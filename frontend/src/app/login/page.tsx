@@ -20,7 +20,7 @@ export default async function Page({
     const path = (Array.isArray(params.path) ? params.path[0] : params.path) || null
 
     const socialError = typeof params.socialError === 'string' ? params.socialError.slice(0, 400) : undefined
-    return <LoginPage serverInternal={internal} path={path} serverExpired={expired} socialError={socialError} />
+    return <LoginPage serverInternal={internal} path={path} serverExpired={expired} socialError={socialError} initialMode={params.mode === 'signup' ? 'signup' : 'login'} serverError={typeof params.error === 'string' ? params.error.slice(0, 500) : undefined} />
 }
 
 function readBooleanParam(value: string | string[] | undefined) {

@@ -1,8 +1,8 @@
 'use client'
 
 import { Search, X } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { reservedUsernames } from '@/utils/auth/reservedUsernames'
+import { useEffect, useRef, useState } from 'react'
+import { isReservedPlaceholder } from '@/utils/users/isReservedPlaceholder'
 import DashboardUser from './dashboardUser'
 
 export default function UsersList({ users, roles }: { users: UserWithRole[], roles: Role[] }) {
@@ -28,14 +28,13 @@ export default function UsersList({ users, roles }: { users: UserWithRole[], rol
         return () => window.removeEventListener('keydown', onKeyDown)
     }, [searchOpen])
 
-    const reservedSet = useMemo(() => new Set(reservedUsernames), [])
-    const reservedCount = users.filter((user) => reservedSet.has(user.id.toLowerCase())).length
+    const reservedCount = users.filter(isReservedPlaceholder).length
     const visibleUsers = (showReserved
         ? users
-        : users.filter((user) => !reservedSet.has(user.id.toLowerCase())))
+        : users.filter((user) => !isReservedPlaceholder(user)))
         .filter((user) => {
             const query = search.trim().toLowerCase()
-            return !query || user.name.toLowerCase().includes(query) || user.id.toLowerCase().includes(query)
+            return !query || user.name.toLowerCase().includes(query) || user.id.toLowerCase().includes(query) || (user.username || '').toLowerCase().includes(query)
         })
 
     return (

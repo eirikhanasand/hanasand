@@ -17,6 +17,8 @@ type LoginPageProps = {
     serverInternal: boolean
     serverExpired: boolean
     socialError?: string
+    initialMode?: 'login' | 'signup'
+    serverError?: string
 }
 
 const authInputClass = 'h-10 rounded-lg border border-ui-border bg-ui-panel px-3.5 text-sm font-medium text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-4 focus:ring-ui-primary/20'
@@ -24,19 +26,20 @@ const authPrimaryButtonClass = 'group inline-flex h-9 items-center justify-cente
 const authGhostButtonClass = 'inline-flex h-9 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text disabled:cursor-not-allowed disabled:text-ui-muted/60'
 
 
-export default function LoginPage({ path, serverInternal, serverExpired, socialError }: LoginPageProps) {
+export default function LoginPage({ path, serverInternal, serverExpired, socialError, initialMode = 'login', serverError }: LoginPageProps) {
     const router = useRouter()
-    const [mode, setMode] = useState<'login' | 'signup' | 'request-reset' | 'verify-reset'>('login')
+    const [mode, setMode] = useState<'login' | 'signup' | 'request-reset' | 'verify-reset'>(initialMode)
     const [resetUserId, setResetUserId] = useState('')
     const [resetCode, setResetCode] = useState('')
     const [busy, setBusy] = useState(false)
     const [hydrated, setHydrated] = useState(false)
     const [signupName, setSignupName] = useState('')
     const [signupUsername, setSignupUsername] = useState('')
+    const [signupEmail, setSignupEmail] = useState('')
     const [signupPassword, setSignupPassword] = useState('')
     const signupPasswordIsValid = passwordMeetsRequirements(signupPassword)
     const reservedUsername = reservedUsernames.includes(signupUsername.trim().toLowerCase())
-    const canCreateAccount = signupName.trim() && signupUsername.trim() && signupPasswordIsValid && !reservedUsername
+    const canCreateAccount = signupName.trim() && signupUsername.trim() && signupEmail.trim() && signupPasswordIsValid && !reservedUsername
 
     function handleSubmit() {
         setBusy(true)
@@ -157,7 +160,7 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
         }
     }
 
-    const { condition: error, setCondition: setError } = useClearStateAfter()
+    const { condition: error, setCondition: setError } = useClearStateAfter({ initialState: serverError })
     const { condition: internal } = useClearStateAfter({ initialState: serverInternal })
     const { condition: expired } = useClearStateAfter({ initialState: serverExpired, timeout: 8000 })
     const redirectPath = safeRedirectPath(path)
@@ -288,6 +291,7 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
                                 <span className='text-xs font-semibold text-ui-muted'>Username</span>
                                 <input
                                     id='login-signup-username'
+                                    disabled={!hydrated}
                                     type='text'
                                     name='username'
                                     value={signupUsername}
@@ -303,6 +307,7 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
                                 <span className='text-xs font-semibold text-ui-muted'>Name</span>
                                 <input
                                     id='login-signup-name'
+                                    disabled={!hydrated}
                                     type='text'
                                     name='name'
                                     value={signupName}
@@ -313,10 +318,15 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
                                     required
                                 />
                             </label>
+                            <label className='grid gap-1.5' htmlFor='login-signup-email'>
+                                <span className='text-xs font-semibold text-ui-muted'>Email</span>
+                                <input id='login-signup-email' disabled={!hydrated} type='email' name='email' value={signupEmail} onChange={e => setSignupEmail(e.target.value)} autoComplete='email' maxLength={254} className={authInputClass} required />
+                            </label>
                             <label className='grid gap-1.5' htmlFor='login-signup-password'>
                                 <span className='text-xs font-semibold text-ui-muted'>Password</span>
                                 <input
                                     id='login-signup-password'
+                                    disabled={!hydrated}
                                     type='password'
                                     name='password'
                                     value={signupPassword}

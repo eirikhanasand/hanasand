@@ -19,11 +19,11 @@ exec runuser --login "$name"`
 type ExecOperation = { metadata: { fds: Record<string, string> }; id: string }
 
 export async function openLxdConsole(name: string, onOutput: (data: string) => void, onExit: () => void) {
-    const state = await lxdRequest<{ status: string }>(`/1.0/instances/${encodeURIComponent(name)}/state`)
+    const state = await lxdRequest<{ status: string }>(`/1.0/instances/${encodeURIComponent(name)}/state`, { timeout: 10000 })
     if (state.metadata.status !== 'Running') throw new Error('Start this VM before opening its console.')
     const username = consoleUsername(name)
     const result = await lxdRequest<ExecOperation>(`/1.0/instances/${encodeURIComponent(name)}/exec`, {
-        method: 'POST',
+        method: 'POST', timeout: 10000,
         body: {
             command: ['/bin/sh', '-c', consoleLoginScript, 'hanasand-console', username],
             interactive: true,
@@ -32,7 +32,21 @@ export async function openLxdConsole(name: string, onOutput: (data: string) => v
             width: 100, height: 30,
         },
     })
-    const operation = `/1.0/operations/${encodeURIComponent(result.metadata.id)}`
+    return attachConsoleChannels(result.metadata, onOutput, onExit, username)
+}
+
+// The serial console remains available while the guest agent and login shell restart.
+// It is read-only here: browser input is only ever sent to the user's login shell.
+export async function openLxdBootConsole(name: string, onOutput: (data: string) => void, onExit: () => void) {
+    const result = await lxdRequest<ExecOperation>(`/1.0/instances/${encodeURIComponent(name)}/console`, {
+        method: 'POST', timeout: 10000, body: { type: 'console', width: 100, height: 30 },
+    })
+    const channel = await attachConsoleChannels(result.metadata, onOutput, onExit)
+    return { close: channel.close }
+}
+
+async function attachConsoleChannels(result: ExecOperation, onOutput: (data: string) => void, onExit: () => void, username?: string) {
+    const operation = `/1.0/operations/${encodeURIComponent(result.id)}`
     const decoder = new StringDecoder('utf8')
     const channels: WebSocket[] = []
     let closed = false
@@ -40,17 +54,17 @@ export async function openLxdConsole(name: string, onOutput: (data: string) => v
         if (closed) return
         closed = true
         const control = channels[1]
-        if (control?.readyState === WebSocket.OPEN) control.send(JSON.stringify({ command: 'signal', signal: 15 }))
+        if (username && control?.readyState === WebSocket.OPEN) control.send(JSON.stringify({ command: 'signal', signal: 15 }))
         for (const socket of channels) { if (socket.readyState === WebSocket.CONNECTING) socket.terminate(); else socket.close() }
         void lxdRequest(operation, { method: 'DELETE' }).catch(() => {})
     }
     try {
         for (const fd of ['0', 'control']) {
-            const secret = result.metadata.metadata.fds[fd]
+            const secret = result.metadata.fds[fd]
             if (!secret) throw new Error('VM console channel unavailable.')
             const socket = new WebSocket(`ws+unix://${config.lxd_socket_path}:${operation}/websocket?secret=${encodeURIComponent(secret)}`, { handshakeTimeout: 10000 })
             channels.push(socket)
-            socket.on('error', () => { close(); onExit() })
+            socket.on('error', () => { if (!closed) { close(); onExit() } })
             socket.on('close', () => { if (!closed) { close(); onExit() } })
             if (fd === '0') socket.on('message', data => onOutput(decoder.write(data as Buffer)))
         }

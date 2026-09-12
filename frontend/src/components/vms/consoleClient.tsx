@@ -21,15 +21,27 @@ export default function VmConsole({ name }: { name: string }) {
         } catch { setStatus('Fullscreen is unavailable in this browser.') }
     }
     const container = useRef<HTMLDivElement>(null)
-    const [attempt, setAttempt] = useState(0)
+    const reconnect = useRef<() => void>(() => {})
+    const bootPanel = useRef<HTMLPreElement>(null)
+    const followBoot = useRef(true)
+    const [bootLog, setBootLog] = useState('')
+    const [bootError, setBootError] = useState('')
+    const [showBoot, setShowBoot] = useState(false)
+    useEffect(() => {
+        if (followBoot.current && bootPanel.current) bootPanel.current.scrollTop = bootPanel.current.scrollHeight
+    }, [bootLog, showBoot])
     const [status, setStatus] = useState('Connecting…')
     const [username, setUsername] = useState('')
     useEffect(() => {
         let disposed = false
         let socket: WebSocket | undefined
+        let retry: ReturnType<typeof setTimeout> | undefined
         let disposeTerminal: (() => void) | undefined
         setStatus('Connecting…')
         setUsername('')
+        setBootLog('')
+        setBootError('')
+        setShowBoot(false)
         void (async () => {
             const [{ Terminal }, { FitAddon }] = await Promise.all([import('@xterm/xterm'), import('@xterm/addon-fit')])
             if (disposed || !container.current) return
@@ -81,39 +93,61 @@ export default function VmConsole({ name }: { name: string }) {
                 if (ready && socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'input', data }))
             })
             disposeTerminal = () => { observer.disconnect(); host.removeEventListener('wheel', stopFollowing); input.dispose(); selection.dispose(); scroll.dispose(); terminal.dispose() }
-            socket = new WebSocket(`${config.url.api_wss}/vm/${encodeURIComponent(name)}/console`)
-            socket.onopen = () => {
-                socket?.send(JSON.stringify({ type: 'auth', id: getCookie('id'), token: decodeURIComponent(getCookie('access_token') || '') }))
-                setStatus('Opening console…')
-            }
-            socket.onmessage = event => {
+            const connect = () => {
                 if (disposed) return
-                try {
-                    const message = JSON.parse(event.data)
-                    if (message.type === 'output') {
-                        pendingWrites++
-                        terminal.write(message.data, () => {
-                            if (!disposed && followOutput) terminal.scrollToBottom()
-                            pendingWrites--
-                        })
-                    }
-                    else if (message.type === 'ready') {
-                        ready = true
-                        setUsername(message.username)
-                        setStatus('Connected')
-                        sendSize()
-                        terminal.focus()
-                    } else if (message.type === 'error') {
-                        failed = true
-                        setStatus(message.message)
-                    } else if (message.type === 'closed') setStatus('Console closed.')
-                } catch { setStatus('Invalid console response. Reconnect to try again.') }
+                clearTimeout(retry)
+                if (socket) { socket.onclose = null; socket.close() }
+                ready = false
+                failed = false
+                socket = new WebSocket(`${config.url.api_wss}/vm/${encodeURIComponent(name)}/console`)
+                socket.onopen = () => {
+                    socket?.send(JSON.stringify({ type: 'auth', id: getCookie('id'), token: decodeURIComponent(getCookie('access_token') || '') }))
+                    setStatus('Opening console…')
+                }
+                socket.onmessage = event => {
+                    if (disposed) return
+                    try {
+                        const message = JSON.parse(event.data)
+                        if (message.type === 'output') {
+                            pendingWrites++
+                            terminal.write(message.data, () => {
+                                if (!disposed && followOutput) terminal.scrollToBottom()
+                                pendingWrites--
+                            })
+                        }
+                        else if (message.type === 'ready') {
+                            ready = true
+                            setUsername(message.username)
+                            setStatus('Connected')
+                            sendSize()
+                            terminal.focus()
+                        } else if (message.type === 'error') {
+                            failed = true
+                            setStatus(message.message)
+                        } else if (message.type === 'status') {
+                            ready = false
+                            setStatus(message.message)
+                            if (message.message !== 'Opening console…') setShowBoot(true)
+                        } else if (message.type === 'boot-output') {
+                            setBootError('')
+                            setBootLog(previous => (previous + message.data).slice(-65536))
+                        } else if (message.type === 'boot-error') setBootError(message.message)
+                        else if (message.type === 'closed') setStatus('Console disconnected. Reconnecting…')
+                    } catch { setStatus('Invalid console response. Reconnect to try again.') }
+                }
+                socket.onerror = () => { if (!disposed && !failed) setStatus('Connection lost. Reconnecting automatically…') }
+                socket.onclose = event => {
+                    ready = false
+                    if (disposed || failed || event.code === 1008) return
+                    setStatus('Connection lost. Reconnecting automatically…')
+                    retry = setTimeout(connect, 2000)
+                }
             }
-            socket.onerror = () => { failed = true; if (!disposed) setStatus('Unable to connect to the console.') }
-            socket.onclose = () => { ready = false; if (!disposed && !failed) setStatus('Console closed.') }
+            reconnect.current = connect
+            connect()
         })().catch(() => { if (!disposed) setStatus('Unable to load the console. Try again.') })
-        return () => { disposed = true; socket?.close(); disposeTerminal?.() }
-    }, [name, attempt])
+        return () => { disposed = true; clearTimeout(retry); reconnect.current = () => {}; socket?.close(); disposeTerminal?.() }
+    }, [name])
 
     return <section ref={panel} className='flex h-[calc(100dvh-7rem)] min-h-0 flex-col gap-3 overflow-hidden rounded-xl border border-ui-border bg-ui-panel p-4 [&:fullscreen]:h-dvh [&:fullscreen]:w-screen [&:fullscreen]:rounded-none'>
         <header className='flex flex-wrap items-center justify-between gap-3'>
@@ -121,9 +155,14 @@ export default function VmConsole({ name }: { name: string }) {
             <div className='flex items-center gap-3'>
                 <button type='button' onClick={() => void toggleFullscreen()} aria-label={fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'} title={fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'} aria-pressed={fullscreen} className='rounded-lg border border-ui-border p-2'>{fullscreen ? <Minimize2 className='h-4 w-4' /> : <Maximize2 className='h-4 w-4' />}</button>
                 <Link href='/system' className='text-sm text-ui-primary'>Back to overview</Link>
-                <button type='button' onClick={() => setAttempt(value => value + 1)} className='flex items-center gap-2 rounded-lg border border-ui-border px-3 py-2 text-sm'><RefreshCw className='h-4 w-4' />Reconnect</button>
+                <button type='button' onClick={() => reconnect.current()} className='flex items-center gap-2 rounded-lg border border-ui-border px-3 py-2 text-sm'><RefreshCw className='h-4 w-4' />Reconnect</button>
             </div>
         </header>
+        {(bootLog || bootError || showBoot) && <details open={showBoot} onToggle={event => setShowBoot(event.currentTarget.open)} className='shrink-0 rounded-lg border border-ui-border px-3 py-2 text-sm'>
+            <summary className='cursor-pointer'>Restart log</summary>
+            {bootError && <p className='text-ui-muted'>{bootError}</p>}
+            <pre ref={bootPanel} onScroll={event => { const el = event.currentTarget; followBoot.current = el.scrollHeight - el.scrollTop - el.clientHeight < 4 }} className='mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-xs' aria-label='VM restart log'>{bootLog || 'Waiting for boot output…'}</pre>
+        </details>}
         <div ref={container} aria-label={`${name} terminal`} className='min-h-0 min-w-0 flex-1 overflow-hidden rounded-lg bg-[#08111f] p-2' />
     </section>
 }

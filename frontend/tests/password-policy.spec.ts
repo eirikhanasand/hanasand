@@ -8,6 +8,7 @@ test('signup and reset accept one of each character type and reject missing type
     const form = page.locator('form[action="/api/auth/register"]')
     await form.getByLabel('Username', { exact: true }).fill('policytest')
     await form.getByLabel('Name', { exact: true }).fill('Policy test')
+    await form.getByLabel('Email', { exact: true }).fill('policy@example.test')
     for (const value of ['Shortpass1!', 'abcdefghijklmn1!', 'ABCDEFGHIJKLMN1!', 'Abcdefghijklmnop!', 'Abcdefghijklmnop1']) {
         await form.getByLabel('Password', { exact: true }).fill(value)
         await expect(form.getByRole('button', { name: 'Create account', exact: true })).toBeDisabled()
@@ -21,6 +22,7 @@ test('signup and reset accept one of each character type and reject missing type
     const signup = page.locator('form[action="/api/auth/register"]')
     await signup.locator('[name=username]').fill('policytest')
     await signup.locator('[name=name]').fill('Policy test')
+    await signup.getByLabel('Email', { exact: true }).fill('policy@example.test')
     await signup.locator('[name=password]').fill('Abcdefghijklmn1!')
     await signup.getByRole('button', { name: 'Create account', exact: true }).click()
     await expect(page.getByText('Registration submitted', { exact: true })).toBeVisible()

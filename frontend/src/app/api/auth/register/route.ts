@@ -13,13 +13,13 @@ export async function POST(req: NextRequest) {
 
     if (!name || !id || !password || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         if (wantsRedirect) {
-            return authRedirect(req, '/register', 'Name, username, valid email, and password are required.')
+            return authRedirect(redirectPath, '/login?mode=signup', 'Name, username, valid email, and password are required.')
         }
         return NextResponse.json({ error: 'Name, username, valid email, and password are required.' }, { status: 400 })
     }
     if (reservedUsernames.includes(id.toLowerCase())) {
         if (wantsRedirect) {
-            return authRedirect(req, '/register', 'This username is reserved.')
+            return authRedirect(redirectPath, '/login?mode=signup', 'This username is reserved.')
         }
         return NextResponse.json({ error: 'This username is reserved.' }, { status: 400 })
     }
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     }).catch(() => null)
     if (!upstream) {
         if (wantsRedirect) {
-            return authRedirect(req, '/register', 'Authentication service is unavailable.')
+            return authRedirect(redirectPath, '/login?mode=signup', 'Authentication service is unavailable.')
         }
         return NextResponse.json({ error: 'Authentication service is unavailable.' }, { status: 502 })
     }
@@ -41,13 +41,13 @@ export async function POST(req: NextRequest) {
 
     if (!upstream.ok) {
         if (wantsRedirect) {
-            return authRedirect(req, '/register', String(data?.error || responseText || 'Unable to create account.'))
+            return authRedirect(redirectPath, '/login?mode=signup', String(data?.error || responseText || 'Unable to create account.'))
         }
         return NextResponse.json(data || { error: responseText || 'Unable to create account.' }, { status: upstream.status })
     }
     if (!data?.id || !data?.name) {
         if (wantsRedirect) {
-            return authRedirect(req, '/register', 'Account created, but the session could not be created.')
+            return authRedirect(redirectPath, '/login', 'Your account was created. Please log in to continue.')
         }
         return NextResponse.json({ error: 'Account created, but the session could not be created.' }, { status: 502 })
     }
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
     const loginData = data.token ? data : await createLoginSession(req, data.id, password)
     if (!loginData?.token || !loginData?.id || !loginData?.name) {
         if (wantsRedirect) {
-            return authRedirect(req, '/register', 'Account created, but the session could not be created.')
+            return authRedirect(redirectPath, '/login', 'Your account was created. Please log in to continue.')
         }
         return NextResponse.json({ error: 'Account created, but the session could not be created.' }, { status: 502 })
     }
@@ -123,9 +123,9 @@ async function createLoginSession(req: NextRequest, id: string, password: string
     return parseJson(await upstream.text())
 }
 
-function authRedirect(_req: NextRequest, path: string, error: string) {
-    const search = new URLSearchParams({ error })
-    return redirectTo(`${path}?${search.toString()}`)
+function authRedirect(redirectPath: string, path: string, error: string) {
+    const search = new URLSearchParams({ error, path: safeRedirectPath(redirectPath) })
+    return redirectTo(`${path}${path.includes('?') ? '&' : '?'}${search.toString()}`)
 }
 
 function redirectTo(path: string) {

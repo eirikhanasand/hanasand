@@ -5,7 +5,7 @@ import getRoles from '@/utils/roles/getRoles'
 import fetchUsersWithRoles from '@/utils/users/fetchUsersWithRoles'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import { Radio, Shield, UserRound, UsersRound } from 'lucide-react'
-import { reservedUsernames } from '@/utils/auth/reservedUsernames'
+import { isReservedPlaceholder } from '@/utils/users/isReservedPlaceholder'
 import type { ReactNode } from 'react'
 
 export default async function Page() {
@@ -23,8 +23,7 @@ export default async function Page() {
     ])
     const refreshedAt = new Date()
     void name
-    const reservedSet = new Set(reservedUsernames)
-    const reservedCount = users.filter((user) => reservedSet.has(user.id.toLowerCase())).length
+    const reservedCount = users.filter(isReservedPlaceholder).length
     const assignedUsers = users.filter((user) => user.highest_role_id).length
     const priorityRole = [...roles].sort((a, b) => a.priority - b.priority)[0]
 

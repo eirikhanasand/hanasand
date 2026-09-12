@@ -33,3 +33,17 @@ test('refresh uses the attached guest interface instead of Docker bridges and do
         expect(writes).toBe(1)
     } finally { restoreRequest(); restoreWriter() }
 })
+
+for (const [assigned, expected] of [['10.119.85.50', '10.119.85.50'], ['auto', ''], ['', '']]) {
+    test(`startup without guest networking uses only a valid assigned address: ${assigned}`, async () => {
+        const restoreWriter = setVmDetailsWriterForTest(async () => {})
+        const restoreRequest = setLxdRequestForTest(async <T>(path: string) => ({
+            status_code: 200, status: 'Success', metadata: (path.endsWith('/state')
+                ? { status: 'Running', network: {} }
+                : { name: 'cashflow', expanded_devices: { eth0: { name: 'eth0', 'ipv4.address': assigned } } }) as T,
+        }))
+        try {
+            expect((await refreshLocalLxdDetails('cashflow', true)).device_eth0_ipv4_address).toBe(expected)
+        } finally { restoreRequest(); restoreWriter() }
+    })
+}

@@ -49,7 +49,6 @@ const pwnedPage = readFileSync(path.join(frontendRoot, 'src/app/pwned/page.tsx')
 const pwnedPageClient = readFileSync(path.join(frontendRoot, 'src/app/pwned/pageClient.tsx'), 'utf8')
 const pwnedSearch = readFileSync(path.join(frontendRoot, 'src/components/pwned/pwnedSearch.tsx'), 'utf8')
 const loginPageClient = readFileSync(path.join(frontendRoot, 'src/app/login/pageClient.tsx'), 'utf8')
-const registerPageClient = readFileSync(path.join(frontendRoot, 'src/app/register/pageClient.tsx'), 'utf8')
 const publicFooter = readFileSync(path.join(frontendRoot, 'src/components/footer/footer.tsx'), 'utf8')
 const previewFlow = readFileSync(path.join(frontendRoot, 'src/components/share/previewFlow.tsx'), 'utf8')
 const contactPage = readFileSync(path.join(frontendRoot, 'src/components/contact/contact.tsx'), 'utf8')
@@ -831,27 +830,6 @@ if (bannedLoginPageClientColor.test(loginPageClient)) {
     violations.push('login page should not use one-off public page color utilities after palette migration')
 }
 
-for (const required of [
-    'bg-ui-canvas',
-    'bg-ui-panel',
-    'bg-ui-raised',
-    'border-ui-border',
-    'text-ui-text',
-    'text-ui-muted',
-    'text-ui-primary',
-    'text-ui-warning',
-    'text-ui-success',
-    'text-ui-danger',
-]) {
-    if (!registerPageClient.includes(required)) {
-        violations.push(`register page should use shared palette class ${required}`)
-    }
-}
-
-const bannedRegisterPageClientColor = /#[0-9a-fA-F]{3,8}|rgba\(|\b(?:bg|text|border|ring|outline|shadow)-\[#|\b(?:bg|text|border|ring|outline)-(?:white|black|red|orange|amber|yellow|green|emerald|blue|sky|slate|zinc|neutral|gray|rose|bright)\b|\b(?:bg|text|border|ring|outline)-(?:white|black|red|orange|amber|yellow|green|emerald|blue|sky|slate|zinc|neutral|gray|rose|bright)\//g
-if (bannedRegisterPageClientColor.test(registerPageClient)) {
-    violations.push('register page should not use one-off public page color utilities after palette migration')
-}
 
 for (const required of [
     'bg-ui-canvas',

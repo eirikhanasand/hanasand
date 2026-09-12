@@ -13,7 +13,8 @@ test('signup, login and delete account work end to end', async ({ browser, page,
     await expect(page.getByRole('button', { name: 'Create account' })).toBeVisible()
     await page.getByPlaceholder('Username').fill(id)
     await page.getByRole('textbox', { name: 'Name', exact: true }).fill(name)
-    await page.getByPlaceholder('Password').fill(password)
+    await page.getByLabel('Email', { exact: true }).fill(`${id}@example.test`)
+    await page.getByLabel('Password', { exact: true }).fill(password)
     await page.getByRole('button', { name: 'Create account' }).click()
     await expect(page).toHaveURL(/dashboard/)
 

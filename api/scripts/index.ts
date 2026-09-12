@@ -22,6 +22,7 @@ const coreTasks: TestTask[] = [
     { id: 'audit-pagination', title: 'Numbered audit pages and authorization', command: [bun, 'test', 'tests/audit-pagination.test.ts'] },
     scriptTask('status-feed', 'Status snapshots and monitoring failure', 'check-status-feed.ts'),
     { id: 'vm-console', title: 'VM console access and live status', command: [bun, 'test', 'tests/vm-console.test.ts'] },
+    { id: 'vm-console-restart', title: 'VM console restart recovery', command: [bun, 'test', 'tests/vm-console-restart.test.ts'] },
     { id: 'logs-cache', title: 'Log snapshot refresh and failures', command: [bun, 'test', 'tests/logs-cache.test.ts'] },
     { id: 'logs-access', title: 'Cached log authorization', command: [bun, 'test', 'tests/logs-access.test.ts'] },
     { id: 'password-policy', title: 'Password requirements', command: [bun, 'test', 'tests/password-policy.test.ts'] },
