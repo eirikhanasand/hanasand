@@ -6,14 +6,15 @@ import useClearStateAfter from '@/hooks/useClearStateAfter'
 import { setCookieWithExpiresAt } from '@/utils/cookies/cookies'
 import { ArrowLeft, RotateCcw } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useMemo, useState } from 'react'
+import ResetPasswordPage from '../reset-password/pageClient'
+import { useEffect, useMemo, useState } from 'react'
 
 const authPrimaryButtonClass = 'ml-auto inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:border disabled:border-ui-border disabled:bg-ui-raised disabled:text-ui-muted'
 const authGhostButtonClass = 'inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'
 
 export default function PendingDeletionPage({
     id,
-    restoreToken,
+    restoreToken: initialRestoreToken,
     deletionScheduledAt,
 }: {
     id: string
@@ -22,6 +23,19 @@ export default function PendingDeletionPage({
 }) {
     const router = useRouter()
     const [busy, setBusy] = useState(false)
+    const [restoreToken, setRestoreToken] = useState(initialRestoreToken)
+    const [resetToken, setResetToken] = useState('')
+    useEffect(() => {
+        const fragment = new URLSearchParams(window.location.hash.slice(1))
+        const token = fragment.get('restoreToken')
+        if (token) setRestoreToken(token)
+        if (token || initialRestoreToken) {
+            const url = new URL(window.location.href)
+            url.hash = ''
+            url.searchParams.delete('restoreToken')
+            window.history.replaceState(null, '', url.pathname + url.search)
+        }
+    }, [initialRestoreToken])
     const { condition: error, setCondition: setError } = useClearStateAfter()
     const canRestore = Boolean(id && restoreToken)
     const deletionDate = useMemo(() => {
@@ -49,7 +63,7 @@ export default function PendingDeletionPage({
                 setCookieWithExpiresAt('avatar', data.avatar ?? '', data.expires_at)
                 setCookieWithExpiresAt('access_token', data.token, data.expires_at)
                 setCookieWithExpiresAt('roles', JSON.stringify(data.roles ?? []), data.expires_at)
-                router.push('/dashboard')
+                setResetToken(data.resetToken)
                 return
             }
             router.push('/login')
@@ -59,6 +73,8 @@ export default function PendingDeletionPage({
             setBusy(false)
         }
     }
+
+    if (resetToken) return <ResetPasswordPage userId={id} initialResetToken={resetToken} restored />
 
     return (
         <section className='grid min-h-[calc(100vh-4.5rem)] w-full place-items-center bg-ui-canvas px-4 py-10 text-ui-text md:px-10'>

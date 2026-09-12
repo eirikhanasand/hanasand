@@ -1,7 +1,7 @@
 import crypto from 'node:crypto'
 import bcrypt from 'bcrypt'
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import run from '#db'
+import run, { withTransaction } from '#db'
 import { revokeAllTokens } from '#utils/auth/session.ts'
 import { validatePassword } from '#utils/auth/password.ts'
 import { addressForUser } from '#utils/mail/helpers.ts'
@@ -166,13 +166,22 @@ export async function completePasswordReset(req: FastifyRequest, res: FastifyRep
     const reset = resetResult.rows[0] as ResetRow & { name: string }
     const hashedPassword = await bcrypt.hash(password, 10)
 
-    await run('UPDATE users SET password = $2 WHERE id = $1', [userId, hashedPassword])
+    const updated = await withTransaction(async query => {
+        await query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [userId])
+        const consumed = await query(`UPDATE password_reset_codes SET consumed_at = NOW()
+            WHERE id = $1 AND reset_token_hash = $2 AND consumed_at IS NULL AND expires_at > NOW()
+            RETURNING id`, [reset.id, tokenHash])
+        if (!consumed.rows.length) return false
+        await query('UPDATE users SET password = $2 WHERE id = $1', [userId, hashedPassword])
+        await query('UPDATE password_reset_codes SET consumed_at = NOW() WHERE user_id = $1 AND consumed_at IS NULL', [userId])
+        await query('DELETE FROM attempts WHERE id = $1', [userId])
+        await revokeAllTokens({ userId, revokedBy: 'password_reset' }, query)
+        return true
+    })
+    if (!updated) return res.status(400).send({ error: 'The reset session is invalid or expired.' })
     await syncMailPasswordForUser(userId, reset.name || userId, password).catch(error => {
         req.log.error({ error, userId }, 'Failed to sync mail password after password reset')
     })
-    await run('UPDATE password_reset_codes SET consumed_at = NOW() WHERE id = $1', [reset.id])
-    await run('DELETE FROM attempts WHERE id = $1', [userId])
-    await revokeAllTokens({ userId, revokedBy: 'password_reset' })
 
     return res.send({ ok: true })
 }
