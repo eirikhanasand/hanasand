@@ -1,3 +1,4 @@
+import { VM_METRICS_JOB_ID } from './vms/collectMetrics.ts'
 import { existsSync } from 'node:fs'
 import { readFile, stat, writeFile, chmod, chown } from 'node:fs/promises'
 import { execFile, spawn } from 'node:child_process'
@@ -240,6 +241,16 @@ const apiBackgroundJobDefinitions: Array<{
         schedule: 'Every minute',
         cadenceSeconds: API_CRON_CADENCE_SECONDS,
         source: 'api/src/utils/organizationPrivacy.ts',
+        controls: ['pause', 'resume', 'run_now'],
+    },
+    {
+        id: VM_METRICS_JOB_ID,
+        name: 'VM metrics',
+        description: 'Collects CPU, memory, disk, network and power measurements for registered VMs.',
+        category: 'Other/System',
+        schedule: 'Every minute',
+        cadenceSeconds: API_CRON_CADENCE_SECONDS,
+        source: 'api/src/utils/vms/collectMetrics.ts',
         controls: ['pause', 'resume', 'run_now'],
     },
     {

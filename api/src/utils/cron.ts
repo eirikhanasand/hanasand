@@ -1,3 +1,4 @@
+import collectVmMetrics, { VM_METRICS_JOB_ID } from './vms/collectMetrics.ts'
 import { schedule } from 'node-cron'
 import invalidateOldTokens from './auth/invalidateOldTokens.ts'
 import invalidateOldAttempts from './auth/invalidateOldAttempts.ts'
@@ -23,6 +24,7 @@ const apiCronRunners: Record<string, () => Promise<unknown> | unknown> = {
     'api-login-attempt-cleanup': invalidateOldAttempts,
     'api-deleted-account-purge': purgeDeletedAccounts,
     'api-synthetic-monitor': runSyntheticMonitor,
+    [VM_METRICS_JOB_ID]: collectVmMetrics,
     'api-production-log-monitor': runProductionLogMonitors,
     [HOST_UPDATE_MONITOR_JOB_ID]: async() => {
         const { status, runId } = await readHostUpdateStatus()
@@ -96,6 +98,7 @@ export default function cron() {
                 runDueApiCronJob('api-login-attempt-cleanup'),
                 runDueApiCronJob('api-deleted-account-purge'),
                 runDueApiCronJob('api-synthetic-monitor'),
+                runDueApiCronJob(VM_METRICS_JOB_ID),
                 runDueApiCronJob('api-production-log-monitor'),
                 runDueApiCronJob(HOST_UPDATE_MONITOR_JOB_ID),
                 runDueApiCronJob('api-vm-ensure-running'),

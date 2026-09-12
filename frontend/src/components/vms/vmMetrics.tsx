@@ -7,7 +7,7 @@ type VMMetricsProps = {
     metrics: VMMetrics[] | null
 }
 
-export default function VMMetrics({ boxStyle, boxTitleStyle, vm, metrics }: VMMetricsProps) {
+export default function VMMetrics({ boxStyle, boxTitleStyle, metrics }: VMMetricsProps) {
     const latest = Array.isArray(metrics) && metrics.length
         ? [...metrics].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
         : null
@@ -17,8 +17,9 @@ export default function VMMetrics({ boxStyle, boxTitleStyle, vm, metrics }: VMMe
             <h1 className={boxTitleStyle}>Metrics</h1>
             {latest ? (
                 <div>
+                    {Date.now() - new Date(latest.created_at).getTime() > 180_000 && <p className='mb-3 text-sm text-ui-muted'>Metrics have not updated recently.</p>}
                     <Field title='Power' value={latest.power_state} />
-                    <Field title='CPU' value={`${formatNumber(latest.cpu_usage_percent)}% across ${latest.cpu_cores} cores`} />
+                    <Field title='CPU' value={`${formatNumber(latest.cpu_usage_percent)}% across ${latest.cpu_cores ?? "—"} cores`} />
                     <Field title='Memory' value={`${formatMb(latest.ram_used_mb)} / ${formatMb(latest.ram_total_mb)}`} />
                     <Field title='Disk' value={`${formatMb(latest.disk_used_mb)} / ${formatMb(latest.disk_total_mb)}`} />
                     <Field title='Network' value={`${formatNumber(latest.net_in_kbps)} kbps in · ${formatNumber(latest.net_out_kbps)} kbps out`} />
@@ -26,29 +27,28 @@ export default function VMMetrics({ boxStyle, boxTitleStyle, vm, metrics }: VMMe
                     <Field title='Updated' value={new Date(latest.created_at).toLocaleString()} underline={false} />
                 </div>
             ) : (
-                <div className='rounded-xl border border-ui-border/10 bg-ui-panel/[0.035] p-3'>
-                    <p className='text-sm font-medium text-ui-text/78'>Telemetry lane attaching</p>
-                    <p className='mt-1 text-xs leading-5 text-ui-text/48'>
-                        {vm.name} is registered. CPU, memory, disk, network, and uptime samples stream here when the metrics collector reports.
-                    </p>
-                </div>
+                <p className='text-sm text-ui-muted'>Metrics are unavailable.</p>
             )}
         </div>
     )
 }
 
-function formatNumber(value: number) {
-    return Number.isFinite(value) ? value.toFixed(value >= 10 ? 1 : 2) : '0'
+function formatNumber(value: number | string | null) {
+    const numeric = value === null ? NaN : Number(value)
+    return Number.isFinite(numeric) ? numeric.toFixed(numeric >= 10 ? 1 : 2) : '—'
 }
 
-function formatMb(value: number) {
-    if (!Number.isFinite(value)) return '0 MB'
+function formatMb(raw: number | string | null) {
+    const value = raw === null ? NaN : Number(raw)
+    if (!Number.isFinite(value)) return '—'
     if (value >= 1024) return `${(value / 1024).toFixed(1)} GB`
     return `${Math.round(value)} MB`
 }
 
-function formatDuration(seconds: number) {
-    if (!Number.isFinite(seconds) || seconds <= 0) return 'collector metering'
+function formatDuration(raw: number | string | null) {
+    const seconds = raw === null ? NaN : Number(raw)
+    if (!Number.isFinite(seconds)) return '—'
+    if (seconds <= 0) return '0m'
     const hours = Math.floor(seconds / 3600)
     const minutes = Math.floor((seconds % 3600) / 60)
     if (hours) return `${hours}h ${minutes}m`
