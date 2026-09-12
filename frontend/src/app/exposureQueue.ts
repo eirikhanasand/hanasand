@@ -99,7 +99,7 @@ function normalizeExposureQueueItem(rawItem: unknown): ExposureQueueItem | null 
     return {
         id,
         actor,
-        company,
+        company: decodeCompanyName(company),
         claimedData: String(item.claimedData || 'Not disclosed by TA'),
         claimedDataSize: String(item.claimedDataSize || 'Not disclosed by TA'),
         country: String(item.country || 'Not disclosed by TA'),
@@ -109,6 +109,17 @@ function normalizeExposureQueueItem(rawItem: unknown): ExposureQueueItem | null 
         confidence: typeof item.confidence === 'number' ? item.confidence : undefined,
         sourceName: typeof item.sourceName === 'string' ? item.sourceName : undefined,
     }
+}
+
+// Sources may provide URL-encoded names; keep malformed escapes and literal % signs intact.
+function decodeCompanyName(value: string) {
+    return value.replace(/(?:%[0-9a-f]{2})+/gi, encoded => {
+        try {
+            return decodeURIComponent(encoded)
+        } catch {
+            return encoded
+        }
+    })
 }
 
 export function mergeExposureQueueItems(current: ExposureQueueItem[], nextItems: ExposureQueueItem[], mode: 'replace' | 'append') {
