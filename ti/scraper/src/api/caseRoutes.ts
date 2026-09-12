@@ -177,6 +177,34 @@ async function createCaseFromBody(
   if (access.error) return access.error;
   const generatedAt = nowIso();
   const actor = caseAuditActor(request, body);
+  if (body.sourceType === "manual" && !handoffOptions.requireAlertProvenance) {
+    const title = typeof body.title === "string" ? body.title.trim() : "";
+    const summary = typeof body.summary === "string" ? body.summary.trim() : "";
+    const key = typeof body.idempotencyKey === "string" ? body.idempotencyKey : "";
+    if (!title || title.length > 200 || summary.length > 5000 || (body.summary !== undefined && typeof body.summary !== "string")
+      || !/^[a-f0-9-]{36}$/i.test(key) || body.alertId || body.sourceId
+      || (body.priority !== undefined && !["low", "medium", "high", "critical"].includes(body.priority))) {
+      return json({ error: { code: "invalid_manual_case", message: "Enter a title (1–200 characters), description (up to 5,000 characters), valid severity and creation request ID." } }, 400);
+    }
+    const id = `case_${createHash("sha256").update(JSON.stringify([scope.tenantId, scope.organizationId, key])).digest("hex").slice(0, 32)}`;
+    const existing = findCase(options, id);
+    if (existing) {
+      if (existing.tenantId !== scope.tenantId || !caseMatchesOrganizationScope(existing, scope.organizationId)
+        || existing.title !== title || existing.summary !== summary || existing.priority !== normalizePriority(body.priority)) {
+        return json({ error: { code: "creation_request_used", message: "This creation request was already used. Reopen the form to start a different case." } }, 409);
+      }
+      return json({ case: existing }, 200);
+    }
+    const assignedOwner = normalizeOwner(body.assignedOwner ?? body.owner);
+    const ownerError = validateAssignedOwner(options, scope.organizationId, assignedOwner);
+    if (ownerError) return ownerError;
+    const note = summary || "Case created manually.";
+    const event = caseEvent({ caseId: id, tenantId: scope.tenantId, organizationId: scope.organizationId, generatedAt, actor, action: "open", idempotencyKey: key, toStatus: "open", toOwner: assignedOwner, note });
+    const saved = (options.store as any).saveCase({ id, tenantId: scope.tenantId, organizationId: scope.organizationId,
+      sourceType: "manual", sourceId: id, title, summary, priority: normalizePriority(body.priority), status: "open",
+      assignedOwner, createdAt: generatedAt, updatedAt: generatedAt, workflowEvents: [event], lastDecision: note } satisfies AnalystCase);
+    return json({ case: saved, access: caseAccessSummary(access) }, 201);
+  }
   const alertId = String(body.alertId ?? body.sourceId ?? "").trim();
   if (!alertId) return json({ error: { code: "missing_alert_id", message: "A DWM alert ID is required to open a case." } }, 400);
 
@@ -683,7 +711,7 @@ export async function updateCase(request: Request, options: ApiServerOptions, ca
 
 function buildCaseDetail(caseRecord: AnalystCase, options: ApiServerOptions, organization: unknown, access?: CaseAccessResult) {
   const alert = findDwmAlert(options, caseRecord.alertId);
-  const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === caseRecord.alertId);
+  const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => Boolean(caseRecord.alertId) && row.alertId === caseRecord.alertId);
   const watchlists = caseWatchlists(options, alert, caseRecord);
   const caseActionLedger = buildCaseActionLedgerTimeline(caseRecord, options, alert);
   const timeline = buildCaseTimeline(caseRecord, alert, deliveries, caseActionLedger.rows);
@@ -995,7 +1023,7 @@ function exportOptionsFromUrl(url: URL): CaseExportOptions {
 
 function buildCaseExport(caseRecord: AnalystCase, options: ApiServerOptions, organization: unknown, access: CaseAccessResult | undefined, exportOptions: CaseExportOptions) {
   const alert = findDwmAlert(options, caseRecord.alertId);
-  const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === caseRecord.alertId);
+  const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => Boolean(caseRecord.alertId) && row.alertId === caseRecord.alertId);
   const watchlists = caseWatchlists(options, alert, caseRecord);
   const caseActionLedger = buildCaseActionLedgerTimeline(caseRecord, options, alert);
   const timeline = buildCaseTimeline(caseRecord, alert, deliveries, caseActionLedger.rows);
@@ -1203,6 +1231,7 @@ function syncAlertForCase(options: ApiServerOptions, alert: any, caseRecord: Ana
 }
 
 function caseWatchlists(options: ApiServerOptions, alert: any, caseRecord: AnalystCase) {
+  if (!alert) return [];
   const ids = new Set([...(alert?.watchlistIds ?? []), ...(alert?.workflowContext?.watchlistIds ?? [])].filter(Boolean));
   return ((options.store as any).listDwmWatchlists?.() ?? [])
     .filter((watchlist: any) => watchlist.tenantId === caseRecord.tenantId)
@@ -1264,7 +1293,7 @@ function caseFiltersFromUrl(url: URL): CaseFilters {
 
 function caseMatchesFilters(caseRecord: AnalystCase, filters: CaseFilters, options: ApiServerOptions): boolean {
   const alert = findDwmAlert(options, caseRecord.alertId);
-  const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === caseRecord.alertId);
+  const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => Boolean(caseRecord.alertId) && row.alertId === caseRecord.alertId);
   const caseActionLedger = buildCaseActionLedgerTimeline(caseRecord, options, alert);
   if (filters.status && caseRecord.status !== filters.status) return false;
   if (filters.assignee && normalizeFilter(caseRecord.assignedOwner) !== filters.assignee) return false;
@@ -1295,7 +1324,7 @@ function alertMatchesOrganizationScope(alert: any, organizationId: string | unde
 
 function caseListItem(caseRecord: AnalystCase, options: ApiServerOptions, access?: CaseAccessResult) {
   const alert = findDwmAlert(options, caseRecord.alertId);
-  const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === caseRecord.alertId);
+  const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => Boolean(caseRecord.alertId) && row.alertId === caseRecord.alertId);
   const caseActionLedger = buildCaseActionLedgerTimeline(caseRecord, options, alert);
   const timeline = buildCaseTimeline(caseRecord, alert, deliveries, caseActionLedger.rows);
   const workflowActionPolicy = caseWorkflowActionPolicy(caseRecord, alert, deliveries, access);
@@ -1304,6 +1333,7 @@ function caseListItem(caseRecord: AnalystCase, options: ApiServerOptions, access
   return {
     id: caseRecord.id,
     caseId: caseRecord.id,
+    source: caseRecord.sourceType === "manual" ? "manual" : "intelligence",
     title: caseRecord.title,
     summary: caseRecord.summary,
     status: caseRecord.status,
@@ -1889,7 +1919,7 @@ function buildCaseHandoffActionHistory(caseRecord: AnalystCase, options: ApiServ
   actor?: string;
 }) {
   const alert = findDwmAlert(options, caseRecord.alertId);
-  const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === caseRecord.alertId);
+  const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => Boolean(caseRecord.alertId) && row.alertId === caseRecord.alertId);
   const alertCaseHandoffContext = alert ? buildAlertCaseHandoff({
     caseRecord,
     alert,
@@ -1948,7 +1978,7 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
   eventAction?: string;
 }) {
   const alert = findDwmAlert(options, caseRecord.alertId);
-  const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === caseRecord.alertId);
+  const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => Boolean(caseRecord.alertId) && row.alertId === caseRecord.alertId);
   const handoffHistory = buildCaseHandoffActionHistory(caseRecord, options, organization, access, {
     actionId: filters.actionId,
     idempotencyKey: filters.idempotencyKey
@@ -2100,7 +2130,7 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
 
 function buildCaseWebhookReplayReadinessResponse(caseRecord: AnalystCase, options: ApiServerOptions, organization: unknown, access: CaseAccessResult) {
   const alert = findDwmAlert(options, caseRecord.alertId);
-  const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === caseRecord.alertId);
+  const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => Boolean(caseRecord.alertId) && row.alertId === caseRecord.alertId);
   const customerNotifications = (caseRecord.customerNotifications ?? []).map((receipt: any) => ({
     id: receipt.id,
     webhookDeliveryId: receipt.webhookDeliveryId,
@@ -2252,7 +2282,7 @@ function buildCaseWorkflowTransitionHistoryResponse(caseRecord: AnalystCase, opt
   actor?: string;
 }) {
   const alert = findDwmAlert(options, caseRecord.alertId);
-  const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === caseRecord.alertId);
+  const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => Boolean(caseRecord.alertId) && row.alertId === caseRecord.alertId);
   const workflowTransitions = (caseRecord.workflowEvents ?? [])
     .filter((event) => !filters.eventAction || event.action === filters.eventAction)
     .filter((event) => !filters.idempotencyKey || event.idempotencyKey === filters.idempotencyKey)
