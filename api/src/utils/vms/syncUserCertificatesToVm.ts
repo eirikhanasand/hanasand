@@ -43,6 +43,7 @@ export default async function syncUserCertificatesToVm({ vmName, userIds }: Sync
 
     const response = await fetch(`${config.internal_api}/vm/${encodeURIComponent(vmName)}/authorized-keys`, {
         method: 'POST',
+        signal: AbortSignal.timeout(3000),
         headers: {
             'Authorization': `Bearer ${encodeURIComponent(config.vm_api_token || '')}`,
             'Content-Type': 'application/json',

@@ -76,3 +76,16 @@ test('VM navigation cancels stale requests and manual refresh also reloads acces
     await expect.poll(() => requests).toBe(2)
     await expect(page.getByText('ssh ubuntu@192.0.2.10', { exact: true })).toHaveCount(0)
 })
+
+test('expired website session automatically logs out and retains the complete return URL', async ({ page }) => {
+    await page.route('**/api/backend/vm/first-vm/connection', route => route.fulfill({ status: 401, json: { error: 'Unauthorized.' } }))
+    await page.route('http://vm-access.test/vms/cashflow?tab=access', route => route.fulfill({ contentType: 'text/html; charset=utf-8', body: '<div id="root"></div><script src="/fixture.js"></script>' }))
+    await page.route('http://vm-access.test/logout?**', route => route.fulfill({ contentType: 'text/html', body: 'Logging out' }))
+    await page.goto('http://vm-access.test/vms/cashflow?tab=access#ssh')
+    await expect(page).toHaveURL(/\/logout\?path=/)
+    const logout = new URL(page.url())
+    const login = new URL(logout.searchParams.get('path')!, logout.origin)
+    expect(login.pathname).toBe('/login')
+    expect(login.searchParams.get('expired')).toBe('true')
+    expect(login.searchParams.get('path')).toBe('/vms/cashflow?tab=access#ssh')
+})

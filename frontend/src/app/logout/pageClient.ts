@@ -16,7 +16,7 @@ export default function LogoutPageClient({ path }: { path?: string }) {
                     if (key.startsWith('account-delete-confirmation:')) sessionStorage.removeItem(key)
                 }
             } catch { /* Storage may be disabled; keep asking for confirmation. */ }
-            removeCookies('name', 'access_token', 'id', 'avatar', 'roles')
+            removeCookies('name', 'access_token', 'id', 'avatar', 'roles', 'session_expires_at', 'auth_checked_at', 'impersonation_token', 'impersonating_id', 'impersonating_name')
             const searchParams = new URLSearchParams(window.location.search)
             const queryString = searchParams.toString()
 

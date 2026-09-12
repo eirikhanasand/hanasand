@@ -2,7 +2,6 @@ import { requireVmAccess } from '#utils/vms/access.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import config from '#constants'
 import syncUserCertificatesToVm from '#utils/vms/syncUserCertificatesToVm.ts'
 import recordLog from '#utils/logs/recordLog.ts'
 
@@ -31,21 +30,10 @@ export default async function getVmConnection(req: FastifyRequest, res: FastifyR
             ORDER BY c.created_at DESC
         `, [id])
 
-        const vmResponse = await fetch(`${config.internal_api}/vm/${encodeURIComponent(vmName)}`, {
-            headers: {
-                'Authorization': `Bearer ${encodeURIComponent(config.vm_api_token || '')}`,
-                'Content-Type': 'application/json',
-                'User-Agent': 'hanasand_api',
-            },
-        })
-
-        const vmPayload = await vmResponse.json().catch(() => ({} as { vm_ip?: string }))
-        if (!vmResponse.ok) {
-            if (!isExpectedVmLookupMiss(vmResponse.status)) {
-                void recordTerminalFailure(vmName, `Internal VM lookup returned ${vmResponse.status}.`)
-            }
-            return res.status(vmResponse.status).send(vmPayload)
-        }
+        // Access details use the same collected host metadata as the VM details panel.
+        // An internal host credential failure must never become a website-session 401.
+        const details = await run('SELECT device_eth0_ipv4_address FROM vm_details WHERE name = $1', [vmName])
+        if (!details.rows.length) return res.status(503).send({ error: 'VM access details are being collected. Try again shortly.' })
 
         await syncUserCertificatesToVm({
             vmName,
@@ -55,7 +43,7 @@ export default async function getVmConnection(req: FastifyRequest, res: FastifyR
             void recordTerminalFailure(vmName, error)
         })
 
-        const vmIp = typeof vmPayload.vm_ip === 'string' ? vmPayload.vm_ip : ''
+        const vmIp = typeof details.rows[0].device_eth0_ipv4_address === 'string' ? details.rows[0].device_eth0_ipv4_address : ''
         const username = vmName
 
         return res.send({
@@ -71,10 +59,6 @@ export default async function getVmConnection(req: FastifyRequest, res: FastifyR
         void recordTerminalFailure(vmName, error)
         return res.status(500).send({ error: 'Unable to load VM connection details.' })
     }
-}
-
-function isExpectedVmLookupMiss(statusCode: number) {
-    return statusCode === 401 || statusCode === 403 || statusCode === 404
 }
 
 async function recordTerminalFailure(vmName: string, error: unknown) {

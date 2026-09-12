@@ -27,11 +27,20 @@ export default function useVMConnection(vmName: string, initialConnection: VMCon
                 const response = await fetch(`/api/backend/vm/${encodeURIComponent(vmName)}/connection`, {
                     cache: 'no-store', signal: controller.signal,
                 })
-                if ([401, 403, 404].includes(response.status)) {
+                if (response.status === 401) {
+                    retry = false
                     if (!disposed) {
                         setConnection(null)
-                        setError(response.status === 401 ? 'Your session has expired. Sign in to view access details.'
-                            : response.status === 403 ? 'You do not have permission to view access details.' : 'This VM is no longer available.')
+                        const path = window.location.pathname + window.location.search + window.location.hash
+                        const login = '/login?' + new URLSearchParams({ path, expired: 'true' })
+                        window.location.replace('/logout?' + new URLSearchParams({ path: login }))
+                    }
+                    return
+                }
+                if ([403, 404].includes(response.status)) {
+                    if (!disposed) {
+                        setConnection(null)
+                        setError(response.status === 403 ? 'You do not have permission to view access details.' : 'This VM is no longer available.')
                     }
                     retry = false
                     return
