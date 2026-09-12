@@ -14,7 +14,7 @@ import getVM from '@/utils/vms/fetch/getVM'
 import { getCookie } from '@/utils/cookies/cookies'
 import { useRouter } from 'next/navigation'
 import getVMDetails from '@/utils/vms/fetch/metrics/getVMDetails'
-import getVMMetrics from '@/utils/vms/fetch/metrics/getVMMetrics'
+import useVMMetrics from '@/components/vms/useVMMetrics'
 import VMMetrics from '@/components/vms/vmMetrics'
 import VMHostOptions from '@/components/vms/vmHostOptions'
 
@@ -28,7 +28,7 @@ type VMClientProps = {
 export default function VMClient({ vm: serverVM, details: serverDetails, metrics: serverMetrics, connection: serverConnection }: VMClientProps) {
     const [vm, setVM] = useState<VM>(serverVM)
     const [details, setDetails] = useState(serverDetails)
-    const [metrics, setMetrics] = useState(serverMetrics)
+    const { metrics, error: metricsError, refresh: refreshMetrics } = useVMMetrics(serverVM.name, serverMetrics)
     const { connection, error: connectionError, refresh: refreshConnection } = useVMConnection(serverVM.name, serverConnection)
     const router = useRouter()
     const boxStyle = 'w-full rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm'
@@ -36,6 +36,7 @@ export default function VMClient({ vm: serverVM, details: serverDetails, metrics
 
     async function handleRefresh() {
         refreshConnection()
+        refreshMetrics()
         const token = getCookie('access_token')
         const id = getCookie('id')
         if (!id || !token) {
@@ -53,10 +54,6 @@ export default function VMClient({ vm: serverVM, details: serverDetails, metrics
             setDetails(detailsResponse)
         }
 
-        const metricsResponse = await getVMMetrics(serverVM.name, token, id)
-        if (metricsResponse) {
-            setMetrics(metricsResponse)
-        }
     }
 
     if (vm.deleted_at) return <VMRow vm={vm} update={() => void handleRefresh()} />
@@ -88,7 +85,7 @@ export default function VMClient({ vm: serverVM, details: serverDetails, metrics
                 <VMAccess boxStyle={boxStyle} boxTitleStyle={boxTitleStyle} connection={connection} error={connectionError} />
             </div>
             <div className='grid gap-3'>
-                <VMMetrics boxStyle={boxStyle} boxTitleStyle={boxTitleStyle} vm={vm} metrics={metrics} />
+                <VMMetrics boxStyle={boxStyle} boxTitleStyle={boxTitleStyle} vm={vm} metrics={metrics} error={metricsError} />
             </div>
         </div>
     )
