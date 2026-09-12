@@ -25,7 +25,9 @@ export async function runRestrictedMetadataCollectionCycle(options: any) {
 
   for (let offset = 0; offset < sources.length; offset += maxConcurrentSources) {
     await Promise.all(sources.slice(offset, offset + maxConcurrentSources).map(async (source: any) => {
-    const task = { id: stableId("restricted-task", `${source.id}:${generatedAt}`), tenantId: source.tenantId, sourceId: source.id, sourceType: source.type, targetUrl: source.url, queuedAt: generatedAt, retryCount: source.crawlState?.retryCount ?? 0, maxBytes: 64_000, runId };
+    // Each due cycle creates a new task. Source failures control backoff,
+    // not the retry budget of this new attempt.
+    const task = { id: stableId("restricted-task", `${source.id}:${generatedAt}`), tenantId: source.tenantId, sourceId: source.id, sourceType: source.type, targetUrl: source.url, queuedAt: generatedAt, retryCount: 0, maxBytes: 64_000, runId };
     const started = Date.now();
     try {
       const collectionSource = governedCandidate(source, generatedAt)
@@ -153,6 +155,9 @@ export function startRestrictedMetadataCollectionLoop(options: any) {
 
 function due(source: any, generatedAt: string) {
   if (sourceCollectionLane(source) !== "restricted_metadata" && !governedCandidate(source, generatedAt)) return false;
+  // Older cycles could reject a new task without making a network attempt.
+  // Recover that artificial lockout once; real failures still set normal backoff.
+  if (source.crawlState?.lastError === "retry budget exhausted") return true;
   const eligible = source.crawlState?.backoffUntil ?? source.crawlState?.nextEligibleAt;
   return !eligible || Date.parse(eligible) <= Date.parse(generatedAt);
 }
