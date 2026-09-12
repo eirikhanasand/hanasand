@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Markdown from 'react-markdown'
 import { CaseDevelopment } from './case-development'
 import { useEffect, useState } from 'react'
 import type { CaseRow } from './cases-client'
@@ -9,7 +10,7 @@ export type MonitoringCase = CaseRow & {
     lastSeenAt?: string, occurrences: number, automationId: string, resolvedAt?: string, notificationsEnabled: boolean,
     history: Array<{ id: string, actor: string, at: string, action: string, note?: string, fromStatus?: string, toStatus?: string, fromSeverity?: string, toSeverity?: string, notificationsEnabled?: boolean }>,
     comments: Array<{ id: string, author: string, body: string, createdAt: string }>,
-    notifications: Array<{ messageId?: string, deliveredAt?: string, error?: string, nextAttemptAt?: string }>,
+    notifications: Array<{ messageId?: string, deliveredAt?: string, error?: string, nextAttemptAt?: string, message?: { content?: string, embeds?: Array<{ title?: string, description?: string, fields?: Array<{ name: string, value: string }> }> } }>,
 }
 
 const control = 'rounded-lg border border-ui-border bg-ui-canvas px-3 py-2 text-sm text-ui-text disabled:cursor-not-allowed disabled:opacity-50'
@@ -107,12 +108,27 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
                 <dl className='grid gap-4 sm:grid-cols-2 xl:grid-cols-4'>{[['First seen', date(item.createdAt)], ['Last seen', date(item.lastSeenAt || item.updatedAt)], ['Recovered', item.resolvedAt ? date(item.resolvedAt) : 'Not recovered'], ['Occurrences', item.occurrences.toLocaleString()]].map(([label, value]) => <div key={label} className='min-w-0 rounded-lg bg-ui-canvas p-4'><dt className='text-sm text-ui-muted'>{label}</dt><dd className='mt-2 wrap-break-word text-sm font-medium'>{value}</dd></div>)}</dl>
                 <p className='text-sm text-ui-muted'>Health checks update recovery automatically. A manual case status stays in effect until you change it; closing a case does not mark the health check as recovered.</p>
             </section>
-            <section aria-labelledby='case-notifications' className='grid gap-4 border-b border-ui-border p-5 sm:p-6'>
-                <h2 id='case-notifications' className='text-lg font-semibold'>Notification settings</h2>
-                <label className='flex items-center gap-3 text-sm'><input type='checkbox' className='h-4 w-4' checked={item.notificationsEnabled} disabled={busy} onChange={event => void save({ notificationsEnabled: event.target.checked })} />Enable notifications for this case</label>
-                <p className='text-sm text-ui-muted'>Uses the health check’s configured destinations and delivery rules.</p>
-                <details><summary className='cursor-pointer text-sm font-medium'>Delivery history ({item.notifications.length})</summary><div className='mt-3 grid gap-3'>{item.notifications.length ? item.notifications.map((notification, index) => <div className='rounded-lg bg-ui-canvas p-3 text-sm' key={index}>{notification.error ? <p className='text-ui-danger'>{notification.error}</p> : <p>{notification.deliveredAt ? `Delivered ${date(notification.deliveredAt)}` : 'Delivery pending'}</p>}{notification.messageId && <p className='mt-1 wrap-break-word text-ui-muted'>Message: {notification.messageId}</p>}</div>) : <p className='text-sm text-ui-muted'>No notifications recorded.</p>}</div></details>
-            </section>
+            <details key={`notifications-${caseId}`} className='border-b border-ui-border p-5 sm:p-6'>
+                <summary className='cursor-pointer text-lg font-semibold'>Notification settings ({item.notifications.filter(notification => notification.deliveredAt).length})</summary>
+                <div className='mt-4 grid gap-4'>
+                    <label className='flex items-center gap-3 text-sm'><input type='checkbox' className='h-4 w-4' checked={item.notificationsEnabled} disabled={busy} onChange={event => void save({ notificationsEnabled: event.target.checked })} />Enable notifications for this case</label>
+                    <p className='text-sm text-ui-muted'>Uses the health check’s configured destinations and delivery rules.</p>
+                    <h3 className='text-sm font-medium'>Delivery history</h3>
+                    {item.notifications.length ? item.notifications.map((notification, index) => <article className='grid gap-2 rounded-lg bg-ui-canvas p-3 text-sm' key={notification.messageId || index}>
+                        <p>{notification.deliveredAt ? `Delivered ${date(notification.deliveredAt)}` : 'Delivery pending'}</p>
+                        {notification.error && <p className='text-ui-danger'>{notification.error}</p>}
+                        {notification.message ? <div className='grid gap-3 [overflow-wrap:anywhere]'>
+                            {notification.message.content && <NotificationText text={notification.message.content} />}
+                            {notification.message.embeds?.map((embed, embedIndex) => <div key={embedIndex} className='grid gap-2 border-l-2 border-ui-border pl-3'>
+                                {embed.title && <p className='font-semibold'>{notificationText(embed.title)}</p>}
+                                {embed.description && <NotificationText text={embed.description} />}
+                                {embed.fields?.length ? <dl className='grid gap-2 sm:grid-cols-2'>{embed.fields.map((field, fieldIndex) => <div key={fieldIndex}><dt className='text-ui-muted'>{field.name}</dt><dd><NotificationText text={field.value} /></dd></div>)}</dl> : null}
+                            </div>)}
+                        </div> : notification.deliveredAt && <p className='text-ui-muted'>Original message content is unavailable.</p>}
+                        {notification.messageId && <p className='wrap-break-word text-xs text-ui-muted'>Message ID: {notification.messageId}</p>}
+                    </article>) : <p className='text-sm text-ui-muted'>No notifications sent.</p>}
+                </div>
+            </details>
             <CaseDevelopment caseId={caseId} organizationId={item.organizationId || organizationId} />
             <section aria-labelledby='case-history' className='grid gap-4 border-b border-ui-border p-5 sm:p-6'>
                 <h2 id='case-history' className='text-lg font-semibold'>Case history</h2>
@@ -136,4 +152,15 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
             </section>
         </>}
     </article>
+}
+
+function notificationText(text: string) {
+    return text.replace(/<t:(\d+)(?::[tTdDfFR])?>/g, (match, seconds) => {
+        const timestamp = new Date(Number(seconds) * 1000)
+        return Number.isFinite(timestamp.getTime()) ? date(timestamp.toISOString()) : match
+    })
+}
+
+function NotificationText({ text }: { text: string }) {
+    return <div className='whitespace-pre-wrap'><Markdown skipHtml allowedElements={['p', 'strong', 'em', 'a', 'code', 'br', 'ul', 'ol', 'li', 'blockquote']} components={{ a: ({ href, children }) => <a href={href} className='text-ui-primary underline' target='_blank' rel='noopener noreferrer'>{children}</a> }}>{notificationText(text)}</Markdown></div>
 }

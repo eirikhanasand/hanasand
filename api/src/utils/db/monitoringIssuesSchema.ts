@@ -46,6 +46,15 @@ export default async function ensureMonitoringIssuesSchema() {
         PRIMARY KEY (issue_id, destination)
     )`)
     await run('ALTER TABLE monitoring_issue_notifications ADD COLUMN IF NOT EXISTS message_id TEXT, ADD COLUMN IF NOT EXISTS mentioned_everyone BOOLEAN')
+    await run(`CREATE TABLE IF NOT EXISTS monitoring_issue_messages (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        issue_id BIGINT NOT NULL REFERENCES monitoring_issues(id) ON DELETE CASCADE,
+        message_id TEXT UNIQUE, delivered_at TIMESTAMPTZ NOT NULL, message JSONB
+    )`)
+    await run('CREATE INDEX IF NOT EXISTS monitoring_issue_messages_issue ON monitoring_issue_messages(issue_id, delivered_at)')
+    await run(`INSERT INTO monitoring_issue_messages (issue_id, message_id, delivered_at)
+        SELECT issue_id, message_id, delivered_at FROM monitoring_issue_notifications WHERE message_id IS NOT NULL AND delivered_at IS NOT NULL
+        ON CONFLICT (message_id) DO NOTHING`)
     await run('ALTER TABLE agent_automation_runs ADD COLUMN IF NOT EXISTS issue_id BIGINT REFERENCES monitoring_issues(id) ON DELETE SET NULL')
     await run('CREATE INDEX IF NOT EXISTS idx_automation_runs_issue ON agent_automation_runs(issue_id) WHERE issue_id IS NOT NULL')
 }

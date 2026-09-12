@@ -55,7 +55,13 @@ export async function recordMonitoringOutcome(automation: AutomationRow, runId: 
         if (!claim.rows.length) continue
         try {
             const receipt = await deliverDiscordWebhookFile(destination, alert.content, true, alert.embeds)
-            await run('UPDATE monitoring_issue_notifications SET delivered_at = NOW(), next_attempt_at = NOW() + INTERVAL \'24 hours\', last_error = NULL, message_id = $3, mentioned_everyone = $4 WHERE issue_id = $1 AND destination = $2', [issue, destination, receipt?.id || null, receipt?.mention_everyone ?? null])
+            await run(`WITH delivered AS (
+                UPDATE monitoring_issue_notifications SET delivered_at = NOW(), next_attempt_at = NOW() + INTERVAL '24 hours',
+                    last_error = NULL, message_id = $3, mentioned_everyone = $4 WHERE issue_id = $1 AND destination = $2 RETURNING issue_id, delivered_at
+                ) INSERT INTO monitoring_issue_messages (issue_id, message_id, delivered_at, message)
+                SELECT issue_id, $3, delivered_at, $5::jsonb FROM delivered
+                ON CONFLICT (message_id) DO UPDATE SET message = EXCLUDED.message`,
+            [issue, destination, receipt?.id || null, receipt?.mention_everyone ?? null, JSON.stringify({ content: `@everyone ${alert.content}`.slice(0, 1900), embeds: alert.embeds })])
         } catch (error) {
             // Keep the reservation after ambiguous failures to avoid duplicate pings.
             const detail = redactSecretBearingText(error instanceof Error ? error.message : 'Discord delivery failed.')
@@ -66,9 +72,13 @@ export async function recordMonitoringOutcome(automation: AutomationRow, runId: 
 }
 
 export async function loadMonitoringIssues(automationId: string) {
-    const result = await run(`SELECT i.*, COALESCE((SELECT jsonb_agg(jsonb_build_object(
-        'messageId', n.message_id, 'mentionedEveryone', n.mentioned_everyone, 'deliveredAt', n.delivered_at, 'nextAttemptAt', n.next_attempt_at, 'error', n.last_error))
-        FROM monitoring_issue_notifications n WHERE n.issue_id = i.id), '[]'::jsonb) AS notifications
+    const result = await run(`SELECT i.*, COALESCE((SELECT jsonb_agg(entry ORDER BY delivered_at DESC NULLS FIRST) FROM (
+        SELECT jsonb_build_object('messageId', m.message_id, 'deliveredAt', m.delivered_at, 'message', m.message) AS entry, m.delivered_at
+        FROM monitoring_issue_messages m WHERE m.issue_id = i.id
+        UNION ALL
+        SELECT jsonb_build_object('nextAttemptAt', n.next_attempt_at, 'error', n.last_error), NULL::timestamptz
+        FROM monitoring_issue_notifications n WHERE n.issue_id = i.id AND (n.delivered_at IS NULL OR n.last_error IS NOT NULL)
+        ) history), '[]'::jsonb) AS notifications
         FROM monitoring_issues i WHERE i.automation_id = $1 ORDER BY i.last_seen_at DESC, i.id DESC`, [automationId])
     return result.rows.map(row => ({
         id: row.id, caseNumber: `HA-${row.id}`, kind: row.kind, summary: row.summary,
