@@ -97,7 +97,7 @@ try {
     ])
 
     await page.goto(`${baseUrl}${dashboardPath}`, { waitUntil: 'domcontentloaded', timeout: timeoutMs })
-    await page.getByRole('heading', { name: 'Database', exact: true }).waitFor({ state: 'visible', timeout: timeoutMs })
+    await page.locator('[data-db-monitor-metrics]').waitFor({ state: 'visible', timeout: timeoutMs })
 
     const bodyText = await page.locator('body').innerText({ timeout: timeoutMs })
     const signal = evaluateDashboardText(bodyText)
