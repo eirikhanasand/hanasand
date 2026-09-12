@@ -11,6 +11,7 @@ import tokenIsValid from '@/utils/proxy/tokenIsValid'
 import { toPublicServiceStatus } from '@/utils/status/publicStatus'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import DwmOverviewPanel from './dwmOverviewPanel'
+import { loadOverview } from './loadOverview'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,10 +29,12 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
         redirect('/logout?path=/login%3Fpath%3D/dashboard%26expired=true')
     }
 
+    const params = searchParams ? await searchParams : {}
+    const organizationId = firstParam(params.organizationId) || firstParam(params.orgId)
+    const overview = loadOverview(sessionCookies.toString(), organizationId)
     const session = id ? await tokenIsValid(token, id) : null
     const isAdmin = session?.valid === true && session.roles?.some(role => role.id === 'administrator' || role.id === 'admin') === true
 
-    const params = searchParams ? await searchParams : {}
     const accessDenied = params.notAllowed === 'true'
     const membership = accessDenied ? await organizationMembership() : null
     const notice = membership === 'none'
@@ -39,6 +42,8 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
         : membership === 'member'
             ? { title: 'You don’t have access to this page.', description: 'If you need access, contact your administrator.', action: 'View organizations', href: '/organizations' }
             : { title: 'We couldn’t check your organization access.', description: 'Try again, or open your organizations to check your membership.', action: 'View organizations', href: '/organizations' }
+
+    const overviewState = await overview
 
     return (
         <DashboardPage>
@@ -65,7 +70,7 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
                 </div>
             ) : null}
 
-            <DwmOverviewPanel organizationId={firstParam(params.organizationId) || firstParam(params.orgId)} />
+            <DwmOverviewPanel organizationId={organizationId} state={overviewState} />
 
             {isAdmin ? (
                 <Suspense fallback={<div role='status'><DashboardPanel className='p-4'>Checking service health…</DashboardPanel></div>}>

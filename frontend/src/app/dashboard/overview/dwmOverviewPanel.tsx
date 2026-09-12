@@ -1,43 +1,10 @@
-'use client'
-
 import Link from 'next/link'
-import { AlertTriangle, ArrowRight, BellRing, CheckCircle2, FileText, Loader2, Radar, ShieldAlert, Ticket } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import type { DwmProductSnapshot } from '@/utils/dwm/product'
+import { AlertTriangle, ArrowRight, BellRing, CheckCircle2, FileText, Radar, ShieldAlert, Ticket } from 'lucide-react'
 
-type CaseRow = { status?: string }
-type LoadState = { status: 'loading' } | { status: 'ready', snapshot: DwmProductSnapshot, openCases: number | null } | { status: 'error', message: string }
+import type { OverviewState } from './loadOverview'
 
-export default function DwmOverviewPanel({ organizationId }: { organizationId?: string }) {
-    const [state, setState] = useState<LoadState>({ status: 'loading' })
-
-    useEffect(() => {
-        const controller = new AbortController()
-        const query = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''
-        const casesQuery = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''
-        Promise.all([
-            fetch(`/api/dwm/product${query}`, { cache: 'no-store', signal: controller.signal }),
-            fetch(`/api/cases${casesQuery}`, { cache: 'no-store', signal: controller.signal }).catch(() => null),
-        ])
-            .then(async ([snapshotResponse, casesResponse]) => {
-                const body = await snapshotResponse.json().catch(() => null) as DwmProductSnapshot | { error?: { message?: string } } | null
-                const errorMessage = body && 'error' in body ? body.error?.message : undefined
-                if (!snapshotResponse.ok || !body || !('schemaVersion' in body)) throw new Error(errorMessage || 'Tenant monitoring is unavailable.')
-                if (organizationId && body.tenantId !== organizationId) throw new Error('Organization monitoring returned an unexpected tenant scope.')
-                const caseBody = casesResponse?.ok ? await casesResponse.json().catch(() => null) as { items?: CaseRow[], cases?: CaseRow[] } | null : null
-                const cases = Array.isArray(caseBody?.items) ? caseBody.items : Array.isArray(caseBody?.cases) ? caseBody.cases : null
-                const openCases = cases?.filter(row => !['closed', 'resolved', 'false_positive', 'suppressed'].includes(String(row.status || '').toLowerCase())).length ?? null
-                setState({ status: 'ready', snapshot: body, openCases })
-            })
-            .catch(error => {
-                if (error instanceof DOMException && error.name === 'AbortError') return
-                setState({ status: 'error', message: error instanceof Error ? error.message : 'Tenant monitoring is unavailable.' })
-            })
-        return () => controller.abort()
-    }, [organizationId])
-
+export default function DwmOverviewPanel({ organizationId, state }: { organizationId?: string, state: OverviewState }) {
     const scopeLabel = organizationId ? 'Organization monitoring' : 'Personal monitoring'
-    if (state.status === 'loading') return <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm' aria-label={scopeLabel}><div className='flex items-center gap-2 text-sm text-ui-muted'><Loader2 className='h-4 w-4 animate-spin text-ui-primary' />Loading {scopeLabel.toLowerCase()}…</div></section>
     if (state.status === 'error') return <section className='rounded-lg border border-ui-warning/40 bg-ui-panel p-4 shadow-sm' aria-label={scopeLabel}><div className='flex items-center gap-2 text-sm font-semibold text-ui-text'><AlertTriangle className='h-4 w-4 text-ui-warning' />{scopeLabel} needs review</div><p className='mt-2 text-sm text-ui-muted'>{state.message}</p><Link href={organizationId ? `/dwm?organizationId=${encodeURIComponent(organizationId)}` : '/dwm'} className='mt-3 inline-flex text-sm font-semibold text-ui-primary hover:underline'>Open DWM</Link></section>
 
     const { snapshot, openCases } = state
