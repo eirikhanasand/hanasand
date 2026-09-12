@@ -45,7 +45,7 @@ export default function IncidentReport({ incident }: { incident: ServiceIncident
                     <p className='mt-2 text-sm leading-6 text-ui-muted'>{update.message}</p>
                     {update.evidence && <div className='mt-3 rounded-lg border border-ui-border bg-ui-canvas px-4 py-3'>
                         <p className='text-xs font-medium text-ui-text'>Recorded check result</p>
-                        <p className='mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-ui-muted'>{update.evidence}</p>
+                        <p className='mt-1 whitespace-pre-wrap wrap-break-word text-sm leading-6 text-ui-muted'>{update.evidence}</p>
                     </div>}
                 </li>)}
             </ol>
