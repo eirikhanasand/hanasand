@@ -11,6 +11,8 @@ type MonitoringCase = CaseRow & {
 }
 
 const control = 'rounded-lg border border-ui-border bg-ui-canvas px-3 py-2 text-sm text-ui-text disabled:cursor-not-allowed disabled:opacity-50'
+const severityColor: Record<string, string> = { low: '#89CFF0', medium: '#22C55E', high: '#FACC15', critical: '#EF4444' }
+const headerControl = `${control} inline-flex h-10 min-w-28 items-center justify-center whitespace-nowrap`
 const date = (value?: string) => value ? new Date(value).toLocaleString() : '—'
 
 export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: string, organizationId?: string }) {
@@ -56,18 +58,18 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
         }
     }
     return <article className='min-w-0 overflow-hidden rounded-xl border border-ui-border bg-ui-panel text-ui-text'>
-        <header className='grid gap-5 border-b border-ui-border p-5 sm:p-6'>
+        <div aria-hidden='true' className='h-1.5' style={{ backgroundColor: severityColor[item?.severity ?? ''] ?? 'transparent' }} />
+        <header className='grid gap-3 border-b border-ui-border px-5 py-4 sm:px-6'>
             <Link className='w-fit text-sm text-ui-primary' href={`/cases${organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''}`}>← Cases</Link>
-            <div className='flex flex-col items-start justify-between gap-4 sm:flex-row sm:flex-wrap'>
-                <div className='min-w-0 flex-1'><h1 className='wrap-break-word text-2xl font-semibold'>{item?.title || caseId}</h1>
-                    {item && <span className={`mt-3 inline-flex rounded-full border px-3 py-1 text-sm font-medium capitalize ${item.status === 'open' ? 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning' : 'border-ui-success/30 bg-ui-success/10 text-ui-success'}`}>{item.status}</span>}
-                </div>
-                {item && <div className='flex flex-wrap items-end gap-3'>
-                    <label className='grid gap-1 text-sm text-ui-muted'>Severity<select aria-label='Severity' className={control} value={item.severity} disabled={busy} onChange={event => void save({ severity: event.target.value })}>{['low', 'medium', 'high', 'critical'].map(value => <option key={value} value={value}>{value[0].toUpperCase() + value.slice(1)}</option>)}</select></label>
-                    <button className={control} disabled={busy} onClick={() => void save({ status: item.status === 'open' ? 'closed' : 'open' })}>{item.status === 'open' ? 'Close case' : 'Reopen case'}</button>
+            <div className='flex flex-wrap items-center gap-3'>
+                <h1 className='min-w-0 flex-1 basis-full wrap-break-word text-xl font-semibold leading-10 lg:basis-0'>{item?.title || caseId}</h1>
+                {item && <div className='flex max-w-full flex-wrap items-center gap-2'>
+                    <span className={`inline-flex h-10 min-w-28 items-center justify-center rounded-lg border px-3 text-sm font-medium capitalize ${item.status === 'open' ? 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning' : 'border-ui-success/30 bg-ui-success/10 text-ui-success'}`}>{item.status}</span>
+                    <select aria-label='Severity' className={headerControl} value={item.severity} disabled={busy} onChange={event => void save({ severity: event.target.value })}>{['low', 'medium', 'high', 'critical'].map(value => <option key={value} value={value}>{value[0].toUpperCase() + value.slice(1)}</option>)}</select>
+                    <button className={headerControl} disabled={busy} onClick={() => void save({ status: item.status === 'open' ? 'closed' : 'open' })}>{item.status === 'open' ? 'Close case' : 'Reopen case'}</button>
                 </div>}
             </div>
-            <p role='status' className='text-sm text-ui-muted'>{busy ? 'Saving…' : notice}</p>
+            <p role='status' className='sr-only'>{busy ? 'Saving…' : notice}</p>
             {error && <div role='alert' className='text-sm text-ui-danger'>{error} <button className='underline' disabled={busy} onClick={() => setRevision(value => value + 1)}>Retry</button></div>}
         </header>
         {!item && !error && <p className='p-6'>Loading case…</p>}
