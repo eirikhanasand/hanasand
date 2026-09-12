@@ -1,48 +1,29 @@
 import { expect, test } from '@playwright/test'
 
-test('register page sends managed onboarding requests through contact intake', async ({ page }) => {
-    await page.route('**/api/commercial/contact-requests', async (route) => {
-        expect(route.request().headers()['idempotency-key']).toBeTruthy()
-        const body = route.request().postDataJSON() as Record<string, unknown>
-        expect(body).toMatchObject({
-            name: 'Avery Chen',
-            email: 'avery@acme.test',
-            company: 'Acme Security',
-            subject: 'Managed Hanasand onboarding request',
-            intent: 'enterprise',
-            plan: 'managed-onboarding',
-            deliveryPreference: 'not-sure',
-            replyWindow: 'this-week',
-            securityReview: true,
-        })
-        expect(String(body.message)).toContain('Vendor monitoring for Acme suppliers')
-
-        await route.fulfill({
-            status: 202,
-            contentType: 'application/json',
-            body: JSON.stringify({
-                accepted: true,
-                ticketId: 'HS-20260705-ABC12345',
-                nextStep: 'Expect a reply by email with coverage fit, setup steps, and security review material.',
-            }),
-        })
+test('legacy signup links open one signup form with required email', async ({ page }) => {
+    await page.route('**/api/auth/register', async route => {
+        const fields = new URLSearchParams(route.request().postData() || '')
+        expect(fields.get('email')).toBe('signup@example.test')
+        expect(fields.get('redirectPath')).toBe('/developers#api-access')
+        await route.fulfill({ contentType: 'text/html', body: 'Signup submitted once' })
     })
+    await page.goto('/register?path=%2Fdevelopers%23api-access')
+    await expect(page).toHaveURL(/\/login\?mode=signup/)
+    await expect(page.getByText('Enterprise onboarding', { exact: true })).toHaveCount(0)
+    const form = page.locator('form[action="/api/auth/register"]')
+    await expect(form).toHaveCount(1)
+    await form.getByLabel('Username', { exact: true }).fill('signup-example')
+    await form.getByLabel('Name', { exact: true }).fill('Signup Example')
+    await form.getByLabel('Password', { exact: true }).fill('Test-password-12345!')
+    await expect(form.getByRole('button', { name: 'Create account', exact: true })).toBeDisabled()
+    await expect(form.getByLabel('Email', { exact: true })).toHaveAttribute('required', '')
+    await form.getByLabel('Email', { exact: true }).fill('signup@example.test')
+    await form.getByRole('button', { name: 'Create account', exact: true }).click()
+    await expect(page.getByText('Signup submitted once')).toBeVisible()
+})
 
-    await page.goto('/register')
-
-    await expect(page.locator('[data-managed-onboarding-intake="true"]')).toBeVisible()
-    await expect(page.getByText('Creates an intake ticket for coverage fit')).toBeVisible()
-    await expect(page.locator('#register-email')).toHaveCount(0)
-    await expect(page.locator('#register-company')).toHaveCount(0)
-
-    await page.getByLabel('Name').first().fill('Avery Chen')
-    await page.getByLabel('Work email').fill('avery@acme.test')
-    await page.getByLabel('Company').fill('Acme Security')
-    await page.getByLabel('Monitoring context').fill('Vendor monitoring for Acme suppliers with SSO and DPA review before rollout.')
-    await page.getByRole('button', { name: 'Send setup request' }).click()
-
-    const result = page.locator('[data-managed-onboarding-result="true"]')
-    await expect(result).toContainText('Setup request received')
-    await expect(result).toContainText('HS-20260705-ABC12345')
-    await expect(result).toContainText('security review material')
+test('signup errors remain on the single form with the intended destination', async ({ page }) => {
+    await page.goto('/login?mode=signup&error=Username%20already%20exists&path=%2Forganizations')
+    await expect(page.getByText('Username already exists', { exact: true })).toBeVisible()
+    await expect(page.locator('form[action="/api/auth/register"] input[name="redirectPath"]')).toHaveValue('/organizations')
 })

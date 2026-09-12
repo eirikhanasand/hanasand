@@ -1,31 +1,14 @@
-import RegisterPage from './pageClient'
-import type { Metadata } from 'next'
-import { buildRouteMetadata } from '../seo'
+import { redirect } from 'next/navigation'
 
-export const metadata: Metadata = buildRouteMetadata({
-    title: 'Create Account',
-    description: 'Create a Hanasand account for monitoring alerts, webhooks, and API access.',
-    path: '/register',
-    keywords: ['hanasand account', 'dark web monitoring account'],
-})
-
-export default async function Page({
-    searchParams,
-}: {
-    searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+// Keep existing signup links working without a second registration page.
+export default async function Page({ searchParams }: {
+    searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
     const params = await searchParams
-    const internal = readBooleanParam(params.internal)
-    const path = Array.isArray(params.path) ? params.path[0] : params.path
-
-    return <RegisterPage
-        serverInternal={internal}
-        serverError={typeof params.error === 'string' ? params.error : null}
-        path={path || null}
-    />
-}
-
-function readBooleanParam(value: string | string[] | undefined) {
-    const next = Array.isArray(value) ? value[0] : value
-    return next === 'true' || next === '1'
+    const query = new URLSearchParams({ mode: 'signup' })
+    for (const key of ['path', 'internal', 'error']) {
+        const value = Array.isArray(params[key]) ? params[key][0] : params[key]
+        if (value) query.set(key, value)
+    }
+    redirect(`/login?${query}`)
 }
