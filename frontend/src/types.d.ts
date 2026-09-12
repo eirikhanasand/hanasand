@@ -556,6 +556,7 @@ type Project = {
 }
 
 type VMDetails = {
+    last_checked: string
     name: string
     status: string
     type: string
