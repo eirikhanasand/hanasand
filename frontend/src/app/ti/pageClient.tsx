@@ -2,6 +2,7 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars -- dormant TI workbench sections are unused while the simplified public result view ships. */
 
+import SearchSuggestions, { rememberSearch } from '@/components/ti/searchSuggestions'
 import searchThreatIntel, { evidenceTimestamp, TiSearchResponse } from '@/utils/ti/search'
 import { actorGeoProfile, countryFromValue, victimObservationsFor } from '@/utils/ti/actorProfile'
 import { buildActorIntelligence, type TiActorIntelligenceProfile } from '@/utils/ti/actorIntelligence'
@@ -135,7 +136,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
     const [savedSearchError, setSavedSearchError] = useState('')
     const activeQueryRef = useRef((initialResult?.query ?? initialQuery).trim().toLowerCase())
     const requestSeqRef = useRef(0)
-    const inputRef = useRef<HTMLInputElement>(null)
+    useEffect(() => { if (initialQuery.trim()) rememberSearch(initialQuery) }, [initialQuery])
 
     useEffect(() => {
         document.body.dataset.publicTiRoute = 'true'
@@ -228,6 +229,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
 
     async function executeSearch(clean: string) {
         if (!clean) return
+        rememberSearch(clean)
 
         const requestSeq = requestSeqRef.current + 1
         requestSeqRef.current = requestSeq
@@ -253,7 +255,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
     async function submit(event: SyntheticEvent<HTMLFormElement>) {
         event.preventDefault()
         const form = new FormData(event.currentTarget)
-        await executeSearch(String(form.get('q') ?? inputRef.current?.value ?? query).trim())
+        await executeSearch(String(form.get('q') ?? query).trim())
     }
 
     async function saveCurrentSearch() {
@@ -330,17 +332,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
                     </div>
                 ) : null}
                 <div className={`flex flex-col gap-3 ${visible ? 'md:flex-row md:items-end' : 'rounded-xl border border-ui-border bg-ui-panel p-3 shadow-[0_18px_50px_rgba(26,35,55,0.12)] dark:border-ui-border dark:bg-ui-panel'}`}>
-                    <label className='grid flex-1 gap-2'>
-                        <span className={`text-xs font-semibold uppercase text-ui-primary ${visible ? 'sr-only' : ''}`}>Threat intelligence search</span>
-                        <input
-                            ref={inputRef}
-                            name='q'
-                            value={query}
-                            onChange={(event) => handleQueryChange(event.target.value)}
-                            placeholder='APT29, LockBit, microsoft.com, CVE-2024-3094...'
-                            className={`${visible ? 'h-10 rounded-lg px-3 text-sm' : 'h-12 rounded-lg px-4 text-base'} border border-ui-border bg-ui-panel font-medium text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-4 focus:ring-ui-primary/20 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:placeholder:text-ui-muted`}
-                        />
-                    </label>
+                    <SearchSuggestions query={query} onChange={handleQueryChange} onSearch={value => void executeSearch(value)} saved={savedSearches.map(item => item.query)} compact={Boolean(visible)} />
                     <button
                         type='submit'
                         aria-busy={busy}
