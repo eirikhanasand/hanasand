@@ -88,7 +88,7 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
 
     return (
         <div className='group relative h-10 min-h-10 max-h-10'>
-            <div onClick={() => router.push(`/profile/${encodeURIComponent(user.id)}`)} className={'grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_100px_100px_240px] items-center gap-3 rounded-lg py-2 hover:bg-ui-raised cursor-pointer hover:scale-[1.005]'}>
+            <div onClick={() => router.push(`/profile/${encodeURIComponent(user.id)}`)} className={'grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_100px_100px_240px] items-center gap-3 rounded-lg py-2 hover:bg-ui-raised cursor-pointer'}>
                 <h1 className={`min-w-0 truncate ${user.active === false ? 'text-ui-muted line-through' : ''}`} key={user.id}>{user.name}</h1>
                 <span className={`min-w-0 truncate text-sm text-ui-muted ${user.active === false ? 'line-through' : ''}`}>{user.id}</span>
                 <span className='text-xs text-ui-muted'><AccountDate value={user.created_at} /></span>
