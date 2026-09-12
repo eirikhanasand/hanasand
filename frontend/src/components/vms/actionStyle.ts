@@ -1,0 +1,1 @@
+export const vmActionStyle = 'inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg border border-ui-border text-sm font-medium transition hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary disabled:cursor-not-allowed disabled:opacity-50'
