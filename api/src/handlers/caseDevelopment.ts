@@ -29,7 +29,10 @@ export async function getCaseDevelopment(req: FastifyRequest<{ Querystring: Quer
     const { caseId, offset = '0' } = req.query
     if (!caseId || !/^[a-zA-Z0-9_-]{1,200}$/.test(caseId) || !/^\d{1,7}$/.test(offset)) return res.status(400).send({ error: 'Invalid case or page.' })
     const result = await run(`SELECT d.*, r.repository_url, r.provider FROM case_development d JOIN case_repositories r ON r.id = d.repository_id
-        WHERE ${scope} AND d.case_references @> ARRAY[$3]::text[]
+        WHERE ${scope} AND d.case_references && (ARRAY[$3]::text[] || COALESCE((
+            SELECT array_agg('HA-' || related.id) FROM monitoring_issues related
+            WHERE COALESCE(related.merged_into,related.id)=(SELECT COALESCE(original.merged_into,original.id)
+                FROM monitoring_issues original WHERE 'HA-' || original.id=$3)), ARRAY[]::text[]))
         ORDER BY d.updated_at DESC, d.repository_id, d.kind, d.external_id LIMIT 51 OFFSET $4`, [auth.owner, auth.organizationId, caseId, Number(offset)])
     return res.send({ items: result.rows.slice(0, 50), hasMore: result.rows.length > 50 })
 }

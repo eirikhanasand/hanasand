@@ -26,7 +26,7 @@ export async function getMonitoringCases(req: FastifyRequest<{ Params: { id?: st
         FROM monitoring_issues i JOIN agent_automations a ON a.id = i.automation_id
         WHERE ${monitoringCaseReadScope('a', '$1', '$2')}
           AND ($3::text IS NULL OR a.organization_id = $3)
-          AND ($4::text IS NULL OR i.id::text = $4)
+          AND i.merged_into IS NULL AND ($4::text IS NULL OR i.id = (SELECT COALESCE(merged_into,id) FROM monitoring_issues WHERE id::text=$4))
         ORDER BY i.last_seen_at DESC, i.id DESC`, [includeAll, id, organizationId, caseId?.slice(3) || null])
     const items = result.rows.map(row => ({
         canManage: row.can_manage === true, id: `HA-${row.id}`, caseNumber: `HA-${row.id}`, source: 'monitoring',
@@ -41,8 +41,8 @@ export async function getMonitoringCases(req: FastifyRequest<{ Params: { id?: st
     if (!caseId) return res.send({ items })
     if (!items.length) return res.status(404).send({ error: 'Case not found.' })
     const issues = await loadMonitoringIssues(items[0].automationId)
-    const events = await loadMonitoringCaseEvents(caseId.slice(3), page, snapshot)
-    return res.send({ case: { ...items[0], ...events, currentCheck: monitoringCheckDetails(result.rows[0] as AutomationRow), notifications: issues.find(issue => issue.caseNumber === caseId)?.notifications || [] } })
+    const events = await loadMonitoringCaseEvents(items[0].id.slice(3), page, snapshot)
+    return res.send({ case: { ...items[0], ...events, currentCheck: monitoringCheckDetails(result.rows[0] as AutomationRow), notifications: issues.find(issue => issue.caseNumber === items[0].id)?.notifications || [] } })
 }
 
 export async function updateMonitoringCase(req: FastifyRequest<{ Params: { id: string }, Querystring: { organizationId?: string, tenantId?: string }, Body: { status?: string, severity?: string, notificationsEnabled?: boolean, comment?: string, resolutionMethod?: string, confirmResolutionId?: string } }>, res: FastifyReply) {
@@ -92,7 +92,7 @@ export async function updateMonitoringCase(req: FastifyRequest<{ Params: { id: s
             WHEN $10::jsonb IS NOT NULL THEN $10::jsonb WHEN $5::text IN ('open', 'in_progress') THEN NULL ELSE i.resolution END
         FROM agent_automations a WHERE a.id = i.automation_id
         AND ${automationReadScope('a', '$1', '$2')}
-        AND ($3::text IS NULL OR a.organization_id = $3) AND i.id::text = $4
+        AND ($3::text IS NULL OR a.organization_id = $3) AND i.id = (SELECT COALESCE(merged_into,id) FROM monitoring_issues WHERE id::text=$4)
         AND ($11::text IS NULL OR (i.resolution->>'id' = $11 AND i.resolution->>'type' IN ('ai', 'automation')
             AND i.resolution->>'confirmedAt' IS NULL AND COALESCE(i.status_override, CASE WHEN i.resolved_at IS NULL THEN 'open' ELSE 'resolved' END) IN ('resolved', 'closed')))
         RETURNING i.id`, [includeAll, id, organizationId, caseId.slice(3), body.status ?? null, body.severity ?? null, body.notificationsEnabled ?? null, JSON.stringify(comment), metadata, resolution, body.confirmResolutionId ?? null, actor, at])

@@ -16,6 +16,7 @@ app.delete('/cases/repositories/:id', handlers.deleteCaseRepository)
 test('durable signed events, idempotency, stale updates, ownership and organization access', async () => {
     await query('CREATE TABLE organizations(id text, status text); CREATE TABLE organization_members(organization_id text, user_id text, status text, role text)')
     await query("INSERT INTO organizations VALUES ('org','active'); INSERT INTO organization_members VALUES ('org','owner','active','admin'),('org','member','active','member')")
+    await query('CREATE TABLE monitoring_issues(id bigint PRIMARY KEY, merged_into bigint)')
     await schema(); await schema()
     const create = await app.inject({ method: 'POST', url: '/cases/repositories', payload: { provider: 'forgejo', repositoryUrl: 'https://git.example.com/team/app' } })
     expect(create.statusCode).toBe(201)
@@ -36,6 +37,10 @@ test('durable signed events, idempotency, stale updates, ownership and organizat
     expect((await get('other')).json().items).toHaveLength(0)
     expect((await get('anonymous')).statusCode).toBe(401)
     expect((await app.inject('/cases/development?caseId=HA-100')).json().items).toHaveLength(0)
+    await query('INSERT INTO monitoring_issues VALUES (1,NULL),(100,1)')
+    await send({ ...push, commits: push.commits.map(commit => ({ ...commit, message: 'Repair HA-100' })) })
+    expect((await get()).json().items).toHaveLength(1)
+    expect((await app.inject('/cases/development?caseId=HA-100')).json().items).toHaveLength(1)
     expect((await app.inject('/cases/repositories')).json().items[0].secret_encrypted).toBeUndefined()
     const pr = { number: 7, title: 'Fix HA-1', state: 'open', updated_at: '2026-09-12T12:01:00Z', user: { login: 'Engineer' } }
     expect((await send({ repository: repo, pull_request: pr }, 'pull_request')).statusCode).toBe(200)

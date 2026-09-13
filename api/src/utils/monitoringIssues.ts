@@ -1,3 +1,4 @@
+import { correlationKey, monitoringScope } from './monitoringCorrelation.ts'
 import { monitoringCaseDiscordAlert } from './alerts/monitoringCase.ts'
 import { isHostThresholdMessage } from './hostCheckMessage.ts'
 import { createHash } from 'node:crypto'
@@ -16,26 +17,35 @@ export function monitoringIssueFingerprint(automation: Pick<AutomationRow, 'targ
 
 export async function recordMonitoringOutcome(automation: AutomationRow, runId: string, kind: 'failure' | 'warning' | null, message: string) {
     const issue = await withTransaction(async query => {
+        await query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [monitoringScope(automation)])
         const check = (await query('SELECT issue_id FROM agent_automation_runs WHERE id = $1 FOR UPDATE', [runId])).rows[0]
         if (!check) throw new Error('Monitoring run was not found.')
         if (kind !== 'failure') {
+            await query(`UPDATE monitoring_issue_checks c SET active=false FROM monitoring_issues i
+                WHERE c.issue_id=i.id AND c.automation_id=$1 AND ($2::text IS NULL OR i.kind='failure')`, [automation.id, kind])
             await query(`UPDATE monitoring_issues SET resolved_at = NOW(),
                 history = history || jsonb_build_array(jsonb_build_object('id', $3::text, 'at', NOW(), 'actor', 'Health monitoring', 'actorType', 'automation', 'action', 'recovered', 'note', $4::text, 'runId', $3::text)),
                 comments = comments || jsonb_build_array(jsonb_build_object('id', $3::text, 'createdAt', NOW(), 'author', 'Health monitoring', 'body', $4::text)),
                 resolution = CASE WHEN status_override IS NULL THEN jsonb_build_object('id', $3::text, 'at', NOW(), 'actor', 'Health monitoring', 'type', 'automation', 'note', $4::text) ELSE resolution END
-                WHERE automation_id = $1 AND resolved_at IS NULL AND ($2::text IS NULL OR kind = 'failure')`, [automation.id, kind, runId, redactSecretBearingText(message)])
+                WHERE merged_into IS NULL AND resolved_at IS NULL AND ($2::text IS NULL OR kind = 'failure')
+                  AND EXISTS (SELECT 1 FROM monitoring_issue_checks c WHERE c.issue_id=monitoring_issues.id AND c.automation_id=$1)
+                  AND NOT EXISTS (SELECT 1 FROM monitoring_issue_checks c WHERE c.issue_id=monitoring_issues.id AND c.active)`, [automation.id, kind, runId, redactSecretBearingText(message)])
             if (!kind) return null
         }
         if (check.issue_id) return check.issue_id as string
-        const result = await query(`INSERT INTO monitoring_issues (automation_id, fingerprint, kind, summary)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (automation_id, fingerprint) DO UPDATE
+        const fingerprint = monitoringIssueFingerprint(automation, kind, message)
+        const key = await correlationKey(query, automation, fingerprint, kind, message)
+        const result = await query(`INSERT INTO monitoring_issues (automation_id, fingerprint, kind, summary, correlation_key)
+            VALUES (COALESCE((SELECT automation_id FROM monitoring_issues WHERE correlation_key=$6),$1),
+                COALESCE((SELECT fingerprint FROM monitoring_issues WHERE correlation_key=$6),$2), $3, $4, $6)
+            ON CONFLICT (correlation_key) DO UPDATE
             SET occurrences = monitoring_issues.occurrences + 1, last_seen_at = NOW(), resolved_at = NULL, summary = EXCLUDED.summary,
                 history = monitoring_issues.history || CASE WHEN monitoring_issues.resolved_at IS NOT NULL THEN jsonb_build_array(jsonb_build_object(
                     'id', $5::text, 'at', NOW(), 'actor', 'Health monitoring', 'actorType', 'automation', 'action', 'recurred', 'note', EXCLUDED.summary, 'runId', $5::text)) ELSE '[]'::jsonb END,
                 resolution = CASE WHEN monitoring_issues.status_override IS NULL THEN NULL ELSE monitoring_issues.resolution END
-            RETURNING id`, [automation.id, monitoringIssueFingerprint(automation, kind, message), kind, redactSecretBearingText(message), runId])
+            RETURNING id`, [automation.id, fingerprint, kind, redactSecretBearingText(message), runId, key])
         const id = result.rows[0].id as string
+        await query('INSERT INTO monitoring_issue_checks VALUES ($1,$2,true) ON CONFLICT(issue_id,automation_id) DO UPDATE SET active=true', [id, automation.id])
         await query('UPDATE agent_automation_runs SET issue_id = $2 WHERE id = $1', [runId, id])
         return id
     })
@@ -79,7 +89,7 @@ export async function loadMonitoringIssues(automationId: string) {
         SELECT jsonb_build_object('nextAttemptAt', n.next_attempt_at, 'error', n.last_error), NULL::timestamptz
         FROM monitoring_issue_notifications n WHERE n.issue_id = i.id AND (n.delivered_at IS NULL OR n.last_error IS NOT NULL)
         ) history), '[]'::jsonb) AS notifications
-        FROM monitoring_issues i WHERE i.automation_id = $1 ORDER BY i.last_seen_at DESC, i.id DESC`, [automationId])
+        FROM monitoring_issues i WHERE i.merged_into IS NULL AND (i.automation_id = $1 OR EXISTS (SELECT 1 FROM monitoring_issue_checks c WHERE c.issue_id=i.id AND c.automation_id=$1)) ORDER BY i.last_seen_at DESC, i.id DESC`, [automationId])
     return result.rows.map(row => ({
         id: row.id, caseNumber: `HA-${row.id}`, kind: row.kind, summary: row.summary,
         occurrences: row.occurrences, firstSeenAt: row.first_seen_at, lastSeenAt: row.last_seen_at,

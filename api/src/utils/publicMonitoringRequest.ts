@@ -101,7 +101,7 @@ export async function publicMonitoringRequest(value: string | URL, options: Moni
                     response.once('aborted', () => reject(new Error('Monitoring response ended before the body was complete.')))
                     response.once('end', () => resolve({ status, location, body: Buffer.concat(chunks).toString('utf8') }))
                 })
-                request.once('error', reject)
+                request.once('error', error => reject(signal.aborted ? signal.reason : error))
                 request.end()
             })
             if (!options.followRedirects || !result.location || ![301, 302, 303, 307, 308].includes(result.status)) return result

@@ -53,7 +53,7 @@ test('database aggregation, concurrent delivery, rolling cooldown, recovery and 
     await query("UPDATE monitoring_issue_notifications SET next_attempt_at=NOW()-INTERVAL '1 second' WHERE issue_id=$1", [reopened.id])
     await Promise.all([check('after-window-1'), check('after-window-2')])
     expect(sent).toHaveLength(3)
-    await check('other-owner-monitor', 'HTTP 503', 'failure', { ...monitor, id: 'other-issues' })
+    await check('other-owner-monitor', 'HTTP 503', 'failure', { ...monitor, id: 'other-issues', owner_id: 'other-owner' })
     expect(sent).toHaveLength(4)
     await check('muted', 'HTTP 404', 'failure', { ...monitor, notify_on: 'never' })
     await check('warning', 'Slow', 'warning')

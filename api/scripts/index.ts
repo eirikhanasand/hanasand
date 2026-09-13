@@ -107,7 +107,7 @@ const unitTasks: TestTask[] = (await readdir(path.join(scriptDir, '../tests')))
         id: file.replace(/\.test\.(ts|mjs)$/, ''),
         title: `API behavior: ${file}`,
         command: [bun, 'test', `tests/${file}`],
-        ...(['signup-verification-postgres.test.ts', 'automation-history.test.mjs', 'monitoring-issues-postgres.test.ts', 'monitoring-message-history-postgres.test.ts', 'monitoring-case-workflow-postgres.test.ts', 'monitoring-vm-access-postgres.test.ts', 'account-deletion-postgres.test.ts', 'case-development-postgres.test.ts', 'monitor-backlog-postgres.test.ts', 'personal-automations-postgres.test.ts'].includes(file) ? { requires: 'database' as const } : {}),
+        ...(['signup-verification-postgres.test.ts', 'automation-history.test.mjs', 'monitoring-issues-postgres.test.ts', 'monitoring-correlation-postgres.test.ts', 'monitoring-message-history-postgres.test.ts', 'monitoring-case-workflow-postgres.test.ts', 'monitoring-vm-access-postgres.test.ts', 'account-deletion-postgres.test.ts', 'case-development-postgres.test.ts', 'monitor-backlog-postgres.test.ts', 'personal-automations-postgres.test.ts'].includes(file) ? { requires: 'database' as const } : {}),
     }))
 const playwrightTasks = await discoverPlaywrightTasks()
 const tasks = [...coreTasks, ...unitTasks, ...environmentTasks, ...playwrightTasks]

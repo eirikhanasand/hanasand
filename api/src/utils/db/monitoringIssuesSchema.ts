@@ -63,5 +63,13 @@ export default async function ensureMonitoringIssuesSchema() {
         ON CONFLICT (message_id) DO NOTHING`)
     await run('ALTER TABLE agent_automation_runs ADD COLUMN IF NOT EXISTS check_details JSONB')
     await run('ALTER TABLE agent_automation_runs ADD COLUMN IF NOT EXISTS issue_id BIGINT REFERENCES monitoring_issues(id) ON DELETE SET NULL')
+    await run('ALTER TABLE monitoring_issues ADD COLUMN IF NOT EXISTS correlation_key TEXT, ADD COLUMN IF NOT EXISTS merged_into BIGINT REFERENCES monitoring_issues(id)')
+    await run('CREATE UNIQUE INDEX IF NOT EXISTS monitoring_issues_correlation ON monitoring_issues(correlation_key)')
+    await run(`CREATE TABLE IF NOT EXISTS monitoring_issue_checks (
+        issue_id BIGINT NOT NULL REFERENCES monitoring_issues(id) ON DELETE CASCADE,
+        automation_id TEXT NOT NULL REFERENCES agent_automations(id) ON DELETE CASCADE,
+        active BOOLEAN NOT NULL, PRIMARY KEY(issue_id, automation_id)
+    )`)
+    await run('INSERT INTO monitoring_issue_checks SELECT id, automation_id, resolved_at IS NULL FROM monitoring_issues WHERE merged_into IS NULL ON CONFLICT DO NOTHING')
     await run('CREATE INDEX IF NOT EXISTS idx_automation_runs_issue ON agent_automation_runs(issue_id) WHERE issue_id IS NOT NULL')
 }

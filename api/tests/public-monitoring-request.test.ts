@@ -107,7 +107,7 @@ test('deadline covers DNS and response body', async () => {
     await expect(publicMonitoringRequest('http://example.com', { ...options, timeoutMs: 20 }, () => new Promise(() => {}), slow.send)).rejects.toThrow('timed out')
     expect(slow.calls).toHaveLength(0)
     const body = mockSend([{ hang: true }])
-    await expect(publicMonitoringRequest('http://example.com', { ...options, timeoutMs: 20 }, resolver, body.send)).rejects.toThrow('aborted')
+    await expect(publicMonitoringRequest('http://example.com', { ...options, timeoutMs: 20 }, resolver, body.send)).rejects.toThrow('timed out')
 })
 
 test('Bun native transport uses the supplied pinned lookup and retains Host', async () => {
@@ -162,4 +162,14 @@ test('native HTTPS pinning preserves SNI and certificate hostname verification',
     } finally {
         if (server) await new Promise<void>(resolve => server!.close(() => resolve()))
     }
+})
+
+test('an expired deadline retains TimeoutError when Bun reports ECONNREFUSED on abort', async () => {
+    const send: Send = (_url, opts) => {
+        const request = new EventEmitter() as ReturnType<Send>
+        request.end = (() => request) as typeof request.end
+        opts.signal!.addEventListener('abort', () => request.emit('error', Object.assign(new Error('connect ECONNREFUSED example.com:443'), { code: 'ECONNREFUSED' })), { once: true })
+        return request
+    }
+    await expect(publicMonitoringRequest('https://example.com', { ...options, timeoutMs: 10 }, resolver, send)).rejects.toMatchObject({ name: 'TimeoutError' })
 })
