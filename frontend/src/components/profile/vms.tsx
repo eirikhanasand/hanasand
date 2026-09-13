@@ -1,13 +1,12 @@
 'use client'
 
 import postVM from '@/utils/vms/fetch/postVM'
-import { Info, Plus, X } from 'lucide-react'
+import { Plus, X } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
 import VMRow from './vm'
 import getVMs from '@/utils/vms/fetch/getVMs'
 import { getCookie } from '@/utils/cookies/cookies'
 import { useRouter } from 'next/navigation'
-import Tooltip from '../tooltip/tooltip'
 import Link from 'next/link'
 import { DashboardPanel } from '../dashboard/ui'
 
@@ -60,23 +59,9 @@ export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
             <div className='mb-1 flex items-center justify-between gap-3'>
                 <div>
                     <h2 className='text-base font-semibold text-ui-text'>Virtual machines</h2>
-                    <p className='mt-1 text-sm text-ui-muted'>{vms.length} managed target{vms.length === 1 ? '' : 's'}</p>
+                    <p className='mt-1 text-sm text-ui-muted'>{vms.length} virtual machine{vms.length === 1 ? '' : 's'}</p>
                 </div>
                 <div className='flex shrink-0 items-center gap-2'>
-                    <Tooltip
-                        align='right'
-                        content={
-                            <h1>
-                                Create a VM here or provision one from a project.
-                                Use these controls for start, stop, and restart.
-                            </h1>
-                        }
-                    >
-                        <div className='flex h-8 items-center gap-1 rounded-md border border-ui-border bg-ui-primary/10 px-2.5'>
-                            <Info className='h-3 w-3 stroke-ui-primary' />
-                            <span className='text-[0.7rem] font-semibold text-ui-primary'>Managed</span>
-                        </div>
-                    </Tooltip>
                     <button
                         type='button'
                         aria-label={showCreate ? 'Close VM creation controls' : 'Create VM'}

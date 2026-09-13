@@ -1,3 +1,4 @@
+import { withShareManagement } from '#utils/vms/shareManagement.ts'
 import { withLiveVmStatus } from '#utils/vms/status.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
@@ -31,7 +32,7 @@ export default async function getVM(req: FastifyRequest, res: FastifyReply) {
             return res.status(200).send([])
         }
 
-        return res.send(await Promise.all(result.rows.map(row => withLiveVmStatus(row))))
+        return res.send(await Promise.all((await withShareManagement(result.rows)).map(row => withLiveVmStatus(row))))
     } catch (error) {
         console.log(error)
         return res.status(500).send({ error: 'Internal server error' })

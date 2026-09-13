@@ -68,7 +68,7 @@ test('empty accounts only see Infrastructure Overview until their first VM is cr
     })
     await page.goto('/system')
     const nav = page.getByRole('navigation', { name: 'Main navigation' })
-    await expect(page.getByText('0 managed targets', { exact: true })).toBeVisible()
+    await expect(page.getByText('0 virtual machines', { exact: true })).toBeVisible()
     await expect(nav.locator('a[href="/system"]')).toBeVisible()
     await expect(nav.getByRole('button', { name: 'Compute', exact: true })).toHaveCount(0)
     await expect(nav.locator('a[href="/vms"]')).toHaveCount(0)
