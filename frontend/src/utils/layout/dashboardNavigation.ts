@@ -56,7 +56,6 @@ export function getDashboardNavigation({ id, isAdmin, canManageSystem, canManage
             group('Quality & oversight', [
                 link('Evaluation', '/ti/evaluation', canReviewIntel),
                 link('Timeliness', '/ti/timeliness', canReviewIntel),
-                link('Audit Log', '/ti/audit', isAdmin),
             ]),
         ]),
         group('Automation', [
@@ -103,6 +102,7 @@ export function getDashboardNavigation({ id, isAdmin, canManageSystem, canManage
                 link('Mail', '/mail', isAdmin),
             ]),
             group('Management', [
+                link('Audit Log', '/management/audit', isAdmin),
                 link('Users', '/management/users', isAdmin),
                 link('Roles', '/management/roles', isAdmin),
                 link('Service accounts', '/management/service-accounts', isAdmin),
