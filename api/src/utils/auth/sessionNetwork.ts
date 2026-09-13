@@ -16,7 +16,15 @@ async function loadDatabases() {
 export async function sessionNetwork(value: string) {
     let ip = ''
     try { ip = ipaddr.process(value).toString() } catch { /* Legacy records may not contain an IP. */ }
-    if (!isPublicMonitoringAddress(ip)) return { ip: null, network: null }
+    if (!isPublicMonitoringAddress(ip)) {
+        // VPNs and local networks can reach the service without a public address.
+        // Preserve that distinction without pretending a private IP is geolocatable.
+        const range = ip ? ipaddr.parse(ip).range() : ''
+        if (['private', 'uniqueLocal', 'carrierGradeNat'].includes(range)) {
+            return { ip: null, network: null, private_ip: ip }
+        }
+        return { ip: null, network: null }
+    }
     if (!databases && Date.now() >= retryAt) {
         databases = loadDatabases().catch(error => {
             databases = undefined
