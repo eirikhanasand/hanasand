@@ -5,7 +5,7 @@ import { certificateTarget, checkCertificate } from './automations.ts'
 import getStats from './refresh/queries/stats.ts'
 
 export type JsonRule = { path: string, operator: 'gt' | 'gte' | 'lt' | 'lte' | 'eq' | 'ne', value: number | boolean | string, aggregate: 'max' | 'min' | 'avg' | 'first' }
-export type JsonSource = { owner_id: string, target_url: string | null, user_agent: string | null, follow_redirects: boolean, timeout_seconds: number }
+export type JsonSource = { owner_id: string, target_url: string | null, user_agent: string | null, follow_redirects: boolean, timeout_seconds: number, json_rule?: unknown }
 
 export function normalizeJsonRule(value: unknown): JsonRule {
     if (!value || typeof value !== 'object') throw new Error('JSON checks need a field and comparison.')
@@ -42,7 +42,6 @@ export function evaluateJsonRule(payload: unknown, rule: JsonRule) {
 async function fetchJson(source: JsonSource) {
     if (source.target_url === 'system:metrics') {
         const result = await getStats()
-        if (!result.data.host) throw new Error(result.data.hostUnavailableReason || 'Host telemetry is unavailable.')
         return { payload: result.data, certificate: { status: 'not_applicable' as const, subject: null, issuer: null, expiresAt: null } }
     }
     const tls = certificateTarget({ target_url: source.target_url, monitoring_type: 'json' })
@@ -85,9 +84,18 @@ async function loadSnapshot(source: JsonSource, key: string) {
     if (snapshot.error) throw new Error(snapshot.error)
     const result = snapshot.payload as Awaited<ReturnType<typeof fetchJson>>
     if (source.target_url === 'system:metrics') {
-        const host = (result.payload as { host?: { sampledAt?: string } }).host
-        const age = Date.now() - Date.parse(host?.sampledAt || '')
-        if (!Number.isFinite(age) || age > 90_000 || age < -5_000) throw new Error('Host telemetry is stale.')
+        const path = (source.json_rule as JsonRule | undefined)?.path || 'host'
+        assertHostSnapshotFresh(result.payload, path)
     }
     return result
+}
+
+export function assertHostSnapshotFresh(payload: unknown, path: string) {
+    const data = payload as { host?: { sampledAt?: string }, hosts?: { ovhcloud?: { sampledAt?: string } } }
+    const remote = path.startsWith('hosts.ovhcloud.')
+    const host = remote ? data?.hosts?.ovhcloud : data?.host
+    const label = remote ? 'OVH' : 'Inspur'
+    if (!host) throw new Error(`${label} host telemetry is unavailable.`)
+    const age = Date.now() - Date.parse(host.sampledAt || '')
+    if (!Number.isFinite(age) || age > 90_000 || age < -5_000) throw new Error(`${label} host telemetry is stale.`)
 }

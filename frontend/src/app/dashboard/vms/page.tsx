@@ -26,7 +26,7 @@ export default async function Page() {
             <DashboardHeader
                 eyebrow='Virtual machines'
                 title='Virtual Machines'
-                description='Start, stop, restart, and inspect managed machines from one live inventory.'
+                description='Start, stop, restart, and inspect your virtual machines.'
             />
             <div className='max-w-5xl'>
                 <VMs vms={vms} />

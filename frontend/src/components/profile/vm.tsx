@@ -73,6 +73,7 @@ export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
                         <div className='flex min-w-0 flex-wrap items-center gap-2'>
                             <h3 className='truncate text-sm font-semibold text-ui-text'>{name}</h3>
                             <span className='rounded-md border border-ui-border bg-ui-primary/10 px-2 py-0.5 text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-ui-muted'>Virtual machine</span>
+                            {vm.managed === true && <span title='Provisioned through a share' className='rounded-md border border-ui-border bg-ui-primary/10 px-2 py-0.5 text-[0.68rem] font-semibold text-ui-primary'>Managed</span>}
                             <span className={`rounded-md px-2 py-0.5 text-[0.68rem] font-medium uppercase tracking-[0.08em] ${status === 'Running'
                                 ? 'border border-ui-success/35 bg-ui-success/10 text-ui-success'
                                 : status === 'Stopped'
