@@ -11,7 +11,7 @@ export async function sendSystemMail(params: {
 }) {
     const access = await ensureSystemSender()
 
-    await sendMailViaSmtp({
+    const result = await sendMailViaSmtp({
         username: access.username,
         password: access.password,
         from: { email: access.address, name: 'Hanasand' },
@@ -20,6 +20,8 @@ export async function sendSystemMail(params: {
         textBody: params.textBody,
         htmlBody: params.htmlBody,
     })
+    console.info('System email accepted by mail server', { messageId: result.messageId, acceptedCount: result.accepted.length })
+    return result
 }
 
 async function ensureSystemSender() {

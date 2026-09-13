@@ -22,11 +22,17 @@ export async function sendMailViaSmtp(params: {
     attachments?: SmtpAttachment[]
 }) {
     const smtpHost = getInternalSmtpHost()
-    const requireTls = shouldRequireTls(smtpHost)
+    const requireTls = shouldRequireTls()
     const transport = nodemailer.createTransport({
         host: smtpHost,
-        port: mailConfig.internalSmtpPort,
-        secure: false,
+        // Port 25 is incoming mail, not authenticated submission.
+        port: mailConfig.internalSmtpPort === 25 ? 587 : mailConfig.internalSmtpPort,
+        secure: mailConfig.internalSmtpPort === 465,
+        name: mailConfig.host,
+        authMethod: 'LOGIN',
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 30000,
         requireTLS: requireTls,
         ignoreTLS: !requireTls,
         auth: {
@@ -38,7 +44,7 @@ export async function sendMailViaSmtp(params: {
         },
     })
 
-    await transport.sendMail({
+    return await transport.sendMail({
         from: formatAddress(params.from),
         to: params.to.map(formatAddress),
         cc: (params.cc || []).map(formatAddress),
@@ -67,11 +73,11 @@ function getInternalSmtpHost() {
     }
 }
 
-function shouldRequireTls(host: string) {
+function shouldRequireTls() {
     const configured = process.env.MAIL_SMTP_REQUIRE_TLS
     if (configured !== undefined) {
         return configured === '1' || configured.toLowerCase() === 'true'
     }
 
-    return !['127.0.0.1', 'localhost', 'host.docker.internal', 'stalwart'].includes(host)
+    return true
 }

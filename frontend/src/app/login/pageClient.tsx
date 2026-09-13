@@ -38,6 +38,8 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
     const [signupUsername, setSignupUsername] = useState('')
     const [signupChallenge, setSignupChallenge] = useState('')
     const [signupCode, setSignupCode] = useState('')
+    const [signupNotice, setSignupNotice] = useState('')
+    const [signupSendError, setSignupSendError] = useState('')
     const [signupEmail, setSignupEmail] = useState('')
     const [signupPassword, setSignupPassword] = useState('')
     const signupPasswordIsValid = passwordMeetsRequirements(signupPassword)
@@ -50,6 +52,8 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
 
     async function submitSignup(code = '', resend = false) {
         if (busy) return
+        setSignupSendError('')
+        setSignupNotice('')
         setError(null)
         if (!signupPasswordIsValid || reservedUsername) {
             setError(reservedUsername ? 'This username is reserved.' : passwordRequirementMessage)
@@ -68,6 +72,7 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
                 throw new Error(data.error || 'Unable to create account.')
             }
             if (data.verificationRequired) {
+                setSignupNotice(signupChallenge ? 'A new code has been sent. Check your inbox and junk folder; use the newest code.' : 'Check your inbox and junk folder for an email from Hanasand.')
                 setSignupChallenge(data.challengeId)
                 setSignupCode('')
                 setMode('verify-signup')
@@ -76,7 +81,7 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
             window.location.assign(redirectPath)
         } catch (error) {
             setSignupCode('')
-            setError(error instanceof Error ? error.message : 'Unable to create account. Please try again.')
+            setSignupSendError(error instanceof Error ? error.message : 'Unable to create account. Please try again.')
         } finally { setBusy(false) }
     }
 
@@ -313,6 +318,8 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
                             method='post'
                         >
                             <input type='hidden' name='redirectPath' value={redirectPath} />
+                            <p className='mb-2 text-sm text-ui-muted'>We’ll email you a six-digit code to verify your address and finish creating your account.</p>
+                            {signupSendError && <p role='alert' className='text-sm text-red-600'>{signupSendError}</p>}
                             <label className='grid gap-1.5' htmlFor='login-signup-username'>
                                 <span className='text-xs font-semibold text-ui-muted'>Username</span>
                                 <input
@@ -374,7 +381,7 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
                                     disabled={!hydrated || busy || !canCreateAccount}
                                     className={`${authPrimaryButtonClass} min-w-36`}
                                 >
-                                    {busy ? 'Creating' : 'Create account'}
+                                    {busy ? 'Sending code' : 'Create account'}
                                     <ArrowRight className='h-4 w-4 transition group-hover:translate-x-0.5' />
                                 </button>
                                 <button
@@ -390,6 +397,8 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
 
                     {mode === 'verify-signup' && <div className='grid gap-4'>
                         <h2 className='text-xl font-semibold'>Check your email</h2>
+                        {signupNotice && <p role='status' className='text-sm text-ui-muted'>{signupNotice}</p>}
+                        {signupSendError && <p role='alert' className='text-sm text-red-600'>{signupSendError}</p>}
                         <p className='text-sm text-ui-muted'>Enter the six-digit code sent to {signupEmail}. It expires in 10 minutes. Your account will be created after verification.</p>
                         <VerificationCodeInput value={signupCode} setValue={setSignupCode} disabled={busy} onComplete={code => submitSignup(code)} />
                         <div className='flex flex-wrap gap-2'>

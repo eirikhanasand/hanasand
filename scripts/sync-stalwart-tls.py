@@ -21,7 +21,8 @@ except PermissionError:
     key = subprocess.check_output(['docker', 'exec', 'openresty', 'cat',
         '/etc/letsencrypt/live/hanasand.com/privkey.pem'], text=True)
 subprocess.run(['openssl', 'x509', '-in', str(cert_dir / 'fullchain.pem'), '-noout', '-checkend', '86400'], check=True, stdout=subprocess.DEVNULL)
-state = mail / '.tls-certificate-sha256'
+state = Path.home() / '.cache/hanasand-mail/tls-certificate-sha256'
+state.parent.mkdir(parents=True, exist_ok=True)
 digest = hashlib.sha256(cert.encode()).hexdigest()
 if state.exists() and state.read_text().strip() == digest:
     raise SystemExit(0)

@@ -46,7 +46,9 @@ export async function requestSignupCode(email: string, ip: string, binding: stri
         await sendSystemMail({ to: email, subject: 'Verify your Hanasand email',
             textBody: `Your Hanasand signup code is ${code}.\n\nIt expires in 10 minutes. Your account will only be created after you enter this code. If you did not request this, ignore this email.`,
             htmlBody: `<p>Your Hanasand signup code is <strong>${code}</strong>.</p><p>It expires in 10 minutes. Your account will only be created after you enter this code. If you did not request this, ignore this email.</p>` })
-    } catch {
+    } catch (error) {
+        const smtp = error as { code?: string; responseCode?: number; command?: string }
+        console.error('Signup verification email failed', { challengeId: id, code: smtp.code, responseCode: smtp.responseCode, command: smtp.command })
         await run('UPDATE signup_verifications SET consumed_at = NOW() WHERE id = $1', [id])
         return { status: 503, error: 'We could not send the verification email. Please try again shortly.' }
     }

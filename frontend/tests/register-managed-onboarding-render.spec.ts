@@ -38,6 +38,7 @@ test('legacy signup links open one signup form with required email', async ({ pa
     await expect(page.getByText('The code is incorrect or expired.', { exact: true })).toBeVisible()
     await page.getByRole('button', { name: 'Resend code' }).click()
     await expect.poll(() => requests).toBe(3)
+    await expect(page.getByRole('status')).toContainText('A new code has been sent')
     await firstDigit.fill('123456')
     await expect(page).toHaveURL(/\/developers#api-access$/)
     expect(requests).toBe(4)
@@ -47,4 +48,34 @@ test('signup errors remain on the single form with the intended destination', as
     await page.goto('/login?mode=signup&error=Username%20already%20exists&path=%2Forganizations')
     await expect(page.getByText('Username already exists', { exact: true })).toBeVisible()
     await expect(page.locator('form[action="/api/auth/register"] input[name="redirectPath"]')).toHaveValue('/organizations')
+})
+
+
+test('initial send and resend failures stay visible and both can be retried', async ({ page }) => {
+    let requests = 0
+    await page.route('**/api/auth/register', async route => {
+        requests++
+        if (requests === 1 || requests === 3) {
+            await route.fulfill({ status: 503, json: { error: 'We could not send the verification email. Please try again shortly.' } })
+        } else {
+            await route.fulfill({ status: 202, json: { verificationRequired: true, challengeId: `challenge-${requests}` } })
+        }
+    })
+    await page.goto('/login?mode=signup')
+    await expect(page.getByText('We’ll email you a six-digit code', { exact: false })).toBeVisible()
+    const form = page.locator('form[action="/api/auth/register"]')
+    await form.getByLabel('Username', { exact: true }).fill('signup-example')
+    await form.getByLabel('Name', { exact: true }).fill('Signup Example')
+    await form.getByLabel('Email', { exact: true }).fill('signup@example.test')
+    await form.getByLabel('Password', { exact: true }).fill('Test-password-12345!')
+    await form.getByRole('button', { name: 'Create account', exact: true }).click()
+    await expect(page.locator('p[role=alert]')).toContainText('could not send')
+    await form.getByRole('button', { name: 'Create account', exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'Check your email' })).toBeVisible()
+    await page.getByRole('button', { name: 'Resend code' }).click()
+    await expect(page.locator('p[role=alert]')).toContainText('could not send')
+    await page.getByRole('button', { name: 'Resend code' }).click()
+    await expect(page.locator('p[role=alert]')).toHaveCount(0)
+    await expect(page.getByRole('status')).toContainText('A new code has been sent')
+    expect(requests).toBe(4)
 })
