@@ -1,3 +1,4 @@
+// @ts-expect-error Bun provides this module when running tests.
 import { expect, test } from 'bun:test'
 import { isReservedPlaceholder } from '../src/utils/users/isReservedPlaceholder'
 

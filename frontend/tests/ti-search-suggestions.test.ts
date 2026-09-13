@@ -1,3 +1,4 @@
+// @ts-expect-error Bun provides this module when running tests.
 import { test, expect } from 'bun:test'
 import { searchSuggestions } from '../src/components/ti/searchSuggestions'
 
