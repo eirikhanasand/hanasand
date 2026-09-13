@@ -60,10 +60,14 @@ const pending = new Map<string, Promise<Awaited<ReturnType<typeof fetchJson>>>>(
 export async function sharedJsonSnapshot(source: JsonSource) {
     const key = createHash('sha256').update(JSON.stringify(['public-network-v1', source.owner_id, source.target_url, source.user_agent, source.follow_redirects, source.timeout_seconds])).digest('hex')
     const existing = pending.get(key)
-    if (existing) return existing
-    const promise = loadSnapshot(source, key).finally(() => pending.delete(key))
-    pending.set(key, promise)
-    return promise
+    const promise = existing || loadSnapshot(source, key).finally(() => pending.delete(key))
+    if (!existing) pending.set(key, promise)
+    const result = await promise
+    if (source.target_url === 'system:metrics') {
+        const path = (source.json_rule as JsonRule | undefined)?.path || 'host'
+        assertHostSnapshotFresh(result.payload, path)
+    }
+    return result
 }
 
 async function loadSnapshot(source: JsonSource, key: string) {
@@ -82,12 +86,7 @@ async function loadSnapshot(source: JsonSource, key: string) {
         return { payload, error }
     })
     if (snapshot.error) throw new Error(snapshot.error)
-    const result = snapshot.payload as Awaited<ReturnType<typeof fetchJson>>
-    if (source.target_url === 'system:metrics') {
-        const path = (source.json_rule as JsonRule | undefined)?.path || 'host'
-        assertHostSnapshotFresh(result.payload, path)
-    }
-    return result
+    return snapshot.payload as Awaited<ReturnType<typeof fetchJson>>
 }
 
 export function assertHostSnapshotFresh(payload: unknown, path: string) {
