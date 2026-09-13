@@ -29,3 +29,16 @@ test('temperature threshold evaluates actual sensor values, including sensors wi
     expect(evaluateJsonRule({ host: { temperatures: [{ value: 50.1, margin: null }, { value: 30, margin: 54 }] } }, temperature)).toEqual({ exceeded: true, observed: 50.1 })
     expect(() => evaluateJsonRule({ host: { temperatures: [] } }, temperature)).toThrow('unavailable')
 })
+
+test('OVH and Inspur snapshots have independent readings and freshness', async () => {
+    const { assertHostSnapshotFresh } = await import('../src/utils/jsonMonitoring.ts')
+    const fresh = new Date().toISOString()
+    const old = new Date(Date.now() - 120_000).toISOString()
+    const payload = { host: { sampledAt: old, cpuPercent: 90 }, hosts: { ovhcloud: { sampledAt: fresh, cpuPercent: 5 } } }
+    const remoteRule = { ...rule, path: 'hosts.ovhcloud.cpuPercent' }
+    expect(evaluateJsonRule(payload, remoteRule)).toEqual({ exceeded: false, observed: 5 })
+    expect(() => assertHostSnapshotFresh(payload, remoteRule.path)).not.toThrow()
+    expect(() => assertHostSnapshotFresh(payload, 'host.cpuPercent')).toThrow('Inspur host telemetry is stale')
+    expect(() => assertHostSnapshotFresh({ host: { sampledAt: fresh } }, remoteRule.path)).toThrow('OVH host telemetry is unavailable')
+    expect(() => assertHostSnapshotFresh({ hosts: { ovhcloud: { sampledAt: old } } }, remoteRule.path)).toThrow('OVH host telemetry is stale')
+})

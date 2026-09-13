@@ -1,5 +1,6 @@
 import { readFileSync, statfsSync } from 'node:fs'
 import os from 'node:os'
+import { dirname, join } from 'node:path'
 
 export default async function getStats() {
     let host: { sampledAt: string, memoryTotalBytes: number, memoryAvailableBytes: number, memoryPercent: number, [key: string]: unknown } | null
@@ -13,11 +14,15 @@ export default async function getStats() {
         host = null
         hostUnavailableReason = error instanceof Error && error.message === 'Host telemetry is stale.' ? error.message : 'Host telemetry is unavailable.'
     }
+    let ovhcloud: unknown = null
+    try {
+        ovhcloud = JSON.parse(readFileSync(join(dirname(process.env.HOST_METRICS_FILE || '/host/var/lib/hanasand/metrics/host.json'), 'ovhcloud.json'), 'utf8'))
+    } catch { /* A missing remote snapshot remains unavailable, never healthy. */ }
     const system = runtimeSystemSnapshot()
     if (host) {
         system.memory = { total: host.memoryTotalBytes, used: host.memoryTotalBytes - host.memoryAvailableBytes, percent: host.memoryPercent.toFixed(2) }
     }
-    return { status: 200, data: { system, host, hostUnavailableReason } }
+    return { status: 200, data: { system, host, hosts: { ovhcloud }, hostUnavailableReason } }
 }
 
 function runtimeSystemSnapshot() {

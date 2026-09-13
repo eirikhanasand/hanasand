@@ -1,21 +1,22 @@
 #!/bin/sh
 set -eu
 # Run on the monitored host. Existing API mounts expose this directory read-only.
+destination=${1:-/var/lib/hanasand/metrics/host.json}
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-install -d -m 755 /var/lib/hanasand/metrics /usr/local/lib/hanasand
+install -d -m 755 "$(dirname "$destination")" /var/lib/hanasand/metrics /usr/local/lib/hanasand
 install -m 755 "$script_dir/host-metrics.py" /usr/local/lib/hanasand/host-metrics.py
-cat > /etc/systemd/system/hanasand-host-metrics.service <<'UNIT'
+cat > /etc/systemd/system/hanasand-host-metrics.service <<UNIT
 [Unit]
 Description=Collect Hanasand host telemetry
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/python3 /usr/local/lib/hanasand/host-metrics.py
+ExecStart=/usr/bin/python3 /usr/local/lib/hanasand/host-metrics.py ${destination}
 TimeoutStartSec=20
 NoNewPrivileges=true
 ProtectSystem=strict
-ProtectHome=true
+ProtectHome=read-only
 PrivateTmp=true
-ReadWritePaths=/var/lib/hanasand/metrics
+ReadWritePaths=${destination%/*}
 UNIT
 cat > /etc/systemd/system/hanasand-host-metrics.timer <<'UNIT'
 [Unit]

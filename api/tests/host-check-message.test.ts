@@ -38,3 +38,8 @@ test('temperature shows actual hottest reading and the configured Celsius thresh
     expect(hostCheckMessage(rule, 50, false)).toBe('Temperature is normal: 50°C (alert above 50°C).')
     expect(hostCheckMessage(rule, null, false)).toBeNull()
 })
+
+test('OVH checks retain readable threshold messages', () => {
+    expect(hostCheckMessage({ path: 'hosts.ovhcloud.cpuPercent', operator: 'gt', aggregate: 'max', value: 80 }, 12, false)).toBe('CPU usage is normal: 12% used (alert at 80%).')
+    expect(hostCheckMessage({ path: 'hosts.ovhcloud.power.*.margin', operator: 'lt', aggregate: 'min', value: 0 }, -2, true)).toContain('2 W above')
+})
