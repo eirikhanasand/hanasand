@@ -115,6 +115,7 @@ import { deleteAiConversationCollaborator, postAiConversationCollaborator } from
 import { getAiReleases, getAiReleaseSupportBundle, postAiRollback } from './handlers/ai/releases.ts'
 import { getAiPreview } from './handlers/ai/preview.ts'
 import getMailOverview from './handlers/mail/getOverview.ts'
+import relayHealth from './handlers/mail/relayHealth.ts'
 import postSendMail from './handlers/mail/postSend.ts'
 import postMailAction from './handlers/mail/postAction.ts'
 import postMailbox from './handlers/mail/postMailbox.ts'
@@ -553,6 +554,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
 
     // Mail
     fastify.get('/mail/overview', getMailOverview)
+    fastify.get('/mail-relay/:site/health', relayHealth)
     fastify.post('/mail/send', postSendMail)
     fastify.post('/mail/mailboxes', postMailbox)
     fastify.post('/mail/message/:id/action', postMailAction)
