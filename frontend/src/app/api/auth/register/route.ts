@@ -13,13 +13,13 @@ export async function POST(req: NextRequest) {
 
     if (!name || !id || !password || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         if (wantsRedirect) {
-            return authRedirect(redirectPath, '/login?mode=signup', 'Name, username, valid email, and password are required.')
+            return authRedirect(redirectPath, '/signup', 'Name, username, valid email, and password are required.')
         }
         return NextResponse.json({ error: 'Name, username, valid email, and password are required.' }, { status: 400 })
     }
     if (reservedUsernames.includes(id.toLowerCase())) {
         if (wantsRedirect) {
-            return authRedirect(redirectPath, '/login?mode=signup', 'This username is reserved.')
+            return authRedirect(redirectPath, '/signup', 'This username is reserved.')
         }
         return NextResponse.json({ error: 'This username is reserved.' }, { status: 400 })
     }
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     }).catch(() => null)
     if (!upstream) {
         if (wantsRedirect) {
-            return authRedirect(redirectPath, '/login?mode=signup', 'Authentication service is unavailable.')
+            return authRedirect(redirectPath, '/signup', 'Authentication service is unavailable.')
         }
         return NextResponse.json({ error: 'Authentication service is unavailable.' }, { status: 502 })
     }
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
 
     if (!upstream.ok) {
         if (wantsRedirect) {
-            return authRedirect(redirectPath, '/login?mode=signup', String(data?.error || responseText || 'Unable to create account.'))
+            return authRedirect(redirectPath, '/signup', String(data?.error || responseText || 'Unable to create account.'))
         }
         return NextResponse.json(data || { error: responseText || 'Unable to create account.' }, { status: upstream.status })
     }

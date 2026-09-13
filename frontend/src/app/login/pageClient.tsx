@@ -5,7 +5,7 @@ import SocialSignIn from '@/components/login/socialSignIn'
 import Notify from '@/components/notify/notify'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import { getCookie } from '@/utils/cookies/cookies'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import config from '@/config'
 import { ArrowRight, Fingerprint, KeyRound } from 'lucide-react'
@@ -29,6 +29,7 @@ const authGhostButtonClass = 'inline-flex h-9 items-center rounded-lg px-3 text-
 
 export default function LoginPage({ path, serverInternal, serverExpired, socialError, initialMode = 'login', serverError }: LoginPageProps) {
     const router = useRouter()
+    const pathname = usePathname()
     const [mode, setMode] = useState<'login' | 'signup' | 'verify-signup' | 'request-reset' | 'verify-reset'>(initialMode)
     const [resetUserId, setResetUserId] = useState('')
     const [resetCode, setResetCode] = useState('')
@@ -68,7 +69,7 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
             })
             const data = await response.json()
             if (!response.ok) {
-                if (data.accountCreated) setMode('login')
+                if (data.accountCreated) changeMode('login')
                 throw new Error(data.error || 'Unable to create account.')
             }
             if (data.verificationRequired) {
@@ -202,6 +203,13 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
         if (nextMode !== 'verify-reset') {
             setResetCode('')
         }
+        if (nextMode === 'signup' || nextMode === 'login') {
+            const target = nextMode === 'signup' ? '/signup' : '/login'
+            if (pathname !== target) {
+                router.push(`${target}?path=${encodeURIComponent(redirectPath)}`)
+                return
+            }
+        }
         setMode(nextMode)
     }
 
@@ -219,7 +227,6 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
             <div className='grid w-full max-w-98 gap-4'>
                 <div className='grid justify-items-center gap-2 pb-3 text-center'>
                     <h1 className='text-[42px] font-semibold leading-none tracking-normal text-ui-primary'>Hanasand</h1>
-                    <p className='text-sm leading-6 text-ui-muted'>Sign in to the console.</p>
                 </div>
 
                 <div className='grid w-full gap-3 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-lg'>
