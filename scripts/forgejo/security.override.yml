@@ -1,0 +1,8 @@
+# Apply with the host's existing docker-compose.yml; preserves volumes and secrets.
+services:
+  git:
+    image: codeberg.org/forgejo/forgejo:15.0.8@sha256:0a2e377fd3c5af3451bfa1f44e6f198f322b6d5e03f04a028b8e672f1ccddc9f
+    environment:
+      FORGEJO__SECURITY__DISABLE_GIT_HOOKS: "true"
+    security_opt:
+      - no-new-privileges:true
