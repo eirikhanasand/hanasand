@@ -352,7 +352,7 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
                             </label>
                             <label className='grid gap-1.5' htmlFor='login-signup-email'>
                                 <span className='text-xs font-semibold text-ui-muted'>Email</span>
-                                <input id='login-signup-email' disabled={!hydrated} type='email' name='email' value={signupEmail} onChange={e => setSignupEmail(e.target.value)} autoComplete='email' maxLength={254} className={authInputClass} required />
+                                <input id='login-signup-email' disabled={!hydrated} type='email' name='email' placeholder='example@mail.com' value={signupEmail} onChange={e => setSignupEmail(e.target.value)} autoComplete='email' maxLength={254} className={authInputClass} required />
                             </label>
                             <label className='grid gap-1.5' htmlFor='login-signup-password'>
                                 <span className='text-xs font-semibold text-ui-muted'>Password</span>
