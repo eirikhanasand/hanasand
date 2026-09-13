@@ -1,5 +1,6 @@
 FROM python:3.13-alpine@sha256:7415fbc3c9e4979cc717d92377ab2bc7b2b4a2af1ac03cc52b5f3f88efedaf3a
-RUN apk add --no-cache openssh-client ca-certificates
+RUN apk add --no-cache openssh-client ca-certificates \
+    && addgroup -g 1000 relay && adduser -D -H -u 1000 -G relay relay
 WORKDIR /app
 COPY health.py /app/health.py
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
