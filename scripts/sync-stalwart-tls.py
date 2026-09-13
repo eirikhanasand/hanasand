@@ -28,7 +28,7 @@ if state.exists() and state.read_text().strip() == digest:
 admin = tomllib.loads((mail / 'etc/config.toml').read_text())['authentication']['fallback-admin']
 base = ['docker', 'exec', 'hanasand_mail', 'stalwart-cli', '-u', 'http://127.0.0.1:8080', '-c', f"{admin['user']}:{admin['secret']}", 'server']
 for field, value in [('cert', cert), ('private-key', key), ('default', 'true')]:
-    result = subprocess.run(base + ['add-config', f'certificate.default.{field}', value], capture_output=True)
+    result = subprocess.run(base + ['add-config', f'certificate.default.{field}', '--', value], capture_output=True)
     if result.returncode:
         raise SystemExit(f'Stalwart certificate update failed for {field}; certificate state was not marked current.')
 for action in ['reload-config', 'reload-certificates']:
