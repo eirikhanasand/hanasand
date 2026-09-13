@@ -31,7 +31,8 @@ def smtp_probe(settings, reject_anonymous=False):
                 raise ValueError('Anonymous relay accepted')
             smtp.rset()
         smtp.login(settings['username'], settings['password'])
-        if smtp.mail('noreply@hanasand.com')[0] != 250 or smtp.rcpt('postmaster@example.net')[0] not in (250, 251):
+        # RCPT consumes per-sender delivery quotas even without DATA.
+        if smtp.mail('noreply@hanasand.com')[0] != 250:
             raise ValueError('Authenticated relay rejected')
         smtp.rset()
     return True

@@ -49,11 +49,13 @@ def ensure_principal(base, admin, principal):
 
 
 def start(name, image, network, volumes, ports, aliases=(), extra=()):
+    previous_ip = None
     if subprocess.run(['docker', 'inspect', name], capture_output=True).returncode == 0:
         current = json.loads(subprocess.check_output(['docker', 'inspect', name]))[0]
         if current['Config']['Image'] == image:
             subprocess.run(['docker', 'start', name], check=True, stdout=subprocess.DEVNULL)
             return
+        previous_ip = current['NetworkSettings']['Networks'][network]['IPAddress']
         # Only these task-owned, stateless health/connector containers are replaced.
         if name == 'hanasand-mail-relay-ovh':
             raise RuntimeError('Relay image changes require a reviewed upgrade.')
@@ -63,6 +65,7 @@ def start(name, image, network, volumes, ports, aliases=(), extra=()):
         '--user', '1000:1000', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true', '--read-only',
         '--tmpfs', '/tmp:rw,noexec,nosuid,size=16m', '--memory', '512m', '--cpus', '1',
         '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3', '--stop-timeout', '30']
+    if previous_ip: command += ['--ip', previous_ip]
     for alias in aliases: command += ['--network-alias', alias]
     for volume in volumes: command += ['-v', volume]
     for port in ports: command += ['-p', port]
