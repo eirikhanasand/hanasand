@@ -12,7 +12,7 @@ import time
 import tomllib
 import urllib.request
 
-STALWART_IMAGE = 'stalwartlabs/stalwart@sha256:cea39417b45fb32fad05cdf96ff89892f9ed48ff69aa5aca76c35d0372625d81'
+STALWART_IMAGE = 'stalwartlabs/stalwart@sha256:b6c2a04a79695136d5e2c16e9da0254135d0c3f3b1f8147873e812916b0ae8c4'
 ROOT = Path.home() / 'resilience-mail-relay'
 
 
