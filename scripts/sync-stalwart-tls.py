@@ -14,7 +14,12 @@ root = Path(__file__).resolve().parents[1]
 mail = root / 'mail/stalwart'
 cert_dir = Path(os.environ.get('MAIL_TLS_SOURCE', '/home/hanasand/openresty/letsencrypt/live/hanasand.com'))
 cert = (cert_dir / 'fullchain.pem').read_text()
-key = (cert_dir / 'privkey.pem').read_text()
+try:
+    key = (cert_dir / 'privkey.pem').read_text()
+except PermissionError:
+    # The renewal container owns the key; read it there without changing permissions.
+    key = subprocess.check_output(['docker', 'exec', 'openresty', 'cat',
+        '/etc/letsencrypt/live/hanasand.com/privkey.pem'], text=True)
 subprocess.run(['openssl', 'x509', '-in', str(cert_dir / 'fullchain.pem'), '-noout', '-checkend', '86400'], check=True, stdout=subprocess.DEVNULL)
 state = mail / '.tls-certificate-sha256'
 digest = hashlib.sha256(cert.encode()).hexdigest()
