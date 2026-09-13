@@ -318,7 +318,6 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
                             method='post'
                         >
                             <input type='hidden' name='redirectPath' value={redirectPath} />
-                            <p className='mb-2 text-sm text-ui-muted'>We’ll email you a six-digit code to verify your address and finish creating your account.</p>
                             {signupSendError && <p role='alert' className='text-sm text-red-600'>{signupSendError}</p>}
                             <label className='grid gap-1.5' htmlFor='login-signup-username'>
                                 <span className='text-xs font-semibold text-ui-muted'>Username</span>
@@ -399,7 +398,7 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
                         <h2 className='text-xl font-semibold'>Check your email</h2>
                         {signupNotice && <p role='status' className='text-sm text-ui-muted'>{signupNotice}</p>}
                         {signupSendError && <p role='alert' className='text-sm text-red-600'>{signupSendError}</p>}
-                        <p className='text-sm text-ui-muted'>Enter the six-digit code sent to {signupEmail}. It expires in 10 minutes. Your account will be created after verification.</p>
+                        <p className='text-sm text-ui-muted'>We’ve emailed a six-digit code to {signupEmail}. Enter it to verify your address and finish creating your account. It expires in 10 minutes.</p>
                         <VerificationCodeInput value={signupCode} setValue={setSignupCode} disabled={busy} onComplete={code => submitSignup(code)} />
                         <div className='flex flex-wrap gap-2'>
                             <button type='button' disabled={busy} className={authGhostButtonClass} onClick={() => void submitSignup('', true)}>Resend code</button>
