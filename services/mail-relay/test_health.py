@@ -39,7 +39,9 @@ class HealthTests(unittest.TestCase):
             def starttls(self, context): pass
             def login(self, username, password): self.logged_in = True
             def mail(self, *_): return (250 if self.logged_in else 530, b'')
-            def rcpt(self, *_): return (250 if self.logged_in else 550, b'')
+            def rcpt(self, *_):
+                if self.logged_in: raise AssertionError('Probe consumed delivery quota')
+                return (550, b'')
             def rset(self): pass
         settings = {'host': 'mail', 'port': 587, 'serverName': 'mail.example.test', 'username': 'test', 'password': 'test'}
         with patch.object(health.smtplib, 'SMTP', SMTP): self.assertTrue(health.smtp_probe(settings, True))
