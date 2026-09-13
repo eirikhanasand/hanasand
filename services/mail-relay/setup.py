@@ -65,7 +65,7 @@ def start(name, image, network, volumes, ports, aliases=(), extra=()):
         '--user', '1000:1000', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true', '--read-only',
         '--tmpfs', '/tmp:rw,noexec,nosuid,size=16m', '--memory', '512m', '--cpus', '1',
         '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3', '--stop-timeout', '30']
-    if previous_ip: command += ['--ip', previous_ip]
+    if previous_ip and name == 'hanasand-mail-relay-inspur': command += ['--ip', previous_ip]
     for alias in aliases: command += ['--network-alias', alias]
     for volume in volumes: command += ['-v', volume]
     for port in ports: command += ['-p', port]
