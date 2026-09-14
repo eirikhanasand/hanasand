@@ -24,7 +24,7 @@ const viewOptions: Array<{ key: LogsView, label: string }> = [
     { key: 'dashboard', label: 'Dashboard' },
     { key: 'errors', label: 'Error Codes' },
     { key: 'live', label: 'Live Feed' },
-    { key: 'stored', label: 'Stored Sample' },
+    { key: 'stored', label: 'Recent errors' },
 ]
 
 function when(value: string) {
