@@ -9,6 +9,7 @@ import type { CaseRow } from './cases-client'
 
 export type MonitoringCase = CaseRow & {
     canManage?: boolean,
+    relatedChecks?: Array<{ id: string, name: string, message: string, outcome?: string, completedAt?: string }>,
     events?: CaseEvent[], eventTotal?: number, eventPage?: number, eventSnapshot?: string, currentCheck?: CheckDetails,
     lastSeenAt?: string, occurrences: number, automationId: string, resolvedAt?: string, notificationsEnabled: boolean,
     history: Array<{ id: string, actor: string, at: string, action: string, note?: string, fromStatus?: string, toStatus?: string, fromSeverity?: string, toSeverity?: string, notificationsEnabled?: boolean }>,
@@ -119,12 +120,19 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
                 {item.resolution && <section className='grid gap-2 border-b border-ui-border p-5' aria-label='Resolution review'>
                     <h2 className='font-semibold'>{item.resolution.type === 'ai' ? 'Resolved by AI' : item.resolution.type === 'automation' ? 'Recovered automatically' : item.resolution.type === 'unknown' ? 'Resolver not recorded' : 'Resolved by a person'}</h2>
                     <p className='text-sm'>{item.resolution.actor || 'Identity unavailable'} · {date(item.resolution.at)}</p>
-                    <p className='whitespace-pre-wrap text-sm'>{item.resolution.note}</p>
+                    {item.resolution.type === 'automation' && item.resolvedAt && (item.relatedChecks?.length || 0) > 1 ? <div className='grid gap-3'>
+                        <p className='text-sm text-ui-muted'>Results when the affected checks recovered.</p>
+                        <dl className='grid gap-3'>{item.relatedChecks!.map(check => <div key={check.id}>
+                            <dt className='text-sm font-medium'>{check.name}</dt>
+                            <dd className='mt-1 whitespace-pre-wrap text-sm'>{check.message}</dd>
+                        </div>)}</dl>
+                    </div> : <p className='whitespace-pre-wrap text-sm'>{item.resolution.note}</p>}
                     {item.resolution.confirmedAt ? <p className='text-sm text-ui-success'>Confirmed by {item.resolution.confirmedBy} · {date(item.resolution.confirmedAt)}</p> : ['ai', 'automation'].includes(item.resolution.type) && <p className='text-sm text-ui-muted'>Awaiting human confirmation.</p>}
                 </section>}
                 <section aria-labelledby='case-summary' className='min-w-0 grid gap-3 border-b border-ui-border p-5 sm:p-6'>
                     <h2 id='case-summary' className='text-lg font-semibold'>Summary</h2>
                     <p className='whitespace-pre-wrap [overflow-wrap:anywhere] leading-7'>{item.summary}</p>
+                    {(item.relatedChecks?.length || 0) > 1 && <p className='text-sm text-ui-muted'>Affected checks: {item.relatedChecks!.map(check => check.name).join(', ')}.</p>}
                 </section>
                 <section aria-labelledby='case-technical' className='grid gap-4 border-b border-ui-border p-5 sm:p-6'>
                     <div className='flex flex-wrap items-center justify-between gap-3'><h2 id='case-technical' className='text-lg font-semibold'>Technical details</h2><Link className='text-sm text-ui-primary underline' href={`/automation/health?monitor=${encodeURIComponent(item.automationId)}`}>View health check</Link></div>

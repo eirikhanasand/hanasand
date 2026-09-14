@@ -5,7 +5,7 @@ import { automationReadScope } from '#utils/automationAccess.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import { monitoringCaseHistory, monitoringCaseResolution } from '#utils/monitoringCaseWorkflow.ts'
-import { loadMonitoringCaseEvents, monitoringCheckDetails } from '#utils/monitoringCaseEvents.ts'
+import { loadMonitoringCaseEvents, loadMonitoringRelatedChecks, monitoringCheckDetails } from '#utils/monitoringCaseEvents.ts'
 import type { AutomationRow } from '#utils/automations.ts'
 import { loadMonitoringIssues } from '#utils/monitoringIssues.ts'
 
@@ -22,7 +22,7 @@ export async function getMonitoringCases(req: FastifyRequest<{ Params: { id?: st
     if (!Number.isSafeInteger(page) || page < 0 || page > 100000) return res.status(400).send({ error: 'Invalid events page.' })
     const organizationId = req.query.organizationId || null
     if (req.query.tenantId && req.query.tenantId !== (organizationId || id)) return res.status(403).send({ error: 'Invalid case scope.' })
-    const result = await run(`SELECT i.*, ${automationReadScope('a', '$1', '$2')} AS can_manage, a.name AS monitor_name, a.owner_id, a.organization_id, a.target_url, a.monitoring_type, a.timeout_seconds, a.retry_count, a.follow_redirects, a.expected_down, a.upside_down
+    const result = await run(`SELECT i.*, (SELECT count(*)::int FROM monitoring_issue_checks c WHERE c.issue_id=i.id) AS check_count, ${automationReadScope('a', '$1', '$2')} AS can_manage, a.name AS monitor_name, a.owner_id, a.organization_id, a.target_url, a.monitoring_type, a.timeout_seconds, a.retry_count, a.follow_redirects, a.expected_down, a.upside_down
         FROM monitoring_issues i JOIN agent_automations a ON a.id = i.automation_id
         WHERE ${monitoringCaseReadScope('a', '$1', '$2')}
           AND ($3::text IS NULL OR a.organization_id = $3)
@@ -30,7 +30,7 @@ export async function getMonitoringCases(req: FastifyRequest<{ Params: { id?: st
         ORDER BY i.last_seen_at DESC, i.id DESC`, [includeAll, id, organizationId, caseId?.slice(3) || null])
     const items = result.rows.map(row => ({
         canManage: row.can_manage === true, id: `HA-${row.id}`, caseNumber: `HA-${row.id}`, source: 'monitoring',
-        title: `HA-${row.id} · ${row.monitor_name}`, summary: row.summary,
+        title: `HA-${row.id} · ${row.monitor_name}${row.check_count > 1 ? ` (+${row.check_count - 1} checks)` : ''}`, summary: row.summary,
         status: row.status_override || (row.resolved_at ? 'resolved' : 'open'), severity: row.severity_override || (row.kind === 'failure' ? 'high' : 'medium'),
         notificationsEnabled: row.notifications_enabled ?? true, comments: row.comments || [],
         history: monitoringCaseHistory(row), resolution: monitoringCaseResolution(row),
@@ -41,8 +41,9 @@ export async function getMonitoringCases(req: FastifyRequest<{ Params: { id?: st
     if (!caseId) return res.send({ items })
     if (!items.length) return res.status(404).send({ error: 'Case not found.' })
     const issues = await loadMonitoringIssues(items[0].automationId)
+    const relatedChecks = await loadMonitoringRelatedChecks(items[0].id.slice(3), items[0].resolvedAt ? new Date(items[0].resolvedAt).toISOString() : snapshot)
     const events = await loadMonitoringCaseEvents(items[0].id.slice(3), page, snapshot)
-    return res.send({ case: { ...items[0], ...events, currentCheck: monitoringCheckDetails(result.rows[0] as AutomationRow), notifications: issues.find(issue => issue.caseNumber === items[0].id)?.notifications || [] } })
+    return res.send({ case: { ...items[0], ...events, relatedChecks, currentCheck: monitoringCheckDetails(result.rows[0] as AutomationRow), notifications: issues.find(issue => issue.caseNumber === items[0].id)?.notifications || [] } })
 }
 
 export async function updateMonitoringCase(req: FastifyRequest<{ Params: { id: string }, Querystring: { organizationId?: string, tenantId?: string }, Body: { status?: string, severity?: string, notificationsEnabled?: boolean, comment?: string, resolutionMethod?: string, confirmResolutionId?: string } }>, res: FastifyReply) {

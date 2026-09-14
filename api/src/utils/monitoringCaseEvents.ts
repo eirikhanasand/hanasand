@@ -25,3 +25,26 @@ export async function loadMonitoringCaseEvents(issueId: string, page: number, sn
         message: redactSecretBearingText(row.error || row.result || ''), details: row.check_details })),
     eventTotal: count.rows[0].total as number, eventPage: page, eventSnapshot: snapshot }
 }
+
+// Shared outages can include several monitors. Read each result at recovery time,
+// so later runs cannot replace the evidence shown for the recovered case.
+export async function loadMonitoringRelatedChecks(issueId: string, snapshot: string) {
+    const result = await run(`SELECT a.id, a.name, r.status, r.warning, r.error, r.result, r.completed_at
+        FROM monitoring_issue_checks c
+        JOIN agent_automations a ON a.id = c.automation_id
+        JOIN monitoring_issues i ON i.id = c.issue_id
+        LEFT JOIN LATERAL (
+            SELECT status, warning, error, result, completed_at FROM agent_automation_runs
+            WHERE automation_id = c.automation_id AND completed_at <= $2::timestamptz
+                AND started_at >= COALESCE((SELECT min(f.started_at) FROM agent_automation_runs f
+                    WHERE f.issue_id = i.id AND f.automation_id = c.automation_id), i.first_seen_at)
+            ORDER BY completed_at DESC, id DESC LIMIT 1
+        ) r ON true
+        WHERE c.issue_id = $1
+        ORDER BY (a.id = i.automation_id) DESC, a.name, a.id`, [issueId, snapshot])
+    return result.rows.map(row => ({
+        id: row.id, name: row.name || row.id, completedAt: row.completed_at,
+        outcome: row.status === 'failed' ? 'failure' : row.warning ? 'warning' : row.status,
+        message: redactSecretBearingText(row.error || row.result || 'No result recorded at this time.'),
+    }))
+}
