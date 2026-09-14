@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
             if (!response.ok) return NextResponse.json({ error: response.status === 403 || response.status === 404 ? 'You do not have access to this organization.' : 'Organization access could not be checked. Please retry.' }, { status: [403, 404].includes(response.status) ? response.status : 503 })
             const payload = await response.json()
             const organization = payload.organization || payload
-            if (organization.id !== organizationId || organization.status !== 'active') return NextResponse.json({ error: 'This organization is not active.' }, { status: 403 })
+            if (organization.id !== organizationId || organization.lifecycleStatus !== 'active') return NextResponse.json({ error: 'This organization is not active.' }, { status: 403 })
             name = organization.name || organization.slug || organizationId
         } catch { return NextResponse.json({ error: 'Organization access could not be checked. Please retry.' }, { status: 503 }) }
     }

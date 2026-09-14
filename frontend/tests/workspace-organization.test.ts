@@ -21,8 +21,8 @@ test('workspace cookies are bound to the signed-in identity', () => {
     expect(readWorkspace(value, 'user-two')).toBeNull()
     expect(readWorkspace('invalid', 'user-one')).toBeNull()
 })
-test('validates membership and stores a single secure HttpOnly cookie', async () => {
-    globalThis.fetch = mock(async () => Response.json({ organization: { id: 'org-one', name: 'One', status: 'active' } })) as unknown as typeof fetch
+test('uses the organization API lifecycleStatus and stores a single secure HttpOnly cookie', async () => {
+    globalThis.fetch = mock(async () => Response.json({ organization: { id: 'org-one', name: 'One', lifecycleStatus: 'active' } })) as unknown as typeof fetch
     const response = await POST(request('org-one'))
     expect(response.status).toBe(200)
     const saved = response.cookies.get(WORKSPACE_COOKIE)!
@@ -37,7 +37,7 @@ test('denied, inactive and unavailable organizations never replace the workspace
         expect(response.status).toBe(status)
         expect(response.cookies.get(WORKSPACE_COOKIE)).toBeUndefined()
     }
-    globalThis.fetch = mock(async () => Response.json({ organization: { id: 'org-one', name: 'One', status: 'suspended' } })) as unknown as typeof fetch
+    globalThis.fetch = mock(async () => Response.json({ organization: { id: 'org-one', name: 'One', lifecycleStatus: 'suspended' } })) as unknown as typeof fetch
     expect((await POST(request('org-one'))).status).toBe(403)
 })
 test('rejects cross-site switching and supports returning to personal workspace', async () => {
@@ -49,5 +49,13 @@ test('reading workspace state does not write a competing cookie', async () => {
     cookieValues[WORKSPACE_COOKIE] = JSON.stringify({ userId: 'user-one', organizationId: 'org-one', name: 'One' })
     const response = await GET(new NextRequest('https://hanasand.com/api/workspace-organization'))
     expect((await response.json()).workspace.organizationId).toBe('org-one')
+    expect(response.cookies.get(WORKSPACE_COOKIE)).toBeUndefined()
+})
+
+
+test('missing lifecycle state cannot grant organization access', async () => {
+    globalThis.fetch = mock(async () => Response.json({ organization: { id: 'org-one', name: 'One' } })) as unknown as typeof fetch
+    const response = await POST(request('org-one'))
+    expect(response.status).toBe(403)
     expect(response.cookies.get(WORKSPACE_COOKIE)).toBeUndefined()
 })
