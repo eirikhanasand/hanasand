@@ -387,7 +387,7 @@ export function DwmAnalystPortal({
 
     if (view === 'delivery') {
         return (
-            <DwmPanelPage title='Integrations' meta={`${localDeliveries.length} delivery attempts · webhook ${webhookState}`}>
+            <DwmPanelPage title='Integrations' meta={selectedOrganizationId ? `${localDeliveries.length} delivery attempts · webhook ${webhookState}` : undefined}>
                 <DeliveryPanel alert={selectedAlert} deliveries={localDeliveries} busyAction={busyAction} onTest={testDelivery} onSend={sendAlert} />
             </DwmPanelPage>
         )
@@ -589,7 +589,7 @@ function CoverageFact({ label, value, tone = 'normal' }: { label: string, value:
     )
 }
 
-function DwmPanelPage({ title, meta, children }: { title: string, meta: string, children: ReactNode }) {
+function DwmPanelPage({ title, meta, children }: { title: string, meta?: string, children: ReactNode }) {
     return (
         <div className='grid gap-4'>
             <section className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
@@ -598,7 +598,7 @@ function DwmPanelPage({ title, meta, children }: { title: string, meta: string, 
                         <p className='text-[10px] font-semibold uppercase text-ui-primary'>Dark web monitoring</p>
                         <h1 className='mt-1 text-lg font-semibold text-ui-text'>{title}</h1>
                     </div>
-                    <p className='text-xs font-medium text-ui-muted'>{meta}</p>
+                    {meta && <p className='text-xs font-medium text-ui-muted'>{meta}</p>}
                 </div>
                 <div className='p-3'>
                     {children}
@@ -2254,7 +2254,7 @@ function DeliveryPanel({ alert, deliveries, busyAction, onTest, onSend }: { aler
         return (
             <section className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-6 text-center'>
                 <h2 className='text-base font-semibold text-ui-text'>Create an organization to set up integrations</h2>
-                <p className='mx-auto max-w-md text-sm leading-6 text-ui-muted'>Integrations connect monitored alerts to the tools your organization already uses.</p>
+                <p className='mx-auto max-w-md text-sm leading-6 text-ui-muted'>Send events and alerts to the tools your organization already uses.</p>
                 <div><Link href='/organizations' className='inline-flex min-h-9 items-center rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>Create organization</Link></div>
                 <div className='grid gap-2 text-left sm:grid-cols-3'>
                     {['Slack', 'Microsoft Teams', 'Webhook'].map(preset => <Link key={preset} href='/organizations' className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-xs font-semibold text-ui-muted'>{preset}<span className='mt-1 block font-normal'>Available after setup</span></Link>)}
