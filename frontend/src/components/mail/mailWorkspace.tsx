@@ -29,7 +29,7 @@ import {
     sendMail,
 } from '@/utils/mail/client'
 import type { MailMessageSummary, MailOverview } from '@/utils/mail/types'
-import { DashboardHeader, DashboardPage, DashboardPanel, dashboardPanelClass } from '@/components/dashboard/ui'
+import { DashboardPage, DashboardPanel, dashboardPanelClass } from '@/components/dashboard/ui'
 import ErrorNotice from '@/components/error/errorNotice'
 import { Composer, MessageRow } from './mailWorkspaceParts'
 import {
@@ -198,40 +198,21 @@ export default function MailWorkspace({ mailboxUser }: Props) {
         [selectedMessage, overview?.mailboxUser]
     )
 
+    const unreadCount = overview?.mailboxes.reduce((sum, mailbox) => sum + (mailbox.unreadEmails || 0), 0) ?? 0
     const showStaleWarning = Boolean(lastSuccessAt && now - lastSuccessAt > STALE_AFTER_MS)
 
     return (
         <DashboardPage>
-            <DashboardHeader
-                eyebrow='Communications'
-                title='Mail'
-                description={overview?.mailboxAddress || 'Read, triage, and send operational mail from one workspace.'}
-                actions={(
-                    <div className='flex flex-wrap items-center justify-end gap-2'>
-                        {showStaleWarning && (
-                            <div className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-ui-danger/30 bg-ui-danger/10 px-2.5 text-[11px] text-ui-danger'>
-                                <Clock3 className='h-3.5 w-3.5' />
-                                Updated {formatRelativeTime(lastSuccessAt!, now)} ago
-                            </div>
-                        )}
-                        <button
-                            data-testid='mail-compose-button'
-                            disabled={!overview}
-                            className='inline-flex h-8 items-center gap-1.5 rounded-lg bg-ui-primary px-3 text-[11px] font-medium text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-ui-raised disabled:text-ui-muted'
-                            onClick={() => setComposer({ ...emptyComposer, open: true })}
-                        >
-                            <MailPlus className='h-3.5 w-3.5' />
-                            Create
-                        </button>
-                    </div>
-                )}
-            />
-
             <DashboardPanel className='flex flex-wrap items-center gap-2 p-2.5 sm:p-3' id='mail-toolbar'>
                 <div className='flex min-w-0 flex-1 flex-wrap items-center gap-2'>
                     <div className='mr-auto min-w-0'>
                         <p className='text-[10px] uppercase tracking-[0.24em] text-ui-muted'>Workspace</p>
                         <p className='truncate text-[11px] text-ui-muted'>{overview?.mailboxAddress || 'Communication'}</p>
+                    </div>
+                    <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-ui-muted' data-mail-counts>
+                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1'>{unreadCount} unread</span>
+                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1'>{filteredMessages.length} visible</span>
+                        {showStaleWarning && <span className='rounded-md border border-ui-danger/35 bg-ui-danger/10 px-2 py-1 text-ui-danger'>stale</span>}
                     </div>
                     <MailSyncStatus lastSuccessAt={lastSuccessAt} now={now} issue={backgroundIssue || error} />
 
@@ -253,26 +234,30 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                         </select>
                     )}
 
-                    <div className='relative min-w-0 flex-1 sm:min-w-52 sm:max-w-sm'>
-                        <Search className='pointer-events-none absolute left-2.5 top-2 h-3.5 w-3.5 text-ui-muted' />
-                        <input
-                            value={query}
-                            onChange={event => setQuery(event.target.value)}
-                            placeholder='Search this mailbox'
-                            className={`${subtleInput} w-full pl-8`}
-                        />
+                    <div className='flex min-w-0 basis-full items-center gap-2 sm:basis-auto sm:flex-1 sm:min-w-64 sm:max-w-md'>
+                        <div className='relative min-w-0 flex-1'>
+                            <Search className='pointer-events-none absolute left-2.5 top-2 h-3.5 w-3.5 text-ui-muted' />
+                            <input
+                                value={query}
+                                onChange={event => setQuery(event.target.value)}
+                                placeholder='Search this mailbox'
+                                aria-label='Search this mailbox'
+                                className={`${subtleInput} w-full pl-8`}
+                            />
+                        </div>
+                        <button
+                            type='button'
+                            data-testid='mail-compose-button'
+                            disabled={!overview}
+                            className={`${toolbarButton} shrink-0`}
+                            onClick={() => setComposer({ ...emptyComposer, open: true })}
+                        >
+                            <MailPlus className='h-3.5 w-3.5' />
+                            Create
+                        </button>
                     </div>
                 </div>
             </DashboardPanel>
-
-            <MailPrimaryFlow
-                overview={overview}
-                visibleCount={filteredMessages.length}
-                selectedMessage={selectedMessage}
-                stale={showStaleWarning}
-                onCompose={() => setComposer({ ...emptyComposer, open: true })}
-                onReply={() => selectedMessage && setComposer(composeFromReply('reply', selectedMessage))}
-            />
 
             {error && (
                 <ErrorNotice
@@ -289,7 +274,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 <ErrorNotice compact message={`Background sync paused. Last successful update was ${formatRelativeTime(lastSuccessAt!, now)} ago.`} />
             )}
 
-            <div className={`grid gap-3 ${sidebarCompact ? '2xl:grid-cols-[80px_320px_minmax(0,1fr)]' : '2xl:grid-cols-[220px_320px_minmax(0,1fr)]'} xl:grid-cols-[minmax(0,280px)_minmax(0,1fr)]`}>
+            <div className={`grid min-w-0 grid-cols-1 gap-3 ${sidebarCompact ? '2xl:grid-cols-[80px_320px_minmax(0,1fr)]' : '2xl:grid-cols-[220px_320px_minmax(0,1fr)]'} xl:grid-cols-[minmax(0,280px)_minmax(0,1fr)]`}>
                 <aside
                     className={`${dashboardPanelClass} relative overflow-hidden p-3`}
                 >
@@ -786,53 +771,6 @@ function MailSyncStatus({
             <Clock3 className='h-3.5 w-3.5 shrink-0' />
             <span className='truncate'>{issue ? `Reconnecting; syncs every ${intervalSeconds}s, ${label}` : `Syncs every ${intervalSeconds}s · ${label}`}</span>
         </div>
-    )
-}
-
-function MailPrimaryFlow({ overview, visibleCount, selectedMessage, stale, onCompose, onReply }: {
-    overview: MailOverview | null
-    visibleCount: number
-    selectedMessage: MailOverview['selectedMessage']
-    stale: boolean
-    onCompose: () => void
-    onReply: () => void
-}) {
-    const unreadCount = overview?.mailboxes.reduce((sum, mailbox) => sum + (mailbox.unreadEmails || 0), 0) ?? 0
-    const title = selectedMessage
-        ? `Reply or triage "${selectedMessage.subject || 'selected message'}"`
-        : unreadCount
-            ? `Review ${unreadCount} unread message${unreadCount === 1 ? '' : 's'}`
-            : 'Mailbox is ready'
-    const detail = selectedMessage
-        ? `From ${selectedMessage.from.map(formatMailboxAddress).join(', ') || 'unknown sender'} · ${formatDate(selectedMessage.receivedAt, true)}`
-        : overview
-            ? `${visibleCount} visible message${visibleCount === 1 ? '' : 's'} in ${overview.mailboxAddress}.`
-            : 'Mail is loading; compose unlocks when the mailbox connects.'
-
-    return (
-        <section className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_auto]' data-mail-primary-flow>
-            <div className='min-w-0'>
-                <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-ui-muted'>
-                    <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1'>{unreadCount} unread</span>
-                    <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1'>{visibleCount} visible</span>
-                    {stale ? <span className='rounded-md border border-ui-danger/35 bg-ui-danger/10 px-2 py-1 text-ui-danger'>stale</span> : null}
-                </div>
-                <h2 className='mt-3 wrap-break-word text-lg font-semibold text-ui-text'>{title}</h2>
-                <p className='mt-1 max-w-3xl text-sm leading-6 text-ui-muted'>{detail}</p>
-            </div>
-            <div className='flex flex-wrap items-center gap-2 lg:justify-end'>
-                {selectedMessage ? (
-                    <button type='button' onClick={onReply} className='inline-flex min-h-10 items-center gap-2 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90' data-mail-primary-action>
-                        <Reply className='h-4 w-4' />
-                        Reply
-                    </button>
-                ) : null}
-                <button type='button' onClick={onCompose} disabled={!overview} className='inline-flex min-h-10 items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text shadow-sm transition hover:border-ui-primary/35 hover:bg-ui-panel disabled:cursor-not-allowed disabled:opacity-50' data-mail-compose-primary>
-                    <MailPlus className='h-4 w-4' />
-                    Create
-                </button>
-            </div>
-        </section>
     )
 }
 
