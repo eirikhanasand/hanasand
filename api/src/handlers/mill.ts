@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import run from '#db'
+import run, { withTransaction } from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { matchApiKeyScope, validateApiKey } from '#utils/auth/apiKeys.ts'
 import { recordSystemEvent } from '#utils/systemEvent.ts'
@@ -9,7 +9,7 @@ import { parse as parseYaml } from 'yaml'
 type MillEvent = Record<string, unknown>
 type MillBody = { source?: Record<string, unknown>, events?: unknown }
 type MillCondition = { path: string, operator: 'equals' | 'contains' | 'regex', value: string }
-type MillRule = { id: string, recordId?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'owned' | 'open_source', sourceReference?: string, definition?: { match: 'all', conditions: MillCondition[] } }
+type MillRule = { id: string, detectionLogic?: string, recordId?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'owned' | 'open_source', sourceReference?: string, definition?: { match: 'all', conditions: MillCondition[] } }
 
 export const MILL_RULES: MillRule[] = [
     { id: 'auth.brute_force_success.v1', version: '1', name: 'Brute-force success', family: 'Authentication', severity: 'high', explanation: 'A successful login followed multiple failed logins for the same user within 15 minutes.', evidence: ['failed event IDs', 'successful event ID', 'time window'] },
@@ -140,13 +140,8 @@ export async function postMillRule(req: FastifyRequest, res: FastifyReply) {
     if (explanation.length < 10 || explanation.length > 500) return res.status(400).send({ error: 'Rule explanation must contain 10-500 characters.' })
     if (!conditionResult.conditions.length || conditionResult.error) return res.status(400).send({ error: conditionResult.error || 'Add at least one valid rule condition.' })
     const ruleId = `custom.${randomUUID().replaceAll('-', '').slice(0, 20)}.v1`
-    const result = await run(`
-        INSERT INTO mill_rules (id, organization_id, rule_id, version, name, family, severity, explanation, definition, enabled, created_by)
-        VALUES ($1, $2, $3, '1', $4, 'Custom', $5, $6, $7, TRUE, $8)
-        RETURNING id, rule_id, version, name, family, severity, explanation, definition, source, source_reference, enabled, created_at, updated_at
-    `, [randomUUID(), access.organizationId, ruleId, name, severity, explanation, JSON.stringify({ match: 'all', conditions: conditionResult.conditions }), access.userId])
-    await recordSystemEvent(req, { actionType: 'mill.rule.created', actorId: access.userId, organizationId: access.organizationId, targetType: 'mill_rule', targetId: result.rows[0].id, context: { ruleId, severity, conditionCount: conditionResult.conditions.length } })
-    return res.status(201).send({ rule: { ...result.rows[0], source: 'owned' } })
+    const rule = await saveMillRule(req, access, { id: ruleId, version: '1', name, family: 'Custom', severity, explanation, evidence: [], definition: { match: 'all', conditions: conditionResult.conditions }, source: 'owned', enabled: true }, 'mill.rule.created')
+    return res.status(201).send({ rule })
 }
 
 export async function postMillRulePack(req: FastifyRequest, res: FastifyReply) {
@@ -176,11 +171,7 @@ export async function postMillRulePack(req: FastifyRequest, res: FastifyReply) {
         prepared.push({ ruleId: `open.${packSlug}.${rawId}.v1`, name, severity, explanation, definition: { match: 'all', conditions: conditions.conditions } })
     }
     for (const rule of prepared) {
-        await run(`
-            INSERT INTO mill_rules (id, organization_id, rule_id, version, name, family, severity, explanation, definition, source, source_reference, enabled, created_by)
-            VALUES ($1, $2, $3, '1', $4, $5, $6, $7, $8, 'open_source', $9, TRUE, $10)
-            ON CONFLICT (organization_id, rule_id) DO UPDATE SET version = EXCLUDED.version, name = EXCLUDED.name, family = EXCLUDED.family, severity = EXCLUDED.severity, explanation = EXCLUDED.explanation, definition = EXCLUDED.definition, source = EXCLUDED.source, source_reference = EXCLUDED.source_reference, updated_at = NOW()
-        `, [randomUUID(), access.organizationId, rule.ruleId, rule.name, packName, rule.severity, rule.explanation, JSON.stringify(rule.definition), sourceReference, access.userId])
+        await saveMillRule(req, access, { id: rule.ruleId, version: '1', name: rule.name, family: packName, severity: rule.severity, explanation: rule.explanation, definition: rule.definition, evidence: [], source: 'open_source', sourceReference, enabled: true }, 'mill.rule.imported', undefined, true)
     }
     await recordSystemEvent(req, { actionType: 'mill.rule_pack.imported', actorId: access.userId, organizationId: access.organizationId, targetType: 'mill_rule_pack', targetId: `${packSlug}@${packVersion}`, context: { packName, packVersion, sourceReference, ruleCount: prepared.length } })
     return res.status(201).send({ imported: prepared.length, pack: { name: packName, version: packVersion, sourceReference } })
@@ -207,11 +198,7 @@ export async function postMillSigmaPack(req: FastifyRequest, res: FastifyReply) 
     if (!packSlug) return res.status(400).send({ error: 'Pack name must contain letters or numbers.' })
     for (const rule of compiled.rules) {
         const ruleId = `sigma.${packSlug}.${rule.id}.v1`
-        await run(`
-            INSERT INTO mill_rules (id, organization_id, rule_id, version, name, family, severity, explanation, definition, source, source_reference, enabled, created_by)
-            VALUES ($1, $2, $3, '1', $4, 'Sigma', $5, $6, $7, 'open_source', $8, TRUE, $9)
-            ON CONFLICT (organization_id, rule_id) DO UPDATE SET name = EXCLUDED.name, severity = EXCLUDED.severity, explanation = EXCLUDED.explanation, definition = EXCLUDED.definition, source = EXCLUDED.source, source_reference = EXCLUDED.source_reference, updated_at = NOW()
-        `, [randomUUID(), access.organizationId, ruleId, rule.name, rule.severity, rule.explanation, JSON.stringify({ match: 'all', conditions: rule.conditions }), sourceReference, access.userId])
+        await saveMillRule(req, access, { id: ruleId, version: '1', name: rule.name, family: 'Sigma', severity: rule.severity, explanation: rule.explanation, definition: { match: 'all', conditions: rule.conditions }, evidence: [], source: 'open_source', sourceReference, enabled: true }, 'mill.rule.imported', undefined, true)
     }
     await recordSystemEvent(req, { actionType: 'mill.sigma_pack.imported', actorId: access.userId, organizationId: access.organizationId, targetType: 'mill_sigma_pack', targetId: `${packSlug}@${packVersion}`, context: { packName, packVersion, sourceReference, ruleCount: compiled.rules.length } })
     return res.status(201).send({ imported: compiled.rules.length, pack: { name: packName, version: packVersion, sourceReference } })
@@ -223,26 +210,77 @@ export async function postMillRuleAction(req: FastifyRequest<{ Params: { id: str
     if (!canManageMillRules(access.role)) return res.status(403).send({ error: 'Owner or admin access is required to manage Mill rules.' })
     const action = req.body?.action === 'enable' || req.body?.action === 'disable' ? req.body.action : null
     if (!action) return res.status(400).send({ error: 'Action must be enable or disable.' })
-    const builtIn = MILL_RULES.find(rule => rule.id === req.params.id)
-    if (builtIn) {
-        const result = await run(`
-            INSERT INTO mill_rules (id, organization_id, rule_id, version, name, family, severity, explanation, definition, source, enabled, created_by)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, '{}'::jsonb, 'hanasand', $9, $10)
-            ON CONFLICT (organization_id, rule_id) DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = NOW()
-            RETURNING id, rule_id, version, name, family, severity, explanation, definition, source, source_reference, enabled, updated_at
-        `, [randomUUID(), access.organizationId, builtIn.id, builtIn.version, builtIn.name, builtIn.family, builtIn.severity, builtIn.explanation, action === 'enable', access.userId])
-        await recordSystemEvent(req, { actionType: 'mill.rule.updated', actorId: access.userId, organizationId: access.organizationId, targetType: 'mill_rule', targetId: result.rows[0].id, context: { action, ruleId: builtIn.id } })
-        return res.send({ rule: { ...result.rows[0], id: builtIn.id, source: 'hanasand' } })
+    const rule = (await loadConfiguredMillRules(access.organizationId)).find(rule => rule.id === req.params.id || rule.recordId === req.params.id)
+    if (!rule) return res.status(404).send({ error: 'Rule not found.' })
+    try {
+        const saved = await saveMillRule(req, access, { ...rule, enabled: action === 'enable' }, 'mill.rule.updated', rule.version)
+        return res.send({ rule: saved })
+    } catch (error) {
+        if (error instanceof RuleConflict) return res.status(409).send({ error: error.message })
+        throw error
     }
-    const result = await run(`
-        UPDATE mill_rules
-        SET enabled = $3, updated_at = NOW()
-        WHERE id = $1 AND organization_id = $2
-        RETURNING id, rule_id, version, name, family, severity, explanation, definition, source, source_reference, enabled, updated_at
-    `, [req.params.id, access.organizationId, action === 'enable'])
-    if (!result.rows[0]) return res.status(404).send({ error: 'Custom Mill rule not found.' })
-    await recordSystemEvent(req, { actionType: 'mill.rule.updated', actorId: access.userId, organizationId: access.organizationId, targetType: 'mill_rule', targetId: req.params.id, context: { action } })
-    return res.send({ rule: { ...result.rows[0], source: result.rows[0].source || 'owned' } })
+}
+
+export async function getMillRule(req: FastifyRequest<{ Params: { id: string }, Querystring: { organizationId?: string, offset?: string } }>, res: FastifyReply) {
+    const access = await organizationAccess(req, res)
+    if (!access) return
+    const rule = (await loadConfiguredMillRules(access.organizationId)).find(rule => rule.id === req.params.id || rule.recordId === req.params.id)
+    if (!rule) return res.status(404).send({ error: 'Rule not found.' })
+    const offset = Math.max(0, Math.min(1000000, Number.parseInt(req.query.offset || '0', 10) || 0))
+    const audit = await run(`SELECT id, event_type, actor_id, created_at, context
+        FROM system_events WHERE organization_id = $1 AND object_type = 'mill_rule'
+        AND (object_id = $2 OR object_id = $3 OR context->>'ruleId' = $2)
+        ORDER BY created_at DESC, id DESC LIMIT 51 OFFSET $4`, [access.organizationId, rule.id, rule.recordId || rule.id, offset])
+    return res.send({ organizationId: access.organizationId, canEdit: canManageMillRules(access.role), rule, audit: audit.rows.slice(0, 50), nextOffset: audit.rows.length > 50 ? offset + 50 : null })
+}
+
+export async function putMillRule(req: FastifyRequest<{ Params: { id: string } }>, res: FastifyReply) {
+    const access = await organizationAccess(req, res)
+    if (!access) return
+    if (!canManageMillRules(access.role)) return res.status(403).send({ error: 'Owner or admin access is required to manage rules.' })
+    const rule = (await loadConfiguredMillRules(access.organizationId)).find(rule => rule.id === req.params.id)
+    if (!rule) return res.status(404).send({ error: 'Rule not found.' })
+    const body = (req.body || {}) as Record<string, unknown>
+    const name = typeof body.name === 'string' ? body.name.trim() : ''
+    const explanation = typeof body.explanation === 'string' ? body.explanation.trim() : ''
+    if (name.length < 2 || name.length > 120 || explanation.length < 10 || explanation.length > 500) return res.status(400).send({ error: 'Name must contain 2–120 characters and description 10–500 characters.' })
+    if (!['low', 'medium', 'high', 'critical'].includes(String(body.severity)) || typeof body.enabled !== 'boolean' || typeof body.version !== 'string') return res.status(400).send({ error: 'A valid severity, enabled state and current version are required.' })
+    let definition = rule.definition
+    if (rule.source !== 'hanasand') {
+        const normalized = normalizeMillConditions(body.conditions)
+        if (normalized.error || !normalized.conditions.length) return res.status(400).send({ error: normalized.error || 'Add at least one condition.' })
+        definition = { match: 'all', conditions: normalized.conditions }
+    } else if (body.conditions !== undefined) return res.status(400).send({ error: 'Built-in detection logic cannot be replaced with field conditions.' })
+    try {
+        const saved = await saveMillRule(req, access, { ...rule, name, explanation, severity: String(body.severity), enabled: body.enabled, definition }, 'mill.rule.updated', body.version)
+        return res.send({ rule: saved })
+    } catch (error) {
+        if (error instanceof RuleConflict) return res.status(409).send({ error: error.message })
+        throw error
+    }
+}
+
+class RuleConflict extends Error { constructor() { super('This rule changed since you opened it. Reload the rule before saving again.') } }
+
+async function saveMillRule(req: FastifyRequest, access: { organizationId: string, userId: string }, rule: MillRule, action: string, expectedVersion?: string, preserveEnabled = false) {
+    return withTransaction(async query => {
+        // Serialize edits even when a built-in rule has no organization override yet.
+        await query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`mill-rule:${access.organizationId}:${rule.id}`])
+        const existing = await query('SELECT * FROM mill_rules WHERE organization_id = $1 AND rule_id = $2 FOR UPDATE', [access.organizationId, rule.id])
+        const row = existing.rows[0]
+        const builtin = MILL_RULES.find(item => item.id === rule.id)
+        const version = String(row?.version || builtin?.version || '0')
+        if (expectedVersion !== undefined && expectedVersion !== version) throw new RuleConflict()
+        const before = row ? { name: row.name, explanation: row.explanation, severity: row.severity, enabled: row.enabled, definition: row.definition, version } : builtin ? { name: builtin.name, explanation: builtin.explanation, severity: builtin.severity, enabled: true, definition: {}, version } : null
+        const after = { name: rule.name, explanation: rule.explanation, severity: rule.severity, enabled: preserveEnabled && row ? Boolean(row.enabled) : rule.enabled !== false, definition: rule.definition || {}, version: String(Number(version) + 1) }
+        if (action === 'mill.rule.updated' && before && ['name', 'explanation', 'severity', 'enabled', 'definition'].every(key => JSON.stringify(before[key as keyof typeof before]) === JSON.stringify(after[key as keyof typeof after]))) return { ...rule, version, recordId: row?.id }
+        const result = await query(`INSERT INTO mill_rules (id, organization_id, rule_id, version, name, family, severity, explanation, definition, source, source_reference, enabled, created_by)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13)
+            ON CONFLICT (organization_id, rule_id) DO UPDATE SET version=EXCLUDED.version, name=EXCLUDED.name, family=EXCLUDED.family, severity=EXCLUDED.severity, explanation=EXCLUDED.explanation, definition=EXCLUDED.definition, source=EXCLUDED.source, source_reference=EXCLUDED.source_reference, enabled=EXCLUDED.enabled, updated_at=NOW()
+            RETURNING id`, [row?.id || randomUUID(), access.organizationId, rule.id, after.version, rule.name, rule.family, rule.severity, rule.explanation, JSON.stringify(after.definition), rule.source || 'owned', rule.sourceReference || null, after.enabled, access.userId])
+        await recordSystemEvent(req, { actionType: action, actorId: access.userId, organizationId: access.organizationId, source: 'mill', targetType: 'mill_rule', targetId: rule.id, context: { ruleId: rule.id, before, after } }, query)
+        return { ...rule, version: after.version, enabled: after.enabled, recordId: result.rows[0].id }
+    })
 }
 
 async function organizationAccess(req: FastifyRequest, res: FastifyReply) {
@@ -280,7 +318,7 @@ async function loadConfiguredMillRules(organizationId: string): Promise<MillRule
     const overrides = new Map((result.rows as Array<Record<string, unknown>>).map(row => [String(row.rule_id), row]))
     const builtIns = MILL_RULES.map(rule => {
         const override = overrides.get(rule.id)
-        return { ...rule, enabled: override ? Boolean(override.enabled) : true, source: 'hanasand' as const }
+        return { ...rule, detectionLogic: rule.explanation, ...(override ? { recordId: String(override.id), version: String(override.version), name: String(override.name), explanation: String(override.explanation), severity: String(override.severity) } : {}), enabled: override ? Boolean(override.enabled) : true, source: 'hanasand' as const }
     })
     const custom = (result.rows as Array<Record<string, unknown>>)
         .filter(row => !MILL_RULES.some(rule => rule.id === row.rule_id))
@@ -291,6 +329,10 @@ async function loadConfiguredMillRules(organizationId: string): Promise<MillRule
 }
 
 async function createMillFindings(organizationId: string, eventId: string, event: NormalizedEvent, rules: MillRule[]) {
+    const insertFinding = async (org: string, id: string, severity: string, summary: string, eventIds: string[], evidence: MillEvent) => {
+        const configured = rules.find(rule => rule.id === id)
+        await persistFinding(org, id, configured?.severity || severity, summary, eventIds, { ...evidence, ruleVersion: configured?.version || '1', ruleName: configured?.name, ruleExplanation: configured?.explanation })
+    }
     const enabled = new Set(rules.filter(rule => rule.enabled !== false).map(rule => rule.id))
     for (const rule of rules.filter(rule => (rule.source === 'owned' || rule.source === 'open_source') && rule.enabled !== false)) {
         if (rule.definition && matchesMillRule(event.normalized, rule.definition.conditions)) {
@@ -361,7 +403,7 @@ async function createMillFindings(organizationId: string, eventId: string, event
     }
 }
 
-async function insertFinding(organizationId: string, ruleId: string, severity: string, summary: string, eventIds: string[], evidence: MillEvent) {
+async function persistFinding(organizationId: string, ruleId: string, severity: string, summary: string, eventIds: string[], evidence: MillEvent) {
     const findingKey = `${organizationId}:${ruleId}:${eventIds.slice().sort().join(',')}`
     await run(`
         INSERT INTO mill_findings (id, organization_id, finding_key, rule_id, severity, status, summary, evidence, event_ids, first_observed, last_observed)

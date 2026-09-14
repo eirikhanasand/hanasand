@@ -4,7 +4,7 @@ import { loadAutomations } from '@/utils/automations/server'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-    title: 'Automation',
+    title: 'Health Checks',
     description: 'Configure monitoring jobs and alert destinations.',
 }
 
