@@ -25,12 +25,12 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     if (!userId || !token) {
         return (
             <div className='min-h-full w-full bg-ui-canvas px-4 py-8 text-ui-text sm:px-6 sm:py-14'>
-                <PublicProfile profile={profile} username={username} />
+                <PublicProfile key={username} profile={profile} username={username} />
             </div>
         )
     }
 
-    if (!isSelf) return <DashboardPage><PublicProfile profile={profile} username={username} /></DashboardPage>
+    if (!isSelf) return <DashboardPage><PublicProfile key={username} profile={profile} username={username} /></DashboardPage>
 
     const displayName = profile?.name || (isSelf ? name : null) || profileId
     const certificates = isSelf ? await getCertificates(userId, token, userId) : null
