@@ -7,10 +7,13 @@ import json
 import os
 from pathlib import Path
 import secrets
+import re
+import shlex
 import subprocess
 import time
 import tomllib
 import urllib.request
+import urllib.error
 
 STALWART_IMAGE = 'stalwartlabs/stalwart@sha256:b6c2a04a79695136d5e2c16e9da0254135d0c3f3b1f8147873e812916b0ae8c4'
 ROOT = Path.home() / 'resilience-mail-relay'
@@ -76,6 +79,67 @@ def refresh_tls():
     for filename in ['fullchain.pem', 'privkey.pem']:
         value = subprocess.check_output(['docker', 'exec', 'openresty', 'cat', '/etc/letsencrypt/live/hanasand.com/' + filename], text=True)
         write_secret(ROOT / 'tls' / filename, value)
+
+
+
+def refresh_ovh_certificate():
+    previous = (ROOT / 'tls/fullchain.pem').read_bytes()
+    refresh_tls()
+    if previous != (ROOT / 'tls/fullchain.pem').read_bytes():
+        result = api('http://127.0.0.1:18081', 'admin', credentials()['admin'], '/reload/certificate')
+        if result.get('data', {}).get('errors'):
+            raise RuntimeError('Relay certificate reload failed')
+        print('Relay TLS certificate renewed and reloaded.')
+
+
+def install_certificate_refresh(revision):
+    if not re.fullmatch(r'[0-9a-f]{40}', revision): raise ValueError('A full pushed Git revision is required')
+    repository = Path.home() / 'hanasand'
+    subprocess.run(['git', '-C', str(repository), 'cat-file', '-e', revision + ':services/mail-relay/setup.py'], check=True)
+    command = 'git -C ' + shlex.quote(str(repository)) + ' show ' + revision + ':services/mail-relay/setup.py | /usr/bin/python3 - ovh --refresh-tls'
+    line = '17 * * * * /usr/bin/flock -n ' + shlex.quote(str(ROOT / 'renewal.lock')) + ' /bin/bash -o pipefail -c ' + shlex.quote(command) + ' 2>&1 | /usr/bin/logger -t hanasand-mail-relay-tls # hanasand-mail-relay-renewal'
+    existing = subprocess.run(['crontab', '-l'], text=True, capture_output=True)
+    if existing.returncode and 'no crontab' not in existing.stderr: raise RuntimeError('Could not read existing crontab')
+    lines = [item for item in existing.stdout.splitlines() if not item.endswith('# hanasand-mail-relay-renewal')]
+    subprocess.run(['crontab', '-'], input='\n'.join(lines + [line, '']), text=True, check=True)
+    print('Hourly certificate refresh installed; existing scheduled tasks preserved.')
+
+
+def activate_inspur():
+    admin = tomllib.loads(Path('/home/hanasand/hanasand/mail/stalwart/etc/config.toml').read_text())['authentication']['fallback-admin']
+    def call(path, body=None):
+        return api('http://127.0.0.1:8081', admin['user'], admin['secret'], path, body)
+    # Queue backlog returns 503 during activation; connection checks must still pass.
+    try:
+        response = urllib.request.urlopen('http://127.0.0.1:19261/health', timeout=5)
+    except urllib.error.HTTPError as error:
+        if error.code != 503: raise
+        response = error
+    with response:
+        health = json.load(response)
+    if not all(health.get('checks', {}).get(key) for key in ['smtpAuthentication', 'relayAuthentication', 'tunnel']):
+        raise RuntimeError('Private relay authentication must pass before activation')
+    saved = json.loads((ROOT / 'ovh-credentials.json').read_text())
+    values = {
+        'queue.route.ovh-relay.type': 'relay', 'queue.route.ovh-relay.address': 'smtp-relay.hanasand.com',
+        'queue.route.ovh-relay.port': '1587', 'queue.route.ovh-relay.protocol': 'smtp',
+        'queue.route.ovh-relay.auth.username': 'inspur-relay', 'queue.route.ovh-relay.auth.secret': saved['relay'],
+        'queue.route.ovh-relay.tls.implicit': 'false', 'queue.route.ovh-relay.tls.allow-invalid-certs': 'false',
+        'queue.strategy.route.0.if': "is_local_domain('*', rcpt_domain)", 'queue.strategy.route.0.then': "'local'",
+        'queue.strategy.route.1.if': "sender == 'noreply@hanasand.com'", 'queue.strategy.route.1.then': "'ovh-relay'",
+        'queue.strategy.route.2.else': "'mx'",
+        'queue.tls.ovh-relay.starttls': 'require', 'queue.tls.ovh-relay.allow-invalid-certs': 'false',
+        'queue.tls.ovh-relay.timeout.tls': '10s',
+        'queue.strategy.tls.0.if': "sender == 'noreply@hanasand.com'", 'queue.strategy.tls.0.then': "'ovh-relay'",
+        'queue.strategy.tls.1.if': "retry_num > 0 && last_error == 'tls'", 'queue.strategy.tls.1.then': "'invalid-tls'",
+        'queue.strategy.tls.2.else': "'default'",
+    }
+    backup = ROOT / 'route-before.json'
+    if not backup.exists(): write_secret(backup, json.dumps(call('/settings/list?prefix=queue.strategy')))
+    call('/settings', [{'type': 'insert', 'assert_empty': False, 'prefix': None, 'values': list(values.items())}])
+    result = call('/reload')
+    if result.get('data', {}).get('errors'): raise RuntimeError('Relay configuration reload failed')
+    print('System sender uses the authenticated OVH relay with required TLS; local delivery is preserved.')
 
 
 def setup_ovh(image):
@@ -170,7 +234,14 @@ def setup_inspur(image):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('site', choices=['ovh', 'inspur'])
-    parser.add_argument('--image', required=True)
+    parser.add_argument('--image')
+    parser.add_argument('--refresh-tls', action='store_true')
+    parser.add_argument('--activate', action='store_true')
+    parser.add_argument('--renewal-revision')
     args = parser.parse_args()
     ROOT.mkdir(mode=0o700, exist_ok=True)
-    (setup_ovh if args.site == 'ovh' else setup_inspur)(args.image)
+    if args.renewal_revision and args.site == 'ovh': install_certificate_refresh(args.renewal_revision)
+    elif args.refresh_tls and args.site == 'ovh': refresh_ovh_certificate()
+    elif args.activate and args.site == 'inspur': activate_inspur()
+    elif args.image: (setup_ovh if args.site == 'ovh' else setup_inspur)(args.image)
+    else: parser.error('Choose --image, OVH --refresh-tls, or Inspur --activate')
