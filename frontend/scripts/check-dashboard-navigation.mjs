@@ -1,14 +1,15 @@
 import { strict as assert } from 'node:assert'
+import { execFileSync } from 'node:child_process'
 import { readdir, readFile } from 'node:fs/promises'
 import { chromium } from '@playwright/test'
-import { hasAppSidebar } from '../src/utils/routes/appRoutes.ts'
+import { canonicalAppPath, hasAppSidebar } from '../src/utils/routes/appRoutes.ts'
 import { getDashboardNavigation, navigationLinks } from '../src/utils/layout/dashboardNavigation.ts'
 
 const access = { id: 'sidebar-test', isAdmin: true, canManageSystem: true, canManageContent: true, hasVMs: true }
 const all = navigationLinks(getDashboardNavigation(access))
 assert.equal(all.length, new Set(all.map(item => item.href)).size)
 const memberAccess = { ...access, isAdmin: false, canManageSystem: false, canManageContent: false }
-assert.deepEqual(getDashboardNavigation(memberAccess).map(item => item.label), ['Security operations', 'Automation', 'Infrastructure', 'Content', 'Settings'])
+assert.deepEqual(getDashboardNavigation(memberAccess).map(item => item.label), ['Security operations', 'Threat intelligence', 'Automation', 'Infrastructure', 'Content', 'Settings'])
 for (const permissions of [access, memberAccess]) {
     const automation = getDashboardNavigation(permissions).find(item => item.label === 'Automation')
     assert.deepEqual(automation.items.map(({ label, href, items }) => ({ label, href, items })), [
@@ -16,12 +17,12 @@ for (const permissions of [access, memberAccess]) {
         { label: 'Cron Jobs', href: '/automation/cron', items: undefined },
     ])
 }
-assert.deepEqual(navigationLinks(getDashboardNavigation(memberAccess)).filter(item => item.ancestors.includes('Content')).map(item => item.href), ['/shares'])
+assert.deepEqual(navigationLinks(getDashboardNavigation(memberAccess)).filter(item => item.ancestors.includes('Content')).map(item => item.href), ['/shares', '/s', '/gallery', '/upload', '/g', '/g/stats'])
 const reviewer = navigationLinks(getDashboardNavigation({ ...memberAccess, canReviewIntel: true }))
 assert.deepEqual(reviewer.filter(item => ['/ti/evaluation', '/ti/timeliness'].includes(item.href)).map(item => item.label), ['Evaluation', 'Timeliness'])
 const operator = navigationLinks(getDashboardNavigation({ ...memberAccess, canManageSystem: true }))
 assert(operator.some(item => item.href === '/system'))
-assert.deepEqual(navigationLinks(getDashboardNavigation(memberAccess)).filter(item => item.ancestors.includes('Infrastructure')).map(item => item.href), ['/system', '/vms'])
+assert.deepEqual(navigationLinks(getDashboardNavigation(memberAccess)).filter(item => item.ancestors.includes('Infrastructure')).map(item => item.href), ['/system', '/status', '/status/incidents', '/vms'])
 assert(!navigationLinks(getDashboardNavigation({ ...memberAccess, hasVMs: false })).some(item => item.href === '/vms'))
 assert(!operator.some(item => ['/db', '/logs', '/system/updates'].includes(item.href)))
 assert.equal(all.find(item => item.href === '/dwm/actors')?.label, 'Monitored actors')
@@ -42,6 +43,29 @@ for (const permissions of [access, memberAccess]) {
 }
 for (const path of ['/browser', '/browser/report', '/solutions', '/solutions/scanner', '/solutions/mill', '/pwned', '/test']) assert(hasAppSidebar(path), `Product loses the signed-in sidebar: ${path}`)
 assert(!hasAppSidebar('/browser-unrelated'))
+
+for (const href of ['/ti/admin', '/ti/workbench', '/ai', '/activity', '/monitor', '/ti/darkweb/index', '/test/stats', '/coverage', '/status', '/status/incidents', '/db/restore', '/content/articles/create', '/content/thoughts/create', '/s', '/gallery', '/upload', '/g', '/g/stats', '/cookie-settings', '/reserved-usernames', '/developers', '/prompt']) {
+    assert(all.some(item => item.href === href), `Missing workspace destination: ${href}`)
+    if (href !== '/s') assert(hasAppSidebar(href), `Workspace destination loses sidebar: ${href}`)
+}
+for (const href of ['/traffic', '/logs']) assert.deepEqual(all.find(item => item.href === href).ancestors, ['Infrastructure'])
+for (const href of ['/ai/window', '/s/workspace-id', '/g/shortcut-id']) assert(!hasAppSidebar(href), `Detached or shared route should retain its own layout: ${href}`)
+
+// Every standalone page must be discoverable or have an explicit reason for exclusion.
+// Detail routes require a selected record and are reached through their parent page.
+const exclusions = {
+    publicWebsite: ['/', '/about', '/articles', '/contact', '/cookies', '/eirik', '/eirik/motivation', '/faq', '/pricing', '/privacy', '/solutions', '/solutions/mill', '/support', '/terms', '/trust'],
+    authentication: ['/account-pending-deletion', '/login', '/logout', '/reset-password', '/signup'],
+    contextual: ['/ai/window', '/browser/report'],
+    aliases: ['/article', '/browser-sandbox', '/api-docs', '/content/article', '/automation/monitoring', '/automation', '/backup', '/dwm/cases', '/dwm/sources', '/management', '/system/impersonation', '/content/thought/create', '/content/thought', '/ti/audit', '/vm', '/onion-session', '/profile', '/quotes', '/register', '/role', '/solutions/onion-session', '/thesis', '/thought', '/thoughts', '/user', '/users'],
+}
+const excluded = new Set(Object.values(exclusions).flat())
+const available = new Set([...all, ...navigationLinks(getDashboardNavigation(memberAccess))].map(item => item.href))
+const pages = execFileSync('git', ['ls-files', 'src/app'], { encoding: 'utf8' }).trim().split('\n').filter(file => /\/page\.(tsx?|jsx?)$/.test(file))
+for (const file of pages) {
+    const route = canonicalAppPath(file.replace(/^src\/app/, '').replace(/\/page\.(tsx?|jsx?)$/, '') || '/')
+    if (!route.includes('[')) assert(available.has(route) || excluded.has(route), `Page needs a sidebar link or an explicit classification: ${route}`)
+}
 
 // Exercise the real component; only Next routing is replaced.
 const build = await Bun.build({ entrypoints: ['sidebar-test-entry'], target: 'browser', plugins: [{ name: 'sidebar-fixture', setup(builder) {
@@ -79,6 +103,11 @@ try {
     await link('Browser').click()
     assert.equal(await link('Browser').getAttribute('aria-current'), 'page')
     assert.equal(await link('All products and solutions').count(), 0)
+    await page.getByRole('searchbox').fill('log monitoring')
+    await link('Log Monitoring').waitFor({ state: 'visible' })
+    await link('Log Monitoring').click()
+    assert.equal(new URL(page.url()).pathname, '/logs')
+    await link('Traffic').waitFor({ state: 'visible' })
     await page.getByRole('searchbox').fill('Security findings')
     await link('Security findings').click()
     assert.equal(new URL(page.url()).pathname, '/mill')
