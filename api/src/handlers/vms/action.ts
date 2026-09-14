@@ -1,3 +1,4 @@
+import { hasVmAccess } from '#utils/vms/access.ts'
 import { vmLifecycleLock } from '#utils/vms/lifecycleLock.ts'
 import config from '#constants'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
@@ -32,7 +33,7 @@ export default async function vmAction(req: FastifyRequest, res: FastifyReply) {
                 return res.status(404).send({ error: `Virtual machine ${id} was not found.` })
             }
 
-            if (!validRole && !canUserManageVm(vm, userId)) {
+            if (!validRole && !await hasVmAccess(vm.name, userId)) {
                 return res.status(403).send({ error: 'You do not have access to manage this virtual machine.' })
             }
 
@@ -117,12 +118,6 @@ async function loadManageableVm(id: string) {
         primary_host: string
         deleted_at: string | null
     } | undefined
-}
-
-function canUserManageVm(vm: Awaited<ReturnType<typeof loadManageableVm>> & {}, userId: string) {
-    return vm.owner === userId
-        || vm.created_by === userId
-        || (Array.isArray(vm.access_users) && vm.access_users.includes(userId))
 }
 
 function parseInternalPayload(text: string) {

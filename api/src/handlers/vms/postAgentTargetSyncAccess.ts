@@ -1,3 +1,4 @@
+import { hasVmAccess } from '#utils/vms/access.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
@@ -8,6 +9,7 @@ import recordLog from '#utils/logs/recordLog.ts'
 
 type VMRow = {
     name: string
+    organization_id?: string | null
     owner: string
     created_by: string
     access_users: string[] | null
@@ -48,10 +50,7 @@ export default async function postAgentTargetSyncAccess(req: FastifyRequest, res
         const vm = result.rows[0] as VMRow
         const accessUsers = Array.isArray(vm.access_users) ? vm.access_users : []
         const canAccess =
-            isAdmin
-            || vm.owner === userId
-            || vm.created_by === userId
-            || accessUsers.includes(userId)
+            isAdmin || await hasVmAccess(vm.name, userId)
 
         if (!canAccess) {
             return res.status(403).send({ error: 'Forbidden.' })
@@ -59,8 +58,7 @@ export default async function postAgentTargetSyncAccess(req: FastifyRequest, res
 
         const canSyncAllUsers =
             isAdmin
-            || vm.owner === userId
-            || vm.created_by === userId
+            || (!vm.organization_id && (vm.owner === userId || vm.created_by === userId))
 
         if (scope === 'all_access_users' && !canSyncAllUsers) {
             return res.status(403).send({
@@ -69,7 +67,7 @@ export default async function postAgentTargetSyncAccess(req: FastifyRequest, res
         }
 
         const syncedUserIds = scope === 'all_access_users'
-            ? uniqueUserIds([vm.owner, vm.created_by, ...accessUsers])
+            ? uniqueUserIds(vm.organization_id ? accessUsers : [vm.owner, vm.created_by, ...accessUsers])
             : [userId]
 
         const syncResult = await syncUserCertificatesToVm({

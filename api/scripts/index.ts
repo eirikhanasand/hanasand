@@ -21,6 +21,8 @@ const coreTasks: TestTask[] = [
     { id: 'service-accounts', title: 'Service account lifecycle', command: [bun, 'test', 'tests/service-accounts.test.ts'] },
     { id: 'audit-pagination', title: 'Numbered audit pages and authorization', command: [bun, 'test', 'tests/audit-pagination.test.ts'] },
     scriptTask('status-feed', 'Status snapshots and monitoring failure', 'check-status-feed.ts'),
+    { id: 'vm-organization', title: 'Organization VM transfer authorization', command: [bun, 'test', 'tests/vm-organization.test.ts'] },
+    { id: 'vm-member-access', title: 'VM member access boundaries', command: [bun, 'test', 'tests/vm-member-access.test.ts'] },
     { id: 'vm-console', title: 'VM console access and live status', command: [bun, 'test', 'tests/vm-console.test.ts'] },
     { id: 'vm-share-management', title: 'Share-managed VM labels', command: [bun, 'test', 'tests/vm-share-management.test.ts'] },
     { id: 'vm-console-restart', title: 'VM console restart recovery', command: [bun, 'test', 'tests/vm-console-restart.test.ts'] },

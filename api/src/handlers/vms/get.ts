@@ -32,7 +32,7 @@ export default async function getVM(req: FastifyRequest, res: FastifyReply) {
             return res.status(200).send([])
         }
 
-        return res.send(await Promise.all((await withShareManagement(result.rows)).map(row => withLiveVmStatus(row))))
+        return res.send(await Promise.all((await withShareManagement(result.rows)).map(row => withLiveVmStatus({ ...row, can_assign_organization: !row.organization_id && !row.deleted_at && (viewer.admin || row.owner === viewer.id) }))))
     } catch (error) {
         console.log(error)
         return res.status(500).send({ error: 'Internal server error' })

@@ -1,5 +1,7 @@
 'use client'
 
+import AddToOrganization from '../vms/addToOrganization'
+
 import Link from 'next/link'
 import { useState } from 'react'
 import DeleteVmDialog from '../vms/deleteVmDialog'
@@ -83,7 +85,7 @@ export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
                         </div>
                         {statusNote && <p className='mt-1 text-xs text-ui-muted'>{statusNote}</p>}
                         <p className='mt-1 truncate text-xs text-ui-muted'>
-                            {ip} · Owner {vm.owner || vm.created_by || 'Unknown'} · Last used {lastUsed} · {editors} editor{editors === 1 ? '' : 's'}
+                            {ip} · {vm.organization_id ? `Organization ${vm.organization_name || ''}` : `Owner ${vm.owner || vm.created_by || 'Unknown'}`} · Last used {lastUsed}{!vm.organization_id && <> · {editors} editor{editors === 1 ? '' : 's'}</>}
                         </p>
                         <div className='mt-3 flex min-w-0 flex-wrap gap-2 text-[0.72rem] text-ui-muted'>
                             <span className='inline-flex items-center gap-1 rounded-md border border-ui-border bg-ui-canvas px-2 py-1'>
@@ -102,6 +104,7 @@ export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
                     </div>
                     <div className='grid min-w-0 gap-2 justify-self-start sm:justify-self-end'>
                         <div className='flex flex-wrap items-center gap-2 sm:justify-end'>
+                            <AddToOrganization vm={vm} onAdded={update} />
                             {!deleted && <Link href={`/vms/${encodeURIComponent(name)}/console`} aria-label={`Open ${name} console`} title='Open console' className={`${vmActionStyle} w-9 text-ui-primary`}>
                                 <TerminalSquare className='h-4 w-4' />
                             </Link>}

@@ -3,6 +3,8 @@ SELECT
     v.owner,
     v.created_by,
     v.access_users,
+    v.organization_id,
+    (SELECT name FROM organizations WHERE id = v.organization_id) AS organization_name,
     v.deleted_at,
     v.delete_after,
     v.deletion_error,

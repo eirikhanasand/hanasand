@@ -17,6 +17,7 @@ mock.module('../src/utils/docker/engine.ts', () => ({ isRuntimeLogSourceAvailabl
 mock.module('../src/utils/loadSQL.ts', () => ({ loadSQL: async (file: string) => readFile(new URL(`../src/queries/${file}`, import.meta.url), 'utf8') }))
 mock.module('../src/utils/db.ts', () => ({ withDatabaseAdvisoryLock: async (_key: string, work: () => Promise<unknown>) => work(), default: async (sql: string, params: unknown[] = []) => {
     queries.push({ sql, params })
+    if (sql.includes('SELECT vm_user_has_access')) return { rows: [{ allowed: Boolean(existing && (existing.owner === params[1] || existing.created_by === params[1] || existing.access_users.includes(String(params[1])))) }] }
     if (/SELECT name, owner, created_by, access_users, deleted_at FROM vms|SELECT name, owner, created_by, access_users, deleted_at\s+FROM vms/.test(sql)) return { rows: existing ? [existing] : [] }
     return { rows: /INSERT INTO vms/.test(sql) ? [{ name: params[0], owner: params[1] }] : [] }
 } }))
@@ -41,7 +42,7 @@ test('members see only their VM scope, and host metrics remain admin-only', asyn
     expect((await app.inject({ url: '/vms/other', headers: { id: 'member' } })).statusCode).toBe(403)
     await app.inject({ url: '/vms', headers: { id: 'member' } })
     expect(queries.at(-1)?.params).toEqual(['member'])
-    expect(queries.at(-1)?.sql).toContain('v.access_users ? $1')
+    expect(queries.at(-1)?.sql).toContain('vm_user_has_access(v.name, $1)')
     await app.inject({ url: '/vm/metrics', headers: { id: 'member' } })
     expect(queries.at(-1)?.sql).toContain('JOIN vms v')
     expect(queries.at(-1)?.params).toEqual(['member'])

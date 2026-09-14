@@ -1,3 +1,4 @@
+import { hasVmAccess } from '#utils/vms/access.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import config from '#constants'
@@ -513,8 +514,7 @@ async function getAccessibleVm(req: FastifyRequest, res: FastifyReply, vmName: s
     }
 
     const vm = result.rows[0] as VMRow
-    const accessUsers = Array.isArray(vm.access_users) ? vm.access_users : []
-    const canAccess = isAdmin || vm.owner === userId || vm.created_by === userId || accessUsers.includes(userId)
+    const canAccess = isAdmin || await hasVmAccess(vm.name, userId)
     if (!canAccess) {
         res.status(403).send({ error: 'Forbidden.' })
         return null

@@ -1,3 +1,4 @@
+import { hasVmAccess } from '#utils/vms/access.ts'
 import { vmLifecycleLock } from '#utils/vms/lifecycleLock.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
@@ -35,8 +36,7 @@ export default async function postVmFailover(req: FastifyRequest, res: FastifyRe
                 deleted_at: string | null
                 failover_host: string | null
             }
-            const accessUsers = Array.isArray(vm.access_users) ? vm.access_users : []
-            const canManage = isAdmin || vm.owner === userId || vm.created_by === userId || accessUsers.includes(userId)
+            const canManage = isAdmin || await hasVmAccess(vm.name, userId)
             if (!canManage) {
                 return res.status(403).send({ error: 'You do not have access to this VM.' })
             }

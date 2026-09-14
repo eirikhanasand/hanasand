@@ -1,3 +1,4 @@
+import assignVmOrganization from './handlers/vms/organization.ts'
 import { caseRepositoryWebhooks, getCaseDevelopment, getCaseRepositories, postCaseRepository, deleteCaseRepository } from './handlers/caseDevelopment.ts'
 import { getServiceAccounts, postServiceAccount, deleteServiceAccount, serviceAccountSelf } from './handlers/serviceAccounts.ts'
 import authRoutes from './authRoutes.ts'
@@ -438,6 +439,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/vms/names', getVMNames)
     fastify.get('/vms/:user', getVM)
     fastify.get('/vms/access/:user', getAccessibleVMs)
+    fastify.put('/vm/:id/organization', assignVmOrganization)
     fastify.post('/vm', postVM)
     fastify.post('/vm/:id/:action', vmAction)
     fastify.post('/vm/details', postVMDetails)
