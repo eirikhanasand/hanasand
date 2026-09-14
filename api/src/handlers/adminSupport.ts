@@ -521,6 +521,15 @@ export async function getSystemEvents(req: FastifyRequest, res: FastifyReply) {
     if (outcome) where.push(`e.outcome = ${add(outcome)}`)
     if (from && !Number.isNaN(Date.parse(from))) where.push(`e.created_at >= ${add(new Date(from).toISOString())}`)
     if (to && !Number.isNaN(Date.parse(to))) where.push(`e.created_at <= ${add(new Date(to).toISOString())}`)
+    // Count matching events before the cursor so every batch reports the full filtered total.
+    const countResult = await run(`
+        SELECT COUNT(*)::int AS total
+        FROM system_events e
+        LEFT JOIN users actor ON actor.id = e.actor_id
+        LEFT JOIN users target_user ON target_user.id = e.object_id
+        LEFT JOIN organizations organization ON organization.id = e.organization_id
+        ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+    `, [...values])
     if (cursor) {
         where.push(`(e.created_at, e.id) < (${add(cursor.createdAt)}, ${add(cursor.id)})`)
     }
@@ -564,6 +573,7 @@ export async function getSystemEvents(req: FastifyRequest, res: FastifyReply) {
     return res.send({
         events,
         pagination: {
+            total: Number(countResult.rows[0].total),
             limit,
             page,
             nextPage: result.rows.length > limit ? page + 1 : null,
