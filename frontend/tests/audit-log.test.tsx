@@ -13,12 +13,12 @@ test('audit navigation belongs to Management and remains administrator-only', ()
     expect(navigationLinks(getDashboardNavigation({ ...access, isAdmin: false })).some(link => link.href === '/management/audit')).toBe(false)
 })
 
-test('shared audit renders service, event and object fields and preserves filters across pages', async () => {
+test('shared audit renders service, event and object fields and retains filters and displays the matching total', async () => {
     const originalFetch = globalThis.fetch
     let requested = ''
     globalThis.fetch = (async (url: string | URL | Request) => {
         requested = String(url)
-        return Response.json({ events: [{ id: 12, created_at: '2026-09-13T12:00:00Z', service: 'compute', actor_id: 'admin', event_type: 'vm.restart', object_id: 'cashflow', outcome: 'success' }], pagination: { nextCursor: 'next' } })
+        return Response.json({ events: [{ id: 12, created_at: '2026-09-13T12:00:00Z', service: 'compute', actor_id: 'admin', event_type: 'vm.restart', object_id: 'cashflow', outcome: 'success' }], pagination: { nextCursor: 'next', total: 125 } })
     }) as typeof fetch
     try {
         const html = renderToStaticMarkup(await AuditLogPage({ searchParams: Promise.resolve({ service: 'compute' }) }))
@@ -27,7 +27,9 @@ test('shared audit renders service, event and object fields and preserves filter
         expect(html).toContain('vm.restart')
         expect(html).toContain('cashflow')
         expect(html).toContain('compute')
-        expect(html).toContain('/management/audit?service=compute&amp;page=2')
+        expect(html).toContain('1/125')
+        expect(html).toContain('Load 50 more')
+        expect(requested).not.toContain('page=')
         expect(html).not.toContain('/ti/domains')
     } finally { globalThis.fetch = originalFetch }
 })
