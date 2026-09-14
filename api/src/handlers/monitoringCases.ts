@@ -30,7 +30,7 @@ export async function getMonitoringCases(req: FastifyRequest<{ Params: { id?: st
         ORDER BY i.last_seen_at DESC, i.id DESC`, [includeAll, id, organizationId, caseId?.slice(3) || null])
     const items = result.rows.map(row => ({
         canManage: row.can_manage === true, id: `HA-${row.id}`, caseNumber: `HA-${row.id}`, source: 'monitoring',
-        title: `HA-${row.id} · ${row.monitor_name}${row.check_count > 1 ? ` (+${row.check_count - 1} checks)` : ''}`, summary: row.summary,
+        title: `HA-${row.id} · ${row.monitor_name}${row.check_count > 1 ? ` (+${row.check_count - 1} ${row.check_count === 2 ? 'check' : 'checks'})` : ''}`, summary: row.summary,
         status: row.status_override || (row.resolved_at ? 'resolved' : 'open'), severity: row.severity_override || (row.kind === 'failure' ? 'high' : 'medium'),
         notificationsEnabled: row.notifications_enabled ?? true, comments: row.comments || [],
         history: monitoringCaseHistory(row), resolution: monitoringCaseResolution(row),
