@@ -98,7 +98,7 @@ export default function UsersList({ users, roles }: { users: UserWithRole[], rol
                 </div>
             </div>
             <div className='overflow-x-auto'><div className='min-w-[800px]'>
-                <div className='grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_100px_100px_240px] gap-3 text-[0.68rem] font-bold uppercase tracking-[0.12em] text-ui-muted'>
+                <div className='grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_100px_100px_40px] gap-3 text-[0.68rem] font-bold uppercase tracking-[0.12em] text-ui-muted'>
                     <span>Name</span>
                     <span>Username</span>
                     <span>Created</span>

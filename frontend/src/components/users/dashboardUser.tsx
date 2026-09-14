@@ -6,17 +6,19 @@ import AccountDate from './accountDate'
 import deleteUser from '@/utils/users/deleteUser'
 import { startImpersonating } from '@/utils/impersonation/client'
 import setUserActive from '@/utils/users/setUserActive'
-import { Ban, CheckCircle2, Crown, Pencil, X } from 'lucide-react'
+import { Ban, CheckCircle2, Crown, MoreHorizontal, Pencil, UserRound, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import ErrorNotice from '../error/errorNotice'
 import UserRoleHandler from '../roles/userRoleHandler'
-import Tooltip from '../tooltip/tooltip'
 
 export default function DashboardUser({ user, roles }: { user: UserWithRole, roles: Role[] }) {
     const { condition: deleted, setCondition: setDeleted } = useClearStateAfter()
     const [displayRoles, setDisplayRoles] = useState(false)
     const router = useRouter()
+    const actions = useRef<HTMLDivElement>(null)
+    const actionsId = useId()
+    const [actionsOpen, setActionsOpen] = useState(false)
     const { condition: error, setCondition: setError } = useClearStateAfter()
     const [impersonationPending, setImpersonationPending] = useState(false)
     const [impersonationPromptOpen, setImpersonationPromptOpen] = useState(false)
@@ -26,12 +28,14 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
     async function handleRoles(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) {
         e.stopPropagation()
         e.preventDefault()
+        actions.current?.hidePopover()
         setDisplayRoles(!displayRoles)
     }
 
     async function handleActive(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) {
         e.stopPropagation()
         e.preventDefault()
+        actions.current?.hidePopover()
         const result = await setUserActive(user.id, user.active === false)
         if (result.status === 200) {
             router.refresh()
@@ -43,6 +47,7 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
     async function handleImpersonate(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) {
         e.stopPropagation()
         e.preventDefault()
+        actions.current?.hidePopover()
         setImpersonationPromptOpen(true)
         setImpersonationReasonError('')
     }
@@ -88,56 +93,44 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
 
     return (
         <div className='group relative h-10 min-h-10 max-h-10'>
-            <div onClick={() => router.push(`/profile/${encodeURIComponent(user.id)}`)} className={'grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_100px_100px_240px] items-center gap-3 rounded-lg py-2 hover:bg-ui-raised cursor-pointer'}>
-                <h1 className={`min-w-0 truncate ${user.active === false ? 'text-ui-muted line-through' : ''}`} key={user.id}>{user.name}</h1>
+            <div onClick={() => router.push(`/profile/${encodeURIComponent(user.id)}`)} className={'grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_100px_100px_40px] items-center gap-3 rounded-lg py-2 hover:bg-ui-raised cursor-pointer'}>
+                <h1 className={`min-w-0 truncate ${user.active === false ? 'text-ui-muted line-through' : ''}`} key={user.id}>{user.name}{user.highest_role_priority === 0 && <Crown aria-label='Administrator' className='ml-2 inline h-4 w-4 stroke-ui-warning' />}</h1>
                 <span className={`min-w-0 truncate text-sm text-ui-muted ${user.active === false ? 'line-through' : ''}`}>{user.username || user.id}</span>
                 <span className='text-xs text-ui-muted'><AccountDate value={user.created_at} /></span>
                 <span className='text-xs text-ui-muted'><AccountDate value={user.last_login_at} empty='Never recorded' /></span>
-                <div className='group flex items-center gap-2'>
-                    <div className='pointer-events-none grid h-7 w-7 place-items-center opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100'>
-                        <Tooltip content={`${user.active === false ? 'Activate' : 'Deactivate'} ${user.id}`}>
-                            <button
-                                type='button'
-                                aria-label={`${user.active === false ? 'Activate' : 'Deactivate'} ${user.id}`}
-                                title={`${user.active === false ? 'Activate' : 'Deactivate'} ${user.id}`}
-                                onClick={handleActive}
-                                className={`grid h-7 w-7 place-items-center rounded-lg ${user.active === false ? 'hover:bg-ui-success/10' : 'hover:bg-ui-danger/10'}`}
-                            >
-                                {user.active === false
-                                    ? <CheckCircle2 className='h-4 w-4 stroke-ui-success' />
-                                    : <Ban className='h-4 w-4 stroke-ui-danger' />
-                                }
-                            </button>
-                        </Tooltip>
-                    </div>
-                    {user.highest_role_priority === 0 && <Crown className='h-5 w-5 stroke-ui-warning' />}
-                    <button
-                        type='button'
-                        aria-label={`Impersonate ${user.id}`}
-                        onClick={handleImpersonate}
-                        disabled={impersonationPending}
-                        className='rounded-md border border-ui-primary/25 bg-ui-primary/10 px-2 py-1 text-[0.68rem] font-bold text-ui-primary transition hover:bg-ui-primary/15'
-                        title={`Impersonate ${user.id}`}
-                    >
-                        {impersonationPending ? 'Checking' : 'Impersonate'}
+                <button
+                    type='button'
+                    aria-label={`Actions for ${user.id}`}
+                    aria-expanded={actionsOpen}
+                    popoverTarget={actionsId}
+                    onClick={(event) => {
+                        event.stopPropagation()
+                        const rect = event.currentTarget.getBoundingClientRect()
+                        if (actions.current) {
+                            actions.current.style.top = `${Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - 200))}px`
+                            actions.current.style.left = `${Math.max(8, rect.right - 208)}px`
+                        }
+                    }}
+                    className='grid h-9 w-9 place-items-center rounded-lg text-ui-muted hover:bg-ui-raised focus-visible:outline-2 focus-visible:outline-ui-primary [@media(hover:hover)]:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 aria-expanded:opacity-100'
+                ><MoreHorizontal className='h-5 w-5' /></button>
+                <div ref={actions} id={actionsId} popover='auto' aria-label={`Actions for ${user.id}`}
+                    onToggle={event => setActionsOpen(event.newState === 'open')}
+                    onClick={event => event.stopPropagation()}
+                    onKeyDown={event => { if (event.key === 'Escape') event.stopPropagation() }}
+                    className='fixed m-0 w-52 rounded-lg border border-ui-border bg-ui-panel p-1 text-sm text-ui-text shadow-xl'>
+                    <button type='button' autoFocus onClick={handleImpersonate} disabled={impersonationPending}
+                        aria-label={`Impersonate ${user.id}`} className='flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-ui-raised'>
+                        <UserRound className='h-4 w-4' />{impersonationPending ? 'Checking' : 'Impersonate'}
                     </button>
-                    <div className='pointer-events-none grid h-7 w-7 place-items-center opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100'>
-                        <Tooltip content={displayRoles ? 'Cancel role editing' : 'Edit roles'}>
-                            <button
-                                type='button'
-                                aria-label={displayRoles ? `Cancel role editing for ${user.id}` : `Edit roles for ${user.id}`}
-                                title={displayRoles ? 'Cancel role editing' : 'Edit roles'}
-                                onClick={handleRoles}
-                                className='grid h-7 w-7 place-items-center rounded-lg transition hover:bg-ui-raised'
-                            >
-                                {displayRoles
-                                    ? <X className='h-4 w-4 stroke-ui-muted' />
-                                    : <Pencil className='h-4 w-4 stroke-ui-muted' />
-                                }
-                            </button>
-                        </Tooltip>
-                    </div>
-                    <DeleteAccountButton name={user.id} onDelete={handleDelete} />
+                    <button type='button' onClick={handleRoles} aria-label={`${displayRoles ? 'Cancel role editing' : 'Edit roles'} for ${user.id}`}
+                        className='flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-ui-raised'>
+                        {displayRoles ? <X className='h-4 w-4' /> : <Pencil className='h-4 w-4' />}{displayRoles ? 'Cancel role editing' : 'Edit roles'}
+                    </button>
+                    <button type='button' onClick={handleActive} aria-label={`${user.active === false ? 'Activate' : 'Deactivate'} ${user.id}`}
+                        className='flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-ui-raised'>
+                        {user.active === false ? <CheckCircle2 className='h-4 w-4' /> : <Ban className='h-4 w-4' />}{user.active === false ? 'Activate' : 'Deactivate'}
+                    </button>
+                    <DeleteAccountButton name={user.id} onDelete={handleDelete} label='Delete user' />
                 </div>
             </div>
             {impersonationPromptOpen ? (

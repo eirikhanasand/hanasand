@@ -1,6 +1,6 @@
 import { expect, test, type Browser, type Page } from '@playwright/test'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { copyFileSync, cpSync, existsSync, mkdirSync, rmSync, symlinkSync } from 'node:fs'
+import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs'
 import http, { type IncomingMessage, type ServerResponse } from 'node:http'
 import net from 'node:net'
 import os from 'node:os'
@@ -29,6 +29,7 @@ test.describe.configure({ mode: 'serial' })
 test.setTimeout(120_000)
 
 test.beforeAll(async () => {
+    test.setTimeout(120_000)
     apiServer = await startMockApi()
     const apiAddress = apiServer.address()
     if (!apiAddress || typeof apiAddress === 'string') throw new Error('Mock API did not bind to a TCP port.')
@@ -73,7 +74,7 @@ test.afterAll(async () => {
     }
     if (appRoot !== root) {
         try {
-            rmSync(appRoot, { force: true, recursive: true })
+            rmSync(path.dirname(appRoot), { force: true, recursive: true })
         } catch {
             // Next can briefly hold compiled files after SIGTERM; stale temp roots are removed before the next run.
         }
@@ -131,8 +132,47 @@ test('shows backend errors without losing target or reason context', async ({ br
     }
 })
 
-async function openManagementPage(browser: Browser) {
-    const context = await browser.newContext({ baseURL: appBase })
+test('row menu supports keyboard dismissal and preserves delete confirmation', async ({ browser }) => {
+    const { context, page } = await openManagementPage(browser)
+    try {
+        const trigger = page.getByRole('button', { name: 'Actions for target-user', exact: true })
+        const action = page.getByRole('button', { name: 'Impersonate target-user', exact: true })
+        await expect(action).toBeHidden()
+        const before = await trigger.boundingBox()
+        await page.getByText('Target User', { exact: true }).hover()
+        await expect(trigger).toHaveCSS('opacity', '1')
+        expect(await trigger.boundingBox()).toEqual(before)
+        await trigger.focus()
+        await page.keyboard.press('Enter')
+        await expect(action).toBeVisible()
+        await page.keyboard.press('Escape')
+        await expect(action).toBeHidden()
+        await expect(trigger).toBeFocused()
+        await trigger.click()
+        await page.getByRole('button', { name: 'Delete target-user', exact: true }).click()
+        const dialog = page.getByRole('dialog', { name: 'Delete target-user?' })
+        await expect(dialog).toBeVisible()
+        await expect(dialog.getByLabel('Don’t ask again for this session')).toBeVisible()
+        await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+        await expect(dialog).toBeHidden()
+    } finally { await context.close() }
+})
+
+test('touch users can tap the menu without navigating away', async ({ browser }) => {
+    const { context, page } = await openManagementPage(browser, true)
+    try {
+        const trigger = page.getByRole('button', { name: 'Actions for target-user', exact: true })
+        await expect(trigger).toHaveCSS('opacity', '1')
+        await trigger.tap()
+        await expect(page.getByRole('button', { name: 'Edit roles for target-user', exact: true })).toBeVisible()
+        await expect(page).toHaveURL(/\/management\/users$/)
+        await page.getByRole('heading', { name: 'Users', exact: true }).tap()
+        await expect(page.getByRole('button', { name: 'Edit roles for target-user', exact: true })).toBeHidden()
+    } finally { await context.close() }
+})
+
+async function openManagementPage(browser: Browser, touch = false) {
+    const context = await browser.newContext({ baseURL: appBase, ...(touch ? { hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } } : {}) })
     await context.addCookies([
         { name: 'id', value: 'admin-user', url: appBase, expires: cookieExpiry(), sameSite: 'Lax' },
         { name: 'name', value: encodeURIComponent('Admin User'), url: appBase, expires: cookieExpiry(), sameSite: 'Lax' },
@@ -140,13 +180,14 @@ async function openManagementPage(browser: Browser) {
         { name: 'roles', value: encodeURIComponent(JSON.stringify([{ id: 'administrator' }, { id: 'user_admin' }])), url: appBase, expires: cookieExpiry(), sameSite: 'Lax' },
     ])
     const page = await context.newPage()
-    await page.goto('/management', { waitUntil: 'networkidle' })
-    await expect(page.getByRole('heading', { name: 'User management', exact: true })).toBeVisible()
+    await page.goto('/management/users', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByRole('heading', { name: 'Users', exact: true })).toBeVisible()
     await expect(page.getByText('Target User')).toBeVisible()
     return { context, page }
 }
 
 async function openImpersonationPrompt(page: Page) {
+    await page.getByRole('button', { name: 'Actions for target-user', exact: true }).click()
     const button = page.getByRole('button', { name: 'Impersonate target-user' })
     const prompt = page.getByRole('form', { name: 'Impersonation reason for target-user' })
     await expect(button).toBeVisible()
@@ -160,11 +201,12 @@ async function openImpersonationPrompt(page: Page) {
 }
 
 function prepareIsolatedNextRoot() {
-    const isolatedRoot = path.join(os.tmpdir(), 'hanasand-management-impersonation-flow')
-    rmSync(isolatedRoot, { force: true, recursive: true })
+    const parent = mkdtempSync(path.join(os.tmpdir(), 'hanasand-management-impersonation-flow-'))
+    const isolatedRoot = path.join(parent, 'frontend')
+    symlinkSync(path.resolve(root, '../api'), path.join(parent, 'api'), 'dir')
     mkdirSync(isolatedRoot, { recursive: true })
 
-    for (const name of ['package.json', 'tsconfig.json', 'next-env.d.ts', 'postcss.config.mjs']) {
+    for (const name of ['package.json', 'tsconfig.json', 'next-env.d.ts', 'postcss.config.mjs', 'next.config.js']) {
         const source = path.join(root, name)
         if (existsSync(source)) copyFileSync(source, path.join(isolatedRoot, name))
     }
@@ -202,6 +244,11 @@ function startMockApi() {
 async function handleMockApi(request: IncomingMessage, response: ServerResponse) {
     const url = new URL(request.url || '/', apiBase || 'http://127.0.0.1/api')
     const pathName = url.pathname
+
+    if (request.method === 'GET' && pathName.startsWith('/api/auth/token/')) {
+        sendJson(response, { roles: [{ id: 'administrator' }, { id: 'user_admin' }], name: 'Admin User' })
+        return
+    }
 
     if (request.method === 'GET' && pathName === '/api/roles') {
         sendJson(response, [{
