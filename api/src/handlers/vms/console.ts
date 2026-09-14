@@ -1,3 +1,4 @@
+import { hasVmAccess } from '#utils/vms/access.ts'
 import type { FastifyInstance } from 'fastify'
 import WebSocket from 'ws'
 import run from '#db'
@@ -12,7 +13,7 @@ export async function consoleAccess(name: string, id: string, token: string) {
     const role = await run(await loadSQL('hasRole.sql'), [session.user.id, 'system_admin'])
     const result = await run('SELECT owner, created_by, access_users, deleted_at FROM vms WHERE name = $1', [name])
     const vm = result.rows[0]
-    return Boolean(vm && !vm.deleted_at && (role.rows[0]?.has_role === true || vm.owner === id || vm.created_by === id || Array.isArray(vm.access_users) && vm.access_users.includes(id)))
+    return Boolean(vm && !vm.deleted_at && (role.rows[0]?.has_role === true || await hasVmAccess(name, session.user.id)))
 }
 
 export default function registerVmConsole(fastify: FastifyInstance) {

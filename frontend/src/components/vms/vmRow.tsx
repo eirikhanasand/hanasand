@@ -1,3 +1,4 @@
+import AddToOrganization from './addToOrganization'
 import formatDescription from '@/utils/vms/formatDescription'
 import Tag from '../tags/tag'
 import smallDate from '@/utils/date/smallDate'
@@ -9,20 +10,19 @@ export default function VmRow({ vm, metrics }: { vm: VM; metrics?: VMMetrics }) 
     const type = vm.type === 'virtual-machine' ? 'VM' : 'Container'
     const status = vm.status ? upperCaseFirstLetter(vm.status) : 'Status pending'
     const accessUserCount = Array.isArray(vm.access_users) ? vm.access_users.length : 0
-    const owner = vm.owner || vm.created_by || 'Unassigned'
+    const owner = vm.organization_name || vm.owner || vm.created_by || 'Unassigned'
     const ipAddress = vm.device_eth0_ipv4_address || 'IP checking'
     const lastChecked = vm.last_checked ? smallDate(vm.last_checked) : 'Not checked yet'
 
     return (
-        <Link
-            href={`/vms/${vm.name}`}
+        <div
             className={`
                 group grid min-w-[74rem] items-center gap-2 rounded-md p-2
                 text-ui-text/80 transition hover:bg-ui-panel/3
                 lg:grid-cols-[minmax(14rem,1.3fr)_minmax(10rem,1fr)_7rem_10rem_minmax(9rem,0.95fr)_minmax(9rem,0.95fr)_7rem_minmax(16rem,1.4fr)_6.5rem]
             `}
         >
-            <h1 className='truncate'>{vm.name}</h1>
+            <Link href={`/vms/${vm.name}`} className='truncate'>{vm.name}</Link>
             <h1 className='truncate'>{owner}</h1>
             <h1>{metrics ? `${metrics.cpu_usage_percent}%` : vm.limits_cpu}</h1>
             <h1>{metrics ? `${metrics.ram_used_mb}/${metrics.ram_total_mb} MB` : vm.limits_memory}</h1>
@@ -36,9 +36,10 @@ export default function VmRow({ vm, metrics }: { vm: VM; metrics?: VMMetrics }) 
                 <Tag color='green' icon='refresh' text={lastChecked} />
                 <Tag color='blue' text={ipAddress} />
             </div>
-            <div className='flex justify-end'>
+            <div className='flex justify-end gap-2'>
+                <AddToOrganization vm={vm} />
                 <RestartButtons vm={vm} />
             </div>
-        </Link>
+        </div>
     )
 }

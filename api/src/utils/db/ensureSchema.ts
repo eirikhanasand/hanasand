@@ -1,3 +1,4 @@
+import ensureVmOrganizationSchema from './vmOrganizationSchema.ts'
 import ensureCaseDevelopmentSchema from './caseDevelopmentSchema.ts'
 import run from '#db'
 import { ensureTrafficHistorySchema } from '../traffic/history.ts'
@@ -1507,6 +1508,7 @@ export default async function ensureSchema() {
         )
     `)
     await run('CREATE INDEX IF NOT EXISTS idx_mail_recent_recipients_lookup ON mail_recent_recipients(owner_user_id, mailbox_user, last_used_at DESC)')
+    await ensureVmOrganizationSchema()
 }
 
 async function columnExists(tableName: string, columnName: string) {

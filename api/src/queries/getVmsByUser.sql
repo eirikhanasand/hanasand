@@ -3,6 +3,8 @@ SELECT
     v.owner,
     v.created_by,
     v.access_users,
+    v.organization_id,
+    (SELECT name FROM organizations WHERE id = v.organization_id) AS organization_name,
     v.deleted_at,
     v.delete_after,
     v.deletion_error,
@@ -26,6 +28,4 @@ SELECT
     d.last_checked
 FROM vms v
 LEFT JOIN vm_details d ON LOWER(d.name) = LOWER(v.name)
-WHERE (v.owner = $1
-    OR v.created_by = $1
-    OR v.access_users ? $1)
+WHERE vm_user_has_access(v.name, $1)

@@ -30,8 +30,8 @@ export default async function syncUserCertificatesToVm({ vmName, userIds }: Sync
         SELECT DISTINCT c.public_key
         FROM certificates c
         JOIN user_certificates uc ON uc.certificate_id = c.id
-        WHERE uc.user_id = ANY($1::text[])
-    `, [normalizedUserIds])
+        WHERE uc.user_id = ANY($1::text[]) AND vm_user_has_access($2, uc.user_id)
+    `, [normalizedUserIds, vmName])
 
     const certificates = result.rows
         .map((row) => String(row.public_key || '').trim())

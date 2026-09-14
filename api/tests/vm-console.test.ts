@@ -16,7 +16,7 @@ let admin = false
 let deleted = false
 mock.module('../src/utils/auth/session.ts', () => ({ validateSession: async ({ id }: { id: string }) => valid ? { user: { id } } : null }))
 mock.module('../src/utils/loadSQL.ts', () => ({ loadSQL: async () => 'role-query' }))
-mock.module('../src/utils/db.ts', () => ({ default: async (sql: string) => ({ rows: sql === 'role-query' ? [{ has_role: admin }] : [{ owner: 'owner', created_by: 'creator', access_users: ['member'], deleted_at: deleted ? new Date() : null }] }) }))
+mock.module('../src/utils/db.ts', () => ({ default: async (sql: string, params: string[] = []) => ({ rows: sql.includes('SELECT vm_user_has_access') ? [{ allowed: ['owner', 'creator', 'member'].includes(params[1]) }] : sql === 'role-query' ? [{ has_role: admin }] : [{ owner: 'owner', created_by: 'creator', access_users: ['member'], deleted_at: deleted ? new Date() : null }] }) }))
 mock.module('../src/utils/resilience.ts', () => ({ recoveryReadOnly: () => false }))
 mock.module('../src/utils/vms/lxd.ts', () => ({ lxdRequest: async () => { throw new Error('Unexpected host access') } }))
 const { consoleAccess } = await import('../src/handlers/vms/console.ts')

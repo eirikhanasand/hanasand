@@ -447,6 +447,9 @@ type VM = {
     name: string
     owner: string
     created_by: string
+    organization_id?: string | null
+    organization_name?: string | null
+    can_assign_organization?: boolean
     access_users: string[]
     always_running_premium: boolean
     always_running_enabled: boolean

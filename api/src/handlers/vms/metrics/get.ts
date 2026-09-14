@@ -17,7 +17,7 @@ export default async function getVMMetrics(req: FastifyRequest, res: FastifyRepl
         } else {
             result = viewer.admin
                 ? await run('SELECT DISTINCT ON (name) * FROM vm_metrics ORDER BY name, created_at DESC')
-                : await run('SELECT DISTINCT ON (m.name) m.* FROM vm_metrics m JOIN vms v ON LOWER(v.name) = LOWER(m.name) WHERE v.owner = $1 OR v.created_by = $1 OR v.access_users ? $1 ORDER BY m.name, m.created_at DESC', [viewer.id])
+                : await run('SELECT DISTINCT ON (m.name) m.* FROM vm_metrics m JOIN vms v ON LOWER(v.name) = LOWER(m.name) WHERE vm_user_has_access(v.name, $1) ORDER BY m.name, m.created_at DESC', [viewer.id])
         }
 
         return res.send(result.rows)

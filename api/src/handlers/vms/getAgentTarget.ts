@@ -1,3 +1,4 @@
+import { hasVmAccess } from '#utils/vms/access.ts'
 import { withLiveVmStatus } from '#utils/vms/status.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
@@ -49,12 +50,8 @@ export default async function getAgentTarget(req: FastifyRequest, res: FastifyRe
         }
 
         const vm = result.rows[0] as VMRow
-        const accessUsers = Array.isArray(vm.access_users) ? vm.access_users : []
         const canAccess =
-            isAdmin
-            || vm.owner === userId
-            || vm.created_by === userId
-            || accessUsers.includes(userId)
+            isAdmin || await hasVmAccess(vm.name, userId)
 
         if (!canAccess) {
             return res.status(403).send({ error: 'Forbidden.' })
