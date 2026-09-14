@@ -873,7 +873,7 @@ function durableDeliveryRows(payload: Record<string, unknown>) {
 function selectRebuiltAlert(payload: Record<string, unknown>, company: string, terms: string) {
     const alerts = Array.isArray(payload.alerts) ? payload.alerts.filter(isRecord) : []
     const needles = [company, ...terms.split(/[\n,]/)].map(item => item.trim().toLowerCase()).filter(Boolean)
-    const match = events.find(alert => {
+    const match = alerts.find(alert => {
         const companyValue = readString(alert.company).toLowerCase()
         const matchedValue = readNestedString(alert, ['matchedTerm', 'value']).toLowerCase()
         const summary = rebuiltAlertSummary(alert).toLowerCase()
