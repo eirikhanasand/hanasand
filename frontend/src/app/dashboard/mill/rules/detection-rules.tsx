@@ -145,7 +145,7 @@ export default function DetectionRules() {
                 </details>
             </DashboardPanel>}
             <DashboardPanel className='grid min-w-0 gap-4 p-4 sm:p-6' id='mill-rules'>
-                <div><h2 className='font-semibold'>Rule library</h2><p className='mt-1 text-sm text-ui-muted'>Built-in rules can be tuned per organization. Custom rules match normalized JSON fields on new events.</p></div>
+                <h2 className='font-semibold'>Rule library</h2>
                 <div role='search' aria-label='Filter rules' className='grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_1.5fr_auto_auto_auto]'>
                     <label className='grid min-w-0 gap-1 text-xs text-ui-muted'>Title<input type='search' value={titleFilter} onChange={event => setTitleFilter(event.target.value)} placeholder='Filter by title' className='h-9 min-w-0 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text' /></label>
                     <label className='grid min-w-0 gap-1 text-xs text-ui-muted'>Search text<input type='search' value={textFilter} onChange={event => setTextFilter(event.target.value)} placeholder='Search descriptions, IDs, evidence…' className='h-9 min-w-0 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text' /></label>
