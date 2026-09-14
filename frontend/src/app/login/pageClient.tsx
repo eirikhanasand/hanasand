@@ -73,7 +73,7 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
                 throw new Error(data.error || 'Unable to create account.')
             }
             if (data.verificationRequired) {
-                setSignupNotice(signupChallenge ? 'A new code has been sent. Check your inbox and junk folder; use the newest code.' : 'Check your inbox and junk folder for an email from Hanasand.')
+                setSignupNotice(signupChallenge ? 'A new code has been sent. Check your inbox and junk folder; use the newest code.' : 'Check junk.')
                 setSignupChallenge(data.challengeId)
                 setSignupCode('')
                 setMode('verify-signup')
@@ -405,7 +405,7 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
                         <h2 className='text-xl font-semibold'>Check your email</h2>
                         {signupNotice && <p role='status' className='text-sm text-ui-muted'>{signupNotice}</p>}
                         {signupSendError && <p role='alert' className='text-sm text-red-600'>{signupSendError}</p>}
-                        <p className='text-sm text-ui-muted'>We’ve emailed a six-digit code to {signupEmail}. Enter it to verify your address and finish creating your account. It expires in 10 minutes.</p>
+                        <p className='text-sm text-ui-muted'>Enter the six digit code sent to {signupEmail}. Expires in 10 minutes.</p>
                         <VerificationCodeInput value={signupCode} setValue={setSignupCode} disabled={busy} onComplete={code => submitSignup(code)} />
                         <div className='flex flex-wrap gap-2'>
                             <button type='button' disabled={busy} className={authGhostButtonClass} onClick={() => void submitSignup('', true)}>Resend code</button>
