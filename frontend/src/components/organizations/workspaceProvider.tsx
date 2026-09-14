@@ -81,7 +81,7 @@ export default function WorkspaceProvider({ initial, enabled: authenticated, chi
 }
 export function OrganizationSwitcher() {
     const { organizationId, organizations, loading, switchOrganization } = useWorkspace()
-    return <label className='flex min-w-0 items-center gap-2 text-sm font-semibold text-ui-text'><span className='hidden sm:inline'>Org</span>
+    return <label className='flex min-w-0 items-center gap-2 text-sm font-semibold text-ui-text'>
         <select aria-label='Org' value={organizationId} disabled={loading} onChange={event => void switchOrganization(event.target.value)} className='h-10 min-w-0 max-w-20 rounded-lg border border-ui-border bg-ui-panel px-2 text-sm text-ui-text sm:max-w-48'>
             <option value=''>Personal workspace</option>
             {organizationId && !organizations.some(org => org.id === organizationId) && <option value={organizationId}>Organization unavailable</option>}
