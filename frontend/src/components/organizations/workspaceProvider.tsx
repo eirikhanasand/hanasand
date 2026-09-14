@@ -1,10 +1,12 @@
 'use client'
 import { createContext, useCallback, useContext, useEffect, useRef, useState, Fragment, type ReactNode } from 'react'
+import BrandLogo from '@/components/brand/brandLogo'
+import { Building2, LoaderCircle, TriangleAlert } from 'lucide-react'
 import { hasAppSidebar } from '@/utils/routes/appRoutes'
 import { usePathname, useSearchParams, useRouter } from 'next/navigation'
 import { cleanWorkspaceUrl, organizationFromParams, type Workspace } from '@/utils/organizations/workspace'
 
-type Organization = { id: string, name?: string, slug?: string, role?: string, status?: string }
+type Organization = { id: string, name?: string, slug?: string, role?: string, lifecycleStatus?: string }
 type Context = { organizationId: string, organizations: Organization[], loading: boolean, switchOrganization: (id: string) => Promise<void> }
 const WorkspaceContext = createContext<Context>({ organizationId: '', organizations: [], loading: true, switchOrganization: async () => {} })
 export const useWorkspace = () => useContext(WorkspaceContext)
@@ -74,8 +76,20 @@ export default function WorkspaceProvider({ initial, enabled: authenticated, chi
     }, [enabled, organizationId, switching, requested])
     return <WorkspaceContext.Provider value={{ organizationId, organizations, loading, switchOrganization }}>
         {notice && <div role='status' className='fixed left-1/2 top-20 z-[1100] -translate-x-1/2 rounded-lg border border-ui-border bg-ui-panel px-4 py-3 text-sm text-ui-text shadow-lg'>{notice}</div>}
-        {enabled && (switching || requested && requested !== organizationId) ? <main className='mx-auto mt-28 max-w-lg rounded-lg border border-ui-border bg-ui-panel p-6 text-ui-text'>
-            {error ? <><p role='alert'>{error}</p><button className='mt-4 text-ui-primary underline' onClick={() => void switchOrganization(requested)}>Retry</button><a className='ml-4 text-ui-primary underline' href={cleanWorkspaceUrl(`${pathname}?${params}`)}>Keep current workspace</a></> : <p role='status'>Switching organization…</p>}
+        {enabled && (switching || requested && requested !== organizationId) ? <main className='fixed inset-0 z-[1200] flex min-h-dvh flex-col overflow-auto bg-ui-canvas text-ui-text'>
+            <header className='flex h-20 shrink-0 items-center border-b border-ui-border bg-ui-panel px-6 sm:px-10'><BrandLogo /></header>
+            <div className='flex flex-1 items-center justify-center px-6 py-12'>
+                <section aria-busy={!error} className='w-full max-w-md rounded-2xl border border-ui-border bg-ui-panel p-8 text-center shadow-sm sm:p-10'>
+                    <div className='mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-ui-border bg-ui-canvas'>
+                        {error ? <TriangleAlert aria-hidden className='h-6 w-6 text-ui-danger' /> : <Building2 aria-hidden className='h-6 w-6 text-ui-primary' />}
+                    </div>
+                    <h1 className='text-xl font-semibold tracking-tight'>{error ? 'Could not switch workspace' : 'Switching workspace'}</h1>
+                    {error ? <><p role='alert' className='mt-3 text-sm leading-6 text-ui-muted'>{error}</p><div className='mt-7 flex flex-col gap-3'>
+                        <button className='rounded-lg bg-ui-primary px-4 py-3 text-sm font-semibold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2' onClick={() => void switchOrganization(requested)}>Retry</button>
+                        <a className='rounded-lg border border-ui-border px-4 py-3 text-sm font-medium hover:bg-ui-canvas' href={cleanWorkspaceUrl(`${pathname}?${params}`)}>Keep current workspace</a>
+                    </div></> : <><p className='mt-3 text-sm leading-6 text-ui-muted'>Loading your workspace. This should only take a moment.</p><div role='status' className='mt-7 flex items-center justify-center gap-2 text-sm text-ui-muted'><LoaderCircle aria-hidden className='h-4 w-4 animate-spin motion-reduce:animate-none' />Switching organization…</div></>}
+                </section>
+            </div>
         </main> : <><Fragment key={organizationId}>{children}</Fragment>{enabled && error && <div role='alert' className='fixed bottom-4 right-4 z-[1100] max-w-sm rounded-lg border border-ui-border bg-ui-panel p-3 text-sm text-ui-danger'>{error}</div>}</>}
     </WorkspaceContext.Provider>
 }
@@ -85,7 +99,7 @@ export function OrganizationSwitcher() {
         <select aria-label='Org' value={organizationId} disabled={loading} onChange={event => void switchOrganization(event.target.value)} className='h-10 min-w-0 max-w-20 rounded-lg border border-ui-border bg-ui-panel px-2 text-sm text-ui-text sm:max-w-48'>
             <option value=''>Personal workspace</option>
             {organizationId && !organizations.some(org => org.id === organizationId) && <option value={organizationId}>Organization unavailable</option>}
-            {organizations.map(org => <option key={org.id} value={org.id} disabled={org.status !== undefined && org.status !== 'active'}>{org.name || org.slug || org.id}</option>)}
+            {organizations.map(org => <option key={org.id} value={org.id} disabled={org.lifecycleStatus !== 'active'}>{org.name || org.slug || org.id}</option>)}
         </select>
     </label>
 }

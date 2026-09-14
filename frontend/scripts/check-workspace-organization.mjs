@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile, readdir } from 'node:fs/promises'
 import { chromium } from '@playwright/test'
-const organizations = [{ id: 'org-one', name: 'First org', role: 'owner', status: 'active' }, { id: 'org-two', name: 'Second org', role: 'member', status: 'active' }]
+const organizations = [{ id: 'org-one', name: 'First org', role: 'owner', lifecycleStatus: 'active' }, { id: 'org-two', name: 'Second org', role: 'member', lifecycleStatus: 'active' }]
 const calls = []
 let bundle = ''
 const cssDir = process.env.DWM_CSS_DIR || '.next/static/css'
@@ -43,7 +43,7 @@ try {
     const context = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'], viewport: { width: 1440, height: 1000 } })
     const page = await context.newPage();page.setDefaultTimeout(10000);page.on('pageerror', error => console.log('Browser error:', error.message))
     await page.goto(`${server.url}mill/rules?organizationId=org-one`)
-    await page.getByRole('heading', { name: 'Rule for org-one' }).waitFor().catch(async error => { console.log(await page.locator('body').innerText()); throw error })
+    await page.getByRole('link', { name: 'Rule for org-one' }).waitFor().catch(async error => { console.log(await page.locator('body').innerText()); throw error })
     assert.equal(new URL(page.url()).search, '')
     assert.equal(await page.getByRole('combobox', { name: 'Org', exact: true }).count(), 1)
     assert.equal(await page.getByRole('combobox', { name: 'Organization', exact: true }).count(), 0)
@@ -59,19 +59,19 @@ try {
     assert.equal(new URL(shared).searchParams.get('org'), 'org-one')
     assert(!shared.includes('organizationId'))
     const second = await context.newPage(); await second.goto(`${server.url}mill/rules`)
-    await second.getByRole('heading', { name: 'Rule for org-one' }).waitFor()
+    await second.getByRole('link', { name: 'Rule for org-one' }).waitFor()
     await page.getByRole('combobox', { name: 'Org', exact: true }).selectOption('org-two')
     await page.getByRole('heading', { name: 'Cases for org-two' }).waitFor()
-    await second.getByRole('heading', { name: 'Rule for org-two' }).waitFor()
+    await second.getByRole('link', { name: 'Rule for org-two' }).waitFor()
     const since = calls.length
     await page.goto(`${server.url}mill/rules?org=org-one`)
-    await page.getByRole('heading', { name: 'Rule for org-one' }).waitFor()
+    await page.getByRole('link', { name: 'Rule for org-one' }).waitFor()
     assert(calls.slice(since).filter(url => url.pathname.includes('/mill/rules')).every(url => url.searchParams.get('organizationId') === 'org-one'))
     for (const width of [320,390,768,1440]) { await page.setViewportSize({ width, height: 1000 }); assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Header overflow at ${width}`) }
     await page.goto(`${server.url}mill/rules?org=foreign`)
     await page.getByRole('alert').filter({ hasText: 'You do not have access' }).waitFor()
     assert.equal(await page.getByRole('heading', { name: 'Detection rules' }).count(), 0)
     await page.getByRole('link', { name: 'Keep current workspace' }).click()
-    await page.getByRole('heading', { name: 'Rule for org-one' }).waitFor()
+    await page.getByRole('link', { name: 'Rule for org-one' }).waitFor()
     console.log('Workspace browser checks passed: legacy and short links, clean navigation, shared copy, three-second notice, cookie-only scope, cross-tab changes, denied scope, responsive header.')
 } finally { await browser.close(); server.stop(true) }
