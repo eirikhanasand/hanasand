@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 import bcrypt from 'bcrypt'
 import run, { withTransaction, type queryOnce } from '#db'
 import { sendSystemMail } from '#utils/mail/system.ts'
+import { signupVerificationEmail } from '#utils/mail/signupVerificationEmail.ts'
 
 let schemaReady: Promise<unknown> | undefined
 export function ensureSignupVerification() {
@@ -43,9 +44,7 @@ export async function requestSignupCode(email: string, ip: string, binding: stri
     })
     if (!allowed) return { status: 429, error: 'Please wait before requesting another code. You can request up to five codes per hour.' }
     try {
-        await sendSystemMail({ to: email, subject: 'Verify your Hanasand email',
-            textBody: `Your Hanasand signup code is ${code}.\n\nIt expires in 10 minutes. Your account will only be created after you enter this code. If you did not request this, ignore this email.`,
-            htmlBody: `<p>Your Hanasand signup code is <strong>${code}</strong>.</p><p>It expires in 10 minutes. Your account will only be created after you enter this code. If you did not request this, ignore this email.</p>` })
+        await sendSystemMail({ to: email, ...signupVerificationEmail(code) })
     } catch (error) {
         const smtp = error as { code?: string; responseCode?: number; command?: string }
         console.error('Signup verification email failed', { challengeId: id, code: smtp.code, responseCode: smtp.responseCode, command: smtp.command })
