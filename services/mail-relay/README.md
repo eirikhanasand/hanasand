@@ -9,6 +9,8 @@ System mail travels through Inspur Stalwart → the Inspur SSH connector → OVH
 | Inspur | `hanasand-mail-relay-inspur` | `127.0.0.1:19261/health` | `https://api.hanasand.com/api/mail-relay/inspur/health` |
 | OVH | `hanasand-mail-relay-ovh`, `hanasand-mail-relay-ovh-health` | `127.0.0.1:19262/health` | `https://api.hanasand.com/api/mail-relay/ovh/health` |
 
+Public readiness routes are served directly by the gateways, independently of the application API, its database, and recovery-mode restrictions. Each gateway reads its local relay and uses certificate-verified HTTPS to a fixed peer gateway for the other relay. The exact GET/HEAD routes are rate-limited, forward no client credentials, and never cache health samples.
+
 Checks run every 30 seconds. HTTP 200 means ready; HTTP 503 means a dependency failed, a message is over five minutes old, the queue exceeds 100 messages, or the sample is stale. Inspur checks its SMTP authentication, queue, tunnel, and OVH authentication. OVH checks SMTP authentication, queue, and an external Microsoft SMTP greeting. Probes never send DATA and authenticated probes never issue RCPT, avoiding recipient quotas. Readiness cannot establish inbox placement; outbound logs provide recipient-server acceptance.
 
 `api/scripts/setup-mail-relay-monitoring.ts` idempotently creates exactly two named one-minute health jobs using the existing Hanasand API monitor owner and notification destinations. Existing job preferences are preserved.
@@ -32,3 +34,9 @@ Provision the restricted SSH key and remote SMTP credential locally before initi
 Run setup on Inspur with `--activate` only once relay authentication passes. This preserves a protected `route-before.json` snapshot and configures the sender route with mandatory TLS. Run setup on OVH with `--renewal-revision <full-pushed-sha>` to install certificate refresh; `--refresh-tls` also runs it immediately.
 
 After deployment check both public APIs, both named jobs, and actual delivery logs. A queue is preserved across restarts and failures. If the relay fails, leave mail queued, repair the failing dependency, then verify recipient acceptance. Do not silently fall back to blocked direct outbound delivery or weaken TLS. Restore prior route settings from the protected snapshot only as an explicit rollback.
+
+### Deploy gateway health routes
+
+After fetching the pushed revision on both hosts, run `git show <revision>:services/mail-relay/install-health-routes.py | python3 - <site> <nginx-config-root> <revision>`, with site `inspur` or `ovh`. Existing gateway configuration is backed up, syntax-checked and gracefully reloaded; validation failure restores the previous files. Mail servers and queues are not restarted.
+
+Verify both health URLs against **both gateway IPs** using `curl --resolve api.hanasand.com:443:<gateway-IP>`. Check the `X-Mail-Relay-Health-Release` response header and fresh relay checks. The OVH application API may still reject nonessential routes during recovery; relay health must work independently of it. Authentication, queue, outbound-connectivity and stale-sample failures must continue returning 503.
