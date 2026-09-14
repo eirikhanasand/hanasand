@@ -5,6 +5,7 @@ export type AuthSession = {
     token_id: number
     id: string
     ip: string | null
+    private_ip?: string
     current: boolean
     network: { provider: string | null, country: string | null, country_code: string | null, region: string | null, city: string | null } | null
     user_agent: string
