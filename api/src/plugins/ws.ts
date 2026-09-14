@@ -1,4 +1,5 @@
 import fp from 'fastify-plugin'
+import { proxyModelSocket } from '../utils/ws/proxyModelSocket.ts'
 import registerVmConsole from '../handlers/vms/console.ts'
 import { subscribeThesis } from '#utils/thesis.ts'
 import WebSocket from 'ws'
@@ -190,6 +191,7 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
     fastify.get<{ Params: { id: string } }>('/api/client/ws/:id', { websocket: true }, (connection: WebSocket, req: FastifyRequest<{ Params: { id: string } }>) => {
         const id = (req.params as { id: string}).id
 
+        if (proxyModelSocket(connection, id, Boolean(req.headers['x-ai-models-forwarded']))) return
         registerClient(id, connection, gpt, countGptViewers)
         sendGptSnapshot(id, connection)
         connection.on('message', (message) => {

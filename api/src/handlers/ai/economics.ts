@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
-import { listGptClients } from '#utils/ws/handleGptMessage.ts'
+import { readModelState } from './getModels.ts'
 import { requireAiUser } from './shared.ts'
 
 type UsageEconomicsRow = {
@@ -335,6 +335,7 @@ export async function getAiEconomics(req: FastifyRequest, res: FastifyReply) {
         ? verifiedUnits / productiveMinutes / costNok
         : 0
     const reliability = buildReliability({
+        clients: (await readModelState()).connected,
         estimatedCostNok: costNok,
         queueRows: queueResult.rows as QueueDepthRow[],
         latencyRows: verificationLatencyResult.rows as VerificationLatencyRow[],
@@ -691,7 +692,8 @@ function formatDeploymentAttempt(deployment?: LatestDeploymentRow, release?: Lat
     return `${deploymentPart}; ${releasePart}${failure}.`
 }
 
-function buildReliability({ estimatedCostNok, queueRows, latencyRows, buildDeployRows, failedProofRows, firstOutput, deployTiming }: {
+function buildReliability({ clients, estimatedCostNok, queueRows, latencyRows, buildDeployRows, failedProofRows, firstOutput, deployTiming }: {
+    clients: GPT_Client[]
     estimatedCostNok: number
     queueRows: QueueDepthRow[]
     latencyRows: VerificationLatencyRow[]
@@ -733,7 +735,7 @@ function buildReliability({ estimatedCostNok, queueRows, latencyRows, buildDeplo
         kind: row.kind,
         count: numberValue(row.count),
     }))
-    const gpuLanes = liveGpuLanes()
+    const gpuLanes = liveGpuLanes(clients)
     const totalAvailableSessions = gpuLanes.reduce((sum, lane) => sum + lane.availableSessions, 0)
     const totalActiveSessions = gpuLanes.reduce((sum, lane) => sum + lane.activeSessions, 0)
     const successfulVerifiedBuilds = buildDeploy
@@ -774,8 +776,8 @@ function buildReliability({ estimatedCostNok, queueRows, latencyRows, buildDeplo
     }
 }
 
-function liveGpuLanes() {
-    return listGptClients('gpt').flatMap((client) => {
+function liveGpuLanes(clients: GPT_Client[]) {
+    return clients.flatMap((client) => {
         const model = client.modelId || client.model?.conversationId || client.name
         const clientPowerWatts = numberValue(client.power?.totalWatts)
         const lanes = client.lanes?.length ? client.lanes : []

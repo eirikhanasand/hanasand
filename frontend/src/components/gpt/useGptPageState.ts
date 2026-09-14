@@ -14,51 +14,43 @@ function createPendingAssistantMessage(conversationId: string): GPT_ChatMessage 
 
 export default function useGptPageState() {
     const [clients, setClients] = useState<GPT_Client[]>([])
-    const [reconnect, setReconnect] = useState(false)
     const [isConnected, setIsConnected] = useState(false)
     const [participants, setParticipants] = useState(1)
     const [chatSession, setChatSession] = useState<ChatSession | null>(null)
     const socketRef = useRef<WebSocket | null>(null)
 
     useEffect(() => {
-        const ws = new WebSocket(`${config.url.api_client_wss}/client/ws/gpt`)
-        socketRef.current = ws
-
-        ws.onopen = () => {
-            setReconnect(false)
-            setIsConnected(true)
+        let cancelled = false
+        let retry: ReturnType<typeof setTimeout> | undefined
+        function connect() {
+            const ws = new WebSocket(`${config.url.api_client_wss}/client/ws/gpt`)
+            socketRef.current = ws
+            ws.onopen = () => { if (!cancelled) setIsConnected(true) }
+            ws.onclose = () => {
+                if (cancelled) return
+                setIsConnected(false)
+                setClients([])
+                socketRef.current = null
+                retry = setTimeout(connect, 3000)
+            }
+            ws.onerror = () => ws.close()
+            ws.onmessage = event => {
+                if (cancelled) return
+                try {
+                    handleSocketMessage(JSON.parse(event.data) as GptSocketMessage, setChatSession, setClients, setParticipants)
+                } catch (error) {
+                    console.error('Invalid model update:', error)
+                }
+            }
         }
-
-        ws.onclose = () => {
-            setIsConnected(false)
+        connect()
+        return () => {
+            cancelled = true
+            clearTimeout(retry)
+            socketRef.current?.close()
             socketRef.current = null
         }
-
-        ws.onerror = (error) => {
-            console.log('WebSocket error:', error)
-            setIsConnected(false)
-        }
-
-        ws.onmessage = (event) => {
-            try {
-                handleSocketMessage(JSON.parse(event.data) as GptSocketMessage, setChatSession, setClients, setParticipants)
-            } catch (error) {
-                console.error('Invalid message from server:', error)
-            }
-        }
-
-        return () => ws.close()
-    }, [reconnect])
-
-    useEffect(() => {
-        const timeout = setTimeout(() => {
-            if (!isConnected) {
-                setReconnect(true)
-            }
-        }, 3000)
-
-        return () => clearTimeout(timeout)
-    }, [isConnected])
+    }, [])
 
     function openChat(client: GPT_Client) {
         setChatSession((prev) => prev?.clientName === client.name
@@ -127,6 +119,10 @@ function handleSocketMessage(
     setParticipants: React.Dispatch<React.SetStateAction<number>>
 ) {
     switch (msg.type) {
+        case 'snapshot':
+            setClients((msg.clients || []).map(normalizeClient))
+            setParticipants(msg.participants || 0)
+            return
         case 'update': {
             if (!msg.client) return
             const normalizedClient = normalizeClient(msg.client)

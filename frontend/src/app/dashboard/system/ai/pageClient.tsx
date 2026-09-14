@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Activity, AlertTriangle, ArrowLeft, CheckCircle2, Coins, Layers3, LineChart, Server, Timer, Zap } from 'lucide-react'
+import { Activity, AlertTriangle, ArrowLeft, CheckCircle2, Coins, Layers3, LineChart, Timer } from 'lucide-react'
 import GPT_Content from '@components/gpt/content'
 import GPT_EmptyState from '@components/gpt/emptyState'
 import GPT_Header from '@components/gpt/header'
@@ -237,9 +237,7 @@ export default function GPT_Page() {
                 <div className='mx-auto flex w-full max-w-330 flex-col gap-4 px-4 pb-4 pt-6 sm:px-6 md:px-8 md:pt-8'>
                     <div className='flex items-end justify-between gap-4'>
                         <div>
-                            <p className='text-xs uppercase tracking-[0.22em] text-ui-muted'>System</p>
                             <h1 className='mt-1 text-2xl font-semibold text-ui-text'>AI operations</h1>
-                            <p className='mt-1 text-sm text-ui-muted'>Connected workers, verified output, capacity, and spend.</p>
                         </div>
                         <div className='flex flex-wrap items-center justify-end gap-2'>
                             <GPT_Header isConnected={gpt.isConnected} participants={gpt.participants} />
@@ -369,7 +367,7 @@ function AIContainerHealth({ containers, error }: { containers: DockerContainer[
                             <div className='flex items-start justify-between gap-2'>
                                 <div className='min-w-0'>
                                     <p className='truncate font-semibold text-ui-text'>{container.name}</p>
-                                    <p className='mt-1 truncate text-ui-muted'>{container.image || 'container image metering'} · {container.status}</p>
+                                    <p className='mt-1 truncate text-ui-muted'>{container.image || container.name} · {container.status}</p>
                                 </div>
                                 <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${healthToneClass(health.tone)}`}>{health.label}</span>
                             </div>
@@ -416,8 +414,8 @@ function ReliabilityPanel({ reliability }: { reliability: AIEconomics['reliabili
 
             <div className='mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
                 <EconomicsStat icon={<Activity className='h-4 w-4' />} label='Queue capacity' value={`${reliability.capacity.totalAvailableSessions} open`} detail={`${reliability.capacity.totalActiveSessions} active, ${reliability.capacity.totalQueued} queued across workers`} />
-                <EconomicsStat icon={<Timer className='h-4 w-4' />} label='First output' value={formatDuration(reliability.promptTiming.p50FirstUsefulOutputMs)} detail={`p95 ${formatDuration(reliability.promptTiming.p95FirstUsefulOutputMs)} · ${reliability.promptTiming.sampleCount} runs`} />
-                <EconomicsStat icon={<CheckCircle2 className='h-4 w-4' />} label='Verified deploy' value={formatDuration(reliability.deployTiming.p50PromptToVerifiedDeployMs)} detail={`p95 ${formatDuration(reliability.deployTiming.p95PromptToVerifiedDeployMs)} · ${reliability.deployTiming.sampleCount} deploys`} />
+                <EconomicsStat icon={<Timer className='h-4 w-4' />} label='Time to first response' value={reliability.promptTiming.sampleCount ? formatDuration(reliability.promptTiming.p50FirstUsefulOutputMs) : 'No runs yet'} detail={reliability.promptTiming.sampleCount ? `Typical response time · ${reliability.promptTiming.sampleCount} runs` : 'Shown after the first completed run'} />
+                <EconomicsStat icon={<CheckCircle2 className='h-4 w-4' />} label='Verified deploy' value={reliability.deployTiming.sampleCount ? formatDuration(reliability.deployTiming.p50PromptToVerifiedDeployMs) : 'No deployments yet'} detail={reliability.deployTiming.sampleCount ? `Typical deployment time · ${reliability.deployTiming.sampleCount} deploys` : 'Shown after the first verified deployment'} />
                 <EconomicsStat icon={<Coins className='h-4 w-4' />} label='Cost / verified build' value={`${formatNok(reliability.costPerSuccessfulVerifiedBuildNok)} NOK`} detail='Cost per successful build or deploy run' />
             </div>
 
@@ -434,7 +432,7 @@ function ReliabilityPanel({ reliability }: { reliability: AIEconomics['reliabili
                                     <span className='capitalize text-ui-text'>{row.kind}</span>
                                     <span className='text-ui-muted'>{formatDuration(row.p50Ms)} / {formatDuration(row.p95Ms)} · {row.sampleCount}</span>
                                 </div>
-                            )) : <p className='text-sm text-ui-muted'>Verification jobs are metering; p50/p95 rows update from completed runs.</p>}
+                            )) : <p className='text-sm text-ui-muted'>No completed verification runs.</p>}
                         </div>
                     </div>
 
@@ -477,31 +475,6 @@ function ReliabilityPanel({ reliability }: { reliability: AIEconomics['reliabili
                         </div>
                     </div>
 
-                    <div className='rounded-lg border border-ui-border bg-ui-raised p-4'>
-                        <div className='flex items-center justify-between gap-3'>
-                            <h4 className='text-sm font-semibold text-ui-text'>GPU worker health</h4>
-                            <span className='text-xs text-ui-muted'>{reliability.gpuLanes.length} workers</span>
-                        </div>
-                        <div className='mt-3 grid gap-2 md:grid-cols-2'>
-                            {reliability.gpuLanes.length ? reliability.gpuLanes.map((lane) => (
-                                <article key={`${lane.clientName}-${lane.lane}`} className='rounded-lg border border-ui-border bg-ui-raised p-3'>
-                                    <div className='flex items-start justify-between gap-2'>
-                                        <div>
-                                            <p className='text-sm font-semibold text-ui-text'>{lane.lane}</p>
-                                            <p className='mt-1 text-xs text-ui-muted'>{lane.model} · {lane.tier}</p>
-                                        </div>
-                                        <span className='rounded-full border border-ui-border px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-ui-muted'>{lane.status}</span>
-                                    </div>
-                                    <div className='mt-3 grid grid-cols-2 gap-2 text-xs text-ui-muted'>
-                                        <LaneMetric icon={<Server className='h-3.5 w-3.5' />} value={`${lane.availableSessions}/${lane.maxSessions}`} label='available' />
-                                        <LaneMetric icon={<Activity className='h-3.5 w-3.5' />} value={`${Math.round(lane.gpuLoad)}%`} label='load' />
-                                        <LaneMetric icon={<Zap className='h-3.5 w-3.5' />} value={`${Math.round(lane.powerWatts)} W`} label='power' />
-                                        <LaneMetric icon={<Timer className='h-3.5 w-3.5' />} value={formatCompact(lane.contextMaxTokens)} label='context' />
-                                    </div>
-                                </article>
-                            )) : <p className='text-sm text-ui-muted'>GPU telemetry updates with load, power, and session capacity for connected model workers.</p>}
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -519,18 +492,6 @@ function SuccessRate({ row, fallback }: { row?: AIEconomics['reliability']['buil
             <div className='h-2 overflow-hidden rounded-full bg-ui-border'>
                 <div className='h-full rounded-full bg-ui-primary' style={{ width: `${row ? Math.max(4, rate) : 0}%` }} />
             </div>
-        </div>
-    )
-}
-
-function LaneMetric({ icon, value, label }: { icon: ReactNode, value: string, label: string }) {
-    return (
-        <div className='rounded-md border border-ui-border bg-ui-raised p-2'>
-            <div className='flex items-center gap-1.5 text-ui-text'>
-                <span className='text-ui-primary'>{icon}</span>
-                <span className='font-medium'>{value}</span>
-            </div>
-            <p className='mt-1 text-[10px] uppercase tracking-[0.12em] text-ui-muted'>{label}</p>
         </div>
     )
 }
@@ -568,7 +529,7 @@ function formatKind(kind: string) {
 }
 
 function formatDuration(value: number) {
-    if (!value) return 'metering'
+    if (!value) return '—'
     if (value < 1000) return `${Math.round(value)} ms`
     const seconds = value / 1000
     if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 1 : 0)} s`
