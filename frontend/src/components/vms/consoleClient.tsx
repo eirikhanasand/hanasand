@@ -19,6 +19,10 @@ export default function VmConsole({ name }: { name: string }) {
     }, [])
     useEffect(() => {
         if (!expanded) return
+        // The route frame is its own stacking context below the site header.
+        const frame = panel.current?.closest<HTMLElement>('[data-route-frame]')
+        const previousLayer = frame?.style.zIndex || ''
+        if (frame) frame.style.zIndex = '1000'
         const previousOverflow = document.body.style.overflow
         document.body.style.overflow = 'hidden'
         // The visual viewport also shrinks when a mobile keyboard opens.
@@ -38,6 +42,7 @@ export default function VmConsole({ name }: { name: string }) {
         document.addEventListener('keydown', escape, true)
         return () => {
             document.body.style.overflow = previousOverflow
+            if (frame) frame.style.zIndex = previousLayer
             visible?.removeEventListener('resize', resize)
             visible?.removeEventListener('scroll', resize)
             window.removeEventListener('resize', resize)

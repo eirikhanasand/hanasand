@@ -29,7 +29,7 @@ export default function RouteFrame({ children, serverPath, token, sidebar, banne
             : 'mt-[8.25vh] h-[91.75vh] md:mt-[9.5vh] md:h-[90.5vh]'
 
     return (
-        <div className={`enterprise-theme relative z-10 ${frameSizing} w-full overflow-auto`}>
+        <div data-route-frame className={`enterprise-theme relative z-10 ${frameSizing} w-full overflow-auto`}>
             <main className={`w-full ${isAppSurface ? 'h-full' : isPublicProduct ? 'min-h-full' : 'min-h-[90.5vh] pt-3 md:pt-0'}`}>
                 {showSidebar ? (
                     <div className='h-full min-h-0 bg-ui-canvas px-2 pb-2 text-ui-text'>
