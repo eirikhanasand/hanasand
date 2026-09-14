@@ -19,6 +19,7 @@ export default async function DashboardDwmPage({
     if (!identityId || !token) redirect('/login?path=%2Fdwm')
 
     const organizationId = firstParam(params?.organizationId)?.trim() || undefined
+    if (firstParam(params?.panel) === 'alerts') redirect(organizationId ? `/cases?organizationId=${encodeURIComponent(organizationId)}` : '/cases')
     const tenantId = organizationId || identityId
     const roles = parseCookie<Array<Role | string>>(cookieStore.get('roles')?.value, [])
     const roleIds = roles.map(role => typeof role === 'string' ? role : role.id || '')
@@ -69,15 +70,15 @@ function loadingSnapshot(tenantId: string): DwmProductSnapshot {
 
 function loadingDataHealth() {
     return {
-        snapshot: { state: 'missing' as const, label: 'Monitoring loading', detail: 'Loading the persisted tenant watchlist and alert state.' },
+        snapshot: { state: 'missing' as const, label: 'Monitoring loading', detail: 'Loading the persisted tenant watchlist and event state.' },
         operations: { state: 'missing' as const, label: 'Collection loading', detail: 'Loading retained source and capture state.' },
-        alerts: { state: 'missing' as const, label: 'Alerts loading', detail: 'Loading persisted tenant alerts.' },
+        alerts: { state: 'missing' as const, label: 'Events loading', detail: 'Loading recorded events.' },
         deliveries: { state: 'missing' as const, label: 'Deliveries loading', detail: 'Loading persisted delivery attempts.' },
     }
 }
 
 function normalizeDwmView(value: string | undefined): DwmView {
-    return value === 'watchlists' || value === 'sources' || value === 'delivery' || value === 'actors' || value === 'actions' || value === 'alerts' ? value : 'overview'
+    return value === 'watchlists' || value === 'sources' || value === 'delivery' || value === 'actors' || value === 'actions' ? value : 'overview'
 }
 
 function firstParam(value: string | string[] | undefined) {

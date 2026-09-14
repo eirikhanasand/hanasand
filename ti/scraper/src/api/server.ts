@@ -1,3 +1,4 @@
+import { receiveSecurityCase } from './securityCases.ts';
 import { startReadinessWorker } from "./readiness.ts";
 import { paginationCursor } from "./pagination.ts";
 import { buildDarkwebIndexStatus, searchDarkwebIndex } from "../adapters/darkwebIndex.ts";
@@ -189,6 +190,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       }));
     }
     if (url.pathname === "/v1/cases" && request.method === "GET") return listCases(url, options, request);
+    if (url.pathname === "/v1/cases/security-detections" && request.method === "POST") return receiveSecurityCase(request, options);
     if (url.pathname === "/v1/cases" && request.method === "POST") return createCase(request, options);
     if (/^\/v1\/cases\/[^/]+\/action-replay-export$/.test(url.pathname) && request.method === "GET") return exportCaseActionReplay(url, options, url.pathname.split("/")[3], request);
     if (/^\/v1\/cases\/[^/]+\/export$/.test(url.pathname) && request.method === "GET") return exportCaseEvidence(url, options, url.pathname.split("/")[3], request);

@@ -208,7 +208,7 @@ import { getCommercialContactRequests, postCommercialContactRequest } from './ha
 import { getOrganizationPrivacy, postOrganizationPrivacy } from './handlers/organizationPrivacy.ts'
 import { deleteSavedSearch, getSavedSearches, postSavedSearch } from './handlers/ti/savedSearches.ts'
 import { getAptUpdates } from './handlers/aptUpdates.ts'
-import { getMillEvents, getMillFindings, getMillRules, getMillUsage, ingestMill, postMillEventAction, postMillFindingAction, postMillRule, postMillRuleAction, postMillRulePack, postMillSigmaPack } from './handlers/mill.ts'
+import { getMillEvents, getMillRules, ingestMill, postMillEventAction, postMillRule, postMillRuleAction, postMillRulePack, postMillSigmaPack } from './handlers/mill.ts'
 import { createBillingPortal, getBillingSubscription, receiveStripeWebhook } from './handlers/billing.ts'
 
 /**
@@ -575,12 +575,9 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/mill', ingestMill)
     fastify.get('/mill/events', getMillEvents)
     fastify.post('/mill/events/:id/actions', postMillEventAction)
-    fastify.get('/mill/findings', getMillFindings)
     fastify.get('/mill/rules', getMillRules)
-    fastify.get('/mill/usage', getMillUsage)
     fastify.post('/mill/rules', postMillRule)
     fastify.post('/mill/rules/packs', postMillRulePack)
     fastify.post('/mill/rules/sigma', postMillSigmaPack)
     fastify.post('/mill/rules/:id/actions', postMillRuleAction)
-    fastify.post('/mill/findings/:id/actions', postMillFindingAction)
 }

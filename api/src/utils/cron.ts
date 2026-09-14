@@ -1,3 +1,4 @@
+import { deliverMillCases, MILL_CASE_DELIVERY_JOB_ID } from './millCases.ts'
 import { maintainDeletedVms } from './vms/deletion.ts'
 import collectVmMetrics, { VM_METRICS_JOB_ID } from './vms/collectMetrics.ts'
 import { schedule } from 'node-cron'
@@ -34,6 +35,7 @@ const apiCronRunners: Record<string, () => Promise<unknown> | unknown> = {
         return status
     },
     'api-vm-ensure-running': ensureAlwaysRunningVms,
+    [MILL_CASE_DELIVERY_JOB_ID]: deliverMillCases,
     'api-vm-deletion': maintainDeletedVms,
     [VULNERABILITY_SCAN_JOB_ID]: runDueVulnerabilityScan,
     [DATABASE_BACKUP_JOB_ID]: runDueDatabaseBackup,
@@ -104,6 +106,7 @@ export default function cron() {
                 runDueApiCronJob('api-production-log-monitor'),
                 runDueApiCronJob(HOST_UPDATE_MONITOR_JOB_ID),
                 runDueApiCronJob('api-vm-ensure-running'),
+                runDueApiCronJob(MILL_CASE_DELIVERY_JOB_ID),
                 runDueApiCronJob('api-vm-deletion'),
                 runDueApiCronJob(VULNERABILITY_SCAN_JOB_ID),
                 runDueApiCronJob(DATABASE_BACKUP_JOB_ID),

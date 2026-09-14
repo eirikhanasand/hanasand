@@ -284,6 +284,16 @@ const apiBackgroundJobDefinitions: Array<{
         controls: [],
     },
     {
+        id: 'api-security-case-delivery',
+        name: 'Security case delivery',
+        description: 'Opens cases for security detections and retries pending deliveries.',
+        category: 'Other/System',
+        schedule: 'Every minute',
+        cadenceSeconds: API_CRON_CADENCE_SECONDS,
+        source: 'api/src/utils/millCases.ts',
+        controls: [],
+    },
+    {
         id: 'api-vm-deletion',
         name: 'Deleted VM retention',
         description: 'Keeps deleted VMs stopped and removes their disks after the 30-day recovery period.',

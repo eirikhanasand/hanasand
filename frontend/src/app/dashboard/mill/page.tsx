@@ -1,9 +1,8 @@
-import type { Metadata } from 'next'
-import MillWorkspace from './workspace'
+import { redirect } from 'next/navigation'
 
-export const metadata: Metadata = { title: 'Security overview', description: 'Review organization-specific security monitoring findings.' }
 export const dynamic = 'force-dynamic'
 
-export default function Page() {
-    return <MillWorkspace />
+export default async function Page({ searchParams }: { searchParams: Promise<{ organizationId?: string }> }) {
+    const { organizationId } = await searchParams
+    redirect(`/cases${organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''}`)
 }

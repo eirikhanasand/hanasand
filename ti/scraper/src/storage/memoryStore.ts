@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { ensureDwmCase } from "./dwmCases.ts";
 import type { CaptureReplayJob, DiscoveryEvidence, EvidenceDelta, IncidentCandidate, LiveSearchSnapshot, PipelineResult, RawCapture, ReplayPipelineInput, SourceRecord } from "../types.ts";
 import type {
   CaptureMetadataStore,
@@ -505,6 +506,14 @@ export class InMemoryScraperStore implements ScraperStore {
     const incomingFirstSeenAt = validIso(alert.firstSeenAt);
     const firstSeenAt = [existingFirstSeenAt, incomingFirstSeenAt].filter(Boolean).sort()[0];
     const stored = this.putScoped(this.dwmAlerts, firstSeenAt ? { ...alert, firstSeenAt } : alert);
+    if (!this.organizationWriteGuardDepth) {
+      const caseRecord = ensureDwmCase(this, stored);
+      if (caseRecord) {
+        stored.caseId = caseRecord.id;
+        stored.casePath = stored.casePath || `/v1/cases/${encodeURIComponent(caseRecord.id)}?alertId=${encodeURIComponent(stored.id)}`;
+        stored.workflowContext = { ...stored.workflowContext, caseId: caseRecord.id, casePath: stored.casePath };
+      }
+    }
     const alertCreated = [["alertCreatedAt", alert.alertCreatedAt], ["alertCreatedEvent.at", alert.alertCreatedEvent?.at], ["deliveryReadinessContext.alertCreatedAt", alert.deliveryReadinessContext?.alertCreatedAt]]
       .map(([field, value]) => ({ field, timestamp: validIso(value) }))
       .find((candidate) => candidate.timestamp);
@@ -515,6 +524,17 @@ export class InMemoryScraperStore implements ScraperStore {
       }
     }
     return stored;
+  }
+  backfillDwmCases() {
+    let created = 0;
+    for (const event of this.listDwmAlerts()) {
+      const caseRecord = ensureDwmCase(this, event);
+      if (caseRecord && event.caseId !== caseRecord.id) {
+        this.saveDwmAlert({ ...event, caseId: caseRecord.id });
+        created++;
+      }
+    }
+    return created;
   }
   getDwmAlert(id: string) { return this.dwmAlerts.get(id); } listDwmAlerts() { return mapValues(this.dwmAlerts); }
   saveDwmWebhookDelivery(delivery: any) {

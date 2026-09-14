@@ -31,14 +31,12 @@ const publicRouteItems: SearchItem[] = [
 
 const dashboardRouteItems: SearchItem[] = [
     route('Dashboard overview', 'Customer console overview', '/dashboard'),
-    route('Security overview', 'Suspicious login and security event review', '/mill'),
     route('Detection rules', 'Create and import security detection rules', '/mill/rules'),
     route('Security Scanner', 'Run and schedule approved Hanasand scans', '/scanner'),
     route('Cases', 'Cases across all services', '/cases'),
     route('DWM watchlists', 'Watched companies, vendors, domains, and brands', '/dwm/watchlists'),
     route('DWM delivery', 'Webhook attempts and customer delivery', '/dwm/delivery'),
     route('DWM actors', 'Actor context and coverage', '/dwm/actors'),
-    route('Matched alerts', 'Review matched alerts and open cases', '/dwm/alerts'),
     route('DWM actions', 'Watchlist, source, case, and webhook controls', '/dwm/actions'),
     route('Automation', 'Webhook and automation setup', '/automation'),
     route('Subscription', 'Billing and plan controls', '/subscription'),

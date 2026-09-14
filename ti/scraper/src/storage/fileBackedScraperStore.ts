@@ -9,7 +9,7 @@ type FileBackedScraperSnapshot = any;
 
 export class FileBackedScraperStore extends InMemoryScraperStore {
   private readonly snapshotPath: string; private hydrating = false; private batchDepth = 0; private dirty = false;
-  constructor(options: FileBackedScraperStoreOptions) { super(); this.snapshotPath = options.snapshotPath; mkdirSync(dirname(this.snapshotPath), { recursive: true }); this.hydrate(); }
+  constructor(options: FileBackedScraperStoreOptions) { super(); this.snapshotPath = options.snapshotPath; mkdirSync(dirname(this.snapshotPath), { recursive: true }); this.hydrate(); this.batch(() => this.backfillDwmCases()); }
   batch<T>(write: () => T): T {
     this.batchDepth++;
     try {

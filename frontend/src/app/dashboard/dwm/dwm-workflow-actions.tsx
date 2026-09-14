@@ -176,7 +176,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             if (!rebuild.ok) throw new Error(rebuild.message)
 
             const alert = selectRebuiltAlert(rebuild, company, nextTerms)
-            if (!alert?.id) throw new Error('No matching alert was generated for this evidence.')
+            if (!alert?.id) throw new Error('No matching event was found in this evidence.')
 
             const casePayload = await postJson(`/api/dwm/alerts/${encodeURIComponent(alert.id)}/case-handoff`, {
                 ...scope,
@@ -301,7 +301,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                     captureCount,
                     alertCount: savedAlertCount,
                 })
-                setResult({ ok: true, message: `Sources updated. Collected ${captureCount} capture(s) and rebuilt ${savedAlertCount} alert(s). No watchlist match opened a case.` })
+                setResult({ ok: true, message: `Sources updated. Collected ${captureCount} capture(s) and matched ${savedAlertCount} events. No watchlist match opened a case.` })
                 router.refresh()
                 return
             }
@@ -350,7 +350,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             })
             setResult({
                 ok: true,
-                message: `Added ${advisoryCount} public advisory source(s), collected ${captureCount} capture(s), rebuilt ${savedAlertCount} alert(s), opened ${caseId || 'a case'}.${deliveryReady ? deliveryText : deliveryText ? ' Configure or test a destination before sending customer notification.' : ''}`,
+                message: `Added ${advisoryCount} public advisory source(s), collected ${captureCount} capture(s), matched ${savedAlertCount} events, opened ${caseId || 'a case'}.${deliveryReady ? deliveryText : deliveryText ? ' Configure or test a destination before sending customer notification.' : ''}`,
                 actionHref: deliveryText && !deliveryReady ? deliverySetupHref(organizationId, alert.id, caseId || undefined) : undefined,
                 actionLabel: deliveryText && !deliveryReady ? 'Configure delivery' : undefined,
             })
@@ -421,7 +421,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             setResult({
                 ok: rebuildOutcome.ok,
                 message: rebuildOutcome.ok
-                    ? `Collected ${captureCount} Telegram captures. Rebuilt ${savedAlertCount} alerts.`
+                    ? `Collected ${captureCount} Telegram captures. Matched ${savedAlertCount} events.`
                     : rebuildOutcome.message,
             })
             setLastRoute({
@@ -473,7 +473,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             const captureCount = readNumber(run.canaryRun, 'insertedCaptureCount')
             const savedAlertCount = typeof rebuild.savedAlertCount === 'number' ? rebuild.savedAlertCount : 0
             setTerms(nextTerms)
-            setResult({ ok: true, message: `Added ${createdCount} Telegram canary source(s), skipped ${duplicateCount} duplicate(s), collected ${captureCount} capture(s), rebuilt ${savedAlertCount} alert(s).` })
+            setResult({ ok: true, message: `Added ${createdCount} Telegram canary source(s), skipped ${duplicateCount} duplicate(s), collected ${captureCount} capture(s), matched ${savedAlertCount} events.` })
             setLastRoute({
                 label: 'Telegram expansion',
                 watchTerms: countTerms(nextTerms),
@@ -556,7 +556,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             const message = failed
                 ? 'Webhook delivery recorded a failed attempt. Review delivery history before retrying.'
                 : deliveredCount
-                    ? `${deliveredCount} alert${deliveredCount === 1 ? '' : 's'} delivered to the configured destination.`
+                    ? `${deliveredCount} event${deliveredCount === 1 ? '' : 's'} delivered to the configured destination.`
                     : dryRunCount
                         ? 'Webhook delivery recorded a dry-run; no customer notification was sent.'
                         : skippedCount
@@ -596,8 +596,8 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 message: failed
                     ? 'Webhook test recorded a failed delivery attempt. Review delivery history before retrying.'
                     : dryRun
-                        ? 'Webhook test recorded a dry-run delivery. Future alerts can use this destination.'
-                        : 'Webhook test delivered. Future alerts can use this destination.',
+                        ? 'Webhook test recorded a dry-run delivery. Future events can use this destination.'
+                        : 'Webhook test delivered. Future events can use this destination.',
             })
             setLastRoute({
                 label: 'Webhook test',
@@ -643,13 +643,13 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     const sourceDisabledReason = sourceReady ? '' : 'Add a public Telegram handle or t.me URL first.'
     const claimDisabledReason = claimReady ? '' : 'Add the actor, affected company, exposure details, and an HTTPS source URL.'
     const webhookTestDisabledReason = webhookConfigured ? '' : 'Enter an HTTPS webhook URL before testing delivery.'
-    const webhookSendDisabledReason = webhookConfigured || organizationId ? '' : 'Enter an HTTPS webhook URL or open an organization with a saved delivery destination before sending queued alerts.'
+    const webhookSendDisabledReason = webhookConfigured || organizationId ? '' : 'Enter an HTTPS webhook URL or open an organization with a saved delivery destination before sending queued events.'
     const routeQueue = [
         {
             id: 'watchlist',
             label: 'Watchlist',
             state: termCount ? `${termCount} terms` : 'terms needed',
-            detail: termCount ? 'Save your watchlist and find matching alerts.' : 'Add company names, domains, brands or products to monitor.',
+            detail: termCount ? 'Save your watchlist and find matching events.' : 'Add company names, domains, brands or products to monitor.',
             tone: effectiveTermCount ? 'ok' : 'warn',
             command: termCount ? 'Save and rebuild' : 'Add terms',
             busy: busyAction === 'watchlist',
@@ -717,7 +717,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 <div className='flex flex-wrap items-start justify-between gap-3'>
                     <div className='min-w-0'>
                         <h3 className='text-sm font-semibold text-ui-text'>Commands</h3>
-                        <p className='mt-0.5 text-xs leading-5 text-ui-subtle'>Manage your watchlist, collect updates and send alerts.</p>
+                        <p className='mt-0.5 text-xs leading-5 text-ui-subtle'>Manage your watchlist, collect updates and send events.</p>
                     </div>
                     <div className='flex flex-wrap gap-2'>
                         {organizationId ? (
@@ -769,13 +769,13 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                     <div className='mt-3 flex flex-wrap gap-2'>
                         <button disabled={busy || Boolean(watchlistDisabledReason)} title={watchlistDisabledReason || undefined} className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'>
                             {busyAction === 'watchlist' ? <Loader2 className='h-4 w-4 animate-spin' /> : <RefreshCw className='h-4 w-4' />}
-                            Save and rebuild alerts
+                            Save and check events
                         </button>
                         <WorkflowButton busy={busyAction === 'collection'} disabled={busy} icon={<RefreshCw className='h-4 w-4' />} onClick={runCollection}>Run Telegram collection</WorkflowButton>
                         <WorkflowButton busy={busyAction === 'delivery'} disabled={busy || Boolean(webhookSendDisabledReason)} disabledReason={webhookSendDisabledReason || undefined} icon={<Send className='h-4 w-4' />} onClick={deliverWebhooks}>Send webhooks</WorkflowButton>
                         <WorkflowButton busy={busyAction === 'webhook-test'} disabled={busy || Boolean(webhookTestDisabledReason)} disabledReason={webhookTestDisabledReason} icon={<Send className='h-4 w-4' />} onClick={testWebhook}>Test webhook</WorkflowButton>
                     </div>
-                    {!termCount ? <p className='mt-2 text-xs leading-5 text-ui-warning'>No persisted watchlist terms. Add terms owned by this tenant before collecting or rebuilding alerts.</p> : null}
+                    {!termCount ? <p className='mt-2 text-xs leading-5 text-ui-warning'>No persisted watchlist terms. Add terms owned by this tenant before collecting or checking events.</p> : null}
                     {webhookTestDisabledReason ? <p className='mt-1 text-xs leading-5 text-ui-subtle'>{webhookTestDisabledReason}</p> : null}
                 </form>
 
@@ -783,7 +783,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                     <div className='flex items-start justify-between gap-3'>
                         <div>
                             <h2 className='text-base font-semibold text-ui-text'>Public incident evidence</h2>
-                            <p className='mt-1 text-sm leading-6 text-ui-subtle'>Fetch a public incident report, retain its publisher timestamp, and rebuild matching alerts.</p>
+                            <p className='mt-1 text-sm leading-6 text-ui-subtle'>Fetch a public incident report, retain its publisher timestamp, and create cases for matching events.</p>
                         </div>
                         <ShieldCheck className='h-5 w-5 text-ui-primary' />
                     </div>
@@ -981,7 +981,7 @@ function RouteRunSummary({ route, organizationId }: { route: WorkflowRouteSummar
         { label: 'Watch terms', value: String(route.watchTerms) },
         { label: 'Sources', value: route.sourceCount === undefined ? 'unchanged' : String(route.sourceCount) },
         { label: 'Captures', value: route.captureCount === undefined ? 'pending' : String(route.captureCount) },
-        { label: 'Alerts', value: route.alertCount === undefined ? 'pending' : String(route.alertCount) },
+        { label: 'Events', value: route.alertCount === undefined ? 'pending' : String(route.alertCount) },
         { label: 'Case', value: route.caseId ? 'case linked' : 'not opened' },
         { label: 'Delivery', value: route.deliveryAttempts === undefined ? route.deliveryState || 'not run' : `${route.deliveryAttempts} attempt${route.deliveryAttempts === 1 ? '' : 's'}` },
     ]
@@ -1003,7 +1003,7 @@ function RouteRunSummary({ route, organizationId }: { route: WorkflowRouteSummar
                             Open delivery log
                         </Link>
                     ) : null}
-                    {route.alertId ? <span className='inline-flex h-8 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-muted'>alert linked</span> : null}
+                    {route.alertId ? <span className='inline-flex h-8 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-muted'>event linked</span> : null}
                 </div>
             </div>
             <div className='mt-3 grid grid-cols-2 gap-2 lg:grid-cols-6'>

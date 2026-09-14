@@ -1920,7 +1920,7 @@ function OrgActionStrip({ organizationId, alertId, canManage, hasWatchlists, has
                 : undefined,
     })
     if (alertId) actions.push({ href: `/ti/workbench?alertId=${encodeURIComponent(alertId)}&organizationId=${encodeURIComponent(organizationId)}`, icon: <CircleAlert className='h-4 w-4' />, label: 'Open DWM alert' })
-    actions.push({ href: `/mill?organizationId=${encodeURIComponent(organizationId)}`, icon: <ShieldCheck className='h-4 w-4' />, label: hasMillKey ? 'Open Security Monitoring' : 'Open Security Monitoring · key needed' })
+    actions.push({ href: `/cases?organizationId=${encodeURIComponent(organizationId)}`, icon: <ShieldCheck className='h-4 w-4' />, label: 'Open cases' })
     if (hasDestination || hasWatchlists) actions.push({ href: '#audit', icon: <CheckCircle2 className='h-4 w-4' />, label: 'Audit' })
     const nextStep = !canManage
         ? 'Owner or admin access unlocks setup actions.'

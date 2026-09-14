@@ -191,6 +191,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     onStartupPhase?.("source_keys_backfilled");
     await this.syncOrganizationWatchlists();
     onStartupPhase?.("organization_watchlists_synced");
+    this.backfillDwmCases();
+    await this.flush();
+    onStartupPhase?.("monitoring_cases_backfilled");
   }
 
   async batch<T>(write: () => T | Promise<T>): Promise<T> {

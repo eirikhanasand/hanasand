@@ -97,7 +97,7 @@ type AnalystCase = {
   id: string;
   tenantId: string;
   organizationId?: string;
-  sourceType: "dwm_alert" | "ti_actor" | "manual";
+  sourceType: "dwm_alert" | "ti_actor" | "manual" | "security_detection";
   sourceId: string;
   alertId?: string;
   title: string;
@@ -1333,7 +1333,7 @@ function caseListItem(caseRecord: AnalystCase, options: ApiServerOptions, access
   return {
     id: caseRecord.id,
     caseId: caseRecord.id,
-    source: caseRecord.sourceType === "manual" ? "manual" : "intelligence",
+    source: caseRecord.sourceType === "security_detection" ? "security" : caseRecord.sourceType === "manual" ? "manual" : "intelligence",
     title: caseRecord.title,
     summary: caseRecord.summary,
     status: caseRecord.status,

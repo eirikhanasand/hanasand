@@ -169,7 +169,7 @@ type PortalProps = {
     view?: DwmView
 }
 
-export type DwmView = 'overview' | 'cases' | 'watchlists' | 'sources' | 'delivery' | 'actors' | 'actions' | 'alerts'
+export type DwmView = 'overview' | 'cases' | 'watchlists' | 'sources' | 'delivery' | 'actors' | 'actions'
 
 export type DwmDataHealth = {
     snapshot: DataHealthItem
@@ -265,9 +265,7 @@ export function DwmAnalystPortal({
     useEffect(() => {
         const controller = new AbortController()
         const params = dwmScopeSearchParams(tenantId, organizationId)
-        if (view === 'alerts') {
-            void refreshDwmAlerts(params, controller.signal, setAlerts, setDataHealth)
-        } else if (view === 'cases') {
+        if (view === 'cases') {
             void refreshCases(params, controller.signal, setCasesState)
             void refreshDwmOperations(params, controller.signal, setOperations, setDataHealth)
             void refreshDwmAlerts(params, controller.signal, setAlerts, setDataHealth)
@@ -333,27 +331,6 @@ export function DwmAnalystPortal({
         }
     }
 
-    async function openCaseFromAlert(alert: PortalAlert, assignedOwner?: string, note?: string) {
-        await runAction(`case:${alert.id}`, async () => {
-            const response = await fetch(`/api/dwm/alerts/${encodeURIComponent(alert.id)}/case-handoff`, {
-                method: 'POST',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify(scopeBody({
-                    alertId: alert.id,
-                    assignedOwner: assignedOwner?.trim() || undefined,
-                    note: note?.trim() || 'Case opened from the retained alert.',
-                    idempotencyKey: `dashboard-alert-case:${alert.id}`,
-                }, tenantId, alertOrganizationId(alert, organizationId))),
-            })
-            const payload = await readPayload(response)
-            if (!response.ok) throw new Error(payload.error?.message || response.statusText)
-            const caseId = payload.case?.id || payload.alertCaseHandoff?.caseId
-            if (!caseId) throw new Error('The alert was saved, but no case id was returned.')
-            router.push(caseDetailHref(caseId, alert.id, alertOrganizationId(alert, organizationId), 'alert_queue'))
-            return 'Case opened.'
-        })
-    }
-
     if (view === 'watchlists') {
         return (
             <div className='grid gap-4'>
@@ -395,9 +372,8 @@ export function DwmAnalystPortal({
 
     if (view === 'overview') {
         return <MonitoringOverview snapshot={snapshot} operations={operations} alerts={alerts} dataHealth={dataHealth}
-            organizationId={organizationId} initialAlertId={initialAlertId} busyAction={busyAction} actionMessage={actionMessage}
-            onRefresh={() => setRefreshVersion(version => version + 1)} onOpenCase={openCaseFromAlert}
-            canOpenCase={alert => actionReady(alert, 'case_link') && alertCaptureIds(alert).length > 0}
+            organizationId={organizationId} initialAlertId={initialAlertId} actionMessage={actionMessage}
+            onRefresh={() => setRefreshVersion(version => version + 1)}
             caseHref={alert => { const id = alertCaseId(alert); return id ? caseDetailHref(id, alert.id, alertOrganizationId(alert, organizationId), 'alert_queue') : undefined }} />
     }
 
@@ -411,58 +387,11 @@ export function DwmAnalystPortal({
 
     if (view === 'actions') return workflowActions
 
-    if (view === 'alerts') {
-        return <div className='grid gap-3'>
-            {actionMessage && <p role='alert' className={`rounded-lg border p-3 text-sm ${actionMessage.ok ? 'border-ui-border text-ui-text' : 'border-ui-danger text-ui-danger'}`}>{actionMessage.text}</p>}
-            <AlertReviewPanel alerts={alerts} busyAction={busyAction} onOpenCase={openCaseFromAlert} organizationId={organizationId} health={dataHealth.alerts} onRetry={() => setRefreshVersion(version => version + 1)} />
-        </div>
-    }
-
     if (view === 'cases') {
         return <CaseOverview organizationId={organizationId} state={casesState} alerts={alerts} operations={operations} isAdmin={isAdmin} />
     }
 
     return null
-}
-
-function AlertReviewPanel({ alerts, busyAction, onOpenCase, organizationId, health, onRetry }: {
-    alerts: PortalAlert[]
-    busyAction: string | null
-    onOpenCase: (alert: PortalAlert) => Promise<void>
-    organizationId?: string
-    health: DataHealthItem
-    onRetry: () => void
-}) {
-    return (
-        <section id='dwm-alert-review' className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
-            <div className='border-b border-ui-border px-4 py-3'>
-                <h1 className='text-lg font-semibold text-ui-text'>Matched alerts</h1>
-                <p className='mt-1 text-xs leading-5 text-ui-muted'>Alerts matching your watchlist.</p>
-            </div>
-            {health.state === 'error' ? <div role='alert' className='px-4 py-6 text-sm text-ui-danger'>Alerts could not be loaded. <button type='button' onClick={onRetry} className='ml-2 underline'>Retry</button></div> : health.state !== 'live' ? <p className='px-4 py-8 text-sm text-ui-muted'>Loading matched alerts…</p> : !alerts.length ? <p className='px-4 py-8 text-sm text-ui-muted'>No alerts yet.</p> : (
-                <div className='divide-y divide-ui-border'>
-                    {alerts.map(alert => {
-                        const caseId = alertCaseId(alert)
-                        const evidenceCount = alert.evidenceSummary?.evidenceCount ?? alert.provenance?.captureIds?.length ?? 0
-                        const href = caseId ? caseDetailHref(caseId, alert.id, alertOrganizationId(alert, organizationId), 'alert_queue') : undefined
-                        return (
-                            <div key={alert.id} className='flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between'>
-                                <div className='min-w-0'>
-                                    <p className='wrap-break-word text-sm font-semibold text-ui-text'>{alert.company || alert.matchedTerm?.value || 'Unlabeled match'}</p>
-                                    <p className='mt-1 wrap-break-word text-xs text-ui-muted'>{stateLabel(alert.severity)} · {stateLabel(alert.sourceFamily)} · {evidenceCount} evidence row{evidenceCount === 1 ? '' : 's'}</p>
-                                </div>
-                                {href ? <Link href={href} className='inline-flex min-h-9 items-center justify-center rounded-lg border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text'>Open case</Link> : (
-                                    <button type='button' onClick={() => void onOpenCase(alert)} disabled={busyAction === `case:${alert.id}` || !actionReady(alert, 'case_link') || alertCaptureIds(alert).length === 0} className='inline-flex min-h-9 items-center justify-center rounded-lg bg-ui-primary px-3 text-xs font-semibold text-ui-canvas disabled:cursor-wait disabled:opacity-60'>
-                                        {busyAction === `case:${alert.id}` ? 'Opening…' : 'Open case'}
-                                    </button>
-                                )}
-                            </div>
-                        )
-                    })}
-                </div>
-            )}
-        </section>
-    )
 }
 
 function CaseOverview({ organizationId, state, alerts, operations, isAdmin }: { organizationId?: string, state: CasesState, alerts: PortalAlert[], operations: OperationsSnapshot | null, isAdmin?: boolean }) {
@@ -497,7 +426,7 @@ function CaseOverview({ organizationId, state, alerts, operations, isAdmin }: { 
                 {state.status === 'ready' && !state.rows.length && (
                     <div className='flex min-h-56 flex-col items-center justify-center gap-1 px-4 py-16 text-center text-ui-muted' data-dwm-cases-empty='true'>
                         <p className='font-semibold text-ui-text'>No cases.</p>
-                        <p className='max-w-md text-sm leading-6'>No alert is waiting for review. Cases appear after an alert is saved and opened for investigation.</p>
+                        <p className='max-w-md text-sm leading-6'>No cases yet. Matching monitoring events create cases automatically.</p>
                     </div>
                 )}
                 {state.status === 'ready' && state.rows.length > 0 && filteredRows.length === 0 && <div className='px-4 py-10 text-center text-sm text-ui-muted'>No cases match the current filters.</div>}
@@ -636,7 +565,7 @@ async function refreshDwmProduct(
             return
         }
         setSnapshot(await response.json() as DwmProductSnapshot)
-        setDataHealth(current => ({ ...current, snapshot: { state: 'live', label: 'Dark web stream live', detail: 'The exposure monitor is showing live watchlists, sources, actors, and alerts.' } }))
+        setDataHealth(current => ({ ...current, snapshot: { state: 'live', label: 'Dark web stream live', detail: 'The exposure monitor is showing live watchlists, sources, actors, and events.' } }))
     } catch (error) {
         if (!isAbortError(error)) setDataHealth(current => ({ ...current, snapshot: { state: 'error', label: 'Monitoring unavailable', detail: requestFailureDetail(error) } }))
     }
@@ -672,15 +601,15 @@ async function refreshDwmAlerts(
         const response = await fetch(`/api/dwm/alerts?${params.toString()}`, { cache: 'no-store', signal })
         if (!response.ok) {
             const detail = await responseProblem(response)
-            setDataHealth(current => ({ ...current, alerts: { state: 'error', label: 'Alerts unavailable', detail } }))
+            setDataHealth(current => ({ ...current, alerts: { state: 'error', label: 'Events unavailable', detail } }))
             return
         }
         const payload = await response.json() as { alerts?: PortalAlert[] }
         const savedAlerts = payload.alerts || []
         setAlerts(savedAlerts)
-        setDataHealth(current => ({ ...current, alerts: { state: 'live', label: 'Alerts live', detail: `${savedAlerts.length} saved alert(s).` } }))
+        setDataHealth(current => ({ ...current, alerts: { state: 'live', label: 'Events live', detail: `${savedAlerts.length} recorded events.` } }))
     } catch (error) {
-        if (!isAbortError(error)) setDataHealth(current => ({ ...current, alerts: { state: 'error', label: 'Alerts unavailable', detail: requestFailureDetail(error) } }))
+        if (!isAbortError(error)) setDataHealth(current => ({ ...current, alerts: { state: 'error', label: 'Events unavailable', detail: requestFailureDetail(error) } }))
     }
 }
 
@@ -788,7 +717,7 @@ function WorkflowRouteStrip({ watchTermCount, activeSourceCount, sourceCount, ca
         { label: 'Sources', value: `${activeSourceCount}/${sourceCount}`, detail: sourceCount ? 'shared active coverage' : 'load source pack', tone: activeSourceCount ? 'ready' : 'blocked' },
         { label: 'Captures', value: `${captureCount}`, detail: latestRunLabel, tone: captureCount ? 'ready' : 'waiting' },
         { label: 'Matches', value: `${watchlistMatchCount}`, detail: alertCount ? `${alertCount} alerts` : 'watching', tone: alertCount ? 'ready' : 'waiting' },
-        { label: 'Cases', value: `${caseCount}`, detail: caseCount ? 'linked' : 'open from alert', tone: caseCount ? 'ready' : alertCount ? 'waiting' : 'blocked' },
+        { label: 'Cases', value: `${caseCount}`, detail: caseCount ? 'linked' : 'created automatically', tone: caseCount ? 'ready' : alertCount ? 'waiting' : 'blocked' },
         { label: 'Delivery', value: deliveryCount ? `${deliveryCount}` : webhookState, detail: deliveryCount ? 'attempts' : 'test delivery', tone: deliveryCount || webhookReady(webhookState) ? 'ready' : 'waiting' },
     ] as const
 
@@ -846,7 +775,7 @@ function PublicTiDwmIntake({ handoff, tenantId, organizationId, activeSourceCoun
 }) {
     const sourceHref = '/ti/sources'
     const orgHref = organizationId ? `/organizations?organizationId=${encodeURIComponent(organizationId)}` : `/organizations?tenantId=${encodeURIComponent(tenantId)}`
-    const actionsHref = organizationId ? `/dwm/alerts?organizationId=${encodeURIComponent(organizationId)}` : '/dwm/alerts'
+    const actionsHref = organizationId ? `/cases?organizationId=${encodeURIComponent(organizationId)}` : '/cases'
     const casesHref = organizationId ? `/cases?organizationId=${encodeURIComponent(organizationId)}` : '/cases'
 
     if (!handoff.ok) {
@@ -876,7 +805,7 @@ function PublicTiDwmIntake({ handoff, tenantId, organizationId, activeSourceCoun
         {
             label: 'Watchlist',
             value: terms.length ? `${terms.length} term${terms.length === 1 ? '' : 's'}` : 'term needed',
-            detail: terms.join(', ') || 'Add a scoped organization term before alert rebuild.',
+            detail: terms.join(', ') || 'Add a scoped organization term before checking events.',
             href: orgHref,
             tone: terms.length && organizationId ? 'ready' : 'blocked',
         },
@@ -1160,7 +1089,7 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, busyAc
                 <CaseBrief label='What happened' value={customerAlertSummary(alert)} />
                 <CaseBrief label='Next action' value={alert.recommendedAction} />
                 {alert.workflowNote && <CaseBrief label='Latest note' value={alert.workflowNote} />}
-                <CaseBrief label='Delivery destination' value={`${stateLabel(alert.webhookDelivery.recommendedRoute)} · ${alert.webhookDelivery.dedupeKey ? 'deduplicated alert' : 'pending alert key'}`} />
+                <CaseBrief label='Delivery destination' value={`${stateLabel(alert.webhookDelivery.recommendedRoute)} · ${alert.webhookDelivery.dedupeKey ? 'deduplicated event' : 'pending event key'}`} />
             </section>
 
             <InvestigationTabs active={investigationTab} onChange={setInvestigationTab} />
@@ -1365,7 +1294,7 @@ function WorkflowSpine({ alert, deliveries, workflowContext, evidenceSummary, bu
             id: 'case',
             label: 'Case',
             value: actualCaseId || caseCandidate || 'not opened',
-            detail: actualCaseId ? 'Case file is linked to this alert.' : canOpenCase ? 'Open the case to preserve analyst work.' : 'Evidence is required before case delivery.',
+            detail: actualCaseId ? 'Case file is linked to this event.' : canOpenCase ? 'Open the case to preserve analyst work.' : 'Evidence is required before case delivery.',
             state: actualCaseId ? 'ready' : canOpenCase ? 'action' : 'blocked',
             action: actualCaseId || !canOpenCase ? undefined : {
                 label: 'Open case',
@@ -1688,7 +1617,7 @@ function SourceProvenancePanel({ sourceFamilies, sourceFilter, selectedEvidence,
                         </tbody>
                     </table>
                 </div>
-                {!visibleEvidence.length && <p className='rounded-lg border border-dashed border-ui-border bg-ui-raised p-3 text-sm text-ui-muted'>Choose another source family or rebuild alerts.</p>}
+                {!visibleEvidence.length && <p className='rounded-lg border border-dashed border-ui-border bg-ui-raised p-3 text-sm text-ui-muted'>Choose another source family or check events.</p>}
             </div>
         </div>
     )
@@ -2107,9 +2036,9 @@ function NoCaseWorkspace({ latestCaptures, workflowActions, watchTermCount, data
         },
         {
             stage: 'Case link',
-            state: 'Select or rebuild alert',
-            action: 'Rebuild alerts',
-            detail: 'Matches become reviewable alerts with evidence, provenance, and delivery state.',
+            state: 'Select an event',
+            action: 'Check events',
+            detail: 'Matches with source evidence create cases automatically.',
         },
         {
             stage: 'Delivery',
@@ -2127,7 +2056,7 @@ function NoCaseWorkspace({ latestCaptures, workflowActions, watchTermCount, data
                 <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border bg-ui-raised px-4 py-3'>
                     <div>
                         <p className='text-[10px] font-semibold uppercase text-ui-primary'>Exposure operations</p>
-                        <h3 className='mt-1 text-base font-semibold text-ui-text'>Monitoring for reviewable alerts</h3>
+                        <h3 className='mt-1 text-base font-semibold text-ui-text'>Monitoring for matching events</h3>
                     </div>
                     <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${hasError ? 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger' : allLive && watchTermCount ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'}`}>{monitoringLabel}</span>
                 </div>
@@ -2254,7 +2183,7 @@ function DeliveryPanel({ alert, deliveries, busyAction, onTest, onSend }: { aler
         return (
             <section className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-6 text-center'>
                 <h2 className='text-base font-semibold text-ui-text'>Create an organization to set up integrations</h2>
-                <p className='mx-auto max-w-md text-sm leading-6 text-ui-muted'>Send events and alerts to the tools your organization already uses.</p>
+                <p className='mx-auto max-w-md text-sm leading-6 text-ui-muted'>Send events and case updates to the tools your organization already uses.</p>
                 <div><Link href='/organizations' className='inline-flex min-h-9 items-center rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>Create organization</Link></div>
                 <div className='grid gap-2 text-left sm:grid-cols-3'>
                     {['Slack', 'Microsoft Teams', 'Webhook'].map(preset => <Link key={preset} href='/organizations' className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-xs font-semibold text-ui-muted'>{preset}<span className='mt-1 block font-normal'>Available after setup</span></Link>)}
@@ -2306,7 +2235,7 @@ function DeliveryPanel({ alert, deliveries, busyAction, onTest, onSend }: { aler
                 <div className='grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3'>
                     <div>
                         <p className='text-sm font-semibold text-ui-text'>Integration presets</p>
-                        <p className='mt-1 text-xs text-ui-muted'>Start with a common destination, then test it before sending alerts.</p>
+                        <p className='mt-1 text-xs text-ui-muted'>Start with a common destination, then test it before sending events.</p>
                     </div>
                     <div className='grid gap-2 sm:grid-cols-3'>
                         {['Slack', 'Microsoft Teams', 'Webhook'].map(preset => <a key={preset} href={`${orgHref}&preset=${encodeURIComponent(preset.toLowerCase().replaceAll(' ', '_'))}`} className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-ui-text transition hover:border-ui-primary'>{preset}<span className='mt-1 block font-normal text-ui-muted'>Configure preset</span></a>)}
@@ -2345,7 +2274,7 @@ function DeliveryPanel({ alert, deliveries, busyAction, onTest, onSend }: { aler
                     <div className='grid gap-3 rounded-lg border border-dashed border-ui-border bg-ui-raised p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center' data-dwm-delivery-empty='true'>
                         <div className='min-w-0'>
                             <p className='text-sm font-semibold text-ui-text'>No delivery attempt yet</p>
-                            <p className='mt-1 text-xs leading-5 text-ui-muted'>Configure or test a destination before sending this alert to a customer process.</p>
+                            <p className='mt-1 text-xs leading-5 text-ui-muted'>Configure or test a destination before sending this event to a customer process.</p>
                         </div>
                         <a href={orgHref} className='inline-flex min-h-9 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-canvas'>
                             Configure delivery
@@ -2571,7 +2500,7 @@ function shortTime(value: string | undefined) {
 function CaseButton({ busy, disabled = false, disabledReason, icon, onClick, children }: { busy: boolean, disabled?: boolean, disabledReason?: string, icon: 'review' | 'ready' | 'replay' | 'send' | 'false' | 'case', onClick: () => void, children: string }) {
     const Icon = busy ? Loader2 : icon === 'case' ? FolderOpen : icon === 'send' ? Send : icon === 'false' ? XCircle : icon === 'replay' ? RotateCcw : icon === 'ready' ? CheckCircle2 : Play
     return (
-        <button type='button' onClick={onClick} disabled={busy || disabled} title={disabled ? disabledReason || 'Action is not available for this alert state.' : undefined} className='inline-flex h-9 min-w-0 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text transition hover:bg-ui-canvas disabled:cursor-not-allowed disabled:opacity-60 sm:px-3'>
+        <button type='button' onClick={onClick} disabled={busy || disabled} title={disabled ? disabledReason || 'Action is not available for this event state.' : undefined} className='inline-flex h-9 min-w-0 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text transition hover:bg-ui-canvas disabled:cursor-not-allowed disabled:opacity-60 sm:px-3'>
             <Icon className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} />
             {children}
         </button>
@@ -2727,7 +2656,7 @@ function actionUnavailableReason(alert: PortalAlert, action: DwmAlertAnalystActi
     const row = actionState.actions?.find(item => item.action === action)
     const blocker = row?.blockerCodes?.length ? `${row.blockerCodes.map(stateLabel).slice(0, 2).join(', ')}.` : ''
     if (blocker) return blocker
-    if (actionState.blockedActions?.includes(action)) return 'This action needs the current alert state to move forward.'
+    if (actionState.blockedActions?.includes(action)) return 'This action needs the current event state to move forward.'
     return undefined
 }
 

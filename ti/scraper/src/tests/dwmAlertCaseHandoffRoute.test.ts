@@ -3,6 +3,12 @@ import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 
+// These fixtures represent retained records from before automatic case creation.
+// New-event behavior is covered by dwmAutomaticCases.test.ts.
+class LegacyEventStore extends InMemoryScraperStore {
+  seedLegacyEvent(event: any) { return this.hydrateWithoutOrganizationWriteGuard(() => super.saveDwmAlert(event)); }
+}
+
 describe("DWM alert case handoff route", () => {
   test("opens and reuses an org-scoped case from a provenanced alert", async () => {
     const { options, store } = fixtureRuntime();
@@ -565,7 +571,7 @@ describe("DWM alert case handoff route", () => {
 
   test("keeps case handoff usable while blocking webhook dry-run without a destination", async () => {
     const { options, store } = fixtureRuntime();
-    store.saveDwmAlert({
+    store.seedLegacyEvent({
       ...provenancedAlert(),
       id: "alert_no_destination",
       caseIdCandidate: "case_alert_no_destination",
@@ -978,7 +984,7 @@ describe("DWM alert case handoff route", () => {
       readOnly: false,
       summary: {
         enabledActionIds: expect.arrayContaining(["note", "review", "assign", "escalate", "close", "suppress", "false_positive"]),
-        blockedActionIds: ["reopen"],
+        blockedActionIds: ["confirm_resolution", "reopen"],
         blockerCodes: ["not_applicable_for_status"]
       }
     });
@@ -1008,7 +1014,7 @@ describe("DWM alert case handoff route", () => {
         workflowActionPolicySummary: {
           schemaVersion: "analyst.case_workflow_action_policy.v1",
           enabledActionIds: expect.arrayContaining(["note", "review", "assign", "escalate", "close", "suppress", "false_positive"]),
-          blockedActionIds: ["reopen"],
+          blockedActionIds: ["confirm_resolution", "reopen"],
           blockerCodes: ["not_applicable_for_status"],
           readOnly: false
         }
@@ -1028,8 +1034,8 @@ describe("DWM alert case handoff route", () => {
       },
       replayPlan: {
         workflowTransitionCount: 1,
-        enabledWorkflowActionCount: 7,
-        blockedWorkflowActionCount: 1,
+        enabledWorkflowActionCount: 8,
+        blockedWorkflowActionCount: 2,
         handoffReceiptCount: 0,
         customerNotificationCount: 0,
         auditTimelineRowCount: 1
@@ -1038,7 +1044,7 @@ describe("DWM alert case handoff route", () => {
         schemaVersion: "analyst.case_workflow_action_policy.v1",
         summary: {
           enabledActionIds: expect.arrayContaining(["note", "review", "assign", "escalate"]),
-          blockedActionIds: ["reopen"]
+          blockedActionIds: ["confirm_resolution", "reopen"]
         }
       },
       auditTimeline: {
@@ -1335,7 +1341,7 @@ describe("DWM alert case handoff route", () => {
       summary: {
         enabledActionIds: ["note", "reopen"],
         blockedActionIds: expect.arrayContaining(["assign", "escalate", "close", "suppress", "false_positive"]),
-        blockerCodes: ["invalid_case_transition"]
+        blockerCodes: ["not_applicable_for_status", "invalid_case_transition"]
       }
     });
     expect(detailAfterFalsePositivePayload.workflowActionPolicy.actions).toEqual(expect.arrayContaining([
@@ -1394,15 +1400,15 @@ describe("DWM alert case handoff route", () => {
       "reopen"
     ]);
     expect(replayExportPayload.replayPlan).toMatchObject({
-      enabledWorkflowActionCount: 7,
-      blockedWorkflowActionCount: 1
+      enabledWorkflowActionCount: 8,
+      blockedWorkflowActionCount: 2
     });
     expect(replayExportPayload.workflowActionPolicy).toMatchObject({
       schemaVersion: "analyst.case_workflow_action_policy.v1",
       status: "open",
       summary: {
         enabledActionIds: expect.arrayContaining(["note", "review", "assign", "escalate", "close", "suppress", "false_positive"]),
-        blockedActionIds: ["reopen"],
+        blockedActionIds: ["confirm_resolution", "reopen"],
         blockerCodes: ["not_applicable_for_status"]
       }
     });
@@ -1467,7 +1473,7 @@ describe("DWM alert case handoff route", () => {
         actionIds: ["open", "false_positive", "reopen"],
         actorIds: ["owner@acme.com"],
         enabledActionIds: expect.arrayContaining(["note", "review", "assign", "escalate", "close", "suppress", "false_positive"]),
-        blockedActionIds: ["reopen"],
+        blockedActionIds: ["confirm_resolution", "reopen"],
         readOnly: false
       },
       workflowTransitionHistory: {
@@ -2201,7 +2207,7 @@ describe("DWM alert case handoff route", () => {
       sourceId: "alert_missing",
       workflowEvents: []
     });
-    store.saveDwmAlert({
+    store.seedLegacyEvent({
       ...provenancedAlert(),
       id: "alert_no_destination",
       caseIdCandidate: "case_alert_no_destination",
@@ -2347,7 +2353,7 @@ describe("DWM alert case handoff route", () => {
 
   test("blocks missing provenance, wrong org, and read-only members", async () => {
     const { options, store } = fixtureRuntime();
-    store.saveDwmAlert({
+    store.seedLegacyEvent({
       ...provenancedAlert(),
       id: "alert_no_provenance",
       evidence: [],
@@ -2446,14 +2452,14 @@ async function getWebhookReplayReadiness(options: ReturnType<typeof fixtureRunti
 }
 
 function fixtureRuntime() {
-  const store = new InMemoryScraperStore();
+  const store = new LegacyEventStore();
   store.saveOrganization({ id: "org_acme", tenantId: "tenant_acme", name: "Acme", slug: "acme", status: "active", createdAt: "2026-06-29T14:00:00.000Z", updatedAt: "2026-06-29T14:00:00.000Z" });
   store.saveOrganization({ id: "org_other", tenantId: "tenant_other", name: "Other", slug: "other", status: "active", createdAt: "2026-06-29T14:00:00.000Z", updatedAt: "2026-06-29T14:00:00.000Z" });
   store.saveOrganizationMember({ id: "member_owner", organizationId: "org_acme", email: "owner@acme.com", role: "owner", status: "active", createdAt: "2026-06-29T14:00:00.000Z", updatedAt: "2026-06-29T14:00:00.000Z" });
   store.saveOrganizationMember({ id: "member_admin", organizationId: "org_acme", email: "admin@acme.com", role: "admin", status: "active", createdAt: "2026-06-29T14:00:00.000Z", updatedAt: "2026-06-29T14:00:00.000Z" });
   store.saveOrganizationMember({ id: "member_member", organizationId: "org_acme", email: "member@acme.com", role: "member", status: "active", createdAt: "2026-06-29T14:00:00.000Z", updatedAt: "2026-06-29T14:00:00.000Z" });
   store.saveOrganizationMember({ id: "member_viewer", organizationId: "org_acme", email: "viewer@acme.com", role: "viewer", status: "active", createdAt: "2026-06-29T14:00:00.000Z", updatedAt: "2026-06-29T14:00:00.000Z" });
-  store.saveDwmAlert(provenancedAlert());
+  store.seedLegacyEvent(provenancedAlert());
   return { store, options: { store, frontier: new FocusedFrontier() } };
 }
 
