@@ -6,7 +6,7 @@ import { DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import { requestJson, type MillRule } from '../detection-rules'
 
 type Audit = { id: string, event_type: string, actor_id: string | null, created_at: string, context: { before?: Record<string, unknown> | null, after?: Record<string, unknown>, action?: string } }
-type Payload = { rule: MillRule, canEdit: boolean, audit: Audit[], nextOffset: number | null }
+type Payload = { triggerCount: number, rule: MillRule, canEdit: boolean, audit: Audit[], nextOffset: number | null }
 const fieldClass = 'mt-1 w-full min-w-0 rounded-lg border border-ui-border bg-ui-canvas p-3 text-sm disabled:opacity-70'
 
 export default function RuleDetails({ id, organizationId }: { id: string, organizationId: string }) {
@@ -59,7 +59,7 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
         {status && <p role='status'>{status}</p>}
         {!draft && !error && <p role='status'>Loading rule…</p>}
         {draft && data && <>
-            <header><h1 className='text-2xl font-semibold'>{data.rule.name}</h1><p className='mt-2 break-all font-mono text-sm text-ui-muted'>{draft.id} · Version {draft.version}</p><p className='mt-2 text-sm text-ui-muted'>{draft.family} · {draft.source === 'hanasand' ? 'Hanasand rule' : draft.source === 'open_source' ? 'Imported rule' : 'Custom rule'}</p></header>
+            <header><h1 className='text-2xl font-semibold'>{data.rule.name}</h1><p className='mt-2 break-all font-mono text-sm text-ui-muted'>{draft.id} · Version {draft.version}</p><p className='mt-2 text-sm text-ui-muted'>{draft.family} · {draft.source === 'hanasand' ? 'Hanasand rule' : draft.source === 'open_source' ? 'Imported rule' : 'Custom rule'}</p><dl className='mt-4 flex items-baseline gap-2'><dt className='text-sm text-ui-muted'>Trigger count</dt><dd className='text-xl font-semibold tabular-nums'>{data.triggerCount?.toLocaleString() ?? 'Unavailable'}</dd></dl><p className='mt-1 text-xs text-ui-muted'>Recorded detections for this organization across all versions, including resolved detections.</p></header>
             <DashboardPanel className='p-4 sm:p-6'>
                 <form onSubmit={event => { event.preventDefault(); void save() }} className='grid gap-5'>
                     {!data.canEdit && <p className='text-sm text-ui-muted'>You can view this rule and its history. An organization owner or admin can edit it.</p>}
