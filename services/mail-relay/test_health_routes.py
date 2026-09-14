@@ -27,8 +27,8 @@ class HealthRouteTests(unittest.TestCase):
     def test_each_gateway_reads_its_local_relay_and_verifies_the_fixed_peer(self):
         for site, peer in [('inspur', 'ovh'), ('ovh', 'inspur')]:
             config = routes.routes(site, REVISION)
-            self.assertIn(f'proxy_pass http://127.0.0.1:{routes.SITES[site][1]}/health?;', config)
-            self.assertIn(f'proxy_pass https://{routes.SITES[peer][0]}/api/mail-relay/{peer}/health?;', config)
+            self.assertIn(f'proxy_pass http://127.0.0.1:{routes.SITES[site][1]}/health;', config)
+            self.assertIn(f'proxy_pass https://{routes.SITES[peer][0]}/api/mail-relay/{peer}/health;', config)
             self.assertIn('proxy_ssl_verify on;', config)
             self.assertIn('proxy_ssl_name api.hanasand.com;', config)
             self.assertNotIn('hanasand_recovery_api', config)

@@ -29,7 +29,7 @@ def routes(site, revision):
         limit_except GET {{ deny all; }}
         limit_req zone=mail_relay_health burst=10 nodelay;
         limit_req_status 429;
-        proxy_pass {endpoint}?;
+        proxy_pass {endpoint};
         proxy_pass_request_headers off;
         proxy_pass_request_body off;
         proxy_set_header Host api.hanasand.com;
