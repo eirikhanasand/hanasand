@@ -3,8 +3,10 @@
 import { AlertTriangle, Activity, Database, Server, ShieldAlert, TerminalSquare, Bug } from 'lucide-react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import type { ReactNode } from 'react'
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Component, createRef, Fragment, useEffect, useMemo, useState } from 'react'
 import config from '@/config'
+import { displayLogServiceName } from '@/utils/logs/displayServiceName'
+import { logKey, mergeRuntimeLogs } from '@/utils/logs/retainLogs'
 import { dashboardPanelClass } from '@/components/dashboard/ui'
 import type { ErrorEventsResponse, LogRealtimeResponse, RuntimeLog, ServiceLog, LogService } from '@/utils/logs/getLogs'
 
@@ -57,11 +59,15 @@ export default function LogsPageClient({
     const [errorEvents] = useState(initialErrors)
     const [services] = useState(initialServices)
     const [realtime, setRealtime] = useState(initialRealtime)
+    const [receivedLogs, setReceivedLogs] = useState(initialRealtime.logs)
 
     useEffect(() => {
         let cancelled = false
+        let refreshing = false
 
         async function refresh() {
+            if (refreshing) return
+            refreshing = true
             const params = new URLSearchParams({ limit: '300' })
             if (serviceFilter !== 'all') {
                 params.set('service', serviceFilter)
@@ -77,9 +83,12 @@ export default function LogsPageClient({
                 const body = await response.json() as LogRealtimeResponse
                 if (!cancelled) {
                     setRealtime(body)
+                    setReceivedLogs(previous => mergeRuntimeLogs(previous, body.logs))
                 }
             } catch {
                 // Keep the previous feed visible during polling failures.
+            } finally {
+                refreshing = false
             }
         }
 
@@ -93,9 +102,9 @@ export default function LogsPageClient({
 
     const liveLogs = useMemo(
         () => serviceFilter === 'all'
-            ? realtime.logs || []
-            : (realtime.logs || []).filter((log) => log.service === serviceFilter),
-        [realtime.logs, serviceFilter]
+            ? receivedLogs
+            : receivedLogs.filter((log) => log.service === serviceFilter),
+        [receivedLogs, serviceFilter]
     )
     const runtimeServices = useMemo(
         () => (realtime.logs || []).map((log) => log.service).filter(Boolean),
@@ -109,7 +118,8 @@ export default function LogsPageClient({
         ].filter(Boolean))).sort(),
         [runtimeServices, serviceFilter, services]
     )
-    const recentErrorCount = liveLogs.filter((log) => log.level === 'error' || log.level === 'fatal').length
+    const currentLogs = (realtime.logs || []).filter(log => serviceFilter === 'all' || log.service === serviceFilter)
+    const recentErrorCount = currentLogs.filter((log) => log.level === 'error' || log.level === 'fatal').length
     const generatedAt = realtime.generated_at ? when(realtime.generated_at) : 'Syncing'
     const errorsPastHour = errorEvents.summary.last_hour || 0
     const totalErrors = errorEvents.summary.total || 0
@@ -151,7 +161,7 @@ export default function LogsPageClient({
                             >
                                 <option value='all'>All services</option>
                                 {allServices.map((service) => (
-                                    <option key={service} value={service}>{service}</option>
+                                    <option key={service} value={service}>{displayLogServiceName(service)}</option>
                                 ))}
                             </select>
                         </div>
@@ -194,11 +204,11 @@ export default function LogsPageClient({
                 <details className='overflow-hidden' data-logs-metrics-disclosure>
                     <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-1.5 text-sm font-semibold text-ui-text transition hover:bg-ui-raised sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
                         <span>Operational counters</span>
-                        <span className='text-xs font-medium text-ui-muted'>{realtime.containers?.length || 0} containers, {liveLogs.length} live lines, {recentErrorCount} live errors</span>
+                        <span className='text-xs font-medium text-ui-muted'>{realtime.containers?.length || 0} containers, {currentLogs.length} live lines, {recentErrorCount} live errors</span>
                     </summary>
                     <section className='grid gap-3 border-t border-ui-border bg-ui-panel p-3 sm:grid-cols-2 xl:grid-cols-4' data-logs-metrics>
                         <SummaryCard icon={<Server className='h-4 w-4' />} label='Runtime containers' value={String(realtime.containers?.length || 0)} note='Live source' />
-                        <SummaryCard icon={<Activity className='h-4 w-4' />} label='Live log lines' value={String(liveLogs.length)} note='Rolling feed' />
+                        <SummaryCard icon={<Activity className='h-4 w-4' />} label='Live log lines' value={String(currentLogs.length)} note='Rolling feed' />
                         <SummaryCard icon={<AlertTriangle className='h-4 w-4' />} label='Live errors' value={String(recentErrorCount)} note='Error and fatal' />
                         <SummaryCard icon={<ShieldAlert className='h-4 w-4' />} label='Errors' value={String(totalErrors)} note={`${errorsPastHour} in the last hour`} />
                     </section>
@@ -222,7 +232,7 @@ export default function LogsPageClient({
 
             {view === 'dashboard' && (
                 <section className='grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]'>
-                    <LogFeedCard title='Live across running apps' icon={<TerminalSquare className='h-4 w-4 text-ui-success' />} logs={liveLogs.slice(0, 14)} empty='Container log lines stream in as apps write output.' expanded={expanded} onToggle={toggleLog} />
+                    <LogFeedCard key={serviceFilter} title='Realtime' icon={<TerminalSquare className='h-4 w-4 text-ui-success' />} logs={liveLogs} empty='Container log lines stream in as apps write output.' expanded={expanded} onToggle={toggleLog} />
                     <section className='grid gap-4'>
                         <div className={`${dashboardPanelClass} p-4`}>
                             <div className='flex items-center justify-between gap-3'>
@@ -233,7 +243,7 @@ export default function LogsPageClient({
                                 {services.slice(0, 8).map((service) => (
                                     <div key={service.service} className='flex items-center justify-between gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2'>
                                         <div className='min-w-0'>
-                                            <p className='truncate text-sm font-medium text-ui-text'>{service.service}</p>
+                                            <p className='truncate text-sm font-medium text-ui-text'>{displayLogServiceName(service.service)}</p>
                                             <p className='mt-0.5 text-xs text-ui-muted'>{when(service.last_seen)}</p>
                                         </div>
                                         <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-0.5 text-xs font-semibold text-ui-text'>{service.entries}</span>
@@ -256,7 +266,7 @@ export default function LogsPageClient({
             )}
 
             {view === 'live' && (
-                <LogFeedCard title='Realtime runtime feed' icon={<TerminalSquare className='h-4 w-4 text-ui-success' />} logs={liveLogs} empty='Container log lines stream in as apps write output.' tall expanded={expanded} onToggle={toggleLog} />
+                <LogFeedCard key={serviceFilter} title='Realtime' icon={<TerminalSquare className='h-4 w-4 text-ui-success' />} logs={liveLogs} empty='Container log lines stream in as apps write output.' expanded={expanded} onToggle={toggleLog} />
             )}
 
             {view === 'stored' && (
@@ -430,23 +440,23 @@ function LogFeedCard({
                 </div>
                 <span className='shrink-0 text-xs font-medium text-ui-muted'>{logs.length} rows</span>
             </div>
-            <div className={`divide-y divide-ui-border ${tall ? '' : 'max-h-[42rem] overflow-auto'}`}>
+            <LogFeedRows logs={logs} tall={tall}>
                 {logs.map((log) => {
-                    const key = String(log.id)
+                    const key = logKey(log)
                     const isOpen = expanded[key] ?? false
                     const hasMetadata = 'metadata' in log && Object.keys(log.metadata || {}).length > 0
 
                     return (
-                        <article key={log.id} className='min-w-0 bg-ui-panel px-3 py-2.5 transition hover:bg-ui-raised sm:px-4' data-logs-row>
+                        <article key={key} className='min-w-0 bg-ui-panel px-3 py-2.5 transition hover:bg-ui-raised sm:px-4' data-logs-row>
                             <div className='grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start'>
                                 <button
                                     type='button'
-                                    onClick={() => onToggle(log.id)}
+                                    onClick={() => onToggle(key)}
                                     className='min-w-0 text-left'
                                     aria-expanded={isOpen}
                                 >
                                     <div className='flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ui-muted'>
-                                        <span className='font-semibold text-ui-text'>{log.service}</span>
+                                        <span className='font-semibold text-ui-text'>{displayLogServiceName(log.service)}</span>
                                         {'host' in log && log.host ? <span>{log.host}</span> : null}
                                         {'source' in log && log.source ? <span>{log.source}</span> : null}
                                         <span>{when(log.created_at)}</span>
@@ -486,7 +496,32 @@ function LogFeedCard({
                         {empty}
                     </div>
                 )}
-            </div>
+            </LogFeedRows>
         </section>
     )
+}
+
+// Capture the scroll offset immediately before React inserts new rows. Native
+// scroll anchoring is disabled here so browsers do not apply the offset twice.
+class LogFeedRows extends Component<{ logs: Array<ServiceLog | RuntimeLog>, tall: boolean, children: ReactNode }> {
+    private viewport = createRef<HTMLDivElement>()
+
+    getSnapshotBeforeUpdate(previous: Readonly<{ logs: Array<ServiceLog | RuntimeLog> }>) {
+        const node = this.viewport.current
+        return node && previous.logs !== this.props.logs && node.scrollTop > 0
+            ? { top: node.scrollTop, height: node.scrollHeight }
+            : null
+    }
+
+    componentDidUpdate(_previous: unknown, _state: unknown, snapshot: { top: number, height: number } | null) {
+        const node = this.viewport.current
+        if (node && snapshot) node.scrollTop = snapshot.top + node.scrollHeight - snapshot.height
+    }
+
+    render() {
+        return <div ref={this.viewport} data-logs-scroll style={{ overflowAnchor: 'none' }}
+            className={`divide-y divide-ui-border ${this.props.tall ? '' : 'max-h-[42rem] overflow-auto'}`}>
+            {this.props.children}
+        </div>
+    }
 }

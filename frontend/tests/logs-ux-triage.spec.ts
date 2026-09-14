@@ -29,7 +29,7 @@ test('logs dashboard keeps real streams while focusing the primary triage flow',
     expect(page).toContain('Recent errors')
     expect(page).toMatch(/title='Errors'/)
     expect(page).toContain('Most active services')
-    expect(page).toContain('Live across running apps')
+    expect(page).toContain('title=\'Realtime\'')
     expect(page).toContain('Showing {events.errors.length} recent rows from {events.summary.total} errors')
     expect(page).toContain('break-all')
 })
