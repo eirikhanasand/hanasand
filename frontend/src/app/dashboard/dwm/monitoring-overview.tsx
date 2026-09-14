@@ -34,18 +34,15 @@ function Pages({ count, page, setPage }: { count: number, page: number, setPage:
     </nav>
 }
 
-export function MonitoringOverview({ snapshot, operations, alerts, dataHealth, organizationId, initialAlertId, busyAction, actionMessage, onRefresh, onOpenCase, canOpenCase, caseHref }: {
+export function MonitoringOverview({ snapshot, operations, alerts, dataHealth, organizationId, initialAlertId, actionMessage, onRefresh, caseHref }: {
     snapshot: DwmProductSnapshot
     operations: OperationsSnapshot | null
     alerts: PortalAlert[]
     dataHealth: DwmDataHealth
     organizationId?: string
     initialAlertId?: string
-    busyAction: string | null
     actionMessage: { ok: boolean, text: string } | null
     onRefresh: () => void
-    onOpenCase: (alert: PortalAlert) => Promise<void>
-    canOpenCase: (alert: PortalAlert) => boolean
     caseHref: (alert: PortalAlert) => string | undefined
 }) {
     const [filter, setFilter] = useState('all')
@@ -58,7 +55,7 @@ export function MonitoringOverview({ snapshot, operations, alerts, dataHealth, o
     const scopedHref = (path: string) => organizationId ? `${path}?organizationId=${encodeURIComponent(organizationId)}` : path
     return <div className='grid min-w-0 gap-4' data-dwm-overview>
         <header className='flex flex-wrap items-start justify-between gap-3'>
-            <div><h1 className='text-xl font-semibold text-ui-text'>Dark web monitoring</h1><p className='mt-1 text-sm text-ui-muted'>Findings matching your watchlist and the sources behind them.</p></div>
+            <div><h1 className='text-xl font-semibold text-ui-text'>Dark web monitoring</h1><p className='mt-1 text-sm text-ui-muted'>Events matching your watchlist. Cases are created automatically when source evidence is available.</p></div>
             <button onClick={onRefresh} className={control}>Refresh</button>
         </header>
         <section className={`${panel} p-4`}>
@@ -80,7 +77,7 @@ export function MonitoringOverview({ snapshot, operations, alerts, dataHealth, o
                 return <article key={alert.id} className='min-w-0 p-4' data-finding-id={alert.id}>
                     <div className='flex flex-wrap items-start justify-between gap-3'>
                         <div className='min-w-0'><h3 className='wrap-break-word font-semibold text-ui-text'>{alert.company || alert.matchedTerm.value}</h3><p className='mt-1 text-xs text-ui-muted'>Matched {alert.matchedTerm.value} · {label(alert.severity)} · {label(alert.reviewState)}</p></div>
-                        {href ? <Link href={href} className={link}>Open case</Link> : <button className={`${control} disabled:cursor-not-allowed disabled:opacity-50`} disabled={busyAction === `case:${alert.id}` || !canOpenCase(alert)} title={canOpenCase(alert) ? undefined : 'Case creation requires retained source evidence and permission.'} onClick={() => void onOpenCase(alert)}>{busyAction === `case:${alert.id}` ? 'Opening…' : 'Open case'}</button>}
+                        {href ? <Link href={href} className={link}>Open case</Link> : <span className='text-sm text-ui-muted'>No case yet</span>}
                     </div>
                     <p className='mt-2 wrap-break-word text-sm leading-6 text-ui-text'>{customerAlertSummary(alert)}</p>
                     <p className='mt-2 text-xs text-ui-muted'>{alert.matchTiming?.kind === 'new_evidence' ? 'New observation' : alert.matchTiming?.kind === 'historical_backfill' ? 'Historical match' : 'Observation'} · <Timestamp value={alert.evidenceSummary?.lastObservedAt || alert.lastSeenAt || alert.firstSeenAt} /> · {evidence.length} evidence records</p>

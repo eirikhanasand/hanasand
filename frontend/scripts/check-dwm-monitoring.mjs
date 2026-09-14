@@ -8,15 +8,13 @@ const now = '2026-09-07T12:00:00Z'
 const actorOverviews = Array.from({ length: 25 }, (_, i) => ({ actor: `Actor ${i + 1}`, aliases: [], sourceFamilies: ['darkweb_metadata'], sourceCount: 1, captureCount: 0, confidence: 99, watchState: 'metadata_only', summary: '' }))
 const snapshot = { schemaVersion: 'dwm.product.v1', generatedAt: now, tenantId: 'org-one', watchlist: [{ value: 'acme.com', kind: 'domain' }], alerts: [], sourceCoverage: [], actorOverviews, onDemandQueue: [], readiness: { decision: 'blocked_missing_live_sources', blockers: [], advantages: [], nextWorkItem: '' } }
 const evidence = { id: 'evidence-one', sourceName: 'Recorded source', sourceFamily: 'darkweb_metadata', captureMode: 'metadata_only', redactionState: 'metadata_only', contentHash: 'verified-hash', excerpt: 'acme.com appeared in the recorded source post.', observedAt: now, provenance: { captureId: 'capture-one', sourceId: 'source-one', collectedAt: '2026-09-07T12:10:00Z', metadataOnly: true } }
-const finding = { id: 'finding-one', eventType: 'darkweb.monitoring.match', company: 'Acme', matchedTerm: snapshot.watchlist[0], actor: 'Actor 1', severity: 'high', confidence: 90, artifactType: 'ransomware_claim', sourceFamily: 'darkweb_metadata', sourceCount: 1, firstSeenAt: now, lastSeenAt: now, claimSummary: 'A source mentioned Acme.', observedMatchSummary: 'acme.com appeared in a source post.', reviewState: 'new', recommendedAction: 'Review the source evidence.', evidence: [evidence], matchTiming: { kind: 'new_evidence' }, webhookDelivery: { recommendedRoute: 'analyst_review', payloadHash: 'hash', dedupeKey: 'dedupe' }, organizationId: 'org-one' }
-const alerts = [finding, { ...finding, id: 'finding-two', company: 'Resolved match', reviewState: 'resolved', evidence: [], firstSeenAt: '2026-09-06T12:00:00Z' }]
+const finding = { id: 'finding-one', eventType: 'darkweb.monitoring.match', company: 'Acme', matchedTerm: snapshot.watchlist[0], actor: 'Actor 1', severity: 'high', confidence: 90, artifactType: 'ransomware_claim', sourceFamily: 'darkweb_metadata', sourceCount: 1, firstSeenAt: now, lastSeenAt: now, claimSummary: 'A source mentioned Acme.', observedMatchSummary: 'acme.com appeared in a source post.', reviewState: 'new', recommendedAction: 'Review the source evidence.', evidence: [evidence], matchTiming: { kind: 'new_evidence' }, webhookDelivery: { recommendedRoute: 'analyst_review', payloadHash: 'hash', dedupeKey: 'dedupe' }, organizationId: 'org-one', caseId: 'case-one' }
+const alerts = [finding, { ...finding, id: 'finding-two', caseId: undefined, company: 'Resolved match', reviewState: 'resolved', evidence: [], firstSeenAt: '2026-09-06T12:00:00Z' }]
 const sourceHealth = Array.from({ length: 25 }, (_, i) => ({ sourceId: `source-${i}`, sourceName: `Source ${i}`, family: 'darkweb_metadata', status: 'active', approvedMetadataOnly: true, collectionStatus: i === 0 ? 'failed' : i === 1 ? 'succeeded' : 'not_collected', lastSuccessAt: i < 2 ? now : undefined, lastAttemptAt: i < 2 ? now : undefined }))
 const operations = { counts: { sourceCount: 25, activeSourceCount: 25, captureCount: 1, watchlistMatchCount: 1 }, sourceHealth, latestCaptures: [], zeroAlertExplanation: { message: '' } }
 const health = Object.fromEntries(['snapshot', 'operations', 'alerts', 'deliveries'].map(key => [key, { state: 'missing', label: '', detail: '' }]))
 let bundle = ''
 let failReads = false
-let failCase = true
-let caseBody
 const calls = []
 const cssDirectory = process.env.DWM_CSS_DIR || '.next/static/css'
 const css = (await Promise.all((await readdir(cssDirectory)).filter(file => file.endsWith('.css')).map(file => readFile(`${cssDirectory}/${file}`, 'utf8')))).join('\n')
@@ -27,8 +25,7 @@ const server = Bun.serve({ port: 0, async fetch(request) {
     if (url.pathname.startsWith('/api/dwm/')) {
         calls.push(url)
         if (url.pathname.endsWith('/case-handoff')) {
-            caseBody = await request.json()
-            return failCase ? Response.json({ error: { message: 'Case service unavailable. Try again.' } }, { status: 503 }) : Response.json({ case: { id: 'case-one' } })
+            throw new Error('Monitoring must link to automatic cases, not create cases on click.')
         }
         if (failReads) return Response.json({ error: { message: 'Service unavailable' } }, { status: 503 })
         if (url.pathname.endsWith('/product')) return Response.json(snapshot)
@@ -40,7 +37,7 @@ const server = Bun.serve({ port: 0, async fetch(request) {
 } })
 const build = await Bun.build({ entrypoints: ['monitoring-fixture'], target: 'browser', plugins: [{ name: 'fixture', setup(builder) {
     builder.onResolve({ filter: /^(monitoring-fixture|next\/link|next\/navigation)$/ }, args => ({ path: args.path, namespace: 'fixture' }))
-    builder.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ loader: 'tsx', resolveDir: process.cwd(), contents: args.path === 'next/link' ? 'export default function Link(props){return <a {...props}/>}' : args.path === 'next/navigation' ? 'export const useRouter=()=>({push:href=>{window.caseNavigation=href},refresh:()=>{}});export const useSearchParams=()=>new URLSearchParams(location.search);' : `import {createRoot} from 'react-dom/client';import {DwmAnalystPortal} from './src/app/dashboard/dwm/dwm-analyst-portal';createRoot(document.getElementById('root')).render(<DwmAnalystPortal tenantId="org-one" organizationId="org-one" view={location.pathname.includes('actors')?'actors':location.pathname.includes('alerts')?'alerts':location.pathname.includes('actions')?'actions':'overview'} snapshot={${JSON.stringify({ ...snapshot, watchlist: [], actorOverviews: [] })}} operations={null} alerts={[]} deliveries={[]} dataHealth={${JSON.stringify(health)}}/>);` }))
+    builder.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ loader: 'tsx', resolveDir: process.cwd(), contents: args.path === 'next/link' ? 'export default function Link(props){return <a {...props}/>}' : args.path === 'next/navigation' ? 'export const useRouter=()=>({push:href=>{window.caseNavigation=href},refresh:()=>{}});export const useSearchParams=()=>new URLSearchParams(location.search);' : `import {createRoot} from 'react-dom/client';import {DwmAnalystPortal} from './src/app/dashboard/dwm/dwm-analyst-portal';createRoot(document.getElementById('root')).render(<DwmAnalystPortal tenantId="org-one" organizationId="org-one" view={location.pathname.includes('actors')?'actors':location.pathname.includes('actions')?'actions':'overview'} snapshot={${JSON.stringify({ ...snapshot, watchlist: [], actorOverviews: [] })}} operations={null} alerts={[]} deliveries={[]} dataHealth={${JSON.stringify(health)}}/>);` }))
 } }] })
 assert(build.success, build.logs.join('\n'))
 bundle = await build.outputs[0].text()
@@ -61,16 +58,11 @@ try {
     await page.getByText('Investigate finding', { exact: true }).click()
     await page.getByText('acme.com appeared in the recorded source post.', { exact: true }).waitFor()
     await page.getByText('Capture: capture-one', { exact: true }).waitFor()
-    await page.getByRole('button', { name: 'Open case', exact: true }).click()
-    await page.getByRole('alert').filter({ hasText: 'Case service unavailable' }).waitFor()
-    failCase = false
-    await page.getByRole('button', { name: 'Open case', exact: true }).click()
-    await page.waitForFunction(() => window.caseNavigation?.includes('case-one'))
-    assert.equal(caseBody.organizationId, 'org-one')
-    assert.equal(caseBody.tenantId, 'org-one')
-    assert.equal(caseBody.idempotencyKey, 'dashboard-alert-case:finding-one')
+    const caseLink = await page.getByRole('link', { name: 'Open case', exact: true }).getAttribute('href')
+    assert(caseLink.includes('/cases/case-one') && caseLink.includes('organizationId=org-one'))
+    assert.equal(calls.filter(url => url.pathname.endsWith('case-handoff')).length, 0)
     await page.getByLabel('Filter findings').selectOption('all')
-    assert(await page.locator('[data-finding-id="finding-two"]').getByRole('button', { name: 'Open case' }).isDisabled())
+    await page.locator('[data-finding-id="finding-two"]').getByText('No case yet', { exact: true }).waitFor()
     await page.getByRole('button', { name: 'Next', exact: true }).click()
     await page.getByText('Source 24', { exact: true }).waitFor()
     for (const width of [390, 768, 1440]) {
@@ -95,29 +87,6 @@ try {
     await page.getByText('2 findings · 1 needing review', { exact: true }).waitFor()
     await page.goto(`${server.url}dwm/actions`)
     assert.equal(await page.getByRole('heading', { name: 'Matched alerts', exact: true }).count(), 0)
-    await page.goto(`${server.url}dwm/alerts`)
-    await page.getByRole('heading', { name: 'Matched alerts', exact: true }).waitFor()
-    await page.getByText('Acme', { exact: true }).waitFor()
-    assert.equal(await page.locator('#dwm-workflow-actions').count(), 0)
-    assert(await page.getByRole('button', { name: 'Open case', exact: true }).nth(1).isDisabled())
-    failCase = true
-    await page.getByRole('button', { name: 'Open case', exact: true }).first().click()
-    await page.getByRole('alert').filter({ hasText: 'Case service unavailable' }).waitFor()
-    failCase = false
-    await page.getByRole('button', { name: 'Open case', exact: true }).first().click()
-    await page.waitForFunction(() => window.caseNavigation?.includes('case-one'))
-    assert.equal(caseBody.organizationId, 'org-one')
-    for (const width of [390, 1440]) {
-        await page.setViewportSize({ width, height: 900 })
-        assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Alerts overflow at ${width}`)
-    }
-    failReads = true
-    await page.goto(`${server.url}dwm/alerts`)
-    await page.getByRole('alert').filter({ hasText: 'Alerts could not be loaded' }).waitFor()
-    assert.equal(await page.getByText('No alerts yet.', { exact: true }).count(), 0)
-    failReads = false
-    await page.getByRole('button', { name: 'Retry', exact: true }).click()
-    await page.getByText('Acme', { exact: true }).waitFor()
     assert.deepEqual(errors, [])
-    console.log('DWM browser passed: overview, scoped requests, review filter, retained evidence, case failure/retry, pagination, complete actor links, API failure states and responsive layout.')
+    console.log('DWM browser passed: overview, scoped requests, review filter, retained evidence, automatic case links, pagination, complete actor links, API failure states and responsive layout.')
 } finally { await browser.close(); server.stop(true) }

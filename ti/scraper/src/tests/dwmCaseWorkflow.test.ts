@@ -412,9 +412,15 @@ describe("dwm case workflow", () => {
         headers: { "x-actor-id": "analyst-1" },
         body: JSON.stringify({ organizationId, alertId: alert.id, assignedOwner: "analyst-1", note: "Confirmed watched domain in public source evidence." })
       }), options);
-      const createCasePayload = await createCaseResponse.json() as any;
-
-      expect(createCaseResponse.status).toBe(201);
+      const automaticCasePayload = await createCaseResponse.json() as any;
+      expect(createCaseResponse.status).toBe(200);
+      expect(automaticCasePayload.case.workflowEvents[0].note).toBe("Created automatically from a monitoring event.");
+      const assignCaseResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${automaticCasePayload.case.id}`, {
+        method: "PATCH", headers: { "x-actor-id": "analyst-1" },
+        body: JSON.stringify({ organizationId, action: "assign", assignedOwner: "analyst-1", note: "Confirmed watched domain in public source evidence." })
+      }), options);
+      expect(assignCaseResponse.status).toBe(200);
+      const createCasePayload = await assignCaseResponse.json() as any;
       expect(createCasePayload.case).toMatchObject({
         id: alert.caseIdCandidate,
         organizationId,
@@ -423,7 +429,7 @@ describe("dwm case workflow", () => {
         status: "open",
         assignedOwner: "analyst-1"
       });
-      expect(createCasePayload.case.workflowEvents[0].note).toContain("Confirmed watched domain");
+      expect(createCasePayload.case.workflowEvents.at(-1).note).toContain("Confirmed watched domain");
       expect((store as any).getDwmAlert(alert.id).caseId).toBe(createCasePayload.case.id);
       expect((store as any).getDwmAlert(alert.id).casePath).toContain(`/v1/cases/${createCasePayload.case.id}`);
 
@@ -634,7 +640,7 @@ describe("dwm case workflow", () => {
         reviewState: "resolved"
       });
       expect(rebuildAfterClose.alerts[0].workflowEvents.length).toBeGreaterThanOrEqual(3);
-      expect((store as any).getCase(closed.case.id).workflowEvents).toHaveLength(4);
+      expect((store as any).getCase(closed.case.id).workflowEvents).toHaveLength(5);
 
       const replayAfterDeliveryResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}/replay`, {
         method: "POST",
@@ -784,7 +790,7 @@ describe("dwm case workflow", () => {
       }), options);
       const detail = await detailResponse.json() as any;
       expect(detail.access).toMatchObject({ role: "viewer", readOnly: true });
-      expect(detail.case.workflowEvents).toHaveLength(4);
+      expect(detail.case.workflowEvents).toHaveLength(5);
       expect(detail.evidence[0]).toMatchObject({ sourceId: source.id, contentHash: "hash-case-acme" });
       expect(detail.alertContext).toMatchObject({
         caseIdCandidate: closed.case.id,
@@ -1033,7 +1039,7 @@ describe("dwm case workflow", () => {
       const rehydrated = new FileBackedScraperStore({ snapshotPath });
       expect((rehydrated as any).listCases()).toHaveLength(3);
       expect((rehydrated as any).getCase(closed.case.id).status).toBe("suppressed");
-      expect((rehydrated as any).getCase(closed.case.id).workflowEvents).toHaveLength(6);
+      expect((rehydrated as any).getCase(closed.case.id).workflowEvents).toHaveLength(7);
       expect((rehydrated as any).getCase(closed.case.id).customerNotifications).toHaveLength(1);
       expect((rehydrated as any).getDwmAlert(alert.id).caseId).toBe(closed.case.id);
       expect((rehydrated as any).getDwmAlert(alert.id).caseIdCandidate).toBe(closed.case.id);

@@ -24,11 +24,10 @@ export function getDashboardNavigation({ id, isAdmin, canManageSystem, canManage
                 link('Threat Search', '/ti'),
                 link('Cases', '/cases'),
                 link('Browser', '/browser'),
-                link('Alert actions', '/dwm/actions'),
+                link('Monitoring actions', '/dwm/actions'),
             ]),
             group('Monitoring', [
                 link('Dark web monitoring', '/dwm'),
-                link('Matched alerts', '/dwm/alerts'),
                 link('Monitored actors', '/dwm/actors'),
                 link('Watchlists', '/dwm/watchlists'),
                 link('Detection rules', '/mill/rules'),
