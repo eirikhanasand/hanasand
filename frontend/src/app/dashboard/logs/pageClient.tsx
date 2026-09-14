@@ -134,13 +134,26 @@ export default function LogsPageClient({
     return (
         <div className='grid gap-5'>
             <section className={`${dashboardPanelClass} overflow-hidden`} data-logs-toolbar>
-                <div className='flex flex-col gap-3 border-b border-ui-border bg-ui-panel px-3 py-3 sm:px-4 lg:flex-row lg:items-center lg:justify-between'>
+                <div className='flex flex-col gap-3 bg-ui-panel px-3 py-3 sm:px-4 lg:flex-row lg:items-center lg:justify-between'>
                     <div className='flex min-w-0 flex-wrap items-center gap-2 text-sm text-ui-muted'>
                         <span className='inline-flex items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-2.5 py-1.5 font-semibold text-ui-text'>
                             <span className={`h-2 w-2 rounded-full ${realtime.runtime_available ? 'bg-ui-success' : 'bg-ui-warning'}`} />
                             Runtime {realtime.runtime_available ? 'live' : 'reconnecting'}
                         </span>
                         <span className='rounded-md border border-ui-border bg-ui-raised px-2.5 py-1.5 font-medium'>Updated {generatedAt}</span>
+                        <select
+                            id='logs-service-filter'
+                            aria-label='Service filter'
+                            data-logs-service-filter
+                            value={serviceFilter}
+                            onChange={(event) => handleServiceFilter(event.target.value)}
+                            className='h-9 w-44 max-w-full rounded-md border border-ui-border bg-ui-raised px-3 text-sm font-medium text-ui-text shadow-sm outline-none transition focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/30'
+                        >
+                            <option value='all'>All services</option>
+                            {allServices.map((service) => (
+                                <option key={service} value={service}>{service}</option>
+                            ))}
+                        </select>
                     </div>
 
                     <div className='inline-flex w-full rounded-md border border-ui-border bg-ui-raised p-1 shadow-sm sm:w-auto' role='tablist' aria-label='Logs view' data-logs-tabs>
@@ -162,26 +175,7 @@ export default function LogsPageClient({
                     </div>
                 </div>
 
-                <div className='flex flex-col gap-2 px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4'>
-                    <div className='text-sm text-ui-muted'>
-                        Showing <span className='font-semibold text-ui-primary'>{activeServiceLabel}</span> across live, stored, and error streams.
-                    </div>
-                    <label htmlFor='logs-service-filter' className='flex min-w-0 flex-col gap-1.5 text-sm sm:w-72'>
-                        <span className='text-xs font-semibold text-ui-muted'>Service filter</span>
-                        <select
-                            id='logs-service-filter'
-                            data-logs-service-filter
-                            value={serviceFilter}
-                            onChange={(event) => handleServiceFilter(event.target.value)}
-                            className='h-10 rounded-md border border-ui-border bg-ui-raised px-3 text-sm font-medium text-ui-text shadow-sm outline-none transition focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/30'
-                        >
-                            <option value='all'>All services</option>
-                            {allServices.map((service) => (
-                                <option key={service} value={service}>{service}</option>
-                            ))}
-                        </select>
-                    </label>
-                </div>
+
             </section>
 
             <dl className={`${dashboardPanelClass} flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-2 text-sm leading-5`} aria-label='Error summary' data-logs-error-summary>
