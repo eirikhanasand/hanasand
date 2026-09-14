@@ -7,6 +7,8 @@ const root = process.cwd()
 test('logs dashboard keeps real streams while focusing the primary triage flow', async () => {
     const page = await readFile(path.join(root, 'src/app/dashboard/logs/pageClient.tsx'), 'utf8')
 
+    expect(page).toContain('data-logs-controls')
+    expect(page).toContain("className='border-b border-ui-border' data-logs-toolbar")
     expect(page).toContain('data-logs-error-summary')
     expect(page).toContain('Total errors')
     expect(page).toContain('Live error lines')
