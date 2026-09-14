@@ -1,5 +1,4 @@
 import { strict as assert } from 'node:assert'
-import { execFileSync } from 'node:child_process'
 import { readdir, readFile } from 'node:fs/promises'
 import { chromium } from '@playwright/test'
 import { canonicalAppPath, hasAppSidebar } from '../src/utils/routes/appRoutes.ts'
@@ -61,7 +60,7 @@ const exclusions = {
 }
 const excluded = new Set(Object.values(exclusions).flat())
 const available = new Set([...all, ...navigationLinks(getDashboardNavigation(memberAccess))].map(item => item.href))
-const pages = execFileSync('git', ['ls-files', 'src/app'], { encoding: 'utf8' }).trim().split('\n').filter(file => /\/page\.(tsx?|jsx?)$/.test(file))
+const pages = (await readdir('src/app', { recursive: true })).map(file => `src/app/${file}`).filter(file => /\/page\.(tsx?|jsx?)$/.test(file))
 for (const file of pages) {
     const route = canonicalAppPath(file.replace(/^src\/app/, '').replace(/\/page\.(tsx?|jsx?)$/, '') || '/')
     if (!route.includes('[')) assert(available.has(route) || excluded.has(route), `Page needs a sidebar link or an explicit classification: ${route}`)
