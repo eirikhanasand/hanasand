@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import type { ReactNode } from 'react'
 import { Component, createRef, Fragment, useEffect, useMemo, useState } from 'react'
 import config from '@/config'
+import { displayLogServiceName } from '@/utils/logs/displayServiceName'
 import { logKey, mergeRuntimeLogs } from '@/utils/logs/retainLogs'
 import { dashboardPanelClass } from '@/components/dashboard/ui'
 import type { ErrorEventsResponse, LogRealtimeResponse, RuntimeLog, ServiceLog, LogService } from '@/utils/logs/getLogs'
@@ -160,7 +161,7 @@ export default function LogsPageClient({
                             >
                                 <option value='all'>All services</option>
                                 {allServices.map((service) => (
-                                    <option key={service} value={service}>{service}</option>
+                                    <option key={service} value={service}>{displayLogServiceName(service)}</option>
                                 ))}
                             </select>
                         </div>
@@ -242,7 +243,7 @@ export default function LogsPageClient({
                                 {services.slice(0, 8).map((service) => (
                                     <div key={service.service} className='flex items-center justify-between gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2'>
                                         <div className='min-w-0'>
-                                            <p className='truncate text-sm font-medium text-ui-text'>{service.service}</p>
+                                            <p className='truncate text-sm font-medium text-ui-text'>{displayLogServiceName(service.service)}</p>
                                             <p className='mt-0.5 text-xs text-ui-muted'>{when(service.last_seen)}</p>
                                         </div>
                                         <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-0.5 text-xs font-semibold text-ui-text'>{service.entries}</span>
@@ -455,7 +456,7 @@ function LogFeedCard({
                                     aria-expanded={isOpen}
                                 >
                                     <div className='flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ui-muted'>
-                                        <span className='font-semibold text-ui-text'>{log.service}</span>
+                                        <span className='font-semibold text-ui-text'>{displayLogServiceName(log.service)}</span>
                                         {'host' in log && log.host ? <span>{log.host}</span> : null}
                                         {'source' in log && log.source ? <span>{log.source}</span> : null}
                                         <span>{when(log.created_at)}</span>
