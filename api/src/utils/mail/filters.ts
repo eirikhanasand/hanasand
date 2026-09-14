@@ -4,14 +4,14 @@ import { ensureMailbox, getMessage, listInboxMessagesForFiltering, moveMessage }
 import { type MailRule } from './types.ts'
 
 export async function listMailRules(userId: string) {
-    const response = await run('SELECT * FROM mail_filters WHERE user_id = $1 ORDER BY priority ASC, id ASC', [userId])
+    const response = await run(`SELECT * FROM ${filterTable(userId)} WHERE user_id = $1 ORDER BY priority ASC, id ASC`, [userId])
     return response.rows as MailRule[]
 }
 
 export async function createMailRule(userId: string, input: Omit<MailRule, 'id' | 'user_id' | 'created_at' | 'updated_at'>) {
     const response = await run(`
-        INSERT INTO mail_filters (user_id, name, enabled, criteria, action, priority)
-        VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, COALESCE((SELECT MAX(priority) + 1 FROM mail_filters WHERE user_id = $1), 1))
+        INSERT INTO ${filterTable(userId)} (user_id, name, enabled, criteria, action, priority)
+        VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, COALESCE((SELECT MAX(priority) + 1 FROM ${filterTable(userId)} WHERE user_id = $1), 1))
         RETURNING *
     `, [userId, input.name, input.enabled, JSON.stringify(input.criteria), JSON.stringify(input.action)])
 
@@ -19,7 +19,7 @@ export async function createMailRule(userId: string, input: Omit<MailRule, 'id' 
 }
 
 export async function deleteMailRule(userId: string, ruleId: string) {
-    await run('DELETE FROM mail_filters WHERE user_id = $1 AND id = $2', [userId, ruleId])
+    await run(`DELETE FROM ${filterTable(userId)} WHERE user_id = $1 AND id = $2`, [userId, ruleId])
 }
 
 export async function applyMailRules(params: {
@@ -126,4 +126,8 @@ function isTrustedInternalMail(message: NonNullable<Awaited<ReturnType<typeof ge
     }
 
     return allSenders.every(address => address.endsWith(`@${mailConfig.domain}`))
+}
+
+function filterTable(userId: string) {
+    return userId.startsWith('shared:') ? 'shared_mail_filters' : 'mail_filters'
 }

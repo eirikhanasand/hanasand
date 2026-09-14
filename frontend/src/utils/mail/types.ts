@@ -95,10 +95,11 @@ export type MailOverview = {
     actor: {
         id: string
         canAccessAnyMailbox: boolean
+        canSend?: boolean
     }
     mailboxUser: string
     mailboxAddress: string
-    accessibleAccounts: Array<{ id: string, name: string, address: string }>
+    accessibleAccounts: Array<{ id: string, name: string, address: string, shared?: boolean, unreadCount?: number | null }>
     mailboxes: MailboxItem[]
     selectedMailboxId: string | null
     messages: MailMessageSummary[]

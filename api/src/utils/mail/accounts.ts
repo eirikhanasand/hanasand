@@ -1,4 +1,5 @@
 import run from '#db'
+import { mailPermissions, MailAccessDenied, sharedMailAccess, sharedMailboxes } from './shared.ts'
 import { mailConfig } from './config.ts'
 import { encryptMailSecret, generateMailSecret, tryDecryptMailSecret } from './crypto.ts'
 import { addressForUser, addressesForUser, mailboxLocalPartForUser } from './helpers.ts'
@@ -126,9 +127,15 @@ export async function rotateMailPasswordForUser(userId: string, displayName: str
 
 export async function getMailAccess(actorId: string, mailboxUser?: string) {
     const targetUser = mailboxUser || actorId
-    const canAccessAnyMailbox = mailConfig.privilegedMailboxUsers.has(actorId)
+    const permissions = await mailPermissions(actorId)
+    const canAccessAnyMailbox = permissions.any
+    if (targetUser.startsWith('shared:')) {
+        if (!permissions.shared) throw new MailAccessDenied()
+        const account = await sharedMailAccess(targetUser)
+        return { actorId, targetUser, canAccessAnyMailbox, ...account, canSend: targetUser !== 'shared:noreply' || permissions.admin }
+    }
     if (targetUser !== actorId && !canAccessAnyMailbox) {
-        throw new Error('You do not have access to this mailbox.')
+        throw new MailAccessDenied()
     }
 
     const userResult = await run('SELECT id, name FROM users WHERE id = $1', [targetUser])
@@ -149,6 +156,7 @@ export async function getMailAccess(actorId: string, mailboxUser?: string) {
 
     return {
         actorId,
+        canSend: true,
         targetUser: user.id,
         canAccessAnyMailbox,
         username: account.username,
@@ -158,7 +166,15 @@ export async function getMailAccess(actorId: string, mailboxUser?: string) {
 }
 
 export async function listAccessibleMailAccounts(actorId: string) {
-    if (mailConfig.privilegedMailboxUsers.has(actorId)) {
+    const permissions = await mailPermissions(actorId)
+    const personal = await listPersonalMailAccounts(actorId, permissions.any)
+    return [...personal.map(account => ({ ...account, shared: false })), ...(permissions.shared ? sharedMailboxes.map(mailbox => ({
+        id: mailbox.id, name: mailbox.name, address: `${mailbox.localPart}@${mailConfig.domain}`, shared: true,
+    })) : [])]
+}
+
+async function listPersonalMailAccounts(actorId: string, canAccessAnyMailbox: boolean) {
+    if (canAccessAnyMailbox) {
         const rows = await run(`
             SELECT u.id, u.name, ma.mail_address
             FROM users u

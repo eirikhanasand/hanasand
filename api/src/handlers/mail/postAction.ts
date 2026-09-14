@@ -1,3 +1,4 @@
+import { MailAccessDenied } from '#utils/mail/shared.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { getMailAccess } from '#utils/mail/accounts.ts'
@@ -59,6 +60,7 @@ export default async function postMailAction(req: FastifyRequest, res: FastifyRe
 
         return res.send({ ok: true })
     } catch (error) {
+        if (error instanceof MailAccessDenied) return res.status(403).send({ error: error.message })
         if (isMailAdminConfigError(error)) {
             return res.status(503).send(mailAdminUnavailablePayload())
         }

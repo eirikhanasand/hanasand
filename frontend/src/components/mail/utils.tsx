@@ -248,9 +248,9 @@ export function withInlineAttachments(message: MailMessage, mailboxUser: string)
     return html
 }
 
-export function ActionIconButton({ label, icon, onClick }: { label: string, icon: ReactNode, onClick: () => void }) {
+export function ActionIconButton({ label, icon, onClick, disabled }: { label: string, icon: ReactNode, onClick: () => void, disabled?: boolean }) {
     return (
-        <button title={label} aria-label={label} className={iconButton} onClick={onClick}>
+        <button disabled={disabled} title={label} aria-label={label} className={iconButton} onClick={onClick}>
             {icon}
         </button>
     )

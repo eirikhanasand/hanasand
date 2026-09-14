@@ -1,5 +1,6 @@
 import crypto from 'node:crypto'
 import { mailConfig } from './config.ts'
+import { storeSentMessage } from './jmap.ts'
 import { sendMailViaSmtp } from './smtp.ts'
 import { type AdminPatch, createPrincipal, findPrincipalByName, patchPrincipal } from './stalwartAdmin.ts'
 
@@ -20,18 +21,15 @@ export async function sendSystemMail(params: {
         textBody: params.textBody,
         htmlBody: params.htmlBody,
     })
+    await storeSentMessage({ ...access, from: { email: access.address, name: 'Hanasand' }, to: [{ email: params.to }], subject: params.subject, textBody: params.textBody, htmlBody: params.htmlBody }).catch(() => {
+        console.warn('System email sent, but its Sent copy could not be saved.')
+    })
     console.info('System email accepted by mail server', { messageId: result.messageId, acceptedCount: result.accepted.length })
     return result
 }
 
-async function ensureSystemSender() {
-    const username = mailConfig.systemSenderLocalPart
-    const address = `${username}@${mailConfig.domain}`
-    const password = crypto
-        .createHash('sha256')
-        .update(mailConfig.encryptionKey)
-        .update(`system-sender:${address}`)
-        .digest('base64url')
+export async function ensureSystemSender() {
+    const { username, address, password } = systemSenderAccess()
 
     // Provisioning needs mail-admin access; sending from an existing account does not.
     if (!mailConfig.adminPassword) {
@@ -69,6 +67,18 @@ async function ensureSystemSender() {
 
         await patchPrincipal(principal.name, patches)
     }
+
+    return { username, address, password }
+}
+
+export function systemSenderAccess() {
+    const username = mailConfig.systemSenderLocalPart
+    const address = `${username}@${mailConfig.domain}`
+    const password = process.env.MAIL_SYSTEM_SENDER_PASSWORD || crypto
+        .createHash('sha256')
+        .update(mailConfig.encryptionKey)
+        .update(`system-sender:${address}`)
+        .digest('base64url')
 
     return { username, address, password }
 }

@@ -159,6 +159,7 @@ function normalizeMailOverview(payload: Partial<MailOverview>): MailOverview {
         actor: {
             id: payload.actor?.id || getCookie('id') || mailboxUser,
             canAccessAnyMailbox: Boolean(payload.actor?.canAccessAnyMailbox),
+            canSend: payload.actor?.canSend !== false,
         },
         mailboxUser,
         mailboxAddress,

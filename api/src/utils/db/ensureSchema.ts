@@ -1,3 +1,4 @@
+import ensureSharedMailSchema from './sharedMailSchema.ts'
 import ensureVmOrganizationSchema from './vmOrganizationSchema.ts'
 import ensureCaseDevelopmentSchema from './caseDevelopmentSchema.ts'
 import run from '#db'
@@ -1483,6 +1484,7 @@ export default async function ensureSchema() {
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
     `)
+    await ensureSharedMailSchema()
     await run('ALTER TABLE mail_accounts ADD COLUMN IF NOT EXISTS recovery_email TEXT')
     await run(`
         CREATE TABLE IF NOT EXISTS mail_filters (
