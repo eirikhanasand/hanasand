@@ -2,7 +2,7 @@
 
 import { CaseDevelopment } from '../case-development'
 
-import Link from 'next/link'
+import Link from '@/components/organizations/workspaceLink'
 import type { CaseResolution } from '../cases-client'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ArrowLeft, BellRing, CheckCircle2, Copy, Loader2, RotateCcw, Send, ShieldCheck, UserRound, XCircle } from 'lucide-react'

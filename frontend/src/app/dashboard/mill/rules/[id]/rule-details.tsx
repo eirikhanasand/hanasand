@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import Link from '@/components/organizations/workspaceLink'
 import { useEffect, useState } from 'react'
 import { DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import { requestJson, type MillRule } from '../detection-rules'
@@ -18,7 +18,7 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
     const endpoint = `/api/backend/mill/rules/${encodeURIComponent(id)}?organizationId=${encodeURIComponent(organizationId)}`
     useEffect(() => {
         let active = true
-        if (!organizationId) { setError('Choose an organization from the rule library first.'); return }
+        if (!organizationId) { setError('Choose an organization in the topbar.'); return }
         requestJson<Payload>(endpoint).then(payload => { if (active) { setData(payload); setDraft(payload.rule) } }).catch(cause => { if (active) setError(cause.message) })
         return () => { active = false }
     }, [endpoint, organizationId])

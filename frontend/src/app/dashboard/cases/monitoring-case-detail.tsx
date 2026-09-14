@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import Link from '@/components/organizations/workspaceLink'
 import { CaseEvents, CheckFields, type CaseEvent, type CheckDetails } from './case-events'
 import Markdown from 'react-markdown'
 import { CaseDevelopment } from './case-development'

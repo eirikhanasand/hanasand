@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import Link from '@/components/organizations/workspaceLink'
 import { useRouter } from 'next/navigation'
 import { SyntheticEvent, useRef, useState } from 'react'
 import { Activity, BellRing, Loader2, Plus, RefreshCw, Send, ShieldCheck } from 'lucide-react'

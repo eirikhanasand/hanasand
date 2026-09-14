@@ -1,7 +1,7 @@
 'use client'
 
 import { Fragment, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
-import Link from 'next/link'
+import Link from '@/components/organizations/workspaceLink'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { CheckCircle2, Clock3, Copy, FolderOpen, Loader2, MessageSquareText, Play, RotateCcw, Send, ShieldCheck, SlidersHorizontal, UserRound, XCircle } from 'lucide-react'
 import type { DwmAlert, DwmAlertAnalystAction, DwmProductSnapshot } from '@/utils/dwm/product'

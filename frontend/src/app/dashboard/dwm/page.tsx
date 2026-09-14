@@ -1,3 +1,4 @@
+import { activeOrganizationId } from '@/utils/organizations/serverWorkspace'
 import { DashboardPage } from '@/components/dashboard/ui'
 import type { DwmProductSnapshot } from '@/utils/dwm/product'
 import { decodePublicTiHandoffPayload, PUBLIC_TI_HANDOFF_SOURCE } from '@/utils/ti/actorWorkbench'
@@ -18,8 +19,11 @@ export default async function DashboardDwmPage({
     const token = cookieStore.get('access_token')?.value
     if (!identityId || !token) redirect('/login?path=%2Fdwm')
 
-    const organizationId = firstParam(params?.organizationId)?.trim() || undefined
-    if (firstParam(params?.panel) === 'alerts') redirect(organizationId ? `/cases?organizationId=${encodeURIComponent(organizationId)}` : '/cases')
+    const organizationId = await activeOrganizationId()
+    if (firstParam(params?.panel) === 'alerts') {
+        const sharedOrg = firstParam(params?.org) || firstParam(params?.organizationId) || firstParam(params?.orgId)
+        redirect(sharedOrg ? `/cases?org=${encodeURIComponent(sharedOrg)}` : '/cases')
+    }
     const tenantId = organizationId || identityId
     const roles = parseCookie<Array<Role | string>>(cookieStore.get('roles')?.value, [])
     const roleIds = roles.map(role => typeof role === 'string' ? role : role.id || '')

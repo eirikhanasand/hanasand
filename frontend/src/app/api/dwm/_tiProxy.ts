@@ -1,3 +1,4 @@
+import { activeOrganizationId } from '@/utils/organizations/serverWorkspace'
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { tiScraperApiBase } from '@/utils/dwm/scraperApiBase'
@@ -35,17 +36,17 @@ export async function proxyTiRequest(request: NextRequest, path: string, options
         if (requestText && !body) {
             return NextResponse.json({ error: { code: 'invalid_json', message: 'A JSON request body is required.' } }, { status: 400 })
         }
-        const scope = resolveDwmRequestScope({ identityId: id, params: request.nextUrl.searchParams, headers: request.headers, body: body || {} })
+        const scope = resolveDwmRequestScope({ identityId: id, params: request.nextUrl.searchParams, headers: request.headers, body: body || {}, fallbackOrganizationId: await activeOrganizationId() })
         if (scope.error) {
             return NextResponse.json({ error: { code: 'invalid_scope', message: scope.error } }, { status: 400 })
         }
         if (scope.organizationId) {
-            const scopeError = await organizationScopeError(scope.organizationId, token, id)
+            const scopeError = await organizationScopeError(scope.organizationId, token, id, impersonationToken)
             if (scopeError) return scopeError
         }
         const target = new URL(path, base)
         for (const [key, value] of request.nextUrl.searchParams.entries()) {
-            if (key === 'tenantId' || key === 'organizationId' || key === 'orgId') continue
+            if (key === 'org' || key === 'tenantId' || key === 'organizationId' || key === 'orgId') continue
             target.searchParams.set(key, value)
         }
         target.searchParams.set('tenantId', scope.tenantId)
@@ -89,8 +90,10 @@ export function resolveDwmRequestScope(input: {
     params: Pick<URLSearchParams, 'get'>
     headers: Pick<Headers, 'get'>
     body?: Record<string, unknown>
+    fallbackOrganizationId?: string
 }): DwmRequestScope {
     const organizationIds = [
+        input.params.get('org'),
         input.params.get('organizationId'),
         input.params.get('orgId'),
         input.headers.get('x-organization-id'),
@@ -102,7 +105,7 @@ export function resolveDwmRequestScope(input: {
     if (distinctOrganizationIds.length > 1) {
         return { tenantId: input.identityId, error: 'Organization scope is inconsistent across the request.' }
     }
-    const organizationId = distinctOrganizationIds[0]
+    const organizationId = distinctOrganizationIds[0] || input.fallbackOrganizationId
     return {
         tenantId: organizationId || input.identityId,
         ...(organizationId ? { organizationId } : {}),
@@ -127,7 +130,7 @@ export function withDwmRequestScope(body: Record<string, unknown>, scope: Pick<D
     return scoped
 }
 
-async function organizationScopeError(organizationId: string, token: string, id: string) {
+async function organizationScopeError(organizationId: string, token: string, id: string, impersonationToken: string) {
     try {
         const target = new URL(`${authApiUrl().replace(/\/$/, '')}/organizations/${encodeURIComponent(organizationId)}`)
         const response = await fetch(target, {
@@ -135,6 +138,7 @@ async function organizationScopeError(organizationId: string, token: string, id:
             headers: {
                 Authorization: `Bearer ${token}`,
                 id,
+                ...(impersonationToken ? { 'x-impersonation-token': impersonationToken } : {}),
             },
             signal: AbortSignal.timeout(8000),
         })

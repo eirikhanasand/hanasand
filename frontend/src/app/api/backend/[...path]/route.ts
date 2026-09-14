@@ -1,3 +1,4 @@
+import { activeOrganizationId } from '@/utils/organizations/serverWorkspace'
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import config from '@/config'
@@ -37,6 +38,10 @@ async function handler(req: NextRequest, context: Context) {
     const path = pathSegments.map(segment => encodeURIComponent(segment)).join('/')
     const target = new URL(`${config.url.api}/${path}`)
     target.search = req.nextUrl.search
+    if (pathSegments[0] === 'mill' && !target.searchParams.has('organizationId')) {
+        const organizationId = await activeOrganizationId()
+        if (organizationId) target.searchParams.set('organizationId', organizationId)
+    }
 
     const headers = new Headers()
     req.headers.forEach((value, key) => {

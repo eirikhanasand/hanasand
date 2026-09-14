@@ -1,16 +1,15 @@
 'use client'
 
-import Link from 'next/link'
+import Link from '@/components/organizations/workspaceLink'
+import { useWorkspace } from '@/components/organizations/workspaceProvider'
 import { useEffect, useRef, useState } from 'react'
 import { DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 
-type Organization = { id: string, name?: string, slug?: string, role?: string }
 export type MillRule = { id: string, detectionLogic?: string, recordId?: string, rule_id?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'owned' | 'open_source', sourceReference?: string, definition?: { conditions?: Array<{ path: string, operator: string, value: string }> } }
 
 export default function DetectionRules() {
     const latestOrganization = useRef('')
-    const [organizations, setOrganizations] = useState<Organization[]>([])
-    const [organizationId, setOrganizationId] = useState('')
+    const { organizationId, organizations } = useWorkspace()
     const [rules, setRules] = useState<MillRule[]>([])
     const [showImports, setShowImports] = useState(false)
     const [ruleName, setRuleName] = useState('')
@@ -30,18 +29,7 @@ export default function DetectionRules() {
     const [status, setStatus] = useState('')
     const [error, setError] = useState('')
 
-    useEffect(() => { void loadOrganizations() }, [])
     useEffect(() => { if (organizationId) void loadMill(organizationId) }, [organizationId])
-
-    async function loadOrganizations() {
-        try {
-            const payload = await requestJson<{ organizations?: Organization[] }>('/api/organizations')
-            const next = payload.organizations || []
-            setOrganizations(next)
-            const requestedId = new URLSearchParams(window.location.search).get('organizationId')
-            setOrganizationId(next.find(org => org.id === requestedId)?.id || next[0]?.id || '')
-        } catch (cause) { setError(errorMessage(cause)) }
-    }
 
     async function loadMill(id: string) {
         latestOrganization.current = id
@@ -102,9 +90,9 @@ export default function DetectionRules() {
             <div className='flex flex-wrap items-center justify-between gap-4'>
                 <div><p className='text-sm text-ui-muted'>Security tools</p><h1 className='mt-1 text-2xl font-semibold'>Detection rules</h1><p className='mt-2 text-sm text-ui-muted'>Create, import, and enable the rules that monitor your security events.</p></div>
                 <div className='flex max-w-full flex-wrap items-center gap-3'>
-                    <select value={organizationId} onChange={event => { latestOrganization.current = event.target.value; setRules([]); setOrganizationId(event.target.value); setStatus(''); const url = new URL(window.location.href); url.searchParams.set('organizationId', event.target.value); window.history.replaceState(null, '', url) }} className='h-10 max-w-full rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text' aria-label='Organization'>{!organizations.length && <option value=''>No organizations available</option>}{organizations.map(org => <option key={org.id} value={org.id}>{org.name || org.slug || org.id}</option>)}</select>
+
                     <button type='button' aria-expanded={showImports} aria-controls='mill-rule-imports' onClick={() => setShowImports(open => !open)} className='rounded-lg bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary'>Import</button>
-                    <Link href={`/cases${organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''}`} className='rounded-lg border border-ui-border px-4 py-2 text-sm font-semibold text-ui-primary hover:bg-ui-raised'>Cases</Link>
+                    <Link href='/cases' className='rounded-lg border border-ui-border px-4 py-2 text-sm font-semibold text-ui-primary hover:bg-ui-raised'>Cases</Link>
                 </div>
             </div>
             {error && <div role='alert' className='rounded-lg border border-red-400/40 bg-red-500/10 p-3 text-sm text-red-200'>{error}</div>}
