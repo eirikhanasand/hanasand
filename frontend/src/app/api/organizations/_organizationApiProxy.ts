@@ -26,6 +26,7 @@ export async function proxyOrganizationApiRequest(request: NextRequest, path: st
                 'x-tenant-id': request.headers.get('x-tenant-id') || 'default',
                 ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 ...(id ? { id } : {}),
+                ...(cookieStore.get('impersonation_token')?.value ? { 'x-impersonation-token': cookieStore.get('impersonation_token')!.value } : {}),
             },
             signal: AbortSignal.timeout(options.timeoutMs ?? 12000),
         }

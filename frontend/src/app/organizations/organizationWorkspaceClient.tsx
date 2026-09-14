@@ -971,7 +971,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations }: { 
                 setupWarnings.push(`invites failed: ${endpointErrorMessage(err)}`)
             }
         }
-        setSelectedId(organizationId)
+        await switchOrganization(organizationId)
         replaceOrganizationWorkspaceSelectionUrl(organizationId, { type: 'organization', id: organizationId })
         setCreateName('')
         if (!firstWatchlistValue || firstWatchlistAdded) setCreateFirstWatchlist({ kind: 'domain', value: '', notes: '' })

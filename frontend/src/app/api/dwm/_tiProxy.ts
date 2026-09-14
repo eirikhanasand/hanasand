@@ -41,7 +41,7 @@ export async function proxyTiRequest(request: NextRequest, path: string, options
             return NextResponse.json({ error: { code: 'invalid_scope', message: scope.error } }, { status: 400 })
         }
         if (scope.organizationId) {
-            const scopeError = await organizationScopeError(scope.organizationId, token, id)
+            const scopeError = await organizationScopeError(scope.organizationId, token, id, impersonationToken)
             if (scopeError) return scopeError
         }
         const target = new URL(path, base)
@@ -130,7 +130,7 @@ export function withDwmRequestScope(body: Record<string, unknown>, scope: Pick<D
     return scoped
 }
 
-async function organizationScopeError(organizationId: string, token: string, id: string) {
+async function organizationScopeError(organizationId: string, token: string, id: string, impersonationToken: string) {
     try {
         const target = new URL(`${authApiUrl().replace(/\/$/, '')}/organizations/${encodeURIComponent(organizationId)}`)
         const response = await fetch(target, {
@@ -138,6 +138,7 @@ async function organizationScopeError(organizationId: string, token: string, id:
             headers: {
                 Authorization: `Bearer ${token}`,
                 id,
+                ...(impersonationToken ? { 'x-impersonation-token': impersonationToken } : {}),
             },
             signal: AbortSignal.timeout(8000),
         })
