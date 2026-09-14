@@ -19,6 +19,7 @@ export default function MillWorkspace({ view = 'overview' }: { view?: 'overview'
     const [events, setEvents] = useState<Event[]>([])
     const [members, setMembers] = useState<Member[]>([])
     const [rules, setRules] = useState<MillRule[]>([])
+    const [showImports, setShowImports] = useState(false)
     const [usage, setUsage] = useState<MillUsage>({})
     const [ruleName, setRuleName] = useState('')
     const [ruleExplanation, setRuleExplanation] = useState('')
@@ -124,6 +125,7 @@ export default function MillWorkspace({ view = 'overview' }: { view?: 'overview'
             await requestJson(`/api/backend/mill/rules/packs?organizationId=${encodeURIComponent(organizationId)}`, { method: 'POST', body: JSON.stringify({ packName, packVersion, sourceReference: packReference, rules: parsed.rules }) })
             setStatus('Signature pack imported and enabled for new events.')
             setPackName(''); setPackVersion(''); setPackReference('')
+            setShowImports(false)
             await loadMill(organizationId)
         } catch (cause) { setError(cause instanceof SyntaxError ? 'Signature pack JSON is invalid.' : errorMessage(cause)) }
     }
@@ -134,6 +136,7 @@ export default function MillWorkspace({ view = 'overview' }: { view?: 'overview'
             await requestJson(`/api/backend/mill/rules/sigma?organizationId=${encodeURIComponent(organizationId)}`, { method: 'POST', body: JSON.stringify({ packName: sigmaPackName, packVersion: sigmaPackVersion, sourceReference: sigmaPackReference, yaml: sigmaYaml }) })
             setStatus('Sigma rules imported and enabled for new events.')
             setSigmaPackName(''); setSigmaPackVersion(''); setSigmaPackReference('')
+            setShowImports(false)
             await loadMill(organizationId)
         } catch (cause) { setError(errorMessage(cause)) }
     }
@@ -160,6 +163,7 @@ export default function MillWorkspace({ view = 'overview' }: { view?: 'overview'
                 <div><p className='text-sm text-ui-muted'>Security tools</p><h1 className='mt-1 text-2xl font-semibold'>{view === 'rules' ? 'Detection rules' : 'Overview'}</h1><p className='mt-2 text-sm text-ui-muted'>{view === 'rules' ? 'Create, import, and enable the rules that monitor your security events.' : 'Review findings and investigate suspicious activity.'}</p></div>
                 <div className='flex max-w-full flex-wrap items-center gap-3'>
                     <select value={organizationId} onChange={event => { setOrganizationId(event.target.value); setSelectedId(''); setNote(''); setAssigneeId(''); setStatus(''); const url = new URL(window.location.href); url.searchParams.set('organizationId', event.target.value); window.history.replaceState(null, '', url) }} className='h-10 max-w-full rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text' aria-label='Organization'>{!organizations.length && <option value=''>No organizations available</option>}{organizations.map(org => <option key={org.id} value={org.id}>{org.name || org.slug || org.id}</option>)}</select>
+                    {view === 'rules' && <button type='button' aria-expanded={showImports} aria-controls='mill-rule-imports' onClick={() => setShowImports(open => !open)} className='rounded-lg bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary'>Import</button>}
                     <Link href={`${view === 'rules' ? '/mill' : '/mill/rules'}${organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''}`} className='rounded-lg border border-ui-border px-4 py-2 text-sm font-semibold text-ui-primary hover:bg-ui-raised'>{view === 'rules' ? 'Back to overview' : 'Detection rules'}</Link>
                 </div>
             </div>
@@ -171,12 +175,8 @@ export default function MillWorkspace({ view = 'overview' }: { view?: 'overview'
                 <Metric label='Active rules' value={String(usage.active_rules ?? rules.filter(rule => rule.enabled !== false).length)} icon={<FileSearch className='h-4 w-4' />} />
                 <Metric label='30-day processed' value={String(usage.events_30d || 0)} icon={<Radio className='h-4 w-4' />} />
             </section>}
-            {view === 'rules' && <DashboardPanel className='grid min-w-0 gap-6 p-4 sm:p-6' id='mill-rules'>
-                <div><h2 className='font-semibold'>Rule library</h2><p className='mt-1 text-sm text-ui-muted'>Built-in rules can be tuned per organization. Custom rules match normalized JSON fields on new events.</p></div>
-                <div className='grid gap-4 xl:grid-cols-2'>
-                    {!rules.length && <p className='text-sm text-ui-muted'>No rules available for this organization.</p>}
-                    {rules.map(rule => <div key={rule.id} className='rounded-lg border border-ui-border bg-ui-raised p-3'><div className='flex items-start justify-between gap-2'><div><p className='font-semibold text-ui-text'>{rule.name}</p><p className='mt-1 text-xs text-ui-muted'>{rule.family} · {rule.severity} · {rule.source === 'open_source' ? 'open-source pack' : rule.source === 'owned' ? 'owned rule' : 'Hanasand rule'}</p></div><button type='button' className='rounded-md border border-ui-border px-2 py-1 text-xs font-semibold text-ui-text disabled:opacity-50' disabled={!canManageRules} onClick={() => void toggleRule(rule)}>{rule.enabled === false ? 'Enable' : 'Disable'}</button></div><p className='mt-2 text-xs text-ui-muted'>{rule.explanation}</p>{rule.sourceReference && <a className='mt-2 block truncate text-xs text-ui-primary hover:underline' href={rule.sourceReference} target='_blank' rel='noopener noreferrer'>Source reference</a>}</div>)}
-                </div>
+            {view === 'rules' && showImports && <DashboardPanel className='grid min-w-0 gap-4 p-4 sm:p-6' id='mill-rule-imports'>
+                <h2 className='font-semibold'>Import or create rules</h2>
                 <details className='min-w-0 rounded-lg border border-ui-border'>
                     <summary className='cursor-pointer rounded-lg p-4 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-ui-primary sm:p-5'>Create custom rule</summary>
                     <form className='grid min-w-0 gap-4 border-t border-ui-border p-4 sm:p-5' onSubmit={event => { event.preventDefault(); void createRule() }}>
@@ -203,6 +203,13 @@ export default function MillWorkspace({ view = 'overview' }: { view?: 'overview'
                         <button type='submit' className='min-w-0 h-10 justify-self-start rounded-md bg-ui-text px-3 text-xs font-semibold text-ui-canvas disabled:opacity-50' disabled={!canManageRules || !sigmaPackName.trim() || !sigmaPackVersion.trim() || !sigmaPackReference.trim() || !sigmaYaml.trim()}>Import Sigma</button>
                     </form>
                 </details>
+            </DashboardPanel>}
+            {view === 'rules' && <DashboardPanel className='grid min-w-0 gap-6 p-4 sm:p-6' id='mill-rules'>
+                <div><h2 className='font-semibold'>Rule library</h2><p className='mt-1 text-sm text-ui-muted'>Built-in rules can be tuned per organization. Custom rules match normalized JSON fields on new events.</p></div>
+                <div className='grid gap-4 xl:grid-cols-2'>
+                    {!rules.length && <p className='text-sm text-ui-muted'>No rules available for this organization.</p>}
+                    {rules.map(rule => <div key={rule.id} className='rounded-lg border border-ui-border bg-ui-raised p-3'><div className='flex items-start justify-between gap-2'><div><p className='font-semibold text-ui-text'>{rule.name}</p><p className='mt-1 text-xs text-ui-muted'>{rule.family} · {rule.severity} · {rule.source === 'open_source' ? 'open-source pack' : rule.source === 'owned' ? 'owned rule' : 'Hanasand rule'}</p></div><button type='button' className='rounded-md border border-ui-border px-2 py-1 text-xs font-semibold text-ui-text disabled:opacity-50' disabled={!canManageRules} onClick={() => void toggleRule(rule)}>{rule.enabled === false ? 'Enable' : 'Disable'}</button></div><p className='mt-2 text-xs text-ui-muted'>{rule.explanation}</p>{rule.sourceReference && <a className='mt-2 block truncate text-xs text-ui-primary hover:underline' href={rule.sourceReference} target='_blank' rel='noopener noreferrer'>Source reference</a>}</div>)}
+                </div>
             </DashboardPanel>}
             {view === 'overview' && <div className='grid items-start gap-6 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.35fr)]'>
 
