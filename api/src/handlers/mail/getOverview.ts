@@ -1,3 +1,4 @@
+import { MailAccessDenied } from '#utils/mail/shared.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { getMailAccess, listAccessibleMailAccounts, rotateMailPasswordForUser } from '#utils/mail/accounts.ts'
@@ -20,6 +21,7 @@ export default async function getMailOverview(req: FastifyRequest, res: FastifyR
         const query = req.query as { mailboxUser?: string, mailboxId?: string, messageId?: string }
         const access = await getMailAccess(id, query.mailboxUser)
         const accessibleAccounts = await listAccessibleMailAccounts(id)
+        const accountCounts = loadAccountCounts(id, accessibleAccounts, access.targetUser)
         const recentRecipients = await listRecentRecipients(id, access.targetUser)
         const health = await withDeadline(getMailHealth(), 3500, null).catch(error => {
             req.log.warn({ error }, 'Failed to collect mail health checks')
@@ -52,10 +54,12 @@ export default async function getMailOverview(req: FastifyRequest, res: FastifyR
                 }))
         }
 
+        overviewData.accessibleAccounts = await accountCounts
         return res
             .header('Cache-Control', 'no-store, private, max-age=0, must-revalidate')
             .send(overviewData)
     } catch (error) {
+        if (error instanceof MailAccessDenied) return res.status(403).send({ error: error.message })
         const query = req.query as { mailboxUser?: string }
         if (isMailSetupUnavailable(error)) {
             const targetUser = query.mailboxUser || id
@@ -105,7 +109,7 @@ async function loadMailboxOverviewData({
     const inboxMailbox = mailboxData.mailboxes.find(mailbox => mailbox.role === 'inbox') || mailboxData.mailboxes[0]
     if (!inboxMailbox) {
         return {
-            actor: { id: actorId, canAccessAnyMailbox: access.canAccessAnyMailbox },
+            actor: { id: actorId, canAccessAnyMailbox: access.canAccessAnyMailbox, canSend: access.canSend },
             mailboxUser: repairedAccess.targetUser,
             mailboxAddress: repairedAccess.address,
             accessibleAccounts,
@@ -131,7 +135,7 @@ async function loadMailboxOverviewData({
 
     const refreshedMailboxData = await getMailboxList(repairedAccess.username, repairedAccess.password)
     const selectedMailboxId = query.mailboxId
-        || refreshedMailboxData.mailboxes.find(mailbox => mailbox.role === 'inbox')?.id
+        || refreshedMailboxData.mailboxes.find(mailbox => mailbox.role === (access.targetUser === 'shared:noreply' ? 'sent' : 'inbox'))?.id
         || refreshedMailboxData.mailboxes[0]?.id
         || null
     const messages = selectedMailboxId ? await listMessages(repairedAccess.username, repairedAccess.password, selectedMailboxId) : []
@@ -140,7 +144,7 @@ async function loadMailboxOverviewData({
     const filters = await listMailRules(repairedAccess.targetUser)
 
     return {
-        actor: { id: actorId, canAccessAnyMailbox: repairedAccess.canAccessAnyMailbox },
+        actor: { id: actorId, canAccessAnyMailbox: repairedAccess.canAccessAnyMailbox, canSend: repairedAccess.canSend },
         mailboxUser: repairedAccess.targetUser,
         mailboxAddress: repairedAccess.address,
         accessibleAccounts,
@@ -156,10 +160,10 @@ async function loadMailboxOverviewData({
 }
 
 export function withDeadline<T>(work: Promise<T>, timeoutMs: number, fallback: T) {
-    return Promise.race([
-        work,
-        new Promise<T>(resolve => setTimeout(() => resolve(fallback), timeoutMs)),
-    ])
+    return new Promise<T>((resolve, reject) => {
+        const timer = setTimeout(() => resolve(fallback), timeoutMs)
+        work.then(value => { clearTimeout(timer); resolve(value) }, error => { clearTimeout(timer); reject(error) })
+    })
 }
 
 async function repairMailAccessIfNeeded(access: MailAccess, onRepair: (error: Error) => void) {
@@ -171,6 +175,7 @@ async function repairMailAccessIfNeeded(access: MailAccess, onRepair: (error: Er
             throw error
         }
         onRepair(error as Error)
+        if (access.targetUser.startsWith('shared:')) throw error
         const repaired = await rotateMailPasswordForUser(access.targetUser, access.targetUser)
         const repairedAccess = { ...access, username: repaired.username, address: repaired.address, password: repaired.password }
         return { access: repairedAccess, mailboxData: await getMailboxList(repairedAccess.username, repairedAccess.password) }
@@ -201,7 +206,7 @@ export function degradedMailOverview({
     healthLabel?: string
 }) {
     return {
-        actor: { id, canAccessAnyMailbox },
+        actor: { id, canAccessAnyMailbox, canSend: false },
         mailboxUser: targetUser,
         mailboxAddress: address,
         accessibleAccounts,
@@ -249,4 +254,22 @@ function settingsFor(access: { username: string, address: string }) {
         username: access.username,
         address: access.address,
     }
+}
+
+const unreadCache = new Map<string, { at: number, count: number }>()
+async function loadAccountCounts(actorId: string, accounts: Awaited<ReturnType<typeof listAccessibleMailAccounts>>, selected: string) {
+    return Promise.all(accounts.map(async account => {
+        if (!account.shared && account.id !== actorId && account.id !== selected) return { ...account, unreadCount: null }
+        const cached = unreadCache.get(account.id)
+        if (cached && Date.now() - cached.at < 10_000) return { ...account, unreadCount: cached.count }
+        const unreadCount = await withDeadline((async () => {
+            const access = await getMailAccess(actorId, account.id)
+            const { mailboxes } = await getMailboxList(access.username, access.password)
+            const count = mailboxes.filter(mailbox => mailbox.role === 'inbox').reduce((sum, mailbox) => sum + (mailbox.unreadEmails || 0), 0)
+            if (unreadCache.size > 500) unreadCache.clear()
+            unreadCache.set(account.id, { at: Date.now(), count })
+            return count
+        })().catch(() => null), 3000, null)
+        return { ...account, unreadCount }
+    }))
 }

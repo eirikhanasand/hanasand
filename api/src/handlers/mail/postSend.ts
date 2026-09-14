@@ -1,3 +1,4 @@
+import { MailAccessDenied } from '#utils/mail/shared.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { getMailAccess } from '#utils/mail/accounts.ts'
@@ -34,6 +35,7 @@ export default async function postSendMail(req: FastifyRequest, res: FastifyRepl
     const body = req.body as SendBody
     try {
         const access = await getMailAccess(id, body.mailboxUser)
+        if (access.canSend === false) throw new MailAccessDenied()
         if (!body.to?.trim()) {
             return res.status(400).send({ error: 'A recipient is required.' })
         }
@@ -97,6 +99,7 @@ export default async function postSendMail(req: FastifyRequest, res: FastifyRepl
                 sentMessageId: sendResult.sentMessageId,
             })
     } catch (error) {
+        if (error instanceof MailAccessDenied) return res.status(403).send({ error: error.message })
         if (isMailAdminConfigError(error)) {
             return res.status(503).send(mailAdminUnavailablePayload())
         }

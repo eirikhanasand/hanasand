@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
     Archive,
     Clock3,
@@ -79,7 +79,9 @@ export default function MailWorkspace({ mailboxUser }: Props) {
     const [query, setQuery] = useState('')
     const [lastSuccessAt, setLastSuccessAt] = useState<number | null>(null)
     const [now, setNow] = useState(() => Date.now())
-    const [activeMailboxUser, setActiveMailboxUser] = useState<string | null>(mailboxUser || null)
+    const selection = useRef<{ user: string | null, mailbox: string | null, message: string | null }>({ user: mailboxUser || null, mailbox: null, message: null })
+    const requestVersion = useRef(0)
+    const requestPending = useRef(false)
     const [mailFilter, setMailFilter] = useState<MailListFilter>('all')
 
     const load = useCallback(async (params: {
@@ -89,6 +91,9 @@ export default function MailWorkspace({ mailboxUser }: Props) {
         silent?: boolean
     } = {}) => {
         const silent = Boolean(params.silent)
+        if (silent && requestPending.current) return
+        const version = ++requestVersion.current
+        requestPending.current = true
 
         try {
             if (!silent) {
@@ -97,24 +102,26 @@ export default function MailWorkspace({ mailboxUser }: Props) {
             }
 
             const next = await fetchMailOverview({
-                mailboxUser: params.mailboxUser ?? activeMailboxUser ?? mailboxUser ?? undefined,
-                mailboxId: params.mailboxId ?? selectedMailboxId,
-                messageId: params.messageId ?? selectedMessageId,
+                mailboxUser: params.mailboxUser ?? selection.current.user ?? mailboxUser ?? undefined,
+                mailboxId: params.mailboxId === undefined ? selection.current.mailbox : params.mailboxId,
+                messageId: params.messageId === undefined ? selection.current.message : params.messageId,
             })
 
+            if (version !== requestVersion.current) return
             setOverview(next)
-            setActiveMailboxUser(next.mailboxUser)
             setSelectedMailboxId(next.selectedMailboxId)
             const nextSelectedMessageId = params.messageId
                 || next.selectedMessage?.id
-                || next.messages.find(message => message.id === selectedMessageId)?.id
+                || next.messages.find(message => message.id === selection.current.message)?.id
                 || next.messages[0]?.id
                 || null
+            selection.current = { user: next.mailboxUser, mailbox: next.selectedMailboxId, message: nextSelectedMessageId }
             setSelectedMessageId(nextSelectedMessageId)
             setMoveTargetMailboxId('')
             setBackgroundIssue('')
             setLastSuccessAt(Date.now())
         } catch (cause) {
+            if (version !== requestVersion.current) return
             const rawMessage = cause instanceof Error ? cause.message : ''
             const message = /failed to fetch|networkerror|load failed/i.test(rawMessage)
                 ? 'Mail is reconnecting. The rest of the console is still ready.'
@@ -125,18 +132,19 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 setError(message)
             }
         } finally {
-            if (!silent) {
+            if (version === requestVersion.current) requestPending.current = false
+            if (!silent && version === requestVersion.current) {
                 setLoading(false)
             }
         }
-    }, [activeMailboxUser, mailboxUser, selectedMailboxId, selectedMessageId])
+    }, [mailboxUser])
 
     useEffect(() => {
         const timer = window.setTimeout(() => {
             void load({ mailboxUser, mailboxId: null, messageId: null })
         }, 0)
 
-        return () => window.clearTimeout(timer)
+        return () => { window.clearTimeout(timer); requestVersion.current++; requestPending.current = false }
     }, [load, mailboxUser])
 
     useEffect(() => {
@@ -216,24 +224,6 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                     </div>
                     <MailSyncStatus lastSuccessAt={lastSuccessAt} now={now} issue={backgroundIssue || error} />
 
-                    {overview?.actor.canAccessAnyMailbox && (
-                        <select
-                            data-testid='mail-account-select'
-                            className={`${subtleInput} min-w-36`}
-                            value={overview.mailboxUser}
-                            onChange={(event) => {
-                                setActiveMailboxUser(event.target.value)
-                                void load({ mailboxUser: event.target.value, mailboxId: null, messageId: null })
-                            }}
-                        >
-                            {overview.accessibleAccounts.map(account => (
-                                <option key={account.id} value={account.id}>
-                                    {account.id}
-                                </option>
-                            ))}
-                        </select>
-                    )}
-
                     <div className='flex min-w-0 basis-full items-center gap-2 sm:basis-auto sm:flex-1 sm:min-w-64 sm:max-w-md'>
                         <div className='relative min-w-0 flex-1'>
                             <Search className='pointer-events-none absolute left-2.5 top-2 h-3.5 w-3.5 text-ui-muted' />
@@ -248,7 +238,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                         <button
                             type='button'
                             data-testid='mail-compose-button'
-                            disabled={!overview}
+                            disabled={!overview || loading || overview.actor.canSend === false}
                             className={`${toolbarButton} shrink-0`}
                             onClick={() => setComposer({ ...emptyComposer, open: true })}
                         >
@@ -312,6 +302,25 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                             </div>
                         </div>
 
+                        <nav aria-label='Mailboxes' className='mb-3 grid gap-1 border-b border-ui-border pb-3'>
+                            {overview?.accessibleAccounts.map(account => (
+                                <button key={account.id} type='button' disabled={composer.open}
+                                    aria-label={`Open ${account.shared ? account.name : account.id === overview.actor.id ? 'Personal inbox' : account.name}`}
+                                    aria-current={overview.mailboxUser === account.id ? 'true' : undefined}
+                                    title={composer.open ? 'Close the draft before opening another mailbox' : account.address}
+                                    onClick={() => {
+                                        setQuery('')
+                                        setMailFilter('all')
+                                        void load({ mailboxUser: account.id, mailboxId: null, messageId: null })
+                                    }}
+                                    className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-xs disabled:opacity-50 ${overview.mailboxUser === account.id ? 'bg-ui-primary/10 font-semibold text-ui-primary' : 'text-ui-muted hover:bg-ui-raised'}`}>
+                                    <span className='flex min-w-0 items-center gap-2'><Inbox className='h-4 w-4 shrink-0' />
+                                        {!sidebarCompact && <span className='truncate'>{account.shared ? account.name : account.id === overview.actor.id ? 'Personal inbox' : account.name}</span>}
+                                    </span>
+                                    {!sidebarCompact && <span aria-label={account.unreadCount == null ? 'Unread count unavailable' : `${account.unreadCount} unread`}>{account.unreadCount ?? '—'}</span>}
+                                </button>
+                            ))}
+                        </nav>
                         <div className='grid gap-1.5'>
                             {overview?.mailboxes.map(mailbox => (
                                 <button
@@ -402,9 +411,9 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                 </div>
 
                                 <div className='flex flex-wrap items-center gap-1.5'>
-                                    <ActionIconButton label='Reply' icon={<Reply className='h-3.5 w-3.5' />} onClick={() => setComposer(composeFromReply('reply', selectedMessage))} />
-                                    <ActionIconButton label='Reply all' icon={<CornerUpLeft className='h-3.5 w-3.5' />} onClick={() => setComposer(composeFromReply('replyAll', selectedMessage, overview.mailboxAddress))} />
-                                    <ActionIconButton label='Forward' icon={<Forward className='h-3.5 w-3.5' />} onClick={() => setComposer(composeFromReply('forward', selectedMessage))} />
+                                    <ActionIconButton label='Reply' disabled={loading || overview?.actor.canSend === false} icon={<Reply className='h-3.5 w-3.5' />} onClick={() => setComposer(composeFromReply('reply', selectedMessage))} />
+                                    <ActionIconButton label='Reply all' disabled={loading || overview?.actor.canSend === false} icon={<CornerUpLeft className='h-3.5 w-3.5' />} onClick={() => setComposer(composeFromReply('replyAll', selectedMessage, overview.mailboxAddress))} />
+                                    <ActionIconButton label='Forward' disabled={loading || overview?.actor.canSend === false} icon={<Forward className='h-3.5 w-3.5' />} onClick={() => setComposer(composeFromReply('forward', selectedMessage))} />
                                     <ActionIconButton label={selectedMessage.isFlagged ? 'Unstar' : 'Star'} icon={<Star className='h-3.5 w-3.5' />} onClick={() => void runAction(selectedMessage.id, overview, setError, load, selectedMessage.isFlagged ? 'unflag' : 'flag')} />
                                     <ActionIconButton label='Archive' icon={<Archive className='h-3.5 w-3.5' />} onClick={() => void runAction(selectedMessage.id, overview, setError, load, 'archive')} />
                                     <ActionIconButton

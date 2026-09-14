@@ -13,6 +13,15 @@ assert kind in ('api', 'auth', 'frontend') and len(ports) == 2
 assert all(port.isdecimal() and 1024 < int(port) < 65535 for port in ports)
 original = json.loads(subprocess.check_output(['docker', 'inspect', source]))[0]
 settings = dict(item.split('=', 1) for item in original['Config']['Env'])
+if kind in ('api', 'auth'):
+    mail_file = Path('/home/hanasand/resilience/mail.json')
+    if mail_file.exists():
+        mail = json.loads(mail_file.read_text())
+        allowed = {'MAIL_ADMIN_USERNAME', 'MAIL_ADMIN_PASSWORD', 'MAIL_SERVICE_KEY', 'MAIL_SYSTEM_SENDER_PASSWORD', 'MAIL_INTERNAL_URL', 'MAIL_SMTP_INTERNAL_PORT'}
+        if not isinstance(mail, dict) or not set(mail) <= allowed or not all(isinstance(v, str) and v for v in mail.values()):
+            raise SystemExit('Invalid mail runtime configuration')
+        settings.update(mail)
+
 # Keep provider secrets separate from the shared API/frontend environment.
 if kind == 'auth':
     secret_file = Path('/home/hanasand/resilience/auth-providers.json')

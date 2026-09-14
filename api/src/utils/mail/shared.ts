@@ -1,0 +1,67 @@
+import run from '#db'
+import { mailConfig } from './config.ts'
+import { encryptMailSecret, generateMailSecret, tryDecryptMailSecret } from './crypto.ts'
+import { createPrincipal, findPrincipalByName, patchPrincipal } from './stalwartAdmin.ts'
+
+export const sharedMailboxes = [
+    { id: 'shared:support', name: 'Support', localPart: 'support' },
+    { id: 'shared:sales', name: 'Sales', localPart: 'sales' },
+    { id: 'shared:noreply', name: 'Noreply', localPart: mailConfig.systemSenderLocalPart },
+]
+
+export class MailAccessDenied extends Error {
+    constructor() { super('You do not have access to this mailbox.') }
+}
+
+export async function mailPermissions(actorId: string) {
+    const result = await run(`SELECT r.id FROM roles r JOIN user_roles ur ON ur.role_id = r.id
+        JOIN users u ON u.id = ur.user_id WHERE ur.user_id = $1 AND u.active = TRUE`, [actorId])
+    const roles = result.rows.map((row: { id: string }) => row.id)
+    const admin = roles.some((role: string) => ['administrator', 'admin', 'system_admin'].includes(role))
+    return { admin, shared: admin || roles.includes('support'), any: admin || mailConfig.privilegedMailboxUsers.has(actorId) }
+}
+
+// Secrets are encrypted in the database; shared mailboxes are not website users.
+export async function sharedMailAccess(id: string) {
+    const definition = sharedMailboxes.find(mailbox => mailbox.id === id)
+    if (!definition) throw new MailAccessDenied()
+    if (id === 'shared:noreply') {
+        const { systemSenderAccess } = await import('./system.ts')
+        return systemSenderAccess()
+    }
+    const result = await run('SELECT * FROM shared_mail_accounts WHERE id = $1', [id])
+    const row = result.rows[0]
+    const password = row && tryDecryptMailSecret(row.mail_password_encrypted)
+    if (!password) throw new Error(`Shared mailbox ${definition.name} has not been provisioned.`)
+    return { username: row.mail_username as string, address: row.mail_address as string, password }
+}
+
+// Run during deployment, not on every inbox poll. Existing credentials are retained.
+export async function provisionSharedMailboxes() {
+    for (const mailbox of sharedMailboxes) {
+        if (mailbox.id === 'shared:noreply') {
+            const { ensureSystemSender } = await import('./system.ts')
+            const account = await ensureSystemSender()
+            await run(`INSERT INTO shared_mail_accounts (id, mail_username, mail_address, mail_password_encrypted)
+                VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO UPDATE SET mail_password_encrypted = EXCLUDED.mail_password_encrypted`,
+            [mailbox.id, account.username, account.address, encryptMailSecret(account.password)])
+            continue
+        }
+        const existing = await run('SELECT * FROM shared_mail_accounts WHERE id = $1', [mailbox.id])
+        const row = existing.rows[0]
+        const address = `${mailbox.localPart}@${mailConfig.domain}`
+        const password = row ? tryDecryptMailSecret(row.mail_password_encrypted) : generateMailSecret()
+        if (!password) throw new Error(`Cannot decrypt ${mailbox.name} mailbox credentials.`)
+        const principal = await findPrincipalByName(mailbox.localPart, 'individual')
+        if (principal && !row) throw new Error(`Existing ${mailbox.name} mailbox must be linked before provisioning; credentials were not changed.`)
+        await run(`INSERT INTO shared_mail_accounts (id, mail_username, mail_address, mail_password_encrypted)
+            VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING`,
+        [mailbox.id, mailbox.localPart, address, encryptMailSecret(password)])
+        if (!principal) {
+            await createPrincipal({ type: 'individual', name: mailbox.localPart, description: mailbox.name,
+                secrets: [password], emails: [address], roles: ['user'], quota: 0 })
+        } else if (!principal.emails?.includes(address)) {
+            await patchPrincipal(principal.name, [{ action: 'addItem', field: 'emails', value: address }])
+        }
+    }
+}

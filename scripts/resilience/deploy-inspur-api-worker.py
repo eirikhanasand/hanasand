@@ -9,6 +9,14 @@ lock=open('/tmp/hanasand-frontend-deploy.lock','a')
 fcntl.flock(lock,fcntl.LOCK_EX)
 original=json.loads(subprocess.check_output(['docker','inspect','hanasand_api']))[0]
 settings=dict(value.split('=',1) for value in original['Config']['Env'])
+mail_file = Path('/home/hanasand/resilience/mail.json')
+if mail_file.exists():
+    mail = json.loads(mail_file.read_text())
+    allowed = {'MAIL_ADMIN_USERNAME', 'MAIL_ADMIN_PASSWORD', 'MAIL_SERVICE_KEY', 'MAIL_SYSTEM_SENDER_PASSWORD', 'MAIL_INTERNAL_URL', 'MAIL_SMTP_INTERNAL_PORT'}
+    if not isinstance(mail, dict) or not set(mail) <= allowed or not all(isinstance(v, str) and v for v in mail.values()):
+        raise SystemExit('Invalid mail runtime configuration')
+    settings.update(mail)
+
 assert settings.get('API_HTTP_ONLY','0') != '1'
 subprocess.run(['docker','image','inspect',image],check=True,stdout=subprocess.DEVNULL)
 with tempfile.NamedTemporaryFile(mode='w',suffix='.json',prefix='monitoring-worker-',delete=False) as temporary:
