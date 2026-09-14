@@ -35,7 +35,7 @@ try {
     const detail = await page.getByRole('heading', { name: 'Suspicious login activity', exact: true }).boundingBox()
     assert(Math.abs(queue.y - detail.y) < 60, 'Queue and detail must share the first row')
     if (process.env.MILL_SCREENSHOT_DIR) await page.screenshot({ path: `${process.env.MILL_SCREENSHOT_DIR}/mill-overview.png` })
-    await page.getByRole('link', { name: 'Detection rules', exact: true }).last().click()
+    await page.getByRole('link', { name: 'Rules', exact: true }).last().click()
     await page.getByRole('heading', { name: 'Rule library' }).waitFor()
     assert.equal(await page.getByLabel('Organization', { exact: true }).inputValue(), 'beta')
     assert.equal(await page.locator('details').count(), 3)

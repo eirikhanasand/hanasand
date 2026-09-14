@@ -70,7 +70,7 @@ try {
     for (const width of [320,390,768,1440]) { await page.setViewportSize({ width, height: 1000 }); assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Header overflow at ${width}`) }
     await page.goto(`${server.url}mill/rules?org=foreign`)
     await page.getByRole('alert').filter({ hasText: 'You do not have access' }).waitFor()
-    assert.equal(await page.getByRole('heading', { name: 'Detection rules' }).count(), 0)
+    assert.equal(await page.getByRole('heading', { name: 'Rules' }).count(), 0)
     await page.getByRole('link', { name: 'Keep current workspace' }).click()
     await page.getByRole('link', { name: 'Rule for org-one' }).waitFor()
     console.log('Workspace browser checks passed: legacy and short links, clean navigation, shared copy, three-second notice, cookie-only scope, cross-tab changes, denied scope, responsive header.')
