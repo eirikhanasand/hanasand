@@ -33,6 +33,7 @@ class HealthRouteTests(unittest.TestCase):
             self.assertIn('proxy_ssl_name api.hanasand.com;', config)
             self.assertNotIn('hanasand_recovery_api', config)
             self.assertEqual(config.count('limit_except GET { deny all; }'), 2)
+            self.assertEqual(config.count('proxy_method GET;'), 2)
             self.assertEqual(config.count('proxy_pass_request_headers off;'), 2)
             self.assertEqual(config.count('proxy_intercept_errors off;'), 2)
             self.assertIn('limit_req_status 429;', config)
