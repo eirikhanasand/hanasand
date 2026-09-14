@@ -6,7 +6,7 @@ const queries: Array<{ sql: string, values: unknown[] }> = []
 async function run(sql: string, values: unknown[] = []) {
     if (sql.includes('FROM roles r')) return { rows: administrator ? [{ id: 'system_admin' }] : [] }
     queries.push({ sql, values })
-    return { rows: [] }
+    return { rows: sql.includes('COUNT(*)') ? [{ total: 125 }] : [] }
 }
 mock.module('../src/utils/db.ts', () => ({ default: run, queryOnce: run, closeDatabase: async () => {} }))
 mock.module('../src/utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: true, id: 'test-admin' }) }))
@@ -21,10 +21,10 @@ test('audit query validator accepts page and applies an offset after stable orde
     const response = await request({ page: '2', limit: '50', actor: 'operator' })
     expect(response.statusCode).toBe(200)
     expect(response.body.pagination.page).toBe(2)
-    expect(queries[0].sql).toContain('ORDER BY e.created_at DESC, e.id DESC')
-    expect(queries[0].sql).toContain('OFFSET')
-    expect(queries[0].values.at(-1)).toBe(50)
-    expect(queries[0].values).toContain('%operator%')
+    expect(queries[1].sql).toContain('ORDER BY e.created_at DESC, e.id DESC')
+    expect(queries[1].sql).toContain('OFFSET')
+    expect(queries[1].values.at(-1)).toBe(50)
+    expect(queries[1].values).toContain('%operator%')
 })
 test('invalid pages and unsupported filters are rejected', async () => {
     expect((await request({ page: '0' })).statusCode).toBe(400)
@@ -35,4 +35,15 @@ test('numbered audit pages remain administrator-only', async () => {
     administrator = false
     expect((await request({ page: '2' })).statusCode).toBe(403)
     expect(queries).toHaveLength(0)
+})
+
+test('cursor batches count all filtered events before applying the cursor', async () => {
+    const cursor = encodeURIComponent(JSON.stringify({ createdAt: '2026-09-14T00:00:00Z', id: 75 }))
+    const response = await request({ limit: '50', service: 'test', cursor })
+    expect(response.body.pagination.total).toBe(125)
+    expect(queries[0].sql).toContain('COUNT(*)')
+    expect(queries[0].values).toEqual(['%test%'])
+    expect(queries[0].sql).not.toContain('(e.created_at, e.id) <')
+    expect(queries[1].sql).toContain('(e.created_at, e.id) <')
+    expect(queries[1].values).toContain(75)
 })
