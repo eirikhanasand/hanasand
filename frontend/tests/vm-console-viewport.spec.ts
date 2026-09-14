@@ -87,3 +87,53 @@ test('restart progress keeps existing output and reconnects after a transport in
     await page.waitForTimeout(2200)
     expect(connections).toBe(2)
 })
+
+for (const support of ['missing', 'rejected'] as const) {
+    test(`mobile fullscreen fills the viewport when native fullscreen is ${support}`, async ({ page }) => {
+        await page.setViewportSize({ width: 390, height: 844 })
+        await page.context().addCookies([
+            { name: 'id', value: 'dashboard-render-proof-user', url: 'http://127.0.0.1:3272' },
+            { name: 'access_token', value: 'local-dashboard-render-proof-token', url: 'http://127.0.0.1:3272' },
+        ])
+        await page.setExtraHTTPHeaders({ 'x-hanasand-render-proof-auth': 'local-dashboard-render-proof' })
+        await page.addInitScript(mode => {
+            Object.defineProperty(Element.prototype, 'requestFullscreen', { configurable: true, value: mode === 'missing' ? undefined : () => Promise.reject(new Error('Not supported')) })
+        }, support)
+        let connections = 0
+        const sizes: number[] = []
+        await page.routeWebSocket('**/vm/cashflow/console', socket => {
+            connections++
+            socket.onMessage(data => {
+                const message = JSON.parse(String(data))
+                if (message.type === 'auth') socket.send(JSON.stringify({ type: 'ready', username: 'fixture' }))
+                if (message.type === 'resize') sizes.push(message.rows)
+            })
+        })
+        await page.goto('/vms/cashflow/console')
+        await expect(page.getByRole('status')).toContainText('Connected')
+        const terminal = page.getByLabel('cashflow terminal')
+        const original = await terminal.evaluate(el => el.getBoundingClientRect().height)
+        await page.getByRole('button', { name: 'Enter fullscreen' }).click()
+        const expanded = page.locator('section[data-expanded]')
+        await expect(expanded).toBeVisible()
+        await expect.poll(() => expanded.evaluate(el => Math.round(el.getBoundingClientRect().height))).toBe(844)
+        await expect(page.getByRole('status')).toContainText('Connected')
+        await expect.poll(() => terminal.evaluate(el => el.getBoundingClientRect().height)).toBeGreaterThan(original)
+        await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('hidden')
+        const rowsBeforeKeyboard = sizes.at(-1)!
+        await page.evaluate(() => {
+            Object.defineProperty(window.visualViewport!, 'height', { configurable: true, value: 430 })
+            window.visualViewport!.dispatchEvent(new Event('resize'))
+        })
+        await expect.poll(() => expanded.evaluate(el => Math.round(el.getBoundingClientRect().height))).toBe(430)
+        await expect.poll(() => sizes.at(-1)!).toBeLessThan(rowsBeforeKeyboard)
+        await page.getByRole('button', { name: 'Exit fullscreen' }).click()
+        await expect(expanded).toHaveCount(0)
+        await expect.poll(() => terminal.evaluate(el => el.getBoundingClientRect().height)).toBe(original)
+        await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('')
+        await page.getByRole('button', { name: 'Enter fullscreen' }).click()
+        await page.keyboard.press('Escape')
+        await expect(page.getByRole('button', { name: 'Enter fullscreen' })).toBeVisible()
+        expect(connections).toBe(1)
+    })
+}

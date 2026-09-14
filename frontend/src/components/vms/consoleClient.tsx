@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import Link from 'next/link'
 import { Maximize2, Minimize2, RefreshCw } from 'lucide-react'
 import config from '@/config'
@@ -8,17 +8,56 @@ import { getCookie } from '@/utils/cookies/cookies'
 
 export default function VmConsole({ name }: { name: string }) {
     const panel = useRef<HTMLElement>(null)
-    const [fullscreen, setFullscreen] = useState(false)
+    const [nativeFullscreen, setNativeFullscreen] = useState(false)
+    const [expanded, setExpanded] = useState(false)
+    const [viewport, setViewport] = useState<CSSProperties>()
+    const fullscreen = nativeFullscreen || expanded
     useEffect(() => {
-        const changed = () => setFullscreen(document.fullscreenElement === panel.current)
+        const changed = () => setNativeFullscreen(document.fullscreenElement === panel.current)
         document.addEventListener('fullscreenchange', changed)
         return () => document.removeEventListener('fullscreenchange', changed)
     }, [])
+    useEffect(() => {
+        if (!expanded) return
+        const previousOverflow = document.body.style.overflow
+        document.body.style.overflow = 'hidden'
+        // The visual viewport also shrinks when a mobile keyboard opens.
+        const visible = window.visualViewport
+        const resize = () => setViewport({ top: visible?.offsetTop || 0, left: visible?.offsetLeft || 0, width: visible?.width || window.innerWidth, height: visible?.height || window.innerHeight })
+        const escape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                event.preventDefault()
+                event.stopPropagation()
+                setExpanded(false)
+            }
+        }
+        resize()
+        visible?.addEventListener('resize', resize)
+        visible?.addEventListener('scroll', resize)
+        window.addEventListener('resize', resize)
+        document.addEventListener('keydown', escape, true)
+        return () => {
+            document.body.style.overflow = previousOverflow
+            visible?.removeEventListener('resize', resize)
+            visible?.removeEventListener('scroll', resize)
+            window.removeEventListener('resize', resize)
+            document.removeEventListener('keydown', escape, true)
+        }
+    }, [expanded])
     async function toggleFullscreen() {
+        if (expanded) { setExpanded(false); return }
+        if (document.fullscreenElement === panel.current) {
+            await document.exitFullscreen().catch(() => setStatus('Use your browser’s fullscreen control to exit.'))
+            return
+        }
         try {
-            if (document.fullscreenElement === panel.current) await document.exitFullscreen()
-            else await panel.current?.requestFullscreen()
-        } catch { setStatus('Fullscreen is unavailable in this browser.') }
+            if (!panel.current?.requestFullscreen || document.fullscreenEnabled === false) { setExpanded(true); return }
+            await panel.current.requestFullscreen()
+        } catch {
+            // Some mobile browsers cannot fullscreen arbitrary elements. Keep the
+            // same mounted terminal and connection while filling the browser area.
+            setExpanded(true)
+        }
     }
     const container = useRef<HTMLDivElement>(null)
     const reconnect = useRef<() => void>(() => {})
@@ -149,7 +188,7 @@ export default function VmConsole({ name }: { name: string }) {
         return () => { disposed = true; clearTimeout(retry); reconnect.current = () => {}; socket?.close(); disposeTerminal?.() }
     }, [name])
 
-    return <section ref={panel} className='flex h-[calc(100dvh-7rem)] min-h-0 flex-col gap-3 overflow-hidden rounded-xl border border-ui-border bg-ui-panel p-4 [&:fullscreen]:h-dvh [&:fullscreen]:w-screen [&:fullscreen]:rounded-none'>
+    return <section ref={panel} data-expanded={expanded || undefined} style={expanded ? viewport : undefined} className={`flex min-h-0 flex-col gap-3 overflow-hidden border border-ui-border bg-ui-panel p-4 [&:fullscreen]:h-dvh [&:fullscreen]:w-screen [&:fullscreen]:rounded-none ${expanded ? 'fixed inset-0 z-[1000] h-dvh rounded-none pt-[max(1rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))]' : 'h-[calc(100dvh-7rem)] rounded-xl'}`}>
         <header className='flex flex-wrap items-center justify-between gap-3'>
             <div><h1 className='text-lg font-semibold'>{name} console</h1><p role='status' className='text-sm text-ui-muted'>{status}{username ? ` · ${username}` : ''}</p></div>
             <div className='flex items-center gap-3'>
