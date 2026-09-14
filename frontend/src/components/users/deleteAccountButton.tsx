@@ -4,7 +4,7 @@ import { useRef, useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { getCookie } from '@/utils/cookies/cookies'
 
-export default function DeleteAccountButton({ name, onDelete }: { name: string, onDelete: () => Promise<void> }) {
+export default function DeleteAccountButton({ name, onDelete, label }: { name: string, onDelete: () => Promise<void>, label?: string }) {
     const dialog = useRef<HTMLDialogElement>(null)
     const [skip, setSkip] = useState(false)
     const [pending, setPending] = useState(false)
@@ -27,14 +27,14 @@ export default function DeleteAccountButton({ name, onDelete }: { name: string, 
 
     return <>
         <button type='button' aria-label={`Delete ${name}`} disabled={pending}
-            className='grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ui-danger hover:bg-ui-danger/10 disabled:opacity-50'
+            className={`${label ? 'flex w-full items-center gap-2 px-3 py-2 text-left' : 'grid h-8 w-8 shrink-0 place-items-center'} rounded-lg text-ui-danger hover:bg-ui-danger/10 disabled:opacity-50`}
             onClick={(event) => {
                 event.stopPropagation()
                 let direct = false
                 try { direct = sessionStorage.getItem(storageKey()) === 'skip' } catch { /* Storage may be disabled; keep asking for confirmation. */ }
                 if (direct) void remove()
                 else { setSkip(false); setError(''); dialog.current?.showModal() }
-            }}><Trash2 className='h-4 w-4' /></button>
+            }}><Trash2 className='h-4 w-4' />{label}</button>
         <dialog ref={dialog} aria-label={`Delete ${name}?`}
             onClick={event => event.stopPropagation()}
             onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); if (pending) event.preventDefault() } }}
