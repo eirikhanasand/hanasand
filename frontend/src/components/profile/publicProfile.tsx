@@ -46,6 +46,7 @@ export default function PublicProfile({ profile, username }: { profile: User | n
                 </div>
                 <h1 className='wrap-break-word text-3xl font-semibold tracking-tight text-ui-text sm:text-4xl'>{displayName}</h1>
                 <p className='mt-1 break-all text-lg text-ui-muted'>@{username}</p>
+                {profile?.email && <p className='mt-3 break-all text-sm text-ui-muted'><span className='font-medium'>Email: </span>{profile.email}</p>}
                 {!profile && <p role='status' className='mt-5 text-sm text-ui-muted'>Profile details are unavailable. Please try again.</p>}
                 {inactive && <p className='mt-5 text-sm text-ui-muted'>This account is no longer active.</p>}
                 <div className='mt-8 flex flex-col gap-4 border-t border-ui-border pt-5 sm:flex-row sm:items-center sm:justify-between'>
