@@ -3,6 +3,7 @@
 import argparse
 import fcntl
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -23,7 +24,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('root', type=Path)
     args = parser.parse_args()
-    with open('/tmp/hanasand-frontend-deploy.lock', 'a') as lock:
+    # Open an existing shared lock without O_CREAT (root may not create over a
+    # user-owned file in /tmp on hosts with protected_regular enabled).
+    lock_path = '/tmp/hanasand-frontend-deploy.lock'
+    try:
+        descriptor = os.open(lock_path, os.O_RDWR | os.O_NOFOLLOW)
+    except FileNotFoundError:
+        descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(descriptor, 'r+') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         ids = subprocess.check_output(['docker', 'ps', '-aq'], text=True).split()
         containers = json.loads(subprocess.check_output(['docker', 'inspect', *ids]))
