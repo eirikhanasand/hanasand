@@ -59,7 +59,7 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
     })
     return <section className='min-w-0 rounded-lg border border-ui-border bg-ui-panel'>
         <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border p-4'>
-            <div><h1 className='text-lg font-semibold text-ui-text'>Cases</h1><p className='text-sm text-ui-muted'>Cases across the service, including health monitoring and dark web monitoring.</p></div>
+            <h1 className='text-lg font-semibold text-ui-text'>Cases</h1>
             <div className='flex items-center gap-2'><CreateCase organizationId={organizationId} />
                 <button type='button' aria-label='Refresh cases' title='Refresh cases' className='inline-flex h-8 w-8 items-center justify-center rounded text-ui-primary hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary' onClick={() => { setPage(1); setCursor(null); setRevision(value => value + 1) }}>
                     <RefreshCw className='h-4 w-4' aria-hidden='true' />
