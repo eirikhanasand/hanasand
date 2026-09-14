@@ -303,23 +303,34 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                         </div>
 
                         <nav aria-label='Mailboxes' className='mb-3 grid gap-1 border-b border-ui-border pb-3'>
-                            {overview?.accessibleAccounts.map(account => (
-                                <button key={account.id} type='button' disabled={composer.open}
-                                    aria-label={`Open ${account.shared ? account.name : account.id === overview.actor.id ? 'Personal inbox' : account.name}`}
-                                    aria-current={overview.mailboxUser === account.id ? 'true' : undefined}
-                                    title={composer.open ? 'Close the draft before opening another mailbox' : account.address}
-                                    onClick={() => {
-                                        setQuery('')
-                                        setMailFilter('all')
-                                        void load({ mailboxUser: account.id, mailboxId: null, messageId: null })
-                                    }}
-                                    className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-xs disabled:opacity-50 ${overview.mailboxUser === account.id ? 'bg-ui-primary/10 font-semibold text-ui-primary' : 'text-ui-muted hover:bg-ui-raised'}`}>
-                                    <span className='flex min-w-0 items-center gap-2'><Inbox className='h-4 w-4 shrink-0' />
-                                        {!sidebarCompact && <span className='truncate'>{account.shared ? account.name : account.id === overview.actor.id ? 'Personal inbox' : account.name}</span>}
-                                    </span>
-                                    {!sidebarCompact && <span aria-label={account.unreadCount == null ? 'Unread count unavailable' : `${account.unreadCount} unread`}>{account.unreadCount ?? '—'}</span>}
-                                </button>
-                            ))}
+                            {overview && [
+                                overview.accessibleAccounts.filter(account => account.id === overview.actor.id || account.shared).sort((a, b) => Number(b.id === overview.actor.id) - Number(a.id === overview.actor.id)),
+                                overview.accessibleAccounts.filter(account => account.id !== overview.actor.id && !account.shared),
+                            ].map((accounts, index) => {
+                                const buttons = accounts.map(account => (
+                                    <button key={account.id} type='button' disabled={composer.open}
+                                        aria-label={`Open ${account.shared ? account.name : account.id === overview.actor.id ? 'Personal inbox' : account.name}`}
+                                        aria-current={overview.mailboxUser === account.id ? 'true' : undefined}
+                                        title={composer.open ? 'Close the draft before opening another mailbox' : account.address}
+                                        onClick={() => {
+                                            setQuery('')
+                                            setMailFilter('all')
+                                            void load({ mailboxUser: account.id, mailboxId: null, messageId: null })
+                                        }}
+                                        className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-xs disabled:opacity-50 ${overview.mailboxUser === account.id ? 'bg-ui-primary/10 font-semibold text-ui-primary' : 'text-ui-muted hover:bg-ui-raised'}`}>
+                                        <span className='flex min-w-0 items-center gap-2'><Inbox className='h-4 w-4 shrink-0' />
+                                            {!sidebarCompact && <span className='truncate'>{account.shared ? account.name : account.id === overview.actor.id ? 'Personal inbox' : account.name}</span>}
+                                        </span>
+                                        {!sidebarCompact && <span aria-label={account.unreadCount == null ? 'Unread count unavailable' : `${account.unreadCount} unread`}>{account.unreadCount ?? '—'}</span>}
+                                    </button>
+                                ))
+                                return index === 0 ? <div key='inboxes' className='grid gap-1'>{buttons}</div> : accounts.length > 0 && (
+                                    <details key='other' className='text-xs text-ui-muted'>
+                                        <summary className='cursor-pointer px-2.5 py-2' aria-label='Other mailboxes'>{sidebarCompact ? '…' : 'Other mailboxes'}</summary>
+                                        <div className='grid max-h-64 gap-1 overflow-y-auto'>{buttons}</div>
+                                    </details>
+                                )
+                            })}
                         </nav>
                         <div className='grid gap-1.5'>
                             {overview?.mailboxes.map(mailbox => (
