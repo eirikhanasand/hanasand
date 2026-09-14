@@ -34,7 +34,7 @@ export default function UsersList({ users, roles }: { users: UserWithRole[], rol
         : users.filter((user) => !isReservedPlaceholder(user)))
         .filter((user) => {
             const query = search.trim().toLowerCase()
-            return !query || user.name.toLowerCase().includes(query) || user.id.toLowerCase().includes(query) || (user.username || '').toLowerCase().includes(query)
+            return !query || user.name.toLowerCase().includes(query) || user.id.toLowerCase().includes(query) || (user.username || '').toLowerCase().includes(query) || (user.email || '').toLowerCase().includes(query)
         })
 
     return (
@@ -58,9 +58,9 @@ export default function UsersList({ users, roles }: { users: UserWithRole[], rol
                                     }
                                 }}
                                 aria-label='Filter users'
-                                className='h-8 w-36 bg-transparent text-sm text-ui-text outline-none placeholder:text-ui-muted'
+                                className='h-8 w-52 bg-transparent text-sm text-ui-text outline-none placeholder:text-ui-muted'
                                 onChange={(event) => setSearch(event.target.value)}
-                                placeholder='Name or username'
+                                placeholder='Name, username or email'
                                 value={search}
                             />
                             <button
@@ -78,7 +78,7 @@ export default function UsersList({ users, roles }: { users: UserWithRole[], rol
                         type='button'
                         aria-label='Search users (Cmd J)'
                         aria-keyshortcuts='Meta+J Control+J'
-                        title='Search users by name or username (Cmd J)'
+                        title='Search users by name, username or email (Cmd J)'
                         onClick={() => setSearchOpen(true)}
                         className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-muted hover:bg-ui-panel hover:text-ui-text'
                     >
@@ -97,10 +97,11 @@ export default function UsersList({ users, roles }: { users: UserWithRole[], rol
                     )}
                 </div>
             </div>
-            <div className='overflow-x-auto'><div className='min-w-[800px]'>
-                <div className='grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_100px_100px_40px] gap-3 text-[0.68rem] font-bold uppercase tracking-[0.12em] text-ui-muted'>
+            <div className='overflow-x-auto'><div className='min-w-[1000px]'>
+                <div className='grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)_100px_100px_40px] gap-3 text-[0.68rem] font-bold uppercase tracking-[0.12em] text-ui-muted'>
                     <span>Name</span>
                     <span>Username</span>
+                    <span>Email</span>
                     <span>Created</span>
                     <span>Last login</span>
                     <span aria-hidden='true' />

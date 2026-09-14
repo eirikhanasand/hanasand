@@ -1,5 +1,6 @@
 SELECT 
     u.id,
+    CASE WHEN $1::boolean THEN u.email ELSE NULL END AS email,
     COALESCE(u.username, u.id) AS username,
     u.name, 
     u.avatar,

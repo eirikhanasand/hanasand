@@ -17,7 +17,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     const name = Cookies.get('name')?.value
     const userId = Cookies.get('id')?.value
     const token = Cookies.get('access_token')?.value
-    const profile = await fetchUser(profileId)
+    const profile = await fetchUser(profileId, userId && token ? { id: userId, token } : undefined)
     const username = profile?.username || profile?.id || profileId
     const isSelf = Boolean(profile && profile.id === userId)
     if (profile && profileId !== username) redirect(`/profile/${encodeURIComponent(username)}`)
@@ -40,6 +40,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
             <DashboardPanel className='relative p-4'>
                 <h1 className='wrap-break-word pr-10 text-xl font-semibold text-ui-text'>{displayName}</h1>
                 <p className='mt-1 break-all pr-10 text-sm text-ui-muted'>@{username}</p>
+                {profile?.email && <p className='mt-2 break-all text-sm text-ui-muted'>{profile.email}</p>}
                 {isSelf && <ProfileIdentity displayName={displayName} username={username} />}
                 {profile?.active === false && <p className='mt-2 text-sm text-ui-muted'>Inactive account</p>}
                 {!profile && !isSelf && <p role='status' className='mt-2 text-sm text-ui-muted'>Profile details are unavailable. Please try again.</p>}
