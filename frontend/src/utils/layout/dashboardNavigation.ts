@@ -24,15 +24,10 @@ export function getDashboardNavigation({ id, isAdmin, canManageSystem, canManage
                 link('Threat Search', '/ti'),
                 link('Cases', '/cases'),
                 link('Browser', '/browser'),
-                link('Analyst Workbench', '/ti/workbench', canReviewIntel),
-                link('Review Assistant', '/ai'),
                 link('Alert actions', '/dwm/actions'),
             ]),
             group('Monitoring', [
                 link('Dark web monitoring', '/dwm'),
-                link('Exposure Activity', '/activity'),
-                link('Monitored Domains', '/monitor', isAdmin),
-                link('Exposure Source Map', '/ti/darkweb/index'),
                 link('Matched alerts', '/dwm/alerts'),
                 link('Monitored actors', '/dwm/actors'),
                 link('Watchlists', '/dwm/watchlists'),
@@ -44,12 +39,10 @@ export function getDashboardNavigation({ id, isAdmin, canManageSystem, canManage
                 link('Security Scanner', canManageSystem ? '/scanner' : '/solutions/scanner'),
                 link('Exposure Lookup', '/pwned'),
                 link('Endpoint Checks', '/test'),
-                link('Check Results', '/test/stats'),
             ]),
         ]),
         group('Threat intelligence', [
             group('Intelligence', [
-                link('Overview', '/ti/admin', isAdmin),
                 link('Latest Activity', '/ti/activity', isAdmin),
                 link('Attacks', '/ti/attacks', isAdmin),
                 link('Actor Profiles', '/ti/enrichment', isAdmin),
@@ -63,7 +56,6 @@ export function getDashboardNavigation({ id, isAdmin, canManageSystem, canManage
             group('Quality & oversight', [
                 link('Evaluation', '/ti/evaluation', canReviewIntel),
                 link('Timeliness', '/ti/timeliness', canReviewIntel),
-                link('Coverage', '/coverage'),
             ]),
         ]),
         group('Automation', [
@@ -72,15 +64,13 @@ export function getDashboardNavigation({ id, isAdmin, canManageSystem, canManage
         ]),
         group('Infrastructure', [
             link('Overview', '/system'),
-            link('Traffic', '/traffic', canManageSystem),
-            link('Log Monitoring', '/logs', isAdmin),
-            link('Service Status', '/status'),
-            link('Incident History', '/status/incidents'),
             group('Compute', [
                 link('Virtual Machines', '/vms', hasVMs),
                 link('Host Updates', '/system/updates', isAdmin),
             ]),
             group('Observability', [
+                link('Traffic', '/traffic', canManageSystem),
+                link('Logs', '/logs', isAdmin),
                 link('AI Metrics', '/system/ai', canManageSystem),
             ]),
             group('Security & resilience', [
@@ -91,7 +81,6 @@ export function getDashboardNavigation({ id, isAdmin, canManageSystem, canManage
             group('Data management', [
                 link('Database', '/db', isAdmin),
                 link('Backups', '/db/backups', isAdmin),
-                link('Restore Backup', '/db/restore', isAdmin),
             ]),
         ]),
         group('Content', [
@@ -99,14 +88,9 @@ export function getDashboardNavigation({ id, isAdmin, canManageSystem, canManage
             group('Writing', [
                 link('Notes', '/notes', canManageContent),
                 link('Articles', '/content/articles', canManageContent),
-                link('New Article', '/content/articles/create', canManageContent),
                 link('Thoughts', '/content/thoughts', canManageContent),
-                link('New Thought', '/content/thoughts/create', canManageContent),
             ]),
             link('Shares', '/shares'),
-            link('New Workspace', '/s'),
-            group('Media', [link('Gallery', '/gallery'), link('Upload', '/upload')]),
-            group('Shortcuts', [link('Create Shortcut', '/g'), link('Shortcut Statistics', '/g/stats')]),
         ]),
         group('Administration', [
             group('Workspaces', [
@@ -128,11 +112,9 @@ export function getDashboardNavigation({ id, isAdmin, canManageSystem, canManage
             group('Account & organization', [
                 link('Profile', `/profile/${id}`),
                 link('Organizations', '/organizations'),
-                link('Cookie Settings', '/cookie-settings'),
-                link('Reserved Usernames', '/reserved-usernames'),
             ]),
             group('Billing', [link('Subscription', '/subscription')]),
-            group('Developer resources', [link('API Docs', '/api'), link('OpenAPI JSON', '/api/openapi'), link('Developer Guide', '/developers'), link('Prompt Portal', '/prompt')]),
+            group('Developer resources', [link('API Docs', '/api'), link('OpenAPI JSON', '/api/openapi')]),
         ]),
     ]
     const permitted = (items: NavigationItem[]): NavigationItem[] => items
