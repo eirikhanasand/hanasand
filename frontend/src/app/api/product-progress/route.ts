@@ -1,3 +1,4 @@
+import { activeOrganizationId } from '@/utils/organizations/serverWorkspace'
 import { NextRequest, NextResponse } from 'next/server'
 import { buildProductProgressPayload, isDurableDelivered } from '@/utils/productProgress/readiness'
 import { deployLedgerFromStatusPayload } from '@/utils/productProgress/deployLedger'
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest) {
         fetchInternalJson(request, routes.deployProbe || '/api/status'),
     ])
     const watchlistRows = rows((watchlists.json as { watchlists?: unknown[] } | undefined)?.watchlists) as DwmWatchlistSummary[]
-    const selectedOrganization = selectOrganization(organizations.json, request)
+    const selectedOrganization = selectOrganization(organizations.json, request, await activeOrganizationId())
     const organizationWebhooks = selectedOrganization
         ? await fetchInternalJson(request, `/api/organizations/${encodeURIComponent(selectedOrganization.id)}/webhooks`)
         : { ok: false, status: 0, error: 'No selected organization available for webhook readiness.' }
@@ -282,12 +283,10 @@ function uniqueStrings(values: string[]) {
     return Array.from(new Set(values.filter(Boolean)))
 }
 
-function selectOrganization(payload: unknown, request: NextRequest): DwmOrganizationSummary | undefined {
+function selectOrganization(payload: unknown, request: NextRequest, activeOrganization?: string): DwmOrganizationSummary | undefined {
     const organizations = rows((payload as { organizations?: unknown[] } | undefined)?.organizations) as DwmOrganizationSummary[]
-    const requestedId = request.nextUrl.searchParams.get('organizationId') || request.headers.get('x-organization-id') || ''
+    const requestedId = request.nextUrl.searchParams.get('organizationId') || request.headers.get('x-organization-id') || activeOrganization || ''
     return organizations.find(item => item.id === requestedId)
-        || organizations.find(item => item.status === 'active')
-        || organizations[0]
 }
 
 function publicTiProvenanceReadiness(input: {

@@ -5,6 +5,7 @@ import { renderToReadableStream } from 'react-dom/server'
 
 let organizationId = ''
 let response = { ok: true, json: async () => ({ organizations: [] as Array<{ id: string, name: string, role: string }> }) }
+mock.module('@/components/organizations/workspaceProvider', () => ({ useWorkspace: () => ({ organizationId, organizations: [], loading: false, switchOrganization: async () => {} }) }))
 mock.module('next/navigation', () => ({ useSearchParams: () => new URLSearchParams({ organizationId }) }))
 mock.module('@/app/api/organizations/_organizationApiProxy', () => ({
     proxyOrganizationApiRequest: async (_request: unknown, path: string, options: { method: string }) => {

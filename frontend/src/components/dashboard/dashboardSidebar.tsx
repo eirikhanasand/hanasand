@@ -81,7 +81,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
 
     function save(next: Preferences) {
         setPreferences(next)
-        try { setCookie(NAVIGATION_COOKIE, JSON.stringify({ ...next, id: access.id }), 365); localStorage.setItem(storageKey, JSON.stringify(next)) } catch { /* Keep this session usable without storage. */ }
+        try { setCookie(NAVIGATION_COOKIE, JSON.stringify({ ...next, id: access.id }), 365); localStorage.removeItem(storageKey) } catch { /* Keep this session usable without storage. */ }
     }
 
     function isExpanded(key: string) {

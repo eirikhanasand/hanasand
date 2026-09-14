@@ -16,6 +16,7 @@ import isPublicProductPath from '@/utils/routes/isPublicProductPath'
 import BrandLogo from '@/components/brand/brandLogo'
 import { useState } from 'react'
 import SiteSearch from './siteSearch'
+import { OrganizationSwitcher } from '@/components/organizations/workspaceProvider'
 import SupportAssistant from '@/components/support/supportAssistant'
 
 const productItems = [
@@ -166,9 +167,9 @@ export default function Header({ token, path: serverPath, initialMode = 'normal'
 
     return (
         <header className='fixed left-0 top-0 z-1000 w-full border-b border-ui-border bg-ui-panel/95 px-3 shadow-[0_1px_0_rgba(17,24,39,0.03)] backdrop-blur sm:px-5 md:px-8'>
-            <div className='mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-4'>
+            <div className='mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-2 sm:gap-4'>
                 <div className='flex min-w-0 items-center gap-4'>
-                    <BrandLogo />
+                    <BrandLogo className='[&>span]:hidden md:[&>span]:inline' />
                     {!isDashboard && !isProfile && !isOrganizations && (
                         <nav className='hidden items-center gap-1 lg:flex'>
                             {token ? (
@@ -182,7 +183,8 @@ export default function Header({ token, path: serverPath, initialMode = 'normal'
                         </nav>
                     )}
                 </div>
-                <div className='flex items-center justify-end gap-2'>
+                <div className='flex min-w-0 items-center justify-end gap-1 sm:gap-2'>
+                    {token && <OrganizationSwitcher />}
                     {token && isDashboard && <ViewModeToggle initialMode={initialMode} />}
                     {isShare ? <ShareIcon baseStyles={baseStyles} isShare={isShare} href='/s' /> : null}
                     <SiteSearch token={token} />
@@ -190,7 +192,7 @@ export default function Header({ token, path: serverPath, initialMode = 'normal'
                         <ActivityIcon className={`h-4.5 w-4.5 ${isStatus ? 'text-ui-success' : ''}`} />
                     </Link>
                     <ThemeSwitch />
-                    <Dashboard href='/dashboard' serverToken={token} />
+                    <span className='hidden sm:block'><Dashboard href='/dashboard' serverToken={token} /></span>
                     <Logout baseStyles={baseStyles} serverToken={token} />
                     <Login serverToken={token} />
                     <Menu />

@@ -1,3 +1,4 @@
+import { activeOrganizationId } from '@/utils/organizations/serverWorkspace'
 import { DashboardPage } from '@/components/dashboard/ui'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
@@ -18,7 +19,7 @@ export default async function DwmCaseDetailPage({
     const token = cookieStore.get('access_token')?.value
     if (!identityId || !token) redirect(`/login?path=${encodeURIComponent(`/cases/${id}`)}`)
 
-    const organizationId = firstParam(query?.organizationId)?.trim() || undefined
+    const organizationId = await activeOrganizationId()
     const tenantId = organizationId || identityId
 
     return (

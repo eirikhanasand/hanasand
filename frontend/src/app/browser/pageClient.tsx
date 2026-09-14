@@ -2939,13 +2939,15 @@ function historyDomainKey(target: string) {
 
 function getOrCreateBrowserClientId() {
     try {
-        const existing = window.localStorage.getItem(clientIdStorageKey)
+        const cookie = document.cookie.split('; ').find(value => value.startsWith(`${clientIdStorageKey}=`))?.slice(clientIdStorageKey.length + 1)
+        let existing = cookie ? decodeURIComponent(cookie) : ''
+        if (!existing) { try { existing = window.localStorage.getItem(clientIdStorageKey) || '' } catch { /* Cookies remain available when local storage is blocked. */ } }
         if (existing) {
             persistBrowserClientCookie(existing)
+            try { window.localStorage.removeItem(clientIdStorageKey) } catch { /* One-time migration is optional. */ }
             return existing
         }
         const next = crypto.randomUUID()
-        window.localStorage.setItem(clientIdStorageKey, next)
         persistBrowserClientCookie(next)
         return next
     } catch {

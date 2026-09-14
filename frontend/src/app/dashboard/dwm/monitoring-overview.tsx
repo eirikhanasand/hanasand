@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
+import Link from '@/components/organizations/workspaceLink'
 import type { DwmActorOverview, DwmProductSnapshot } from '@/utils/dwm/product'
 import { customerAlertSummary, safeEvidenceExcerpt } from '@/utils/dwm/display'
 import type { DwmDataHealth, OperationsSnapshot, PortalAlert } from './dwm-analyst-portal'

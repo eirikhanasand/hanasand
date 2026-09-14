@@ -1,3 +1,4 @@
+import { activeOrganizationId } from '@/utils/organizations/serverWorkspace'
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { cookies } from 'next/headers'
@@ -30,7 +31,7 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
     }
 
     const params = searchParams ? await searchParams : {}
-    const organizationId = firstParam(params.organizationId) || firstParam(params.orgId)
+    const organizationId = await activeOrganizationId()
     const overview = loadOverview(sessionCookies.toString(), organizationId)
     const session = id ? await tokenIsValid(token, id) : null
     const isAdmin = session?.valid === true && session.roles?.some(role => role.id === 'administrator' || role.id === 'admin') === true
@@ -87,10 +88,6 @@ async function organizationMembership(): Promise<'member' | 'none' | 'unavailabl
     const payload = await response.json() as { organizations?: unknown }
     if (!Array.isArray(payload.organizations)) return 'unavailable'
     return payload.organizations.length ? 'member' : 'none'
-}
-
-function firstParam(value: string | string[] | undefined) {
-    return (Array.isArray(value) ? value[0] : value)?.trim() || undefined
 }
 
 async function ServiceHealth() {

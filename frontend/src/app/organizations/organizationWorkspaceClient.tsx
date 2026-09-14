@@ -1,4 +1,6 @@
 'use client'
+import { useWorkspace } from '@/components/organizations/workspaceProvider'
+import { cleanWorkspaceUrl, workspaceShareUrl } from '@/utils/organizations/workspace'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
@@ -626,7 +628,7 @@ function firstDomainCandidate(value: string) {
 
 export default function OrganizationWorkspaceClient({ initialOrganizations }: { initialOrganizations?: OrganizationSummary[] } = {}) {
     const searchParams = useSearchParams()
-    const requestedOrganizationId = searchParams.get('organizationId')?.trim() || ''
+    const { organizationId: requestedOrganizationId, switchOrganization } = useWorkspace()
     const requestedWatchlistId = searchParams.get('watchlistItemId')?.trim() || searchParams.get('watchlistId')?.trim() || ''
     const requestedDestinationId = searchParams.get('destinationId')?.trim() || ''
     const requestedDeliveryId = searchParams.get('deliveryId')?.trim() || ''
@@ -636,7 +638,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations }: { 
     const requestedMemberId = searchParams.get('memberId')?.trim() || ''
     const requestedFocus = searchParams.get('focus')?.trim() || ''
     const [organizations, setOrganizations] = useState<OrganizationSummary[]>(initialOrganizations || [])
-    const [selectedId, setSelectedId] = useState(() => initialOrganizations?.find(item => item.id === requestedOrganizationId)?.id || initialOrganizations?.[0]?.id || '')
+    const [selectedId, setSelectedId] = useState(() => requestedOrganizationId)
     const [bundle, setBundle] = useState<OrgBundle>(initialBundle)
     const [loading, setLoading] = useState(initialOrganizations === undefined)
     const [busy, setBusy] = useState('')
@@ -717,7 +719,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations }: { 
             const nextOrganizations = payload.organizations || []
             setOrganizations(nextOrganizations)
             const preferred = nextSelectedId || requestedOrganizationId || selectedId
-            const nextSelected = nextOrganizations.find(item => item.id === preferred)?.id || nextOrganizations[0]?.id || ''
+            const nextSelected = nextOrganizations.find(item => item.id === preferred)?.id || ''
             setSelectedId(nextSelected)
             if (!nextSelected) {
                 setBundle(initialBundle)
@@ -827,11 +829,11 @@ export default function OrganizationWorkspaceClient({ initialOrganizations }: { 
 
     const selectOrganization = useCallback((organizationId: string) => {
         organizationSwitchFocusRef.current = focusForSubjectType(selectedActivitySubject.type) || workspaceFocusRef.current || currentOrganizationFocus() || requestedFocus
-        setSelectedId(organizationId)
+        void switchOrganization(organizationId)
         const subject = { type: 'organization', id: organizationId } as ActivitySubject
         setSelectedActivitySubject(subject)
         replaceOrganizationWorkspaceSelectionUrl(organizationId, subject)
-    }, [requestedFocus, selectedActivitySubject.type])
+    }, [requestedFocus, selectedActivitySubject.type, switchOrganization])
 
     const selectActivitySubject = useCallback((subject: ActivitySubject) => {
         workspaceFocusRef.current = focusForSubjectType(subject.type)
@@ -3756,6 +3758,7 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
 }
 
 function ScopeColumn({ icon, title, route, rows, empty, rowPrefix }: { icon: ReactNode, title: string, route: string, rows: Array<{ id: string, primary: string, secondary: string, href?: string }>, empty: string, rowPrefix?: string }) {
+    const { organizationId } = useWorkspace()
     const [copyStatus, setCopyStatus] = useState<RowMessage | undefined>()
     const [showAll, setShowAll] = useState(false)
     const showRecordActions = !route.startsWith('/api/')
@@ -3763,7 +3766,7 @@ function ScopeColumn({ icon, title, route, rows, empty, rowPrefix }: { icon: Rea
     const hiddenRows = Math.max(0, rows.length - visibleRows.length)
     const copyRoute = async () => {
         try {
-            await navigator.clipboard.writeText(route)
+            await navigator.clipboard.writeText(workspaceShareUrl(route, organizationId))
             setCopyStatus({ ok: true, text: 'Records link copied.' })
         } catch {
             setCopyStatus({ ok: false, text: 'Copy failed.' })
@@ -4340,13 +4343,13 @@ function replaceOrganizationWorkspaceSelectionUrl(organizationId: string, subjec
     const href = organizationWorkspaceSelectionHref(organizationId, subject)
     if (!href) return
     const url = new URL(href)
-    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+    window.history.replaceState(window.history.state, '', cleanWorkspaceUrl(url.toString()))
 }
 
 function organizationWorkspaceSelectionHref(organizationId: string, subject: ActivitySubject) {
     if (typeof window === 'undefined' || !organizationId) return ''
     const url = new URL(window.location.href)
-    url.searchParams.set('organizationId', organizationId)
+    url.searchParams.set('org', organizationId)
     for (const key of ['inviteId', 'memberId', 'watchlistId', 'watchlistItemId', 'destinationId', 'deliveryId', 'alertId', 'alert', 'caseId']) {
         url.searchParams.delete(key)
     }

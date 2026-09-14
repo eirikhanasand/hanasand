@@ -1,3 +1,4 @@
+import { activeOrganizationId } from '@/utils/organizations/serverWorkspace'
 import { NextRequest } from 'next/server'
 import { proxyTiRequest } from '../../_tiProxy'
 import { proxyOrganizationApiRequest } from '@/app/api/organizations/_organizationApiProxy'
@@ -5,7 +6,7 @@ import { proxyOrganizationApiRequest } from '@/app/api/organizations/_organizati
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
-    const organizationId = request.nextUrl.searchParams.get('organizationId')?.trim() || request.headers.get('x-organization-id') || undefined
+    const organizationId = request.nextUrl.searchParams.get('organizationId')?.trim() || request.headers.get('x-organization-id') || await activeOrganizationId()
     if (organizationId) {
         const scopedUrl = new URL(request.url)
         scopedUrl.searchParams.set('orgId', organizationId)

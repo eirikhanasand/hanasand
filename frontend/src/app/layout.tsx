@@ -1,3 +1,5 @@
+import WorkspaceProvider from '@/components/organizations/workspaceProvider'
+import { readWorkspace, WORKSPACE_COOKIE } from '@/utils/organizations/workspace'
 import { NAVIGATION_COOKIE, readNavigationPreferences } from '@/utils/layout/navigationPreferences'
 import parseCookie from '@/utils/cookies/parseCookie'
 import DashboardSidebar from '@/components/dashboard/dashboardSidebar'
@@ -40,15 +42,17 @@ export default async function layout({ children }: { children: ReactNode }) {
         <html lang='en' className={theme}>
             <body className='h-full w-full max-h-screen max-w-screen overflow-hidden'>
                 <div className='site-atmosphere' />
-                <MobileNavigation enabled={Boolean(id && token)}>
-                    <Header token={token} path={path} initialMode={initialMode} />
-                    <DetachedBoxHost />
-                    <RouteFrame serverPath={path} token={token}
-                        sidebar={id && token ? <DashboardSidebar initialPreferences={initialPreferences} initialMode={initialMode} id={id} isAdmin={isAdmin} canManageSystem={canManageSystem} canManageContent={canManageContent} canReviewIntel={canReviewIntel} /> : null}
-                        banner={<><RecoveryBanner />{impersonatingId ? <ImpersonationBanner id={impersonatingId} name={impersonatingName} /> : null}</>}>
-                        {children}
-                    </RouteFrame>
-                </MobileNavigation>
+                <WorkspaceProvider initial={readWorkspace(Cookies.get(WORKSPACE_COOKIE)?.value, impersonatingId || id)} enabled={token}>
+                    <MobileNavigation enabled={Boolean(id && token)}>
+                        <Header token={token} path={path} initialMode={initialMode} />
+                        <DetachedBoxHost />
+                        <RouteFrame serverPath={path} token={token}
+                            sidebar={id && token ? <DashboardSidebar initialPreferences={initialPreferences} initialMode={initialMode} id={id} isAdmin={isAdmin} canManageSystem={canManageSystem} canManageContent={canManageContent} canReviewIntel={canReviewIntel} /> : null}
+                            banner={<><RecoveryBanner />{impersonatingId ? <ImpersonationBanner id={impersonatingId} name={impersonatingName} /> : null}</>}>
+                            {children}
+                        </RouteFrame>
+                    </MobileNavigation>
+                </WorkspaceProvider>
             </body>
         </html>
     )
