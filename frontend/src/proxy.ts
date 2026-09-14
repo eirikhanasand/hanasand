@@ -114,7 +114,8 @@ export async function proxy(req: NextRequest) {
             applyRefreshedAuthCookies(response, refreshedCookieOptions, refreshedAuth)
         }
 
-        const strictPath = pathToRoleArray.find((item) => path.startsWith(item.path))
+        // This page enforces organization membership on the server and in its API.
+        const strictPath = path === '/dashboard/management/organizations' ? undefined : pathToRoleArray.find((item) => path.startsWith(item.path))
         if (strictPath) {
             if (!roles.length) {
                 const rolesCookie = req.cookies.get('roles')?.value

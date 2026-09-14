@@ -7,6 +7,7 @@ export type NavigationItem = {
 
 export type NavigationAccess = {
     id: string
+    canManageOrganizations?: boolean
     isAdmin: boolean
     canManageSystem: boolean
     canManageContent: boolean
@@ -14,7 +15,7 @@ export type NavigationAccess = {
     canReviewIntel?: boolean
 }
 
-export function getDashboardNavigation({ id, isAdmin, canManageSystem, canManageContent, canReviewIntel = isAdmin, hasVMs = false }: NavigationAccess): NavigationItem[] {
+export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = false, canManageSystem, canManageContent, canReviewIntel = isAdmin, hasVMs = false }: NavigationAccess): NavigationItem[] {
     const link = (label: string, href: string, visible = true): NavigationItem => ({ label, href, visible })
     const group = (label: string, items: NavigationItem[]): NavigationItem => ({ label, items })
     const sections = [
@@ -102,6 +103,7 @@ export function getDashboardNavigation({ id, isAdmin, canManageSystem, canManage
             group('Management', [
                 link('Audit Log', '/management/audit', isAdmin),
                 link('Users', '/management/users', isAdmin),
+                link('Organizations', '/management/organizations', canManageOrganizations),
                 link('Roles', '/management/roles', isAdmin),
                 link('Service accounts', '/management/service-accounts', isAdmin),
             ]),

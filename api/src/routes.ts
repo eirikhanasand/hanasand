@@ -1,3 +1,4 @@
+import { getManagementOrganizations } from './handlers/managementOrganizations.ts'
 import assignVmOrganization from './handlers/vms/organization.ts'
 import { caseRepositoryWebhooks, getCaseDevelopment, getCaseRepositories, postCaseRepository, deleteCaseRepository } from './handlers/caseDevelopment.ts'
 import { getServiceAccounts, postServiceAccount, deleteServiceAccount, serviceAccountSelf } from './handlers/serviceAccounts.ts'
@@ -371,6 +372,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.delete('/ti/saved-searches', deleteSavedSearch)
 
     // Organizations
+    fastify.get('/management/organizations', getManagementOrganizations)
     fastify.get('/organizations', getOrganizations)
     fastify.post('/organizations', postOrganization)
     fastify.post('/organizations/invites/:inviteId/accept', postOrganizationInviteAccept)
