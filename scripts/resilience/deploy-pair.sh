@@ -31,11 +31,12 @@ case "$kind:$old_ports" in
  'api:8082 8083') ports='20802 20803';; api:*) ports='8082 8083';;
  'auth:8181 8182') ports='8183 8184';; auth:*) ports='8181 8182';;
 esac
+pair_name() { python3 scripts/resilience/container_names.py "$kind" "$1"; }
 source=hanasand_api
-if test "$kind" = frontend; then source=hanasand-resilience-frontend-$(printf '%s' "$old_ports" | cut -d' ' -f1); fi
+if test "$kind" = frontend; then source=$(pair_name "$(printf '%s' "$old_ports" | cut -d' ' -f1)"); fi
 # Only stale, stopped task-owned candidates may be removed to reuse an inactive slot.
 for port in $ports; do
- name=hanasand-resilience-$kind-$port
+ name=$(pair_name "$port")
  if docker inspect "$name" >/dev/null 2>&1; then
   test "$(docker inspect -f '{{.State.Running}}' "$name")" = false || { echo "Candidate $name is still running" >&2; exit 1; }
   docker rm "$name" >/dev/null
@@ -66,5 +67,5 @@ sh scripts/resilience/start-routing.sh "$root"
 trap - EXIT HUP INT TERM
 rm -f "$backup"
 sleep 65
-for port in $old_ports; do docker stop -t 65 "hanasand-resilience-$kind-$port" >/dev/null; done
+for port in $old_ports; do docker stop -t 65 "$(pair_name "$port")" >/dev/null; done
 printf '%s deployed: %s; two serving instances on %s\n' "$kind" "$release" "$ports"

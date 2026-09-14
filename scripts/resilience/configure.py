@@ -23,7 +23,7 @@ service('intelligence', 'Threat intelligence queries', 18097, '/v1/health', [('i
 service('database', 'Database', 18504, '', [('inspur-db-primary','inspur',8503 if site == 'inspur' else 18503),('inspur-db-standby','inspur',18502),('ovh-db','ovhcloud',18506)])
 config = dict(site=site, services=services, notify=site=='ovhcloud', interval=5, fall=3, rise=6, statsUrl='http://127.0.0.1:19900/stats;csv',
               peerStatusUrl='http://127.0.0.1:19911/status' if site=='ovhcloud' else None,
-              databaseContainer='hanasand-resilience-db-local' if site=='inspur' else 'hanasand-resilience-db', databasePort=18502 if site=='inspur' else 18506,
+              databaseContainer='hanasand-db-standby' if site=='inspur' else 'hanasand-db', databasePort=18502 if site=='inspur' else 18506,
               memoryBudgetMb=12288 if site=='ovhcloud' else 16384, discordWebhookFile=str(root/'secrets/discord-webhook.txt'))
 # Never replace a live configuration: deployment may have changed active slots.
 root.mkdir(parents=True, exist_ok=True)

@@ -66,7 +66,7 @@ def authorize():
 def start(image):
     subprocess.run(["docker", "image", "inspect", image], check=True, stdout=subprocess.DEVNULL)
     for group, forwards in GROUPS.items():
-        name = 'hanasand-resilience-tunnel-' + group
+        name = 'hanasand-tunnel-' + group
         existing = subprocess.run(['docker', 'inspect', '-f', '{{.State.Running}}', name], capture_output=True, text=True)
         if existing.returncode == 0:
             if existing.stdout.strip() != 'true':

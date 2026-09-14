@@ -10,7 +10,7 @@ for index in 0 1; do
 done
 for index in 0 1; do
  file=haproxy.cfg; test "$index" = 0 || file=haproxy-secondary.cfg
- name=hanasand-resilience-proxy-$index
+ name=hanasand-proxy-$((index + 1))
  if docker inspect "$name" >/dev/null 2>&1; then
   docker kill -s USR2 "$name" >/dev/null
  else

@@ -4,8 +4,8 @@ set -eu
 secrets=/home/hanasand/resilience-secrets
 test -s "$secrets/reverse-tunnel-key"
 test -s "$secrets/ovh-known-hosts"
-docker rm -f hanasand-resilience-tunnel >/dev/null 2>&1 || true
-docker run -d --name hanasand-resilience-tunnel --restart unless-stopped --network host --memory 128m --cpus .5 \
+docker rm -f hanasand-tunnel >/dev/null 2>&1 || true
+docker run -d --name hanasand-tunnel --restart unless-stopped --network host --memory 128m --cpus .5 \
  -v "$secrets/reverse-tunnel-key:/run/key:ro" -v "$secrets/ovh-known-hosts:/run/known_hosts:ro" \
  --entrypoint ssh hanasand_api -NT -i /run/key -o UserKnownHostsFile=/run/known_hosts -o StrictHostKeyChecking=yes \
  -o ExitOnForwardFailure=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \

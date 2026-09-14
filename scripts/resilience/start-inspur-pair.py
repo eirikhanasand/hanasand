@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 import socket
 import sys
+from container_names import pair_name
 
 kind, image, source, *ports = sys.argv[1:]
 assert kind in ('api', 'auth', 'frontend') and len(ports) == 2
@@ -32,7 +33,7 @@ for item in json.loads(subprocess.check_output(['docker', 'inspect', *subprocess
         if network.get('IPAddress'):
             for alias in network.get('Aliases') or []: aliases[alias] = network['IPAddress']
 for port in ports:
-    name = f'hanasand-resilience-{kind}-{port}'
+    name = pair_name(kind, port)
     if subprocess.run(['docker','inspect',name],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode == 0:
         raise SystemExit(f'{name} already exists; choose unused slots before deploying')
     with socket.socket() as listener:
