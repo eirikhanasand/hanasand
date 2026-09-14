@@ -58,7 +58,7 @@ export default function DetectionRules() {
             await requestJson(`/api/backend/mill/rules?organizationId=${encodeURIComponent(organizationId)}`, { method: 'POST', body: JSON.stringify({ name: ruleName, explanation: ruleExplanation, severity: ruleSeverity, conditions: [{ path: rulePath, operator: ruleOperator, value: ruleValue }] }) })
             setStatus('Custom rule created and enabled for new events.')
             setRuleName(''); setRuleExplanation(''); setRuleValue('')
-            await loadMill(organizationId)
+            if (latestOrganization.current === organizationId) await loadMill(organizationId)
         } catch (cause) { setError(errorMessage(cause)) }
     }
 
@@ -67,7 +67,7 @@ export default function DetectionRules() {
         try {
             await requestJson(`/api/backend/mill/rules/${encodeURIComponent(rule.recordId || rule.id)}/actions?organizationId=${encodeURIComponent(organizationId)}`, { method: 'POST', body: JSON.stringify({ action: rule.enabled === false ? 'enable' : 'disable' }) })
             setStatus(`${rule.name} ${rule.enabled === false ? 'enabled' : 'disabled'}.`)
-            await loadMill(organizationId)
+            if (latestOrganization.current === organizationId) await loadMill(organizationId)
         } catch (cause) { setError(errorMessage(cause)) }
     }
 
@@ -79,7 +79,7 @@ export default function DetectionRules() {
             setStatus('Signature pack imported and enabled for new events.')
             setPackName(''); setPackVersion(''); setPackReference('')
             setShowImports(false)
-            await loadMill(organizationId)
+            if (latestOrganization.current === organizationId) await loadMill(organizationId)
         } catch (cause) { setError(cause instanceof SyntaxError ? 'Signature pack JSON is invalid.' : errorMessage(cause)) }
     }
 
@@ -90,7 +90,7 @@ export default function DetectionRules() {
             setStatus('Sigma rules imported and enabled for new events.')
             setSigmaPackName(''); setSigmaPackVersion(''); setSigmaPackReference('')
             setShowImports(false)
-            await loadMill(organizationId)
+            if (latestOrganization.current === organizationId) await loadMill(organizationId)
         } catch (cause) { setError(errorMessage(cause)) }
     }
 
