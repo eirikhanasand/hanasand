@@ -31,7 +31,7 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
                 link('Dark web monitoring', '/dwm'),
                 link('Monitored actors', '/dwm/actors'),
                 link('Watchlists', '/dwm/watchlists'),
-                link('Detection rules', '/mill/rules'),
+                link('Rules', '/mill/rules'),
                 link('Integrations', '/dwm/delivery'),
             ]),
             group('Security tools', [

@@ -4,10 +4,12 @@ import Link from '@/components/organizations/workspaceLink'
 import { useEffect, useState } from 'react'
 import { DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import { requestJson, type MillRule } from '../detection-rules'
+import { ArrowLeft, Activity, History, SlidersHorizontal, ShieldCheck } from 'lucide-react'
+import { getRuleCategory, ruleCategories } from '../rule-categories'
 
 type Audit = { id: string, event_type: string, actor_id: string | null, created_at: string, context: { before?: Record<string, unknown> | null, after?: Record<string, unknown>, action?: string } }
 type Payload = { triggerCount: number, rule: MillRule, canEdit: boolean, audit: Audit[], nextOffset: number | null }
-const fieldClass = 'mt-1 w-full min-w-0 rounded-lg border border-ui-border bg-ui-canvas p-3 text-sm disabled:opacity-70'
+const fieldClass = 'mt-1.5 w-full min-w-0 rounded-lg border border-ui-border bg-ui-canvas px-3 py-2 text-sm font-normal text-ui-text outline-none focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/15 disabled:opacity-70'
 
 export default function RuleDetails({ id, organizationId }: { id: string, organizationId: string }) {
     const [data, setData] = useState<Payload | null>(null)
@@ -54,40 +56,68 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
         if (draft) setDraft({ ...draft, definition: { conditions: conditions.map((condition, i) => i === index ? { ...condition, [key]: value } : condition) } })
     }
     return <DashboardPage className='!gap-6 !p-4 lg:!p-6'>
-        <Link href={`/mill/rules?organizationId=${encodeURIComponent(organizationId)}`} className='text-sm font-semibold text-ui-primary'>← Detection rules</Link>
+        <Link href={`/mill/rules?organizationId=${encodeURIComponent(organizationId)}`} className='inline-flex w-fit items-center gap-2 rounded-md text-sm font-medium text-ui-muted hover:text-ui-primary'><ArrowLeft size={16} aria-hidden='true' />Rules</Link>
         {error && <div role='alert' className='rounded-lg border border-red-500 p-4'>{error} {data && <button type='button' disabled={busy} onClick={() => void reload()} className='ml-3 underline'>Reload rule</button>}</div>}
         {status && <p role='status'>{status}</p>}
         {!draft && !error && <p role='status'>Loading rule…</p>}
         {draft && data && <>
-            <header><h1 className='text-2xl font-semibold'>{data.rule.name}</h1><p className='mt-2 break-all font-mono text-sm text-ui-muted'>{draft.id} · Version {draft.version}</p><p className='mt-2 text-sm text-ui-muted'>{draft.family} · {draft.source === 'hanasand' ? 'Hanasand rule' : draft.source === 'open_source' ? 'Imported rule' : 'Custom rule'}</p><dl className='mt-4 flex items-baseline gap-2'><dt className='text-sm text-ui-muted'>Trigger count</dt><dd className='text-xl font-semibold tabular-nums'>{data.triggerCount?.toLocaleString() ?? 'Unavailable'}</dd></dl><p className='mt-1 text-xs text-ui-muted'>Recorded detections for this organization across all versions, including resolved detections.</p></header>
-            <DashboardPanel className='p-4 sm:p-6'>
-                <form onSubmit={event => { event.preventDefault(); void save() }} className='grid gap-5'>
-                    {!data.canEdit && <p className='text-sm text-ui-muted'>You can view this rule and its history. An organization owner or admin can edit it.</p>}
-                    <fieldset disabled={!data.canEdit || busy} className='grid min-w-0 gap-5'>
-                        <label className='text-sm font-semibold'>Name<input required minLength={2} maxLength={120} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} className={fieldClass} /></label>
-                        <label className='text-sm font-semibold'>Description<textarea required minLength={10} maxLength={500} value={draft.explanation} onChange={event => setDraft({ ...draft, explanation: event.target.value })} className={fieldClass} /></label>
-                        <label className='text-sm font-semibold'>Severity<select value={draft.severity} onChange={event => setDraft({ ...draft, severity: event.target.value })} className={fieldClass}>{['low', 'medium', 'high', 'critical'].map(value => <option key={value} value={value}>{value}</option>)}</select></label>
-                        <label className='flex items-center gap-2 text-sm font-semibold'><input type='checkbox' checked={draft.enabled !== false} onChange={event => setDraft({ ...draft, enabled: event.target.checked })} />Enabled</label>
-                        {draft.source === 'hanasand' ? <div><h2 className='font-semibold'>Detection logic</h2><p className='mt-2 text-sm text-ui-muted'>This built-in detector uses the detection logic below. You can change its name, description, severity and enabled state for this organization.</p><p className='mt-2 text-sm'>{draft.detectionLogic}</p><ul className='mt-2 list-inside list-disc text-sm'>{draft.evidence.map(item => <li key={item}>{item}</li>)}</ul></div> : <div className='grid gap-3'>
-                            <h2 className='font-semibold'>Conditions</h2><p className='text-sm text-ui-muted'>All conditions must match the normalized event.</p>
-                            {conditions.map((condition, index) => <div key={index} className='grid min-w-0 items-end gap-2 sm:grid-cols-[1fr_auto_1fr_auto]'>
-                                <label className='text-xs'>Field<input required aria-label={`Condition ${index + 1} field`} value={condition.path} onChange={event => changeCondition(index, 'path', event.target.value)} className={fieldClass} /></label>
-                                <label className='text-xs'>Operator<select aria-label={`Condition ${index + 1} operator`} value={condition.operator} onChange={event => changeCondition(index, 'operator', event.target.value)} className={fieldClass}>{['equals', 'contains', 'regex'].map(value => <option key={value}>{value}</option>)}</select></label>
-                                <label className='text-xs'>Value<input required aria-label={`Condition ${index + 1} value`} value={condition.value} onChange={event => changeCondition(index, 'value', event.target.value)} className={fieldClass} /></label>
-                                <button type='button' aria-label={`Remove condition ${index + 1}`} disabled={conditions.length <= 1} className='rounded-lg border border-ui-border p-3 text-sm disabled:opacity-50' onClick={() => setDraft({ ...draft, definition: { conditions: conditions.filter((_, i) => i !== index) } })}>Remove</button>
-                            </div>)}
-                            <button type='button' disabled={conditions.length >= 8} className='justify-self-start rounded-lg border border-ui-border px-3 py-2 text-sm disabled:opacity-50' onClick={() => setDraft({ ...draft, definition: { conditions: [...conditions, { path: '', operator: 'equals', value: '' }] } })}>Add condition</button>
-                        </div>}
-                        {data.canEdit && <button type='submit' className='justify-self-start rounded-lg bg-ui-primary px-4 py-2 font-semibold text-ui-canvas disabled:opacity-50'>{busy ? 'Saving…' : 'Save changes'}</button>}
-                    </fieldset>
-                </form>
+            <DashboardPanel className='overflow-hidden'>
+                <header className='grid min-w-0 gap-5 p-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:p-6'>
+                    <div className='min-w-0'>
+                        <div className='mb-3 flex flex-wrap items-center gap-2 text-xs font-medium'>
+                            <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-ui-muted'>{ruleCategories[getRuleCategory(draft)].label}</span>
+                            <span className='text-ui-muted'>{draft.family}</span>
+                            <span className={`rounded-full px-2 py-0.5 ${data.rule.enabled === false ? 'bg-ui-raised text-ui-muted' : 'bg-ui-success/10 text-ui-success'}`}>{data.rule.enabled === false ? 'Disabled' : 'Enabled'}</span>
+                        </div>
+                        <h1 className='text-xl font-semibold tracking-tight text-ui-text sm:text-2xl'>{data.rule.name}</h1>
+                        <div className='mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ui-muted'>
+                            <span className='break-all'>{draft.id}</span><span className='h-3 border-l border-ui-border' aria-hidden='true' /><span>Version {draft.version}</span><span className='h-3 border-l border-ui-border' aria-hidden='true' /><span>{draft.source === 'hanasand' ? 'Hanasand rule' : draft.source === 'open_source' ? 'Imported rule' : 'Custom rule'}</span>
+                        </div>
+                    </div>
+                    <dl className='flex items-center gap-3 border-t border-ui-border pt-4 sm:min-w-36 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-6'>
+                        <Activity size={20} className='text-ui-primary' aria-hidden='true' />
+                        <div><dt className='text-xs font-medium text-ui-muted'>Trigger count</dt><dd className='mt-1 text-2xl font-semibold leading-none tabular-nums text-ui-text' title='Recorded detections for this organization across all versions, including resolved detections.'>{data.triggerCount?.toLocaleString() ?? 'Unavailable'}</dd></div>
+                    </dl>
+                </header>
             </DashboardPanel>
-            <DashboardPanel className='grid gap-4 p-4 sm:p-6'>
-                <h2 className='text-lg font-semibold'>Audit log</h2>
+            <div className='grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]'>
+                <DashboardPanel className='p-4 sm:p-6'>
+                    <form onSubmit={event => { event.preventDefault(); void save() }} className='grid gap-5'>
+                        <div className='flex items-center gap-2'><SlidersHorizontal size={18} className='text-ui-muted' aria-hidden='true' /><h2 className='text-sm font-semibold'>Rule settings</h2></div>
+                        {!data.canEdit && <p className='text-sm text-ui-muted'>You can view this rule and its history. An organization owner or admin can edit it.</p>}
+                        <fieldset disabled={!data.canEdit || busy} className='grid min-w-0 gap-4 sm:grid-cols-2'>
+                            <label className='text-sm font-medium'>Name<input required minLength={2} maxLength={120} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} className={fieldClass} /></label>
+                            <label className='text-sm font-medium'>Severity<select value={draft.severity} onChange={event => setDraft({ ...draft, severity: event.target.value })} className={fieldClass}>{['low', 'medium', 'high', 'critical'].map(value => <option key={value} value={value}>{value}</option>)}</select></label>
+                            <label className='text-sm font-medium sm:col-span-2'>Description<textarea required minLength={10} maxLength={500} value={draft.explanation} onChange={event => setDraft({ ...draft, explanation: event.target.value })} rows={3} className={fieldClass} /></label>
+                            <label className='flex items-center gap-2 text-sm font-medium sm:col-span-2'><input type='checkbox' checked={draft.enabled !== false} onChange={event => setDraft({ ...draft, enabled: event.target.checked })} />Enabled</label>
+                            {draft.source !== 'hanasand' && <div className='grid min-w-0 gap-3 sm:col-span-2'>
+                                <h2 className='font-semibold'>Conditions</h2><p className='text-sm text-ui-muted'>All conditions must match the normalized event.</p>
+                                {conditions.map((condition, index) => <div key={index} className='grid min-w-0 items-end gap-2 sm:grid-cols-[1fr_auto_1fr_auto]'>
+                                    <label className='text-xs'>Field<input required aria-label={`Condition ${index + 1} field`} value={condition.path} onChange={event => changeCondition(index, 'path', event.target.value)} className={fieldClass} /></label>
+                                    <label className='text-xs'>Operator<select aria-label={`Condition ${index + 1} operator`} value={condition.operator} onChange={event => changeCondition(index, 'operator', event.target.value)} className={fieldClass}>{['equals', 'contains', 'regex'].map(value => <option key={value}>{value}</option>)}</select></label>
+                                    <label className='text-xs'>Value<input required aria-label={`Condition ${index + 1} value`} value={condition.value} onChange={event => changeCondition(index, 'value', event.target.value)} className={fieldClass} /></label>
+                                    <button type='button' aria-label={`Remove condition ${index + 1}`} disabled={conditions.length <= 1} className='rounded-lg border border-ui-border p-3 text-sm disabled:opacity-50' onClick={() => setDraft({ ...draft, definition: { conditions: conditions.filter((_, i) => i !== index) } })}>Remove</button>
+                                </div>)}
+                                <button type='button' disabled={conditions.length >= 8} className='justify-self-start rounded-lg border border-ui-border px-3 py-2 text-sm disabled:opacity-50' onClick={() => setDraft({ ...draft, definition: { conditions: [...conditions, { path: '', operator: 'equals', value: '' }] } })}>Add condition</button>
+                            </div>}
+                            {data.canEdit && <button type='submit' className='justify-self-start rounded-lg bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas disabled:opacity-50 sm:col-span-2'>{busy ? 'Saving…' : 'Save changes'}</button>}
+                        </fieldset>
+                    </form>
+                </DashboardPanel>
+                <DashboardPanel className='grid gap-4 p-5 sm:p-6'>
+                    <div className='flex items-center gap-2'><ShieldCheck size={18} className='text-ui-muted' aria-hidden='true' /><h2 className='text-sm font-semibold'>{draft.source === 'hanasand' ? 'Detection logic' : 'How this rule matches'}</h2></div>
+                    <p className='text-sm leading-6 text-ui-muted'>{draft.source === 'hanasand' ? draft.detectionLogic : 'All configured conditions must match the normalized event.'}</p>
+                    {draft.evidence.length > 0 && <div className='border-t border-ui-border pt-4'><h3 className='mb-2 text-xs font-medium text-ui-muted'>Supporting evidence</h3><ul className='flex flex-wrap gap-2'>{draft.evidence.map(item => <li key={item} className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs text-ui-muted'>{item}</li>)}</ul></div>}
+                    {draft.source === 'hanasand' && <p className='text-xs leading-5 text-ui-muted'>Built-in detection logic is maintained by Hanasand. Settings apply to this organization.</p>}
+                    <p className='text-xs leading-5 text-ui-muted'>Trigger counts include resolved detections and earlier versions of this rule.</p>
+                </DashboardPanel>
+            </div>
+            <DashboardPanel className='grid gap-4 p-5 sm:p-6'>
+                <div className='flex items-center gap-2'><History size={18} className='text-ui-muted' aria-hidden='true' /><h2 className='text-sm font-semibold'>Audit log</h2></div>
                 {!data.audit.length && <p className='text-sm text-ui-muted'>No recorded changes for this rule in this organization.</p>}
                 <ol className='divide-y divide-ui-border'>{data.audit.map(entry => <li key={entry.id} className='py-4'>
                     <div className='flex flex-wrap justify-between gap-2 text-sm'><p className='font-semibold'>{entry.event_type === 'mill.rule.created' ? 'Rule created' : entry.event_type === 'mill.rule.imported' ? 'Rule imported' : 'Rule updated'}{entry.context.action ? ` · ${entry.context.action}` : ''} · {entry.actor_id || 'System'}</p><time dateTime={entry.created_at}>{new Date(entry.created_at).toLocaleString()}</time></div>
-                    {entry.context.after && <dl className='mt-3 grid gap-2 text-sm'>{Object.entries(entry.context.after).filter(([key, value]) => JSON.stringify(entry.context.before?.[key]) !== JSON.stringify(value)).map(([key, value]) => <div key={key} className='min-w-0'><dt className='font-semibold capitalize'>{key === 'definition' ? 'Conditions' : key}</dt><dd className='wrap-break-word whitespace-pre-wrap text-ui-muted'>{entry.context.before && <><span>{displayValue(entry.context.before[key])}</span><span aria-label='changed to'> → </span></>}{displayValue(value)}</dd></div>)}</dl>}
+                    {entry.context.after && <dl className='mt-3 grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 text-xs'>{Object.entries(entry.context.after).filter(([key, value]) => JSON.stringify(entry.context.before?.[key]) !== JSON.stringify(value)).map(([key, value]) => <div key={key} className='grid min-w-0 gap-1 sm:grid-cols-[7rem_minmax(0,1fr)]'><dt className='font-medium capitalize'>{key === 'definition' ? 'Conditions' : key}</dt><dd className='wrap-break-word whitespace-pre-wrap text-ui-muted'>{entry.context.before && <><span>{displayValue(entry.context.before[key])}</span><span aria-label='changed to'> → </span></>}{displayValue(value)}</dd></div>)}</dl>}
                 </li>)}</ol>
                 {data.nextOffset !== null && <button type='button' disabled={busy} onClick={() => void moreAudit()} className='justify-self-start rounded-lg border border-ui-border px-3 py-2 text-sm'>Load older changes</button>}
             </DashboardPanel>

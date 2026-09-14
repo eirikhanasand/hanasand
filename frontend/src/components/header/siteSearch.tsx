@@ -31,7 +31,7 @@ const publicRouteItems: SearchItem[] = [
 
 const dashboardRouteItems: SearchItem[] = [
     route('Dashboard overview', 'Customer console overview', '/dashboard'),
-    route('Detection rules', 'Create and import security detection rules', '/mill/rules'),
+    route('Rules', 'Create and import security detection rules', '/mill/rules'),
     route('Security Scanner', 'Run and schedule approved Hanasand scans', '/scanner'),
     route('Cases', 'Cases across all services', '/cases'),
     route('DWM watchlists', 'Watched companies, vendors, domains, and brands', '/dwm/watchlists'),
