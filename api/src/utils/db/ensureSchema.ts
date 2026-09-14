@@ -1466,6 +1466,9 @@ export default async function ensureSchema() {
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
     `)
+    await run('ALTER TABLE mill_findings ADD COLUMN IF NOT EXISTS case_id TEXT')
+    await run('ALTER TABLE mill_findings ADD COLUMN IF NOT EXISTS case_delivery_attempted_at TIMESTAMPTZ')
+    await run('CREATE INDEX IF NOT EXISTS idx_mill_pending_cases ON mill_findings(case_delivery_attempted_at, created_at) WHERE case_id IS NULL')
     await run('CREATE INDEX IF NOT EXISTS idx_mill_findings_org_status ON mill_findings(organization_id, status, last_observed DESC)')
     await run(`
         CREATE TABLE IF NOT EXISTS mail_accounts (

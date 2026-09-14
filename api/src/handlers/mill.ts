@@ -128,21 +128,6 @@ export async function getMillRules(req: FastifyRequest, res: FastifyReply) {
     return res.send({ organizationId: access.organizationId, rules: await loadConfiguredMillRules(access.organizationId) })
 }
 
-export async function getMillUsage(req: FastifyRequest, res: FastifyReply) {
-    const access = await organizationAccess(req, res)
-    if (!access) return
-    const query = req.query as { organizationId?: string }
-    if (query.organizationId !== access.organizationId) return res.status(403).send({ error: 'Organization access denied.' })
-    const result = await run(`
-        SELECT
-            (SELECT COUNT(*) FROM mill_events WHERE organization_id = $1 AND received_at >= NOW() - INTERVAL '24 hours')::int AS events_24h,
-            (SELECT COUNT(*) FROM mill_events WHERE organization_id = $1 AND received_at >= NOW() - INTERVAL '30 days')::int AS events_30d,
-            (SELECT COUNT(*) FROM mill_findings WHERE organization_id = $1 AND created_at >= NOW() - INTERVAL '30 days')::int AS findings_30d,
-            (SELECT COUNT(*) FROM mill_rules WHERE organization_id = $1 AND enabled = TRUE)::int AS active_rules
-    `, [access.organizationId])
-    return res.send({ organizationId: access.organizationId, plan: 'security-monitoring', metering: result.rows[0] })
-}
-
 export async function postMillRule(req: FastifyRequest, res: FastifyReply) {
     const access = await organizationAccess(req, res)
     if (!access) return
@@ -259,60 +244,6 @@ export async function postMillRuleAction(req: FastifyRequest<{ Params: { id: str
     if (!result.rows[0]) return res.status(404).send({ error: 'Custom Mill rule not found.' })
     await recordSystemEvent(req, { actionType: 'mill.rule.updated', actorId: access.userId, organizationId: access.organizationId, targetType: 'mill_rule', targetId: req.params.id, context: { action } })
     return res.send({ rule: { ...result.rows[0], source: result.rows[0].source || 'owned' } })
-}
-
-export async function getMillFindings(req: FastifyRequest, res: FastifyReply) {
-    const access = await organizationAccess(req, res)
-    if (!access) return
-    const query = req.query as { organizationId?: string, limit?: string, status?: string }
-    if (query.organizationId !== access.organizationId) return res.status(403).send({ error: 'Organization access denied.' })
-    const limit = Math.min(Math.max(Number(query.limit || 100), 1), 500)
-    const result = await run(`
-        SELECT id, rule_id, severity, status, summary, evidence, event_ids,
-               first_observed, last_observed, assignee_id, analyst_note, created_at, updated_at
-        FROM mill_findings
-        WHERE organization_id = $1
-          AND ($2::text IS NULL OR status = $2)
-        ORDER BY CASE severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
-                 last_observed DESC
-        LIMIT $3
-    `, [access.organizationId, query.status || null, limit])
-    return res.send({ organizationId: access.organizationId, findings: result.rows })
-}
-
-export async function postMillFindingAction(req: FastifyRequest<{ Params: { id: string }, Body: { status?: unknown, note?: unknown, assigneeId?: unknown } }>, res: FastifyReply) {
-    const access = await organizationAccess(req, res)
-    if (!access) return
-    const body = req.body || {}
-    const statuses = ['new', 'investigating', 'benign', 'resolved', 'suppressed']
-    const status = typeof body.status === 'string' && statuses.includes(body.status) ? body.status : null
-    const note = typeof body.note === 'string' ? body.note.trim().slice(0, 4000) : null
-    const assigneeId = typeof body.assigneeId === 'string' ? body.assigneeId.trim() || null : null
-    if (!status && note === null && body.assigneeId === undefined) return res.status(400).send({ error: 'Provide a valid status, note, or assigneeId.' })
-    if (assigneeId) {
-        const member = await run(`
-            SELECT 1
-            FROM organization_members
-            WHERE organization_id = $1 AND user_id = $2 AND status = 'active'
-        `, [access.organizationId, assigneeId])
-        if (!member.rows[0]) return res.status(422).send({ error: 'Assignee must be an active member of this organization.' })
-    }
-    const result = await run(`
-        UPDATE mill_findings
-        SET status = COALESCE($3, status), analyst_note = COALESCE($4, analyst_note), assignee_id = COALESCE($5, assignee_id), updated_at = NOW()
-        WHERE id = $1 AND organization_id = $2
-        RETURNING id, status, analyst_note, assignee_id, updated_at
-    `, [req.params.id, access.organizationId, status, note, assigneeId])
-    if (!result.rows[0]) return res.status(404).send({ error: 'Finding not found.' })
-    await recordSystemEvent(req, {
-        actionType: 'mill.finding.updated',
-        actorId: access.userId,
-        organizationId: access.organizationId,
-        targetType: 'mill_finding',
-        targetId: req.params.id,
-        context: { status, noteProvided: note !== null, assigneeId },
-    })
-    return res.send({ finding: result.rows[0] })
 }
 
 async function organizationAccess(req: FastifyRequest, res: FastifyReply) {

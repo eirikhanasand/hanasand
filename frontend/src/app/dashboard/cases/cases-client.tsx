@@ -71,7 +71,7 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
         <div className='flex flex-wrap items-end gap-3 px-4 pb-4'>
             <CaseFilter label='Status' value={status} onChange={setStatus} options={['active', 'all', 'open', 'in_progress', 'escalated', 'resolved', 'closed', 'suppressed', 'false_positive']} />
             <CaseFilter label='Severity' value={severity} onChange={setSeverity} options={['all', 'critical', 'high', 'medium', 'low']} />
-            <CaseFilter label='Source' value={source} onChange={setSource} options={['all', 'monitoring', 'intelligence', 'manual']} />
+            <CaseFilter label='Source' value={source} onChange={setSource} options={['all', 'monitoring', 'security', 'intelligence', 'manual']} />
             <CaseFilter label='Owner' value={owner} onChange={setOwner} options={['all', 'unassigned', ...Array.from(new Set(rows.map(row => row.assignedOwner).filter((value): value is string => Boolean(value)))).sort()]} />
             <CaseFilter label='Resolved by' value={resolutionType} onChange={value => { setResolutionType(value); if (value !== 'all') setStatus('all') }} options={['all', 'human', 'ai', 'automation', 'unknown']} />
             <CaseFilter label='Human review' value={review} onChange={value => { setReview(value); if (value !== 'all') setStatus('all') }} options={['all', 'pending', 'confirmed']} />

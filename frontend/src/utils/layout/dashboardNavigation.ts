@@ -31,7 +31,6 @@ export function getDashboardNavigation({ id, isAdmin, canManageSystem, canManage
                 link('Matched alerts', '/dwm/alerts'),
                 link('Monitored actors', '/dwm/actors'),
                 link('Watchlists', '/dwm/watchlists'),
-                link('Security findings', '/mill'),
                 link('Detection rules', '/mill/rules'),
                 link('Integrations', '/dwm/delivery'),
             ]),

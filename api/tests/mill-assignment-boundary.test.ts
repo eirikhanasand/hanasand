@@ -1,31 +1,18 @@
-import { expect, mock, test } from 'bun:test'
+import { expect, test } from 'bun:test'
+import { receiveSecurityCase } from '../../ti/scraper/src/api/securityCases.ts'
+import { InMemoryScraperStore } from '../../ti/scraper/src/storage/memoryStore.ts'
 
-const queries: string[] = []
-
-mock.module('#utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: true, id: 'analyst-a' }) }))
-mock.module('#utils/adminAudit.ts', () => ({ recordAdminAuditEvent: async () => undefined }))
-mock.module('#db', () => ({
-    default: async (sql: string) => {
-        queries.push(sql)
-        if (sql.includes('FROM organizations')) return { rows: [{ id: 'org-a', role: 'owner' }] }
-        if (sql.includes('FROM organization_members')) return { rows: [] }
-        throw new Error('finding update should not run for a non-member assignee')
-    },
-}))
-
-test('Mill finding assignment rejects a non-member before persistence', async () => {
-    const { postMillFindingAction } = await import('../src/handlers/mill.ts')
-    const response = {
-        statusCode: 200,
-        status(code: number) { this.statusCode = code; return this },
-        send(body: unknown) { return { status: this.statusCode, body } },
-    }
-    const result = await postMillFindingAction({
-        query: { organizationId: 'org-a' },
-        params: { id: 'finding-1' },
-        body: { status: 'investigating', assigneeId: 'user-from-another-org' },
-    } as never, response as never)
-
-    expect(result).toEqual({ status: 422, body: { error: 'Assignee must be an active member of this organization.' } })
-    expect(queries.some(sql => sql.includes('UPDATE mill_findings'))).toBe(false)
+test('security case migration never assigns a user from another organization', async () => {
+    const store = new InMemoryScraperStore()
+    const at = '2026-09-14T12:00:00Z'
+    store.saveOrganization({ id: 'org-a', tenantId: 'org-a', status: 'active', name: 'Example team', createdAt: at, updatedAt: at })
+    store.saveOrganizationMember({ id: 'outside', userId: 'outside', organizationId: 'org-b', role: 'admin', status: 'active', createdAt: at, updatedAt: at })
+    const response = await receiveSecurityCase(new Request('http://localhost/v1/cases/security-detections', {
+        method: 'POST', headers: { 'x-hanasand-service-token': 'test-token' },
+        body: JSON.stringify({ id: 'finding-a', organizationId: 'org-a', ruleId: 'auth.new_device.v1', summary: 'New device login', severity: 'medium', status: 'investigating', firstObserved: at, lastObserved: at, assigneeId: 'outside', events: [] }),
+    }), { store, serviceToken: 'test-token' } as any)
+    expect(response.status).toBe(201)
+    const id = (await response.json() as any).case.id
+    expect(store.getCase(id)?.assignedOwner).toBeUndefined()
+    expect(store.getCase(id)?.workflowEvents.some((event: any) => event.toOwner === 'outside')).toBe(false)
 })
