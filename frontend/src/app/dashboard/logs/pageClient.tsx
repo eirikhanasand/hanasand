@@ -111,7 +111,6 @@ export default function LogsPageClient({
     )
     const recentErrorCount = liveLogs.filter((log) => log.level === 'error' || log.level === 'fatal').length
     const generatedAt = realtime.generated_at ? when(realtime.generated_at) : 'Syncing'
-    const activeServiceLabel = serviceFilter === 'all' ? 'all services' : serviceFilter
     const errorsPastHour = errorEvents.summary.last_hour || 0
     const totalErrors = errorEvents.summary.total || 0
 
