@@ -16,9 +16,10 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
         audits.push({ id: String(audits.length), event_type: p[0], actor_id: p[4], object_type: p[5], object_id: p[6], organization_id: p[7], context: JSON.parse(p[12]), created_at: '2026-09-14T12:00:00Z' })
         return { rows: [] }
     }
+    if (sql.includes('SELECT count(*)::text AS count FROM mill_findings')) return { rows: [{ count: String(findings.filter(row => row.organizationId === p[0] && row.ruleId === p[1]).length) }] }
     if (sql.includes('FROM system_events')) return { rows: audits.filter(row => row.organization_id === p[0] && (row.object_id === p[1] || row.object_id === p[2])).slice(p[3], p[3] + 51) }
     if (sql.includes('INSERT INTO mill_events')) return { rows: [] }
-    if (sql.includes('INSERT INTO mill_findings')) { findings.push({ ruleId: p[3], severity: p[4], evidence: JSON.parse(p[6]) }); return { rows: [] } }
+    if (sql.includes('INSERT INTO mill_findings')) { findings.push({ organizationId: p[1], ruleId: p[3], severity: p[4], evidence: JSON.parse(p[6]) }); return { rows: [] } }
     throw new Error(`Unexpected query: ${sql}`)
 }
 mock.module('#db', () => ({ default: query, withTransaction: async (work: any) => {
@@ -126,4 +127,17 @@ test('unchanged saves do not clutter history, and older audit pages remain acces
     const second = await getMillRule(secondRequest, reply() as any)
     expect(second.audit).toHaveLength(2)
     expect(second.nextOffset).toBeNull()
+})
+
+
+test('trigger count includes all saved detections only for this organization and stable rule ID', async () => {
+    expect((await getMillRule(request(), reply() as any)).triggerCount).toBe(0)
+    findings.push(
+        { organizationId: 'org-a', ruleId: builtin, status: 'new', version: '1' },
+        { organizationId: 'org-a', ruleId: builtin, status: 'resolved', version: '2' },
+        { organizationId: 'other-org', ruleId: builtin },
+        { organizationId: 'org-a', ruleId: 'auth.impossible_travel.v1' },
+    )
+    expect((await getMillRule(request(), reply() as any)).triggerCount).toBe(2)
+    expect((await getMillRule(request('auth.impossible_travel.v1'), reply() as any)).triggerCount).toBe(1)
 })

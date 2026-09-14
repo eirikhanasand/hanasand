@@ -20,6 +20,8 @@ type LogsPageClientProps = {
     initialServiceFilter?: string
 }
 
+const countFormatter = new Intl.NumberFormat('nb-NO')
+
 type LogsView = 'dashboard' | 'errors' | 'live' | 'stored'
 
 const viewOptions: Array<{ key: LogsView, label: string }> = [
@@ -189,15 +191,15 @@ export default function LogsPageClient({
                 <dl className='flex flex-wrap items-center gap-x-6 gap-y-1 border-b border-ui-border px-4 py-1 text-sm leading-5' aria-label='Error summary' data-logs-error-summary>
                     <div className='flex items-baseline gap-2'>
                         <dt className='text-ui-muted'>Total errors</dt>
-                        <dd className='font-semibold tabular-nums text-ui-text'>{totalErrors.toLocaleString()}</dd>
+                        <dd className='font-semibold tabular-nums text-ui-text'>{countFormatter.format(totalErrors)}</dd>
                     </div>
                     <div className='flex items-baseline gap-2'>
                         <dt className='text-ui-muted'>Live error lines</dt>
-                        <dd className='font-semibold tabular-nums text-ui-text'>{recentErrorCount.toLocaleString()}</dd>
+                        <dd className='font-semibold tabular-nums text-ui-text'>{countFormatter.format(recentErrorCount)}</dd>
                     </div>
                     <div className='flex items-baseline gap-2'>
                         <dt className='text-ui-muted'>Errors in the past hour</dt>
-                        <dd className='font-semibold tabular-nums text-ui-text'>{errorsPastHour.toLocaleString()}</dd>
+                        <dd className='font-semibold tabular-nums text-ui-text'>{countFormatter.format(errorsPastHour)}</dd>
                     </div>
                 </dl>
 
@@ -207,10 +209,10 @@ export default function LogsPageClient({
                         <span className='text-xs font-medium text-ui-muted'>{realtime.containers?.length || 0} containers, {currentLogs.length} live lines, {recentErrorCount} live errors</span>
                     </summary>
                     <section className='grid gap-3 border-t border-ui-border bg-ui-panel p-3 sm:grid-cols-2 xl:grid-cols-4' data-logs-metrics>
-                        <SummaryCard icon={<Server className='h-4 w-4' />} label='Runtime containers' value={String(realtime.containers?.length || 0)} note='Live source' />
-                        <SummaryCard icon={<Activity className='h-4 w-4' />} label='Live log lines' value={String(currentLogs.length)} note='Rolling feed' />
-                        <SummaryCard icon={<AlertTriangle className='h-4 w-4' />} label='Live errors' value={String(recentErrorCount)} note='Error and fatal' />
-                        <SummaryCard icon={<ShieldAlert className='h-4 w-4' />} label='Errors' value={String(totalErrors)} note={`${errorsPastHour} in the last hour`} />
+                        <SummaryCard icon={<Server className='h-4 w-4' />} label='Runtime containers' value={realtime.containers?.length || 0} note='Live source' />
+                        <SummaryCard icon={<Activity className='h-4 w-4' />} label='Live log lines' value={currentLogs.length} note='Rolling feed' />
+                        <SummaryCard icon={<AlertTriangle className='h-4 w-4' />} label='Live errors' value={recentErrorCount} note='Error and fatal' />
+                        <SummaryCard icon={<ShieldAlert className='h-4 w-4' />} label='Errors' value={totalErrors} note={`${countFormatter.format(errorsPastHour)} in the last hour`} />
                     </section>
                 </details>
             </div>
@@ -291,15 +293,15 @@ function ErrorCodesPanel({
     return (
         <section className='grid gap-4'>
             <div className='grid gap-3 sm:grid-cols-2'>
-                <SummaryCard icon={<Bug className='h-4 w-4' />} label='Scans against projects' value={String(events.summary.project_scans)} note='404 probes folded out of errors' />
-                <SummaryCard icon={<ShieldAlert className='h-4 w-4' />} label='Scans against shares' value={String(events.summary.share_scans)} note='Share and tree 404 probes' />
+                <SummaryCard icon={<Bug className='h-4 w-4' />} label='Scans against projects' value={events.summary.project_scans} note='404 probes folded out of errors' />
+                <SummaryCard icon={<ShieldAlert className='h-4 w-4' />} label='Scans against shares' value={events.summary.share_scans} note='Share and tree 404 probes' />
             </div>
 
             <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-4'>
-                <SummaryCard icon={<Bug className='h-4 w-4' />} label='Errors' value={String(events.summary.total)} note='API, auth, and website' />
-                <SummaryCard icon={<Activity className='h-4 w-4' />} label='Last hour' value={String(events.summary.last_hour)} note='Fresh incidents' />
-                <SummaryCard icon={<AlertTriangle className='h-4 w-4' />} label='Server errors' value={String(events.summary.server_errors)} note='HTTP 5xx' />
-                <SummaryCard icon={<ShieldAlert className='h-4 w-4' />} label='Client errors' value={String(events.summary.client_errors)} note='HTTP 4xx' />
+                <SummaryCard icon={<Bug className='h-4 w-4' />} label='Errors' value={events.summary.total} note='API, auth, and website' />
+                <SummaryCard icon={<Activity className='h-4 w-4' />} label='Last hour' value={events.summary.last_hour} note='Fresh incidents' />
+                <SummaryCard icon={<AlertTriangle className='h-4 w-4' />} label='Server errors' value={events.summary.server_errors} note='HTTP 5xx' />
+                <SummaryCard icon={<ShieldAlert className='h-4 w-4' />} label='Client errors' value={events.summary.client_errors} note='HTTP 4xx' />
             </div>
 
             <section className='grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(16rem,0.34fr)]'>
@@ -401,14 +403,14 @@ function BreakdownCard({ title, rows }: { title: string, rows: Array<{ label: st
     )
 }
 
-function SummaryCard({ icon, label, value, note }: { icon: ReactNode, label: string, value: string, note: string }) {
+function SummaryCard({ icon, label, value, note }: { icon: ReactNode, label: string, value: number, note: string }) {
     return (
         <article className={`${dashboardPanelClass} p-3 sm:p-4`} data-logs-metric-card>
             <div className='flex items-center justify-between gap-3 text-ui-muted'>
                 <span className='text-xs font-medium'>{label}</span>
                 <span className='grid h-8 w-8 place-items-center rounded-md border border-ui-border bg-ui-raised text-ui-muted'>{icon}</span>
             </div>
-            <p className='mt-2 text-xl font-semibold text-ui-text'>{value}</p>
+            <p className='mt-2 text-xl font-semibold text-ui-text'>{countFormatter.format(value)}</p>
             <p className='mt-1 text-xs font-medium text-ui-muted'>{note}</p>
         </article>
     )
