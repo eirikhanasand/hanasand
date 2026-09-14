@@ -132,78 +132,78 @@ export default function LogsPageClient({
 
     return (
         <div className='grid gap-5'>
-            <section className={`${dashboardPanelClass} overflow-hidden`} data-logs-toolbar>
-                <div className='flex flex-col gap-3 bg-ui-panel px-3 py-3 sm:px-4 lg:flex-row lg:items-center lg:justify-between'>
-                    <div className='flex min-w-0 flex-wrap items-center gap-2 text-sm text-ui-muted'>
-                        <span className='inline-flex items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-2.5 py-1.5 font-semibold text-ui-text'>
-                            <span className={`h-2 w-2 rounded-full ${realtime.runtime_available ? 'bg-ui-success' : 'bg-ui-warning'}`} />
-                            Runtime {realtime.runtime_available ? 'live' : 'reconnecting'}
-                        </span>
-                        <span className='rounded-md border border-ui-border bg-ui-raised px-2.5 py-1.5 font-medium'>Updated {generatedAt}</span>
-                        <select
-                            id='logs-service-filter'
-                            aria-label='Service filter'
-                            data-logs-service-filter
-                            value={serviceFilter}
-                            onChange={(event) => handleServiceFilter(event.target.value)}
-                            className='h-9 w-44 max-w-full rounded-md border border-ui-border bg-ui-raised px-3 text-sm font-medium text-ui-text shadow-sm outline-none transition focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/30'
-                        >
-                            <option value='all'>All services</option>
-                            {allServices.map((service) => (
-                                <option key={service} value={service}>{service}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div className='inline-flex w-full rounded-md border border-ui-border bg-ui-raised p-1 shadow-sm sm:w-auto' role='tablist' aria-label='Logs view' data-logs-tabs>
-                        {viewOptions.map(({ key, label }) => (
-                            <button
-                                key={key}
-                                type='button'
-                                role='tab'
-                                aria-selected={view === key}
-                                data-logs-tab={key}
-                                onClick={() => setView(key)}
-                                className={`min-h-9 flex-1 rounded-sm px-3 text-sm font-semibold transition sm:flex-none ${
-                                    view === key ? 'bg-ui-primary text-ui-canvas shadow-sm' : 'text-ui-muted hover:bg-ui-panel hover:text-ui-text'
-                                }`}
+            <div className={`${dashboardPanelClass} overflow-hidden`} data-logs-controls>
+                <section className='border-b border-ui-border' data-logs-toolbar>
+                    <div className='flex flex-col gap-3 bg-ui-panel px-3 py-1 sm:px-4 lg:flex-row lg:items-center lg:justify-between'>
+                        <div className='flex min-w-0 flex-wrap items-center gap-2 text-sm text-ui-muted'>
+                            <span className='inline-flex items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-2.5 py-1.5 font-semibold text-ui-text'>
+                                <span className={`h-2 w-2 rounded-full ${realtime.runtime_available ? 'bg-ui-success' : 'bg-ui-warning'}`} />
+                                Runtime {realtime.runtime_available ? 'live' : 'reconnecting'}
+                            </span>
+                            <span className='rounded-md border border-ui-border bg-ui-raised px-2.5 py-1.5 font-medium'>Updated {generatedAt}</span>
+                            <select
+                                id='logs-service-filter'
+                                aria-label='Service filter'
+                                data-logs-service-filter
+                                value={serviceFilter}
+                                onChange={(event) => handleServiceFilter(event.target.value)}
+                                className='h-9 w-44 max-w-full rounded-md border border-ui-border bg-ui-raised px-3 text-sm font-medium text-ui-text shadow-sm outline-none transition focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/30'
                             >
-                                {label}
-                            </button>
-                        ))}
+                                <option value='all'>All services</option>
+                                {allServices.map((service) => (
+                                    <option key={service} value={service}>{service}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className='inline-flex w-full rounded-md border border-ui-border bg-ui-raised p-1 shadow-sm sm:w-auto' role='tablist' aria-label='Logs view' data-logs-tabs>
+                            {viewOptions.map(({ key, label }) => (
+                                <button
+                                    key={key}
+                                    type='button'
+                                    role='tab'
+                                    aria-selected={view === key}
+                                    data-logs-tab={key}
+                                    onClick={() => setView(key)}
+                                    className={`min-h-9 flex-1 rounded-sm px-3 text-sm font-semibold transition sm:flex-none ${
+                                        view === key ? 'bg-ui-primary text-ui-canvas shadow-sm' : 'text-ui-muted hover:bg-ui-panel hover:text-ui-text'
+                                    }`}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
-                </div>
-
-
-            </section>
-
-            <dl className={`${dashboardPanelClass} flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-2 text-sm leading-5`} aria-label='Error summary' data-logs-error-summary>
-                <div className='flex items-baseline gap-2'>
-                    <dt className='text-ui-muted'>Total errors</dt>
-                    <dd className='font-semibold tabular-nums text-ui-text'>{totalErrors.toLocaleString()}</dd>
-                </div>
-                <div className='flex items-baseline gap-2'>
-                    <dt className='text-ui-muted'>Live error lines</dt>
-                    <dd className='font-semibold tabular-nums text-ui-text'>{recentErrorCount.toLocaleString()}</dd>
-                </div>
-                <div className='flex items-baseline gap-2'>
-                    <dt className='text-ui-muted'>Errors in the past hour</dt>
-                    <dd className='font-semibold tabular-nums text-ui-text'>{errorsPastHour.toLocaleString()}</dd>
-                </div>
-            </dl>
-
-            <details className={`${dashboardPanelClass} overflow-hidden`} data-logs-metrics-disclosure>
-                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
-                    <span>Operational counters</span>
-                    <span className='text-xs font-medium text-ui-muted'>{realtime.containers?.length || 0} containers, {liveLogs.length} live lines, {recentErrorCount} live errors</span>
-                </summary>
-                <section className='grid gap-3 border-t border-ui-border bg-ui-panel p-3 sm:grid-cols-2 xl:grid-cols-4' data-logs-metrics>
-                    <SummaryCard icon={<Server className='h-4 w-4' />} label='Runtime containers' value={String(realtime.containers?.length || 0)} note='Live source' />
-                    <SummaryCard icon={<Activity className='h-4 w-4' />} label='Live log lines' value={String(liveLogs.length)} note='Rolling feed' />
-                    <SummaryCard icon={<AlertTriangle className='h-4 w-4' />} label='Live errors' value={String(recentErrorCount)} note='Error and fatal' />
-                    <SummaryCard icon={<ShieldAlert className='h-4 w-4' />} label='Errors' value={String(totalErrors)} note={`${errorsPastHour} in the last hour`} />
                 </section>
-            </details>
+
+                <dl className='flex flex-wrap items-center gap-x-6 gap-y-1 border-b border-ui-border px-4 py-1 text-sm leading-5' aria-label='Error summary' data-logs-error-summary>
+                    <div className='flex items-baseline gap-2'>
+                        <dt className='text-ui-muted'>Total errors</dt>
+                        <dd className='font-semibold tabular-nums text-ui-text'>{totalErrors.toLocaleString()}</dd>
+                    </div>
+                    <div className='flex items-baseline gap-2'>
+                        <dt className='text-ui-muted'>Live error lines</dt>
+                        <dd className='font-semibold tabular-nums text-ui-text'>{recentErrorCount.toLocaleString()}</dd>
+                    </div>
+                    <div className='flex items-baseline gap-2'>
+                        <dt className='text-ui-muted'>Errors in the past hour</dt>
+                        <dd className='font-semibold tabular-nums text-ui-text'>{errorsPastHour.toLocaleString()}</dd>
+                    </div>
+                </dl>
+
+                <details className='overflow-hidden' data-logs-metrics-disclosure>
+                    <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-1.5 text-sm font-semibold text-ui-text transition hover:bg-ui-raised sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                        <span>Operational counters</span>
+                        <span className='text-xs font-medium text-ui-muted'>{realtime.containers?.length || 0} containers, {liveLogs.length} live lines, {recentErrorCount} live errors</span>
+                    </summary>
+                    <section className='grid gap-3 border-t border-ui-border bg-ui-panel p-3 sm:grid-cols-2 xl:grid-cols-4' data-logs-metrics>
+                        <SummaryCard icon={<Server className='h-4 w-4' />} label='Runtime containers' value={String(realtime.containers?.length || 0)} note='Live source' />
+                        <SummaryCard icon={<Activity className='h-4 w-4' />} label='Live log lines' value={String(liveLogs.length)} note='Rolling feed' />
+                        <SummaryCard icon={<AlertTriangle className='h-4 w-4' />} label='Live errors' value={String(recentErrorCount)} note='Error and fatal' />
+                        <SummaryCard icon={<ShieldAlert className='h-4 w-4' />} label='Errors' value={String(totalErrors)} note={`${errorsPastHour} in the last hour`} />
+                    </section>
+                </details>
+            </div>
 
             {(!realtime.runtime_available || realtime.native_available === false) && (
                 <section className='grid gap-2' data-logs-stream-alerts>
