@@ -10,7 +10,7 @@ mock.module('../src/utils/auth/tokenWrapper.ts', () => ({ default: async () => (
 mock.module('../src/utils/auth/hasRole.ts', () => ({ default: async () => ({ valid: admin }) }))
 mock.module('../src/utils/db.ts', () => ({ default: async (query: string, params: unknown[]) => { sql = query; values = params; return { rows } } }))
 mock.module('../src/utils/monitoringIssues.ts', () => ({ loadMonitoringIssues: async () => [{ caseNumber: 'HA-3', notifications: [{ messageId: 'receipt' }] }] }))
-mock.module('../src/utils/monitoringCaseEvents.ts', () => ({ monitoringCheckDetails: () => ({ endpoint: 'https://example.com' }), loadMonitoringCaseEvents: async () => ({ events: [{ id: 'run-1' }], eventTotal: 1, eventPage: 0 }) }))
+mock.module('../src/utils/monitoringCaseEvents.ts', () => ({ loadMonitoringRelatedChecks: async () => [], monitoringCheckDetails: () => ({ endpoint: 'https://example.com' }), loadMonitoringCaseEvents: async () => ({ events: [{ id: 'run-1' }], eventTotal: 1, eventPage: 0 }) }))
 const { getMonitoringCases, updateMonitoringCase } = await import('../src/handlers/monitoringCases.ts')
 const app = Fastify()
 app.get('/cases/monitoring', getMonitoringCases)
@@ -110,4 +110,11 @@ test('legacy recovery is attributed to monitoring and unknown manual resolvers a
     item = (await app.inject('/cases/monitoring/HA-3')).json().case
     expect(item.resolution.type).toBe('unknown')
     expect(item.history.at(-1)).toMatchObject({ actor: 'Codex (AI)', note: 'Verified recovery' })
+})
+
+test('shared cases identify additional affected checks', async () => {
+    rows = [{ id: '3', monitor_name: 'OVH RAM', check_count: 5, resolved_at: '2026-09-14T20:04:00Z' }]
+    const result = await app.inject('/cases/monitoring/HA-3')
+    expect(result.json().case.title).toBe('HA-3 · OVH RAM (+4 checks)')
+    expect(result.json().case.relatedChecks).toEqual([])
 })
