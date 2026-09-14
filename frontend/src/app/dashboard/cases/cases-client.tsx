@@ -65,10 +65,7 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
                     <RefreshCw className='h-4 w-4' aria-hidden='true' />
                 </button></div>
         </div>
-        <div className='flex flex-wrap gap-3 p-4'>
-            <input aria-label='Search cases' placeholder='Search cases' value={query} onChange={event => setQuery(event.target.value)} className='min-w-0 flex-1 rounded border border-ui-border bg-ui-canvas p-2 text-ui-text' />
-        </div>
-        <div className='flex flex-wrap items-end gap-3 px-4 pb-4'>
+        <div className='flex flex-wrap items-end gap-3 p-4'>
             <CaseFilter label='Status' value={status} onChange={setStatus} options={['active', 'all', 'open', 'in_progress', 'escalated', 'resolved', 'closed', 'suppressed', 'false_positive']} />
             <CaseFilter label='Severity' value={severity} onChange={setSeverity} options={['all', 'critical', 'high', 'medium', 'low']} />
             <CaseFilter label='Source' value={source} onChange={setSource} options={['all', 'monitoring', 'security', 'intelligence', 'manual']} />
@@ -76,15 +73,17 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
             <CaseFilter label='Resolved by' value={resolutionType} onChange={value => { setResolutionType(value); if (value !== 'all') setStatus('all') }} options={['all', 'human', 'ai', 'automation', 'unknown']} />
             <CaseFilter label='Human review' value={review} onChange={value => { setReview(value); if (value !== 'all') setStatus('all') }} options={['all', 'pending', 'confirmed']} />
             <button type='button' className='px-2 py-2 text-sm text-ui-primary' onClick={() => { setQuery(''); setStatus('active'); setSeverity('all'); setSource('all'); setOwner('all'); setResolutionType('all'); setReview('all') }}>Reset filters</button>
+            <input aria-label='Search cases' placeholder='Search cases' value={query} onChange={event => setQuery(event.target.value)} className='w-44 min-w-0 max-w-full rounded border border-ui-border bg-ui-canvas p-2 text-sm text-ui-text' />
         </div>
         {warnings.map(warning => <p role='alert' key={warning} className='px-4 pb-3 text-sm text-ui-danger'>{warning}</p>)}
         {loading ? <p className='p-4 text-ui-muted'>Loading cases…</p> : <>
             <p className='px-4 pb-3 text-xs text-ui-muted'>{visible.length} matching · {rows.length} cases loaded{nextCursor ? ' · More cases available below' : ''}</p>
             {!visible.length ? <p className='p-4 text-ui-muted'>{warnings.length ? 'No cases could be displayed from the available sources.' : rows.length ? 'No cases match the current filters.' : 'No cases yet.'}</p> : <div className='overflow-x-auto'><table className='w-full text-left text-sm'>
-                <thead className='border-y border-ui-border bg-ui-raised text-ui-muted'><tr>{['Case', 'Severity / status', 'Owner', 'Updated'].map(label => <th key={label} className='p-4'>{label}</th>)}</tr></thead>
+                <thead className='border-y border-ui-border bg-ui-raised text-ui-muted'><tr>{['Case', 'Severity', 'Status', 'Owner', 'Updated'].map(label => <th key={label} scope='col' className='p-4'>{label}</th>)}</tr></thead>
                 <tbody className='divide-y divide-ui-border'>{visible.map(row => <tr key={row.caseId || row.id} className='text-ui-text'>
                     <td className='p-4'><Link className='font-semibold text-ui-primary hover:underline' href={`/cases/${encodeURIComponent(row.caseId || row.id)}${row.organizationId || organizationId ? `?organizationId=${encodeURIComponent(row.organizationId || organizationId!)}` : ''}`}>{row.title || row.id}</Link>{[row.actor, row.victimName || row.company, row.organizationId].filter(Boolean).map(value => <p className='mt-1 text-xs text-ui-muted' key={value}>{value}</p>)}{row.summary && <p className='mt-1 max-w-xl wrap-break-word text-xs text-ui-muted'>{row.summary}</p>}</td>
-                    <td className='p-4'>{row.severity || row.priority || '—'} · {row.status.replaceAll('_', ' ')}{row.resolution && <p className='mt-1 text-xs text-ui-muted'>{row.resolution.type === 'ai' ? 'AI resolved' : row.resolution.type === 'automation' ? 'Automatically recovered' : row.resolution.type === 'unknown' ? 'Resolver not recorded' : `Resolved by ${row.resolution.actor || 'human'}`}{['ai', 'automation'].includes(row.resolution.type) && (row.resolution.confirmedAt ? ' · Human confirmed' : ' · Needs human review')}</p>}</td><td className='p-4'>{row.assignedOwner || 'Unassigned'}</td><td className='p-4'>{row.updatedAt || row.createdAt ? new Date(row.updatedAt || row.createdAt!).toLocaleString() : '—'}</td>
+                    <td className='p-4'>{row.severity || row.priority || '—'}</td>
+                    <td className='p-4'>{row.status.replaceAll('_', ' ')}{row.resolution && <p className='mt-1 text-xs text-ui-muted'>{row.resolution.type === 'ai' ? 'AI resolved' : row.resolution.type === 'automation' ? 'Automatically recovered' : row.resolution.type === 'unknown' ? 'Resolver not recorded' : `Resolved by ${row.resolution.actor || 'human'}`}{['ai', 'automation'].includes(row.resolution.type) && (row.resolution.confirmedAt ? ' · Human confirmed' : ' · Needs human review')}</p>}</td><td className='p-4'>{row.assignedOwner || 'Unassigned'}</td><td className='p-4'>{row.updatedAt || row.createdAt ? new Date(row.updatedAt || row.createdAt!).toLocaleString() : '—'}</td>
                 </tr>)}</tbody>
             </table></div>}
             {nextCursor && <button className='p-4 text-ui-primary' onClick={() => { setCursor(nextCursor); setPage(current => current + 1) }}>Load more cases</button>}
