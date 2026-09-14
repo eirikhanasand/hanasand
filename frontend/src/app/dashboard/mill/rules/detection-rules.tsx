@@ -1,13 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 
 type Organization = { id: string, name?: string, slug?: string, role?: string }
-type MillRule = { id: string, recordId?: string, rule_id?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'owned' | 'open_source', sourceReference?: string, definition?: { conditions?: Array<{ path: string, operator: string, value: string }> } }
+export type MillRule = { id: string, detectionLogic?: string, recordId?: string, rule_id?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'owned' | 'open_source', sourceReference?: string, definition?: { conditions?: Array<{ path: string, operator: string, value: string }> } }
 
 export default function DetectionRules() {
+    const latestOrganization = useRef('')
     const [organizations, setOrganizations] = useState<Organization[]>([])
     const [organizationId, setOrganizationId] = useState('')
     const [rules, setRules] = useState<MillRule[]>([])
@@ -43,11 +44,12 @@ export default function DetectionRules() {
     }
 
     async function loadMill(id: string) {
+        latestOrganization.current = id
         try {
             setError('')
             const payload = await requestJson<{ rules?: MillRule[] }>(`/api/backend/mill/rules?organizationId=${encodeURIComponent(id)}`)
-            setRules(payload.rules || [])
-        } catch (cause) { setError(errorMessage(cause)); setRules([]) }
+            if (latestOrganization.current === id) setRules(payload.rules || [])
+        } catch (cause) { if (latestOrganization.current === id) { setError(errorMessage(cause)); setRules([]) } }
     }
 
     async function createRule() {
@@ -100,7 +102,7 @@ export default function DetectionRules() {
             <div className='flex flex-wrap items-center justify-between gap-4'>
                 <div><p className='text-sm text-ui-muted'>Security tools</p><h1 className='mt-1 text-2xl font-semibold'>Detection rules</h1><p className='mt-2 text-sm text-ui-muted'>Create, import, and enable the rules that monitor your security events.</p></div>
                 <div className='flex max-w-full flex-wrap items-center gap-3'>
-                    <select value={organizationId} onChange={event => { setOrganizationId(event.target.value); setStatus(''); const url = new URL(window.location.href); url.searchParams.set('organizationId', event.target.value); window.history.replaceState(null, '', url) }} className='h-10 max-w-full rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text' aria-label='Organization'>{!organizations.length && <option value=''>No organizations available</option>}{organizations.map(org => <option key={org.id} value={org.id}>{org.name || org.slug || org.id}</option>)}</select>
+                    <select value={organizationId} onChange={event => { latestOrganization.current = event.target.value; setRules([]); setOrganizationId(event.target.value); setStatus(''); const url = new URL(window.location.href); url.searchParams.set('organizationId', event.target.value); window.history.replaceState(null, '', url) }} className='h-10 max-w-full rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text' aria-label='Organization'>{!organizations.length && <option value=''>No organizations available</option>}{organizations.map(org => <option key={org.id} value={org.id}>{org.name || org.slug || org.id}</option>)}</select>
                     <button type='button' aria-expanded={showImports} aria-controls='mill-rule-imports' onClick={() => setShowImports(open => !open)} className='rounded-lg bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary'>Import</button>
                     <Link href={`/cases${organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''}`} className='rounded-lg border border-ui-border px-4 py-2 text-sm font-semibold text-ui-primary hover:bg-ui-raised'>Cases</Link>
                 </div>
@@ -138,14 +140,22 @@ export default function DetectionRules() {
             </DashboardPanel>}
             <DashboardPanel className='grid min-w-0 gap-6 p-4 sm:p-6' id='mill-rules'>
                 <div><h2 className='font-semibold'>Rule library</h2><p className='mt-1 text-sm text-ui-muted'>Built-in rules can be tuned per organization. Custom rules match normalized JSON fields on new events.</p></div>
-                <div className='grid gap-4 xl:grid-cols-2'>
-                    {!rules.length && <p className='text-sm text-ui-muted'>No rules available for this organization.</p>}
-                    {rules.map(rule => <div key={rule.id} className='rounded-lg border border-ui-border bg-ui-raised p-3'><div className='flex items-start justify-between gap-2'><div><p className='font-semibold text-ui-text'>{rule.name}</p><p className='mt-1 text-xs text-ui-muted'>{rule.family} · {rule.severity} · {rule.source === 'open_source' ? 'open-source pack' : rule.source === 'owned' ? 'owned rule' : 'Hanasand rule'}</p></div><button type='button' className='rounded-md border border-ui-border px-2 py-1 text-xs font-semibold text-ui-text disabled:opacity-50' disabled={!canManageRules} onClick={() => void toggleRule(rule)}>{rule.enabled === false ? 'Enable' : 'Disable'}</button></div><p className='mt-2 text-xs text-ui-muted'>{rule.explanation}</p>{rule.sourceReference && <a className='mt-2 block truncate text-xs text-ui-primary hover:underline' href={rule.sourceReference} target='_blank' rel='noopener noreferrer'>Source reference</a>}</div>)}
-                </div>
+                {!rules.length && <p className='text-sm text-ui-muted'>No rules available for this organization.</p>}
+                <ul className='grid min-w-0 gap-3' aria-label='Detection rules'>
+                    {rules.map(rule => <li key={rule.id} className='flex min-w-0 items-center gap-4 rounded-lg border border-ui-border bg-ui-raised pr-4'>
+                        <Link href={`/mill/rules/${encodeURIComponent(rule.id)}?organizationId=${encodeURIComponent(organizationId)}`} className='min-w-0 flex-1 rounded-lg p-4 hover:bg-ui-panel focus-visible:outline-2 focus-visible:outline-ui-primary'>
+                            <div className='flex flex-wrap items-center gap-3'><h3 className='font-semibold text-ui-primary'>{rule.name}</h3><span className='text-xs'>{rule.enabled === false ? 'Disabled' : 'Enabled'}</span></div>
+                            <p className='mt-1 break-all font-mono text-xs text-ui-muted'>{rule.id} · v{rule.version}</p>
+                            <p className='mt-2 text-sm text-ui-muted'>{rule.explanation}</p>
+                            <p className='mt-2 text-xs text-ui-muted'>{rule.family} · {rule.severity} · {rule.source === 'open_source' ? 'Imported rule' : rule.source === 'owned' ? 'Custom rule' : 'Hanasand rule'}</p>
+                        </Link>
+                        <button type='button' aria-label={`${rule.enabled === false ? 'Enable' : 'Disable'} ${rule.name}`} className='shrink-0 rounded-md border border-ui-border px-3 py-2 text-xs font-semibold disabled:opacity-50' disabled={!canManageRules} onClick={() => void toggleRule(rule)}>{rule.enabled === false ? 'Enable' : 'Disable'}</button>
+                    </li>)}
+                </ul>
             </DashboardPanel>
         </DashboardPage>
     )
 }
 
-async function requestJson<T>(url: string, init: RequestInit = {}) { const response = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json', ...(init.headers || {}) } }); const payload = await response.json().catch(() => ({})); if (!response.ok) throw new Error(payload?.error?.message || payload?.error || `Request failed (${response.status})`); return payload as T }
+export async function requestJson<T>(url: string, init: RequestInit = {}) { const response = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json', ...(init.headers || {}) } }); const payload = await response.json().catch(() => ({})); if (!response.ok) throw new Error(payload?.error?.message || payload?.error || `Request failed (${response.status})`); return payload as T }
 function errorMessage(error: unknown) { return error instanceof Error ? error.message : 'Mill could not load this workspace.' }

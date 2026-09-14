@@ -173,9 +173,9 @@ export async function userHasAdministrativeRole(userId: string) {
     return result.rows.length > 0
 }
 
-export async function recordSystemEvent(req: FastifyRequest, input: SystemEventInput) {
+export async function recordSystemEvent(req: FastifyRequest, input: SystemEventInput, query: typeof run = run) {
     const requestId = input.requestId || requestIdFrom(req)
-    await run(`
+    await query(`
         INSERT INTO system_events (
             event_type,
             severity,

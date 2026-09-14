@@ -3,7 +3,7 @@ import { expect, mock, test } from 'bun:test'
 const findings: any[] = [], events: any[] = []
 mock.module('#utils/auth/apiKeys.ts', () => ({ validateApiKey: async () => ({ organizationId: 'org-a', apiKey: { scopes: [] } }), matchApiKeyScope: () => true }))
 mock.module('#utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: true, id: 'analyst' }) }))
-mock.module('#db', () => ({ default: async (sql: string, p: any[] = []) => {
+mock.module('#db', () => ({ withTransaction: async () => { throw new Error('Ingestion must not edit rules') }, default: async (sql: string, p: any[] = []) => {
     if (sql.includes('FROM mill_rules')) return { rows: [] }
     if (sql.includes('INSERT INTO mill_events')) { events.push({ id: p[0], organization_id: p[2], source_vendor: p[3], source_product: p[4], event_timestamp: p[5], event_type: p[6], action: p[7], outcome: p[8], normalized: JSON.parse(p[15]) }); return { rows: [] } }
     if (sql.includes('INSERT INTO mill_findings')) {
