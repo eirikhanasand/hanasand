@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
-import { receiveSecurityCase } from '../../ti/scraper/src/api/securityCases.ts'
-import { InMemoryScraperStore } from '../../ti/scraper/src/storage/memoryStore.ts'
+import { receiveSecurityCase } from '../api/securityCases.ts'
+import { InMemoryScraperStore } from '../storage/memoryStore.ts'
 
 test('security case migration never assigns a user from another organization', async () => {
     const store = new InMemoryScraperStore()
