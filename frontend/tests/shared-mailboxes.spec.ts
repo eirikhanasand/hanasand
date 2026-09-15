@@ -5,9 +5,12 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 let output: string
 let bundle: string
+let styles: string
 test.beforeAll(() => {
     output = mkdtempSync(path.join(tmpdir(), 'shared-mailboxes-test-'))
     execFileSync('bun', ['build', 'tests/fixtures/shared-mailboxes.tsx', '--target=browser', '--define', 'process.env={"NODE_ENV":"production"}', '--outfile', path.join(output, 'fixture.js')])
+    execFileSync('bun', ['-e', 'import postcss from \'postcss\'; import tailwind from \'@tailwindcss/postcss\'; const from=\'src/app/globals.css\'; const css=await Bun.file(from).text(); const result=await postcss([tailwind()]).process(css,{from}); await Bun.write(process.argv[1], result.css);', path.join(output, 'fixture.css')])
+    styles = readFileSync(path.join(output, 'fixture.css'), 'utf8')
     bundle = readFileSync(path.join(output, 'fixture.js'), 'utf8')
 })
 test.afterAll(() => rmSync(output, { recursive: true, force: true }))
@@ -38,7 +41,8 @@ test('shared folders keep mailbox selections separate and respect sending permis
         } })
     })
     await page.route('**/fixture.js', route => route.fulfill({ contentType: 'application/javascript', body: bundle }))
-    await page.route('**/mail', route => route.fulfill({ contentType: 'text/html', body: '<div id="root"></div><script type="module" src="/fixture.js"></script>' }))
+    await page.route('**/mail', route => route.fulfill({ contentType: 'text/html', body: `<html class="dark"><style>${styles}</style><div class="enterprise-theme" style="height:calc(100dvh - 64px);margin-top:64px" id="root"></div><script type="module" src="/fixture.js"></script>` }))
+    await page.setViewportSize({ width: 1440, height: 800 })
     await page.goto('/mail')
     await expect(page.getByRole('navigation', { name: 'Mailboxes', exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Open Support', exact: true })).toContainText('3')
@@ -72,6 +76,12 @@ test('shared folders keep mailbox selections separate and respect sending permis
     await page.getByText('first subject', { exact: true }).click()
     await expect(page.locator('[data-mail-message-list]')).toHaveCount(0)
     await expect(page.getByText('first body', { exact: true })).toBeVisible()
+    for (const height of [800, 650]) {
+        await page.setViewportSize({ width: 1440, height })
+        await expect.poll(() => page.locator('[data-mail-message-reader]').evaluate(el => Math.ceil(el.getBoundingClientRect().bottom))).toBeLessThanOrEqual(height)
+        await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(height)
+    }
+    await expect(page.locator('[data-mail-message-reader] article')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
     await page.getByRole('button', { name: 'Back to Inbox', exact: true }).click()
     await expect(page.locator('[data-mail-message-reader]')).toHaveCount(0)
     holdMessage = true

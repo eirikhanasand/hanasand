@@ -32,6 +32,7 @@ next-env.d.ts
 
 # next
 .next
+/frontend/.next-*/
 
 # runtime article repository clone
 /api/articles/
