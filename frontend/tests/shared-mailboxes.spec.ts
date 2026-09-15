@@ -16,18 +16,25 @@ test('shared folders keep mailbox selections separate and respect sending permis
     await context.addCookies(['id', 'access_token', 'roles'].map(name => ({ name, value: name === 'id' ? 'mail-test' : name === 'roles' ? encodeURIComponent(JSON.stringify([{ id: 'support' }])) : 'fixture-token', url: baseURL! })))
     const requests: URL[] = []
     let holdSupport = false
+    let failMessage = false
+    let releaseMessage: (() => void) | undefined
+    let holdMessage = false
     let releaseSupport: (() => void) | undefined
     await page.route('**/api/backend/mail/overview?**', async route => {
         const url = new URL(route.request().url()); requests.push(url)
         const user = url.searchParams.get('mailboxUser') || 'mail-test'
         const shared = user.startsWith('shared:')
+        const requestedMessage = url.searchParams.get('messageId')
+        if (holdMessage && requestedMessage) await new Promise<void>(resolve => { releaseMessage = resolve })
+        if (failMessage && requestedMessage) return route.fulfill({ status: 503 })
+        const messages = ['first', 'second'].map(id => ({ id, subject: `${id} subject`, preview: `${id} preview`, from: [{ email: 'sender@example.test', name: 'Sender' }], to: [], cc: [], attachments: [], receivedAt: '2026-09-15T08:00:00Z', textBody: `${id} body`, htmlBody: '', isRead: false, isFlagged: false, hasAttachment: false }))
         if (holdSupport && user === 'shared:support') await new Promise<void>(resolve => { releaseSupport = resolve })
         await route.fulfill({ json: {
             actor: { id: 'mail-test', canAccessAnyMailbox: false, canSend: user !== 'shared:noreply' },
             mailboxUser: user, mailboxAddress: `${shared ? user.slice(7) : 'personal'}@example.test`,
             accessibleAccounts: [{ id: 'mail-test', name: 'Me', address: 'personal@example.test', unreadCount: 1 }, ...['support', 'sales', 'noreply'].map(name => ({ id: `shared:${name}`, name: name[0].toUpperCase() + name.slice(1), address: `${name}@example.test`, shared: true, unreadCount: name === 'support' ? 3 : 0 }))],
             mailboxes: [{ id: `${user}-inbox`, name: 'Inbox', role: 'inbox', unreadEmails: 0 }, { id: `${user}-sent`, name: 'Sent', role: 'sent', unreadEmails: 0 }],
-            selectedMailboxId: url.searchParams.get('mailboxId') || `${user}-inbox`, messages: [], selectedMessage: null,
+            selectedMailboxId: url.searchParams.get('mailboxId') || `${user}-inbox`, messages, selectedMessage: messages.find(message => message.id === requestedMessage) || messages[0],
         } })
     })
     await page.route('**/fixture.js', route => route.fulfill({ contentType: 'application/javascript', body: bundle }))
@@ -61,4 +68,24 @@ test('shared folders keep mailbox selections separate and respect sending permis
     const personalRequest = requests.at(-1)!
     expect(personalRequest.searchParams.has('mailboxId')).toBe(false)
     await expect(page).toHaveURL(/\/mail$/)
+    await expect(page.locator('[data-mail-message-reader]')).toHaveCount(0)
+    await page.getByText('first subject', { exact: true }).click()
+    await expect(page.locator('[data-mail-message-list]')).toHaveCount(0)
+    await expect(page.getByText('first body', { exact: true })).toBeVisible()
+    await page.getByRole('button', { name: 'Back to Inbox', exact: true }).click()
+    await expect(page.locator('[data-mail-message-reader]')).toHaveCount(0)
+    holdMessage = true
+    await page.getByText('second subject', { exact: true }).click()
+    await expect(page.getByText('Loading message…')).toBeVisible()
+    await expect(page.getByText('first body', { exact: true })).toHaveCount(0)
+    await expect.poll(() => Boolean(releaseMessage)).toBe(true)
+    releaseMessage!()
+    await expect(page.getByText('second body', { exact: true })).toBeVisible()
+    await page.getByRole('button', { name: 'Back to Inbox', exact: true }).click()
+    holdMessage = false
+    failMessage = true
+    await page.getByText('first subject', { exact: true }).click()
+    await expect(page.getByText('This message is unavailable. Return to the list or try opening it again.')).toBeVisible()
+    await page.getByRole('button', { name: 'Back to Inbox', exact: true }).click()
+    await expect(page.locator('[data-mail-message-list]')).toBeVisible()
 })

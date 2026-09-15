@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
     Archive,
+    ArrowLeft,
     Clock3,
     CornerUpLeft,
     FolderInput,
@@ -66,6 +67,11 @@ export default function MailWorkspace({ mailboxUser }: Props) {
     const [error, setError] = useState('')
     const [backgroundIssue, setBackgroundIssue] = useState('')
     const [selectedMailboxId, setSelectedMailboxId] = useState<string | null>(null)
+    const [readingMessage, setReadingMessage] = useState(false)
+    const reader = useRef<HTMLElement>(null)
+    useEffect(() => {
+        if (readingMessage) reader.current?.scrollIntoView({ block: 'start' })
+    }, [readingMessage])
     const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null)
     const [moveTargetMailboxId, setMoveTargetMailboxId] = useState('')
     const [composer, setComposer] = useState<ComposerState>(emptyComposer)
@@ -90,6 +96,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
         mailboxUser?: string | null
         silent?: boolean
     } = {}) => {
+        if (params.messageId === null) setReadingMessage(false)
         const silent = Boolean(params.silent)
         if (silent && requestPending.current) return
         const version = ++requestVersion.current
@@ -189,17 +196,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
 
     const mailboxFilterOptions = useMemo(() => buildMailListFilters(overview?.messages || []), [overview?.messages])
 
-    const selectedMessage = useMemo(() => {
-        if (!overview) {
-            return null
-        }
-
-        if (overview.selectedMessage?.id === selectedMessageId) {
-            return overview.selectedMessage
-        }
-
-        return overview.selectedMessage
-    }, [overview, selectedMessageId])
+    const selectedMessage = overview?.selectedMessage?.id === selectedMessageId ? overview.selectedMessage : null
 
     const renderedHtml = useMemo(
         () => selectedMessage ? buildMailFrameHtml(withInlineAttachments(selectedMessage, overview?.mailboxUser || '')) : '',
@@ -264,7 +261,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 <ErrorNotice compact message={`Background sync paused. Last successful update was ${formatRelativeTime(lastSuccessAt!, now)} ago.`} />
             )}
 
-            <div className={`grid min-w-0 grid-cols-1 gap-3 ${sidebarCompact ? '2xl:grid-cols-[80px_320px_minmax(0,1fr)]' : '2xl:grid-cols-[220px_320px_minmax(0,1fr)]'} xl:grid-cols-[minmax(0,280px)_minmax(0,1fr)]`}>
+            <div className={`grid min-w-0 grid-cols-1 gap-3 ${sidebarCompact ? 'xl:grid-cols-[80px_minmax(0,1fr)]' : 'xl:grid-cols-[220px_minmax(0,1fr)]'}`}>
                 <aside
                     className={`${dashboardPanelClass} relative overflow-hidden p-3`}
                 >
@@ -359,7 +356,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                     </div>
                 </aside>
 
-                <section className={`${dashboardPanelClass} min-w-0 order-3 p-2.5 xl:order-2`}>
+                {!readingMessage && <section data-mail-message-list className={`${dashboardPanelClass} min-w-0 p-2.5`}>
                     <div className='flex items-center gap-2 px-1 pb-2 text-[10px] uppercase tracking-[0.24em] text-ui-muted'>
                         <span>{overview?.mailboxes.find(mailbox => mailbox.id === selectedMailboxId)?.name || 'Mailbox'}</span>
                         <span className='text-ui-muted'>•</span>
@@ -392,8 +389,9 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                 message={message}
                                 active={selectedMessageId === message.id}
                                 onClick={() => {
+                                    setReadingMessage(true)
                                     setSelectedMessageId(message.id)
-                                    void load({ messageId: message.id, silent: true })
+                                    void load({ messageId: message.id })
                                 }}
                             />
                         ))}
@@ -403,11 +401,12 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                             </div>
                         )}
                     </div>
-                </section>
+                </section>}
 
-                <section className={`${dashboardPanelClass} order-2 p-3 xl:order-3`}>
-                    {loading && !overview && <div className='px-2 py-6 text-xs text-ui-muted'>Loading mailbox…</div>}
-                    {!loading && !selectedMessage && <div className='rounded-lg border border-dashed border-ui-border px-4 py-8 text-xs text-ui-muted'>Choose a message to read it here.</div>}
+                {readingMessage && <section ref={reader} data-mail-message-reader className={`${dashboardPanelClass} min-w-0 p-3`}>
+                    <button type='button' className={`${toolbarButton} mb-3`} onClick={() => setReadingMessage(false)}><ArrowLeft className='h-4 w-4' />Back to {overview?.mailboxes.find(mailbox => mailbox.id === selectedMailboxId)?.name || 'inbox'}</button>
+                    {loading && <div role='status' className='px-2 py-6 text-xs text-ui-muted'>Loading message…</div>}
+                    {!loading && !selectedMessage && <div className='rounded-lg border border-dashed border-ui-border px-4 py-8 text-xs text-ui-muted'>This message is unavailable. Return to the list or try opening it again.</div>}
                     {selectedMessage && overview && (
                         <div className='grid gap-3'>
                             <div className='flex flex-wrap items-center justify-between gap-2 border-b border-ui-border pb-3'>
@@ -506,13 +505,13 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                     srcDoc={renderedHtml}
                                 />
                             ) : (
-                                <article className='min-h-128 rounded-lg border border-ui-border bg-ui-raised px-4 py-3 text-[13px] leading-6 whitespace-pre-wrap text-ui-text'>
+                                <article className='min-w-0 wrap-anywhere min-h-128 rounded-lg border border-ui-border bg-ui-raised px-4 py-3 text-[13px] leading-6 whitespace-pre-wrap text-ui-text'>
                                     {selectedMessage.textBody}
                                 </article>
                             )}
                         </div>
                     )}
-                </section>
+                </section>}
             </div>
 
             {composer.open && overview && (
