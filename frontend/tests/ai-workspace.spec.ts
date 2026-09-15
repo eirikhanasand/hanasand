@@ -3,6 +3,10 @@ import { expect, test } from '@playwright/test'
 const apiBase = process.env.PLAYWRIGHT_API_BASE || 'http://127.0.0.1:8080/api'
 
 test('persisted AI workspace loads from the database into the app shell', async ({ browser, request, baseURL }) => {
+    // This test creates a disposable user; never run it against a deployed service.
+    const isLocal = (value: string | undefined) => Boolean(value && ['localhost', '127.0.0.1', '[::1]'].includes(new URL(value).hostname))
+    test.skip(!isLocal(apiBase) || !isLocal(baseURL), 'Account-creation tests require local API and frontend servers.')
+
     const suffix = Date.now()
     const id = `ai_ui_${suffix}`
     const password = `Aa11!!${suffix}Bb22!!`
