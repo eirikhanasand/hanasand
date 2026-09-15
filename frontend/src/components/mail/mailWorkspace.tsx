@@ -55,7 +55,7 @@ type Props = {
     mailboxUser?: string | null
 }
 
-type MailListFilter = 'all' | 'unread' | 'starred' | 'attachments' | 'needsFiling'
+type MailListFilter = 'all' | 'unread' | 'starred' | 'attachments'
 
 const POLL_INTERVAL_MS = 10_000
 const STALE_AFTER_MS = 5 * 60_000
@@ -359,7 +359,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                     </div>
                 </aside>
 
-                <section className={`${dashboardPanelClass} order-3 p-2.5 xl:order-2`}>
+                <section className={`${dashboardPanelClass} min-w-0 order-3 p-2.5 xl:order-2`}>
                     <div className='flex items-center gap-2 px-1 pb-2 text-[10px] uppercase tracking-[0.24em] text-ui-muted'>
                         <span>{overview?.mailboxes.find(mailbox => mailbox.id === selectedMailboxId)?.name || 'Mailbox'}</span>
                         <span className='text-ui-muted'>•</span>
@@ -385,7 +385,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                         ))}
                     </div>
 
-                    <div className='grid gap-1.5'>
+                    <div className='grid min-w-0 grid-cols-1 gap-1.5'>
                         {filteredMessages.map(message => (
                             <MessageRow
                                 key={message.id}
@@ -399,7 +399,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                         ))}
                         {!filteredMessages.length && !loading && (
                             <div className='rounded-lg border border-dashed border-ui-border px-3 py-4 text-xs text-ui-muted'>
-                                {query || mailFilter !== 'all' ? 'No messages match the current view.' : 'Mailbox stream is live; no recent messages.'}
+                                {query || mailFilter !== 'all' ? 'No messages match the current view.' : 'No recent messages.'}
                             </div>
                         )}
                     </div>
@@ -800,7 +800,6 @@ function buildMailListFilters(messages: MailMessageSummary[]): Array<{ id: MailL
         { id: 'unread', label: 'Unread', count: messages.filter(message => !message.isRead).length },
         { id: 'starred', label: 'Starred', count: messages.filter(message => message.isFlagged).length },
         { id: 'attachments', label: 'Attachments', count: messages.filter(message => message.hasAttachment).length },
-        { id: 'needsFiling', label: 'Needs filing', count: messages.filter(message => !message.isRead || message.isFlagged || message.hasAttachment).length },
     ]
 }
 
@@ -808,6 +807,5 @@ function messageMatchesMailFilter(message: MailMessageSummary, filter: MailListF
     if (filter === 'unread') return !message.isRead
     if (filter === 'starred') return message.isFlagged
     if (filter === 'attachments') return message.hasAttachment
-    if (filter === 'needsFiling') return !message.isRead || message.isFlagged || message.hasAttachment
     return true
 }

@@ -53,7 +53,7 @@ test('mail workspace uses shared dashboard chrome and compact operational geomet
     expect(workspace).toContain('label: \'Unread\'')
     expect(workspace).toContain('label: \'Starred\'')
     expect(workspace).toContain('label: \'Attachments\'')
-    expect(workspace).toContain('label: \'Needs filing\'')
+    expect(workspace).not.toContain('Needs filing')
     expect(workspace).toContain('No messages match the current view.')
     expect(workspace).toContain('function buildMailListFilters')
     expect(workspace).toContain('function messageMatchesMailFilter')
