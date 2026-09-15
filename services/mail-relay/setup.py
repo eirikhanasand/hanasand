@@ -126,20 +126,21 @@ def activate_inspur():
         'queue.route.ovh-relay.auth.username': 'inspur-relay', 'queue.route.ovh-relay.auth.secret': saved['relay'],
         'queue.route.ovh-relay.tls.implicit': 'false', 'queue.route.ovh-relay.tls.allow-invalid-certs': 'false',
         'queue.strategy.route.0.if': "is_local_domain('*', rcpt_domain)", 'queue.strategy.route.0.then': "'local'",
-        'queue.strategy.route.1.if': "sender == 'noreply@hanasand.com'", 'queue.strategy.route.1.then': "'ovh-relay'",
-        'queue.strategy.route.2.else': "'mx'",
+        'queue.strategy.route.1.else': "'ovh-relay'",
         'queue.tls.ovh-relay.starttls': 'require', 'queue.tls.ovh-relay.allow-invalid-certs': 'false',
         'queue.tls.ovh-relay.timeout.tls': '10s',
-        'queue.strategy.tls.0.if': "sender == 'noreply@hanasand.com'", 'queue.strategy.tls.0.then': "'ovh-relay'",
-        'queue.strategy.tls.1.if': "retry_num > 0 && last_error == 'tls'", 'queue.strategy.tls.1.then': "'invalid-tls'",
-        'queue.strategy.tls.2.else': "'default'",
+        'queue.strategy.tls': "'ovh-relay'",
     }
     backup = ROOT / 'route-before.json'
     if not backup.exists(): write_secret(backup, json.dumps(call('/settings/list?prefix=queue.strategy')))
-    call('/settings', [{'type': 'insert', 'assert_empty': False, 'prefix': None, 'values': list(values.items())}])
+    call('/settings', [
+        {'type': 'clear', 'prefix': 'queue.strategy.route'},
+        {'type': 'clear', 'prefix': 'queue.strategy.tls'},
+        {'type': 'insert', 'assert_empty': False, 'prefix': None, 'values': list(values.items())},
+    ])
     result = call('/reload')
     if result.get('data', {}).get('errors'): raise RuntimeError('Relay configuration reload failed')
-    print('System sender uses the authenticated OVH relay with required TLS; local delivery is preserved.')
+    print('External mail uses the authenticated OVH relay with required TLS; local delivery is preserved.')
 
 
 def setup_ovh(image):
@@ -202,7 +203,7 @@ enable = true
     ensure_principal(base, admin, {'type': 'individual', 'name': 'relay-health', 'secrets': [saved['health']],
         'roles': [], 'enabledPermissions': ['authenticate', 'message-queue-list', 'message-queue-get']})
     api(base, 'relay-health', saved['health'], '/queue/messages?limit=1')
-    settings = {'site': 'ovh', 'smtp': {'host': 'smtp-relay.hanasand.com', 'port': 1587, 'serverName': 'smtp-relay.hanasand.com', 'username': 'inspur-relay', 'password': saved['relay']},
+    settings = {'site': 'ovh', 'incoming': {'host': '192.99.32.185'}, 'smtp': {'host': 'smtp-relay.hanasand.com', 'port': 1587, 'serverName': 'smtp-relay.hanasand.com', 'username': 'inspur-relay', 'password': saved['relay']},
         'queue': {'url': 'http://hanasand-mail-relay-ovh:8080', 'username': 'relay-health', 'password': saved['health']}}
     write_secret(ROOT / 'health/health.json', json.dumps(settings))
     start('hanasand-mail-relay-ovh-health', image, network, [f'{ROOT}/health:/run/config:ro'], ['127.0.0.1:19262:8080'])
@@ -231,16 +232,74 @@ def setup_inspur(image):
     print('Inspur connector and readiness service installed. Routing is not changed until activation.')
 
 
+def configure_gateway(site):
+    if site == 'inspur':
+        mail = Path('/home/hanasand/hanasand/mail/stalwart/etc/config.toml')
+        admin = tomllib.loads(mail.read_text())['authentication']['fallback-admin']
+        info = json.loads(subprocess.check_output(['docker', 'inspect', 'hanasand-mail-relay-inspur']))[0]
+        address = info['NetworkSettings']['Networks']['hanasand_hanasandnet']['IPAddress']
+        # Trust only this pinned connector address, and only on incoming SMTP.
+        api('http://127.0.0.1:8081', admin['user'], admin['secret'], '/settings', [{
+            'type': 'insert', 'assert_empty': False, 'prefix': None,
+            'values': [('server.listener.smtp.proxy.trusted-networks', address + '/32')],
+        }])
+        subprocess.run(['docker', 'restart', 'hanasand_mail'], check=True, stdout=subprocess.DEVNULL)
+        print('Incoming SMTP trusts PROXY headers only from the private connector.')
+        return
+
+    keys = Path.home() / '.ssh/authorized_keys'
+    lines = keys.read_text().splitlines(keepends=True)
+    matching = [i for i, line in enumerate(lines)
+                if 'permitopen="127.0.0.1:2687"' in line and 'permitopen="127.0.0.1:19262"' in line]
+    if len(matching) != 1: raise RuntimeError('Expected exactly one restricted mail relay SSH key')
+    index = matching[0]
+    if 'permitlisten="127.0.0.1:2625"' not in lines[index]:
+        write_secret(ROOT / 'authorized-keys-before-inbound', keys.read_text())
+        lines[index] = 'permitlisten="127.0.0.1:2625",' + lines[index]
+        write_secret(keys, ''.join(lines))
+    saved = credentials()
+    # This private principal represents the upstream MTA, which already checks
+    # sender ownership. Health users and other accounts retain sender matching.
+    api('http://127.0.0.1:18081', 'admin', saved['admin'], '/settings', [{
+        'type': 'insert', 'assert_empty': False, 'prefix': None, 'values': [
+            ('session.auth.match-sender.0.if', "authenticated_as == 'inspur-relay'"),
+            ('session.auth.match-sender.0.then', 'false'),
+            ('session.auth.match-sender.1.else', 'true'),
+        ],
+    }])
+    result = api('http://127.0.0.1:18081', 'admin', saved['admin'], '/reload')
+    if result.get('data', {}).get('errors'): raise RuntimeError('Relay configuration reload failed')
+    config = ROOT / 'gateway.cfg'
+    write_secret(config, Path(__file__).with_name('gateway.cfg').read_text())
+    image = 'haproxy@sha256:6343ce34a132a5dceaa24767d739df2bd519f8f7c1079ae39e4821334e8eb42e'
+    flags = ['--network', 'host', '--user', '1000:1000', '--cap-drop', 'ALL',
+             '--cap-add', 'NET_BIND_SERVICE', '--security-opt', 'no-new-privileges:true',
+             '--read-only', '--memory', '128m', '--cpus', '1',
+             '-v', f'{config}:/usr/local/etc/haproxy/haproxy.cfg:ro']
+    subprocess.run(['docker', 'run', '--rm'] + flags + [image, 'haproxy', '-c', '-f',
+                   '/usr/local/etc/haproxy/haproxy.cfg'], check=True)
+    name = 'hanasand-mail-gateway-ovh'
+    if subprocess.run(['docker', 'inspect', name], capture_output=True).returncode == 0:
+        subprocess.run(['docker', 'restart', name], check=True, stdout=subprocess.DEVNULL)
+    else:
+        subprocess.run(['docker', 'run', '-d', '--name', name, '--restart', 'unless-stopped',
+                        '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3'] + flags + [image],
+                       check=True, stdout=subprocess.DEVNULL)
+    print('OVH public SMTP gateway installed; mailboxes and recipient validation remain on Inspur.')
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('site', choices=['ovh', 'inspur'])
     parser.add_argument('--image')
     parser.add_argument('--refresh-tls', action='store_true')
     parser.add_argument('--activate', action='store_true')
+    parser.add_argument('--configure-gateway', action='store_true')
     parser.add_argument('--renewal-revision')
     args = parser.parse_args()
     ROOT.mkdir(mode=0o700, exist_ok=True)
-    if args.renewal_revision and args.site == 'ovh': install_certificate_refresh(args.renewal_revision)
+    if args.configure_gateway: configure_gateway(args.site)
+    elif args.renewal_revision and args.site == 'ovh': install_certificate_refresh(args.renewal_revision)
     elif args.refresh_tls and args.site == 'ovh': refresh_ovh_certificate()
     elif args.activate and args.site == 'inspur': activate_inspur()
     elif args.image: (setup_ovh if args.site == 'ovh' else setup_inspur)(args.image)
