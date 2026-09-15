@@ -17,6 +17,7 @@ import urllib.error
 
 STALWART_IMAGE = 'stalwartlabs/stalwart@sha256:b6c2a04a79695136d5e2c16e9da0254135d0c3f3b1f8147873e812916b0ae8c4'
 ROOT = Path.home() / 'resilience-mail-relay'
+RELAY_SENDERS = ['noreply@hanasand.com', 'support@hanasand.com', 'eirik@hanasand.com']
 
 
 def write_secret(path, value):
@@ -35,10 +36,10 @@ def credentials():
     return json.loads(path.read_text())
 
 
-def api(base, username, password, path, body=None):
+def api(base, username, password, path, body=None, method=None):
     request = urllib.request.Request(base + '/api' + path, headers={
         'Authorization': 'Basic ' + base64.b64encode((username + ':' + password).encode()).decode(),
-        'Content-Type': 'application/json'}, data=json.dumps(body).encode() if body is not None else None)
+        'Content-Type': 'application/json'}, data=json.dumps(body).encode() if body is not None else None, method=method)
     with urllib.request.urlopen(request, timeout=8) as response:
         data = json.load(response)
     if data.get('error') and data['error'] != 'notFound':
@@ -122,16 +123,20 @@ def activate_inspur():
     if not all(health.get('checks', {}).get(key) for key in ['smtpAuthentication', 'relayAuthentication', 'tunnel']):
         raise RuntimeError('Private relay authentication must pass before activation')
     saved = json.loads((ROOT / 'ovh-credentials.json').read_text())
+    sender_condition = ' || '.join("sender == '" + address + "'" for address in RELAY_SENDERS)
     values = {
         'queue.route.ovh-relay.type': 'relay', 'queue.route.ovh-relay.address': 'smtp-relay.hanasand.com',
         'queue.route.ovh-relay.port': '1587', 'queue.route.ovh-relay.protocol': 'smtp',
         'queue.route.ovh-relay.auth.username': 'inspur-relay', 'queue.route.ovh-relay.auth.secret': saved['relay'],
         'queue.route.ovh-relay.tls.implicit': 'false', 'queue.route.ovh-relay.tls.allow-invalid-certs': 'false',
         'queue.strategy.route.0.if': "is_local_domain('*', rcpt_domain)", 'queue.strategy.route.0.then': "'local'",
-        'queue.strategy.route.1.else': "'ovh-relay'",
+        'queue.strategy.route.1.if': sender_condition, 'queue.strategy.route.1.then': "'ovh-relay'",
+        'queue.strategy.route.2.else': "'mx'",
         'queue.tls.ovh-relay.starttls': 'require', 'queue.tls.ovh-relay.allow-invalid-certs': 'false',
         'queue.tls.ovh-relay.timeout.tls': '10s',
-        'queue.strategy.tls': "'ovh-relay'",
+        'queue.strategy.tls.0.if': sender_condition, 'queue.strategy.tls.0.then': "'ovh-relay'",
+        'queue.strategy.tls.1.if': "retry_num > 0 && last_error == 'tls'",
+        'queue.strategy.tls.1.then': "'invalid-tls'", 'queue.strategy.tls.2.else': "'default'",
     }
     backup = ROOT / 'route-before.json'
     if not backup.exists(): write_secret(backup, json.dumps(call('/settings/list?prefix=queue.strategy')))
@@ -142,7 +147,7 @@ def activate_inspur():
     ])
     result = call('/reload')
     if result.get('data', {}).get('errors'): raise RuntimeError('Relay configuration reload failed')
-    print('External mail uses the authenticated OVH relay with required TLS; local delivery is preserved.')
+    print('Support, personal and system mail use the authenticated OVH relay with required TLS; local delivery is preserved.')
 
 
 def setup_ovh(image):
@@ -260,15 +265,11 @@ def configure_gateway(site):
         lines[index] = 'permitlisten="127.0.0.1:2625",' + lines[index]
         write_secret(keys, ''.join(lines))
     saved = credentials()
-    # This private principal represents the upstream MTA, which already checks
-    # sender ownership. Health users and other accounts retain sender matching.
-    api('http://127.0.0.1:18081', 'admin', saved['admin'], '/settings', [{
-        'type': 'insert', 'assert_empty': False, 'prefix': None, 'values': [
-            ('session.auth.match-sender.0.if', "authenticated_as == 'inspur-relay'"),
-            ('session.auth.match-sender.0.then', 'false'),
-            ('session.auth.match-sender.1.else', 'true'),
-        ],
-    }])
+    # Preserve sender ownership checks and the three explicitly approved senders.
+    api('http://127.0.0.1:18081', 'admin', saved['admin'], '/principal/inspur-relay',
+        [{'action': 'set', 'field': 'emails', 'value': RELAY_SENDERS}], method='PATCH')
+    api('http://127.0.0.1:18081', 'admin', saved['admin'], '/settings',
+        [{'type': 'clear', 'prefix': 'session.auth.match-sender'}])
     result = api('http://127.0.0.1:18081', 'admin', saved['admin'], '/reload')
     if result.get('data', {}).get('errors'): raise RuntimeError('Relay configuration reload failed')
     config = ROOT / 'gateway.cfg'
