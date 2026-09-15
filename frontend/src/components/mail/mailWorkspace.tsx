@@ -309,7 +309,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                             ].map((accounts, index) => {
                                 const buttons = accounts.map(account => (
                                     <button key={account.id} type='button' disabled={composer.open}
-                                        aria-label={`Open ${account.shared ? account.name : account.id === overview.actor.id ? 'Personal inbox' : account.name}`}
+                                        aria-label={`Open ${account.shared ? account.name : account.id === overview.actor.id ? 'Inbox' : account.name}`}
                                         aria-current={overview.mailboxUser === account.id ? 'true' : undefined}
                                         title={composer.open ? 'Close the draft before opening another mailbox' : account.address}
                                         onClick={() => {
@@ -319,7 +319,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                         }}
                                         className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-xs disabled:opacity-50 ${overview.mailboxUser === account.id ? 'bg-ui-primary/10 font-semibold text-ui-primary' : 'text-ui-muted hover:bg-ui-raised'}`}>
                                         <span className='flex min-w-0 items-center gap-2'><Inbox className='h-4 w-4 shrink-0' />
-                                            {!sidebarCompact && <span className='truncate'>{account.shared ? account.name : account.id === overview.actor.id ? 'Personal inbox' : account.name}</span>}
+                                            {!sidebarCompact && <span className='truncate'>{account.shared ? account.name : account.id === overview.actor.id ? 'Inbox' : account.name}</span>}
                                         </span>
                                         {!sidebarCompact && <span aria-label={account.unreadCount == null ? 'Unread count unavailable' : `${account.unreadCount} unread`}>{account.unreadCount ?? '—'}</span>}
                                     </button>

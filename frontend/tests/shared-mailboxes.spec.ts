@@ -40,7 +40,7 @@ test('shared folders keep mailbox selections separate and respect sending permis
     releaseSupport!()
     await lateResponse
     await expect(page.getByRole('button', { name: 'Open Sales', exact: true })).toHaveAttribute('aria-current', 'true')
-    await page.getByRole('button', { name: 'Open Personal inbox', exact: true }).click()
+    await page.getByRole('button', { name: 'Open Inbox', exact: true }).click()
     await expect(page.getByTestId('mail-compose-button')).toBeEnabled()
     await expect(page).toHaveURL(/\/mail$/)
 })
