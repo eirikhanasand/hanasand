@@ -17,6 +17,20 @@ class HealthTests(unittest.TestCase):
         self.assertFalse(health.public_state(health.snapshot('test', {'smtp': False}, 100), 110)['ok'])
         self.assertFalse(health.public_state({'ok': True, 'checkedAt': None}, 110)['ok'])
 
+    def test_incoming_probe_requires_tls_and_never_submits_mail(self):
+        from unittest.mock import MagicMock
+        smtp = MagicMock()
+        smtp.__enter__.return_value = smtp
+        smtp.ehlo.return_value = (250, b'OK')
+        with patch.object(health.smtplib, 'SMTP', return_value=smtp):
+            self.assertTrue(health.incoming_probe({'host': '192.0.2.1'}))
+            smtp.starttls.assert_called_once()
+            smtp.mail.assert_not_called()
+            smtp.data.assert_not_called()
+            smtp.starttls.side_effect = health.ssl.SSLError('certificate verification failed')
+            with self.assertRaises(health.ssl.SSLError):
+                health.incoming_probe({'host': '192.0.2.1'})
+
     def test_queue_age_and_failed_queue_reads(self):
         settings = {'url': 'http://mail', 'username': 'read-only', 'password': 'test'}
         for created, healthy in [(950, True), (600, False)]:

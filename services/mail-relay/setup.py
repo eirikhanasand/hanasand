@@ -212,7 +212,7 @@ enable = true
     print('OVH private SMTP relay and readiness service installed.')
 
 
-def setup_inspur(image):
+def setup_inspur(image, api_container):
     saved = credentials()
     relay = json.loads((ROOT / 'ovh-credentials.json').read_text())
     mail = Path('/home/hanasand/hanasand/mail/stalwart/etc/config.toml')
@@ -223,7 +223,7 @@ def setup_inspur(image):
     api(base, 'relay-health', saved['health'], '/queue/messages?limit=1')
     # Derive the existing application sender credential inside its current runtime.
     javascript = '''import {systemSenderAccess} from "./src/utils/mail/system.ts";console.log(JSON.stringify(systemSenderAccess()));process.exit(0);'''
-    sender = json.loads(subprocess.check_output(['docker', 'exec', 'hanasand_api', 'bun', '-e', javascript]))
+    sender = json.loads(subprocess.check_output(['docker', 'exec', api_container, 'bun', '-e', javascript]))
     settings = {'site': 'inspur', 'smtp': {'host': 'stalwart', 'port': 587, 'serverName': 'mail.hanasand.com', **sender},
         'relay': {'host': '127.0.0.1', 'port': 1587, 'serverName': 'smtp-relay.hanasand.com', 'username': 'inspur-relay', 'password': relay['relay']},
         'queue': {'url': 'http://stalwart:8080', 'username': 'relay-health', 'password': saved['health']}}
@@ -297,6 +297,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('site', choices=['ovh', 'inspur'])
     parser.add_argument('--image')
+    parser.add_argument('--api-container', help='Active API container supplying the configured sender credential')
     parser.add_argument('--refresh-tls', action='store_true')
     parser.add_argument('--activate', action='store_true')
     parser.add_argument('--configure-gateway', action='store_true')
@@ -307,5 +308,8 @@ if __name__ == '__main__':
     elif args.renewal_revision and args.site == 'ovh': install_certificate_refresh(args.renewal_revision)
     elif args.refresh_tls and args.site == 'ovh': refresh_ovh_certificate()
     elif args.activate and args.site == 'inspur': activate_inspur()
-    elif args.image: (setup_ovh if args.site == 'ovh' else setup_inspur)(args.image)
+    elif args.image:
+        if args.site == 'ovh': setup_ovh(args.image)
+        elif args.api_container: setup_inspur(args.image, args.api_container)
+        else: parser.error('Inspur setup requires --api-container naming an active API container')
     else: parser.error('Choose --image, OVH --refresh-tls, or Inspur --activate')
