@@ -272,19 +272,19 @@ def configure_gateway(site):
     config = ROOT / 'gateway.cfg'
     write_secret(config, Path(__file__).with_name('gateway.cfg').read_text())
     image = 'haproxy@sha256:6343ce34a132a5dceaa24767d739df2bd519f8f7c1079ae39e4821334e8eb42e'
-    flags = ['--network', 'host', '--user', '1000:1000', '--cap-drop', 'ALL',
-             '--cap-add', 'NET_BIND_SERVICE', '--security-opt', 'no-new-privileges:true',
+    flags = ['--network', 'host', '--user', '0:0', '--cap-drop', 'ALL',
+             '--cap-add', 'NET_BIND_SERVICE', '--cap-add', 'SETUID', '--cap-add', 'SETGID', '--security-opt', 'no-new-privileges:true',
              '--read-only', '--memory', '128m', '--cpus', '1',
              '-v', f'{config}:/usr/local/etc/haproxy/haproxy.cfg:ro']
     subprocess.run(['docker', 'run', '--rm'] + flags + [image, 'haproxy', '-c', '-f',
                    '/usr/local/etc/haproxy/haproxy.cfg'], check=True)
     name = 'hanasand-mail-gateway-ovh'
     if subprocess.run(['docker', 'inspect', name], capture_output=True).returncode == 0:
-        subprocess.run(['docker', 'restart', name], check=True, stdout=subprocess.DEVNULL)
-    else:
-        subprocess.run(['docker', 'run', '-d', '--name', name, '--restart', 'unless-stopped',
-                        '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3'] + flags + [image],
-                       check=True, stdout=subprocess.DEVNULL)
+        # This gateway is stateless; replacing it applies changed capability/volume settings.
+        subprocess.run(['docker', 'rm', '-f', name], check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(['docker', 'run', '-d', '--name', name, '--restart', 'unless-stopped',
+                    '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3'] + flags + [image],
+                   check=True, stdout=subprocess.DEVNULL)
     print('OVH public SMTP gateway installed; mailboxes and recipient validation remain on Inspur.')
 
 
