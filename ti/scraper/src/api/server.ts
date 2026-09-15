@@ -90,6 +90,8 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (requiresAuthenticatedRequest(url.pathname)) {
       const authentication = await authenticateOperatorRequest(request, options);
       if (authentication.error) return authentication.error;
+      const organizationId = url.searchParams.get("organizationId") || request.headers.get("x-organization-id");
+      if (organizationId) await (options.store as any).refreshAccountOrganization?.(organizationId);
     }
     if ((options.serviceToken || options.authApiBase || Bun.env.TI_SCRAPER_SERVICE_TOKEN || Bun.env.HANASAND_AUTH_API_BASE)
       && (url.pathname === "/v1/ti/actor-org-relevance" || url.pathname.startsWith("/v1/ti/actor-org-relevance/"))) {

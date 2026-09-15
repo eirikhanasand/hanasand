@@ -3,13 +3,12 @@
 import Link from '@/components/organizations/workspaceLink'
 import { useWorkspace } from '@/components/organizations/workspaceProvider'
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown } from 'lucide-react'
 import { getRuleCategory, ruleCategories, type RuleCategory } from './rule-categories'
 import { DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 
 export type MillRule = { id: string, detectionLogic?: string, recordId?: string, rule_id?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'owned' | 'open_source', sourceReference?: string, definition?: { conditions?: Array<{ path: string, operator: string, value: string }> } }
 
-export default function DetectionRules() {
+export default function DetectionRules({ category }: { category: RuleCategory }) {
     const latestOrganization = useRef('')
     const { organizationId, organizations } = useWorkspace()
     const [rules, setRules] = useState<MillRule[]>([])
@@ -93,20 +92,21 @@ export default function DetectionRules() {
 
     const titleQuery = titleFilter.trim().toLowerCase()
     const textQuery = textFilter.trim().toLowerCase()
-    const filteredRules = rules.filter(rule =>
+    const categoryRules = rules.filter(rule => getRuleCategory(rule) === category)
+    const filteredRules = categoryRules.filter(rule =>
         rule.name.toLowerCase().includes(titleQuery)
         && (!textQuery || [rule.name, rule.id, rule.rule_id, rule.explanation, rule.family, rule.severity, rule.sourceReference, rule.detectionLogic, ...(rule.evidence || []), ...(rule.definition?.conditions || []).flatMap(condition => [condition.path, condition.operator, condition.value])].join(' ').toLowerCase().includes(textQuery))
         && (enabledFilter === 'all' || (rule.enabled !== false) === (enabledFilter === 'enabled'))
         && (severityFilter === 'all' || rule.severity.toLowerCase() === severityFilter)
     )
-    const severities = Array.from(new Set(['informational', 'low', 'medium', 'high', 'critical', ...rules.map(rule => rule.severity.toLowerCase())]))
+    const severities = Array.from(new Set(['informational', 'low', 'medium', 'high', 'critical', ...categoryRules.map(rule => rule.severity.toLowerCase())]))
     const hasFilters = Boolean(titleFilter || textFilter || enabledFilter !== 'all' || severityFilter !== 'all')
     function clearFilters() { setTitleFilter(''); setTextFilter(''); setEnabledFilter('all'); setSeverityFilter('all') }
 
     return (
         <DashboardPage className='!gap-6 !p-4 lg:!p-6'>
             <div className='flex flex-wrap items-center justify-between gap-4'>
-                <div><p className='text-sm text-ui-muted'>Security tools</p><h1 className='mt-1 text-2xl font-semibold'>Rules</h1><p className='mt-2 text-sm text-ui-muted'>Create, import, and enable the rules that monitor your security events.</p></div>
+                <div><p className='text-sm text-ui-muted'>Security tools</p><h1 className='mt-1 text-2xl font-semibold'>{ruleCategories[category].label}</h1><p className='mt-2 text-sm text-ui-muted'>{ruleCategories[category].description}</p></div>
                 <div className='flex max-w-full flex-wrap items-center gap-3'>
 
                     <button type='button' aria-expanded={showImports} aria-controls='mill-rule-imports' onClick={() => setShowImports(open => !open)} className='rounded-lg bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary'>Import</button>
@@ -114,7 +114,7 @@ export default function DetectionRules() {
                 </div>
             </div>
             {error && <div role='alert' className='rounded-lg border border-red-400/40 bg-red-500/10 p-3 text-sm text-red-200'>{error}</div>}
-            {status && <div role='status' className='rounded-lg border border-ui-primary/40 bg-ui-primary/10 p-3 text-sm text-ui-text'>{status}</div>}
+            {status && <div role='status' className='rounded-lg border border-ui-primary/40 bg-ui-primary/10 p-3 text-sm text-ui-text'>{status}{category !== 'match' && <Link href='/mill/rules/match' className='ml-2 underline'>View custom and imported rules in Match filter</Link>}</div>}
             {showImports && <DashboardPanel className='grid min-w-0 gap-4 p-4 sm:p-6' id='mill-rule-imports'>
                 <h2 className='font-semibold'>Import or create rules</h2>
                 <details className='min-w-0 rounded-lg border border-ui-border'>
@@ -153,40 +153,30 @@ export default function DetectionRules() {
                     <label className='grid min-w-0 gap-1 text-xs text-ui-muted'>Severity<select value={severityFilter} onChange={event => setSeverityFilter(event.target.value)} className='h-9 min-w-0 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text'><option value='all'>All severities</option>{severities.map(severity => <option key={severity} value={severity}>{severity.charAt(0).toUpperCase() + severity.slice(1)}</option>)}</select></label>
                     <button type='button' onClick={clearFilters} disabled={!hasFilters} className='h-9 self-end rounded-md border border-ui-border px-3 text-xs font-semibold disabled:opacity-50'>Clear filters</button>
                 </div>
-                <p role='status' className='text-xs text-ui-muted'>{filteredRules.length} of {rules.length} rules</p>
-                {(Object.keys(ruleCategories) as RuleCategory[]).map(category => {
-                    const categoryRules = filteredRules.filter(rule => getRuleCategory(rule) === category)
-                    return <details key={category} open className='group min-w-0 rounded-lg border border-ui-border'>
-                        <summary className='flex cursor-pointer list-none items-center gap-3 rounded-lg p-4 focus-visible:outline-2 focus-visible:outline-ui-primary [&::-webkit-details-marker]:hidden'>
-                            <ChevronDown size={16} aria-hidden className='shrink-0 text-ui-muted transition-transform group-not-open:-rotate-90' />
-                            <span className='min-w-0 flex-1'><span className='block text-sm font-semibold'>{ruleCategories[category].label}</span><span className='mt-1 block text-xs text-ui-muted'>{ruleCategories[category].description}</span></span>
-                            <span className='rounded-md bg-ui-raised px-2 py-1 text-xs tabular-nums text-ui-muted'>{categoryRules.length}</span>
-                        </summary>
-                        <div role='region' aria-label={`${ruleCategories[category].label} rules`} tabIndex={0} className='min-w-0 overflow-x-auto rounded-md border border-ui-border focus-visible:outline-2 focus-visible:outline-ui-primary'>
-                            <table className='w-full min-w-[900px] table-fixed text-left text-sm' aria-label={`${ruleCategories[category].label} rules`}>
-                                <colgroup><col className='w-[24%]' /><col className='w-[29%]' /><col className='w-[12%]' /><col className='w-[8%]' /><col className='w-[8%]' /><col className='w-[10%]' /><col className='w-[9%]' /></colgroup>
-                                <thead className='bg-ui-raised text-xs text-ui-muted'><tr>{['Title', 'Description', 'Family', 'Severity', 'Status', 'Source', 'Action'].map(column => <th key={column} scope='col' className='px-3 py-2 font-medium'>{column}</th>)}</tr></thead>
-                                <tbody className='divide-y divide-ui-border'>
-                                    {categoryRules.map(rule => <tr key={rule.id} className='h-16 hover:bg-ui-raised'>
-                                        <th scope='row' className='px-3 py-2 font-normal'>
-                                            <Link href={`/mill/rules/${encodeURIComponent(rule.id)}?organizationId=${encodeURIComponent(organizationId)}`} className='block rounded-sm focus-visible:outline-2 focus-visible:outline-ui-primary'>
-                                                <span className='block truncate font-semibold text-ui-primary' title={rule.name}>{rule.name}</span>
-                                                <span className='mt-1 block truncate text-xs text-ui-muted' title={`${rule.id} · v${rule.version}`}>{rule.id} · v{rule.version}</span>
-                                            </Link>
-                                        </th>
-                                        <td className='px-3 py-2 text-xs text-ui-muted'><span className='line-clamp-2' title={rule.explanation}>{rule.explanation}</span></td>
-                                        <td className='px-3 py-2 text-xs text-ui-muted'><span className='line-clamp-2' title={rule.family}>{rule.family}</span></td>
-                                        <td className='px-3 py-2 text-xs capitalize'>{rule.severity}</td>
-                                        <td className='px-3 py-2 text-xs'>{rule.enabled === false ? 'Disabled' : 'Enabled'}</td>
-                                        <td className='px-3 py-2 text-xs text-ui-muted'>{rule.source === 'open_source' ? 'Imported rule' : rule.source === 'owned' ? 'Custom rule' : 'Hanasand rule'}</td>
-                                        <td className='px-2 py-2'><button type='button' aria-label={`${rule.enabled === false ? 'Enable' : 'Disable'} ${rule.name}`} className='rounded-md border border-ui-border px-2 py-2 text-xs font-semibold disabled:opacity-50' disabled={!canManageRules} onClick={() => void toggleRule(rule)}>{rule.enabled === false ? 'Enable' : 'Disable'}</button></td>
-                                    </tr>)}
-                                    {!categoryRules.length && <tr><td colSpan={7} className='px-3 py-6 text-center text-sm text-ui-muted'>{hasFilters ? 'No rules in this category match these filters.' : 'No rules in this category.'}</td></tr>}
-                                </tbody>
-                            </table>
-                        </div>
-                    </details>
-                })}
+                <p role='status' className='text-xs text-ui-muted'>{filteredRules.length} of {categoryRules.length} rules</p>
+                <div role='region' aria-label={`${ruleCategories[category].label} rules`} tabIndex={0} className='min-w-0 overflow-x-auto rounded-md border border-ui-border focus-visible:outline-2 focus-visible:outline-ui-primary'>
+                    <table className='w-full min-w-[900px] table-fixed text-left text-sm' aria-label={`${ruleCategories[category].label} rules`}>
+                        <colgroup><col className='w-[24%]' /><col className='w-[29%]' /><col className='w-[12%]' /><col className='w-[8%]' /><col className='w-[8%]' /><col className='w-[10%]' /><col className='w-[9%]' /></colgroup>
+                        <thead className='bg-ui-raised text-xs text-ui-muted'><tr>{['Title', 'Description', 'Family', 'Severity', 'Status', 'Source', 'Action'].map(column => <th key={column} scope='col' className='px-3 py-2 font-medium'>{column}</th>)}</tr></thead>
+                        <tbody className='divide-y divide-ui-border'>
+                            {filteredRules.map(rule => <tr key={rule.id} className='h-16 hover:bg-ui-raised'>
+                                <th scope='row' className='px-3 py-2 font-normal'>
+                                    <Link href={`/mill/rules/${category}/${encodeURIComponent(rule.id)}?organizationId=${encodeURIComponent(organizationId)}`} className='block rounded-sm focus-visible:outline-2 focus-visible:outline-ui-primary'>
+                                        <span className='block truncate font-semibold text-ui-primary' title={rule.name}>{rule.name}</span>
+                                        <span className='mt-1 block truncate text-xs text-ui-muted' title={`${rule.id} · v${rule.version}`}>{rule.id} · v{rule.version}</span>
+                                    </Link>
+                                </th>
+                                <td className='px-3 py-2 text-xs text-ui-muted'><span className='line-clamp-2' title={rule.explanation}>{rule.explanation}</span></td>
+                                <td className='px-3 py-2 text-xs text-ui-muted'><span className='line-clamp-2' title={rule.family}>{rule.family}</span></td>
+                                <td className='px-3 py-2 text-xs capitalize'>{rule.severity}</td>
+                                <td className='px-3 py-2 text-xs'>{rule.enabled === false ? 'Disabled' : 'Enabled'}</td>
+                                <td className='px-3 py-2 text-xs text-ui-muted'>{rule.source === 'open_source' ? 'Imported rule' : rule.source === 'owned' ? 'Custom rule' : 'Hanasand rule'}</td>
+                                <td className='px-2 py-2'><button type='button' aria-label={`${rule.enabled === false ? 'Enable' : 'Disable'} ${rule.name}`} className='rounded-md border border-ui-border px-2 py-2 text-xs font-semibold disabled:opacity-50' disabled={!canManageRules} onClick={() => void toggleRule(rule)}>{rule.enabled === false ? 'Enable' : 'Disable'}</button></td>
+                            </tr>)}
+                            {!filteredRules.length && <tr><td colSpan={7} className='px-3 py-6 text-center text-sm text-ui-muted'>{hasFilters ? 'No rules in this category match these filters.' : 'No rules in this category.'}</td></tr>}
+                        </tbody>
+                    </table>
+                </div>
             </DashboardPanel>
         </DashboardPage>
     )

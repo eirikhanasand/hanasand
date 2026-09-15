@@ -56,7 +56,7 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
         if (draft) setDraft({ ...draft, definition: { conditions: conditions.map((condition, i) => i === index ? { ...condition, [key]: value } : condition) } })
     }
     return <DashboardPage className='!gap-6 !p-4 lg:!p-6'>
-        <Link href={`/mill/rules?organizationId=${encodeURIComponent(organizationId)}`} className='inline-flex w-fit items-center gap-2 rounded-md text-sm font-medium text-ui-muted hover:text-ui-primary'><ArrowLeft size={16} aria-hidden='true' />Rules</Link>
+        <Link href={`/mill/rules/${getRuleCategory(data?.rule || { id })}?organizationId=${encodeURIComponent(organizationId)}`} className='inline-flex w-fit items-center gap-2 rounded-md text-sm font-medium text-ui-muted hover:text-ui-primary'><ArrowLeft size={16} aria-hidden='true' />{ruleCategories[getRuleCategory(data?.rule || { id })].label}</Link>
         {error && <div role='alert' className='rounded-lg border border-red-500 p-4'>{error} {data && <button type='button' disabled={busy} onClick={() => void reload()} className='ml-3 underline'>Reload rule</button>}</div>}
         {status && <p role='status'>{status}</p>}
         {!draft && !error && <p role='status'>Loading rule…</p>}

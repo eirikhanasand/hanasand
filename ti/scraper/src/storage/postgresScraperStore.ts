@@ -218,6 +218,36 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     }
   }
 
+  // Read account membership on each scoped request so removal takes effect immediately.
+  async refreshAccountOrganization(organizationId: string): Promise<void> {
+    const [tables] = await this.sql`SELECT to_regclass('public.organizations')::text AS organizations`;
+    if (!tables?.organizations) return;
+    const [organization] = await this.sql`SELECT id, name, slug, status, alert_visibility_policy,
+      created_by, created_at, updated_at FROM public.organizations WHERE id = ${organizationId}`;
+    if (!organization) return;
+    const members = await this.sql`SELECT member.user_id, member.role, member.status,
+      member.created_at, users.active AS user_active
+      FROM public.organization_members member JOIN public.users users ON users.id = member.user_id
+      WHERE member.organization_id = ${organizationId}`;
+    this.hydrateWithoutOrganizationWriteGuard(() => {
+      super.saveOrganization({
+        ...this.getOrganization(organizationId),
+        id: organization.id, tenantId: organization.id, name: organization.name, slug: organization.slug,
+        status: organization.status === 'active' ? 'active' : 'suspended', kind: 'customer',
+        alertVisibilityPolicy: organization.alert_visibility_policy, accountOrganization: true,
+        createdBy: organization.created_by, createdAt: String(organization.created_at), updatedAt: String(organization.updated_at)
+      });
+      for (const member of this.listOrganizationMembers()) {
+        if (member.organizationId === organizationId) super.saveOrganizationMember({ ...member, status: 'removed' });
+      }
+      for (const member of members) super.saveOrganizationMember({
+        id: this.listOrganizationMembers().find(row => row.organizationId === organizationId && row.userId === member.user_id)?.id ?? `account:${organizationId}:${member.user_id}`, organizationId, userId: member.user_id,
+        role: member.role === 'member' ? 'analyst' : member.role, status: member.status,
+        userActive: member.user_active, createdAt: String(member.created_at), updatedAt: String(member.created_at)
+      });
+    });
+  }
+
   async refreshReadOnlyRecords(): Promise<void> {
     if (!this.readOnly) throw new Error("Metadata refresh is reserved for query replicas");
     const [clock] = await this.sql`SELECT CASE WHEN pg_is_in_recovery() THEN coalesce(pg_last_xact_replay_timestamp(), 'epoch'::timestamptz) ELSE clock_timestamp() END AS at`;

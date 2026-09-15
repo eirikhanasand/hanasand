@@ -52,7 +52,7 @@ try {
     await page.getByText('2 findings · 1 needing review', { exact: true }).waitFor()
     await page.getByText('Collection failed', { exact: false }).waitFor()
     await page.getByText('Last attempt succeeded', { exact: false }).waitFor()
-    assert.equal(await page.getByRole('heading', { name: 'Monitored actors' }).count(), 0)
+    assert.equal(await page.getByRole('heading', { name: 'Actors' }).count(), 0)
     await page.getByLabel('Filter findings').selectOption('review')
     assert.equal(await page.locator('[data-finding-id]').count(), 1)
     await page.getByText('Investigate finding', { exact: true }).click()
