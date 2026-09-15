@@ -44,6 +44,7 @@ class HealthTests(unittest.TestCase):
             with self.assertRaises(ValueError): health.queue_probe(settings)
 
     def test_submission_requires_authentication_and_never_sends_data(self):
+        senders = []
         class SMTP:
             def __init__(self, **_): self.logged_in = False
             def __enter__(self): return self
@@ -52,13 +53,16 @@ class HealthTests(unittest.TestCase):
             def ehlo(self, *_): pass
             def starttls(self, context): pass
             def login(self, username, password): self.logged_in = True
-            def mail(self, *_): return (250 if self.logged_in else 530, b'')
+            def mail(self, sender):
+                senders.append(sender)
+                return (250 if self.logged_in else 530, b'')
             def rcpt(self, *_):
                 if self.logged_in: raise AssertionError('Probe consumed delivery quota')
                 return (550, b'')
             def rset(self): pass
-        settings = {'host': 'mail', 'port': 587, 'serverName': 'mail.example.test', 'username': 'test', 'password': 'test'}
+        settings = {'host': 'mail', 'port': 587, 'serverName': 'mail.example.test', 'username': 'test', 'password': 'test', 'sender': 'sales@hanasand.com'}
         with patch.object(health.smtplib, 'SMTP', SMTP): self.assertTrue(health.smtp_probe(settings, True))
+        self.assertEqual(senders, ['sales@hanasand.com', 'sales@hanasand.com'])
         class OpenRelay(SMTP):
             def mail(self, *_): return 250, b''
             def rcpt(self, *_): return 250, b''

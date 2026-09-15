@@ -24,7 +24,7 @@ def smtp_probe(settings, reject_anonymous=False):
         smtp.starttls(context=ssl.create_default_context())
         smtp.ehlo('mail.hanasand.com')
         if reject_anonymous:
-            code, _ = smtp.mail('noreply@hanasand.com')
+            code, _ = smtp.mail(settings.get('sender', 'noreply@hanasand.com'))
             if code < 400:
                 code, _ = smtp.rcpt('postmaster@example.net')
             if code < 400:
@@ -32,7 +32,7 @@ def smtp_probe(settings, reject_anonymous=False):
             smtp.rset()
         smtp.login(settings['username'], settings['password'])
         # RCPT consumes per-sender delivery quotas even without DATA.
-        if smtp.mail('noreply@hanasand.com')[0] != 250:
+        if smtp.mail(settings.get('sender', 'noreply@hanasand.com'))[0] != 250:
             raise ValueError('Authenticated relay rejected')
         smtp.rset()
     return True

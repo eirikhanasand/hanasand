@@ -17,7 +17,6 @@ import urllib.error
 
 STALWART_IMAGE = 'stalwartlabs/stalwart@sha256:b6c2a04a79695136d5e2c16e9da0254135d0c3f3b1f8147873e812916b0ae8c4'
 ROOT = Path.home() / 'resilience-mail-relay'
-RELAY_SENDERS = ['noreply@hanasand.com', 'support@hanasand.com', 'eirik@hanasand.com']
 
 
 def write_secret(path, value):
@@ -123,20 +122,16 @@ def activate_inspur():
     if not all(health.get('checks', {}).get(key) for key in ['smtpAuthentication', 'relayAuthentication', 'tunnel']):
         raise RuntimeError('Private relay authentication must pass before activation')
     saved = json.loads((ROOT / 'ovh-credentials.json').read_text())
-    sender_condition = ' || '.join("sender == '" + address + "'" for address in RELAY_SENDERS)
     values = {
         'queue.route.ovh-relay.type': 'relay', 'queue.route.ovh-relay.address': 'smtp-relay.hanasand.com',
         'queue.route.ovh-relay.port': '1587', 'queue.route.ovh-relay.protocol': 'smtp',
         'queue.route.ovh-relay.auth.username': 'inspur-relay', 'queue.route.ovh-relay.auth.secret': saved['relay'],
         'queue.route.ovh-relay.tls.implicit': 'false', 'queue.route.ovh-relay.tls.allow-invalid-certs': 'false',
         'queue.strategy.route.0.if': "is_local_domain('*', rcpt_domain)", 'queue.strategy.route.0.then': "'local'",
-        'queue.strategy.route.1.if': sender_condition, 'queue.strategy.route.1.then': "'ovh-relay'",
-        'queue.strategy.route.2.else': "'mx'",
+        'queue.strategy.route.1.else': "'ovh-relay'",
         'queue.tls.ovh-relay.starttls': 'require', 'queue.tls.ovh-relay.allow-invalid-certs': 'false',
         'queue.tls.ovh-relay.timeout.tls': '10s',
-        'queue.strategy.tls.0.if': sender_condition, 'queue.strategy.tls.0.then': "'ovh-relay'",
-        'queue.strategy.tls.1.if': "retry_num > 0 && last_error == 'tls'",
-        'queue.strategy.tls.1.then': "'invalid-tls'", 'queue.strategy.tls.2.else': "'default'",
+        'queue.strategy.tls': "'ovh-relay'",
     }
     backup = ROOT / 'route-before.json'
     if not backup.exists(): write_secret(backup, json.dumps(call('/settings/list?prefix=queue.strategy')))
@@ -147,7 +142,7 @@ def activate_inspur():
     ])
     result = call('/reload')
     if result.get('data', {}).get('errors'): raise RuntimeError('Relay configuration reload failed')
-    print('Support, personal and system mail use the authenticated OVH relay with required TLS; local delivery is preserved.')
+    print('All mailboxes use the authenticated OVH relay for external delivery with required TLS; local delivery is preserved.')
 
 
 def setup_ovh(image):
@@ -210,7 +205,7 @@ enable = true
     ensure_principal(base, admin, {'type': 'individual', 'name': 'relay-health', 'secrets': [saved['health']],
         'roles': [], 'enabledPermissions': ['authenticate', 'message-queue-list', 'message-queue-get']})
     api(base, 'relay-health', saved['health'], '/queue/messages?limit=1')
-    settings = {'site': 'ovh', 'incoming': {'host': '192.99.32.185'}, 'smtp': {'host': 'smtp-relay.hanasand.com', 'port': 1587, 'serverName': 'smtp-relay.hanasand.com', 'username': 'inspur-relay', 'password': saved['relay']},
+    settings = {'site': 'ovh', 'incoming': {'host': '192.99.32.185'}, 'smtp': {'host': 'smtp-relay.hanasand.com', 'port': 1587, 'serverName': 'smtp-relay.hanasand.com', 'username': 'inspur-relay', 'password': saved['relay'], 'sender': 'sales@hanasand.com'},
         'queue': {'url': 'http://hanasand-mail-relay-ovh:8080', 'username': 'relay-health', 'password': saved['health']}}
     write_secret(ROOT / 'health/health.json', json.dumps(settings))
     start('hanasand-mail-relay-ovh-health', image, network, [f'{ROOT}/health:/run/config:ro'], ['127.0.0.1:19262:8080'])
@@ -265,11 +260,18 @@ def configure_gateway(site):
         lines[index] = 'permitlisten="127.0.0.1:2625",' + lines[index]
         write_secret(keys, ''.join(lines))
     saved = credentials()
-    # Preserve sender ownership checks and the three explicitly approved senders.
-    api('http://127.0.0.1:18081', 'admin', saved['admin'], '/principal/inspur-relay',
-        [{'action': 'set', 'field': 'emails', 'value': RELAY_SENDERS}], method='PATCH')
-    api('http://127.0.0.1:18081', 'admin', saved['admin'], '/settings',
-        [{'type': 'clear', 'prefix': 'session.auth.match-sender'}])
+    # Inspur authenticates mailboxes and enforces sender ownership. The private
+    # MTA credential represents those validated Hanasand senders over TLS.
+    api('http://127.0.0.1:18081', 'admin', saved['admin'], '/settings', [
+        {'type': 'clear', 'prefix': 'session.auth.match-sender'},
+        {'type': 'clear', 'prefix': 'session.auth.must-match-sender'},
+        {'type': 'insert', 'assert_empty': False, 'prefix': None, 'values': [
+            ('session.auth.must-match-sender.0.if',
+             "authenticated_as == 'inspur-relay' && is_tls && (sender_domain == 'hanasand.com' || sender == '')"),
+            ('session.auth.must-match-sender.0.then', 'false'),
+            ('session.auth.must-match-sender.1.else', 'true'),
+        ]},
+    ])
     result = api('http://127.0.0.1:18081', 'admin', saved['admin'], '/reload')
     if result.get('data', {}).get('errors'): raise RuntimeError('Relay configuration reload failed')
     config = ROOT / 'gateway.cfg'
