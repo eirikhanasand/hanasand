@@ -1127,6 +1127,10 @@ export function authorizeDwmWorkflowAccess(input: { options: ApiServerOptions; s
   const allowedRoles = allowedDwmVisibilityRoles(visibilityPolicy);
   const openDecision: DwmVisibilityDecision = { allowed: true, reason: null, alertVisibilityPolicy: visibilityPolicy, allowedRoles };
   const members = organizationMembers(input.options, input.scope.organizationId);
+  if ((input.scope.organization as any)?.accountOrganization && !members.length) {
+    const visibilityDecision: DwmVisibilityDecision = { allowed: false, reason: "not_member", alertVisibilityPolicy: visibilityPolicy, allowedRoles };
+    return { readOnly: true, visibilityDecision, error: dwmVisibilityError(visibilityDecision, "Organization access requires an active membership.") };
+  }
   if (!input.scope.organizationId || !members.length) return { readOnly: false, visibilityDecision: openDecision };
 
   const identity = requestIdentity(input.request, input.body, input.url);

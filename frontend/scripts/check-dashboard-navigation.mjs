@@ -24,7 +24,7 @@ assert(operator.some(item => item.href === '/system'))
 assert.deepEqual(navigationLinks(getDashboardNavigation(memberAccess)).filter(item => item.ancestors.includes('Infrastructure')).map(item => item.href), ['/system', '/vms'])
 assert(!navigationLinks(getDashboardNavigation({ ...memberAccess, hasVMs: false })).some(item => item.href === '/vms'))
 assert(!operator.some(item => ['/db', '/logs', '/system/updates'].includes(item.href)))
-assert.equal(all.find(item => item.href === '/dwm/actors')?.label, 'Monitored actors')
+assert.equal(all.find(item => item.href === '/dwm/actors')?.label, 'Actors')
 for (const path of ['/management/users', '/management/roles']) {
     assert.deepEqual(all.find(item => item.href === path)?.ancestors, ['Administration', 'Management'])
 }
@@ -74,8 +74,8 @@ try {
     const nav = page.getByRole('navigation', { name: 'Main navigation' })
     const button = (name) => nav.getByRole('button', { name, exact: true })
     const link = (name) => nav.getByRole('link', { name, exact: true })
-    await link('Monitored actors').waitFor({ state: 'visible' })
-    assert.equal(await link('Monitored actors').getAttribute('aria-current'), 'page')
+    await link('Actors').waitFor({ state: 'visible' })
+    assert.equal(await link('Actors').getAttribute('aria-current'), 'page')
     await button('Rules').click()
     for (const category of ['Match filter', 'Analysis filter', 'Detection filter']) {
         await link(category).click()
@@ -106,7 +106,7 @@ try {
     assert.equal(await button('Monitoring').isVisible(), false)
     assert.equal(await button('Scheduling').count(), 0)
     assert.equal(await link('Execution Monitoring').count(), 0)
-    assert.equal(await link('Monitored actors').isVisible(), false)
+    assert.equal(await link('Actors').isVisible(), false)
     await button('Infrastructure').click()
     await button('Compute').click()
     await link('Virtual Machines').click()

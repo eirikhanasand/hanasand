@@ -379,7 +379,7 @@ export function DwmAnalystPortal({
 
     if (view === 'actors') {
         return (
-            <DwmPanelPage title='Monitored actors' meta={dataHealth.snapshot.state === 'live' ? `${snapshot.actorOverviews.length} actor profiles` : dataHealth.snapshot.state === 'error' ? 'Actor profiles unavailable' : 'Loading actor profiles…'}>
+            <DwmPanelPage title='Actors' meta={dataHealth.snapshot.state === 'live' ? `${snapshot.actorOverviews.length} actor profiles` : dataHealth.snapshot.state === 'error' ? 'Actor profiles unavailable' : 'Loading actor profiles…'}>
                 <ActorDirectory actors={snapshot.actorOverviews} state={dataHealth.snapshot.state} onRetry={() => setRefreshVersion(version => version + 1)} />
             </DwmPanelPage>
         )

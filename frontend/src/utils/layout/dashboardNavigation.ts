@@ -29,7 +29,7 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
             ]),
             group('Monitoring', [
                 link('Dark web monitoring', '/dwm'),
-                link('Monitored actors', '/dwm/actors'),
+                link('Actors', '/dwm/actors'),
                 link('Watchlists', '/dwm/watchlists'),
                 group('Rules', [
                     link('Match filter', '/mill/rules/match'),

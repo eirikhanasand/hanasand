@@ -326,6 +326,7 @@ export function resolveOrganizationScope(input: { body?: any; url?: URL; request
   if (organizationId) {
     const organization = findOrganization(options, organizationId);
     if (!organization) return { organizationId, tenantId: organizationId, error: orgNotFound() };
+    if ((organization as any).accountOrganization && organization.status !== "active") return { organizationId, tenantId: organization.tenantId, error: error("organization_inactive", "Organization is not active.", 403) };
     if (tenantIds[0] && tenantIds[0] !== organization.tenantId) {
       return { organizationId, tenantId: tenantIds[0], error: error("tenant_scope_mismatch", "Organization and tenant scope must match", 403) };
     }
