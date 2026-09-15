@@ -56,7 +56,9 @@ def start(name, image, network, volumes, ports, aliases=(), extra=()):
     if subprocess.run(['docker', 'inspect', name], capture_output=True).returncode == 0:
         current = json.loads(subprocess.check_output(['docker', 'inspect', name]))[0]
         if current['Config']['Image'] == image:
-            subprocess.run(['docker', 'start', name], check=True, stdout=subprocess.DEVNULL)
+            # Health/connector config is read at startup; apply credential changes.
+            action = 'start' if name == 'hanasand-mail-relay-ovh' else 'restart'
+            subprocess.run(['docker', action, name], check=True, stdout=subprocess.DEVNULL)
             return
         previous_ip = current['NetworkSettings']['Networks'][network]['IPAddress']
         # Only these task-owned, stateless health/connector containers are replaced.
@@ -220,7 +222,7 @@ def setup_inspur(image):
         'roles': [], 'enabledPermissions': ['authenticate', 'message-queue-list', 'message-queue-get']})
     api(base, 'relay-health', saved['health'], '/queue/messages?limit=1')
     # Derive the existing application sender credential inside its current runtime.
-    javascript = '''import crypto from "node:crypto";import {mailConfig as c} from "./src/utils/mail/config.ts";console.log(JSON.stringify({username:c.systemSenderLocalPart,password:crypto.createHash("sha256").update(c.encryptionKey).update(`system-sender:${c.systemSenderLocalPart}@${c.domain}`).digest("base64url")}));process.exit(0);'''
+    javascript = '''import {systemSenderAccess} from "./src/utils/mail/system.ts";console.log(JSON.stringify(systemSenderAccess()));process.exit(0);'''
     sender = json.loads(subprocess.check_output(['docker', 'exec', 'hanasand_api', 'bun', '-e', javascript]))
     settings = {'site': 'inspur', 'smtp': {'host': 'stalwart', 'port': 587, 'serverName': 'mail.hanasand.com', **sender},
         'relay': {'host': '127.0.0.1', 'port': 1587, 'serverName': 'smtp-relay.hanasand.com', 'username': 'inspur-relay', 'password': relay['relay']},
@@ -271,6 +273,7 @@ def configure_gateway(site):
     if result.get('data', {}).get('errors'): raise RuntimeError('Relay configuration reload failed')
     config = ROOT / 'gateway.cfg'
     write_secret(config, Path(__file__).with_name('gateway.cfg').read_text())
+    config.chmod(0o644)  # Contains no secrets; readable after the worker drops privileges.
     image = 'haproxy@sha256:6343ce34a132a5dceaa24767d739df2bd519f8f7c1079ae39e4821334e8eb42e'
     flags = ['--network', 'host', '--user', '0:0', '--cap-drop', 'ALL',
              '--cap-add', 'NET_BIND_SERVICE', '--cap-add', 'SETUID', '--cap-add', 'SETGID', '--security-opt', 'no-new-privileges:true',
@@ -285,6 +288,8 @@ def configure_gateway(site):
     subprocess.run(['docker', 'run', '-d', '--name', name, '--restart', 'unless-stopped',
                     '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3'] + flags + [image],
                    check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(['sudo', '-n', 'ufw', 'allow', 'proto', 'tcp', 'from', 'any', 'to',
+                    '192.99.32.185', 'port', '25', 'comment', 'Hanasand incoming mail gateway'], check=True)
     print('OVH public SMTP gateway installed; mailboxes and recipient validation remain on Inspur.')
 
 
