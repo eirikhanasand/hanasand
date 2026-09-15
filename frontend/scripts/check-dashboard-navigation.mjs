@@ -8,7 +8,7 @@ const access = { id: 'sidebar-test', isAdmin: true, canManageSystem: true, canMa
 const all = navigationLinks(getDashboardNavigation(access))
 assert.equal(all.length, new Set(all.map(item => item.href)).size)
 const memberAccess = { ...access, isAdmin: false, canManageSystem: false, canManageContent: false }
-assert.deepEqual(getDashboardNavigation(memberAccess).map(item => item.label), ['Security operations', 'Automation', 'Infrastructure', 'Content', 'Settings'])
+assert.deepEqual(getDashboardNavigation(memberAccess).map(item => item.label), ['Security operations', 'Automation', 'Infrastructure', 'Content', 'Administration', 'Settings'])
 for (const permissions of [access, memberAccess]) {
     const automation = getDashboardNavigation(permissions).find(item => item.label === 'Automation')
     assert.deepEqual(automation.items.map(({ label, href, items }) => ({ label, href, items })), [
@@ -36,9 +36,9 @@ assert.deepEqual(getDashboardNavigation(access)[0].items.map(item => item.label)
 for (const permissions of [access, memberAccess]) {
     const links = navigationLinks(getDashboardNavigation(permissions))
     assert(!links.some(item => item.href === '/solutions'), 'Marketing catalog must not appear in the internal menu')
-    for (const href of ['/dwm', '/cases', '/mill/rules', '/ti', '/browser', '/organizations', '/pwned', '/test']) assert(links.some(item => item.href === href), `Missing product destination: ${href}`)
+    for (const href of ['/dwm', '/cases', '/mill/rules/match', '/mill/rules/analysis', '/mill/rules/detection', '/ti', '/browser', '/organizations', '/pwned', '/test']) assert(links.some(item => item.href === href), `Missing product destination: ${href}`)
     assert(links.some(item => item.label === 'Security Scanner' && item.href === (permissions.canManageSystem ? '/scanner' : '/solutions/scanner')))
-    assert(links.some(item => item.href === '/mill/rules' && item.ancestors.includes('Monitoring')))
+    for (const category of ['match', 'analysis', 'detection']) assert.deepEqual(links.find(item => item.href === `/mill/rules/${category}`)?.ancestors, ['Security operations', 'Monitoring', 'Rules'])
 }
 for (const path of ['/browser', '/browser/report', '/solutions', '/solutions/scanner', '/solutions/mill', '/pwned', '/test']) assert(hasAppSidebar(path), `Product loses the signed-in sidebar: ${path}`)
 assert(!hasAppSidebar('/browser-unrelated'))
@@ -54,8 +54,9 @@ const build = await Bun.build({ entrypoints: ['sidebar-test-entry'], target: 'br
     }))
 } }] })
 assert(build.success, build.logs.join('\n'))
-const cssFiles = await readdir('.next/static/css').catch(() => [])
-const css = (await Promise.all(cssFiles.filter(file => file.endsWith('.css')).map(file => readFile(`.next/static/css/${file}`, 'utf8')))).join('\n')
+const cssDir = process.env.DWM_CSS_DIR || '.next/static/css'
+const cssFiles = await readdir(cssDir).catch(() => [])
+const css = (await Promise.all(cssFiles.filter(file => file.endsWith('.css')).map(file => readFile(`${cssDir}/${file}`, 'utf8')))).join('\n')
 if (process.env.SIDEBAR_SCREENSHOT) assert(css.length > 0, 'Build the frontend before visual verification')
 const server = Bun.serve({ port: 0, fetch(request) {
     const path = new URL(request.url).pathname
@@ -75,6 +76,17 @@ try {
     const link = (name) => nav.getByRole('link', { name, exact: true })
     await link('Monitored actors').waitFor({ state: 'visible' })
     assert.equal(await link('Monitored actors').getAttribute('aria-current'), 'page')
+    await button('Rules').click()
+    for (const category of ['Match filter', 'Analysis filter', 'Detection filter']) {
+        await link(category).click()
+        assert.equal(await link(category).getAttribute('aria-current'), 'page')
+        assert.equal(await button('Rules').getAttribute('aria-expanded'), 'true')
+    }
+    await button('Rules').click()
+    assert.equal(await link('Match filter').isVisible(), false)
+    await button('Rules').focus()
+    await page.keyboard.press('Enter')
+    assert(await link('Match filter').isVisible())
     await button('Investigations').click()
     await link('Browser').click()
     assert.equal(await link('Browser').getAttribute('aria-current'), 'page')
