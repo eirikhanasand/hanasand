@@ -122,15 +122,13 @@ function SourceCollectionStatus({ operations, state, onRetry }: { operations: Op
     </section>
 }
 
-export function ActorDirectory({ actors, state, onRetry }: { actors: DwmActorOverview[], state: string, onRetry: () => void }) {
-    const [query, setQuery] = useState('')
+export function ActorDirectory({ actors, state, onRetry, query = '' }: { actors: DwmActorOverview[], state: string, onRetry: () => void, query?: string }) {
     const [page, setPage] = useState(0)
     const rows = actors.filter(actor => [actor.actor, ...actor.aliases].some(name => name.toLowerCase().includes(query.toLowerCase())))
     const currentPage = Math.min(page, Math.max(0, Math.ceil(rows.length / pageSize) - 1))
     return <section>
         <LoadState state={state} subject='Actor profiles' onRetry={onRetry} />
         {state === 'live' && <>
-            <div className='p-4'><input aria-label='Search actors' placeholder='Search actors or aliases' className={`${control} w-full`} value={query} onChange={event => { setQuery(event.target.value); setPage(0) }} /></div>
             {!rows.length && <p className='p-4 text-sm text-ui-muted'>{actors.length ? 'No actors match this search.' : 'No actor profiles are linked to this monitoring scope yet.'}</p>}
             <ul className='divide-y divide-ui-border'>{rows.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(actor => <li key={actor.actor} className='flex flex-wrap items-center justify-between gap-3 p-4'>
                 <div className='min-w-0'><Link className={`${link} wrap-break-word`} href={`/ti/${encodeURIComponent(actor.actor)}`}>{actor.actor}</Link><p className='mt-1 text-xs text-ui-muted'>{actor.sourceCount} sources · {actor.captureCount} captures · {actor.captureCount ? 'Recorded observations' : 'No captured observations'}</p><p className='mt-1 text-xs text-ui-muted'>Latest observation: <Timestamp value={actor.latestSeenAt} /></p>{actor.sourceFamilies.includes('darkweb_metadata') && <p className='mt-1 text-xs text-ui-muted'>Includes metadata-only sources</p>}</div>
