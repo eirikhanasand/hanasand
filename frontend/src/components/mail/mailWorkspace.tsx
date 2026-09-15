@@ -333,7 +333,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                             })}
                         </nav>
                         <div className='grid gap-1.5'>
-                            {overview?.mailboxes.map(mailbox => (
+                            {overview?.mailboxes.filter(mailbox => mailbox.role !== 'inbox').map(mailbox => (
                                 <button
                                     key={mailbox.id}
                                     data-testid={`mail-mailbox-${mailbox.role || mailbox.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
