@@ -49,7 +49,7 @@ export function MessageRow({ message, active, onClick }: {
 export function Composer({
     state,
     now,
-    mailboxUser,
+    mailboxAddress,
     recentRecipients,
     onChange,
     onClose,
@@ -57,7 +57,7 @@ export function Composer({
 }: {
     state: ComposerState
     now: number
-    mailboxUser: string
+    mailboxAddress: string
     recentRecipients: RecentMailRecipient[]
     onChange: (state: ComposerState) => void
     onClose: () => void
@@ -179,7 +179,7 @@ export function Composer({
                 </div>
 
                 <div className='mt-4 flex items-center justify-between gap-3'>
-                    <p className='text-[11px] text-ui-muted'>Sending as `{mailboxUser}`</p>
+                    <p className='text-[11px] text-ui-muted'>Sending as {mailboxAddress}</p>
                     <div className='flex items-center gap-2'>
                         <button type='button' className={toolbarButton} onClick={onClose}>Cancel</button>
                         <button data-testid='mail-compose-send' type='submit' className='inline-flex h-8 items-center gap-1.5 rounded-lg bg-ui-primary px-3 text-[11px] font-medium text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45' disabled={submitting}>

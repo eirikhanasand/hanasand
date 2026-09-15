@@ -62,21 +62,21 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
         {!draft && !error && <p role='status'>Loading rule…</p>}
         {draft && data && <>
             <DashboardPanel className='overflow-hidden'>
-                <header className='grid min-w-0 gap-5 p-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:p-6'>
+                <header className='grid min-w-0 gap-3 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center'>
                     <div className='min-w-0'>
-                        <div className='mb-3 flex flex-wrap items-center gap-2 text-xs font-medium'>
+                        <div className='flex flex-wrap items-center gap-x-3 gap-y-2 text-xs font-medium'>
+                            <h1 className='min-w-0 wrap-anywhere text-xl font-semibold tracking-tight text-ui-text'>{data.rule.name}</h1>
                             <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-ui-muted'>{ruleCategories[getRuleCategory(draft)].label}</span>
                             <span className='text-ui-muted'>{draft.family}</span>
                             <span className={`rounded-full px-2 py-0.5 ${data.rule.enabled === false ? 'bg-ui-raised text-ui-muted' : 'bg-ui-success/10 text-ui-success'}`}>{data.rule.enabled === false ? 'Disabled' : 'Enabled'}</span>
                         </div>
-                        <h1 className='text-xl font-semibold tracking-tight text-ui-text sm:text-2xl'>{data.rule.name}</h1>
-                        <div className='mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ui-muted'>
+                        <div className='mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ui-muted'>
                             <span className='break-all'>{draft.id}</span><span className='h-3 border-l border-ui-border' aria-hidden='true' /><span>Version {draft.version}</span><span className='h-3 border-l border-ui-border' aria-hidden='true' /><span>{draft.source === 'hanasand' ? 'Hanasand rule' : draft.source === 'open_source' ? 'Imported rule' : 'Custom rule'}</span>
                         </div>
                     </div>
-                    <dl className='flex items-center gap-3 border-t border-ui-border pt-4 sm:min-w-36 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-6'>
+                    <dl className='flex items-center gap-2 border-t border-ui-border pt-2 sm:min-w-32 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-4'>
                         <Activity size={20} className='text-ui-primary' aria-hidden='true' />
-                        <div><dt className='text-xs font-medium text-ui-muted'>Trigger count</dt><dd className='mt-1 text-2xl font-semibold leading-none tabular-nums text-ui-text' title='Recorded detections for this organization across all versions, including resolved detections.'>{data.triggerCount?.toLocaleString() ?? 'Unavailable'}</dd></div>
+                        <div><dt className='text-xs font-medium text-ui-muted'>Trigger count</dt><dd className='mt-1 text-xl font-semibold leading-none tabular-nums text-ui-text' title='Recorded detections for this organization across all versions, including resolved detections.'>{data.triggerCount?.toLocaleString() ?? 'Unavailable'}</dd></div>
                     </dl>
                 </header>
             </DashboardPanel>

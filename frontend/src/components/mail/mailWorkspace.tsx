@@ -519,7 +519,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 <Composer
                     state={composer}
                     now={now}
-                    mailboxUser={overview.mailboxUser}
+                    mailboxAddress={overview.mailboxAddress}
                     recentRecipients={overview.recentRecipients}
                     onChange={setComposer}
                     onClose={() => setComposer(emptyComposer)}
