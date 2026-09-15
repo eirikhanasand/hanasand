@@ -204,6 +204,20 @@ export function DwmAnalystPortal({
 }: PortalProps) {
     const router = useRouter()
     const searchParams = useSearchParams()
+    const [actorQuery, setActorQuery] = useState('')
+    const actorSearchRef = useRef<HTMLInputElement>(null)
+    useEffect(() => {
+        if (view !== 'actors') return
+        const focusActorSearch = (event: KeyboardEvent) => {
+            if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'j' && actorSearchRef.current) {
+                event.preventDefault()
+                actorSearchRef.current.focus()
+                actorSearchRef.current.select()
+            }
+        }
+        window.addEventListener('keydown', focusActorSearch)
+        return () => window.removeEventListener('keydown', focusActorSearch)
+    }, [view])
     const [snapshot, setSnapshot] = useState(initialSnapshot)
     const [operations, setOperations] = useState(initialOperations)
     const [alerts, setAlerts] = useState(initialAlerts)
@@ -379,8 +393,14 @@ export function DwmAnalystPortal({
 
     if (view === 'actors') {
         return (
-            <DwmPanelPage title='Actors' meta={dataHealth.snapshot.state === 'live' ? `${snapshot.actorOverviews.length} actor profiles` : dataHealth.snapshot.state === 'error' ? 'Actor profiles unavailable' : 'Loading actor profiles…'}>
-                <ActorDirectory actors={snapshot.actorOverviews} state={dataHealth.snapshot.state} onRetry={() => setRefreshVersion(version => version + 1)} />
+            <DwmPanelPage title='Actors' meta={<div className='flex flex-wrap items-center gap-3'>
+                <span className='whitespace-nowrap'>{dataHealth.snapshot.state === 'live' ? `${snapshot.actorOverviews.length} actor profiles` : dataHealth.snapshot.state === 'error' ? 'Actor profiles unavailable' : 'Loading actor profiles…'}</span>
+                {dataHealth.snapshot.state === 'live' && <label className='flex h-9 w-60 max-w-full items-center gap-2 rounded-lg border border-ui-border bg-ui-canvas px-3 focus-within:ring-2 focus-within:ring-ui-primary'>
+                    <input ref={actorSearchRef} aria-label='Search actors' aria-keyshortcuts='Meta+J Control+J' placeholder='Search actors' className='min-w-0 flex-1 bg-transparent text-sm font-normal text-ui-text outline-none' value={actorQuery} onChange={event => setActorQuery(event.target.value)} />
+                    <kbd className='shrink-0 rounded border border-ui-border bg-ui-panel px-1 py-0.5 text-[10px] font-semibold text-ui-muted'>⌘ J</kbd>
+                </label>}
+            </div>}>
+                <ActorDirectory key={actorQuery} query={actorQuery} actors={snapshot.actorOverviews} state={dataHealth.snapshot.state} onRetry={() => setRefreshVersion(version => version + 1)} />
             </DwmPanelPage>
         )
     }
@@ -518,7 +538,7 @@ function CoverageFact({ label, value, tone = 'normal' }: { label: string, value:
     )
 }
 
-function DwmPanelPage({ title, meta, children }: { title: string, meta?: string, children: ReactNode }) {
+function DwmPanelPage({ title, meta, children }: { title: string, meta?: ReactNode, children: ReactNode }) {
     return (
         <div className='grid gap-4'>
             <section className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
@@ -527,7 +547,7 @@ function DwmPanelPage({ title, meta, children }: { title: string, meta?: string,
                         <p className='text-[10px] font-semibold uppercase text-ui-primary'>Dark web monitoring</p>
                         <h1 className='mt-1 text-lg font-semibold text-ui-text'>{title}</h1>
                     </div>
-                    {meta && <p className='text-xs font-medium text-ui-muted'>{meta}</p>}
+                    {meta && <div className='min-w-0 text-xs font-medium text-ui-muted'>{meta}</div>}
                 </div>
                 <div className='p-3'>
                     {children}

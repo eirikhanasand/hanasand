@@ -106,7 +106,7 @@ export default function DetectionRules({ category }: { category: RuleCategory })
     return (
         <DashboardPage className='!gap-6 !p-4 lg:!p-6'>
             <div className='flex flex-wrap items-center justify-between gap-4'>
-                <div><p className='text-sm text-ui-muted'>Security tools</p><h1 className='mt-1 text-2xl font-semibold'>{ruleCategories[category].label}</h1><p className='mt-2 text-sm text-ui-muted'>{ruleCategories[category].description}</p></div>
+                <div><p className='text-sm text-ui-muted'>Security tools</p><h1 className='mt-1 text-2xl font-semibold'>{ruleCategories[category].label}</h1></div>
                 <div className='flex max-w-full flex-wrap items-center gap-3'>
 
                     <button type='button' aria-expanded={showImports} aria-controls='mill-rule-imports' onClick={() => setShowImports(open => !open)} className='rounded-lg bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary'>Import</button>
