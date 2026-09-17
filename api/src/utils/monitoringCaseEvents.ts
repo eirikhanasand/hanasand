@@ -1,3 +1,4 @@
+import { readableMonitoringMessage } from './monitoringMessage.ts'
 import run from '#db'
 import type { AutomationRow } from './automations.ts'
 import { redactSecretBearingText } from './alerts/discordWebhookFile.ts'
@@ -22,7 +23,7 @@ export async function loadMonitoringCaseEvents(issueId: string, page: number, sn
     const count = await run('SELECT count(*)::int AS total FROM agent_automation_runs WHERE issue_id = $1 AND started_at <= $2::timestamptz AND (completed_at IS NULL OR completed_at <= $2::timestamptz)', [issueId, snapshot])
     return { events: result.rows.map(row => ({ id: row.id, startedAt: row.started_at, completedAt: row.completed_at,
         durationMs: row.duration_ms, outcome: row.status === 'failed' ? 'failure' : row.warning ? 'warning' : row.status,
-        message: redactSecretBearingText(row.error || row.result || ''), details: row.check_details })),
+        message: readableMonitoringMessage(redactSecretBearingText(row.error || row.result || '')), details: row.check_details })),
     eventTotal: count.rows[0].total as number, eventPage: page, eventSnapshot: snapshot }
 }
 
@@ -45,6 +46,6 @@ export async function loadMonitoringRelatedChecks(issueId: string, snapshot: str
     return result.rows.map(row => ({
         id: row.id, name: row.name || row.id, completedAt: row.completed_at,
         outcome: row.status === 'failed' ? 'failure' : row.warning ? 'warning' : row.status,
-        message: redactSecretBearingText(row.error || row.result || 'No result recorded at this time.'),
+        message: readableMonitoringMessage(redactSecretBearingText(row.error || row.result || 'No result recorded at this time.')),
     }))
 }

@@ -1,7 +1,9 @@
+import { readableMonitoringMessage } from './monitoringMessage.ts'
 type Row = Record<string, any>
 
 export function monitoringCaseResolution(row: Row) {
-    if (row.resolution) return row.resolution
+    if (row.resolution) return row.resolution.type === 'automation' && typeof row.resolution.note === 'string'
+        ? { ...row.resolution, note: readableMonitoringMessage(row.resolution.note) } : row.resolution
     if (row.status_override === 'closed' || row.status_override === 'resolved') return { type: 'unknown', note: 'This case was closed before resolver attribution was recorded.' }
     if (row.resolved_at && !row.status_override) return { type: 'automation', actor: 'Health monitoring', at: row.resolved_at, note: 'The health check recovered automatically. The original recovery comment was not recorded.' }
     return null
