@@ -4,7 +4,7 @@ let enabled = false
 let claims = 0
 let deliveries = 0
 let delivered: unknown[] = []
-let ready = false
+let ready = true
 let currentRun = 'run-1'
 mock.module('../src/utils/db.ts', () => ({
     default: async (sql: string) => {
@@ -31,6 +31,7 @@ test('case notification preference suppresses delivery until re-enabled', async 
     expect(claims).toBe(0)
     expect(deliveries).toBe(0)
     enabled = true
+    ready = false
     currentRun = 'run-2'
     await recordMonitoringOutcome(automation, 'run-2', 'failure', 'HTTP 503')
     expect(claims).toBe(0)

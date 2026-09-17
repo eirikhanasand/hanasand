@@ -27,7 +27,7 @@ test('database aggregation, concurrent delivery, rolling cooldown, recovery and 
     await schema()
     await query("INSERT INTO agent_automations(id,status,action_type,schedule_kind) VALUES ('issues','active','agent_prompt','interval'), ('other-issues','active','agent_prompt','interval')")
     const monitor = { id: 'issues', owner_id: 'owner', action_type: 'agent_prompt', monitoring_type: 'fetch', target_url: 'http://127.0.0.1:9', timeout_seconds: 1, retry_count: 0, notify_on: 'failure', interval_minutes: 1, schedule_kind: 'interval', notification_destinations: ['test-discord', 'test-discord'] } as AutomationRow
-    let checkedAt = Date.parse('2020-01-01')
+    let checkedAt = Date.now() - 86_400_000
     async function check(id: string, message = 'HTTP 503', kind: 'failure' | 'warning' | null = 'failure', automation = monitor) {
         await query("INSERT INTO agent_automation_runs(id,automation_id,owner_id,status,warning,started_at,completed_at) VALUES ($1,$2,'owner',$3,$4,$5,$5)", [id, automation.id, kind === 'failure' ? 'failed' : 'completed', kind === 'warning', new Date(checkedAt += 120_000)])
         await recordMonitoringOutcome(automation, id, kind, message)
