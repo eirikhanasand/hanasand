@@ -44,12 +44,15 @@ async function fetchJson(source: JsonSource) {
         const result = await getStats()
         return { payload: result.data, certificate: { status: 'not_applicable' as const, subject: null, issuer: null, expiresAt: null } }
     }
+    const startedAt = Date.now()
     const tls = certificateTarget({ target_url: source.target_url, monitoring_type: 'json' })
     const certificate = tls ? await checkCertificate(tls, source.timeout_seconds * 1000) : { status: 'not_applicable' as const, subject: null, issuer: null, expiresAt: null }
     if (certificate.status === 'invalid') throw new Error(`TLS certificate validation failed for ${tls!.hostname}.`)
+    const timeoutMs = source.timeout_seconds * 1000 - (Date.now() - startedAt)
+    if (timeoutMs <= 0) throw new DOMException('Monitoring request timed out.', 'TimeoutError')
     const response = await publicMonitoringRequest(source.target_url!, {
         followRedirects: source.follow_redirects, userAgent: source.user_agent,
-        timeoutMs: source.timeout_seconds * 1000, readBody: true,
+        timeoutMs, readBody: true,
     })
     if (response.status < 200 || response.status >= 300) throw new Error(`JSON source returned HTTP ${response.status}.`)
     return { payload: JSON.parse(response.body) as unknown, certificate }
@@ -57,8 +60,9 @@ async function fetchJson(source: JsonSource) {
 
 const pending = new Map<string, Promise<Awaited<ReturnType<typeof fetchJson>>>>()
 
-export async function sharedJsonSnapshot(source: JsonSource) {
-    const key = createHash('sha256').update(JSON.stringify(['public-network-v1', source.owner_id, source.target_url, source.user_agent, source.follow_redirects, source.timeout_seconds])).digest('hex')
+export async function sharedJsonSnapshot(source: JsonSource, attempt = 0) {
+    const key = createHash('sha256').update(JSON.stringify(['public-network-v2', attempt, source.owner_id, source.target_url, source.user_agent, source.follow_redirects, source.timeout_seconds])).digest('hex')
+    // Each retry samples afresh, while checks sharing a source also share that retry.
     const existing = pending.get(key)
     const promise = existing || loadSnapshot(source, key).finally(() => pending.delete(key))
     if (!existing) pending.set(key, promise)

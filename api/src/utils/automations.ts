@@ -1,3 +1,4 @@
+import { setTimeout as retryDelay } from 'node:timers/promises'
 import { checkScheduledAutomationAccess } from './automationAccess.ts'
 import { hostCheckMessage } from './hostCheckMessage.ts'
 import { monitoringLookup, monitoringUrl, publicMonitoringRequest, resolveMonitoringAddresses } from './publicMonitoringRequest.ts'
@@ -234,8 +235,8 @@ export function normalizeAutomationInput(input: AutomationInput, existing?: Auto
     const userAgent = clean(input.userAgent ?? input.user_agent ?? existing?.user_agent) || null
     const expectedDown = parseBoolean(input.expectedDown ?? input.expected_down ?? existing?.expected_down, false)
     const upsideDown = parseBoolean(input.upsideDown ?? input.upside_down ?? existing?.upside_down, false)
-    const timeoutSeconds = parseBoundedInteger(input.timeoutSeconds ?? input.timeout_seconds ?? existing?.timeout_seconds, 1, 120, 1)
-    const retryCount = parseBoundedInteger(input.retryCount ?? input.retry_count ?? existing?.retry_count, 0, 5, 1)
+    const timeoutSeconds = parseBoundedInteger(input.timeoutSeconds ?? input.timeout_seconds ?? existing?.timeout_seconds, 1, 120, 5)
+    const retryCount = parseBoundedInteger(input.retryCount ?? input.retry_count ?? existing?.retry_count, 0, 5, 4)
     const notifyWarnings = parseBoolean(input.notifyWarnings ?? input.notify_warnings ?? existing?.notify_warnings, false)
     const scheduleKind = parseScheduleKind(input.scheduleKind ?? input.schedule_kind ?? existing?.schedule_kind)
     const intervalMinutes = parseIntervalMinutes(input.intervalMinutes ?? input.interval_minutes ?? existing?.interval_minutes, scheduleKind)
@@ -547,21 +548,24 @@ export function certificateTarget(automation: Pick<AutomationRow, 'monitoring_ty
     return null
 }
 
-async function runMonitoringCheck(automation: AutomationRow) {
+export async function runMonitoringCheck(automation: AutomationRow) {
     if (!automation.target_url) throw new Error('Monitoring is missing the URL to check.')
-    if (automation.monitoring_type === 'json') return runJsonCheck(automation)
-    const target = automation.monitoring_type === 'tcp' || automation.monitoring_type === 'ssh' ? null : new URL(automation.target_url)
-    const tlsTarget = certificateTarget(automation)
-    const startedAt = Date.now()
+    const target = ['tcp', 'ssh', 'json'].includes(automation.monitoring_type) ? null : new URL(automation.target_url)
+    const tlsTarget = automation.monitoring_type === 'json' ? null : certificateTarget(automation)
     let certificate: Awaited<ReturnType<typeof checkCertificate>> | { status: 'not_applicable', subject: null, issuer: null, expiresAt: null } | null = tlsTarget ? null : { status: 'not_applicable', subject: null, issuer: null, expiresAt: null }
     let lastError: unknown
     for (let attempt = 0; attempt <= automation.retry_count; attempt += 1) {
+        if (attempt) await retryDelay(attempt * 1000)
+        const startedAt = Date.now()
         try {
+            if (automation.monitoring_type === 'json') return await runJsonCheck(automation, attempt)
             if (tlsTarget) {
                 certificate = await checkCertificate(tlsTarget, automation.timeout_seconds * 1000)
                 if (certificate.status === 'invalid') throw new Error(`TLS certificate validation failed for ${tlsTarget.hostname}.`)
             }
-            const result = target ? await runHttpCheck(target, automation) : await runSocketCheck(automation)
+            const timeoutMs = automation.timeout_seconds * 1000 - (Date.now() - startedAt)
+            if (timeoutMs <= 0) throw new DOMException('Monitoring request timed out.', 'TimeoutError')
+            const result = target ? await runHttpCheck(target, automation, timeoutMs) : await runSocketCheck(automation, timeoutMs)
             const healthy = automation.upside_down ? !result.up : automation.expected_down ? !result.up : result.up
             const message = `${automation.monitoring_type.toUpperCase()} check ${healthy ? 'passed' : 'failed'}: ${automation.target_url} ${result.detail}.`
             if (!healthy) throw new Error(message)
@@ -574,14 +578,14 @@ async function runMonitoringCheck(automation: AutomationRow) {
         }
     }
     const message = lastError instanceof Error ? lastError.message : 'Monitoring request failed.'
-    const failure = Object.assign(new Error(`${message} Failed after ${automation.retry_count + 1} attempt${automation.retry_count ? 's' : ''}.`), { certificate })
+    const failure = Object.assign(new Error(`${message} Failed after ${automation.retry_count + 1} attempt${automation.retry_count ? 's' : ''}.`), { certificate: getCertificateFromError(lastError) ?? certificate })
     throw failure
 }
 
-async function runJsonCheck(automation: AutomationRow) {
+async function runJsonCheck(automation: AutomationRow, attempt: number) {
     let certificate: Awaited<ReturnType<typeof checkCertificate>> | { status: 'not_applicable', subject: null, issuer: null, expiresAt: null } | null = null
     try {
-        const snapshot = await sharedJsonSnapshot(automation)
+        const snapshot = await sharedJsonSnapshot(automation, attempt)
         certificate = snapshot.certificate
         const rule = normalizeJsonRule(automation.json_rule)
         const { exceeded, observed } = evaluateJsonRule(snapshot.payload, rule)
@@ -596,28 +600,28 @@ async function runJsonCheck(automation: AutomationRow) {
     }
 }
 
-async function runHttpCheck(target: URL, automation: AutomationRow) {
+async function runHttpCheck(target: URL, automation: AutomationRow, timeoutMs: number) {
     const checksGitRefs = target.pathname.endsWith('/info/refs') && target.searchParams.get('service') === 'git-upload-pack'
     const response = await publicMonitoringRequest(target, {
         method: automation.monitoring_type === 'post' ? 'POST' : 'GET', followRedirects: automation.follow_redirects,
-        userAgent: automation.user_agent, timeoutMs: automation.timeout_seconds * 1000, readBody: checksGitRefs,
+        userAgent: automation.user_agent, timeoutMs, readBody: checksGitRefs,
     })
     const body = response.body
     const hasMainRef = !checksGitRefs || body.includes('refs/heads/main')
     return { up: response.status >= 200 && response.status < 300 && hasMainRef, detail: checksGitRefs ? `returned HTTP ${response.status}${hasMainRef ? ' with refs/heads/main' : ' without refs/heads/main'}` : `returned HTTP ${response.status}` }
 }
 
-async function runSocketCheck(automation: AutomationRow) {
+async function runSocketCheck(automation: AutomationRow, timeoutMs: number) {
     const raw = automation.target_url || ''
     const [host, portText] = raw.split(':')
     const port = Number(portText) || (automation.monitoring_type === 'ssh' ? 22 : 80)
-    const signal = AbortSignal.timeout(automation.timeout_seconds * 1000)
+    const signal = AbortSignal.timeout(timeoutMs)
     const addresses = await resolveMonitoringAddresses(host, signal)
     return new Promise<{ up: boolean, detail: string }>((resolve, reject) => {
         const socket = connectTcp({ host, port, lookup: monitoringLookup(addresses), signal })
         let settled = false
         const finish = (value: { up: boolean, detail: string }) => { if (!settled) { settled = true; socket.destroy(); resolve(value) } }
-        socket.setTimeout(automation.timeout_seconds * 1000, () => reject(new Error(`Connection timed out after ${automation.timeout_seconds} second${automation.timeout_seconds === 1 ? '' : 's'}.`)))
+        socket.setTimeout(timeoutMs, () => socket.destroy(new Error(`Connection timed out after ${automation.timeout_seconds} seconds.`)))
         socket.once('connect', () => {
             if (automation.monitoring_type === 'ssh') socket.once('data', data => finish({ up: /^SSH-/.test(data.toString()), detail: 'accepted an SSH connection' }))
             else finish({ up: true, detail: `accepted a TCP connection on port ${port}` })
