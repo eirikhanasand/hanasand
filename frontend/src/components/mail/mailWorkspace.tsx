@@ -207,8 +207,8 @@ export default function MailWorkspace({ mailboxUser }: Props) {
     const showStaleWarning = Boolean(lastSuccessAt && now - lastSuccessAt > STALE_AFTER_MS)
 
     return (
-        <DashboardPage>
-            <DashboardPanel className='flex flex-wrap items-center gap-2 p-2.5 sm:p-3' id='mail-toolbar'>
+        <DashboardPage className='xl:flex xl:h-full xl:min-h-0 xl:flex-col'>
+            <DashboardPanel className='flex shrink-0 flex-wrap items-center gap-2 p-2.5 sm:p-3' id='mail-toolbar'>
                 <div className='flex min-w-0 flex-1 flex-wrap items-center gap-2'>
                     <div className='mr-auto min-w-0'>
                         <p className='text-[10px] uppercase tracking-[0.24em] text-ui-muted'>Workspace</p>
@@ -261,9 +261,9 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 <ErrorNotice compact message={`Background sync paused. Last successful update was ${formatRelativeTime(lastSuccessAt!, now)} ago.`} />
             )}
 
-            <div className={`grid min-w-0 grid-cols-1 gap-3 ${sidebarCompact ? 'xl:grid-cols-[80px_minmax(0,1fr)]' : 'xl:grid-cols-[220px_minmax(0,1fr)]'}`}>
+            <div className={`grid min-w-0 grid-cols-1 gap-3 xl:min-h-0 xl:flex-1 ${sidebarCompact ? 'xl:grid-cols-[80px_minmax(0,1fr)]' : 'xl:grid-cols-[220px_minmax(0,1fr)]'}`}>
                 <aside
-                    className={`${dashboardPanelClass} relative overflow-hidden p-3`}
+                    className={`${dashboardPanelClass} relative overflow-hidden p-3 xl:min-h-0 xl:overflow-y-auto`}
                 >
                     <MailSketch />
                     <div className='relative z-10'>
@@ -356,7 +356,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                     </div>
                 </aside>
 
-                {!readingMessage && <section data-mail-message-list className={`${dashboardPanelClass} min-w-0 p-2.5`}>
+                {!readingMessage && <section data-mail-message-list className={`${dashboardPanelClass} min-w-0 p-2.5 xl:min-h-0 xl:overflow-y-auto`}>
                     <div className='flex items-center gap-2 px-1 pb-2 text-[10px] uppercase tracking-[0.24em] text-ui-muted'>
                         <span>{overview?.mailboxes.find(mailbox => mailbox.id === selectedMailboxId)?.name || 'Mailbox'}</span>
                         <span className='text-ui-muted'>•</span>
@@ -403,12 +403,12 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                     </div>
                 </section>}
 
-                {readingMessage && <section ref={reader} data-mail-message-reader className={`${dashboardPanelClass} min-w-0 p-3`}>
-                    <button type='button' className={`${toolbarButton} mb-3`} onClick={() => setReadingMessage(false)}><ArrowLeft className='h-4 w-4' />Back to {overview?.mailboxes.find(mailbox => mailbox.id === selectedMailboxId)?.name || 'inbox'}</button>
+                {readingMessage && <section ref={reader} data-mail-message-reader className={`${dashboardPanelClass} min-w-0 p-3 xl:flex xl:min-h-0 xl:flex-col xl:overflow-y-auto`}>
+                    <button type='button' className={`${toolbarButton} mb-2 shrink-0 self-start`} onClick={() => setReadingMessage(false)}><ArrowLeft className='h-4 w-4' />Back to {overview?.mailboxes.find(mailbox => mailbox.id === selectedMailboxId)?.name || 'inbox'}</button>
                     {loading && <div role='status' className='px-2 py-6 text-xs text-ui-muted'>Loading message…</div>}
                     {!loading && !selectedMessage && <div className='rounded-lg border border-dashed border-ui-border px-4 py-8 text-xs text-ui-muted'>This message is unavailable. Return to the list or try opening it again.</div>}
                     {selectedMessage && overview && (
-                        <div className='grid gap-3'>
+                        <div className='flex min-h-0 flex-1 flex-col gap-2'>
                             <div className='flex flex-wrap items-center justify-between gap-2 border-b border-ui-border pb-3'>
                                 <div className='min-w-0'>
                                     <h2 className='truncate text-lg font-semibold tracking-[-0.03em] text-ui-text'>{selectedMessage.subject}</h2>
@@ -500,12 +500,12 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                             {selectedMessage.htmlBody ? (
                                 <iframe
                                     title='HTML mail'
-                                    className='min-h-128 w-full rounded-lg border border-ui-border bg-ui-canvas'
+                                    className='h-72 w-full shrink-0 rounded-lg border border-ui-border xl:min-h-40 xl:flex-1'
                                     sandbox='allow-popups allow-popups-to-escape-sandbox'
                                     srcDoc={renderedHtml}
                                 />
                             ) : (
-                                <article className='min-w-0 wrap-anywhere min-h-128 rounded-lg border border-ui-border bg-ui-raised px-4 py-3 text-[13px] leading-6 whitespace-pre-wrap text-ui-text'>
+                                <article className='min-w-0 wrap-anywhere rounded-lg border border-ui-border px-4 py-3 xl:min-h-40 xl:flex-1 xl:overflow-y-auto text-[13px] leading-6 whitespace-pre-wrap text-ui-text'>
                                     {selectedMessage.textBody}
                                 </article>
                             )}

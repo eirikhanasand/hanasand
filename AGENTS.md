@@ -8,7 +8,7 @@ Do not expand a small request into a redesign, new workflow, documentation exerc
 
 Always work on the main branch, never create new worktrees, branches or checkouts as there is a chance of forgetting to merge these into the real main.
 
-Push to Github and Forgejo when done.
+After completing and verifying requested changes, always commit, push to both GitHub and Forgejo, and redeploy the affected service. This is standing user authorization; do not ask for confirmation again for routine publication or deployment. Verify the deployed revision and affected live behavior before reporting completion.
 
 Always explain what you did, what the problem was, what the fix was and report the commit hash in your summary.
 

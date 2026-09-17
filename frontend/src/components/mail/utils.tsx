@@ -169,12 +169,12 @@ export function buildMailFrameHtml(html: string) {
     html, body {
       margin: 0;
       padding: 0;
-      background: Canvas;
+      background: transparent;
       color: CanvasText;
       font-family: Manrope, Aptos, sans-serif;
     }
     body {
-      padding: 24px;
+      padding: 12px;
       line-height: 1.65;
     }
     img, iframe, video {
