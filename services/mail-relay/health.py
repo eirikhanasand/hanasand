@@ -24,7 +24,7 @@ def smtp_probe(settings, reject_anonymous=False):
         smtp.starttls(context=ssl.create_default_context())
         smtp.ehlo('mail.hanasand.com')
         if reject_anonymous:
-            code, _ = smtp.mail('noreply@hanasand.com')
+            code, _ = smtp.mail(settings.get('sender', 'noreply@hanasand.com'))
             if code < 400:
                 code, _ = smtp.rcpt('postmaster@example.net')
             if code < 400:
@@ -32,7 +32,7 @@ def smtp_probe(settings, reject_anonymous=False):
             smtp.rset()
         smtp.login(settings['username'], settings['password'])
         # RCPT consumes per-sender delivery quotas even without DATA.
-        if smtp.mail('noreply@hanasand.com')[0] != 250:
+        if smtp.mail(settings.get('sender', 'noreply@hanasand.com'))[0] != 250:
             raise ValueError('Authenticated relay rejected')
         smtp.rset()
     return True
@@ -57,6 +57,17 @@ def queue_probe(settings):
         at = datetime.fromisoformat(created.replace('Z', '+00:00')).timestamp() if isinstance(created, str) else float(created)
         if time.time() - at > 300:
             raise ValueError('Delivery backlog')
+    return True
+
+
+def incoming_probe(settings):
+    with smtplib.SMTP(timeout=5) as smtp:
+        smtp.connect(settings['host'], 25)
+        smtp._host = 'mail.hanasand.com'
+        smtp.ehlo('mail.hanasand.com')
+        smtp.starttls(context=ssl.create_default_context())
+        if smtp.ehlo('mail.hanasand.com')[0] != 250:
+            raise ValueError('Incoming SMTP unavailable')
     return True
 
 
@@ -93,6 +104,7 @@ def poll(config):
                     '-o', 'IdentitiesOnly=yes', '-o', 'ExitOnForwardFailure=yes', '-o', 'ConnectTimeout=5',
                     '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=3',
                     '-L', '0.0.0.0:1587:127.0.0.1:2687', '-L', '0.0.0.0:8081:127.0.0.1:19262',
+                    '-R', '127.0.0.1:2625:stalwart:25',
                     'ubuntu@192.99.32.185'])
             tasks = {'smtpAuthentication': lambda: smtp_probe(config['smtp'], config['site'] == 'ovh'),
                      'queueHealthy': lambda: queue_probe(config['queue'])}
@@ -100,6 +112,8 @@ def poll(config):
                 tasks['relayAuthentication'] = lambda: smtp_probe(config['relay'], True)
             else:
                 tasks['outboundDeliveryConnection'] = outbound_probe
+                if config.get('incoming'):
+                    tasks['incomingConnection'] = lambda: incoming_probe(config['incoming'])
             checks = {}
             with ThreadPoolExecutor(max_workers=4) as pool:
                 pending = {key: pool.submit(action) for key, action in tasks.items()}
