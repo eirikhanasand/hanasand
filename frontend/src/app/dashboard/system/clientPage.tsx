@@ -440,7 +440,7 @@ export default function SystemDashboard({
                     </div>
                     {containers.length ? (
                         <div className='mt-4 overflow-x-auto'>
-                            <table className='min-w-full text-left text-sm'>
+                            <table className='min-w-[40rem] text-left text-sm xl:min-w-full'>
                                 <thead className='border-b border-ui-border text-xs uppercase text-ui-muted'>
                                     <tr>
                                         <th className='py-2 pr-3 font-semibold'>Container</th>
@@ -505,7 +505,7 @@ export default function SystemDashboard({
                 </div>
                 {normalizedVms.length ? (
                     <div className='mt-4 overflow-x-auto'>
-                        <table className='min-w-full text-left text-sm'>
+                        <table className='min-w-[40rem] text-left text-sm xl:min-w-full'>
                             <thead className='border-b border-ui-border text-xs uppercase text-ui-muted'>
                                 <tr>
                                     <th className='py-2 pr-3 font-semibold'>Name</th>
