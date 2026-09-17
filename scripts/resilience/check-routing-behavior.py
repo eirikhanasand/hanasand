@@ -12,7 +12,7 @@ class Handler(BaseHTTPRequestHandler):
   body=b'primary' if primary else b'backup'
   self.send_response(503 if primary and state['down'] else 200);self.end_headers()
   try:self.wfile.write(body)
-  except BrokenPipeError:pass
+  except (BrokenPipeError,ConnectionResetError):pass
  def log_message(self,*args):pass
 servers=[ThreadingHTTPServer(('127.0.0.1',p),Handler) for p in (29981,29982)]
 for server in servers:threading.Thread(target=server.serve_forever,daemon=True).start()
@@ -40,10 +40,27 @@ try:
   assert fetch(29983)=='primary';assert status()['primary'].startswith('UP');time.sleep(2)
  print('PASS: 3-second healthy responses remain on primary (old 2-second deadline would fail).',flush=True)
  state.update(delay=0,down=True)
- until(lambda:status()['primary'].startswith('DOWN'),35)
+ time.sleep(8)
+ assert status()['primary'].startswith('UP')
+ state['down']=False
+ until(lambda:status()['primary']=='UP',10)
+ assert fetch(29983)=='primary'
+ print('PASS: brief outage does not switch away from primary.',flush=True)
+ state['down']=True
+ failed_at=time.monotonic()
+ while time.monotonic()-failed_at < 59:
+  assert status()['primary'].startswith('UP'), 'Failed over before the one-minute grace period'
+  time.sleep(1)
+ until(lambda:status()['primary'].startswith('DOWN'),30)
+ assert time.monotonic()-failed_at >= 60
  assert fetch(29983)=='backup';print('PASS: sustained 503 switches to backup.',flush=True)
  state['down']=False
- until(lambda:status()['primary']=='UP',65)
+ recovered_at=time.monotonic()
+ while time.monotonic()-recovered_at < 59:
+  assert status()['primary'].startswith('DOWN'), 'Failed back before stable recovery'
+  time.sleep(1)
+ until(lambda:status()['primary']=='UP',30)
+ assert time.monotonic()-recovered_at >= 60
  assert fetch(29983)=='primary';print('PASS: sustained recovery returns to primary with production rise threshold.',flush=True)
 finally:
  subprocess.run(['docker','rm','-f',name],stdout=subprocess.DEVNULL,check=False)

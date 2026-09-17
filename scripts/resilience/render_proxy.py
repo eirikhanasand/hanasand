@@ -6,10 +6,12 @@ import sys
 
 
 def render(config):
+    # 31 observations at 2-second intervals span at least 60 seconds.
+    # Apply the same stability requirement before returning to a primary.
     lines = ['global', '    hard-stop-after 65s', '    log stdout format raw local0', f"    stats socket /run/haproxy/admin{config.get('proxyIndex', 0)}.sock mode 600 level admin",
              f"    stats socket ipv4@127.0.0.1:{19909 + config.get('proxyIndex', 0)} level admin",
              'defaults', '    log global', '    mode http', '    timeout connect 2s', '    timeout client 60s', '    timeout server 60s', '    timeout check 5s',
-             '    retries 1', '    option redispatch', '    default-server inter 2s fall 3 rise 15',
+             '    retries 1', '    option redispatch', '    default-server inter 2s fall 31 rise 31',
              'listen stats', f"    bind 127.0.0.1:{config.get('statsPort', 19900)}", '    stats enable', '    stats uri /stats']
     for service in config['services']:
         if not service.get('listenPort'):

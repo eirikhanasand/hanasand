@@ -42,7 +42,9 @@ def fake_api(_config, path, payload=None):
     return dict(record)
 dns.api = fake_api
 dns.probe = lambda host, ip, path: ip == config['standbyIp']
-state, events = dns.reconcile(config, {'affected': ['API']}, {'api.hanasand.com': {'candidate': 'ovhcloud', 'candidateSince': time.time()-30}})
+state, events = dns.reconcile(config, {'affected': ['API']}, {'api.hanasand.com': {'candidate': 'ovhcloud', 'candidateSince': time.time()-59}})
+assert record['data'] == config['primaryIp'] and not events
+state, events = dns.reconcile(config, {'affected': ['API']}, {'api.hanasand.com': {'candidate': 'ovhcloud', 'candidateSince': time.time()-61}})
 assert record['data'] == config['standbyIp'] and events[0]['color'] == 0xFF0000
 dns.probe = lambda host, ip, path: True
 state, events = dns.reconcile(config, {'affected': []}, {'api.hanasand.com': {'candidate': 'inspur', 'candidateSince': time.time()-130}})
@@ -104,3 +106,18 @@ rendered = render(readiness_config)
 assert 'server inspur-ti-1 172.20.0.6:8097 check port 8098' in rendered
 assert 'server inspur-ti-2 127.0.0.1:18102 check backup' in rendered
 print('Independent readiness port preserves serving ports and backup routing.')
+
+assert 'default-server inter 2s fall 31 rise 31' in rendered
+old = {'healthy': True, 'observed': True, 'count': 3}
+failed = monitor.stable_observation(old, False, 100)
+assert monitor.stable_observation(failed, False, 159)['healthy']
+assert not monitor.stable_observation(failed, False, 160)['healthy']
+recovered = monitor.stable_observation(monitor.stable_observation(failed, False, 160), True, 170)
+assert not monitor.stable_observation(recovered, True, 229)['healthy']
+assert monitor.stable_observation(recovered, True, 230)['healthy']
+brief = monitor.stable_observation(failed, True, 110)
+assert monitor.stable_observation(brief, False, 120)['healthy']
+# A saved timer survives process restarts and legacy counters start a new timer.
+assert not monitor.stable_observation(dict(failed), False, 170)['healthy']
+assert monitor.stable_observation(old, False, 1000)['healthy']
+print('One-minute routing, fallback probes and DNS grace periods passed.')

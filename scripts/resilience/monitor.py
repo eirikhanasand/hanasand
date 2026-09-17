@@ -38,6 +38,15 @@ def read_json(path, fallback):
         return fallback
 
 
+def stable_observation(old, healthy, now):
+    old = old or {'healthy': healthy, 'count': 0, 'observed': healthy}
+    same = old['observed'] == healthy
+    since = old.get('observedSince', now) if same else now
+    return {'healthy': healthy if now - since >= 60 else old['healthy'],
+            'count': old['count'] + 1 if same else 1,
+            'observed': healthy, 'observedSince': since}
+
+
 def request(url, timeout=4):
     with urllib.request.urlopen(url, timeout=timeout) as response:
         return response.read()
@@ -161,10 +170,13 @@ def sample(config, previous):
         observations = dict(executor.map(check, instances.values()))
     counters = previous.get('healthCounters', {})
     for key, healthy in observations.items():
-        old = counters.get(key, {'healthy': healthy, 'count': 0, 'observed': healthy})
-        count = old['count'] + 1 if old['observed'] == healthy else 1
-        stable = healthy if count >= (config.get('rise', 6) if healthy else config.get('fall', 3)) else old['healthy']
-        counters[key] = {'healthy': stable, 'count': count, 'observed': healthy}
+        # Router and peer states already include the routing grace period.
+        # Only raw fallback probes need their own persisted one-minute timer.
+        health = instances[key]['health']
+        authoritative = key in proxy_status or health.startswith('peer:') and health[5:] in peer_instances
+        counters[key] = stable_observation(counters.get(key), healthy, time.time())
+        if authoritative:
+            counters[key]['healthy'] = healthy
     services = [choose_service({**service, 'observedFromSite': config['site'], 'instances': [{**i, 'endpoint': peer_instances.get(i['id'], {}).get('endpoint', i['endpoint'])} if i['health'].startswith('peer:') else i for i in service['instances']]}, {key: value['healthy'] for key, value in counters.items()}) for service in config['services']]
     for service in services:
         for instance in service['instances']:

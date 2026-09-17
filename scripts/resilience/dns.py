@@ -42,7 +42,7 @@ def reconcile(config, state, previous):
         target = 'inspur' if primary_ready else 'ovhcloud' if standby_ready else None
         candidate_since = old.get('candidateSince', time.time()) if target == old.get('candidate') else time.time()
         current = dict(old, candidate=target, candidateSince=candidate_since, primaryReady=primary_ready, standbyReady=standby_ready)
-        delay = 120 if target == 'inspur' else 15
+        delay = 120 if target == 'inspur' else 60
         if target and time.time() - candidate_since >= delay and time.time() - old.get('verifiedAt', 0) >= 30:
             path = f"/domains/{config['domainId']}/dns/{record['id']}"
             existing = api(config, path)
