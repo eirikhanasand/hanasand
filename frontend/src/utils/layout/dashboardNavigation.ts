@@ -57,7 +57,6 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
                 link('Collection Runs', '/ti/runs', isAdmin),
             ]),
             group('Quality & oversight', [
-                link('Evaluation', '/ti/evaluation', canReviewIntel),
                 link('Timeliness', '/ti/timeliness', canReviewIntel),
             ]),
         ]),
