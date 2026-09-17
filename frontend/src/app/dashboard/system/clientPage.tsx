@@ -320,7 +320,7 @@ export default function SystemDashboard({
     }
 
     return (
-        <div className='relative grid gap-4'>
+        <div className='relative grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4'>
             <div className='pointer-events-none absolute left-0 top-0 z-20 max-w-3xl'>
                 <ErrorNotice compact variant='info' message={message as string | null} />
             </div>

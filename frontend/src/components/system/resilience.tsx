@@ -40,11 +40,21 @@ export function RecoveryBanner() {
 
 export default function ResiliencePanel() {
     const state = useResilience()
-    return <section aria-label='Service resilience' className='rounded-xl border border-current/10 p-5 space-y-4'>
+    return <section aria-label='Service resilience' className='rounded-xl border border-current/10 p-4 sm:p-5 space-y-4 max-xl:min-w-0 max-xl:[overflow-wrap:anywhere]'>
         <div><h2 className='text-lg font-semibold'>Service resilience</h2><p className='text-sm opacity-70'>Inspur preferred → Inspur alternate → OVHcloud. Each service recovers independently.</p></div>
         {!state ? <p>Loading service status…</p> : <>
             <p role='status'>{state.mode === 'normal' ? 'Preferred services are available.' : state.mode === 'unknown' || state.stale ? 'Status is reconnecting; availability has not been verified.' : state.readOnly ? 'Database recovery is read-only. Changes are paused.' : 'Backup services are active.'}</p>
-            <div className='overflow-x-auto'><table className='w-full text-sm text-left'><thead><tr><th className='p-2'>Service</th><th className='p-2'>Serving from</th><th className='p-2'>Endpoint</th><th className='p-2'>Instances</th></tr></thead><tbody>
+            <div className='grid min-w-0 gap-3 sm:grid-cols-2 xl:hidden' data-resilience-cards>
+                {state.services.map(service => <article key={service.id} className='min-w-0 rounded-lg border border-current/10 p-3'>
+                    <h3 className='font-semibold'>{service.name}</h3>
+                    <dl className='mt-2 grid min-w-0 grid-cols-[5.5rem_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm'>
+                        <dt className='opacity-70'>Serving from</dt><dd>{service.activeInstance || 'Unavailable'}</dd>
+                        <dt className='opacity-70'>Endpoint</dt><dd>{service.activeEndpoint || 'None'}</dd>
+                        <dt className='opacity-70'>Instances</dt><dd className='space-y-1'>{service.instances.map(instance => <p key={instance.id}>{instance.id}: {instance.healthy ? 'ready' : 'unavailable'}</p>)}</dd>
+                    </dl>
+                </article>)}
+            </div>
+            <div className='hidden overflow-x-auto xl:block' data-resilience-table><table className='w-full text-sm text-left'><thead><tr><th className='p-2'>Service</th><th className='p-2'>Serving from</th><th className='p-2'>Endpoint</th><th className='p-2'>Instances</th></tr></thead><tbody>
                 {state.services.map(service => <tr key={service.id} className='border-t border-current/10'><th className='p-2 font-medium'>{service.name}</th><td className='p-2'>{service.activeInstance || 'Unavailable'}</td><td className='p-2 break-all'>{service.activeEndpoint || 'None'}</td><td className='p-2'>{service.instances.map(instance => `${instance.id}: ${instance.healthy ? 'ready' : 'unavailable'}`).join(' · ')}</td></tr>)}
             </tbody></table></div>
             {state.sites && <div className='grid gap-4 md:grid-cols-2'>{Object.entries(state.sites).map(([name, site]) => <div key={name}><h3 className='font-medium'>{name === 'inspur' ? 'Inspur' : 'OVHcloud'}</h3><p className='text-sm'>{site.fresh ? `${Math.round((site.compute?.memoryAvailableBytes || 0) / 1024 ** 3)} GB memory available · ${Math.round((site.compute?.diskFreeBytes || 0) / 1024 ** 3)} GB disk available` : 'Host telemetry is unavailable.'}</p><p className='text-xs opacity-70'>Replication: {site.database?.receiverStatus || 'Not verified'}</p></div>)}</div>}
