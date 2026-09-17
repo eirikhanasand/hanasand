@@ -1,3 +1,4 @@
+import { monitoringAlertReady } from './monitoringAlertPolicy.ts'
 import { correlationKey, monitoringScope } from './monitoringCorrelation.ts'
 import { monitoringCaseDiscordAlert } from './alerts/monitoringCase.ts'
 import { isHostThresholdMessage } from './hostCheckMessage.ts'
@@ -50,6 +51,12 @@ export async function recordMonitoringOutcome(automation: AutomationRow, runId: 
         return id
     })
     if (!issue || automation.notify_on === 'never' || kind === 'warning' && !automation.notify_warnings && automation.notify_on !== 'always') return
+    // Use persisted check history so restarts and intermittent successes do not
+    // bypass the grace period. Cases and their raw outcomes remain immediate.
+    const history = await run(`SELECT id, status, warning, completed_at FROM agent_automation_runs
+        WHERE automation_id = $1 AND status IN ('completed', 'failed')
+        ORDER BY started_at DESC, id DESC LIMIT 100`, [automation.id])
+    if (history.rows[0]?.id !== runId || !monitoringAlertReady(history.rows, kind!)) return
     const preferences = await run('SELECT notifications_enabled, kind, summary, occurrences, first_seen_at, last_seen_at, resolved_at, severity_override, status_override FROM monitoring_issues WHERE id = $1', [issue])
     const details = preferences.rows[0]
     if (!details || details.notifications_enabled === false) return

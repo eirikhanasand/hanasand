@@ -9,7 +9,7 @@ const {mergeMonitoringCases:merge}=await import('../src/utils/mergeMonitoringCas
 const message='connect ECONNREFUSED git.example.com:443 Failed after 2 attempts.'
 test('merges scoped socket failures, retains evidence and aliases, serializes notifications, and waits for every check to recover',async()=>{
  await q(`CREATE TABLE agent_automations(id text PRIMARY KEY,owner_id text,organization_id text,target_url text,monitoring_type text,action_type text,notification_destinations text[]);
- CREATE TABLE agent_automation_runs(id text PRIMARY KEY,automation_id text,started_at timestamptz DEFAULT NOW(),status text);
+ CREATE TABLE agent_automation_runs(id text PRIMARY KEY,automation_id text,started_at timestamptz DEFAULT NOW(),status text,warning boolean DEFAULT false,completed_at timestamptz DEFAULT NOW());
  CREATE TABLE monitoring_case_vms(automation_id text,target_url text,vm_name text)`)
  await schema()
  const a={id:'a',owner_id:'owner',organization_id:null,target_url:'https://git.example.com/info/refs',monitoring_type:'fetch',action_type:'agent_prompt',notify_on:'failure',notification_destinations:['test']} as any
@@ -22,6 +22,7 @@ test('merges scoped socket failures, retains evidence and aliases, serializes no
   await q('INSERT INTO agent_automation_runs(id,automation_id,status,issue_id) VALUES($1,$2,\'failed\',$3)',['legacy-'+item.id,item.id,id])
   await q('INSERT INTO monitoring_issue_messages(issue_id,message_id,delivered_at,message) VALUES($1,$2,NOW(),$3::jsonb)',[id,'legacy-'+item.id,JSON.stringify({content:item.id})])
  }
+ await q("UPDATE agent_automation_runs SET started_at=NOW()-INTERVAL '2 minutes',completed_at=NOW()-INTERVAL '2 minutes'")
  await schema()
  expect(await merge()).toEqual([{from:'HA-'+ids[1],to:'HA-'+ids[0]}])
  expect(await merge()).toEqual([])

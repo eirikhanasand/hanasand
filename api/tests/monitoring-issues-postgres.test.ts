@@ -27,17 +27,20 @@ test('database aggregation, concurrent delivery, rolling cooldown, recovery and 
     await schema()
     await query("INSERT INTO agent_automations(id,status,action_type,schedule_kind) VALUES ('issues','active','agent_prompt','interval'), ('other-issues','active','agent_prompt','interval')")
     const monitor = { id: 'issues', owner_id: 'owner', action_type: 'agent_prompt', monitoring_type: 'fetch', target_url: 'http://127.0.0.1:9', timeout_seconds: 1, retry_count: 0, notify_on: 'failure', interval_minutes: 1, schedule_kind: 'interval', notification_destinations: ['test-discord', 'test-discord'] } as AutomationRow
+    let checkedAt = Date.parse('2020-01-01')
     async function check(id: string, message = 'HTTP 503', kind: 'failure' | 'warning' | null = 'failure', automation = monitor) {
-        await query("INSERT INTO agent_automation_runs(id,automation_id,owner_id,status) VALUES ($1,$2,'owner',$3)", [id, automation.id, kind === 'failure' ? 'failed' : 'completed'])
+        await query("INSERT INTO agent_automation_runs(id,automation_id,owner_id,status,warning,started_at,completed_at) VALUES ($1,$2,'owner',$3,$4,$5,$5)", [id, automation.id, kind === 'failure' ? 'failed' : 'completed', kind === 'warning', new Date(checkedAt += 120_000)])
         await recordMonitoringOutcome(automation, id, kind, message)
     }
+    await check('grace-baseline')
+    expect(sent).toHaveLength(0)
     await Promise.all(Array.from({ length: 12 }, (_, i) => check(`issue-${i}`)))
     let issues = await loadMonitoringIssues('issues')
     expect(issues).toHaveLength(1)
-    expect(issues[0].occurrences).toBe(12)
+    expect(issues[0].occurrences).toBe(13)
     expect(sent).toEqual([{ content: `[${issues[0].caseNumber}](https://hanasand.com/cases/${issues[0].caseNumber})`, mention: true }])
     await recordMonitoringOutcome(monitor, 'issue-0', 'failure', 'HTTP 503')
-    expect((await loadMonitoringIssues('issues'))[0].occurrences).toBe(12)
+    expect((await loadMonitoringIssues('issues'))[0].occurrences).toBe(13)
     await check('different', 'HTTP 401')
     expect(sent).toHaveLength(2)
     await check('healthy', 'Healthy', null)
@@ -53,12 +56,14 @@ test('database aggregation, concurrent delivery, rolling cooldown, recovery and 
     await query("UPDATE monitoring_issue_notifications SET next_attempt_at=NOW()-INTERVAL '1 second' WHERE issue_id=$1", [reopened.id])
     await Promise.all([check('after-window-1'), check('after-window-2')])
     expect(sent).toHaveLength(3)
+    await check('other-owner-baseline', 'HTTP 503', 'failure', { ...monitor, id: 'other-issues', owner_id: 'other-owner' })
     await check('other-owner-monitor', 'HTTP 503', 'failure', { ...monitor, id: 'other-issues', owner_id: 'other-owner' })
     expect(sent).toHaveLength(4)
     await check('muted', 'HTTP 404', 'failure', { ...monitor, notify_on: 'never' })
     await check('warning', 'Slow', 'warning')
     expect(sent).toHaveLength(4)
     failDelivery = true
+    await check('delivery-baseline')
     await executeAutomation(monitor)
     const result = (await query("SELECT last_status,last_error FROM agent_automations WHERE id='issues'")).rows[0]
     expect(result.last_status).toBe('failed')

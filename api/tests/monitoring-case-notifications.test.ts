@@ -4,8 +4,14 @@ let enabled = false
 let claims = 0
 let deliveries = 0
 let delivered: unknown[] = []
+let ready = false
+let currentRun = 'run-1'
 mock.module('../src/utils/db.ts', () => ({
     default: async (sql: string) => {
+        if (sql.startsWith('SELECT id, status, warning, completed_at')) return { rows: [
+            { id: currentRun, status: 'failed', completed_at: new Date(120_000) },
+            ...(ready ? [{ id: 'prior', status: 'failed', completed_at: new Date(0) }] : []),
+        ] }
         if (sql.startsWith('SELECT notifications_enabled')) return { rows: [{ notifications_enabled: enabled, kind: 'failure', summary: 'HTTP 503', occurrences: 2, first_seen_at: '2026-09-07T18:00:00Z', last_seen_at: '2026-09-07T18:01:00Z' }] }
         if (sql.startsWith('INSERT INTO monitoring_issue_notifications')) claims++
         return { rows: [{ issue_id: '1' }] }
@@ -25,6 +31,10 @@ test('case notification preference suppresses delivery until re-enabled', async 
     expect(claims).toBe(0)
     expect(deliveries).toBe(0)
     enabled = true
+    currentRun = 'run-2'
+    await recordMonitoringOutcome(automation, 'run-2', 'failure', 'HTTP 503')
+    expect(claims).toBe(0)
+    ready = true
     await recordMonitoringOutcome(automation, 'run-2', 'failure', 'HTTP 503')
     expect(claims).toBe(1)
     expect(deliveries).toBe(1)
