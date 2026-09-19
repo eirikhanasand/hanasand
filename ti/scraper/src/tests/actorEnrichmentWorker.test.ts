@@ -7,6 +7,7 @@ const capture = { id: 'capture-one', sourceId: 'news', url: 'https://example.com
 const fact = { kind: 'victim', value: 'Example Corporation', quote };
 test('accepts new quoted facts and rejects repeats, invented quotes, and other actors', () => {
   expect(groundedAdditions(actor, capture, [fact])).toHaveLength(1);
+  expect(groundedAdditions(actor, { ...capture, body: undefined, metadata: { normalizedEvidence: { text: 'BrainCipher Ransomware attacked Example Corporation yesterday.' } } }, [{ kind: 'malware', value: 'BrainCipher Ransomware', quote: 'BrainCipher Ransomware attacked Example Corporation yesterday.' }])).toHaveLength(0);
   expect(groundedAdditions({ ...actor, characterization: { victims: [{ value: fact.value }] } }, capture, [fact])).toHaveLength(0);
   expect(groundedAdditions(actor, capture, [{ ...fact, quote: quote + ' New unsupported information.' }])).toHaveLength(0);
   expect(groundedAdditions({ ...actor, canonicalName: 'OtherActor' }, capture, [fact])).toHaveLength(0);
