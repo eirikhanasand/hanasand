@@ -1,4 +1,5 @@
 import { getIntelOperationsHealth } from './ti/operationsHealth.ts'
+import { readResilienceChecks } from './resilienceMonitoring.ts'
 import { getDeliverySummary } from './ti/delivery.ts'
 import { createHash } from 'node:crypto'
 import { publicMonitoringRequest } from './publicMonitoringRequest.ts'
@@ -43,6 +44,7 @@ export function evaluateJsonRule(payload: unknown, rule: JsonRule) {
 }
 
 async function fetchJson(source: JsonSource) {
+    if (source.target_url === 'system:resilience') return { payload: readResilienceChecks(), certificate: { status: 'not_applicable' as const, subject: null, issuer: null, expiresAt: null } }
     if (['system:ti-collection', 'system:ti-enrichment'].includes(source.target_url || '')) return { payload: await getIntelOperationsHealth(), certificate: { status: 'not_applicable' as const, subject: null, issuer: null, expiresAt: null } }
     if (source.target_url === 'system:ti-delivery') return { payload: await getDeliverySummary(), certificate: { status: 'not_applicable' as const, subject: null, issuer: null, expiresAt: null } }
     if (source.target_url === 'system:metrics') {

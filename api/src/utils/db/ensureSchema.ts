@@ -1,4 +1,5 @@
 import ensureRoleSchema from './roleSchema.ts'
+import ensureLogDimensionsSchema from './logDimensionsSchema.ts'
 import ensureSharedMailSchema from './sharedMailSchema.ts'
 import ensureVmOrganizationSchema from './vmOrganizationSchema.ts'
 import ensureCaseDevelopmentSchema from './caseDevelopmentSchema.ts'
@@ -438,6 +439,8 @@ export default async function ensureSchema() {
         )
     `)
     await run('CREATE INDEX IF NOT EXISTS idx_service_logs_created_at ON service_logs(created_at DESC)')
+    await run('ALTER TABLE service_logs ADD COLUMN IF NOT EXISTS source_event_id TEXT')
+    await run('CREATE UNIQUE INDEX IF NOT EXISTS idx_service_logs_source_event_id ON service_logs(source_event_id)')
     await run('CREATE INDEX IF NOT EXISTS idx_service_logs_service_level ON service_logs(service, level, created_at DESC)')
     await run(`
         CREATE TABLE IF NOT EXISTS host_update_snapshots (
@@ -1424,7 +1427,15 @@ export default async function ensureSchema() {
     `)
     await run('ALTER TABLE mill_events ADD COLUMN IF NOT EXISTS parser_version TEXT NOT NULL DEFAULT \'mill.v1\'')
     await run('CREATE INDEX IF NOT EXISTS idx_mill_events_org_time ON mill_events(organization_id, event_timestamp DESC)')
+    await run('ALTER TABLE mill_events ADD COLUMN IF NOT EXISTS log_key TEXT')
+    await run('CREATE INDEX IF NOT EXISTS idx_mill_events_pending ON mill_events(event_timestamp, id) WHERE processing_status = \'pending\'')
+    await run('CREATE UNIQUE INDEX IF NOT EXISTS idx_mill_events_log_key ON mill_events(log_key)')
+    await run('CREATE TABLE IF NOT EXISTS log_processing_cursors (name TEXT PRIMARY KEY, last_id BIGINT NOT NULL DEFAULT 0, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), last_error TEXT)')
+    await run('ALTER TABLE log_processing_cursors ADD COLUMN IF NOT EXISTS recent_id BIGINT')
+    await run('CREATE INDEX IF NOT EXISTS idx_mill_events_logs_skipped ON mill_events(id) WHERE ingestion_id = \'logs\' AND processing_status = \'skipped\'')
+    await run('CREATE INDEX IF NOT EXISTS idx_mill_events_logs_time ON mill_events(event_timestamp DESC, id DESC) WHERE ingestion_id = \'logs\' AND processing_status = \'processed\'')
     await run('CREATE INDEX IF NOT EXISTS idx_mill_events_org_user_time ON mill_events(organization_id, user_id, event_timestamp DESC)')
+    await ensureLogDimensionsSchema()
     await run(`
         CREATE TABLE IF NOT EXISTS mill_rules (
             id TEXT PRIMARY KEY,
@@ -1474,6 +1485,9 @@ export default async function ensureSchema() {
     await run('ALTER TABLE mill_findings ADD COLUMN IF NOT EXISTS case_delivery_attempted_at TIMESTAMPTZ')
     await run('CREATE INDEX IF NOT EXISTS idx_mill_pending_cases ON mill_findings(case_delivery_attempted_at, created_at) WHERE case_id IS NULL')
     await run('CREATE INDEX IF NOT EXISTS idx_mill_findings_org_status ON mill_findings(organization_id, status, last_observed DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_mill_findings_event_ids ON mill_findings USING GIN(event_ids)')
+    await run('CREATE INDEX IF NOT EXISTS idx_mill_logs_severity_time ON mill_events ((normalized->>\'severity\'), event_timestamp DESC) WHERE ingestion_id = \'logs\'')
+    await run('CREATE INDEX IF NOT EXISTS idx_mill_logs_type_time ON mill_events ((normalized->>\'log_type\'), event_timestamp DESC) WHERE ingestion_id = \'logs\'')
     await run(`
         CREATE TABLE IF NOT EXISTS mail_accounts (
             user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,

@@ -562,7 +562,6 @@ export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { i
                 <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
                     <div>
                         <h3 className='text-sm font-semibold text-ui-text'>Customer lookup</h3>
-                        <p className='mt-1 text-xs leading-5 text-ui-muted'>Load customer state, then use any audited action below when the case already has enough context.</p>
                     </div>
                     <button
                         type='button'
@@ -577,7 +576,7 @@ export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { i
 
             <details data-testid='support-secondary-operations' className='group rounded-md border border-ui-border bg-ui-canvas' open={operation !== 'inspect'}>
                 <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/20'>
-                    <span>Audited support actions</span>
+                    <span>Actions</span>
                     <span className='text-xs font-medium text-ui-muted group-open:hidden'>Sessions, invites, roles, API usage</span>
                     <span className='hidden text-xs font-medium text-ui-muted group-open:inline'>Hide actions</span>
                 </summary>
@@ -597,7 +596,6 @@ export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { i
             {operation === 'inspect' && <section className='grid gap-3'>
                 <div>
                     <h3 className='text-sm font-semibold text-ui-text'>Support inspection</h3>
-                    <p className='mt-1 text-xs leading-5 text-ui-muted'>Shows what is real: organization/user state, invites, memberships, webhooks, watchlists, and recent support audit.</p>
                 </div>
                 <form className='grid gap-2' onSubmit={submitInspection}>
                     <div className='grid gap-2 sm:grid-cols-[8rem_minmax(0,1fr)]'>

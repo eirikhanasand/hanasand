@@ -6,12 +6,15 @@ test "$(pwd)" = /home/hanasand/hanasand
 exec 9>/tmp/hanasand-frontend-deploy.lock
 flock 9
 root=/home/hanasand/resilience
-release=$(git rev-parse HEAD)
+release=${HANASAND_RELEASE_COMMIT:-$(git rev-parse HEAD)}
+test "$(git rev-parse --verify "$release^{commit}")" = "$release"
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 image=hanasand-resilience-$kind:$release
 case "${1:-}" in
  --no-build)
   docker image inspect "$image" >/dev/null 2>&1 || { echo 'The exact release image must be built before --no-build.' >&2; exit 1; };;
  '')
+  test "$release" = "$(git rev-parse HEAD)" || { echo 'Build the selected release from its clean archive, then use --no-build.' >&2; exit 1; }
   case "$kind" in
    frontend) git archive "$release" | docker build -f frontend/Dockerfile -t "$image" -;;
    api) docker build --build-arg SESSION_GEOIP_MONTH="$(date -u +%Y-%m)" --target app-runtime --build-context database_schema=./db -t "$image" api;;
@@ -31,7 +34,7 @@ case "$kind:$old_ports" in
  'api:8082 8083') ports='20802 20803';; api:*) ports='8082 8083';;
  'auth:8181 8182') ports='8183 8184';; auth:*) ports='8181 8182';;
 esac
-pair_name() { python3 scripts/resilience/container_names.py "$kind" "$1"; }
+pair_name() { python3 "$script_dir/container_names.py" "$kind" "$1"; }
 source=hanasand_api
 if test "$kind" = frontend; then source=$(pair_name "$(printf '%s' "$old_ports" | cut -d' ' -f1)"); fi
 # Only stale, stopped task-owned candidates may be removed to reuse an inactive slot.
@@ -42,7 +45,7 @@ for port in $ports; do
   docker rm "$name" >/dev/null
  fi
 done
-python3 scripts/resilience/start-inspur-pair.py "$kind" "$image" "$source" $ports
+python3 "$script_dir/start-inspur-pair.py" "$kind" "$image" "$source" $ports
 path=/ready; test "$kind" != frontend || path=/api/resilience/ready
 for port in $ports; do
  ready=0

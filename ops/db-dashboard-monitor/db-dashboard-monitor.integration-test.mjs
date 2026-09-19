@@ -67,6 +67,7 @@ try {
     assert.deepEqual(
         requests.map(({ service, check_name, status }) => ({ service, check_name, status })),
         [
+            { service: 'production-monitor', check_name: 'Public status feed', status: 'up' },
             { service: 'threat-intelligence', check_name: 'Backup continuity', status: 'down' },
             { service: 'database', check_name: 'Database dashboard', status: 'down' },
         ],

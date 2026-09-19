@@ -68,12 +68,15 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
                 link('Virtual Machines', '/vms', hasVMs),
                 link('Host Updates', '/system/updates', isAdmin),
             ]),
-            group('Observability', [
+            group('Logs', [
+                link('Dashboard', '/logs', canManageSystem),
+                link('Realtime', '/logs/realtime', canManageSystem),
+                link('Search', '/logs/search', canManageSystem),
+                link('Errors', '/logs/errors', canManageSystem),
                 link('Traffic', '/traffic', canManageSystem),
-                link('Logs', '/logs', isAdmin),
-                link('AI Metrics', '/system/ai', canManageSystem),
             ]),
-            group('Security & resilience', [
+            group('Health', [
+                link('AI Metrics', '/system/ai', canManageSystem),
                 link('Vulnerabilities', '/vulnerabilities', canManageSystem),
                 link('Rate Limits', '/system/rates', isAdmin),
                 link('Load Testing', '/load-testing', canManageSystem),

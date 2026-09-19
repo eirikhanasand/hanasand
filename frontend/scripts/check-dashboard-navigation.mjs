@@ -25,8 +25,18 @@ const operator = navigationLinks(getDashboardNavigation({ ...memberAccess, canMa
 assert(operator.some(item => item.href === '/system'))
 assert.deepEqual(navigationLinks(getDashboardNavigation(memberAccess)).filter(item => item.ancestors.includes('Infrastructure')).map(item => item.href), ['/system', '/vms'])
 assert(!navigationLinks(getDashboardNavigation({ ...memberAccess, hasVMs: false })).some(item => item.href === '/vms'))
-assert(!operator.some(item => ['/db', '/logs', '/system/updates'].includes(item.href)))
+assert(!operator.some(item => ['/db', '/system/updates'].includes(item.href)))
+for (const href of ['/logs', '/logs/realtime', '/logs/search', '/logs/errors']) assert(operator.some(item => item.href === href), `System administrators need access to ${href}`)
 assert.equal(all.find(item => item.href === '/dwm/actors')?.label, 'Actors')
+assert.deepEqual(all.filter(item => item.ancestors.includes('Logs')).map(({ label, href }) => ({ label, href })), [
+    { label: 'Dashboard', href: '/logs' },
+    { label: 'Realtime', href: '/logs/realtime' },
+    { label: 'Search', href: '/logs/search' },
+    { label: 'Errors', href: '/logs/errors' },
+    { label: 'Traffic', href: '/traffic' },
+])
+for (const href of ['/vulnerabilities', '/system/rates', '/load-testing']) assert.deepEqual(all.find(item => item.href === href)?.ancestors, ['Infrastructure', 'Health'])
+assert(!all.some(item => item.ancestors.includes('Observability') || item.ancestors.includes('Security & resilience')))
 for (const path of ['/management/users', '/management/roles']) {
     assert.deepEqual(all.find(item => item.href === path)?.ancestors, ['Administration', 'Management'])
 }

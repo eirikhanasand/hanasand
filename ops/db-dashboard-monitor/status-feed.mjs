@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process'
 const MAX_AGE_MS = 5 * 60_000
 const required = ['API Health', 'Public Website', 'Public Search', 'Processing Backlog', 'Source Collection', 'Browser Workspace', 'Monitoring Workspace', 'Latest Activity']
 
@@ -30,22 +29,3 @@ export async function checkStatusFeed(url, fetcher = fetch) {
     }
 }
 
-// Use the existing mail worker's SMTP identity, independently of the public API
-// and its database connection. Credentials never leave that container.
-export async function sendStatusFeedEmail(subject, textBody) {
-    const code = `import { sendSystemMail } from './src/utils/mail/system.ts';
-import { mailConfig } from './src/utils/mail/config.ts';
-import { addressForUser } from './src/utils/mail/helpers.ts';
-const message = await Bun.stdin.json();
-await sendSystemMail({ to: process.env.MONITOR_ALERT_EMAIL || addressForUser(mailConfig.systemMailboxOwner), ...message });`
-    await new Promise((resolve, reject) => {
-        const child = spawn('docker', ['exec', '-i', '-w', '/app', process.env.HANASAND_STATUS_MAIL_CONTAINER || 'hanasand_api', 'bun', '-e', code], { stdio: ['pipe', 'ignore', 'pipe'] })
-        let error = ''
-        child.stderr.on('data', chunk => { error = (error + chunk).slice(-500) })
-        const timer = setTimeout(() => { child.kill(); reject(new Error('Status monitoring email timed out.')) }, 30_000)
-        child.on('error', failure => { clearTimeout(timer); reject(failure) })
-        child.on('close', code => { clearTimeout(timer); code === 0 ? resolve() : reject(new Error(`Status monitoring email failed (${code}): ${error}`)) })
-        child.stdin.on('error', () => {})
-        child.stdin.end(JSON.stringify({ subject, textBody }))
-    })
-}

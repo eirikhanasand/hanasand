@@ -1,3 +1,4 @@
+import { processStoredLogs } from '#utils/mill/processLogs.ts'
 import { warmTrafficStatistics } from './handlers/traffic/legacy.ts'
 import { refreshTrafficHistory } from './utils/traffic/history.ts'
 import { warmLogSnapshots, refreshLogSnapshots } from '#utils/logs/warm.ts'
@@ -175,6 +176,11 @@ async function start() {
 
                 fastify.log.warn({ error }, 'Failed to provision mail accounts on startup')
             })
+        }
+        if (!browserWorkerOnly && !httpWorkerOnly && process.env.AUTH_SERVICE_ONLY !== '1') {
+            const processTimer = setInterval(() => { void processStoredLogs().catch(error => fastify.log.error({ error }, 'Mill log processing failed; will retry')) }, 5000)
+            processTimer.unref()
+            fastify.addHook('onClose', async () => { clearInterval(processTimer) })
         }
         if (!browserWorkerOnly) {
             await warmLogSnapshots()

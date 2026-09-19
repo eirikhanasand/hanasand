@@ -8,9 +8,15 @@ export async function deliverMillCases() {
     const base = process.env.TI_SCRAPER_API_BASE?.replace(/\/$/, '')
     const token = process.env.TI_SCRAPER_SERVICE_TOKEN
     if (!base || !token) throw new Error('Security case delivery is not configured.')
+    // Restricted command logs belong in the administrator-only Logs workspace,
+    // never in cases shared with ordinary organization members. The durable flag
+    // preserves that boundary even after linked events expire through retention.
     // The claim is atomic across worker replicas. Expired claims recover after a crash.
     const pending = await run(`UPDATE mill_findings SET case_delivery_attempted_at = NOW()
-        WHERE id IN (SELECT id FROM mill_findings WHERE case_id IS NULL
+        WHERE id IN (SELECT finding.id FROM mill_findings finding WHERE case_id IS NULL
+            AND finding.evidence->>'restrictedLog' IS DISTINCT FROM 'true'
+            AND NOT EXISTS (SELECT 1 FROM mill_events event WHERE event.organization_id = finding.organization_id
+                AND event.id = ANY(finding.event_ids) AND event.ingestion_id = 'logs')
             AND rule_id <> 'scanner.hanasand_validation.v1'
             AND (case_delivery_attempted_at IS NULL OR case_delivery_attempted_at < NOW() - INTERVAL '5 minutes')
             ORDER BY case_delivery_attempted_at NULLS FIRST, created_at LIMIT 20 FOR UPDATE SKIP LOCKED)

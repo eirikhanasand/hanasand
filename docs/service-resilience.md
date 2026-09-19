@@ -14,7 +14,7 @@ Authentication validates actual stored sessions against the selected database. R
 
 ## Monitoring and alerts
 
-The independent monitor serves loopback `/status`; public API routing exposes `/api/resilience/status`, and the frontend consumes `/api/resilience`. `/system`, database and backup pages show placement, instance health, both sites' resource availability, replication, backup verification and notification results. Recovery monitoring is independent of the application API. Red Discord embeds report failover or restore requirements; green embeds report failback and list anything still affected. Delivery is retried independently of health sampling.
+The independent monitor serves loopback `/status`; the frontend consumes `/api/resilience`. It keeps checking services and routing traffic independently of the API. The scheduled API worker reads its state through `system:resilience` and collects backup, replication and failover failures into HA cases. Only the shared case sender posts to Discord, once per case and destination every 24 hours. Recovery closes the case; recurrence reopens the same case without resetting its notification limit. If the API or writable database is down, sampling continues and case checks resume when it returns.
 
 DNS recovery is a last resort after public readiness fails despite service-level routing. Only explicit website/API A records are in scope. Mail and wildcard records remain unchanged. DNS caching means this path has a nonzero recovery interval; it is not a guarantee of uninterrupted requests during complete host loss.
 
@@ -22,11 +22,11 @@ DNS recovery is a last resort after public readiness fails despite service-level
 
 - `scripts/resilience/deploy-pair.sh frontend|api|auth` runs from `/home/hanasand/hanasand`. It builds an immutable revision image, starts two unused slots, verifies readiness, switches routing and drains old workers. `--no-build` requires the exact image already present.
 - `scripts/resilience/maintenance.py ROOT SERVICE maint|ready INSTANCE...` updates both routing processes and persists maintenance state. Always restore maintenance after a drill.
-- `scripts/resilience/backup.sh` performs a compressed physical backup from the local standby, verifies the manifest and isolated recovery, then sends only the verified bundle through a command-restricted SSH key. OVH retains fourteen verified bundles. The monitor alerts immediately when the job fails and when no verified off-site backup arrives within 36 hours.
+- `scripts/resilience/backup.sh` takes a compressed backup from the local standby, checks it by restoring it, then sends it through a restricted SSH key. OVH retains fourteen backups. The receiver writes `backups/status.json` in its own directory. A failed job or no completed off-site backup within 36 hours updates the backup HA case. A lost replication slot updates the replica's separate case.
 - `scripts/resilience/check-database-switch.sh` uses isolated temporary databases and leaves production databases untouched.
 - `api/scripts/check-recovery-records.ts` creates and deletes a scoped temporary account, case and alert to verify authenticated alerts and actual timeline events, search and read-only boundaries during a drill.
 
-Secrets stay outside source control. OVH receives a dedicated, limited application database identity, a replication-only identity and the existing monitoring webhook. It does not receive the primary's administrative, AI or SSH credentials.
+Secrets stay outside source control. OVH receives a limited application database identity and a replication-only identity. The recovery monitor does not use a Discord webhook. It does not receive the primary's administrative, AI or SSH credentials.
 
 ## Scale and alternatives
 
@@ -46,7 +46,7 @@ For stronger recovery guarantees, add an independent witness/fencing service or 
 - A stopped local routing process left its peer serving fifty successful requests.
 - Both live physical replicas streamed with verified replay positions. A compressed physical backup passed manifest/WAL verification and an isolated writable restore; OVH acknowledged checksum-verified receipt. The scheduled daily run repeated this successfully.
 - The isolated database promotion/reseed/failback check preserved all three test writes without stopping production databases.
-- Discord acknowledged red failover/restore-required/job-failure and green recovery messages. Simulations were labelled TEST.
+- Historical checks used direct Discord messages. That sender has been removed; HA cases now own delivery and its 24-hour limit.
 - Recovery UI browser checks passed normal, read-only, unavailable-status and failback states. Full API and frontend build checks passed; sixteen focused TI checks passed. The wider TI type-check retains unrelated existing errors.
 - OVH's expired manual-renewal certificate was replaced with DNS-based automatic renewal. Both sites passed strict HTTPS readiness checks. Website/API DNS records were verified at a 60-second TTL; unrelated DNS records were unchanged.
 

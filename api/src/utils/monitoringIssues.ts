@@ -10,7 +10,7 @@ import { deliverDiscordWebhookFile, redactSecretBearingText } from './alerts/dis
 
 export function monitoringIssueFingerprint(automation: Pick<AutomationRow, 'target_url' | 'monitoring_type' | 'json_rule'>, kind: string, message: string) {
     // Group changing durations and retry counts, but retain HTTP codes and error details.
-    const reason = automation.monitoring_type === 'json' && (message.startsWith('JSON threshold exceeded:') || automation.target_url === 'system:metrics' && isHostThresholdMessage(message))
+    const reason = automation.monitoring_type === 'json' && (automation.target_url === 'system:resilience' || message.startsWith('JSON threshold exceeded:') || automation.target_url === 'system:metrics' && isHostThresholdMessage(message))
         ? JSON.stringify(automation.json_rule) : redactSecretBearingText(message)
             .replace(/ Failed after \d+ attempts?\.$/, '')
             .replace(/\b\d+(?:\.\d+)?\s*(?:milliseconds?|ms|seconds?)\b/gi, '<duration>')

@@ -38,7 +38,7 @@ export async function handleActorEnrichmentRequest(request: Request, options: Ap
     const newFacts = runs.reduce((n: number, run: any) => n + Number(run.newFacts ?? 0), 0);
     const wordsAdded = runs.reduce((n: number, run: any) => n + Number(run.wordsAdded ?? 0), 0);
     const last = runs[0];
-    const workerRunning = Boolean(last && Date.now() - Date.parse(last.updatedAt) < 3_600_000 && last.status !== "failed");
+    const workerRunning = Boolean(last && Date.now() - Date.parse(last.updatedAt) < 3_600_000);
     return json({ generatedAt: new Date().toISOString(),
       collection: { critical: ageSeconds === null || ageSeconds > 300, lastRunAt: at, ageSeconds, thresholdSeconds: 300, runId: data.collection?.id },
       enrichment: { critical: !workerRunning || profiles === 0 || newFacts === 0, workerRunning,
@@ -54,7 +54,7 @@ export async function handleActorEnrichmentRequest(request: Request, options: Ap
     const latest = result.runs[0];
     const recent = result.runs.filter((run: any) => Date.now() - Date.parse(run.finishedAt ?? run.startedAt) < 3_600_000);
     const response = json({ profiles: result.profiles, updates: result.updates, status: {
-      worker: { state: latest?.status === "failed" ? "unavailable" : latest && Date.now() - Date.parse(latest.updatedAt) < 300_000 ? "active" : "idle",
+      worker: { state: latest && Date.now() - Date.parse(latest.updatedAt) < 3_600_000 ? "active" : result.queued ? "unavailable" : "idle",
         lastRunAt: latest?.finishedAt, lastSuccessfulRunAt: result.runs.find((run: any) => run.status === "completed")?.finishedAt,
         currentFailure: latest?.status === "failed" ? latest.error : null, snapshotFresh: Boolean(latest && Date.now() - Date.parse(latest.updatedAt) < 300_000) },
       latestRun: actorEnrichmentRunSummary(latest), queued: result.queued ?? 0,

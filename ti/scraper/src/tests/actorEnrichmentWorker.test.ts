@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { enrichActor, groundedAdditions } from '../ops/actorEnrichmentWorker.ts';
+import { enrichActor, groundedAdditions, explicitVictimRelation } from '../ops/actorEnrichmentWorker.ts';
 import { handleActorEnrichmentRequest } from '../api/actorEnrichmentRoutes.ts';
 const quote = 'BrainCipher attacked Example Corporation with malicious software in September.';
 const actor = { id: 'actor-one', canonicalName: 'BrainCipher', tenantId: 'default', aliases: [], characterization: {} };
@@ -48,4 +48,31 @@ test('flushes fresh collection evidence before querying it for enrichment', asyn
   const { FocusedFrontier } = await import('../frontier/frontier.ts');
   await enrichActor({ store, frontier: new FocusedFrontier(), runExecutor: async () => { pending = true; return { status: 'completed', captureIds: [capture.id] }; } }, actor);
   expect(readFresh).toBe(true);
+});
+
+test('health measures hourly productivity despite an isolated model failure', async () => {
+  const store = { queryIntelWorkerHealth: async () => ({ collection: { at: new Date().toISOString() }, enrichment: [
+    { status: 'failed', updatedAt: new Date().toISOString(), error: 'Model unavailable' },
+    { status: 'completed', updatedAt: new Date().toISOString(), newFacts: 2, wordsAdded: 30, changedActorIds: ['actor-one'] },
+  ] }) };
+  const response = await handleActorEnrichmentRequest(new Request('http://localhost/v1/intel/operations/health'), { store } as any);
+  expect((await response!.json()).enrichment).toMatchObject({ critical: false, workerRunning: true, profilesEditedLastHour: 1, newFactsLastHour: 2, error: 'Model unavailable' });
+});
+test('retries a temporary model connection response without accepting it as evidence', async () => {
+  const runs: any[] = []; let calls = 0;
+  const store = { saveActorEnrichmentRun: (run: any) => runs.push(run), listSources: () => [], getActorProfile: () => actor,
+    queryActorEnrichmentCaptures: async () => [capture], saveActorProfile() {}, saveEvidenceDelta() {} };
+  await enrichActor({ store, fetch: async () => Response.json(++calls === 1 ? { status: 'connecting', message: 'Hanasand AI is connecting.' } : { message: JSON.stringify({ facts: [fact] }) }) }, actor);
+  expect(calls).toBe(2);
+  expect(runs.at(-1)).toMatchObject({ status: 'completed', newFacts: 1 });
+});
+
+test('victim evidence requires an attack relationship, not a publisher, tool or generic mention', () => {
+  expect(explicitVictimRelation(['Blacknevas'], 'Mefa Group', 'BlackNevas Targets Turkish Industrial Leader Mefa Group')).toBe(true);
+  expect(explicitVictimRelation(['Doommageddon'], 'SITTNAK Lojistik A.Ş.', 'Doommageddon Strikes SITTNAK Lojistik A.Ş.')).toBe(true);
+  expect(explicitVictimRelation(['M3rx'], 'AusProof', 'Exclusive: AusProof allegedly breached by M3rx ransomware')).toBe(true);
+  expect(explicitVictimRelation(['APT28'], 'Trellix', 'Trellix APT28’s Stealthy Multi-Stage Campaign Leveraging CVE')).toBe(false);
+  expect(explicitVictimRelation(['APT28'], 'PixyNetLoader', 'APT28 PixyNetLoader Evolves with PNG Steganography')).toBe(false);
+  expect(explicitVictimRelation(['Termite'], 'ClickFix', 'Termite ransomware breaches linked to ClickFix CastleRAT attacks')).toBe(false);
+  expect(explicitVictimRelation(['Sandworm'], 'OT environments', 'Sandworm uses pre-compromised OT environments instead of zero-days to escalate OT attacks')).toBe(false);
 });

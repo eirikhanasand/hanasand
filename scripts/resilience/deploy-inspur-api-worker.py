@@ -9,6 +9,14 @@ lock=open('/tmp/hanasand-frontend-deploy.lock','a')
 fcntl.flock(lock,fcntl.LOCK_EX)
 original=json.loads(subprocess.check_output(['docker','inspect','hanasand_api']))[0]
 settings=dict(value.split('=',1) for value in original['Config']['Env'])
+# Collectors receive a credential that authenticates only log ingestion.
+log_ingest_file = Path('/home/hanasand/resilience/log-ingest.json')
+if log_ingest_file.exists():
+    log_ingest = json.loads(log_ingest_file.read_text())
+    if not isinstance(log_ingest, dict) or set(log_ingest) != {'LOG_INGEST_TOKEN'} or not isinstance(log_ingest['LOG_INGEST_TOKEN'], str) or len(log_ingest['LOG_INGEST_TOKEN']) < 32:
+        raise SystemExit('Invalid log ingestion configuration')
+    settings.update(log_ingest)
+
 mail_file = Path('/home/hanasand/resilience/mail.json')
 if mail_file.exists():
     mail = json.loads(mail_file.read_text())
@@ -23,7 +31,8 @@ with tempfile.NamedTemporaryFile(mode='w',suffix='.json',prefix='monitoring-work
     override=temporary.name
 os.chmod(override,0o600)
 def apply(target,env):
-    Path(override).write_text(json.dumps({'services':{'api':{'image':target,'command':original['Config']['Cmd'],'environment':env,'stop_grace_period':'65s'}}}))
+    Path(override).write_text(json.dumps({'services':{'api':{'image':target,'command':original['Config']['Cmd'],'environment':env,'stop_grace_period':'65s',
+        'volumes':['/home/hanasand/resilience/status:/resilience:ro']}}}))
     subprocess.run(['docker','compose','-f','docker-compose.yml','-f',override,'up','-d','--no-deps','--no-build','api'],cwd=root,check=True)
 def ready(expected):
     for _ in range(90):

@@ -1,529 +1,167 @@
 'use client'
 
-import { AlertTriangle, Activity, Database, Server, ShieldAlert, TerminalSquare, Bug } from 'lucide-react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import type { ReactNode } from 'react'
-import { Component, createRef, Fragment, useEffect, useMemo, useState } from 'react'
-import config from '@/config'
-import { displayLogServiceName } from '@/utils/logs/displayServiceName'
-import { logKey, mergeRuntimeLogs } from '@/utils/logs/retainLogs'
+import Link from 'next/link'
+import { usePathname, useSearchParams } from 'next/navigation'
+import { useEffect, useRef, useState } from 'react'
+import { Copy, ChevronDown, Search } from 'lucide-react'
+import { retainEvents } from '@/utils/logs/retainEvents'
+import EventFeed from './eventFeed'
+import ErrorsPanel from './errorsPanel'
+import type { ErrorEvent, ErrorEventsResponse, LogService } from '@/utils/logs/getLogs'
 import { dashboardPanelClass } from '@/components/dashboard/ui'
-import type { ErrorEventsResponse, LogRealtimeResponse, RuntimeLog, ServiceLog, LogService } from '@/utils/logs/getLogs'
 
-type LogsPageClientProps = {
-    id: string
-    token: string
-    initialServices: LogService[]
-    initialStoredLogs: ServiceLog[]
-    initialRealtime: LogRealtimeResponse
-    initialErrors: ErrorEventsResponse
-    initialServiceFilter?: string
+type Event = { id: string, event_timestamp: string, normalized: { severity: string, level: string, log_type: string, service: string, host: string, message: string, process?: { executable?: string, command_line?: string }, detections?: Array<{ rule_id: string, summary: string, severity: string }>, rules_checked?: number, [key: string]: unknown } }
+type ProcessingSource = { name: string, last_id?: string | null, recent_id?: string | null }
+type Result = { rows: Event[], counts: Array<{ severity: string, count: number }>, services: Array<{ service: string, count: number }>, processing: { updated_at: string, last_error?: string, skipped_events?: number, sources?: ProcessingSource[] } | null, summarize?: string, projection?: string[], limit: number }
+const colors: Record<string, string> = { low: 'text-ui-muted bg-ui-raised', medium: 'text-ui-warning bg-ui-warning/10', high: 'text-ui-danger bg-ui-danger/10', critical: 'text-ui-danger bg-ui-danger/20 ring-1 ring-ui-danger' }
+const fieldClass = 'rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm text-ui-text'
+const logTables = ['Logs', 'ProcessLogs', 'SigninLogs', 'ApplicationLogs', 'HttpLogs', 'SystemLogs']
+const fieldNames: Record<string, string> = { TimeGenerated: 'timestamp', Severity: 'severity', Level: 'level', Service: 'service', Host: 'host', Message: 'message', LogType: 'log_type', CommandLine: 'process.command_line', Executable: 'process.executable', UserId: 'user.id', RuleId: 'detections' }
+function projected(event: Event, fields: string[]) {
+    return Object.fromEntries(fields.map(field => [field, field === 'TimeGenerated' ? event.event_timestamp : field === 'RuleId' ? event.normalized.detections?.map(rule => rule.rule_id) : fieldNames[field]?.split('.').reduce<unknown>((value, key) => value && typeof value === 'object' ? (value as Record<string, unknown>)[key] : undefined, event.normalized)]))
 }
-
-const countFormatter = new Intl.NumberFormat('nb-NO')
-
-type LogsView = 'dashboard' | 'errors' | 'live' | 'stored'
-
-const viewOptions: Array<{ key: LogsView, label: string }> = [
-    { key: 'dashboard', label: 'Dashboard' },
-    { key: 'errors', label: 'Error Codes' },
-    { key: 'live', label: 'Live Feed' },
-    { key: 'stored', label: 'Recent errors' },
-]
-
-function when(value: string) {
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return value
-    return date.toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
+function isCatchingUp({ last_id, recent_id }: ProcessingSource) {
+    return typeof last_id === 'string' && typeof recent_id === 'string'
+        && /^\d+$/.test(last_id) && /^\d+$/.test(recent_id)
+        && BigInt(last_id) < BigInt(recent_id)
 }
-
-function normalizeInitialServiceFilter(value?: string) {
-    const trimmed = String(value || '').trim()
-    return trimmed || 'all'
-}
-
-export default function LogsPageClient({
-    id,
-    token,
-    initialServices,
-    initialStoredLogs,
-    initialRealtime,
-    initialErrors,
-    initialServiceFilter,
-}: LogsPageClientProps) {
-    const router = useRouter()
+export default function LogsPageClient({ initialServices, initialErrors, initialServiceFilter = 'all' }: { initialServices: LogService[], initialErrors: ErrorEventsResponse, initialServiceFilter?: string }) {
     const pathname = usePathname()
-    const searchParams = useSearchParams()
-    const [view, setView] = useState<LogsView>('dashboard')
-    const [serviceFilter, setServiceFilter] = useState<string>(() => normalizeInitialServiceFilter(initialServiceFilter))
+    const params = useSearchParams()
+    const view = pathname.endsWith('/realtime') ? 'realtime' : pathname.endsWith('/search') ? 'search' : pathname.endsWith('/errors') ? 'errors' : 'dashboard'
+    const [service, setService] = useState(params.get('service') || initialServiceFilter)
+    const [search, setSearch] = useState(params.get('search') || '')
+    const [table, setTable] = useState(logTables.includes(params.get('table') || '') ? params.get('table')! : 'Logs')
+    const [advanced, setAdvanced] = useState(!!params.get('kql'))
+    const [kql, setKql] = useState(params.get('kql') || 'ProcessLogs | where Severity in ("high", "critical") | order by TimeGenerated desc | take 100')
+    const [appliedKql, setAppliedKql] = useState(params.get('kql') || '')
+    const [hours, setHours] = useState(params.get('hours') || '24')
+    const [severity, setSeverity] = useState(params.get('severity') || 'all')
+    const [data, setData] = useState<Result | null>(null)
+    const [error, setError] = useState('')
+    const [busy, setBusy] = useState(false)
+    const [paused, setPaused] = useState(false)
     const [expanded, setExpanded] = useState<Record<string, boolean>>({})
-    const [storedLogs] = useState(initialStoredLogs)
-    const [errorEvents] = useState(initialErrors)
-    const [services] = useState(initialServices)
-    const [realtime, setRealtime] = useState(initialRealtime)
-    const [receivedLogs, setReceivedLogs] = useState(initialRealtime.logs)
-
+    const [copied, setCopied] = useState('')
+    const [errors, setErrors] = useState(initialErrors)
+    const [refresh, setRefresh] = useState(0)
+    const editing = useRef(false)
+    const pausedUpdates = useRef(false)
+    const queryIdentity = useRef('')
     useEffect(() => {
-        let cancelled = false
-        let refreshing = false
-
-        async function refresh() {
-            if (refreshing) return
-            refreshing = true
-            const params = new URLSearchParams({ limit: '300' })
-            if (serviceFilter !== 'all') {
-                params.set('service', serviceFilter)
-            }
-
-            try {
-                const response = await fetch(`${config.url.api}/logs/realtime?${params.toString()}`, {
-                    headers: { id, Authorization: `Bearer ${token}` },
-                    cache: 'no-store',
-                })
-
-                if (!response.ok) return
-                const body = await response.json() as LogRealtimeResponse
-                if (!cancelled) {
-                    setRealtime(body)
-                    setReceivedLogs(previous => mergeRuntimeLogs(previous, body.logs))
-                }
-            } catch {
-                // Keep the previous feed visible during polling failures.
-            } finally {
-                refreshing = false
-            }
-        }
-
-        void refresh()
-        const interval = window.setInterval(refresh, 4000)
+        const finishSelection = () => { editing.current = false }
+        window.addEventListener('pointerup', finishSelection)
+        window.addEventListener('pointercancel', finishSelection)
         return () => {
-            cancelled = true
-            window.clearInterval(interval)
+            window.removeEventListener('pointerup', finishSelection)
+            window.removeEventListener('pointercancel', finishSelection)
         }
-    }, [id, token, serviceFilter])
-
-    const liveLogs = useMemo(
-        () => serviceFilter === 'all'
-            ? receivedLogs
-            : receivedLogs.filter((log) => log.service === serviceFilter),
-        [receivedLogs, serviceFilter]
-    )
-    const runtimeServices = useMemo(
-        () => (realtime.logs || []).map((log) => log.service).filter(Boolean),
-        [realtime.logs]
-    )
-    const allServices = useMemo(
-        () => Array.from(new Set([
-            ...services.map((service) => service.service),
-            ...runtimeServices,
-            serviceFilter === 'all' ? '' : serviceFilter,
-        ].filter(Boolean))).sort(),
-        [runtimeServices, serviceFilter, services]
-    )
-    const currentLogs = (realtime.logs || []).filter(log => serviceFilter === 'all' || log.service === serviceFilter)
-    const recentErrorCount = currentLogs.filter((log) => log.level === 'error' || log.level === 'fatal').length
-    const generatedAt = realtime.generated_at ? when(realtime.generated_at) : 'Syncing'
-    const errorsPastHour = errorEvents.summary.last_hour || 0
-    const totalErrors = errorEvents.summary.total || 0
-
-    function handleServiceFilter(nextService: string) {
-        setServiceFilter(nextService)
-        const params = new URLSearchParams(searchParams?.toString())
-        if (nextService === 'all') {
-            params.delete('service')
-        } else {
-            params.set('service', nextService)
+    }, [])
+    useEffect(() => {
+        if (!copied) return
+        const timeout = setTimeout(() => setCopied(''), 3000)
+        return () => clearTimeout(timeout)
+    }, [copied])
+    useEffect(() => {
+        if (view === 'errors') return
+        const url = new URL(window.location.href)
+        for (const [key, value] of Object.entries({ service: service === 'all' ? '' : service, search: advanced ? '' : search, table: advanced || table === 'Logs' ? '' : table, kql: advanced ? appliedKql : '', hours: hours === '24' ? '' : hours, severity: view === 'realtime' || severity === 'all' ? '' : severity })) {
+            if (value) url.searchParams.set(key, value)
+            else url.searchParams.delete(key)
         }
-        const query = params.toString()
-        router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
+        window.history.replaceState(null, '', url)
+    }, [view, service, search, table, advanced, appliedKql, hours, severity])
+    useEffect(() => {
+        const identity = JSON.stringify([view, service, search, table, advanced, appliedKql, hours, severity])
+        if (queryIdentity.current !== identity) { setData(null); setError(''); queryIdentity.current = identity }
+        setBusy(false)
+        const controller = new AbortController()
+        let inFlight = false
+        async function load(manual = false) {
+            if (inFlight || (!manual && (pausedUpdates.current || editing.current))) return
+            inFlight = true; setBusy(true)
+            const params = new URLSearchParams({ hours, kql: advanced && appliedKql ? appliedKql : `${table} | take 200` })
+            if (search && !advanced) params.set('search', search)
+            if (service !== 'all') params.set('service', service)
+            if (view === 'realtime') params.set('severity', 'high,critical')
+            else if (severity !== 'all') params.set('severity', severity)
+            if (view === 'dashboard') params.set('stats', '1')
+            try {
+                const response = await fetch(view === 'errors' ? '/api/backend/logs/errors?limit=150' : `/api/backend/logs/search?${params}`, { signal: controller.signal, cache: 'no-store' })
+                const body = await response.json().catch(() => ({}))
+                if (!response.ok) throw new Error(body.error || 'Could not search logs.')
+                if (!controller.signal.aborted && (manual || !pausedUpdates.current)) {
+                    if (view === 'errors') setErrors(body)
+                    else setData(previous => view === 'realtime' && previous && !body.summarize ? { ...body, rows: retainEvents(previous.rows, body.rows) } : body)
+                    setError('')
+                }
+            } catch (cause) { if (!controller.signal.aborted && (manual || !pausedUpdates.current)) setError(cause instanceof Error ? cause.message : 'Could not load logs.') }
+            finally { if (!controller.signal.aborted) setBusy(false); inFlight = false }
+        }
+        // Pause freezes automatic updates; explicit filters, retries and Resume
+        // still load once even while an event's text is selected.
+        const debounce = setTimeout(() => void load(true), 250)
+        const interval = view === 'realtime' || view === 'dashboard' ? setInterval(() => void load(), 5000) : undefined
+        return () => { controller.abort(); clearTimeout(debounce); clearInterval(interval) }
+    }, [view, service, search, table, advanced, appliedKql, hours, severity, refresh])
+    function togglePaused() {
+        pausedUpdates.current = !pausedUpdates.current
+        setPaused(pausedUpdates.current)
+        if (!pausedUpdates.current) setRefresh(value => value + 1)
     }
-
-    function toggleLog(id: string | number) {
-        setExpanded((current) => ({ ...current, [String(id)]: !current[String(id)] }))
+    async function copy(event: Event | ErrorEvent) {
+        try { await navigator.clipboard.writeText(JSON.stringify('normalized' in event ? event.normalized : event, null, 2)); setCopied(event.id) }
+        catch { setCopied(''); setError('Copy failed. Select the event text and copy it manually.') }
     }
-
-    return (
-        <div className='grid gap-5'>
-            <div className={`${dashboardPanelClass} overflow-hidden`} data-logs-controls>
-                <section className='border-b border-ui-border' data-logs-toolbar>
-                    <div className='flex flex-col gap-3 bg-ui-panel px-3 py-1 sm:px-4 lg:flex-row lg:items-center lg:justify-between'>
-                        <div className='flex min-w-0 flex-wrap items-center gap-2 text-sm text-ui-muted'>
-                            <span className='inline-flex items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-2.5 py-1.5 font-semibold text-ui-text'>
-                                <span className={`h-2 w-2 rounded-full ${realtime.runtime_available ? 'bg-ui-success' : 'bg-ui-warning'}`} />
-                                Runtime {realtime.runtime_available ? 'live' : 'reconnecting'}
-                            </span>
-                            <span className='rounded-md border border-ui-border bg-ui-raised px-2.5 py-1.5 font-medium'>Updated {generatedAt}</span>
-                            <select
-                                id='logs-service-filter'
-                                aria-label='Service filter'
-                                data-logs-service-filter
-                                value={serviceFilter}
-                                onChange={(event) => handleServiceFilter(event.target.value)}
-                                className='h-9 w-44 max-w-full rounded-md border border-ui-border bg-ui-raised px-3 text-sm font-medium text-ui-text shadow-sm outline-none transition focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/30'
-                            >
-                                <option value='all'>All services</option>
-                                {allServices.map((service) => (
-                                    <option key={service} value={service}>{displayLogServiceName(service)}</option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div className='inline-flex w-full rounded-md border border-ui-border bg-ui-raised p-1 shadow-sm sm:w-auto' role='tablist' aria-label='Logs view' data-logs-tabs>
-                            {viewOptions.map(({ key, label }) => (
-                                <button
-                                    key={key}
-                                    type='button'
-                                    role='tab'
-                                    aria-selected={view === key}
-                                    data-logs-tab={key}
-                                    onClick={() => setView(key)}
-                                    className={`min-h-9 flex-1 rounded-sm px-3 text-sm font-semibold transition sm:flex-none ${
-                                        view === key ? 'bg-ui-primary text-ui-canvas shadow-sm' : 'text-ui-muted hover:bg-ui-panel hover:text-ui-text'
-                                    }`}
-                                >
-                                    {label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </section>
-
-                <dl className='flex flex-wrap items-center gap-x-6 gap-y-1 border-b border-ui-border px-4 py-1 text-sm leading-5' aria-label='Error summary' data-logs-error-summary>
-                    <div className='flex items-baseline gap-2'>
-                        <dt className='text-ui-muted'>Total errors</dt>
-                        <dd className='font-semibold tabular-nums text-ui-text'>{countFormatter.format(totalErrors)}</dd>
-                    </div>
-                    <div className='flex items-baseline gap-2'>
-                        <dt className='text-ui-muted'>Live error lines</dt>
-                        <dd className='font-semibold tabular-nums text-ui-text'>{countFormatter.format(recentErrorCount)}</dd>
-                    </div>
-                    <div className='flex items-baseline gap-2'>
-                        <dt className='text-ui-muted'>Errors in the past hour</dt>
-                        <dd className='font-semibold tabular-nums text-ui-text'>{countFormatter.format(errorsPastHour)}</dd>
-                    </div>
-                </dl>
-
-                <details className='overflow-hidden' data-logs-metrics-disclosure>
-                    <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-1.5 text-sm font-semibold text-ui-text transition hover:bg-ui-raised sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
-                        <span>Operational counters</span>
-                        <span className='text-xs font-medium text-ui-muted'>{realtime.containers?.length || 0} containers, {currentLogs.length} live lines, {recentErrorCount} live errors</span>
-                    </summary>
-                    <section className='grid gap-3 border-t border-ui-border bg-ui-panel p-3 sm:grid-cols-2 xl:grid-cols-4' data-logs-metrics>
-                        <SummaryCard icon={<Server className='h-4 w-4' />} label='Runtime containers' value={realtime.containers?.length || 0} note='Live source' />
-                        <SummaryCard icon={<Activity className='h-4 w-4' />} label='Live log lines' value={currentLogs.length} note='Rolling feed' />
-                        <SummaryCard icon={<AlertTriangle className='h-4 w-4' />} label='Live errors' value={recentErrorCount} note='Error and fatal' />
-                        <SummaryCard icon={<ShieldAlert className='h-4 w-4' />} label='Errors' value={totalErrors} note={`${countFormatter.format(errorsPastHour)} in the last hour`} />
-                    </section>
-                </details>
-            </div>
-
-            {(!realtime.runtime_available || realtime.native_available === false) && (
-                <section className='grid gap-2' data-logs-stream-alerts>
-                    {!realtime.runtime_available && (
-                        <p className='rounded-md border border-ui-warning bg-ui-warning/15 px-4 py-3 text-sm font-medium text-ui-warning'>
-                            Runtime stream is reconnecting{realtime.unavailable_reason ? `: ${realtime.unavailable_reason}` : '.'}
-                        </p>
-                    )}
-                    {realtime.native_available === false && (
-                        <p className='rounded-md border border-ui-warning bg-ui-warning/15 px-4 py-3 text-sm font-medium text-ui-warning'>
-                            Native host log stream is reconnecting.
-                        </p>
-                    )}
-                </section>
-            )}
-
-            {view === 'dashboard' && (
-                <section className='grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]'>
-                    <LogFeedCard key={serviceFilter} title='Realtime' icon={<TerminalSquare className='h-4 w-4 text-ui-success' />} logs={liveLogs} empty='Container log lines stream in as apps write output.' expanded={expanded} onToggle={toggleLog} />
-                    <section className='grid gap-4'>
-                        <div className={`${dashboardPanelClass} p-4`}>
-                            <div className='flex items-center justify-between gap-3'>
-                                <h2 className='text-base font-semibold text-ui-text'>Most active services</h2>
-                                <span className='text-xs font-medium text-ui-muted'>{services.length} indexed</span>
-                            </div>
-                            <div className='mt-3 grid gap-1.5' data-logs-service-summary>
-                                {services.slice(0, 8).map((service) => (
-                                    <div key={service.service} className='flex items-center justify-between gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2'>
-                                        <div className='min-w-0'>
-                                            <p className='truncate text-sm font-medium text-ui-text'>{displayLogServiceName(service.service)}</p>
-                                            <p className='mt-0.5 text-xs text-ui-muted'>{when(service.last_seen)}</p>
-                                        </div>
-                                        <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-0.5 text-xs font-semibold text-ui-text'>{service.entries}</span>
-                                    </div>
-                                ))}
-                                {!services.length && (
-                                    <div className='rounded-md border border-dashed border-ui-border bg-ui-raised px-3 py-6 text-center text-sm text-ui-muted'>
-                                        Stored service counters update as error records are indexed.
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                        <LogFeedCard title='Errors' icon={<Database className='h-4 w-4 text-ui-warning' />} logs={storedLogs.slice(0, 8)} empty='Stored error stream is clear.' expanded={expanded} onToggle={toggleLog} />
-                    </section>
-                </section>
-            )}
-
-            {view === 'errors' && (
-                <ErrorCodesPanel events={errorEvents} expanded={expanded} onToggle={toggleLog} />
-            )}
-
-            {view === 'live' && (
-                <LogFeedCard key={serviceFilter} title='Realtime' icon={<TerminalSquare className='h-4 w-4 text-ui-success' />} logs={liveLogs} empty='Container log lines stream in as apps write output.' expanded={expanded} onToggle={toggleLog} />
-            )}
-
-            {view === 'stored' && (
-                <LogFeedCard title='Latest stored error records' icon={<Database className='h-4 w-4 text-ui-warning' />} logs={storedLogs} empty='Stored error stream is clear.' tall expanded={expanded} onToggle={toggleLog} />
-            )}
-        </div>
-    )
-}
-
-function ErrorCodesPanel({
-    events,
-    expanded,
-    onToggle,
-}: {
-    events: ErrorEventsResponse
-    expanded: Record<string, boolean>
-    onToggle: (id: string | number) => void
-}) {
-    const topCodes = events.summary.code_counts.slice(0, 8)
-    const topSurfaces = events.summary.surface_counts.slice(0, 8)
-
-    return (
-        <section className='grid gap-4'>
-            <div className='grid gap-3 sm:grid-cols-2'>
-                <SummaryCard icon={<Bug className='h-4 w-4' />} label='Scans against projects' value={events.summary.project_scans} note='404 probes folded out of errors' />
-                <SummaryCard icon={<ShieldAlert className='h-4 w-4' />} label='Scans against shares' value={events.summary.share_scans} note='Share and tree 404 probes' />
-            </div>
-
-            <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-4'>
-                <SummaryCard icon={<Bug className='h-4 w-4' />} label='Errors' value={events.summary.total} note='API, auth, and website' />
-                <SummaryCard icon={<Activity className='h-4 w-4' />} label='Last hour' value={events.summary.last_hour} note='Fresh incidents' />
-                <SummaryCard icon={<AlertTriangle className='h-4 w-4' />} label='Server errors' value={events.summary.server_errors} note='HTTP 5xx' />
-                <SummaryCard icon={<ShieldAlert className='h-4 w-4' />} label='Client errors' value={events.summary.client_errors} note='HTTP 4xx' />
-            </div>
-
-            <section className='grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(16rem,0.34fr)]'>
-                <div className={`${dashboardPanelClass} min-w-0 overflow-hidden`} data-logs-error-table>
-                    <div className='border-b border-ui-border px-4 py-3'>
-                        <h2 className='text-base font-semibold text-ui-text'>Recent error codes</h2>
-                        <p className='mt-1 text-xs leading-5 text-ui-muted'>Showing {events.errors.length} recent rows from {events.summary.total} errors. Select a row for context.</p>
-                    </div>
-                    <div className='overflow-x-auto'>
-                        <table className='min-w-full table-fixed divide-y divide-ui-border text-left text-sm'>
-                            <thead className='bg-ui-raised text-xs text-ui-muted'>
-                                <tr>
-                                    <th className='w-40 px-3 py-2 font-semibold'>Time</th>
-                                    <th className='w-24 px-3 py-2 font-semibold'>Surface</th>
-                                    <th className='w-20 px-3 py-2 font-semibold'>Status</th>
-                                    <th className='px-3 py-2 font-semibold'>Code</th>
-                                    <th className='w-[28%] px-3 py-2 font-semibold'>Route</th>
-                                    <th className='w-28 px-3 py-2 font-semibold'>User</th>
-                                </tr>
-                            </thead>
-                            <tbody className='divide-y divide-ui-border'>
-                                {events.errors.map((event) => {
-                                    const isOpen = expanded[event.id] ?? false
-
-                                    return (
-                                        <Fragment key={event.id}>
-                                            <tr className='align-top hover:bg-ui-raised/70'>
-                                                <td className='whitespace-nowrap px-3 py-2 text-xs text-ui-muted'>{when(event.created_at)}</td>
-                                                <td className='px-3 py-2'>
-                                                    <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-0.5 text-xs font-semibold text-ui-text'>{event.surface || event.source}</span>
-                                                </td>
-                                                <td className='px-3 py-2'>
-                                                    <span className={`rounded-md border px-2 py-0.5 text-xs font-semibold ${event.status_code >= 500 ? 'border-ui-danger bg-ui-danger/15 text-ui-danger' : 'border-ui-warning bg-ui-warning/15 text-ui-warning'}`}>
-                                                        {event.status_code || 'unreported'}
-                                                    </span>
-                                                </td>
-                                                <td className='px-3 py-2'>
-                                                    <button
-                                                        type='button'
-                                                        onClick={() => onToggle(event.id)}
-                                                        aria-expanded={isOpen}
-                                                        className='block max-w-full break-all text-left font-mono text-xs text-ui-text hover:text-ui-primary'
-                                                    >
-                                                        {event.error_code || 'uncategorized'}
-                                                    </button>
-                                                </td>
-                                                <td className='break-all px-3 py-2 font-mono text-xs text-ui-muted'>{event.method} {event.path}</td>
-                                                <td className='break-all px-3 py-2 text-xs text-ui-muted'>{event.user_id || 'anonymous'}</td>
-                                            </tr>
-                                            {isOpen && (
-                                                <tr className='bg-ui-raised/60'>
-                                                    <td colSpan={6} className='px-3 py-2'>
-                                                        <pre className='max-h-56 overflow-auto whitespace-pre-wrap break-all rounded-md border border-ui-border bg-ui-panel p-3 font-mono text-xs leading-5 text-ui-text'>
-                                                            {[
-                                                                event.message || 'No message captured',
-                                                                event.request_id ? `request_id=${event.request_id}` : '',
-                                                                `${event.method} ${event.path}`,
-                                                            ].filter(Boolean).join('\n')}
-                                                        </pre>
-                                                    </td>
-                                                </tr>
-                                            )}
-                                        </Fragment>
-                                    )
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                    {!events.errors.length && (
-                        <div className='grid min-h-48 place-content-center border-t border-ui-border px-5 text-center text-sm text-ui-muted'>
-                            No tracked error codes in the current window.
-                        </div>
-                    )}
+    const toggle = (id: string | number) => setExpanded(previous => ({ ...previous, [id]: !previous[id] }))
+    const serviceOptions = [...new Set([...initialServices.map(item => item.service), ...(data?.services.map(item => item.service) || []), ...(service === 'all' ? [] : [service])])].sort()
+    return <div className='grid min-w-0 gap-4'>
+        <header className='flex flex-wrap items-center justify-between gap-3'>
+            <div><h1 className='text-2xl font-semibold'>{view === 'dashboard' ? 'Logs' : view === 'realtime' ? 'Realtime' : view === 'errors' ? 'Errors' : 'Search logs'}</h1><p className='mt-1 text-sm text-ui-muted'>{view === 'realtime' ? 'High and critical events checked by Mill. Expand an event to investigate.' : view === 'errors' ? 'Application errors, response codes, and request details.' : 'Search structured events and investigate detections across your services and hosts.'}</p></div>
+            <nav aria-label='Log pages' className='flex flex-wrap gap-2'>{[['Dashboard', '/logs'], ['Realtime', '/logs/realtime'], ['Search', '/logs/search'], ['Errors', '/logs/errors'], ['Traffic', '/traffic']].map(([label, href]) => <Link key={href} href={href} aria-current={pathname === href || pathname === `/dashboard${href}` ? 'page' : undefined} className={`${fieldClass} ${pathname === href ? 'font-semibold text-ui-primary' : ''}`}>{label}</Link>)}</nav>
+        </header>
+        {error && <div role='alert' className='flex flex-wrap items-center justify-between gap-2 rounded-lg border border-ui-danger p-3 text-sm text-ui-danger'><span>{error}</span><button type='button' className={fieldClass} onClick={() => setRefresh(value => value + 1)}>Retry</button></div>}
+        {view === 'errors' ? <><div className='flex items-center justify-between gap-3 text-xs text-ui-muted'><span role='status'>{busy ? 'Refreshing…' : copied ? 'Event copied' : 'Recent application errors'}</span><button type='button' className={fieldClass} disabled={busy} onClick={() => setRefresh(value => value + 1)}>Refresh errors</button></div><ErrorsPanel events={errors} expanded={expanded} onToggle={toggle} onCopy={event => void copy(event)} /></> : <>
+            <section className={`${dashboardPanelClass} grid gap-3 p-4`} aria-label='Log search' data-logs-toolbar>
+                <div className='flex flex-wrap items-center gap-3'>
+                    <label className='flex min-w-48 flex-1 items-center gap-2'><Search size={16} aria-hidden /><input type='search' aria-label='Search logs' placeholder='Search messages, commands, hosts…' value={search} onChange={event => setSearch(event.target.value)} disabled={advanced} className={`${fieldClass} w-full`} /></label>
+                    <select aria-label='Service' value={service} onChange={event => setService(event.target.value)} className={`${fieldClass} max-w-full`} data-logs-service-filter><option value='all'>All services</option>{serviceOptions.map(value => <option key={value}>{value}</option>)}</select>
+                    {!advanced && <select aria-label='Log type' value={table} onChange={event => setTable(event.target.value)} className={fieldClass}>{logTables.map(value => <option key={value} value={value}>{value === 'Logs' ? 'All log types' : value}</option>)}</select>}
+                    <select aria-label='Time range' value={hours} onChange={event => setHours(event.target.value)} className={fieldClass}>{[['1','Last hour'],['24','Last 24 hours'],['168','Last 7 days'],['720','Last 30 days'],['2160','Last 90 days']].map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select>
+                    {view !== 'realtime' && <select aria-label='Severity' value={severity} onChange={event => setSeverity(event.target.value)} className={fieldClass}><option value='all'>All severities</option>{['low','medium','high','critical'].map(value => <option key={value}>{value}</option>)}</select>}
+                    <label className='flex items-center gap-2 text-sm'><input type='checkbox' checked={advanced} onChange={event => { setAdvanced(event.target.checked); if (event.target.checked) setAppliedKql(kql) }} />Advanced KQL</label>
+                    {view === 'realtime' && <button type='button' onClick={togglePaused} className={fieldClass}>{paused ? 'Resume' : 'Pause'}</button>}
                 </div>
-
-                <section className='grid min-w-0 content-start gap-4'>
-                    <BreakdownCard title='Top codes' rows={topCodes.map(row => ({ label: row.error_code || 'uncategorized', count: row.count }))} />
-                    <BreakdownCard title='Top surfaces' rows={topSurfaces.map(row => ({ label: row.surface || 'api', count: row.count }))} />
-                </section>
+                {advanced && <form onSubmit={event => { event.preventDefault(); setAppliedKql(kql); setRefresh(value => value + 1) }} className='grid gap-2'>
+                    <textarea aria-label='KQL query' value={kql} onChange={event => setKql(event.target.value)} rows={3} spellCheck={false} className={`${fieldClass} min-w-0 font-mono`} />
+                    <button className='justify-self-start rounded-lg bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas'>Run query</button>
+                    {kql !== appliedKql && <p className='text-xs text-ui-warning'>Query edited. Run it to update the results.</p>}
+                    <details className='text-xs text-ui-muted'><summary className='cursor-pointer'>KQL syntax and tables</summary><p className='mt-2'>Tables: Logs, ProcessLogs, SigninLogs, ApplicationLogs, HttpLogs, SystemLogs. Supported KQL subset: where, project, order by, take (1–500), summarize count() by. Conditions: ==, !=, &gt;, &gt;=, &lt;, &lt;=, contains, has, startswith, endswith, in, and, or, not, parentheses and ago(24h). Other operators are rejected.</p><p className='mt-2'>Put where before order by. After project or summarize, only take is supported. Put take last. Fields: {Object.keys(fieldNames).join(', ')}. The selected time range, service and severity filters always apply.</p><pre className='mt-2 whitespace-pre-wrap'>ProcessLogs | where CommandLine contains &quot;whoami&quot; | project TimeGenerated, Host, CommandLine</pre></details>
+                </form>}
             </section>
-        </section>
-    )
-}
-
-function BreakdownCard({ title, rows }: { title: string, rows: Array<{ label: string, count: number }> }) {
-    return (
-        <div className={`${dashboardPanelClass} min-w-0 p-4`}>
-            <h3 className='text-base font-semibold text-ui-text'>{title}</h3>
-            <div className='mt-3 grid gap-1.5'>
-                {rows.map((row) => (
-                    <div key={row.label} className='flex min-w-0 items-center justify-between gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2'>
-                        <span className='min-w-0 break-all font-mono text-xs text-ui-text'>{row.label}</span>
-                        <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-0.5 text-xs font-semibold text-ui-muted'>{row.count}</span>
+            {data?.processing?.last_error && <p role='alert' className='text-sm text-ui-danger'>Mill processing is delayed: {data.processing.last_error}</p>}
+            {data?.processing?.sources?.some(isCatchingUp) && <p role='status' className='text-sm text-ui-warning'>Historical logs are still being checked. Search results and counters are incomplete until catch-up finishes.</p>}
+            {!!data?.processing?.skipped_events && <p role='status' className='text-sm text-ui-warning'>{data.processing.skipped_events.toLocaleString()} events could not be assigned to an active organization and were excluded from detection.</p>}
+            {data && !data.processing && !busy && <p role='status' className='text-sm text-ui-warning'>Waiting for the log processor to check in.</p>}
+            {view === 'dashboard' ? <>
+                <section className='grid gap-3 sm:grid-cols-4' aria-label='Events by severity' data-logs-metrics>{['low','medium','high','critical'].map(value => <Link key={value} href={`/logs/search?${new URLSearchParams({ hours, ...(service !== 'all' ? { service } : {}), ...(advanced && appliedKql ? { kql: appliedKql } : { table, search }), severity: value })}`} className={`${dashboardPanelClass} p-4`} data-logs-metric-card><p className='text-sm capitalize text-ui-muted'>{value}</p><p className='mt-2 text-2xl font-semibold tabular-nums'>{data ? (data.counts.find(item => item.severity === value)?.count || 0).toLocaleString() : '—'}</p></Link>)}</section>
+                <div className={`${dashboardPanelClass} flex flex-wrap gap-4 p-5`}><Link className='text-sm font-semibold text-ui-primary' href='/logs/realtime'>Investigate high and critical activity →</Link><Link className='text-sm font-semibold text-ui-primary' href='/logs/errors'>Review application errors →</Link></div>
+                <details className={`${dashboardPanelClass} p-4`}><summary className='cursor-pointer text-sm font-semibold'>Operational counters</summary><p className='mt-3 text-xs text-ui-muted'>Most active services in the selected time range</p><dl className='mt-2 grid gap-2'>{data?.services.map(item => <div key={item.service} className='flex justify-between gap-3 text-sm'><dt>{item.service}</dt><dd>{item.count.toLocaleString()}</dd></div>)}</dl></details>
+            </> : <section className={`${dashboardPanelClass} min-w-0 overflow-hidden`} aria-label='Log events'>
+                <div className='flex flex-wrap justify-between gap-2 border-b border-ui-border p-3 text-xs text-ui-muted'><span>{data?.rows.length || 0} results{data && data.rows.length === data.limit ? ` · limited to ${data.limit}; narrow your search or use take up to 500` : ''}</span><span role='status'>{busy ? 'Searching…' : paused ? 'Paused' : view === 'realtime' ? 'Updates every 5 seconds' : 'Results'}{copied ? ' · Event copied' : ''}</span></div>
+                <EventFeed rows={data?.rows || []}>{data?.summarize ? <table className='w-full text-left text-sm'><thead><tr><th className='p-3'>{data.summarize}</th><th className='p-3'>Count</th></tr></thead><tbody>{(data.rows as unknown as Array<{value: string,count: number}>).map(row => <tr key={row.value}><td className='p-3'>{row.value}</td><td className='p-3'>{row.count}</td></tr>)}</tbody></table> : data?.rows.map(event => <article key={event.id} className='select-text border-b border-ui-border p-4 last:border-b-0' onPointerDown={() => { editing.current = true }} onPointerUp={() => { editing.current = false }} onPointerLeave={() => { editing.current = false }}>
+                    <div className='flex flex-wrap items-start justify-between gap-3'>
+                        <button type='button' onClick={() => toggle(event.id)} aria-expanded={!!expanded[event.id]} aria-controls={`log-details-${event.id}`} className='flex min-w-0 flex-wrap items-center gap-2 break-all text-left text-sm font-semibold'><ChevronDown size={16} aria-hidden className={expanded[event.id] ? '' : '-rotate-90'} />{event.normalized.service}<span className='font-normal text-ui-muted'>{event.normalized.host}</span></button>
+                        <div className='flex items-center gap-2'><span className={`rounded-md px-2 py-1 text-xs font-semibold capitalize ${colors[event.normalized.severity]}`}>{event.normalized.severity}</span><button type='button' aria-label='Copy event JSON' onClick={() => void copy(event)} className='rounded-md p-1.5 text-ui-muted hover:text-ui-primary'><Copy size={16} /></button></div>
                     </div>
-                ))}
-                {!rows.length && <p className='rounded-md border border-dashed border-ui-border p-3 text-sm text-ui-muted'>No error-code rows in this window.</p>}
-            </div>
-        </div>
-    )
-}
-
-function SummaryCard({ icon, label, value, note }: { icon: ReactNode, label: string, value: number, note: string }) {
-    return (
-        <article className={`${dashboardPanelClass} p-3 sm:p-4`} data-logs-metric-card>
-            <div className='flex items-center justify-between gap-3 text-ui-muted'>
-                <span className='text-xs font-medium'>{label}</span>
-                <span className='grid h-8 w-8 place-items-center rounded-md border border-ui-border bg-ui-raised text-ui-muted'>{icon}</span>
-            </div>
-            <p className='mt-2 text-xl font-semibold text-ui-text'>{countFormatter.format(value)}</p>
-            <p className='mt-1 text-xs font-medium text-ui-muted'>{note}</p>
-        </article>
-    )
-}
-
-function LogFeedCard({
-    title,
-    icon,
-    logs,
-    empty,
-    tall = false,
-    expanded,
-    onToggle,
-}: {
-    title: string
-    icon: ReactNode
-    logs: Array<ServiceLog | RuntimeLog>
-    empty: string
-    tall?: boolean
-    expanded: Record<string, boolean>
-    onToggle: (id: string | number) => void
-}) {
-    return (
-        <section className={`${dashboardPanelClass} overflow-hidden`} data-logs-feed={title}>
-            <div className='flex items-center justify-between gap-3 border-b border-ui-border px-4 py-3 text-ui-text'>
-                <div className='flex min-w-0 items-center gap-2'>
-                    {icon}
-                    <h2 className='truncate text-base font-semibold'>{title}</h2>
-                </div>
-                <span className='shrink-0 text-xs font-medium text-ui-muted'>{logs.length} rows</span>
-            </div>
-            <LogFeedRows logs={logs} tall={tall}>
-                {logs.map((log) => {
-                    const key = logKey(log)
-                    const isOpen = expanded[key] ?? false
-                    const hasMetadata = 'metadata' in log && Object.keys(log.metadata || {}).length > 0
-
-                    return (
-                        <article key={key} className='min-w-0 bg-ui-panel px-3 py-2.5 transition hover:bg-ui-raised sm:px-4' data-logs-row>
-                            <div className='grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start'>
-                                <button
-                                    type='button'
-                                    onClick={() => onToggle(key)}
-                                    className='min-w-0 text-left'
-                                    aria-expanded={isOpen}
-                                >
-                                    <div className='flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ui-muted'>
-                                        <span className='font-semibold text-ui-text'>{displayLogServiceName(log.service)}</span>
-                                        {'host' in log && log.host ? <span>{log.host}</span> : null}
-                                        {'source' in log && log.source ? <span>{log.source}</span> : null}
-                                        <span>{when(log.created_at)}</span>
-                                    </div>
-                                    <pre className='mt-1 whitespace-pre-wrap break-all font-mono text-xs leading-5 text-ui-text'>{log.message}</pre>
-                                    {hasMetadata && (
-                                        <p className='mt-1 text-xs text-ui-muted'>
-                                            {isOpen ? 'Hide request context' : 'Show request context'}
-                                        </p>
-                                    )}
-                                </button>
-                                <span className={`w-fit rounded-md border px-2 py-0.5 text-xs font-semibold ${
-                                    log.level === 'error' || log.level === 'fatal'
-                                        ? 'border-ui-danger bg-ui-danger/15 text-ui-danger'
-                                        : log.level === 'warn'
-                                            ? 'border-ui-warning bg-ui-warning/15 text-ui-warning'
-                                            : 'border-ui-border bg-ui-panel text-ui-text'
-                                }`}>
-                                    {log.level}
-                                </span>
-                            </div>
-                            {isOpen && hasMetadata && (
-                                <div className='mt-2 overflow-hidden rounded-md border border-ui-border bg-ui-raised'>
-                                    <div className='border-b border-ui-border px-3 py-2 text-xs font-semibold text-ui-muted'>
-                                        Request context
-                                    </div>
-                                    <pre className='max-w-full overflow-auto whitespace-pre-wrap break-all p-3 font-mono text-xs leading-5 text-ui-text'>
-                                        {JSON.stringify(log.metadata, null, 2)}
-                                    </pre>
-                                </div>
-                            )}
-                        </article>
-                    )
-                })}
-                {!logs.length && (
-                    <div className='grid min-h-48 place-content-center bg-ui-panel px-4 text-center text-sm text-ui-muted'>
-                        {empty}
-                    </div>
-                )}
-            </LogFeedRows>
-        </section>
-    )
-}
-
-// Capture the scroll offset immediately before React inserts new rows. Native
-// scroll anchoring is disabled here so browsers do not apply the offset twice.
-class LogFeedRows extends Component<{ logs: Array<ServiceLog | RuntimeLog>, tall: boolean, children: ReactNode }> {
-    private viewport = createRef<HTMLDivElement>()
-
-    getSnapshotBeforeUpdate(previous: Readonly<{ logs: Array<ServiceLog | RuntimeLog> }>) {
-        const node = this.viewport.current
-        return node && previous.logs !== this.props.logs && node.scrollTop > 0
-            ? { top: node.scrollTop, height: node.scrollHeight }
-            : null
-    }
-
-    componentDidUpdate(_previous: unknown, _state: unknown, snapshot: { top: number, height: number } | null) {
-        const node = this.viewport.current
-        if (node && snapshot) node.scrollTop = snapshot.top + node.scrollHeight - snapshot.height
-    }
-
-    render() {
-        return <div ref={this.viewport} data-logs-scroll style={{ overflowAnchor: 'none' }}
-            className={`divide-y divide-ui-border ${this.props.tall ? '' : 'max-h-[42rem] overflow-auto'}`}>
-            {this.props.children}
-        </div>
-    }
+                    <p className='mt-1 text-xs text-ui-muted'>{new Date(event.event_timestamp).toLocaleString()} · {event.normalized.log_type} · Original level: {event.normalized.level}</p>
+                    <pre className='mt-2 select-text whitespace-pre-wrap wrap-break-word font-mono text-xs leading-5'>{data.projection ? JSON.stringify(projected(event, data.projection), null, 2) : event.normalized.process?.command_line || event.normalized.message}</pre>
+                    {!!event.normalized.detections?.length && <div className='mt-2 flex flex-wrap gap-2'>{event.normalized.detections.map(rule => <Link key={rule.rule_id} href={`/mill/rules/${encodeURIComponent(rule.rule_id)}`} className='text-xs font-medium text-ui-primary'>{rule.summary}</Link>)}</div>}
+                    {expanded[event.id] && <div id={`log-details-${event.id}`} className='mt-3 rounded-md border border-ui-border bg-ui-raised p-3'><p className='mb-2 text-xs text-ui-muted'>{typeof event.normalized.rules_checked === 'number' ? `Mill checked ${event.normalized.rules_checked} enabled rules. ` : ''}Full event and detection evidence:</p><pre className='max-h-96 select-text overflow-auto whitespace-pre-wrap wrap-break-word font-mono text-xs'>{JSON.stringify(event.normalized, null, 2)}</pre></div>}
+                </article>)}
+                </EventFeed>
+                {!busy && !data?.rows.length && !error && <p className='p-6 text-sm text-ui-muted'>No events match this search.</p>}
+            </section>}
+        </>}
+    </div>
 }

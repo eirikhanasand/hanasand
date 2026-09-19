@@ -32,7 +32,7 @@ import {
 import type { MailMessageSummary, MailOverview } from '@/utils/mail/types'
 import { DashboardPage, DashboardPanel, dashboardPanelClass } from '@/components/dashboard/ui'
 import ErrorNotice from '@/components/error/errorNotice'
-import { Composer, MessageRow } from './mailWorkspaceParts'
+import { Composer, MessageRow, type MailQuickAction } from './mailWorkspaceParts'
 import {
     ActionIconButton,
     AttachmentPreview,
@@ -121,7 +121,8 @@ export default function MailWorkspace({ mailboxUser }: Props) {
             if (version !== requestVersion.current) return
             const switched = next.mailboxUser !== selection.current.user || next.selectedMailboxId !== selection.current.mailbox
             setOverview(current => {
-                if (switched || params.messageId === null || !current || current.messages.length <= 50) return next
+                if (version !== requestVersion.current) return current
+                if (params.messageId === null || !current || current.mailboxUser !== next.mailboxUser || current.selectedMailboxId !== next.selectedMailboxId || current.messages.length <= 50) return next
                 const ids = new Set(next.messages.map(message => message.id))
                 const boundary = current.messages.findIndex(message => message.id === next.messages.at(-1)?.id)
                 const tail = current.messages.slice(boundary >= 0 ? boundary + 1 : 50)
@@ -160,6 +161,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
 
     const loadMore = useCallback(async () => {
         if (!overview?.nextCursor || paginationPending.current || requestPending.current) return
+        if (overview.mailboxUser !== selection.current.user || overview.selectedMailboxId !== selection.current.mailbox) return
         const version = requestVersion.current
         paginationPending.current = true
         setLoadingMore(true)
@@ -168,7 +170,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
             const page = await fetchMailOverview({ mailboxUser: overview.mailboxUser, mailboxId: overview.selectedMailboxId, after: overview.nextCursor })
             if (version !== requestVersion.current) return
             setOverview(current => {
-                if (!current) return current
+                if (!current || version !== requestVersion.current || current.mailboxUser !== overview.mailboxUser || current.selectedMailboxId !== overview.selectedMailboxId) return current
                 const ids = new Set(current.messages.map(message => message.id))
                 return { ...current, messages: [...current.messages, ...page.messages.filter(message => !ids.has(message.id))], nextCursor: page.nextCursor }
             })
@@ -179,6 +181,21 @@ export default function MailWorkspace({ mailboxUser }: Props) {
             setLoadingMore(false)
         }
     }, [overview])
+
+    async function quickAction(message: MailMessageSummary, action: MailQuickAction) {
+        if (!overview || loading) return
+        if (action === 'reply' || action === 'replyAll' || action === 'forward') {
+            const version = requestVersion.current
+            try {
+                const detail = await fetchMailOverview({ mailboxUser: overview.mailboxUser, mailboxId: overview.selectedMailboxId, messageId: message.id })
+                if (version !== requestVersion.current) return
+                if (!detail.selectedMessage) throw new Error('This message is no longer available.')
+                setComposer(composeFromReply(action, detail.selectedMessage, overview.mailboxAddress))
+            } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to open message.') }
+        } else {
+            await runAction(message.id, overview, setError, load, action)
+        }
+    }
 
     useEffect(() => {
         const target = nextPageTrigger.current
@@ -429,7 +446,9 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                     <div className='grid min-w-0 grid-cols-1 gap-1.5'>
                         {filteredMessages.map(message => (
                             <MessageRow
-                                key={message.id}
+                                key={`${overview?.mailboxUser}:${message.id}`}
+                                canSend={overview?.actor.canSend}
+                                onAction={action => void quickAction(message, action)}
                                 message={message}
                                 active={selectedMessageId === message.id}
                                 onClick={() => {

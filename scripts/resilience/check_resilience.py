@@ -5,6 +5,14 @@ root = pathlib.Path(__file__).parent
 spec = importlib.util.spec_from_file_location('monitor', root / 'monitor.py')
 monitor = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(monitor)
+
+# Lost WAL stays lost through a failed sample; only caught-up replication clears it.
+lost_slot = 'hanasand_ovh_standby'
+assert monitor.restore_slots({'slots': [{'slot': lost_slot, 'walStatus': 'lost'}]}, []) == [lost_slot]
+assert monitor.restore_slots({}, [lost_slot]) == [lost_slot]
+assert monitor.restore_slots({'slots': []}, [lost_slot]) == [lost_slot]
+assert monitor.restore_slots({'slots': [{'slot': lost_slot, 'walStatus': 'reserved', 'active': True, 'lagBytes': 2000000}]}, [lost_slot]) == [lost_slot]
+assert monitor.restore_slots({'slots': [{'slot': lost_slot, 'walStatus': 'reserved', 'active': True, 'lagBytes': 0}]}, [lost_slot]) == []
 service = {'id': 'api', 'name': 'API', 'instances': [
     {'id': 'inspur-api-1', 'site': 'inspur', 'endpoint': 'https://api.hanasand.com'},
     {'id': 'inspur-api-2', 'site': 'inspur', 'endpoint': 'https://api.hanasand.com'},

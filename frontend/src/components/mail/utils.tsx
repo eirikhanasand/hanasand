@@ -108,7 +108,9 @@ export async function runAction(
 ) {
     try {
         await messageAction(messageId, { mailboxUser: overview.mailboxUser, action })
-        await load({ silent: true })
+        await load(['archive', 'trash', 'junk', 'ham', 'restore'].includes(action)
+            ? { silent: true, messageId: null }
+            : { silent: true })
     } catch (cause) {
         setError(cause instanceof Error ? cause.message : 'Unable to update message.')
     }

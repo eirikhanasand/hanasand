@@ -1,212 +1,90 @@
-import { strict as assert } from 'node:assert'
+import assert from 'node:assert/strict'
 import { mkdir, writeFile } from 'node:fs/promises'
-import path from 'node:path'
-import { chromium } from '@playwright/test'
+import { chromium, expect as playwrightExpect } from '@playwright/test'
 
-const viewports = [
-    { name: 'desktop', width: 1440, height: 1000 },
-    { name: 'mobile', width: 390, height: 844 },
+const expect = playwrightExpect.configure({ timeout: 30000 })
+const outDir = process.argv.find(arg => arg.startsWith('--out-dir='))?.slice(10) || '/tmp/hanasand-logs-ui'
+const base = 'http://127.0.0.1:3031'
+const timestamp = new Date().toISOString()
+const rows = [
+    { id: 'proof-whoami', event_timestamp: timestamp, normalized: { timestamp, log_type: 'ProcessLogs', severity: 'high', level: 'info', service: 'audit', host: 'inspur', message: 'Process executed', process: { executable: '/usr/bin/whoami', command_line: 'whoami' }, rules_checked: 105, detections: [{ rule_id: 'recon.whoami', severity: 'high', summary: 'Identity reconnaissance' }] } },
+    { id: 'proof-critical', event_timestamp: timestamp, normalized: { timestamp, log_type: 'ProcessLogs', severity: 'critical', level: 'info', service: 'audit', host: 'ovh', message: 'Synthetic detection evidence', process: { executable: '/usr/bin/curl', command_line: `curl https://example.invalid/BloodHound.zip?test=${'a'.repeat(180)}` }, rules_checked: 105, detections: [{ rule_id: 'tool.bloodhound', severity: 'critical', summary: 'BloodHound download' }] } },
 ]
-
-const colorSchemes = ['dark', 'light']
-
-const authFixture = {
-    header: 'local-dashboard-render-proof',
-    id: 'dashboard-render-proof-user',
-    name: 'Logs UI Proof',
-    token: 'local-dashboard-render-proof-token',
-    roles: [{ id: 'admin' }, { id: 'system_admin' }],
-}
-
-function parseArgs(argv) {
-    const options = {
-        baseUrl: 'http://127.0.0.1:3000',
-        outDir: '/tmp/hanasand-logs-ui',
-        jsonPath: '',
+const errors = { generated_at: timestamp, errors: [{ id: 'proof-error', created_at: timestamp, source: 'api', service: 'api', surface: 'api', method: 'GET', path: '/api/example', status_code: 500, error_code: 'EXAMPLE_FAILURE', message: 'Example request failed', request_id: 'proof-request', user_id: '', level: 'error' }], summary: { total: 1, last_hour: 1, server_errors: 1, client_errors: 0, status_counts: [], surface_counts: [{ surface: 'api', count: 1 }], code_counts: [{ error_code: 'EXAMPLE_FAILURE', count: 1 }], project_scans: 0, share_scans: 0 } }
+// Real Next routes, styles and backend proxy; only the API is an isolated fixture.
+const api = Bun.serve({ port: 0, fetch(request) {
+    const url = new URL(request.url)
+    if (url.pathname.includes('/auth/token/')) return Response.json({ roles: [{ id: 'system_admin' }, { id: 'admin' }] })
+    if (url.pathname.includes('/user/')) return Response.json({ id: 'dashboard-render-proof-user', username: 'proof', name: 'Logs proof' })
+    if (url.pathname === '/api/organizations') return Response.json({ organizations: [] })
+    if (url.pathname === '/api/logs/services') return Response.json({ services: [{ service: 'audit', entries: 2, last_seen: timestamp }, { service: 'api', entries: 1, last_seen: timestamp }] })
+    if (url.pathname === '/api/logs/errors') return Response.json(errors)
+    if (url.pathname === '/api/logs/search') return Response.json({ rows, counts: [{ severity: 'low', count: 256 }, { severity: 'medium', count: 8 }, { severity: 'high', count: 1 }, { severity: 'critical', count: 1 }], services: [{ service: 'audit', count: 2 }, { service: 'api', count: 264 }], processing: { updated_at: timestamp }, limit: 200 })
+    return Response.json({})
+} })
+const dev = Bun.spawn(['node', './node_modules/.bin/next', 'dev', '--webpack', '-p', '3031'], {
+    env: { ...process.env, FRONTEND_AUTH_API: `${api.url}api`, FRONTEND_INTERNAL_API: `${api.url}api`, TI_SCRAPER_API_BASE: String(api.url), NEXT_DIST_DIR: '.next' },
+    stdout: 'ignore', stderr: 'inherit',
+})
+const report = []
+let browser
+try {
+    for (let attempt = 0; attempt < 120; attempt++) {
+        if (dev.exitCode !== null) throw new Error('Logs proof frontend failed to start')
+        if (await fetch(base).then(() => true).catch(() => false)) break
+        await Bun.sleep(500)
     }
-    for (const arg of argv) {
-        if (arg.startsWith('--base-url=')) options.baseUrl = arg.slice('--base-url='.length).replace(/\/$/, '')
-        if (arg.startsWith('--out-dir=')) options.outDir = arg.slice('--out-dir='.length)
-        if (arg.startsWith('--json=')) options.jsonPath = arg.slice('--json='.length)
-    }
-    options.jsonPath ||= path.join(options.outDir, 'hanasand-logs-ui-proof.json')
-    return options
-}
-
-function cookieUrl(baseUrl) {
-    return new URL(baseUrl).origin
-}
-
-function screenshotPath(outDir, viewportName, colorScheme) {
-    return path.join(outDir, `hanasand-logs-${viewportName}-${colorScheme}.png`)
-}
-
-async function clickTabUntilSelected(page, key) {
-    const tab = page.locator(`[data-logs-tab="${key}"]`).first()
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-        await tab.click()
-        if (await tab.evaluate(element => element.getAttribute('aria-selected') === 'true').catch(() => false)) return
-        await page.waitForTimeout(150 + attempt * 100)
-    }
-    await tab.click()
-}
-
-async function inspectLogsPage(page) {
-    const result = await page.evaluate(() => {
-        const selectors = [
-            'main',
-            '[data-logs-dashboard]',
-            '[data-logs-toolbar]',
-            '[data-logs-tabs]',
-            '[data-logs-service-filter]',
-            '[data-logs-metrics]',
-            '[data-logs-metric-card]',
-            '[data-logs-feed]',
-        ]
-        const selectorCounts = Object.fromEntries(selectors.map(selector => [selector, document.querySelectorAll(selector).length]))
-        const horizontalOverflow = Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth)
-        const clippedTextCount = Array.from(document.querySelectorAll('button, [data-logs-toolbar], [data-logs-metric-card], [data-logs-feed]'))
-            .filter((element) => element.scrollWidth > element.clientWidth + 2 && (element.textContent || '').trim().length > 12)
-            .length
-
-        return {
-            selectorCounts,
-            horizontalOverflow,
-            clippedTextCount,
-            bodyText: document.body.innerText,
-        }
-    })
-
-    const reasons = []
-    for (const [selector, count] of Object.entries(result.selectorCounts)) {
-        if (!count) reasons.push(`missing selector: ${selector}`)
-    }
-    if (result.selectorCounts['[data-logs-metric-card]'] < 4) reasons.push(`missing metric cards: ${result.selectorCounts['[data-logs-metric-card]']}`)
-    if (result.horizontalOverflow > 1) reasons.push(`horizontal overflow: ${result.horizontalOverflow}`)
-    if (result.clippedTextCount) reasons.push(`clipped logs text/control count: ${result.clippedTextCount}`)
-    if (/glass-card|rounded-\[1\.|tracking-\[|text-bright|bg-black\/|border-white\//.test(result.bodyText)) {
-        reasons.push('legacy generated-style copy or classes are visible')
-    }
-
-    return { ...result, reasons }
-}
-
-async function exerciseLogsInteractions(page) {
-    const expectedTabs = [
-        { key: 'dashboard', text: 'Most active stored services' },
-        { key: 'errors', text: 'Recent error codes' },
-        { key: 'live', text: 'Realtime runtime feed' },
-        { key: 'stored', text: 'Stored and searchable error records' },
-    ]
-    const reasons = []
-
-    for (const tab of expectedTabs) {
-        await clickTabUntilSelected(page, tab.key)
-        const visible = await page.getByText(tab.text).first().isVisible().catch(() => false)
-        if (!visible) reasons.push(`missing tab view text: ${tab.key}`)
-    }
-
-    const serviceFilter = page.locator('[data-logs-service-filter]')
-    const initialValue = await serviceFilter.inputValue().catch(() => '')
-    if (initialValue !== 'api') reasons.push(`service query did not initialize filter: ${initialValue || 'empty'}`)
-    await serviceFilter.selectOption('all')
-    await page.waitForFunction(() => {
-        const select = document.querySelector('[data-logs-service-filter]')
-        return select instanceof HTMLSelectElement && select.value === 'all' && !new URL(location.href).searchParams.has('service')
-    }, null, { timeout: 5000 }).catch(() => {})
-    const selectedValue = await serviceFilter.inputValue().catch(() => '')
-    if (selectedValue !== 'all') reasons.push(`service filter did not switch to all: ${selectedValue || 'empty'}`)
-    if (new URL(page.url()).searchParams.has('service')) reasons.push('service filter did not clear service query param')
-
-    return reasons
-}
-
-async function gotoLogsPage(page, url) {
-    let lastError
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-        try {
-            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 })
-            await page.locator('[data-logs-toolbar]').waitFor({ state: 'attached', timeout: 30000 })
-            return
-        } catch (error) {
-            lastError = error
-            await page.waitForTimeout(700 * (attempt + 1))
-        }
-    }
-    throw lastError
-}
-
-async function run() {
-    const options = parseArgs(process.argv.slice(2))
-    await mkdir(options.outDir, { recursive: true })
-    const artifact = {
-        schema: 'hanasand.logs.ui-proof.v1',
-        generatedAt: new Date().toISOString(),
-        baseUrl: options.baseUrl,
-        pages: [],
-        summary: { passed: false, failureReasons: [], artifactPath: options.jsonPath, screenshotPaths: [] },
-    }
-
-    const browser = await chromium.launch({ headless: true })
-    try {
-        for (const colorScheme of colorSchemes) {
-            for (const viewport of viewports) {
-                const context = await browser.newContext({
-                    viewport,
-                    colorScheme,
-                    extraHTTPHeaders: { 'x-hanasand-render-proof-auth': authFixture.header },
-                })
-                await context.addCookies([
-                    { name: 'id', value: encodeURIComponent(authFixture.id), url: cookieUrl(options.baseUrl), httpOnly: false, secure: false, sameSite: 'Lax' },
-                    { name: 'name', value: encodeURIComponent(authFixture.name), url: cookieUrl(options.baseUrl), httpOnly: false, secure: false, sameSite: 'Lax' },
-                    { name: 'access_token', value: encodeURIComponent(authFixture.token), url: cookieUrl(options.baseUrl), httpOnly: false, secure: false, sameSite: 'Lax' },
-                    { name: 'roles', value: encodeURIComponent(JSON.stringify(authFixture.roles)), url: cookieUrl(options.baseUrl), httpOnly: false, secure: false, sameSite: 'Lax' },
-                    { name: 'email', value: encodeURIComponent('logs-ui-proof@hanasand.local'), url: cookieUrl(options.baseUrl), httpOnly: false, secure: false, sameSite: 'Lax' },
-                    { name: 'theme', value: colorScheme, url: cookieUrl(options.baseUrl), httpOnly: false, secure: false, sameSite: 'Lax' },
-                ])
-                await context.addInitScript((scheme) => {
-                    document.documentElement.classList.toggle('dark', scheme === 'dark')
-                    document.documentElement.classList.toggle('light', scheme === 'light')
-                    window.localStorage.setItem('theme', scheme)
-                }, colorScheme)
-
-                const page = await context.newPage()
-                const imagePath = screenshotPath(options.outDir, viewport.name, colorScheme)
-                artifact.summary.screenshotPaths.push(imagePath)
-                const pageResult = {
-                    viewport,
-                    colorScheme,
-                    screenshotPath: imagePath,
-                    passed: false,
-                    reasons: [],
+    await mkdir(outDir, { recursive: true })
+    browser = await chromium.launch()
+    for (const colorScheme of ['light', 'dark']) {
+        for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
+            const context = await browser.newContext({ viewport, colorScheme, extraHTTPHeaders: { 'x-hanasand-render-proof-auth': 'local-dashboard-render-proof' }, permissions: ['clipboard-read', 'clipboard-write'] })
+            await context.addCookies(Object.entries({ id: 'dashboard-render-proof-user', access_token: 'local-dashboard-render-proof-token', roles: '["system_admin","admin"]', theme: colorScheme }).map(([name, value]) => ({ name, value, url: base })))
+            const page = await context.newPage()
+            const pageErrors = []
+            page.on('pageerror', error => pageErrors.push(error.message))
+            for (const [route, heading] of [['/logs', 'Logs'], ['/logs/realtime', 'Realtime'], ['/logs/search', 'Search logs'], ['/logs/errors', 'Errors']]) {
+                const loaded = page.waitForResponse(response => response.url().includes(`/api/backend/logs/${route === '/logs/errors' ? 'errors' : 'search'}?`) && response.ok())
+                await page.goto(`${base}${route}`, { waitUntil: 'domcontentloaded' })
+                await loaded
+                await expect(page.getByRole('heading', { level: 1 })).toHaveText(heading)
+                if (route === '/logs') {
+                    await expect(page.getByRole('region', { name: 'Events by severity' }).getByRole('link').first()).toContainText('256')
+                    await page.getByText('Operational counters', { exact: true }).click()
+                    await expect(page.getByText('Most active services in the selected time range')).toBeVisible()
+                } else if (route === '/logs/errors') {
+                    await page.getByRole('button', { name: 'EXAMPLE_FAILURE' }).click()
+                    await expect(page.getByRole('button', { name: 'EXAMPLE_FAILURE' })).toHaveAttribute('aria-expanded', 'true')
+                    await expect(page.getByText('Example request failed', { exact: false })).toBeVisible()
+                    await page.getByRole('button', { name: 'Copy error JSON' }).click()
+                    assert.equal(JSON.parse(await page.evaluate(() => navigator.clipboard.readText())).error_code, 'EXAMPLE_FAILURE')
+                } else {
+                    const event = page.locator('article').filter({ hasText: 'whoami' })
+                    await event.getByRole('button', { expanded: false }).click()
+                    await expect(event).toContainText('Mill checked 105 enabled rules.')
+                    await event.getByRole('button', { name: 'Copy event JSON' }).click()
+                    assert.equal(JSON.parse(await page.evaluate(() => navigator.clipboard.readText())).process.command_line, 'whoami')
+                    if (route === '/logs/search') {
+                        await page.getByRole('checkbox', { name: 'Advanced KQL' }).check()
+                        await page.getByText('KQL syntax and tables', { exact: true }).click()
+                    }
                 }
-                try {
-                    await gotoLogsPage(page, `${options.baseUrl}/logs?service=api`)
-                    pageResult.reasons.push(...await exerciseLogsInteractions(page))
-                    Object.assign(pageResult, await inspectLogsPage(page))
-                    await page.screenshot({ path: imagePath, fullPage: true, timeout: 60000 })
-                    pageResult.passed = pageResult.reasons.length === 0
-                } catch (error) {
-                    pageResult.reasons.push(error instanceof Error ? error.message : String(error))
-                } finally {
-                    await context.close()
-                }
-                artifact.pages.push(pageResult)
+                await expect(page.locator('[data-logs-dashboard]').getByRole('alert')).toHaveCount(0)
+                const overflow = await page.evaluate(() => Math.max(0, document.documentElement.scrollWidth - innerWidth))
+                assert(overflow <= 1, `${route} ${viewport.width} ${colorScheme} overflows by ${overflow}px`)
+                const screenshot = `${outDir}/${route.replaceAll('/', '-').slice(1)}-${viewport.width}-${colorScheme}.png`
+                await page.screenshot({ path: screenshot, fullPage: true })
+                report.push({ route, viewport, colorScheme, screenshot, overflow })
             }
-        }
-    } finally {
-        await browser.close()
-    }
-
-    for (const pageResult of artifact.pages) {
-        for (const reason of pageResult.reasons) {
-            artifact.summary.failureReasons.push(`${pageResult.colorScheme}/${pageResult.viewport.name}: ${reason}`)
+            assert.deepEqual(pageErrors, [], 'Logs routes must hydrate without browser errors')
+            await context.close()
         }
     }
-    artifact.summary.passed = artifact.summary.failureReasons.length === 0
-    await writeFile(options.jsonPath, `${JSON.stringify(artifact, null, 2)}\n`, 'utf8')
-    console.log(JSON.stringify(artifact, null, 2))
-    assert.equal(artifact.summary.passed, true, `Logs UI proof failed; see ${options.jsonPath}`)
+    await writeFile(`${outDir}/proof.json`, `${JSON.stringify({ passed: true, pages: report }, null, 2)}\n`)
+    console.log(`Logs route proof passed: ${report.length} desktop/mobile light/dark views, inline details, clipboard, proxy, and no horizontal overflow. Screenshots: ${outDir}`)
+} finally {
+    await browser?.close()
+    dev.kill()
+    await dev.exited
+    api.stop(true)
 }
-
-void run()

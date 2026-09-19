@@ -13,6 +13,14 @@ assert kind in ('api', 'auth', 'frontend') and len(ports) == 2
 assert all(port.isdecimal() and 1024 < int(port) < 65535 for port in ports)
 original = json.loads(subprocess.check_output(['docker', 'inspect', source]))[0]
 settings = dict(item.split('=', 1) for item in original['Config']['Env'])
+# Collectors receive a credential that authenticates only log ingestion.
+log_ingest_file = Path('/home/hanasand/resilience/log-ingest.json')
+if kind == 'api' and log_ingest_file.exists():
+    log_ingest = json.loads(log_ingest_file.read_text())
+    if not isinstance(log_ingest, dict) or set(log_ingest) != {'LOG_INGEST_TOKEN'} or not isinstance(log_ingest['LOG_INGEST_TOKEN'], str) or len(log_ingest['LOG_INGEST_TOKEN']) < 32:
+        raise SystemExit('Invalid log ingestion configuration')
+    settings.update(log_ingest)
+
 if kind in ('api', 'auth'):
     mail_file = Path('/home/hanasand/resilience/mail.json')
     if mail_file.exists():

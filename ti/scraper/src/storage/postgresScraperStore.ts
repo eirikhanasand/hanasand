@@ -83,6 +83,7 @@ const DEFAULT_MIGRATIONS = [
   { version: "046_processing_backlog_indexes", path: fileURLToPath(new URL("../../migrations/046_processing_backlog_indexes.sql", import.meta.url)) },
   { version: "047_enrichment_activity_index", path: fileURLToPath(new URL("../../migrations/047_enrichment_activity_index.sql", import.meta.url)) },
   { version: "048_active_actor_index", path: fileURLToPath(new URL("../../migrations/048_active_actor_index.sql", import.meta.url)) },
+  { version: "049_actor_activity_projection", path: fileURLToPath(new URL("../../migrations/049_actor_activity_projection.sql", import.meta.url)) },
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 const MAINTENANCE_MIGRATION_VERSIONS = new Set(["037_remove_parser_fallback_artifacts"]);
@@ -2362,21 +2363,18 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         FROM threat_intel.actor_profiles p CROSS JOIN LATERAL jsonb_to_record(record) AS detail(aliases jsonb, "sourceIds" jsonb, "captureIds" jsonb, "identityResolutionState" text) WHERE tenant_id = ${tenantId}
         AND COALESCE(detail."identityResolutionState", 'active') <> 'archived'
         ORDER BY last_seen_at DESC LIMIT 100`,
-      this.sql`SELECT jsonb_build_object('id', w.id, 'subjectId', detail."subjectId",
+      this.sql`SELECT jsonb_build_object('id', w.id, 'subjectType', 'actor_profile', 'subjectId', detail."subjectId",
         'actorName', p.canonical_name, 'observedAt', w.updated_at, 'kind', detail."kind",
         'sourceId', detail."sourceId", 'sourceName', s.name,
-        'captureIds', COALESCE(detail."captureIds", '[]'::jsonb), 'metadata', jsonb_build_object(
-          'aliasesAdded', detail.metadata->'aliasesAdded',
-          'characterization', (SELECT jsonb_object_agg(key, true) FROM jsonb_object_keys(COALESCE(detail.metadata->'characterization', '{}'::jsonb)) key),
-          'wordsAdded', detail.metadata->'wordsAdded',
-          'newFacts', detail.metadata->'newFacts')) AS record
+         'captureIds', COALESCE(detail."captureIds", '[]'::jsonb), 'metadata', detail.metadata) AS record
         FROM threat_intel.workflow_records w
-        CROSS JOIN LATERAL jsonb_to_record(w.record) AS detail("subjectId" text, kind text, "sourceId" text, "subjectType" text, "captureIds" jsonb, metadata jsonb)
-        LEFT JOIN threat_intel.actor_profiles p ON p.id = detail."subjectId" AND p.tenant_id = w.tenant_id
-        LEFT JOIN threat_intel.sources s ON s.id = detail."sourceId"
-        WHERE w.record_type = 'evidence_delta' AND w.tenant_id = ${tenantId} AND w.record->>'subjectType' = 'actor_profile'
-        AND (${pattern}::text IS NULL OR p.canonical_name ILIKE ${pattern} OR s.name ILIKE ${pattern}
-          OR detail."kind" ILIKE ${pattern})
+        CROSS JOIN LATERAL jsonb_to_record(w.actor_activity) AS detail("subjectId" text, kind text, "sourceId" text, "subjectType" text, "captureIds" jsonb, metadata jsonb)
+        LEFT JOIN threat_intel.actor_profiles p ON p.id = w.actor_activity->>'subjectId' AND p.tenant_id = w.tenant_id
+        LEFT JOIN threat_intel.sources s ON s.id = w.actor_activity->>'sourceId'
+        WHERE w.record_type = 'evidence_delta' AND w.tenant_id = ${tenantId} AND w.actor_activity IS NOT NULL
+        AND (${pattern}::text IS NULL OR w.actor_activity->>'subjectId' IN (SELECT id FROM threat_intel.actor_profiles WHERE tenant_id = ${tenantId} AND canonical_name ILIKE ${pattern})
+          OR w.actor_activity->>'sourceId' IN (SELECT id FROM threat_intel.sources WHERE name ILIKE ${pattern})
+          OR w.actor_activity->>'kind' ILIKE ${pattern})
         ORDER BY w.updated_at DESC, w.id DESC LIMIT 100`,
       this.sql`SELECT record FROM threat_intel.workflow_records WHERE record_type = 'actor_enrichment_run'
         AND tenant_id = ${tenantId} ORDER BY updated_at DESC LIMIT 500`
