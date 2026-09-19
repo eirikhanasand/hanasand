@@ -49,10 +49,11 @@ export async function handleActorEnrichmentRequest(request: Request, options: Ap
   }
 
   if (isOverview) {
+    const started = performance.now();
     const result = await store.queryEnrichmentOverview(tenantId ?? "default", url.searchParams.get("q") ?? "");
     const latest = result.runs[0];
     const recent = result.runs.filter((run: any) => Date.now() - Date.parse(run.finishedAt ?? run.startedAt) < 3_600_000);
-    return json({ profiles: result.profiles, updates: result.updates, status: {
+    const response = json({ profiles: result.profiles, updates: result.updates, status: {
       worker: { state: latest?.status === "failed" ? "unavailable" : latest && Date.now() - Date.parse(latest.updatedAt) < 300_000 ? "active" : "idle",
         lastRunAt: latest?.finishedAt, lastSuccessfulRunAt: result.runs.find((run: any) => run.status === "completed")?.finishedAt,
         currentFailure: latest?.status === "failed" ? latest.error : null, snapshotFresh: Boolean(latest && Date.now() - Date.parse(latest.updatedAt) < 300_000) },
@@ -61,6 +62,8 @@ export async function handleActorEnrichmentRequest(request: Request, options: Ap
         wordsAdded: recent.reduce((n: number, run: any) => n + Number(run.wordsAdded ?? 0), 0),
         newFacts: recent.reduce((n: number, run: any) => n + Number(run.newFacts ?? 0), 0) }
     } });
+    response.headers.set("server-timing", `ti;dur=${(performance.now() - started).toFixed(2)};desc="Query and JSON serialization"`);
+    return response;
   }
 
   if (isTimeline) {
