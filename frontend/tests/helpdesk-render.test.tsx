@@ -48,7 +48,7 @@ const html = await render()
 for (const text of ['Search audit events', 'impersonation.start', 'support.organization.invite', 'Example customer', 'Example organization', 'session-1']) {
     assert(html.includes(text), `Missing audit content: ${text}`)
 }
-assert(html.includes('request=request-1&amp;entity=session-1'), 'Focus must preserve request and subject identifiers')
+assert(html.includes('href="/helpdesk?event=101"'), 'Each row must select its unique event without filtering the timeline')
 assert(!html.includes('undefined'), 'Current audit fields must not render as undefined')
 assert(html.includes('1 denied event need review'))
 assert(/>Sessions<\/div><div[^>]*>1<\/div>/.test(html), 'Session count must use event_type')
@@ -73,8 +73,33 @@ response = () => Response.json({ events: legacyEvents })
 const legacyHtml = await render({ request: 'request-2' })
 assert(!legacyHtml.includes('Commercial Acceptance'), 'Legacy test names must have natural display labels throughout the page')
 assert(legacyHtml.includes('Test account') && legacyHtml.includes('Test organization mrubl4uc540203'))
-assert(legacyHtml.includes('entity=commercial-acceptance-mruaroxh'), 'Display labels must preserve the original identifiers in Focus links')
+assert(legacyHtml.includes('commercial-acceptance-mruaroxh'), 'Display labels must preserve recorded identifiers')
 assert.equal(legacyEvents[0].target_name, 'Commercial Acceptance', 'Presentation must not rewrite recorded audit data')
+
+const deletionEvents = [
+    { ...events[1], id: 201, event_type: 'organization.deleted', target_name: undefined,
+        object_id: 'deleted-org-1', organization_id: 'deleted-org-1', organization_name: 'First organization',
+        request_id: undefined, subject_id: undefined, context: { name: 'First organization', cleanup: 'remove-acceptance-tenants', previousStatus: 'active' } },
+    { ...events[1], id: 202, event_type: 'organization.deleted', target_name: undefined,
+        object_id: 'deleted-org-2', organization_id: 'deleted-org-2', organization_name: undefined,
+        request_id: undefined, subject_id: undefined, context: { name: 'Deleted organization', cleanup: 'remove-acceptance-tenants', previousStatus: 'active' } },
+]
+response = () => Response.json({ events: deletionEvents })
+const deletionHtml = await render({ event: '202', q: 'organization', severity: 'warning', support: 'invite', limit: '50' })
+assert.equal(new URL(requestUrl).searchParams.has('event'), false, 'Selection must not become an API filter')
+assert.equal(new URL(requestUrl).searchParams.get('q'), 'organization')
+assert(deletionHtml.includes('href="/helpdesk?q=organization&amp;severity=warning&amp;limit=50&amp;support=invite&amp;event=201"'), 'Row selection must retain filters and support mode')
+assert.equal((deletionHtml.match(/<article /g) || []).length, 2, 'Selecting one event must keep the timeline intact')
+assert(/data-audit-event-id="202" data-helpdesk-focused-event="true"/.test(deletionHtml), 'Events without request or entity IDs must be individually selectable')
+assert(deletionHtml.match(/id="selected-audit-event"[\s\S]*?<dd[^>]*>Deleted organization<\/dd>/), 'Selected detail must use the recorded organization name')
+assert(!deletionHtml.includes('deleted-org-1') && !deletionHtml.includes('deleted-org-2'), 'Organization names should replace target UUIDs')
+assert(!deletionHtml.includes('cleanup:') && !deletionHtml.includes('previousStatus:') && !deletionHtml.includes('name:'), 'Raw context summaries must not be rendered')
+assert(!deletionHtml.includes('Selected detail') && !deletionHtml.includes('checking'))
+assert(deletionHtml.includes('aria-current="true"'), 'The selected row must be exposed to assistive technology')
+const firstSelectionHtml = await render({ event: '201' })
+assert(/data-audit-event-id="201" data-helpdesk-focused-event="true"/.test(firstSelectionHtml))
+const staleSelectionHtml = await render({ event: '999' })
+assert(/data-audit-event-id="201" data-helpdesk-focused-event="true"/.test(staleSelectionHtml), 'Unavailable selections must fall back to a visible event')
 
 response = () => Response.json({ events: [] })
 assert((await render()).includes('No matching support events'))
