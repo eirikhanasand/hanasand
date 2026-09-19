@@ -641,6 +641,9 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
     const [newApiKeySecret, setNewApiKeySecret] = useState('')
     const [newWebhookSigningSecret, setNewWebhookSigningSecret] = useState('')
     const [createName, setCreateName] = useState('')
+    const [createFormOpen, setCreateFormOpen] = useState(false)
+    const createNameRef = useRef<HTMLInputElement>(null)
+    useEffect(() => { if (createFormOpen) createNameRef.current?.focus() }, [createFormOpen])
     const [workspaceQuery, setWorkspaceQuery] = useState('')
     const [createFirstWatchlist, setCreateFirstWatchlist] = useState({ kind: 'domain' as WatchlistKind, value: '', notes: '' })
     const [createInviteEmails, setCreateInviteEmails] = useState('')
@@ -966,6 +969,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
         await switchOrganization(organizationId)
         replaceOrganizationWorkspaceSelectionUrl(organizationId, { type: 'organization', id: organizationId })
         setCreateName('')
+        setCreateFormOpen(false)
         if (!firstWatchlistValue || firstWatchlistAdded) setCreateFirstWatchlist({ kind: 'domain', value: '', notes: '' })
         if (!firstInviteEmails.length || firstInviteCount) {
             setCreateInviteEmails('')
@@ -1344,6 +1348,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
             <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
                 Name
                 <input
+                    ref={createNameRef}
                     value={createName}
                     onChange={event => setCreateName(event.target.value)}
                     className={inputClass}
@@ -1383,20 +1388,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
             <RowStatus message={rowMessages['organization-create']} />
         </div>
     )
-    const createOrganizationPanel = organizations.length > 0 ? (
-        <details className='group rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-create-compact='true'>
-            <summary className='flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-md px-2 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/30 dark:text-ui-text dark:hover:bg-ui-raised [&::-webkit-details-marker]:hidden'>
-                <span className='inline-flex min-w-0 items-center gap-2'>
-                    <Building2 className='h-4 w-4 shrink-0 text-ui-primary' />
-                    <span>Create organization</span>
-                </span>
-                <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-[11px] font-semibold text-ui-muted group-open:hidden dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>New</span>
-            </summary>
-            <div className='border-t border-ui-border px-2 pb-2 pt-3 dark:border-ui-border'>
-                {createOrganizationForm}
-            </div>
-        </details>
-    ) : (
+    const createOrganizationPanel = (
         <section id='org-create-primary' className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-create-primary='true'>
             <h2 className='flex items-center gap-2 text-sm font-semibold text-ui-text dark:text-ui-text'>
                 <Building2 className='h-4 w-4 text-ui-primary' />
@@ -1417,15 +1409,20 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
                         </div>
                         <h1 className='text-2xl font-semibold tracking-tight text-ui-text'>{organizationPages.find(item => item.id === activePage)?.label}</h1>
                     </div>
-                    <button
-                        type='button'
-                        onClick={() => void loadOrganizations(selectedOrganization?.id)}
-                        className='inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-4 text-sm font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-60 dark:border-ui-border dark:bg-ui-raised dark:text-ui-text dark:hover:bg-ui-raised'
-                        disabled={Boolean(busy || loading)}
-                    >
-                        {busy === 'load-org' || loading ? <Loader2 className='h-4 w-4 animate-spin' /> : <RefreshCw className='h-4 w-4' />}
-                        Refresh
-                    </button>
+                    <div className='flex flex-wrap items-center gap-2'>
+                        <button type='button' className={primaryButtonClass} aria-expanded={createFormOpen || organizations.length === 0} aria-controls='org-create-primary' onClick={() => organizations.length === 0 ? createNameRef.current?.focus() : setCreateFormOpen(current => !current)}>
+                            <Building2 className='h-4 w-4' />Create organization
+                        </button>
+                        <button
+                            type='button'
+                            onClick={() => void loadOrganizations(selectedOrganization?.id)}
+                            className='inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-4 text-sm font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-60 dark:border-ui-border dark:bg-ui-raised dark:text-ui-text dark:hover:bg-ui-raised'
+                            disabled={Boolean(busy || loading)}
+                        >
+                            {busy === 'load-org' || loading ? <Loader2 className='h-4 w-4 animate-spin' /> : <RefreshCw className='h-4 w-4' />}
+                            Refresh
+                        </button>
+                    </div>
                 </header>
 
                 {(error || message || bundle.loadErrors.length > 0) && (
@@ -1436,9 +1433,10 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
                     </div>
                 )}
 
+                {(createFormOpen || organizations.length === 0) && createOrganizationPanel}
+
                 <div className={organizations.length === 0 ? 'grid gap-5' : 'grid gap-5 lg:grid-cols-[15rem_minmax(0,1fr)]'}>
-                    <aside className={`${activePage === 'overview' || organizations.length === 0 ? 'flex' : 'hidden lg:flex'} min-w-0 flex-col gap-4`}>
-                        {organizations.length === 0 && createOrganizationPanel}
+                    <aside className={`${organizations.length === 0 ? 'hidden' : activePage === 'overview' ? 'flex' : 'hidden lg:flex'} min-w-0 flex-col gap-4`}>
 
                         {(loading || organizations.length > 0) && (
                             <section className='rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
@@ -1487,7 +1485,6 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
                                 </div>
                             </section>
                         )}
-                        {organizations.length > 0 && createOrganizationPanel}
                     </aside>
 
                     {(selectedOrganization || organizations.length > 0 || (!loading && organizations.length === 0)) && <main className='min-w-0'>
@@ -1496,9 +1493,9 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
                                 <WorkspaceSummary organization={selectedOrganization} activeWatchlists={activeWatchlists.length} pausedWatchlists={pausedWatchlists.length} archivedWatchlists={archivedWatchlists.length} memberCount={activeMembers.length} inviteCount={pendingInvites.length} webhookCount={configuredDestinationCount} />
                                 <WorkspaceSectionNav activePage={activePage} />
                                 {busy === 'load-org' ? <SkeletonRows count={3} /> : <>
-                                    {activePage === 'overview' && <WorkspaceHealthStrip organization={selectedOrganization} bundle={bundle} canManage={canManage} />}
+                                    {activePage === 'overview' && <WorkspaceHealthStrip organization={selectedOrganization} bundle={bundle} />}
                                     {activePage === 'settings' && <SettingsPanel settingsDraft={settingsDraft} setSettingsDraft={setSettingsDraft} settingsDirty={settingsDirty} canManage={canManage} busy={busy} rowMessage={rowMessages.settings} onSave={() => void saveSettings()} onReset={() => setSettingsDraft(bundle.settings || {})} />}
-                                    {activePage === 'team' && (canManage ? <InvitePanel emails={inviteEmails} setEmails={setInviteEmails} role={inviteRole} setRole={setInviteRole} invites={bundle.invites} members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} onInvite={() => void sendInvite()} onInviteAction={(invite, action) => void inviteAction(invite, action)} onCopyInvite={invite => void copyInvite(invite)} /> : <p className='rounded-lg border border-ui-border bg-ui-panel p-4 text-sm text-ui-muted'>Only this organization’s owners and admins can manage invitations.</p>)}
+                                    {activePage === 'team' && canManage && <InvitePanel emails={inviteEmails} setEmails={setInviteEmails} role={inviteRole} setRole={setInviteRole} invites={bundle.invites} members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} onInvite={() => void sendInvite()} onInviteAction={(invite, action) => void inviteAction(invite, action)} onCopyInvite={invite => void copyInvite(invite)} />}
                                     {activePage === 'team' && <MemberPanel members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} onRoleChange={(member, role) => void changeMemberRole(member, role)} onRemove={member => void removeMember(member)} />}
                                     {activePage === 'watchlists' && <WatchlistPanel
                                         watchlists={bundle.watchlists}
@@ -1562,7 +1559,7 @@ function WorkspaceSectionNav({ activePage }: { activePage: OrganizationPage }) {
     </nav>
 }
 
-function WorkspaceHealthStrip({ organization, bundle, canManage }: { organization: OrganizationSummary, bundle: OrgBundle, canManage: boolean }) {
+function WorkspaceHealthStrip({ organization, bundle }: { organization: OrganizationSummary, bundle: OrgBundle }) {
     const activeMembers = bundle.members.filter(member => member.status.toLowerCase() === 'active')
     const activeTeammates = activeMembers.filter(member => member.role.toLowerCase() !== 'owner')
     const adminMembers = bundle.members.filter(member => member.status.toLowerCase() === 'active' && ['owner', 'admin'].includes(member.role.toLowerCase()))
@@ -1573,7 +1570,6 @@ function WorkspaceHealthStrip({ organization, bundle, canManage }: { organizatio
     const routedCases = bundle.cases.filter(item => item.status?.toLowerCase() !== 'closed')
     const hasAlertOrCaseActivity = Boolean(bundle.alerts.length || routedCases.length)
     const lastActivityAt = organizationLastActivityAt(organization, bundle)
-    const accessMode = canManage ? 'admin controls enabled' : organization.role?.toLowerCase() === 'support' ? 'support inspection only' : 'read-only access'
     const rows = [
         {
             id: 'access',
@@ -1615,9 +1611,9 @@ function WorkspaceHealthStrip({ organization, bundle, canManage }: { organizatio
                 <div className='min-w-0'>
                     <h2 className='flex items-center gap-2 text-sm font-semibold text-ui-text dark:text-ui-text'>
                         <ShieldCheck className='h-4 w-4 text-ui-primary' />
-                        Workspace health
+                        Overview
                     </h2>
-                    <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{organizationDisplayName(organization)} · {accessMode} · Last activity {lastActivityAt ? formatDate(lastActivityAt) : 'pending'}</p>
+                    <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>Last activity {lastActivityAt ? formatDate(lastActivityAt) : 'pending'}</p>
                 </div>
                 <Link href='/organizations/activity#audit' className={secondaryButtonClass} data-org-health-activity='true'>
                     <ExternalLink className='h-4 w-4' />
@@ -1659,7 +1655,6 @@ function EmptyWorkspacePreview() {
 }
 
 function WorkspaceSummary({ organization, activeWatchlists, pausedWatchlists, archivedWatchlists, memberCount, inviteCount, webhookCount }: { organization: OrganizationSummary, activeWatchlists: number, pausedWatchlists: number, archivedWatchlists: number, memberCount: number, inviteCount: number, webhookCount: number }) {
-    const workspaceMeta = sanitizeOrganizationDisplayCopy(organization.status || organization.slug || organization.id) || 'Active workspace'
     const rows = [
         { id: 'role', icon: <ShieldCheck className='h-4 w-4' />, label: 'Role', value: organization.role || 'member', detail: organization.status || 'active' },
         { id: 'members', icon: <Users className='h-4 w-4' />, label: 'Members', value: String(memberCount ?? organization.memberCount ?? organization.activeMemberCount ?? 0), detail: `${inviteCount ?? organization.pendingInviteCount ?? 0} pending` },
@@ -1673,7 +1668,6 @@ function WorkspaceSummary({ organization, activeWatchlists, pausedWatchlists, ar
                     <ShieldCheck className='h-4 w-4 shrink-0 text-ui-primary' />
                     <span className='truncate'>{organizationDisplayName(organization)}</span>
                 </p>
-                <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{organizationDisplayId(organization)} · {workspaceMeta}</p>
             </div>
             <div className='hidden min-w-0 gap-2 sm:grid sm:grid-cols-2 xl:flex xl:flex-wrap xl:justify-end' data-org-summary-chip-list='true'>
                 {rows.map(row => (
@@ -1766,7 +1760,7 @@ function SettingsPanel({ settingsDraft, setSettingsDraft, settingsDirty, canMana
     return (
         <details id='settings' open className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-settings-disclosure>
             <summary className='flex cursor-pointer list-none flex-col gap-3 p-4 outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 dark:hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
-                <SectionTitle icon={<Settings className='h-4 w-4' />} title='Workspace settings' detail={canManage ? 'Name, lifecycle, webhook policy, alert access.' : 'Read-only organization policy.'} />
+                <SectionTitle icon={<Settings className='h-4 w-4' />} title='Settings' detail={canManage ? 'Name, lifecycle, webhook policy, alert access.' : ''} />
                 <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>
                     {settingsDirty ? 'Unsaved changes' : 'Settings'}
                 </span>
@@ -1792,6 +1786,7 @@ function SettingsPanel({ settingsDraft, setSettingsDraft, settingsDirty, canMana
                     Save settings
                 </button>
             </div>
+            {!canManage && <p className='px-4 pb-3 text-center text-xs text-ui-muted'>Only admins can edit.</p>}
         </details>
     )
 }
@@ -2046,12 +2041,12 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                 {members.length > 0 && (
                     <>
                         <div className='mb-3 flex flex-wrap gap-2' data-org-member-status-counts='true'>
-                            {memberCounts.map(item => (
+                            {memberCounts.filter(item => item.count > 0).map(item => (
                                 <span key={item.status} className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>
                                     {item.label}: {item.count}
                                 </span>
                             ))}
-                            {memberRoleCounts.map(item => (
+                            {memberRoleCounts.filter(item => item.count > 0).map(item => (
                                 <span key={item.role} className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>
                                     {item.label}: {item.count}
                                 </span>
@@ -2103,7 +2098,6 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                 const roleChanged = selectedRole !== member.role
                                 const canMutateMember = canManage && memberCanMutate(member)
                                 const memberMutationReason = memberMutationDisabledReason(canManage, member)
-                                const memberAccess = memberAccessState(canMutateMember, member)
                                 const selected = selectedSubject.type === 'member' && selectedSubject.id === member.userId
                                 return (
                                     <article
@@ -2129,9 +2123,6 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                             <StatusPill status={member.status} />
                                         </div>
                                         <div className='grid gap-2' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
-                                            <span className='w-fit rounded-full border border-ui-border px-2 py-0.5 text-xs font-semibold text-ui-muted dark:border-ui-border dark:text-ui-muted' data-org-member-access-state='true'>
-                                                {memberAccess}
-                                            </span>
                                             {canMutateMember ? (
                                                 <div className='grid grid-cols-[minmax(0,1fr)_auto] gap-2'>
                                                     <select className={compactSelectClass} value={selectedRole} disabled={Boolean(busy)} onChange={event => setPendingRoles(current => ({ ...current, [member.userId]: event.target.value as OrganizationRole }))}>
@@ -2177,7 +2168,6 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                     const roleChanged = selectedRole !== member.role
                                     const canMutateMember = canManage && memberCanMutate(member)
                                     const memberMutationReason = memberMutationDisabledReason(canManage, member)
-                                    const memberAccess = memberAccessState(canMutateMember, member)
                                     const selected = selectedSubject.type === 'member' && selectedSubject.id === member.userId
                                     return (
                                         <tr
@@ -2229,9 +2219,6 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                             <td className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>
                                                 <div className='grid gap-1'>
                                                     <StatusPill status={member.status} />
-                                                    <span className='w-fit rounded-full border border-ui-border px-2 py-0.5 text-xs font-semibold text-ui-muted dark:border-ui-border dark:text-ui-muted' data-org-member-access-state='true'>
-                                                        {memberAccess}
-                                                    </span>
                                                     <RowStatus message={rowMessages[`member-${member.userId}`]} />
                                                 </div>
                                             </td>
@@ -3335,7 +3322,7 @@ function SectionTitle({ icon, title, detail }: { icon: ReactNode, title: string,
         <div className='flex items-start justify-between gap-4'>
             <div>
                 <h2 className='flex items-center gap-2 text-base font-semibold text-ui-text dark:text-ui-text'>{icon}{title}</h2>
-                <p className='mt-1 text-sm leading-5 text-ui-muted dark:text-ui-muted'>{detail}</p>
+                {detail && <p className='mt-1 text-sm leading-5 text-ui-muted dark:text-ui-muted'>{detail}</p>}
             </div>
         </div>
     )
@@ -4289,13 +4276,6 @@ function memberMutationDisabledReason(canManage: boolean, member: OrganizationMe
     if (member.role.toLowerCase() === 'owner') return 'Owner role cannot be changed here'
     if (['removed', 'revoked', 'inactive'].includes(member.status.toLowerCase())) return 'Access is closed'
     return ''
-}
-
-function memberAccessState(canMutateMember: boolean, member: OrganizationMember) {
-    if (canMutateMember) return 'Role editable'
-    if (member.role.toLowerCase() === 'owner') return 'Owner locked'
-    if (['removed', 'revoked', 'inactive'].includes(member.status.toLowerCase())) return 'Access closed'
-    return 'Read-only'
 }
 
 function validDestinationUrl(value: string) {

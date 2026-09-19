@@ -1,6 +1,6 @@
 export const organizationPages = [
     { id: 'overview', label: 'Overview', href: '/organizations' },
-    { id: 'settings', label: 'General settings', href: '/organizations/settings' },
+    { id: 'settings', label: 'Settings', href: '/organizations/settings' },
     { id: 'team', label: 'Team', href: '/organizations/team' },
     { id: 'watchlists', label: 'Watchlists', href: '/organizations/watchlists' },
     { id: 'destinations', label: 'Destinations', href: '/organizations/destinations' },

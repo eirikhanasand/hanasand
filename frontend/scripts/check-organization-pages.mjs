@@ -20,7 +20,15 @@ const api = Bun.serve({ port: 0, async fetch(request) {
         const id = url.pathname.split('/').pop()
         return Response.json({ id, username: id, name: id === 'dashboard-render-proof-user' ? 'Fixture owner' : 'Other person' })
     }
-    if (url.pathname === '/api/organizations') return Response.json({ organizations })
+    if (url.pathname === '/api/organizations') {
+        if (request.method === 'POST') {
+            const { name } = await request.json()
+            const organization = { id: 'created-org', name, slug: 'created-org', role: 'owner', lifecycleStatus: 'active' }
+            organizations.push(organization)
+            return Response.json({ organization }, { status: 201 })
+        }
+        return Response.json({ organizations })
+    }
     const [, orgId, resource] = url.pathname.match(/^\/api\/organizations\/([^/]+)(?:\/([^/]+))?/) || []
     const organization = organizations.find(item => item.id === orgId)
     if (organization) {
@@ -34,7 +42,11 @@ const api = Bun.serve({ port: 0, async fetch(request) {
             }
             return Response.json({ organization, settings: { retentionDays: 365, defaultWebhookPolicy: 'active_destinations', alertVisibilityPolicy: 'members', lifecycleStatus: 'active' } })
         }
-        if (resource === 'members') return Response.json({ members: [{ id: 'member', userId: 'dashboard-render-proof-user', name: 'Fixture owner', role: organization.role, status: 'active' }] })
+        if (resource === 'members') return Response.json({ members: [
+            { userId: 'dashboard-render-proof-user', name: 'Fixture user', role: organization.role, status: 'active' },
+            { userId: 'teammate-one', name: 'First teammate', role: organization.role === 'owner' ? 'member' : 'owner', status: 'active' },
+            { userId: 'teammate-two', name: 'Second teammate', role: 'member', status: 'active' },
+        ] })
     }
     return Response.json({})
 } })
@@ -64,6 +76,17 @@ try {
     const name = page.locator('#settings').getByLabel('Name', { exact: true })
     await expect(name).toHaveValue('Cashflow')
     await expect(name).toBeDisabled()
+    await expect(page.getByRole('heading', { name: 'Settings', exact: true, level: 1 })).toBeVisible()
+    await expect(page.getByText('Read-only organization policy.', { exact: true })).toHaveCount(0)
+    await expect(page.locator('[data-org-workspace-summary]')).not.toContainText('cashflow · cashflow')
+    assert.equal((await page.locator('[data-org-workspace-summary]').innerText()).match(/cashflow/gi)?.length, 1)
+    await page.getByRole('navigation', { name: 'Organization pages' }).getByRole('link', { name: 'Team', exact: true }).click()
+    await expect(page.locator('[data-org-member-status-counts]')).toHaveText('Active: 3Owner: 1Member: 2')
+    await expect(page.locator('[data-org-member-access-state]')).toHaveCount(0)
+    for (const button of await page.getByRole('button', { name: 'Remove member', exact: true }).all()) await expect(button).toBeDisabled()
+    await page.screenshot({ path: '/tmp/organization-team-desktop.png', fullPage: true })
+    await page.getByRole('navigation', { name: 'Organization pages' }).getByRole('link', { name: 'Settings', exact: true }).click()
+    await expect(name).toHaveValue('Cashflow')
     console.log('Verified member settings')
     await expect(page.getByText('Organization name is required.', { exact: true })).toHaveCount(0)
     await expect(page.getByText(/Sign in with an organization account/)).toHaveCount(0)
@@ -94,9 +117,20 @@ try {
         await expect(nav.getByRole('link', { name: label, exact: true })).toHaveAttribute('aria-current', 'page')
     }
     await nav.getByRole('link', { name: 'Overview', exact: true }).click()
-    await expect(page.getByText('Workspace health', { exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Overview', exact: true, level: 2 })).toBeVisible()
     await expect(page.getByText('Pilot measurement', { exact: true })).toHaveCount(0)
     await expect(page.locator('#privacy, #settings, #members, #watchlists')).toHaveCount(0)
+    const createButton = page.getByRole('button', { name: 'Create organization', exact: true })
+    const refreshButton = page.getByRole('button', { name: 'Refresh', exact: true })
+    assert(await createButton.evaluate((element) => element.parentElement.contains([...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'Refresh'))))
+    await expect(refreshButton).toBeVisible()
+    await createButton.click()
+    const createForm = page.locator('#org-create-primary')
+    await expect(createForm.getByLabel('Name', { exact: true })).toBeFocused()
+    await createForm.getByLabel('Name', { exact: true }).fill('Cashflow')
+    await expect(createForm.getByRole('button', { name: 'Create organization', exact: true })).toBeDisabled()
+    await page.locator('header').getByRole('button', { name: 'Create organization', exact: true }).click()
+    await expect(createForm).toHaveCount(0)
     await page.screenshot({ path: '/tmp/organization-overview-desktop.png', fullPage: true })
     for (const width of [390, 768, 1440]) {
         await page.setViewportSize({ width, height: 1000 })
@@ -133,6 +167,13 @@ try {
     await page.goto(`${base}/profile/other-person/security`)
     await expect(page.getByRole('navigation', { name: 'Account pages' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Delete account', exact: true })).toHaveCount(0)
+    await page.goto(`${base}/organizations`)
+    await page.getByRole('button', { name: 'Create organization', exact: true }).click()
+    await createForm.getByLabel('Name', { exact: true }).fill('Created organization')
+    await createForm.getByRole('button', { name: 'Create organization', exact: true }).click()
+    await expect(page.getByRole('combobox', { name: 'Org', exact: true })).toHaveValue('created-org')
+    await expect(createForm).toHaveCount(0)
+    assert.equal(organizations.find(item => item.id === 'created-org')?.name, 'Created organization')
     assert.deepEqual(errors, [])
     console.log('Organization pages passed: member/owner permissions, name validation and persistence, switching, all section routes, legacy links, responsive layout, real errors, and separate private account pages.')
 } finally {
