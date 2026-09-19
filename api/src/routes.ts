@@ -1,4 +1,4 @@
-import { getDockerStorage, clearDockerStorage } from '#handlers/dockerStorage.ts'
+import { getDockerStorage, clearDockerStorage } from './handlers/dockerStorage.ts'
 import { searchLogs } from './handlers/logs/search.ts'
 import { getManagementOrganizations } from './handlers/managementOrganizations.ts'
 import assignVmOrganization from './handlers/vms/organization.ts'
