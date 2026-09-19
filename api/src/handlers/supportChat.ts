@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import run from '#db'
+import run, { withTransaction } from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 
 type SupportBody = { subject?: string; message?: string }
@@ -28,11 +28,11 @@ export async function getSupportTickets(req: FastifyRequest, res: FastifyReply) 
         const support = await isSupport(userId)
         const result = await run(`
             SELECT t.id, t.user_id, t.subject, t.status, t.created_at, t.updated_at,
-                   u.name AS user_name,
+                   COALESCE(u.name, 'Visitor') AS user_name,
                    (SELECT body FROM support_messages WHERE ticket_id = t.id ORDER BY created_at DESC LIMIT 1) AS last_message
             FROM support_tickets t
-            JOIN users u ON u.id = t.user_id
-            WHERE ($1::boolean OR t.user_id = $2)
+            LEFT JOIN users u ON u.id = t.user_id
+            WHERE (($1::boolean AND t.channel = 'human') OR (NOT $1::boolean AND t.user_id = $2))
             ORDER BY t.updated_at DESC
             LIMIT 100
         `, [support, userId])
@@ -51,8 +51,10 @@ export async function postSupportTicket(req: FastifyRequest<{ Body: SupportBody 
     if (!message) return res.status(400).send({ error: 'Message is required.' })
     try {
         const ticketId = randomUUID()
-        await run('INSERT INTO support_tickets (id, user_id, subject) VALUES ($1, $2, $3)', [ticketId, userId, subject || 'Support question'])
-        await run('INSERT INTO support_messages (id, ticket_id, sender_id, body) VALUES ($1, $2, $3, $4)', [randomUUID(), ticketId, userId, message])
+        await withTransaction(async query => {
+            await query('INSERT INTO support_tickets (id, user_id, subject) VALUES ($1, $2, $3)', [ticketId, userId, subject || 'Support question'])
+            await query('INSERT INTO support_messages (id, ticket_id, sender_id, body) VALUES ($1, $2, $3, $4)', [randomUUID(), ticketId, userId, message])
+        })
         return res.status(201).send({ id: ticketId })
     } catch (error) {
         req.log.error(error)
@@ -68,9 +70,10 @@ export async function getSupportMessages(req: FastifyRequest<{ Params: { id: str
         const access = await run('SELECT EXISTS (SELECT 1 FROM support_tickets WHERE id = $1 AND ($2::boolean OR user_id = $3)) AS allowed', [req.params.id, support, userId])
         if (!access.rows[0]?.allowed) return res.status(404).send({ error: 'Support ticket not found.' })
         const result = await run(`
-            SELECT m.id, m.sender_id, m.body, m.created_at, u.name AS sender_name
-            FROM support_messages m JOIN users u ON u.id = m.sender_id
-            WHERE m.ticket_id = $1 ORDER BY m.created_at ASC
+            SELECT m.id, m.sender_id, m.sender_kind, m.body, m.created_at,
+                   CASE WHEN m.sender_kind = 'assistant' THEN 'Hanasand AI' WHEN m.sender_kind = 'system' THEN 'Support' ELSE COALESCE(u.name, 'Visitor') END AS sender_name
+            FROM support_messages m LEFT JOIN users u ON u.id = m.sender_id
+            WHERE m.ticket_id = $1 ORDER BY m.created_at ASC, m.id
         `, [req.params.id])
         return res.send({ messages: result.rows })
     } catch (error) {
@@ -88,8 +91,14 @@ export async function postSupportMessage(req: FastifyRequest<{ Params: { id: str
         const support = await isSupport(userId)
         const access = await run('SELECT EXISTS (SELECT 1 FROM support_tickets WHERE id = $1 AND ($2::boolean OR user_id = $3)) AS allowed', [req.params.id, support, userId])
         if (!access.rows[0]?.allowed) return res.status(404).send({ error: 'Support ticket not found.' })
-        await run('INSERT INTO support_messages (id, ticket_id, sender_id, body) VALUES ($1, $2, $3, $4)', [randomUUID(), req.params.id, userId, body])
-        await run('UPDATE support_tickets SET status = $2, updated_at = NOW() WHERE id = $1', [req.params.id, req.body?.status || 'open'])
+        await withTransaction(async query => {
+            await query('SELECT id FROM support_tickets WHERE id = $1 FOR UPDATE', [req.params.id])
+            await query('INSERT INTO support_messages (id, ticket_id, sender_id, sender_kind, body) VALUES ($1, $2, $3, $4, $5)', [randomUUID(), req.params.id, userId, support ? 'support' : 'user', body])
+            await query(`UPDATE support_tickets SET status = $2, updated_at = NOW(),
+                channel = CASE WHEN $3 THEN 'human' ELSE channel END,
+                ai_pending_id = CASE WHEN $3 THEN NULL ELSE ai_pending_id END,
+                ai_pending_at = CASE WHEN $3 THEN NULL ELSE ai_pending_at END WHERE id = $1`, [req.params.id, req.body?.status === 'closed' ? 'closed' : 'open', support])
+        })
         return res.send({ ok: true })
     } catch (error) {
         req.log.error(error)

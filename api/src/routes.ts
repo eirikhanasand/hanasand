@@ -3,7 +3,7 @@ import { searchLogs } from './handlers/logs/search.ts'
 import { getManagementOrganizations } from './handlers/managementOrganizations.ts'
 import assignVmOrganization from './handlers/vms/organization.ts'
 import { caseRepositoryWebhooks, getCaseDevelopment, getCaseRepositories, postCaseRepository, deleteCaseRepository } from './handlers/caseDevelopment.ts'
-import { getServiceAccounts, postServiceAccount, deleteServiceAccount, serviceAccountSelf } from './handlers/serviceAccounts.ts'
+import { getServiceAccounts, postServiceAccount, patchServiceAccount, deleteServiceAccount, serviceAccountSelf } from './handlers/serviceAccounts.ts'
 import authRoutes from './authRoutes.ts'
 import { getMonitoringCases, updateMonitoringCase } from './handlers/monitoringCases.ts'
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify'
@@ -206,6 +206,7 @@ import {
 } from './handlers/dwm/webhooks.ts'
 import { getBrowserSandboxProfiles, putBrowserSandboxProfiles } from './handlers/browserSandboxProfiles.ts'
 import { getBrowserRunReport, getBrowserRuns, getBrowserRunStats, postBrowserRunReport } from './handlers/browserSandboxRuns.ts'
+import { publicSupportChat } from './handlers/publicSupportChat.ts'
 import { getSupportMessages, getSupportTickets, postSupportMessage, postSupportTicket } from './handlers/supportChat.ts'
 import { getCommercialContactRequests, postCommercialContactRequest } from './handlers/commercialContactRequests.ts'
 import { getOrganizationPrivacy, postOrganizationPrivacy } from './handlers/organizationPrivacy.ts'
@@ -274,6 +275,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/service-accounts/self', serviceAccountSelf)
     fastify.get('/service-accounts', getServiceAccounts)
     fastify.post('/service-accounts', postServiceAccount)
+    fastify.patch('/service-accounts/:id', patchServiceAccount)
     fastify.delete('/service-accounts/:id', deleteServiceAccount)
     fastify.get('/user/:id', getUser)
     fastify.get('/user/full/:id', authorizedUserHandler)
@@ -323,6 +325,8 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/browser/runs', getBrowserRuns)
     fastify.get('/browser/runs/:id/report', getBrowserRunReport)
     fastify.post('/browser/runs/:id/report', postBrowserRunReport)
+    fastify.get('/support/chat', publicSupportChat)
+    fastify.post('/support/chat', publicSupportChat)
     fastify.get('/support/tickets', getSupportTickets)
     fastify.post('/support/tickets', postSupportTicket)
     fastify.get('/support/tickets/:id/messages', getSupportMessages)

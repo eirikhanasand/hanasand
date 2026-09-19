@@ -2,16 +2,18 @@ import { beforeEach, expect, mock, test } from 'bun:test'
 let authenticated = true
 let administrator = true
 let writes: string[] = []
-const query = async (sql: string) => { writes.push(sql); return { rows: [{ id: 'svc_fixture' }] } }
+let values: unknown[][] = []
+let found = true
+const query = async (sql: string, params: unknown[] = []) => { writes.push(sql); values.push(params); return { rows: found ? [{ id: 'svc_fixture', description: params[1] || 'Existing description' }] : [] } }
 mock.module('#db', () => ({ default: query, withTransaction: async (work: any) => work(query) }))
 mock.module('#utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: authenticated, id: 'actor' }) }))
 mock.module('#utils/auth/hasRole.ts', () => ({ default: async () => ({ valid: administrator }) }))
 mock.module('#utils/auth/apiKeys.ts', () => ({ createApiKey: async (input: any) => ({ apiKey: { ownerId: input.ownerId, scopes: input.scopes }, secret: 'once' }), listApiKeys: async () => [] }))
 mock.module('#utils/systemEvent.ts', () => ({ recordSystemEvent: async () => {} }))
-const { postServiceAccount, deleteServiceAccount } = await import('../src/handlers/serviceAccounts.ts')
+const { getServiceAccounts, postServiceAccount, patchServiceAccount, deleteServiceAccount } = await import('../src/handlers/serviceAccounts.ts')
 const reply = () => ({ statusCode: 200, body: null as any, header() { return this }, status(value: number) { this.statusCode = value; return this }, send(value: any) { this.body = value; return this } })
 const body = { name: 'Health monitor', scopes: [{ method: 'GET', route: '/api/service-accounts/self' }] }
-beforeEach(() => { authenticated = true; administrator = true; writes = [] })
+beforeEach(() => { authenticated = true; administrator = true; writes = []; values = []; found = true })
 test('creation rejects signed-out and non-administrative users without writes', async () => {
     for (const [auth, admin, status] of [[false, true, 401], [true, false, 403]]) {
         authenticated = Boolean(auth); administrator = Boolean(admin)
@@ -36,4 +38,41 @@ test('deletion revokes all credentials and retains audit identity', async () => 
     expect(writes.some(sql => sql.includes('enabled = FALSE'))).toBe(true)
     expect(writes.some(sql => sql.includes('revoked_at = NOW()'))).toBe(true)
     expect(writes.some(sql => sql.startsWith('DELETE'))).toBe(false)
+})
+test('creation persists an optional description and rejects invalid descriptions', async () => {
+    for (const description of [null, 123, {}, 'a'.repeat(2001)]) {
+        const res = reply(); await postServiceAccount({ body: { ...body, description } } as any, res as any)
+        expect(res.statusCode).toBe(400); expect(writes).toHaveLength(0)
+    }
+    const res = reply(); await postServiceAccount({ body: { ...body, description: '  Database monitoring\nRead-only checks.  ' } } as any, res as any)
+    expect(res.statusCode).toBe(201)
+    expect(writes[0]).toContain('service_description')
+    expect(values[0][3]).toBe('Database monitoring\nRead-only checks.')
+})
+test('listing includes saved descriptions', async () => {
+    const res = reply(); await getServiceAccounts({} as any, res as any)
+    expect(writes[0]).toContain('service_description AS description')
+    expect(res.body.accounts[0].description).toBe('Existing description')
+})
+test('description edits require a system administrator', async () => {
+    for (const [auth, admin, status] of [[false, true, 401], [true, false, 403]]) {
+        authenticated = Boolean(auth); administrator = Boolean(admin)
+        const res = reply(); await patchServiceAccount({ params: { id: 'svc_fixture' }, body: { description: 'Update' } } as any, res as any)
+        expect(res.statusCode).toBe(status); expect(writes).toHaveLength(0)
+    }
+})
+test('description edits validate text, support clearing, and only affect active service accounts', async () => {
+    for (const description of [undefined, null, 1, {}, 'a'.repeat(2001)]) {
+        const res = reply(); await patchServiceAccount({ params: { id: 'svc_fixture' }, body: { description } } as any, res as any)
+        expect(res.statusCode).toBe(400); expect(writes).toHaveLength(0)
+    }
+    for (const description of ['  Updated notes  ', '', 'a'.repeat(2000)]) {
+        const res = reply(); await patchServiceAccount({ params: { id: 'svc_fixture' }, body: { description } } as any, res as any)
+        expect(res.statusCode).toBe(200)
+        expect(values.at(-1)).toEqual(['svc_fixture', description.trim()])
+        expect(writes.at(-1)).toContain("account_type = 'service' AND active = TRUE")
+    }
+    found = false
+    const res = reply(); await patchServiceAccount({ params: { id: 'user_or_missing' }, body: { description: 'No' } } as any, res as any)
+    expect(res.statusCode).toBe(404)
 })

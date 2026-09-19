@@ -31,7 +31,7 @@ export async function serviceAccountSelf(req: FastifyRequest, res: FastifyReply)
 export async function getServiceAccounts(req: FastifyRequest, res: FastifyReply) {
     if (!await authorize(req, res)) return
     const [users, keys] = await Promise.all([
-        run('SELECT id, name, active, created_at FROM users WHERE account_type = \'service\' ORDER BY name'),
+        run('SELECT id, name, service_description AS description, active, created_at FROM users WHERE account_type = \'service\' ORDER BY name'),
         listApiKeys(),
     ])
     return res.send({ endpoints: serviceAccountEndpoints.map(({ method, route, label }) => ({ method, route, label })), accounts: users.rows.map(user => ({
@@ -43,21 +43,39 @@ export async function getServiceAccounts(req: FastifyRequest, res: FastifyReply)
 export async function postServiceAccount(req: FastifyRequest, res: FastifyReply) {
     const actorId = await authorize(req, res)
     if (!actorId) return
-    const body = (req.body || {}) as { name?: unknown, scopes?: unknown }
+    const body = (req.body || {}) as { name?: unknown, scopes?: unknown, description?: unknown }
     if (typeof body.name !== 'string' || !body.name.trim() || body.name.trim().length > 100 || !validateServiceAccountScopes(body.scopes)) {
         return res.status(400).send({ error: 'Enter a name (up to 100 characters) and select at least one supported endpoint.' })
     }
+    if (body.description !== undefined && (typeof body.description !== 'string' || body.description.length > 2000)) {
+        return res.status(400).send({ error: 'Description must be text up to 2,000 characters.' })
+    }
     const name = body.name.trim()
+    const description = typeof body.description === 'string' ? body.description.trim() : ''
     const scopes = body.scopes.map((scope, index) => ({ ...scope, id: `scope_${index}`, enabled: true,
         limits: { perSecond: 5, perMinute: 60, perHour: 1000, perDay: 10000 } }))
     const unusablePasswordHash = await bcrypt.hash(randomBytes(32).toString('base64url'), 12)
     const created = await withTransaction(async query => {
         const id = `svc_${randomUUID()}`
-        await query('INSERT INTO users (id, name, password, avatar, account_type) VALUES ($1, $2, $3, \'\', \'service\')', [id, name, unusablePasswordHash])
+        await query('INSERT INTO users (id, name, password, avatar, account_type, service_description) VALUES ($1, $2, $3, \'\', \'service\', $4)', [id, name, unusablePasswordHash, description])
         return createApiKey({ ownerId: id, name, tier: 'custom', scopes }, query)
     })
     await recordSystemEvent(req, { actionType: 'service_account.created', actorId, targetType: 'service_account', targetId: created.apiKey.ownerId!, context: { scopes: body.scopes } })
     return res.status(201).send(created)
+}
+
+export async function patchServiceAccount(req: FastifyRequest, res: FastifyReply) {
+    const actorId = await authorize(req, res)
+    if (!actorId) return
+    const { description } = (req.body || {}) as { description?: unknown }
+    if (typeof description !== 'string' || description.length > 2000) {
+        return res.status(400).send({ error: 'Description must be text up to 2,000 characters.' })
+    }
+    const { id } = req.params as { id: string }
+    const result = await run('UPDATE users SET service_description = $2 WHERE id = $1 AND account_type = \'service\' AND active = TRUE RETURNING id, service_description AS description', [id, description.trim()])
+    if (!result.rows.length) return res.status(404).send({ error: 'Service account not found.' })
+    await recordSystemEvent(req, { actionType: 'service_account.updated', actorId, targetType: 'service_account', targetId: id })
+    return res.send(result.rows[0])
 }
 
 export async function deleteServiceAccount(req: FastifyRequest, res: FastifyReply) {

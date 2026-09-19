@@ -1,3 +1,4 @@
+import ensureSupportAiSchema from '#utils/support/schema.ts'
 import ensureOrganizationRolesSchema from './organizationRolesSchema.ts'
 import ensureRoleSchema from './roleSchema.ts'
 import ensureLogDimensionsSchema from './logDimensionsSchema.ts'
@@ -183,6 +184,7 @@ export default async function ensureSchema() {
         )
     `)
     await run('CREATE INDEX IF NOT EXISTS idx_support_messages_ticket_created ON support_messages(ticket_id, created_at ASC)')
+    await ensureSupportAiSchema()
     await run(`
         CREATE TABLE IF NOT EXISTS commercial_contact_requests (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
