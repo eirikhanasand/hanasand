@@ -8,8 +8,8 @@ export default function TimelinessPage() {
         <DashboardPage>
             <DashboardHeader
                 eyebrow='Threat intelligence'
-                title='Report-to-alert timeliness'
-                description='Resolve authoritative first-report evidence, inspect timestamp provenance, and measure retained incidents through alert delivery.'
+                title='Delivery'
+                description='Track automatically recorded collection, processing, and alert delivery events. Add public report evidence only when the source did not provide it.'
             />
             <TimelinessClient />
         </DashboardPage>

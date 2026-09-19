@@ -1,3 +1,4 @@
+import { zonedSourceTimestamp } from "../pipeline/sourceFieldReportTimestamp.ts";
 import { createHash } from "node:crypto";
 import { ensureDwmCase } from "./dwmCases.ts";
 import type { CaptureReplayJob, DiscoveryEvidence, EvidenceDelta, IncidentCandidate, LiveSearchSnapshot, PipelineResult, RawCapture, ReplayPipelineInput, SourceRecord } from "../types.ts";
@@ -161,9 +162,33 @@ export class InMemoryScraperStore implements ScraperStore {
     if (incident) {
       const previousTimeliness = this.getTimelinessRecord(incident.id);
       const timingCapture = this.getCapture(previousTimeliness?.captureId) ?? capture;
-      this.saveTimelinessRecord(timelinessRecord(timingCapture, incident, previousTimeliness));
+      this.saveTimelinessRecord(this.reconcileTimelinessRecord(timelinessRecord(timingCapture, incident, previousTimeliness)));
     }
     return { ...result, capture, incident };
+  }
+  timelinessMatchesAlert(record: any, alert: any, captureIds = new Set(linkedAlertCaptureIds(alert))) {
+    if ((record.tenantId ?? null) !== (alert.tenantId ?? null)) return false;
+    const incident = this.getIncident(record.incidentId);
+    return record.incidentId === alert.incidentId || [record.captureId, incident?.captureId, ...(incident?.captureIds ?? [])].some(id => captureIds.has(id));
+  }
+  reconcileTimelinessRecord(record: any) {
+    const capture = this.getCapture(record.captureId);
+    if (!capture) return record;
+    const reporting = mergeReportTimeline(record, reportTimeline(capture, this.getSource(capture.sourceId)));
+    let repaired = enrichTimeliness({ ...record, ...reporting,
+      publishedAt: reporting.publisherReportedAt ?? record.publishedAt,
+      observedAt: record.observedAt ?? capture.observedAt ?? capture.metadata?.fetchProvenance?.fetchedAt ?? capture.collectedAt
+    });
+    for (const alert of this.listDwmAlerts()) {
+      if (!this.timelinessMatchesAlert(record, alert)) continue;
+      const created = [["alertCreatedAt", alert.alertCreatedAt], ["alertCreatedEvent.at", alert.alertCreatedEvent?.at], ["deliveryReadinessContext.alertCreatedAt", alert.deliveryReadinessContext?.alertCreatedAt]]
+        .map(([field, value]) => ({ field, timestamp: validIso(value) })).find(candidate => candidate.timestamp);
+      if (created?.timestamp) repaired = withAlertCreated(repaired, created.timestamp, alert.id, `alert.${created.field}`);
+      for (const delivery of this.listDwmWebhookDeliveries()) {
+        if (delivery.alertId === alert.id && !["dry_run", "skipped"].includes(delivery.status)) repaired = withDelivery(repaired, delivery);
+      }
+    }
+    return repaired;
   }
   replayInput(captureId: string, extractorVersion: string): ReplayPipelineInput | undefined { const c = this.captures.get(captureId); return c && { captureId: c.id, sourceId: c.sourceId, url: c.url, collectedAt: c.collectedAt, mediaType: c.mediaType, storageKind: c.storageKind, body: c.body, objectRef: c.objectRef, metadata: c.metadata, contentHash: c.contentHash, normalizedTextHash: c.normalizedTextHash, extractorVersion }; }
   createReplayJob(input: any): CaptureReplayJob { throw new Error("prototype not installed"); }
@@ -520,7 +545,7 @@ export class InMemoryScraperStore implements ScraperStore {
     if (alertCreated?.timestamp) {
       const captureIds = new Set(linkedAlertCaptureIds(alert));
       for (const timeliness of this.listTimelinessRecords()) {
-        if (timeliness.incidentId === alert.incidentId || captureIds.has(timeliness.captureId)) this.saveTimelinessRecord(withAlertCreated(timeliness, alertCreated.timestamp, alert.id, `alert.${alertCreated.field}`));
+        if (this.timelinessMatchesAlert(timeliness, alert, captureIds)) this.saveTimelinessRecord(withAlertCreated(timeliness, alertCreated.timestamp, alert.id, `alert.${alertCreated.field}`));
       }
     }
     return stored;
@@ -545,7 +570,7 @@ export class InMemoryScraperStore implements ScraperStore {
       if (alert) {
         const captureIds = new Set(linkedAlertCaptureIds(alert));
         for (const timeliness of this.listTimelinessRecords()) {
-          if (timeliness.incidentId !== alert.incidentId && !captureIds.has(timeliness.captureId)) continue;
+          if (!this.timelinessMatchesAlert(timeliness, alert, captureIds)) continue;
           this.saveTimelinessRecord(withDelivery(timeliness, stored));
         }
       }
@@ -941,12 +966,14 @@ function reportTimeline(capture: any, source?: any): any {
   const reportTimestamps = (Array.isArray(capture.metadata?.reportTimestamps) ? capture.metadata.reportTimestamps : [])
     .map((evidence: any) => {
       const role = verifiedReportRole(evidence?.role, source);
-      const timestamp = zonedIso(evidence?.timestamp);
+      const rawTimestamp = zonedSourceTimestamp(evidence?.timestamp);
+      const timestamp = rawTimestamp ? validIso(rawTimestamp) : undefined;
       const referenceUrl = publicReferenceUrl(evidence?.referenceUrl);
       if (!role || !timestamp || !referenceUrl || evidence?.extractionMethod !== "source_field") return undefined;
       return {
         role,
         timestamp,
+        rawTimestamp: evidence.rawTimestamp ?? rawTimestamp,
         referenceUrl,
         sourceId: capture.sourceId,
         sourceName: source?.name ?? evidence.sourceName,
@@ -997,6 +1024,7 @@ function timelinessRecord(capture: any, incident: any, previous?: any): any {
     captureId: capture.id,
     incidentId: incident.id,
     ...reporting,
+    observedAt: previous?.observedAt ?? capture.observedAt ?? capture.metadata?.fetchProvenance?.fetchedAt ?? capture.collectedAt,
     publishedAt: reporting.publisherReportedAt,
     collectedAt: capture.collectedAt,
     processedAt: capture.processedAt ?? incident.processedAt,

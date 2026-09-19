@@ -1,3 +1,4 @@
+import { zonedSourceTimestamp } from "./sourceFieldReportTimestamp.ts";
 import { stableId } from "../utils.ts";
 
 export type ReportRole = "actor" | "victim" | "publisher";
@@ -445,13 +446,16 @@ function groupedMetrics(items: TimelinessRecordView[], key: (item: TimelinessRec
 function actorName(incident: JsonObject | undefined, entities: JsonObject[], incidentId: string, captureId: string): string | undefined {
   const direct = string(incident?.actorName) ?? string(incident?.actor) ?? string(incident?.canonicalActorName) ?? string(object(incident?.metadata)?.actorName);
   if (direct) return direct;
-  return string(entities.find((entity) => string(entity.type) === "actor" && (string(entity.incidentId) === incidentId || string(entity.captureId) === captureId))?.value);
+  const linked = entities.filter((entity) => string(entity.incidentId) === incidentId || string(entity.captureId) === captureId);
+  const candidates = [...objectArray(incident?.entities), ...linked].filter((entity) => ["actor", "ransomware_family"].includes(string(entity.type) ?? ""));
+  const names = [...new Set(candidates.map(entity => string(entity.value)).filter(Boolean))];
+  return names.length === 1 ? names[0] : undefined;
 }
 
 function reportReferences(record: JsonObject): JsonObject[] {
   return objectArray(record.reportTimestamps).flatMap((reference) => {
     const role = string(reference.role);
-    const timestamp = zonedIso(reference.timestamp);
+    const timestamp = reference.extractionMethod === "source_field" ? validIso(zonedSourceTimestamp(reference.timestamp)) : zonedIso(reference.timestamp);
     const extractionMethod = string(reference.extractionMethod);
     const hasStoredLineage = string(reference.sourceId) && string(reference.captureId) && string(reference.evidencePath);
     const hasAcceptedOrigin = extractionMethod === "source_field" || extractionMethod === "public_reference" && string(reference.referenceUrl);

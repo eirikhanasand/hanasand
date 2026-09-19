@@ -739,6 +739,19 @@ export interface components {
             pagination: components["schemas"]["Pagination"];
             meta: components["schemas"]["Meta"];
         };
+        DeliveryResponse: components["schemas"]["TimelinessCollection"] | {
+            /** Format: date-time */
+            generatedAt?: string;
+            summary?: {
+                recordCount?: number;
+                needsReportCount?: number;
+                unresolvedReferenceCount?: number;
+                /** @constant */
+                criticalThreshold?: 10;
+                /** @enum {string} */
+                status?: "ok" | "critical";
+            };
+        };
     };
     responses: {
         /** @description Invalid input */
@@ -810,6 +823,8 @@ export interface components {
         };
     };
     parameters: {
+        /** @description Return the global delivery backlog summary instead of records. needsReportCount > 10 is critical. */
+        DeliverySummary: boolean;
         /** @description Filter by text, ignoring case. */
         Query: string;
         /** @description Number of records per page. */
@@ -1277,6 +1292,8 @@ export interface operations {
                  * @description Legacy record offset. Use page for new integrations. Do not combine with page.
                  */
                 cursor?: components["parameters"]["Cursor"];
+                /** @description Return the global delivery backlog summary instead of records. needsReportCount > 10 is critical. */
+                summary?: components["parameters"]["DeliverySummary"];
             };
             header?: never;
             path?: never;
@@ -1292,7 +1309,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TimelinessCollection"];
+                    "application/json": components["schemas"]["DeliveryResponse"];
                 };
             };
             400: components["responses"]["BadRequest"];
