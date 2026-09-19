@@ -20,6 +20,12 @@ export default async function getMailOverview(req: FastifyRequest, res: FastifyR
     try {
         const query = req.query as { mailboxUser?: string, mailboxId?: string, messageId?: string, after?: string }
         const access = await getMailAccess(id, query.mailboxUser)
+        if (query.after) {
+            if (typeof query.after !== 'string' || query.after.length > 1024 || typeof query.mailboxId !== 'string') {
+                return res.status(400).send({ error: 'A mailbox and valid message cursor are required.' })
+            }
+            return res.send(await listMessagePage(access.username, access.password, query.mailboxId, query.after))
+        }
         const accessibleAccounts = await listAccessibleMailAccounts(id)
         const accountCounts = loadAccountCounts(id, accessibleAccounts, access.targetUser)
         const recentRecipients = await listRecentRecipients(id, access.targetUser)
