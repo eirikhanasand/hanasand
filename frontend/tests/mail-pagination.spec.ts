@@ -18,13 +18,14 @@ test('mail scroll loads older messages, retries failures and contains long mailb
         const messages = Array.from({ length: support ? (archived ? 5 : 6) : after ? 25 : 50 }, (_, i) => ({ id: support ? `support-${i + (archived ? 1 : 0)}` : String(i + (after ? 50 : 0)), subject: `Message ${i + (after ? 50 : 0)}`, from: [{ email: 'sender@example.com' }], to: [{ email: 'support@example.com' }], cc: [{ email: 'other@example.com' }], receivedAt: '2026-09-19T10:00:00Z', mailboxIds: ['inbox'], preview: 'preview', isRead: false }))
         await route.fulfill({ json: {
             actor: { id: 'dashboard-render-proof-user', canAccessAnyMailbox: true }, mailboxUser: support ? 'shared:support' : 'dashboard-render-proof-user', mailboxAddress: support ? 'support@example.com' : 'test@example.com',
-            accessibleAccounts: [{ id: 'shared:support', name: 'Support', address: 'support@example.com', shared: true }, { id: 'dashboard-render-proof-user', name: 'Test', address: 'test@example.com' }, { id: 'long', name: 'VeryLongMailboxName'.repeat(20), address: 'long@example.com' }],
+            accessibleAccounts: [{ id: 'shared:security', name: 'Security', address: 'security@example.com', shared: true }, { id: 'shared:support', name: 'Support', address: 'support@example.com', shared: true }, { id: 'dashboard-render-proof-user', name: 'Test', address: 'test@example.com' }, { id: 'long', name: 'VeryLongMailboxName'.repeat(20), address: 'long@example.com' }],
             mailboxes: [{ id: 'inbox', name: 'Inbox', role: 'inbox', totalEmails: 75 }], selectedMailboxId: 'inbox', messages, nextCursor: support || after ? null : '49',
-            selectedMessage: params.get('messageId') ? { ...messages.find(message => message.id === params.get('messageId')), replyTo: [], bcc: [], attachments: [], textBody: 'Original message', htmlBody: '' } : null,
+            selectedMessage: params.get('messageId') ? { ...messages.find(message => message.id === params.get('messageId')), replyTo: [], bcc: [], attachments: [], textBody: 'Original message', htmlBody: '<p>Original message</p>' } : null,
         } })
     })
     await page.goto('/mail')
     await expect(page.getByTestId('mail-message-49')).toBeAttached()
+    await expect(page.getByRole('button', { name: 'Open Security', exact: true })).toBeVisible()
     await page.getByRole('button', { name: 'Load older messages' }).scrollIntoViewIfNeeded()
     await expect(page.getByRole('alert').filter({ hasText: 'Could not load older messages' })).toBeVisible()
     await page.getByRole('button', { name: 'Load older messages' }).click()
@@ -33,7 +34,7 @@ test('mail scroll loads older messages, retries failures and contains long mailb
     await expect(page.getByRole('button', { name: 'Load older messages' })).toHaveCount(0)
     for (const width of [1440, 390]) {
         await page.setViewportSize({ width, height: 900 })
-        await page.getByLabel('Other mailboxes', { exact: true }).evaluate(el => { (el.parentElement as HTMLDetailsElement).open = true })
+        await expect(page.getByLabel('Other mailboxes', { exact: true })).toHaveCount(0)
         const mailbox = page.getByRole('button', { name: /^Open VeryLongMailboxName/ })
         expect(await mailbox.evaluate(el => el.scrollWidth <= el.clientWidth && el.getBoundingClientRect().right <= el.closest('aside')!.getBoundingClientRect().right)).toBe(true)
     }
@@ -63,5 +64,17 @@ test('mail scroll loads older messages, retries failures and contains long mailb
     expect((actedOn as { url: string }).url).toContain('/message/support-0/action')
     await expect(row).toHaveCount(0)
     await expect(page.locator('button[data-testid^="mail-message-"]')).toHaveCount(5)
-
+    await page.getByTestId('mail-message-support-1').click()
+    const frame = page.frameLocator('iframe[title="HTML mail"]')
+    for (const theme of ['dark', 'light']) {
+        await page.evaluate(value => {
+            document.documentElement.classList.remove('dark', 'light')
+            document.documentElement.classList.add(value)
+        }, theme)
+        await expect(page.locator('iframe[title="HTML mail"]')).toHaveCSS('color-scheme', theme)
+        await expect(frame.locator('html')).toHaveCSS('color-scheme', theme)
+        await expect(frame.locator('html')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+        await expect(frame.locator('body')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+        await expect(frame.getByText('Original message')).toBeVisible()
+    }
 })

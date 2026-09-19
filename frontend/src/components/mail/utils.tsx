@@ -160,14 +160,14 @@ export function prettyBytes(size: number) {
     return `${(size / (1024 * 1024)).toFixed(1)} MB`
 }
 
-export function buildMailFrameHtml(html: string) {
+export function buildMailFrameHtml(html: string, theme: 'light' | 'dark' = 'light') {
     return `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    :root { color-scheme: light dark; }
+    :root { color-scheme: ${theme}; }
     html, body {
       margin: 0;
       padding: 0;
