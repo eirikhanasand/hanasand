@@ -34,9 +34,10 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
     const [service, setService] = useState(params.get('service') || initialServiceFilter)
     const [search, setSearch] = useState(params.get('search') || '')
     const [table, setTable] = useState(logTables.includes(params.get('table') || '') ? params.get('table')! : 'Logs')
-    const [advanced, setAdvanced] = useState(!!params.get('kql'))
-    const [kql, setKql] = useState(params.get('kql') || 'ProcessLogs | where Severity in ("high", "critical") | order by TimeGenerated desc | take 100')
-    const [appliedKql, setAppliedKql] = useState(params.get('kql') || '')
+    const initialHql = params.get('hql') || params.get('kql') || ''
+    const [advanced, setAdvanced] = useState(!!initialHql)
+    const [hql, setHql] = useState(initialHql || 'ProcessLogs | where Severity in ("high", "critical") | order by TimeGenerated desc | take 100')
+    const [appliedHql, setAppliedHql] = useState(initialHql)
     const [hours, setHours] = useState(params.get('hours') || '24')
     const [severity, setSeverity] = useState(params.get('severity') || 'all')
     const [data, setData] = useState<Result | null>(null)
@@ -67,14 +68,15 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
     useEffect(() => {
         if (view === 'errors') return
         const url = new URL(window.location.href)
-        for (const [key, value] of Object.entries({ service: service === 'all' ? '' : service, search: advanced ? '' : search, table: advanced || table === 'Logs' ? '' : table, kql: advanced ? appliedKql : '', hours: hours === '24' ? '' : hours, severity: view === 'realtime' || severity === 'all' ? '' : severity })) {
+        url.searchParams.delete('kql')
+        for (const [key, value] of Object.entries({ service: service === 'all' ? '' : service, search: advanced ? '' : search, table: advanced || table === 'Logs' ? '' : table, hql: advanced ? appliedHql : '', hours: hours === '24' ? '' : hours, severity: view === 'realtime' || severity === 'all' ? '' : severity })) {
             if (value) url.searchParams.set(key, value)
             else url.searchParams.delete(key)
         }
         window.history.replaceState(null, '', url)
-    }, [view, service, search, table, advanced, appliedKql, hours, severity])
+    }, [view, service, search, table, advanced, appliedHql, hours, severity])
     useEffect(() => {
-        const identity = JSON.stringify([view, service, search, table, advanced, appliedKql, hours, severity])
+        const identity = JSON.stringify([view, service, search, table, advanced, appliedHql, hours, severity])
         if (queryIdentity.current !== identity) { setData(null); setError(''); queryIdentity.current = identity }
         setBusy(false)
         const controller = new AbortController()
@@ -82,7 +84,7 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
         async function load(manual = false) {
             if (inFlight || (!manual && (pausedUpdates.current || editing.current))) return
             inFlight = true; setBusy(true)
-            const params = new URLSearchParams({ hours, kql: advanced && appliedKql ? appliedKql : `${table} | take 200` })
+            const params = new URLSearchParams({ hours, hql: advanced && appliedHql ? appliedHql : `${table} | take 200` })
             if (search && !advanced) params.set('search', search)
             if (service !== 'all') params.set('service', service)
             if (view === 'realtime') params.set('severity', 'high,critical')
@@ -105,7 +107,7 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
         const debounce = setTimeout(() => void load(true), 250)
         const interval = view === 'realtime' || view === 'dashboard' ? setInterval(() => void load(), 5000) : undefined
         return () => { controller.abort(); clearTimeout(debounce); clearInterval(interval) }
-    }, [view, service, search, table, advanced, appliedKql, hours, severity, refresh])
+    }, [view, service, search, table, advanced, appliedHql, hours, severity, refresh])
     function togglePaused() {
         pausedUpdates.current = !pausedUpdates.current
         setPaused(pausedUpdates.current)
@@ -133,13 +135,13 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
                     {!advanced && <select aria-label='Log type' value={table} onChange={event => setTable(event.target.value)} className={fieldClass}>{logTables.map(value => <option key={value} value={value}>{value === 'Logs' ? 'All log types' : value}</option>)}</select>}
                     <select aria-label='Time range' value={hours} onChange={event => setHours(event.target.value)} className={fieldClass}>{[['1','Last hour'],['24','Last 24 hours'],['168','Last 7 days'],['720','Last 30 days'],['2160','Last 90 days']].map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select>
                     {view !== 'realtime' && <select aria-label='Severity' value={severity} onChange={event => setSeverity(event.target.value)} className={fieldClass}><option value='all'>All severities</option>{['low','medium','high','critical'].map(value => <option key={value}>{value}</option>)}</select>}
-                    <label className='flex items-center gap-2 text-sm'><input type='checkbox' checked={advanced} onChange={event => { setAdvanced(event.target.checked); if (event.target.checked) setAppliedKql(kql) }} />HQL</label>
+                    <label className='flex items-center gap-2 text-sm'><input type='checkbox' checked={advanced} onChange={event => { setAdvanced(event.target.checked); if (event.target.checked) setAppliedHql(hql) }} />HQL</label>
                     {view === 'realtime' && <button type='button' onClick={togglePaused} className={fieldClass}>{paused ? 'Resume' : 'Pause'}</button>}
                 </div>
-                {advanced && <form onSubmit={event => { event.preventDefault(); setAppliedKql(kql); setRefresh(value => value + 1) }} className='grid gap-2'>
-                    <textarea aria-label='HQL query' value={kql} onChange={event => setKql(event.target.value)} rows={3} spellCheck={false} className={`${fieldClass} min-w-0 font-mono`} />
+                {advanced && <form onSubmit={event => { event.preventDefault(); setAppliedHql(hql); setRefresh(value => value + 1) }} className='grid gap-2'>
+                    <textarea aria-label='HQL query' value={hql} onChange={event => setHql(event.target.value)} rows={3} spellCheck={false} className={`${fieldClass} min-w-0 font-mono`} />
                     <button className='justify-self-start rounded-lg bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas'>Run query</button>
-                    {kql !== appliedKql && <p className='text-xs text-ui-warning'>Query edited. Run it to update the results.</p>}
+                    {hql !== appliedHql && <p className='text-xs text-ui-warning'>Query edited. Run it to update the results.</p>}
                     <details className='text-xs text-ui-muted'><summary className='cursor-pointer'>HQL syntax and tables</summary><p className='mt-2'>Tables: Logs, ProcessLogs, SigninLogs, ApplicationLogs, HttpLogs, SystemLogs. HQL (Hanasand Query Language) supports this subset: where, project, order by, take (1–500), summarize count() by. Conditions: ==, !=, &gt;, &gt;=, &lt;, &lt;=, contains, has, startswith, endswith, in, and, or, not, parentheses and ago(24h). Other operators are rejected.</p><p className='mt-2'>Put where before order by. After project or summarize, only take is supported. Put take last. Fields: {Object.keys(fieldNames).join(', ')}. The selected time range, service and severity filters always apply.</p><pre className='mt-2 whitespace-pre-wrap'>ProcessLogs | where CommandLine contains &quot;whoami&quot; | project TimeGenerated, Host, CommandLine</pre></details>
                 </form>}
             </section>
@@ -149,7 +151,7 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
             {!!data?.processing?.skipped_events && <p role='status' className='text-sm text-ui-warning'>{data.processing.skipped_events.toLocaleString()} events remain excluded from detection.</p>}
             {data && !data.processing && !busy && <p role='status' className='text-sm text-ui-warning'>Waiting for the log processor to check in.</p>}
             {view === 'dashboard' ? <>
-                <section className='grid gap-3 sm:grid-cols-4' aria-label='Events by severity' data-logs-metrics>{['low','medium','high','critical'].map(value => <Link key={value} href={`/logs/search?${new URLSearchParams({ hours, ...(service !== 'all' ? { service } : {}), ...(advanced && appliedKql ? { kql: appliedKql } : { table, search }), severity: value })}`} className={`${dashboardPanelClass} p-4`} data-logs-metric-card><p className='text-sm capitalize text-ui-muted'>{value}</p><p className='mt-2 text-2xl font-semibold tabular-nums'>{data ? (data.counts.find(item => item.severity === value)?.count || 0).toLocaleString() : '—'}</p></Link>)}</section>
+                <section className='grid gap-3 sm:grid-cols-4' aria-label='Events by severity' data-logs-metrics>{['low','medium','high','critical'].map(value => <Link key={value} href={`/logs/search?${new URLSearchParams({ hours, ...(service !== 'all' ? { service } : {}), ...(advanced && appliedHql ? { hql: appliedHql } : { table, search }), severity: value })}`} className={`${dashboardPanelClass} p-4`} data-logs-metric-card><p className='text-sm capitalize text-ui-muted'>{value}</p><p className='mt-2 text-2xl font-semibold tabular-nums'>{data ? (data.counts.find(item => item.severity === value)?.count || 0).toLocaleString() : '—'}</p></Link>)}</section>
                 <div className={`${dashboardPanelClass} flex flex-wrap gap-4 p-5`}><Link className='text-sm font-semibold text-ui-primary' href='/logs/realtime'>Investigate high and critical activity →</Link><Link className='text-sm font-semibold text-ui-primary' href='/logs/errors'>Review application errors →</Link></div>
                 <details className={`${dashboardPanelClass} p-4`}><summary className='cursor-pointer text-sm font-semibold'>Operational counters</summary>{pendingCommands && <p className='mt-3 text-sm'>Commands awaiting checks: {pendingCommands.has_more ? 'more than ' : ''}{pendingCommands.count.toLocaleString()}</p>}<p className='mt-3 text-xs text-ui-muted'>Most active services in the selected time range</p><dl className='mt-2 grid gap-2'>{data?.services.map(item => <div key={item.service} className='flex justify-between gap-3 text-sm'><dt>{item.service}</dt><dd>{item.count.toLocaleString()}</dd></div>)}</dl></details>
             </> : <section className={`${dashboardPanelClass} min-w-0 overflow-hidden`} aria-label='Log events'>

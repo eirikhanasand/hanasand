@@ -67,7 +67,7 @@ test('basic search sends the chosen log type, service, severity and time range a
     await page.getByRole('combobox', { name: 'Service', exact: true }).selectOption('audit')
     await page.getByRole('combobox', { name: 'Severity' }).selectOption('high')
     await page.getByRole('combobox', { name: 'Time range' }).selectOption('168')
-    await expect.poll(() => Object.fromEntries(requests.at(-1)?.searchParams || [])).toEqual({ hours: '168', kql: 'ProcessLogs | take 200', search: 'whoami', service: 'audit', severity: 'high' })
+    await expect.poll(() => Object.fromEntries(requests.at(-1)?.searchParams || [])).toEqual({ hours: '168', hql: 'ProcessLogs | take 200', search: 'whoami', service: 'audit', severity: 'high' })
     await page.reload()
     await expect(page.getByRole('searchbox', { name: 'Search logs' })).toHaveValue('whoami')
     await expect(page.getByRole('combobox', { name: 'Log type' })).toHaveValue('ProcessLogs')
@@ -76,31 +76,31 @@ test('basic search sends the chosen log type, service, severity and time range a
     await expect.poll(() => new URL(page.url()).searchParams.has('service')).toBe(false)
 })
 
-test('KQL requires running edited queries, projects fields, summarizes and reports unsupported syntax', async ({ page }) => {
+test('HQL requires running edited queries, projects fields, summarizes and reports unsupported syntax', async ({ page }) => {
     const queries: string[] = []
     await page.route('**/api/backend/logs/search?*', route => {
-        const query = new URL(route.request().url()).searchParams.get('kql')!
+        const query = new URL(route.request().url()).searchParams.get('hql')!
         queries.push(query)
         if (query.includes('union')) return route.fulfill({ status: 400, json: { error: 'Unsupported operator union.' } })
         if (query.includes('summarize')) return route.fulfill({ json: { ...result([{ value: 'audit', count: 3 }]), summarize: 'Service' } })
         return route.fulfill({ json: { ...result(), ...(query.includes('project') ? { projection: ['TimeGenerated', 'CommandLine', 'RuleId'] } : {}) } })
     })
     await openLogs(page, '/logs/search')
-    await page.getByRole('checkbox', { name: 'Advanced KQL' }).check()
+    await page.getByRole('checkbox', { name: 'HQL' }).check()
     await expect(page.getByRole('searchbox')).toBeDisabled()
     await expect.poll(() => queries.at(-1)).toContain('ProcessLogs | where Severity')
     const projection = 'ProcessLogs | where CommandLine contains "whoami" | project TimeGenerated, CommandLine, RuleId'
-    await page.getByRole('textbox', { name: 'KQL query' }).fill(projection)
+    await page.getByRole('textbox', { name: 'HQL query' }).fill(projection)
     await expect(page.getByText('Query edited. Run it to update the results.')).toBeVisible()
     expect(queries).not.toContain(projection)
     await page.getByRole('button', { name: 'Run query' }).click()
     await expect(page.locator('article pre').first()).toHaveText(JSON.stringify({ TimeGenerated: event().event_timestamp, CommandLine: 'whoami', RuleId: ['recon.whoami'] }, null, 2))
-    await page.getByText('KQL syntax and tables', { exact: true }).click()
+    await page.getByText('HQL syntax and tables', { exact: true }).click()
     await expect(page.getByText('Tables: Logs, ProcessLogs, SigninLogs', { exact: false })).toBeVisible()
-    await page.getByRole('textbox', { name: 'KQL query' }).fill('Logs | summarize count() by Service')
+    await page.getByRole('textbox', { name: 'HQL query' }).fill('Logs | summarize count() by Service')
     await page.getByRole('button', { name: 'Run query' }).click()
     await expect(page.getByRole('table')).toContainText('audit3')
-    await page.getByRole('textbox', { name: 'KQL query' }).fill('Logs | union ProcessLogs')
+    await page.getByRole('textbox', { name: 'HQL query' }).fill('Logs | union ProcessLogs')
     await page.getByRole('button', { name: 'Run query' }).click()
     await expect(page.getByRole('alert')).toContainText('Unsupported operator union.')
     await expect(page.getByRole('table')).toHaveCount(0)
@@ -123,4 +123,19 @@ test('errors expand inline, copy JSON and show a recoverable data failure', asyn
     fail = false
     await page.getByRole('button', { name: 'Retry' }).click()
     await expect(page.getByRole('alert')).toHaveCount(0)
+})
+
+test('legacy KQL links retain their query when renamed to HQL', async ({ page }) => {
+    const hql = 'Logs | where Service == "audit" | take 20'
+    const queries: string[] = []
+    await page.route('**/api/backend/logs/search?*', route => {
+        queries.push(new URL(route.request().url()).searchParams.get('hql')!)
+        return route.fulfill({ json: result() })
+    })
+    await openLogs(page, '/logs/search?kql=' + encodeURIComponent(hql))
+    await expect(page.getByRole('checkbox', { name: 'HQL', exact: true })).toBeChecked()
+    await expect(page.getByRole('textbox', { name: 'HQL query' })).toHaveValue(hql)
+    await expect.poll(() => queries.at(-1)).toBe(hql)
+    await expect.poll(() => new URL(page.url()).searchParams.get('hql')).toBe(hql)
+    expect(new URL(page.url()).searchParams.has('kql')).toBe(false)
 })

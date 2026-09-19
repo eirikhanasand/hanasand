@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { randomUUID } from 'crypto'
 import run from '#db'
+import { compileAuditQuery } from '#utils/auditQuery.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { actorHasAdminSupportAccess, recordSystemEvent, redactAuditValue, requireAuditReason, supportTimelineAuditBridgeEvent } from '#utils/systemEvent.ts'
 import {
@@ -18,6 +19,7 @@ import {
 } from '#utils/organizations.ts'
 
 type AuditQuery = {
+    hql?: string
     q?: string
     org?: string
     orgId?: string
@@ -362,6 +364,7 @@ const supportInspectionFilters = new Set([
 
 const systemEventFilters = new Set([
     'q',
+    'hql',
     'org',
     'orgId',
     'organizationId',
@@ -416,8 +419,15 @@ export async function getSystemEvents(req: FastifyRequest, res: FastifyReply) {
     if (!actor) return
 
     const query = req.query as AuditQuery
-    const where: string[] = []
-    const values: Array<string | number | Date | null> = []
+    let compiled: ReturnType<typeof compileAuditQuery> | undefined
+    try {
+        if (query.hql !== undefined) compiled = compileAuditQuery(text(query.hql))
+    } catch (error) {
+        return res.status(400).send(supportError('invalid_hql', error instanceof Error ? error.message : 'Invalid HQL query.'))
+    }
+    if (compiled && (query.cursor || query.page)) return res.status(400).send(supportError('invalid_hql', 'Use take to limit HQL results, without page or cursor.'))
+    const where: string[] = [...(compiled?.where || [])]
+    const values: Array<string | number | Date | null> = [...(compiled?.params || [])]
     const add = (value: string | number | Date | null) => {
         values.push(value)
         return `$${values.length}`
@@ -530,6 +540,32 @@ export async function getSystemEvents(req: FastifyRequest, res: FastifyReply) {
         LEFT JOIN organizations organization ON organization.id = e.organization_id
         ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
     `, [...values])
+    if (compiled) {
+        const selected = compiled.summarize
+            ? `${compiled.fields[compiled.summarize]} AS value, COUNT(*)::int AS count`
+            : Object.entries(compiled.fields).map(([name, sql]) => `${sql} AS "${name}"`).join(', ')
+        const result = await run(`
+            SELECT ${selected}
+            FROM system_events e
+            LEFT JOIN users actor ON actor.id = e.actor_id
+            LEFT JOIN users target_user ON target_user.id = e.object_id
+            LEFT JOIN organizations organization ON organization.id = e.organization_id
+            ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+            ${compiled.summarize ? 'GROUP BY 1 ORDER BY count DESC, value ASC NULLS LAST' : `ORDER BY ${compiled.order}`}
+            LIMIT ${add(compiled.limit)}
+        `, values)
+        const columns = compiled.summarize ? [compiled.summarize, 'Count'] : compiled.projection || Object.keys(compiled.fields)
+        return res.send({
+            events: [],
+            queryResult: {
+                columns,
+                rows: result.rows.map(row => compiled.summarize ? [row.value, row.count] : columns.map(column => row[column])),
+                limit: compiled.limit,
+                summarized: !!compiled.summarize,
+            },
+            pagination: { total: Number(countResult.rows[0].total), nextCursor: null },
+        })
+    }
     if (cursor) {
         where.push(`(e.created_at, e.id) < (${add(cursor.createdAt)}, ${add(cursor.id)})`)
     }

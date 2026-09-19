@@ -6,7 +6,7 @@ const queries: Array<{ sql: string, values: unknown[] }> = []
 async function run(sql: string, values: unknown[] = []) {
     if (sql.includes('FROM roles r')) return { rows: administrator ? [{ id: 'system_admin' }] : [] }
     queries.push({ sql, values })
-    return { rows: sql.includes('COUNT(*)') ? [{ total: 125 }] : [] }
+    return { rows: sql.includes('AS total') ? [{ total: 125 }] : sql.includes('GROUP BY 1') ? [{ value: 'test', count: 12 }] : sql.includes('AS "Action"') ? [{ Action: 'restart', Description: 'matched' }] : [] }
 }
 mock.module('../src/utils/db.ts', () => ({ default: run, queryOnce: run, closeDatabase: async () => {} }))
 mock.module('../src/utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: true, id: 'test-admin' }) }))
@@ -46,4 +46,30 @@ test('cursor batches count all filtered events before applying the cursor', asyn
     expect(queries[0].sql).not.toContain('(e.created_at, e.id) <')
     expect(queries[1].sql).toContain('(e.created_at, e.id) <')
     expect(queries[1].values).toContain(75)
+})
+
+test('HQL shares KQL operators and binds values before existing audit filters', async () => {
+    const response = await request({ hql: 'AuditEvents | where Result == "failed" and Description contains "x\' OR 1=1 --" | order by TimeGenerated asc | project Action, Description | take 25', service: 'test', q: 'needle' })
+    expect(response.statusCode).toBe(200)
+    expect(response.body.queryResult).toEqual({ columns: ['Action', 'Description'], rows: [['restart', 'matched']], limit: 25, summarized: false })
+    expect(response.body.pagination).toEqual({ total: 125, nextCursor: null })
+    expect(queries[0].values).toEqual(['failed', "x' OR 1=1 --", '%needle%', '%test%'])
+    expect(queries[1].sql).toContain('ORDER BY e.created_at ASC, e.id DESC')
+    expect(queries[1].sql).not.toContain('OR 1=1')
+    expect(queries[1].sql).not.toContain('normalized')
+    expect(queries[1].values.at(-1)).toBe(25)
+})
+
+test('HQL summarizes filtered matches and rejects unsupported syntax without querying data', async () => {
+    const response = await request({ hql: 'AuditEvents | where TimeGenerated > ago(24h) | summarize count() by Service | take 10' })
+    expect(response.body.queryResult).toEqual({ columns: ['Service', 'Count'], rows: [['test', 12]], limit: 10, summarized: true })
+    expect(queries[1].sql).toContain('GROUP BY 1 ORDER BY count DESC')
+    queries.length = 0
+    for (const hql of ['AuditEvents | union Logs', 'AuditEvents | where constructor == 1', 'AuditEvents | take 10 | where Result == "failed"', 'AuditEvents | take 501']) {
+        expect((await request({ hql })).statusCode).toBe(400)
+    }
+    expect((await request({ hql: 'AuditEvents', cursor: 'bad' })).statusCode).toBe(400)
+    expect(queries).toHaveLength(0)
+    administrator = false
+    expect((await request({ hql: 'AuditEvents' })).statusCode).toBe(403)
 })

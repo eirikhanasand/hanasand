@@ -11,9 +11,9 @@ export async function searchLogs(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
     if (!valid) return res.status(401).send({ error: 'Unauthorized.' })
     if (!(await hasRole(req, res, 'system_admin')).valid) return res.status(403).send({ error: 'Missing system_admin role.' })
-    const input = req.query as { kql?: string, search?: string, service?: string, severity?: string, hours?: string, stats?: string }
+    const input = req.query as { hql?: string, kql?: string, search?: string, service?: string, severity?: string, hours?: string, stats?: string }
     try {
-        const compiled = compileLogQuery(input.kql || 'Logs | take 200')
+        const compiled = compileLogQuery(input.hql || input.kql || 'Logs | take 200')
         const params = [...compiled.params]
         const bind = (value: string | number) => { params.push(value); return `$${params.length}` }
         const hours = Number(input.hours || 24)

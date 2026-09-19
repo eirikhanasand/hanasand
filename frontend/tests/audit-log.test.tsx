@@ -33,3 +33,25 @@ test('shared audit renders service, event and object fields and retains filters 
         expect(html).not.toContain('/ti/domains')
     } finally { globalThis.fetch = originalFetch }
 })
+
+test('audit search reloads HQL results and shows query errors without claiming an empty log', async () => {
+    const originalFetch = globalThis.fetch
+    const hql = 'AuditEvents | summarize count() by Service'
+    let fail = false
+    globalThis.fetch = (async (url: string | URL | Request) => {
+        expect(new URL(String(url)).searchParams.get('hql')).toBe(hql)
+        return fail ? Response.json({ error: 'Invalid HQL query.' }, { status: 400 }) : Response.json({ events: [], pagination: { total: 12, nextCursor: null }, queryResult: { columns: ['Service', 'Count'], rows: [['compute', 12]], limit: 100, summarized: true } })
+    }) as typeof fetch
+    try {
+        const props = { searchParams: Promise.resolve({ hql }) }
+        const html = renderToStaticMarkup(await AuditLogPage(props))
+        expect(html).toContain('compute')
+        expect(html).toContain('1 group · 12 matches')
+        expect(html).toContain('HQL query')
+        fail = true
+        const failed = renderToStaticMarkup(await AuditLogPage(props))
+        expect(failed).toContain('Invalid HQL query.')
+        expect(failed).not.toContain('No audit events match')
+        expect(failed).not.toContain('Audit storage is unavailable')
+    } finally { globalThis.fetch = originalFetch }
+})

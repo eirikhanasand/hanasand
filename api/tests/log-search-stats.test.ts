@@ -91,3 +91,15 @@ test('processing status exposes bounded pending command counts and their oldest 
     pendingCount = 0
     expect((await app.inject('/logs/search')).json().processing.pending_commands).toEqual({ count: 0, has_more: false, oldest_queued_at: null })
 })
+
+test('HQL and legacy KQL links compile to the same parameterized query', async () => {
+    const query = 'ProcessLogs | where Severity == "high" | take 10'
+    const results: Array<{ sql: string, params: unknown[] }> = []
+    for (const name of ['hql', 'kql']) {
+        statements = []; parameters = []
+        expect((await app.inject('/logs/search?' + name + '=' + encodeURIComponent(query))).statusCode).toBe(200)
+        const index = statements.findIndex(sql => sql.startsWith('SELECT id, normalized'))
+        results.push({ sql: statements[index], params: parameters[index] })
+    }
+    expect(results[0]).toEqual(results[1])
+})

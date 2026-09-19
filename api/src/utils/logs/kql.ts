@@ -8,6 +8,12 @@ const fields: Record<string, string> = {
 }
 export const logTables = ['Logs', 'SigninLogs', 'ApplicationLogs', 'ProcessLogs', 'HttpLogs', 'SystemLogs']
 export function compileLogQuery(input: string) {
+    return compileQuery(input, { fields, tables: logTables, defaultOrder: 'event_timestamp DESC, id DESC', idColumn: 'id', logSearch: true })
+}
+
+type QuerySource = { fields: Record<string, string>, tables: string[], defaultOrder: string, idColumn: string, logSearch?: boolean }
+export function compileQuery(input: string, source: QuerySource) {
+    const { fields } = source
     if (input.length > 8000) throw new Error('Query is too long (maximum 8,000 characters).')
     const tokens: string[] = []
     const pattern = /\s*("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|>=|<=|==|!=|[|(),><]|\d+(?:\.\d+)?[smhd]?|[A-Za-z_][A-Za-z0-9_.]*|\*)/gy
@@ -24,7 +30,7 @@ export function compileLogQuery(input: string) {
     const next = () => tokens[index++]
     const peek = () => tokens[index]?.toLowerCase()
     const requireToken = (value: string) => { if (next()?.toLowerCase() !== value) throw new Error(`Expected ${value}.`) }
-    const field = () => { const name = next(); if (!fields[name]) throw new Error(`Unknown field ${name || '(missing)'}.`); return { name, sql: fields[name] } }
+    const field = () => { const name = next(); if (!Object.hasOwn(fields, name)) throw new Error(`Unknown field ${name || '(missing)'}.`); return { name, sql: fields[name] } }
     const value = (): string => {
         const token = next()
         if (token?.startsWith('"') || token?.startsWith('\'')) return bind(token.slice(1, -1).replace(/\\([\\'"nrt])/g, (_, c) => ({ n: '\n', r: '\r', t: '\t' }[c as string] || c)))
@@ -45,11 +51,11 @@ export function compileLogQuery(input: string) {
         if (operator === 'in') {
             requireToken('('); const values = [value()]
             while (peek() === ',') { next(); values.push(value()) }
-            requireToken(')'); return left.name === 'RuleId' ? `EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(${left.sql}, '[]'::jsonb)) detection WHERE detection->>'rule_id' IN (${values.join(', ')}))` : `${left.sql} IN (${values.join(', ')})`
+            requireToken(')'); return source.logSearch && left.name === 'RuleId' ? `EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(${left.sql}, '[]'::jsonb)) detection WHERE detection->>'rule_id' IN (${values.join(', ')}))` : `${left.sql} IN (${values.join(', ')})`
         }
         if (['==', '!=', '>', '<', '>=', '<='].includes(operator)) {
             const right = value()
-            if (left.name === 'RuleId') {
+            if (source.logSearch && left.name === 'RuleId') {
                 if (!['==', '!='].includes(operator)) throw new Error('RuleId supports ==, !=, in, contains and has.')
                 return `${operator === '!=' ? 'NOT ' : ''}EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(${left.sql}, '[]'::jsonb)) detection WHERE detection->>'rule_id' = ${right})`
             }
@@ -58,38 +64,38 @@ export function compileLogQuery(input: string) {
         if (['contains', 'has', 'startswith', 'endswith'].includes(operator)) {
             const param = value()
             if (left.name === 'TimeGenerated') throw new Error('Use a comparison operator for TimeGenerated.')
-            const text = left.name === 'RuleId' ? 'detection->>\'rule_id\'' : left.sql
+            const text = source.logSearch && left.name === 'RuleId' ? 'detection->>\'rule_id\'' : left.sql
             let match = operator === 'has' ? `lower(${param}::text) = ANY(regexp_split_to_array(lower(COALESCE(${text}, '')), '[^[:alnum:]]+'))`
                 : operator === 'endswith' ? `right(lower(COALESCE(${text}, '')), length(${param}::text)) = lower(${param}::text)`
                     : operator === 'startswith' ? `left(lower(COALESCE(${text}, '')), length(${param}::text)) = lower(${param}::text)`
                         : `strpos(lower(COALESCE(${text}, '')), lower(${param}::text)) > 0`
-            if (left.name === 'Executable' && operator === 'endswith') {
+            if (source.logSearch && left.name === 'Executable' && operator === 'endswith') {
                 // Bound index keys for arbitrary-length metadata. The complete
                 // suffix recheck preserves long values and database case-folding.
                 const prefix = `replace(replace(replace(left(reverse(lower(${param}::text)), 512), '!', '!!'), '%', '!%'), '_', '!_')`
                 match = `(left(reverse(lower(COALESCE(${text}, ''))), 512) LIKE ${prefix} || '%' ESCAPE '!' AND ${match})`
-            } else if (left.name !== 'UserId' && left.name !== 'RuleId') {
+            } else if (source.logSearch && left.name !== 'UserId' && left.name !== 'RuleId') {
                 match = `(${logFieldTextCandidates(param)} AND ${match})`
             }
-            return left.name === 'RuleId' ? `EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(${left.sql}, '[]'::jsonb)) detection WHERE ${match})` : match
+            return source.logSearch && left.name === 'RuleId' ? `EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(${left.sql}, '[]'::jsonb)) detection WHERE ${match})` : match
         }
         throw new Error(`Unsupported operator ${operator || '(missing)'}.`)
     }
     const and = (): string => { let sql = atom(); while (peek() === 'and') { next(); sql = `(${sql} AND ${atom()})` } return sql }
     const or = (): string => { let sql = and(); while (peek() === 'or') { next(); sql = `(${sql} OR ${and()})` } return sql }
-    const table = next() || 'Logs'
-    if (!logTables.includes(table)) throw new Error(`Choose a table: ${logTables.join(', ')}.`)
-    const where = table === 'Logs' ? [] : [`normalized->>'log_type' = ${bind(table)}`]
-    let order = 'event_timestamp DESC, id DESC', limit = 100
+    const table = next() || source.tables[0]
+    if (!source.tables.includes(table)) throw new Error(`Choose a table: ${source.tables.join(', ')}.`)
+    const where = !source.logSearch || table === 'Logs' ? [] : [`normalized->>'log_type' = ${bind(table)}`]
+    let order = source.defaultOrder, limit = 100
     let projection: string[] | null = null, summarize: string | null = null
     let taken = false, ordered = false
     while (index < tokens.length) {
         requireToken('|')
         const operation = next()?.toLowerCase()
-        if (taken) throw new Error('take must be the final operator in this KQL subset.')
-        if ((projection || summarize) && operation !== 'take' && operation !== 'limit') throw new Error('Only take may follow project or summarize in this KQL subset.')
+        if (taken) throw new Error('take must be the final operator in this HQL subset.')
+        if ((projection || summarize) && operation !== 'take' && operation !== 'limit') throw new Error('Only take may follow project or summarize in this HQL subset.')
         if (operation === 'where') {
-            if (ordered) throw new Error('Put where before order by in this KQL subset.')
+            if (ordered) throw new Error('Put where before order by in this HQL subset.')
             where.push(or())
         }
         else if (operation === 'take' || operation === 'limit') {
@@ -97,11 +103,11 @@ export function compileLogQuery(input: string) {
             if (!/^\d+$/.test(count || '') || Number(count) < 1 || Number(count) > 500) throw new Error('Take must be between 1 and 500.')
             limit = Number(count); taken = true
         } else if (operation === 'sort' || operation === 'order') {
-            if (ordered) throw new Error('Use one order by clause in this KQL subset.')
+            if (ordered) throw new Error('Use one order by clause in this HQL subset.')
             ordered = true
             requireToken('by'); const selected = field(); const direction = next()?.toLowerCase()
             if (direction !== 'asc' && direction !== 'desc') throw new Error('Use asc or desc.')
-            order = `${selected.sql} ${direction.toUpperCase()}, id DESC`
+            order = `${selected.sql} ${direction.toUpperCase()}, ${source.idColumn} DESC`
         } else if (operation === 'project') {
             projection = [field().name]
             while (peek() === ',') { next(); projection.push(field().name) }
