@@ -1,69 +1,24 @@
-import run from '#db'
 import hasPermissionToModifyRole from '#utils/auth/hasPermissionToModifyRole.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
+import { RoleChangeError, saveRoleChanges, validateRoleChanges } from '#utils/roleChanges.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
-type PutRoleBody = {
-    name?: string
-    description?: string
-}
-
-/**
- * PUT /role/:id
- * Update a role's name or description
- */
 export default async function putRole(req: FastifyRequest, res: FastifyReply) {
-    const { valid } = await tokenWrapper(req, res)
-    const { valid: validRole } = await hasRole(req, res, 'user_admin')
-    if (!valid || !validRole) {
-        return res.status(401).send({ error: 'Unauthorized.' })
-    }
-
+    const identity = await tokenWrapper(req, res)
+    if (!identity.valid || !identity.id) return res.status(401).send({ error: 'Unauthorized.' })
+    if (!(await hasRole(req, res, 'user_admin')).valid && !(await hasRole(req, res, 'administrator')).valid) return res.status(403).send({ error: 'Unauthorized.' })
     const { id } = req.params as { id: string }
-    const { name, description } = req.body as PutRoleBody ?? {}
-
-    if (!id) {
-        return res.status(400).send({ error: 'Missing role id' })
-    }
-
-    const { valid: hasPermission } = await hasPermissionToModifyRole(req, res)
-    if (!hasPermission) {
-        return res.status(401).send({ error: 'Unauthorized.' })
-    }
-
+    if (!id) return res.status(400).send({ error: 'Missing role id' })
     try {
-        const fields: string[] = []
-        const values: any[] = []
-
-        if (name) {
-            fields.push(`name = $${fields.length + 1}`)
-            values.push(name)
-        }
-
-        if (description !== undefined) {
-            fields.push(`description = $${fields.length + 1}`)
-            values.push(description)
-        }
-
-        if (!fields.length) {
-            return res.status(400).send({ error: 'No fields to update' })
-        }
-
-        values.push(id)
-        const query = `UPDATE roles SET ${fields.join(', ')}, updated_at = NOW() WHERE id = $${values.length} RETURNING *`
-        const result = await run(query, values)
-        if (!result.rows.length) {
-            return res.status(404).send({ error: 'Role not found' })
-        }
-
-        return res.send(result.rows[0])
-    } catch (error: any) {
-        if (error.code === '23505') {
-            return res.status(409).send({ error: 'Role name already exists' })
-        }
-
-        console.error(error)
-        return res.status(500).send({ error: 'Internal Server Error' })
+        const changes = validateRoleChanges(req.body)
+        const { valid: hasPermission } = await hasPermissionToModifyRole(req, res)
+        if (!hasPermission) return res.status(403).send({ error: 'Unauthorized.' })
+        return res.send(await saveRoleChanges(req, id, identity.id, identity.authenticatedId || identity.id, changes))
+    } catch (error) {
+        if (error instanceof RoleChangeError) return res.status(error.status).send({ error: error.message })
+        if ((error as { code?: string }).code === '23505') return res.status(409).send({ error: 'Role name already exists' })
+        req.log.error(error)
+        return res.status(500).send({ error: 'Unable to save the role.' })
     }
 }

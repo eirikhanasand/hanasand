@@ -1,3 +1,4 @@
+import ensureRoleSchema from './roleSchema.ts'
 import ensureSharedMailSchema from './sharedMailSchema.ts'
 import ensureVmOrganizationSchema from './vmOrganizationSchema.ts'
 import ensureCaseDevelopmentSchema from './caseDevelopmentSchema.ts'
@@ -11,6 +12,7 @@ import ensureThesisSchema from './thesisSchema.ts'
 import { reservedUsernames } from '#utils/auth/reservedUsernames.ts'
 
 export default async function ensureSchema() {
+    await ensureRoleSchema()
     await ensureAccountIdentitySchema()
     await ensureServiceAccountsSchema()
     await ensureThesisSchema()

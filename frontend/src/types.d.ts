@@ -198,6 +198,7 @@ type MinimalRole = {
 }
 
 type Role = {
+    icon?: string | null
     id: string
     name: string
     description: string
