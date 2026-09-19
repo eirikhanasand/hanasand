@@ -1,3 +1,5 @@
+import { logFieldTextCandidates } from './searchText.ts'
+
 const fields: Record<string, string> = {
     TimeGenerated: 'event_timestamp', Severity: 'normalized->>\'severity\'', Level: 'normalized->>\'level\'',
     Service: 'normalized->>\'service\'', Host: 'normalized->>\'host\'', Message: 'normalized->>\'message\'',
@@ -66,6 +68,8 @@ export function compileLogQuery(input: string) {
                 // suffix recheck preserves long values and database case-folding.
                 const prefix = `replace(replace(replace(left(reverse(lower(${param}::text)), 512), '!', '!!'), '%', '!%'), '_', '!_')`
                 match = `(left(reverse(lower(COALESCE(${text}, ''))), 512) LIKE ${prefix} || '%' ESCAPE '!' AND ${match})`
+            } else if (left.name !== 'UserId' && left.name !== 'RuleId') {
+                match = `(${logFieldTextCandidates(param)} AND ${match})`
             }
             return left.name === 'RuleId' ? `EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(${left.sql}, '[]'::jsonb)) detection WHERE ${match})` : match
         }

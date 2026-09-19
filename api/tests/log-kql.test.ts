@@ -37,7 +37,7 @@ test('KQL rejects unsupported pipeline semantics instead of silently reordering 
     expect(rule.where.join(' ')).not.toContain('ILIKE')
     expect(compileLogQuery('Logs | where Message has "foo"').where.join(' ')).toContain('regexp_split_to_array')
 })
-test('executable suffixes use a parameterized literal prefix without changing other fields', () => {
+test('executable suffixes retain their bounded parameterized index prefix', () => {
     for (const value of ['whoami', '%', '_', '\\', '!', '', 'WHOAMI', 'İ', 'x\' OR 1=1 --']) {
         const query = compileLogQuery(`ProcessLogs | where Executable endswith ${JSON.stringify(value)} | project TimeGenerated, Host | take 100`)
         expect(query.params).toEqual(['ProcessLogs', value])
@@ -49,8 +49,27 @@ test('executable suffixes use a parameterized literal prefix without changing ot
         expect(query.limit).toBe(100)
         expect(query.projection).toEqual(['TimeGenerated', 'Host'])
     }
-    expect(compileLogQuery('Logs | where Message endswith "whoami"').where.join(' ')).not.toContain('LIKE')
-    expect(compileLogQuery('Logs | where Executable contains "whoami"').where.join(' ')).not.toContain('LIKE')
+    expect(compileLogQuery('Logs | where Message endswith "whoami"').where.join(' ')).not.toContain('reverse(')
+    expect(compileLogQuery('Logs | where Executable contains "whoami"').where.join(' ')).not.toContain('reverse(')
+})
+test('JSON field searches retain exact predicates inside each Boolean atom', () => {
+    for (const field of ['Severity', 'Level', 'Service', 'Host', 'Message', 'LogType', 'CommandLine', 'Executable']) {
+        for (const operator of ['contains', 'has', 'startswith', 'endswith']) {
+            if (field === 'Executable' && operator === 'endswith') continue
+            const query = compileLogQuery(`Logs | where not ${field} ${operator} "path\\\\%_!"`)
+            expect(query.params).toEqual(['path\\%_!'])
+            expect(query.where[0]).toStartWith('(NOT ((')
+            expect(query.where[0]).toContain('lower(normalized::text) LIKE')
+            expect(query.where[0]).toContain('to_jsonb(lower($1::text))::text')
+            expect(query.where[0]).toContain('ESCAPE \'!\'')
+        }
+    }
+    for (const field of ['UserId', 'RuleId']) {
+        for (const operator of ['contains', 'has', 'startswith', 'endswith']) {
+            expect(compileLogQuery(`Logs | where ${field} ${operator} "whoami"`).where.join(' ')).not.toContain('LIKE')
+        }
+    }
+    expect(compileLogQuery('Logs | where Message == "whoami"').where.join(' ')).not.toContain('LIKE')
 })
 test('normalizes HTTP aliases and SSH identity context without mixing level and severity', () => {
     const base = { id: '1', service: 'api', level: 'info', created_at: '2026-09-19T00:00:00Z' }
