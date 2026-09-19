@@ -223,14 +223,16 @@ export function sourceById(overview: TiAdminOverview, id: string) {
     return overview.sources.find(source => source.id === id)
 }
 
+const tiDateFormatter = new Intl.DateTimeFormat('en', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'Europe/Oslo',
+})
+
 export function formatTiDate(value: string) {
     const date = new Date(value)
     if (!Number.isFinite(date.getTime())) return 'not recorded'
-    return new Intl.DateTimeFormat('en', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-        timeZone: 'Europe/Oslo',
-    }).format(date)
+    return tiDateFormatter.format(date)
 }
 
 export function ageDays(since: string) {
