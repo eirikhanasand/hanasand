@@ -8,7 +8,10 @@ export type LogSource = 'service_logs' | 'login_events' | 'traffic_events' | 'sy
 export async function stableLogWatermark(source: LogSource): Promise<string | null> {
     try {
         return await withTransaction(async query => {
-            await query(`LOCK TABLE ${source} IN SHARE MODE NOWAIT`)
+            // Queue briefly behind current inserts so continuous collection cannot
+            // starve the watermark. A longer transaction only delays this stream.
+            await query('SET LOCAL lock_timeout = \'100ms\'')
+            await query(`LOCK TABLE ${source} IN SHARE MODE`)
             const result = await query(`SELECT COALESCE(MAX(id), 0)::text AS last_id FROM ${source}`)
             return String(result.rows[0].last_id)
         })
