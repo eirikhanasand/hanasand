@@ -7,6 +7,7 @@ const capture = { id: 'capture-one', sourceId: 'news', url: 'https://example.com
 const fact = { kind: 'victim', value: 'Example Corporation', quote };
 test('accepts new quoted facts and rejects repeats, invented quotes, and other actors', () => {
   expect(groundedAdditions(actor, capture, [fact])).toHaveLength(1);
+  expect(groundedAdditions(actor, { ...capture, body: undefined, metadata: { normalizedEvidence: { text: 'BrainCipher Ransomware attacked Example Corporation yesterday.' } } }, [{ kind: 'malware', value: 'BrainCipher Ransomware', quote: 'BrainCipher Ransomware attacked Example Corporation yesterday.' }])).toHaveLength(0);
   expect(groundedAdditions({ ...actor, characterization: { victims: [{ value: fact.value }] } }, capture, [fact])).toHaveLength(0);
   expect(groundedAdditions(actor, capture, [{ ...fact, quote: quote + ' New unsupported information.' }])).toHaveLength(0);
   expect(groundedAdditions({ ...actor, canonicalName: 'OtherActor' }, capture, [fact])).toHaveLength(0);
@@ -39,7 +40,7 @@ test('flushes fresh collection evidence before querying it for enrichment', asyn
   let pending = false;
   let readFresh = false;
   const store = {
-    saveActorEnrichmentRun() {}, savePlan() {}, saveRun() {}, getActorProfile: () => actor,
+    saveActorEnrichmentRun() {}, savePlan(plan: any) { expect(plan.tasks[0].availableAt).toBeUndefined(); expect(plan.tasks[0].planning.actorEnrichment.actorId).toBe(actor.id); }, saveRun() {}, getActorProfile: () => actor,
     listSources: () => [{ id: 'search', name: 'Public news', type: 'rss', status: 'active', url: 'https://example.com/?q={query}', accessMethod: 'public_http', risk: 'low', legalNotes: 'Public news', metadata: { sourceFamily: 'public_news_search' }, crawlState: { nextEligibleAt: '2099-01-01T00:00:00Z' } }],
     flush: async () => { pending = false; },
     queryActorEnrichmentCaptures: async (profile: any) => { expect(pending).toBe(false); expect(profile.captureIds).toContain(capture.id); readFresh = true; return []; },

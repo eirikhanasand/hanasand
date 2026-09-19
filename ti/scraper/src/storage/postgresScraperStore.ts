@@ -2365,13 +2365,13 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       this.sql`SELECT jsonb_build_object('id', w.id, 'subjectId', detail."subjectId",
         'actorName', p.canonical_name, 'observedAt', w.updated_at, 'kind', detail."kind",
         'sourceId', detail."sourceId", 'sourceName', s.name,
-        'captureIds', '[]'::jsonb, 'metadata', jsonb_build_object(
+        'captureIds', COALESCE(detail."captureIds", '[]'::jsonb), 'metadata', jsonb_build_object(
           'aliasesAdded', detail.metadata->'aliasesAdded',
           'characterization', (SELECT jsonb_object_agg(key, true) FROM jsonb_object_keys(COALESCE(detail.metadata->'characterization', '{}'::jsonb)) key),
           'wordsAdded', detail.metadata->'wordsAdded',
           'newFacts', detail.metadata->'newFacts')) AS record
         FROM threat_intel.workflow_records w
-        CROSS JOIN LATERAL jsonb_to_record(w.record) AS detail("subjectId" text, kind text, "sourceId" text, "subjectType" text, metadata jsonb)
+        CROSS JOIN LATERAL jsonb_to_record(w.record) AS detail("subjectId" text, kind text, "sourceId" text, "subjectType" text, "captureIds" jsonb, metadata jsonb)
         LEFT JOIN threat_intel.actor_profiles p ON p.id = detail."subjectId" AND p.tenant_id = w.tenant_id
         LEFT JOIN threat_intel.sources s ON s.id = detail."sourceId"
         WHERE w.record_type = 'evidence_delta' AND w.tenant_id = ${tenantId} AND w.record->>'subjectType' = 'actor_profile'
