@@ -250,6 +250,56 @@ try {
     assert.equal((await query('SELECT 1 FROM log_process_queue WHERE log_id=$1', [archivedLog.id])).rowCount, 0,
         'An organization becoming inactive during retry cannot poison the command FIFO')
     console.log(`Process queue PostgreSQL verification passed: transactional admission, delayed VM detection, FIFO under sustained arrivals, bounded recovery, deduplication; 1,103 queued events processed in ${Math.round(performance.now()-startedQueue)} ms including recovery checks.`)
+    // Exercise the real oldest-receipt query, all four historical limits and
+    // durable cursors without changing the surrounding fixture's source state.
+    await query('SAVEPOINT historical_throttle')
+    await query('TRUNCATE service_logs CASCADE')
+    await query('TRUNCATE login_events, traffic_events, system_events')
+    await query("UPDATE log_processing_cursors SET recent_id=0 WHERE name='process_logs_recovery'")
+    const throttleSources = [
+        ['service_logs', "service,host,level,message,created_at", "'throttle','fixture-host','info','ordinary history'"],
+        ['login_events', "user_id,ip,status,created_at", "'throttle-user-'||n,'192.0.2.201','success'"],
+        ['traffic_events', "domain,path,method,status,created_at", "'fixture.test','/throttle','GET',200"],
+        ['system_events', "event_type,severity,organization_id,created_at", "'fixture.throttle','info','fixture'"],
+    ]
+    const histories: Array<{ source: string, ids: string[] }> = []
+    for (const [source, columns, values] of throttleSources) {
+        const inserted = await query(`INSERT INTO ${source} (${columns}) SELECT ${values},
+            CASE WHEN n=251 THEN clock_timestamp() ELSE clock_timestamp()-INTERVAL '1 hour' END
+            FROM generate_series(1,251) n RETURNING id::text`)
+        const ids = inserted.rows.map(row => row.id as string).sort((a,b) => BigInt(a) < BigInt(b) ? -1 : 1)
+        histories.push({ source, ids })
+        await query(`INSERT INTO log_processing_cursors(name,last_id,recent_id) VALUES($1,$2,$3)
+            ON CONFLICT(name) DO UPDATE SET last_id=EXCLUDED.last_id,recent_id=EXCLUDED.recent_id`,
+        [source, String(BigInt(ids[0])-1n), ids[249]])
+    }
+    let delayedReceipt = ''
+    queryObserver = async sql => {
+        if (sql.includes('AS delayed') && !delayedReceipt) {
+            // A committed arrival after queue polling remains for the next pass.
+            delayedReceipt = (await client.query(insertCommand, [benignProcess])).rows[0].id
+            await client.query("UPDATE log_process_queue SET queued_at=clock_timestamp()-INTERVAL '61 seconds' WHERE log_id=$1", [delayedReceipt])
+        }
+    }
+    try {
+        await processStoredLogs()
+        queryObserver = undefined
+        for (const { source, ids } of histories) {
+            const state = (await query('SELECT last_id::text,recent_id::text FROM log_processing_cursors WHERE name=$1', [source])).rows[0]
+            assert.equal(state.last_id, ids[99], `${source} history advances by exactly100 acknowledged rows`)
+            assert.equal(state.recent_id, ids[250], `${source} fresh row is still processed`)
+            const keys = ids.map(id => `service:${source==='service_logs'?'':source+':'}${id}`)
+            assert.equal((await query("SELECT COUNT(*)::int AS count FROM mill_events WHERE log_key=ANY($1::text[]) AND processing_status='processed'", [keys])).rows[0].count,101,
+                `${source} has exactly100 historical rows plus its fresh row processed`)
+        }
+        assert.equal((await query('SELECT COUNT(*)::int AS count FROM log_process_queue WHERE log_id=$1', [delayedReceipt])).rows[0].count,1)
+        await processStoredLogs() // ACK the delayed command, then restore normal history capacity.
+        for (const { source, ids } of histories) {
+            const state = (await query('SELECT last_id::text FROM log_processing_cursors WHERE name=$1', [source])).rows[0]
+            assert.equal(state.last_id, ids[250], `${source} resumes its ordinary history page after the queue clears`)
+        }
+    } finally { queryObserver=undefined; await query('ROLLBACK TO SAVEPOINT historical_throttle') }
+    console.log('PostgreSQL historical throttle passed: indexed aged queue, four100-row history pages, fresh rows retained, exact cursors and normal capacity restored.')
     assert.equal((await query('SELECT ready FROM mill_log_dimensions_state')).rows[0].ready, true)
     async function assertProjectionParity() {
         const differences = await query(`WITH source AS (
