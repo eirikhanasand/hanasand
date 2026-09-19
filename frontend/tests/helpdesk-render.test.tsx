@@ -61,6 +61,21 @@ for (const params of focusFilters) {
     for (const [key, value] of Object.entries(params)) assert.equal(query.get(key), value)
 }
 
+const legacyEvents = [
+    { ...events[0], actor_name: 'Hanasand Commercial Acceptance', target_name: 'Commercial Acceptance',
+        organization_name: 'Commercial Acceptance mruaroxh', subject_id: 'commercial-acceptance-mruaroxh',
+        reason: 'Removed Commercial Acceptance', context: { name: 'Commercial Acceptance' } },
+    { ...events[1], target_name: 'Commercial Acceptance mrubl4uc540203',
+        organization_id: 'org-2', organization_name: 'Commercial Acceptance mrubl4uc540203',
+        context: { name: 'Commercial Acceptance mrubl4uc540203' } },
+]
+response = () => Response.json({ events: legacyEvents })
+const legacyHtml = await render({ request: 'request-2' })
+assert(!legacyHtml.includes('Commercial Acceptance'), 'Legacy test names must have natural display labels throughout the page')
+assert(legacyHtml.includes('Test account') && legacyHtml.includes('Test organization mrubl4uc540203'))
+assert(legacyHtml.includes('entity=commercial-acceptance-mruaroxh'), 'Display labels must preserve the original identifiers in Focus links')
+assert.equal(legacyEvents[0].target_name, 'Commercial Acceptance', 'Presentation must not rewrite recorded audit data')
+
 response = () => Response.json({ events: [] })
 assert((await render()).includes('No matching support events'))
 response = () => Response.json({ error: 'Forbidden' }, { status: 403 })

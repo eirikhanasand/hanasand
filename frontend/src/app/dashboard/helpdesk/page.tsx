@@ -64,11 +64,11 @@ const supportActions = [
     { action: 'impersonation.start', label: 'Session started' },
     { action: 'impersonation.stop', label: 'Session ended' },
 ]
-const supportCapabilityCards = [
-    { title: 'Can fix now', body: 'Inspect org/user state, create recovery invites, review approvals, resend/revoke invites, recover member roles, reset live API-key buckets, and start scoped impersonation.' },
-    { title: 'Abuse controls', body: 'Every privileged action requires a reason; high-risk paths write admin audit events with actor, target, request, entity, IP, user agent, and outcome.' },
-    { title: 'Not pretend-fixed', body: 'Billing credits, durable quota changes, cross-node limiter resets, secret exposure, and silent org spying stay outside this console unless backend support exists.' },
-]
+
+function auditDisplayText(value: string, kind = 'account') {
+    // Legacy test names remain in the audit records; only their display wording changes.
+    return value.replace(/\b(?:Hanasand )?Commercial Acceptance\b/gi, kind === 'organization' ? 'Test organization' : 'Test account')
+}
 
 function formatTime(value: string) {
     const date = new Date(value)
@@ -99,12 +99,12 @@ function decodeAccessToken(value: string) {
     }
 }
 
-function contextText(value: Record<string, unknown> | null | undefined) {
+function contextText(value: Record<string, unknown> | null | undefined, kind?: string) {
     if (!value || typeof value !== 'object') return ''
     const entries = Object.entries(value)
         .filter(([, item]) => item !== null && item !== undefined && item !== '')
         .slice(0, 4)
-    return entries.map(([key, item]) => `${key}: ${Array.isArray(item) ? item.join(', ') : String(item)}`).join(' · ')
+    return auditDisplayText(entries.map(([key, item]) => `${key}: ${Array.isArray(item) ? item.join(', ') : String(item)}`).join(' · '), kind)
 }
 
 function severityClass(severity: AdminAuditEvent['severity']) {
@@ -151,9 +151,9 @@ function selectedAuditEvent(events: AdminAuditEvent[], params: AuditSearchParams
 
 function auditDetailRows(event: AdminAuditEvent) {
     return [
-        ['Actor', event.actor_name || event.actor_id],
-        ['Target', event.target_name || event.object_id || event.object_type],
-        ['Organization', event.organization_name || event.organization_id],
+        ['Actor', event.actor_name ? auditDisplayText(event.actor_name) : event.actor_id],
+        ['Target', event.target_name ? auditDisplayText(event.target_name, event.object_type || undefined) : event.object_id || event.object_type],
+        ['Organization', event.organization_name ? auditDisplayText(event.organization_name, 'organization') : event.organization_id],
         ['Request', event.request_id],
         ['Entity', event.subject_id],
         ['Source', `${event.source}/${event.service}`],
@@ -216,7 +216,6 @@ export default async function HelpdeskPage({
             <DashboardHeader
                 eyebrow='Support'
                 title='Helpdesk operations'
-                description='Find the customer, run real audited fixes, and review support activity from one workbench.'
                 actions={(
                     <div className='flex flex-wrap gap-2'>
                         <Link className={quietButtonClass} href='/dashboard'>Dashboard</Link>
@@ -278,14 +277,6 @@ export default async function HelpdeskPage({
                             ) : null}
                         </form>
                     </DashboardPanel>
-                    <section className='grid gap-2 md:grid-cols-3'>
-                        {supportCapabilityCards.map(card => (
-                            <DashboardPanel className='p-4' key={card.title}>
-                                <h2 className='text-sm font-semibold text-ui-text'>{card.title}</h2>
-                                <p className='mt-2 text-xs leading-5 text-ui-muted'>{card.body}</p>
-                            </DashboardPanel>
-                        ))}
-                    </section>
                     {responseError ? (
                         <DashboardPanel className='border-ui-warning/35 bg-ui-warning/10 p-4 text-sm text-ui-warning'>
                             {responseError} Check API availability or narrow the query.
@@ -335,14 +326,14 @@ export default async function HelpdeskPage({
                                                 <span className='rounded-md bg-ui-raised px-2 py-1 text-xs text-ui-muted'>{event.source}/{event.service}</span>
                                             </div>
                                             <div className='mt-2 flex flex-wrap gap-2 text-xs text-ui-muted'>
-                                                <span className='rounded-md bg-ui-raised px-2 py-1'>actor {event.actor_name || event.actor_id}</span>
-                                                {event.object_id ? <span className='rounded-md bg-ui-raised px-2 py-1'>{event.object_type || 'target'} {event.target_name || event.object_id}</span> : null}
-                                                {event.organization_id ? <span className='rounded-md bg-ui-primary/10 px-2 py-1 text-ui-primary'>{event.organization_name || event.organization_id}</span> : null}
+                                                <span className='rounded-md bg-ui-raised px-2 py-1'>actor {event.actor_name ? auditDisplayText(event.actor_name) : event.actor_id}</span>
+                                                {event.object_id ? <span className='rounded-md bg-ui-raised px-2 py-1'>{event.object_type || 'target'} {event.target_name ? auditDisplayText(event.target_name, event.object_type || undefined) : event.object_id}</span> : null}
+                                                {event.organization_id ? <span className='rounded-md bg-ui-primary/10 px-2 py-1 text-ui-primary'>{event.organization_name ? auditDisplayText(event.organization_name, 'organization') : event.organization_id}</span> : null}
                                                 {event.subject_id ? <span className='rounded-md bg-ui-raised px-2 py-1 font-mono'>entity {event.subject_id}</span> : null}
                                                 {event.request_id ? <span className='rounded-md bg-ui-raised px-2 py-1 font-mono'>request {event.request_id}</span> : null}
                                             </div>
-                                            {event.reason ? <p className='mt-2 text-sm text-ui-muted'>{event.reason}</p> : null}
-                                            {contextText(event.context) ? <p className='mt-1 text-xs text-ui-muted'>{contextText(event.context)}</p> : null}
+                                            {event.reason ? <p className='mt-2 text-sm text-ui-muted'>{auditDisplayText(event.reason, event.object_type || undefined)}</p> : null}
+                                            {contextText(event.context, event.object_type || undefined) ? <p className='mt-1 text-xs text-ui-muted'>{contextText(event.context, event.object_type || undefined)}</p> : null}
                                         </div>
                                         <div className='text-left text-xs text-ui-muted md:text-right'>
                                             <div>{formatTime(event.created_at)}</div>
@@ -385,14 +376,13 @@ export default async function HelpdeskPage({
                                     </div>
                                 ))}
                             </dl>
-                            {selectedEvent.reason ? <p className='mt-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-sm leading-6 text-ui-muted'>{selectedEvent.reason}</p> : null}
-                            {contextText(selectedEvent.context) ? <p className='mt-2 text-xs leading-5 text-ui-muted'>{contextText(selectedEvent.context)}</p> : null}
+                            {selectedEvent.reason ? <p className='mt-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-sm leading-6 text-ui-muted'>{auditDisplayText(selectedEvent.reason, selectedEvent.object_type || undefined)}</p> : null}
+                            {contextText(selectedEvent.context, selectedEvent.object_type || undefined) ? <p className='mt-2 text-xs leading-5 text-ui-muted'>{contextText(selectedEvent.context, selectedEvent.object_type || undefined)}</p> : null}
                         </DashboardPanel>
                     ) : null}
                     <DashboardPanel className='p-0' id='support-actions'>
                         <div className='border-b border-ui-border px-4 py-3'>
                             <h2 className='text-sm font-semibold text-ui-text'>Support actions</h2>
-                            <p className='mt-1 text-xs leading-5 text-ui-muted'>Pick the action the case needs. Inspection helps, but valid audited fixes are not hidden behind it.</p>
                         </div>
                         <details className='group' open>
                             <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-panel focus-visible:ring-2 focus-visible:ring-ui-primary/20'>
