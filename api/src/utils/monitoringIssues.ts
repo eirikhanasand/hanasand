@@ -9,6 +9,8 @@ import type { AutomationRow } from './automations.ts'
 import { deliverDiscordWebhookFile, redactSecretBearingText } from './alerts/discordWebhookFile.ts'
 
 export function monitoringIssueFingerprint(automation: Pick<AutomationRow, 'target_url' | 'monitoring_type' | 'json_rule'>, kind: string, message: string) {
+    // A job keeps its case when the blocker changes, including after recovery.
+    if (automation.target_url?.startsWith('system:cron:')) return createHash('sha256').update(automation.target_url).digest('hex')
     // Group changing durations and retry counts, but retain HTTP codes and error details.
     const reason = automation.monitoring_type === 'json' && (automation.target_url === 'system:resilience' || message.startsWith('JSON threshold exceeded:') || automation.target_url === 'system:metrics' && isHostThresholdMessage(message))
         ? JSON.stringify(automation.json_rule) : redactSecretBearingText(message)

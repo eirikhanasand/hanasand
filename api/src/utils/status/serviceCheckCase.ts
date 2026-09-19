@@ -5,9 +5,9 @@ import { recordMonitoringOutcome } from '../monitoringIssues.ts'
 import type { MonitorStatus } from './monitorPolicy.ts'
 
 // Reuse the synthetic result itself so a recovery between polling ticks cannot hide a failure.
-export async function recordServiceCheckCase(service: string, checkName: string, result: { status: MonitorStatus, checkedAt: string, latencyMs: number, message: string }, query = run, record = recordMonitoringOutcome) {
+export async function recordServiceCheckCase(service: string, checkName: string, result: { status: MonitorStatus, checkedAt: string, latencyMs: number, message: string, checkId?: string }, query = run, record = recordMonitoringOutcome) {
     const publicSearch = service === 'threat-intelligence' && checkName === 'Public search'
-    const automationId = publicSearch ? 'monitor-public-search' : `monitor-service-${createHash('sha256').update(JSON.stringify([service, checkName])).digest('hex').slice(0, 24)}`
+    const automationId = publicSearch ? 'monitor-public-search' : `monitor-service-${createHash('sha256').update(JSON.stringify([service, result.checkId || checkName])).digest('hex').slice(0, 24)}`
     // These checks are driven by real monitor results, not a second polling schedule.
     if (!publicSearch) await query(`INSERT INTO agent_automations
         (id, owner_id, organization_id, name, prompt, target_url, monitoring_type, schedule_kind, interval_minutes,
@@ -16,7 +16,9 @@ export async function recordServiceCheckCase(service: string, checkName: string,
             'active', 'agent_prompt', 'failure', true, model_name, notification_destinations, NULL
         FROM agent_automations WHERE name = 'Hanasand API' AND status <> 'archived' AND organization_id IS NOT NULL
         ORDER BY created_at LIMIT 1 ON CONFLICT (id) DO NOTHING`,
-    [automationId, checkName, `Production health check: ${service} / ${checkName}`, `https://hanasand.com/api/status?service=${encodeURIComponent(service)}&check=${encodeURIComponent(checkName)}`])
+    [automationId, checkName, `Production health check: ${service} / ${checkName}`, service === 'scheduled-jobs' && result.checkId
+        ? `system:cron:${result.checkId}`
+        : `https://hanasand.com/api/status?service=${encodeURIComponent(service)}&check=${encodeURIComponent(checkName)}`])
     const automation = (await query('SELECT * FROM agent_automations WHERE id = $1', [automationId])).rows[0] as AutomationRow | undefined
     if (!automation) throw new Error(`Case monitoring is not configured for ${service} / ${checkName}.`)
     const id = `${publicSearch ? 'public-search' : automationId}:${result.checkedAt}`

@@ -21,3 +21,16 @@ test('database observations create scoped case events for failures, warnings and
 test('missing monitoring owner is a visible error, not a silently dropped case', async () => {
     await expect(recordServiceCheckCase('database', 'Database dashboard', { status: 'down', checkedAt: new Date().toISOString(), latencyMs: 0, message: 'Failed' }, (async () => ({ rows: [] })) as never)).rejects.toThrow('Case monitoring is not configured')
 })
+
+test('scheduled job identity survives display-name changes and uses the system-only target', async () => {
+    const writes: unknown[][] = []
+    const query = async (sql: string, values: unknown[] = []) => {
+        if (sql.startsWith('INSERT INTO agent_automations')) writes.push(values)
+        return { rows: sql.startsWith('SELECT') ? [{ id: values[0], owner_id: 'owner', organization_id: 'org' }] : [] }
+    }
+    for (const name of ['Old name', 'New name']) await recordServiceCheckCase('scheduled-jobs', name, {
+        checkId: 'job-a', status: 'down', checkedAt: new Date().toISOString(), latencyMs: 0, message: 'Blocked',
+    }, query as never, async () => {})
+    expect(writes[0][0]).toBe(writes[1][0])
+    expect(writes[0][3]).toBe('system:cron:job-a')
+})

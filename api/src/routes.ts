@@ -139,7 +139,7 @@ import deleteApiKeyHandler from './handlers/rateLimit/deleteApiKey.ts'
 import resetApiKeyUsageHandler from './handlers/rateLimit/resetApiKeyUsage.ts'
 import { getDesktopAgentPresence, postDesktopAgentPresence } from './handlers/desktopAgent/presence.ts'
 import { deleteAutomation, getAutomation, getAutomations, postAutomation, postAutomationRunNow, putAutomation } from './handlers/automations.ts'
-import { getSystemCronJobs, putSystemCronJob } from './handlers/systemCron.ts'
+import { getSystemCronJobs, postSystemCronMonitor, putSystemCronJob } from './handlers/systemCron.ts'
 import { getImpersonationCurrent, getImpersonationEvents, startImpersonation, stopImpersonation } from './handlers/impersonation.ts'
 import {
     getSystemEvent,
@@ -500,6 +500,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/vulnerabilities/web-scan', postWebScanner)
     fastify.put('/vulnerabilities/web-scan/schedule', putWebScannerSchedule)
     fastify.get('/system/cron', getSystemCronJobs)
+    fastify.post('/system/cron/monitor', postSystemCronMonitor)
     fastify.put('/system/cron/:id', putSystemCronJob)
     fastify.get('/system/updates', getAptUpdates)
     fastify.get('/system/storage', getDockerStorage)

@@ -26,6 +26,7 @@ const apiCronRunners: Record<string, () => Promise<unknown> | unknown> = {
     'api-login-attempt-cleanup': invalidateOldAttempts,
     'api-deleted-account-purge': purgeDeletedAccounts,
     'api-synthetic-monitor': runSyntheticMonitor,
+    'api-cron-health-monitor': async() => (await import('./systemCronMonitor.ts')).monitorSystemCronJobs(),
     [VM_METRICS_JOB_ID]: collectVmMetrics,
     'api-production-log-monitor': runProductionLogMonitors,
     [HOST_UPDATE_MONITOR_JOB_ID]: async() => {
@@ -107,6 +108,7 @@ export default function cron() {
                 runDueApiCronJob('api-login-attempt-cleanup'),
                 runDueApiCronJob('api-deleted-account-purge'),
                 runDueApiCronJob('api-synthetic-monitor'),
+                runDueApiCronJob('api-cron-health-monitor'),
                 runDueApiCronJob(VM_METRICS_JOB_ID),
                 runDueApiCronJob('api-production-log-monitor'),
                 runDueApiCronJob(HOST_UPDATE_MONITOR_JOB_ID),

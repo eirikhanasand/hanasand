@@ -194,6 +194,16 @@ const apiBackgroundJobDefinitions: Array<{
     controls: ScheduledJobControl[]
 }> = [
     {
+        id: 'api-cron-health-monitor',
+        name: 'Scheduled job health monitor',
+        description: 'Checks blocked jobs, updates their cases, and sends Discord notifications.',
+        category: 'Alerts',
+        schedule: 'Every minute',
+        cadenceSeconds: API_CRON_CADENCE_SECONDS,
+        source: 'api/src/utils/systemCronMonitor.ts',
+        controls: ['run_now'],
+    },
+    {
         id: 'api-hot-cache-refresh',
         name: 'API stats and Docker cache refresh',
         description: 'Refreshes cached API stats and Docker/container snapshots for dashboard resource telemetry.',
