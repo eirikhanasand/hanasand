@@ -6,9 +6,10 @@ import config from '@/config'
 import { getCookie } from '@/utils/cookies/cookies'
 import DeleteAccountButton from './deleteAccountButton'
 import AccountDate from './accountDate'
+import ServiceAccountDescription from './serviceAccountDescription'
 
 type Endpoint = { method: string, route: string, label: string }
-type Account = { id: string, name: string, active: boolean, created_at: string | null, keys: { lastUsedAt: string | null, scopes: Endpoint[] }[] }
+type Account = { id: string, name: string, description?: string, active: boolean, created_at: string | null, keys: { lastUsedAt: string | null, scopes: Endpoint[] }[] }
 
 async function request(path = '', options: RequestInit = {}) {
     const response = await fetch(`${config.url.api}/service-accounts${path}`, { ...options, cache: 'no-store', headers: {
@@ -24,6 +25,7 @@ export default function ServiceAccounts() {
     const [endpoints, setEndpoints] = useState<Endpoint[]>([])
     const [selected, setSelected] = useState<string[]>([])
     const [name, setName] = useState('')
+    const [description, setDescription] = useState('')
     const [secret, setSecret] = useState('')
     const [copied, setCopied] = useState(false)
     const [copyError, setCopyError] = useState('')
@@ -56,7 +58,7 @@ export default function ServiceAccounts() {
 
     const activeAccounts = accounts.filter(account => account.active)
     const query = search.trim().toLowerCase()
-    const visibleAccounts = activeAccounts.filter(account => [account.name, account.id, ...account.keys.flatMap(key => key.scopes.map(scope => `${scope.method} ${scope.route} ${scope.label || ''}`))].some(value => value.toLowerCase().includes(query)))
+    const visibleAccounts = activeAccounts.filter(account => [account.name, account.id, account.description || '', ...account.keys.flatMap(key => key.scopes.map(scope => `${scope.method} ${scope.route} ${scope.label || ''}`))].some(value => value.toLowerCase().includes(query)))
         .sort((a, b) => (sort === 'asc' ? 1 : -1) * (a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }) || a.id.localeCompare(b.id)))
 
     return <div className='grid gap-5'>
@@ -66,7 +68,7 @@ export default function ServiceAccounts() {
             <div className='flex flex-wrap items-center gap-3'>
                 <div className='flex min-w-0 flex-1 basis-64 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 focus-within:ring-2 focus-within:ring-ui-primary'>
                     <Search className='h-4 w-4 shrink-0 text-ui-muted' aria-hidden='true' />
-                    <input ref={searchInput} type='search' aria-label='Search service accounts' aria-keyshortcuts='Meta+J Control+J' value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setSearch('') }} placeholder='Search names or endpoints…' className='h-10 min-w-0 w-full bg-transparent text-sm outline-none' />
+                    <input ref={searchInput} type='search' aria-label='Search service accounts' aria-keyshortcuts='Meta+J Control+J' value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setSearch('') }} placeholder='Search accounts…' className='h-10 min-w-0 w-full bg-transparent text-sm outline-none' />
                     <kbd className='shrink-0 rounded border border-ui-border px-1.5 py-0.5 text-[10px] text-ui-muted'>⌘/Ctrl J</kbd>
                 </div>
                 <select aria-label='Sort service accounts' value={sort} onChange={event => setSort(event.target.value)} className='h-10 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm focus-visible:outline-ui-primary'>
@@ -86,14 +88,15 @@ export default function ServiceAccounts() {
                     if (pending || !name.trim() || !selected.length) return
                     setPending(true); setCreateError('')
                     try {
-                        const result = await request('', { method: 'POST', body: JSON.stringify({ name: name.trim(), scopes: endpoints.filter(endpoint => selected.includes(`${endpoint.method} ${endpoint.route}`)).map(({ method, route }) => ({ method, route })) }) })
-                        setSecret(result.secret); setName(''); setSelected([]); setCopied(false); setCopyError(''); setError('')
+                        const result = await request('', { method: 'POST', body: JSON.stringify({ name: name.trim(), description: description.trim(), scopes: endpoints.filter(endpoint => selected.includes(`${endpoint.method} ${endpoint.route}`)).map(({ method, route }) => ({ method, route })) }) })
+                        setSecret(result.secret); setName(''); setDescription(''); setSelected([]); setCopied(false); setCopyError(''); setError('')
                         dialog.current?.close()
                         await load().catch(error => setError(error.message))
                     } catch (error) { setCreateError(error instanceof Error ? error.message : 'Unable to create service account.') }
                     finally { setPending(false) }
                 }}>
                     <label className='grid gap-1 text-sm'>Name<input ref={nameInput} disabled={pending} required maxLength={100} value={name} onChange={event => setName(event.target.value)} placeholder='Production health monitor' className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2' /></label>
+                    <label className='grid gap-1 text-sm'>Description (optional)<textarea disabled={pending} maxLength={2000} rows={3} value={description} onChange={event => setDescription(event.target.value)} placeholder='What does this account do?' className='resize-y rounded-lg border border-ui-border bg-ui-raised px-3 py-2' /></label>
                     <fieldset disabled={pending} className='grid gap-1 rounded-lg border border-ui-border p-3'><legend className='px-1 text-sm font-semibold'>Allowed endpoints</legend>
                         {endpoints.map(endpoint => { const id = `${endpoint.method} ${endpoint.route}`; return <label key={id} className='flex items-start gap-3 rounded-md px-2 py-2 text-sm transition hover:bg-ui-primary/5'><input className='mt-0.5 accent-ui-primary' type='checkbox' checked={selected.includes(id)} onChange={event => setSelected(current => event.target.checked ? [...current, id] : current.filter(value => value !== id))} /><span className='grid min-w-0 gap-0.5 sm:flex sm:flex-wrap sm:items-baseline sm:gap-x-2'>{endpoint.label} <code className='break-all text-xs text-ui-muted'>{endpoint.method} {endpoint.route}</code></span></label> })}
                     </fieldset>
@@ -125,8 +128,11 @@ export default function ServiceAccounts() {
                 </div>
                 {copyError && <p role='alert' className='text-sm text-ui-text'>{copyError}</p>}
             </section>}
-            <div className='overflow-x-auto'><table className='w-full text-left text-sm'><thead><tr><th className='p-2'>Name</th><th className='p-2'>Endpoints</th><th className='p-2'>Created</th><th className='p-2'>Last used</th><th className='p-2'><span className='sr-only'>Actions</span></th></tr></thead><tbody>
-                {visibleAccounts.map(account => <tr key={account.id} className='border-t border-ui-border'><td className='p-2'>{account.name}</td><td className='p-2'>{account.keys.flatMap(key => key.scopes).map(scope => <div key={`${scope.method} ${scope.route}`}><code className='text-xs'>{scope.method} {scope.route}</code></div>)}</td><td className='p-2 whitespace-nowrap'><AccountDate value={account.created_at} /></td><td className='p-2 whitespace-nowrap'><AccountDate value={account.keys.map(key => key.lastUsedAt).filter((value): value is string => Boolean(value)).sort().at(-1)} empty='Never' /></td><td className='p-2'><DeleteAccountButton name={account.name} onDelete={async () => { await request(`/${encodeURIComponent(account.id)}`, { method: 'DELETE' }); await load() }} /></td></tr>)}
+            <div className='overflow-x-auto'><table className='w-full text-left text-sm'><thead><tr><th className='p-2'>Name</th><th className='p-2'>Description</th><th className='p-2'>Endpoints</th><th className='p-2'>Created</th><th className='p-2'>Last used</th><th className='p-2'><span className='sr-only'>Actions</span></th></tr></thead><tbody>
+                {visibleAccounts.map(account => <tr key={account.id} className='border-t border-ui-border'><td className='p-2'>{account.name}</td><td className='p-2'><ServiceAccountDescription name={account.name} description={account.description || ''} onSave={async description => {
+                    const saved = await request(`/${encodeURIComponent(account.id)}`, { method: 'PATCH', body: JSON.stringify({ description }) })
+                    setAccounts(current => current.map(item => item.id === account.id ? { ...item, description: saved.description } : item))
+                }} /></td><td className='p-2'>{account.keys.flatMap(key => key.scopes).map(scope => <div key={`${scope.method} ${scope.route}`}><code className='text-xs'>{scope.method} {scope.route}</code></div>)}</td><td className='p-2 whitespace-nowrap'><AccountDate value={account.created_at} /></td><td className='p-2 whitespace-nowrap'><AccountDate value={account.keys.map(key => key.lastUsedAt).filter((value): value is string => Boolean(value)).sort().at(-1)} empty='Never' /></td><td className='p-2'><DeleteAccountButton alwaysConfirm name={account.name} onDelete={async () => { await request(`/${encodeURIComponent(account.id)}`, { method: 'DELETE' }); await load() }} /></td></tr>)}
             </tbody></table></div>
             {!visibleAccounts.length && <p className='text-sm text-ui-muted'>{activeAccounts.length ? 'No service accounts match your search.' : 'No service accounts yet.'}</p>}
         </>}

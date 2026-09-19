@@ -2,7 +2,7 @@ import { searchLogs } from './handlers/logs/search.ts'
 import { getManagementOrganizations } from './handlers/managementOrganizations.ts'
 import assignVmOrganization from './handlers/vms/organization.ts'
 import { caseRepositoryWebhooks, getCaseDevelopment, getCaseRepositories, postCaseRepository, deleteCaseRepository } from './handlers/caseDevelopment.ts'
-import { getServiceAccounts, postServiceAccount, deleteServiceAccount, serviceAccountSelf } from './handlers/serviceAccounts.ts'
+import { getServiceAccounts, postServiceAccount, patchServiceAccount, deleteServiceAccount, serviceAccountSelf } from './handlers/serviceAccounts.ts'
 import authRoutes from './authRoutes.ts'
 import { getMonitoringCases, updateMonitoringCase } from './handlers/monitoringCases.ts'
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify'
@@ -273,6 +273,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/service-accounts/self', serviceAccountSelf)
     fastify.get('/service-accounts', getServiceAccounts)
     fastify.post('/service-accounts', postServiceAccount)
+    fastify.patch('/service-accounts/:id', patchServiceAccount)
     fastify.delete('/service-accounts/:id', deleteServiceAccount)
     fastify.get('/user/:id', getUser)
     fastify.get('/user/full/:id', authorizedUserHandler)
