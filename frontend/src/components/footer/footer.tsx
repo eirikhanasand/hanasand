@@ -7,7 +7,6 @@ import { useEffect, useState } from 'react'
 import { Activity, ArrowUpRight, BellRing, BookOpen, Code2, FileText, Gauge, Globe, LockKeyhole, Network, Radar, ShieldCheck, Waypoints } from 'lucide-react'
 import isSharePath from '@/utils/routes/isSharePath'
 import BrandLogo from '@/components/brand/brandLogo'
-import { isVerifiedStatus } from '@/utils/status/publicStatus'
 import type { ServiceStatus } from '@/utils/status/getStatus'
 
 const footerGroups = [
@@ -70,14 +69,11 @@ export default function Footer() {
             try {
                 const response = await fetch('/api/status?summary=true', { cache: 'no-store', signal: AbortSignal.timeout(5000) })
                 if (!response.ok) {
-                    if (mounted) setPublicStatus('unknown')
                     return
                 }
                 const status = await response.json() as ServiceStatus
-                if (mounted) setPublicStatus(isVerifiedStatus(status) ? status.overall : 'unknown')
-            } catch {
-                if (mounted) setPublicStatus('unknown')
-            }
+                if (mounted && status.checks.some(check => check.checked_at && check.status !== 'unknown')) setPublicStatus(status.overall)
+            } catch { /* Keep the last received service status during a refresh failure. */ }
         }
 
         void refreshStatus()

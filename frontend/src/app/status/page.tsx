@@ -13,7 +13,7 @@ export const metadata: Metadata = buildRouteMetadata({
 })
 
 export default async function page() {
-    const serviceStatus = await getPublicStatus()
+    const serviceStatus = await getPublicStatus({ dashboard: true })
 
     return (
         <div className='min-h-[calc(100vh-4.5rem)] bg-ui-canvas px-4 py-6 text-ui-text md:px-8'>

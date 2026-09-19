@@ -177,7 +177,7 @@ test('public status exposes stale latest activity as a service failure', () => {
     })
 })
 
-test('public status rejects monitor results older than five minutes', () => {
+test('public status retains stale evidence while marking the feed stale', () => {
     const now = Date.parse('2026-07-05T00:10:01.000Z')
     const status = toPublicServiceStatus({
         overall: 'up',
@@ -188,7 +188,8 @@ test('public status rejects monitor results older than five minutes', () => {
     }, now)
 
     expect(status.overall).toBe('unknown')
-    expect(status.checks[0]).toMatchObject({ status: 'unknown' })
+    expect(status.checks[0]).toMatchObject({ status: 'up', checked_at: '2026-07-05T00:05:00.000Z' })
+    expect(status.monitoring).toBe('unavailable')
 })
 
 test('status transport failure stays unavailable instead of becoming fresh synthetic status', async () => {
@@ -232,9 +233,9 @@ test('public status page renders unverified coverage without fake uptime', async
     expect(source).toContain('formatUptime(check.uptime_30d)')
     expect(source).toContain('function formatUptime')
     expect(source).toContain('historyDaysFor(currentStatus, check)')
-    expect(source).toContain('No incidents on')
+    expect(source).toContain('No verified history')
     expect(source).toContain('/status/incidents/${day.incident.id}')
-    expect(source).toContain('Live monitoring unavailable')
+    expect(source).toContain('Showing last verified results')
     expect(source).not.toContain('{check.uptime_30d}%')
     expect(source).not.toContain('Array.from({ length: 45 }')
     expect(source).not.toContain('index > 38')
@@ -243,7 +244,7 @@ test('public status page renders unverified coverage without fake uptime', async
 test('public footer does not hardcode operational status', async () => {
     const footer = await readFile(path.join(root, 'src/components/footer/footer.tsx'), 'utf8')
 
-    expect(footer).toContain('fetch(\'/api/status\'')
+    expect(footer).toContain('fetch(\'/api/status?summary=true\'')
     expect(footer).toContain('useState<ServiceStatus[\'overall\'] | \'unknown\'>(\'unknown\')')
     expect(footer).toContain('return { label: \'Monitoring unavailable\', dotClass: \'bg-ui-muted\' }')
     expect(footer).not.toContain('<span className=\'h-2.5 w-2.5 rounded-full bg-ui-success shadow-sm\' />')
@@ -262,7 +263,7 @@ test('status monitors probe buyer-facing surfaces without inserting fake traffic
     expect(syntheticMonitor).toContain('fetchJson(\'/openapi.json\', {}, publicApiBase)')
     expect(syntheticMonitor).toContain('body?.mode === \'scraper\'')
     expect(syntheticMonitor).toContain('activityFreshnessMinutes(freshness ?? {})')
-    expect(dashboardMonitor.indexOf('await monitorThreatIntelBackup()')).toBeLessThan(dashboardMonitor.indexOf('if (!username || !password)'))
+    expect(dashboardMonitor.indexOf('await monitorThreatIntelBackup()')).toBeLessThan(dashboardMonitor.indexOf('if (!serviceKey)'))
     expect(dashboardMonitor).toContain('`${statusIngestBaseUrl}/api/status/ingest`')
     expect(dashboardMonitor).toContain('statePath: backupStatePath')
     expect(logMonitor).not.toContain('INSERT INTO traffic_events')
@@ -286,12 +287,12 @@ test('missing monitoring retains the last verified snapshot and never invents a 
     const verified = toPublicServiceStatus(raw)
     expect(isVerifiedStatus(verified)).toBe(true)
     const failed = retainVerifiedStatus(toPublicServiceStatus(unavailableServiceStatus()), verified)
-    expect(failed).toMatchObject({ overall: 'unknown', monitoring: 'unavailable', last_verified_at: at })
+    expect(failed).toMatchObject({ overall: 'up', monitoring: 'unavailable', last_verified_at: at })
     expect(failed.checks).toHaveLength(8)
-    expect(failed.checks.every(check => check.status === 'unknown' && check.checked_at === at)).toBe(true)
+    expect(failed.checks.every(check => check.status === 'up' && check.checked_at === at)).toBe(true)
     expect(isVerifiedStatus(failed)).toBe(false)
     const stale = toPublicServiceStatus(raw, Date.now() + 6 * 60_000)
-    expect(stale).toMatchObject({ overall: 'unknown', monitoring: 'unavailable', last_verified_at: at })
+    expect(stale).toMatchObject({ overall: 'up', monitoring: 'unavailable', last_verified_at: at })
     raw.checks[0].status = 'down'
     expect(toPublicServiceStatus(raw).overall).toBe('down')
 })
