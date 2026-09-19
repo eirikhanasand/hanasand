@@ -13,14 +13,16 @@ test('members can list only their own shares; anonymous and cross-user requests 
         for (const id of ['member-a', 'member-b']) {
             const headers = { id, authorization: `Bearer token-${id}` }
             expect((await app.inject({ url: `/share/user/${id}`, headers })).statusCode).toBe(200)
-            expect(queries.at(-1)?.params).toEqual([id])
-            expect(queries.at(-1)?.sql).toMatch(/WHERE owner = \$1 AND COALESCE\(parent/)
+            expect(queries.at(-1)?.params).toEqual([id, null])
+            expect(queries.at(-1)?.sql.replace(/\s+/g, ' ').trim()).toContain('WHERE (($2::text IS NULL AND organization_id IS NULL AND owner = $1) OR organization_id = $2) AND COALESCE(parent, \'\') = \'\'')
             const before = queries.length
             expect((await app.inject({ url: '/share/user/another-user', headers })).statusCode).toBe(401)
             expect((await app.inject({ url: '/share/user/another-organization', headers })).statusCode).toBe(401)
             expect(queries.length).toBe(before)
         }
+        const before = queries.length
         expect((await app.inject({ url: '/share/user/member-a' })).statusCode).toBe(401)
         expect((await app.inject({ url: '/share/user/member-a', headers: { id: 'member-a', authorization: 'Bearer invalid' } })).statusCode).toBe(401)
+        expect(queries.length).toBe(before)
     } finally { await app.close() }
 })
