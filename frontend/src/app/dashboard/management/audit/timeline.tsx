@@ -105,86 +105,59 @@ export default function AuditTimeline({ initialAudit, filters }: { initialAudit:
                 </form>
             </DashboardPanel>
 
-            <div className='grid min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_20rem]'>
-                <DashboardPanel className='min-h-0 overflow-hidden border-ui-border bg-ui-panel p-0'>
-                    <div className='border-b border-ui-border bg-ui-raised px-3 py-2'>
-                        <div className='flex flex-wrap items-center justify-between gap-2'>
-                            <div>
-                                <h2 className='text-sm font-semibold text-ui-text'>Timeline</h2>
-                                <p className='mt-0.5 text-[11px] text-ui-muted'>{sortedEvents.length}/{audit.total ?? '—'} events · newest first</p>
-                            </div>
-                            <div className='flex flex-wrap gap-1.5 text-[11px] font-semibold'>
-                                <StatusPill label={audit.available ? 'audit storage available' : 'audit storage unavailable'} tone={audit.available ? 'ok' : 'bad'} />
-                            </div>
+            <DashboardPanel className='min-h-0 overflow-hidden border-ui-border bg-ui-panel p-0'>
+                <div className='border-b border-ui-border bg-ui-raised px-3 py-2'>
+                    <div className='flex flex-wrap items-center justify-between gap-2'>
+                        <div>
+                            <h2 className='text-sm font-semibold text-ui-text'>Timeline</h2>
+                            <p className='mt-0.5 text-[11px] text-ui-muted'>{sortedEvents.length}/{audit.total ?? '—'} events · newest first</p>
+                        </div>
+                        <div className='flex flex-wrap gap-1.5 text-[11px] font-semibold'>
+                            <StatusPill label={audit.available ? 'audit storage available' : 'audit storage unavailable'} tone={audit.available ? 'ok' : 'bad'} />
                         </div>
                     </div>
-                    <div ref={scrollRoot} data-testid='audit-scroll' className='max-h-[calc(100vh-18rem)] min-h-72 overflow-auto'>
-                        <table className='min-w-full border-separate border-spacing-0 text-xs'>
-                            <thead className='sticky top-0 z-10 bg-ui-panel/95 text-left text-[10px] font-semibold uppercase text-ui-muted backdrop-blur'>
-                                <tr>
-                                    <th className='border-b border-ui-border px-3 py-2'>Time</th>
-                                    <th className='border-b border-ui-border px-3 py-2'>Service</th>
-                                    <th className='border-b border-ui-border px-3 py-2'>Actor</th>
-                                    <th className='border-b border-ui-border px-3 py-2'>Action</th>
-                                    <th className='border-b border-ui-border px-3 py-2'>Target</th>
-                                    <th className='border-b border-ui-border px-3 py-2'>Result</th>
-                                    <th className='border-b border-ui-border px-3 py-2'>Detail</th>
+                </div>
+                <div ref={scrollRoot} data-testid='audit-scroll' className='max-h-[calc(100vh-18rem)] min-h-72 overflow-auto'>
+                    <table className='min-w-full border-separate border-spacing-0 text-xs'>
+                        <thead className='sticky top-0 z-10 bg-ui-panel/95 text-left text-[10px] font-semibold uppercase text-ui-muted backdrop-blur'>
+                            <tr>
+                                <th className='border-b border-ui-border px-3 py-2'>Time</th>
+                                <th className='border-b border-ui-border px-3 py-2'>Service</th>
+                                <th className='border-b border-ui-border px-3 py-2'>Actor</th>
+                                <th className='border-b border-ui-border px-3 py-2'>Action</th>
+                                <th className='border-b border-ui-border px-3 py-2'>Target</th>
+                                <th className='border-b border-ui-border px-3 py-2'>Result</th>
+                                <th className='border-b border-ui-border px-3 py-2'>Detail</th>
+                            </tr>
+                        </thead>
+                        <tbody className='bg-ui-panel'>
+                            {sortedEvents.map(event => (
+                                <tr key={event.id} id={`event-${event.id}`} className='align-top transition hover:bg-ui-raised'>
+                                    <td className='whitespace-nowrap border-b border-ui-border px-3 py-1.5 text-ui-muted'>{compactTime(event.happenedAt)}</td>
+                                    <td className='border-b border-ui-border px-3 py-1.5 text-ui-text'>{event.service}</td>
+                                    <td className='max-w-28 border-b border-ui-border px-3 py-1.5 font-mono text-ui-text'>{event.actor}</td>
+                                    <td className='whitespace-nowrap border-b border-ui-border px-3 py-1.5 font-mono font-semibold text-ui-primary'>{event.action}</td>
+                                    <td className='max-w-44 border-b border-ui-border px-3 py-1.5 font-mono text-ui-text'>
+                                        {event.target}
+                                    </td>
+                                    <td className='whitespace-nowrap border-b border-ui-border px-3 py-1.5'><StatusPill label={event.result} tone={failedIds.has(event.id) ? 'bad' : 'ok'} /></td>
+                                    <td className='max-w-[34rem] border-b border-ui-border px-3 py-1.5 text-ui-muted'>
+                                        <span className='line-clamp-2'>{event.detail}</span>
+                                    </td>
                                 </tr>
-                            </thead>
-                            <tbody className='bg-ui-panel'>
-                                {sortedEvents.map(event => (
-                                    <tr key={event.id} id={`event-${event.id}`} className='align-top transition hover:bg-ui-raised'>
-                                        <td className='whitespace-nowrap border-b border-ui-border px-3 py-1.5 text-ui-muted'>{compactTime(event.happenedAt)}</td>
-                                        <td className='border-b border-ui-border px-3 py-1.5 text-ui-text'>{event.service}</td>
-                                        <td className='max-w-28 border-b border-ui-border px-3 py-1.5 font-mono text-ui-text'>{event.actor}</td>
-                                        <td className='whitespace-nowrap border-b border-ui-border px-3 py-1.5 font-mono font-semibold text-ui-primary'>{event.action}</td>
-                                        <td className='max-w-44 border-b border-ui-border px-3 py-1.5 font-mono text-ui-text'>
-                                            {event.target}
-                                        </td>
-                                        <td className='whitespace-nowrap border-b border-ui-border px-3 py-1.5'><StatusPill label={event.result} tone={failedIds.has(event.id) ? 'bad' : 'ok'} /></td>
-                                        <td className='max-w-[34rem] border-b border-ui-border px-3 py-1.5 text-ui-muted'>
-                                            <span className='line-clamp-2'>{event.detail}</span>
-                                        </td>
-                                    </tr>
-                                ))}
-                                {!sortedEvents.length ? (
-                                    <tr>
-                                        <td colSpan={7} className='px-4 py-8 text-center text-sm text-ui-muted'>{audit.available ? 'No audit events match these filters.' : 'Audit storage is unavailable. The result is not being treated as an empty log.'}</td>
-                                    </tr>
-                                ) : null}
-                            </tbody>
-                        </table>
-                        <div ref={sentinel} className='p-3 text-center text-xs text-ui-muted' aria-live='polite'>
-                            {loading ? 'Loading more events…' : error ? <button type='button' onClick={() => void loadMore()} className='text-ui-primary underline'>Could not load more events. Retry</button> : audit.nextCursor ? <button type='button' onClick={() => void loadMore()} className='text-ui-primary'>Load 50 more</button> : audit.available && sortedEvents.length ? 'All events displayed' : null}
-                        </div>
-                    </div>
-                </DashboardPanel>
-
-                <DashboardPanel className='min-h-0 overflow-hidden border-ui-border bg-ui-panel p-0'>
-                    <div className='border-b border-ui-border bg-ui-raised px-3 py-2'>
-                        <h2 className='text-sm font-semibold text-ui-text'>Events to review</h2>
-                        <p className='mt-0.5 text-[11px] text-ui-muted'>{failedEvents.length} event{failedEvents.length === 1 ? '' : 's'}</p>
-                    </div>
-                    <div className='max-h-[calc(100vh-19rem)] min-h-72 overflow-auto p-2'>
-                        <div className='grid gap-1.5'>
-                            {failedEvents.slice(0, 24).map(event => (
-                                <Link key={event.id} href={auditEventHref(event)} className='grid gap-1 rounded-md border border-ui-border bg-ui-raised px-2.5 py-2 text-left transition hover:border-ui-primary hover:bg-ui-panel'>
-                                    <div className='flex min-w-0 items-center justify-between gap-2'>
-                                        <span className='truncate font-mono text-[11px] font-semibold text-ui-primary'>{event.action}</span>
-                                        <StatusPill label={event.result} tone='bad' />
-                                    </div>
-                                    <p className='truncate font-mono text-[11px] text-ui-text'>{event.target}</p>
-                                    <div className='flex min-w-0 items-center justify-between gap-2 text-[10px] text-ui-muted'>
-                                        <span className='truncate'>{event.actor}</span>
-                                        <span className='shrink-0'>{shortAge(event.happenedAt)}</span>
-                                    </div>
-                                </Link>
                             ))}
-                            {!failedEvents.length ? <p className='rounded-md border border-dashed border-ui-border p-3 text-xs text-ui-muted'>{audit.available ? 'No failed events among the displayed events.' : 'Audit events could not be loaded.'}</p> : null}
-                        </div>
+                            {!sortedEvents.length ? (
+                                <tr>
+                                    <td colSpan={7} className='px-4 py-8 text-center text-sm text-ui-muted'>{audit.available ? 'No audit events match these filters.' : 'Audit storage is unavailable. The result is not being treated as an empty log.'}</td>
+                                </tr>
+                            ) : null}
+                        </tbody>
+                    </table>
+                    <div ref={sentinel} className='p-3 text-center text-xs text-ui-muted' aria-live='polite'>
+                        {loading ? 'Loading more events…' : error ? <button type='button' onClick={() => void loadMore()} className='text-ui-primary underline'>Could not load more events. Retry</button> : audit.nextCursor ? <button type='button' onClick={() => void loadMore()} className='text-ui-primary'>Load 50 more</button> : audit.available && sortedEvents.length ? 'All events displayed' : null}
                     </div>
-                </DashboardPanel>
-            </div>
+                </div>
+            </DashboardPanel>
         </DashboardPage>
     )
 }
@@ -209,10 +182,6 @@ function Metric({ title, value, icon, tone = 'neutral' }: { title: string, value
 function StatusPill({ label, tone }: { label: string, tone: 'neutral' | 'ok' | 'watch' | 'bad' }) {
     const classes = toneClass(tone)
     return <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${classes.bg} ${classes.text}`}>{label}</span>
-}
-
-function auditEventHref(event: { id: number }) {
-    return `#event-${event.id}`
 }
 
 function toneClass(tone: 'neutral' | 'ok' | 'watch' | 'bad') {
@@ -240,14 +209,4 @@ function shortTime(value: string) {
         minute: '2-digit',
         timeZone: 'Europe/Oslo',
     }).format(new Date(value))
-}
-
-function shortAge(value: string) {
-    const delta = Date.now() - new Date(value).getTime()
-    if (!Number.isFinite(delta)) return 'checking'
-    const minutes = Math.max(0, Math.round(delta / 60_000))
-    if (minutes < 60) return `${minutes}m`
-    const hours = Math.round(minutes / 60)
-    if (hours < 48) return `${hours}h`
-    return `${Math.round(hours / 24)}d`
 }
