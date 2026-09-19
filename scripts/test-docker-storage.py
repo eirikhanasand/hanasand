@@ -27,6 +27,17 @@ class StorageTest(unittest.TestCase):
         self.assertEqual([r['id'] for r in storage.image_inventory(images, [], 2_000_000) if r['eligible']], ['c'])
 
 class CleanupStateTest(unittest.TestCase):
+    def test_metrics_refresh_leaves_cleanup_queued(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(storage, 'STATE_DIR', Path(directory)):
+            root = Path(directory)
+            storage.save(root / 'status.json', {'lastSuccessAt': 'previous-success'})
+            storage.save(root / 'request.json', {'requestedAt': 'now'})
+            with patch.object(storage, 'snapshot', return_value={'checkedAt': 'later'}), patch.object(storage, 'command') as command:
+                storage.perform()
+            command.assert_not_called()
+            self.assertTrue((root / 'request.json').exists())
+            self.assertEqual(storage.read(root / 'status.json')['lastSuccessAt'], 'previous-success')
+
     def test_failure_does_not_replace_last_success(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(storage, 'STATE_DIR', Path(directory)):
             root = Path(directory)

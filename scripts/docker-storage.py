@@ -108,7 +108,6 @@ def perform(clear=False):
         state_path = STATE_DIR / 'status.json'
         request_path = STATE_DIR / 'request.json'
         previous = read(state_path)
-        clear = clear or request_path.exists()
         state = {**previous, 'running': clear, 'error': None if clear else previous.get('error')}
         if clear:
             state['startedAt'] = now()
