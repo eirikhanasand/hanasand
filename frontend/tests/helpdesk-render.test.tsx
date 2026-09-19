@@ -4,11 +4,11 @@ import { mock } from 'bun:test'
 import { renderToReadableStream } from 'react-dom/server'
 
 let authenticated = true
+let renderedParams: Record<string, string> = {}
 mock.module('next/headers', () => ({ cookies: async () => ({
     get: (name: string) => authenticated ? { value: name === 'id' ? 'support-user' : 'test-token' } : undefined,
 }) }))
-mock.module('next/navigation', () => ({ redirect: (url: string) => { throw new Error(`redirect:${url}`) } }))
-mock.module('../src/app/dashboard/helpdesk/accessRecoveryForm', () => ({ default: () => null }))
+mock.module('next/navigation', () => ({ redirect: (url: string) => { throw new Error(`redirect:${url}`) }, useSearchParams: () => new URLSearchParams(renderedParams) }))
 
 // The audit endpoint returns system-event fields, not the retired admin-audit columns.
 const events = [
@@ -40,23 +40,27 @@ globalThis.fetch = (async (input: string | URL | Request, options?: RequestInit)
 }) as typeof fetch
 
 const { default: Page } = await import('../src/app/dashboard/helpdesk/page')
-const render = async (params: Record<string, string> = {}) => new Response(await renderToReadableStream(
-    await Page({ searchParams: Promise.resolve(params) }),
-)).text()
+const render = async (params: Record<string, string> = {}) => {
+    renderedParams = params
+    return new Response(await renderToReadableStream(await Page({ searchParams: Promise.resolve(params) }))).text()
+}
 
 const html = await render()
 for (const text of ['Search audit events', 'impersonation.start', 'support.organization.invite', 'Example customer', 'Example organization', 'session-1']) {
     assert(html.includes(text), `Missing audit content: ${text}`)
 }
-assert(html.includes('href="/helpdesk?event=101"'), 'Each row must select its unique event without filtering the timeline')
+assert(html.includes('aria-controls="audit-detail-101"'), 'Each row must control its own inline details')
+for (const removed of ['Support actions', 'Task controls', 'Customer lookup', 'Support inspection', 'Inspect access', 'Audit snapshot', '<aside', 'Start session']) assert(!html.includes(removed), `Removed UI must stay absent: ${removed}`)
 assert(!html.includes('undefined'), 'Current audit fields must not render as undefined')
-assert(html.includes('1 denied event need review'))
+assert(html.includes('Notifications: 1 event to review'))
+assert(html.includes('aria-label="Audit notifications"'))
+assert(!/<details[^>]* open/.test(html), 'Notifications and filters must stay collapsed initially')
 assert(/>Sessions<\/div><div[^>]*>1<\/div>/.test(html), 'Session count must use event_type')
 assert(/>Recovery<\/div><div[^>]*>1<\/div>/.test(html), 'Recovery count must use event_type')
 const focusFilters: Record<string, string>[] = [{ action: events[1].event_type }, { entity: 'invite-2' }, { target: 'org-2' }]
 for (const params of focusFilters) {
     const focusedHtml = await render(params)
-    assert(focusedHtml.match(/>Selected event<\/p><h2[^>]*>support.organization.invite<\/h2>/), 'Selection must use the API event, object and subject fields')
+    assert(/data-audit-event-id="102" data-helpdesk-focused-event="true"/.test(focusedHtml), 'Selection must use the API event, object and subject fields')
     const query = new URL(requestUrl).searchParams
     for (const [key, value] of Object.entries(params)) assert.equal(query.get(key), value)
 }
@@ -88,18 +92,26 @@ response = () => Response.json({ events: deletionEvents })
 const deletionHtml = await render({ event: '202', q: 'organization', severity: 'warning', support: 'invite', limit: '50' })
 assert.equal(new URL(requestUrl).searchParams.has('event'), false, 'Selection must not become an API filter')
 assert.equal(new URL(requestUrl).searchParams.get('q'), 'organization')
-assert(deletionHtml.includes('href="/helpdesk?q=organization&amp;severity=warning&amp;limit=50&amp;support=invite&amp;event=201"'), 'Row selection must retain filters and support mode')
+assert(!deletionHtml.includes('href="/helpdesk?event='), 'Selecting an event must not navigate to the server')
 assert.equal((deletionHtml.match(/<article /g) || []).length, 2, 'Selecting one event must keep the timeline intact')
 assert(/data-audit-event-id="202" data-helpdesk-focused-event="true"/.test(deletionHtml), 'Events without request or entity IDs must be individually selectable')
-assert(deletionHtml.match(/id="selected-audit-event"[\s\S]*?<dd[^>]*>Deleted organization<\/dd>/), 'Selected detail must use the recorded organization name')
+assert(deletionHtml.match(/id="audit-detail-202"[\s\S]*?<dd[^>]*>Deleted organization<\/dd>/), 'Selected detail must use the recorded organization name')
 assert(!deletionHtml.includes('deleted-org-1') && !deletionHtml.includes('deleted-org-2'), 'Organization names should replace target UUIDs')
 assert(!deletionHtml.includes('cleanup:') && !deletionHtml.includes('previousStatus:') && !deletionHtml.includes('name:'), 'Raw context summaries must not be rendered')
 assert(!deletionHtml.includes('Selected detail') && !deletionHtml.includes('checking'))
-assert(deletionHtml.includes('aria-current="true"'), 'The selected row must be exposed to assistive technology')
+assert(deletionHtml.includes('aria-expanded="true"'), 'The expanded row must be exposed to assistive technology')
 const firstSelectionHtml = await render({ event: '201' })
 assert(/data-audit-event-id="201" data-helpdesk-focused-event="true"/.test(firstSelectionHtml))
 const staleSelectionHtml = await render({ event: '999' })
 assert(/data-audit-event-id="201" data-helpdesk-focused-event="true"/.test(staleSelectionHtml), 'Unavailable selections must fall back to a visible event')
+
+
+response = () => Response.json({ events: [{ ...events[0], severity: 'critical' }, { ...events[1], severity: 'critical' }] })
+const criticalHtml = await render()
+assert(criticalHtml.includes('Notifications: 2 events to review'), 'An event that is critical and denied must only be counted once')
+const notifications = criticalHtml.split('aria-label="Audit notifications"')[1].split('</details>')[0]
+assert(notifications.includes('impersonation.start') && notifications.includes('support.organization.invite'), 'The notification panel must expose every counted event')
+assert(/>Critical<\/div><div[^>]*>2<\/div>/.test(notifications), 'Critical count must match available events')
 
 response = () => Response.json({ events: [] })
 assert((await render()).includes('No matching support events'))
