@@ -31,7 +31,8 @@ for (const width of [390, 1440]) {
 
 }
 
-test('an empty staff queue has no composer', async ({ page }) => {
+test('an empty staff queue has no composer', async ({ page, baseURL }) => {
+    await page.context().addCookies([{ name: 'id', value: 'agent', url: baseURL! }, { name: 'access_token', value: 'local-test', url: baseURL! }])
     await page.route('**/api/backend/support/tickets', route => route.fulfill({ json: { role: 'support', tickets: [] } }))
     await page.goto('/support')
     await expect(page.getByText('Select a customer chat to read and reply.')).toBeVisible()

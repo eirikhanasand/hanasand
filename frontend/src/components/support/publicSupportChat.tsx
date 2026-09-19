@@ -120,3 +120,15 @@ export default function PublicSupportChat() {
         </section>
     )
 }
+
+export function PublicSupportPanel() {
+    return (
+        <section className='mx-auto grid h-[calc(100dvh-9rem)] min-h-96 w-full max-w-2xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-2xl border border-ui-border bg-ui-panel shadow-sm' aria-label='Guest support'>
+            <header className='flex items-center gap-3 border-b border-ui-border px-5 py-4'>
+                <span className='grid h-9 w-9 place-items-center rounded-xl bg-ui-primary text-ui-canvas'><Sparkles className='h-4 w-4' aria-hidden='true' /></span>
+                <div><h1 className='text-sm font-semibold text-ui-text'>Hanasand AI</h1><p className='mt-0.5 text-xs text-ui-muted'>Support</p></div>
+            </header>
+            <PublicSupportChat />
+        </section>
+    )
+}

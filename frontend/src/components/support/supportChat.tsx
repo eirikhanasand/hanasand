@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { PublicSupportPanel } from './publicSupportChat'
 import { MessageCircle, Send } from 'lucide-react'
 import { FormEvent, useCallback, useEffect, useState } from 'react'
 import { getCookie } from '@/utils/cookies/cookies'
@@ -79,6 +80,8 @@ export default function SupportChat({ embedded = false }: { embedded?: boolean }
         }
     }
 
+    if (signedOut) return <PublicSupportPanel />
+
     const selected = tickets.find(ticket => ticket.id === selectedId)
     const shell = embedded
         ? 'grid h-[calc(100dvh-7rem)] min-h-[30rem] min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm lg:grid-cols-[18rem_minmax(0,1fr)] lg:grid-rows-1'
@@ -117,7 +120,7 @@ export default function SupportChat({ embedded = false }: { embedded?: boolean }
                 </div>
                 <div className='border-t border-ui-border p-4'>
                     {error ? <p role='alert' className='mb-3 text-sm text-ui-danger'>{error}</p> : null}
-                    {signedOut ? <Link href='/login?path=/support' className='inline-flex h-10 items-center rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas'>Sign in to support</Link> : role !== 'support' || selectedId ? (
+                    {role !== 'support' || selectedId ? (
                         <form onSubmit={send} className='grid min-w-0 gap-3'>
                             {!selectedId ? <input aria-label='Subject' maxLength={160} value={subject} onChange={event => setSubject(event.target.value)} placeholder='Subject' className={`h-10 ${fieldClass}`} /> : null}
                             <div className='flex min-w-0 items-end gap-2'>
