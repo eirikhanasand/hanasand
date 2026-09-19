@@ -206,8 +206,10 @@ type=EXECVE msg=audit(1789817001.123:457): argc=1 a0="id"
         class Result:
             returncode=0
             stdout='2026-09-19T00:00:30Z ready'
+        error=c.HTTPError('https://example.invalid/private-test-value',400,'private-test-value',{},None)
+        self.addCleanup(error.close)
         with tempfile.TemporaryDirectory() as tmp, patch.object(c,'STATE',Path(tmp)):
-            with patch.object(c.shutil,'which',return_value='/usr/bin/docker'), patch.object(c,'command',return_value='one service'), patch.object(c.subprocess,'run',return_value=Result()), patch.object(c,'send',side_effect=c.HTTPError('https://example.invalid/private-test-value',400,'private-test-value',{},None)):
+            with patch.object(c.shutil,'which',return_value='/usr/bin/docker'), patch.object(c,'command',return_value='one service'), patch.object(c.subprocess,'run',return_value=Result()), patch.object(c,'send',side_effect=error):
                 with self.assertRaises(c.DockerCollectionError) as raised:c.docker({'host':'inspur','start':'2026-09-19T00:00:00Z'})
             detail=c.collection_error(raised.exception)
             self.assertIn('service (delivery HTTP 400)',detail)
