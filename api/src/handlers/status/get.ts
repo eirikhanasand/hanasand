@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run, { withTransaction } from '#db'
 import { ensureStatusSnapshots } from '#utils/status/snapshotSchema.ts'
-import { compactStatus, searchHealth } from '#utils/status/presentation.ts'
+import { createDashboardSerializer, searchHealth } from '#utils/status/presentation.ts'
 
 type MonitorRow = {
     service: string
@@ -45,6 +45,7 @@ let statusInflight: Promise<object> | null = null
 let historyRefresh: Promise<void> | null = null
 let historyRetryAt = 0
 let dashboardCache: { current: unknown, history: unknown, json: string } | undefined
+const serializeDashboard = createDashboardSerializer()
 let historySnapshot: Awaited<ReturnType<typeof loadStatusPayload>> | null = null
 
 export default async function getStatus(req: FastifyRequest<{ Querystring: { summary?: string, incident?: string, dashboard?: string, check?: string } }>, res: FastifyReply) {
@@ -57,7 +58,7 @@ export default async function getStatus(req: FastifyRequest<{ Querystring: { sum
     }
     if (req.query?.dashboard === 'true') {
         if (dashboardCache?.current !== statusCache || dashboardCache?.history !== historySnapshot) {
-            dashboardCache = { current: statusCache, history: historySnapshot, json: JSON.stringify(compactStatus(payload as ReturnType<typeof withHistory>)) }
+            dashboardCache = { current: statusCache, history: historySnapshot, json: serializeDashboard(payload as ReturnType<typeof withHistory>) }
         }
         return res.type('application/json').send(dashboardCache!.json)
     }
@@ -88,16 +89,28 @@ async function statusPayload(summary: boolean) {
     statusInflight ||= loadStatusPayload(true).then(payload => {
         statusCache = payload.checks.length ? payload : { ...(statusCache || historySnapshot || payload), monitoring: 'unavailable' }
         expiresAt = Date.now() + STATUS_CACHE_MS
+        prepareDashboard()
         return statusCache
     }).catch(error => {
         console.error('[production-monitor] current status unavailable:', error.message)
         expiresAt = Date.now() + STATUS_CACHE_MS
-        if (statusCache) statusCache = { ...statusCache, monitoring: 'unavailable' }
+        if (statusCache) {
+            statusCache = { ...statusCache, monitoring: 'unavailable' }
+            prepareDashboard()
+        }
         return statusCache || { ...(historySnapshot || { overall: 'unknown', generated_at: '', checks: [], history: [], incidents: [] }), monitoring: 'unavailable' }
     }).finally(() => { statusInflight = null })
     // A slow database refresh must not delay readers that already have evidence.
     const current = statusCache || await statusInflight
     return summary ? current : withHistory(current)
+}
+
+function prepareDashboard() {
+    if (statusCache) dashboardCache = {
+        current: statusCache,
+        history: historySnapshot,
+        json: serializeDashboard(withHistory(statusCache)),
+    }
 }
 
 function withHistory(current: object) {
@@ -119,6 +132,7 @@ function refreshHistory() {
         if (saved.rows[0]) {
             historySnapshot = saved.rows[0].payload
             if (!statusCache && historySnapshot) statusCache = { ...historySnapshot, history: [], incidents: [] }
+            prepareDashboard()
             if (Date.now() - new Date(saved.rows[0].updated_at).getTime() < MONITOR_STALE_MS) return
         }
         // History scans never block current checks. A database lock shares one
@@ -131,6 +145,7 @@ function refreshHistory() {
             if (!payload.checks.length) throw new Error('No current monitor results; retaining the verified snapshot.')
             await query('INSERT INTO service_status_snapshots (id, payload) VALUES (\'history-v2\', $1::jsonb) ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()', [JSON.stringify(payload)])
             historySnapshot = payload
+            prepareDashboard()
         })
     })().catch(error => {
         console.error('[production-monitor] status history unavailable:', error.message)
