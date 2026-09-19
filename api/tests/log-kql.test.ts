@@ -10,7 +10,7 @@ test('KQL values are parameters, fields and operators are allowlisted', () => {
     expect(() => compileLogQuery('Logs | where evil == "x"')).toThrow('Unknown field')
     expect(() => compileLogQuery('Logs | delete')).toThrow('Unsupported')
     expect(() => compileLogQuery('Logs | take 999999')).toThrow()
-    expect(compileLogQuery('Logs | where Message contains "x\' OR 1=1 --"').params).toEqual(["x' OR 1=1 --"])
+    expect(compileLogQuery('Logs | where Message contains "x\' OR 1=1 --"').params).toEqual(['x\' OR 1=1 --'])
 })
 test('KQL projection, aggregation, quoted pipes and malformed syntax', () => {
     expect(compileLogQuery('Logs | project TimeGenerated, Host, CommandLine').projection).toHaveLength(3)
@@ -36,6 +36,21 @@ test('KQL rejects unsupported pipeline semantics instead of silently reordering 
     expect(rule.where.join(' ')).toContain('strpos(')
     expect(rule.where.join(' ')).not.toContain('ILIKE')
     expect(compileLogQuery('Logs | where Message has "foo"').where.join(' ')).toContain('regexp_split_to_array')
+})
+test('executable suffixes use a parameterized literal prefix without changing other fields', () => {
+    for (const value of ['whoami', '%', '_', '\\', '!', '', 'WHOAMI', 'İ', 'x\' OR 1=1 --']) {
+        const query = compileLogQuery(`ProcessLogs | where Executable endswith ${JSON.stringify(value)} | project TimeGenerated, Host | take 100`)
+        expect(query.params).toEqual(['ProcessLogs', value])
+        expect(query.where[1]).toContain('reverse(lower(COALESCE(normalized#>>\'{process,executable}\', \'\')))')
+        expect(query.where[1]).toContain('reverse(lower($2::text))')
+        expect(query.where[1]).toContain('ESCAPE \'!\'')
+        expect(query.where[1]).toContain('AND right(lower(')
+        expect(query.order).toBe('event_timestamp DESC, id DESC')
+        expect(query.limit).toBe(100)
+        expect(query.projection).toEqual(['TimeGenerated', 'Host'])
+    }
+    expect(compileLogQuery('Logs | where Message endswith "whoami"').where.join(' ')).not.toContain('LIKE')
+    expect(compileLogQuery('Logs | where Executable contains "whoami"').where.join(' ')).not.toContain('LIKE')
 })
 test('normalizes HTTP aliases and SSH identity context without mixing level and severity', () => {
     const base = { id: '1', service: 'api', level: 'info', created_at: '2026-09-19T00:00:00Z' }
