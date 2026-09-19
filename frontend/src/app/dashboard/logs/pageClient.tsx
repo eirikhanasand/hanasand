@@ -11,13 +11,19 @@ import type { ErrorEvent, ErrorEventsResponse, LogService } from '@/utils/logs/g
 import { dashboardPanelClass } from '@/components/dashboard/ui'
 
 type Event = { id: string, event_timestamp: string, normalized: { severity: string, level: string, log_type: string, service: string, host: string, message: string, process?: { executable?: string, command_line?: string }, detections?: Array<{ rule_id: string, summary: string, severity: string }>, rules_checked?: number, [key: string]: unknown } }
-type Result = { rows: Event[], counts: Array<{ severity: string, count: number }>, services: Array<{ service: string, count: number }>, processing: { updated_at: string, last_error?: string, skipped_events?: number } | null, summarize?: string, projection?: string[], limit: number }
+type ProcessingSource = { name: string, last_id?: string | null, recent_id?: string | null }
+type Result = { rows: Event[], counts: Array<{ severity: string, count: number }>, services: Array<{ service: string, count: number }>, processing: { updated_at: string, last_error?: string, skipped_events?: number, sources?: ProcessingSource[] } | null, summarize?: string, projection?: string[], limit: number }
 const colors: Record<string, string> = { low: 'text-ui-muted bg-ui-raised', medium: 'text-ui-warning bg-ui-warning/10', high: 'text-ui-danger bg-ui-danger/10', critical: 'text-ui-danger bg-ui-danger/20 ring-1 ring-ui-danger' }
 const fieldClass = 'rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm text-ui-text'
 const logTables = ['Logs', 'ProcessLogs', 'SigninLogs', 'ApplicationLogs', 'HttpLogs', 'SystemLogs']
 const fieldNames: Record<string, string> = { TimeGenerated: 'timestamp', Severity: 'severity', Level: 'level', Service: 'service', Host: 'host', Message: 'message', LogType: 'log_type', CommandLine: 'process.command_line', Executable: 'process.executable', UserId: 'user.id', RuleId: 'detections' }
 function projected(event: Event, fields: string[]) {
     return Object.fromEntries(fields.map(field => [field, field === 'TimeGenerated' ? event.event_timestamp : field === 'RuleId' ? event.normalized.detections?.map(rule => rule.rule_id) : fieldNames[field]?.split('.').reduce<unknown>((value, key) => value && typeof value === 'object' ? (value as Record<string, unknown>)[key] : undefined, event.normalized)]))
+}
+function isCatchingUp({ last_id, recent_id }: ProcessingSource) {
+    return typeof last_id === 'string' && typeof recent_id === 'string'
+        && /^\d+$/.test(last_id) && /^\d+$/.test(recent_id)
+        && BigInt(last_id) < BigInt(recent_id)
 }
 export default function LogsPageClient({ initialServices, initialErrors, initialServiceFilter = 'all' }: { initialServices: LogService[], initialErrors: ErrorEventsResponse, initialServiceFilter?: string }) {
     const pathname = usePathname()
@@ -117,6 +123,7 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
                 </form>}
             </section>
             {data?.processing?.last_error && <p role='alert' className='text-sm text-ui-danger'>Mill processing is delayed: {data.processing.last_error}</p>}
+            {data?.processing?.sources?.some(isCatchingUp) && <p role='status' className='text-sm text-ui-warning'>Historical logs are still being checked. Search results and counters are incomplete until catch-up finishes.</p>}
             {!!data?.processing?.skipped_events && <p role='status' className='text-sm text-ui-warning'>{data.processing.skipped_events.toLocaleString()} events could not be assigned to an active organization and were excluded from detection.</p>}
             {data && !data.processing && !busy && <p role='status' className='text-sm text-ui-warning'>Waiting for the log processor to check in.</p>}
             {view === 'dashboard' ? <>

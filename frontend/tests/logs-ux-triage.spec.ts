@@ -1,6 +1,24 @@
 import { expect, test } from '@playwright/test'
 import { event, openLogs, result } from './fixtures/logs-browser'
 
+test('historical catch-up notice checks every source without losing bigint precision', async ({ page }) => {
+    await page.clock.install()
+    const sources = [
+        { name: 'invalid', last_id: 'not-a-number', recent_id: '100' },
+        { name: 'missing', last_id: null, recent_id: '100' },
+        { name: 'complete', last_id: '100', recent_id: '100' },
+        { name: 'backfill', last_id: '9007199254740992', recent_id: '9007199254740993' },
+    ]
+    await page.route('**/api/backend/logs/search?*', route => route.fulfill({ json: { ...result(), processing: { ...result().processing, sources } } }))
+    await openLogs(page, '/logs')
+    await page.clock.runFor(300)
+    const notice = page.getByRole('status').filter({ hasText: 'Historical logs are still being checked.' })
+    await expect(notice).toHaveText('Historical logs are still being checked. Search results and counters are incomplete until catch-up finishes.')
+    sources[3].last_id = sources[3].recent_id
+    await page.clock.runFor(5000)
+    await expect(notice).toHaveCount(0)
+})
+
 test('dashboard lands on severity counts and keeps active services inside operational counters', async ({ page }) => {
     await page.route('**/api/backend/logs/search?*', route => route.fulfill({ json: result() }))
     await openLogs(page, '/logs?service=audit&hours=168')
