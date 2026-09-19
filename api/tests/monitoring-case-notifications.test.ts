@@ -16,7 +16,10 @@ mock.module('../src/utils/db.ts', () => ({
         if (sql.startsWith('INSERT INTO monitoring_issue_notifications')) claims++
         return { rows: [{ issue_id: '1' }] }
     },
-    withTransaction: async (work: (query: (sql: string) => Promise<unknown>) => Promise<unknown>) => work(async sql => ({ rows: sql.startsWith('INSERT') ? [{ id: '1' }] : [{}] })),
+    withTransaction: async (work: (query: (sql: string) => Promise<unknown>) => Promise<unknown>) => work(async sql => {
+        if (sql.startsWith('INSERT INTO monitoring_issue_notifications')) claims++
+        return { rows: sql.startsWith('INSERT') ? [{ id: '1' }] : [{}] }
+    }),
 }))
 mock.module('../src/utils/alerts/discordWebhookFile.ts', () => ({
     redactSecretBearingText: (value: string) => value,
