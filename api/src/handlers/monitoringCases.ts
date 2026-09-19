@@ -26,14 +26,14 @@ export async function getMonitoringCases(req: FastifyRequest<{ Params: { id?: st
     const result = await run(`SELECT i.*, (SELECT count(*)::int FROM monitoring_issue_checks c WHERE c.issue_id=i.id) AS check_count, ${automationReadScope('a', '$1', '$2')} AS can_manage, a.name AS monitor_name, a.owner_id, a.organization_id, a.target_url, a.monitoring_type, a.timeout_seconds, a.retry_count, a.follow_redirects, a.expected_down, a.upside_down
         FROM monitoring_issues i JOIN agent_automations a ON a.id = i.automation_id
         WHERE ${monitoringCaseReadScope('a', '$1', '$2')}
-          AND ($3::text IS NULL OR a.organization_id = $3 OR a.organization_id IS NULL)
+          AND ($3::text IS NULL OR a.organization_id = $3)
           AND i.merged_into IS NULL AND ($4::text IS NULL OR i.id = (SELECT COALESCE(merged_into,id) FROM monitoring_issues WHERE id::text=$4))
         ORDER BY i.last_seen_at DESC, i.id DESC`, [includeAll, id, organizationId, caseId?.slice(3) || null])
     const items = result.rows.map(row => ({
         canManage: row.can_manage === true, id: `HA-${row.id}`, caseNumber: `HA-${row.id}`, source: 'monitoring',
         title: `HA-${row.id} · ${row.monitor_name}${row.check_count > 1 ? ` (+${row.check_count - 1} ${row.check_count === 2 ? 'check' : 'checks'})` : ''}`, summary: readableMonitoringMessage(row.summary),
         status: row.status_override || (row.resolved_at ? 'resolved' : 'open'), severity: row.severity_override || (row.kind === 'failure' ? 'high' : 'medium'),
-        notificationsEnabled: row.notifications_enabled ?? true, comments: row.comments || [], diskDiagnostics: row.disk_diagnostics,
+        notificationsEnabled: row.notifications_enabled ?? true, comments: row.comments || [],
         history: monitoringCaseHistory(row), resolution: monitoringCaseResolution(row),
         assignedOwner: row.owner_id, organizationId: row.organization_id,
         createdAt: row.first_seen_at, lastSeenAt: row.last_seen_at, updatedAt: (row.history || []).reduce((latest: string, event: { at: string }) => new Date(event.at) > new Date(latest) ? event.at : latest, row.last_seen_at), resolvedAt: row.resolved_at,
@@ -94,7 +94,7 @@ export async function updateMonitoringCase(req: FastifyRequest<{ Params: { id: s
             WHEN $10::jsonb IS NOT NULL THEN $10::jsonb WHEN $5::text IN ('open', 'in_progress') THEN NULL ELSE i.resolution END
         FROM agent_automations a WHERE a.id = i.automation_id
         AND ${automationReadScope('a', '$1', '$2')}
-        AND ($3::text IS NULL OR a.organization_id = $3 OR a.organization_id IS NULL) AND i.id = (SELECT COALESCE(merged_into,id) FROM monitoring_issues WHERE id::text=$4)
+        AND ($3::text IS NULL OR a.organization_id = $3) AND i.id = (SELECT COALESCE(merged_into,id) FROM monitoring_issues WHERE id::text=$4)
         AND ($11::text IS NULL OR (i.resolution->>'id' = $11 AND i.resolution->>'type' IN ('ai', 'automation')
             AND i.resolution->>'confirmedAt' IS NULL AND COALESCE(i.status_override, CASE WHEN i.resolved_at IS NULL THEN 'open' ELSE 'resolved' END) IN ('resolved', 'closed')))
         RETURNING i.id`, [includeAll, id, organizationId, caseId.slice(3), body.status ?? null, body.severity ?? null, body.notificationsEnabled ?? null, JSON.stringify(comment), metadata, resolution, body.confirmResolutionId ?? null, actor, at])

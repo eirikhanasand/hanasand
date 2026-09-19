@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict'
-import { readdir, readFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { chromium } from '@playwright/test'
+import postcss from 'postcss'
+import tailwind from '@tailwindcss/postcss'
 
 let bundle = ''
 let streamLoads = 0
-const css = (await Promise.all((await readdir('.next/static/css')).filter(file => file.endsWith('.css')).map(file => readFile(`.next/static/css/${file}`, 'utf8')))).join('\n')
+const css = (await postcss([tailwind()]).process(await readFile('src/app/globals.css', 'utf8'), { from: 'src/app/globals.css' })).css
 const server = Bun.serve({ port: 0, fetch(request) {
     const url = new URL(request.url)
     if (url.pathname === '/app.js') return new Response(bundle, { headers: { 'content-type': 'text/javascript' } })
@@ -69,7 +71,7 @@ try {
     await iframe.waitFor()
     const frame = page.frameLocator('iframe')
     await frame.getByRole('button', { name: 'Remote click' }).waitFor()
-    assert((await viewport.boundingBox()).height <= 180, 'Keep the player compact before its first video frame')
+    assert((await viewport.boundingBox()).height > 300, 'A connected stream must have a usable viewport even before its readiness message')
     const nativeFrame = page.frames().find(frame => frame.url().includes('/stream/index.html'))
     await nativeFrame.evaluate(() => parent.postMessage({ type: 'hanasand-browser-stream', state: 'ready' }, location.origin))
     await page.waitForFunction(() => document.querySelector('[data-browser-viewport]').getBoundingClientRect().height > 300)
@@ -89,8 +91,27 @@ try {
     await page.setViewportSize({ width: 390, height: 844 })
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Mobile workspace must not overflow horizontally')
     assert.equal(streamLoads, 1, 'Responsive changes must not recreate the stream')
+    if (process.env.BROWSER_WORKSPACE_SCREENSHOT) {
+        await page.setViewportSize({ width: 1440, height: 900 })
+        await page.screenshot({ path: process.env.BROWSER_WORKSPACE_SCREENSHOT.replace('.png', '-live.png'), fullPage: true })
+        await page.setViewportSize({ width: 390, height: 844 })
+    }
     const mobileViewport = await viewport.boundingBox()
     assert(mobileViewport.x + mobileViewport.width <= 390, `Viewport clipped at ${mobileViewport.x + mobileViewport.width}px`)
+    await page.evaluate(() => window.deliver({ type: 'downloads', networkSummary: { requestCount: 8, uniqueDomainCount: 2, downloads: [{ id: 'file-1', fileName: 'sample.txt', sha256: 'a'.repeat(64), bytes: 32, virusTotal: { status: 'checking' } }] } }))
+    await page.getByText('sample.txt', { exact: true }).waitFor()
+    await page.evaluate(() => window.deliver({ type: 'downloads', networkSummary: { requestCount: 8, uniqueDomainCount: 2, downloads: [{ id: 'file-1', fileName: 'sample.txt', sha256: 'a'.repeat(64), bytes: 32, virusTotal: { status: 'known', flagged: 2, total: 70 } }] } }))
+    await page.getByText('VirusTotal 2/70 detections', { exact: true }).waitFor()
+    await page.evaluate(() => window.deliver({ type: 'ended' }))
+    const result = page.locator('[data-run-result]')
+    await result.waitFor()
+    assert.equal(await result.getAttribute('aria-expanded'), 'false', 'Completed runs become a closed result box')
+    assert.equal(await viewport.isVisible(), false, 'Saved screenshots must not dominate a completed run')
+    await result.click()
+    assert.equal(await result.getAttribute('aria-expanded'), 'true')
+    await page.getByText('VirusTotal 2/70 detections', { exact: true }).waitFor()
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Expanded mobile report must not overflow')
+    await result.click()
     if (process.env.BROWSER_WORKSPACE_SCREENSHOT) {
         await page.setViewportSize({ width: 1440, height: 900 })
         await page.screenshot({ path: process.env.BROWSER_WORKSPACE_SCREENSHOT.replace('.png', '-desktop.png'), fullPage: false })
@@ -98,5 +119,5 @@ try {
     }
     if (process.env.BROWSER_WORKSPACE_SCREENSHOT) await page.screenshot({ path: process.env.BROWSER_WORKSPACE_SCREENSHOT, fullPage: true })
     assert.deepEqual(errors, [])
-    console.log('Browser workspace passed: compact waiting, single toolbar, stable stream, native click/scroll, screenshot coordinates, keyboard tabs, and mobile width.')
+    console.log('Browser workspace passed: live input, stable stream, downloads, updated VT verdict, completion box, expandable evidence, keyboard tabs and mobile width.')
 } finally { await browser.close(); server.stop(true) }

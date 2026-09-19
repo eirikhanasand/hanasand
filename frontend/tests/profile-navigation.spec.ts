@@ -25,6 +25,8 @@ test('management opens the selected profile with one sidebar and self-only accou
     }
     await page.goto('/profile/role-fixture-admin')
     await expect(page.getByRole('heading', { name: 'Fixture Admin', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Certificates', exact: true })).toHaveCount(0)
+    await page.getByRole('navigation', { name: 'Account pages' }).getByRole('link', { name: 'Certificates', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Certificates', exact: true })).toBeVisible()
     await expect(page.locator('[aria-label="Dashboard sidebar"]')).toHaveCount(1)
     await context.close()

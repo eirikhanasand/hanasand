@@ -194,7 +194,7 @@ client.send(JSON.stringify({ type: 'click', x: 80, y: 108, button: 0 }))
 for (const key of 'abc') client.send(JSON.stringify({ type: 'key', key }))
 await waitForPayload(payloads, payload => payload.type === 'frame' && payload.title === 'Typed proof: abc', 8_000)
 client.send(JSON.stringify({ type: 'click', x: 80, y: 155, button: 0 }))
-await waitForPayload(payloads, payload => payload.type === 'status' && payload.state === 'download_blocked', 8_000)
+await waitForPayload(payloads, payload => payload.type === 'downloads' && Boolean(payload.networkSummary?.downloads?.some(file => file.sha256 === downloadHash)), 8_000)
 await waitForPayload(payloads, payload => payload.type === 'frame' && payload.url?.endsWith('/final'), 25_000)
 await waitForPayload(payloads, payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'virustotal' && payload.toolAnalysis.vendorFlagged !== undefined)
 await waitForPayload(payloads, payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'urlquery' && payload.toolAnalysis.alertCount !== undefined)
@@ -319,7 +319,7 @@ function waitForPayload(payloads: BrokerPayload[], predicate: (payload: BrokerPa
 
             if (Date.now() - started > timeoutMs) {
                 clearInterval(timer)
-                reject(new Error(`Timed out waiting for browser sandbox payload. Received: ${JSON.stringify(payloads.slice(-10).map(summarizePayload))}`))
+                reject(new Error(`Timed out waiting for ${predicate.toString()}. Received: ${JSON.stringify(payloads.slice(-10).map(summarizePayload))}`))
             }
         }, 50)
     })

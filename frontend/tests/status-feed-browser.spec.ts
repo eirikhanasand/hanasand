@@ -1,9 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-test.use({ timezoneId: 'Europe/Oslo' })
-
 test('status feed failures preserve verified evidence without claiming a service outage', async ({ page }) => {
-    test.setTimeout(60000)
     test.skip(process.env.STATUS_FEED_TEST !== '1', 'Enable explicit browser fault injection.')
     const names = [['Core platform', 'API Health'], ['Website', 'Public Website'], ['Threat intelligence', 'Public Search'], ['Threat intelligence', 'Processing Backlog'], ['Threat intelligence', 'Source Collection'], ['Browser sandbox', 'Browser Workspace'], ['Dark web monitoring', 'Monitoring Workspace'], ['Dark web monitoring', 'Latest Activity']]
     const at = new Date().toISOString()

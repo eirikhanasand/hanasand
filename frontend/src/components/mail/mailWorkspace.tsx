@@ -121,7 +121,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
             if (version !== requestVersion.current) return
             const switched = next.mailboxUser !== selection.current.user || next.selectedMailboxId !== selection.current.mailbox
             setOverview(current => {
-                if (switched || !current || current.messages.length <= 50) return next
+                if (switched || params.messageId === null || !current || current.messages.length <= 50) return next
                 const ids = new Set(next.messages.map(message => message.id))
                 const boundary = current.messages.findIndex(message => message.id === next.messages.at(-1)?.id)
                 const tail = current.messages.slice(boundary >= 0 ? boundary + 1 : 50)

@@ -31,33 +31,3 @@ UNIT
 systemctl daemon-reload
 systemctl enable --now hanasand-host-metrics.timer
 systemctl start hanasand-host-metrics.service
-
-# Directory scans are independent of the fast health telemetry timer.
-install -m 755 "$script_dir/disk-directories.py" /usr/local/lib/hanasand/disk-directories.py
-cat > /etc/systemd/system/hanasand-disk-directories.service <<UNIT
-[Unit]
-Description=Collect largest directories on high-usage filesystems
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/python3 /usr/local/lib/hanasand/disk-directories.py ${destination}
-TimeoutStartSec=10min
-Nice=19
-IOSchedulingClass=idle
-NoNewPrivileges=true
-ProtectSystem=strict
-ProtectHome=read-only
-ReadWritePaths=${destination%/*}
-UNIT
-cat > /etc/systemd/system/hanasand-disk-directories.timer <<'UNIT'
-[Unit]
-Description=Refresh disk incident diagnostics
-[Timer]
-OnBootSec=30s
-OnUnitActiveSec=15min
-AccuracySec=10s
-[Install]
-WantedBy=timers.target
-UNIT
-systemctl daemon-reload
-systemctl enable --now hanasand-disk-directories.timer
-systemctl start --no-block hanasand-disk-directories.service

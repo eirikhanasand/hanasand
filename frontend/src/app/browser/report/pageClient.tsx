@@ -40,7 +40,7 @@ type BrowserReport = {
             redirectChain?: string[]
             urlStates?: string[]
             peerSummary?: NetworkRequestRow[]
-            downloads?: Array<{ url?: string; fileName?: string; bytes?: number; sha256?: string; hashStatus?: string }>
+            downloads?: Array<{ url?: string; fileName?: string; bytes?: number; sha256?: string; hashStatus?: string; virusTotal?: { status?: string; flagged?: number; total?: number; detail?: string } }>
             recentRequests?: NetworkRequestRow[]
         }
         scriptArtifacts?: Array<{ scriptId?: string; source?: string; sha256?: string; assessment?: string; summary?: string; indicators?: { domains?: string[]; ips?: string[]; urls?: string[] } }>
@@ -216,6 +216,7 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
                                     download.fileName || download.url || 'download',
                                     download.bytes !== undefined ? `${download.bytes} bytes` : '',
                                     download.sha256 ? `sha256 ${download.sha256}` : download.hashStatus || '',
+                                    download.virusTotal?.total ? `VirusTotal: ${download.virusTotal.flagged || 0}/${download.virusTotal.total} detections` : download.virusTotal?.detail || download.virusTotal?.status || '',
                                     download.url && download.fileName ? download.url : '',
                                 ].filter(Boolean).join('\n')).join('\n\n')}</pre>
                             ) : null}
@@ -308,10 +309,10 @@ function scriptIndicatorList(script: NonNullable<NonNullable<BrowserReport['anal
 
 function ReportPanel({ title, children }: { title: string; children: React.ReactNode }) {
     return (
-        <section className='rounded-lg border border-ui-border bg-ui-panel p-4'>
-            <h2 className='text-sm font-semibold uppercase text-ui-primary'>{title}</h2>
-            <div className='mt-3'>{children}</div>
-        </section>
+        <details className='min-w-0 rounded-lg border border-ui-border bg-ui-panel'>
+            <summary className='cursor-pointer p-4 text-sm font-semibold text-ui-primary'>{title}</summary>
+            <div className='border-t border-ui-border p-4'>{children}</div>
+        </details>
     )
 }
 

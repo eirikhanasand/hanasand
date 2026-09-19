@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { lookup, resolveTxt } from 'node:dns/promises'
-import { readFile, stat } from 'node:fs/promises'
 import { promisify } from 'node:util'
 import WebSocket, { type RawData } from 'ws'
-import { chromium, type Browser, type BrowserContext, type Frame, type Page, type Request } from 'playwright'
+import { chromium, type Browser, type BrowserContext, type Download, type Frame, type Page, type Request } from 'playwright'
+import { fileReputation, inspectDownload, type FileReputation } from './downloads.ts'
 import recordLog from '#utils/logs/recordLog.ts'
 import { finishBrowserRun, prepareBrowserRun, updateBrowserRunProviderResult, type BrowserProviderRunResult } from '../browserSandboxRuns.ts'
 import {
@@ -75,6 +75,8 @@ type SandboxNetworkEvent = {
     bytes?: number
     sha256?: string
     hashStatus?: string
+    id?: string
+    virusTotal?: FileReputation
     failure?: string
     at: string
 }
@@ -96,7 +98,6 @@ const DEFAULT_DURATION_MS = 90 * 1000
 const SUSPICIOUS_DURATION_MS = 3 * 60 * 1000
 const MANUAL_EXTENSION_MS = 5 * 60 * 1000
 const DEFAULT_BROWSER_MAX_SESSIONS = 100
-const MAX_DOWNLOAD_HASH_BYTES = 5 * 1024 * 1024
 const asnCache = new Map<string, Promise<string | undefined>>()
 const CHROME_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
 const execFileAsync = promisify(execFile)
@@ -304,6 +305,10 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
     let editableSelectAllArmed = false
     let messageQueue = Promise.resolve()
     let networkEvents: SandboxNetworkEvent[] = []
+    const downloads: SandboxNetworkEvent[] = []
+    const fileLookups = new Map<string, Promise<FileReputation>>()
+    let fileLookupQueue = Promise.resolve()
+    let downloadsInFlight = 0
     let cachedDeobfuscationTasks: SandboxDeobfuscationTask[] = []
     let cachedThreatAssociations: ReturnType<typeof extractThreatAssociations> = []
     let cachedIndicators: ReturnType<typeof extractIndicators> | null = null
@@ -334,6 +339,11 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
     const cleanup = async (runStatus: 'ended' | 'failed' | 'unreachable' = terminalRunStatus) => {
         trace('cleanup', { runStatus, hasPage: Boolean(page), hasContext: Boolean(context), ownsBrowser })
         closed = true
+        for (const file of downloads) {
+            if (file.virusTotal?.status === 'checking') file.virusTotal = { status: 'interrupted', detail: 'Run ended before the hash lookup finished' }
+            if (file.hashStatus === 'downloading') file.hashStatus = 'Download interrupted when the run ended'
+        }
+        publishDownloads()
         cancelAdmission?.()
         cancelAdmission = null
         releaseAdmission?.()
@@ -752,30 +762,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     at: new Date().toISOString(),
                 })
             })
-            page.on('download', (download) => {
-                void inspectDownload(download).then(async evidence => {
-                    trackNetwork({
-                        kind: 'download',
-                        url: download.url(),
-                        failure: 'download saved for hash evidence, then deleted',
-                        at: new Date().toISOString(),
-                        ...evidence,
-                    })
-                    send({ type: 'status', state: 'download_blocked', url: download.url(), message: 'Download hashed for evidence and deleted.' })
-                    await sendFrame(true, 'download')
-                })
-                    .catch(() => {
-                        trackNetwork({
-                            kind: 'download',
-                            url: download.url(),
-                            failure: 'download blocked for sandbox safety',
-                            at: new Date().toISOString(),
-                        })
-                        send({ type: 'status', state: 'download_blocked', url: download.url(), message: 'Download blocked for sandbox safety.' })
-                        void sendFrame(true, 'download')
-                    })
-                    .finally(() => void download.delete().catch(() => undefined))
-            })
+            watchDownloads(page)
             page.on('framenavigated', (frame) => {
                 if (frame !== page?.mainFrame()) return
                 send({ type: 'status', state: 'navigated', url: page.url(), sessionId })
@@ -1095,6 +1082,83 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         if (networkEvents.length > 600) networkEvents = networkEvents.slice(-600)
     }
 
+    function networkSummary() {
+        return summarizeNetworkEvents([...networkEvents, ...downloads])
+    }
+
+    function publishDownloads() {
+        if (downloads.length) send({ type: 'downloads', networkSummary: networkSummary() })
+    }
+
+    function watchDownloads(targetPage: Page) {
+        targetPage.on('download', download => { void captureDownload(download) })
+        targetPage.on('popup', popup => watchDownloads(popup))
+    }
+
+    async function lookupFile(sha256: string): Promise<FileReputation> {
+        if (closed || !context) return { status: 'interrupted', detail: 'Run ended before the hash lookup finished' }
+        const lookupPage = await context.newPage()
+        try {
+            await focusRemoteTab()
+            const bodies: string[] = []
+            lookupPage.on('response', response => {
+                // Never confuse the URL report or a neighbouring file's score with this hash.
+                if (new URL(response.url()).hostname === 'www.virustotal.com' && new URL(response.url()).pathname === `/ui/files/${sha256}`) {
+                    void response.text().then(body => bodies.push(body.slice(0, 80_000))).catch(() => undefined)
+                }
+            })
+            await lookupPage.goto(`https://www.virustotal.com/gui/file/${sha256}`, { waitUntil: 'domcontentloaded', timeout: 15_000 })
+            await focusRemoteTab()
+            const deadline = Date.now() + 20_000
+            let result: FileReputation = fileReputation('', sha256)
+            while (!closed && Date.now() < deadline) {
+                const text = [bodies.join('\n'), await withTimeout(collectRenderedText(lookupPage), 1500, '')].join('\n')
+                result = fileReputation(text, sha256)
+                if (result.status === 'known' || result.status === 'unknown' || /access limited/.test(result.detail || '')) break
+                await lookupPage.waitForTimeout(500)
+            }
+            return result
+        } catch {
+            return { status: closed ? 'interrupted' : 'unavailable', detail: closed ? 'Run ended before the hash lookup finished' : 'VirusTotal file lookup failed — no verdict' }
+        } finally {
+            await lookupPage.close().catch(() => undefined)
+            await focusRemoteTab()
+        }
+    }
+
+    async function captureDownload(download: Download) {
+        if (closed || downloads.length >= 10 || downloadsInFlight >= 2) {
+            await download.cancel().catch(() => undefined)
+            await download.delete().catch(() => undefined)
+            send({ type: 'status', state: 'download_limit', message: 'Download inspection limit reached (10 files per run, 2 transfers at a time).' })
+            return
+        }
+        const file: SandboxNetworkEvent = { id: `file-${downloads.length + 1}`, kind: 'download', url: download.url(), fileName: download.suggestedFilename(), hashStatus: 'downloading', at: new Date().toISOString() }
+        downloads.push(file)
+        downloadsInFlight++
+        publishDownloads()
+        try {
+            Object.assign(file, await inspectDownload(download))
+            if (closed) return
+            if (file.sha256) {
+                file.virusTotal = { status: 'checking', detail: 'Checking SHA-256 in VirusTotal…' }
+                publishDownloads()
+                const hash = file.sha256
+                if (!fileLookups.has(hash)) {
+                    const lookup = fileLookupQueue.then(() => lookupFile(hash)).catch((): FileReputation => ({ status: closed ? 'interrupted' : 'unavailable', detail: 'VirusTotal lookup unavailable — no verdict' }))
+                    fileLookups.set(hash, lookup)
+                    fileLookupQueue = lookup.then(() => undefined, () => undefined)
+                }
+                file.virusTotal = await fileLookups.get(hash)!
+            }
+        } catch {
+            file.hashStatus = 'Download failed or exceeded the 30-second limit'
+        } finally {
+            downloadsInFlight--
+            publishDownloads()
+        }
+    }
+
     async function navigate(value: string) {
         if (!page) return
         const target = normalizeTarget(value)
@@ -1111,6 +1175,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         const response = await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 25_000 })
             .catch((error) => {
                 const message = error instanceof Error ? error.message : String(error)
+                if (/Download is starting/i.test(message) || downloads.some(file => file.url === target)) return null
                 markTargetUnreachable(target, message)
                 send({ type: 'navigation_error', target, message })
                 return null
@@ -1298,7 +1363,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 reason,
                 frameQuality,
                 evidence,
-                networkSummary: summarizeNetworkEvents(networkEvents),
+                networkSummary: networkSummary(),
             })
             trace('frame_sent', { reason, url: page.url(), bytes: buffer.length })
         } catch (error) {
@@ -1411,7 +1476,7 @@ function documentDeobfuscationTasks(html: string): SandboxDeobfuscationTask[] {
 function summarizeNetworkEvents(events: SandboxNetworkEvent[]) {
     const requests = events.filter(event => event.kind === 'request')
     const responses = events.filter(event => event.kind === 'response')
-    const failures = events.filter(event => event.kind === 'failed' || event.kind === 'download')
+    const failures = events.filter(event => event.kind === 'failed')
     const domains = Array.from(new Set(events.map(event => domainFromUrl(event.url)).filter(Boolean))).slice(0, 80)
     const recentRequests = events
         .filter(event => event.kind === 'request' || event.kind === 'response' || event.kind === 'failed')
@@ -1456,11 +1521,13 @@ function summarizeNetworkEvents(events: SandboxNetworkEvent[]) {
         statusCounts,
         redirectChain,
         downloads: events.filter(event => event.kind === 'download').slice(-20).map(event => ({
+            id: event.id,
             url: event.url,
             fileName: event.fileName,
             bytes: event.bytes,
             sha256: event.sha256,
             hashStatus: event.hashStatus,
+            virusTotal: event.virusTotal,
             at: event.at,
         })),
         recentFailures: failures.slice(-8).map(event => ({
@@ -1513,25 +1580,6 @@ function requestInitiator(request: Request) {
         return request.frame()?.url() || 'browser'
     } catch {
         return 'browser'
-    }
-}
-
-async function inspectDownload(download: { path: () => Promise<string | null>; suggestedFilename: () => string }) {
-    const path = await download.path()
-    if (!path) return { fileName: download.suggestedFilename(), hashStatus: 'no_download_path' }
-    const info = await stat(path)
-    if (info.size > MAX_DOWNLOAD_HASH_BYTES) {
-        return {
-            fileName: download.suggestedFilename(),
-            bytes: info.size,
-            hashStatus: `too_large_over_${MAX_DOWNLOAD_HASH_BYTES}_bytes`,
-        }
-    }
-    return {
-        fileName: download.suggestedFilename(),
-        bytes: info.size,
-        sha256: createHash('sha256').update(await readFile(path)).digest('hex'),
-        hashStatus: 'hashed_and_deleted',
     }
 }
 
@@ -1964,15 +2012,15 @@ function isUrlQueryTool(tool: { id?: string; name?: string; url?: string }, reso
 
 function officialProviderKind(resolvedUrl: string) {
     const host = domainFromUrl(resolvedUrl)
-    if (host.endsWith('virustotal.com')) return 'virustotal'
+    if (host === 'virustotal.com' || host.endsWith('.virustotal.com')) return 'virustotal'
     if (host === 'urlquery.net' || host.endsWith('.urlquery.net')) return 'urlquery'
     return ''
 }
 
-function providerStartUrl(tool: { id?: string; name?: string; url?: string }, resolvedUrl: string, target: string) {
+export function providerStartUrl(tool: { id?: string; name?: string; url?: string }, resolvedUrl: string, target: string) {
     const kind = officialProviderKind(resolvedUrl)
     if (kind === 'virustotal') return `https://www.virustotal.com/gui/url/${virusTotalUrlId(target)}`
-    if (kind === 'urlquery') return `https://urlquery.net/api/htmx/search/?limit=24&offset=0&q=${encodeURIComponent(target)}&type=reports`
+    if (kind === 'urlquery') return `https://urlquery.net/search?q=${encodeURIComponent(target)}`
     return resolvedUrl
 }
 
@@ -1988,7 +2036,7 @@ async function interactWithProvider(page: Page, tool: { id?: string; name?: stri
     try {
         const kind = officialProviderKind(page.url())
         if (kind === 'virustotal' && /\/gui\/url\//i.test(page.url())) return ''
-        if (kind === 'urlquery' && /\/api\/htmx\/search/i.test(page.url())) return ''
+        if (kind === 'urlquery' && /\/search\?q=/i.test(page.url())) return ''
         if (kind === 'virustotal' && isVirusTotalTool(tool, page.url())) {
             await page.waitForTimeout(900)
             const searchInput = page.locator('input[type="text"], textarea:not([name="g-recaptcha-response"])').first()
@@ -2415,7 +2463,7 @@ function analyzeToolEvidence(toolName: string, evidence: Awaited<ReturnType<type
         || text.match(/(\d{1,3})\s+(?:security\s*)?(?:vendors?|engines?)\s+(?:flagged|detected|marked)/i)
         || text.match(/(\d{1,3})\s+(?:of)\s+(\d{1,3})\s+security engines?/i)
         || text.match(/(\d{1,3})\s+out of\s+(\d{1,3})\s+engines?/i)
-    const urlqueryNoAlertText = /no\s+(?:alerts?|detections?|results?|matches?|hits?)\s+(?:were|was)?\s*(?:found|detected)?/i.test(text) || /0\s+alerts?/i.test(text)
+    const urlqueryNoAlertText = /no\s+(?:alerts?|detections?)\s+(?:were|was)?\s*(?:found|detected)?/i.test(text) || /\b0\s+alerts?/i.test(text)
     const vtNoDetectionsText = /\b(?:no\s+detections?|0\s*\/\s*\d+\s+security\s+vendors?|no detections|undetected|clean)\b/i.test(text)
     const communityMatch = text.match(/(\d{1,3})\s+(?:community\s*)?(?:comments?|votes?|reviews?)/i)
     const isVirusTotal = /virus\s*total|virustotal/.test(tool) || /virustotal\.com/i.test(text)
@@ -2435,7 +2483,6 @@ function analyzeToolEvidence(toolName: string, evidence: Awaited<ReturnType<type
     const hasProviderNoDetectionText = /(?:no\s+(?:detections|alerts?|results?|matches?|issues)\s+(?:found)?|undetected|clean|harmless)/i.test(text)
     const hasVendorDetections = flagged !== undefined && Number.isFinite(flagged) && flagged > 0
     const hasUrlQueryAlerts = alertCount !== undefined && Number.isFinite(alertCount) && alertCount > 0
-    const hasUrlQueryNoResult = /no\s+(?:alerts?|detections?|results?|matches?)\s+found/i.test(text) || /0\s+alerts?/i.test(text)
     const hasExplicitMaliciousIndicator = /malicious|phishing|blacklist|detected/i.test(text)
     const hasExplicitBenignIndicator = hasProviderNoDetectionText
     const hasParsedProviderSignal = vendorMatch !== null || alertMatch !== null || communityMatch !== null || Boolean(vtStats || urlqueryScores)
@@ -2451,9 +2498,7 @@ function analyzeToolEvidence(toolName: string, evidence: Awaited<ReturnType<type
         : isUrlQuery
             ? alertCount !== undefined
                 ? (hasUrlQueryAlerts ? 'suspicious' : 'clean')
-                : hasUrlQueryNoResult
-                    ? 'clean'
-                    : 'unknown'
+                : 'unknown'
             : hasExplicitMaliciousIndicator && hasParsedProviderSignal && !hasExplicitBenignIndicator
                 ? 'suspicious'
                 : hasExplicitBenignIndicator || /no(?:t|) malicious/i.test(text)
@@ -2519,9 +2564,9 @@ function numberFromJsonField(text: string, field: string) {
     return match ? Number(match[1]) : 0
 }
 
-function parseUrlQueryScores(text: string) {
+export function parseUrlQueryScores(text: string) {
     const rows = Array.from(text.matchAll(/\b(\d{1,3})\s*-\s*(\d{1,3})\s*-\s*(\d{1,3})\b/g))
-    if (!rows.length && !/Search:\s*\d+\s+hits/i.test(text)) return null
+    if (!rows.length) return null
     const alerts = rows.reduce((max, row) => Math.max(max, Number(row[1]) + Number(row[2]) + Number(row[3])), 0)
     return { alerts }
 }

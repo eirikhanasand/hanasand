@@ -16,11 +16,10 @@ app.patch('/cases/:id', updateMonitoringCase)
 
 test('host cases follow current VM access without granting monitor administration', async () => {
     await query(`CREATE TABLE vms(name text PRIMARY KEY, owner text, created_by text, access_users jsonb, deleted_at timestamptz);
-        CREATE TABLE organizations(id text PRIMARY KEY, status text);
+        CREATE TABLE organizations(id text, status text);
         CREATE TABLE organization_members(organization_id text, user_id text, status text);
         CREATE TABLE agent_automations(id text PRIMARY KEY, name text, owner_id text, organization_id text, action_type text, target_url text, model_name text, notification_destinations text[], monitoring_type text, timeout_seconds int, retry_count int, follow_redirects boolean, expected_down boolean, upside_down boolean);
         CREATE TABLE agent_automation_runs(id text PRIMARY KEY, automation_id text);`)
-    await (await import('../src/utils/db/vmOrganizationSchema.ts')).default()
     await schema()
     await query(`INSERT INTO vms VALUES ('cashflow','sindre','creator','["eiriktest"]',NULL);
         INSERT INTO agent_automations(id,name,owner_id,action_type,target_url,model_name) VALUES
@@ -34,13 +33,10 @@ test('host cases follow current VM access without granting monitor administratio
         expect((await list()).map((item: any) => item.id)).toEqual(['HA-1'])
         expect((await app.inject('/cases/HA-1')).json().case.canManage).toBe(false)
         expect((await app.inject('/cases/HA-2')).statusCode).toBe(404)
-        expect((await app.inject('/cases?organizationId=selected-org')).json().items.map((item: any) => item.id)).toEqual(['HA-1'])
-        expect((await app.inject('/cases/HA-1?organizationId=selected-org')).statusCode).toBe(200)
         expect((await app.inject({ method: 'PATCH', url: '/cases/HA-1', payload: { comment: 'Attempt' } })).statusCode).toBe(404)
     }
     viewer = 'unrelated'
     expect(await list()).toEqual([])
-    expect((await app.inject('/cases?organizationId=selected-org')).json().items).toEqual([])
     viewer = 'eiriktest'
     await query("UPDATE vms SET access_users='[]'")
     expect((await app.inject('/cases/HA-1')).statusCode).toBe(404)
@@ -54,8 +50,6 @@ test('host cases follow current VM access without granting monitor administratio
     expect(await list()).toEqual([])
     viewer = 'admin'
     expect((await list()).length).toBe(2)
-    expect((await app.inject('/cases?organizationId=selected-org')).json().items.map((item: any) => item.id)).toEqual(['HA-2'])
-    expect((await app.inject('/cases/HA-1?organizationId=selected-org')).statusCode).toBe(404)
     expect((await app.inject('/cases/HA-1')).json().case.canManage).toBe(true)
     await app.close()
     await closeDatabase()

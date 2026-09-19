@@ -352,7 +352,6 @@ class Handler(BaseHTTPRequestHandler):
             state = public_state(read_json(STATE, {'mode': 'unknown', 'readOnly': True, 'services': []}), include_host=self.path.split('?')[0] != '/public-status')
         if self.path.split('?')[0] == '/status':
             state['hostMetrics'] = read_json(ROOT / 'host-metrics.json', None)
-            state['diskDiagnostics'] = read_json(ROOT / 'disk-directories.json', None)
         body = json.dumps(state).encode()
         self.send_response(200 if state.get('updatedAt') and not state.get('stale') else 503)
         self.send_header('Content-Type', 'application/json')
