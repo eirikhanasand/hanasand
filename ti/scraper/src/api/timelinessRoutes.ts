@@ -1,6 +1,6 @@
 import { paginationCursor } from "./pagination.ts";
 import { buildTimelinessWorkbench, mergePublicReportReference, type ReportRole, type TimelinessQueueStatus } from "../pipeline/timelinessGroundTruth.ts";
-import { authenticateRequest } from "./requestAuthentication.ts";
+import { authenticateRequest, authenticateOperatorRequest } from "./requestAuthentication.ts";
 import { error, json, numberQuery, readJson } from "./http.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
 import { inTenantScope, resolveTenantScope } from "./tenantScope.ts";
@@ -20,13 +20,30 @@ type TimelinessStore = {
 };
 
 const WORKBENCH = "/v1/intel/timeliness/workbench";
+const SUMMARY = "/v1/intel/timeliness/summary";
 const REFERENCES = "/v1/intel/timeliness/references";
 const ROLES = new Set(["owner", "admin", "administrator", "system_admin", "analyst"]);
 const STATUSES = new Set<TimelinessQueueStatus>(["unresolved_reference", "anomaly", "awaiting_alert", "awaiting_delivery", "complete"]);
 
 export async function handleTimelinessRequest(request: Request, options: ApiServerOptions): Promise<Response | undefined> {
   const url = new URL(request.url);
-  if (url.pathname !== WORKBENCH && url.pathname !== REFERENCES) return undefined;
+  if (url.pathname !== WORKBENCH && url.pathname !== REFERENCES && url.pathname !== SUMMARY) return undefined;
+  if (url.pathname === SUMMARY && request.method === "GET") {
+    const auth = await authenticateOperatorRequest(request, options);
+    if (auth.error) return auth.error;
+    if (!auth.identity) return error("authentication_required", "Delivery metrics require authentication", 401);
+    if (!auth.identity.roles.some(role => role === "service" || ROLES.has(role))) return error("timeliness_forbidden", "Delivery metrics require an analyst role", 403);
+    const scope = resolveTenantScope(request, url);
+    if (scope.error) return scope.error;
+    const store = options.store as unknown as TimelinessStore;
+    const records = typeof (store as any).queryDeliveryRecords === "function"
+      ? await (store as any).queryDeliveryRecords(scope.tenantId)
+      : store.listTimelinessRecords().filter(record => inTenantScope(record, scope.tenantId));
+    const snapshot = buildTimelinessWorkbench(records);
+    const needsReportCount = snapshot.summary.unresolvedReferenceCount;
+    return json({ generatedAt: snapshot.generatedAt, summary: { recordCount: records.length, needsReportCount,
+      unresolvedReferenceCount: needsReportCount, criticalThreshold: 10, status: needsReportCount > 10 ? "critical" : "ok" } });
+  }
   const authentication = await authenticateRequest(request, options);
   if (authentication.error) return authentication.error;
   if (!authentication.identity?.roles.some((role) => ROLES.has(role))) return error("timeliness_forbidden", "Timeliness operations require an analyst role", 403);
@@ -35,7 +52,7 @@ export async function handleTimelinessRequest(request: Request, options: ApiServ
   return error("timeliness_method_not_allowed", "Use GET for the workbench or POST for report references", 405);
 }
 
-function workbench(request: Request, url: URL, options: ApiServerOptions): Response {
+async function workbench(request: Request, url: URL, options: ApiServerOptions): Promise<Response> {
   const scope = resolveTenantScope(request, url);
   if (scope.error) return scope.error;
   const store = options.store as unknown as TimelinessStore;
@@ -47,7 +64,8 @@ function workbench(request: Request, url: URL, options: ApiServerOptions): Respo
     entities: store.listExtractedEntities().filter((record) => inTenantScope(record, scope.tenantId)),
     validationRecords: store.listValidationRecords().filter((record) => inTenantScope(record, scope.tenantId)),
   };
-  const snapshot = buildTimelinessWorkbench(records, context);
+  const persisted = await (store as any).queryDeliveryWorkbench?.(scope.tenantId);
+  const snapshot = persisted ? buildTimelinessWorkbench(persisted.records, persisted.context) : buildTimelinessWorkbench(records, context);
   const requestedStatus = url.searchParams.get("status") as TimelinessQueueStatus | null;
   if (requestedStatus && !STATUSES.has(requestedStatus)) return error("invalid_timeliness_status", "Unsupported timeliness queue status", 400);
   const query = url.searchParams.get("q")?.trim().toLowerCase();

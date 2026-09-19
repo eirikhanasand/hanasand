@@ -94,6 +94,8 @@ for (const [schemaName] of Object.values(resourceDefinitions)) {
     schemas[responseName] = object({ data: { type: 'array', items: ref(schemaName) }, pagination: ref('Pagination'), meta: ref('Meta') }, ['data', 'pagination', 'meta'])
 }
 
+schemas.DeliveryResponse = { oneOf: [ref('TimelinessCollection'), object({ generatedAt: dateTime(), summary: object({ recordCount: integer(), needsReportCount: integer(), unresolvedReferenceCount: integer(), criticalThreshold: integer({ const: 10 }), status: string({ enum: ['ok', 'critical'] }) }) })] }
+
 const paths: Record<string, unknown> = {
     '/ti/search': {
         post: {
@@ -124,8 +126,8 @@ for (const [path, [schemaName, summary, operationId]] of Object.entries(resource
             summary,
             ...(path === '/alerts' ? { description: 'Returns alerts for the organization that owns the API key.' } : {}),
             security: path === '/alerts' ? [{ ApiKey: [] }] : protectedSecurity(),
-            parameters: paginationParameters,
-            responses: { '200': jsonResponse(`${schemaName} page`, ref(`${schemaName}Collection`)), ...errorResponses },
+            parameters: path === '/timeliness' ? [...paginationParameters, { $ref: '#/components/parameters/DeliverySummary' }] : paginationParameters,
+            responses: { '200': jsonResponse(`${schemaName} page`, path === '/timeliness' ? ref('DeliveryResponse') : ref(`${schemaName}Collection`)), ...errorResponses },
         },
     }
 }
@@ -141,6 +143,7 @@ export const publicTiOpenApi = {
     paths,
     components: {
         parameters: {
+            DeliverySummary: { name: 'summary', in: 'query', schema: { type: 'boolean' }, description: 'Return the global delivery backlog summary instead of records. needsReportCount > 10 is critical.' },
             Query: { name: 'q', in: 'query', description: 'Filter by text, ignoring case.', schema: string({ maxLength: 200 }) },
             Limit: { name: 'limit', in: 'query', description: 'Number of records per page.', schema: integer({ minimum: 1, maximum: 100, default: 50 }) },
             Page: { name: 'page', in: 'query', description: 'Page number, starting at 1. Do not combine with cursor.', schema: integer({ minimum: 1, default: 1, example: 2 }) },

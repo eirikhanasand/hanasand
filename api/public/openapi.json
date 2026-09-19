@@ -842,6 +842,9 @@
           },
           {
             "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/DeliverySummary"
           }
         ],
         "responses": {
@@ -863,7 +866,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TimelinessCollection"
+                  "$ref": "#/components/schemas/DeliveryResponse"
                 }
               }
             }
@@ -892,6 +895,14 @@
   },
   "components": {
     "parameters": {
+      "DeliverySummary": {
+        "name": "summary",
+        "in": "query",
+        "schema": {
+          "type": "boolean"
+        },
+        "description": "Return the global delivery backlog summary instead of records. needsReportCount > 10 is critical."
+      },
       "Query": {
         "name": "q",
         "in": "query",
@@ -2908,6 +2919,49 @@
           "data",
           "pagination",
           "meta"
+        ]
+      },
+      "DeliveryResponse": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/TimelinessCollection"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "generatedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "summary": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "recordCount": {
+                    "type": "integer"
+                  },
+                  "needsReportCount": {
+                    "type": "integer"
+                  },
+                  "unresolvedReferenceCount": {
+                    "type": "integer"
+                  },
+                  "criticalThreshold": {
+                    "type": "integer",
+                    "const": 10
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "ok",
+                      "critical"
+                    ]
+                  }
+                }
+              }
+            }
+          }
         ]
       }
     },

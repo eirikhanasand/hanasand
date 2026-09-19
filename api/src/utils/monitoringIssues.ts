@@ -36,15 +36,15 @@ export async function recordMonitoringOutcome(automation: AutomationRow, runId: 
         if (check.issue_id) return check.issue_id as string
         const fingerprint = monitoringIssueFingerprint(automation, kind, message)
         const key = await correlationKey(query, automation, fingerprint, kind, message)
-        const result = await query(`INSERT INTO monitoring_issues (automation_id, fingerprint, kind, summary, correlation_key)
+        const result = await query(`INSERT INTO monitoring_issues (automation_id, fingerprint, kind, summary, correlation_key, severity_override)
             VALUES (COALESCE((SELECT automation_id FROM monitoring_issues WHERE correlation_key=$6),$1),
-                COALESCE((SELECT fingerprint FROM monitoring_issues WHERE correlation_key=$6),$2), $3, $4, $6)
+                COALESCE((SELECT fingerprint FROM monitoring_issues WHERE correlation_key=$6),$2), $3, $4, $6, $7)
             ON CONFLICT (correlation_key) DO UPDATE
             SET occurrences = monitoring_issues.occurrences + 1, last_seen_at = NOW(), resolved_at = NULL, summary = EXCLUDED.summary,
                 history = monitoring_issues.history || CASE WHEN monitoring_issues.resolved_at IS NOT NULL THEN jsonb_build_array(jsonb_build_object(
                     'id', $5::text, 'at', NOW(), 'actor', 'Health monitoring', 'actorType', 'automation', 'action', 'recurred', 'note', EXCLUDED.summary, 'runId', $5::text)) ELSE '[]'::jsonb END,
                 resolution = CASE WHEN monitoring_issues.status_override IS NULL THEN NULL ELSE monitoring_issues.resolution END
-            RETURNING id`, [automation.id, fingerprint, kind, redactSecretBearingText(message), runId, key])
+            RETURNING id`, [automation.id, fingerprint, kind, redactSecretBearingText(message), runId, key, automation.target_url === 'system:ti-delivery' && kind === 'failure' ? 'critical' : null])
         const id = result.rows[0].id as string
         await query('INSERT INTO monitoring_issue_checks VALUES ($1,$2,true) ON CONFLICT(issue_id,automation_id) DO UPDATE SET active=true', [id, automation.id])
         await query('UPDATE agent_automation_runs SET issue_id = $2 WHERE id = $1', [runId, id])

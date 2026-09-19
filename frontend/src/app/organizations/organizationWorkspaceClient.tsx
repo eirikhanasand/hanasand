@@ -1619,10 +1619,10 @@ function WorkspaceHealthStrip({ organization, bundle, canManage }: { organizatio
                     </h2>
                     <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{organizationDisplayName(organization)} · {accessMode} · Last activity {lastActivityAt ? formatDate(lastActivityAt) : 'pending'}</p>
                 </div>
-                <a href='/organizations/activity#audit' className={secondaryButtonClass} data-org-health-activity='true'>
+                <Link href='/organizations/activity#audit' className={secondaryButtonClass} data-org-health-activity='true'>
                     <ExternalLink className='h-4 w-4' />
                     Activity
-                </a>
+                </Link>
             </div>
             <div className='mt-3 overflow-hidden rounded-lg border border-ui-border dark:border-ui-border' data-org-health-compact='true'>
                 {rows.map(row => (
@@ -2786,10 +2786,10 @@ function WatchlistDestinationSummary({ item, delivery }: { item: WatchlistItem, 
             {endpoint && <span className='truncate text-ui-muted dark:text-ui-muted'>Route: {endpoint}</span>}
             <span className='truncate text-ui-muted dark:text-ui-muted'>{delivery ? `Last ${delivery.dryRun ? 'test' : 'delivery'} ${delivery.status || 'attempted'}` : 'No delivery history yet'}</span>
             <span className='truncate text-ui-muted dark:text-ui-muted'>History: {delivery ? formatDate(delivery.attemptedAt || delivery.updatedAt || delivery.createdAt) : 'waiting for test'}</span>
-            <a href='/organizations/destinations#destinations' className='mt-1 inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary dark:border-ui-border dark:bg-ui-canvas dark:text-ui-text' onClick={event => event.stopPropagation()}>
+            <Link href='/organizations/destinations#destinations' className='mt-1 inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary dark:border-ui-border dark:bg-ui-canvas dark:text-ui-text' onClick={event => event.stopPropagation()}>
                 <Webhook className='h-4 w-4' />
                 Configure delivery
-            </a>
+            </Link>
         </div>
     )
 }

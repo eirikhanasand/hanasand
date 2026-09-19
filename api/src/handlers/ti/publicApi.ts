@@ -1,3 +1,4 @@
+import { getDeliverySummary } from '../../utils/ti/delivery.ts'
 import type { FastifyInstance, FastifyPluginOptions, FastifyReply, FastifyRequest } from 'fastify'
 import { publicTiOpenApi } from '../../contracts/publicTiOpenApi.ts'
 import { normalizeBatchQueries, TI_BATCH_MAX_QUERIES } from './search.ts'
@@ -86,8 +87,12 @@ export default async function publicTiApi(fastify: FastifyInstance, options: Pub
     })
 
     for (const [route, [upstream, responseKey, project]] of Object.entries({ ...RESOURCE_ROUTES, '/claims': RESOURCE_ROUTES['/findings'] })) {
-        fastify.get(route, async (req: FastifyRequest<{ Querystring: { q?: unknown, limit?: unknown, page?: unknown, cursor?: unknown } }>, reply) => {
+        fastify.get(route, async (req: FastifyRequest<{ Querystring: { q?: unknown, limit?: unknown, page?: unknown, cursor?: unknown, summary?: unknown } }>, reply) => {
             if (!hasAuthenticatedPrincipal(req)) return sendError(reply, req.id, 401, 'authentication_required', 'An API key or authenticated session is required.')
+            if (route === '/timeliness' && req.query.summary === 'true') {
+                try { return await getDeliverySummary(fetchImpl) }
+                catch { return sendError(reply, req.id, 503, 'delivery_unavailable', 'Delivery metrics are unavailable.') }
+            }
             const organizationId = apiKeyOrganizationId(req)
             if (route === '/alerts' && !organizationId) return sendError(reply, req.id, 403, 'organization_scope_required', 'Tenant-scoped alerts require an organization API key.')
             const query = parseCollectionQuery(req.query)
@@ -147,7 +152,7 @@ async function fetchCollection(
     fetchImpl: typeof fetch,
     upstream: string,
     responseKey: string,
-    query: { limit: number, cursor: number, q: string },
+    query: { limit: number, cursor: number, page: number, q: string },
     organizationId?: string,
 ) {
     const base = process.env.TI_SCRAPER_API_BASE?.replace(/\/$/, '')

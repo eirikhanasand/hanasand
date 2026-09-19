@@ -20,6 +20,7 @@ export function buildRawCapture(item: CollectedItem): RawCapture {
     sourceId: item.sourceId,
     taskId: item.taskId,
     url: item.url,
+    observedAt: item.metadata?.observedAt ?? item.metadata?.fetchProvenance?.fetchedAt ?? item.collectedAt,
     collectedAt: item.collectedAt,
     publishedAt: item.publishedAt,
     contentHash,

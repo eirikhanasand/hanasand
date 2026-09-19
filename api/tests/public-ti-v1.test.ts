@@ -609,6 +609,33 @@ describe('public TI v1', () => {
         expect(page.data?.pagination).toEqual({ page: 1, limit: 1, total: 1, totalPages: 1, nextPage: null, nextCursor: null })
     })
 
+    test('returns authenticated delivery counts and fails explicitly when metrics are missing', async () => {
+        const previousToken = process.env.TI_SCRAPER_SERVICE_TOKEN
+        process.env.TI_SCRAPER_SERVICE_TOKEN = 'delivery-test-service'
+        try {
+            let payload: unknown = { generatedAt: '2026-09-19T10:00:00.000Z', summary: { recordCount: 20, needsReportCount: 11, unresolvedReferenceCount: 11, criticalThreshold: 10, status: 'critical' } }
+            let calls = 0
+            const app = await testApp(async (input, init) => {
+                calls++
+                expect(String(input)).toBe('https://scraper.example.test/v1/intel/timeliness/summary')
+                expect(new Headers(init?.headers).get('x-hanasand-service-token')).toBe('delivery-test-service')
+                return Response.json(payload)
+            })
+            expect((await app.inject('/api/v1/timeliness?summary=true')).statusCode).toBe(401)
+            expect(calls).toBe(0)
+            const response = await app.inject({ url: '/api/v1/timeliness?summary=true&tenantId=another-org', headers: { 'x-api-key': 'valid' } })
+            expect(response.statusCode).toBe(200)
+            expect(response.json().summary.needsReportCount).toBe(11)
+            expect(validateResponse('/timeliness', 'get', 200, response.json())).toBe(true)
+            payload = { summary: {} }
+            const unavailable = await app.inject({ url: '/api/v1/timeliness?summary=true', headers: { 'x-api-key': 'valid' } })
+            expect(unavailable.statusCode).toBe(503)
+        } finally {
+            if (previousToken === undefined) delete process.env.TI_SCRAPER_SERVICE_TOKEN
+            else process.env.TI_SCRAPER_SERVICE_TOKEN = previousToken
+        }
+    })
+
     test('normalizes legacy rate-limit responses into the stable error contract', () => {
         const response = normalizeError(JSON.stringify({ error: 'Rate limit exceeded.' }), 429, 'request-1')
         expect(response).toEqual({ error: { code: 'rate_limit_exceeded', message: 'Rate limit exceeded.', requestId: 'request-1' } })

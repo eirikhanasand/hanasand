@@ -72,8 +72,9 @@ function jsonItem(source: any, task: any, entry: any, at: string, metadata: any,
 function ransomwareVictimMetadata(source: any, title: string | undefined, publishedAt: string | undefined, actorValue?: string) {
   if (!source.metadata?.exposureQueueSource) return {};
   const match = String(title ?? "").match(/^(.+?)\s+by\s+(.+)$/i);
-  const victimName = cleanGroupValue(match?.[1] ?? title);
-  const actorName = cleanGroupValue(match?.[2] ?? actorValue);
+  const publication = String(title ?? "").replace(/^[^\p{L}\p{N}]+/u, "").match(/^(.+?)\s+has just published a new victim\s*:\s*(.+)$/i);
+  const victimName = cleanGroupValue(publication?.[2] ?? match?.[1] ?? title);
+  const actorName = cleanGroupValue(publication?.[1] ?? match?.[2] ?? actorValue);
   if (!victimName || !actorName || victimName.length > 140 || actorName.length > 80) return {};
   return { leakSite: { actorName, victimName, claimType: "ransomware_victim_publication", firstSeenAt: publishedAt, metadataOnly: true } };
 }
