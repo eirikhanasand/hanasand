@@ -7,7 +7,10 @@ const directory = await mkdtemp(join(tmpdir(), 'apt-updates-'))
 process.env.APT_UPDATE_STATUS_PATH = join(directory, 'inspur.json')
 process.env.OVH_HOST_METRICS_PATH = join(directory, 'ovh.json')
 const queries: Array<{ sql: string, params: unknown[] }> = []
-mock.module('#db', () => ({ default: async (sql: string, params: unknown[] = []) => { queries.push({ sql, params }); return { rows: [] } } }))
+let rows: unknown[] = []
+let readOnly = false
+mock.module('../src/utils/resilience.ts', () => ({ recoveryReadOnly: () => readOnly }))
+mock.module('#db', () => ({ default: async (sql: string, params: unknown[] = []) => { queries.push({ sql, params }); return { rows } } }))
 let authenticated = true
 let admin = true
 mock.module('#utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: authenticated }) }))
@@ -50,4 +53,26 @@ test('host allowlist and system administrator authorization are enforced', async
     admin = true
     expect(queries).toHaveLength(0)
     expect(await invoke('inspur')).toBe(200)
+})
+
+test('OVH standby reads host-scoped replicated snapshots without writing', async () => {
+    const prior = process.env.RESILIENCE_SITE
+    try {
+        process.env.RESILIENCE_SITE = 'ovhcloud'
+        for (const host of ['inspur', 'ovhcloud'] as const) {
+            const status = { status: 'ok', run_id: host, checked_at: new Date().toISOString() }
+            rows = [{ payload: status }]; queries.length = 0
+            expect((await readHostUpdateStatus(host)).runId).toBe(host)
+            await persistHostUpdateStatus(status, host, host)
+            expect(queries).toHaveLength(1)
+            expect(queries[0].params).toEqual([host === 'inspur' ? 'hanasand' : host])
+        }
+        process.env.RESILIENCE_SITE = 'inspur'; readOnly = true; queries.length = 0
+        await persistHostUpdateStatus({ status: 'ok' }, 'run')
+        expect(queries).toHaveLength(0)
+    } finally {
+        if (prior === undefined) delete process.env.RESILIENCE_SITE
+        else process.env.RESILIENCE_SITE = prior
+        rows = []; readOnly = false
+    }
 })

@@ -1,16 +1,21 @@
 import { readFile } from 'node:fs/promises'
 import run from '#db'
+import { recoveryReadOnly } from './resilience.ts'
 
 const statusPath = process.env.APT_UPDATE_STATUS_PATH || '/host/var/lib/hanasand/apt-updates/status.json'
 export const updateHosts = ['inspur', 'ovhcloud'] as const
 export type UpdateHost = typeof updateHosts[number]
 // Preserve the existing Inspur history, recorded before hosts could be selected.
 const historyHost = (host: UpdateHost) => host === 'inspur' ? 'hanasand' : host
+const replica = () => ['ovh', 'ovhcloud'].includes(process.env.RESILIENCE_SITE || '')
 
 export async function readHostUpdateStatus(host: UpdateHost = 'inspur') {
     try {
-        let parsed = JSON.parse(await readFile(host === 'inspur' ? statusPath : process.env.OVH_HOST_METRICS_PATH || '/host/var/lib/hanasand/metrics/ovhcloud.json', 'utf8'))
-        if (host === 'ovhcloud') {
+        // Standby workers have no primary-host mounts and must not write to the replica.
+        let parsed = replica()
+            ? (await run('SELECT payload FROM host_update_snapshots WHERE host = $1', [historyHost(host)])).rows[0]?.payload
+            : JSON.parse(await readFile(host === 'inspur' ? statusPath : process.env.OVH_HOST_METRICS_PATH || '/host/var/lib/hanasand/metrics/ovhcloud.json', 'utf8'))
+        if (!replica() && host === 'ovhcloud') {
             const age = Date.now() - Date.parse(parsed.sampledAt)
             if (!Number.isFinite(age) || age < -5000 || age > 120000) throw new Error('OVH telemetry is stale.')
             parsed = parsed.aptUpdates
@@ -29,7 +34,7 @@ export async function readHostUpdateStatus(host: UpdateHost = 'inspur') {
 }
 
 export async function persistHostUpdateStatus(status: Record<string, unknown>, runId: string | null, host: UpdateHost = 'inspur') {
-    if (!runId) return
+    if (!runId || replica() || recoveryReadOnly()) return
     await run(`
         INSERT INTO host_update_snapshots (host, run_id, status, checked_at, payload)
         VALUES ($5, $1, $2, COALESCE($3::timestamptz, NOW()), $4::jsonb)
