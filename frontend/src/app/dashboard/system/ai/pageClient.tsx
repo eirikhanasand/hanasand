@@ -252,7 +252,7 @@ export default function GPT_Page() {
                     </div>
                     <EconomicsPanel economics={economics} error={economicsError} aiContainers={aiContainers} containerError={containerError} />
                     <div id='ai-clients' data-ai-clients>
-                        {gpt.clients.length ? <GPT_Content clients={gpt.clients} onTestClient={gpt.openChat} costPerBuildNok={economics?.reliability.costPerSuccessfulVerifiedBuildNok} /> : <GPT_EmptyState />}
+                        {gpt.clients.length ? <GPT_Content clients={gpt.clients} onTestClient={gpt.openChat} /> : <GPT_EmptyState />}
                     </div>
                 </div>
             </div>
@@ -289,18 +289,6 @@ function EconomicsPanel({ economics, error, aiContainers, containerError }: { ec
 
     return (
         <section className='space-y-4 rounded-xl bg-ui-panel p-4 border border-ui-border'>
-            <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
-                <div>
-                    <h2 className='text-xl font-semibold text-ui-text'>Worker output</h2>
-                    <p className='mt-1 text-sm text-ui-muted'>Verified work, live capacity, and spend.</p>
-                </div>
-                <div className='flex flex-wrap items-center justify-end gap-2 text-xs font-semibold'>
-                    <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-ui-muted'>{economics.reliability.capacity.totalAvailableSessions} open sessions</span>
-                    <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-ui-muted'>{economics.reliability.capacity.totalQueued} queued</span>
-
-                </div>
-            </div>
-
             <AIContainerHealth containers={aiContainers} error={containerError} />
             <ReliabilityPanel reliability={economics.reliability} />
         </section>
@@ -313,39 +301,22 @@ function AIContainerHealth({ containers, error }: { containers: DockerContainer[
         return tone === 'bad' || tone === 'warn'
     })
     const primary = unhealthy[0] || containers[0] || null
-    const title = error
-        ? 'Docker telemetry reconnecting'
-        : unhealthy.length
-            ? `${unhealthy.length} AI service${unhealthy.length === 1 ? '' : 's'} need review`
-            : containers.length
-                ? 'AI services are reporting'
-                : 'AI service inventory connecting'
-    const detail = error
-        || (primary
-            ? `${primary.name} is ${containerHealth(primary).label.toLowerCase()} (${primary.status}).`
-            : 'Model client and parser bridge containers stream here when Docker telemetry attaches.')
 
     return (
         <div className='rounded-lg border border-ui-border bg-ui-raised p-4' data-ai-container-health>
-            <div className='flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between'>
-                <div>
-                    <p className='text-xs font-medium uppercase tracking-[0.18em] text-ui-muted'>Service health</p>
-                    <h3 className='mt-1 text-lg font-semibold text-ui-text'>{title}</h3>
-                    <p className='mt-2 max-w-3xl text-sm leading-6 text-ui-muted'>{detail}</p>
+            {error ? <p className='mb-3 text-sm text-ui-danger' role='alert'>{error}</p> : null}
+            {primary ? (
+                <div className='mb-3 flex justify-end'>
+                    <Link href={`/logs?service=${encodeURIComponent(primary.name)}`} className='rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-ui-text hover:border-ui-primary/40'>
+                        View logs
+                    </Link>
                 </div>
-                <div className='flex flex-wrap gap-2'>
-                    {primary ? (
-                        <Link href={`/logs?service=${encodeURIComponent(primary.name)}`} className='rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-ui-text hover:border-ui-primary/40'>
-                            View logs
-                        </Link>
-                    ) : null}
-                </div>
-            </div>
-            <div className='mt-3 grid gap-2 md:grid-cols-2'>
+            ) : null}
+            <div className='grid gap-2 md:grid-cols-2'>
                 {containers.length ? containers.map((container) => {
                     const health = containerHealth(container)
                     return (
-                        <div key={container.id} className='rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-xs' data-ai-container-row>
+                        <div key={container.id} className='min-w-0 rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-xs' data-ai-container-row>
                             <div className='flex items-start justify-between gap-2'>
                                 <div className='min-w-0'>
                                     <p className='truncate font-semibold text-ui-text'>{container.name}</p>
@@ -374,8 +345,6 @@ function healthToneClass(tone: ReturnType<typeof containerHealth>['tone']) {
 
 function ReliabilityPanel({ reliability }: { reliability: AIEconomics['reliability'] }) {
     const queuedRows = reliability.queueDepth.filter((row) => row.status === 'queued' || row.status === 'running')
-    const buildRate = reliability.buildDeploy.find((row) => row.kind === 'build')
-    const deployRate = reliability.buildDeploy.find((row) => row.kind === 'deploy')
 
     return (
         <div className='rounded-lg border border-ui-border bg-ui-raised p-4' id='ai-reliability' data-ai-reliability>
@@ -384,63 +353,22 @@ function ReliabilityPanel({ reliability }: { reliability: AIEconomics['reliabili
                 <EconomicsStat icon={<Timer className='h-4 w-4' />} label='Time to first response' value={reliability.promptTiming.sampleCount ? formatDuration(reliability.promptTiming.p50FirstUsefulOutputMs) : 'No runs yet'} detail={reliability.promptTiming.sampleCount ? `Typical response time · ${reliability.promptTiming.sampleCount} runs` : 'Shown after the first completed run'} />
             </div>
 
-            <div className='mt-4 grid gap-4 xl:grid-cols-[1fr_1.1fr]'>
-                <div className='grid gap-4'>
-                    <div className='rounded-lg border border-ui-border bg-ui-raised p-4'>
-                        <h4 className='text-sm font-semibold text-ui-text'>Build and deploy success</h4>
-                        <div className='mt-3 grid gap-3'>
-                            <SuccessRate row={buildRate} fallback='build' />
-                            <SuccessRate row={deployRate} fallback='deploy' />
-                        </div>
-                    </div>
-
-                    <div className='rounded-lg border border-ui-border bg-ui-raised p-4'>
-                        <h4 className='text-sm font-semibold text-ui-text'>Failed verification categories</h4>
-                        <div className='mt-3 flex flex-wrap gap-2'>
-                            {reliability.failedProofCategories.length ? reliability.failedProofCategories.map((row) => (
-                                <span key={`${row.kind}-${row.category}`} className='rounded-full border border-ui-danger/30 bg-ui-danger/10 px-2.5 py-1 text-xs text-ui-danger'>
-                                    {formatKind(row.category)} · {row.kind} · {row.count}
-                                </span>
-                            )) : <span className='rounded-full border border-ui-success/30 bg-ui-success/10 px-2.5 py-1 text-xs text-ui-success'>No verification failures in this window</span>}
-                        </div>
-                    </div>
+            <div className='mt-4 rounded-lg border border-ui-border bg-ui-raised p-4'>
+                <div className='flex items-center justify-between gap-3'>
+                    <h4 className='text-sm font-semibold text-ui-text'>Active and queued work</h4>
+                    <span className='text-xs text-ui-muted'>{queuedRows.reduce((total, row) => total + row.count, 0)} runs</span>
                 </div>
-
-                <div className='grid gap-4'>
-                    <div className='rounded-lg border border-ui-border bg-ui-raised p-4'>
-                        <div className='flex items-center justify-between gap-3'>
-                            <h4 className='text-sm font-semibold text-ui-text'>Active and queued work</h4>
-                            <span className='text-xs text-ui-muted'>{queuedRows.reduce((total, row) => total + row.count, 0)} runs</span>
+                <div className='mt-3 max-h-52 space-y-2 overflow-auto'>
+                    {queuedRows.length ? queuedRows.map((row) => (
+                        <div key={`${row.lane}-${row.kind}-${row.status}`} className='grid grid-cols-[1fr_auto] gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-xs'>
+                            <div>
+                                <p className='font-medium text-ui-text'>{row.lane} · {row.model}</p>
+                                <p className='mt-1 text-ui-muted'>{row.kind} · {row.status}</p>
+                            </div>
+                            <span className='self-center text-sm font-semibold text-ui-text'>{row.count}</span>
                         </div>
-                        <div className='mt-3 max-h-52 space-y-2 overflow-auto'>
-                            {queuedRows.length ? queuedRows.map((row) => (
-                                <div key={`${row.lane}-${row.kind}-${row.status}`} className='grid grid-cols-[1fr_auto] gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-xs'>
-                                    <div>
-                                        <p className='font-medium text-ui-text'>{row.lane} · {row.model}</p>
-                                        <p className='mt-1 text-ui-muted'>{row.kind} · {row.status}</p>
-                                    </div>
-                                    <span className='self-center text-sm font-semibold text-ui-text'>{row.count}</span>
-                                </div>
-                            )) : <p className='text-sm text-ui-muted'>No work is running or waiting.</p>}
-                        </div>
-                    </div>
-
+                    )) : <p className='text-sm text-ui-muted'>No work is running or waiting.</p>}
                 </div>
-            </div>
-        </div>
-    )
-}
-
-function SuccessRate({ row, fallback }: { row?: AIEconomics['reliability']['buildDeploy'][number], fallback: string }) {
-    const rate = row ? Math.round(row.successRate * 100) : 0
-    return (
-        <div>
-            <div className='mb-1 flex items-center justify-between text-xs text-ui-muted'>
-                <span className='capitalize'>{row?.kind || fallback}</span>
-                <span>{row ? `${rate}% · ${row.completed}/${row.total}` : 'no samples'}</span>
-            </div>
-            <div className='h-2 overflow-hidden rounded-full bg-ui-border'>
-                <div className='h-full rounded-full bg-ui-primary' style={{ width: `${row ? Math.max(4, rate) : 0}%` }} />
             </div>
         </div>
     )
@@ -457,10 +385,6 @@ function EconomicsStat({ icon, label, value, detail }: { icon: ReactNode, label:
             <p className='mt-1 text-xs leading-5 text-ui-muted'>{detail}</p>
         </div>
     )
-}
-
-function formatKind(kind: string) {
-    return kind.replace(/_/g, ' ')
 }
 
 function formatDuration(value: number) {
