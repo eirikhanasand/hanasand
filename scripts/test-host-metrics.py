@@ -1,11 +1,21 @@
 import importlib.util
 from pathlib import Path
 import unittest
+from unittest.mock import Mock
 spec = importlib.util.spec_from_file_location('metrics', Path(__file__).with_name('host-metrics.py'))
 metrics = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(metrics)
 
 class HostMetricsTests(unittest.TestCase):
+    def test_update_status(self):
+        path = Mock()
+        path.read_text.return_value = '{"status":"pending","run_id":"test"}'
+        self.assertEqual(metrics.update_status(path)['run_id'], 'test')
+        for value in ['[]', 'invalid json']:
+            path.read_text.return_value = value
+            self.assertEqual(metrics.update_status(path)['status'], 'unknown')
+        path.read_text.side_effect = FileNotFoundError()
+        self.assertEqual(metrics.update_status(path)['status'], 'unknown')
     def test_limits_round_down(self):
         for limit, expected in [(83, 74), (94, 84), (300, 270), (250.5, 225)]:
             self.assertEqual(metrics.limited_sensor('GPU', expected + 0.1, limit, 'C')['alertLimit'], expected)

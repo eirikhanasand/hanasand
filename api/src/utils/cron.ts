@@ -16,7 +16,7 @@ import { runDueVulnerabilityScan, VULNERABILITY_SCAN_JOB_ID } from './vulnerabil
 import { DATABASE_BACKUP_JOB_ID, runDueDatabaseBackup } from './db/backups.ts'
 import run, { queryOnce } from '#db'
 import { ORGANIZATION_RETENTION_JOB_ID, runOrganizationRetentionWorker } from './organizationPrivacy.ts'
-import { persistHostUpdateStatus, readHostUpdateStatus } from './aptUpdates.ts'
+import { persistHostUpdateStatus, readHostUpdateStatus, updateHosts } from './aptUpdates.ts'
 
 export const HOST_UPDATE_MONITOR_JOB_ID = 'api-host-update-monitor'
 export const WEB_SCAN_JOB_ID = 'api-web-security-scanner'
@@ -29,10 +29,15 @@ const apiCronRunners: Record<string, () => Promise<unknown> | unknown> = {
     [VM_METRICS_JOB_ID]: collectVmMetrics,
     'api-production-log-monitor': runProductionLogMonitors,
     [HOST_UPDATE_MONITOR_JOB_ID]: async() => {
-        const { status, runId } = await readHostUpdateStatus()
-        if (!runId) throw new Error(String(status.last_error || 'Host update status has not checked in yet.'))
-        await persistHostUpdateStatus(status, runId)
-        return status
+        const results = await Promise.allSettled(updateHosts.map(async host => {
+            const { status, runId } = await readHostUpdateStatus(host)
+            if (!runId) throw new Error(`${host}: ${status.last_error || 'Host update status has not checked in yet.'}`)
+            await persistHostUpdateStatus(status, runId, host)
+            return status
+        }))
+        const failure = results.find(result => result.status === 'rejected')
+        if (failure?.status === 'rejected') throw failure.reason
+        return results
     },
     'api-vm-ensure-running': ensureAlwaysRunningVms,
     [MILL_CASE_DELIVERY_JOB_ID]: deliverMillCases,

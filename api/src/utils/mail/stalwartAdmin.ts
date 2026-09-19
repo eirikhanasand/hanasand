@@ -55,6 +55,17 @@ export async function listPrincipals(types?: string[]) {
     return records
 }
 
+export async function deleteMailPrincipal(name: string) {
+    const principal = await findPrincipalByName(name, 'individual')
+    if (!principal) return
+    try {
+        await adminFetch(`/api/principal/${encodeURIComponent(name)}`, { method: 'DELETE' })
+    } catch (error) {
+        if (!isLegacyAdminRouteMissing(error)) throw error
+        await jmapAdminCall('x:Account/set', { destroy: [String(principal.id)] })
+    }
+}
+
 export async function findPrincipalByName(name: string, type?: string) {
     try {
         const response = await adminFetch(`/api/principal/${encodeURIComponent(name)}`)

@@ -88,6 +88,10 @@ export default function MailWorkspace({ mailboxUser }: Props) {
     const selection = useRef<{ user: string | null, mailbox: string | null, message: string | null }>({ user: mailboxUser || null, mailbox: null, message: null })
     const requestVersion = useRef(0)
     const requestPending = useRef(false)
+    const paginationPending = useRef(false)
+    const nextPageTrigger = useRef<HTMLDivElement>(null)
+    const [loadingMore, setLoadingMore] = useState(false)
+    const [pageError, setPageError] = useState('')
     const [mailFilter, setMailFilter] = useState<MailListFilter>('all')
 
     const load = useCallback(async (params: {
@@ -98,7 +102,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
     } = {}) => {
         if (params.messageId === null) setReadingMessage(false)
         const silent = Boolean(params.silent)
-        if (silent && requestPending.current) return
+        if (silent && (requestPending.current || paginationPending.current)) return
         const version = ++requestVersion.current
         requestPending.current = true
 
@@ -115,7 +119,15 @@ export default function MailWorkspace({ mailboxUser }: Props) {
             })
 
             if (version !== requestVersion.current) return
-            setOverview(next)
+            const switched = next.mailboxUser !== selection.current.user || next.selectedMailboxId !== selection.current.mailbox
+            setOverview(current => {
+                if (switched || !current || current.messages.length <= 50) return next
+                const ids = new Set(next.messages.map(message => message.id))
+                const boundary = current.messages.findIndex(message => message.id === next.messages.at(-1)?.id)
+                const tail = current.messages.slice(boundary >= 0 ? boundary + 1 : 50)
+                return { ...next, messages: [...next.messages, ...tail.filter(message => !ids.has(message.id))], nextCursor: current.nextCursor }
+            })
+            if (switched) setPageError('')
             setSelectedMailboxId(next.selectedMailboxId)
             const nextSelectedMessageId = params.messageId
                 || next.selectedMessage?.id
@@ -145,6 +157,38 @@ export default function MailWorkspace({ mailboxUser }: Props) {
             }
         }
     }, [mailboxUser])
+
+    const loadMore = useCallback(async () => {
+        if (!overview?.nextCursor || paginationPending.current || requestPending.current) return
+        const version = requestVersion.current
+        paginationPending.current = true
+        setLoadingMore(true)
+        setPageError('')
+        try {
+            const page = await fetchMailOverview({ mailboxUser: overview.mailboxUser, mailboxId: overview.selectedMailboxId, after: overview.nextCursor })
+            if (version !== requestVersion.current) return
+            setOverview(current => {
+                if (!current) return current
+                const ids = new Set(current.messages.map(message => message.id))
+                return { ...current, messages: [...current.messages, ...page.messages.filter(message => !ids.has(message.id))], nextCursor: page.nextCursor }
+            })
+        } catch {
+            if (version === requestVersion.current) setPageError('Could not load older messages. Try again.')
+        } finally {
+            paginationPending.current = false
+            setLoadingMore(false)
+        }
+    }, [overview])
+
+    useEffect(() => {
+        const target = nextPageTrigger.current
+        if (!target || !overview?.nextCursor || loadingMore || pageError) return
+        const observer = new IntersectionObserver(entries => {
+            if (entries.some(entry => entry.isIntersecting)) void loadMore()
+        }, { rootMargin: '300px' })
+        observer.observe(target)
+        return () => observer.disconnect()
+    }, [loadMore, overview?.nextCursor, loadingMore, pageError])
 
     useEffect(() => {
         const timer = window.setTimeout(() => {
@@ -299,7 +343,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                             </div>
                         </div>
 
-                        <nav aria-label='Mailboxes' className='mb-3 grid gap-1 border-b border-ui-border pb-3'>
+                        <nav aria-label='Mailboxes' className='mb-3 grid min-w-0 grid-cols-1 gap-1 border-b border-ui-border pb-3'>
                             {overview && [
                                 overview.accessibleAccounts.filter(account => account.id === overview.actor.id || account.shared).sort((a, b) => Number(b.id === overview.actor.id) - Number(a.id === overview.actor.id)),
                                 overview.accessibleAccounts.filter(account => account.id !== overview.actor.id && !account.shared),
@@ -314,17 +358,17 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                             setMailFilter('all')
                                             void load({ mailboxUser: account.id, mailboxId: null, messageId: null })
                                         }}
-                                        className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-xs disabled:opacity-50 ${overview.mailboxUser === account.id ? 'bg-ui-primary/10 font-semibold text-ui-primary' : 'text-ui-muted hover:bg-ui-raised'}`}>
-                                        <span className='flex min-w-0 items-center gap-2'><Inbox className='h-4 w-4 shrink-0' />
+                                        className={`flex min-w-0 w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-xs disabled:opacity-50 ${overview.mailboxUser === account.id ? 'bg-ui-primary/10 font-semibold text-ui-primary' : 'text-ui-muted hover:bg-ui-raised'}`}>
+                                        <span className='flex min-w-0 flex-1 items-center gap-2'><Inbox className='h-4 w-4 shrink-0' />
                                             {!sidebarCompact && <span className='truncate'>{account.shared ? account.name : account.id === overview.actor.id ? 'Inbox' : account.name}</span>}
                                         </span>
-                                        {!sidebarCompact && <span aria-label={account.unreadCount == null ? 'Unread count unavailable' : `${account.unreadCount} unread`}>{account.unreadCount ?? '—'}</span>}
+                                        {!sidebarCompact && <span className='shrink-0' aria-label={account.unreadCount == null ? 'Unread count unavailable' : `${account.unreadCount} unread`}>{account.unreadCount ?? '—'}</span>}
                                     </button>
                                 ))
-                                return index === 0 ? <div key='inboxes' className='grid gap-1'>{buttons}</div> : accounts.length > 0 && (
-                                    <details key='other' className='text-xs text-ui-muted'>
+                                return index === 0 ? <div key='inboxes' className='grid min-w-0 grid-cols-1 gap-1'>{buttons}</div> : accounts.length > 0 && (
+                                    <details key='other' className='min-w-0 text-xs text-ui-muted'>
                                         <summary className='cursor-pointer px-2.5 py-2' aria-label='Other mailboxes'>{sidebarCompact ? '…' : 'Other mailboxes'}</summary>
-                                        <div className='grid max-h-64 gap-1 overflow-y-auto'>{buttons}</div>
+                                        <div className='grid min-w-0 grid-cols-1 max-h-64 gap-1 overflow-y-auto'>{buttons}</div>
                                     </details>
                                 )
                             })}
@@ -338,7 +382,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                         setSelectedMailboxId(mailbox.id)
                                         void load({ mailboxId: mailbox.id, messageId: null })
                                     }}
-                                    className={`flex w-full items-center justify-between rounded-lg border px-2.5 py-2 text-left text-xs transition ${
+                                    className={`flex min-w-0 w-full items-center justify-between rounded-lg border px-2.5 py-2 text-left text-xs transition ${
                                         selectedMailboxId === mailbox.id
                                             ? 'border-ui-primary bg-ui-primary/10 text-ui-text'
                                             : 'border-transparent text-ui-muted hover:border-ui-border hover:bg-ui-raised hover:text-ui-text'
@@ -395,6 +439,10 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                 }}
                             />
                         ))}
+                        <div ref={nextPageTrigger}>
+                            {overview?.nextCursor && <button type='button' className={toolbarButton} disabled={loadingMore} onClick={() => void loadMore()}>{loadingMore ? 'Loading older messages…' : 'Load older messages'}</button>}
+                            {pageError && <p role='alert' className='mt-2 text-xs text-ui-danger'>{pageError}</p>}
+                        </div>
                         {!filteredMessages.length && !loading && (
                             <div className='rounded-lg border border-dashed border-ui-border px-3 py-4 text-xs text-ui-muted'>
                                 {query || mailFilter !== 'all' ? 'No messages match the current view.' : 'No recent messages.'}

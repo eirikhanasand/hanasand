@@ -16,6 +16,7 @@ type MailAccountRow = {
     mail_address: string
     mail_password_encrypted: string
     principal_id: number | null
+    disabled_at?: string | null
 }
 
 export async function ensureMailInfrastructure() {
@@ -28,7 +29,7 @@ export async function ensureMailInfrastructure() {
 
 export async function provisionExistingMailAccounts() {
     await ensureMailInfrastructure()
-    const users = await run('SELECT id, name FROM users WHERE active = TRUE ORDER BY id ASC')
+    const users = await run('SELECT u.id, u.name FROM users u LEFT JOIN mail_accounts ma ON ma.user_id = u.id WHERE u.active = TRUE AND ma.disabled_at IS NULL ORDER BY u.id ASC')
     for (const user of users.rows as UserRow[]) {
         await ensureMailAccountForUser(user.id, user.name).catch(error => {
             console.error(`Failed to provision mail account for ${user.id}`, error)
@@ -39,6 +40,7 @@ export async function provisionExistingMailAccounts() {
 export async function ensureMailAccountForUser(userId: string, displayName: string, preferredSecret?: string) {
     await ensureDomainPrincipal()
     const existing = await getMailAccount(userId)
+    if (existing?.disabled_at) throw new MailAccessDenied()
     const username = mailboxLocalPartForUser(userId)
     const address = addressForUser(userId)
     const allAddresses = addressesForUser(userId)
@@ -145,6 +147,7 @@ export async function getMailAccess(actorId: string, mailboxUser?: string) {
 
     const user = userResult.rows[0] as UserRow
     const existing = await getMailAccount(user.id)
+    if (existing?.disabled_at) throw new MailAccessDenied()
     const storedPassword = existing ? getStoredMailSecret(existing) : null
     const account = existing && storedPassword
         ? {
@@ -179,7 +182,7 @@ async function listPersonalMailAccounts(actorId: string, canAccessAnyMailbox: bo
             SELECT u.id, u.name, ma.mail_address
             FROM users u
             LEFT JOIN mail_accounts ma ON ma.user_id = u.id
-            WHERE u.active = TRUE
+            WHERE u.active = TRUE AND ma.disabled_at IS NULL
             ORDER BY u.id ASC
         `)
 
@@ -200,6 +203,7 @@ async function listPersonalMailAccounts(actorId: string, canAccessAnyMailbox: bo
 
     const user = row.rows[0] as UserRow
     const account = await getMailAccount(user.id)
+    if (account?.disabled_at) return []
     return [{ id: user.id, name: user.name, address: account?.mail_address || addressForUser(user.id) }]
 }
 

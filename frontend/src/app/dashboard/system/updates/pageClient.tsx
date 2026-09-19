@@ -1,51 +1,61 @@
 'use client'
 
-import { useCallback, useEffect, useState, useId, type ReactNode } from 'react'
-import { AlertTriangle, CheckCircle2, CircleAlert, CircleCheck, CircleX, Clock3, RefreshCcw, ShieldCheck } from 'lucide-react'
+import { useCallback, useEffect, useState, useId, useRef, type ReactNode } from 'react'
+import { AlertTriangle, CheckCircle2, Info, CircleCheck, CircleX, Clock3, RefreshCcw, ShieldCheck } from 'lucide-react'
 import { DashboardPanel } from '@/components/dashboard/ui'
-import { fetchAptUpdates, type AptUpdateStatus, type AptUpdateHistory } from '@/utils/aptUpdates/client'
+import { fetchAptUpdates, type AptUpdateStatus, type AptUpdateHistory, type UpdateHost } from '@/utils/aptUpdates/client'
 
 export default function AptUpdatesClient() {
+    const [host, setHost] = useState<UpdateHost>('inspur')
+    const request = useRef<AbortController | null>(null)
     const [status, setStatus] = useState<AptUpdateStatus | null>(null)
     const [history, setHistory] = useState<AptUpdateHistory[]>([])
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(true)
     const load = useCallback(async () => {
-        setLoading(true); setError('')
-        try { const result = await fetchAptUpdates(); setStatus(result.status); setHistory(result.history) }
-        catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to load host update status.') }
-        finally { setLoading(false) }
-    }, [])
-    useEffect(() => { void load() }, [load])
+        request.current?.abort()
+        const controller = new AbortController()
+        request.current = controller
+        setLoading(true); setError(''); setStatus(null); setHistory([])
+        try {
+            const result = await fetchAptUpdates(host, controller.signal)
+            if (!controller.signal.aborted) { setStatus(result.status); setHistory(result.history) }
+        }
+        catch (cause) { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Unable to load host update status.') }
+        finally { if (!controller.signal.aborted) setLoading(false) }
+    }, [host])
+    useEffect(() => { void load(); return () => request.current?.abort() }, [load])
 
     const pending = status?.pending_updates || []
     const security = pending.filter(item => item.security)
     const regular = pending.filter(item => !item.security)
-    const tone = status?.status === 'failed' || error ? 'danger' : pending.length ? 'warning' : 'success'
+    const available = !loading && !error && status && status.status !== 'unknown'
+    const delayHours = status?.policy?.non_security_delay_hours ?? 72
+    const tone = status?.status === 'failed' || error || status?.last_error ? 'danger' : security.length ? 'danger' : !available || pending.length ? 'info' : 'success'
     return <div className='grid gap-3'>
         <DashboardPanel className='grid gap-4 p-4'>
             <div className='flex flex-wrap items-start justify-between gap-3'>
-                <div><p className='text-xs font-semibold text-ui-muted'>hanasand · Ubuntu 24.04</p><h2 className='mt-1 text-lg font-semibold'>Update control</h2><p className='mt-1 text-sm text-ui-muted'>The server installs updates automatically.</p></div>
-                <div className='flex items-center gap-3'><span className='text-sm text-ui-muted'>{formatLastCheck(status?.checked_at)}</span><button onClick={() => void load()} className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold hover:border-ui-primary'><RefreshCcw className='h-4 w-4' />{loading ? 'Checking' : 'Refresh'}</button></div>
+                <div><p className='text-xs font-semibold text-ui-muted'>{host === 'inspur' ? 'Inspur' : 'OVH'} · Ubuntu</p><h2 className='mt-1 text-lg font-semibold'>Update control</h2><p className='mt-1 text-sm text-ui-muted'>The server installs updates automatically.</p></div>
+                <div className='flex flex-wrap items-center gap-3'><select aria-label='Host' value={host} onChange={event => { request.current?.abort(); setStatus(null); setHistory([]); setError(''); setLoading(true); setHost(event.target.value as UpdateHost) }} className='h-9 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold'><option value='inspur'>Inspur</option><option value='ovhcloud'>OVH</option></select><span className='text-sm text-ui-muted'>{formatLastCheck(status?.checked_at)}</span><button disabled={loading} onClick={() => void load()} className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold hover:border-ui-primary disabled:opacity-60'><RefreshCcw className='h-4 w-4' />{loading ? 'Checking' : 'Refresh'}</button></div>
             </div>
             <div className='grid gap-2 sm:grid-cols-3'>
-                <Summary icon={tone === 'danger' ? <AlertTriangle /> : <CheckCircle2 />} label='State' value={error || label(status?.status)} tone={tone} />
-                <Summary icon={<ShieldCheck />} label='Security Updates' value={`${security.length} package${security.length === 1 ? '' : 's'}`} tone={security.length ? 'danger' : 'success'} />
-                <Summary icon={<Clock3 />} label='Updates' value={`${regular.length} package${regular.length === 1 ? '' : 's'}`} tone={regular.length ? 'warning' : 'success'} />
+                <Summary icon={tone === 'danger' ? <AlertTriangle /> : tone === 'info' ? <Info /> : <CheckCircle2 />} label='State' value={loading ? 'Checking host' : error || label(status?.status)} tone={tone} />
+                <Summary icon={<ShieldCheck />} label='Security Updates' value={available ? `${security.length} package${security.length === 1 ? '' : 's'}` : 'Not reported'} tone={!available ? 'info' : security.length ? 'danger' : 'success'} />
+                <Summary icon={<Clock3 />} label='Updates' value={available ? `${regular.length} package${regular.length === 1 ? '' : 's'}` : 'Not reported'} tone={!available || regular.length ? 'info' : 'success'} />
             </div>
             <div className='grid gap-2 lg:grid-cols-3'>
                 <div className='rounded-lg border border-ui-border bg-ui-raised p-3 min-w-0'><div className='flex flex-wrap items-center justify-between gap-2'><p className='text-xs font-semibold text-ui-muted'>Last installed</p><p className='text-right text-sm text-ui-muted'>{status?.last_update_at ? formatLastCheck(status.last_update_at) : 'Never'}</p></div>{status?.last_updated_packages?.length ? <p className='mt-2 wrap-break-word text-sm'>{status.last_updated_packages.join(', ')}</p> : null}</div>
-                <Detail label='Policy' value='Security updates immediately; other Ubuntu updates after 72 hours.' />
+                <Detail label='Policy' value={`Security updates immediately; other Ubuntu updates after ${delayHours} hours. Waiting during this window is normal.`} />
                 <Detail label='Verification' value={status?.policy?.repository_verification || 'Waiting for the host to report its verification policy.'} />
             </div>
             {status?.last_error ? <p className='rounded-lg border border-ui-danger bg-ui-danger/10 p-3 text-sm text-ui-danger'>{status.last_error}</p> : null}
         </DashboardPanel>
-        <DashboardPanel className='grid gap-3 p-4'><h2 className='text-base font-semibold'>Pending packages</h2>{pending.length ? <div className='overflow-x-auto'><table className='w-full min-w-[760px] text-left text-sm'><thead className='text-xs text-ui-muted'><tr><th className='pb-2'>Package</th><th className='pb-2'>Version</th><th className='pb-2'>Type</th><th className='pb-2'>Age</th><th className='pb-2'>Installed</th></tr></thead><tbody>{pending.map(item => { const installedAt = item.installed_at || item.first_seen; const ageHours = updateAgeHours(installedAt); const ready = item.security || ageHours >= 72; return <tr key={`${item.package}-${item.version}`} className='border-t border-ui-border'><td className='py-2 font-mono'>{item.package}</td><td className='py-2 font-mono'>{item.version}</td><td className='py-2'>{item.security ? 'Security' : 'Regular'}</td><td className={`py-2 font-semibold ${ready ? 'text-ui-success' : 'text-ui-danger'}`}><span className='inline-flex items-center gap-1.5'>{ready ? <CircleCheck className='h-4 w-4' aria-hidden='true' /> : <CircleX className='h-4 w-4' aria-hidden='true' />}<span>{ready ? 'Ready' : `${ageHours}/72 hours`}</span></span></td><td className='py-2 text-ui-muted'>{new Date(installedAt * 1000).toLocaleString()}</td></tr> })}</tbody></table></div> : <p className='text-sm text-ui-muted'>No pending packages reported.</p>}</DashboardPanel>
+        <DashboardPanel className='grid gap-3 p-4'><h2 className='text-base font-semibold'>Pending packages</h2>{pending.length ? <div className='overflow-x-auto'><table className='w-full min-w-[760px] text-left text-sm'><thead className='text-xs text-ui-muted'><tr><th className='pb-2'>Package</th><th className='pb-2'>Version</th><th className='pb-2'>Type</th><th className='pb-2'>Age</th><th className='pb-2'>Installed</th></tr></thead><tbody>{pending.map(item => { const installedAt = item.installed_at || item.first_seen; const ageHours = updateAgeHours(installedAt); const ready = item.security || ageHours >= delayHours; return <tr key={`${item.package}-${item.version}`} className='border-t border-ui-border'><td className='py-2 font-mono'>{item.package}</td><td className='py-2 font-mono'>{item.version}</td><td className='py-2'>{item.security ? 'Security' : 'Regular'}</td><td className={`py-2 font-semibold ${ready ? 'text-ui-success' : 'text-ui-muted'}`}><span className='inline-flex items-center gap-1.5'>{ready ? <CircleCheck className='h-4 w-4' aria-hidden='true' /> : <Info className='h-4 w-4' aria-hidden='true' />}<span>{ready ? 'Ready' : `${ageHours}/${delayHours} hours · Scheduled wait`}</span></span></td><td className='py-2 text-ui-muted'>{new Date(installedAt * 1000).toLocaleString()}</td></tr> })}</tbody></table></div> : <p className='text-sm text-ui-muted'>{loading ? 'Checking host…' : available ? 'No pending packages reported.' : 'Package status unavailable.'}</p>}</DashboardPanel>
         <DashboardPanel className='grid gap-3 p-4'><h2 className='text-base font-semibold'>History</h2>{history.length ? <div className='grid gap-2'>{history.map(item => <div key={item.run_id} className='grid gap-1 rounded-lg border border-ui-border bg-ui-raised p-3 text-sm md:grid-cols-[180px_24px_minmax(0,1fr)]'><span className='text-ui-muted'>{formatDate(item.occurred_at)}</span><span className='flex items-center'><HistoryStatus item={item} /></span><span>{item.error ? formatUpdateError(item.error) : item.packages?.length ? `Installed: ${item.packages.join(', ')}` : 'No packages installed.'}</span></div>)}</div> : <p className='text-sm text-ui-muted'>No host check-in has been persisted yet.</p>}</DashboardPanel>
     </div>
 }
 
-function Summary({ icon, label, value, tone }: { icon: ReactNode, label: string, value: string, tone: string }) { return <div className={`grid gap-1 rounded-lg border p-3 ${tone === 'danger' ? 'border-ui-danger bg-ui-danger/10 text-ui-danger' : tone === 'warning' ? 'border-ui-warning bg-ui-warning/10 text-ui-warning' : 'border-ui-success bg-ui-success/10 text-ui-success'}`}><div className='flex items-center gap-2 text-xs font-semibold'>{icon}<span>{label}</span></div><p className='wrap-break-word text-sm font-semibold'>{value}</p></div> }
+function Summary({ icon, label, value, tone }: { icon: ReactNode, label: string, value: string, tone: string }) { return <div className={`grid gap-1 rounded-lg border p-3 ${tone === 'danger' ? 'border-ui-danger bg-ui-danger/10 text-ui-danger' : tone === 'info' ? 'border-ui-border bg-ui-raised text-ui-muted' : 'border-ui-success bg-ui-success/10 text-ui-success'}`}><div className='flex items-center gap-2 text-xs font-semibold'>{icon}<span>{label}</span></div><p className='wrap-break-word text-sm font-semibold'>{value}</p></div> }
 function Detail({ label, value }: { label: string, value: string }) { return <div className='rounded-lg border border-ui-border bg-ui-raised p-3'><p className='text-xs font-semibold text-ui-muted'>{label}</p><p className='mt-1 wrap-break-word text-sm'>{value}</p></div> }
 function label(value?: string) { return value === 'ok' ? 'Healthy' : value === 'pending' ? 'Updates pending' : value === 'failed' ? 'Update failed' : 'Waiting for host check-in' }
 function formatDate(value?: string | null) { return value ? new Date(value).toLocaleString() : 'Not reported' }
@@ -66,7 +76,7 @@ function updateAgeHours(firstSeen: number) { return Math.max(0, Math.floor((Date
 function historyStatusIcon(status: string) {
     const normalized = status.toLowerCase()
     if (normalized === 'ok' || normalized === 'success' || normalized === 'healthy') return <CircleCheck className='h-4 w-4 text-ui-success' aria-label='Healthy' />
-    if (normalized === 'pending' || normalized === 'running') return <CircleAlert className='h-4 w-4 text-ui-warning' aria-label='Pending' />
+    if (normalized === 'pending' || normalized === 'running') return <Info className='h-4 w-4 text-ui-muted' aria-label='Pending' />
     return <CircleX className='h-4 w-4 text-ui-danger' aria-label='Failed' />
 }
 

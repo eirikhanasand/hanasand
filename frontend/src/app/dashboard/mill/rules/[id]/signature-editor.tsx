@@ -21,7 +21,7 @@ export default function SignatureEditor({ rule, disabled, onChange }: { rule: Mi
         const items = definition[key] || []
         return <section className='grid min-w-0 content-start gap-3 rounded-lg border border-ui-border p-4'>
             <div className='flex flex-wrap items-center justify-between gap-2'><h3 className='text-sm font-semibold'>{title}</h3><span className='text-xs text-ui-muted'>ALL conditions</span></div>
-            {required && <code className='whitespace-pre-wrap break-words text-xs text-ui-muted'>{required}</code>}
+            {required && <code className='whitespace-pre-wrap wrap-break-word text-xs text-ui-muted'>{required}</code>}
             {items.map((condition, index) => <div key={index} className='grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_7rem_minmax(0,1fr)_auto]'>
                 <label className='grid gap-1 text-xs'>Field<input required maxLength={80} aria-label={`${title} ${index + 1} field`} placeholder='EventID' value={condition.path} onChange={event => update(index, 'path', event.target.value)} className={inputClass} /></label>
                 <label className='grid gap-1 text-xs'>Operator<select aria-label={`${title} ${index + 1} operator`} value={condition.operator} onChange={event => update(index, 'operator', event.target.value)} className={inputClass}>{['equals', 'contains', 'regex'].map(value => <option key={value}>{value}</option>)}</select></label>
@@ -51,7 +51,7 @@ export default function SignatureEditor({ rule, disabled, onChange }: { rule: Mi
                 {selectors('conditions', brute ? 'Success selector' : 'Event selector', builtIn ? brute ? 'event_type = authentication AND action = login AND outcome = success' : rule.id.startsWith('auth.') ? `event_type = authentication AND action = login AND outcome = ${spray ? 'failure' : 'success'}` : rule.detectionLogic || '' : '')}
                 <p className='text-xs leading-5 text-ui-muted'>Fields use paths in the normalized event, such as EventID, event.code, signature_id, or source.ip. Field names are case-sensitive; values are case-insensitive. Use regex <code className='font-mono'>^(4625|4771)$</code> to select multiple event IDs. Empty built-in selectors accept every event matching the required fields.</p>
             </fieldset>
-            <aside className='min-w-0 border-t border-ui-border bg-ui-raised p-5 xl:border-t-0 xl:border-l'><h3 className='mb-3 text-xs font-semibold uppercase tracking-wide text-ui-muted'>Signature preview</h3><pre aria-label='Signature preview' className='max-h-[38rem] overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-6 text-ui-text'>{JSON.stringify(signature, null, 2)}</pre></aside>
+            <aside className='min-w-0 border-t border-ui-border bg-ui-raised p-5 xl:border-t-0 xl:border-l'><h3 className='mb-3 text-xs font-semibold uppercase tracking-wide text-ui-muted'>Signature preview</h3><pre aria-label='Signature preview' className='max-h-[38rem] overflow-auto whitespace-pre-wrap wrap-break-word font-mono text-xs leading-6 text-ui-text'>{JSON.stringify(signature, null, 2)}</pre></aside>
         </div>
     </DashboardPanel>
 }
