@@ -2352,12 +2352,15 @@ export class PostgresScraperStore extends InMemoryScraperStore {
 
   async queryEnrichmentOverview(tenantId = "default", query = "") {
     const pattern = query.trim() ? `%${query.trim().slice(0, 100)}%` : null;
-    const [profiles, updates, runs, queue] = await Promise.all([
+    const [profiles, updates, runs] = await Promise.all([
       this.sql`SELECT jsonb_build_object('id', id, 'canonicalName', canonical_name, 'confidence', confidence,
         'firstSeenAt', first_seen_at, 'lastSeenAt', last_seen_at, 'updatedAt', updated_at, 'evidenceCount', evidence_count,
-        'aliases', detail.aliases, 'sourceIds', detail."sourceIds", 'captureIds', jsonb_path_query_array(COALESCE(detail."captureIds", '[]'::jsonb), '$[0 to 4]')) AS record
-        FROM threat_intel.actor_profiles CROSS JOIN LATERAL jsonb_to_record(record) AS detail(aliases jsonb, "sourceIds" jsonb, "captureIds" jsonb, "identityResolutionState" text) WHERE tenant_id = ${tenantId}
-        AND COALESCE(record->>'identityResolutionState', 'active') <> 'archived'
+        'aliases', detail.aliases, 'sourceIds', detail."sourceIds", 'captureIds', jsonb_path_query_array(COALESCE(detail."captureIds", '[]'::jsonb), '$[0 to 4]')) AS record,
+        count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM threat_intel.workflow_records w
+          WHERE w.record_type = 'actor_enrichment_run' AND w.tenant_id = p.tenant_id
+          AND w.record->>'actorId' = p.id AND w.updated_at > now() - interval '1 hour')) OVER () AS queued
+        FROM threat_intel.actor_profiles p CROSS JOIN LATERAL jsonb_to_record(record) AS detail(aliases jsonb, "sourceIds" jsonb, "captureIds" jsonb, "identityResolutionState" text) WHERE tenant_id = ${tenantId}
+        AND COALESCE(detail."identityResolutionState", 'active') <> 'archived'
         ORDER BY last_seen_at DESC LIMIT 100`,
       this.sql`SELECT jsonb_build_object('id', w.id, 'subjectId', detail."subjectId",
         'actorName', p.canonical_name, 'observedAt', w.updated_at, 'kind', detail."kind",
@@ -2376,13 +2379,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           OR detail."kind" ILIKE ${pattern})
         ORDER BY w.updated_at DESC, w.id DESC LIMIT 100`,
       this.sql`SELECT record FROM threat_intel.workflow_records WHERE record_type = 'actor_enrichment_run'
-        AND tenant_id = ${tenantId} ORDER BY updated_at DESC LIMIT 500`,
-      this.sql`SELECT count(*)::int AS count FROM threat_intel.actor_profiles p
-        WHERE p.tenant_id = ${tenantId} AND COALESCE(p.record->>'identityResolutionState', 'active') <> 'archived'
-        AND NOT EXISTS (SELECT 1 FROM threat_intel.workflow_records w WHERE w.record_type = 'actor_enrichment_run'
-          AND w.tenant_id = p.tenant_id AND w.record->>'actorId' = p.id AND w.updated_at > now() - interval '1 hour')`
+        AND tenant_id = ${tenantId} ORDER BY updated_at DESC LIMIT 500`
     ]);
-    return { profiles: profiles.map(readRecord), updates: updates.map(readRecord), runs: runs.map(readRecord), queued: Number(queue[0]?.count ?? 0) };
+    return { profiles: profiles.map(readRecord), updates: updates.map(readRecord), runs: runs.map(readRecord), queued: Number(profiles[0]?.queued ?? 0) };
   }
 
   async queryEvidenceDeltas(input: { tenantId?: string; query?: string; limit?: number; offset?: number } = {}) {
