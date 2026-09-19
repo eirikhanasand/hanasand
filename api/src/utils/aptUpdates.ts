@@ -51,13 +51,23 @@ export async function persistHostUpdateStatus(status: Record<string, unknown>, r
 
 export async function listHostUpdateHistory(host: UpdateHost = 'inspur') {
     const result = await run(`
-        SELECT run_id, status, occurred_at, packages, error, payload
-        FROM host_update_events WHERE host = $1
-        ORDER BY occurred_at DESC LIMIT 30
+        SELECT ((occurred_at AT TIME ZONE 'Europe/Oslo')::date)::text AS day,
+               jsonb_agg(jsonb_build_object('status', status, 'error', error,
+                   'installed', COALESCE(payload->'installed_packages', '[]'::jsonb))
+                   ORDER BY occurred_at DESC, run_id DESC) AS checks
+        FROM host_update_events
+        WHERE host = $1
+          AND occurred_at < (date_trunc('day', NOW() AT TIME ZONE 'Europe/Oslo') AT TIME ZONE 'Europe/Oslo')
+        GROUP BY day ORDER BY day DESC LIMIT 30
     `, [historyHost(host)])
-    return result.rows.map(({ payload, ...event }) => ({ ...event, packages: installedPackages(payload || {}) }))
+    return result.rows.map(({ day, checks }: { day: string, checks: Array<{ status: string, error: string | null, installed: Array<{ package: string, version?: string }> }> }) => {
+        const packages = [...new Set(checks.flatMap(check => installedPackages({ installed_packages: check.installed }, true)))].sort()
+        const errors = [...new Set(checks.flatMap(check => check.error ? [check.error] : []))]
+        return { run_id: day, occurred_at: day, status: errors.length || checks.some(check => check.status === 'failed') ? 'failed' : checks[0].status,
+            packages, error: errors.join('; ') || null }
+    })
 }
 
-function installedPackages(status: Record<string, unknown>): string[] {
-    return Array.isArray(status.installed_packages) ? status.installed_packages.flatMap(item => item && typeof item.package === 'string' ? [item.package] : []) : []
+function installedPackages(status: Record<string, unknown>, withVersions = false): string[] {
+    return Array.isArray(status.installed_packages) ? status.installed_packages.flatMap(item => item && typeof item.package === 'string' ? [withVersions && typeof item.version === 'string' && item.version ? `${item.package} v${item.version}` : item.package] : []) : []
 }

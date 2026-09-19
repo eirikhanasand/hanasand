@@ -31,6 +31,7 @@ type AdminAuditEvent = {
 type SupportMode = 'inspect' | 'impersonation' | 'recovery' | 'decision' | 'queue' | 'invite' | 'member' | 'apiUsage'
 
 type AuditSearchParams = {
+    event?: string | string[]
     q?: string | string[]
     org?: string | string[]
     actor?: string | string[]
@@ -99,12 +100,21 @@ function decodeAccessToken(value: string) {
     }
 }
 
-function contextText(value: Record<string, unknown> | null | undefined, kind?: string) {
-    if (!value || typeof value !== 'object') return ''
-    const entries = Object.entries(value)
-        .filter(([, item]) => item !== null && item !== undefined && item !== '')
-        .slice(0, 4)
-    return auditDisplayText(entries.map(([key, item]) => `${key}: ${Array.isArray(item) ? item.join(', ') : String(item)}`).join(' · '), kind)
+function auditTargetName(event: AdminAuditEvent) {
+    const organizationName = event.object_type === 'organization'
+        ? ((!event.organization_id || event.organization_id === event.object_id) ? event.organization_name : '')
+            || (typeof event.context?.name === 'string' ? event.context.name : '')
+        : ''
+    const name = event.target_name || organizationName
+    return name ? auditDisplayText(name, event.object_type || undefined) : event.object_id || event.object_type || ''
+}
+
+function auditEventHref(params: AuditSearchParams, eventId: number) {
+    const query = new URLSearchParams(buildApiQuery(params))
+    const support = param(params, 'support')
+    if (support) query.set('support', support)
+    query.set('event', String(eventId))
+    return `/helpdesk?${query}`
 }
 
 function severityClass(severity: AdminAuditEvent['severity']) {
@@ -136,6 +146,8 @@ function stats(events: AdminAuditEvent[]) {
 }
 
 function selectedAuditEvent(events: AdminAuditEvent[], params: AuditSearchParams) {
+    const eventId = param(params, 'event').trim()
+    if (eventId) return events.find(event => String(event.id) === eventId) || events[0]
     const request = param(params, 'request').trim()
     const entity = param(params, 'entity').trim()
     const action = param(params, 'action').trim()
@@ -152,8 +164,10 @@ function selectedAuditEvent(events: AdminAuditEvent[], params: AuditSearchParams
 function auditDetailRows(event: AdminAuditEvent) {
     return [
         ['Actor', event.actor_name ? auditDisplayText(event.actor_name) : event.actor_id],
-        ['Target', event.target_name ? auditDisplayText(event.target_name, event.object_type || undefined) : event.object_id || event.object_type],
-        ['Organization', event.organization_name ? auditDisplayText(event.organization_name, 'organization') : event.organization_id],
+        ['Target', auditTargetName(event)],
+        ['Organization', event.object_type === 'organization' && event.object_id === event.organization_id
+            ? undefined
+            : event.organization_name ? auditDisplayText(event.organization_name, 'organization') : event.organization_id],
         ['Request', event.request_id],
         ['Entity', event.subject_id],
         ['Source', `${event.source}/${event.service}`],
@@ -283,24 +297,10 @@ export default async function HelpdeskPage({
                         </DashboardPanel>
                     ) : null}
                     <DashboardPanel className='overflow-hidden'>
-                        <div className='grid border-b border-ui-border md:grid-cols-[minmax(0,1fr)_minmax(260px,0.48fr)]'>
-                            <div className='min-w-0 px-4 py-3'>
-                                <div className='flex flex-wrap items-center gap-2'>
-                                    <h2 className='text-sm font-semibold text-ui-text'>Audit timeline</h2>
-                                    <span className='rounded-md bg-ui-raised px-2 py-1 text-xs font-medium text-ui-muted'>{events.length} events</span>
-                                </div>
-                                <p className='mt-1 text-xs text-ui-muted'>{events.length ? 'Use Focus to inspect a specific event without opening every control.' : 'Search or open filters to find support activity.'}</p>
-                            </div>
-                            <div className='border-t border-ui-border bg-ui-raised px-4 py-3 md:border-l md:border-t-0'>
-                                <div className='text-[10px] font-semibold uppercase tracking-[0.16em] text-ui-muted'>Selected detail</div>
-                                {selectedEvent ? (
-                                    <div className='mt-2 min-w-0 text-sm text-ui-text'>
-                                        <div className='truncate font-semibold text-ui-text'>{selectedEvent.event_type}</div>
-                                        <div className='mt-1 truncate text-xs'>request {selectedEvent.request_id || 'checking'} · entity {selectedEvent.subject_id || 'checking'}</div>
-                                    </div>
-                                ) : (
-                                    <p className='mt-2 text-sm text-ui-muted'>Select an audit row to inspect request and entity detail.</p>
-                                )}
+                        <div className='border-b border-ui-border px-4 py-3'>
+                            <div className='flex flex-wrap items-center gap-2'>
+                                <h2 className='text-sm font-semibold text-ui-text'>Audit timeline</h2>
+                                <span className='rounded-md bg-ui-raised px-2 py-1 text-xs font-medium text-ui-muted'>{events.length} events</span>
                             </div>
                         </div>
                         <div className='grid max-h-[72vh] gap-0 divide-y divide-ui-border overflow-auto'>
@@ -316,32 +316,33 @@ export default async function HelpdeskPage({
                             ) : events.map((event) => {
                                 const focused = selectedEvent?.id === event.id
                                 return (
-                                    <article key={event.id} className={`grid gap-3 p-4 md:grid-cols-[minmax(0,1fr)_11rem] md:items-start ${focused ? 'bg-ui-primary/5 ring-1 ring-inset ring-ui-primary/25' : ''}`} data-helpdesk-focused-event={focused ? 'true' : undefined}>
-                                        <div className='min-w-0'>
-                                            <div className='flex flex-wrap items-center gap-2 text-sm text-ui-text'>
-                                                <strong className='min-w-0 truncate'>{event.event_type}</strong>
-                                                {focused ? <span className='rounded-md border border-ui-primary/35 bg-ui-primary/10 px-2 py-1 text-[11px] font-semibold uppercase text-ui-primary'>Focused</span> : null}
-                                                <span className={`rounded-md border px-2 py-1 text-[11px] font-semibold uppercase ${severityClass(event.severity)}`}>{event.severity}</span>
-                                                <span className={`rounded-md border px-2 py-1 text-[11px] font-semibold uppercase ${outcomeClass(event.outcome)}`}>{event.outcome}</span>
-                                                <span className='rounded-md bg-ui-raised px-2 py-1 text-xs text-ui-muted'>{event.source}/{event.service}</span>
+                                    <article key={event.id} data-audit-event-id={event.id} data-helpdesk-focused-event={focused ? 'true' : undefined}>
+                                        <Link href={auditEventHref(params, event.id)} scroll={false} prefetch={false} aria-current={focused ? 'true' : undefined} className={`grid gap-3 p-4 transition hover:bg-ui-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ui-primary md:grid-cols-[minmax(0,1fr)_11rem] md:items-start ${focused ? 'bg-ui-primary/5 ring-1 ring-inset ring-ui-primary/25' : ''}`}>
+                                            <div className='min-w-0'>
+                                                <div className='flex flex-wrap items-center gap-2 text-sm text-ui-text'>
+                                                    <strong className='min-w-0 truncate'>{event.event_type}</strong>
+                                                    {focused ? <span className='rounded-md border border-ui-primary/35 bg-ui-primary/10 px-2 py-1 text-[11px] font-semibold uppercase text-ui-primary'>Focused</span> : null}
+                                                    <span className={`rounded-md border px-2 py-1 text-[11px] font-semibold uppercase ${severityClass(event.severity)}`}>{event.severity}</span>
+                                                    <span className={`rounded-md border px-2 py-1 text-[11px] font-semibold uppercase ${outcomeClass(event.outcome)}`}>{event.outcome}</span>
+                                                    <span className='rounded-md bg-ui-raised px-2 py-1 text-xs text-ui-muted'>{event.source}/{event.service}</span>
+                                                </div>
+                                                <div className='mt-2 flex flex-wrap gap-2 text-xs text-ui-muted'>
+                                                    {event.actor_name || event.actor_id ? <span className='rounded-md bg-ui-raised px-2 py-1'>actor {event.actor_name ? auditDisplayText(event.actor_name) : event.actor_id}</span> : null}
+                                                    {event.object_id ? <span className='rounded-md bg-ui-raised px-2 py-1'>{event.object_type || 'target'} {auditTargetName(event)}</span> : null}
+                                                    {event.organization_id && !(event.object_type === 'organization' && event.object_id === event.organization_id) ? <span className='rounded-md bg-ui-primary/10 px-2 py-1 text-ui-primary'>{event.organization_name ? auditDisplayText(event.organization_name, 'organization') : event.organization_id}</span> : null}
+                                                    {event.subject_id ? <span className='rounded-md bg-ui-raised px-2 py-1 font-mono'>entity {event.subject_id}</span> : null}
+                                                    {event.request_id ? <span className='rounded-md bg-ui-raised px-2 py-1 font-mono'>request {event.request_id}</span> : null}
+                                                </div>
+                                                {event.reason ? <p className='mt-2 text-sm text-ui-muted'>{auditDisplayText(event.reason, event.object_type || undefined)}</p> : null}
                                             </div>
-                                            <div className='mt-2 flex flex-wrap gap-2 text-xs text-ui-muted'>
-                                                <span className='rounded-md bg-ui-raised px-2 py-1'>actor {event.actor_name ? auditDisplayText(event.actor_name) : event.actor_id}</span>
-                                                {event.object_id ? <span className='rounded-md bg-ui-raised px-2 py-1'>{event.object_type || 'target'} {event.target_name ? auditDisplayText(event.target_name, event.object_type || undefined) : event.object_id}</span> : null}
-                                                {event.organization_id ? <span className='rounded-md bg-ui-primary/10 px-2 py-1 text-ui-primary'>{event.organization_name ? auditDisplayText(event.organization_name, 'organization') : event.organization_id}</span> : null}
-                                                {event.subject_id ? <span className='rounded-md bg-ui-raised px-2 py-1 font-mono'>entity {event.subject_id}</span> : null}
-                                                {event.request_id ? <span className='rounded-md bg-ui-raised px-2 py-1 font-mono'>request {event.request_id}</span> : null}
+                                            <div className='text-left text-xs text-ui-muted md:text-right'>
+                                                <div>{formatTime(event.created_at)}</div>
+                                                <div className='mt-1 max-w-xl truncate'>{event.ip}</div>
+                                                <span className='mt-2 inline-flex rounded-md border border-ui-border px-2 py-1 font-semibold text-ui-text'>
+                                                    Focus
+                                                </span>
                                             </div>
-                                            {event.reason ? <p className='mt-2 text-sm text-ui-muted'>{auditDisplayText(event.reason, event.object_type || undefined)}</p> : null}
-                                            {contextText(event.context, event.object_type || undefined) ? <p className='mt-1 text-xs text-ui-muted'>{contextText(event.context, event.object_type || undefined)}</p> : null}
-                                        </div>
-                                        <div className='text-left text-xs text-ui-muted md:text-right'>
-                                            <div>{formatTime(event.created_at)}</div>
-                                            <div className='mt-1 max-w-xl truncate'>{event.ip}</div>
-                                            <Link className='mt-2 inline-flex rounded-md border border-ui-border px-2 py-1 font-semibold text-ui-text hover:bg-ui-raised' href={`/helpdesk?request=${encodeURIComponent(event.request_id || '')}&entity=${encodeURIComponent(event.subject_id || '')}&source=${encodeURIComponent(event.source)}&service=${encodeURIComponent(event.service)}`}>
-                                                Focus
-                                            </Link>
-                                        </div>
+                                        </Link>
                                     </article>
                                 )
                             })}
@@ -360,7 +361,7 @@ export default async function HelpdeskPage({
                         </div>
                     </DashboardPanel>
                     {selectedEvent ? (
-                        <DashboardPanel className='p-4' data-helpdesk-selected-detail>
+                        <DashboardPanel className='p-4' id='selected-audit-event'>
                             <div className='flex flex-wrap items-start justify-between gap-2'>
                                 <div className='min-w-0'>
                                     <p className='text-[10px] font-semibold uppercase tracking-[0.16em] text-ui-muted'>Selected event</p>
@@ -377,7 +378,6 @@ export default async function HelpdeskPage({
                                 ))}
                             </dl>
                             {selectedEvent.reason ? <p className='mt-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-sm leading-6 text-ui-muted'>{auditDisplayText(selectedEvent.reason, selectedEvent.object_type || undefined)}</p> : null}
-                            {contextText(selectedEvent.context, selectedEvent.object_type || undefined) ? <p className='mt-2 text-xs leading-5 text-ui-muted'>{contextText(selectedEvent.context, selectedEvent.object_type || undefined)}</p> : null}
                         </DashboardPanel>
                     ) : null}
                     <DashboardPanel className='p-0' id='support-actions'>

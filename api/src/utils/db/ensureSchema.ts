@@ -1,5 +1,6 @@
 import ensureRoleSchema from './roleSchema.ts'
 import ensureLogDimensionsSchema from './logDimensionsSchema.ts'
+import ensureLogProcessQueueSchema from './logProcessQueueSchema.ts'
 import ensureSharedMailSchema from './sharedMailSchema.ts'
 import ensureVmOrganizationSchema from './vmOrganizationSchema.ts'
 import ensureCaseDevelopmentSchema from './caseDevelopmentSchema.ts'
@@ -29,6 +30,7 @@ export default async function ensureSchema() {
     ].map(name => name.toLowerCase())
 
     await run('CREATE EXTENSION IF NOT EXISTS pgcrypto')
+    await run('CREATE EXTENSION IF NOT EXISTS pg_trgm')
     await run('ALTER TABLE load_tests ADD COLUMN IF NOT EXISTS owner_id TEXT REFERENCES users(id) ON DELETE SET NULL')
     await run('ALTER TABLE load_tests ADD COLUMN IF NOT EXISTS quota_identity TEXT')
     await run('ALTER TABLE load_tests ADD COLUMN IF NOT EXISTS quota_plan TEXT NOT NULL DEFAULT \'free\'')
@@ -1436,6 +1438,7 @@ export default async function ensureSchema() {
     await run('CREATE INDEX IF NOT EXISTS idx_mill_events_logs_time ON mill_events(event_timestamp DESC, id DESC) WHERE ingestion_id = \'logs\' AND processing_status = \'processed\'')
     await run('CREATE INDEX IF NOT EXISTS idx_mill_events_org_user_time ON mill_events(organization_id, user_id, event_timestamp DESC)')
     await ensureLogDimensionsSchema()
+    await ensureLogProcessQueueSchema()
     await run(`
         CREATE TABLE IF NOT EXISTS mill_rules (
             id TEXT PRIMARY KEY,
@@ -1488,6 +1491,14 @@ export default async function ensureSchema() {
     await run('CREATE INDEX IF NOT EXISTS idx_mill_findings_event_ids ON mill_findings USING GIN(event_ids)')
     await run('CREATE INDEX IF NOT EXISTS idx_mill_logs_severity_time ON mill_events ((normalized->>\'severity\'), event_timestamp DESC) WHERE ingestion_id = \'logs\'')
     await run('CREATE INDEX IF NOT EXISTS idx_mill_logs_type_time ON mill_events ((normalized->>\'log_type\'), event_timestamp DESC) WHERE ingestion_id = \'logs\'')
+    await run(`CREATE INDEX IF NOT EXISTS idx_mill_logs_search_trgm ON mill_events
+        USING GIN (lower(normalized::text) gin_trgm_ops)
+        WHERE ingestion_id = 'logs' AND processing_status = 'processed'`)
+    await run(`CREATE INDEX IF NOT EXISTS idx_mill_logs_executable_suffix ON mill_events
+        (left(reverse(lower(COALESCE(normalized#>>'{process,executable}', ''))), 512) text_pattern_ops)
+        WHERE ingestion_id = 'logs' AND processing_status = 'processed'`)
+    await run(`CREATE STATISTICS IF NOT EXISTS stat_mill_logs_executable_suffix ON
+        (left(reverse(lower(COALESCE(normalized#>>'{process,executable}', ''))), 512)) FROM mill_events`)
     await run(`
         CREATE TABLE IF NOT EXISTS mail_accounts (
             user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,

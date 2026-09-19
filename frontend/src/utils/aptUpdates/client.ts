@@ -11,7 +11,7 @@ export type AptUpdateStatus = {
     status?: 'ok' | 'pending' | 'failed' | 'unknown'
     last_error?: string | null
     pending_updates?: AptUpdate[]
-    installed_packages?: Array<{ package: string }>
+    installed_packages?: Array<{ package: string, version?: string }>
     last_updated_packages?: string[]
     last_update_at?: string | null
     policy?: { non_security_delay_hours?: number, security_install?: string, allowed_origin?: string, repository_verification?: string }

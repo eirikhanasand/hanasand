@@ -179,7 +179,7 @@ class DockerFileTests(unittest.TestCase):
             self.assertEqual(event['level'],expected)
     def test_timeout_enrolls_readable_file_without_advancing_cli_cursor(self):
         self.log.write_bytes(line('first'));c.save('docker.json',{'container':self.source['since']})
-        with patch.object(c.shutil,'which',return_value='/usr/bin/docker'),patch.object(c,'command',side_effect=['container cdn',json.dumps({'path':str(self.log),'driver':'json-file'})]),patch.object(c.subprocess,'run',side_effect=subprocess.TimeoutExpired('docker',60)):
+        with patch.object(c.shutil,'which',return_value='/usr/bin/docker'),patch.object(c,'command',side_effect=['container cdn','2026-09-18T00:00:00Z',json.dumps({'path':str(self.log),'driver':'json-file'})]),patch.object(c.subprocess,'run',side_effect=subprocess.TimeoutExpired('docker',60)):
             c.docker({'host':'inspur','start':'2026-09-01T00:00:00Z'})
         self.assertEqual(c.load('docker-file-sources.json',{})['container']['since'],self.source['since'])
         self.assertEqual(c.load('docker.json',{})['container'],self.source['since'])
@@ -190,5 +190,92 @@ class DockerFileTests(unittest.TestCase):
         self.log.write_bytes(line('new',2));self.sender.side_effect=RuntimeError('offline')
         with self.assertRaises(RuntimeError):self.batch()
         self.assertEqual(c.load('docker-file-history-container.json',{}),original)
+
+    def test_removed_source_archives_acknowledgments_only_after_one_notice(self):
+        cursor={'device':1,'inode':2,'offset':123,'anchor':'retained-hash'}
+        c.save('docker-file-sources.json',{'container':self.source})
+        c.save('docker-file-history-container.json',cursor)
+        with patch.object(c.shutil,'which',return_value='/usr/bin/docker'),patch.object(c,'command',return_value=''):
+            c.docker({'host':'inspur','start':self.source['since']});c.docker({'host':'inspur','start':self.source['since']})
+        self.assertEqual(len(self.delivered),1)
+        self.assertEqual(self.delivered[0]['level'],'error')
+        self.assertIn('final log coverage is unknown',self.delivered[0]['message'])
+        self.assertEqual(c.load('docker-file-history-container.json',{}),cursor)
+        self.assertNotIn('container',c.load('docker-file-sources.json',{}))
+        retired=c.load('docker-file-retired.json',{})['container']
+        self.assertEqual(retired['source'],self.source)
+        self.assertEqual(retired['cursors']['history']['checkpoint'],cursor)
+        self.assertEqual(c.docker_file_history(self.config)['retiredUnavailableSources'],1)
+    def test_failed_retirement_notice_preserves_active_source_and_retries_stable_identity(self):
+        c.save('docker-file-sources.json',{'container':self.source})
+        cursor={'device':1,'inode':2,'offset':123};c.save('docker-file-history-container.json',cursor)
+        captured=[]
+        def fail(config,events):captured.extend(events);raise RuntimeError('offline')
+        self.sender.side_effect=fail
+        with patch.object(c.shutil,'which',return_value='/usr/bin/docker'),patch.object(c,'command',return_value=''):
+            with self.assertRaises(c.DockerCollectionError):c.docker({'host':'inspur','start':self.source['since']})
+            self.assertIn('container',c.load('docker-file-sources.json',{}))
+            self.assertEqual(c.load('docker-file-retired.json',{}),{})
+            self.sender.side_effect=lambda cfg,events:self.delivered.extend(events)
+            c.docker({'host':'inspur','start':self.source['since']})
+        self.assertEqual(captured[0]['sourceEventId'],self.delivered[0]['sourceEventId'])
+        self.assertEqual(c.load('docker-file-history-container.json',{}),cursor)
+    def test_existing_container_missing_file_keeps_failure_and_never_retires(self):
+        c.save('docker-file-sources.json',{'container':self.source})
+        with patch.object(c.shutil,'which',return_value='/usr/bin/docker'),patch.object(c,'command',return_value='container cdn'):
+            c.docker({'host':'inspur','start':self.source['since']})
+        with self.assertRaisesRegex(c.DockerCollectionError,'source files unavailable'):self.batch()
+        self.assertIn('container',c.load('docker-file-sources.json',{}));self.assertEqual(self.delivered,[])
+    def test_removed_container_retained_file_remains_readable_history(self):
+        self.log.write_bytes(line('retained'))
+        c.save('docker-file-sources.json',{'container':self.source})
+        with patch.object(c.shutil,'which',return_value='/usr/bin/docker'),patch.object(c,'command',return_value=''):
+            c.docker({'host':'inspur','start':self.source['since']})
+        self.batch();self.assertEqual(self.messages(),['retained'])
+        self.assertIn('container',c.load('docker-file-sources.json',{}))
+        self.assertEqual(c.load('docker-file-retired.json',{}),{})
+    def test_replacement_automatically_enrolls_with_existing_cutoff_and_new_identity(self):
+        old_source={**self.source,'path':str(self.root/'gone.json')}
+        old_cursor={'device':1,'inode':2,'offset':123}
+        c.save('docker-file-sources.json',{'old':old_source})
+        c.save('docker-file-history-old.json',old_cursor)
+        c.save('docker.json',{'new':self.source['since']})
+        self.log.write_bytes(line('replacement'))
+        def command(args,**kwargs):
+            return 'new cdn' if args[1]=='ps' else json.dumps({'path':str(self.log),'driver':'json-file'})
+        with patch.object(c.shutil,'which',return_value='/usr/bin/docker'),patch.object(c,'command',side_effect=command),patch.object(c.subprocess,'run') as cli:
+            c.docker({'host':'inspur','start':'2026-09-01T00:00:00Z'})
+        cli.assert_not_called()
+        source=c.load('docker-file-sources.json',{})['new']
+        self.assertEqual(source['since'],self.source['since'])
+        self.assertEqual(c.load('docker-file-history-old.json',{}),old_cursor)
+        c.docker_file_batch(self.config,'new',source)
+        expected=c.docker_event(self.config,'new','cdn','2026-09-19T00:00:01.100000000Z','replacement')
+        self.assertEqual(self.delivered[-1]['sourceEventId'],expected['sourceEventId'])
+        self.assertEqual(c.load('docker-file-history-new.json',{})['offset'],self.log.stat().st_size)
+    def test_cli_skips_only_proven_precreation_time_and_caches_creation(self):
+        created='2026-09-19T00:00:05Z';calls=[]
+        def command(args,**kwargs):
+            calls.append(args)
+            return 'new api' if args[1]=='ps' else created
+        with patch.object(c.shutil,'which',return_value='/usr/bin/docker'),patch.object(c,'command',side_effect=command),patch.object(c.subprocess,'run',return_value=subprocess.CompletedProcess([],0,'')) as cli:
+            c.docker({'host':'inspur','start':self.source['since']})
+            self.assertEqual(cli.call_args.args[0][4],created)
+            c.docker({'host':'inspur','start':self.source['since']})
+        self.assertEqual(sum(args[1]=='inspect' for args in calls),1)
+        self.assertEqual(c.load('docker-created.json',{})['new'],created)
+    def test_failed_delivery_after_creation_clamp_keeps_original_cli_checkpoint(self):
+        c.save('docker.json',{'new':self.source['since']})
+        self.sender.side_effect=RuntimeError('offline')
+        with patch.object(c.shutil,'which',return_value='/usr/bin/docker'),patch.object(c,'command',side_effect=['new api','2026-09-19T00:00:05Z']),patch.object(c.subprocess,'run',return_value=subprocess.CompletedProcess([],0,'2026-09-19T00:00:10.000000000Z new\n')):
+            with self.assertRaises(c.DockerCollectionError):c.docker({'host':'inspur','start':self.source['since']})
+        self.assertEqual(c.load('docker.json',{})['new'],self.source['since'])
+    def test_inventory_failure_cannot_retire_registered_history(self):
+        c.save('docker-file-sources.json',{'container':self.source})
+        with patch.object(c.shutil,'which',return_value='/usr/bin/docker'),patch.object(c,'command',side_effect=RuntimeError('inventory offline')):
+            with self.assertRaises(RuntimeError):c.docker({'host':'inspur','start':self.source['since']})
+        self.assertIn('container',c.load('docker-file-sources.json',{}))
+        self.assertEqual(c.load('docker-file-retired.json',{}),{})
+        self.assertEqual(self.delivered,[])
 
 if __name__=='__main__':unittest.main()

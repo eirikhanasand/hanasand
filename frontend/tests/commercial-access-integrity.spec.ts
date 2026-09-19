@@ -17,7 +17,7 @@ test('pricing and subscription use one truthful commercial access contract', asy
     expect(pricing).toContain('import { commercialAccessPlans } from \'@/utils/commercialAccess\'')
     expect(subscription).toContain('import { commercialAccessPlans } from \'@/utils/commercialAccess\'')
     expect(contract).toContain('priceNok: 299')
-    expect(contract).toContain('priceNok: 500')
+    expect(contract).toContain('priceNok: 499')
     expect(contract).toContain('priceNok: 199')
     expect(contract).toContain('priceNok: 99')
     expect(contract).toContain('100 searches per day')

@@ -10,7 +10,7 @@ export const commercialAccessPlans = [
     {
         id: 'monitoring',
         name: 'Dark Web Monitoring',
-        priceNok: 500,
+        priceNok: 499,
         quota: '25 watch terms',
         summary: 'Monitor relevant public intelligence and turn matches into alerts and cases.',
         features: ['Customer watchlists', 'Evidence-backed alerts', 'Case workflow', 'Source health and freshness'],

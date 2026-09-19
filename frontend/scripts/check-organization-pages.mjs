@@ -8,6 +8,8 @@ const base = 'http://127.0.0.1:3029'
 const organizations = [
     { id: 'cashflow', name: 'Cashflow', slug: 'cashflow', role: 'member', lifecycleStatus: 'active' },
     { id: 'hanasand', name: 'Hanasand', slug: 'hanasand', role: 'owner', lifecycleStatus: 'active' },
+    { id: 'research-norsk-tipping', name: 'Research - Norsk Tipping', slug: 'research-norsk-tipping', role: 'member', lifecycleStatus: 'active' },
+    { id: 'research-mnemonic', name: 'Research - mnemonic', slug: 'research-mnemonic', role: 'member', lifecycleStatus: 'active' },
 ]
 const calls = []
 let settingsError = false
@@ -85,6 +87,9 @@ try {
     await expect(page.locator('[data-org-member-access-state]')).toHaveCount(0)
     for (const button of await page.getByRole('button', { name: 'Remove member', exact: true }).all()) await expect(button).toBeDisabled()
     await page.screenshot({ path: '/tmp/organization-team-desktop.png', fullPage: true })
+    await page.getByRole('navigation', { name: 'Organization pages' }).getByRole('link', { name: 'Destinations', exact: true }).click()
+    await expect(page.getByText('Maintainers can add destinations', { exact: true })).toBeVisible()
+    await expect(page.getByText('Inventory, tests, and removal stay available after a destination is saved.', { exact: true })).toHaveCount(0)
     await page.getByRole('navigation', { name: 'Organization pages' }).getByRole('link', { name: 'Settings', exact: true }).click()
     await expect(name).toHaveValue('Cashflow')
     console.log('Verified member settings')
@@ -132,9 +137,21 @@ try {
     await page.locator('header').getByRole('button', { name: 'Create organization', exact: true }).click()
     await expect(createForm).toHaveCount(0)
     await page.screenshot({ path: '/tmp/organization-overview-desktop.png', fullPage: true })
-    for (const width of [390, 768, 1440]) {
+    for (const width of [390, 768, 1024, 1440]) {
         await page.setViewportSize({ width, height: 1000 })
         assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Overflow at ${width}`)
+        const research = page.getByRole('button', { name: /^Research - Norsk Tipping member/ })
+        await expect(research).toBeVisible()
+        assert(await research.evaluate(button => {
+            const bounds = button.getBoundingClientRect()
+            const panel = button.closest('section').getBoundingClientRect()
+            const badge = button.firstElementChild.querySelector('span')
+            const badgeBounds = badge.getBoundingClientRect()
+            return bounds.right <= panel.right && button.scrollWidth <= button.clientWidth
+                && badgeBounds.right <= bounds.right && badgeBounds.height <= 18
+                && Number.parseFloat(getComputedStyle(badge).fontSize) <= 10
+        }), `Workspace name and compact role must fit at ${width}`)
+        if (width === 1440 || width === 390) await page.screenshot({ path: `/tmp/organization-sidebar-${width}.png`, fullPage: true })
     }
     await page.goto(`${base}/organizations?focus=members`)
     await expect(page.locator('#members')).toBeVisible()

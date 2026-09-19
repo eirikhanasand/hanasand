@@ -1,3 +1,5 @@
+import { logFieldTextCandidates } from './searchText.ts'
+
 const fields: Record<string, string> = {
     TimeGenerated: 'event_timestamp', Severity: 'normalized->>\'severity\'', Level: 'normalized->>\'level\'',
     Service: 'normalized->>\'service\'', Host: 'normalized->>\'host\'', Message: 'normalized->>\'message\'',
@@ -57,10 +59,18 @@ export function compileLogQuery(input: string) {
             const param = value()
             if (left.name === 'TimeGenerated') throw new Error('Use a comparison operator for TimeGenerated.')
             const text = left.name === 'RuleId' ? 'detection->>\'rule_id\'' : left.sql
-            const match = operator === 'has' ? `lower(${param}::text) = ANY(regexp_split_to_array(lower(COALESCE(${text}, '')), '[^[:alnum:]]+'))`
+            let match = operator === 'has' ? `lower(${param}::text) = ANY(regexp_split_to_array(lower(COALESCE(${text}, '')), '[^[:alnum:]]+'))`
                 : operator === 'endswith' ? `right(lower(COALESCE(${text}, '')), length(${param}::text)) = lower(${param}::text)`
                     : operator === 'startswith' ? `left(lower(COALESCE(${text}, '')), length(${param}::text)) = lower(${param}::text)`
                         : `strpos(lower(COALESCE(${text}, '')), lower(${param}::text)) > 0`
+            if (left.name === 'Executable' && operator === 'endswith') {
+                // Bound index keys for arbitrary-length metadata. The complete
+                // suffix recheck preserves long values and database case-folding.
+                const prefix = `replace(replace(replace(left(reverse(lower(${param}::text)), 512), '!', '!!'), '%', '!%'), '_', '!_')`
+                match = `(left(reverse(lower(COALESCE(${text}, ''))), 512) LIKE ${prefix} || '%' ESCAPE '!' AND ${match})`
+            } else if (left.name !== 'UserId' && left.name !== 'RuleId') {
+                match = `(${logFieldTextCandidates(param)} AND ${match})`
+            }
             return left.name === 'RuleId' ? `EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(${left.sql}, '[]'::jsonb)) detection WHERE ${match})` : match
         }
         throw new Error(`Unsupported operator ${operator || '(missing)'}.`)

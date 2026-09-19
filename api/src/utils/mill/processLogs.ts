@@ -4,6 +4,7 @@ import { createMillFindings, loadConfiguredMillRules, normalizeMillEvent } from 
 import { normalizeLogEvent, severityOrder, type LogInput } from './logEvent.ts'
 import { processAdditionalLogSources } from './storedSources.ts'
 import { stableLogWatermark } from './logWatermark.ts'
+import { processQueuedLogs, recoverProcessLogs } from './processQueue.ts'
 import { backfillLogDimensions } from '../logs/dimensions.ts'
 
 let running = false
@@ -114,13 +115,19 @@ export async function processStoredLogs() {
                             SELECT item.id, 'logs', $2, 'Hanasand', 'Logs', item.timestamp::timestamptz,
                                 jsonb_build_object('processing_reason', 'Organization is missing or inactive', 'severity', 'low', 'log_type', 'SystemLogs'), '{}'::jsonb, 'skipped', item.key
                             FROM jsonb_to_recordset($1::jsonb) AS item(id text, key text, timestamp text)
-                            ON CONFLICT (log_key) DO NOTHING`, [JSON.stringify(markers), platform.rows[0].id])
+                            ON CONFLICT (log_key) DO UPDATE SET organization_id = EXCLUDED.organization_id,
+                                normalized = EXCLUDED.normalized, original = '{}'::jsonb, processing_status = 'skipped',
+                                event_type = 'unknown', action = 'unknown', outcome = 'unknown', user_id = NULL, user_email = NULL,
+                                source_ip = NULL, source_country = NULL, source_city = NULL, device_id = NULL
+                            WHERE mill_events.ingestion_id = 'logs' AND mill_events.processing_status = 'pending'`, [JSON.stringify(markers), platform.rows[0].id])
                         continue
                     }
                     if (!configured.has(scope)) configured.set(scope, await loadConfiguredMillRules(scope))
                     await processLogBatch(batch, scope, configured.get(scope)!)
                 }
             }
+            await processQueuedLogs(processScopes)
+            await recoverProcessLogs(processScopes)
             // Bulk collector replay may put live commands far behind the ingestion
             // cursor. Check recent event times first without advancing either cursor;
             // the FIFO passes still guarantee every older event is eventually checked.

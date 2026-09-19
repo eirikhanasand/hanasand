@@ -119,7 +119,7 @@ export default function AuditTimeline({ initialAudit, filters }: { initialAudit:
                 </div>
                 <div ref={scrollRoot} data-testid='audit-scroll' className='max-h-[calc(100vh-18rem)] min-h-72 overflow-auto'>
                     <table className='min-w-full border-separate border-spacing-0 text-xs'>
-                        <thead className='sticky top-0 z-10 bg-ui-panel/95 text-left text-[10px] font-semibold uppercase text-ui-muted backdrop-blur'>
+                        <thead className='sticky top-0 z-10 bg-ui-panel/95 text-left text-[10px] font-semibold text-ui-muted backdrop-blur'>
                             <tr>
                                 <th className='border-b border-ui-border px-3 py-2'>Time</th>
                                 <th className='border-b border-ui-border px-3 py-2'>Service</th>
@@ -127,7 +127,7 @@ export default function AuditTimeline({ initialAudit, filters }: { initialAudit:
                                 <th className='border-b border-ui-border px-3 py-2'>Action</th>
                                 <th className='border-b border-ui-border px-3 py-2'>Target</th>
                                 <th className='border-b border-ui-border px-3 py-2'>Result</th>
-                                <th className='border-b border-ui-border px-3 py-2'>Detail</th>
+                                <th className='border-b border-ui-border px-3 py-2'>Description</th>
                             </tr>
                         </thead>
                         <tbody className='bg-ui-panel'>
@@ -171,10 +171,10 @@ function Metric({ title, value, icon, tone = 'neutral' }: { title: string, value
     return (
         <DashboardPanel className='border-ui-border bg-ui-panel p-3'>
             <div className={`flex items-center justify-between ${toneClass(tone).text}`}>
-                <p className='text-[10px] font-semibold uppercase text-ui-muted'>{title}</p>
+                <p className='text-[10px] font-semibold text-ui-muted'>{title}</p>
                 {icon}
             </div>
-            <p className='mt-2 truncate text-lg font-semibold capitalize text-ui-text'>{value}</p>
+            <p className='mt-2 truncate text-lg font-semibold text-ui-text'>{value}</p>
         </DashboardPanel>
     )
 }

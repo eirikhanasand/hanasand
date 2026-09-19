@@ -109,6 +109,9 @@ try {
         assert.ok(result.rowCount, `KQL returned stored events: ${text}`)
     }
     await query('CREATE TEMP TABLE log_processing_cursors (name text PRIMARY KEY, last_id bigint DEFAULT 0, recent_id bigint, updated_at timestamptz DEFAULT NOW(), last_error text)')
+    const { logProcessQueueSchema, processLogIndex } = await import('../src/utils/db/logProcessQueueSchema.ts')
+    for (const statement of logProcessQueueSchema) await query(statement.replace('CREATE TABLE IF NOT EXISTS', 'CREATE TEMP TABLE IF NOT EXISTS'))
+    await query(processLogIndex)
     await query("INSERT INTO login_events (user_id, ip, status, reason) VALUES ('web-user', '192.0.2.55', 'failed', 'bad_password')")
     await query("INSERT INTO traffic_events (domain, path, method, status) VALUES ('hanasand.com', '/fixture', 'GET', 503)")
     await query("INSERT INTO system_events (event_type, severity, organization_id) VALUES ('fixture.audit', 'critical', 'fixture')")
@@ -170,6 +173,83 @@ try {
         else process.env.PLATFORM_LOG_ORGANIZATION_ID = previousPlatform
     }
     console.log('PostgreSQL worker verification passed: live priority before replay, stable watermark bounds, complete FIFO catch-up and finding deduplication.')
+    // Upgrade fixture: pre-existing process events were never admitted to the
+    // new queue. A fixed recovery snapshot must reach an aged command even as
+    // newer commands continue arriving through the trigger.
+    const { processQueuedLogs, recoverProcessLogs, readPendingProcessLogs } = await import('../src/utils/mill/processQueue.ts')
+    await query('DROP TRIGGER log_process_queue_insert ON service_logs')
+    const oldCommand = (await query(`INSERT INTO service_logs (service, host, level, message, metadata, created_at)
+        VALUES ('audit', 'old-vm', 'info', 'whoami', $1, NOW() - INTERVAL '2 hours') RETURNING id::text`, [commandMetadata])).rows[0].id
+    const benignProcess = { process: { executable: '/bin/true', command_line: 'true', arguments: ['true'] } }
+    await query(`INSERT INTO service_logs (service, host, level, message, metadata, created_at)
+        SELECT 'audit', 'old-host', 'info', 'true', $1, NOW() - INTERVAL '1 hour' FROM generate_series(1, 1101)`, [benignProcess])
+    await query("DELETE FROM log_processing_cursors WHERE name = 'process_logs_recovery'")
+    for (const statement of logProcessQueueSchema) await query(statement.replace('CREATE TABLE IF NOT EXISTS', 'CREATE TEMP TABLE IF NOT EXISTS'))
+    const snapshot = (await query("SELECT recent_id FROM log_processing_cursors WHERE name = 'process_logs_recovery'")).rows[0].recent_id
+    await query(`INSERT INTO service_logs (service, host, level, message, metadata)
+        SELECT 'audit', 'busy-host', 'info', 'true', $1 FROM generate_series(1, 1101)`, [benignProcess])
+    const delayedCommand = (await query(`INSERT INTO service_logs (service, host, level, message, metadata, created_at)
+        VALUES ('audit', 'delayed-vm', 'info', 'whoami', $1, NOW() - INTERVAL '1 day') RETURNING id::text`, [commandMetadata])).rows[0].id
+    const structuredCommand = (await query(`INSERT INTO service_logs (service, host, level, message, metadata)
+        VALUES ('application', 'structured-host', 'info', 'whoami', $1) RETURNING id::text`, [{ structured: commandMetadata }])).rows[0].id
+    const malformed = (await query(`INSERT INTO service_logs (service, host, level, message, metadata)
+        VALUES ('application', 'untyped-host', 'info', 'plain', '{"process":[]}') RETURNING id::text`)).rows[0].id
+    assert.equal((await query('SELECT 1 FROM log_process_queue WHERE log_id=$1', [malformed])).rowCount, 0)
+    await query('SAVEPOINT rejected_insertion')
+    const rolledBack = (await query(insertCommand, [commandMetadata])).rows[0].id
+    await query('ROLLBACK TO SAVEPOINT rejected_insertion')
+    assert.equal((await query('SELECT 1 FROM log_process_queue WHERE log_id=$1', [rolledBack])).rowCount, 0, 'Admission rolls back with its source insertion')
+    const pendingBefore = await readPendingProcessLogs()
+    assert.equal(pendingBefore.count, 1103)
+    const startedQueue = performance.now()
+    let queuePages = 0
+    await processQueuedLogs(async logs => {
+        await processLogBatch(logs, 'fixture', rules)
+        queuePages++
+        await query(`INSERT INTO service_logs (service, host, level, message, metadata)
+            SELECT 'audit', 'busy-host', 'info', 'true', $1 FROM generate_series(1, 1000)`, [benignProcess])
+    })
+    assert.equal(queuePages, 2)
+    for (const id of [delayedCommand, structuredCommand]) {
+        const row = (await query('SELECT normalized, processing_status FROM mill_events WHERE log_key=$1', [`service:${id}`])).rows[0]
+        assert.equal(row?.processing_status, 'processed')
+        assert.equal(row.normalized.severity, 'high')
+        assert.equal(row.normalized.rules_checked, 105)
+    }
+    assert.equal((await readPendingProcessLogs()).count, 2000, 'Later arrivals remain queued without displacing older admitted work')
+    await recoverProcessLogs(logs => processLogBatch(logs, 'fixture', rules))
+    assert.equal((await query('SELECT 1 FROM mill_events WHERE log_key=$1', [`service:${oldCommand}`])).rowCount, 0, 'Recovery page stays bounded')
+    assert.ok(BigInt((await query("SELECT recent_id FROM log_processing_cursors WHERE name='process_logs_recovery'")).rows[0].recent_id) < BigInt(snapshot))
+    const durableRecoveryId = (await query("SELECT recent_id FROM log_processing_cursors WHERE name='process_logs_recovery'")).rows[0].recent_id
+    for (const statement of logProcessQueueSchema) await query(statement.replace('CREATE TABLE IF NOT EXISTS', 'CREATE TEMP TABLE IF NOT EXISTS'))
+    assert.equal((await query("SELECT recent_id FROM log_processing_cursors WHERE name='process_logs_recovery'")).rows[0].recent_id, durableRecoveryId, 'Restart/redeploy preserves recovery progress')
+    await recoverProcessLogs(logs => processLogBatch(logs, 'fixture', rules))
+    const recoveredCommand = (await query('SELECT normalized, processing_status FROM mill_events WHERE log_key=$1', [`service:${oldCommand}`])).rows[0]
+    assert.equal(recoveredCommand?.processing_status, 'processed', 'Aged pre-upgrade command recovers automatically despite newer arrivals')
+    assert.equal(recoveredCommand.normalized.severity, 'high')
+    assert.equal(recoveredCommand.normalized.rules_checked, 105)
+    const finalFindingCount = (await query('SELECT COUNT(*)::int AS count FROM mill_findings')).rows[0].count
+    await recoverProcessLogs(logs => processLogBatch(logs, 'fixture', rules))
+    assert.equal((await query('SELECT COUNT(*)::int AS count FROM mill_findings')).rows[0].count, finalFindingCount)
+    await query("INSERT INTO organizations (id, status, name) VALUES ('archived-priority', 'active', 'Archived fixture')")
+    const retryMetadata = { ...commandMetadata, organizationId: 'archived-priority', user: { id: 'private-user', email: 'private@example.test' } }
+    const archivedLog = (await query(`INSERT INTO service_logs (service, host, level, message, metadata)
+        VALUES ('audit', 'archived-host', 'info', 'whoami', $1) RETURNING *`, [retryMetadata])).rows[0]
+    queryObserver = async sql => { if (sql.startsWith('SELECT rule_id, severity')) throw new Error('Fixture interrupted before completion') }
+    await assert.rejects(processLogBatch([archivedLog], 'archived-priority', rules), /Fixture interrupted/)
+    queryObserver = undefined
+    await query("UPDATE organizations SET status='inactive' WHERE id='archived-priority'")
+    await processStoredLogs()
+    const skippedRetry = (await query('SELECT * FROM mill_events WHERE log_key=$1', [`service:${archivedLog.id}`])).rows[0]
+    assert.equal(skippedRetry.processing_status, 'skipped')
+    assert.equal(skippedRetry.organization_id, 'fixture')
+    assert.equal(skippedRetry.user_id, null)
+    assert.equal(skippedRetry.user_email, null)
+    assert.deepEqual(skippedRetry.original, {})
+    assert.ok(!JSON.stringify(skippedRetry.normalized).includes('private-user'))
+    assert.equal((await query('SELECT 1 FROM log_process_queue WHERE log_id=$1', [archivedLog.id])).rowCount, 0,
+        'An organization becoming inactive during retry cannot poison the command FIFO')
+    console.log(`Process queue PostgreSQL verification passed: transactional admission, delayed VM detection, FIFO under sustained arrivals, bounded recovery, deduplication; 1,103 queued events processed in ${Math.round(performance.now()-startedQueue)} ms including recovery checks.`)
     assert.equal((await query('SELECT ready FROM mill_log_dimensions_state')).rows[0].ready, true)
     async function assertProjectionParity() {
         const differences = await query(`WITH source AS (

@@ -302,6 +302,37 @@ def register_docker_file(config, container_id, name, since):
         return True
     except Exception: return False
 
+def retire_docker_file(config, container_id, source):
+    """Archive unavailable removed sources only after the coverage notice is ACKed."""
+    retired=load('docker-file-retired.json',{})
+    entry={'source':source,'retired_at':iso(),'final_coverage':'unknown','cursors':{}}
+    for kind in ('history','live'):
+        state_name='docker-file-'+kind+'-'+container_id+'.json'
+        cursor=load(state_name,None)
+        if cursor:
+            entry['cursors'][kind]={'checkpoint':cursor,'last_ack_at':iso((STATE/state_name).stat().st_mtime)}
+    notice=event(config,'docker-source-retired:'+container_id,'host-log-collector',
+        source['name']+': container removed; final log coverage is unknown because source files are unavailable',entry['retired_at'],
+        {'collector':'docker','container_id':container_id,'source_status':'removed_source_unavailable','retired_source':entry},'error')
+    send(config,[notice])
+    retired[container_id]=entry
+    save('docker-file-retired.json',retired)
+    sources=load('docker-file-sources.json',{})
+    sources.pop(container_id,None)
+    save('docker-file-sources.json',sources)
+
+
+def docker_created_at(container_id):
+    created=load('docker-created.json',{})
+    if container_id not in created:
+        try:
+            timestamp=command(['docker','inspect','--format','{{.Created}}',container_id],timeout=15).strip()
+            datetime.datetime.fromisoformat(timestamp.replace('Z','+00:00'))
+            created[container_id]=timestamp
+            save('docker-created.json',created)
+        except Exception: return None
+    return created[container_id]
+
 def docker_file_notice(config, container_id, source, cursor, reason):
     # This records discontinuity explicitly; it does not assert unverified loss.
     identity='docker-file-notice:'+container_id+':'+str(cursor.get('inode'))+':'+str(cursor.get('offset'))+':'+str(cursor.get('anchor',''))+':'+reason
@@ -399,21 +430,37 @@ def docker_file_source(config, live=False):
                 detail='delivery HTTP '+str(error.code) if isinstance(error,HTTPError) else type(error).__name__
                 failures.append(source['name']+' ('+detail+')')
     if failures: raise DockerCollectionError('; '.join(failures))
-    return {'sources':len(sources),'pendingFileBytes':remaining}
+    return {'sources':len(sources),'pendingFileBytes':remaining,'retiredUnavailableSources':len(load('docker-file-retired.json',{}))}
 
 def docker_file_history(config): return docker_file_source(config)
 def docker_file_live(config): return docker_file_source(config,True)
 
 def docker(config):
     if not shutil.which('docker'): return
-    containers = command(['docker','ps','-a','--format','{{.ID}} {{.Names}}']).splitlines()
+    containers = [row.split(' ',1) for row in command(['docker','ps','-a','--format','{{.ID}} {{.Names}}']).splitlines()]
     checkpoints = load('docker.json', {})
     failures = []
     file_sources=load('docker-file-sources.json',{})
-    for container in containers:
-        container_id, name = container.split(' ', 1)
+    # Only a successful complete inventory can prove a registered container gone.
+    file_names={source['name'] for source in file_sources.values()} | {entry['source']['name'] for entry in load('docker-file-retired.json',{}).values()}
+    current_ids={container_id for container_id,_name in containers}
+    for container_id,source in list(file_sources.items()):
+        if container_id not in current_ids and not docker_json_files(source):
+            try:
+                retire_docker_file(config,container_id,source)
+                file_sources.pop(container_id,None)
+            except Exception as error:
+                detail='HTTP '+str(error.code) if isinstance(error,HTTPError) else type(error).__name__
+                failures.append(source['name']+' (retirement notice delivery '+detail+')')
+    for container_id,name in containers:
         if container_id in file_sources: continue
         since = checkpoints.get(container_id, config['start'])
+        # A replacement retains the same file-collection behavior and original
+        # cutoff, while its predecessor's acknowledged cursors remain archived.
+        if name in file_names and register_docker_file(config,container_id,name,since): continue
+        created=docker_created_at(container_id)
+        if created and datetime.datetime.fromisoformat(created.replace('Z','+00:00')) > datetime.datetime.fromisoformat(since.replace('Z','+00:00')):
+            since=created  # No Docker records can predate this container's creation.
         # Bound the initial historical read as well as memory: every container
         # advances independently through one minute, without skipping any range.
         since_time = datetime.datetime.fromisoformat(since.replace('Z','+00:00')).timestamp()
@@ -451,7 +498,7 @@ def collect(config):
     return failures
 
 def checkpoint_files(root):
-    return ['audit.checkpoint','journal.json','docker.json',*(path.name for path in root.glob('docker-file-*.json'))]
+    return ['audit.checkpoint','journal.json','docker.json','docker-created.json',*(path.name for path in root.glob('docker-file-*.json'))]
 
 def guest_export(config):
     """Keep a replayable guest batch; only the host's acknowledgement commits cursors."""

@@ -76,3 +76,18 @@ test('OVH standby reads host-scoped replicated snapshots without writing', async
         rows = []; readOnly = false
     }
 })
+
+test('history combines each completed day, retains versions and errors, and deduplicates packages', async () => {
+    rows = [{ day: '2026-09-17', checks: [
+        { status: 'ok', error: null, installed: [{ package: 'sqlite', version: '3.1' }] },
+        { status: 'failed', error: 'Update failed', installed: [{ package: 'other', version: '2' }] },
+        { status: 'pending', error: null, installed: [{ package: 'sqlite', version: '3.1' }, { package: 'sqlite', version: '3' }] },
+    ] }, { day: '2026-09-16', checks: [{ status: 'pending', error: null, installed: [] }] }]
+    try {
+        const history = await listHostUpdateHistory('ovhcloud')
+        expect(history).toEqual([
+            { run_id: '2026-09-17', occurred_at: '2026-09-17', status: 'failed', packages: ['other v2', 'sqlite v3', 'sqlite v3.1'], error: 'Update failed' },
+            { run_id: '2026-09-16', occurred_at: '2026-09-16', status: 'pending', packages: [], error: null },
+        ])
+    } finally { rows = [] }
+})
