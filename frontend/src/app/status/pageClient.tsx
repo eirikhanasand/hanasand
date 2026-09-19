@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import IncidentReport from './incidentReport'
-import { retainVerifiedStatus, isCurrentPublicCheck } from '@/utils/status/publicStatus'
+import { retainVerifiedStatus, compactStatusSnapshot, isCurrentPublicCheck } from '@/utils/status/publicStatus'
 import { useEffect, useRef, useState } from 'react'
 import type { ServiceIncident, ServiceStatus } from '@/utils/status/getStatus'
 import { AlertCircle, CheckCircle } from 'lucide-react'
@@ -66,7 +66,7 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
                     const retained = retainVerifiedStatus(next, verified.current)
                     if (retained.checks.some(check => check.checked_at && check.status !== 'unknown')) {
                         verified.current = retained
-                        try { localStorage.setItem('hanasand-verified-status', JSON.stringify(retained)) } catch { /* Optional persistence. */ }
+                        try { localStorage.setItem('hanasand-verified-status', JSON.stringify(compactStatusSnapshot(retained))) } catch { /* Optional persistence. */ }
                     }
                     setCurrentStatus(retained)
                     setRefreshError(next.monitoring === 'unavailable')
@@ -246,7 +246,7 @@ function relativeTime(value: string, now: number | null) {
     const minutes = Math.floor(seconds / 60)
     if (minutes < 60) return `${minutes}m ago`
 
-    return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+    return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(new Date(value)) + ' UTC'
 }
 
 function formatUptime(value: string) {
@@ -305,9 +305,9 @@ function lastDays(count: number) {
 }
 
 function formatDate(value: string) {
-    return new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(value))
+    return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(value))
 }
 
 function formatDateTime(value: string) {
-    return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+    return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(new Date(value)) + ' UTC'
 }

@@ -21,7 +21,15 @@ def read_snapshot():
     age = (datetime.datetime.now(datetime.timezone.utc) - sampled).total_seconds()
     if age < -5 or age > 90:
         raise ValueError('OVH host telemetry is stale')
-    return host, status.get("diskDiagnostics")
+    # This endpoint is only available through the private loopback tunnel.
+    # A diagnostic outage must not interrupt the fast host health telemetry.
+    try:
+        with urllib.request.urlopen('http://127.0.0.1:19911/disk-diagnostics', timeout=3) as response:
+            raw = response.read(1_048_577)
+        diagnostics = json.loads(raw) if len(raw) <= 1_048_576 else None
+    except (OSError, ValueError):
+        diagnostics = None
+    return host, diagnostics
 
 
 if __name__ == '__main__':

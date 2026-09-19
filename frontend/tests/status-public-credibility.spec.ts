@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
-import { toPublicServiceStatus, retainVerifiedStatus, isVerifiedStatus } from '@/utils/status/publicStatus'
+import { toPublicServiceStatus, retainVerifiedStatus, isVerifiedStatus, compactStatusSnapshot } from '@/utils/status/publicStatus'
 import getStatus, { unavailableServiceStatus } from '@/utils/status/getStatus'
 import type { ServiceStatus } from '@/utils/status/getStatus'
 
@@ -295,4 +295,14 @@ test('missing monitoring retains the last verified snapshot and never invents a 
     expect(stale).toMatchObject({ overall: 'up', monitoring: 'unavailable', last_verified_at: at })
     raw.checks[0].status = 'down'
     expect(toPublicServiceStatus(raw).overall).toBe('down')
+})
+
+
+test('browser persistence bounds old incident feeds and preserves linked evidence', () => {
+    const incident = { id: 'first', service: 'Core platform', check_name: 'API Health', title: 'API interruption', impact: 'Outage' as const, status: 'resolved' as const, started_at: '2026-09-19T00:00:00Z', resolved_at: '2026-09-19T00:01:00Z', summary: 'Failed check.', cause: 'Unknown', updates: [{ at: '2026-09-19T00:00:00Z', status: 'investigating', message: 'Evidence'.repeat(1000) }] }
+    const source = { ...unavailableServiceStatus(), history: [{ service: 'Core platform', check_name: 'API Health', date: '2026-09-19', status: 'down' as const, incident_ids: ['9999'] }], incidents: Array.from({ length: 15000 }, (_, id) => ({ ...incident, id: String(id) })) }
+    const stored = compactStatusSnapshot(source)
+    expect(JSON.stringify(stored).length).toBeLessThan(50000)
+    expect(stored.incidents.some(row => row.id === '9999')).toBe(true)
+    expect(source.incidents[0].updates).toHaveLength(1)
 })
