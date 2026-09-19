@@ -1,4 +1,5 @@
 import { SQL } from "bun";
+import { isDeepStrictEqual } from "node:util";
 import { InMemoryScraperStore } from "../src/storage/memoryStore.ts";
 
 // Reuse the ingestion rules; retain only source evidence and actual lifecycle events.
@@ -33,7 +34,7 @@ try {
     const [current] = await tx`SELECT record FROM threat_intel.timeliness_records WHERE id=${row.id} FOR UPDATE`;
     if (!current) return;
     const next = context.reconcileTimelinessRecord(current.record);
-    if (JSON.stringify(next) === JSON.stringify(current.record)) return;
+    if (isDeepStrictEqual(JSON.parse(JSON.stringify(next)), current.record)) return;
     if (dryRun) { repaired++; return; }
     await tx`UPDATE threat_intel.timeliness_records SET record=${JSON.stringify(next)}::jsonb,
       reported_at=${next.reportedAt ?? null}, first_reported_at=${next.firstReportedAt ?? null},

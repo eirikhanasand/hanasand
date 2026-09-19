@@ -1620,9 +1620,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       LEFT JOIN threat_intel.sources s ON s.id=t.source_id AND s.tenant_id IS NOT DISTINCT FROM t.tenant_id
       WHERE t.tenant_id IS NOT DISTINCT FROM ${tenantId ?? null}`;
     const validations = await this.sql`SELECT record FROM threat_intel.validation_records WHERE tenant_id IS NOT DISTINCT FROM ${tenantId ?? null}`;
-    return { records: rows.map((r: any) => r.timeline), context: {
-      captures: rows.map((r: any) => r.capture).filter(Boolean), incidents: rows.map((r: any) => r.incident).filter(Boolean),
-      sources: rows.map((r: any) => r.source).filter(Boolean), validationRecords: validations.map(readRecord)
+    return { records: rows.map((r: any) => readRecord({ record: r.timeline })), context: {
+      captures: rows.map((r: any) => readRecord({ record: r.capture })).filter(Boolean), incidents: rows.map((r: any) => readRecord({ record: r.incident })).filter(Boolean),
+      sources: rows.map((r: any) => readRecord({ record: r.source })).filter(Boolean), validationRecords: validations.map(readRecord)
     } };
   }
 

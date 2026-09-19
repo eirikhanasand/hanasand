@@ -18,7 +18,8 @@ for (const permissions of [access, memberAccess]) {
 }
 assert.deepEqual(navigationLinks(getDashboardNavigation(memberAccess)).filter(item => item.ancestors.includes('Content')).map(item => item.href), ['/shares'])
 const reviewer = navigationLinks(getDashboardNavigation({ ...memberAccess, canReviewIntel: true }))
-assert.deepEqual(reviewer.filter(item => item.href === '/ti/timeliness').map(item => item.label), ['Timeliness'])
+assert.deepEqual(reviewer.filter(item => item.href === '/ti/timeliness').map(item => item.label), ['Delivery'])
+assert(reviewer.find(item => item.href === '/ti/timeliness').ancestors.includes('Collection'))
 assert(![...all, ...reviewer].some(item => item.href === '/ti/evaluation'))
 const operator = navigationLinks(getDashboardNavigation({ ...memberAccess, canManageSystem: true }))
 assert(operator.some(item => item.href === '/system'))
