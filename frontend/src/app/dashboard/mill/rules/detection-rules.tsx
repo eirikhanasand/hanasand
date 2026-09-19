@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import { getRuleCategory, ruleCategories, type RuleCategory } from './rule-categories'
 import { DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 
-export type MillRule = { id: string, detectionLogic?: string, recordId?: string, rule_id?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'owned' | 'open_source', sourceReference?: string, definition?: { conditions?: Array<{ path: string, operator: string, value: string }> } }
+export type MillRule = { id: string, detectionLogic?: string, recordId?: string, rule_id?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'owned' | 'open_source', sourceReference?: string, definition?: { match?: 'all', parameters?: Record<string, number>, failureConditions?: Array<{ path: string, operator: string, value: string }>, conditions?: Array<{ path: string, operator: string, value: string }> } }
 
 export default function DetectionRules({ category }: { category: RuleCategory }) {
     const latestOrganization = useRef('')
@@ -161,9 +161,9 @@ export default function DetectionRules({ category }: { category: RuleCategory })
                         <tbody className='divide-y divide-ui-border'>
                             {filteredRules.map(rule => <tr key={rule.id} className='h-16 hover:bg-ui-raised'>
                                 <th scope='row' className='px-3 py-2 font-normal'>
-                                    <Link href={`/mill/rules/${category}/${encodeURIComponent(rule.id)}?organizationId=${encodeURIComponent(organizationId)}`} className='block rounded-sm focus-visible:outline-2 focus-visible:outline-ui-primary'>
+                                    <Link href={`/mill/rules/${category}/${encodeURIComponent(rule.id.replace(/\.v\d+$/, ''))}?organizationId=${encodeURIComponent(organizationId)}`} className='block rounded-sm focus-visible:outline-2 focus-visible:outline-ui-primary'>
                                         <span className='block truncate font-semibold text-ui-primary' title={rule.name}>{rule.name}</span>
-                                        <span className='mt-1 block truncate text-xs text-ui-muted' title={`${rule.id} · v${rule.version}`}>{rule.id} · v{rule.version}</span>
+                                        <span className='mt-1 block truncate text-xs text-ui-muted' title={rule.id.replace(/\.v\d+$/, '')}>{rule.id.replace(/\.v\d+$/, '')}</span>
                                     </Link>
                                 </th>
                                 <td className='px-3 py-2 text-xs text-ui-muted'><span className='line-clamp-2' title={rule.explanation}>{rule.explanation}</span></td>
