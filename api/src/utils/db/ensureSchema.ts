@@ -1,5 +1,6 @@
 import ensureRoleSchema from './roleSchema.ts'
 import ensureLogDimensionsSchema from './logDimensionsSchema.ts'
+import ensureLogProcessQueueSchema from './logProcessQueueSchema.ts'
 import ensureSharedMailSchema from './sharedMailSchema.ts'
 import ensureVmOrganizationSchema from './vmOrganizationSchema.ts'
 import ensureCaseDevelopmentSchema from './caseDevelopmentSchema.ts'
@@ -1436,6 +1437,7 @@ export default async function ensureSchema() {
     await run('CREATE INDEX IF NOT EXISTS idx_mill_events_logs_time ON mill_events(event_timestamp DESC, id DESC) WHERE ingestion_id = \'logs\' AND processing_status = \'processed\'')
     await run('CREATE INDEX IF NOT EXISTS idx_mill_events_org_user_time ON mill_events(organization_id, user_id, event_timestamp DESC)')
     await ensureLogDimensionsSchema()
+    await ensureLogProcessQueueSchema()
     await run(`
         CREATE TABLE IF NOT EXISTS mill_rules (
             id TEXT PRIMARY KEY,

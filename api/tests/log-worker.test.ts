@@ -1,12 +1,12 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
-let locked = true, fail = false, watermark: string | null = '200', additionalRuns = 0
+let locked = true, fail = false, watermark: string | null = '200', additionalRuns = 0, queueRuns = 0, recoveryRuns = 0
 let cursor: any, statements: string[], checked: string[], stored: Record<string, any>, pending: any[]
 const makeLog = (id: string, metadata: any = {}) => ({ id, service: 'audit', host: 'inspur', level: 'info', message: id, created_at: '2026-09-19T00:00:00Z', metadata })
-let priority: any[], fresh: any[], backlog: any[]
+let priority: any[], fresh: any[], backlog: any[], inactiveScopes: Set<string>
 const query = async (sql: string, p: any[] = []): Promise<any> => {
     statements.push(sql)
     if (sql.includes('pg_try_advisory_xact_lock')) return { rows: [{ locked }] }
-    if (sql.startsWith('SELECT id FROM organizations')) return { rows: p[0] === 'inactive' ? [] : [{ id: 'platform' }] }
+    if (sql.startsWith('SELECT id FROM organizations')) return { rows: inactiveScopes.has(p[0]) ? [] : [{ id: 'platform' }] }
     if (sql.includes('INSERT INTO log_processing_cursors')) return { rows: [] }
     if (sql.includes('SELECT last_id, recent_id')) return { rows: [{ ...cursor }] }
     if (sql.includes('UPDATE log_processing_cursors')) {
@@ -23,7 +23,11 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
         .slice(0, 1000) }
     if (sql.includes('SELECT * FROM service_logs')) return { rows: p[1] === watermark ? fresh : backlog }
     if (sql.includes('INSERT INTO mill_events')) {
-        for (const item of JSON.parse(p[0])) stored[item.id] ||= { ...item, organization_id: p[1], processing_status: sql.includes("'skipped'") ? 'skipped' : 'pending' }
+        for (const item of JSON.parse(p[0])) {
+            if (sql.includes("processing_status = 'skipped'") && stored[item.id]?.processing_status === 'pending') {
+                stored[item.id] = { ...item, organization_id: p[1], processing_status: 'skipped', normalized: { processing_reason: 'Organization is missing or inactive' }, original: {} }
+            } else stored[item.id] ||= { ...item, organization_id: p[1], processing_status: sql.includes("'skipped'") ? 'skipped' : 'pending' }
+        }
         return { rows: [] }
     }
     if (sql.includes('SELECT id FROM mill_events')) return { rows: Object.values(stored).filter(row => p[0].includes(row.id) && row.processing_status !== 'processed') }
@@ -38,6 +42,7 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
 }
 mock.module('#db', () => ({ default: query, withTransaction: async (work: any) => work(query) }))
 mock.module('../src/utils/logs/dimensions.ts', () => ({ backfillLogDimensions: async () => ({ processed: 0, ready: true }) }))
+mock.module('../src/utils/mill/processQueue.ts', () => ({ processQueuedLogs: async () => { queueRuns++ }, recoverProcessLogs: async () => { recoveryRuns++ } }))
 mock.module('../src/utils/mill/storedSources.ts', () => ({ processAdditionalLogSources: async () => { additionalRuns++ } }))
 mock.module('../src/utils/mill/logWatermark.ts', () => ({ stableLogWatermark: async () => watermark }))
 mock.module('../src/handlers/mill.ts', () => ({
@@ -46,7 +51,7 @@ mock.module('../src/handlers/mill.ts', () => ({
     createMillFindings: async (_scope: string, _id: string, event: any) => { if (fail) throw new Error('Finding storage unavailable'); checked.push(event.normalized.message) },
 }))
 const { processStoredLogs } = await import('../src/utils/mill/processLogs.ts')
-beforeEach(() => { watermark = '200'; additionalRuns = 0; locked = true; fail = false; cursor = { last_id: '0', recent_id: '100' }; statements = []; checked = []; stored = {}; pending = []; priority = []; fresh = [makeLog('101')]; backlog = [makeLog('1')] })
+beforeEach(() => { inactiveScopes = new Set(['inactive']); watermark = '200'; additionalRuns = 0; queueRuns = 0; recoveryRuns = 0; locked = true; fail = false; cursor = { last_id: '0', recent_id: '100' }; statements = []; checked = []; stored = {}; pending = []; priority = []; fresh = [makeLog('101')]; backlog = [makeLog('1')] })
 test('a replica that does not hold the shared lock performs no work', async () => {
     locked = false; await processStoredLogs()
     expect(statements).toHaveLength(1)
@@ -84,6 +89,8 @@ test('busy service-log writers do not block other streams and do not advance ser
     await processStoredLogs()
     expect(checked).toEqual(['native'])
     expect(additionalRuns).toBe(1)
+    expect(queueRuns).toBe(1)
+    expect(recoveryRuns).toBe(1)
     expect(cursor).toMatchObject({ last_id: '0', recent_id: '100', last_error: 'Waiting for active log writes; will retry.' })
     expect(statements.some(sql => sql.includes('FROM service_logs'))).toBe(false)
 })
@@ -120,4 +127,16 @@ test('a failed priority check remains pending and retries before the FIFO advanc
     await processStoredLogs()
     expect(checked).toEqual(['190', '101', '1'])
     expect(Object.values(stored)).toHaveLength(3)
+})
+
+test('a pending collected event becomes a sanitized skipped marker if its organization is inactive on retry', async () => {
+    fresh = [makeLog('101', { organizationId: 'archive-later', process: { command_line: 'private command' } })]
+    fail = true
+    await expect(processStoredLogs()).rejects.toThrow('Finding storage unavailable')
+    expect(Object.values(stored)[0].processing_status).toBe('pending')
+    inactiveScopes.add('archive-later'); fail = false; backlog = []
+    await processStoredLogs()
+    expect(Object.values(stored)[0]).toMatchObject({ organization_id: 'platform', processing_status: 'skipped', original: {} })
+    expect(JSON.stringify(stored)).not.toContain('private command')
+    expect(cursor.recent_id).toBe('101')
 })
