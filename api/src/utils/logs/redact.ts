@@ -13,7 +13,7 @@ export function redactLogText(value: string) {
         .replace(/^(\s*(?:cookie|set-cookie)\s*:\s*)[^\r\n]*/gim, '$1[REDACTED]')
         .replace(/(https?:\/\/)[^\s/@:]+:[^\s/@]+@/gi, '$1[REDACTED]@')
         .replace(/\b(Bearer|Basic)\s+[A-Za-z0-9+/_.=-]+/gi, '$1 [REDACTED]')
-        .replace(/((?:--[\w-]*(?:password|passwd|token|secret|api[_-]?key|authorization|cookie)[\w-]*\s+)|(?:\b[\w-]*(?:password|passwd|token|secret|api[_-]?key|authorization|cookie)[\w-]*["']?\s*[=:]\s*))(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s&;,]+)/gi, '$1[REDACTED]')
+        .replace(/((?:--[\w-]*(?:password|passwd|token|secret|api[_-]?key|authorization|cookie)[\w-]*\s+)|(?:\b[\w-]*(?:password|passwd|token|secret|api[_-]?key|authorization|cookie)[\w-]*["']?\s*[=:]\s*))(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s&;,'"]+)/gi, '$1[REDACTED]')
         .replace(/(^|[\s;&|'"()])((?:[^\s'";&|()]*[/\\])?(?:curl|sshpass|mysql|mariadb|redis-cli)(?:\.exe)?)(\s+[^;\r\n]*)/gi, (_match, prefix, executable, args) => {
             for (const flag of credentialFlags[programName(executable)] || []) {
                 const escaped = regexEscape(flag)

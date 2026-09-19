@@ -36,6 +36,9 @@ type=EXECVE msg=audit(1789817001.123:457): argc=2 a0="curl" a1=68747470733a2f2f6
                      'curl -uuser:synthetic-private https://example.test', 'mysql -psynthetic-private'):
             self.assertNotIn('synthetic-private',c.scrub(text),text)
             self.assertNotIn('synthetic-private',str(c.scrub_metadata({'process':{'command_line':text}})),text)
+    def test_quoted_header_retains_shell_argument_boundaries(self):
+        self.assertEqual(c.scrub('curl -H \"Cookie: sid=synthetic-private; session=synthetic-private\" https://example.test'),
+                         'curl -H \"Cookie: [REDACTED]\" https://example.test')
     def test_short_flags_preserve_behavior_when_they_are_not_credentials(self):
         argv=['mkdir','-p','/etc/cron.d']
         self.assertEqual(c.scrub_arguments(argv),argv)

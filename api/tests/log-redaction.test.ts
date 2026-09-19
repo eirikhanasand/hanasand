@@ -22,7 +22,7 @@ test('quoted headers and program-specific credential flags cannot leak trailing 
         'tool --client-secret-key synthetic-private',
     ]
     for (const command of commands) expect(redactLogText(command)).not.toContain('synthetic-private')
-    expect(redactLogText(commands[0])).toContain('BloodHound.zip')
+    expect(redactLogText(commands[0])).toBe('curl -H "Cookie: [REDACTED]" https://example.test/BloodHound.zip')
     for (const args of [['/usr/bin/curl', '-u', 'user:synthetic-private'], ['curl', '--proxy-user=user:synthetic-private'], ['sshpass', '-p', 'synthetic-private'], ['mysql', '-psynthetic-private'], ['redis-cli', '-a', 'synthetic-private'], ['tool', '--client-secret-key', 'synthetic-private']]) {
         expect(JSON.stringify(redactLogValue(args))).not.toContain('synthetic-private')
     }
