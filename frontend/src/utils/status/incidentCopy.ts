@@ -63,7 +63,7 @@ export function simpleStatusText(text: string): string {
         const delayed = /\b[1-9]\d* (?:stale reviews|overdue discovery jobs|stalled evaluations|recent delivery failures)/.test(text)
         return delayed ? 'Threat intelligence processing is delayed.' : 'No processing delays reported.'
     }
-    match = text.match(/^Source operations returned \d+ sources; (\d+) failed\.$/)
+    match = text.match(/^Source\s+operations returned \d+ sources; (\d+) failed\.$/)
     if (match) return Number(match[1]) > 0 ? 'Source collection is delayed.' : 'Source collection completed successfully.'
 
     return text
