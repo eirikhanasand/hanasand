@@ -8,25 +8,32 @@ import ErrorNotice from '@/components/error/errorNotice'
 import config from '@/config'
 import { getCookie } from '@/utils/cookies/cookies'
 import DashboardRole from './dashboardRole'
+import RoleIconPicker from './roleIconPicker'
 
 export default function RoleList({ roles, canManage, highestPriority }: { roles: Role[], canManage: boolean, highestPriority: number }) {
     const router = useRouter()
-    const [items, setItems] = useState(roles)
-    useEffect(() => setItems(roles), [roles])
+    const [items, setItems] = useState(() => [...roles].sort((a, b) => a.priority - b.priority))
+    useEffect(() => setItems([...roles].sort((a, b) => a.priority - b.priority)), [roles])
     const [editing, setEditing] = useState(false)
     const [form, setForm] = useState<Role | 'new' | null>(null)
     const [removing, setRemoving] = useState<Role | null>(null)
     const [name, setName] = useState('')
     const [description, setDescription] = useState('')
+    const [priority, setPriority] = useState('1000')
+    const [icon, setIcon] = useState<string | null>(null)
+    const [notice, setNotice] = useState('')
     const [pending, setPending] = useState(false)
     const [error, setError] = useState('')
 
     function openForm(role: Role | 'new') {
+        setNotice('')
         setForm(role)
         setRemoving(null)
         setError('')
         setName(role === 'new' ? '' : role.name)
         setDescription(role === 'new' ? '' : role.description || '')
+        setPriority(String(role === 'new' ? Math.max(1000, highestPriority) : role.priority))
+        setIcon(role === 'new' ? null : role.icon || null)
     }
 
     async function save(method: 'POST' | 'PUT' | 'DELETE', roleId?: string) {
@@ -43,7 +50,7 @@ export default function RoleList({ roles, canManage, highestPriority }: { roles:
                 method,
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, id },
                 ...(method === 'DELETE' ? {} : { body: JSON.stringify({
-                    name: name.trim(), description: description.trim(),
+                    name: name.trim(), description: description.trim(), priority: Number(priority), icon,
                     ...(method === 'POST' ? { id: crypto.randomUUID(), created_by: id } : {})
                 }) }),
                 signal: controller.signal
@@ -54,9 +61,10 @@ export default function RoleList({ roles, canManage, highestPriority }: { roles:
                 ? current.filter(role => role.id !== roleId)
                 : method === 'POST'
                     ? [...current, result].sort((a, b) => a.priority - b.priority)
-                    : current.map(role => role.id === roleId ? result : role))
+                    : current.map(role => role.id === roleId ? result : role).sort((a, b) => a.priority - b.priority))
             setForm(null)
             setRemoving(null)
+            setNotice(method === 'DELETE' ? 'Role deleted.' : method === 'POST' ? 'Role created.' : 'Role saved.')
             router.refresh()
         } catch (cause) {
             setError(cause instanceof Error && cause.name !== 'AbortError' ? cause.message : 'The request timed out. Refresh the list before trying again.')
@@ -66,8 +74,8 @@ export default function RoleList({ roles, canManage, highestPriority }: { roles:
         }
     }
 
-    const iconClass = 'rounded p-2 text-ui-muted hover:bg-ui-raised hover:text-ui-text disabled:opacity-50'
-    const inputClass = 'w-full rounded-lg border border-ui-border bg-ui-canvas px-3 py-2 text-sm text-ui-text'
+    const iconClass = 'min-h-11 min-w-11 rounded p-2 text-ui-muted hover:bg-ui-raised hover:text-ui-text disabled:opacity-50'
+    const inputClass = 'min-h-11 min-w-0 w-full rounded-lg border border-ui-border bg-ui-canvas px-3 py-2 text-sm text-ui-text'
     return (
         <DashboardPanel className='grid h-fit min-w-0 w-full self-start gap-3 p-4'>
             <div className='flex items-center justify-between gap-4'>
@@ -77,22 +85,25 @@ export default function RoleList({ roles, canManage, highestPriority }: { roles:
                     <button type='button' disabled={pending} aria-label='Add role' title='Add role' onClick={() => openForm('new')} className={iconClass}><Plus className='h-4 w-4' /></button>
                 </div>}
             </div>
-            {form && <form aria-label={form === 'new' ? 'Add role' : 'Edit role'} className='grid gap-3 rounded-lg border border-ui-border p-3' onSubmit={event => { event.preventDefault(); void save(form === 'new' ? 'POST' : 'PUT', form === 'new' ? undefined : form.id) }}>
+            {form && <form aria-label={form === 'new' ? 'Add role' : 'Edit role'} className='grid min-w-0 gap-4 rounded-xl border border-ui-primary/25 bg-ui-primary/5 p-3 sm:grid-cols-2 sm:p-4' onSubmit={event => { event.preventDefault(); void save(form === 'new' ? 'POST' : 'PUT', form === 'new' ? undefined : form.id) }}>
                 <label className='grid gap-1 text-xs text-ui-muted'>Name<input autoFocus required maxLength={120} value={name} disabled={pending} onChange={event => setName(event.target.value)} className={inputClass} /></label>
-                <label className='grid gap-1 text-xs text-ui-muted'>Description<textarea rows={3} maxLength={2000} value={description} disabled={pending} onChange={event => setDescription(event.target.value)} className={inputClass} /></label>
-                <div className='flex justify-end gap-2'>
-                    <button type='button' disabled={pending} onClick={() => { setForm(null); setError('') }} className='rounded px-3 py-2 text-sm text-ui-muted'>Cancel</button>
-                    <button type='submit' disabled={pending || !name.trim()} className='rounded bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas disabled:opacity-50'>{pending ? 'Saving…' : form === 'new' ? 'Create role' : 'Save'}</button>
+                <label className='grid gap-1 text-xs text-ui-muted'>Priority<input aria-describedby='role-priority-help' type='number' step={1} min={form !== 'new' && form.id === 'administrator' ? 0 : Math.max(1, highestPriority)} max={2147483647} required value={priority} disabled={pending || form !== 'new' && form.id === 'administrator'} onChange={event => setPriority(event.target.value)} className={inputClass} /><span id='role-priority-help'>{form !== 'new' && form.id === 'administrator' ? 'Administrator is fixed at 0.' : 'Lower numbers have higher priority. 0 is reserved for Administrator.'}</span></label>
+                <label className='grid gap-1 text-xs text-ui-muted sm:col-span-2'>Description<textarea rows={3} maxLength={2000} value={description} disabled={pending} onChange={event => setDescription(event.target.value)} className={inputClass} /></label>
+                <RoleIconPicker key={form === 'new' ? 'new' : form.id} value={icon} role={{ id: form === 'new' ? undefined : form.id, name }} onChange={setIcon} disabled={pending} />
+                <div className='flex justify-end gap-2 sm:col-span-2'>
+                    <button type='button' disabled={pending} onClick={() => { setForm(null); setError('') }} className='min-h-11 rounded px-3 py-2 text-sm text-ui-muted'>Cancel</button>
+                    <button type='submit' disabled={pending || !name.trim()} className='min-h-11 rounded bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas disabled:opacity-50'>{pending ? 'Saving…' : form === 'new' ? 'Create role' : 'Save'}</button>
                 </div>
             </form>}
             {removing && <div role='alertdialog' aria-label={`Delete ${removing.name}?`} className='grid gap-2 rounded-lg border border-ui-border p-3 text-sm text-ui-text'>
                 <p>Delete “{removing.name}”? This also removes it from all assigned users.</p>
                 <div className='flex justify-end gap-2'>
-                    <button type='button' autoFocus disabled={pending} onClick={() => { setRemoving(null); setError('') }} className='rounded px-3 py-2 text-ui-muted'>Cancel</button>
-                    <button type='button' disabled={pending} onClick={() => void save('DELETE', removing.id)} className='rounded px-3 py-2 text-ui-danger'>{pending ? 'Deleting…' : 'Delete role'}</button>
+                    <button type='button' autoFocus disabled={pending} onClick={() => { setRemoving(null); setError('') }} className='min-h-11 rounded px-3 py-2 text-ui-muted'>Cancel</button>
+                    <button type='button' disabled={pending} onClick={() => void save('DELETE', removing.id)} className='min-h-11 rounded px-3 py-2 text-ui-danger'>{pending ? 'Deleting…' : 'Delete role'}</button>
                 </div>
             </div>}
             {error && <ErrorNotice compact message={error} />}
+            {notice && <p role='status' className='text-sm text-ui-success'>{notice}</p>}
             <div className='grid gap-2'>
                 {items.map(role => <DashboardRole key={role.id} role={role} editable={canManage && editing && highestPriority <= role.priority} disabled={pending} onEdit={() => openForm(role)} onDelete={() => { setRemoving(role); setForm(null); setError('') }} />)}
             </div>

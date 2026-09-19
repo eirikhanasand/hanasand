@@ -92,6 +92,8 @@ CREATE TABLE IF NOT EXISTS roles (
     name TEXT NOT NULL UNIQUE,
     description TEXT,
     priority INT NOT NULL DEFAULT 1000,
+    icon TEXT,
+    CONSTRAINT roles_administrator_priority CHECK ((id='administrator' AND priority=0) OR (id<>'administrator' AND priority>0)),
     created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
