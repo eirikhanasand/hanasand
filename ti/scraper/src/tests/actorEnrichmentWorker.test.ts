@@ -49,3 +49,20 @@ test('flushes fresh collection evidence before querying it for enrichment', asyn
   await enrichActor({ store, frontier: new FocusedFrontier(), runExecutor: async () => { pending = true; return { status: 'completed', captureIds: [capture.id] }; } }, actor);
   expect(readFresh).toBe(true);
 });
+
+test('health measures hourly productivity despite an isolated model failure', async () => {
+  const store = { queryIntelWorkerHealth: async () => ({ collection: { at: new Date().toISOString() }, enrichment: [
+    { status: 'failed', updatedAt: new Date().toISOString(), error: 'Model unavailable' },
+    { status: 'completed', updatedAt: new Date().toISOString(), newFacts: 2, wordsAdded: 30, changedActorIds: ['actor-one'] },
+  ] }) };
+  const response = await handleActorEnrichmentRequest(new Request('http://localhost/v1/intel/operations/health'), { store } as any);
+  expect((await response!.json()).enrichment).toMatchObject({ critical: false, workerRunning: true, profilesEditedLastHour: 1, newFactsLastHour: 2, error: 'Model unavailable' });
+});
+test('retries a temporary model connection response without accepting it as evidence', async () => {
+  const runs: any[] = []; let calls = 0;
+  const store = { saveActorEnrichmentRun: (run: any) => runs.push(run), listSources: () => [], getActorProfile: () => actor,
+    queryActorEnrichmentCaptures: async () => [capture], saveActorProfile() {}, saveEvidenceDelta() {} };
+  await enrichActor({ store, fetch: async () => Response.json(++calls === 1 ? { status: 'connecting', message: 'Hanasand AI is connecting.' } : { message: JSON.stringify({ facts: [fact] }) }) }, actor);
+  expect(calls).toBe(2);
+  expect(runs.at(-1)).toMatchObject({ status: 'completed', newFacts: 1 });
+});

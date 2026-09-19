@@ -38,7 +38,7 @@ export async function handleActorEnrichmentRequest(request: Request, options: Ap
     const newFacts = runs.reduce((n: number, run: any) => n + Number(run.newFacts ?? 0), 0);
     const wordsAdded = runs.reduce((n: number, run: any) => n + Number(run.wordsAdded ?? 0), 0);
     const last = runs[0];
-    const workerRunning = Boolean(last && Date.now() - Date.parse(last.updatedAt) < 3_600_000 && last.status !== "failed");
+    const workerRunning = Boolean(last && Date.now() - Date.parse(last.updatedAt) < 3_600_000);
     return json({ generatedAt: new Date().toISOString(),
       collection: { critical: ageSeconds === null || ageSeconds > 300, lastRunAt: at, ageSeconds, thresholdSeconds: 300, runId: data.collection?.id },
       enrichment: { critical: !workerRunning || profiles === 0 || newFacts === 0, workerRunning,
