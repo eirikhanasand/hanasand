@@ -54,6 +54,8 @@ export async function enrichActor(options: any, actor: any) {
         trigger: 'automated', createdAt: startedAt, startedAt, updatedAt: startedAt, taskCount: plan.tasks.length, captureCount: 0, incidentCount: 0 });
       const collected = await options.runExecutor(id);
       discoveryCaptureIds = collected?.captureIds ?? [];
+      // Read the newly collected evidence only after its queued writes are durable.
+      await store.flush?.();
       if (collected?.status === 'failed') throw new Error(collected.error || 'Public evidence collection failed');
     }
     const current = store.getActorProfile(actor.id) || actor;
