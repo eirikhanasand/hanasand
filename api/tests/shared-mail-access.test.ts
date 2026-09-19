@@ -1,8 +1,8 @@
 import { expect, mock, test } from 'bun:test'
 let roleIds: string[] = []
 let mailboxReads = 0
-mock.module('../src/utils/db.ts', () => ({ default: async (sql: string) => {
-    if (sql.includes('JOIN user_roles')) return { rows: roleIds.map(id => ({ id })) }
+mock.module('../src/utils/db.ts', () => ({ default: async (sql: string, params: string[] = []) => {
+    if (sql.includes('JOIN user_roles')) return { rows: (params[0] === 'private-user' ? [] : roleIds).map(id => ({ id })) }
     if (sql.includes('shared_mail_accounts')) { mailboxReads++; return { rows: [{ mail_username: 'support', mail_address: 'support@example.test', mail_password_encrypted: 'encrypted' }] } }
     if (sql.includes('SELECT id, name FROM users')) return { rows: [{ id: 'member', name: 'Member' }] }
     if (sql.includes('FROM mail_accounts')) return { rows: [{ mail_username: 'member', mail_address: 'member@example.test', mail_password_encrypted: 'encrypted' }] }
@@ -37,4 +37,9 @@ test('administrator can send from noreply and unknown shared IDs are rejected', 
     roleIds = ['administrator']
     expect(await getMailAccess('member', 'shared:noreply')).toMatchObject({ canSend: true })
     await expect(getMailAccess('member', 'shared:unknown')).rejects.toThrow('do not have access')
+})
+
+test('administrators cannot open private customer mailboxes even with a direct mailbox parameter', async () => {
+    roleIds = ['administrator']
+    await expect(getMailAccess('member', 'private-user')).rejects.toThrow('do not have access')
 })

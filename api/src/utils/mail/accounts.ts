@@ -136,7 +136,7 @@ export async function getMailAccess(actorId: string, mailboxUser?: string) {
         const account = await sharedMailAccess(targetUser)
         return { actorId, targetUser, canAccessAnyMailbox, ...account, canSend: targetUser !== 'shared:noreply' || permissions.admin }
     }
-    if (targetUser !== actorId && !canAccessAnyMailbox) {
+    if (targetUser !== actorId && (!canAccessAnyMailbox || !(await mailPermissions(targetUser)).shared)) {
         throw new MailAccessDenied()
     }
 
@@ -183,8 +183,10 @@ async function listPersonalMailAccounts(actorId: string, canAccessAnyMailbox: bo
             FROM users u
             LEFT JOIN mail_accounts ma ON ma.user_id = u.id
             WHERE u.active = TRUE AND ma.disabled_at IS NULL
+                AND (u.id = $1 OR EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id
+                    AND ur.role_id IN ('administrator', 'admin', 'system_admin', 'support')))
             ORDER BY u.id ASC
-        `)
+        `, [actorId])
 
         return Promise.all(rows.rows.map(async (row) => {
             const user = row as UserRow & { mail_address?: string | null }

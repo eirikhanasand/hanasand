@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { checkStatusFeed, sendStatusFeedEmail } from './status-feed.mjs'
+import { checkStatusFeed } from './status-feed.mjs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { dirname } from 'node:path'
@@ -9,7 +9,6 @@ const baseUrl = trimSlash(process.env.HANASAND_DB_MONITOR_BASE_URL || 'https://h
 const dashboardPath = (process.env.HANASAND_DB_MONITOR_PATH || '/db').replace(/^\/dashboard(?=\/)/, '')
 const serviceKey = process.env.HANASAND_DB_MONITOR_SERVICE_ACCOUNT_KEY || ''
 const apiBaseUrl = trimSlash(process.env.HANASAND_DB_MONITOR_API_BASE_URL || 'https://api.hanasand.com/api')
-const discordWebhookUrl = process.env.DISCORD_WEBHOOK_URL || ''
 const discordMention = process.env.HANASAND_DB_MONITOR_DISCORD_MENTION || '@here'
 const statePath = process.env.HANASAND_DB_MONITOR_STATE || '/home/hanasand/monitor-state/db-dashboard-monitor.json'
 const failureScreenshotPath = process.env.HANASAND_DB_MONITOR_SCREENSHOT || '/home/hanasand/monitor-state/db-dashboard-monitor-failure.png'
@@ -18,7 +17,6 @@ const cdnUploadFolder = trimSlashes(process.env.HANASAND_DB_MONITOR_CDN_FOLDER |
 const cdnUploadUser = process.env.HANASAND_DB_MONITOR_CDN_USER || ''
 const cdnUploadToken = process.env.HANASAND_DB_MONITOR_CDN_TOKEN || ''
 const timeoutMs = Number(process.env.HANASAND_DB_MONITOR_TIMEOUT_MS || 30_000)
-const repeatAlertMinutes = Number(process.env.HANASAND_DB_MONITOR_REPEAT_ALERT_MINUTES || 15)
 const failureThreshold = Math.max(Number(process.env.HANASAND_DB_MONITOR_FAILURE_THRESHOLD || 2), 1)
 const backupStatusPath = process.env.HANASAND_TI_BACKUP_STATUS || '/home/hanasand/backups/threat-intel/LATEST-STATUS'
 const backupStatePath = process.env.HANASAND_TI_BACKUP_MONITOR_STATE || '/home/hanasand/monitor-state/threat-intel-backup.json'
@@ -55,7 +53,7 @@ if (process.argv.includes('--self-test')) {
 
 await handleResult(await checkStatusFeed(`${baseUrl}/api/status`), {
     statePath: process.env.HANASAND_STATUS_FEED_MONITOR_STATE || '/home/hanasand/monitor-state/status-feed-monitor.json',
-    service: 'production-monitor', checkName: 'Public status feed', title: 'Public status monitoring', noScreenshot: true, independentEmail: true,
+    service: 'production-monitor', checkName: 'Public status feed', title: 'Public status monitoring', noScreenshot: true,
 })
 
 await monitorThreatIntelBackup()
@@ -313,65 +311,23 @@ async function handleResult(result, options = {}) {
         failureThreshold,
         alertErrors,
     }
-    if (!options.independentEmail) await sendStatusIngest(service, checkName, result).catch(error => {
-        alertErrors.push(error instanceof Error ? error.message : String(error))
-    })
-
-    if (result.ok && previous.ok === false) {
-        const backupRecovered = String(previous.reason || '').startsWith('ti_backup_')
-        const sent = await trySendDiscord({
-            status: 'RECOVERED',
-            color: 0x22c55e,
-            title: options.title ? `${options.title} recovered` : backupRecovered ? 'Threat-intelligence backup recovered' : 'Database dashboard recovered',
-            description: `${result.detail} Alerts resume only if the monitor sees a fresh outage.`,
-            fields: resultFields(result),
+    if (!result.ok && !backupFailure && !options.noScreenshot && next.failureCount === failureThreshold) {
+        next.failureScreenshotUrl = await uploadFailureScreenshot().catch(error => {
+            alertErrors.push(error instanceof Error ? error.message : String(error))
+            return ''
         })
-        if (sent) next.lastAlertAt = now.toISOString()
     }
-
-    if (!result.ok) {
-        const shouldAlert = next.failureCount >= failureThreshold
-            && (previous.ok !== false || minutesSince(previous.lastAlertAt) >= repeatAlertMinutes)
-        if (shouldAlert) {
-            const failureScreenshotUrl = backupFailure || options.noScreenshot ? '' : await uploadFailureScreenshot().catch(error => {
-                alertErrors.push(error instanceof Error ? error.message : String(error))
-                return ''
-            })
-            if (failureScreenshotUrl) {
-                result.failureScreenshotUrl = failureScreenshotUrl
-                next.failureScreenshotUrl = failureScreenshotUrl
-            }
-            const sent = await trySendDiscord({
-                status: 'DOWN',
-                color: 0xef4444,
-                title: options.title ? `${options.title} unavailable` : backupFailure
-                    ? `Threat-intelligence backup unavailable: ${reasonLabel(result.reason)}`
-                    : `Database dashboard unavailable: ${reasonLabel(result.reason)}`,
-                description: options.title ? result.detail : `${failureImpact(result.reason)} ${result.detail}`,
-                fields: resultFields(result),
-            })
-            if (sent) next.lastAlertAt = now.toISOString()
-        }
-    }
-
+    await sendStatusIngest(service, checkName, {
+        ...result,
+        detail: next.failureScreenshotUrl ? `${result.detail} Evidence: ${next.failureScreenshotUrl}` : result.detail,
+    }).catch(error => { alertErrors.push(error instanceof Error ? error.message : String(error)) })
     await writeState(next, resultStatePath)
     console.log(JSON.stringify(next))
-
-    async function trySendDiscord(payload) {
-        try {
-            if (options.independentEmail) await sendStatusFeedEmail(`[Hanasand] ${payload.title}`, `${payload.description}\nCheck: ${baseUrl}/api/status\nObserved: ${now.toISOString()}`)
-            else await sendDiscord(payload)
-            return true
-        } catch (error) {
-            alertErrors.push(error instanceof Error ? error.message : String(error))
-            return false
-        }
-    }
 }
 
 async function sendStatusIngest(service, checkName, result) {
     if (!statusIngestToken) {
-        throw new Error('HANASAND_STATUS_INGEST_TOKEN is required to persist monitor results and send email alerts')
+        throw new Error('HANASAND_STATUS_INGEST_TOKEN is required to persist monitor results and update cases')
     }
     const response = await fetch(`${statusIngestBaseUrl}/api/status/ingest`, {
         method: 'POST',
@@ -418,24 +374,6 @@ async function uploadFailureScreenshot() {
         throw new Error(`CDN screenshot upload failed ${response.status}: ${truncate(body, 240)}`)
     }
     return `${cdnBaseUrl}/files/path/${encodeURIComponent(path)}`
-}
-
-async function sendDiscord({ status, color, title, description, fields }) {
-    if (!discordWebhookUrl) {
-        throw new Error(`DISCORD_WEBHOOK_URL is required to alert database dashboard monitor status=${status}`)
-    }
-
-    const payload = buildDiscordPayload({ status, color, title, description, fields })
-    const response = await fetch(discordWebhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-    })
-
-    if (!response.ok) {
-        const body = await response.text().catch(() => '')
-        throw new Error(`Discord webhook failed ${response.status}: ${truncate(body, 300)}`)
-    }
 }
 
 function buildDiscordPayload({ status, color, title, description, fields }) {
