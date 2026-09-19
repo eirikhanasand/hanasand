@@ -8,7 +8,7 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
     statements.push(sql)
     if (sql.includes('pg_try_advisory_xact_lock')) return { rows: [{ locked }] }
     if (sql.includes('AS delayed')) return { rows: [{ delayed }] }
-    if (sql.startsWith('SELECT id FROM organizations')) return { rows: inactiveScopes.has(p[0]) ? [] : [{ id: 'platform' }] }
+    if (sql.startsWith('SELECT id FROM organizations')) return { rows: (p[0] === 'missing' || inactiveScopes.has(p[0]) && sql.includes("status = 'active'")) ? [] : [{ id: 'platform' }] }
     if (sql.includes('INSERT INTO log_processing_cursors')) return { rows: [] }
     if (sql.includes('SELECT last_id, recent_id')) return { rows: [{ ...cursor }] }
     if (sql.includes('UPDATE log_processing_cursors')) {
@@ -29,9 +29,8 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
     }
     if (sql.includes('INSERT INTO mill_events')) {
         for (const item of JSON.parse(p[0])) {
-            if (sql.includes('processing_status = \'skipped\'') && stored[item.id]?.processing_status === 'pending') {
-                stored[item.id] = { ...item, organization_id: p[1], processing_status: 'skipped', normalized: { processing_reason: 'Organization is missing or inactive' }, original: {} }
-            } else stored[item.id] ||= { ...item, organization_id: p[1], processing_status: sql.includes('\'skipped\'') ? 'skipped' : 'pending' }
+            if (!stored[item.id] || stored[item.id].processing_status === 'pending' || stored[item.id].processing_status === 'skipped' && stored[item.id].normalized.processing_reason === 'Organization is missing or inactive')
+                stored[item.id] = { ...item, organization_id: p[1], processing_status: 'pending' }
         }
         return { rows: [] }
     }
@@ -45,6 +44,8 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
     if (sql.includes('UPDATE mill_events SET')) { pending = pending.filter(row => row.id !== p[0]); return { rows: [] } }
     throw new Error(sql)
 }
+mock.module('../src/utils/mill/catchupProgress.ts', () => ({ refreshLogCatchupProgress: async () => {} }))
+mock.module('../src/utils/mill/recoverUnassignedLogs.ts', () => ({ recoverUnassignedLogs: async () => {} }))
 mock.module('#db', () => ({ default: query, withTransaction: async (work: any) => work(query) }))
 mock.module('../src/utils/logs/dimensions.ts', () => ({ backfillLogDimensions: async () => ({ processed: 0, ready: true }) }))
 mock.module('../src/utils/mill/processQueue.ts', () => ({ processQueuedLogs: async (_process: unknown, delayed: boolean) => { queueRuns++; queueModes.push(delayed) }, recoverProcessLogs: async (_process: unknown, limit: number) => { recoveryRuns++; recoveryLimits.push(limit) } }))
@@ -103,13 +104,12 @@ test('failed findings retain pending event and cursors for successful retry', as
     expect(checked).toEqual(['101', '1'])
     expect(Object.values(stored)).toHaveLength(2)
 })
-test('inactive scopes produce safe skipped markers and direct Mill pending events retry', async () => {
+test('inactive scopes fall back to Hanasand and direct Mill pending events retry', async () => {
     fresh = [makeLog('101', { organizationId: 'inactive', password: 'never-copy-this' })]
     pending = [{ id: 'native', organization_id: 'platform', normalized: { timestamp: '2026-09-19T00:00:00Z', message: 'native' } }]
     await processStoredLogs()
-    expect(Object.values(stored).some(row => row.processing_status === 'skipped')).toBe(true)
-    expect(JSON.stringify(stored)).not.toContain('never-copy-this')
-    expect(checked).toEqual(['native', '1'])
+    expect(Object.values(stored).every(row => row.processing_status === 'processed' && row.organization_id === 'platform')).toBe(true)
+    expect(checked).toEqual(['101', 'native', '1'])
     expect(pending).toHaveLength(0)
 })
 
@@ -160,15 +160,14 @@ test('a failed priority check remains pending and retries before the FIFO advanc
     expect(Object.values(stored)).toHaveLength(3)
 })
 
-test('a pending collected event becomes a sanitized skipped marker if its organization is inactive on retry', async () => {
+test('a pending collected event is checked in Hanasand if its organization is inactive on retry', async () => {
     fresh = [makeLog('101', { organizationId: 'archive-later', process: { command_line: 'private command' } })]
     fail = true
     await expect(processStoredLogs()).rejects.toThrow('Finding storage unavailable')
     expect(Object.values(stored)[0].processing_status).toBe('pending')
     inactiveScopes.add('archive-later'); fail = false; backlog = []
     await processStoredLogs()
-    expect(Object.values(stored)[0]).toMatchObject({ organization_id: 'platform', processing_status: 'skipped', original: {} })
-    expect(JSON.stringify(stored)).not.toContain('private command')
+    expect(Object.values(stored)[0]).toMatchObject({ organization_id: 'platform', processing_status: 'processed' })
     expect(cursor.recent_id).toBe('101')
 })
 
@@ -196,4 +195,16 @@ test('operator cap and delayed-command cap use the smaller limit without reducin
     expect(checked).toEqual(['190', '101', '1'])
     expect(reads.map(read => read.params[2])).toEqual([1, 1])
     expect(recoveryLimits).toEqual([1]); expect(queueModes).toEqual([true])
+})
+
+test('unknown organization logs fall back to the active platform organization', async () => {
+    fresh = [makeLog('101', { organizationId: 'missing' })]
+    await processStoredLogs()
+    expect(checked).toEqual(['101', '1'])
+    expect(Object.values(stored).find(row => row.key === 'service:101')).toMatchObject({ organization_id: 'platform', processing_status: 'processed' })
+})
+test('an empty retained history range advances to its inspected upper bound', async () => {
+    fresh = []; backlog = []
+    await processStoredLogs()
+    expect(cursor.last_id).toBe('100')
 })

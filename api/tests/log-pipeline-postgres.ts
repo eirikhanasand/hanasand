@@ -110,6 +110,8 @@ try {
         assert.ok(result.rowCount, `KQL returned stored events: ${text}`)
     }
     await query('CREATE TEMP TABLE log_processing_cursors (name text PRIMARY KEY, last_id bigint DEFAULT 0, recent_id bigint, updated_at timestamptz DEFAULT NOW(), last_error text)')
+    const { logCatchupSchema } = await import('../src/utils/db/logCatchupSchema.ts')
+    for (const statement of logCatchupSchema) await query(statement.replace('CREATE TABLE IF NOT EXISTS', 'CREATE TEMP TABLE IF NOT EXISTS'))
     const { logProcessQueueSchema, processLogIndex } = await import('../src/utils/db/logProcessQueueSchema.ts')
     for (const statement of logProcessQueueSchema) await query(statement.replace('CREATE TABLE IF NOT EXISTS', 'CREATE TEMP TABLE IF NOT EXISTS'))
     await query(processLogIndex)
@@ -241,13 +243,13 @@ try {
     queryObserver = undefined
     await query("UPDATE organizations SET status='inactive' WHERE id='archived-priority'")
     await processStoredLogs()
-    const skippedRetry = (await query('SELECT * FROM mill_events WHERE log_key=$1', [`service:${archivedLog.id}`])).rows[0]
-    assert.equal(skippedRetry.processing_status, 'skipped')
-    assert.equal(skippedRetry.organization_id, 'fixture')
-    assert.equal(skippedRetry.user_id, null)
-    assert.equal(skippedRetry.user_email, null)
-    assert.deepEqual(skippedRetry.original, {})
-    assert.ok(!JSON.stringify(skippedRetry.normalized).includes('private-user'))
+    const reassignedRetry = (await query('SELECT * FROM mill_events WHERE log_key=$1', [`service:${archivedLog.id}`])).rows[0]
+    assert.equal(reassignedRetry.processing_status, 'processed')
+    assert.equal(reassignedRetry.organization_id, 'fixture')
+    assert.equal(reassignedRetry.user_id, 'private-user')
+    assert.equal(reassignedRetry.user_email, 'private@example.test')
+    assert.equal(reassignedRetry.original.service_log_id, String(archivedLog.id))
+    assert.ok(JSON.stringify(reassignedRetry.normalized).includes('private-user'))
     assert.equal((await query('SELECT 1 FROM log_process_queue WHERE log_id=$1', [archivedLog.id])).rowCount, 0,
         'An organization becoming inactive during retry cannot poison the command FIFO')
     console.log(`Process queue PostgreSQL verification passed: transactional admission, delayed VM detection, FIFO under sustained arrivals, bounded recovery, deduplication; 1,103 queued events processed in ${Math.round(performance.now()-startedQueue)} ms including recovery checks.`)
@@ -410,7 +412,7 @@ try {
     const permissions = readFileSync(new URL('../../scripts/resilience/standby-permissions.sql', import.meta.url), 'utf8')
     const logsGrant = permissions.match(/-- Administrator-only Logs pages[^\n]*\n(GRANT SELECT[\s\S]*?;)/)?.[1]
     assert.ok(logsGrant, 'The explicit standby Logs grant must exist')
-    const logTables = ['service_logs', 'traffic_events', 'mill_events', 'log_processing_cursors', 'log_process_queue', 'mill_log_dimensions', 'mill_log_dimensions_state']
+    const logTables = ['service_logs', 'traffic_events', 'mill_events', 'log_processing_cursors', 'log_catchup_progress', 'log_process_queue', 'mill_log_dimensions', 'mill_log_dimensions_state']
     assert.deepEqual([...logsGrant.matchAll(/public\.(\w+)/g)].map(match => match[1]), logTables)
     const reader = `logs_reader_${crypto.randomUUID().replaceAll('-', '')}`
     const temporarySchema = (await query('SELECT nspname FROM pg_namespace WHERE oid=pg_my_temp_schema()')).rows[0].nspname
@@ -499,7 +501,31 @@ try {
         await query('RESET ROLE')
         await app.close()
     }
-    console.log('PostgreSQL standby permissions passed: exact seven-table SELECT grant, actual Logs/search/counters/errors readers, active organization filtering, 401/403 before reads, no added writes or DDL.')
+    console.log('PostgreSQL standby permissions passed: exact eight-table SELECT grant, actual Logs/search/counters/errors readers, active organization filtering, 401/403 before reads, no added writes or DDL.')
+    await query("INSERT INTO organizations(id,status,name) VALUES ('deleted-scope','deleted','Deleted fixture')")
+    const replayIds = (await query("INSERT INTO service_logs(service,level,message,metadata) VALUES ('fixture','info','Unknown org original', '{\"organizationId\":\"missing-scope\"}'), ('fixture','info','Deleted org original', '{\"organizationId\":\"deleted-scope\"}') RETURNING id::text")).rows.map(row => row.id)
+    for (const id of replayIds) await query("INSERT INTO mill_events(id,ingestion_id,organization_id,log_key,processing_status,normalized,event_timestamp) VALUES($1,'logs','fixture',$2,'skipped',$3,NOW())", [
+        (await import('node:crypto')).createHash('sha256').update('service:'+id).digest('hex'), 'service:'+id, { processing_reason: 'Organization is missing or inactive' }])
+    const { recoverUnassignedLogs } = await import('../src/utils/mill/recoverUnassignedLogs.ts')
+    await recoverUnassignedLogs(logs => processLogBatch(logs, 'fixture', rules))
+    await recoverUnassignedLogs(logs => processLogBatch(logs, 'fixture', rules))
+    const replayed = (await query("SELECT processing_status,organization_id,normalized FROM mill_events WHERE log_key=$1", ['service:'+replayIds[0]])).rows[0]
+    assert.equal(replayed.processing_status,'processed')
+    assert.equal(replayed.organization_id,'fixture')
+    assert.equal(replayed.normalized.message,'Unknown org original')
+    assert.equal((await query("SELECT processing_status FROM mill_events WHERE log_key=$1", ['service:'+replayIds[1]])).rows[0].processing_status,'processed')
+    const { refreshLogCatchupProgress } = await import('../src/utils/mill/catchupProgress.ts')
+    await refreshLogCatchupProgress()
+    await query("UPDATE log_catchup_progress SET sampled_at=NULL, attempted_at=NULL")
+    await refreshLogCatchupProgress()
+    const progress = (await query("SELECT payload FROM log_catchup_progress")).rows[0].payload
+    let remaining = 0
+    for (const source of ['service_logs','login_events','traffic_events','system_events']) {
+        const c = (await query("SELECT last_id,recent_id FROM log_processing_cursors WHERE name=$1",[source])).rows[0]
+        remaining += Number((await query('SELECT count(*) FROM '+source+' WHERE id>$1 AND id<=$2',[c.last_id,c.recent_id])).rows[0].count)
+    }
+    assert.equal(progress.remaining,remaining,'Progress counts retained rows, not sequence gaps')
+    assert.equal(progress.estimated_seconds,remaining ? null : 0,'No fabricated rate in the first sample')
     console.log(`PostgreSQL verification passed: all ${MILL_RULES.length} rules, ${securityRules.length} negatives, retry deduplication, auth correlation, and KQL.`)
 } finally {
     await client.query('ROLLBACK')

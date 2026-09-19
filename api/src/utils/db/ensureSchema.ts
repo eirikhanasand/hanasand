@@ -1,3 +1,4 @@
+import ensureLogCatchupSchema from './logCatchupSchema.ts'
 import ensureSupportAiSchema from '#utils/support/schema.ts'
 import ensureContentOrganizationSchema from './contentOrganizationSchema.ts'
 import ensureOrganizationRolesSchema from './organizationRolesSchema.ts'
@@ -1437,6 +1438,7 @@ export default async function ensureSchema() {
     await run('CREATE UNIQUE INDEX IF NOT EXISTS idx_mill_events_log_key ON mill_events(log_key)')
     await run('CREATE TABLE IF NOT EXISTS log_processing_cursors (name TEXT PRIMARY KEY, last_id BIGINT NOT NULL DEFAULT 0, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), last_error TEXT)')
     await run('ALTER TABLE log_processing_cursors ADD COLUMN IF NOT EXISTS recent_id BIGINT')
+    await ensureLogCatchupSchema()
     await run('CREATE INDEX IF NOT EXISTS idx_mill_events_logs_skipped ON mill_events(id) WHERE ingestion_id = \'logs\' AND processing_status = \'skipped\'')
     await run('CREATE INDEX IF NOT EXISTS idx_mill_events_logs_time ON mill_events(event_timestamp DESC, id DESC) WHERE ingestion_id = \'logs\' AND processing_status = \'processed\'')
     await run('CREATE INDEX IF NOT EXISTS idx_mill_events_org_user_time ON mill_events(organization_id, user_id, event_timestamp DESC)')

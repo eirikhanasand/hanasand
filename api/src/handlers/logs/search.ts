@@ -33,6 +33,8 @@ export async function searchLogs(req: FastifyRequest, res: FastifyReply) {
                 ? await query(`SELECT ${compiled.fields[compiled.summarize]} AS value, COUNT(*)::int AS count FROM mill_events WHERE ${where.join(' AND ')} GROUP BY 1 ORDER BY count DESC LIMIT ${compiled.limit}`, params)
                 : await query(`SELECT id, normalized, event_timestamp, organization_id FROM mill_events WHERE ${where.join(' AND ')} ORDER BY ${compiled.order} LIMIT ${compiled.limit}`, params)
             const status = await query('SELECT name, updated_at, last_error, last_id, recent_id, (SELECT COUNT(*)::int FROM mill_events WHERE ingestion_id = \'logs\' AND processing_status = \'skipped\') AS skipped_events FROM log_processing_cursors ORDER BY name')
+            const progress = (await query('SELECT payload, last_error FROM log_catchup_progress WHERE id = TRUE')).rows[0]
+            const catchup = typeof progress?.payload?.remaining === 'number' ? { ...progress.payload, last_error: progress.last_error } : null
             const pendingCommands = await readPendingProcessLogs(query)
             let counts: ReturnType<typeof foldLogCounts> = { counts: [], services: [] }
             let countersLastError: string | null = null
@@ -48,7 +50,7 @@ export async function searchLogs(req: FastifyRequest, res: FastifyReply) {
             }
             const primary = status.rows.find(row => row.name === 'service_logs')
             const stalled = status.rows.find(row => row.last_error)
-            return { rows: result.rows, processing: primary ? { ...primary, pending_commands: pendingCommands, last_error: stalled ? `${stalled.name}: ${stalled.last_error}` : countersLastError ? `Log counters: ${countersLastError}` : null, sources: status.rows } : null, ...counts }
+            return { rows: result.rows, processing: primary ? { ...primary, catchup, pending_commands: pendingCommands, last_error: stalled ? `${stalled.name}: ${stalled.last_error}` : countersLastError ? `Log counters: ${countersLastError}` : null, sources: status.rows } : null, ...counts }
         })
         return res.send({ ...result, projection: compiled.projection, summarize: compiled.summarize, limit: compiled.limit, hours, generated_at: new Date().toISOString() })
     } catch (error) {

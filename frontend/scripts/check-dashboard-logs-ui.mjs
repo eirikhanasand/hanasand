@@ -19,11 +19,11 @@ const api = Bun.serve({ port: 0, fetch(request) {
     if (url.pathname === '/api/organizations') return Response.json({ organizations: [] })
     if (url.pathname === '/api/logs/services') return Response.json({ services: [{ service: 'audit', entries: 2, last_seen: timestamp }, { service: 'api', entries: 1, last_seen: timestamp }] })
     if (url.pathname === '/api/logs/errors') return Response.json(errors)
-    if (url.pathname === '/api/logs/search') return Response.json({ rows, counts: [{ severity: 'low', count: 256 }, { severity: 'medium', count: 8 }, { severity: 'high', count: 1 }, { severity: 'critical', count: 1 }], services: [{ service: 'audit', count: 2 }, { service: 'api', count: 264 }], processing: { updated_at: timestamp }, limit: 200 })
+    if (url.pathname === '/api/logs/search') return Response.json({ rows, counts: [{ severity: 'low', count: 256 }, { severity: 'medium', count: 8 }, { severity: 'high', count: 1 }, { severity: 'critical', count: 1 }], services: [{ service: 'audit', count: 2 }, { service: 'api', count: 264 }], generated_at: new Date().toISOString(), processing: { updated_at: timestamp, catchup: { remaining: 3000, processed: 1000, total: 4000, rate: 50, estimated_seconds: 60, updated_at: new Date().toISOString() } }, limit: 200 })
     return Response.json({})
 } })
-const dev = Bun.spawn(['node', './node_modules/.bin/next', 'dev', '--webpack', '-p', '3031'], {
-    env: { ...process.env, FRONTEND_AUTH_API: `${api.url}api`, FRONTEND_INTERNAL_API: `${api.url}api`, TI_SCRAPER_API_BASE: String(api.url), NEXT_DIST_DIR: '.next' },
+const dev = Bun.spawn([process.execPath, '--bun', './node_modules/next/dist/bin/next', 'dev', '--webpack', '-p', '3031'], {
+    env: { ...process.env, FRONTEND_AUTH_API: `${api.url}api`, FRONTEND_INTERNAL_API: `${api.url}api`, TI_SCRAPER_API_BASE: String(api.url), NEXT_DIST_DIR: '.next-log-catchup-proof' },
     stdout: 'ignore', stderr: 'inherit',
 })
 const report = []
@@ -49,6 +49,11 @@ try {
                 await loaded
                 await expect(page.getByRole('heading', { level: 1 })).toHaveText(heading)
                 if (route === '/logs') {
+                    const progress = page.getByRole('region', { name: 'Historical log catch-up' })
+                    await expect(progress).toContainText('3,000 logs remaining')
+                    await expect(progress).toContainText('About 1 min remaining')
+                    await expect(progress.getByRole('progressbar')).toHaveAttribute('aria-valuenow','25')
+
                     await expect(page.getByRole('region', { name: 'Events by severity' }).getByRole('link').first()).toContainText('256')
                     await page.getByText('Operational counters', { exact: true }).click()
                     await expect(page.getByText('Most active services in the selected time range')).toBeVisible()

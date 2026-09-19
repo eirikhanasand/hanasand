@@ -54,7 +54,7 @@ test('throttled history keeps every recent stream and advances only the evaluate
     expect(received.slice(3).map(batch => batch.last)).toEqual(['login_events:100', 'traffic_events:100', 'system_events:100'])
     expect(reads.slice(0, 3).every(read => read.values[2] === 1000)).toBe(true)
     expect(reads.slice(3).every(read => read.values[2] === 100)).toBe(true)
-    expect(checkpoints).toEqual([['login_events', '1001'], ['traffic_events', '1001'], ['system_events', '1001'], ['login_events', '100'], ['traffic_events', '100'], ['system_events', '100']])
+    expect(checkpoints).toEqual([['login_events', '1001'], ['traffic_events', '1001'], ['system_events', '1001'], ['login_events', '100', 100], ['traffic_events', '100', 100], ['system_events', '100', 100]])
 })
 test('throttled historical failure leaves that cursor unchanged after fresh streams succeed', async () => {
     let runs = 0

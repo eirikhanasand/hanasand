@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Copy, ChevronDown, Search } from 'lucide-react'
 import { retainEvents } from '@/utils/logs/retainEvents'
 import EventFeed from './eventFeed'
+import LogCatchupProgress, { type CatchupProgress } from './catchupProgress'
 import ErrorsPanel from './errorsPanel'
 import type { ErrorEvent, ErrorEventsResponse, LogService } from '@/utils/logs/getLogs'
 import { dashboardPanelClass } from '@/components/dashboard/ui'
@@ -13,7 +14,7 @@ import { dashboardPanelClass } from '@/components/dashboard/ui'
 type Event = { id: string, event_timestamp: string, normalized: { severity: string, level: string, log_type: string, service: string, host: string, message: string, process?: { executable?: string, command_line?: string }, detections?: Array<{ rule_id: string, summary: string, severity: string }>, rules_checked?: number, [key: string]: unknown } }
 type PendingCommands = { count: number, has_more: boolean, oldest_queued_at: string | null }
 type ProcessingSource = { name: string, last_id?: string | null, recent_id?: string | null }
-type Result = { rows: Event[], counts: Array<{ severity: string, count: number }>, services: Array<{ service: string, count: number }>, processing: { updated_at: string, last_error?: string, skipped_events?: number, sources?: ProcessingSource[], pending_commands?: PendingCommands } | null, generated_at?: string, summarize?: string, projection?: string[], limit: number }
+type Result = { rows: Event[], counts: Array<{ severity: string, count: number }>, services: Array<{ service: string, count: number }>, processing: { updated_at: string, last_error?: string, skipped_events?: number, catchup?: CatchupProgress | null, sources?: ProcessingSource[], pending_commands?: PendingCommands } | null, generated_at?: string, summarize?: string, projection?: string[], limit: number }
 const colors: Record<string, string> = { low: 'text-ui-muted bg-ui-raised', medium: 'text-ui-warning bg-ui-warning/10', high: 'text-ui-danger bg-ui-danger/10', critical: 'text-ui-danger bg-ui-danger/20 ring-1 ring-ui-danger' }
 const fieldClass = 'rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm text-ui-text'
 const logTables = ['Logs', 'ProcessLogs', 'SigninLogs', 'ApplicationLogs', 'HttpLogs', 'SystemLogs']
@@ -144,8 +145,8 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
             </section>
             {data?.processing?.last_error && <p role='alert' className='text-sm text-ui-danger'>Mill processing is delayed: {data.processing.last_error}</p>}
             {commandChecksDelayed && <p role='status' className='text-sm text-ui-warning'>Command checks are delayed. {pendingCommands.has_more ? 'More than ' : ''}{pendingCommands.count.toLocaleString()} {pendingCommands.count === 1 ? 'command is' : 'commands are'} waiting; oldest received {new Date(pendingCommands.oldest_queued_at!).toLocaleString()}.</p>}
-            {data?.processing?.sources?.some(isCatchingUp) && <p role='status' className='text-sm text-ui-warning'>Historical logs are still being checked. Search results and counters are incomplete until catch-up finishes.</p>}
-            {!!data?.processing?.skipped_events && <p role='status' className='text-sm text-ui-warning'>{data.processing.skipped_events.toLocaleString()} events could not be assigned to an active organization and were excluded from detection.</p>}
+            <LogCatchupProgress progress={data?.processing?.catchup} catchingUp={!!data?.processing?.sources?.some(isCatchingUp)} now={data?.generated_at || new Date().toISOString()} stalled={!!data?.processing?.last_error} />
+            {!!data?.processing?.skipped_events && <p role='status' className='text-sm text-ui-warning'>{data.processing.skipped_events.toLocaleString()} events remain excluded from detection.</p>}
             {data && !data.processing && !busy && <p role='status' className='text-sm text-ui-warning'>Waiting for the log processor to check in.</p>}
             {view === 'dashboard' ? <>
                 <section className='grid gap-3 sm:grid-cols-4' aria-label='Events by severity' data-logs-metrics>{['low','medium','high','critical'].map(value => <Link key={value} href={`/logs/search?${new URLSearchParams({ hours, ...(service !== 'all' ? { service } : {}), ...(advanced && appliedKql ? { kql: appliedKql } : { table, search }), severity: value })}`} className={`${dashboardPanelClass} p-4`} data-logs-metric-card><p className='text-sm capitalize text-ui-muted'>{value}</p><p className='mt-2 text-2xl font-semibold tabular-nums'>{data ? (data.counts.find(item => item.severity === value)?.count || 0).toLocaleString() : '—'}</p></Link>)}</section>

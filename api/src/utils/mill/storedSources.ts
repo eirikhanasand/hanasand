@@ -60,6 +60,6 @@ export async function processAdditionalLogSources(processScopes: (logs: LogInput
     for (const { source, last_id, recent_id } of cursors) {
         const backlog = await run(`SELECT * FROM ${source} WHERE id > $1 AND id <= $2 ORDER BY id LIMIT $3`, [last_id, recent_id, historyLimit])
         await processScopes(backlog.rows.map(row => storedSourceLog(source, row)))
-        await run('UPDATE log_processing_cursors SET last_id = GREATEST(last_id, $2), updated_at = NOW(), last_error = NULL WHERE name = $1', [source, backlog.rows.at(-1)?.id || last_id])
+        await run('UPDATE log_processing_cursors SET last_id = GREATEST(last_id, $2), checked_count = checked_count + $3, updated_at = NOW(), last_error = NULL WHERE name = $1', [source, backlog.rows.at(-1)?.id || recent_id, backlog.rows.length])
     }
 }
