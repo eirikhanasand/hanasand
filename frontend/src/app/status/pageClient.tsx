@@ -1,5 +1,7 @@
 'use client'
 
+import { statusHeadline } from '@/utils/status/incidentCopy'
+
 import Link from 'next/link'
 import IncidentReport from './incidentReport'
 import { retainVerifiedStatus, compactStatusSnapshot, isCurrentPublicCheck } from '@/utils/status/publicStatus'
@@ -96,11 +98,7 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
     const incidents = currentStatus.incidents
     const monitoringUnavailable = refreshError || currentStatus.monitoring === 'unavailable' || !currentStatus.checks.every(check => isCurrentPublicCheck(check, now || Date.now()))
     const overall = currentStatus.overall
-    const headline = overall === 'unknown' ? 'Monitoring unavailable' : overall === 'up'
-        ? 'Everything operational'
-        : overall === 'degraded'
-            ? 'Some systems degraded'
-            : 'Service interruption'
+    const headline = statusHeadline(currentStatus)
     const incident = incidentId ? incidents.find(item => item.id === incidentId || item.aliases?.includes(incidentId)) : null
     if (mode === 'incident') {
         return (

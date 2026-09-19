@@ -1,3 +1,4 @@
+import { simpleStatusText } from './incidentCopy'
 import meaningfulIncidentUpdates from './incidentUpdates'
 import { ServiceCheck, ServiceStatus } from './getStatus'
 
@@ -53,11 +54,11 @@ export function toPublicServiceStatus(status: ServiceStatus, nowMs = Date.now())
             title: publicStatusLabel(incident.title),
             summary: publicStatusMessage(incident.summary) || incident.summary,
             cause: publicStatusMessage(incident.cause) || incident.cause,
-            updates: meaningfulIncidentUpdates(incident.updates.map(update => ({
+            updates: meaningfulIncidentUpdates(incident.updates).map(update => ({
                 ...update,
                 message: publicStatusMessage(update.message) || update.message,
                 evidence: update.evidence ? publicStatusMessage(update.evidence) || update.evidence : undefined,
-            }))),
+            })),
         })),
     }
 }
@@ -140,6 +141,9 @@ function publicStatusMessage(message: string | null) {
         return null
     }
 
+    const simple = simpleStatusText(message)
+    if (simple !== message) return simple
+
     if (/No share page 4xx\/5xx responses in the recent log window\./i.test(message)) {
         return 'Normal workspace link traffic baseline.'
     }
@@ -163,13 +167,6 @@ function publicStatusMessage(message: string | null) {
     }
     if (/No workspace runtime errors in the recent log window\./i.test(message)) {
         return 'Normal workspace runtime traffic baseline.'
-    }
-    if (/stale reviews|processing backlog/i.test(message)) {
-        return 'Threat-intelligence processing is behind its current review target.'
-    }
-    const internalSourceMessage = `${['source', 'operations'].join(' ')} returned`
-    if (new RegExp(`${internalSourceMessage}|source collection`, 'i').test(message)) {
-        return 'Source collection is degraded; new intelligence may be delayed.'
     }
 
     return message
