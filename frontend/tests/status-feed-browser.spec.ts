@@ -32,7 +32,13 @@ test('status feed failures preserve verified evidence without claiming a service
     await expect(page.getByRole('heading', { name: 'Everything operational', exact: true })).toBeVisible()
     await expect(verified).toBeVisible()
     response = { ...healthy, overall: 'down', checks: healthy.checks.map((check, index) => ({ ...check, status: index === 0 ? 'down' : 'up' })) }
-    await expect(page.getByRole('heading', { name: 'Service interruption', exact: true })).toBeVisible({ timeout: 10000 })
+    await expect(page.getByRole('heading', { name: 'API is unavailable', exact: true })).toBeVisible({ timeout: 10000 })
+    response = healthy
+    await expect(page.getByRole('heading', { name: 'Everything operational' })).toBeVisible({ timeout: 10000 })
+    response = { ...healthy, overall: 'degraded', checks: healthy.checks.map(check => ({ ...check, status: check.service === 'Dark web monitoring' ? 'degraded' : 'up' })) }
+    await expect(page.getByRole('heading', { name: 'Dark web monitoring is degraded', exact: true })).toBeVisible({ timeout: 10000 })
+    response = { ...healthy, overall: 'degraded', checks: healthy.checks.map(check => ({ ...check, status: check.service === 'Dark web monitoring' || check.check_name === 'Public Search' ? 'degraded' : 'up' })) }
+    await expect(page.getByRole('heading', { name: 'Public Search and Dark web monitoring are degraded', exact: true })).toBeVisible({ timeout: 10000 })
     response = healthy
     await expect(page.getByRole('heading', { name: 'Everything operational' })).toBeVisible({ timeout: 10000 })
     for (const width of [390, 768, 1440]) {

@@ -11,7 +11,7 @@ test('incident report separates evidence and shows newest updates in bounded pag
     await page.goto(`/status/incidents/${id}`)
     const report = page.getByRole('article')
     await expect(report.getByRole('heading', { name: 'Impact', exact: true })).toBeVisible()
-    await expect(report.getByText('No confirmed root cause was recorded.', { exact: true })).toBeVisible()
+    await expect(report.getByText('Cause unknown.', { exact: true })).toBeVisible()
     await expect(report.locator('li')).toHaveCount(25)
     await expect(report.locator('li').first()).toContainText('Update 1000')
     await expect(report.locator('li').first()).toContainText('Recorded evidence 1000')

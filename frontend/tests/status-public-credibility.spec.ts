@@ -113,7 +113,7 @@ test('public status cannot hide fresh processing or source-collection failures',
     expect(status.overall).toBe('down')
     expect(status.checks.find(check => check.check_name === 'Processing Backlog')).toMatchObject({
         status: 'down',
-        message: 'Threat-intelligence processing is behind its current review target.',
+        message: 'Threat intelligence processing is delayed.',
     })
     expect(status.checks.find(check => check.check_name === 'Processing Backlog')?.message).not.toContain('5263')
     expect(status.checks.find(check => check.check_name === 'Source Collection')).toMatchObject({ status: 'degraded' })
@@ -142,7 +142,7 @@ test('public status preserves degraded source-collection evidence', () => {
     expect(status.overall).toBe('down')
     expect(status.checks.find(check => check.check_name === 'Processing Backlog')).toMatchObject({
         status: 'down',
-        message: 'Threat-intelligence processing is behind its current review target.',
+        message: 'Threat intelligence processing is delayed.',
     })
     expect(status.checks.find(check => check.check_name === 'Processing Backlog')?.message).not.toContain('5263')
     expect(status.checks.find(check => check.check_name === 'Source Collection')).toMatchObject({ status: 'degraded' })
@@ -173,7 +173,7 @@ test('public status exposes stale latest activity as a service failure', () => {
     expect(status.overall).toBe('down')
     expect(status.checks.find(check => check.check_name === 'Latest Activity')).toMatchObject({
         status: 'down',
-        message: 'Latest customer activity is stale (113 minutes).',
+        message: 'The activity feed was 113 minutes out of date.',
     })
 })
 
