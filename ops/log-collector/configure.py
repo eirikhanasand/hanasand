@@ -11,7 +11,7 @@ credential = json.load(sys.stdin) if credential_path == '-' else json.loads(Path
 token = credential['LOG_INGEST_TOKEN']
 if not isinstance(token, str) or len(token) < 32: raise ValueError('Invalid ingestion credential')
 config = json.loads(path.read_text()) if path.exists() else {'start':datetime.datetime.now(datetime.timezone.utc).isoformat()}
-config.update(host=host, url='https://hanasand.com/api/logs/ingest', token=token)
+config.update(host=host, url='https://api.hanasand.com/api/logs/ingest', token=token)
 path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
 temporary = path.with_suffix('.tmp')
 temporary.touch(mode=0o600, exist_ok=True)

@@ -1,6 +1,6 @@
 # Host and VM log collection
 
-The Linux collector sends audit executions, system journal entries and Docker stdout/stderr to `/api/logs/ingest`. Original levels are retained; Mill assigns the separate detection severity. Every execve/execveat from every user and service is audited. Shell built-ins do not create execve events; a shell invocation retains its command arguments. Audit collection requires root and kernel audit support.
+The Linux collector sends audit executions, system journal entries and Docker stdout/stderr to `https://api.hanasand.com/api/logs/ingest`. Original levels are retained; Mill assigns the separate detection severity. Every execve/execveat from every user and service is audited. Shell built-ins do not create execve events; a shell invocation retains its command arguments. Audit collection requires root and kernel audit support.
 
 Run `install.sh <host-id>` as root on Debian/Ubuntu (Python 3.9+, systemd). It installs persistent audit rules, the collector and an enabled service, but does not start delivery. Configure its protected credential, then start it only after the ingestion API is ready:
 

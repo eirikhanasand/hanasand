@@ -5,11 +5,23 @@ import contextlib
 import io
 import json
 import tempfile
+import subprocess
+import sys
 from unittest.mock import patch
 spec=importlib.util.spec_from_file_location('collector',Path(__file__).with_name('collector.py'))
 c=importlib.util.module_from_spec(spec);spec.loader.exec_module(c)
 
 class CollectorTests(unittest.TestCase):
+    def test_configuration_uses_api_origin_and_preserves_cursor_start(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config=Path(tmp)/'collector.json'; config.write_text(json.dumps({'start':'2026-09-01T00:00:00Z'}))
+            credential=Path(tmp)/'credential.json'; credential.write_text(json.dumps({'LOG_INGEST_TOKEN':'synthetic-test-credential-value-only'}))
+            result=subprocess.run([sys.executable,str(Path(__file__).with_name('configure.py')),'inspur',str(credential),str(config)],capture_output=True,text=True,check=True)
+            value=json.loads(config.read_text())
+            self.assertEqual(value['url'],'https://api.hanasand.com/api/logs/ingest')
+            self.assertEqual(value['start'],'2026-09-01T00:00:00Z')
+            self.assertEqual(config.stat().st_mode & 0o777,0o600)
+            self.assertEqual(result.stdout,'')
     def test_exec_identity_command_and_hex_arguments(self):
         raw='''----
 type=SYSCALL msg=audit(1789817000.123:456): arch=c000003e syscall=59 success=yes pid=123 ppid=100 uid=1000 auid=1000 exe="/usr/bin/whoami" key="hanasand_exec"
