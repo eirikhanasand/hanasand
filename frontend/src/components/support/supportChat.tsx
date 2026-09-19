@@ -6,7 +6,7 @@ import { FormEvent, useCallback, useEffect, useState } from 'react'
 import { getCookie } from '@/utils/cookies/cookies'
 
 type Ticket = { id: string; subject: string; status: string; user_name?: string; last_message?: string; updated_at: string }
-type Message = { id: string; sender_id: string; sender_name: string; body: string; created_at: string }
+type Message = { id: string; sender_id: string | null; sender_kind?: string; sender_name: string; body: string; created_at: string }
 
 const fieldClass = 'min-w-0 rounded-lg border border-ui-border bg-ui-canvas px-3 py-2 text-sm text-ui-text outline-none placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
 
@@ -95,7 +95,7 @@ export default function SupportChat({ embedded = false }: { embedded?: boolean }
                     <div className='max-h-36 overflow-y-auto p-2 lg:max-h-none lg:flex-1'>
                         {tickets.map(ticket => (
                             <button key={ticket.id} type='button' aria-pressed={selectedId === ticket.id} onClick={() => setSelectedId(ticket.id)} className={`grid w-full min-w-0 gap-1 rounded-lg p-3 text-left focus-visible:outline-2 focus-visible:outline-ui-primary ${selectedId === ticket.id ? 'bg-ui-primary/10' : 'hover:bg-ui-panel'}`}>
-                                <span className='truncate text-sm font-semibold text-ui-text'>{role === 'support' ? ticket.user_name || ticket.subject : ticket.subject}</span>
+                                <span className='truncate text-sm font-semibold text-ui-text'>{role === 'support' && ticket.user_name !== 'Visitor' ? ticket.user_name || ticket.subject : ticket.subject}</span>
                                 <span className='truncate text-xs text-ui-muted'>{ticket.last_message || 'No messages yet'}</span>
                             </button>
                         ))}
@@ -113,7 +113,7 @@ export default function SupportChat({ embedded = false }: { embedded?: boolean }
                     <p className='text-xs text-ui-muted'>{selected ? 'Messages are saved to this conversation.' : role === 'support' ? 'Choose a conversation from the queue.' : 'Tell us what you need help with.'}</p>
                 </header>
                 <div role='log' aria-label='Messages' className='min-h-0 overflow-y-auto p-4'>
-                    {messages.length ? <div className='grid gap-3'>{messages.map(message => <div key={message.id} className={`min-w-0 max-w-[90%] rounded-lg px-3 py-2 text-sm text-ui-text ${message.sender_id === userId ? 'justify-self-end bg-ui-primary/10' : 'justify-self-start bg-ui-raised'}`}><p className='text-xs font-semibold text-ui-muted'>{message.sender_name}</p><p className='mt-1 whitespace-pre-wrap [overflow-wrap:anywhere]'>{message.body}</p></div>)}</div> : <div className='grid h-full content-center justify-items-center gap-3 text-center text-sm text-ui-muted'><MessageCircle aria-hidden='true' className='h-8 w-8 text-ui-muted' /><p>{loading ? 'Loading conversations…' : role === 'support' ? 'Select a customer chat to read and reply.' : 'Your conversation starts here.'}</p></div>}
+                    {messages.length ? <div className='grid gap-3'>{messages.map(message => message.sender_kind === 'system' ? <p key={message.id} className='px-3 py-1 text-center text-xs leading-5 text-ui-muted'>{message.body}</p> : <div key={message.id} className={`min-w-0 max-w-[90%] rounded-lg px-3 py-2 text-sm text-ui-text ${message.sender_id === userId ? 'justify-self-end bg-ui-primary/10' : 'justify-self-start bg-ui-raised'}`}><p className='text-xs font-semibold text-ui-muted'>{message.sender_name}</p><p className='mt-1 whitespace-pre-wrap [overflow-wrap:anywhere]'>{message.body}</p></div>)}</div> : <div className='grid h-full content-center justify-items-center gap-3 text-center text-sm text-ui-muted'><MessageCircle aria-hidden='true' className='h-8 w-8 text-ui-muted' /><p>{loading ? 'Loading conversations…' : role === 'support' ? 'Select a customer chat to read and reply.' : 'Your conversation starts here.'}</p></div>}
                 </div>
                 <div className='border-t border-ui-border p-4'>
                     {error ? <p role='alert' className='mb-3 text-sm text-ui-danger'>{error}</p> : null}

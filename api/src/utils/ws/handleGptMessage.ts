@@ -253,6 +253,11 @@ function broadcastUpdate(id: string, sender: WS, client: GPT_Client) {
 }
 
 function broadcastPromptEvent(id: string, sender: WS, event: { type?: string }) {
+    // Support transcripts belong only to the visitor and the support team.
+    if ((event as GPT_PromptCompletion).conversationId?.startsWith('support-')) {
+        if (gptSockets.get(sender)?.role === 'producer') settlePendingPromptRequest(event as GPT_PromptCompletion)
+        return
+    }
     settlePendingPromptRequest(event as GPT_PromptCompletion)
 
     const clients = gpt.get(id)

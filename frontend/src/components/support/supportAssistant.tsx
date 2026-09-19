@@ -2,8 +2,8 @@
 
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { MessageCircle, X } from 'lucide-react'
-import SupportChat from './supportChat'
+import { MessageCircle, Sparkles, X } from 'lucide-react'
+import PublicSupportChat from './publicSupportChat'
 import { isInternalAppPath } from '@/utils/routes/appRoutes'
 import isPublicProductPath from '@/utils/routes/isPublicProductPath'
 
@@ -27,15 +27,15 @@ export default function SupportAssistant({ force = false, internal = false }: { 
     return (
         <div className='fixed bottom-4 right-4 z-[1100]'>
             {open ? (
-                <section role='dialog' aria-label='Support assistant' onKeyDown={event => { if (event.key === 'Escape') setOpenPath(null) }} className='grid h-[min(40rem,calc(100dvh-6rem))] w-[min(25rem,calc(100vw-2rem))] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border border-ui-border bg-ui-panel text-ui-text shadow-[0_24px_80px_rgba(0,0,0,0.18)]'>
-                    <header className='flex items-center justify-between gap-3 border-b border-ui-border px-4 py-2'>
-                        <h2 className='flex items-center gap-2 text-sm font-semibold'><MessageCircle className='h-4 w-4 text-ui-primary' />Support</h2>
+                <section role='dialog' aria-label='Support assistant' onKeyDown={event => { if (event.key === 'Escape') setOpenPath(null) }} className='grid h-[min(36rem,calc(100dvh-2rem))] w-[min(25rem,calc(100vw-2rem))] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-2xl border border-ui-border bg-ui-panel text-ui-text shadow-[0_24px_80px_rgba(0,0,0,0.18)]'>
+                    <header className='flex items-center justify-between gap-3 border-b border-ui-border px-5 py-4'>
+                        <div className='flex items-center gap-3'><span className='grid h-9 w-9 place-items-center rounded-xl bg-ui-primary text-ui-canvas'><Sparkles className='h-4 w-4' aria-hidden='true' /></span><div><h2 className='text-sm font-semibold'>Hanasand AI</h2><p className='mt-0.5 text-xs text-ui-muted'>Support</p></div></div>
                         <button type='button' onClick={() => setOpenPath(null)} className='grid h-9 w-9 place-items-center rounded-lg text-ui-muted transition hover:bg-ui-raised hover:text-ui-text' aria-label='Close support assistant'>
                             <X className='h-5 w-5' />
                         </button>
                     </header>
 
-                    <SupportChat />
+                    <PublicSupportChat />
                 </section>
             ) : (
                 <button
