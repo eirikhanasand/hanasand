@@ -54,11 +54,11 @@ export function toPublicServiceStatus(status: ServiceStatus, nowMs = Date.now())
             title: publicStatusLabel(incident.title),
             summary: publicStatusMessage(incident.summary) || incident.summary,
             cause: publicStatusMessage(incident.cause) || incident.cause,
-            updates: meaningfulIncidentUpdates(incident.updates).map(update => ({
+            updates: meaningfulIncidentUpdates(incident.updates.map(update => ({
                 ...update,
                 message: publicStatusMessage(update.message) || update.message,
                 evidence: update.evidence ? publicStatusMessage(update.evidence) || update.evidence : undefined,
-            })),
+            }))),
         })),
     }
 }
