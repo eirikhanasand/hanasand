@@ -90,7 +90,8 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (requiresAuthenticatedRequest(url.pathname)) {
       const authentication = await authenticateOperatorRequest(request, options);
       if (authentication.error) return authentication.error;
-      const organizationId = url.searchParams.get("organizationId") || request.headers.get("x-organization-id");
+      const organizationId = url.pathname.match(/^\/v1\/organizations\/([^/]+)/)?.[1]
+        || url.searchParams.get("organizationId") || request.headers.get("x-organization-id");
       if (organizationId) await (options.store as any).refreshAccountOrganization?.(organizationId);
     }
     if ((options.serviceToken || options.authApiBase || Bun.env.TI_SCRAPER_SERVICE_TOKEN || Bun.env.HANASAND_AUTH_API_BASE)
@@ -418,7 +419,9 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
 }
 
 function requiresAuthenticatedRequest(pathname: string): boolean {
-  return pathname === "/v1/intel/runs"
+  return pathname === "/v1/organizations"
+    || pathname.startsWith("/v1/organizations/")
+    || pathname === "/v1/intel/runs"
     || pathname.startsWith("/v1/intel/runs/")
     || pathname === "/v1/exports/stix"
     || pathname === "/v1/cases"

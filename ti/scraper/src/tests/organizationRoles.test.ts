@@ -26,3 +26,23 @@ test("organization Editors edit cases while Readers and legacy roles only view",
   const outsider = new Request(`http://localhost/v1/cases/case_roles?organizationId=${organization.id}`, { headers: { "x-user-email": "outsider@example.test" } });
   expect((await handleApiRequest(outsider, options)).status).toBe(403);
 });
+
+
+test("scoped organization routes refresh authoritative membership before authorization", async () => {
+  const store = new InMemoryScraperStore();
+  store.saveOrganization({ id: "org_fresh", tenantId: "org_fresh", name: "Fresh roles", status: "active" });
+  store.saveOrganizationMember({ id: "actor", organizationId: "org_fresh", userId: "actor", role: "admin", status: "active" });
+  let refreshed = "";
+  (store as any).refreshAccountOrganization = async (id: string) => {
+    refreshed = id;
+    store.saveOrganizationMember({ id: "actor", organizationId: id, userId: "actor", role: "reader", status: "active" });
+  };
+  const options = { store, frontier: new FocusedFrontier(), authApiBase: "https://auth.example/api", authFetch: async () => Response.json({ id: "actor", roles: [] }) };
+  const headers = { id: "actor", authorization: "Bearer fixture" };
+  const response = await handleApiRequest(new Request("http://localhost/v1/organizations/org_fresh/members?organizationId=wrong_org", { headers }), options);
+  expect(response.status).toBe(200);
+  expect(refreshed).toBe("org_fresh");
+  expect((await response.json() as any).members[0].role).toBe("reader");
+  const denied = await handleApiRequest(new Request("http://localhost/v1/organizations/org_fresh/webhooks/target", { method: "DELETE", headers }), options);
+  expect(denied.status).toBe(403);
+});
