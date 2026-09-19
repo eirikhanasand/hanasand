@@ -77,6 +77,8 @@ export async function cacheTrafficHistoryHour(batchHours = 1): Promise<boolean> 
 }
 
 export function refreshTrafficHistory() {
+    // HTTP workers read shared aggregates; only the background worker advances them.
+    if (process.env.API_HTTP_ONLY === '1') return () => {}
     let running = false
     const refresh = async () => {
         if (running || recoveryReadOnly()) return

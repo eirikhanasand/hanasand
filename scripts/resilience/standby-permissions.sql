@@ -23,3 +23,6 @@ GRANT SELECT ON public.host_update_snapshots, public.host_update_events TO hanas
 GRANT SELECT ON public.service_logs, public.traffic_events, public.mill_events,
     public.log_processing_cursors, public.log_catchup_progress, public.log_process_queue,
     public.mill_log_dimensions, public.mill_log_dimensions_state TO hanasand_standby_app;
+
+-- Organization selector counts pending invites; Traffic reads the owner-security aggregate view.
+GRANT SELECT ON public.organization_invites, public.traffic_aggregate_events TO hanasand_standby_app;
