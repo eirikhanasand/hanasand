@@ -133,7 +133,7 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
             <div className='grid gap-5 p-4 sm:p-6'>
                 <div className='grid gap-1'>
                     <h2 className='text-lg font-semibold text-ui-text'>Upload shareable media</h2>
-                    <p className='text-sm leading-6 text-ui-muted'>Choose a public-safe file or paste a direct public image/video URL.</p>
+                    <p className='text-sm leading-6 text-ui-muted'>Choose a file or paste a image/video URL.</p>
                 </div>
 
                 <div className='grid gap-3'>

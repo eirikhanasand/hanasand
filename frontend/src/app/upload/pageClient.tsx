@@ -72,9 +72,8 @@ export default function UploadPageClient() {
                 <div className='mb-6 grid gap-2'>
                     <p className='text-sm font-semibold uppercase text-ui-primary'>Content</p>
                     <h1 className='text-3xl font-semibold tracking-normal md:text-4xl'>Upload files</h1>
-                    <p className='max-w-2xl text-sm leading-6 text-ui-muted'>Upload public images and videos to your library.</p>
                     <p className='max-w-2xl text-sm leading-6 text-ui-muted' data-upload-safety-boundary='true'>
-                        For public media only. Don’t upload private, confidential, or sensitive files. Remote previews require direct public image/video URLs.
+                        Upload public images and videos to your library. For public media only. Don’t upload private, confidential, or sensitive files.
                     </p>
                 </div>
                 <Link href='/gallery' className='text-sm font-semibold text-ui-primary'>Open library</Link>
