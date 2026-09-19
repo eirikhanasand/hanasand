@@ -21,25 +21,39 @@ def iso(seconds=None):
     return datetime.datetime.fromtimestamp(seconds or time.time(), datetime.timezone.utc).isoformat()
 
 def scrub(text):
+    # Authorization schemes can appear without a literal Authorization header.
+    text = re.sub(r'(?i)\b(Bearer|Basic)\s+[A-Za-z0-9+/_.=-]+', r'\1 [REDACTED]', text)
+    text = re.sub(r'''(?i)(["'](?:set-cookie|cookie|authorization)\s*:\s*)([^"'\r\n]*)(["'])''', r'\1[REDACTED]\3', text)
+    text = re.sub(r'(?i)^(\s*(?:set-cookie|cookie|authorization)\s*:\s*)[^\r\n]*', r'\1[REDACTED]', text)
     text = re.sub(r'(?i)(\b(?:authorization|proxy-authorization)\s*[:=]\s*)(?:bearer\s+|basic\s+)?[^\s\'\"]+', r'\1[REDACTED]', text)
-    text = re.sub(r'(?i)((?:password|passwd|token|secret|api[_-]?key|cookie)[=\s:]+)(\"[^\"]*\"|\'[^\']*\'|[^\s&]+)', r'\1[REDACTED]', text)
+    text = re.sub(r'''(?i)((?:--[\w-]*(?:password|passwd|token|secret|api[_-]?key|cookie)[\w-]*\s+)|(?:\b[\w-]*(?:password|passwd|token|secret|api[_-]?key|cookie)[\w-]*["']?\s*[=:]\s*))("[^"\r\n]*"|'[^'\r\n]*'|[^\s&;,]+)''', r'\1[REDACTED]', text)
+    for program, flag in (('curl', r'(?:-u|-U|--user|--proxy-user|--oauth2-bearer)'), ('sshpass', r'-p'), ('(?:mysql|mariadb)', r'-p'), ('redis-cli', r'-a')):
+        text = re.sub(r'(?i)(\b'+program+r'\b[^;\r\n|]*?\s'+flag+r'(?:=|\s+))("[^"\r\n]*"|\'[^\'\r\n]*\'|[^\s;|]+)', r'\1[REDACTED]', text)
+    for program, flag in (('curl', r'(?:-u|-U)'), ('(?:sshpass|mysql|mariadb)', r'-p'), ('redis-cli', r'-a')):
+        text = re.sub(r'(\b'+program+r'\b[^;\r\n|]*?\s'+flag+r')([^\s;|]+)', r'\1[REDACTED]', text)
     return re.sub(r'(https?://)[^/@\s:]+:[^/@\s]+@', r'\1[REDACTED]@', text)
 
 def scrub_arguments(arguments):
     result = []
     hide_next = False
+    program = Path(arguments[0]).name if arguments else ''
+    short = {'curl':('-u','-U','--user','--proxy-user','--oauth2-bearer'), 'sshpass':('-p',), 'mysql':('-p',), 'mariadb':('-p',), 'redis-cli':('-a',)}.get(program, ())
     for argument in arguments:
         if hide_next:
             result.append('[REDACTED]')
             hide_next = False
             continue
-        result.append(scrub(argument))
-        hide_next = bool(re.fullmatch(r'(?i)--?(?:password|passwd|token|secret|api[_-]?key|cookie|authorization|user|u|p)', argument))
+        attached = next((flag for flag in short if len(flag)==2 and argument.startswith(flag) and len(argument)>2), None)
+        assigned = next((flag for flag in short if argument.startswith(flag+'=')), None)
+        result.append(attached+'[REDACTED]' if attached else assigned+'=[REDACTED]' if assigned else scrub(argument))
+        hide_next = argument in short or bool(re.fullmatch(r'(?i)--?[\w-]*(?:password|passwd|token|secret|api[_-]?key|cookie|authorization)[\w-]*', argument))
     return result
 
 def scrub_metadata(value):
     if isinstance(value, dict):
-        return {key: '[REDACTED]' if re.search(r'(?i)password|token|secret|cookie|authorization|api[_-]?key', key) else scrub_metadata(item) for key, item in value.items()}
+        return {key: '[REDACTED]' if re.search(r'(?i)password|token|secret|cookie|authorization|api[_-]?key', key)
+                else scrub_arguments(item) if key == 'arguments' and isinstance(item, list) and all(isinstance(argument,str) for argument in item)
+                else scrub_metadata(item) for key, item in value.items()}
     if isinstance(value, list): return [scrub_metadata(item) for item in value]
     return scrub(value) if isinstance(value, str) else value
 
@@ -265,7 +279,12 @@ def guest_export(config):
         finally: STATE = root; send = sender
         payload = {'id':uuid.uuid4().hex, 'events':events, 'failures':failures}
         save('export.json', payload)
-    print(spool.read_text())
+    payload = json.loads(spool.read_text())
+    # Replay old spools through current redaction before they leave the guest.
+    for item in payload['events']:
+        item['message'] = scrub(item['message'])
+        item['metadata'] = bounded_metadata(item.get('metadata', {}))
+    print(json.dumps(payload))
 
 def guest_ack(identity):
     payload = load('export.json', {})

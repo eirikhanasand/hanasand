@@ -28,6 +28,30 @@ type=EXECVE msg=audit(1789817001.123:457): argc=2 a0="curl" a1=68747470733a2f2f6
     def test_scrub(self):
         self.assertNotIn('abc123',c.scrub('curl --token abc123 https://test'))
         self.assertNotIn('user:pass',c.scrub('curl https://user:pass@example.test'))
+    def test_command_line_only_credentials_and_headers_are_redacted(self):
+        for text in ('token: Bearer synthetic-private', 'curl --client-secret-key synthetic-private https://example.test',
+                     'curl --header "Cookie: sid=synthetic-private; session=synthetic-private" https://example.test',
+                     'curl -u "user:synthetic-private" https://example.test', 'sshpass -p synthetic-private ssh example.test',
+                     'mysql -p synthetic-private', 'redis-cli -a synthetic-private', 'DB_PASSWORD="synthetic-private phrase"',
+                     'curl -uuser:synthetic-private https://example.test', 'mysql -psynthetic-private'):
+            self.assertNotIn('synthetic-private',c.scrub(text),text)
+            self.assertNotIn('synthetic-private',str(c.scrub_metadata({'process':{'command_line':text}})),text)
+    def test_short_flags_preserve_behavior_when_they_are_not_credentials(self):
+        argv=['mkdir','-p','/etc/cron.d']
+        self.assertEqual(c.scrub_arguments(argv),argv)
+        self.assertEqual(c.scrub('ssh -p 222 example.test'),'ssh -p 222 example.test')
+        self.assertNotIn('synthetic-private',str(c.scrub_arguments(['curl','-usynthetic-private','https://example.test'])))
+        self.assertNotIn('synthetic-private',str(c.scrub_arguments(['sshpass','-p','synthetic-private','ssh','example.test'])))
+        self.assertNotIn('synthetic-private',str(c.scrub_arguments(['curl','--user=user:synthetic-private','https://example.test'])))
+        self.assertNotIn('synthetic-private',str(c.scrub_metadata({'process':{'arguments':['curl','-u','synthetic-private']}})))
+    def test_old_guest_spool_is_redacted_before_replay(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(c,'STATE',Path(tmp)):
+            c.save('export.json',{'id':'existing','events':[{'sourceEventId':'stable','message':'curl -usynthetic-private',
+                'metadata':{'process':{'arguments':['curl','-u','synthetic-private']}}}],'failures':[]})
+            output=io.StringIO()
+            with contextlib.redirect_stdout(output): c.guest_export({'host':'inspur/vm'})
+            self.assertNotIn('synthetic-private',output.getvalue())
+            self.assertEqual(json.loads(output.getvalue())['events'][0]['sourceEventId'],'stable')
     def test_metadata_redaction(self):
         value=c.scrub_metadata({'structured': {'authorization':'Bearer private', 'nested':[{'message':'token=private'}]}})
         self.assertNotIn('private',str(value))
