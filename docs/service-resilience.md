@@ -62,8 +62,9 @@ Reference behavior: [PostgreSQL standby and replication](https://www.postgresql.
 
 ## Isolated cross-site transports (12 September 2026)
 
-The legacy SSH connection remains in place for physical database replication and
-existing consumers. Interactive database reads, intelligence queries, web traffic,
+The legacy SSH connection remains in place for existing consumers. Physical
+database replication now uses the separate compressed connection described above.
+Interactive database reads, intelligence queries, web traffic,
 and monitor exchange use four independent SSH connections. This prevents bulk
 replication or one connection's retransmission stalls from blocking all service
 probes together. All forwarding listeners remain loopback-only, using the existing
@@ -74,7 +75,8 @@ build `Dockerfile.tunnel` with a revision tag, then run
 `isolated-tunnels.py start --image REVISION_IMAGE` on Inspur. Verify the new listeners before running
 `isolated-tunnels.py configure --root SITE_ROOT` at each site and gracefully
 reloading the proxies. The helper retains the previous configuration; it never
-stops the legacy replication tunnel. Source service ports and the stable database
+stops the legacy tunnel. The later `split-replication` step moves only replication
+off that connection. Source service ports and the stable database
 proxy endpoint stay unchanged. New query forwarders use 28503/28502/28506,
 intelligence 28097/29097, web 29300/29080/29090, and monitoring 29911.
 
@@ -85,8 +87,9 @@ a server, and fifteen successful checks are required before failback. A slower
 failure response budget trades several seconds of detection time for tolerance of
 measured cross-site response variation; it does not make a failed response healthy.
 
-Alerts retain red failover and green failback, identify the observing site, and
-include proxy check status/duration. A route unavailable from OVH does not establish
+Case events identify the observing site and retain proxy check status/duration.
+Only the case sender notifies Discord, subject to its 24-hour limit; failover and
+recovery do not send separate messages. A route unavailable from OVH does not establish
 that the same service is down on Inspur. `check-routing-behavior.py` exercises a
 three-second healthy response, sustained HTTP failure, and recovery using an
 isolated HAProxy instance; it does not stop production services.
