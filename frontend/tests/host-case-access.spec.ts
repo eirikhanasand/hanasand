@@ -21,11 +21,15 @@ test('host readers can inspect cases while management controls stay unavailable'
     let canManage = false
     await page.route('**/api/cases/HA-15?*', route => route.fulfill({ json: { case: {
         id: 'HA-15', title: 'HA-15 · Pengeflyt', summary: 'Certificate expired', status: 'resolved', severity: 'high',
+        diskDiagnostics: { host: 'inspur', sampledAt: '2026-09-19T10:00:00Z', filesystems: [{ path: '/', usedPercent: 85, complete: false, directories: [{ path: '/var/lib/docker/volumes/example data', sizeBytes: 10737418240 }] }] },
         canManage, occurrences: 1, notificationsEnabled: true, notifications: [], comments: [], history: [], events: [],
     } } }))
     await page.route('**/api/backend/**', route => route.fulfill({ json: { items: [] } }))
     await page.goto('http://host-case.test/')
     await expect(page.getByRole('heading', { name: 'HA-15 · Pengeflyt' })).toBeVisible()
+    await expect(page.getByText('/var/lib/docker/volumes/example data', { exact: true })).toBeVisible()
+    await expect(page.getByRole('cell', { name: '10 GiB' })).toBeVisible()
+    await expect(page.getByText(/partial/i)).toBeVisible()
     await expect(page.getByLabel('Severity')).toBeDisabled()
     await expect(page.getByRole('button', { name: 'Reopen case' })).toBeDisabled()
     await page.getByText('Notification settings (0)', { exact: true }).click()

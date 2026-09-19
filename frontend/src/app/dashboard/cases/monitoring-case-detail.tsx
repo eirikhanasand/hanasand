@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react'
 import type { CaseRow } from './cases-client'
 
 export type MonitoringCase = CaseRow & {
+    diskDiagnostics?: { sampledAt: string, host: string, filesystems: Array<{ path: string, usedPercent: number, complete: boolean, directories: Array<{ path: string, sizeBytes: number }> }> },
     canManage?: boolean,
     relatedChecks?: Array<{ id: string, name: string, message: string, outcome?: string, completedAt?: string }>,
     events?: CaseEvent[], eventTotal?: number, eventPage?: number, eventSnapshot?: string, currentCheck?: CheckDetails,
@@ -104,6 +105,22 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
             <p role='status' className='sr-only'>{busy ? 'Saving…' : notice}</p>
             {error && <div role='alert' className='text-sm text-ui-danger'>{error} <button className='underline' disabled={busy} onClick={() => setRevision(value => value + 1)}>Retry</button></div>}
         </header>
+        {item?.diskDiagnostics && <section aria-label='Disk usage diagnostics' className='border-b border-ui-border p-5 sm:p-6'>
+            <h2 className='font-semibold'>Largest directories</h2>
+            <p className='mt-1 text-xs text-ui-muted'>{item.diskDiagnostics.host} · Collected {new Date(item.diskDiagnostics.sampledAt).toLocaleString()}. Directory sizes include their contents; nested rows overlap.</p>
+            {item.diskDiagnostics.filesystems.map(filesystem => <div key={filesystem.path} className='mt-4'>
+                <h3 className='text-sm font-medium'>{filesystem.path} · {filesystem.usedPercent}% used</h3>
+                {!filesystem.complete && <p className='mt-1 text-sm text-ui-warning'>Partial scan. Some directories could not be measured before the time limit or were inaccessible.</p>}
+                <div className='mt-2 overflow-x-auto'><table className='w-full text-left text-sm'>
+                    <thead className='border-b border-ui-border text-ui-muted'><tr><th className='py-2 pr-4'>Directory</th><th className='py-2 text-right'>Size</th></tr></thead>
+                    <tbody>{filesystem.directories.map(directory => <tr key={directory.path} className='border-b border-ui-border/50'>
+                        <td className='break-all py-2 pr-4 font-mono'>{directory.path}</td>
+                        <td className='whitespace-nowrap py-2 text-right tabular-nums' title={`${directory.sizeBytes.toLocaleString()} bytes`}>{formatDirectorySize(directory.sizeBytes)}</td>
+                    </tr>)}</tbody>
+                </table></div>
+            </div>)}
+        </section>}
+
         {!item && !error && <p className='p-6'>Loading case…</p>}
         {item && <>
             <div role='tablist' aria-label='Case views' className='flex gap-3 border-b border-ui-border px-5 py-3'>
@@ -196,4 +213,10 @@ function notificationText(text: string) {
 
 function NotificationText({ text }: { text: string }) {
     return <div className='whitespace-pre-wrap'><Markdown skipHtml allowedElements={['p', 'strong', 'em', 'a', 'code', 'br', 'ul', 'ol', 'li', 'blockquote']} components={{ a: ({ href, children }) => <a href={href} className='text-ui-primary underline' target='_blank' rel='noopener noreferrer'>{children}</a> }}>{notificationText(text)}</Markdown></div>
+}
+
+function formatDirectorySize(bytes: number) {
+    const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB']
+    const index = bytes > 0 ? Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024))) : 0
+    return `${(bytes / 1024 ** index).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${units[index]}`
 }

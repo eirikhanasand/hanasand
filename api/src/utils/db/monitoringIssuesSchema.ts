@@ -28,6 +28,7 @@ export default async function ensureMonitoringIssuesSchema() {
         ADD COLUMN IF NOT EXISTS severity_override TEXT CHECK (severity_override IN ('low', 'medium', 'high', 'critical')),
         ADD COLUMN IF NOT EXISTS notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE,
         ADD COLUMN IF NOT EXISTS comments JSONB NOT NULL DEFAULT '[]'::jsonb`)
+    await run('ALTER TABLE monitoring_issues ADD COLUMN IF NOT EXISTS disk_diagnostics JSONB')
     await run(`ALTER TABLE monitoring_issues
         ADD COLUMN IF NOT EXISTS history JSONB NOT NULL DEFAULT '[]'::jsonb,
         ADD COLUMN IF NOT EXISTS resolution JSONB`)

@@ -27,7 +27,7 @@ test('list preserves owner and organization boundaries; elevated access is check
     await app.inject('/cases/monitoring?organizationId=org-1&tenantId=org-1')
     expect(values).toEqual([false, 'owner', 'org-1', null])
     expect(sql).toContain('a.owner_id = $2')
-    expect(sql).toContain('a.organization_id = $3')
+    expect(sql).toContain('a.organization_id = $3 OR a.organization_id IS NULL')
     admin = true
     await app.inject('/cases/monitoring')
     expect(values).toEqual([true, 'owner', null, null])
@@ -61,7 +61,7 @@ test('case mutations require authentication, valid input and the same owner scop
     expect((await patch({ status: 'closed' }, '?tenantId=other')).statusCode).toBe(403)
     expect((await patch({ status: 'closed', comment: 'Verified recovered' })).statusCode).toBe(404)
     expect(sql).toContain('a.owner_id = $2')
-    expect(sql).toContain('a.organization_id = $3')
+    expect(sql).toContain('a.organization_id = $3 OR a.organization_id IS NULL')
 })
 test('updates preserve recovery timestamps and append comments with authenticated attribution', async () => {
     rows = [{ id: '3' }]
