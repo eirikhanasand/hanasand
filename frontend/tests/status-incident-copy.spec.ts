@@ -47,4 +47,12 @@ test('public incident cleanup preserves IDs and recovery times and deduplicates 
     expect(incident.updates).toHaveLength(2)
     expect(incident.updates[0].message).toBe('Recovered. No repair recorded.')
     expect(JSON.stringify(raw)).toBe(copy)
+    const processing = { ...raw, incidents: [{ ...raw.incidents[0], service: 'threat-intelligence', check_name: 'Processing backlog', updates: [
+        { ...raw.incidents[0].updates[0], evidence: '5263 stale reviews (oldest 1848 minutes).' },
+        { ...raw.incidents[0].updates[1], evidence: '5264 stale reviews (oldest 1849 minutes).' },
+        raw.incidents[0].updates[2],
+    ] }] }
+    const short = toPublicServiceStatus(processing).incidents[0]
+    expect(short.updates).toHaveLength(2)
+    expect(short.updates[1].message).toBe('Threat intelligence processing is delayed.')
 })
