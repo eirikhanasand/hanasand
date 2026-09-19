@@ -5,7 +5,7 @@ let calls: Array<{ sql: string, params?: unknown[] }> = []
 mock.module('../src/utils/auth/tokenWrapper.ts', () => ({ default: async () => identity }))
 mock.module('#db', () => ({ default: async (sql: string, params?: unknown[]) => {
     calls.push({ sql, params })
-    return { rows: sql.includes('SELECT 1') ? (allowed ? [{ allowed: 1 }] : []) : [{ id: 'cashflow', name: 'Cashflow', member_count: 2 }] }
+    return { rows: sql.includes('SELECT 1') ? (allowed ? [{ allowed: 1 }] : []) : [{ id: 'cashflow', name: 'Cashflow', member_count: 2, last_active_at: '2026-09-19T10:30:00Z' }] }
 } }))
 const { getManagementOrganizations } = await import('../src/handlers/managementOrganizations')
 afterEach(() => { calls = []; allowed = false; identity = { valid: true, id: 'user-one' } })
@@ -34,6 +34,10 @@ test('Hanasand administrators receive the organization list', async () => {
     expect(response.code).toBe(200)
     expect(response.payload.organizations[0].name).toBe('Cashflow')
     expect(calls).toHaveLength(2)
+    expect(response.payload.organizations[0].last_active_at).toBe('2026-09-19T10:30:00Z')
+    expect(calls[1].sql).toContain("o.status <> 'deleted'")
+    expect(calls[1].sql).toContain("e.outcome = 'success'")
+    expect(calls[1].sql).toContain('k.organization_id = o.id')
 })
 test('navigation access checks do not load or expose the list', async () => {
     allowed = true

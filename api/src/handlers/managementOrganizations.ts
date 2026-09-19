@@ -21,10 +21,16 @@ export async function getManagementOrganizations(req: FastifyRequest<{ Querystri
     if (req.query.access === '1') return res.send({ allowed: true })
     const result = await run(`
         SELECT o.id, o.name, o.slug, o.status, o.created_at,
+            GREATEST(o.updated_at,
+                (SELECT MAX(e.created_at) FROM system_events e
+                 WHERE e.organization_id = o.id AND e.outcome = 'success'),
+                (SELECT MAX(k.last_used_at) FROM api_keys k WHERE k.organization_id = o.id)
+            ) AS last_active_at,
             (SELECT COUNT(*)::int FROM organization_members m
              JOIN users u ON u.id = m.user_id AND u.active = TRUE AND u.deletion_scheduled_at IS NULL
              WHERE m.organization_id = o.id AND m.status = 'active') AS member_count
         FROM organizations o
+        WHERE o.status <> 'deleted'
         ORDER BY lower(o.name), o.id
     `)
     return res.send({ organizations: result.rows })
