@@ -26,7 +26,7 @@ export default async function ensureRepositoryUpToDate() {
 }
 
 async function refreshRepository() {
-    if (!(await hasGitMetadata())) {
+    if (!(await hasGitMetadata()) || !(await git('remote')).split('\n').includes('origin')) {
         lastRefresh = Date.now()
         return
     }

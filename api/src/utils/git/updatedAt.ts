@@ -1,7 +1,5 @@
-import git from './git.ts'
+import git, { LOCAL_REPO_PATH } from './git.ts'
 import { relative } from 'path'
-import { resolve } from 'path'
-const LOCAL_REPO_PATH = resolve('./articles')
 
 export default async function updatedAt(filePath: string): Promise<string> {
     try {

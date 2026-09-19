@@ -6,7 +6,7 @@ import { join, resolve } from 'path'
 
 const execAsync = util.promisify(exec)
 
-const LOCAL_REPO_PATH = resolve('./articles')
+const LOCAL_REPO_PATH = resolve(process.env.ARTICLES_REPO_PATH || (process.env.NODE_ENV === 'production' ? '/var/lib/hanasand/articles' : './articles'))
 const ARTICLES_DIR = join(LOCAL_REPO_PATH, 'articles')
 let ensureRepoPromise: Promise<void> | null = null
 
@@ -42,6 +42,9 @@ async function ensureRepo() {
 }
 
 async function ensureRepoInternal() {
+    // Serving existing content must not wait for Git hosting or require its credentials.
+    // Production stores this repository in the API's existing persistent state volume.
+    if (await directoryExists(ARTICLES_DIR)) return
     let localRepoExists = true
     try {
         await fs.access(LOCAL_REPO_PATH)
