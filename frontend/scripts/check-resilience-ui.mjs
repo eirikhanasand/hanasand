@@ -24,12 +24,16 @@ try {
     page.on('pageerror', error => console.error(error.message))
     await page.goto(server.url.href)
     await page.getByText('Preferred services are available.', { exact: true }).waitFor()
+    await page.getByRole('heading', { name: 'Overview', exact: true }).waitFor()
     state = { mode: 'read_only_recovery', readOnly: true, services: [{ id: 'api', name: 'API', activeInstance: 'ovh-api', activeSite: 'ovhcloud', activeEndpoint: 'ovhcloud:19080', status: 'failed_over', instances: [{ id: 'inspur-api-1', site: 'inspur', healthy: false }, { id: 'inspur-api-2', site: 'inspur', healthy: false }, { id: 'ovh-api', site: 'ovhcloud', healthy: true }] }] }
     await page.reload()
     await page.getByText('Database recovery is read-only. Changes are paused.', { exact: true }).waitFor()
     await page.getByRole('cell', { name: 'ovh-api', exact: true }).waitFor()
     assert((await page.locator('body').innerText()).includes('Changes and new processing are paused.'))
     state = { mode: 'unknown', readOnly: true, services: [] }
+    await page.reload()
+    await page.getByText('Status is reconnecting; availability has not been verified.', { exact: true }).waitFor()
+    state = { mode: 'normal', stale: true, readOnly: false, services: [] }
     await page.reload()
     await page.getByText('Status is reconnecting; availability has not been verified.', { exact: true }).waitFor()
     state = { mode: 'normal', readOnly: false, services: [] }
@@ -48,7 +52,20 @@ try {
         if (width < 1280) assert(await page.locator('[data-resilience-cards] article').evaluateAll(elements => elements.every(el => el.scrollWidth <= el.clientWidth)), `Card overflow at ${width}px`)
     }
     if (process.env.SYSTEM_LAYOUT_SCREENSHOT) {
-        state.services = state.services.map(service => ({ ...service, activeInstance: 'inspur-' + service.id + '-1', activeEndpoint: 'inspur:8082', instances: [{ id: 'inspur-' + service.id + '-1', healthy: true }, { id: 'ovh-alternate', healthy: false }] }))
+        const ids = ['frontend', 'api', 'auth', 'ti', 'db']
+        state.services = state.services.map((service, index) => ({ ...service, activeInstance: 'inspur-' + ids[index] + '-1', activeEndpoint: 'inspur:8082', instances: [{ id: 'inspur-' + ids[index] + '-1', healthy: true }, { id: 'inspur-' + ids[index] + '-2', healthy: true }, { id: 'ovh-' + ids[index], healthy: true }] }))
+        state.sites = { inspur: { fresh: true, compute: { memoryAvailableBytes: 919 * 1024 ** 3, diskFreeBytes: 278 * 1024 ** 3 }, database: { receiverStatus: 'streaming' } }, ovhcloud: { fresh: true, compute: { memoryAvailableBytes: 21 * 1024 ** 3, diskFreeBytes: 626 * 1024 ** 3 }, database: { receiverStatus: 'streaming' } } }
+        state.dns = { 'hanasand.com': { activeSite: 'inspur' }, 'api.hanasand.com': { activeSite: 'inspur' }, 'www.hanasand.com': { activeSite: 'inspur' } }
+        state.notifications = []
+        await page.setViewportSize({ width: 1440, height: 900 })
+        await page.reload()
+        await page.getByText('Preferred services are available.', { exact: true }).waitFor()
+        const panel = page.getByRole('region', { name: 'Overview', exact: true })
+        assert((await panel.boundingBox()).height < 700, 'Overview should fit within a desktop screen')
+        for (const theme of ['dark', 'light']) {
+            await page.locator('html').evaluate((el, theme) => { el.className = theme }, theme)
+            await panel.screenshot({ path: process.env.SYSTEM_LAYOUT_SCREENSHOT + '.' + theme + '.png' })
+        }
         await page.setViewportSize({ width: 390, height: 844 })
         await page.reload()
         await page.getByText('Preferred services are available.', { exact: true }).waitFor()

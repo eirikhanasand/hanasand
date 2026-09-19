@@ -67,5 +67,11 @@ sh scripts/resilience/start-routing.sh "$root"
 trap - EXIT HUP INT TERM
 rm -f "$backup"
 sleep 65
-for port in $old_ports; do docker stop -t 65 "$(pair_name "$port")" >/dev/null; done
+for port in $old_ports; do
+ name=$(pair_name "$port")
+ docker stop -t 65 "$name" >/dev/null
+ # The replacement pair has passed readiness and the old workers have drained.
+ # Keep images and persistent volumes; retire only the superseded containers.
+ docker rm "$name" >/dev/null
+done
 printf '%s deployed: %s; two serving instances on %s\n' "$kind" "$release" "$ports"

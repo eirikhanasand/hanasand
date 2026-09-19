@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Activity, ArrowRight, Bell, CheckCircle2, Database, Globe, HardDrive, Server, ShieldCheck, TriangleAlert } from 'lucide-react'
 
 type Service = { id: string; name: string; activeInstance: string | null; activeSite: string | null; activeEndpoint: string | null; status: string; instances: { id: string; site: string; healthy: boolean }[] }
 type Site = { fresh: boolean; compute?: { diskFreeBytes?: number; memoryAvailableBytes?: number; memoryTotalBytes?: number }; database?: { receiverStatus?: string; replayAt?: string } }
@@ -40,32 +41,60 @@ export function RecoveryBanner() {
 
 export default function ResiliencePanel() {
     const state = useResilience()
-    return <section aria-label='Service resilience' className='rounded-xl border border-current/10 p-4 sm:p-5 space-y-4 max-xl:min-w-0 max-xl:[overflow-wrap:anywhere]'>
-        <div><h2 className='text-lg font-semibold'>Service resilience</h2><p className='text-sm opacity-70'>Inspur preferred → Inspur alternate → OVHcloud. Each service recovers independently.</p></div>
+    const normal = state?.mode === 'normal' && !state.stale
+    const card = 'min-w-0 rounded-lg border border-ui-border bg-ui-raised/50 p-3'
+    const heading = 'mb-1.5 flex items-center gap-2 text-xs font-semibold text-ui-muted'
+    return <section aria-label='Overview' className='min-w-0 space-y-3 rounded-xl border border-ui-border bg-ui-panel p-4 text-ui-text shadow-sm sm:p-5 [overflow-wrap:anywhere]'>
+        <div className='flex flex-wrap items-center justify-between gap-2'>
+            <h2 className='flex items-center gap-2 text-lg font-semibold'><Activity className='h-5 w-5 text-ui-primary' aria-hidden />Overview</h2>
+            <div className='flex flex-wrap items-center gap-2 text-xs text-ui-muted' aria-label='Recovery order: Inspur preferred, Inspur alternate, OVHcloud'><span>Inspur preferred</span><ArrowRight className='h-3 w-3' aria-hidden /><span>Inspur alternate</span><ArrowRight className='h-3 w-3' aria-hidden /><span>OVHcloud</span></div>
+        </div>
         {!state ? <p>Loading service status…</p> : <>
-            <p role='status'>{state.mode === 'normal' ? 'Preferred services are available.' : state.mode === 'unknown' || state.stale ? 'Status is reconnecting; availability has not been verified.' : state.readOnly ? 'Database recovery is read-only. Changes are paused.' : 'Backup services are active.'}</p>
+            <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${normal ? 'border-ui-success/25 bg-ui-success/5 text-ui-success' : 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'}`} role='status'>
+                {normal ? <CheckCircle2 className='h-4 w-4 shrink-0' aria-hidden /> : <TriangleAlert className='h-4 w-4 shrink-0' aria-hidden />}
+                <span>{state.mode === 'unknown' || state.stale ? 'Status is reconnecting; availability has not been verified.' : state.readOnly ? 'Database recovery is read-only. Changes are paused.' : normal ? 'Preferred services are available.' : 'Backup services are active.'}</span>
+                <span className='ml-auto hidden text-ui-muted sm:inline'>Each service recovers independently</span>
+            </div>
             <div className='grid min-w-0 gap-3 sm:grid-cols-2 xl:hidden' data-resilience-cards>
                 {state.services.map(service => <article key={service.id} className='min-w-0 rounded-lg border border-current/10 p-3'>
                     <h3 className='font-semibold'>{service.name}</h3>
                     <dl className='mt-2 grid min-w-0 grid-cols-[5.5rem_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm'>
                         <dt className='opacity-70'>Serving from</dt><dd>{service.activeInstance || 'Unavailable'}</dd>
                         <dt className='opacity-70'>Endpoint</dt><dd>{service.activeEndpoint || 'None'}</dd>
-                        <dt className='opacity-70'>Instances</dt><dd className='space-y-1'>{service.instances.map(instance => <p key={instance.id}>{instance.id}: {instance.healthy ? 'ready' : 'unavailable'}</p>)}</dd>
+                        <dt className='opacity-70'>Instances</dt><dd><InstanceStatus service={service} /></dd>
                     </dl>
                 </article>)}
             </div>
             <div className='hidden overflow-x-auto xl:block' data-resilience-table><table className='w-full text-sm text-left'><thead><tr><th className='p-2'>Service</th><th className='p-2'>Serving from</th><th className='p-2'>Endpoint</th><th className='p-2'>Instances</th></tr></thead><tbody>
-                {state.services.map(service => <tr key={service.id} className='border-t border-current/10'><th className='p-2 font-medium'>{service.name}</th><td className='p-2'>{service.activeInstance || 'Unavailable'}</td><td className='p-2 break-all'>{service.activeEndpoint || 'None'}</td><td className='p-2'>{service.instances.map(instance => `${instance.id}: ${instance.healthy ? 'ready' : 'unavailable'}`).join(' · ')}</td></tr>)}
+                {state.services.map(service => <tr key={service.id} className='border-t border-ui-border transition-colors hover:bg-ui-raised/50'><th className='p-2 font-medium'>{service.name}</th><td className='p-2 text-xs font-mono'>{service.activeInstance || 'Unavailable'}</td><td className='p-2 break-all text-xs text-ui-muted'>{service.activeEndpoint || 'None'}</td><td className='p-2'><InstanceStatus service={service} /></td></tr>)}
             </tbody></table></div>
-            {state.sites && <div className='grid gap-4 md:grid-cols-2'>{Object.entries(state.sites).map(([name, site]) => <div key={name}><h3 className='font-medium'>{name === 'inspur' ? 'Inspur' : 'OVHcloud'}</h3><p className='text-sm'>{site.fresh ? `${Math.round((site.compute?.memoryAvailableBytes || 0) / 1024 ** 3)} GB memory available · ${Math.round((site.compute?.diskFreeBytes || 0) / 1024 ** 3)} GB disk available` : 'Host telemetry is unavailable.'}</p><p className='text-xs opacity-70'>Replication: {site.database?.receiverStatus || 'Not verified'}</p></div>)}</div>}
-            <div className='grid gap-4 md:grid-cols-3'>
-                <div><h3 className='font-medium'>Database replication</h3><p className='text-sm'>{state.database?.status || 'Not verified'}{state.database?.replica ? ' · standby' : ''}</p>{state.database?.replayAt && <p className='text-xs opacity-70'>Last replay: {state.database.replayAt}</p>}</div>
-                <div><h3 className='font-medium'>Backups and recovery</h3><p className='text-sm'>{state.backups?.restoreRequired ? 'A database restore is required.' : state.backups?.status?.replaceAll('_', ' ') || 'Not verified'}</p>{state.backups?.verifiedAt && <p className='text-xs opacity-70'>Verified: {state.backups.verifiedAt}</p>}</div>
-                <div><h3 className='font-medium'>Security and capacity</h3><p className='text-sm'>One writable database. Promotion requires fencing the old primary. OVHcloud reserves capacity for core services; heavy AI processing stays on Inspur.</p></div>
+            {state.sites && <div className='grid gap-3 md:grid-cols-2'>{Object.entries(state.sites).map(([name, site]) => <div key={name} className={card}><div className='flex items-center justify-between gap-2'><h3 className={heading}><Server className='h-4 w-4' aria-hidden />{name === 'inspur' ? 'Inspur' : 'OVHcloud'}</h3><span className='text-xs text-ui-muted'>Replication: {site.database?.receiverStatus || 'Not verified'}</span></div>{site.fresh ? <div className='flex flex-wrap gap-x-5 gap-y-1 text-sm'><span><strong className='font-semibold tabular-nums'>{availableGiB(site.compute?.memoryAvailableBytes)}</strong><span className='ml-1 text-xs text-ui-muted'>memory free</span></span><span><strong className='font-semibold tabular-nums'>{availableGiB(site.compute?.diskFreeBytes)}</strong><span className='ml-1 text-xs text-ui-muted'>disk free</span></span></div> : <p className='text-xs text-ui-warning'>Host telemetry is unavailable.</p>}</div>)}</div>}
+            <div className='grid gap-3 md:grid-cols-3'>
+                <div className={card}><h3 className={heading}><Database className='h-4 w-4' aria-hidden />Database replication</h3><p className={`flex items-center gap-1.5 text-sm ${state.database?.status === 'up' ? 'text-ui-success' : 'text-ui-warning'}`}>{state.database?.status === 'up' ? <CheckCircle2 className='h-4 w-4' aria-hidden /> : <TriangleAlert className='h-4 w-4' aria-hidden />}{state.database?.status || 'Not verified'}{state.database?.replica ? ' · standby' : ''}</p>{state.database?.replayAt && <p className='mt-1 text-xs text-ui-muted'>Last replay: <StatusTime value={state.database.replayAt} /></p>}</div>
+                <div className={card}><h3 className={heading}><HardDrive className='h-4 w-4' aria-hidden />Backups and recovery</h3><p className={`flex items-center gap-1.5 text-sm ${state.backups?.status === 'verified' && !state.backups.restoreRequired ? 'text-ui-success' : 'text-ui-warning'}`}>{state.backups?.status === 'verified' && !state.backups.restoreRequired ? <CheckCircle2 className='h-4 w-4' aria-hidden /> : <TriangleAlert className='h-4 w-4' aria-hidden />}{state.backups?.restoreRequired ? 'A database restore is required.' : state.backups?.status?.replaceAll('_', ' ') || 'Not verified'}</p>{state.backups?.verifiedAt && <p className='mt-1 text-xs text-ui-muted'>Verified: <StatusTime value={state.backups.verifiedAt} /></p>}</div>
+                <div className={card}><h3 className={heading}><ShieldCheck className='h-4 w-4' aria-hidden />Security and capacity</h3><p className='text-xs leading-relaxed text-ui-muted'>One writable database; promotion requires fencing the old primary. OVHcloud reserves core capacity. Heavy AI stays on Inspur.</p></div>
             </div>
-            {state.dns && <div><h3 className='font-medium'>Public endpoints</h3>{Object.entries(state.dns).filter(([, value]) => typeof value === 'object').map(([host, value]) => <p className='text-sm' key={host}>{host}: {typeof value === 'object' ? value.activeSite || 'Verifying' : 'Verifying'}</p>)}</div>}
-            <div><h3 className='font-medium'>Recent recovery notifications</h3>{state.notificationHealth === 'delivery_retry_pending' && <p className='text-sm'>Discord delivery is retrying. Recovery monitoring continues.</p>}{state.notifications?.length ? <ul className='text-sm'>{state.notifications.slice(-5).reverse().map((notification, index) => <li key={index}>{notification.title} — {notification.status}</li>)}</ul> : <p className='text-sm opacity-70'>No delivery has been recorded yet.</p>}</div>
-            {state.updatedAt && <p className='text-xs opacity-60'>Updated {state.updatedAt}</p>}
+            <div className='grid gap-3 md:grid-cols-2'>
+                {state.dns && <div className={card}><h3 className={heading}><Globe className='h-4 w-4' aria-hidden />Public endpoints</h3><div className='flex flex-wrap gap-2'>{Object.entries(state.dns).filter(([, value]) => value && typeof value === 'object').map(([host, value]) => <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-xs' key={host}>{host}<span className='ml-2 text-ui-muted'>{typeof value === 'object' ? value.activeSite || 'Verifying' : 'Verifying'}</span></span>)}</div></div>}
+                <div className={card}><h3 className={heading}><Bell className='h-4 w-4' aria-hidden />Recent recovery notifications</h3>{state.notificationHealth === 'delivery_retry_pending' && <p className='text-xs text-ui-warning'>Discord delivery is retrying. Recovery monitoring continues.</p>}{state.notifications?.length ? <ul className='space-y-1 text-xs'>{state.notifications.slice(-5).reverse().map((notification, index) => <li key={index}>{notification.title} — {notification.status}</li>)}</ul> : <p className='text-xs text-ui-muted'>No delivery has been recorded yet.</p>}</div>
+            </div>
+            {state.updatedAt && <p className='text-right text-[11px] text-ui-muted'>Updated <StatusTime value={state.updatedAt} /></p>}
         </>}
     </section>
+}
+
+function InstanceStatus({ service }: { service: Service }) {
+    return <div className='flex flex-wrap gap-1.5'>{service.instances.map(instance => <span key={instance.id} title={`${instance.id}: ${instance.healthy ? 'ready' : 'unavailable'}${instance.id === service.activeInstance ? ' · serving' : ''}`} className={`inline-flex min-w-0 items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] ${instance.id === service.activeInstance ? 'border-ui-primary/35 bg-ui-primary/10' : 'border-ui-border bg-ui-raised/50'}`}>
+        {instance.healthy ? <CheckCircle2 className='h-3.5 w-3.5 shrink-0 text-ui-success' aria-hidden /> : <TriangleAlert className='h-3.5 w-3.5 shrink-0 text-ui-warning' aria-hidden />}
+        <span>{instance.id}</span><span className='sr-only'>: {instance.healthy ? 'ready' : 'unavailable'}{instance.id === service.activeInstance ? ', serving' : ''}</span>
+    </span>)}</div>
+}
+
+function availableGiB(bytes?: number) {
+    return typeof bytes === 'number' && Number.isFinite(bytes) ? `${Math.round(bytes / 1024 ** 3)} GB` : 'Unknown'
+}
+
+function StatusTime({ value }: { value: string }) {
+    const date = new Date(value)
+    return <time dateTime={value} title={value}>{Number.isNaN(date.getTime()) ? value : date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time>
 }
