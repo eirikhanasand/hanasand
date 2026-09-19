@@ -46,3 +46,12 @@ test('existing text-only callers and disabled mentions are unchanged', async () 
     await deliverDiscordWebhookFile('https://discord.com/api/webhooks/123/test-token', 'Mail recovered', false)
     expect(requests[0].body).toEqual({ content: 'Mail recovered', allowed_mentions: { parse: [] } })
 })
+
+test('organization cases and health checks carry share-link context', () => {
+    const alert = monitoringCaseDiscordAlert('HA-1991', 'Disk usage', 'disk-check', {
+        kind: 'failure', summary: 'Disk usage is high', occurrences: 1,
+        first_seen_at: '2026-09-19T00:00:00Z', last_seen_at: '2026-09-19T00:00:00Z',
+    }, 'hanasand-org')
+    expect(alert.embeds[0].url).toBe('https://hanasand.com/cases/HA-1991?org=hanasand-org')
+    expect(alert.embeds[0].fields?.find(field => field.name === 'Health check')?.value).toContain('&org=hanasand-org')
+})

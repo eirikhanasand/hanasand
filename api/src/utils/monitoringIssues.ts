@@ -66,7 +66,7 @@ export async function recordMonitoringOutcome(automation: AutomationRow, runId: 
     const preferences = await run('SELECT notifications_enabled, kind, summary, occurrences, first_seen_at, last_seen_at, resolved_at, severity_override, status_override FROM monitoring_issues WHERE id = $1', [issue])
     const details = preferences.rows[0]
     if (!details || details.notifications_enabled === false) return
-    const alert = monitoringCaseDiscordAlert(`HA-${issue}`, automation.name || 'Health check', automation.id, details)
+    const alert = monitoringCaseDiscordAlert(`HA-${issue}`, automation.name || 'Health check', automation.id, details, automation.organization_id)
     const destinations = new Set(automation.notification_destinations?.length ? automation.notification_destinations : automation.model_name ? [automation.model_name] : [])
     for (const destination of destinations) {
         // Reserve in PostgreSQL before delivery: concurrent workers and restarts cannot send duplicates.

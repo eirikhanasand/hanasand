@@ -6,8 +6,9 @@ type CaseDetails = {
     resolved_at?: string | Date | null, severity_override?: string | null, status_override?: string | null,
 }
 
-export function monitoringCaseDiscordAlert(caseId: string, monitorName: string, automationId: string, issue: CaseDetails) {
-    const url = `https://hanasand.com/cases/${encodeURIComponent(caseId)}`
+export function monitoringCaseDiscordAlert(caseId: string, monitorName: string, automationId: string, issue: CaseDetails, organizationId?: string | null) {
+    const scope = organizationId ? 'org=' + encodeURIComponent(organizationId) : ''
+    const url = `https://hanasand.com/cases/${encodeURIComponent(caseId)}${scope ? '?' + scope : ''}`
     const severity = issue.severity_override || (issue.kind === 'failure' ? 'high' : 'medium')
     const time = (value: string | Date) => {
         const seconds = Math.floor(new Date(value).getTime() / 1000)
@@ -24,7 +25,7 @@ export function monitoringCaseDiscordAlert(caseId: string, monitorName: string, 
             { name: 'Occurrences', value: String(issue.occurrences), inline: true },
             { name: 'First seen', value: time(issue.first_seen_at), inline: true },
             { name: 'Last seen', value: time(issue.last_seen_at), inline: true },
-            { name: 'Health check', value: `[View health check](https://hanasand.com/automation/health?monitor=${encodeURIComponent(automationId)})` },
+            { name: 'Health check', value: `[View health check](https://hanasand.com/automation/health?monitor=${encodeURIComponent(automationId)}${scope ? '&' + scope : ''})` },
         ],
     }
     return { content: `[${caseId}](${url})`, embeds: [embed] }
