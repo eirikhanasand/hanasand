@@ -1,15 +1,23 @@
+import Link from 'next/link'
 import { Eye, Wifi, WifiOff } from 'lucide-react'
 
 export default function GPT_Header({
     isConnected,
     participants,
+    logsHref,
 }: {
     isConnected: boolean
     participants: number
+    logsHref?: string
 }) {
     return (
         <div className='flex flex-wrap items-center justify-end gap-2'>
             <GPT_HeaderCard label={participants === 1 ? 'Viewer' : 'Viewers'} value={String(participants)} icon={<Eye className='h-4 w-4' />} />
+            {logsHref ? (
+                <Link href={logsHref} className='flex h-9 items-center rounded-md border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text hover:bg-ui-panel'>
+                    View logs
+                </Link>
+            ) : null}
             <GPT_ConnectionCard isConnected={isConnected} />
         </div>
     )
