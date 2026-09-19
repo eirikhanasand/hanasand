@@ -11,6 +11,7 @@ import pathlib
 import subprocess
 
 GROUPS = {
+    'replication': ['-R', '127.0.0.1:38503:127.0.0.1:8503'],
     'database': ['-R', '127.0.0.1:28503:127.0.0.1:8503', '-R', '127.0.0.1:28502:127.0.0.1:18502', '-L', '127.0.0.1:28506:127.0.0.1:18506'],
     'intelligence': ['-R', '127.0.0.1:28097:127.0.0.1:18097', '-L', '127.0.0.1:29097:127.0.0.1:19097'],
     'web': ['-L', '127.0.0.1:29300:127.0.0.1:19300', '-L', '127.0.0.1:29080:127.0.0.1:19080', '-L', '127.0.0.1:29090:127.0.0.1:19090'],
@@ -47,7 +48,7 @@ def authorize():
     index = matching[0]
     if not all(option in lines[index] for option in ('restrict,', 'port-forwarding,', 'command="false"')):
         raise RuntimeError('Existing tunnel key restrictions do not match the expected policy')
-    for port in (28503, 28502, 28097, 29911):
+    for port in (28503, 28502, 28097, 29911, 38503):
         permission = f'permitlisten="127.0.0.1:{port}"'
         if permission not in lines[index]:
             lines[index] = permission + ',' + lines[index]
@@ -75,7 +76,8 @@ def start(image):
         subprocess.run(['docker', 'run', '-d', '--name', name, '--restart', 'unless-stopped', '--network', 'host', '--memory', '128m', '--cpus', '.5',
                         '-v', '/home/hanasand/resilience-secrets/reverse-tunnel-key:/run/key:ro',
                         '-v', '/home/hanasand/resilience-secrets/ovh-known-hosts:/run/known_hosts:ro',
-                        '--entrypoint', 'ssh', image, '-NT', '-i', '/run/key',
+                        '--entrypoint', 'ssh', image, '-NT',
+                        *(['-C'] if group == 'replication' else []), '-i', '/run/key',
                         '-o', 'UserKnownHostsFile=/run/known_hosts', '-o', 'StrictHostKeyChecking=yes',
                         '-o', 'ExitOnForwardFailure=yes', '-o', 'ConnectTimeout=10',
                         '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=3',

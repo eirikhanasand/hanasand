@@ -97,9 +97,34 @@ remote_migrated = isolated.migrate(remote_fixture)
 assert remote_migrated['services'][0]['instances'][0]['address'] == '127.0.0.1:28097'
 assert remote_migrated['services'][0]['instances'][0]['health'] == 'peer:inspur-ti-1'
 assert remote_migrated['services'][0]['instances'][1] == remote_fixture['services'][0]['instances'][1]
-assert len(isolated.GROUPS) == 4
+assert len(isolated.GROUPS) == 5
 for forwards in isolated.GROUPS.values():
     assert all(value.startswith('127.0.0.1:') and ':127.0.0.1:' in value for value in forwards[1::2])
+# Add compressed replication without restarting existing tunnels or mixing bulk WAL with queries.
+from types import SimpleNamespace
+from unittest.mock import patch
+started = []
+def tunnel_command(command, **_kwargs):
+    if command[:2] == ['docker', 'inspect']:
+        return SimpleNamespace(returncode=int(command[-1] == 'hanasand-tunnel-replication'), stdout='true\n')
+    if command[:2] == ['docker', 'run']: started.append(command)
+    return SimpleNamespace(returncode=0, stdout='')
+with patch.object(isolated.subprocess, 'run', side_effect=tunnel_command):
+    isolated.start('test-image')
+assert len(started) == 1 and started[0][started[0].index('--name') + 1] == 'hanasand-tunnel-replication'
+assert '-C' in started[0] and '127.0.0.1:38503:127.0.0.1:8503' in started[0]
+assert not any(value.startswith('127.0.0.1:28503:') for value in started[0])
+import tempfile
+with tempfile.TemporaryDirectory() as directory:
+    home = pathlib.Path(directory)
+    (home / '.ssh').mkdir()
+    key = 'restrict,port-forwarding,command="false",' + ','.join(f'permitlisten="127.0.0.1:{port}"' for port in (18503, 28503, 28502, 28097, 29911)) + ' ssh-ed25519 fixture\n'
+    authorized = home / '.ssh/authorized_keys'
+    authorized.write_text('# untouched\n' + key)
+    with patch.object(isolated.pathlib.Path, 'home', return_value=home):
+        isolated.authorize()
+        isolated.authorize()
+    assert authorized.read_text() == '# untouched\npermitlisten="127.0.0.1:38503",' + key
 observed = monitor.transition_embed(primary, {**remote, 'observedFromSite': 'ovhcloud'}, [remote])
 assert observed['description'] == monitor.transition_embed(primary, remote, [remote])['description']
 assert 'outage' not in observed['description'].lower()
