@@ -11,6 +11,8 @@ type TestTask = {
 const bun = process.execPath
 
 const tasks: TestTask[] = [
+    { id: 'share-statistics', title: 'Share line counts and empty statistics', command: [bun, 'test', 'tests/share-statistics.test.tsx'] },
+    { id: 'content-pages', title: 'Article dates and thoughts copy', command: [bun, 'tests/content-pages.test.tsx'] },
     { id: 'workspace-organization-browser', title: 'Global organization switcher and shared links', command: [bun, 'scripts/check-workspace-organization.mjs'], requires: 'playwright' },
     { id: 'workspace-organization', title: 'Shared organization scope and cookie authorization', command: [bun, 'test', 'tests/workspace-organization.test.ts'] },
     { id: 'incident-updates', title: 'Meaningful incident timeline updates', command: [bun, 'test', 'scripts/check-incident-updates.test.mjs'] },

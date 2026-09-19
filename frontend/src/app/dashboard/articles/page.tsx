@@ -40,10 +40,10 @@ export default async function Page() {
             </DashboardPanel> : null}
 
             {articles.length ? <section className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
-                <EditorialMetric icon={<FileText className='h-4 w-4' />} label='Published' value={String(articles.length)} detail='articles indexed for the public site' tone={articles.length ? 'ok' : 'watch'} />
+                <EditorialMetric icon={<FileText className='h-4 w-4' />} label='Published' value={String(articles.length)} detail='articles' tone={articles.length ? 'ok' : 'watch'} />
                 <EditorialMetric icon={<Clock3 className='h-4 w-4' />} label='Latest edit' value={latest ? shortDate(latest.modified || latest.created) : 'Ready'} detail={latest?.title || 'Create the first article'} tone={latest ? 'ok' : 'neutral'} />
-                <EditorialMetric icon={<Timer className='h-4 w-4' />} label='Reading time' value={totalMinutes ? `${totalMinutes} min` : 'Metering'} detail={`${totalWords.toLocaleString('en-US')} indexed words`} tone='neutral' />
-                <EditorialMetric icon={<Radio className='h-4 w-4' />} label='Publishing' value={articles.length ? 'Live' : 'Open'} detail='new drafts and deletes update this queue' tone={articles.length ? 'ok' : 'watch'} />
+                <EditorialMetric icon={<Timer className='h-4 w-4' />} label='Reading time' value={totalMinutes ? `${totalMinutes} min` : 'Metering'} detail={`${totalWords.toLocaleString('en-US')} words`} tone='neutral' />
+                <EditorialMetric icon={<Radio className='h-4 w-4' />} label='Publishing' value={articles.length ? 'Live' : 'Open'} tone={articles.length ? 'ok' : 'watch'} />
             </section> : null}
 
             {articles.length ? <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
@@ -68,7 +68,7 @@ export default async function Page() {
     )
 }
 
-function EditorialMetric({ icon, label, value, detail, tone }: { icon: ReactNode, label: string, value: string, detail: string, tone: 'ok' | 'watch' | 'neutral' }) {
+function EditorialMetric({ icon, label, value, detail, tone }: { icon: ReactNode, label: string, value: string, detail?: string, tone: 'ok' | 'watch' | 'neutral' }) {
     const dot = tone === 'ok'
         ? 'bg-ui-success shadow-[0_0_14px_rgba(49,196,141,0.65)]'
         : tone === 'watch'
@@ -86,7 +86,7 @@ function EditorialMetric({ icon, label, value, detail, tone }: { icon: ReactNode
                 <span className={`h-2 w-2 rounded-full ${dot}`} />
                 {value}
             </div>
-            <p className='mt-2 line-clamp-2 text-sm leading-5 text-ui-muted'>{detail}</p>
+            {detail ? <p className='mt-2 line-clamp-2 text-sm leading-5 text-ui-muted'>{detail}</p> : null}
         </DashboardPanel>
     )
 }
@@ -103,5 +103,5 @@ function dateMs(value: string) {
 function shortDate(value: string) {
     const date = new Date(value)
     if (Number.isNaN(date.getTime())) return 'Synced'
-    return date.toLocaleString('en', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    return date.toLocaleString('en', { year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
