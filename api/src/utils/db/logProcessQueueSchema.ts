@@ -32,6 +32,8 @@ export const logProcessQueueSchema = [
 export default async function ensureLogProcessQueueSchema() {
     await withTransaction(async query => {
         await query('SELECT pg_advisory_xact_lock(hashtextextended(\'mill:process-queue-schema\', 0))')
+        // Writers lock the source before the queue; use the same order on reinstall.
+        await query('LOCK TABLE service_logs IN SHARE ROW EXCLUSIVE MODE')
         for (const statement of logProcessQueueSchema) await query(statement)
     })
     await run(processLogIndex)

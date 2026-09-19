@@ -11,6 +11,7 @@ type TestTask = {
 const bun = process.execPath
 
 const tasks: TestTask[] = [
+    { id: 'vm-console-start', title: 'Console startup and permission failures', command: [bun, 'test', 'tests/vm-console-start.test.ts'] },
     { id: 'logs-ui', title: 'Log severity, search, inline evidence and realtime reader', command: [bun, 'x', 'playwright', 'test', 'tests/realtime-logs.spec.ts', 'tests/logs-ux-triage.spec.ts', '--workers=1'], env: { PLAYWRIGHT_MANAGED_SERVERS: '0' }, requires: 'playwright' },
     { id: 'logs-pages', title: 'Logs routes on desktop/mobile in light/dark mode', command: [bun, 'scripts/check-dashboard-logs-ui.mjs'], requires: 'playwright' },
     { id: 'role-management', title: 'Role priority and icon editor', command: [bun, 'scripts/check-role-management.mjs'], requires: 'playwright' },

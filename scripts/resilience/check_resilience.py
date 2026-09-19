@@ -97,9 +97,76 @@ remote_migrated = isolated.migrate(remote_fixture)
 assert remote_migrated['services'][0]['instances'][0]['address'] == '127.0.0.1:28097'
 assert remote_migrated['services'][0]['instances'][0]['health'] == 'peer:inspur-ti-1'
 assert remote_migrated['services'][0]['instances'][1] == remote_fixture['services'][0]['instances'][1]
-assert len(isolated.GROUPS) == 4
+assert len(isolated.GROUPS) == 5
 for forwards in isolated.GROUPS.values():
     assert all(value.startswith('127.0.0.1:') and ':127.0.0.1:' in value for value in forwards[1::2])
+# Add compressed replication without restarting existing tunnels or mixing bulk WAL with queries.
+from types import SimpleNamespace
+from unittest.mock import patch
+started = []
+def tunnel_command(command, **_kwargs):
+    if command[:2] == ['docker', 'inspect']:
+        if command[-1] == 'hanasand-tunnel': return SimpleNamespace(returncode=0, stdout='[]')
+        return SimpleNamespace(returncode=int(command[-1] == 'hanasand-tunnel-replication'), stdout='true\n')
+    if command[:2] == ['docker', 'run']: started.append(command)
+    return SimpleNamespace(returncode=0, stdout='')
+with patch.object(isolated.subprocess, 'run', side_effect=tunnel_command):
+    isolated.start('test-image')
+assert len(started) == 1 and started[0][started[0].index('--name') + 1] == 'hanasand-tunnel-replication'
+assert '-C' in started[0] and '127.0.0.1:18503:127.0.0.1:8503' in started[0]
+assert not any(value.startswith('127.0.0.1:28503:') for value in started[0])
+import tempfile
+with tempfile.TemporaryDirectory() as directory:
+    home = pathlib.Path(directory)
+    (home / '.ssh').mkdir()
+    key = 'restrict,port-forwarding,command="false",' + ','.join(f'permitlisten="127.0.0.1:{port}"' for port in (18503, 28503, 28502, 28097, 29911)) + ' ssh-ed25519 fixture\n'
+    authorized = home / '.ssh/authorized_keys'
+    authorized.write_text('# untouched\n' + key)
+    with patch.object(isolated.pathlib.Path, 'home', return_value=home):
+        isolated.authorize()
+        isolated.authorize()
+    assert authorized.read_text() == '# untouched\n' + key
+legacy = ['-NT', '-i', '/run/key', '-o', 'StrictHostKeyChecking=yes', '-R', '127.0.0.1:18503:127.0.0.1:8503', '-L', '127.0.0.1:19300:127.0.0.1:19300', 'ubuntu@192.99.32.185']
+remaining, replication = isolated.replication_commands(legacy)
+assert remaining == legacy[:5] + legacy[7:]
+assert replication == legacy[:5] + ['-C', *legacy[5:7], legacy[-1]]
+assert legacy[5:7] == ['-R', '127.0.0.1:18503:127.0.0.1:8503']
+with patch.object(isolated.subprocess, 'check_output', side_effect=[monitor.json.dumps([{'Config': {'Cmd': legacy}}]).encode(), '1\n']), patch.object(isolated.subprocess, 'run') as run:
+    try:
+        isolated.split_replication()
+        raise AssertionError('A running backup must prevent tunnel migration')
+    except RuntimeError as error:
+        assert 'running database backup' in str(error)
+    run.assert_not_called()
+metadata = {'Config': {'Cmd': legacy, 'Entrypoint': ['ssh'], 'Env': []}, 'State': {'Running': True},
+            'HostConfig': {'NetworkMode': 'host', 'Memory': 134217728, 'NanoCpus': 500000000, 'RestartPolicy': {'Name': 'unless-stopped'}},
+            'Mounts': [], 'Image': 'test-image'}
+commands = []
+def migration_command(command, **_kwargs):
+    commands.append(command)
+    return SimpleNamespace(returncode=1 if command[:2] == ['docker', 'inspect'] else 0)
+failed = monitor.json.dumps([{'State': {'Running': False}, 'RestartCount': 1}]).encode()
+with patch.object(isolated.subprocess, 'check_output', side_effect=[monitor.json.dumps([metadata]).encode(), '0\n', failed]), patch.object(isolated.subprocess, 'run', side_effect=migration_command), patch.object(isolated.time, 'sleep'):
+    try:
+        isolated.split_replication()
+        raise AssertionError('A failed tunnel start must restore the original tunnel')
+    except RuntimeError as error:
+        assert 'did not stay running' in str(error)
+assert commands[-2:] == [['docker', 'rename', 'hanasand-tunnel-before-compression', 'hanasand-tunnel'], ['docker', 'start', 'hanasand-tunnel']]
+assert ['docker', 'rm', '-f', 'hanasand-tunnel-before-compression'] not in commands
+commands.clear()
+def missing_image(command, **_kwargs):
+    commands.append(command)
+    if command[:3] == ['docker', 'image', 'inspect']:
+        raise isolated.subprocess.CalledProcessError(1, command)
+    return SimpleNamespace(returncode=0)
+with patch.object(isolated.subprocess, 'check_output', side_effect=[monitor.json.dumps([metadata]).encode(), '0\n']), patch.object(isolated.subprocess, 'run', side_effect=missing_image):
+    try:
+        isolated.split_replication()
+        raise AssertionError('A missing image must stop migration before any service stops')
+    except isolated.subprocess.CalledProcessError:
+        pass
+assert ['docker', 'stop', 'hanasand-tunnel'] not in commands
 observed = monitor.transition_embed(primary, {**remote, 'observedFromSite': 'ovhcloud'}, [remote])
 assert observed['description'] == monitor.transition_embed(primary, remote, [remote])['description']
 assert 'outage' not in observed['description'].lower()

@@ -4,6 +4,7 @@ type VMRow = {
     name: string
     owner: string
     created_by: string
+    organization_id?: string | null
     access_users: string[] | null
     status: string
     type: string
@@ -25,13 +26,11 @@ type AgentTargetOptions = {
 
 export function buildAgentTarget({ vm, currentUserId, canManage }: AgentTargetOptions): AgentVmTarget {
     const accessUsers = Array.isArray(vm.access_users) ? vm.access_users : []
-    const canConnect = vm.status.toLowerCase() === 'running'
     const supportedActions: Array<'start' | 'stop' | 'restart'> = canManage ? ['start', 'stop', 'restart'] : []
     const canAccess =
         canManage
-        || vm.owner === currentUserId
-        || vm.created_by === currentUserId
-        || accessUsers.includes(currentUserId)
+        || (vm.organization_id ? accessUsers.includes(currentUserId) : vm.owner === currentUserId || vm.created_by === currentUserId || accessUsers.includes(currentUserId))
+    const canConnect = canAccess && vm.status.toLowerCase() === 'running'
     const baseApiPath = `/api/vm/${encodeURIComponent(vm.name)}`
     const vmIp = vm.device_eth0_ipv4_address || ''
 
@@ -61,7 +60,7 @@ export function buildAgentTarget({ vm, currentUserId, canManage }: AgentTargetOp
             canView: true,
             canConnect,
             canManage,
-            canSyncAuthorizedKeys: true,
+            canSyncAuthorizedKeys: canAccess,
             canExecuteRemoteCommands: false,
             canWriteRemoteFiles: false,
             supportedActions,

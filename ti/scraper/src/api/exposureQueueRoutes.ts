@@ -1,3 +1,4 @@
+import { canEditOrganization } from "./organizationRoles.ts";
 import { lookup } from "node:dns/promises";
 import { request as httpsRequest } from "node:https";
 import { isIP, type LookupFunction } from "node:net";
@@ -333,7 +334,7 @@ function exposureWriteScope(request: Request, body: any, options: ApiServerOptio
       && row.status === "active"
       && [row.id, row.userId, row.email].some((value) => String(value ?? "").toLowerCase() === identity.id.toLowerCase()));
     if (!member) return { tenantId: scope.tenantId, organizationId: scope.organizationId, submittedBy: identity.id, error: error("organization_visibility_denied", "Exposure intake requires active organization membership", 403) };
-    if (member.role === "viewer") return { tenantId: scope.tenantId, organizationId: scope.organizationId, submittedBy: identity.id, error: error("exposure_intake_read_only", "Viewer members cannot submit or enrich exposure claims", 403) };
+    if (!canEditOrganization(member.role)) return { tenantId: scope.tenantId, organizationId: scope.organizationId, submittedBy: identity.id, error: error("exposure_intake_read_only", "Readers cannot submit or enrich exposure claims", 403) };
   }
   return { tenantId: scope.tenantId, organizationId: scope.organizationId, submittedBy: identity.id };
 }

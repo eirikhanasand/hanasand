@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
-import { automationAccessError, automationReadScope } from '#utils/automationAccess.ts'
+import { automationAccessError, automationReadScope, automationWriteScope } from '#utils/automationAccess.ts'
 import { loadMonitoringIssues } from '#utils/monitoringIssues.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
@@ -154,7 +154,7 @@ export async function putAutomation(req: FastifyRequest<{ Params: { id: string }
     }
 
     const manageAll = await canManageAllAutomations(req, res)
-    const existing = await loadAutomation(req.params.id, ownerId, manageAll)
+    const existing = await loadAutomation(req.params.id, ownerId, manageAll, true)
     if (!existing) {
         return res.status(404).send({ error: 'Automation not found.' })
     }
@@ -252,7 +252,7 @@ export async function deleteAutomation(req: FastifyRequest<{ Params: { id: strin
                next_run_at = NULL,
                updated_at = NOW()
          WHERE id = $1
-           AND ${automationReadScope('agent_automations', '$2', '$3')}
+           AND ${automationWriteScope('agent_automations', '$2', '$3')}
          RETURNING *
     `, [req.params.id, manageAll, ownerId])
 
@@ -269,7 +269,7 @@ export async function postAutomationRunNow(req: FastifyRequest<{ Params: { id: s
         return res.status(401).send({ error: 'Unauthorized.' })
     }
 
-    const automation = await loadAutomation(req.params.id, ownerId, await canManageAllAutomations(req, res))
+    const automation = await loadAutomation(req.params.id, ownerId, await canManageAllAutomations(req, res), true)
     if (!automation) {
         return res.status(404).send({ error: 'Automation not found.' })
     }
@@ -290,12 +290,12 @@ export async function postAutomationRunNow(req: FastifyRequest<{ Params: { id: s
     return res.status(202).send({ ok: true, message: 'Automation run queued.' })
 }
 
-async function loadAutomation(id: string, ownerId: string, includeAll = false) {
+async function loadAutomation(id: string, ownerId: string, includeAll = false, mutate = false) {
     const result = await run(`
         SELECT *
         FROM agent_automations
         WHERE id = $1
-          AND ${automationReadScope('agent_automations', '$2', '$3')}
+          AND ${automationReadScope('agent_automations', '$2', '$3', mutate)}
           AND status <> 'archived'
     `, [id, includeAll, ownerId])
 

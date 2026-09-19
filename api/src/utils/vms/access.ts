@@ -10,19 +10,19 @@ export async function vmViewer(req: FastifyRequest, res: FastifyReply) {
     return { id, admin }
 }
 
-export async function requireVmAccess(req: FastifyRequest, res: FastifyReply, name: string, allowDeleted = false) {
+export async function requireVmAccess(req: FastifyRequest, res: FastifyReply, name: string, allowDeleted = false, manage = false) {
     const viewer = await vmViewer(req, res)
     if (!viewer) return null
     const result = await run('SELECT name, owner, created_by, access_users, deleted_at FROM vms WHERE LOWER(name) = LOWER($1) LIMIT 1', [name])
     const vm = result.rows[0]
-    if (!vm || !viewer.admin && !await hasVmAccess(vm.name, viewer.id)) {
+    if (!vm || !viewer.admin && !await hasVmAccess(vm.name, viewer.id, manage)) {
         res.status(404).send({ error: 'VM not found.' }); return null
     }
     if (vm.deleted_at && !allowDeleted) { res.status(409).send({ error: 'This VM is scheduled for deletion. Restore it before connecting.' }); return null }
     return { ...viewer, name: vm.name as string }
 }
 
-export async function hasVmAccess(name: string, userId: string) {
-    const result = await run('SELECT vm_user_has_access($1, $2) AS allowed', [name, userId])
+export async function hasVmAccess(name: string, userId: string, manage = false) {
+    const result = await run(manage ? 'SELECT vm_user_can_manage($1, $2) AS allowed' : 'SELECT vm_user_has_access($1, $2) AS allowed', [name, userId])
     return result.rows[0]?.allowed === true
 }

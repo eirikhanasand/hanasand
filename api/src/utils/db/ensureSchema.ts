@@ -1,3 +1,4 @@
+import ensureOrganizationRolesSchema from './organizationRolesSchema.ts'
 import ensureRoleSchema from './roleSchema.ts'
 import ensureLogDimensionsSchema from './logDimensionsSchema.ts'
 import ensureLogProcessQueueSchema from './logProcessQueueSchema.ts'
@@ -897,7 +898,7 @@ export default async function ensureSchema() {
         CREATE TABLE IF NOT EXISTS organization_members (
             organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
             user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'admin', 'member', 'viewer')),
+            role TEXT NOT NULL DEFAULT 'reader' CHECK (role IN ('owner', 'admin', 'editor', 'reader', 'member', 'viewer')),
             status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'removed')),
             invited_by TEXT REFERENCES users(id) ON DELETE SET NULL,
             joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -910,7 +911,7 @@ export default async function ensureSchema() {
             id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
             organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
             email TEXT NOT NULL,
-            role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('admin', 'member', 'viewer')),
+            role TEXT NOT NULL DEFAULT 'reader' CHECK (role IN ('admin', 'editor', 'reader', 'member', 'viewer')),
             invited_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'revoked')),
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -920,12 +921,9 @@ export default async function ensureSchema() {
             UNIQUE (organization_id, email)
         )
     `)
-    await run('ALTER TABLE organization_members DROP CONSTRAINT IF EXISTS organization_members_role_check')
-    await run('ALTER TABLE organization_members ADD CONSTRAINT organization_members_role_check CHECK (role IN (\'owner\', \'admin\', \'member\', \'viewer\'))')
+    await ensureOrganizationRolesSchema()
     await run('ALTER TABLE organization_members ADD COLUMN IF NOT EXISTS removed_at TIMESTAMPTZ')
     await run('UPDATE organization_members SET removed_at = NOW() WHERE status = \'removed\' AND removed_at IS NULL')
-    await run('ALTER TABLE organization_invites DROP CONSTRAINT IF EXISTS organization_invites_role_check')
-    await run('ALTER TABLE organization_invites ADD CONSTRAINT organization_invites_role_check CHECK (role IN (\'admin\', \'member\', \'viewer\'))')
     await run('ALTER TABLE organization_invites ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL \'14 days\')')
     await run('ALTER TABLE organization_invites ADD COLUMN IF NOT EXISTS accepted_by TEXT REFERENCES users(id) ON DELETE SET NULL')
     await run('ALTER TABLE organization_invites ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ')
@@ -1431,12 +1429,16 @@ export default async function ensureSchema() {
     await run('CREATE INDEX IF NOT EXISTS idx_mill_events_org_time ON mill_events(organization_id, event_timestamp DESC)')
     await run('ALTER TABLE mill_events ADD COLUMN IF NOT EXISTS log_key TEXT')
     await run('CREATE INDEX IF NOT EXISTS idx_mill_events_pending ON mill_events(event_timestamp, id) WHERE processing_status = \'pending\'')
+    await run(`CREATE INDEX IF NOT EXISTS idx_mill_events_native_pending ON mill_events(event_timestamp, id)
+        WHERE ingestion_id <> 'logs' AND processing_status = 'pending'`)
     await run('CREATE UNIQUE INDEX IF NOT EXISTS idx_mill_events_log_key ON mill_events(log_key)')
     await run('CREATE TABLE IF NOT EXISTS log_processing_cursors (name TEXT PRIMARY KEY, last_id BIGINT NOT NULL DEFAULT 0, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), last_error TEXT)')
     await run('ALTER TABLE log_processing_cursors ADD COLUMN IF NOT EXISTS recent_id BIGINT')
     await run('CREATE INDEX IF NOT EXISTS idx_mill_events_logs_skipped ON mill_events(id) WHERE ingestion_id = \'logs\' AND processing_status = \'skipped\'')
     await run('CREATE INDEX IF NOT EXISTS idx_mill_events_logs_time ON mill_events(event_timestamp DESC, id DESC) WHERE ingestion_id = \'logs\' AND processing_status = \'processed\'')
     await run('CREATE INDEX IF NOT EXISTS idx_mill_events_org_user_time ON mill_events(organization_id, user_id, event_timestamp DESC)')
+    await run(`CREATE INDEX IF NOT EXISTS idx_mill_auth_failure_source_time ON mill_events(organization_id, md5(source_ip), event_timestamp DESC)
+        WHERE event_type = 'authentication' AND action = 'login' AND outcome = 'failure'`)
     await ensureLogDimensionsSchema()
     await ensureLogProcessQueueSchema()
     await run(`

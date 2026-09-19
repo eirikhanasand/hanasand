@@ -26,12 +26,12 @@ import {
     createMailbox,
     deleteFilter,
     fetchMailOverview,
-    messageAction,
     sendMail,
 } from '@/utils/mail/client'
 import type { MailMessageSummary, MailOverview } from '@/utils/mail/types'
 import { DashboardPage, DashboardPanel, dashboardPanelClass } from '@/components/dashboard/ui'
 import ErrorNotice from '@/components/error/errorNotice'
+import DmarcReportPreview, { reportAttachments } from './dmarcReport'
 import { Composer, MessageRow, type MailQuickAction } from './mailWorkspaceParts'
 import {
     ActionIconButton,
@@ -82,13 +82,11 @@ export default function MailWorkspace({ mailboxUser }: Props) {
         if (readingMessage) reader.current?.scrollIntoView({ block: 'start' })
     }, [readingMessage])
     const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null)
-    const [moveTargetMailboxId, setMoveTargetMailboxId] = useState('')
     const [composer, setComposer] = useState<ComposerState>(emptyComposer)
     const [creatingMailbox, setCreatingMailbox] = useState(false)
     const [mailboxModalOpen, setMailboxModalOpen] = useState(false)
     const [mailboxDraft, setMailboxDraft] = useState('')
     const [creatingFilter, setCreatingFilter] = useState(false)
-    const [movingMessage, setMovingMessage] = useState(false)
     const [sidebarCompact, setSidebarCompact] = useState(false)
     const [adminDrawerOpen, setAdminDrawerOpen] = useState(false)
     const [query, setQuery] = useState('')
@@ -146,7 +144,6 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 || null
             selection.current = { user: next.mailboxUser, mailbox: next.selectedMailboxId, message: nextSelectedMessageId }
             setSelectedMessageId(nextSelectedMessageId)
-            setMoveTargetMailboxId('')
             setBackgroundIssue('')
             setLastSuccessAt(Date.now())
         } catch (cause) {
@@ -502,57 +499,6 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                 </div>
                             </div>
 
-                            <details className='rounded-lg border border-ui-border bg-ui-raised' data-mail-message-filing-disclosure>
-                                <summary className='flex cursor-pointer list-none flex-col gap-1 px-3 py-2 text-xs font-semibold text-ui-text transition hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
-                                    <span>Filing and read state</span>
-                                    <span className='text-[11px] font-medium text-ui-muted'>Move, mark read, or mark unread</span>
-                                </summary>
-                                <div className='flex flex-wrap items-center gap-2 border-t border-ui-border p-3'>
-                                    <select
-                                        className={`${subtleInput} min-w-48 flex-1`}
-                                        value={moveTargetMailboxId}
-                                        onChange={event => setMoveTargetMailboxId(event.target.value)}
-                                    >
-                                        <option value=''>Move to…</option>
-                                        {overview.mailboxes
-                                            .filter(mailbox => mailbox.id !== selectedMailboxId)
-                                            .map(mailbox => (
-                                                <option key={mailbox.id} value={mailbox.id}>
-                                                    {mailbox.name}
-                                                </option>
-                                            ))}
-                                    </select>
-                                    <button
-                                        className={toolbarButton}
-                                        disabled={!moveTargetMailboxId || movingMessage}
-                                        onClick={async () => {
-                                            if (!moveTargetMailboxId) {
-                                                return
-                                            }
-
-                                            setMovingMessage(true)
-                                            try {
-                                                await messageAction(selectedMessage.id, {
-                                                    mailboxUser: overview.mailboxUser,
-                                                    action: 'move',
-                                                    targetMailboxId: moveTargetMailboxId,
-                                                })
-                                                await load({ mailboxId: moveTargetMailboxId, messageId: null, silent: true })
-                                            } catch (cause) {
-                                                setError(cause instanceof Error ? cause.message : 'Unable to move message.')
-                                            } finally {
-                                                setMovingMessage(false)
-                                            }
-                                        }}
-                                    >
-                                        Move
-                                    </button>
-                                    <button className={toolbarButton} onClick={() => void runAction(selectedMessage.id, overview, setError, load, selectedMessage.isRead ? 'unread' : 'read')}>
-                                        {selectedMessage.isRead ? 'Mark unread' : 'Mark read'}
-                                    </button>
-                                </div>
-                            </details>
-
                             {!!selectedMessage.attachments.length && (
                                 <div className='rounded-lg border border-ui-border bg-ui-raised p-3'>
                                     <div className='mb-2 text-[11px] font-medium uppercase tracking-[0.22em] text-ui-muted'>Attachments</div>
@@ -564,6 +510,8 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                 </div>
                             )}
 
+                            {reportAttachments(selectedMessage).map(attachment => <DmarcReportPreview key={`${overview.mailboxUser}:${selectedMessage.id}:${attachment.blobId}`} attachment={attachment} mailboxUser={overview.mailboxUser} />)}
+
                             {selectedMessage.htmlBody ? (
                                 <iframe
                                     title='HTML mail'
@@ -572,11 +520,11 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                     sandbox='allow-popups allow-popups-to-escape-sandbox'
                                     srcDoc={renderedHtml}
                                 />
-                            ) : (
+                            ) : selectedMessage.textBody ? (
                                 <article className='min-w-0 wrap-anywhere rounded-lg border border-ui-border px-4 py-3 xl:min-h-40 xl:flex-1 xl:overflow-y-auto text-[13px] leading-6 whitespace-pre-wrap text-ui-text'>
                                     {selectedMessage.textBody}
                                 </article>
-                            )}
+                            ) : null}
                         </div>
                     )}
                 </section>}

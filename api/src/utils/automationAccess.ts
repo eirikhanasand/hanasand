@@ -14,7 +14,7 @@ export async function automationAccessError(input: AccessInput, ownerId: string,
     if (!systemAdmin && [input.modelName, ...(input.notificationDestinations || [])].some(value => value && !isDiscordWebhookUrl(value))) return 'Use a valid Discord webhook URL for your notifications.'
     if (!input.organizationId) return input.actionType === 'organization_report' ? 'Organization reports need an organization.' : null
     const result = await run(`SELECT 1 FROM organizations o WHERE o.id = $1 AND o.status = 'active'
-        AND ($3::boolean OR EXISTS (SELECT 1 FROM organization_members m WHERE m.organization_id = o.id AND m.user_id = $2 AND m.status = 'active'))`, [input.organizationId, ownerId, systemAdmin])
+        AND ($3::boolean OR EXISTS (SELECT 1 FROM organization_members m WHERE m.organization_id = o.id AND m.user_id = $2 AND m.status = 'active' AND m.role IN ('owner', 'admin', 'editor')))`, [input.organizationId, ownerId, systemAdmin])
     return result.rows.length ? null : 'You no longer have access to this organization.'
 }
 
@@ -26,12 +26,16 @@ export async function checkScheduledAutomationAccess(input: AccessInput, ownerId
 }
 
 // Aliases and placeholders are fixed by callers, never supplied by a request.
-export function automationReadScope(alias: string, admin: string, owner: string) {
+export function automationReadScope(alias: string, admin: string, owner: string, mutate = false) {
     const a = alias ? `${alias}.` : ''
     return `(${admin}::boolean OR (${a}owner_id = ${owner}
         AND ${a}action_type <> 'mail_health_check' AND ${a}target_url IS DISTINCT FROM 'system:resilience' AND ${a}target_url IS DISTINCT FROM 'system:metrics' AND ${a}target_url IS DISTINCT FROM 'system:ti-delivery' AND ${a}target_url IS DISTINCT FROM 'system:ti-collection' AND ${a}target_url IS DISTINCT FROM 'system:ti-enrichment'
         AND COALESCE(${a}model_name, '') NOT LIKE 'discord-webhook-file:%'
         AND NOT EXISTS (SELECT 1 FROM unnest(${a}notification_destinations) destination WHERE destination LIKE 'discord-webhook-file:%')
         AND (${a}organization_id IS NULL OR EXISTS (SELECT 1 FROM organizations o JOIN organization_members m ON m.organization_id = o.id
-            WHERE o.id = ${a}organization_id AND o.status = 'active' AND m.user_id = ${owner} AND m.status = 'active'))))`
+            WHERE o.id = ${a}organization_id AND o.status = 'active' AND m.user_id = ${owner} AND m.status = 'active' ${mutate ? 'AND m.role IN (\'owner\', \'admin\', \'editor\')' : ''}))))`
+}
+
+export function automationWriteScope(alias: string, admin: string, owner: string) {
+    return automationReadScope(alias, admin, owner, true)
 }

@@ -12,8 +12,8 @@ export async function createDwmCollectionRequest(request: Request, options: ApiS
   const access = authorizeDwmWorkflowAccess({ options, scope, request, body, mode: "mutate" });
   if (access.error) return access.error;
   if (!scope.organizationId) return error("organization_required", "Select an organization before requesting collection", 400);
-  if (!access.member || !["owner", "admin"].includes(access.member.role)) {
-    return error("collection_role_required", "Fresh collection requires an active organization owner or administrator", 403);
+  if (!access.member || !["owner", "admin", "editor"].includes(access.member.role)) {
+    return error("collection_role_required", "Fresh collection requires an active organization owner, administrator, or editor", 403);
   }
   if (typeof options.runExecutor !== "function") return error("collection_unavailable", "Collection execution is unavailable", 503);
 

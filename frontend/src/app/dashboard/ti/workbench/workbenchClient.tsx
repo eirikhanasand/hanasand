@@ -2933,7 +2933,7 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
     const effectiveStatus = decision?.status ?? backedStatus ?? item.status
     const effectiveOwner = decision?.owner ?? backedOwner ?? item.owner
     const ownerValue = ownerDraft ?? (effectiveOwner === 'unassigned' ? '' : effectiveOwner)
-    const assignableMembers = orgContext?.members.filter(member => member.status === 'active' && member.role !== 'viewer') || []
+    const assignableMembers = orgContext?.members.filter(member => member.status === 'active' && ['owner', 'admin', 'editor', 'analyst'].includes(member.role)) || []
     const readOnly = caseDetail?.status === 'ready' && caseDetail.detail.access?.readOnly === true
     const sendDisabledReason = sendDeliveryDisabledReason(item, orgContext)
     return (

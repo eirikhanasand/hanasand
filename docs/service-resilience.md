@@ -10,6 +10,12 @@ PostgreSQL has one writable primary, an Inspur physical standby and an OVH physi
 
 The primary retains up to 16 GB of WAL per slot (`max_slot_wal_keep_size`), increased from 2 GB after the OVH replica fell behind. `wal_compression=lz4` reduces replication traffic; `full_page_writes` stays enabled. Replica checks open an HA case when the slot is missing, inactive, or more than 1 MB behind. Lost WAL stays recorded through failed samples and clears only after that replica catches up. Restore into a new volume and verify the backup before replacing the failed replica; retain the old volume until recovery is confirmed.
 
+The primary uses `max_wal_size=8GB` with the existing five-minute checkpoint interval. The former 1 GB threshold caused back-to-back checkpoints during log processing, adding disk writes and replication traffic. `fsync` and `full_page_writes` remain enabled. This checkpoint threshold is separate from each replica's WAL retention limit.
+
+During recovery, the scheduled API worker can use `LOG_CATCHUP_BATCH_LIMIT=100` to limit each page of historical and recovery work. Fresh command collection, recent-event priority, enabled security rules and saved cursors stay intact. The setting accepts integers from 1 to 1000; removing it restores the default. Keep it on the scheduled worker, not HTTP workers. Measure WAL generation and replica replay before lifting the limit. Extra WAL retention gives a restore more time, but cannot fix a replica that continually falls further behind.
+
+OVH replication uses its own compressed SSH connection, `hanasand-tunnel-replication`, on the existing loopback port 18503. No SSH permissions or database connection settings change. After a restore's backup transfer finishes, run `isolated-tunnels.py split-replication` on Inspur; supply `--image` with an available tunnel image if the original image was removed. It refuses to interrupt a running backup, checks the image before stopping anything, keeps the legacy tunnel for rollback, and restores it if startup fails. Other forwards keep their existing settings; application queries remain on their separate, uncompressed connection. Verify that the replica catches up before treating it as recovered.
+
 There is no automatic writable promotion. Two sites cannot distinguish a dead primary from a network partition without an independent fencing decision. Confirm the old primary cannot accept writes, check replay position and the accepted data-loss window, then promote through an operator-led procedure. Rejoin a former primary by reseeding it from the new primary; this installation does not assume pg_rewind prerequisites. The isolated switching check exercises replication, fenced promotion, reseeding and failback without stopping production databases.
 
 Authentication validates actual stored sessions against the selected database. Read-only validation does not refresh timestamps or extend the persisted expiry. Missing/stale recovery status blocks mutations. Both API and frontend boundaries return a structured temporary-unavailability response; the UI identifies recovery and unavailable services. OVH permits core viewing and search, while heavy AI and administrative operations remain unavailable.
@@ -60,8 +66,9 @@ Reference behavior: [PostgreSQL standby and replication](https://www.postgresql.
 
 ## Isolated cross-site transports (12 September 2026)
 
-The legacy SSH connection remains in place for physical database replication and
-existing consumers. Interactive database reads, intelligence queries, web traffic,
+The legacy SSH connection remains in place for existing consumers. Physical
+database replication now uses the separate compressed connection described above.
+Interactive database reads, intelligence queries, web traffic,
 and monitor exchange use four independent SSH connections. This prevents bulk
 replication or one connection's retransmission stalls from blocking all service
 probes together. All forwarding listeners remain loopback-only, using the existing
@@ -72,7 +79,8 @@ build `Dockerfile.tunnel` with a revision tag, then run
 `isolated-tunnels.py start --image REVISION_IMAGE` on Inspur. Verify the new listeners before running
 `isolated-tunnels.py configure --root SITE_ROOT` at each site and gracefully
 reloading the proxies. The helper retains the previous configuration; it never
-stops the legacy replication tunnel. Source service ports and the stable database
+stops the legacy tunnel. The later `split-replication` step moves only replication
+off that connection. Source service ports and the stable database
 proxy endpoint stay unchanged. New query forwarders use 28503/28502/28506,
 intelligence 28097/29097, web 29300/29080/29090, and monitoring 29911.
 
@@ -83,8 +91,9 @@ a server, and fifteen successful checks are required before failback. A slower
 failure response budget trades several seconds of detection time for tolerance of
 measured cross-site response variation; it does not make a failed response healthy.
 
-Alerts retain red failover and green failback, identify the observing site, and
-include proxy check status/duration. A route unavailable from OVH does not establish
+Case events identify the observing site and retain proxy check status/duration.
+Only the case sender notifies Discord, subject to its 24-hour limit; failover and
+recovery do not send separate messages. A route unavailable from OVH does not establish
 that the same service is down on Inspur. `check-routing-behavior.py` exercises a
 three-second healthy response, sustained HTTP failure, and recovery using an
 isolated HAProxy instance; it does not stop production services.

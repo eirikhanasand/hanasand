@@ -6,7 +6,7 @@ import type { ApiServerOptions } from "./serverTypes.ts";
 import { privateTarget } from "../registry/sourceRegistry.ts";
 import { authenticateOperatorRequest, type AuthenticatedIdentity } from "./requestAuthentication.ts";
 
-type OrganizationRole = "owner" | "admin" | "analyst" | "viewer";
+type OrganizationRole = "owner" | "admin" | "editor" | "reader" | "analyst" | "member" | "viewer";
 type OrganizationStatus = "active" | "suspended";
 type MemberStatus = "active" | "invited" | "removed";
 type InviteStatus = "pending" | "accepted" | "revoked" | "expired";
@@ -184,7 +184,7 @@ export async function listWebhookDestinations(request: Request, options: ApiServ
 }
 
 export async function createWebhookDestination(request: Request, options: ApiServerOptions, organizationId: string | undefined): Promise<Response> {
-  const access = await authorizeOrganizationRequest(request, options, organizationId, true);
+  const access = await authorizeOrganizationRequest(request, options, organizationId, true, ["owner", "admin", "editor"]);
   if (access.error) return access.error;
   const organization = findOrganization(options, organizationId);
   if (!organization) return orgNotFound();
@@ -211,7 +211,7 @@ export async function createWebhookDestination(request: Request, options: ApiSer
 }
 
 export async function updateWebhookDestination(request: Request, options: ApiServerOptions, organizationId: string | undefined, destinationId: string | undefined): Promise<Response> {
-  const access = await authorizeOrganizationRequest(request, options, organizationId, true);
+  const access = await authorizeOrganizationRequest(request, options, organizationId, true, ["owner", "admin", "editor"]);
   if (access.error) return access.error;
   const organization = findOrganization(options, organizationId);
   if (!organization) return orgNotFound();
@@ -240,7 +240,7 @@ export async function updateWebhookDestination(request: Request, options: ApiSer
 }
 
 export async function disableWebhookDestination(request: Request, options: ApiServerOptions, organizationId: string | undefined, destinationId: string | undefined): Promise<Response> {
-  const access = await authorizeOrganizationRequest(request, options, organizationId, true);
+  const access = await authorizeOrganizationRequest(request, options, organizationId, true, ["owner", "admin", "editor"]);
   if (access.error) return access.error;
   const organization = findOrganization(options, organizationId);
   if (!organization) return orgNotFound();
@@ -252,7 +252,7 @@ export async function disableWebhookDestination(request: Request, options: ApiSe
 }
 
 export async function testOrganizationWebhook(request: Request, options: ApiServerOptions, organizationId: string | undefined): Promise<Response> {
-  const access = await authorizeOrganizationRequest(request, options, organizationId, true);
+  const access = await authorizeOrganizationRequest(request, options, organizationId, true, ["owner", "admin", "editor"]);
   if (access.error) return access.error;
   const organization = findOrganization(options, organizationId);
   if (!organization) return orgNotFound();
@@ -517,7 +517,7 @@ function toEmailList(value: unknown): string[] {
 }
 
 function normalizeRole(value: unknown): OrganizationRole {
-  return value === "owner" || value === "admin" || value === "viewer" ? value : "analyst";
+  return value === "owner" || value === "admin" || value === "editor" || value === "analyst" ? value : "reader";
 }
 
 export function normalizeWebhookUrl(value: unknown): string | undefined {

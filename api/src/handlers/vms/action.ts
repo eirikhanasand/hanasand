@@ -33,7 +33,7 @@ export default async function vmAction(req: FastifyRequest, res: FastifyReply) {
                 return res.status(404).send({ error: `Virtual machine ${id} was not found.` })
             }
 
-            if (!validRole && !await hasVmAccess(vm.name, userId)) {
+            if (!validRole && !await hasVmAccess(vm.name, userId, true)) {
                 return res.status(403).send({ error: 'You do not have access to manage this virtual machine.' })
             }
 

@@ -50,7 +50,7 @@ export default async function postAgentTargetSyncAccess(req: FastifyRequest, res
         const vm = result.rows[0] as VMRow
         const accessUsers = Array.isArray(vm.access_users) ? vm.access_users : []
         const canAccess =
-            isAdmin || await hasVmAccess(vm.name, userId)
+            isAdmin || await hasVmAccess(vm.name, userId, true)
 
         if (!canAccess) {
             return res.status(403).send({ error: 'Forbidden.' })

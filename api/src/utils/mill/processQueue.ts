@@ -4,14 +4,15 @@ import type { LogInput } from './logEvent.ts'
 
 type Process = (logs: LogInput[]) => Promise<void>
 
-export async function processQueuedLogs(process: Process) {
+export async function processQueuedLogs(process: Process, delayed = false) {
     // Rows are removed individually, so a lower ID committed later cannot be
     // skipped. An unrelated long source writer must not delay admitted work.
     const watermark = (await run('SELECT COALESCE(MAX(log_id), 0)::text AS id FROM log_process_queue')).rows[0].id
     if (String(watermark) === '0') return
-    const started = performance.now()
+    const started = performance.now(), budgetMs = delayed ? 30_000 : 5000
     // Reserve capacity for live process arrivals without letting this stream
-    // monopolize a tick. The queue never expires or jumps past failed work.
+    // monopolize a tick. Delayed commands get more time, still capped at four
+    // pages; the soft time budget can overrun by one durable page. No work expires.
     for (let page = 0; page < 4; page++) {
         const batch = await run(`SELECT s.* FROM log_process_queue q JOIN service_logs s ON s.id = q.log_id
             WHERE q.log_id <= $1 ORDER BY q.log_id LIMIT 1000`, [watermark])
@@ -20,11 +21,11 @@ export async function processQueuedLogs(process: Process) {
         await run(`DELETE FROM log_process_queue q USING mill_events e
             WHERE q.log_id = ANY($1::bigint[]) AND e.log_key = 'service:' || q.log_id::text
               AND e.processing_status IN ('processed', 'skipped')`, [batch.rows.map(row => row.id)])
-        if (batch.rows.length < 1000 || performance.now() - started >= 5000) break
+        if (batch.rows.length < 1000 || performance.now() - started >= budgetMs) break
     }
 }
 
-export async function recoverProcessLogs(process: Process) {
+export async function recoverProcessLogs(process: Process, limit = 1000) {
     const cursor = (await run('SELECT recent_id FROM log_processing_cursors WHERE name = \'process_logs_recovery\'')).rows[0]
     if (!cursor || !cursor.recent_id || String(cursor.recent_id) === '0') return
     // Inspect narrow IDs first so already-processed rows do not consume the
@@ -33,10 +34,10 @@ export async function recoverProcessLogs(process: Process) {
         ORDER BY id DESC LIMIT 10000`, [cursor.recent_id])
     const batch = candidates.rows.length ? await run(`SELECT s.* FROM service_logs s WHERE s.id = ANY($1::bigint[])
         AND NOT EXISTS (SELECT 1 FROM mill_events e WHERE e.log_key = 'service:' || s.id::text
-            AND e.processing_status IN ('processed', 'skipped')) ORDER BY s.id DESC LIMIT 1000`,
-    [candidates.rows.map(row => row.id)]) : { rows: [] }
+            AND e.processing_status IN ('processed', 'skipped')) ORDER BY s.id DESC LIMIT $2`,
+    [candidates.rows.map(row => row.id), limit]) : { rows: [] }
     await process(batch.rows)
-    const lastInspected = batch.rows.length === 1000 ? batch.rows.at(-1)?.id : candidates.rows.at(-1)?.id
+    const lastInspected = batch.rows.length === limit ? batch.rows.at(-1)?.id : candidates.rows.at(-1)?.id
     await run(`UPDATE log_processing_cursors SET recent_id = $1, updated_at = NOW(), last_error = NULL
         WHERE name = 'process_logs_recovery'`, [lastInspected ? String(BigInt(lastInspected) - 1n) : '0'])
 }

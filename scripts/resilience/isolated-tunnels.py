@@ -2,15 +2,19 @@
 """Isolate interactive recovery traffic from the existing replication tunnel.
 
 Start on Inspur, verify all new listeners, then configure each site's routing.
-The legacy tunnel and its PostgreSQL replication sessions are never stopped.
+Starting leaves the legacy tunnel untouched. The explicit split-replication
+action moves its existing replication forward only after backups finish.
 """
 import argparse
 import copy
 import json
+import os
 import pathlib
 import subprocess
+import time
 
 GROUPS = {
+    'replication': ['-R', '127.0.0.1:18503:127.0.0.1:8503'],
     'database': ['-R', '127.0.0.1:28503:127.0.0.1:8503', '-R', '127.0.0.1:28502:127.0.0.1:18502', '-L', '127.0.0.1:28506:127.0.0.1:18506'],
     'intelligence': ['-R', '127.0.0.1:28097:127.0.0.1:18097', '-L', '127.0.0.1:29097:127.0.0.1:19097'],
     'web': ['-L', '127.0.0.1:29300:127.0.0.1:19300', '-L', '127.0.0.1:29080:127.0.0.1:19080', '-L', '127.0.0.1:29090:127.0.0.1:19090'],
@@ -72,24 +76,91 @@ def start(image):
             if existing.stdout.strip() != 'true':
                 raise RuntimeError(f'{name} exists but is stopped; inspect before replacing it')
             continue
+        if group == 'replication':
+            legacy = subprocess.run(['docker', 'inspect', '-f', '{{json .Config.Cmd}}', 'hanasand-tunnel'], capture_output=True, text=True)
+            if legacy.returncode == 0 and GROUPS['replication'][1] in json.loads(legacy.stdout):
+                print('Replication still uses the legacy tunnel. Finish any backup before split-replication.')
+                continue
         subprocess.run(['docker', 'run', '-d', '--name', name, '--restart', 'unless-stopped', '--network', 'host', '--memory', '128m', '--cpus', '.5',
                         '-v', '/home/hanasand/resilience-secrets/reverse-tunnel-key:/run/key:ro',
                         '-v', '/home/hanasand/resilience-secrets/ovh-known-hosts:/run/known_hosts:ro',
-                        '--entrypoint', 'ssh', image, '-NT', '-i', '/run/key',
+                        '--entrypoint', 'ssh', image, '-NT',
+                        *(['-C'] if group == 'replication' else []), '-i', '/run/key',
                         '-o', 'UserKnownHostsFile=/run/known_hosts', '-o', 'StrictHostKeyChecking=yes',
                         '-o', 'ExitOnForwardFailure=yes', '-o', 'ConnectTimeout=10',
                         '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=3',
                         *forwards, 'ubuntu@192.99.32.185'], check=True)
 
 
+def replication_commands(command):
+    forward = GROUPS['replication'][1]
+    index = command.index(forward)
+    if index < 1 or command[index - 1] != '-R':
+        raise RuntimeError('Expected the existing loopback replication forward')
+    first_forward = min(i for i, value in enumerate(command) if value in ('-R', '-L'))
+    return command[:index - 1] + command[index + 1:], command[:first_forward] + ['-C', '-R', forward, command[-1]]
+
+
+def split_replication(image=None):
+    name, replica, saved = 'hanasand-tunnel', 'hanasand-tunnel-replication', 'hanasand-tunnel-before-compression'
+    old = json.loads(subprocess.check_output(['docker', 'inspect', name]))[0]
+    if GROUPS['replication'][1] not in old['Config']['Cmd']:
+        running = subprocess.check_output(['docker', 'inspect', '-f', '{{.State.Running}}', replica], text=True).strip()
+        if running != 'true': raise RuntimeError('The separate replication tunnel is not running')
+        return
+    # A disconnected pg_basebackup can discard its unfinished copy. Never interrupt it.
+    backups = subprocess.check_output(['docker', 'exec', 'hanasand_database', 'psql', '-U', 'hanasand', '-d', 'hanasand', '-Atc',
+                                      "SELECT count(*) FROM pg_stat_replication WHERE state='backup'"], text=True).strip()
+    if backups != '0': raise RuntimeError('Finish the running database backup before splitting its tunnel')
+    legacy_command, replica_command = replication_commands(old['Config']['Cmd'])
+    if not old['State']['Running'] or old['HostConfig']['NetworkMode'] != 'host' or old['Config']['Entrypoint'] != ['ssh']:
+        raise RuntimeError('Unexpected legacy tunnel configuration')
+    image = image or old['Image']
+    subprocess.run(['docker', 'image', 'inspect', image], check=True, stdout=subprocess.DEVNULL)
+    for target in (replica, saved):
+        if subprocess.run(['docker', 'inspect', target], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+            raise RuntimeError(f'{target} already exists; inspect it before continuing')
+    environment = dict(value.split('=', 1) for value in old['Config']['Env'])
+    def launch(target, command):
+        args = ['docker', 'run', '-d', '--name', target, '--restart', old['HostConfig']['RestartPolicy']['Name'], '--network', 'host',
+                '--memory', str(old['HostConfig']['Memory']), '--cpus', str(old['HostConfig']['NanoCpus'] / 1e9)]
+        for mount in old['Mounts']:
+            if mount['Type'] != 'bind': raise RuntimeError('Unexpected tunnel mount')
+            args += ['-v', mount['Source'] + ':' + mount['Destination'] + ('' if mount['RW'] else ':ro')]
+        for key in environment: args += ['-e', key]
+        subprocess.run([*args, '--entrypoint', 'ssh', image, *command], env={**os.environ, **environment}, check=True)
+    subprocess.run(['docker', 'stop', name], check=True)
+    try:
+        subprocess.run(['docker', 'rename', name, saved], check=True)
+    except Exception:
+        subprocess.run(['docker', 'start', name], check=True)
+        raise
+    try:
+        launch(name, legacy_command)
+        launch(replica, replica_command)
+        time.sleep(3)
+        for target in (name, replica):
+            status = json.loads(subprocess.check_output(['docker', 'inspect', target]))[0]
+            if not status['State']['Running'] or status['RestartCount']:
+                raise RuntimeError(f'{target} did not stay running')
+    except Exception:
+        for target in (name, replica): subprocess.run(['docker', 'rm', '-f', target], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(['docker', 'rename', saved, name], check=True)
+        subprocess.run(['docker', 'start', name], check=True)
+        raise
+    print('Replication uses the same port and key on a separate compressed connection. Verify replica catch-up.')
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['authorize', 'start', 'configure'])
+    parser.add_argument('action', choices=['authorize', 'start', 'configure', 'split-replication'])
     parser.add_argument('--root', type=pathlib.Path)
     parser.add_argument('--image')
     args = parser.parse_args()
     if args.action == 'authorize':
         authorize()
+    elif args.action == 'split-replication':
+        split_replication(args.image)
     elif args.action == 'start':
         if not args.image:
             parser.error('--image must identify the built tunnel image')

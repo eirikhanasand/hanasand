@@ -6,7 +6,7 @@ import type { AuditPage, AuditSearchParams } from './data'
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import config from '@/config'
-import { AlertTriangle, CheckCircle2, ClipboardList, Clock3 } from 'lucide-react'
+import { AlertTriangle, ClipboardList, Clock3 } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 
 export default function AuditTimeline({ initialAudit, filters }: { initialAudit: AuditPage, filters: AuditSearchParams }) {
@@ -83,10 +83,9 @@ export default function AuditTimeline({ initialAudit, filters }: { initialAudit:
                 description='Audit events across all services, including account access, infrastructure, and threat intelligence.'
             />
 
-            <div className='grid gap-2 sm:grid-cols-2 xl:grid-cols-4'>
+            <div className='grid gap-2 sm:grid-cols-3'>
                 <Metric title='Events' value={`${sortedEvents.length}/${audit.total ?? '—'}`} icon={<ClipboardList className='h-4 w-4' />} />
                 <Metric title='Failures' value={`${failedEvents.length}`} tone={failedEvents.length ? 'bad' : 'ok'} icon={<AlertTriangle className='h-4 w-4' />} />
-                <Metric title='Audit storage' value={audit.available ? 'Available' : 'Unavailable'} tone={audit.available ? 'ok' : 'bad'} icon={<CheckCircle2 className='h-4 w-4' />} />
                 <Metric title='Last action' value={lastEvent ? shortTime(lastEvent.happenedAt) : '—'} icon={<Clock3 className='h-4 w-4' />} />
             </div>
 
@@ -107,15 +106,8 @@ export default function AuditTimeline({ initialAudit, filters }: { initialAudit:
 
             <DashboardPanel className='min-h-0 overflow-hidden border-ui-border bg-ui-panel p-0'>
                 <div className='border-b border-ui-border bg-ui-raised px-3 py-2'>
-                    <div className='flex flex-wrap items-center justify-between gap-2'>
-                        <div>
-                            <h2 className='text-sm font-semibold text-ui-text'>Timeline</h2>
-                            <p className='mt-0.5 text-[11px] text-ui-muted'>{sortedEvents.length}/{audit.total ?? '—'} events · newest first</p>
-                        </div>
-                        <div className='flex flex-wrap gap-1.5 text-[11px] font-semibold'>
-                            <StatusPill label={audit.available ? 'audit storage available' : 'audit storage unavailable'} tone={audit.available ? 'ok' : 'bad'} />
-                        </div>
-                    </div>
+                    <h2 className='text-sm font-semibold text-ui-text'>Timeline</h2>
+                    <p className='mt-0.5 text-[11px] text-ui-muted'>{sortedEvents.length}/{audit.total ?? '—'} events · newest first</p>
                 </div>
                 <div ref={scrollRoot} data-testid='audit-scroll' className='max-h-[calc(100vh-18rem)] min-h-72 overflow-auto'>
                     <table className='min-w-full border-separate border-spacing-0 text-xs'>

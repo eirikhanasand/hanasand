@@ -1,3 +1,4 @@
+import { canEditOrganization } from "./organizationRoles.ts";
 import { createHash } from 'node:crypto';
 import { authenticateOperatorRequest } from './requestAuthentication.ts';
 import { resolveOrganizationScope } from './organizationRoutes.ts';
@@ -36,7 +37,7 @@ export async function receiveSecurityCase(request: Request, options: ApiServerOp
   const actor = 'Security monitoring';
   const note = text(body.analystNote, 4000);
   const members = store.listOrganizationMembers?.() ?? [];
-  const owner = members.find((member: any) => member.organizationId === scope.organizationId && member.status === 'active' && member.role !== 'viewer' && member.userId === body.assigneeId);
+  const owner = members.find((member: any) => member.organizationId === scope.organizationId && member.status === 'active' && canEditOrganization(member.role) && member.userId === body.assigneeId);
   const workflowEvents = [{ id: `${id}:open`, at: body.firstObserved, actor, action: 'open', toStatus: 'open', note: `Detected by ${text(body.ruleId, 200)}.
 ${text(body.evidence, 20000)}` },
     ...body.events.map((event: any) => ({ id: `${id}:log:${event.id}`, at: event.at, actor: text(event.source, 200) || actor, action: 'log', note: text(event.message, 20000) }))];

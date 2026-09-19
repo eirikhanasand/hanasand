@@ -17,7 +17,7 @@ app.patch('/cases/:id', updateMonitoringCase)
 test('host cases follow current VM access without granting monitor administration', async () => {
     await query(`CREATE TABLE vms(name text PRIMARY KEY, owner text, created_by text, access_users jsonb, deleted_at timestamptz);
         CREATE TABLE organizations(id text PRIMARY KEY, status text);
-        CREATE TABLE organization_members(organization_id text, user_id text, status text);
+        CREATE TABLE organization_members(organization_id text, user_id text, status text, role text DEFAULT 'editor');
         CREATE TABLE agent_automations(id text PRIMARY KEY, name text, owner_id text, organization_id text, action_type text, target_url text, model_name text, notification_destinations text[], updated_at timestamptz, monitoring_type text, timeout_seconds int, retry_count int, follow_redirects boolean, expected_down boolean, upside_down boolean);
         CREATE TABLE agent_automation_runs(id text PRIMARY KEY, automation_id text);`)
     await (await import('../src/utils/db/vmOrganizationSchema.ts')).default()

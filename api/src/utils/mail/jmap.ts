@@ -140,7 +140,7 @@ export async function uploadAttachment(username: string, password: string, filen
     const bytes = Buffer.from(contentBase64, 'base64')
     formData.set('file', new Blob([bytes], { type }), filename)
 
-    const response = await fetch(session.uploadUrl.replace('{accountId}', accountId), {
+    const response = await fetch(toMailServiceUrl(session.uploadUrl.replace('{accountId}', accountId)), {
         method: 'POST',
         headers: authHeaders(username, password),
         body: formData,
@@ -221,7 +221,7 @@ export async function downloadBlob(username: string, password: string, blobId: s
         .replace('{name}', encodeURIComponent(name))
         .replace('{type}', '*/*')
 
-    const response = await fetch(url, {
+    const response = await fetch(toMailServiceUrl(url), {
         headers: authHeaders(username, password),
         signal: AbortSignal.timeout(JMAP_TIMEOUT_MS),
     })
@@ -256,7 +256,7 @@ async function getEmailsByIds(username: string, password: string, session: JmapS
 }
 
 async function jmapCall<T = unknown>(username: string, password: string, session: JmapSession, methodCalls: Array<[string, Record<string, unknown>, string]>, using: string[] = [CORE, MAIL]) {
-    const response = await fetch(toApiUrl(session.apiUrl), {
+    const response = await fetch(toMailServiceUrl(session.apiUrl), {
         method: 'POST',
         headers: {
             ...authHeaders(username, password),
@@ -276,7 +276,7 @@ async function jmapCall<T = unknown>(username: string, password: string, session
     return result[1] as T
 }
 
-function toApiUrl(apiUrl: string) {
+function toMailServiceUrl(apiUrl: string) {
     try {
         const url = new URL(apiUrl)
         url.protocol = new URL(mailConfig.internalUrl).protocol

@@ -2,7 +2,7 @@ import { readableMonitoringMessage } from '#utils/monitoringMessage.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import { monitoringCaseReadScope } from '#utils/monitoringCaseAccess.ts'
-import { automationReadScope } from '#utils/automationAccess.ts'
+import { automationWriteScope } from '#utils/automationAccess.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import { monitoringCaseHistory, monitoringCaseResolution } from '#utils/monitoringCaseWorkflow.ts'
@@ -23,7 +23,7 @@ export async function getMonitoringCases(req: FastifyRequest<{ Params: { id?: st
     if (!Number.isSafeInteger(page) || page < 0 || page > 100000) return res.status(400).send({ error: 'Invalid events page.' })
     const organizationId = req.query.organizationId || null
     if (req.query.tenantId && req.query.tenantId !== (organizationId || id)) return res.status(403).send({ error: 'Invalid case scope.' })
-    const result = await run(`SELECT i.*, (SELECT count(*)::int FROM monitoring_issue_checks c WHERE c.issue_id=i.id) AS check_count, ${automationReadScope('a', '$1', '$2')} AS can_manage, a.name AS monitor_name, a.owner_id, a.organization_id, a.target_url, a.monitoring_type, a.timeout_seconds, a.retry_count, a.follow_redirects, a.expected_down, a.upside_down
+    const result = await run(`SELECT i.*, (SELECT count(*)::int FROM monitoring_issue_checks c WHERE c.issue_id=i.id) AS check_count, ${automationWriteScope('a', '$1', '$2')} AS can_manage, a.name AS monitor_name, a.owner_id, a.organization_id, a.target_url, a.monitoring_type, a.timeout_seconds, a.retry_count, a.follow_redirects, a.expected_down, a.upside_down
         FROM monitoring_issues i JOIN agent_automations a ON a.id = i.automation_id
         WHERE ${monitoringCaseReadScope('a', '$1', '$2')}
           AND (a.organization_id IS NOT DISTINCT FROM $3::text)
@@ -93,7 +93,7 @@ export async function updateMonitoringCase(req: FastifyRequest<{ Params: { id: s
         resolution = CASE WHEN $11::text IS NOT NULL THEN i.resolution || jsonb_build_object('confirmedBy', $12::text, 'confirmedAt', $13::text)
             WHEN $10::jsonb IS NOT NULL THEN $10::jsonb WHEN $5::text IN ('open', 'in_progress') THEN NULL ELSE i.resolution END
         FROM agent_automations a WHERE a.id = i.automation_id
-        AND ${automationReadScope('a', '$1', '$2')}
+        AND ${automationWriteScope('a', '$1', '$2')}
         AND (a.organization_id IS NOT DISTINCT FROM $3::text) AND i.id = (SELECT COALESCE(merged_into,id) FROM monitoring_issues WHERE id::text=$4)
         AND ($11::text IS NULL OR (i.resolution->>'id' = $11 AND i.resolution->>'type' IN ('ai', 'automation')
             AND i.resolution->>'confirmedAt' IS NULL AND COALESCE(i.status_override, CASE WHEN i.resolved_at IS NULL THEN 'open' ELSE 'resolved' END) IN ('resolved', 'closed')))

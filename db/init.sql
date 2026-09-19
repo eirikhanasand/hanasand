@@ -153,7 +153,7 @@ CREATE TABLE IF NOT EXISTS organizations (
 CREATE TABLE IF NOT EXISTS organization_members (
     organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'admin', 'member', 'viewer')),
+    role TEXT NOT NULL DEFAULT 'reader' CHECK (role IN ('owner', 'admin', 'editor', 'reader', 'member', 'viewer')),
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'removed')),
     invited_by TEXT REFERENCES users(id) ON DELETE SET NULL,
     joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -165,7 +165,7 @@ CREATE TABLE IF NOT EXISTS organization_invites (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     email TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('admin', 'member', 'viewer')),
+    role TEXT NOT NULL DEFAULT 'reader' CHECK (role IN ('admin', 'editor', 'reader', 'member', 'viewer')),
     invited_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'revoked')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -791,6 +791,20 @@ RETURNS BOOLEAN LANGUAGE SQL STABLE AS $$
                 SELECT 1 FROM organization_members m JOIN organizations o ON o.id = m.organization_id
                 WHERE m.organization_id = v.organization_id AND m.user_id = viewer_id
                   AND m.status = 'active' AND o.status = 'active'
+            )
+            ELSE v.owner = viewer_id OR v.created_by = viewer_id OR v.access_users ? viewer_id
+        END
+    )
+$$;
+
+CREATE OR REPLACE FUNCTION vm_user_can_manage(vm_name TEXT, viewer_id TEXT)
+RETURNS BOOLEAN LANGUAGE SQL STABLE AS $$
+    SELECT EXISTS (
+        SELECT 1 FROM vms v WHERE v.name = vm_name AND CASE
+            WHEN v.organization_id IS NOT NULL THEN EXISTS (
+                SELECT 1 FROM organization_members m JOIN organizations o ON o.id = m.organization_id
+                WHERE m.organization_id = v.organization_id AND m.user_id = viewer_id
+                  AND m.status = 'active' AND o.status = 'active' AND m.role IN ('owner', 'admin')
             )
             ELSE v.owner = viewer_id OR v.created_by = viewer_id OR v.access_users ? viewer_id
         END

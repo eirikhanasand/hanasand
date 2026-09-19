@@ -703,7 +703,8 @@ export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { i
                         <input className={inputClass} name='userId' placeholder='User ID' required />
                         <select className={inputClass} name='role' defaultValue='admin'>
                             <option value='admin'>Admin</option>
-                            <option value='member'>Member</option>
+                            <option value='editor'>Editor</option>
+                            <option value='reader'>Reader</option>
                         </select>
                         <input className={inputClass} name='supportSessionId' placeholder='Support session ID' />
                         <input className={inputClass} name='idempotencyKey' placeholder='Idempotency key' />
@@ -804,7 +805,8 @@ export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { i
                         <input className={inputClass} name='targetUserId' placeholder='Target user ID' />
                         <select className={inputClass} name='role' defaultValue='admin'>
                             <option value='admin'>Admin</option>
-                            <option value='member'>Member</option>
+                            <option value='editor'>Editor</option>
+                            <option value='reader'>Reader</option>
                         </select>
                     </div>
                     <input className={inputClass} name='caseId' placeholder='Support case ID' />

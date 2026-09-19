@@ -29,15 +29,15 @@ const tenInvites = normalizeInviteInput({
 })
 assert.equal(tenInvites.emails.length, 10)
 assert.equal(tenInvites.emails[0], 'user1@example.com')
-assert.equal(tenInvites.role, 'member')
+assert.equal(tenInvites.role, 'reader')
 assert.ok(Date.parse(tenInvites.expiresAt) > Date.now())
 
 const viewerInvite = normalizeInviteInput({ email: 'viewer@example.com', role: 'viewer' })
-assert.equal(viewerInvite.role, 'viewer')
+assert.equal(viewerInvite.role, 'reader')
 
 assert.throws(() => normalizeInviteInput({ email: 'not-an-email' }), /Invalid invite email/)
 assert.throws(() => normalizeInviteInput({ emails: Array.from({ length: 26 }, (_, index) => `user${index}@example.com`) }), /25 users/)
-assert.throws(() => normalizeInviteInput({ email: 'owner@example.com', role: 'owner' }), /admin, member, or viewer/)
+assert.throws(() => normalizeInviteInput({ email: 'owner@example.com', role: 'owner' }), /admin, editor, or reader/)
 assert.throws(() => normalizeInviteInput({ email: 'user@example.com', expiresAt: 'yesterdayish' }), /valid date/)
 assert.throws(() => normalizeInviteInput({ email: 'user@example.com', expiresAt: '2020-01-01T00:00:00.000Z' }), /future/)
 
@@ -184,7 +184,7 @@ assert.deepEqual(buildOrganizationBridgeContext({
     memberCount: 1,
     activeMemberCount: 1,
     ownerCount: 1,
-    allowedViewerRoles: ['owner', 'admin', 'member', 'viewer'],
+    allowedViewerRoles: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'],
     removedMemberDenialReason: 'member_removed',
     deactivatedMemberDenialReason: 'member_deactivated',
     pendingInviteCount: 0,
@@ -317,7 +317,7 @@ assert.deepEqual(alertTermsExport.alertBridgeContract.redactedSummary, {
     archivedCount: 0,
     cleanupRequired: true,
     visibilityPolicy: 'members',
-    allowedViewerRoles: ['owner', 'admin', 'member', 'viewer'],
+    allowedViewerRoles: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'],
     containsRawTerms: false,
 })
 assert.equal(alertTermsExport.alertBridgeContract.deniedAccess.nonmember, 'nonmember_denied')
@@ -388,8 +388,8 @@ assert.deepEqual(alertTermsExport.alertBridgeContract.alertCaseProof.roleActionC
     status: 'active',
     allowedActions: organizationAlertCaseRoleActions('admin'),
 })
-assert.deepEqual(alertTermsExport.alertBridgeContract.alertCaseProof.roleActionContract.roleGates.restore_watchlist, ['owner', 'admin'])
-assert.deepEqual(alertTermsExport.alertBridgeContract.alertCaseProof.roleActionContract.roleGates.assign_case, ['owner', 'admin', 'analyst'])
+assert.deepEqual(alertTermsExport.alertBridgeContract.alertCaseProof.roleActionContract.roleGates.restore_watchlist, ['owner', 'admin', 'editor'])
+assert.deepEqual(alertTermsExport.alertBridgeContract.alertCaseProof.roleActionContract.roleGates.assign_case, ['owner', 'admin', 'editor', 'analyst'])
 assert.equal(alertTermsExport.alertBridgeContract.alertCaseProof.roleActionContract.lifecycleDenials.archivedWatchlist, 'watchlist_archived')
 assert.equal(alertTermsExport.alertBridgeContract.alertCaseProof.supportRedaction.blockerCode, 'support_redaction_required')
 assert.equal(alertTermsExport.alertBridgeContract.alertCaseProof.cleanupLifecycle.cleanupRequired, true)
@@ -492,7 +492,7 @@ assert.deepEqual(organizationVisibilityDecision({
     allowed: true,
     reason: null,
     alertVisibilityPolicy: 'members',
-    allowedRoles: ['owner', 'admin', 'member', 'viewer'],
+    allowedRoles: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'],
 })
 assert.deepEqual(organizationVisibilityDecision({
     role: 'viewer',
@@ -512,7 +512,7 @@ assert.deepEqual(organizationVisibilityDecision({
     allowed: false,
     reason: 'member_removed',
     alertVisibilityPolicy: 'members',
-    allowedRoles: ['owner', 'admin', 'member', 'viewer'],
+    allowedRoles: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'],
 })
 assert.deepEqual(organizationVisibilityDecision({
     role: 'member',
@@ -523,7 +523,7 @@ assert.deepEqual(organizationVisibilityDecision({
     allowed: false,
     reason: 'member_deactivated',
     alertVisibilityPolicy: 'members',
-    allowedRoles: ['owner', 'admin', 'member', 'viewer'],
+    allowedRoles: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'],
 })
 
 assert.equal(roleCanManageOrganization('owner'), true)
@@ -558,8 +558,8 @@ assert.match(ensureSchema, /retention_days INT NOT NULL DEFAULT 365/)
 assert.match(ensureSchema, /audit_safe_metadata JSONB NOT NULL DEFAULT '\{\}'::jsonb/)
 assert.match(ensureSchema, /CREATE TABLE IF NOT EXISTS organization_members/)
 assert.match(ensureSchema, /CREATE TABLE IF NOT EXISTS organization_invites/)
-assert.match(ensureSchema, /role IN \('owner', 'admin', 'member', 'viewer'\)/)
-assert.match(ensureSchema, /role IN \('admin', 'member', 'viewer'\)/)
+assert.match(ensureSchema, /role IN \('owner', 'admin', 'editor', 'reader', 'member', 'viewer'\)/)
+assert.match(ensureSchema, /role IN \('admin', 'editor', 'reader', 'member', 'viewer'\)/)
 assert.match(ensureSchema, /expires_at TIMESTAMPTZ/)
 assert.match(ensureSchema, /CREATE TABLE IF NOT EXISTS organization_watchlist_items/)
 assert.match(ensureSchema, /organization_id TEXT NOT NULL REFERENCES organizations\(id\)/)

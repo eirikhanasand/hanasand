@@ -1703,7 +1703,7 @@ export function buildDwmWebhookDeliveryReadinessConsumerProof({
             allowed: true,
             reason: null,
             alertVisibilityPolicy: 'members' as const,
-            allowedRoles: ['owner', 'admin', 'member', 'viewer'] as OrganizationRole[],
+            allowedRoles: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'] as OrganizationRole[],
         }
     const access = {
         role: clean(viewerRole) || null,
@@ -2109,7 +2109,7 @@ export function buildDwmWebhookDeliveryReceipts({
             allowed: true,
             reason: null,
             alertVisibilityPolicy: 'members' as const,
-            allowedRoles: ['owner', 'admin', 'member', 'viewer'] as OrganizationRole[],
+            allowedRoles: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'] as OrganizationRole[],
         }
     const access = {
         role: clean(viewerRole) || null,
@@ -2479,7 +2479,7 @@ export function buildDwmWebhookDeliveryActionPlan({
                                     : 'test_destination'
         const blockers = uniqueRetryQueueBlockers([
             ...item.blockers,
-            ...(!timeline.access.canManage ? [retryQueueBlocker('permission_denied', 'Only organization owners and admins can act on webhook deliveries.', latest.destinationId, true)] : []),
+            ...(!timeline.access.canManage ? [retryQueueBlocker('permission_denied', 'Only organization owners, admins, and editors can act on webhook deliveries.', latest.destinationId, true)] : []),
         ])
         const dryRunRequest = retryEntry?.dryRunRequest || null
         const liveRequest = retryEntry?.liveRequest || null
@@ -2737,7 +2737,7 @@ export function buildDwmWebhookDeliveryReplayGuard({
             allowed: true,
             reason: null,
             alertVisibilityPolicy: 'members' as const,
-            allowedRoles: ['owner', 'admin', 'member', 'viewer'] as OrganizationRole[],
+            allowedRoles: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'] as OrganizationRole[],
         }
     const access = {
         role: clean(viewerRole) || null,
@@ -3101,7 +3101,7 @@ export function buildDwmWebhookDeliveryRetryQueue({
             allowed: true,
             reason: null,
             alertVisibilityPolicy: 'members' as const,
-            allowedRoles: ['owner', 'admin', 'member', 'viewer'] as OrganizationRole[],
+            allowedRoles: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'] as OrganizationRole[],
         }
     const access = {
         role: clean(viewerRole) || null,
@@ -3529,7 +3529,7 @@ export function buildDwmWebhookDestinationDeliveryMatrix({
             allowed: true,
             reason: null,
             alertVisibilityPolicy: 'members' as const,
-            allowedRoles: ['owner', 'admin', 'member', 'viewer'] as OrganizationRole[],
+            allowedRoles: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'] as OrganizationRole[],
         }
     const access = {
         role: clean(viewerRole) || null,
@@ -4114,7 +4114,7 @@ export function buildDwmWebhookDeliveryAuditTrail({
             allowed: true,
             reason: null,
             alertVisibilityPolicy: 'members' as const,
-            allowedRoles: ['owner', 'admin', 'member', 'viewer'] as OrganizationRole[],
+            allowedRoles: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'] as OrganizationRole[],
         }
     const access = {
         role: clean(viewerRole) || null,
@@ -4549,7 +4549,7 @@ export function buildDwmWebhookCustomerSetupProof({
             allowed: true,
             reason: null,
             alertVisibilityPolicy: 'members' as const,
-            allowedRoles: ['owner', 'admin', 'member', 'viewer'] as OrganizationRole[],
+            allowedRoles: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'] as OrganizationRole[],
         }
     const access = {
         role: clean(viewerRole) || null,
@@ -4820,7 +4820,7 @@ export function buildDwmWebhookDashboardReadinessAdapter({
         allowed: true,
         reason: null,
         alertVisibilityPolicy: 'members',
-        allowedRoles: ['owner', 'admin', 'member', 'viewer'] as OrganizationRole[],
+        allowedRoles: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'] as OrganizationRole[],
     }
     const orgLifecycleStatus = clean(orgStatus).toLowerCase() || 'active'
     const watchlistLifecycleStatus = clean(watchlistStatus).toLowerCase() || 'active'
@@ -5350,7 +5350,7 @@ export function buildDwmWebhookDestinationAdminProof({
             allowed: true,
             reason: null,
             alertVisibilityPolicy: 'members' as const,
-            allowedRoles: ['owner', 'admin', 'member', 'viewer'] as OrganizationRole[],
+            allowedRoles: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'] as OrganizationRole[],
         }
     const access = {
         role: clean(viewerRole) || null,
@@ -5798,7 +5798,7 @@ function buildDwmWebhookOrganizationConsumerReceipt({
         roleGates: {
             automaticDelivery: ['owner', 'admin'],
             manualTrigger: ['owner', 'admin'],
-            readDeliverySummary: ['owner', 'admin', 'member', 'viewer'],
+            readDeliverySummary: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'],
         },
         destinationScope: {
             selectedDestinationOrgField: 'destination.org_id',
@@ -10955,7 +10955,7 @@ function buildDwmWebhookCaseActionDryRunReceipt({
             roleGates: {
                 replay: ['owner', 'admin'],
                 retry: ['owner', 'admin'],
-                readSummary: ['owner', 'admin', 'member', 'viewer'],
+                readSummary: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'],
             },
             readiness: {
                 dryRunReady: canDryRunRetry,

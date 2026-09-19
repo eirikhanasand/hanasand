@@ -22,7 +22,7 @@ export default function AddToOrganization({ vm, onAdded }: { vm: VM; onAdded?: (
             const response = await fetch('/api/organizations', { cache: 'no-store' })
             const body = await response.json()
             if (!response.ok) throw new Error(body.error || 'Unable to load organizations.')
-            const available = (body.organizations || []).filter((org: Organization) => ['owner', 'admin', 'member'].includes(org.role) && (!org.status || org.status === 'active'))
+            const available = (body.organizations || []).filter((org: Organization) => ['owner', 'admin'].includes(org.role) && (!org.status || org.status === 'active'))
             setOrganizations(available); setSelected(available[0]?.id || '')
         } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to load organizations.') }
         finally { setBusy(false) }
