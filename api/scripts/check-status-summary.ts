@@ -2,8 +2,11 @@ import assert from 'node:assert/strict'
 import { mock } from 'bun:test'
 let queries = 0
 mock.module('#db', () => ({ withTransaction: () => { throw new Error('Summary must not load history') }, default: async (sql: string) => {
+    if (sql.startsWith('CREATE TABLE')) return { rows: [] }
     queries++
-    assert(sql.includes('INTERVAL \'5 minutes\''))
+    assert(sql.includes('FROM service_status_snapshots'))
+    assert(sql.includes("id LIKE 'check:%'"))
+    assert(!sql.includes('FROM service_monitor_results'))
     assert(!sql.includes('90 days') && !sql.includes('Window') && !sql.includes('LAG('))
     return { rows: [] }
 } }))

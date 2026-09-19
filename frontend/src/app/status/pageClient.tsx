@@ -295,11 +295,11 @@ function dayDisplayStatus(status: ServiceStatus['checks'][number]['status'], inc
 
 function lastDays(count: number) {
     const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    today.setUTCHours(0, 0, 0, 0)
 
     return Array.from({ length: count }, (_, index) => {
         const date = new Date(today)
-        date.setDate(today.getDate() - (count - 1 - index))
+        date.setUTCDate(today.getUTCDate() - (count - 1 - index))
         return date.toISOString().slice(0, 10)
     })
 }
