@@ -23,7 +23,7 @@ export function MessageRow({ message, active, onClick, onAction, canSend = true 
     const menuRef = useRef<HTMLDivElement>(null)
     useEffect(() => {
         if (!menu) return
-        menuRef.current?.querySelector<HTMLButtonElement>('button')?.focus()
+        menuRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus()
         const close = (event: Event) => {
             if (!menuRef.current?.contains(event.target as Node)) setMenu(null)
         }
