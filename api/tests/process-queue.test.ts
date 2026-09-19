@@ -1,4 +1,4 @@
-import { beforeEach, expect, mock, test } from 'bun:test'
+import { afterEach, beforeEach, expect, mock, spyOn, test } from 'bun:test'
 let queue: { id: string }[], recovered: { id: string }[], calls: string[], recoveryId: string, complete: Set<string>
 const query = async (sql: string, args: any[] = []) => {
     calls.push(sql)
@@ -7,7 +7,7 @@ const query = async (sql: string, args: any[] = []) => {
     if (sql.startsWith('DELETE FROM log_process_queue')) { queue = queue.filter(row => !args[0].includes(row.id) || !complete.has(row.id)); return { rows: [] } }
     if (sql.startsWith('SELECT recent_id')) return { rows: [{ recent_id: recoveryId }] }
     if (sql.startsWith('SELECT id FROM service_logs')) return { rows: recovered.filter(row => BigInt(row.id) <= BigInt(args[0])).sort((a, b) => Number(b.id) - Number(a.id)).slice(0, 10000) }
-    if (sql.startsWith('SELECT s.* FROM service_logs')) return { rows: recovered.filter(row => args[0].includes(row.id) && !complete.has(row.id)).sort((a, b) => Number(b.id) - Number(a.id)).slice(0, 1000) }
+    if (sql.startsWith('SELECT s.* FROM service_logs')) return { rows: recovered.filter(row => args[0].includes(row.id) && !complete.has(row.id)).sort((a, b) => Number(b.id) - Number(a.id)).slice(0, args[1]) }
     if (sql.startsWith('UPDATE log_processing_cursors')) { recoveryId = args[0]; return { rows: [] } }
     if (sql.includes('AS oldest_queued_at')) return { rows: [{ count: Math.min(queue.length, 10001), oldest_queued_at: queue.length ? '2026-09-19T14:49:32Z' : null }] }
     throw new Error(sql)
@@ -73,4 +73,39 @@ test('mixed completed and unfinished recovery pages never skip the remainder of 
     expect(checked).toBe(5000)
     expect(complete.size).toBe(10000)
     expect(recoveryId).toBe('0')
+})
+
+afterEach(() => { mock.restore() })
+test('aged queues use the longer soft budget, preserve per-page ACKs and restore the default budget', async () => {
+    let now = 0
+    spyOn(performance, 'now').mockImplementation(() => now)
+    queue = Array.from({ length: 10_000 }, (_, id) => ({ id: String(id + 1) }))
+    const slowPage = async (rows: any[]) => { await process(rows); now += 6000 }
+    await processQueuedLogs(slowPage)
+    expect(complete.size).toBe(1000); expect(queue[0].id).toBe('1001')
+    await processQueuedLogs(slowPage, true)
+    expect(complete.size).toBe(5000); expect(queue[0].id).toBe('5001')
+    await processQueuedLogs(slowPage)
+    expect(complete.size).toBe(6000); expect(queue[0].id).toBe('6001')
+})
+test('aged soft budget stops after the page crossing thirty seconds and never ACKs a failed page', async () => {
+    let now = 0
+    spyOn(performance, 'now').mockImplementation(() => now)
+    queue = Array.from({ length: 5000 }, (_, id) => ({ id: String(id + 1) }))
+    await processQueuedLogs(async rows => { await process(rows); now += 11_000 }, true)
+    expect(complete.size).toBe(3000); expect(queue[0].id).toBe('3001')
+    await expect(processQueuedLogs(async () => { throw new Error('durability failure') }, true)).rejects.toThrow('durability failure')
+    expect(queue[0].id).toBe('3001'); expect(queue).toHaveLength(2000)
+})
+
+test('operator recovery cap advances only the processed prefix and restores the default without skipping IDs', async () => {
+    recoveryId = '251'; recovered = Array.from({ length: 251 }, (_, id) => ({ id: String(id + 1) }))
+    await recoverProcessLogs(process, 100)
+    expect(complete.size).toBe(100); expect(recoveryId).toBe('151')
+    await expect(recoverProcessLogs(async () => { throw new Error('failed') }, 100)).rejects.toThrow('failed')
+    expect(recoveryId).toBe('151')
+    await recoverProcessLogs(process, 100)
+    expect(complete.size).toBe(200); expect(recoveryId).toBe('51')
+    await recoverProcessLogs(process)
+    expect(complete.size).toBe(251); expect(recoveryId).toBe('0')
 })
