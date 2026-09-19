@@ -4,6 +4,7 @@ import { createMillFindings, loadConfiguredMillRules, normalizeMillEvent } from 
 import { normalizeLogEvent, severityOrder, type LogInput } from './logEvent.ts'
 import { processAdditionalLogSources } from './storedSources.ts'
 import { stableLogWatermark } from './logWatermark.ts'
+import { backfillLogDimensions } from '../logs/dimensions.ts'
 
 let running = false
 // Persist a pending event before evaluating it. A failure is retried with the same
@@ -152,6 +153,9 @@ export async function processStoredLogs() {
                 await run('UPDATE log_processing_cursors SET last_id = GREATEST(last_id, $1), updated_at = NOW(), last_error = NULL WHERE name = \'service_logs\'', [backlog.rows.at(-1)?.id || cursor.last_id])
             }
         })
+        // Counter initialization has its own lock and visible error state. Keep
+        // its historical reads outside the lock used by live event processing.
+        await backfillLogDimensions().catch(() => {})
     } catch (error) {
         await run('UPDATE log_processing_cursors SET last_error = $1 WHERE name = \'service_logs\'', [error instanceof Error ? error.message : 'Log processing failed']).catch(() => {})
         throw error

@@ -3,6 +3,7 @@ import { withTransaction } from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import { compileLogQuery } from '#utils/logs/kql.ts'
+import { dimensionLogWhere, foldLogCounts } from '#utils/logs/dimensions.ts'
 
 export async function searchLogs(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
@@ -30,11 +31,21 @@ export async function searchLogs(req: FastifyRequest, res: FastifyReply) {
                 ? await query(`SELECT ${compiled.fields[compiled.summarize]} AS value, COUNT(*)::int AS count FROM mill_events WHERE ${where.join(' AND ')} GROUP BY 1 ORDER BY count DESC LIMIT ${compiled.limit}`, params)
                 : await query(`SELECT id, normalized, event_timestamp, organization_id FROM mill_events WHERE ${where.join(' AND ')} ORDER BY ${compiled.order} LIMIT ${compiled.limit}`, params)
             const status = await query('SELECT name, updated_at, last_error, last_id, recent_id, (SELECT COUNT(*)::int FROM mill_events WHERE ingestion_id = \'logs\' AND processing_status = \'skipped\') AS skipped_events FROM log_processing_cursors ORDER BY name')
-            const counts = input.stats === '1' ? await query(`SELECT normalized->>'severity' AS severity, COUNT(*)::int AS count FROM mill_events WHERE ${where.join(' AND ')} GROUP BY 1`, params) : { rows: [] }
-            const services = input.stats === '1' ? await query(`SELECT normalized->>'service' AS service, COUNT(*)::int AS count FROM mill_events WHERE ${where.join(' AND ')} GROUP BY 1 ORDER BY count DESC LIMIT 10`, params) : { rows: [] }
+            let counts: ReturnType<typeof foldLogCounts> = { counts: [], services: [] }
+            let countersLastError: string | null = null
+            if (input.stats === '1') {
+                const compact = dimensionLogWhere(where)
+                const projection = (await query('SELECT ready, last_error FROM mill_log_dimensions_state WHERE id = TRUE')).rows[0]
+                const ready = compact && projection?.ready
+                countersLastError = projection?.last_error || null
+                const grouped = ready
+                    ? await query(`SELECT severity, service, COUNT(*)::int AS count FROM mill_log_dimensions mill_events WHERE ${compact!.join(' AND ')} GROUP BY 1, 2`, params)
+                    : await query(`SELECT normalized->>'severity' AS severity, normalized->>'service' AS service, COUNT(*)::int AS count FROM mill_events WHERE ${where.join(' AND ')} GROUP BY 1, 2`, params)
+                counts = foldLogCounts(grouped.rows)
+            }
             const primary = status.rows.find(row => row.name === 'service_logs')
             const stalled = status.rows.find(row => row.last_error)
-            return { rows: result.rows, processing: primary ? { ...primary, last_error: stalled ? `${stalled.name}: ${stalled.last_error}` : null, sources: status.rows } : null, counts: counts.rows, services: services.rows }
+            return { rows: result.rows, processing: primary ? { ...primary, last_error: stalled ? `${stalled.name}: ${stalled.last_error}` : countersLastError ? `Log counters: ${countersLastError}` : null, sources: status.rows } : null, ...counts }
         })
         return res.send({ ...result, projection: compiled.projection, summarize: compiled.summarize, limit: compiled.limit, hours, generated_at: new Date().toISOString() })
     } catch (error) {

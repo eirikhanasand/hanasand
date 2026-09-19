@@ -37,6 +37,7 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
     throw new Error(sql)
 }
 mock.module('#db', () => ({ default: query, withTransaction: async (work: any) => work(query) }))
+mock.module('../src/utils/logs/dimensions.ts', () => ({ backfillLogDimensions: async () => ({ processed: 0, ready: true }) }))
 mock.module('../src/utils/mill/storedSources.ts', () => ({ processAdditionalLogSources: async () => { additionalRuns++ } }))
 mock.module('../src/utils/mill/logWatermark.ts', () => ({ stableLogWatermark: async () => watermark }))
 mock.module('../src/handlers/mill.ts', () => ({
