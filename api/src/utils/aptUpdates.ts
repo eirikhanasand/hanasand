@@ -50,6 +50,7 @@ export async function persistHostUpdateStatus(status: Record<string, unknown>, r
 }
 
 export async function listHostUpdateHistory(host: UpdateHost = 'inspur') {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Oslo' }).format(new Date())
     const result = await run(`
         SELECT ((occurred_at AT TIME ZONE 'Europe/Oslo')::date)::text AS day,
                jsonb_agg(jsonb_build_object('status', status, 'error', error,
@@ -57,15 +58,17 @@ export async function listHostUpdateHistory(host: UpdateHost = 'inspur') {
                    ORDER BY occurred_at DESC, run_id DESC) AS checks
         FROM host_update_events
         WHERE host = $1
-          AND occurred_at < (date_trunc('day', NOW() AT TIME ZONE 'Europe/Oslo') AT TIME ZONE 'Europe/Oslo')
-        GROUP BY day ORDER BY day DESC LIMIT 30
+          AND occurred_at <= NOW()
+        GROUP BY day ORDER BY day DESC LIMIT 31
     `, [historyHost(host)])
-    return result.rows.map(({ day, checks }: { day: string, checks: Array<{ status: string, error: string | null, installed: Array<{ package: string, version?: string }> }> }) => {
+    const history = result.rows.map(({ day, checks }: { day: string, checks: Array<{ status: string, error: string | null, installed: Array<{ package: string, version?: string }> }> }) => {
         const packages = [...new Set(checks.flatMap(check => installedPackages({ installed_packages: check.installed }, true)))].sort()
         const errors = [...new Set(checks.flatMap(check => check.error ? [check.error] : []))]
-        return { run_id: day, occurred_at: day, status: errors.length || checks.some(check => check.status === 'failed') ? 'failed' : checks[0].status,
+        return { run_id: day, occurred_at: day, is_today: day === today, status: errors.length || checks.some(check => check.status === 'failed') ? 'failed' : checks[0].status,
             packages, error: errors.join('; ') || null }
     })
+    const currentDay = history.find(item => item.is_today) || { run_id: today, occurred_at: today, is_today: true, status: 'unknown', packages: [], error: null }
+    return [currentDay, ...history.filter(item => !item.is_today).slice(0, 30)]
 }
 
 function installedPackages(status: Record<string, unknown>, withVersions = false): string[] {

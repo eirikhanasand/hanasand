@@ -1,4 +1,4 @@
-import { expect, test, mock, afterAll } from 'bun:test'
+import { expect, test, mock, afterAll, setSystemTime } from 'bun:test'
 import { mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -77,8 +77,12 @@ test('OVH standby reads host-scoped replicated snapshots without writing', async
     }
 })
 
-test('history combines each completed day, retains versions and errors, and deduplicates packages', async () => {
-    rows = [{ day: '2026-09-17', checks: [
+test('history combines each day, retains versions and errors, and deduplicates packages', async () => {
+    setSystemTime(new Date('2026-09-17T22:30:00Z'))
+    rows = [{ day: '2026-09-18', checks: [
+        { status: 'ok', error: null, installed: [] },
+        { status: 'ok', error: null, installed: [{ package: 'today-package', version: '4' }] },
+    ] }, { day: '2026-09-17', checks: [
         { status: 'ok', error: null, installed: [{ package: 'sqlite', version: '3.1' }] },
         { status: 'failed', error: 'Update failed', installed: [{ package: 'other', version: '2' }] },
         { status: 'pending', error: null, installed: [{ package: 'sqlite', version: '3.1' }, { package: 'sqlite', version: '3' }] },
@@ -86,8 +90,18 @@ test('history combines each completed day, retains versions and errors, and dedu
     try {
         const history = await listHostUpdateHistory('ovhcloud')
         expect(history).toEqual([
-            { run_id: '2026-09-17', occurred_at: '2026-09-17', status: 'failed', packages: ['other v2', 'sqlite v3', 'sqlite v3.1'], error: 'Update failed' },
-            { run_id: '2026-09-16', occurred_at: '2026-09-16', status: 'pending', packages: [], error: null },
+            { run_id: '2026-09-18', occurred_at: '2026-09-18', is_today: true, status: 'ok', packages: ['today-package v4'], error: null },
+            { run_id: '2026-09-17', occurred_at: '2026-09-17', is_today: false, status: 'failed', packages: ['other v2', 'sqlite v3', 'sqlite v3.1'], error: 'Update failed' },
+            { run_id: '2026-09-16', occurred_at: '2026-09-16', is_today: false, status: 'pending', packages: [], error: null },
         ])
-    } finally { rows = [] }
+    } finally { rows = []; setSystemTime() }
+})
+
+test('today exists before the first check, using the Norway calendar day', async () => {
+    setSystemTime(new Date('2026-09-19T22:05:00Z'))
+    try {
+        expect(await listHostUpdateHistory()).toEqual([
+            { run_id: '2026-09-20', occurred_at: '2026-09-20', is_today: true, status: 'unknown', packages: [], error: null },
+        ])
+    } finally { setSystemTime() }
 })

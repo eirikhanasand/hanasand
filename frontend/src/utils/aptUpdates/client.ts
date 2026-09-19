@@ -16,7 +16,7 @@ export type AptUpdateStatus = {
     last_update_at?: string | null
     policy?: { non_security_delay_hours?: number, security_install?: string, allowed_origin?: string, repository_verification?: string }
 }
-export type AptUpdateHistory = { run_id: string, status: string, occurred_at: string, packages: string[], error: string | null }
+export type AptUpdateHistory = { run_id: string, status: string, occurred_at: string, is_today?: boolean, packages: string[], error: string | null }
 export type UpdateHost = 'inspur' | 'ovhcloud'
 
 export async function fetchAptUpdates(host: UpdateHost = 'inspur', signal?: AbortSignal) {

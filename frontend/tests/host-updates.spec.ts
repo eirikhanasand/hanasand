@@ -92,3 +92,30 @@ test('daily history shows package versions without hiding installation details b
     await expect(page.getByRole('button', { name: 'Update status details' })).toHaveCount(1)
     await expect(page.getByText(/^Installed:/)).toHaveCount(0)
 })
+
+
+test('Today shows the packages installed so far or an empty-day message', async ({ page }) => {
+    let installed = false
+    let fail = false
+    await page.route('https://updates.test/fixture.js', route => route.fulfill({ contentType: 'application/javascript', body: bundle }))
+    await page.route('https://updates.test/', route => route.fulfill({ contentType: 'text/html', body: '<meta charset="utf-8"><div id="root"></div><script src="/fixture.js"></script>' }))
+    await page.route('**/api/backend/system/updates?**', route => fail ? route.fulfill({ status: 503, json: { error: 'Host unavailable' } }) : route.fulfill({ json: { status: { status: 'ok' }, history: [
+        { run_id: '2026-09-20', occurred_at: '2026-09-20', is_today: true, status: installed ? 'ok' : 'unknown', packages: installed ? ['libsqlite3-0 v3.45.1', 'libaom3 v3.8.2'] : [], error: null },
+        { run_id: '2026-09-19', occurred_at: '2026-09-19', is_today: false, status: 'ok', packages: [], error: null },
+    ] } }))
+    await page.goto('https://updates.test/')
+    await expect(page.getByText('Today', { exact: true })).toBeVisible()
+    await expect(page.getByText('Nothing installed yet', { exact: true })).toBeVisible()
+    await expect(page.getByText('No packages installed.', { exact: true })).toBeVisible()
+    await expect(page.getByLabel('Not reported', { exact: true })).toBeVisible()
+    installed = true
+    await page.getByRole('button', { name: 'Refresh' }).click()
+    await expect(page.getByText('Today', { exact: true })).toHaveCount(1)
+    await expect(page.getByText('libsqlite3-0 v3.45.1, libaom3 v3.8.2', { exact: true })).toBeVisible()
+    await expect(page.getByText('Nothing installed yet', { exact: true })).toHaveCount(0)
+    fail = true
+    await page.getByRole('button', { name: 'Refresh' }).click()
+    await expect(page.getByText('Host unavailable', { exact: true })).toBeVisible()
+    await expect(page.getByText('Nothing installed yet', { exact: true })).toHaveCount(0)
+    await expect(page.getByText('Today', { exact: true })).toHaveCount(0)
+})
