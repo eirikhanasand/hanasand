@@ -3,6 +3,7 @@ import { publicMonitoringRequest } from './publicMonitoringRequest.ts'
 import run, { withTransaction } from '#db'
 import { certificateTarget, checkCertificate } from './automations.ts'
 import getStats from './refresh/queries/stats.ts'
+import { MonitoringResponseError } from './monitoringResponseError.ts'
 
 export type JsonRule = { path: string, operator: 'gt' | 'gte' | 'lt' | 'lte' | 'eq' | 'ne', value: number | boolean | string, aggregate: 'max' | 'min' | 'avg' | 'first' }
 export type JsonSource = { owner_id: string, target_url: string | null, user_agent: string | null, follow_redirects: boolean, timeout_seconds: number, json_rule?: unknown }
@@ -47,15 +48,19 @@ async function fetchJson(source: JsonSource) {
     const startedAt = Date.now()
     const tls = certificateTarget({ target_url: source.target_url, monitoring_type: 'json' })
     const certificate = tls ? await checkCertificate(tls, source.timeout_seconds * 1000) : { status: 'not_applicable' as const, subject: null, issuer: null, expiresAt: null }
-    if (certificate.status === 'invalid') throw new Error(`TLS certificate validation failed for ${tls!.hostname}.`)
+    if (certificate.status === 'invalid') throw Object.assign(new MonitoringResponseError(`TLS certificate validation failed for ${tls!.hostname}.`), { certificate })
     const timeoutMs = source.timeout_seconds * 1000 - (Date.now() - startedAt)
     if (timeoutMs <= 0) throw new DOMException('Monitoring request timed out.', 'TimeoutError')
     const response = await publicMonitoringRequest(source.target_url!, {
         followRedirects: source.follow_redirects, userAgent: source.user_agent,
         timeoutMs, readBody: true,
     })
-    if (response.status < 200 || response.status >= 300) throw new Error(`JSON source returned HTTP ${response.status}.`)
-    return { payload: JSON.parse(response.body) as unknown, certificate }
+    try {
+        if (response.status < 200 || response.status >= 300) throw new Error(`JSON source returned HTTP ${response.status}.`)
+        return { payload: JSON.parse(response.body) as unknown, certificate }
+    } catch (error) {
+        throw Object.assign(new MonitoringResponseError(error instanceof Error ? error.message : 'Invalid JSON response.', { cause: error }), { certificate })
+    }
 }
 
 const pending = new Map<string, Promise<Awaited<ReturnType<typeof fetchJson>>>>()
@@ -83,13 +88,20 @@ async function loadSnapshot(source: JsonSource, key: string) {
         if (existing) return existing
         let payload: unknown = null
         let error: string | null = null
-        try { payload = await fetchJson(source) } catch (failure) { error = failure instanceof Error ? failure.message : 'JSON source unavailable.' }
+        try { payload = await fetchJson(source) } catch (failure) {
+            error = failure instanceof Error ? failure.message : 'JSON source unavailable.'
+            // Preserve terminal response failures when other monitors read this cached snapshot.
+            if (failure instanceof MonitoringResponseError) payload = { terminal: true, certificate: 'certificate' in failure ? failure.certificate : null }
+        }
         await query(`INSERT INTO monitoring_json_snapshots(id, payload, error, sampled_at, expires_at)
             VALUES ($1, $2::jsonb, $3, NOW(), date_trunc('minute', NOW()) + INTERVAL '1 minute')
             ON CONFLICT(id) DO UPDATE SET payload = EXCLUDED.payload, error = EXCLUDED.error, sampled_at = EXCLUDED.sampled_at, expires_at = EXCLUDED.expires_at`, [key, JSON.stringify(payload), error])
         return { payload, error }
     })
-    if (snapshot.error) throw new Error(snapshot.error)
+    if (snapshot.error) {
+        if (snapshot.payload?.terminal) throw Object.assign(new MonitoringResponseError(snapshot.error), { certificate: snapshot.payload.certificate })
+        throw new Error(snapshot.error)
+    }
     return snapshot.payload as Awaited<ReturnType<typeof fetchJson>>
 }
 

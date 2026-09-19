@@ -1,6 +1,7 @@
 import { setTimeout as retryDelay } from 'node:timers/promises'
 import { checkScheduledAutomationAccess } from './automationAccess.ts'
 import { hostCheckMessage } from './hostCheckMessage.ts'
+import { MonitoringResponseError } from './monitoringResponseError.ts'
 import { monitoringLookup, monitoringUrl, publicMonitoringRequest, resolveMonitoringAddresses } from './publicMonitoringRequest.ts'
 import run from '#db'
 import { normalizeJsonRule, evaluateJsonRule, sharedJsonSnapshot, type JsonRule } from './jsonMonitoring.ts'
@@ -561,17 +562,18 @@ export async function runMonitoringCheck(automation: AutomationRow) {
             if (automation.monitoring_type === 'json') return await runJsonCheck(automation, attempt)
             if (tlsTarget) {
                 certificate = await checkCertificate(tlsTarget, automation.timeout_seconds * 1000)
-                if (certificate.status === 'invalid') throw new Error(`TLS certificate validation failed for ${tlsTarget.hostname}.`)
+                if (certificate.status === 'invalid') throw new MonitoringResponseError(`TLS certificate validation failed for ${tlsTarget.hostname}.`)
             }
             const timeoutMs = automation.timeout_seconds * 1000 - (Date.now() - startedAt)
             if (timeoutMs <= 0) throw new DOMException('Monitoring request timed out.', 'TimeoutError')
             const result = target ? await runHttpCheck(target, automation, timeoutMs) : await runSocketCheck(automation, timeoutMs)
             const healthy = automation.upside_down ? !result.up : automation.expected_down ? !result.up : result.up
             const message = `${automation.monitoring_type.toUpperCase()} check ${healthy ? 'passed' : 'failed'}: ${automation.target_url} ${result.detail}.`
-            if (!healthy) throw new Error(message)
+            if (!healthy) throw new MonitoringResponseError(message)
             const warning = Date.now() - startedAt >= 1000
             return { provider: 'hanasand-monitoring', model: automation.monitoring_type, message, certificate: certificate!, warning }
         } catch (error) {
+            if (error instanceof MonitoringResponseError) throw Object.assign(error, { certificate: getCertificateFromError(error) ?? certificate })
             lastError = error instanceof DOMException && error.name === 'TimeoutError'
                 ? new Error(`Monitoring request timed out after ${automation.timeout_seconds} second${automation.timeout_seconds === 1 ? '' : 's'}.`)
                 : error
@@ -583,10 +585,10 @@ export async function runMonitoringCheck(automation: AutomationRow) {
 }
 
 async function runJsonCheck(automation: AutomationRow, attempt: number) {
-    let certificate: Awaited<ReturnType<typeof checkCertificate>> | { status: 'not_applicable', subject: null, issuer: null, expiresAt: null } | null = null
+    // Retry unavailable snapshots, but evaluate each received snapshot exactly once.
+    const snapshot = await sharedJsonSnapshot(automation, attempt)
+    const certificate = snapshot.certificate
     try {
-        const snapshot = await sharedJsonSnapshot(automation, attempt)
-        certificate = snapshot.certificate
         const rule = normalizeJsonRule(automation.json_rule)
         const { exceeded, observed } = evaluateJsonRule(snapshot.payload, rule)
         const inverted = automation.upside_down || automation.expected_down
@@ -596,7 +598,7 @@ async function runJsonCheck(automation: AutomationRow, attempt: number) {
         if (failed) throw new Error(message)
         return { provider: 'hanasand-monitoring', model: 'json', message, certificate, warning: false }
     } catch (error) {
-        throw Object.assign(error instanceof Error ? error : new Error('JSON check failed.'), { certificate })
+        throw Object.assign(new MonitoringResponseError(error instanceof Error ? error.message : 'JSON check failed.', { cause: error }), { certificate })
     }
 }
 

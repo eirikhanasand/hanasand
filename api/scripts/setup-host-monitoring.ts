@@ -33,8 +33,11 @@ for (const check of checks) {
     if (check.id !== 'gpu') await queryOnce(`INSERT INTO agent_automations
         (id, owner_id, name, prompt, target_url, monitoring_type, json_rule, schedule_kind, interval_minutes, status, action_type,
          timezone, timeout_seconds, retry_count, model_name, notification_destinations, notify_on, notify_warnings, next_run_at)
-        SELECT $2, owner_id, $3, REPLACE(prompt, 'host', 'OVH'), target_url, monitoring_type,
-            jsonb_set(json_rule, '{path}', to_jsonb(REGEXP_REPLACE(json_rule->>'path', '^host[.]', 'hosts.ovhcloud.'))),
+        SELECT $2, owner_id, $3,
+            CASE WHEN $2 = 'monitor-ovh-temperature' THEN 'Alert when any OVH temperature sensor exceeds 60°C.' ELSE REPLACE(prompt, 'host', 'OVH') END,
+            target_url, monitoring_type,
+            jsonb_set(CASE WHEN $2 = 'monitor-ovh-temperature' THEN jsonb_set(json_rule, '{value}', '60'::jsonb) ELSE json_rule END,
+                '{path}', to_jsonb(REGEXP_REPLACE(json_rule->>'path', '^host[.]', 'hosts.ovhcloud.'))),
             schedule_kind, interval_minutes, status, action_type, timezone, timeout_seconds, retry_count,
             model_name, notification_destinations, notify_on, notify_warnings, NOW()
         FROM agent_automations WHERE id = $1

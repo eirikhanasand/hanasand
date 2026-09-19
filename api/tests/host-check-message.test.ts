@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import { hostCheckMessage } from '../src/utils/hostCheckMessage.ts'
 import { monitoringIssueFingerprint } from '../src/utils/monitoringIssues.ts'
+import { evaluateJsonRule } from '../src/utils/jsonMonitoring.ts'
 import type { JsonRule } from '../src/utils/jsonMonitoring.ts'
 
 for (const [path, name] of [['memoryPercent', 'RAM'], ['cpuPercent', 'CPU'], ['gpus.*.usedPercent', 'GPU'], ['storage.*.usedPercent', 'Storage']]) {
@@ -42,4 +43,13 @@ test('temperature shows actual hottest reading and the configured Celsius thresh
 test('OVH checks retain readable threshold messages', () => {
     expect(hostCheckMessage({ path: 'hosts.ovhcloud.cpuPercent', operator: 'gt', aggregate: 'max', value: 80 }, 12, false)).toBe('CPU usage is normal: 12% used (alert at 80%).')
     expect(hostCheckMessage({ path: 'hosts.ovhcloud.power.*.margin', operator: 'lt', aggregate: 'min', value: 0 }, -2, true)).toContain('2 W above')
+})
+
+test('OVH temperature accepts readings through 60°C and alerts above it', () => {
+    const rule: JsonRule = { path: 'hosts.ovhcloud.temperatures.*.value', operator: 'gt', aggregate: 'max', value: 60 }
+    for (const temperature of [53, 60, 61]) {
+        const { exceeded, observed } = evaluateJsonRule({ hosts: { ovhcloud: { temperatures: [{ value: 40 }, { value: temperature }] } } }, rule)
+        expect(exceeded).toBe(temperature > 60)
+        expect(hostCheckMessage(rule, observed, exceeded)).toBe(`Temperature is ${temperature > 60 ? 'high' : 'normal'}: ${temperature}°C (alert above 60°C).`)
+    }
 })
