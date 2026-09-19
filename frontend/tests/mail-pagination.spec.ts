@@ -9,12 +9,13 @@ test('mail scroll loads older messages, retries failures and contains long mailb
         { name: 'roles', value: '["administrator"]', url: baseURL! },
     ])
     let failNext = true
+    let archived = false
     await page.route('**/api/backend/mail/overview?*', async route => {
         const params = new URL(route.request().url()).searchParams
         const after = params.get('after')
         const support = params.get('mailboxUser') === 'shared:support'
         if (after && failNext) { failNext = false; return route.fulfill({ status: 503, json: { error: 'Temporary outage' } }) }
-        const messages = Array.from({ length: support ? 6 : after ? 25 : 50 }, (_, i) => ({ id: support ? `support-${i}` : String(i + (after ? 50 : 0)), subject: `Message ${i + (after ? 50 : 0)}`, from: [{ email: 'sender@example.com' }], to: [{ email: 'support@example.com' }], cc: [{ email: 'other@example.com' }], receivedAt: '2026-09-19T10:00:00Z', mailboxIds: ['inbox'], preview: 'preview', isRead: false }))
+        const messages = Array.from({ length: support ? (archived ? 5 : 6) : after ? 25 : 50 }, (_, i) => ({ id: support ? `support-${i + (archived ? 1 : 0)}` : String(i + (after ? 50 : 0)), subject: `Message ${i + (after ? 50 : 0)}`, from: [{ email: 'sender@example.com' }], to: [{ email: 'support@example.com' }], cc: [{ email: 'other@example.com' }], receivedAt: '2026-09-19T10:00:00Z', mailboxIds: ['inbox'], preview: 'preview', isRead: false }))
         await route.fulfill({ json: {
             actor: { id: 'dashboard-render-proof-user', canAccessAnyMailbox: true }, mailboxUser: support ? 'shared:support' : 'dashboard-render-proof-user', mailboxAddress: support ? 'support@example.com' : 'test@example.com',
             accessibleAccounts: [{ id: 'shared:support', name: 'Support', address: 'support@example.com', shared: true }, { id: 'dashboard-render-proof-user', name: 'Test', address: 'test@example.com' }, { id: 'long', name: 'VeryLongMailboxName'.repeat(20), address: 'long@example.com' }],
@@ -52,6 +53,7 @@ test('mail scroll loads older messages, retries failures and contains long mailb
     let actedOn: unknown
     await page.route('**/api/backend/mail/message/*/action', async route => {
         actedOn = { url: route.request().url(), ...route.request().postDataJSON() }
+        archived = true
         await route.fulfill({ json: { ok: true } })
     })
     await row.focus()
@@ -59,5 +61,7 @@ test('mail scroll loads older messages, retries failures and contains long mailb
     await page.getByRole('menuitem', { name: 'Archive', exact: true }).click()
     await expect.poll(() => actedOn).toMatchObject({ action: 'archive', mailboxUser: 'shared:support' })
     expect((actedOn as { url: string }).url).toContain('/message/support-0/action')
+    await expect(row).toHaveCount(0)
+    await expect(page.locator('button[data-testid^="mail-message-"]')).toHaveCount(5)
 
 })
