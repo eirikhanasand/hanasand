@@ -26,6 +26,7 @@ import {
     createMailbox,
     deleteFilter,
     fetchMailOverview,
+    messageAction,
     sendMail,
 } from '@/utils/mail/client'
 import type { MailMessageSummary, MailOverview } from '@/utils/mail/types'
@@ -99,6 +100,9 @@ export default function MailWorkspace({ mailboxUser }: Props) {
     const nextPageTrigger = useRef<HTMLDivElement>(null)
     const [loadingMore, setLoadingMore] = useState(false)
     const [pageError, setPageError] = useState('')
+    const [checkedMessages, setCheckedMessages] = useState<Set<string>>(new Set())
+    const [archiving, setArchiving] = useState(false)
+    const archivingRef = useRef(false)
     const [mailFilter, setMailFilter] = useState<MailListFilter>('all')
 
     const load = useCallback(async (params: {
@@ -109,7 +113,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
     } = {}) => {
         if (params.messageId === null) setReadingMessage(false)
         const silent = Boolean(params.silent)
-        if (silent && (requestPending.current || paginationPending.current)) return
+        if (silent && (requestPending.current || paginationPending.current || archivingRef.current)) return
         const version = ++requestVersion.current
         requestPending.current = true
 
@@ -135,7 +139,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 const tail = current.messages.slice(boundary >= 0 ? boundary + 1 : 50)
                 return { ...next, messages: [...next.messages, ...tail.filter(message => !ids.has(message.id))], nextCursor: current.nextCursor }
             })
-            if (switched) setPageError('')
+            if (switched) { setPageError(''); setCheckedMessages(new Set()) }
             setSelectedMailboxId(next.selectedMailboxId)
             const nextSelectedMessageId = params.messageId
                 || next.selectedMessage?.id
@@ -189,7 +193,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
     }, [overview])
 
     async function quickAction(message: MailMessageSummary, action: MailQuickAction) {
-        if (!overview || loading) return
+        if (!overview || loading || archivingRef.current) return
         if (action === 'reply' || action === 'replyAll' || action === 'forward') {
             const version = requestVersion.current
             try {
@@ -260,6 +264,38 @@ export default function MailWorkspace({ mailboxUser }: Props) {
             return haystack.includes(needle)
         })
     }, [overview?.messages, query, mailFilter])
+
+    const checkedVisible = filteredMessages.filter(message => checkedMessages.has(message.id))
+
+    async function archiveSelected() {
+        if (!overview || archivingRef.current || !checkedVisible.length) return
+        const user = overview.mailboxUser
+        const mailbox = overview.selectedMailboxId
+        const ids = checkedVisible.map(message => message.id)
+        const succeeded = new Set<string>()
+        archivingRef.current = true
+        setArchiving(true)
+        setError('')
+        try {
+            for (const id of ids) {
+                try {
+                    await messageAction(id, { mailboxUser: user, action: 'archive' })
+                    succeeded.add(id)
+                } catch { /* Keep failed messages selected so they can be retried. */ }
+            }
+            if (selection.current.user === user && selection.current.mailbox === mailbox) {
+                setCheckedMessages(current => new Set([...current].filter(id => !succeeded.has(id))))
+                setOverview(current => current && current.mailboxUser === user && current.selectedMailboxId === mailbox
+                    ? { ...current, messages: current.messages.filter(message => !succeeded.has(message.id)) } : current)
+                archivingRef.current = false
+                await load({ silent: true })
+                if (succeeded.size !== ids.length) setError(`Could not archive ${ids.length - succeeded.size} selected ${ids.length - succeeded.size === 1 ? 'message' : 'messages'}. Try again.`)
+            }
+        } finally {
+            archivingRef.current = false
+            setArchiving(false)
+        }
+    }
 
     const mailboxFilterOptions = useMemo(() => buildMailListFilters(overview?.messages || []), [overview?.messages])
 
@@ -440,10 +476,35 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                         ))}
                     </div>
 
+                    {!!filteredMessages.length && <div className='mb-2 flex flex-wrap items-center gap-3 px-1 text-xs text-ui-muted'>
+                        <label className='flex cursor-pointer items-center gap-2'>
+                            <input type='checkbox' aria-label='Select all visible messages' disabled={loading || archiving}
+                                className='h-4 w-4 accent-ui-primary'
+                                checked={checkedVisible.length === filteredMessages.length}
+                                ref={element => { if (element) element.indeterminate = checkedVisible.length > 0 && checkedVisible.length < filteredMessages.length }}
+                                onChange={event => setCheckedMessages(event.target.checked ? new Set(filteredMessages.map(message => message.id)) : new Set())} />
+                            Select all visible
+                        </label>
+                        {!!checkedVisible.length && <>
+                            <span role='status'>{checkedVisible.length} selected</span>
+                            <button type='button' className={toolbarButton} disabled={archiving || loading} onClick={() => void archiveSelected()}>
+                                <Archive className='h-4 w-4' />{archiving ? 'Archiving…' : 'Archive selected'}
+                            </button>
+                            <button type='button' className='hover:text-ui-text' disabled={archiving} onClick={() => setCheckedMessages(new Set())}>Clear selection</button>
+                        </>}
+                    </div>}
                     <div className='grid min-w-0 grid-cols-1 gap-1.5'>
                         {filteredMessages.map(message => (
                             <MessageRow
                                 key={`${overview?.mailboxUser}:${message.id}`}
+                                checked={checkedMessages.has(message.id)}
+                                selectionDisabled={loading || archiving}
+                                onToggle={() => setCheckedMessages(current => {
+                                    const next = new Set(current)
+                                    if (next.has(message.id)) next.delete(message.id)
+                                    else next.add(message.id)
+                                    return next
+                                })}
                                 canSend={overview?.actor.canSend}
                                 onAction={action => void quickAction(message, action)}
                                 message={message}

@@ -11,12 +11,15 @@ import { fileToDraftAttachment, formatDate, formatRelativeTime, prettyBytes, sub
 
 export type MailQuickAction = 'reply' | 'replyAll' | 'forward' | 'archive' | 'trash' | 'read' | 'unread' | 'flag' | 'unflag'
 
-export function MessageRow({ message, active, onClick, onAction, canSend = true }: {
+export function MessageRow({ message, active, onClick, onAction, canSend = true, checked, onToggle, selectionDisabled }: {
     message: MailMessageSummary
     active: boolean
     onClick: () => void
     onAction: (action: MailQuickAction) => void
     canSend?: boolean
+    checked: boolean
+    onToggle: () => void
+    selectionDisabled: boolean
 }) {
     const [menu, setMenu] = useState<{ x: number, y: number } | null>(null)
     const row = useRef<HTMLButtonElement>(null)
@@ -48,42 +51,46 @@ export function MessageRow({ message, active, onClick, onAction, canSend = true 
     const senderLine = message.from.map((from) => from.name || from.email).join(', ')
 
     return (<>
-        <button
-            ref={row}
-            onContextMenu={event => { event.preventDefault(); setMenu({ x: event.clientX, y: event.clientY }) }}
-            onKeyDown={event => {
-                if (event.key === 'ContextMenu' || event.shiftKey && event.key === 'F10') {
-                    event.preventDefault()
-                    const rect = event.currentTarget.getBoundingClientRect()
-                    setMenu({ x: rect.left, y: rect.top })
-                }
-            }}
-            data-testid={`mail-message-${message.id}`}
-            onClick={onClick}
-            className={`min-w-0 w-full rounded-lg border px-3 py-2 text-left transition ${
-                active
-                    ? 'border-ui-primary bg-ui-primary/10'
-                    : 'border-transparent bg-ui-raised hover:border-ui-border hover:bg-ui-panel'
-            }`}
-        >
-            <div className='flex items-start justify-between gap-3'>
-                <div className='min-w-0 flex-1'>
-                    <div className='flex min-w-0 items-center gap-2'>
-                        {!message.isRead && <span className='h-1.5 w-1.5 shrink-0 rounded-full bg-ui-primary' />}
-                        <p className='truncate text-xs font-medium text-ui-text'>{message.subject}</p>
+        <div className={`flex min-w-0 items-center rounded-lg border transition ${
+            checked || active ? 'border-ui-primary bg-ui-primary/10' : 'border-transparent bg-ui-raised hover:border-ui-border hover:bg-ui-panel'
+        }`}>
+            <label className='flex shrink-0 cursor-pointer items-center self-stretch pl-3 pr-1'>
+                <input type='checkbox' aria-label={`Select ${message.subject}`} checked={checked} onChange={onToggle}
+                    disabled={selectionDisabled} className='h-4 w-4 accent-ui-primary' />
+            </label>
+            <button
+                ref={row}
+                onContextMenu={event => { event.preventDefault(); setMenu({ x: event.clientX, y: event.clientY }) }}
+                onKeyDown={event => {
+                    if (event.key === 'ContextMenu' || event.shiftKey && event.key === 'F10') {
+                        event.preventDefault()
+                        const rect = event.currentTarget.getBoundingClientRect()
+                        setMenu({ x: rect.left, y: rect.top })
+                    }
+                }}
+                data-testid={`mail-message-${message.id}`}
+                onClick={onClick}
+                className='min-w-0 flex-1 rounded-lg px-3 py-2 text-left'
+            >
+                <div className='flex items-start justify-between gap-3'>
+                    <div className='min-w-0 flex-1'>
+                        <div className='flex min-w-0 items-center gap-2'>
+                            {!message.isRead && <span className='h-1.5 w-1.5 shrink-0 rounded-full bg-ui-primary' />}
+                            <p className='truncate text-xs font-medium text-ui-text'>{message.subject}</p>
+                        </div>
+                        <div className='mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-ui-muted'>
+                            <span className='max-w-[40%] shrink-0 truncate'>{senderLine}</span>
+                            {message.preview ? <span className='shrink-0 text-ui-muted'>•</span> : null}
+                            {message.preview ? <span className='min-w-0 flex-1 truncate text-ui-muted'>{message.preview}</span> : null}
+                        </div>
                     </div>
-                    <div className='mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-ui-muted'>
-                        <span className='max-w-[40%] shrink-0 truncate'>{senderLine}</span>
-                        {message.preview ? <span className='shrink-0 text-ui-muted'>•</span> : null}
-                        {message.preview ? <span className='min-w-0 flex-1 truncate text-ui-muted'>{message.preview}</span> : null}
+                    <div className='flex shrink-0 items-center gap-2 pt-0.5'>
+                        {message.hasAttachment && <Paperclip className='h-3.5 w-3.5 text-ui-muted' />}
+                        <span className='text-[10px] text-ui-muted'>{formatDate(message.receivedAt)}</span>
                     </div>
                 </div>
-                <div className='flex shrink-0 items-center gap-2 pt-0.5'>
-                    {message.hasAttachment && <Paperclip className='h-3.5 w-3.5 text-ui-muted' />}
-                    <span className='text-[10px] text-ui-muted'>{formatDate(message.receivedAt)}</span>
-                </div>
-            </div>
-        </button>
+            </button>
+        </div>
         {menu && createPortal(<div ref={menuRef} role='menu' aria-label='Message actions'
             className='fixed z-1400 w-44 rounded-lg border border-ui-border bg-ui-panel p-1 shadow-xl'
             style={{ left: Math.max(8, Math.min(menu.x, window.innerWidth - 184)), top: Math.max(8, Math.min(menu.y, window.innerHeight - 280)) }}
