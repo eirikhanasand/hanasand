@@ -46,7 +46,17 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
     const [errors, setErrors] = useState(initialErrors)
     const [refresh, setRefresh] = useState(0)
     const editing = useRef(false)
+    const pausedUpdates = useRef(false)
     const queryIdentity = useRef('')
+    useEffect(() => {
+        const finishSelection = () => { editing.current = false }
+        window.addEventListener('pointerup', finishSelection)
+        window.addEventListener('pointercancel', finishSelection)
+        return () => {
+            window.removeEventListener('pointerup', finishSelection)
+            window.removeEventListener('pointercancel', finishSelection)
+        }
+    }, [])
     useEffect(() => {
         if (!copied) return
         const timeout = setTimeout(() => setCopied(''), 3000)
@@ -67,8 +77,8 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
         setBusy(false)
         const controller = new AbortController()
         let inFlight = false
-        async function load() {
-            if (inFlight || paused || editing.current) return
+        async function load(manual = false) {
+            if (inFlight || (!manual && (pausedUpdates.current || editing.current))) return
             inFlight = true; setBusy(true)
             const params = new URLSearchParams({ hours, kql: advanced && appliedKql ? appliedKql : `${table} | take 200` })
             if (search && !advanced) params.set('search', search)
@@ -80,18 +90,25 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
                 const response = await fetch(view === 'errors' ? '/api/backend/logs/errors?limit=150' : `/api/backend/logs/search?${params}`, { signal: controller.signal, cache: 'no-store' })
                 const body = await response.json().catch(() => ({}))
                 if (!response.ok) throw new Error(body.error || 'Could not search logs.')
-                if (!controller.signal.aborted) {
+                if (!controller.signal.aborted && (manual || !pausedUpdates.current)) {
                     if (view === 'errors') setErrors(body)
                     else setData(previous => view === 'realtime' && previous && !body.summarize ? { ...body, rows: retainEvents(previous.rows, body.rows) } : body)
                     setError('')
                 }
-            } catch (cause) { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Could not load logs.') }
+            } catch (cause) { if (!controller.signal.aborted && (manual || !pausedUpdates.current)) setError(cause instanceof Error ? cause.message : 'Could not load logs.') }
             finally { if (!controller.signal.aborted) setBusy(false); inFlight = false }
         }
-        const debounce = setTimeout(() => void load(), 250)
+        // Pause freezes automatic updates; explicit filters, retries and Resume
+        // still load once even while an event's text is selected.
+        const debounce = setTimeout(() => void load(true), 250)
         const interval = view === 'realtime' || view === 'dashboard' ? setInterval(() => void load(), 5000) : undefined
         return () => { controller.abort(); clearTimeout(debounce); clearInterval(interval) }
-    }, [view, service, search, table, advanced, appliedKql, hours, severity, paused, refresh])
+    }, [view, service, search, table, advanced, appliedKql, hours, severity, refresh])
+    function togglePaused() {
+        pausedUpdates.current = !pausedUpdates.current
+        setPaused(pausedUpdates.current)
+        if (!pausedUpdates.current) setRefresh(value => value + 1)
+    }
     async function copy(event: Event | ErrorEvent) {
         try { await navigator.clipboard.writeText(JSON.stringify('normalized' in event ? event.normalized : event, null, 2)); setCopied(event.id) }
         catch { setCopied(''); setError('Copy failed. Select the event text and copy it manually.') }
@@ -113,7 +130,7 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
                     <select aria-label='Time range' value={hours} onChange={event => setHours(event.target.value)} className={fieldClass}>{[['1','Last hour'],['24','Last 24 hours'],['168','Last 7 days'],['720','Last 30 days'],['2160','Last 90 days']].map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select>
                     {view !== 'realtime' && <select aria-label='Severity' value={severity} onChange={event => setSeverity(event.target.value)} className={fieldClass}><option value='all'>All severities</option>{['low','medium','high','critical'].map(value => <option key={value}>{value}</option>)}</select>}
                     <label className='flex items-center gap-2 text-sm'><input type='checkbox' checked={advanced} onChange={event => { setAdvanced(event.target.checked); if (event.target.checked) setAppliedKql(kql) }} />Advanced KQL</label>
-                    {view === 'realtime' && <button type='button' onClick={() => setPaused(!paused)} className={fieldClass}>{paused ? 'Resume' : 'Pause'}</button>}
+                    {view === 'realtime' && <button type='button' onClick={togglePaused} className={fieldClass}>{paused ? 'Resume' : 'Pause'}</button>}
                 </div>
                 {advanced && <form onSubmit={event => { event.preventDefault(); setAppliedKql(kql); setRefresh(value => value + 1) }} className='grid gap-2'>
                     <textarea aria-label='KQL query' value={kql} onChange={event => setKql(event.target.value)} rows={3} spellCheck={false} className={`${fieldClass} min-w-0 font-mono`} />
