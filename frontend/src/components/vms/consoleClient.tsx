@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import Link from 'next/link'
-import { Maximize2, Minimize2, RefreshCw } from 'lucide-react'
+import { Maximize2, Minimize2, RefreshCw, LoaderCircle } from 'lucide-react'
 import config from '@/config'
+import { prepareVmConsole } from '@/utils/vms/prepareConsole'
 import { getCookie } from '@/utils/cookies/cookies'
 
 export default function VmConsole({ name }: { name: string }) {
@@ -76,17 +77,27 @@ export default function VmConsole({ name }: { name: string }) {
     }, [bootLog, showBoot])
     const [status, setStatus] = useState('Connecting…')
     const [username, setUsername] = useState('')
+    const [opening, setOpening] = useState(true)
     useEffect(() => {
         let disposed = false
+        const controller = new AbortController()
         let socket: WebSocket | undefined
         let retry: ReturnType<typeof setTimeout> | undefined
         let disposeTerminal: (() => void) | undefined
-        setStatus('Connecting…')
+        setStatus('Checking container…')
+        setOpening(true)
         setUsername('')
         setBootLog('')
         setBootError('')
         setShowBoot(false)
         void (async () => {
+            try {
+                await prepareVmConsole(name, config.url.api, getCookie('id') || '', decodeURIComponent(getCookie('access_token') || ''), message => { if (!disposed) setStatus(message) }, AbortSignal.any([controller.signal, AbortSignal.timeout(120000)]))
+            } catch (error) {
+                if (!disposed) { setOpening(false); setStatus(error instanceof Error ? error.message : 'Unable to open container.'); reconnect.current = () => window.location.reload() }
+                return
+            }
+            if (disposed) return
             const [{ Terminal }, { FitAddon }] = await Promise.all([import('@xterm/xterm'), import('@xterm/addon-fit')])
             if (disposed || !container.current) return
             const terminal = new Terminal({ cursorBlink: true, fontSize: 14, scrollback: 5000, theme: { background: '#08111f', foreground: '#e6edf3' } })
@@ -163,10 +174,12 @@ export default function VmConsole({ name }: { name: string }) {
                             ready = true
                             setUsername(message.username)
                             setStatus('Connected')
+                            setOpening(false)
                             sendSize()
                             terminal.focus()
                         } else if (message.type === 'error') {
                             failed = true
+                            setOpening(false)
                             setStatus(message.message)
                         } else if (message.type === 'status') {
                             ready = false
@@ -190,7 +203,7 @@ export default function VmConsole({ name }: { name: string }) {
             reconnect.current = connect
             connect()
         })().catch(() => { if (!disposed) setStatus('Unable to load the console. Try again.') })
-        return () => { disposed = true; clearTimeout(retry); reconnect.current = () => {}; socket?.close(); disposeTerminal?.() }
+        return () => { disposed = true; controller.abort(); clearTimeout(retry); reconnect.current = () => {}; socket?.close(); disposeTerminal?.() }
     }, [name])
 
     return <section ref={panel} data-expanded={expanded || undefined} style={expanded ? viewport : undefined} className={`flex min-h-0 flex-col gap-3 overflow-hidden border border-ui-border bg-ui-panel p-4 [&:fullscreen]:h-dvh [&:fullscreen]:w-screen [&:fullscreen]:rounded-none ${expanded ? 'fixed inset-0 z-[1000] h-dvh rounded-none pt-[max(1rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))]' : 'h-[calc(100dvh-7rem)] rounded-xl'}`}>
@@ -207,6 +220,7 @@ export default function VmConsole({ name }: { name: string }) {
             {bootError && <p className='text-ui-muted'>{bootError}</p>}
             <pre ref={bootPanel} onScroll={event => { const el = event.currentTarget; followBoot.current = el.scrollHeight - el.scrollTop - el.clientHeight < 4 }} className='mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-xs' aria-label='VM restart log'>{bootLog || 'Waiting for boot output…'}</pre>
         </details>}
+        {opening && <div role='status' className='flex items-center gap-3 rounded-lg border border-ui-primary/25 bg-ui-primary/5 px-4 py-3 text-sm text-ui-primary'><LoaderCircle className='h-5 w-5 animate-spin' aria-hidden />{status}</div>}
         <div ref={container} aria-label={`${name} terminal`} className='min-h-0 min-w-0 flex-1 overflow-hidden rounded-lg bg-[#08111f] p-2' />
     </section>
 }

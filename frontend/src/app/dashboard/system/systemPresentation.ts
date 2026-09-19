@@ -28,7 +28,7 @@ export function containerDisplayName(name: string): string {
 }
 
 export function formatBytes(bytes: number | null | undefined): string {
-    if (typeof bytes !== 'number' || !Number.isFinite(bytes) || bytes < 0) return 'Metering'
+    if (typeof bytes !== 'number' || !Number.isFinite(bytes) || bytes < 0) return 'Loading…'
     const units = ['B', 'KB', 'MB', 'GB', 'TB']
     let n = bytes
     let i = 0
@@ -41,12 +41,12 @@ export function formatBytes(bytes: number | null | undefined): string {
 }
 
 export function formatPercent(value: number | null | undefined, decimals = 1): string {
-    if (typeof value !== 'number' || !Number.isFinite(value)) return 'Metering'
+    if (typeof value !== 'number' || !Number.isFinite(value)) return 'Loading…'
     return `${value.toFixed(decimals)}%`
 }
 
 export function formatDuration(seconds: number | null | undefined): string {
-    if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds < 0) return 'Metering'
+    if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds < 0) return 'Loading…'
     const days = Math.floor(seconds / 86400)
     const hours = Math.floor((seconds % 86400) / 3600)
     const minutes = Math.floor((seconds % 3600) / 60)

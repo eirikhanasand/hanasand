@@ -5,7 +5,7 @@ import { chromium } from '@playwright/test'
 const css = await readFile('node_modules/@xterm/xterm/css/xterm.css', 'utf8')
 const build = await Bun.build({ entrypoints: ['console-fixture'], target: 'browser', plugins: [{ name: 'fixture', setup(builder) {
     builder.onResolve({ filter: /^(console-fixture|next\/link|@\/config)$/ }, args => ({ path: args.path, namespace: 'fixture' }))
-    builder.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ loader: 'tsx', resolveDir: process.cwd(), contents: args.path === 'next/link' ? 'export default function Link(props){return <a {...props}/>}' : args.path === '@/config' ? 'export default {url:{api_wss:"ws://fixture"}}' : `
+    builder.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ loader: 'tsx', resolveDir: process.cwd(), contents: args.path === 'next/link' ? 'export default function Link(props){return <a {...props}/>}' : args.path === '@/config' ? 'export default {url:{api:"/api",api_wss:"ws://fixture"}}' : `
         import {createRoot} from 'react-dom/client';
         import VmConsole from './src/components/vms/consoleClient';
         window.sent=[];
@@ -24,6 +24,8 @@ const build = await Bun.build({ entrypoints: ['console-fixture'], target: 'brows
 assert(build.success, build.logs.join('\n'))
 const bundle = await build.outputs[0].text()
 const server = Bun.serve({ port: 0, fetch(request) {
+    if (new URL(request.url).pathname === '/api/vm/details/cashflow') return Response.json({ status: 'Stopped' })
+    if (new URL(request.url).pathname === '/api/vm/cashflow/start') return Bun.sleep(800).then(() => Response.json({ success: true }))
     if (new URL(request.url).pathname === '/app.js') return new Response(bundle, { headers: { 'content-type': 'text/javascript' } })
     return new Response(`<html><head><style>${css} [aria-label="cashflow terminal"]{height:400px;width:800px}</style></head><body><div id="root"></div><script type="module" src="/app.js"></script></body></html>`, { headers: { 'content-type': 'text/html' } })
 } })
@@ -33,6 +35,7 @@ try {
     const errors = []
     page.on('pageerror', error => errors.push(error.message))
     await page.goto(server.url.toString())
+    await page.getByText('Starting container…', { exact: true }).first().waitFor()
     await page.getByRole('status').filter({ hasText: 'Connected · cashflow' }).waitFor()
     const row = page.locator('.xterm-rows > div').first()
     await row.filter({ hasText: 'copyprobe' }).waitFor()

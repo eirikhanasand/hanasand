@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation'
 import ErrorNotice from '../error/errorNotice'
 import { vmActionStyle } from './actionStyle'
 
-export default function RestartButtons({ vm, forceVisible = false }: { vm: VM, forceVisible?: boolean }) {
+export default function RestartButtons({ vm, forceVisible = false, onUpdated }: { vm: VM, forceVisible?: boolean, onUpdated?: () => void }) {
     const router = useRouter()
     const { condition: message, setCondition: setMessage } = useClearStateAfter()
     const [loading, setLoading] = useState(false)
@@ -37,6 +37,7 @@ export default function RestartButtons({ vm, forceVisible = false }: { vm: VM, f
         setMessage(response)
         if (response && !response.toLowerCase().includes('failed') && !response.toLowerCase().includes('error')) {
             router.refresh()
+            onUpdated?.()
         }
         setLoading(false)
     }
@@ -51,6 +52,7 @@ export default function RestartButtons({ vm, forceVisible = false }: { vm: VM, f
         setMessage(response)
         if (response && !response.toLowerCase().includes('failed') && !response.toLowerCase().includes('error')) {
             router.refresh()
+            onUpdated?.()
         }
         setLoading(false)
     }
@@ -65,6 +67,7 @@ export default function RestartButtons({ vm, forceVisible = false }: { vm: VM, f
         setMessage(response)
         if (response && !response.toLowerCase().includes('failed') && !response.toLowerCase().includes('error')) {
             router.refresh()
+            onUpdated?.()
         }
         setLoading(false)
     }

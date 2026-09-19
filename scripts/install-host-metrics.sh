@@ -23,8 +23,8 @@ cat > /etc/systemd/system/hanasand-host-metrics.timer <<'UNIT'
 Description=Refresh Hanasand host telemetry
 [Timer]
 OnBootSec=10s
-OnUnitActiveSec=15s
-AccuracySec=1s
+OnUnitInactiveSec=1s
+AccuracySec=100ms
 [Install]
 WantedBy=timers.target
 UNIT

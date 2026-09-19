@@ -20,7 +20,6 @@ import {
     ServerCog,
     StopCircle,
     TerminalSquare,
-    Timer,
     Workflow,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -89,7 +88,6 @@ export default function SystemDashboard({
     const [dockerTelemetry, setDockerTelemetry] = useState<DockerTelemetryResponse>(() => normalizeDockerTelemetry(initialDockerTelemetry))
     const [lastUpdated, setLastUpdated] = useState(dockerTelemetry.generated_at || new Date().toISOString())
     const [autoRefresh, setAutoRefresh] = useState(true)
-    const [refreshSeconds, setRefreshSeconds] = useState(15)
     const [refreshing, setRefreshing] = useState(false)
     const [selectedContainerId, setSelectedContainerId] = useState<string>(dockerTelemetry.containers[0]?.id || '')
     const [restartContainer, setRestartContainer] = useState<DockerContainer | null>(null)
@@ -100,7 +98,7 @@ export default function SystemDashboard({
     const logsAbortController = useRef<AbortController | null>(null)
 
     const containers = useMemo(
-        () => dockerTelemetry.containers.filter((container): container is DockerContainer => Boolean(container)),
+        () => dockerTelemetry.containers.filter((container): container is DockerContainer => Boolean(container) && !['exited', 'dead', 'removing'].includes((container.state || container.status || '').toLowerCase())),
         [dockerTelemetry.containers]
     )
     const selectedContainer = containers.find((container) => container.id === selectedContainerId) || containers[0] || null
@@ -110,12 +108,12 @@ export default function SystemDashboard({
     const normalizedMetrics = Array.isArray(vmMetrics) ? vmMetrics.filter((metric): metric is VMMetrics => Boolean(metric)) : []
     const runningVms = normalizedVms.filter((vm) => (vm.status ?? '').toLowerCase() === 'running').length
     const stoppedVms = normalizedVms.filter((vm) => (vm.status ?? '').toLowerCase() === 'stopped').length
-    const telemetryFresh = isFresh(lastUpdated, refreshSeconds * 2500)
+    const telemetryFresh = isFresh(lastUpdated, 10000)
     const unhealthyContainers = containers.filter((container) => {
         const tone = containerHealth(container).tone
         return tone === 'bad' || tone === 'warn'
     })
-    const telemetryBlocked = Boolean(dockerTelemetry.unavailable_reason || (systemUnavailableReason && !systemSnapshot))
+    const telemetryBlocked = Boolean(dockerTelemetry.unavailable_reason || (systemUnavailableReason))
     const primaryHref = telemetryBlocked
         ? '#system-telemetry'
         : unhealthyContainers.length
@@ -163,10 +161,10 @@ export default function SystemDashboard({
             },
             {
                 label: 'Memory',
-                value: systemUnavailableReason && !systemSnapshot ? 'Unavailable' : memoryPercent,
+                value: systemUnavailableReason ? 'Unavailable' : memoryPercent,
                 note: systemSnapshot ? `${formatBytes(systemSnapshot.memory.used)} / ${formatBytes(systemSnapshot.memory.total)}` : systemUnavailableReason || 'host telemetry connecting',
                 icon: <MemoryStick className='h-4 w-4' />,
-                tone: systemUnavailableReason && !systemSnapshot ? 'warn' : undefined,
+                tone: systemUnavailableReason ? 'warn' : undefined,
             },
             {
                 label: 'VMs',
@@ -177,7 +175,7 @@ export default function SystemDashboard({
         ]
     }, [containers.length, normalizedVms.length, runningContainers, runningVms, stoppedVms, systemSnapshot, systemUnavailableReason, unavailableStats])
 
-    const loadContainerLogs = useCallback(async (container: DockerContainer | null) => {
+    const loadContainerLogs = useCallback(async (container: Pick<DockerContainer, 'name'> | null) => {
         logsAbortController.current?.abort()
         if (!container) {
             setLogs([])
@@ -267,7 +265,6 @@ export default function SystemDashboard({
                 setLastUpdated(new Date().toISOString())
             }
 
-            setMessage(`Refreshed ${formatDateTime(refreshedAt)}`)
         } catch (error) {
             setMessage(error instanceof Error ? error.message : 'Unable to refresh system telemetry.')
         } finally {
@@ -277,13 +274,40 @@ export default function SystemDashboard({
 
     useEffect(() => {
         if (!autoRefresh) return
-        const interval = window.setInterval(() => void refreshAll(), refreshSeconds * 1000)
-        return () => window.clearInterval(interval)
-    }, [autoRefresh, refreshAll, refreshSeconds])
+        let disposed = false
+        let socket: WebSocket | undefined
+        let retry: ReturnType<typeof setTimeout> | undefined
+        const connect = () => {
+            if (disposed) return
+            socket = new WebSocket(`${config.url.api_wss}/system`)
+            socket.onopen = () => socket?.send(JSON.stringify({ type: 'auth', id, token }))
+            socket.onmessage = event => {
+                try {
+                    const message = JSON.parse(event.data)
+                    if (message.type === 'snapshot') {
+                        const system = normalizeSystemTelemetry(message.system)
+                        const docker = normalizeDockerTelemetry(message.docker)
+                        setSystemSnapshot(system.system)
+                        setSystemUnavailableReason(system.unavailable_reason || '')
+                        setDockerTelemetry(docker)
+                        setLastUpdated(docker.generated_at || new Date().toISOString())
+                    } else if (message.type === 'error') setSystemUnavailableReason(message.message)
+                } catch { setSystemUnavailableReason('Unable to read system telemetry.') }
+            }
+            socket.onclose = event => {
+                if (disposed) return
+                setSystemUnavailableReason(event.code === 1008 ? 'Sign in with administrator access to view live telemetry.' : 'System telemetry is reconnecting.')
+                if (event.code !== 1008) retry = setTimeout(connect, 2000)
+            }
+        }
+        connect()
+        return () => { disposed = true; clearTimeout(retry); socket?.close() }
+    }, [autoRefresh, id, token])
 
+    const selectedContainerName = selectedContainer?.name
     useEffect(() => {
-        void loadContainerLogs(selectedContainer)
-    }, [loadContainerLogs, selectedContainer])
+        void loadContainerLogs(selectedContainerName ? { name: selectedContainerName } : null)
+    }, [loadContainerLogs, selectedContainerName])
 
     function inspectContainer(container: DockerContainer) {
         setSelectedContainerId(container.id)
@@ -321,7 +345,7 @@ export default function SystemDashboard({
 
     return (
         <div className='relative grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4'>
-            <div className='pointer-events-none absolute left-0 top-0 z-20 max-w-3xl'>
+            <div className='max-w-3xl'>
                 <ErrorNotice compact variant='info' message={message as string | null} />
             </div>
             <AppConfirmDialog
@@ -347,17 +371,13 @@ export default function SystemDashboard({
                     <div>
                         <div className='flex flex-wrap items-center gap-2'>
                             <StatusBadge fresh={telemetryFresh} />
-                            <span className='rounded-full border border-ui-border bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-text'>
-                                Source: {sourceLabel(dockerTelemetry.source)}
-                            </span>
                         </div>
-                        <p className='mt-2 text-sm text-ui-muted'>Live poll {formatDateTime(lastUpdated)}</p>
                         {dockerTelemetry.unavailable_reason && (
                             <p className='mt-2 rounded-md border border-ui-warning/35 bg-ui-warning/10 px-3 py-2 text-sm text-ui-warning'>
                                 Docker telemetry degraded: {dockerTelemetry.unavailable_reason}
                             </p>
                         )}
-                        {systemUnavailableReason && !systemSnapshot && (
+                        {systemUnavailableReason && (
                             <p className='mt-2 rounded-md border border-ui-warning/35 bg-ui-warning/10 px-3 py-2 text-sm text-ui-warning'>
                                 Host telemetry degraded: {systemUnavailableReason}
                             </p>
@@ -382,20 +402,7 @@ export default function SystemDashboard({
                             {autoRefresh ? <PauseCircle className='h-4 w-4' /> : <PlayCircle className='h-4 w-4' />}
                             Auto
                         </button>
-                        <label className='flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text shadow-sm'>
-                            <Timer className='h-4 w-4 text-ui-muted' />
-                            <select
-                                value={refreshSeconds}
-                                onChange={(event) => setRefreshSeconds(Number(event.target.value))}
-                                className='bg-transparent outline-none'
-                                aria-label='Refresh interval'
-                            >
-                                <option value={5}>5s</option>
-                                <option value={15}>15s</option>
-                                <option value={30}>30s</option>
-                                <option value={60}>60s</option>
-                            </select>
-                        </label>
+
                     </div>
                 </div>
             </DashboardPanel>
@@ -422,7 +429,6 @@ export default function SystemDashboard({
             <details className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-system-summary-disclosure>
                 <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
                     <span>Host, container, and VM counters</span>
-                    <span className='text-xs font-medium text-ui-muted'>{sourceLabel(dockerTelemetry.source)}, {formatDateTime(lastUpdated)}</span>
                 </summary>
                 <section className='grid gap-3 border-t border-ui-border p-3 sm:grid-cols-2 xl:grid-cols-4' data-system-summary-metrics>
                     {summary.map((item) => <SummaryCard key={item.label} item={item} />)}
@@ -703,7 +709,7 @@ function VmTableRow({ vm, metrics }: { vm: VM, metrics?: VMMetrics }) {
         <tr className='text-ui-text'>
             <td className='py-3 pr-3 font-semibold text-ui-text'>{vm.name}</td>
             <td className='px-3 py-3'>{owner}</td>
-            <td className='px-3 py-3'>{metrics ? formatPercent(metrics.cpu_usage_percent) : vm.limits_cpu || 'checking'}</td>
+            <td className='px-3 py-3'>{(vm.status || '').toLowerCase() === 'stopped' ? '0%' : metrics ? formatPercent(metrics.cpu_usage_percent) : 'Loading…'}</td>
             <td className='px-3 py-3'>{metrics ? `${metrics.ram_used_mb}/${metrics.ram_total_mb} MB` : vm.limits_memory || 'checking'}</td>
             <td className='px-3 py-3'>{vm.status || 'Checking'}</td>
             <td className='py-3 pl-3 text-right'>
@@ -823,16 +829,11 @@ function formatLoad(load: number[] | undefined): string {
 }
 
 function portLabel(ports?: DockerContainerPort[]) {
-    if (!ports?.length) return 'Private network only'
+    if (!ports?.length) return ''
     return ports.map((port) => {
         const target = port.public_port ? `${port.public_port}->${port.private_port}` : String(port.private_port)
         return `${target}/${port.type}`
     }).join(', ')
-}
-
-function sourceLabel(source?: string) {
-    if (!source) return 'checking source'
-    return source.replace(/_/g, ' ')
 }
 
 function formatLogTime(value: string) {

@@ -21,8 +21,8 @@ cat > /etc/systemd/system/hanasand-ovh-host-metrics.timer <<'UNIT'
 Description=Refresh OVH host telemetry
 [Timer]
 OnBootSec=10s
-OnUnitActiveSec=15s
-AccuracySec=1s
+OnUnitInactiveSec=1s
+AccuracySec=100ms
 [Install]
 WantedBy=timers.target
 UNIT

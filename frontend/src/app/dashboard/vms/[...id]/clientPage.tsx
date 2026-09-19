@@ -2,7 +2,10 @@
 
 import VMRow from '@/components/profile/vm'
 import ErrorNotice from '@/components/error/errorNotice'
-import { RefreshCcw } from 'lucide-react'
+import Link from 'next/link'
+import RestartButtons from '@/components/vms/restartButtons'
+import { vmActionStyle } from '@/components/vms/actionStyle'
+import { RefreshCcw, TerminalSquare } from 'lucide-react'
 import smallDate from '@/utils/date/smallDate'
 import VMDetails from '@/components/vms/vmDetails'
 import VMAccess from '@/components/vms/vmAccess'
@@ -72,17 +75,21 @@ export default function VMClient({ vm: serverVM, details: serverDetails, metrics
                     <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-ui-muted'>Virtual machine</p>
                     <h1 className='mt-1.5 text-xl font-medium text-ui-text sm:text-2xl'>{vm.name}</h1>
                 </div>
-                <button
-                    type='button'
-                    aria-label='Refresh VM details'
-                    aria-busy={refreshing}
-                    disabled={refreshing}
-                    className='group flex h-9 items-center justify-between gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 text-ui-muted transition hover:border-ui-primary hover:bg-ui-raised hover:text-ui-text'
-                    onClick={handleRefresh}
-                >
-                    <span className='text-sm'>{refreshing ? 'Refreshing…' : `Last checked ${smallDate(vm.last_checked)}`}</span>
-                    <RefreshCcw className={`h-4 w-4 text-ui-primary ${refreshing ? 'animate-spin' : ''}`} />
-                </button>
+                <div className='flex flex-wrap items-center gap-2'>
+                    <RestartButtons vm={vm} onUpdated={() => void handleRefresh()} />
+                    <Link href={`/vms/${encodeURIComponent(vm.name)}/console`} aria-label={`Open ${vm.name} console`} title='Open console' className={`${vmActionStyle} w-9 text-ui-primary`}><TerminalSquare className='h-4 w-4' /></Link>
+                    <button
+                        type='button'
+                        aria-label='Refresh VM details'
+                        aria-busy={refreshing}
+                        disabled={refreshing}
+                        className='group flex h-9 items-center justify-between gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 text-ui-muted transition hover:border-ui-primary hover:bg-ui-raised hover:text-ui-text'
+                        onClick={handleRefresh}
+                    >
+                        <span className='text-sm'>{refreshing ? 'Refreshing…' : `Last checked ${smallDate(vm.last_checked)}`}</span>
+                        <RefreshCcw className={`h-4 w-4 text-ui-primary ${refreshing ? 'animate-spin' : ''}`} />
+                    </button>
+                </div>
             </div>
             {refreshError && <ErrorNotice message={refreshError} actionLabel='Retry' onAction={() => void handleRefresh()} />}
             <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
