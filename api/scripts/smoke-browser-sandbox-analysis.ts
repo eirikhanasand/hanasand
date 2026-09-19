@@ -6,7 +6,7 @@ import {
     sandboxUrlSafety,
     summarizeDeobfuscationTask,
 } from '../src/handlers/onionSession/analysis.ts'
-import { parseCymruAsn, providerCommunityComments, providerSummaryText, sandboxResolvedAddressSafety } from '../src/handlers/onionSession/ws.ts'
+import { parseCymruAsn, parseUrlQueryScores, providerStartUrl, providerCommunityComments, providerSummaryText, sandboxResolvedAddressSafety } from '../src/handlers/onionSession/ws.ts'
 
 assert.deepEqual(sandboxUrlSafety('https://example.com/path'), { ok: true })
 assert.equal(sandboxUrlSafety('ftp://example.com').ok, false)
@@ -53,3 +53,8 @@ assert.deepEqual(providerCommunityComments(JSON.stringify({ data: [
 ] })), ['LockBit credential theft reported.', 'Suspicious redirect chain observed.'], 'extracts and cleans structured provider comment bodies')
 
 console.log('Browser sandbox analysis helpers passed.')
+
+assert.equal(providerStartUrl({ id: 'urlquery' }, 'https://urlquery.net/search?q=x', 'https://example.com/'), 'https://urlquery.net/search?q=https%3A%2F%2Fexample.com%2F', 'urlquery must open its public search UI, not a 204 HTML fragment')
+assert.equal(parseUrlQueryScores('Search: 0 hits'), null, 'missing reports are not a clean verdict')
+assert.equal(parseUrlQueryScores('Search: 5 hits'), null, 'a result count alone is not an alert verdict')
+assert.deepEqual(parseUrlQueryScores('<td>0 - 0 - 0</td>'), { alerts: 0 })
