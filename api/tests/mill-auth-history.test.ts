@@ -1,7 +1,7 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
 let findings: any[] = [], previous: any[] = []
 const query = async (sql: string, p: any[] = []) => {
-    if (sql.includes('FROM mill_events')) return { rows: previous }
+    if (sql.trimStart().startsWith('SELECT') && sql.includes('FROM mill_events')) return { rows: previous }
     if (sql.includes('INSERT INTO mill_findings')) { findings.push({ id: p[3] }); return { rows: [] } }
     throw new Error(sql)
 }

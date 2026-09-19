@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run, { withTransaction } from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
+import hasRole from '#utils/auth/hasRole.ts'
 import { matchApiKeyScope, validateApiKey } from '#utils/auth/apiKeys.ts'
 import { recordSystemEvent } from '#utils/systemEvent.ts'
 import { parse as parseYaml } from 'yaml'
@@ -125,15 +126,16 @@ export async function getMillEvents(req: FastifyRequest, res: FastifyReply) {
     const query = req.query as { organizationId?: string, limit?: string }
     if (query.organizationId !== access.organizationId) return res.status(403).send({ error: 'Organization access denied.' })
     const limit = Math.min(Math.max(Number(query.limit || 100), 1), 500)
+    const canReadLogs = (await hasRole(req, res, 'system_admin')).valid
     const result = await run(`
         SELECT id, ingestion_id, source_vendor, source_product, event_timestamp, received_at,
                event_type, action, outcome, user_id, user_email, source_ip, source_country,
                source_city, device_id, normalized, original, parser_version, processing_status
         FROM mill_events
-        WHERE organization_id = $1
+        WHERE organization_id = $1 AND ($3::boolean OR ingestion_id <> 'logs')
         ORDER BY event_timestamp DESC, received_at DESC
         LIMIT $2
-    `, [access.organizationId, limit])
+    `, [access.organizationId, limit, canReadLogs])
     return res.send({ organizationId: access.organizationId, events: result.rows })
 }
 
@@ -142,7 +144,7 @@ export async function postMillEventAction(req: FastifyRequest<{ Params: { id: st
     if (!access) return
     if (req.body?.action !== 'replay') return res.status(400).send({ error: 'Action must be replay.' })
     const result = await run(`
-        SELECT id, event_timestamp, event_type, action, outcome, user_id, user_email,
+        SELECT id, ingestion_id, event_timestamp, event_type, action, outcome, user_id, user_email,
                source_ip, source_country, source_city, device_id, source_vendor, source_product,
                normalized, original, parser_version
         FROM mill_events
@@ -150,6 +152,7 @@ export async function postMillEventAction(req: FastifyRequest<{ Params: { id: st
     `, [req.params.id, access.organizationId])
     const row = result.rows[0]
     if (!row) return res.status(404).send({ error: 'Mill event not found.' })
+    if (row.ingestion_id === 'logs' && !(await hasRole(req, res, 'system_admin')).valid) return res.status(403).send({ error: 'Missing system_admin role.' })
     const event: NormalizedEvent = {
         timestamp: new Date(row.event_timestamp).toISOString(),
         eventType: String(row.event_type), action: String(row.action), outcome: String(row.outcome),
@@ -491,7 +494,9 @@ async function persistFinding(organizationId: string, ruleId: string, severity: 
     const findingKey = `${organizationId}:${ruleId}:${eventIds.slice().sort().join(',')}`
     await run(`
         INSERT INTO mill_findings (id, organization_id, finding_key, rule_id, severity, status, summary, evidence, event_ids, first_observed, last_observed)
-        VALUES ($1, $2, $3, $4, $5, 'new', $6, $7, $8, NOW(), NOW())
+        VALUES ($1, $2, $3, $4, $5, 'new', $6,
+            $7::jsonb || jsonb_build_object('restrictedLog', EXISTS (SELECT 1 FROM mill_events WHERE organization_id = $2 AND id = ANY($8::text[]) AND ingestion_id = 'logs')),
+            $8, NOW(), NOW())
         ON CONFLICT (finding_key) DO NOTHING
     `, [randomUUID(), organizationId, findingKey, ruleId, severity, summary, JSON.stringify(evidence), eventIds])
 }

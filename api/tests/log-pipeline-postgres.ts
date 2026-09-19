@@ -25,6 +25,8 @@ try {
     }
     await query('ALTER TABLE service_logs ADD COLUMN source_event_id text UNIQUE')
     await query('ALTER TABLE mill_events ADD COLUMN log_key text UNIQUE')
+    await query('ALTER TABLE mill_findings ADD COLUMN case_id text')
+    await query('ALTER TABLE mill_findings ADD COLUMN case_delivery_attempted_at timestamptz')
     const { processLogBatch } = await import('../src/utils/mill/processLogs.ts')
     const { MILL_RULES, millDefaultDefinition, createMillFindings, normalizeMillEvent } = await import('../src/handlers/mill.ts')
     const { securityRules } = await import('../src/utils/mill/securityRules.ts')
@@ -38,6 +40,8 @@ try {
             metadata: { process: { executable: rule.field === 'executable' ? command : '/bin/bash', command_line: command } } }
     }))
     await processLogBatch(rows, 'fixture', rules)
+    const restricted = await query("SELECT COUNT(*)::int AS count FROM mill_findings WHERE evidence->>'restrictedLog' IS DISTINCT FROM 'true'")
+    assert.equal(restricted.rows[0].count, 0, 'Every collected-log finding must carry the durable administrator-only flag')
     for (const rule of securityRules) {
         for (const positive of [true, false]) {
             const { rows: [row] } = await query('SELECT * FROM mill_events WHERE log_key = $1', [`service:${rule.id}-${positive}`])
@@ -108,6 +112,12 @@ try {
     const started = performance.now()
     await processLogBatch(Array.from({ length: 5000 }, (_, index) => ({ id: `volume-${index}`, service: 'fixture', host: 'fixture', level: 'info', message: 'Ordinary service log', created_at: new Date().toISOString() })), 'fixture', rules)
     console.log(`Ordinary-event throughput: ${Math.round(5000000 / (performance.now() - started))} events/second`)
+    const deliverySource = readFileSync(new URL('../src/utils/millCases.ts', import.meta.url), 'utf8')
+    const claimSql = deliverySource.match(/await run\(`(UPDATE mill_findings[\s\S]*?RETURNING \*)`\)/)?.[1]
+    assert.ok(claimSql, 'Actual case-delivery claim SQL must be found')
+    const claimed = await query(claimSql)
+    assert.ok(claimed.rowCount, 'Ordinary organization findings remain eligible for shared cases')
+    assert.ok(claimed.rows.every(row => row.evidence.restrictedLog === false), 'Restricted collected-log evidence must never be claimed for shared cases')
     const other = await query("SELECT count(*)::int AS count FROM mill_findings WHERE organization_id = 'other'")
     assert.equal(other.rows[0].count, 0, 'No findings in another organization')
     console.log(`PostgreSQL verification passed: all ${MILL_RULES.length} rules, ${securityRules.length} negatives, retry deduplication, auth correlation, and KQL.`)

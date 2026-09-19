@@ -7,10 +7,10 @@ mock.module('#utils/auth/apiKeys.ts', () => ({ validateApiKey: async () => ({ or
 mock.module('#utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: true, id: 'analyst' }) }))
 mock.module('#db', () => ({ withTransaction: async () => { throw new Error('Ingestion must not edit rules') }, default: async (sql: string, p: any[] = []) => {
     if (sql.includes('FROM mill_rules')) return { rows: [] }
-    if (sql.includes('INSERT INTO mill_events')) { expect(sql).toContain("'pending'"); events.push({ processing_status: 'pending', id: p[0], organization_id: p[2], source_vendor: p[3], source_product: p[4], event_timestamp: p[5], event_type: p[6], action: p[7], outcome: p[8], normalized: JSON.parse(p[15]) }); return { rows: [] } }
+    if (sql.includes('INSERT INTO mill_events')) { expect(sql).toContain("'pending'"); events.push({ ingestion_id: p[1], processing_status: 'pending', id: p[0], organization_id: p[2], source_vendor: p[3], source_product: p[4], event_timestamp: p[5], event_type: p[6], action: p[7], outcome: p[8], normalized: JSON.parse(p[15]) }); return { rows: [] } }
     if (sql.includes('INSERT INTO mill_findings')) {
         if (failFinding) throw new Error('Finding persistence unavailable')
-        if (!findings.some(row => row.finding_key === p[2])) findings.push({ id: p[0], organization_id: p[1], finding_key: p[2], rule_id: p[3], severity: p[4], status: 'new', summary: p[5], evidence: JSON.parse(p[6]), event_ids: p[7], first_observed: new Date().toISOString(), last_observed: new Date().toISOString() })
+        if (!findings.some(row => row.finding_key === p[2])) findings.push({ id: p[0], organization_id: p[1], finding_key: p[2], rule_id: p[3], severity: p[4], status: 'new', summary: p[5], evidence: { ...JSON.parse(p[6]), restrictedLog: events.some(event => event.ingestion_id === 'logs' && event.organization_id === p[1] && p[7].includes(event.id)) }, event_ids: p[7], first_observed: new Date().toISOString(), last_observed: new Date().toISOString() })
         return { rows: [] }
     }
     if (sql.includes("UPDATE mill_events SET processing_status = 'processed'")) {
@@ -20,7 +20,11 @@ mock.module('#db', () => ({ withTransaction: async () => { throw new Error('Inge
         event.processing_status = 'processed'
         return { rows: [] }
     }
-    if (sql.includes('SET case_delivery_attempted_at')) return { rows: findings.filter(row => !row.case_id && row.rule_id !== 'scanner.hanasand_validation.v1') }
+    if (sql.includes('SET case_delivery_attempted_at')) {
+        expect(sql).toContain("event.ingestion_id = 'logs'")
+        expect(sql).toContain("finding.evidence->>'restrictedLog' IS DISTINCT FROM 'true'")
+        return { rows: findings.filter(row => !row.case_id && row.rule_id !== 'scanner.hanasand_validation.v1' && !row.evidence?.restrictedLog && !events.some(event => event.ingestion_id === 'logs' && event.organization_id === row.organization_id && row.event_ids.includes(event.id))) }
+    }
     if (sql.includes('FROM mill_events') && sql.includes('ANY')) {
         expect(p[0]).toBe('org-a')
         return { rows: events.filter(row => row.organization_id === p[0] && p[1].includes(row.id)) }
@@ -70,4 +74,26 @@ test('a finding persistence failure keeps the ingested event pending for worker 
     expect(events).toHaveLength(1)
     expect(events[0].processing_status).toBe('pending')
     expect(findings).toHaveLength(0)
+})
+
+test('restricted log findings never become shared cases, including after event retention', async () => {
+    const { deliverMillCases } = await import('../src/utils/millCases.ts')
+    const beforeBase = process.env.TI_SCRAPER_API_BASE, beforeToken = process.env.TI_SCRAPER_SERVICE_TOKEN
+    process.env.TI_SCRAPER_API_BASE = 'http://case-test.invalid'
+    process.env.TI_SCRAPER_SERVICE_TOKEN = 'test-service-token'
+    const originalFetch = globalThis.fetch
+    const request = mock(async () => { throw new Error('Restricted evidence must never be sent') })
+    globalThis.fetch = request as any
+    try {
+        events.push({ id: 'private-command', organization_id: 'org-a', ingestion_id: 'logs' })
+        findings.push({ id: 'linked', organization_id: 'org-a', rule_id: 'process.recon.whoami.v1', event_ids: ['private-command'], evidence: {} })
+        findings.push({ id: 'retained', organization_id: 'org-a', rule_id: 'process.recon.whoami.v1', event_ids: ['expired-event'], evidence: { restrictedLog: true } })
+        expect(await deliverMillCases()).toEqual({ delivered: 0 })
+        expect(request).not.toHaveBeenCalled()
+        expect(findings.every(row => !row.case_id)).toBe(true)
+    } finally {
+        globalThis.fetch = originalFetch
+        if (beforeBase === undefined) delete process.env.TI_SCRAPER_API_BASE; else process.env.TI_SCRAPER_API_BASE = beforeBase
+        if (beforeToken === undefined) delete process.env.TI_SCRAPER_SERVICE_TOKEN; else process.env.TI_SCRAPER_SERVICE_TOKEN = beforeToken
+    }
 })

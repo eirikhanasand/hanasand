@@ -24,7 +24,7 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
         return { rows: [] }
     }
     if (sql.includes('UPDATE mill_events')) return { rows: [] }
-    if (sql.includes('FROM mill_events')) {
+    if (sql.trimStart().startsWith('SELECT') && sql.includes('FROM mill_events')) {
         const result = events.filter(row => row.organization_id === p[0] && (sql.includes('source_ip = $2') ? row.source_ip === p[1] : row.user_id === p[1]) && row.id !== p[2] && row.event_type === 'authentication' && row.action === 'login' && Date.parse(row.event_timestamp) <= Date.parse(p[3]))
             .sort((a, b) => Date.parse(b.event_timestamp) - Date.parse(a.event_timestamp))
         return { rows: sql.includes("INTERVAL '1 minute'") ? result.filter(row => row.outcome === 'failure' && Date.parse(row.event_timestamp) >= Date.parse(p[3]) - p[4] * 60000) : result.slice(0, p[4]) }
