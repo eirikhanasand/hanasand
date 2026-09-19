@@ -10,6 +10,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 import uuid
@@ -144,7 +145,7 @@ def journal(config):
     checkpoint = load('journal.json', None)
     cursor = checkpoint.get('cursor') if isinstance(checkpoint, dict) else checkpoint
     since = checkpoint.get('since', config['start']) if isinstance(checkpoint, dict) else config['start']
-    args = ['journalctl','--no-pager','-o','json','--show-cursor','--no-tail']
+    args = ['journalctl','--no-pager','-o','json','--show-cursor','--lines=+1000']
     try: output = command(args + (['--after-cursor', cursor] if cursor else ['--since', since]))
     except RuntimeError:
         if not cursor: raise
@@ -178,6 +179,7 @@ def parse_audit(text, config):
     # Raw ausearch records have no separator; enriched records contain a GS suffix.
     for line in text.splitlines():
         row = line.split('\x1d', 1)[0]
+        if not row.startswith(('type=SYSCALL ', 'type=EXECVE ')): continue
         identity = re.search(r'msg=audit\((\d+(?:\.\d+)?):(\d+)\)', row)
         if identity: groups.setdefault(identity.group(0), []).append(row)
     for rows in groups.values():
@@ -205,16 +207,30 @@ def parse_audit(text, config):
         events.append(event(config, 'audit:'+identity.group(0), 'audit', command_line, iso(float(identity.group(1))), metadata))
     return events
 
-def audit(config):
-    stable = STATE/'audit.checkpoint'; pending = STATE/'audit.pending'
-    if stable.exists(): shutil.copyfile(stable, pending)
+def checkpoint_time(path):
+    if not path.exists(): return None
+    match = re.search(r'^output=.*?\s(\d+(?:\.\d+)?):\d+',path.read_text(),re.MULTILINE)
+    return float(match.group(1)) if match else None
+
+def audit_behind():
+    timestamp = checkpoint_time(STATE/'audit.checkpoint')
+    return timestamp is None or timestamp < time.time()-30
+
+def audit(config, live=False):
+    prefix = 'audit-live' if live else 'audit'
+    stable = STATE/(prefix+'.checkpoint'); pending = STATE/(prefix+'.pending')
+    timestamp = checkpoint_time(stable) if live else None
+    reuse = stable.exists() and (not live or (timestamp is not None and timestamp >= time.time()-600))
+    if reuse: shutil.copyfile(stable, pending)
     elif pending.exists(): pending.unlink()
     args = ['ausearch','--input-logs','--checkpoint',str(pending),'-k','hanasand_exec','--raw']
+    if live and not reuse: args += ['--start','recent']
     try: output = command(args, accepted=(0,1))
     except CommandError as error:
         if error.code not in (10,11,12) or not pending.exists(): raise
         output = command(args+['--start','checkpoint'], accepted=(0,1))
-    send(config, parse_audit(output, config))
+    events = parse_audit(output, config)
+    send(config, reversed(events) if live else events)
     if pending.exists(): pending.replace(stable)
 
 def docker(config):
@@ -225,7 +241,10 @@ def docker(config):
     for container in containers:
         container_id, name = container.split(' ', 1)
         since = checkpoints.get(container_id, config['start'])
-        until = iso(time.time()-1)
+        # Bound the initial historical read as well as memory: every container
+        # advances independently through one minute, without skipping any range.
+        since_time = datetime.datetime.fromisoformat(since.replace('Z','+00:00')).timestamp()
+        until = iso(min(time.time()-1, since_time+60))
         result = subprocess.run(['docker','logs','--timestamps','--since',since,'--until',until,container_id],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=60)
         if result.returncode:
             failures.append(name)
@@ -295,6 +314,10 @@ def guest_ack(identity):
     (STATE/'export.json').unlink()
     shutil.rmtree(pending)
 
+def recent_audit(config):
+    output = command(['ausearch','--input-logs','-k','hanasand_exec','--raw','--start','recent'],accepted=(0,1))
+    return list(reversed(parse_audit(output,config)))
+
 def guests(config):
     """Read guest telemetry over the existing management channel, never guest credentials."""
     if config.get('guestCollection') is False: raise RuntimeError('Administrative VM access unavailable')
@@ -311,7 +334,8 @@ def guests(config):
         # Identity includes creation time, so a replacement with the same name is enrolled again.
         identity = name+':'+guest.get('created_at', '')+':'+version
         try:
-            if installed.get(name) != identity:
+            enrolling = installed.get(name) != identity
+            if enrolling:
                 staging = '/var/lib/hanasand-log-collector/install'
                 command([lxc, 'exec', name, '--', 'mkdir', '-p', staging])
                 command([lxc, 'file', 'push', '--uid=0', '--gid=0', str(binary), name+staging+'/collector.py'])
@@ -320,6 +344,13 @@ def guests(config):
                 installed[name] = identity
                 save('guests.json', installed)
             response = json.loads(command([lxc, 'exec', name, '--', '/usr/local/sbin/hanasand-log-collector', '--export', config['host']+'/'+name, config['start']], timeout=120))
+            catching_up = any(datetime.datetime.fromisoformat(item['timestamp'].replace('Z','+00:00')).timestamp() < time.time()-120 for item in response['events'])
+            if enrolling or catching_up:
+                # Prioritize recent commands on every historical export, including
+                # retries after an outage; the main cursor still covers all history.
+                recent = json.loads(command([lxc, 'exec', name, '--', '/usr/local/sbin/hanasand-log-collector', '--recent', config['host']+'/'+name]))
+                for item in recent: item['metadata'].update({'physical_host':config['host'], 'vm':{'name':name,'type':guest.get('type')}})
+                send(config,recent)
             for item in response['events']:
                 item['metadata'].update({'physical_host':config['host'], 'vm':{'name':name, 'type':guest.get('type')}})
             send(config, response['events'])
@@ -334,28 +365,44 @@ def main():
     if len(sys.argv) > 1:
         if sys.argv[1] == '--export': return guest_export({'host':sys.argv[2], 'start':sys.argv[3]})
         if sys.argv[1] == '--ack': return guest_ack(sys.argv[2])
+        if sys.argv[1] == '--recent': return print(json.dumps(recent_audit({'host':sys.argv[2]})))
     config = json.loads(CONFIG.read_text())
-    next_guests = 0
-    guest_error = None
+    statuses = {}
+    status_lock = threading.Lock()
+    def worker(name, source, interval, live=False):
+        while True:
+            if live and not audit_behind():
+                with status_lock: statuses.pop(name,None)
+                time.sleep(interval)
+                continue
+            try:
+                source(config)
+                status = {'ok':True,'checkedAt':iso()}
+            except Exception as error:
+                status = {'ok':False,'checkedAt':iso(),'error':str(error) if name=='guests' else type(error).__name__}
+            with status_lock: statuses[name] = status
+            time.sleep(interval)
+    # Sources have independent cursors and workers. A historical journal/Docker
+    # sweep must never prevent host command checks or VM collection from running.
+    for source, interval in ((audit,5),(journal,1),(docker,5),(guests,30)):
+        threading.Thread(target=worker,args=(source.__name__,source,interval),daemon=True).start()
+    threading.Thread(target=worker,args=('audit_live',lambda cfg:audit(cfg,live=True),5,True),daemon=True).start()
     while True:
-        failures = collect(config)
-        if time.monotonic() >= next_guests:
-            try: guests(config); guest_error = None
-            except Exception as error: guest_error = 'guests: '+str(error)
-            next_guests = time.monotonic()+30
-        if guest_error: failures.append(guest_error)
+        with status_lock: snapshot = dict(statuses)
+        failures = [name+': '+status['error'] for name,status in snapshot.items() if not status['ok']]
         coverage = load('guest-coverage.json', None)
         if coverage and coverage['failures'] and not any(item.startswith('guests:') for item in failures):
             failures.append('guests: '+', '.join(coverage['failures']))
-        health = {source:not any(failure.startswith(source+':') for failure in failures) for source in ('audit','journal','docker','guests')}
-        metadata = {'collector_health':health}
+        health = {source:snapshot.get(source,{}).get('ok') for source in ('audit','journal','docker','guests')}
+        metadata = {'collector_health':health,'source_status':snapshot}
         if coverage:
             metadata['guest_coverage'] = {'checkedAt':coverage['checkedAt'], 'running':sum(guest['status']=='Running' for guest in coverage['instances']),
                 'stopped':sum(guest['status']!='Running' for guest in coverage['instances']), 'failures':coverage['failures'], 'enrollment':'Stopped guests are enrolled when next running.'}
+        message = 'Collection failed: '+', '.join(failures) if failures else 'Collection starting' if any(value is None for value in health.values()) else 'Collection healthy'
         try:
-            send(config,[event(config,'health:'+str(int(time.time())//30),'host-log-collector','Collection failed: '+', '.join(failures) if failures else 'Collection healthy',iso(),metadata,'error' if failures else 'info')])
+            send(config,[event(config,'health:'+str(int(time.time())//30),'host-log-collector',message,iso(),metadata,'error' if failures else 'info')])
         except Exception: failures.append('delivery failed')
         if failures: print('; '.join(failures), flush=True)
-        time.sleep(5)
+        time.sleep(30)
 
 if __name__ == '__main__': main()

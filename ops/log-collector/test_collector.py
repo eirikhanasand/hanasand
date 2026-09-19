@@ -125,6 +125,38 @@ type=EXECVE msg=audit(1789817000.123:456): argc=5 a0="curl" a1="--password" a2="
             with patch.object(c,'command',side_effect=[c.CommandError('ausearch',12),'']) as query, patch.object(c,'send'):
                 c.audit({'host':'inspur'})
             self.assertEqual(query.call_args.args[0][-2:],['--start','checkpoint'])
+    def test_live_audit_uses_separate_checkpoint_and_prioritizes_newest(self):
+        raw='''type=SYSCALL msg=audit(1789817000.123:456): success=yes exe="/usr/bin/whoami"
+type=EXECVE msg=audit(1789817000.123:456): argc=1 a0="whoami"
+type=SYSCALL msg=audit(1789817001.123:457): success=yes exe="/usr/bin/id"
+type=EXECVE msg=audit(1789817001.123:457): argc=1 a0="id"
+'''
+        with tempfile.TemporaryDirectory() as tmp, patch.object(c,'STATE',Path(tmp)):
+            (c.STATE/'audit.checkpoint').write_text('historical')
+            def query(args,**kwargs):
+                self.assertIn('--start',args)
+                self.assertEqual(args[-1],'recent')
+                (c.STATE/'audit-live.pending').write_text('live')
+                return raw
+            delivered=[]
+            with patch.object(c,'command',side_effect=query), patch.object(c,'send',side_effect=lambda _cfg,events:delivered.extend(events)):
+                c.audit({'host':'inspur'},live=True)
+            self.assertEqual([row['message'] for row in delivered],['id','whoami'])
+            self.assertEqual((c.STATE/'audit.checkpoint').read_text(),'historical')
+            self.assertEqual((c.STATE/'audit-live.checkpoint').read_text(),'live')
+    def test_live_audit_reactivates_for_stale_historical_checkpoint(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(c,'STATE',Path(tmp)), patch.object(c.time,'time',return_value=1000):
+            self.assertTrue(c.audit_behind())
+            checkpoint=c.STATE/'audit.checkpoint'
+            checkpoint.write_text('dev=0x903\ninode=1\noutput=- 980.123:123 0x514\n')
+            self.assertFalse(c.audit_behind())
+            checkpoint.write_text('dev=0x903\ninode=1\noutput=- 900.123:123 0x514\n')
+            self.assertTrue(c.audit_behind())
+            (c.STATE/'audit-live.checkpoint').write_text('output=- 100.123:10 0x514\n')
+            with patch.object(c,'command',return_value='') as query, patch.object(c,'send'):
+                c.audit({'host':'inspur'},live=True)
+            self.assertEqual(query.call_args.args[0][-2:],['--start','recent'])
+            self.assertIn('900.123',checkpoint.read_text())
     def test_journal_cursor_rotation_resumes_from_saved_time(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(c,'STATE',Path(tmp)):
             c.save('journal.json',{'cursor':'expired','since':'2026-09-19T00:00:00Z'})
@@ -144,4 +176,14 @@ type=EXECVE msg=audit(1789817000.123:456): argc=5 a0="curl" a1="--password" a2="
             self.assertEqual(sent.call_args[0][1][0]['service'],'healthy')
             self.assertIn('good',c.load('docker.json',{}))
             self.assertNotIn('bad',c.load('docker.json',{}))
+    def test_docker_backfill_advances_only_one_minute_after_ack(self):
+        class Result:
+            returncode=0
+            stdout='2026-09-19T00:00:30Z ready'
+        with tempfile.TemporaryDirectory() as tmp, patch.object(c,'STATE',Path(tmp)):
+            with patch.object(c.shutil,'which',return_value='/usr/bin/docker'), patch.object(c,'command',return_value='one service'), patch.object(c.subprocess,'run',return_value=Result()) as query, patch.object(c,'send'):
+                c.docker({'host':'inspur','start':'2026-09-19T00:00:00Z'})
+            args=query.call_args.args[0]
+            self.assertEqual(args[args.index('--until')+1],'2026-09-19T00:01:00+00:00')
+            self.assertEqual(c.load('docker.json',{})['one'],'2026-09-19T00:01:00+00:00')
 if __name__=='__main__':unittest.main()
