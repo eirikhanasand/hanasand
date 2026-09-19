@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { compactStatus, searchHealth } from '../src/utils/status/presentation.ts'
+import { compactStatus, createDashboardSerializer, searchHealth } from '../src/utils/status/presentation.ts'
 
 test('dashboard bounds incident payload without losing any day link or detailed source evidence', () => {
     const incidents = Array.from({ length: 15000 }, (_, index) => ({ id: String(index), started_at: '2026-09-19', updates: [{ evidence: 'original'.repeat(100) }] }))
@@ -20,4 +20,21 @@ test('search health agrees with latest evidence and cannot report a stale check 
     for (const status of ['down', 'degraded', 'unknown']) expect(searchHealth({ checks: [{ ...check, status }] }, now).ok).toBe(false)
     expect(searchHealth({ checks: [check] }, now + 300001)).toMatchObject({ ok: false, status: 'unknown', lastResult: 'up', checkedAt: check.checked_at })
     expect(searchHealth({ checks: [] }, now).ok).toBe(false)
+})
+
+test('dashboard serialization reuses history while refreshing current results', () => {
+    const serialize = createDashboardSerializer()
+    let historyReads = 0
+    const history = [{ get incident_ids() { historyReads++; return ['old'] } }]
+    const incidents = [{ id: 'old', started_at: '2026-09-19', updates: ['evidence'] }]
+    const first = { checks: [{ status: 'up', message: 'Healthy result' }], history, incidents }
+    expect(JSON.parse(serialize(first))).toEqual(compactStatus(first))
+    historyReads = 0
+    const next = { ...first, checks: [{ status: 'down', message: 'Search failed.' }] }
+    const serialized = JSON.parse(serialize(next))
+    expect(historyReads).toBe(0)
+    expect(serialized).toEqual(compactStatus(next))
+    const refreshed = { ...next, history: [{ incident_ids: ['new'] }], incidents: [{ id: 'new', started_at: '2026-09-20', updates: ['new evidence'] }] }
+    expect(JSON.parse(serialize(refreshed))).toEqual(compactStatus(refreshed))
+    expect(JSON.parse(serialize({ history: [], incidents: [] }))).toEqual({ history: [], incidents: [] })
 })

@@ -7,7 +7,7 @@ import { formatTiDate } from '@/utils/tiAdmin/ops'
 
 export const dynamic = 'force-dynamic'
 
-export default async function TiActivityPage({ searchParams }: { searchParams?: Promise<{ q?: string }> } = {}) {
+export default async function TiActivityPage({ searchParams }: { searchParams?: Promise<{ q?: string }> }) {
     const q = (await searchParams)?.q?.trim() || ''
     const { activity, updatedActors, worker, stats, dataAvailable } = await getTiEnrichmentOverview(q)
     const sortedActivity = [...activity].sort((a, b) => new Date(b.happenedAt).getTime() - new Date(a.happenedAt).getTime())

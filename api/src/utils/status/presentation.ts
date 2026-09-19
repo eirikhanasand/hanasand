@@ -27,3 +27,19 @@ export function searchHealth(status: { checks: Check[] }, now = Date.now()) {
         lastResult: check?.status || null,
     }
 }
+
+// Serialize the large, slowly changing history once per snapshot.
+export function createDashboardSerializer() {
+    let previousHistory: History[] | undefined
+    let previousIncidents: Incident[] | undefined
+    let historyJson = ''
+    return <T extends { history: History[], incidents: Incident[] }>(payload: T) => {
+        const { history, incidents, ...current } = payload
+        if (history !== previousHistory || incidents !== previousIncidents) {
+            historyJson = JSON.stringify(compactStatus({ history, incidents })).slice(1)
+            previousHistory = history
+            previousIncidents = incidents
+        }
+        return JSON.stringify(current).slice(0, -1) + (Object.keys(current).length ? ',' : '') + historyJson
+    }
+}
