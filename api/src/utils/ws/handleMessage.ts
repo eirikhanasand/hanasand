@@ -11,14 +11,16 @@ export async function handleMessage(
     rawMessage: RawData,
     clients: Map<string, Set<WS>>,
 ) {
+    let validEdit = false
     try {
         const msg = JSON.parse(rawMessage.toString())
         if (msg.type !== 'edit' || typeof msg.content !== 'string') {
             return
         }
+        validEdit = true
 
         const share = await run('SELECT organization_id FROM share WHERE id = $1', [id])
-        if (!share.rows.length) return
+        if (!share.rows.length) throw new Error('Share no longer exists')
         let userId: string | null = null
         if (share.rows[0].organization_id) {
             const session = typeof msg.userId === 'string' && typeof msg.token === 'string'
@@ -33,7 +35,8 @@ export async function handleMessage(
         broadcastUpdate(id, socket, msg.content, clients)
         queueSave(id, socket, msg.content, userId)
     } catch (error) {
-        console.error(`Invalid WebSocket message: ${error}`)
+        console.error(`Failed to process WebSocket message: ${error}`)
+        if (validEdit && socket.readyState === WS.OPEN) socket.send(JSON.stringify({ type: 'error', error: 'Unable to save your changes. Please retry.' }))
     }
 }
 
