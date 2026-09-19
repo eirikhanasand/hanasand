@@ -63,6 +63,15 @@ const STALE_AFTER_MS = 5 * 60_000
 
 export default function MailWorkspace({ mailboxUser }: Props) {
     const [overview, setOverview] = useState<MailOverview | null>(null)
+    const [mailTheme, setMailTheme] = useState<'light' | 'dark'>('light')
+    useEffect(() => {
+        const root = document.documentElement
+        const update = () => setMailTheme(root.classList.contains('dark') ? 'dark' : 'light')
+        update()
+        const observer = new MutationObserver(update)
+        observer.observe(root, { attributes: true, attributeFilter: ['class'] })
+        return () => observer.disconnect()
+    }, [])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
     const [backgroundIssue, setBackgroundIssue] = useState('')
@@ -260,8 +269,8 @@ export default function MailWorkspace({ mailboxUser }: Props) {
     const selectedMessage = overview?.selectedMessage?.id === selectedMessageId ? overview.selectedMessage : null
 
     const renderedHtml = useMemo(
-        () => selectedMessage ? buildMailFrameHtml(withInlineAttachments(selectedMessage, overview?.mailboxUser || '')) : '',
-        [selectedMessage, overview?.mailboxUser]
+        () => selectedMessage ? buildMailFrameHtml(withInlineAttachments(selectedMessage, overview?.mailboxUser || ''), mailTheme) : '',
+        [selectedMessage, overview?.mailboxUser, mailTheme]
     )
 
     const unreadCount = overview?.mailboxes.reduce((sum, mailbox) => sum + (mailbox.unreadEmails || 0), 0) ?? 0
@@ -361,11 +370,9 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                         </div>
 
                         <nav aria-label='Mailboxes' className='mb-3 grid min-w-0 grid-cols-1 gap-1 border-b border-ui-border pb-3'>
-                            {overview && [
-                                overview.accessibleAccounts.filter(account => account.id === overview.actor.id || account.shared).sort((a, b) => Number(b.id === overview.actor.id) - Number(a.id === overview.actor.id)),
-                                overview.accessibleAccounts.filter(account => account.id !== overview.actor.id && !account.shared),
-                            ].map((accounts, index) => {
-                                const buttons = accounts.map(account => (
+                            {overview && [...overview.accessibleAccounts]
+                                .sort((a, b) => Number(b.id === overview.actor.id) - Number(a.id === overview.actor.id) || Number(Boolean(b.shared)) - Number(Boolean(a.shared)))
+                                .map(account => (
                                     <button key={account.id} type='button' disabled={composer.open}
                                         aria-label={`Open ${account.shared ? account.name : account.id === overview.actor.id ? 'Inbox' : account.name}`}
                                         aria-current={overview.mailboxUser === account.id ? 'true' : undefined}
@@ -381,14 +388,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                         </span>
                                         {!sidebarCompact && <span className='shrink-0' aria-label={account.unreadCount == null ? 'Unread count unavailable' : `${account.unreadCount} unread`}>{account.unreadCount ?? '—'}</span>}
                                     </button>
-                                ))
-                                return index === 0 ? <div key='inboxes' className='grid min-w-0 grid-cols-1 gap-1'>{buttons}</div> : accounts.length > 0 && (
-                                    <details key='other' className='min-w-0 text-xs text-ui-muted'>
-                                        <summary className='cursor-pointer px-2.5 py-2' aria-label='Other mailboxes'>{sidebarCompact ? '…' : 'Other mailboxes'}</summary>
-                                        <div className='grid min-w-0 grid-cols-1 max-h-64 gap-1 overflow-y-auto'>{buttons}</div>
-                                    </details>
-                                )
-                            })}
+                                ))}
                         </nav>
                         <div className='grid gap-1.5'>
                             {overview?.mailboxes.filter(mailbox => mailbox.role !== 'inbox').map(mailbox => (
@@ -567,6 +567,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                             {selectedMessage.htmlBody ? (
                                 <iframe
                                     title='HTML mail'
+                                    style={{ colorScheme: mailTheme, background: 'transparent' }}
                                     className='h-72 w-full shrink-0 rounded-lg border border-ui-border xl:min-h-40 xl:flex-1'
                                     sandbox='allow-popups allow-popups-to-escape-sandbox'
                                     srcDoc={renderedHtml}

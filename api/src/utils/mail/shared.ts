@@ -6,6 +6,7 @@ import { createPrincipal, findPrincipalByName, patchPrincipal } from './stalwart
 export const sharedMailboxes = [
     { id: 'shared:support', name: 'Support', localPart: 'support' },
     { id: 'shared:sales', name: 'Sales', localPart: 'sales' },
+    { id: 'shared:security', name: 'Security', localPart: 'security' },
     { id: 'shared:noreply', name: 'Noreply', localPart: mailConfig.systemSenderLocalPart },
 ]
 

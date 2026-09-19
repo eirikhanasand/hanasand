@@ -18,6 +18,7 @@ test('personal users cannot enumerate or open shared mailboxes or another user m
     roleIds = []
     mailboxReads = 0
     expect((await listAccessibleMailAccounts('member')).map(account => account.id)).toEqual(['member'])
+    await expect(getMailAccess('member', 'shared:security')).rejects.toThrow('do not have access')
     await expect(getMailAccess('member', 'shared:support')).rejects.toThrow('do not have access')
     await expect(getMailAccess('member', 'someone-else')).rejects.toThrow('do not have access')
     expect(mailboxReads).toBe(0)
@@ -25,7 +26,7 @@ test('personal users cannot enumerate or open shared mailboxes or another user m
 
 test('support role can open shared mailboxes but not private user inboxes', async () => {
     roleIds = ['support']
-    expect((await listAccessibleMailAccounts('member')).filter(account => account.shared).map(account => account.id)).toEqual(['shared:support', 'shared:sales', 'shared:noreply'])
+    expect((await listAccessibleMailAccounts('member')).filter(account => account.shared).map(account => account.id)).toEqual(['shared:support', 'shared:sales', 'shared:security', 'shared:noreply'])
     expect(await getMailAccess('member', 'shared:support')).toMatchObject({ targetUser: 'shared:support', address: 'support@example.test', canSend: true })
     expect(await getMailAccess('member', 'shared:noreply')).toMatchObject({ canSend: false })
     await expect(getMailAccess('member', 'someone-else')).rejects.toThrow('do not have access')
