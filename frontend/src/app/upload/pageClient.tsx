@@ -4,7 +4,7 @@ import Link from 'next/link'
 import Preview from '@/components/upload/preview'
 import Upload from '@/components/upload/upload'
 import config from '@/config'
-import { Check, LinkIcon, RotateCcw, ShieldCheck } from 'lucide-react'
+import { Check, LinkIcon, RotateCcw } from 'lucide-react'
 import Image from 'next/image'
 import { useState } from 'react'
 import copy from '@/utils/copy'
@@ -73,15 +73,9 @@ export default function UploadPageClient() {
                     <p className='text-sm font-semibold uppercase text-ui-primary'>Content</p>
                     <h1 className='text-3xl font-semibold tracking-normal md:text-4xl'>Upload files</h1>
                     <p className='max-w-2xl text-sm leading-6 text-ui-muted'>Upload public images and videos to your library.</p>
-                    <div className='mt-2 grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-4 text-sm leading-6 text-ui-muted shadow-sm sm:grid-cols-3' data-upload-safety-boundary='true'>
-                        <div className='flex items-start gap-2 sm:col-span-3'>
-                            <ShieldCheck className='mt-1 h-4 w-4 shrink-0 text-ui-primary' />
-                            <span className='font-semibold text-ui-text'>Use this only for public media. It is not a malware scanner, evidence vault, or private document store.</span>
-                        </div>
-                        <span>Do not upload credentials, customer data, leaked material, or confidential evidence.</span>
-                        <span>Remote previews must be direct public image or video URLs.</span>
-                        <span>Uploaded links are meant to be shareable assets.</span>
-                    </div>
+                    <p className='max-w-2xl text-sm leading-6 text-ui-muted' data-upload-safety-boundary='true'>
+                        For public media only. Don’t upload private, confidential, or sensitive files. Remote previews require direct public image/video URLs.
+                    </p>
                 </div>
                 <Link href='/gallery' className='text-sm font-semibold text-ui-primary'>Open library</Link>
                 <Upload
