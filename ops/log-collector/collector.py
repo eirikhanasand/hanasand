@@ -13,6 +13,7 @@ import sys
 import threading
 import time
 import urllib.request
+from urllib.error import HTTPError
 import uuid
 
 STATE = Path(os.environ.get('HANASAND_LOG_STATE', '/var/lib/hanasand-log-collector'))
@@ -237,6 +238,12 @@ def audit(config, live=False):
     send(config, reversed(events) if live else events)
     if pending.exists(): pending.replace(stable)
 
+class DockerCollectionError(RuntimeError):
+    """Contains only source names and controlled status descriptions, never logs."""
+
+def collection_error(error):
+    return str(error) if isinstance(error,DockerCollectionError) else type(error).__name__
+
 def docker(config):
     if not shutil.which('docker'): return
     containers = command(['docker','ps','-a','--format','{{.ID}} {{.Names}}']).splitlines()
@@ -251,11 +258,19 @@ def docker(config):
         until = iso(min(time.time()-1, since_time+60))
         try:
             result = subprocess.run(['docker','logs','--timestamps','--since',since,'--until',until,container_id],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=60)
-        except (subprocess.TimeoutExpired, OSError):
-            failures.append(name)
+        except subprocess.TimeoutExpired:
+            failures.append(name+' (log read timed out after 60s)')
+            continue
+        except OSError as error:
+            failures.append(name+' (log read '+type(error).__name__+')')
             continue
         if result.returncode:
-            failures.append(name)
+            reason = next((label for fragment,label in (
+                ('No such container','removed during collection'),
+                ('does not support reading','logging driver does not support reading'),
+                ('invalid character','invalid log data'),
+            ) if fragment in result.stdout),'log read exited '+str(result.returncode))
+            failures.append(name+' ('+reason+')')
             continue
         events = []
         for ordinal, line in enumerate(result.stdout.splitlines()):
@@ -275,15 +290,16 @@ def docker(config):
             events.append(event(config, 'docker:'+container_id+':'+timestamp+':'+message, name, message, timestamp, metadata, level))
         try:
             send(config, events); checkpoints[container_id] = until; save('docker.json', checkpoints)
-        except Exception:
-            failures.append(name)
-    if failures: raise RuntimeError('Docker log collection failed for '+', '.join(failures))
+        except Exception as error:
+            reason = 'HTTP '+str(error.code) if isinstance(error,HTTPError) else type(error).__name__
+            failures.append(name+' (delivery '+reason+')')
+    if failures: raise DockerCollectionError('Docker log collection failed for '+', '.join(failures))
 
 def collect(config):
     failures = []
     for source in (audit, journal, docker):
         try: source(config)
-        except Exception as error: failures.append(source.__name__+': '+type(error).__name__)
+        except Exception as error: failures.append(source.__name__+': '+collection_error(error))
     return failures
 
 def guest_export(config):
@@ -388,7 +404,7 @@ def main():
                 source(config)
                 status = {'ok':True,'checkedAt':iso()}
             except Exception as error:
-                status = {'ok':False,'checkedAt':iso(),'error':str(error) if name=='guests' else type(error).__name__}
+                status = {'ok':False,'checkedAt':iso(),'error':str(error) if name=='guests' else collection_error(error)}
             with status_lock: statuses[name] = status
             time.sleep(interval)
     # Sources have independent cursors and workers. A historical journal/Docker

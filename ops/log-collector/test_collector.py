@@ -176,7 +176,7 @@ type=EXECVE msg=audit(1789817001.123:457): argc=1 a0="id"
             def __init__(self,code,output): self.returncode=code; self.stdout=output
         with tempfile.TemporaryDirectory() as tmp, patch.object(c,'STATE',Path(tmp)):
             with patch.object(c.shutil,'which',return_value='/usr/bin/docker'), patch.object(c,'command',return_value='bad broken\ngood healthy'), patch.object(c.subprocess,'run',side_effect=[Result(1,''),Result(0,'2026-09-19T12:00:00Z ready')]), patch.object(c,'send') as sent:
-                with self.assertRaises(RuntimeError): c.docker({'host':'inspur','start':'2026-09-19T00:00:00Z'})
+                with self.assertRaisesRegex(c.DockerCollectionError,r'broken \(log read exited 1\)'): c.docker({'host':'inspur','start':'2026-09-19T00:00:00Z'})
             self.assertEqual(sent.call_count,1)
             self.assertEqual(sent.call_args[0][1][0]['service'],'healthy')
             self.assertIn('good',c.load('docker.json',{}))
@@ -198,8 +198,30 @@ type=EXECVE msg=audit(1789817001.123:457): argc=1 a0="id"
         with tempfile.TemporaryDirectory() as tmp, patch.object(c,'STATE',Path(tmp)):
             c.save('docker.json',{'slow':'2026-09-19T00:00:00Z'})
             with patch.object(c.shutil,'which',return_value='/usr/bin/docker'), patch.object(c,'command',return_value='slow slow-service\ngood healthy-service'), patch.object(c.subprocess,'run',side_effect=[subprocess.TimeoutExpired('docker',60),Result()]), patch.object(c,'send') as sent:
-                with self.assertRaises(RuntimeError): c.docker({'host':'inspur','start':'2026-09-19T00:00:00Z'})
+                with self.assertRaisesRegex(c.DockerCollectionError,r'slow-service \(log read timed out after 60s\)'): c.docker({'host':'inspur','start':'2026-09-19T00:00:00Z'})
             self.assertEqual(sent.call_args.args[1][0]['service'],'healthy-service')
             self.assertEqual(c.load('docker.json',{})['slow'],'2026-09-19T00:00:00Z')
             self.assertEqual(c.load('docker.json',{})['good'],'2026-09-19T00:01:00+00:00')
+    def test_docker_delivery_failure_has_actionable_safe_health_context(self):
+        class Result:
+            returncode=0
+            stdout='2026-09-19T00:00:30Z ready'
+        with tempfile.TemporaryDirectory() as tmp, patch.object(c,'STATE',Path(tmp)):
+            with patch.object(c.shutil,'which',return_value='/usr/bin/docker'), patch.object(c,'command',return_value='one service'), patch.object(c.subprocess,'run',return_value=Result()), patch.object(c,'send',side_effect=c.HTTPError('https://example.invalid/private-test-value',400,'private-test-value',{},None)):
+                with self.assertRaises(c.DockerCollectionError) as raised:c.docker({'host':'inspur','start':'2026-09-19T00:00:00Z'})
+            detail=c.collection_error(raised.exception)
+            self.assertIn('service (delivery HTTP 400)',detail)
+            self.assertNotIn('private-test-value',detail)
+            self.assertNotIn('one',c.load('docker.json',{}))
+            self.assertEqual(c.collection_error(RuntimeError('private-test-value')),'RuntimeError')
+    def test_docker_removal_and_unsupported_driver_report_source_without_stderr(self):
+        class Result:
+            returncode=1
+            def __init__(self,message):self.stdout=message
+        with tempfile.TemporaryDirectory() as tmp, patch.object(c,'STATE',Path(tmp)):
+            for message,reason in [('No such container: synthetic-private-value','removed during collection'),('configured logging driver does not support reading synthetic-private-value','logging driver does not support reading')]:
+                with patch.object(c.shutil,'which',return_value='/usr/bin/docker'), patch.object(c,'command',return_value='one service'), patch.object(c.subprocess,'run',return_value=Result(message)):
+                    with self.assertRaises(c.DockerCollectionError) as raised:c.docker({'host':'inspur','start':'2026-09-19T00:00:00Z'})
+                self.assertIn(reason,str(raised.exception))
+                self.assertNotIn('synthetic-private-value',str(raised.exception))
 if __name__=='__main__':unittest.main()
