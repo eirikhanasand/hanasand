@@ -345,6 +345,15 @@ def run_notifications():
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
+        # Directory paths must never enter status payloads forwarded by public frontends.
+        if self.path == '/disk-diagnostics':
+            body = json.dumps(read_json(ROOT / 'disk-directories.json', None)).encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Cache-Control', 'no-store')
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if self.path.split('?')[0] not in ('/status', '/health', '/public-status'):
             self.send_error(404)
             return
@@ -352,7 +361,6 @@ class Handler(BaseHTTPRequestHandler):
             state = public_state(read_json(STATE, {'mode': 'unknown', 'readOnly': True, 'services': []}), include_host=self.path.split('?')[0] != '/public-status')
         if self.path.split('?')[0] == '/status':
             state['hostMetrics'] = read_json(ROOT / 'host-metrics.json', None)
-            state['diskDiagnostics'] = read_json(ROOT / 'disk-directories.json', None)
         body = json.dumps(state).encode()
         self.send_response(200 if state.get('updatedAt') and not state.get('stale') else 503)
         self.send_header('Content-Type', 'application/json')
