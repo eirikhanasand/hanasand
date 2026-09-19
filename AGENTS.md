@@ -20,7 +20,16 @@ Always work on the main branch, never create new worktrees, branches or checkout
 
 After completing and verifying requested changes, always commit, push to both GitHub and Forgejo, and redeploy the affected service. This is standing user authorization; do not ask for confirmation again for routine publication or deployment. Verify the deployed revision and affected live behavior before reporting completion.
 
-Always explain what you did, what the problem was, what the fix was and report the commit hash in your summary.
+## Completion responses
+
+Make the final response self-contained so the user does not have to reread progress messages. Always include:
+
+- A short recap of what the user requested, including later corrections.
+- A clickable link to each affected live page so the user can check the result. For work without a page, link to the relevant repository file or commit instead; do not invent a page URL.
+- A concise explanation of what changed and, for a fix, what caused the problem.
+- Relevant verification, the commit hash, and confirmed push and deployment status. Name anything unfinished or blocked; never claim a release is deployed before checking it.
+
+Keep routine progress updates brief and focused on meaningful findings or blockers. The final recap and links are required even after a long task. The standing requirement above to commit, push to both remotes, redeploy the affected service and verify it still applies.
 
 ## Automated checks and service accounts
 

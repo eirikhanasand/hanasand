@@ -32,6 +32,14 @@ Health-check failures and slow responses are grouped by monitor, target and fail
 
 Discord receives `@everyone` and the case number, at most once per issue and destination every 24 hours. PostgreSQL reserves delivery before sending, so restarts and concurrent workers do not reset the limit. Failed or uncertain delivery is recorded in the issue and waits for the same 24-hour window before retrying. Monitoring results remain independent of notification delivery. These persisted records appear alongside other cases at `/cases`, with details at `/cases/HA-<number>`. The shared case page is independent of DWM and reports unavailable sources without hiding cases from the remaining sources. Existing `/dwm/cases` links redirect to `/cases`; old `MON-` links redirect to the corresponding `HA-` case.
 
+## Agent task completion
+
+Agents must finish requested changes by verifying them, committing, pushing to both GitHub and Forgejo, redeploying the affected service, and checking the deployed revision and live behavior. Routine publication and deployment have standing authorization.
+
+Every final response must briefly recap the user's request, explain what changed, and include clickable links to the affected live pages so the user can check them. For work without a page, link to the relevant repository file or commit instead. Include the commit hash, relevant checks, and confirmed push/deployment status; clearly identify anything unfinished. The response must stand on its own without requiring the user to reread progress messages.
+
+See [AGENTS.md](AGENTS.md#completion-responses) for the repository-wide agent instructions.
+
 ## Development
 
 Use Bun 1.3.11, Node.js 22 and Docker Compose. Install dependencies in the component you are changing with `bun install`.
