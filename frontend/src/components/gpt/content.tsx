@@ -6,8 +6,10 @@ import Metric from './metric'
 export default function GPT_Content({
     clients,
     onTestClient,
+    metrics,
 }: {
     clients: GPT_Client[]
+    metrics?: ReactNode
     onTestClient: (client: GPT_Client) => void
 }) {
     const averageLoad = (values: number[]) => values.length
@@ -44,6 +46,7 @@ export default function GPT_Content({
                 <ThroughputCard tps={totalLoad.tps} />
                 <CapacityCard active={capacity.active} available={capacity.available} max={capacity.max} lanes={lanes.length} />
                 <PowerCard watts={power.watts} monthlyKwh={power.monthlyKwh} />
+                {metrics}
 
             </div>
 
