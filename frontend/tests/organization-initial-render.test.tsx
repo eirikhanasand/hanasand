@@ -20,7 +20,7 @@ const emptyPage = await Page()
 assert.deepEqual(emptyPage.props.initialOrganizations, [])
 const emptyHtml = await new Response(await renderToReadableStream(emptyPage)).text()
 assert(emptyHtml.includes('data-org-create-primary'))
-assert(!emptyHtml.includes('lg:grid-cols-[21rem_minmax(0,1fr)]'), 'The empty creation form must be full width before hydration')
+assert(!emptyHtml.includes('lg:grid-cols-['), 'The empty creation form must be full width before hydration')
 assert(!emptyHtml.includes('>Workspaces<'), 'The initial empty state must not show the temporary workspace list')
 
 response = { ok: true, json: async () => ({ organizations: [
@@ -30,7 +30,7 @@ response = { ok: true, json: async () => ({ organizations: [
 organizationId = 'second'
 const populatedPage = await Page()
 const populatedHtml = await new Response(await renderToReadableStream(populatedPage)).text()
-assert(populatedHtml.includes('lg:grid-cols-[15rem_minmax(0,1fr)]'))
+assert(populatedHtml.includes('lg:grid-cols-[18rem_minmax(0,1fr)]'))
 assert(populatedHtml.includes('aria-controls="org-create-primary"'))
 assert(!populatedHtml.includes('data-org-create-primary'))
 assert(populatedHtml.includes('Selected organization'))
@@ -43,5 +43,5 @@ response = { ...response, ok: false }
 const failedPage = await Page()
 assert.equal(failedPage.props.initialOrganizations, undefined, 'A failed request must remain retryable in the browser')
 const failedHtml = await new Response(await renderToReadableStream(failedPage)).text()
-assert(!failedHtml.includes('lg:grid-cols-[21rem_minmax(0,1fr)]'), 'A retry must not squeeze the creation form into a sidebar')
+assert(!failedHtml.includes('lg:grid-cols-['), 'A retry must not squeeze the creation form into a sidebar')
 console.log('Organization initial rendering passes for empty, selected, and failed requests.')
