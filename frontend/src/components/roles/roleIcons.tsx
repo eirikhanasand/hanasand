@@ -4,6 +4,11 @@ import {
     Code2, Terminal, GitBranch, GitPullRequest, Bug, FlaskConical, Package, Rocket, Workflow, Braces,
     Shield, Eye, Scan, Search, Radar, Siren, ShieldAlert, FileKey, FileSearch, BadgeCheck,
     Headset, FileText, Pencil, BookOpen, Newspaper, CreditCard, Wallet, ChartNoAxesCombined, Activity, Wrench,
+    GitCommitHorizontal, GitMerge, GitCompareArrows, GitFork, Webhook, Blocks, Puzzle, Hammer, Construction, TestTubeDiagonal,
+    BrainCircuit, Bot, Sparkles, Binary, TableProperties, ChartPie, ChartColumn, FileJson, FileSpreadsheet, DatabaseBackup,
+    Monitor, Smartphone, Tablet, Laptop, MousePointer2, Keyboard, Camera, Mic, Printer, Usb,
+    MessageSquare, MessagesSquare, Mail, Send, CalendarDays, ClipboardList, ListTodo, Kanban, Presentation, Video,
+    BriefcaseBusiness, GraduationCap, Lightbulb, Target, Compass, MapPin, Languages, Accessibility, HeartHandshake, Gauge,
     type LucideIcon,
 } from 'lucide-react'
 
@@ -29,6 +34,26 @@ export const roleIcons: Preset[] = [
     ...group('Operations', [
         ['headset', 'Support', Headset], ['file-text', 'Content', FileText], ['pencil', 'Editor', Pencil], ['book-open', 'Documentation', BookOpen], ['newspaper', 'Publisher', Newspaper],
         ['credit-card', 'Billing', CreditCard], ['wallet', 'Finance', Wallet], ['chart-no-axes-combined', 'Analyst', ChartNoAxesCombined], ['activity', 'Monitoring', Activity], ['wrench', 'Maintainer', Wrench],
+    ]),
+    ...group('Delivery', [
+        ['git-commit-horizontal', 'Commits', GitCommitHorizontal], ['git-merge', 'Release manager', GitMerge], ['git-compare-arrows', 'Change review', GitCompareArrows], ['git-fork', 'Open source', GitFork], ['webhook', 'Webhooks', Webhook],
+        ['blocks', 'Platform', Blocks], ['puzzle', 'Extensions', Puzzle], ['hammer', 'Build engineer', Hammer], ['construction', 'Staging', Construction], ['test-tube-diagonal', 'Quality assurance', TestTubeDiagonal],
+    ]),
+    ...group('Data & AI', [
+        ['brain-circuit', 'AI engineer', BrainCircuit], ['bot', 'Bot operator', Bot], ['sparkles', 'AI assistant', Sparkles], ['binary', 'Data engineer', Binary], ['table-properties', 'Data steward', TableProperties],
+        ['chart-pie', 'Reporting', ChartPie], ['chart-column', 'Business intelligence', ChartColumn], ['file-json', 'Structured data', FileJson], ['file-spreadsheet', 'Spreadsheets', FileSpreadsheet], ['database-backup', 'Backup operator', DatabaseBackup],
+    ]),
+    ...group('Devices', [
+        ['monitor', 'Desktop', Monitor], ['smartphone', 'Mobile', Smartphone], ['tablet', 'Tablet', Tablet], ['laptop', 'Workstation', Laptop], ['mouse-pointer-2', 'Interaction designer', MousePointer2],
+        ['keyboard', 'Input devices', Keyboard], ['camera', 'Imaging', Camera], ['mic', 'Audio', Mic], ['printer', 'Print services', Printer], ['usb', 'Device access', Usb],
+    ]),
+    ...group('Collaboration', [
+        ['message-square', 'Moderator', MessageSquare], ['messages-square', 'Community', MessagesSquare], ['mail', 'Mail administrator', Mail], ['send', 'Notifications', Send], ['calendar-days', 'Scheduler', CalendarDays],
+        ['clipboard-list', 'Project coordinator', ClipboardList], ['list-todo', 'Task manager', ListTodo], ['kanban', 'Workflow planner', Kanban], ['presentation', 'Trainer', Presentation], ['video', 'Meetings', Video],
+    ]),
+    ...group('Business', [
+        ['briefcase-business', 'Account manager', BriefcaseBusiness], ['graduation-cap', 'Learning', GraduationCap], ['lightbulb', 'Research', Lightbulb], ['target', 'Product manager', Target], ['compass', 'Architect', Compass],
+        ['map-pin', 'Regional manager', MapPin], ['languages', 'Localization', Languages], ['accessibility', 'Accessibility', Accessibility], ['heart-handshake', 'Customer success', HeartHandshake], ['gauge', 'Performance', Gauge],
     ]),
 ]
 
