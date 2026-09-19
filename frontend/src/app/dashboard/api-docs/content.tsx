@@ -1,3 +1,4 @@
+import { currentOpenApi } from '@/utils/api/currentOpenApi'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Braces, Code2, ExternalLink, LockKeyhole } from 'lucide-react'
@@ -120,6 +121,11 @@ function Endpoint({ path, method, operation, components }: { path: string, metho
     const requestSchema = operation.requestBody?.content?.['application/json']?.schema
     const sample = responseExamples[`${method} ${path}`]
     const responses = Object.entries(operation.responses || (sample ? { [sample.status]: { description: sample.status < 300 ? 'Successful response' : 'Endpoint retired' } } : {}))
+    const samplePanel = sample ? <div className={requestSchema ? 'mt-4 border-t border-ui-border pt-3' : 'min-w-0 rounded-md border border-ui-border bg-ui-panel p-3'} data-api-response-example={`${method} ${path}`}>
+        <p className='text-xs font-semibold text-ui-text'>Sample response · HTTP {sample.status}</p>
+        <p className='mt-1 text-xs text-ui-muted'>Fictional example using selected response fields. Names, addresses, and credentials are illustrative.</p>
+        <pre className='mt-3 max-h-96 overflow-auto rounded-md bg-ui-canvas p-3 text-xs leading-5 text-ui-text'><code>{JSON.stringify(sample.body, null, 2)}</code></pre>
+    </div> : null
     return <details className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel' open={method === 'GET' && path === '/actors'}>
         <summary className='flex cursor-pointer list-none flex-wrap items-center gap-3 px-4 py-3'>
             <span className={`rounded-md px-2 py-1 text-[11px] font-bold ${method === 'GET' ? 'bg-ui-success/15 text-ui-success' : 'bg-ui-primary/15 text-ui-primary'}`}>{method}</span>
@@ -129,18 +135,16 @@ function Endpoint({ path, method, operation, components }: { path: string, metho
         </summary>
         <div className='grid gap-4 border-t border-ui-border bg-ui-canvas p-4'>
             {operation.description ? <p className='text-sm leading-6 text-ui-muted'>{operation.description}</p> : null}
+            {!requestSchema && <p className='text-xs text-ui-muted'>No request body.</p>}
             <div className='grid gap-3 md:grid-cols-2'>
-                <div className='min-w-0 rounded-md border border-ui-border bg-ui-panel p-3'><p className='text-[11px] font-semibold uppercase text-ui-muted'>Request</p><p className='mt-2 text-sm text-ui-text'>{requestSchema ? `${operation.requestBody?.required ? 'Required' : 'Optional'} JSON body` : 'No request body'}</p>{requestSchema ? <pre className='mt-2 overflow-x-auto text-xs leading-5 text-ui-muted'>{JSON.stringify(requestSchema, null, 2)}</pre> : null}</div>
+                {requestSchema && <div className='min-w-0 rounded-md border border-ui-border bg-ui-panel p-3'><p className='text-[11px] font-semibold uppercase text-ui-muted'>Request</p><p className='mt-2 text-sm text-ui-text'>{operation.requestBody?.required ? 'Required' : 'Optional'} JSON body</p><pre className='mt-2 overflow-x-auto text-xs leading-5 text-ui-muted'>{JSON.stringify(requestSchema, null, 2)}</pre></div>}
                 <div className='min-w-0 rounded-md border border-ui-border bg-ui-panel p-3'><p className='text-[11px] font-semibold uppercase text-ui-muted'>Responses</p><div className='mt-2 grid gap-2'>{responses.map(([status, response]) => {
                     const resolved = '$ref' in response ? components?.responses?.[response.$ref?.split('/').pop() || ''] : response as ResponseSpec
                     return <div key={status} className='flex items-start gap-2 text-sm'><code className={`font-semibold ${status.startsWith('2') ? 'text-ui-success' : 'text-ui-warning'}`}>{status}</code><span className='text-ui-muted'>{resolved?.description || 'Response'}</span></div>
                 })}</div>
-                {sample ? <div className='mt-4 border-t border-ui-border pt-3' data-api-response-example={`${method} ${path}`}>
-                    <p className='text-xs font-semibold text-ui-text'>Sample response · HTTP {sample.status}</p>
-                    <p className='mt-1 text-xs text-ui-muted'>Fictional example using selected response fields. Names, addresses, and credentials are illustrative.</p>
-                    <pre className='mt-3 max-h-96 overflow-auto rounded-md bg-ui-canvas p-3 text-xs leading-5 text-ui-text'><code>{JSON.stringify(sample.body, null, 2)}</code></pre>
-                </div> : null}
+                {requestSchema ? samplePanel : null}
                 </div>
+                {!requestSchema ? samplePanel : null}
             </div>
         </div>
     </details>
@@ -159,7 +163,7 @@ async function loadContract(): Promise<Contract | null> {
     try {
         const response = await fetch(`${authApiUrl().replace(/\/$/, '')}/v1/openapi.json`, { cache: 'no-store' })
         if (!response.ok) return null
-        const contract = await response.json() as Contract
+        const contract = currentOpenApi(await response.json()) as Contract
         return contract.info && contract.paths ? contract : null
     } catch {
         return null
