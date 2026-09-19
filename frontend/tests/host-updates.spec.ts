@@ -46,7 +46,7 @@ test('host switch and refresh isolate data; scheduled waits are informational an
     security = true
     await page.getByRole('combobox', { name: 'Host' }).selectOption('inspur')
     await expect(page.getByText('Ready', { exact: true })).toBeVisible()
-    await expect(page.getByText('Security Updates').locator('xpath=../..')).toHaveClass(/text-ui-danger/)
+    await expect(page.getByText('Security Updates', { exact: true }).locator('xpath=../..')).toHaveClass(/text-ui-danger/)
 })
 
 test('a slow previous host cannot overwrite the selected host', async ({ page }) => {
