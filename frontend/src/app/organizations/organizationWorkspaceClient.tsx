@@ -3046,10 +3046,10 @@ function DeliveryReference({ delivery, organizationId, destinations }: { deliver
         <div className='grid gap-1 text-xs'>
             {delivery.caseId ? <a href={caseHref} className='truncate font-semibold text-ui-primary hover:text-ui-primary dark:text-ui-primary'>{compactReference(delivery.caseId, 'Case')}</a> : null}
             {delivery.alertId ? <a href={alertHref} className='truncate font-semibold text-ui-primary hover:text-ui-primary dark:text-ui-primary'>{compactReference(delivery.alertId, 'Alert')}</a> : null}
-            {destinationId ? <a href={`/organizations/destinations#destination-${encodeURIComponent(destinationId)}`} className='truncate font-semibold text-ui-primary hover:text-ui-primary dark:text-ui-primary'>{compactReference(destinationId, 'Destination')}</a> : null}
+            {destinationId ? <Link href={`/organizations/destinations#destination-${encodeURIComponent(destinationId)}`} className='truncate font-semibold text-ui-primary hover:text-ui-primary dark:text-ui-primary'>{compactReference(destinationId, 'Destination')}</Link> : null}
             {!delivery.caseId && !delivery.alertId ? <span className='truncate text-ui-muted dark:text-ui-muted'>Attach alert after replay</span> : null}
             {watchlistId
-                ? <a href={`/organizations/watchlists#watchlist-${encodeURIComponent(watchlistId)}`} className='truncate font-semibold text-ui-primary hover:text-ui-primary dark:text-ui-primary'>{compactReference(watchlistId, 'Watchlist')}</a>
+                ? <Link href={`/organizations/watchlists#watchlist-${encodeURIComponent(watchlistId)}`} className='truncate font-semibold text-ui-primary hover:text-ui-primary dark:text-ui-primary'>{compactReference(watchlistId, 'Watchlist')}</Link>
                 : <span className='truncate text-ui-muted dark:text-ui-muted'>{compactReference(delivery.actionId, 'Action') || 'Route context pending'}</span>}
         </div>
     )
