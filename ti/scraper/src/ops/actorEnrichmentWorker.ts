@@ -45,11 +45,11 @@ export async function enrichActor(options: any, actor: any) {
       .map((source: any) => ({ ...source, crawlState: { ...source.crawlState, nextEligibleAt: source.crawlState?.backoffUntil } }));
     if (providers.length && options.runExecutor) {
       const plan = createCollectionPlan({ id: `enrichment-discovery-${run.id}`, tenantId: actor.tenantId,
-        query: `${actor.canonicalName} cyberattack victims malware`, entityType: 'free_text', includeClearWeb: true,
+        query: `${actor.canonicalName} (ransomware OR cyberattack OR malware)`, entityType: 'free_text', includeClearWeb: true,
         includeTelegram: false, includeDarknetMetadata: false, budgetClass: 'broad_daily_sweep', maxTasks: 2,
         createdAt: startedAt, requesterId: 'actor-enrichment', reason: 'Find new source evidence for actor enrichment' }, providers, options.frontier);
       const id = `collection-${run.id}`;
-      store.savePlan({ ...plan, tasks: plan.tasks.map((task: any) => ({ ...task, runId: id, planId: plan.id })) });
+      store.savePlan({ ...plan, tasks: plan.tasks.map((task: any) => ({ ...task, runId: id, planId: plan.id, planning: { ...task.planning, actorEnrichment: { actorId: actor.id } } })) });
       store.saveRun({ id, tenantId: actor.tenantId, planId: plan.id, requestId: plan.request.id, status: 'queued',
         trigger: 'automated', createdAt: startedAt, startedAt, updatedAt: startedAt, taskCount: plan.tasks.length, captureCount: 0, incidentCount: 0 });
       const collected = await options.runExecutor(id);
@@ -95,6 +95,10 @@ export async function enrichActor(options: any, actor: any) {
         captureIds: [capture.id], metadata: { extractionMethod: 'hanasand-ai-grounded', characterization: Object.fromEntries(additions.map(fact => [fact.field, fact.value])),
           newFacts: additions.length, wordsAdded: wordCount, evidence: additions } });
       added += additions.length; words += wordCount; touched.add(capture.sourceId);
+      Object.assign(run, { newFacts: added, wordsAdded: words, changedFieldCount: added,
+        changedActorIds: [actor.id], updatedAt: observedAt });
+      store.saveActorEnrichmentRun({ ...run });
+      await store.flush?.();
     }
     const finishedAt = new Date().toISOString();
     store.saveActorEnrichmentRun({ ...run, status: 'completed', actorCount: 1, changedFieldCount: added,

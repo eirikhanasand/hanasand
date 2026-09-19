@@ -39,7 +39,7 @@ test('flushes fresh collection evidence before querying it for enrichment', asyn
   let pending = false;
   let readFresh = false;
   const store = {
-    saveActorEnrichmentRun() {}, savePlan() {}, saveRun() {}, getActorProfile: () => actor,
+    saveActorEnrichmentRun() {}, savePlan(plan: any) { expect(plan.tasks[0].availableAt).toBeUndefined(); expect(plan.tasks[0].planning.actorEnrichment.actorId).toBe(actor.id); }, saveRun() {}, getActorProfile: () => actor,
     listSources: () => [{ id: 'search', name: 'Public news', type: 'rss', status: 'active', url: 'https://example.com/?q={query}', accessMethod: 'public_http', risk: 'low', legalNotes: 'Public news', metadata: { sourceFamily: 'public_news_search' }, crawlState: { nextEligibleAt: '2099-01-01T00:00:00Z' } }],
     flush: async () => { pending = false; },
     queryActorEnrichmentCaptures: async (profile: any) => { expect(pending).toBe(false); expect(profile.captureIds).toContain(capture.id); readFresh = true; return []; },
