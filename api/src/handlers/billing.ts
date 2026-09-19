@@ -130,31 +130,39 @@ export async function receiveStripeWebhook(req: FastifyRequest, reply: FastifyRe
     }
     const eventType = event.type
     if (!event.id || !eventType || !event.data?.object) return reply.status(400).send({ error: 'Incomplete Stripe event.' })
-    await applyStripeEvent({ ...event, type: eventType })
-    const inserted = await run(`
-        INSERT INTO stripe_webhook_events (event_id, event_type, payload)
-        VALUES ($1, $2, $3::jsonb)
-        ON CONFLICT (event_id) DO NOTHING
-        RETURNING event_id
-    `, [event.id, eventType, rawBody])
-    if (!inserted.rowCount) return reply.send({ received: true, duplicate: true })
-    return reply.send({ received: true })
+    const outcome = await withTransaction(async query => {
+        // Claim the event before applying it; a failed transaction remains retryable.
+        const inserted = await query(`
+            INSERT INTO stripe_webhook_events (event_id, event_type, payload)
+            VALUES ($1, $2, $3::jsonb)
+            ON CONFLICT (event_id) DO NOTHING
+            RETURNING event_id
+        `, [event.id, eventType, JSON.stringify({ id: event.id, type: eventType })])
+        if (!inserted.rowCount) return { duplicate: true }
+        const applied = await applyStripeEvent({ ...event, type: eventType }, query)
+        // Retain only the event ID/type for deleted accounts, not their erased data.
+        if (applied === false) return { ignored: true }
+        await query('UPDATE stripe_webhook_events SET payload = $2::jsonb WHERE event_id = $1', [event.id, rawBody])
+        return {}
+    })
+    return reply.send({ received: true, ...outcome })
 }
 
-async function applyStripeEvent(event: StripeEvent) {
+async function applyStripeEvent(event: StripeEvent, query: typeof run) {
     const object = event.data!.object!
     if (event.type === 'checkout.session.completed') {
         const userId = text((object.metadata as Record<string, unknown> | undefined)?.user_id)
         const planId = text((object.metadata as Record<string, unknown> | undefined)?.plan_id)
         const customerId = text(object.customer)
         const subscriptionId = text(object.subscription)
-        if (userId && customerId) await run(`
+        if (userId && !(await query('SELECT id FROM users WHERE id = $1 FOR KEY SHARE', [userId])).rowCount) return false
+        if (userId && customerId) await query(`
             INSERT INTO billing_customers (user_id, stripe_customer_id)
             VALUES ($1, $2)
             ON CONFLICT (user_id) DO UPDATE SET stripe_customer_id = EXCLUDED.stripe_customer_id, updated_at = NOW()
         `, [userId, customerId])
         if (userId && customerId && subscriptionId && planId && planId in plans) {
-            await upsertSubscription({ userId, customerId, subscriptionId, planId, status: 'active' })
+            await upsertSubscription({ userId, customerId, subscriptionId, planId, status: 'active' }, query)
         }
         return
     }
@@ -163,12 +171,13 @@ async function applyStripeEvent(event: StripeEvent) {
     const customerId = text(object.customer)
     if (!subscriptionId || !customerId) return
     const metadata = (object.metadata as Record<string, unknown> | undefined) || {}
-    const existing = await run('SELECT user_id, plan_id FROM billing_subscriptions WHERE stripe_subscription_id = $1', [subscriptionId])
+    const existing = await query('SELECT user_id, plan_id FROM billing_subscriptions WHERE stripe_subscription_id = $1', [subscriptionId])
     const userId = text(metadata.user_id) || text(existing.rows[0]?.user_id)
     const planId = text(metadata.plan_id) || text(existing.rows[0]?.plan_id)
     if (!userId || !(planId in plans)) return
+    if (!(await query('SELECT id FROM users WHERE id = $1 FOR KEY SHARE', [userId])).rowCount) return false
     const status = event.type === 'customer.subscription.deleted' ? 'canceled' : text(object.status) || 'active'
-    await run(`
+    await query(`
         INSERT INTO billing_customers (user_id, stripe_customer_id)
         VALUES ($1, $2)
         ON CONFLICT (user_id) DO UPDATE SET stripe_customer_id = EXCLUDED.stripe_customer_id, updated_at = NOW()
@@ -182,12 +191,12 @@ async function applyStripeEvent(event: StripeEvent) {
         currentPeriodStart: stripeDate(object.current_period_start),
         currentPeriodEnd: stripeDate(object.current_period_end),
         cancelAtPeriodEnd: object.cancel_at_period_end === true,
-    })
+    }, query)
 }
 
-async function upsertSubscription(input: { userId: string, customerId: string, subscriptionId: string, planId: string, status: string, currentPeriodStart?: Date | null, currentPeriodEnd?: Date | null, cancelAtPeriodEnd?: boolean }) {
+async function upsertSubscription(input: { userId: string, customerId: string, subscriptionId: string, planId: string, status: string, currentPeriodStart?: Date | null, currentPeriodEnd?: Date | null, cancelAtPeriodEnd?: boolean }, query: typeof run) {
     const entitlement = plans[input.planId as keyof typeof plans]
-    await run(`
+    await query(`
         INSERT INTO billing_subscriptions (user_id, stripe_customer_id, stripe_subscription_id, plan_id, status, current_period_start, current_period_end, cancel_at_period_end)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         ON CONFLICT (stripe_subscription_id) DO UPDATE SET
@@ -195,7 +204,7 @@ async function upsertSubscription(input: { userId: string, customerId: string, s
             status = EXCLUDED.status, current_period_start = EXCLUDED.current_period_start,
             current_period_end = EXCLUDED.current_period_end, cancel_at_period_end = EXCLUDED.cancel_at_period_end, updated_at = NOW()
     `, [input.userId, input.customerId, input.subscriptionId, input.planId, input.status, input.currentPeriodStart || null, input.currentPeriodEnd || null, input.cancelAtPeriodEnd || false])
-    await run(`
+    await query(`
         INSERT INTO billing_entitlements (user_id, plan_id, active, quotas, features)
         VALUES ($1, $2, $3, $4::jsonb, $5::jsonb)
         ON CONFLICT (user_id, plan_id) DO UPDATE SET active = EXCLUDED.active, quotas = EXCLUDED.quotas, features = EXCLUDED.features, updated_at = NOW()

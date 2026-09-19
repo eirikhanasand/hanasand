@@ -17,6 +17,7 @@ const bun = process.execPath
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 
 const coreTasks: TestTask[] = [
+    { id: 'stripe-webhook', title: 'Stripe webhook retries and deleted accounts', command: [bun, 'test', 'tests/stripe-webhook.test.ts'] },
     { id: 'shared-mail-access', title: 'Shared mailbox access', command: [bun, 'test', 'tests/shared-mail-access.test.ts'] },
     { id: 'service-account-scopes', title: 'Service account endpoint permissions', command: [bun, 'test', 'tests/service-account-scopes.test.ts'] },
     { id: 'service-accounts', title: 'Service account lifecycle', command: [bun, 'test', 'tests/service-accounts.test.ts'] },
