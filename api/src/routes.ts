@@ -1,3 +1,4 @@
+import { getDockerStorage, clearDockerStorage } from '#handlers/dockerStorage.ts'
 import { searchLogs } from './handlers/logs/search.ts'
 import { getManagementOrganizations } from './handlers/managementOrganizations.ts'
 import assignVmOrganization from './handlers/vms/organization.ts'
@@ -501,6 +502,8 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/system/cron', getSystemCronJobs)
     fastify.put('/system/cron/:id', putSystemCronJob)
     fastify.get('/system/updates', getAptUpdates)
+    fastify.get('/system/storage', getDockerStorage)
+    fastify.post('/system/storage/clear', clearDockerStorage)
 
     // Rate limiting
     fastify.get('/rate-limit/settings', getRateLimitSettingsHandler)

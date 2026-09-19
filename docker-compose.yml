@@ -78,6 +78,7 @@ services:
       - /var/snap/lxd/common/lxd/unix.socket:/var/snap/lxd/common/lxd/unix.socket
       - /var/spool/cron/crontabs:/host/cron/crontabs
       - /var/lib/hanasand:/host/var/lib/hanasand:ro
+      - /var/lib/hanasand/docker-storage:/var/lib/hanasand/docker-storage
       - ${HANASAND_RESILIENCE_STATUS_DIR:-/home/hanasand/resilience/status}:/resilience:ro
       - api_state:/var/lib/hanasand
       - ${HANASAND_APP_UPDATE_DIR:-/srv/hanasand/app-updates}:/srv/hanasand/app-updates

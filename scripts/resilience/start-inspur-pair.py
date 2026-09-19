@@ -57,13 +57,14 @@ for port in ports:
         listener.bind(('127.0.0.1', int(port)))
     settings['PORT'] = port
     command = ['docker', 'run', '-d', '--name', name, '--restart', 'unless-stopped', '--network', 'host', '--memory', '512m' if kind=='auth' else '2g', '--cpus', '1' if kind=='auth' else '2', '--stop-timeout', '65', '-v', '/home/hanasand/resilience/status:/resilience:ro']
+    if kind == 'api': command += ['-v', '/var/lib/hanasand/docker-storage:/var/lib/hanasand/docker-storage']
     if kind == 'frontend': command += ['-v', '/home/hanasand/code-review/published:/app/code-review:ro']
     # Passing names, not values, keeps multiline credentials out of process arguments.
     for key in settings: command += ['-e', key]
     for alias, address in aliases.items(): command += ['--add-host', alias + ':' + address]
     if kind != 'auth':
         for mount in original['Mounts']:
-            if mount['Destination'] in ('/resilience', '/app/code-review'): continue
+            if mount['Destination'] in ('/resilience', '/app/code-review', '/var/lib/hanasand/docker-storage'): continue
             source_path = mount['Name'] if mount['Type']=='volume' else mount['Source']
             command += ['-v', source_path+':'+mount['Destination']+('' if mount['RW'] else ':ro')]
     command += ['--entrypoint', 'bun', image, 'src/index.ts' if kind=='api' else 'src/authServer.ts' if kind=='auth' else 'server.js']
