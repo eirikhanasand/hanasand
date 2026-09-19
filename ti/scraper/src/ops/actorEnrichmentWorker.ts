@@ -40,7 +40,9 @@ export async function enrichActor(options: any, actor: any) {
     // Reuse approved public query providers and their policy/rate-limit enforcement.
     const providers = store.listSources().filter((source: any) => sourceCollectionLane(source) === 'public'
       && source.metadata?.sourceFamily === 'public_news_search' && source.url.includes('{query}')
-      && (source.tenantId == null || source.tenantId === actor.tenantId));
+      && (source.tenantId == null || source.tenantId === actor.tenantId))
+      // Each actor has its own hourly cadence; retain provider-wide failure backoff.
+      .map((source: any) => ({ ...source, crawlState: { ...source.crawlState, nextEligibleAt: source.crawlState?.backoffUntil } }));
     if (providers.length && options.runExecutor) {
       const plan = createCollectionPlan({ id: `enrichment-discovery-${run.id}`, tenantId: actor.tenantId,
         query: `${actor.canonicalName} cyberattack victims malware`, entityType: 'free_text', includeClearWeb: true,
