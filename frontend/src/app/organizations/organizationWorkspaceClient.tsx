@@ -1,4 +1,6 @@
 'use client'
+import Link from 'next/link'
+import { organizationPages, organizationPageForFocus, type OrganizationPage } from '@/utils/organizations/pages'
 import { useWorkspace } from '@/components/organizations/workspaceProvider'
 import { cleanWorkspaceUrl, workspaceShareUrl } from '@/utils/organizations/workspace'
 
@@ -461,16 +463,6 @@ function organizationDisplayId(organization: Pick<OrganizationSummary, 'slug' | 
     return sanitizeOrganizationDisplayCopy(organization?.slug || organization?.id) || 'organization'
 }
 
-function organizationFocusLabel(value: string) {
-    if (value === 'watchlists') return 'Watchlists'
-    if (value === 'destinations' || value === 'webhooks') return 'Delivery destinations'
-    if (value === 'invites') return 'Invites'
-    if (value === 'members') return 'Members'
-    if (value === 'alerts') return 'Alerts'
-    if (value === 'cases') return 'Cases'
-    return stateLabel(value)
-}
-
 function activitySubjectTypeLabel(value: ActivitySubjectType) {
     if (value === 'organization') return 'Organization'
     if (value === 'destination') return 'Delivery destination'
@@ -626,7 +618,7 @@ function firstDomainCandidate(value: string) {
     return match?.[0]
 }
 
-export default function OrganizationWorkspaceClient({ initialOrganizations }: { initialOrganizations?: OrganizationSummary[] } = {}) {
+export default function OrganizationWorkspaceClient({ initialOrganizations, page = 'overview' }: { initialOrganizations?: OrganizationSummary[], page?: OrganizationPage } = {}) {
     const searchParams = useSearchParams()
     const { organizationId: requestedOrganizationId, switchOrganization } = useWorkspace()
     const requestedWatchlistId = searchParams.get('watchlistItemId')?.trim() || searchParams.get('watchlistId')?.trim() || ''
@@ -637,6 +629,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations }: { 
     const requestedInviteId = searchParams.get('inviteId')?.trim() || ''
     const requestedMemberId = searchParams.get('memberId')?.trim() || ''
     const requestedFocus = searchParams.get('focus')?.trim() || ''
+    const activePage = page === 'overview' ? organizationPageForFocus(requestedFocus || (requestedInviteId || requestedMemberId ? 'team' : requestedWatchlistId ? 'watchlists' : requestedDestinationId ? 'destinations' : requestedDeliveryId ? 'delivery' : requestedAlertId || requestedCaseId ? 'alerts' : 'overview')) : page
     const [organizations, setOrganizations] = useState<OrganizationSummary[]>(initialOrganizations || [])
     const [selectedId, setSelectedId] = useState(() => requestedOrganizationId)
     const [bundle, setBundle] = useState<OrgBundle>(initialBundle)
@@ -683,15 +676,11 @@ export default function OrganizationWorkspaceClient({ initialOrganizations }: { 
     const pausedWatchlists = bundle.watchlists.filter(item => item.status.toLowerCase() === 'paused')
     const archivedWatchlists = bundle.watchlists.filter(item => item.status.toLowerCase() === 'archived')
     const activeMembers = bundle.members.filter(member => member.status.toLowerCase() === 'active')
-    const activeTeammates = activeMembers.filter(member => member.role.toLowerCase() !== 'owner')
     const pendingInvites = bundle.invites.filter(invite => invite.status.toLowerCase() === 'pending')
     const configuredDestinationCount = organizationConfiguredDestinationCount(bundle)
-    const hasConfiguredDestination = configuredDestinationCount > 0
     const watchlistDraftDuplicate = isDuplicateWatchlistTerm(bundle.watchlists, watchlistDraft.kind, watchlistDraft.value)
     const watchlistSuggestions = selectedOrganization ? starterWatchlistSuggestions(selectedOrganization, bundle.watchlists) : []
-    const selectedAlertId = bundle.alerts[0]?.id || ''
     const activityRows = useMemo(() => organizationActivityRows(activity, bundle, selectedOrganization?.id), [activity, bundle, selectedOrganization?.id])
-    const hasDwmContext = Boolean(requestedAlertId || requestedCaseId || requestedWatchlistId || requestedDestinationId || requestedDeliveryId || requestedInviteId || requestedMemberId || requestedFocus)
     const settingsDirty = useMemo(() => !settingsEqual(settingsDraft, bundle.settings || {}), [settingsDraft, bundle.settings])
     const normalizedCreateName = normalizeOrganizationName(createName)
     const createNameInUse = normalizedCreateName ? organizationNameInUse(organizations, normalizedCreateName) : false
@@ -742,6 +731,8 @@ export default function OrganizationWorkspaceClient({ initialOrganizations }: { 
         bundleLoadRef.current = requestId
         setBusy('load-org')
         setError('')
+        const organization = organizations.find(item => item.id === organizationId)
+        const mayManage = ['owner', 'admin'].includes(organization?.role?.toLowerCase() || '')
         const endpoints = [
             ['settings', `/api/organizations/${encodeURIComponent(organizationId)}/settings`],
             ['apiKeys', `/api/organizations/${encodeURIComponent(organizationId)}/api-keys`],
@@ -756,19 +747,20 @@ export default function OrganizationWorkspaceClient({ initialOrganizations }: { 
             ['webhooks', `/api/organizations/${encodeURIComponent(organizationId)}/webhooks`],
             ['deliveries', `/api/dwm/webhooks/deliveries?organizationId=${encodeURIComponent(organizationId)}`],
         ] as const
-        const results = await Promise.allSettled(endpoints.map(([, url]) => requestJson<Record<string, unknown>>(url)))
+        const permittedEndpoints = endpoints.filter(([key]) => mayManage || !['apiKeys', 'invites'].includes(key))
+        const results = await Promise.allSettled(permittedEndpoints.map(([, url]) => requestJson<Record<string, unknown>>(url)))
         if (!mountedRef.current || bundleLoadRef.current !== requestId) return
         const nextBundle: OrgBundle = { ...initialBundle, loadErrors: [] }
 
         results.forEach((result, index) => {
-            const [key, url] = endpoints[index]
+            const [key, url] = permittedEndpoints[index]
             if (result.status === 'rejected') {
                 nextBundle.loadErrors.push(`${readableEndpoint(key)}: ${endpointErrorMessage(result.reason)}`)
                 return
             }
             const payload = result.value
             if (key === 'settings') {
-                nextBundle.settings = objectValue(payload.settings)
+                nextBundle.settings = { ...objectValue(payload.settings), name: cleanString(objectValue(payload.organization)?.name) || organization?.name || '', slug: cleanString(objectValue(payload.organization)?.slug) || organization?.slug || '' }
             }
             if (key === 'apiKeys') {
                 nextBundle.apiKeys = arrayValue<OrganizationApiKey>(payload.apiKeys)
@@ -825,7 +817,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations }: { 
         setSelectedActivitySubject(nextSubject)
         if (switchFocus) replaceOrganizationWorkspaceSelectionUrl(organizationId, nextSubject)
         setBusy('')
-    }, [requestedAlertId, requestedCaseId, requestedDeliveryId, requestedDestinationId, requestedFocus, requestedInviteId, requestedMemberId, requestedWatchlistId])
+    }, [organizations, requestedAlertId, requestedCaseId, requestedDeliveryId, requestedDestinationId, requestedFocus, requestedInviteId, requestedMemberId, requestedWatchlistId])
 
     const selectOrganization = useCallback((organizationId: string) => {
         organizationSwitchFocusRef.current = focusForSubjectType(selectedActivitySubject.type) || workspaceFocusRef.current || currentOrganizationFocus() || requestedFocus
@@ -1396,7 +1388,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations }: { 
             <summary className='flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-md px-2 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/30 dark:text-ui-text dark:hover:bg-ui-raised [&::-webkit-details-marker]:hidden'>
                 <span className='inline-flex min-w-0 items-center gap-2'>
                     <Building2 className='h-4 w-4 shrink-0 text-ui-primary' />
-                    <span className='truncate'>Create organization</span>
+                    <span>Create organization</span>
                 </span>
                 <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-[11px] font-semibold text-ui-muted group-open:hidden dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>New</span>
             </summary>
@@ -1423,13 +1415,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations }: { 
                             <Building2 className='h-4 w-4' />
                             Organizations
                         </div>
-                        <h1 className='text-3xl font-semibold tracking-normal text-ui-text dark:text-ui-text sm:text-4xl'>Organization settings</h1>
-                        <div className='mt-3 flex flex-wrap gap-2 text-xs font-semibold text-ui-muted dark:text-ui-muted'>
-                            <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Team</span>
-                            <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Watchlists</span>
-                            <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Destinations</span>
-                            <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Alerts and cases</span>
-                        </div>
+                        <h1 className='text-2xl font-semibold tracking-tight text-ui-text'>{organizationPages.find(item => item.id === activePage)?.label}</h1>
                     </div>
                     <button
                         type='button'
@@ -1450,8 +1436,8 @@ export default function OrganizationWorkspaceClient({ initialOrganizations }: { 
                     </div>
                 )}
 
-                <div className={organizations.length === 0 ? 'grid gap-5' : 'grid gap-5 lg:grid-cols-[21rem_minmax(0,1fr)]'}>
-                    <aside className='flex min-w-0 flex-col gap-4'>
+                <div className={organizations.length === 0 ? 'grid gap-5' : 'grid gap-5 lg:grid-cols-[15rem_minmax(0,1fr)]'}>
+                    <aside className={`${activePage === 'overview' || organizations.length === 0 ? 'flex' : 'hidden lg:flex'} min-w-0 flex-col gap-4`}>
                         {organizations.length === 0 && createOrganizationPanel}
 
                         {(loading || organizations.length > 0) && (
@@ -1506,96 +1492,46 @@ export default function OrganizationWorkspaceClient({ initialOrganizations }: { 
 
                     {(selectedOrganization || organizations.length > 0 || (!loading && organizations.length === 0)) && <main className='min-w-0'>
                         {selectedOrganization ? (
-                            <div className='grid gap-5'>
+                            <div className='grid min-w-0 content-start gap-5'>
                                 <WorkspaceSummary organization={selectedOrganization} activeWatchlists={activeWatchlists.length} pausedWatchlists={pausedWatchlists.length} archivedWatchlists={archivedWatchlists.length} memberCount={activeMembers.length} inviteCount={pendingInvites.length} webhookCount={configuredDestinationCount} />
-                                {hasDwmContext && (
-                                    <DwmHandoffBanner
+                                <WorkspaceSectionNav activePage={activePage} />
+                                {busy === 'load-org' ? <SkeletonRows count={3} /> : <>
+                                    {activePage === 'overview' && <WorkspaceHealthStrip organization={selectedOrganization} bundle={bundle} canManage={canManage} />}
+                                    {activePage === 'settings' && <SettingsPanel settingsDraft={settingsDraft} setSettingsDraft={setSettingsDraft} settingsDirty={settingsDirty} canManage={canManage} busy={busy} rowMessage={rowMessages.settings} onSave={() => void saveSettings()} onReset={() => setSettingsDraft(bundle.settings || {})} />}
+                                    {activePage === 'team' && (canManage ? <InvitePanel emails={inviteEmails} setEmails={setInviteEmails} role={inviteRole} setRole={setInviteRole} invites={bundle.invites} members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} onInvite={() => void sendInvite()} onInviteAction={(invite, action) => void inviteAction(invite, action)} onCopyInvite={invite => void copyInvite(invite)} /> : <p className='rounded-lg border border-ui-border bg-ui-panel p-4 text-sm text-ui-muted'>Only this organization’s owners and admins can manage invitations.</p>)}
+                                    {activePage === 'team' && <MemberPanel members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} onRoleChange={(member, role) => void changeMemberRole(member, role)} onRemove={member => void removeMember(member)} />}
+                                    {activePage === 'watchlists' && <WatchlistPanel
+                                        watchlists={bundle.watchlists}
+                                        activeTerms={bundle.alertTerms}
+                                        members={bundle.members}
+                                        canManage={canManage}
+                                        busy={busy}
+                                        draft={watchlistDraft}
+                                        setDraft={setWatchlistDraft}
+                                        suggestions={watchlistSuggestions}
+                                        editing={editingWatchlist}
+                                        setEditing={setEditingWatchlist}
+                                        onCreate={() => void createWatchlist()}
+                                        onSave={item => void saveWatchlistEdit(item)}
+                                        onAction={(item, action) => void watchlistAction(item, action)}
+                                        onDelete={item => void deleteWatchlist(item)}
                                         organization={selectedOrganization}
-                                        bundle={bundle}
+                                        alerts={bundle.alerts}
+                                        deliveries={bundle.deliveries}
+                                        onCleanup={() => void cleanupWatchlists()}
+                                        onRefreshAlerts={() => void refreshOrganizationAlerts()}
+                                        onRequestFreshCollection={() => void requestFreshCollection()}
+                                        onRefreshCollectionStatus={() => void refreshCollectionStatus()}
+                                        collectionRequest={collectionRequest}
+                                        rowMessages={rowMessages}
+                                        draftDuplicate={watchlistDraftDuplicate}
                                         selectedSubject={selectedActivitySubject}
-                                        alertId={requestedAlertId || selectedAlertId}
-                                        caseId={requestedCaseId}
-                                        watchlistId={requestedWatchlistId}
-                                        destinationId={requestedDestinationId}
-                                        deliveryId={requestedDeliveryId}
-                                        focus={requestedFocus}
-                                    />
-                                )}
-                                <WorkspaceSectionNav organization={selectedOrganization} bundle={bundle} selectedSubject={selectedActivitySubject} />
-                                <WorkspaceHealthStrip organization={selectedOrganization} bundle={bundle} canManage={canManage} />
-                                <OrgActionStrip
-                                    organizationId={selectedOrganization.id}
-                                    alertId={selectedAlertId}
-                                    canManage={canManage}
-                                    hasWatchlists={bundle.watchlists.length > 0}
-                                    hasDestination={hasConfiguredDestination}
-                                    hasMillKey={bundle.apiKeys.some(key => key.enabled !== false)}
-                                />
-                                <PermissionStrip
-                                    role={selectedOrganization.role || 'member'}
-                                    canManage={canManage}
-                                    hasWatchlists={bundle.watchlists.length > 0}
-                                    hasDestination={hasConfiguredDestination}
-                                />
-                                <OrgSetupProgress
-                                    organizationId={selectedOrganization.id}
-                                    canManage={canManage}
-                                    memberCount={activeTeammates.length}
-                                    inviteCount={pendingInvites.length}
-                                    watchlistCount={bundle.watchlists.length}
-                                    destinationCount={configuredDestinationCount}
-                                    alertCount={bundle.alerts.length}
-                                    caseCount={bundle.cases.length}
-                                    alertId={selectedAlertId}
-                                />
-                                <PilotMetricsPanel bundle={bundle} />
-
-                                <section className='grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]'>
-                                    <div className='grid gap-5'>
-                                        <SettingsPanel settingsDraft={settingsDraft} setSettingsDraft={setSettingsDraft} settingsDirty={settingsDirty} canManage={canManage} busy={busy} rowMessage={rowMessages.settings} onSave={() => void saveSettings()} onReset={() => setSettingsDraft(bundle.settings || {})} />
-                                        <MillApiKeyPanel apiKeys={bundle.apiKeys} secret={newApiKeySecret} canManage={canManage} busy={busy} rowMessage={rowMessages['mill-api-key']} onCreate={() => void createMillApiKey()} onRevoke={key => void revokeMillApiKey(key)} onClearSecret={() => setNewApiKeySecret('')} />
-                                        <PrivacyLifecyclePanel organization={selectedOrganization} privacy={bundle.privacy} retentionDays={Number(bundle.settings?.retentionDays || 365)} canManage={canManage} busy={busy} rowMessage={rowMessages.privacy} onRun={() => void runRetention()} onExport={() => void exportPrivacyData()} onDelete={(confirmation, currentPassword) => void requestPrivacyDeletion(confirmation, currentPassword)} />
-                                        <WatchlistPanel
-                                            watchlists={bundle.watchlists}
-                                            activeTerms={bundle.alertTerms}
-                                            members={bundle.members}
-                                            canManage={canManage}
-                                            busy={busy}
-                                            draft={watchlistDraft}
-                                            setDraft={setWatchlistDraft}
-                                            suggestions={watchlistSuggestions}
-                                            editing={editingWatchlist}
-                                            setEditing={setEditingWatchlist}
-                                            onCreate={() => void createWatchlist()}
-                                            onSave={item => void saveWatchlistEdit(item)}
-                                            onAction={(item, action) => void watchlistAction(item, action)}
-                                            onDelete={item => void deleteWatchlist(item)}
-                                            organization={selectedOrganization}
-                                            alerts={bundle.alerts}
-                                            deliveries={bundle.deliveries}
-                                            onCleanup={() => void cleanupWatchlists()}
-                                            onRefreshAlerts={() => void refreshOrganizationAlerts()}
-                                            onRequestFreshCollection={() => void requestFreshCollection()}
-                                            onRefreshCollectionStatus={() => void refreshCollectionStatus()}
-                                            collectionRequest={collectionRequest}
-                                            rowMessages={rowMessages}
-                                            draftDuplicate={watchlistDraftDuplicate}
-                                            selectedSubject={selectedActivitySubject}
-                                            onSelectSubject={selectActivitySubject}
-                                        />
-                                    </div>
-                                    <div className='grid min-w-0 content-start gap-5' data-org-operator-rail='true'>
-                                        <div className='xl:sticky xl:top-24 xl:z-10' data-org-activity-sticky='true'>
-                                            <ActivityPanel organization={selectedOrganization} bundle={bundle} activity={activityRows} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} />
-                                        </div>
-                                        <InvitePanel emails={inviteEmails} setEmails={setInviteEmails} role={inviteRole} setRole={setInviteRole} invites={bundle.invites} members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} onInvite={() => void sendInvite()} onInviteAction={(invite, action) => void inviteAction(invite, action)} onCopyInvite={invite => void copyInvite(invite)} />
-                                        <MemberPanel members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} onRoleChange={(member, role) => void changeMemberRole(member, role)} onRemove={member => void removeMember(member)} />
-                                        <DestinationPanel destinations={bundle.webhooks} deliveries={bundle.deliveries} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} createDraft={destinationCreateDraft} setCreateDraft={setDestinationCreateDraft} editing={editingDestinations} setEditing={setEditingDestinations} onSelectSubject={selectActivitySubject} onCreate={() => void createSavedDestination()} onTest={destination => void testSavedDestination(destination)} onUpdate={(destination, draft) => void updateSavedDestination(destination, draft)} onRotateSigningSecret={destination => void rotateDestinationSigningSecret(destination)} onDelete={destination => void deleteSavedDestination(destination)} signingSecret={newWebhookSigningSecret} onClearSigningSecret={() => setNewWebhookSigningSecret('')} />
-                                    </div>
-                                </section>
-
-                                <section className='grid min-w-0 gap-5'>
-                                    <DeliveryHistoryPanel
+                                        onSelectSubject={selectActivitySubject}
+                                    />}
+                                    {activePage === 'destinations' && <DestinationPanel destinations={bundle.webhooks} deliveries={bundle.deliveries} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} createDraft={destinationCreateDraft} setCreateDraft={setDestinationCreateDraft} editing={editingDestinations} setEditing={setEditingDestinations} onSelectSubject={selectActivitySubject} onCreate={() => void createSavedDestination()} onTest={destination => void testSavedDestination(destination)} onUpdate={(destination, draft) => void updateSavedDestination(destination, draft)} onRotateSigningSecret={destination => void rotateDestinationSigningSecret(destination)} onDelete={destination => void deleteSavedDestination(destination)} signingSecret={newWebhookSigningSecret} onClearSigningSecret={() => setNewWebhookSigningSecret('')} />}
+                                    {activePage === 'api-keys' && (canManage ? <MillApiKeyPanel apiKeys={bundle.apiKeys} secret={newApiKeySecret} canManage={canManage} busy={busy} rowMessage={rowMessages['mill-api-key']} onCreate={() => void createMillApiKey()} onRevoke={key => void revokeMillApiKey(key)} onClearSecret={() => setNewApiKeySecret('')} /> : <p className='rounded-lg border border-ui-border bg-ui-panel p-4 text-sm text-ui-muted'>Only this organization’s owners and admins can manage API keys.</p>)}
+                                    {activePage === 'privacy' && <PrivacyLifecyclePanel organization={selectedOrganization} privacy={bundle.privacy} retentionDays={Number(bundle.settings?.retentionDays || 365)} canManage={canManage} busy={busy} rowMessage={rowMessages.privacy} onRun={() => void runRetention()} onExport={() => void exportPrivacyData()} onDelete={(confirmation, currentPassword) => void requestPrivacyDeletion(confirmation, currentPassword)} />}
+                                    {activePage === 'delivery' && <DeliveryHistoryPanel
                                         organization={selectedOrganization}
                                         deliveries={bundle.deliveries}
                                         destinations={bundle.webhooks}
@@ -1604,9 +1540,10 @@ export default function OrganizationWorkspaceClient({ initialOrganizations }: { 
                                         busy={busy}
                                         rowMessages={rowMessages}
                                         onReplay={delivery => void replayDelivery(delivery)}
-                                    />
-                                    <ScopePanel alertTerms={bundle.alertTerms} alerts={bundle.alerts} cases={bundle.cases} deliveries={bundle.deliveries} members={bundle.members} watchlists={bundle.watchlists} webhooks={bundle.webhooks} alertCaseVisibility={bundle.alertCaseVisibility} organizationId={selectedOrganization.id} />
-                                </section>
+                                    />}
+                                    {activePage === 'alerts' && <ScopePanel alertTerms={bundle.alertTerms} alerts={bundle.alerts} cases={bundle.cases} deliveries={bundle.deliveries} members={bundle.members} watchlists={bundle.watchlists} webhooks={bundle.webhooks} alertCaseVisibility={bundle.alertCaseVisibility} organizationId={selectedOrganization.id} />}
+                                    {activePage === 'activity' && <ActivityPanel organization={selectedOrganization} bundle={bundle} activity={activityRows} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} />}
+                                </>}
                             </div>
                         ) : (
                             <EmptyWorkspacePreview />
@@ -1618,90 +1555,11 @@ export default function OrganizationWorkspaceClient({ initialOrganizations }: { 
     )
 }
 
-function WorkspaceSectionNav({ organization, bundle, selectedSubject }: { organization: OrganizationSummary, bundle: OrgBundle, selectedSubject: ActivitySubject }) {
-    const activeMembers = bundle.members.filter(member => member.status.toLowerCase() === 'active')
-    const activeTeammates = activeMembers.filter(member => member.role.toLowerCase() !== 'owner')
-    const pendingInvites = bundle.invites.filter(invite => invite.status.toLowerCase() === 'pending')
-    const activeTerms = bundle.alertTerms.filter(term => (term.status || 'active').toLowerCase() === 'active')
-    const activeDestinations = organizationConfiguredDestinationCount(bundle)
-    const watchlistDestinations = watchlistsWithOwnDestination(bundle.watchlists, bundle.webhooks).length
-    const failedDeliveries = bundle.deliveries.filter(delivery => delivery.status?.toLowerCase() === 'failed' || Boolean(delivery.error))
-    const rows = [
-        {
-            id: 'team',
-            href: '#members',
-            label: 'Team',
-            value: activeTeammates.length ? `${activeTeammates.length} teammate${activeTeammates.length === 1 ? '' : 's'}` : pendingInvites.length ? 'Invite pending' : 'Invite team',
-            detail: `${pendingInvites.length} pending`,
-            icon: <Users className='h-4 w-4' />,
-            active: selectedSubject.type === 'member' || selectedSubject.type === 'invite',
-            tone: activeTeammates.length ? 'ready' : pendingInvites.length ? 'review' : 'blocked',
-        },
-        {
-            id: 'watchlists',
-            href: '#watchlists',
-            label: 'Watchlists',
-            value: `${activeTerms.length} active`,
-            detail: `${bundle.watchlists.length} saved`,
-            icon: <BellRing className='h-4 w-4' />,
-            active: selectedSubject.type === 'watchlist',
-            tone: activeTerms.length ? 'ready' : 'review',
-        },
-        {
-            id: 'destinations',
-            href: '#destinations',
-            label: 'Destinations',
-            value: `${activeDestinations} configured`,
-            detail: watchlistDestinations ? `${bundle.webhooks.length} saved · ${watchlistDestinations} watchlist` : `${bundle.webhooks.length} saved`,
-            icon: <Webhook className='h-4 w-4' />,
-            active: selectedSubject.type === 'destination',
-            tone: activeDestinations ? 'ready' : 'review',
-        },
-        {
-            id: 'delivery',
-            href: '#delivery-history',
-            label: 'Delivery',
-            value: `${bundle.deliveries.length} events`,
-            detail: failedDeliveries.length ? `${failedDeliveries.length} failed` : 'clean',
-            icon: <RefreshCw className='h-4 w-4' />,
-            active: selectedSubject.type === 'alert' || selectedSubject.type === 'case',
-            tone: failedDeliveries.length ? 'warning' : bundle.deliveries.length ? 'ready' : 'neutral',
-        },
-        {
-            id: 'activity',
-            href: '#audit',
-            label: 'Activity',
-            value: selectedSubjectLabel(selectedSubject, organization, bundle),
-            detail: activitySubjectTypeLabel(selectedSubject.type),
-            icon: <CheckCircle2 className='h-4 w-4' />,
-            active: selectedSubject.type === 'organization',
-            tone: 'neutral',
-        },
-    ] as const
-    return (
-        <nav className='sticky top-2 z-10 rounded-lg border border-ui-border bg-ui-panel/95 p-2 shadow-sm backdrop-blur dark:border-ui-border dark:bg-ui-panel/95' aria-label='Organization workspace sections' data-org-section-nav='true'>
-            <div className='grid gap-2 sm:grid-cols-2 xl:grid-cols-5'>
-                {rows.map(row => (
-                    <a
-                        key={row.id}
-                        href={row.href}
-                        className={`grid min-h-16 min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md border px-3 py-2 text-left transition hover:border-ui-primary/35 hover:bg-ui-raised dark:hover:bg-ui-raised ${row.active ? 'border-ui-primary/35 bg-ui-primary/10 dark:border-ui-primary/35 dark:bg-ui-primary/10' : row.tone === 'warning' ? 'border-ui-warning/35 bg-ui-warning/10 dark:border-ui-warning/35 dark:bg-ui-warning/10' : row.tone === 'ready' ? 'border-ui-border bg-ui-panel dark:border-ui-border dark:bg-ui-canvas' : 'border-ui-border bg-ui-raised dark:border-ui-border dark:bg-ui-canvas'}`}
-                        data-org-section-nav-item={row.id}
-                    >
-                        <span className='grid h-8 w-8 place-items-center rounded-md border border-ui-border bg-ui-panel text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>{row.icon}</span>
-                        <span className='min-w-0'>
-                            <span className='flex min-w-0 items-center justify-between gap-2'>
-                                <span className='truncate text-xs font-semibold uppercase tracking-[0.08em] text-ui-muted dark:text-ui-muted'>{row.label}</span>
-                                <span className='h-1.5 w-1.5 shrink-0 rounded-full bg-ui-primary opacity-70' aria-hidden='true' />
-                            </span>
-                            <span className='mt-1 block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{row.value}</span>
-                            <span className='block truncate text-xs text-ui-muted dark:text-ui-muted'>{row.detail}</span>
-                        </span>
-                    </a>
-                ))}
-            </div>
-        </nav>
-    )
+function WorkspaceSectionNav({ activePage }: { activePage: OrganizationPage }) {
+    return <nav aria-label='Organization pages' className='flex flex-wrap gap-1 border-b border-ui-border pb-3' data-org-section-nav='true'>
+        {organizationPages.map(page => <Link key={page.id} href={page.href} aria-current={page.id === activePage ? 'page' : undefined}
+            className={`rounded-md px-3 py-2 text-sm font-medium transition hover:bg-ui-raised ${page.id === activePage ? 'bg-ui-primary/10 text-ui-primary' : 'text-ui-muted'}`}>{page.label}</Link>)}
+    </nav>
 }
 
 function WorkspaceHealthStrip({ organization, bundle, canManage }: { organization: OrganizationSummary, bundle: OrgBundle, canManage: boolean }) {
@@ -1722,7 +1580,7 @@ function WorkspaceHealthStrip({ organization, bundle, canManage }: { organizatio
             label: 'Access',
             value: activeTeammates.length ? `${activeTeammates.length} teammate${activeTeammates.length === 1 ? '' : 's'}` : pendingInvites.length ? 'Invite pending' : 'Invite team',
             detail: adminMembers.length ? `${adminMembers.length} admin${adminMembers.length === 1 ? '' : 's'} · ${pendingInvites.length} pending` : 'Add an owner or admin',
-            href: '#members',
+            href: '/organizations/team#members',
             tone: activeTeammates.length ? 'ready' : pendingInvites.length ? 'neutral' : 'blocked',
         },
         {
@@ -1730,7 +1588,7 @@ function WorkspaceHealthStrip({ organization, bundle, canManage }: { organizatio
             label: 'Watchlists',
             value: activeTerms.length ? `${activeTerms.length} active term${activeTerms.length === 1 ? '' : 's'}` : 'Add watch term',
             detail: bundle.watchlists.length ? `${bundle.watchlists.length} shared item${bundle.watchlists.length === 1 ? '' : 's'}` : 'Create a shared watchlist term',
-            href: '#watchlists',
+            href: '/organizations/watchlists#watchlists',
             tone: activeTerms.length ? 'ready' : 'blocked',
         },
         {
@@ -1738,7 +1596,7 @@ function WorkspaceHealthStrip({ organization, bundle, canManage }: { organizatio
             label: 'Delivery',
             value: configuredDestinations ? `${configuredDestinations} destination${configuredDestinations === 1 ? '' : 's'}` : 'Set delivery',
             detail: failedDeliveries.length ? `${failedDeliveries.length} failed delivery` : bundle.deliveries.length ? `${bundle.deliveries.length} delivery event${bundle.deliveries.length === 1 ? '' : 's'}` : 'Test a Discord or webhook destination',
-            href: '#destinations',
+            href: '/organizations/destinations#destinations',
             tone: failedDeliveries.length ? 'warning' : configuredDestinations ? 'ready' : 'blocked',
         },
         {
@@ -1746,7 +1604,7 @@ function WorkspaceHealthStrip({ organization, bundle, canManage }: { organizatio
             label: 'Alert flow',
             value: hasAlertOrCaseActivity ? `${bundle.alerts.length} alert${bundle.alerts.length === 1 ? '' : 's'} · ${routedCases.length} case${routedCases.length === 1 ? '' : 's'}` : activeTerms.length ? 'Listening for matches' : 'Add watch term',
             detail: hasAlertOrCaseActivity ? 'Open exposure monitoring workspace' : activeTerms.length ? 'Matched captures will open alert and case rows' : 'Start with a shared watchlist term',
-            href: '#delivery-history',
+            href: '/organizations/delivery#delivery-history',
             tone: hasAlertOrCaseActivity ? 'ready' : activeTerms.length ? 'neutral' : 'blocked',
         },
     ] as const
@@ -1761,7 +1619,7 @@ function WorkspaceHealthStrip({ organization, bundle, canManage }: { organizatio
                     </h2>
                     <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{organizationDisplayName(organization)} · {accessMode} · Last activity {lastActivityAt ? formatDate(lastActivityAt) : 'pending'}</p>
                 </div>
-                <a href='#audit' className={secondaryButtonClass} data-org-health-activity='true'>
+                <a href='/organizations/activity#audit' className={secondaryButtonClass} data-org-health-activity='true'>
                     <ExternalLink className='h-4 w-4' />
                     Activity
                 </a>
@@ -1817,7 +1675,7 @@ function WorkspaceSummary({ organization, activeWatchlists, pausedWatchlists, ar
                 </p>
                 <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{organizationDisplayId(organization)} · {workspaceMeta}</p>
             </div>
-            <div className='grid min-w-0 gap-2 sm:grid-cols-2 xl:flex xl:flex-wrap xl:justify-end' data-org-summary-chip-list='true'>
+            <div className='hidden min-w-0 gap-2 sm:grid sm:grid-cols-2 xl:flex xl:flex-wrap xl:justify-end' data-org-summary-chip-list='true'>
                 {rows.map(row => (
                     <span key={row.id} className='grid min-h-10 min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 border-l border-ui-border py-1 pl-2 dark:border-ui-border' data-org-summary-chip={row.id}>
                         <span className='shrink-0 text-ui-muted dark:text-ui-muted'>{row.icon}</span>
@@ -1832,117 +1690,6 @@ function WorkspaceSummary({ organization, activeWatchlists, pausedWatchlists, ar
     )
 }
 
-function DwmHandoffBanner({ organization, bundle, selectedSubject, alertId, caseId, watchlistId, destinationId, deliveryId, focus }: {
-    organization: OrganizationSummary
-    bundle: OrgBundle
-    selectedSubject: ActivitySubject
-    alertId: string
-    caseId: string
-    watchlistId: string
-    destinationId: string
-    deliveryId: string
-    focus: string
-}) {
-    const selectedLabel = selectedSubjectLabel(selectedSubject, organization, bundle)
-    const effectiveAlertId = alertId || (selectedSubject.type === 'alert' ? selectedSubject.id : '')
-    const effectiveCaseId = caseId || (selectedSubject.type === 'case' ? selectedSubject.id : '')
-    const effectiveWatchlistId = watchlistId || (selectedSubject.type === 'watchlist' ? selectedSubject.id : selectedSubjectWatchlistId(selectedSubject, bundle))
-    const effectiveDestinationId = destinationId || (selectedSubject.type === 'destination' ? selectedSubject.id : selectedSubjectDestinationId(selectedSubject, bundle))
-    const effectiveDeliveryId = deliveryId || selectedSubjectDeliveryId(selectedSubject, bundle)
-    const scopedValues = [
-        ['Org', organizationDisplayId(organization)],
-        ['Selected', selectedLabel],
-        ['Case', compactReference(effectiveCaseId, 'Case')],
-        ['Alert', compactReference(effectiveAlertId, 'Alert')],
-        ['Watchlist', compactReference(effectiveWatchlistId, 'Watchlist')],
-        ['Destination', compactReference(effectiveDestinationId, 'Destination')],
-        ['Delivery', compactReference(effectiveDeliveryId, 'Delivery')],
-    ].filter(([, value]) => Boolean(value))
-    const caseHref = effectiveCaseId
-        ? `/cases/${encodeURIComponent(effectiveCaseId)}?organizationId=${encodeURIComponent(organization.id)}${effectiveAlertId ? `&alertId=${encodeURIComponent(effectiveAlertId)}` : ''}`
-        : ''
-    const alertHref = effectiveAlertId
-        ? `/ti/workbench?alertId=${encodeURIComponent(effectiveAlertId)}&organizationId=${encodeURIComponent(organization.id)}`
-        : ''
-    const deliveryHref = effectiveDeliveryId || effectiveDestinationId || focus === 'destinations' || focus === 'webhooks' ? '#delivery-history' : ''
-    return (
-        <section className='rounded-lg border border-ui-primary/35 bg-ui-primary/10 p-4 shadow-sm dark:border-ui-primary/35 dark:bg-ui-panel' data-dwm-handoff='true'>
-            <div className='grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center'>
-                <div className='min-w-0'>
-                    <h2 className='flex items-center gap-2 text-base font-semibold text-ui-primary dark:text-ui-primary'>
-                        <CircleAlert className='h-4 w-4 text-ui-primary dark:text-ui-primary' />
-                        DWM actions for this organization
-                    </h2>
-                    <div className='mt-3 flex flex-wrap gap-2'>
-                        {scopedValues.map(([label, value]) => (
-                            <span key={`${label}-${value}`} className='max-w-full truncate rounded-md border border-ui-primary/35 bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-text dark:border-ui-primary/35 dark:bg-ui-canvas dark:text-ui-primary'>
-                                {label}: {sanitizeOrganizationDisplayCopy(value) || value}
-                            </span>
-                        ))}
-                        {focus && <span className='rounded-md border border-ui-primary/35 bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-text dark:border-ui-primary/35 dark:bg-ui-canvas dark:text-ui-primary'>Focus: {organizationFocusLabel(focus)}</span>}
-                    </div>
-                </div>
-                <div className='grid gap-2 sm:grid-cols-2 lg:flex'>
-                    <ActionAnchor href='#audit' icon={<CheckCircle2 className='h-4 w-4' />} label='Review context' />
-                    <ActionAnchor href='#watchlists' icon={<BellRing className='h-4 w-4' />} label='Manage watchlist' />
-                    {deliveryHref && <ActionAnchor href={deliveryHref} icon={<Webhook className='h-4 w-4' />} label='Delivery history' />}
-                    {caseHref && <ActionAnchor href={caseHref} icon={<ExternalLink className='h-4 w-4' />} label='Open case' />}
-                    {alertHref && <ActionAnchor href={alertHref} icon={<ExternalLink className='h-4 w-4' />} label='Open alert' />}
-                </div>
-            </div>
-        </section>
-    )
-}
-
-function OrgActionStrip({ organizationId, alertId, canManage, hasWatchlists, hasDestination, hasMillKey }: { organizationId: string, alertId: string, canManage: boolean, hasWatchlists: boolean, hasDestination: boolean, hasMillKey: boolean }) {
-    const actions: Array<{ href: string, icon: ReactNode, label: string, disabled?: boolean, disabledReason?: string }> = []
-    actions.push({
-        href: '#watchlists',
-        icon: <BellRing className='h-4 w-4' />,
-        label: 'Create watchlist',
-        disabled: !canManage,
-        disabledReason: canManage ? undefined : 'Owner or admin access is required to create watchlists.',
-    })
-    actions.push({
-        href: '#invites',
-        icon: <UserPlus className='h-4 w-4' />,
-        label: 'Invite member',
-        disabled: !canManage,
-        disabledReason: canManage ? undefined : 'Admin access is required to invite team members.',
-    })
-    actions.push({
-        href: '#destinations',
-        icon: <Webhook className='h-4 w-4' />,
-        label: 'Test destination',
-        disabled: !canManage || !hasWatchlists,
-        disabledReason: !canManage
-            ? 'Owner or admin access is required to test delivery.'
-            : !hasWatchlists
-                ? 'Add a watchlist term before testing delivery.'
-                : undefined,
-    })
-    if (alertId) actions.push({ href: `/ti/workbench?alertId=${encodeURIComponent(alertId)}&organizationId=${encodeURIComponent(organizationId)}`, icon: <CircleAlert className='h-4 w-4' />, label: 'Open DWM alert' })
-    actions.push({ href: `/cases?organizationId=${encodeURIComponent(organizationId)}`, icon: <ShieldCheck className='h-4 w-4' />, label: 'Open cases' })
-    if (hasDestination || hasWatchlists) actions.push({ href: '#audit', icon: <CheckCircle2 className='h-4 w-4' />, label: 'Audit' })
-    const nextStep = !canManage
-        ? 'Owner or admin access unlocks setup actions.'
-        : !hasWatchlists
-            ? 'Start with a shared watchlist term.'
-            : !hasDestination
-                ? 'Test and save a delivery destination.'
-                : !hasMillKey
-                    ? 'Create an organization API key before sending logs to Security Monitoring.'
-                    : alertId
-                        ? ''
-                        : 'Reviewed alerts will appear after a watchlist match.'
-    return (
-        <nav className='flex flex-wrap items-center gap-2 rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm dark:border-ui-border dark:bg-ui-panel' aria-label='Organization actions' data-org-action-strip='true'>
-            {actions.map(action => <ActionAnchor key={action.label} href={action.href} icon={action.icon} label={action.label} disabled={action.disabled} disabledReason={action.disabledReason} />)}
-            {nextStep ? <span className='inline-flex min-h-9 items-center rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-raised dark:text-ui-muted' data-org-action-next='true'>{nextStep}</span> : null}
-        </nav>
-    )
-}
-
 function ActionAnchor({ href, icon, label, disabled, disabledReason }: { href: string, icon: ReactNode, label: string, disabled?: boolean, disabledReason?: string }) {
     const classes = disabled
         ? 'pointer-events-none inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-raised dark:text-ui-muted'
@@ -1951,245 +1698,6 @@ function ActionAnchor({ href, icon, label, disabled, disabledReason }: { href: s
         return <span className={classes} aria-disabled='true' aria-label={disabledReason ? `${label}: ${disabledReason}` : label} title={disabledReason}>{icon}{label}</span>
     }
     return <a className={classes} href={href}>{icon}{label}</a>
-}
-
-function PermissionStrip({ role, canManage, hasWatchlists, hasDestination }: { role: OrganizationRole, canManage: boolean, hasWatchlists: boolean, hasDestination: boolean }) {
-    const supportAccess = role.toLowerCase() === 'support'
-    const readOnlyReason = supportAccess ? 'Support inspection only' : 'Owner or admin required'
-    const rows = [
-        { id: 'team', label: 'Team', value: canManage ? 'Manage' : supportAccess ? 'Inspect' : 'View', ready: canManage, reason: canManage ? 'Invite and update roles' : readOnlyReason },
-        { id: 'watchlists', label: 'Watchlists', value: canManage ? 'Manage' : supportAccess ? 'Inspect' : 'View', ready: canManage, reason: canManage ? 'Create, edit, archive' : readOnlyReason },
-        { id: 'destinations', label: 'Destinations', value: canManage && hasWatchlists ? 'Test' : hasDestination ? (supportAccess ? 'Inspect' : 'View') : 'Add watchlist', ready: canManage && hasWatchlists, reason: hasWatchlists ? (canManage ? 'Save and replay routes' : readOnlyReason) : 'Add watchlist first' },
-        { id: 'alerts', label: 'Alerts and cases', value: hasWatchlists ? 'Scoped' : 'Waiting', ready: hasWatchlists, reason: hasWatchlists ? 'Org watchlist context available' : 'Add watchlist first' },
-    ] as const
-    const actionCount = rows.filter(row => row.ready).length
-    return (
-        <details open className='group rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-permission-strip='true' aria-label='Organization permission summary'>
-            <summary className='flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-md px-2 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/30 dark:text-ui-text dark:hover:bg-ui-raised [&::-webkit-details-marker]:hidden'>
-                <span className='inline-flex min-w-0 items-center gap-2'>
-                    <ShieldCheck className='h-4 w-4 shrink-0 text-ui-primary' />
-                    <span className='truncate'>Access rules</span>
-                    <span className='hidden text-xs font-medium text-ui-muted dark:text-ui-muted sm:inline'>Current role: {role}</span>
-                </span>
-                <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-[11px] font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>
-                    {actionCount}/{rows.length} available
-                </span>
-            </summary>
-            <div className='grid gap-2 border-t border-ui-border px-2 pb-2 pt-3 dark:border-ui-border sm:grid-cols-2 xl:grid-cols-4'>
-                {rows.map(row => (
-                    <div key={row.id} className='grid min-h-12 min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 py-2 dark:border-ui-border dark:bg-ui-canvas' data-org-permission-row={row.id}>
-                        <span className='min-w-0'>
-                            <span className='block truncate text-xs font-semibold text-ui-muted dark:text-ui-muted'>{row.label}</span>
-                            <span className='block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{row.value}</span>
-                            <span className='block truncate text-[11px] text-ui-muted dark:text-ui-muted'>{row.reason}</span>
-                        </span>
-                        <StatusPill status={row.ready ? 'ready' : 'review'} />
-                    </div>
-                ))}
-            </div>
-        </details>
-    )
-}
-
-function OrgSetupProgress({ organizationId, canManage, memberCount, inviteCount, watchlistCount, destinationCount, alertCount, caseCount, alertId }: {
-    organizationId: string
-    canManage: boolean
-    memberCount: number
-    inviteCount: number
-    watchlistCount: number
-    destinationCount: number
-    alertCount: number
-    caseCount: number
-    alertId: string
-}) {
-    const rows = [
-        {
-            id: 'team',
-            title: 'Team access',
-            body: memberCount ? `${memberCount} active member${memberCount === 1 ? '' : 's'}` : inviteCount ? `${inviteCount} invite${inviteCount === 1 ? '' : 's'} pending` : 'Invite analysts or admins',
-            reason: canManage ? 'Invite an analyst or admin to share review work.' : 'Owner or admin access is required to invite members.',
-            href: '#invites',
-            ready: memberCount > 0,
-            blocked: !canManage,
-            action: inviteCount ? 'Review invites' : 'Invite member',
-        },
-        {
-            id: 'watchlists',
-            title: 'Shared watchlists',
-            body: watchlistCount ? `${watchlistCount} term${watchlistCount === 1 ? '' : 's'} active` : 'Add company, domain, supplier, actor, or keyword',
-            reason: canManage ? 'Add a monitored company, domain, vendor, actor, or keyword.' : 'Owner or admin access is required to create watchlists.',
-            href: '#watchlists',
-            ready: watchlistCount > 0,
-            blocked: !canManage,
-            action: watchlistCount ? 'Review terms' : 'Add term',
-        },
-        {
-            id: 'destinations',
-            title: 'Delivery destination',
-            body: destinationCount ? `${destinationCount} destination${destinationCount === 1 ? '' : 's'} saved` : watchlistCount ? 'Test and save a destination' : 'Create a watchlist first',
-            reason: !canManage ? 'Owner or admin access is required to test delivery.' : watchlistCount ? 'Test a Discord or webhook destination before customer delivery.' : 'Create a shared watchlist term before testing delivery.',
-            href: '#destinations',
-            ready: destinationCount > 0,
-            blocked: !watchlistCount || !canManage,
-            action: destinationCount ? 'Review destination' : 'Test destination',
-        },
-        {
-            id: 'activity',
-            title: 'Alert and case context',
-            body: alertCount || caseCount ? `${alertCount} alert${alertCount === 1 ? '' : 's'} · ${caseCount} case${caseCount === 1 ? '' : 's'}` : watchlistCount ? 'Open exposure monitoring after the first match' : 'Add watchlist first',
-            reason: watchlistCount ? 'Matched exposure records are shown here as collection runs.' : 'Shared watchlist coverage unlocks alert and case context.',
-            href: '#audit',
-            ready: alertCount > 0 || caseCount > 0,
-            blocked: false,
-            action: 'Open activity',
-        },
-    ]
-
-    const visibleRows = rows
-    const completed = visibleRows.filter(row => row.ready).length
-    const nextAction = rows.find(row => !row.ready && !row.blocked) || rows.find(row => row.ready) || rows[0]
-    const openAlertHref = alertId ? `/ti/workbench?alertId=${encodeURIComponent(alertId)}&organizationId=${encodeURIComponent(organizationId)}` : ''
-    return (
-        <section className='border-t border-ui-border pt-3 dark:border-ui-border' data-org-setup-progress='true'>
-            <div className='grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center'>
-                <div className='min-w-0' data-org-setup-rail='true'>
-                    <div className='mb-2 flex min-w-0 items-center justify-between gap-3'>
-                        <h2 className='flex min-w-0 items-center gap-2 text-sm font-semibold text-ui-text dark:text-ui-text'>
-                            <ShieldCheck className='h-4 w-4 shrink-0 text-ui-primary' />
-                            <span className='truncate'>Organization setup</span>
-                        </h2>
-                        <span className='shrink-0 border-l border-ui-border pl-2 text-xs font-semibold text-ui-muted dark:border-ui-border dark:text-ui-muted' data-org-setup-progress-count='true'>
-                            {completed}/{visibleRows.length} setup
-                        </span>
-                    </div>
-                    <div className='grid border-t border-ui-border dark:border-ui-border sm:grid-cols-2 xl:grid-cols-4'>
-                        {visibleRows.map(row => {
-                            const rowClass = `grid min-h-20 min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-2 border-b border-ui-border py-2 pr-3 text-left transition xl:border-b xl:border-r xl:last:border-r-0 dark:border-ui-border ${row.ready ? '' : row.blocked ? 'opacity-75' : 'hover:text-ui-primary'}`
-                            const icon = row.ready ? <CheckCircle2 className='h-4 w-4 shrink-0 text-ui-success' /> : <CircleAlert className='h-4 w-4 shrink-0 text-ui-warning' />
-                            const content = (
-                                <>
-                                    <span className='mt-0.5'>{icon}</span>
-                                    <span className='min-w-0'>
-                                        <span className='block truncate text-xs font-semibold uppercase tracking-[0.08em] text-ui-muted dark:text-ui-muted'>{row.title}</span>
-                                        <span className='block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{row.body}</span>
-                                        {!row.ready ? <span className='mt-0.5 block line-clamp-2 text-xs leading-5 text-ui-muted dark:text-ui-muted' data-org-setup-step-reason='true'>{row.reason}</span> : null}
-                                    </span>
-                                </>
-                            )
-                            return <a key={row.id} href={row.href} className={rowClass} data-org-setup-step={row.id}>{content}</a>
-                        })}
-                    </div>
-                </div>
-                <div className='grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] xl:min-w-72 xl:grid-cols-1' data-org-setup-next='true'>
-                    <span className='min-w-0 border-l border-ui-primary/35 pl-3 text-sm dark:border-ui-primary/35'>
-                        <span className='block truncate text-xs font-semibold uppercase tracking-[0.08em] text-ui-primary dark:text-ui-primary'>Next</span>
-                        <span className='mt-0.5 block truncate font-semibold text-ui-text dark:text-ui-text'>{nextAction.action}</span>
-                    </span>
-                    <div className='grid gap-2 sm:grid-cols-2 xl:grid-cols-1'>
-                        <ActionAnchor href={nextAction.href} icon={<ExternalLink className='h-4 w-4' />} label={nextAction.action} disabled={nextAction.blocked} disabledReason={nextAction.body} />
-                        {openAlertHref && <ActionAnchor href={openAlertHref} icon={<CircleAlert className='h-4 w-4' />} label='Validate alert' disabled={!watchlistCount} disabledReason='Add a watchlist term before validating DWM alert context.' />}
-                    </div>
-                </div>
-            </div>
-        </section>
-    )
-}
-
-function PilotMetricsPanel({ bundle }: { bundle: OrgBundle }) {
-    const activeTerms = bundle.watchlists.filter(item => item.status.toLowerCase() === 'active').length
-    const finalReviews = bundle.alerts.filter(alert => ['confirmed', 'rejected', 'false_positive', 'resolved'].includes((alert.reviewState || '').toLowerCase()))
-    const confirmedReviews = finalReviews.filter(alert => (alert.reviewState || '').toLowerCase() === 'confirmed').length
-    const detectionLatencies = bundle.deliveries.flatMap(delivery => {
-        const evidenceTimestamp = delivery.payloadPreview?.context?.evidenceTimestamp
-        const attemptedAt = delivery.attemptedAt || delivery.createdAt
-        if (!evidenceTimestamp || !attemptedAt) return []
-        const latency = Date.parse(attemptedAt) - Date.parse(evidenceTimestamp)
-        return Number.isFinite(latency) && latency >= 0 && latency <= 30 * 86_400_000 ? [latency] : []
-    })
-    const medianDetectionLatency = median(detectionLatencies)
-    const triageLatencies = bundle.cases.flatMap(caseRecord => {
-        const createdAt = caseRecord.createdAt
-        const triageEvent = caseRecord.timeline?.find(event => {
-            const status = (event.toStatus || '').toLowerCase()
-            const action = (event.workflowState?.action || '').toLowerCase()
-            return status === 'triaged' || status === 'investigating' || action === 'review' || action === 'triage' || action === 'investigate'
-        })
-        if (!createdAt || !triageEvent?.timestamp) return []
-        const latency = Date.parse(triageEvent.timestamp) - Date.parse(createdAt)
-        return Number.isFinite(latency) && latency >= 0 && latency <= 30 * 86_400_000 ? [latency] : []
-    })
-    const medianTriageLatency = median(triageLatencies)
-    const rows = [
-        {
-            id: 'coverage',
-            label: 'Coverage',
-            value: activeTerms ? `${activeTerms} active term${activeTerms === 1 ? '' : 's'}` : 'Not configured',
-            detail: activeTerms ? 'Shared watchlist terms in this organization.' : 'Add a company, domain, vendor, actor, or keyword.',
-            tone: activeTerms ? 'ready' : 'review',
-        },
-        {
-            id: 'precision',
-            label: 'Alert review',
-            value: finalReviews.length ? `${confirmedReviews}/${finalReviews.length} confirmed` : 'Not measured',
-            detail: finalReviews.length ? 'Confirmed outcomes among closed review decisions.' : 'Review or close an alert to establish a precision baseline.',
-            tone: finalReviews.length ? 'ready' : 'review',
-        },
-        {
-            id: 'detection',
-            label: 'Time to detection',
-            value: medianDetectionLatency === null ? 'Not measured' : formatDuration(medianDetectionLatency),
-            detail: detectionLatencies.length ? `Median across ${detectionLatencies.length} delivery event${detectionLatencies.length === 1 ? '' : 's'} with source timestamps.` : 'Waiting for a delivery with source and attempted timestamps.',
-            tone: medianDetectionLatency === null ? 'review' : 'ready',
-        },
-        {
-            id: 'triage',
-            label: 'Time to triage',
-            value: medianTriageLatency === null ? 'Not measured' : formatDuration(medianTriageLatency),
-            detail: triageLatencies.length ? `Median across ${triageLatencies.length} case${triageLatencies.length === 1 ? '' : 's'} with a recorded review or triage transition.` : 'Waiting for a case review or triage transition.',
-            tone: medianTriageLatency === null ? 'review' : 'ready',
-        },
-    ] as const
-    return (
-        <section className='rounded-lg border border-ui-border bg-ui-panel p-3 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-pilot-metrics='true'>
-            <div className='flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between'>
-                <div className='min-w-0'>
-                    <h2 className='flex items-center gap-2 text-sm font-semibold text-ui-text dark:text-ui-text'>
-                        <CheckCircle2 className='h-4 w-4 text-ui-primary' />
-                        Pilot measurement
-                    </h2>
-                    <p className='mt-1 max-w-3xl text-xs leading-5 text-ui-muted dark:text-ui-muted'>Coverage, alert review, and delivery latency are calculated from this organization’s records only. Empty metrics mean the pilot has not produced enough evidence yet.</p>
-                </div>
-                <a href='#audit' className={secondaryButtonClass} data-org-pilot-metrics-activity='true'>
-                    <ExternalLink className='h-4 w-4' />
-                    Inspect records
-                </a>
-            </div>
-            <div className='mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4'>
-                {rows.map(row => (
-                    <div key={row.id} className='grid min-h-24 gap-1 rounded-md border border-ui-border bg-ui-raised px-3 py-2 dark:border-ui-border dark:bg-ui-canvas' data-org-pilot-metric={row.id}>
-                        <span className='text-[11px] font-semibold uppercase tracking-[0.08em] text-ui-muted dark:text-ui-muted'>{row.label}</span>
-                        <span className='text-base font-semibold text-ui-text dark:text-ui-text'>{row.value}</span>
-                        <span className='text-xs leading-5 text-ui-muted dark:text-ui-muted'>{row.detail}</span>
-                    </div>
-                ))}
-            </div>
-        </section>
-    )
-}
-
-function median(values: number[]) {
-    if (!values.length) return null
-    const sorted = [...values].sort((left, right) => left - right)
-    const middle = Math.floor(sorted.length / 2)
-    return sorted.length % 2 ? sorted[middle] : Math.round((sorted[middle - 1] + sorted[middle]) / 2)
-}
-
-function formatDuration(milliseconds: number) {
-    const minutes = Math.round(milliseconds / 60_000)
-    if (minutes < 60) return `${minutes}m median`
-    const hours = Math.round(minutes / 60 * 10) / 10
-    if (hours < 24) return `${hours}h median`
-    return `${Math.round(hours / 24 * 10) / 10}d median`
 }
 
 function MillApiKeyPanel({ apiKeys, secret, canManage, busy, rowMessage, onCreate, onRevoke, onClearSecret }: { apiKeys: OrganizationApiKey[], secret: string, canManage: boolean, busy: string, rowMessage?: RowMessage, onCreate: () => void, onRevoke: (apiKey: OrganizationApiKey) => void, onClearSecret: () => void }) {
@@ -2270,7 +1778,7 @@ function SettingsPanel({ settingsDraft, setSettingsDraft, settingsDirty, canMana
                 <SelectField label='Alert visibility' value={settingsDraft.alertVisibilityPolicy || 'members'} options={alertPolicies} disabled={!canManage} onChange={value => setSettingsDraft({ ...settingsDraft, alertVisibilityPolicy: value })} />
                 <SelectField label='Lifecycle' value={settingsDraft.lifecycleStatus || 'active'} options={lifecycleStatuses} disabled={!canManage} onChange={value => setSettingsDraft({ ...settingsDraft, lifecycleStatus: value })} />
                 <Field label='Retention days' type='number' value={String(settingsDraft.retentionDays || 365)} disabled={!canManage} onChange={value => setSettingsDraft({ ...settingsDraft, retentionDays: Number(value) || 365 })} />
-                {validationMessage && <p className='rounded-md bg-ui-danger/10 px-3 py-2 text-xs font-semibold text-ui-danger dark:bg-ui-danger/10 dark:text-ui-danger md:col-span-2'>{validationMessage}</p>}
+                {canManage && settingsDirty && validationMessage && <p className='rounded-md bg-ui-danger/10 px-3 py-2 text-xs font-semibold text-ui-danger dark:bg-ui-danger/10 dark:text-ui-danger md:col-span-2'>{validationMessage}</p>}
             </div>
             <div className='flex flex-wrap items-center justify-end gap-2 border-t border-ui-border px-4 py-3 dark:border-ui-border'>
                 {saving && <InlineBusy label='Saving settings' marker='data-org-settings-busy' />}
@@ -3278,7 +2786,7 @@ function WatchlistDestinationSummary({ item, delivery }: { item: WatchlistItem, 
             {endpoint && <span className='truncate text-ui-muted dark:text-ui-muted'>Route: {endpoint}</span>}
             <span className='truncate text-ui-muted dark:text-ui-muted'>{delivery ? `Last ${delivery.dryRun ? 'test' : 'delivery'} ${delivery.status || 'attempted'}` : 'No delivery history yet'}</span>
             <span className='truncate text-ui-muted dark:text-ui-muted'>History: {delivery ? formatDate(delivery.attemptedAt || delivery.updatedAt || delivery.createdAt) : 'waiting for test'}</span>
-            <a href='#destinations' className='mt-1 inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary dark:border-ui-border dark:bg-ui-canvas dark:text-ui-text' onClick={event => event.stopPropagation()}>
+            <a href='/organizations/destinations#destinations' className='mt-1 inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary dark:border-ui-border dark:bg-ui-canvas dark:text-ui-text' onClick={event => event.stopPropagation()}>
                 <Webhook className='h-4 w-4' />
                 Configure delivery
             </a>
@@ -3538,10 +3046,10 @@ function DeliveryReference({ delivery, organizationId, destinations }: { deliver
         <div className='grid gap-1 text-xs'>
             {delivery.caseId ? <a href={caseHref} className='truncate font-semibold text-ui-primary hover:text-ui-primary dark:text-ui-primary'>{compactReference(delivery.caseId, 'Case')}</a> : null}
             {delivery.alertId ? <a href={alertHref} className='truncate font-semibold text-ui-primary hover:text-ui-primary dark:text-ui-primary'>{compactReference(delivery.alertId, 'Alert')}</a> : null}
-            {destinationId ? <a href={`#destination-${encodeURIComponent(destinationId)}`} className='truncate font-semibold text-ui-primary hover:text-ui-primary dark:text-ui-primary'>{compactReference(destinationId, 'Destination')}</a> : null}
+            {destinationId ? <a href={`/organizations/destinations#destination-${encodeURIComponent(destinationId)}`} className='truncate font-semibold text-ui-primary hover:text-ui-primary dark:text-ui-primary'>{compactReference(destinationId, 'Destination')}</a> : null}
             {!delivery.caseId && !delivery.alertId ? <span className='truncate text-ui-muted dark:text-ui-muted'>Attach alert after replay</span> : null}
             {watchlistId
-                ? <a href={`#watchlist-${encodeURIComponent(watchlistId)}`} className='truncate font-semibold text-ui-primary hover:text-ui-primary dark:text-ui-primary'>{compactReference(watchlistId, 'Watchlist')}</a>
+                ? <a href={`/organizations/watchlists#watchlist-${encodeURIComponent(watchlistId)}`} className='truncate font-semibold text-ui-primary hover:text-ui-primary dark:text-ui-primary'>{compactReference(watchlistId, 'Watchlist')}</a>
                 : <span className='truncate text-ui-muted dark:text-ui-muted'>{compactReference(delivery.actionId, 'Action') || 'Route context pending'}</span>}
         </div>
     )
@@ -3568,8 +3076,8 @@ function ScopePanel({ alertTerms, alerts, cases, deliveries, members, watchlists
                         </div>
                     </div>
                     <div className='flex flex-wrap gap-2'>
-                        <ActionAnchor href='#watchlists' icon={<BellRing className='h-4 w-4' />} label='Add watchlist' />
-                        <ActionAnchor href='#destinations' icon={<Webhook className='h-4 w-4' />} label='Prepare delivery' />
+                        <ActionAnchor href='/organizations/watchlists#watchlists' icon={<BellRing className='h-4 w-4' />} label='Add watchlist' />
+                        <ActionAnchor href='/organizations/destinations#destinations' icon={<Webhook className='h-4 w-4' />} label='Prepare delivery' />
                     </div>
                 </div>
             </section>
@@ -3590,7 +3098,7 @@ function ScopePanel({ alertTerms, alerts, cases, deliveries, members, watchlists
                     id: term.watchlistItemId || term.watchlistId || term.alertGenerationRef || term.term || term.value || 'term',
                     primary: term.term || term.value || 'Watchlist term',
                     secondary: term.matchReason || compactReference(term.alertGenerationRef, 'watch') || term.kind || term.family || 'Shared watchlist match',
-                    href: term.watchlistItemId || term.watchlistId ? `#watchlist-${encodeURIComponent(term.watchlistItemId || term.watchlistId || '')}` : undefined,
+                    href: term.watchlistItemId || term.watchlistId ? `/organizations/watchlists#watchlist-${encodeURIComponent(term.watchlistItemId || term.watchlistId || '')}` : undefined,
                 }))} empty='Add an active shared watchlist term to create organization alert terms.' />
                 <ScopeColumn icon={<CircleAlert className='h-4 w-4' />} title='Alerts' route={`/api/dwm/alerts?organizationId=${encodeURIComponent(organizationId)}`} rows={alerts.map(alert => {
                     const matchReason = matchReasonForRecord(alert.id, deliveries)
@@ -3616,13 +3124,13 @@ function ScopePanel({ alertTerms, alerts, cases, deliveries, members, watchlists
                         id: destination.id,
                         primary: destination.name || compactReference(destination.id, 'destination') || 'Destination',
                         secondary: `${destination.status || 'unknown'} · ${destinationDisplayState(destination)}`,
-                        href: `#destination-${encodeURIComponent(destination.id)}`,
+                        href: `/organizations/destinations#destination-${encodeURIComponent(destination.id)}`,
                     })),
                     ...watchlistDestinationRows.map(item => ({
                         id: `watchlist-${item.id}`,
                         primary: item.value || compactReference(item.id, 'watchlist') || 'Watchlist route',
                         secondary: `${item.status || 'active'} · ${destinationDisplayState(item)}`,
-                        href: `#watchlist-${encodeURIComponent(item.id)}`,
+                        href: `/organizations/watchlists#watchlist-${encodeURIComponent(item.id)}`,
                     })),
                 ]} empty='Save a watchlist destination to make customer delivery available here.' />
             </div>
@@ -3986,8 +3494,8 @@ function errorMessage(error: unknown) {
     if (error && typeof error === 'object' && 'code' in error && error.code === 'dwm_watchlist_sync_failed' && error instanceof Error) {
         return error.message
     }
-    if (error && typeof error === 'object' && 'status' in error && (error.status === 401 || error.status === 403)) {
-        return 'Sign in with an organization account to manage organizations.'
+    if (error && typeof error === 'object' && 'status' in error && error.status === 401) {
+        return 'Your session has expired. Sign in again.'
     }
     if (error && typeof error === 'object' && 'status' in error && typeof error.status === 'number' && error.status >= 500) {
         return 'Organization service is temporarily unavailable.'
@@ -4529,38 +4037,38 @@ function selectedSubjectActions(subject: ActivitySubject, organization: Organiza
     const organizationId = encodeURIComponent(organization.id)
     if (subject.type === 'organization') {
         return [
-            { label: 'Settings', href: '#settings' },
-            { label: 'Retention & privacy', href: '#privacy' },
-            { label: 'Members', href: '#members' },
-            { label: 'Invites', href: '#invites' },
-            { label: 'Watchlists', href: '#watchlists' },
-            { label: 'Destinations', href: '#destinations' },
-            { label: 'Activity', href: '#audit' },
+            { label: 'Settings', href: '/organizations/settings#settings' },
+            { label: 'Retention & privacy', href: '/organizations/privacy#privacy' },
+            { label: 'Members', href: '/organizations/team#members' },
+            { label: 'Invites', href: '/organizations/team#invites' },
+            { label: 'Watchlists', href: '/organizations/watchlists#watchlists' },
+            { label: 'Destinations', href: '/organizations/destinations#destinations' },
+            { label: 'Activity', href: '/organizations/activity#audit' },
         ]
     }
     if (subject.type === 'invite') {
         const inviteId = encodeURIComponent(subject.id)
         return [
-            { label: 'Invite', href: `#invite-${inviteId}` },
-            { label: 'Audit trail', href: '#audit' },
+            { label: 'Invite', href: `/organizations/team#invite-${inviteId}` },
+            { label: 'Audit trail', href: '/organizations/activity#audit' },
         ]
     }
     if (subject.type === 'member') {
         const memberId = encodeURIComponent(subject.id)
         return [
-            { label: 'Member', href: `#member-${memberId}` },
-            { label: 'Audit trail', href: '#audit' },
+            { label: 'Member', href: `/organizations/team#member-${memberId}` },
+            { label: 'Audit trail', href: '/organizations/activity#audit' },
         ]
     }
     if (subject.type === 'watchlist') {
         const watchlistId = encodeURIComponent(subject.id)
         const destinationId = selectedSubjectDestinationId(subject, bundle)
         const deliveryId = selectedSubjectDeliveryId(subject, bundle)
-        const destinationHref = destinationId ? `#destination-${encodeURIComponent(destinationId)}` : `#watchlist-${watchlistId}`
+        const destinationHref = destinationId ? `/organizations/destinations#destination-${encodeURIComponent(destinationId)}` : `/organizations/watchlists#watchlist-${watchlistId}`
         return [
-            { label: 'Watchlist', href: `#watchlist-${watchlistId}` },
+            { label: 'Watchlist', href: `/organizations/watchlists#watchlist-${watchlistId}` },
             { label: 'Destination', href: destinationHref },
-            { label: 'Delivery', href: deliveryId ? `#delivery-${encodeURIComponent(deliveryId)}` : '#delivery-history' },
+            { label: 'Delivery', href: deliveryId ? `/organizations/delivery#delivery-${encodeURIComponent(deliveryId)}` : '/organizations/delivery#delivery-history' },
             { label: 'Open alert workspace', href: `/ti/workbench?organizationId=${organizationId}&watchlistId=${watchlistId}` },
         ]
     }
@@ -4569,9 +4077,9 @@ function selectedSubjectActions(subject: ActivitySubject, organization: Organiza
         const watchlistId = selectedSubjectWatchlistId(subject, bundle)
         const deliveryId = selectedSubjectDeliveryId(subject, bundle)
         return [
-            { label: 'Destination', href: `#destination-${destinationId}` },
-            ...(watchlistId ? [{ label: 'Watchlist', href: `#watchlist-${encodeURIComponent(watchlistId)}` }] : []),
-            { label: 'Delivery', href: deliveryId ? `#delivery-${encodeURIComponent(deliveryId)}` : '#delivery-history' },
+            { label: 'Destination', href: `/organizations/destinations#destination-${destinationId}` },
+            ...(watchlistId ? [{ label: 'Watchlist', href: `/organizations/watchlists#watchlist-${encodeURIComponent(watchlistId)}` }] : []),
+            { label: 'Delivery', href: deliveryId ? `/organizations/delivery#delivery-${encodeURIComponent(deliveryId)}` : '/organizations/delivery#delivery-history' },
         ]
     }
     if (subject.type === 'alert') {
@@ -4581,11 +4089,11 @@ function selectedSubjectActions(subject: ActivitySubject, organization: Organiza
         const deliveryId = selectedSubjectDeliveryId(subject, bundle)
         return [
             { label: 'Alert', href: `/ti/workbench?alertId=${alertId}&organizationId=${organizationId}` },
-            { label: 'Record', href: `#alert-record-${alertId}` },
-            ...(watchlistId ? [{ label: 'Watchlist', href: `#watchlist-${encodeURIComponent(watchlistId)}` }] : []),
-            ...(destinationId ? [{ label: 'Destination', href: `#destination-${encodeURIComponent(destinationId)}` }] : []),
-            { label: 'Delivery', href: deliveryId ? `#delivery-${encodeURIComponent(deliveryId)}` : '#delivery-history' },
-            { label: 'Organization activity', href: '#audit' },
+            { label: 'Record', href: `/organizations/alerts#alert-record-${alertId}` },
+            ...(watchlistId ? [{ label: 'Watchlist', href: `/organizations/watchlists#watchlist-${encodeURIComponent(watchlistId)}` }] : []),
+            ...(destinationId ? [{ label: 'Destination', href: `/organizations/destinations#destination-${encodeURIComponent(destinationId)}` }] : []),
+            { label: 'Delivery', href: deliveryId ? `/organizations/delivery#delivery-${encodeURIComponent(deliveryId)}` : '/organizations/delivery#delivery-history' },
+            { label: 'Organization activity', href: '/organizations/activity#audit' },
         ]
     }
     if (subject.type === 'case') {
@@ -4595,11 +4103,11 @@ function selectedSubjectActions(subject: ActivitySubject, organization: Organiza
         const deliveryId = selectedSubjectDeliveryId(subject, bundle)
         return [
             { label: 'Case', href: `/cases/${caseId}?organizationId=${organizationId}` },
-            { label: 'Record', href: `#case-record-${caseId}` },
-            ...(watchlistId ? [{ label: 'Watchlist', href: `#watchlist-${encodeURIComponent(watchlistId)}` }] : []),
-            ...(destinationId ? [{ label: 'Destination', href: `#destination-${encodeURIComponent(destinationId)}` }] : []),
-            { label: 'Delivery', href: deliveryId ? `#delivery-${encodeURIComponent(deliveryId)}` : '#delivery-history' },
-            { label: 'Organization activity', href: '#audit' },
+            { label: 'Record', href: `/organizations/alerts#case-record-${caseId}` },
+            ...(watchlistId ? [{ label: 'Watchlist', href: `/organizations/watchlists#watchlist-${encodeURIComponent(watchlistId)}` }] : []),
+            ...(destinationId ? [{ label: 'Destination', href: `/organizations/destinations#destination-${encodeURIComponent(destinationId)}` }] : []),
+            { label: 'Delivery', href: deliveryId ? `/organizations/delivery#delivery-${encodeURIComponent(deliveryId)}` : '/organizations/delivery#delivery-history' },
+            { label: 'Organization activity', href: '/organizations/activity#audit' },
         ]
     }
     return []

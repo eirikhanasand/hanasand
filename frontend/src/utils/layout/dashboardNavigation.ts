@@ -1,3 +1,4 @@
+import { organizationPages } from '@/utils/organizations/pages'
 export type NavigationItem = {
     label: string
     href?: string
@@ -113,10 +114,14 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
             ]),
         ]),
         group('Settings', [
-            group('Account & organization', [
+            group('Account', [
                 link('Profile', `/profile/${id}`),
-                link('Organizations', '/organizations'),
+                link('Security', `/profile/${id}/security`),
+                link('Sessions', `/profile/${id}/sessions`),
+                link('Certificates', `/profile/${id}/certificates`),
+                link('Support tickets', `/profile/${id}/support`),
             ]),
+            group('Organization', organizationPages.map(page => link(page.label, page.href))),
             group('Billing', [link('Subscription', '/subscription')]),
             group('Developer resources', [link('API Docs', '/api'), link('OpenAPI JSON', '/api/openapi')]),
         ]),
