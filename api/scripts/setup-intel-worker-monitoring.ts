@@ -14,10 +14,10 @@ try {
             VALUES ($1,$2,$3,$4,$5,'json',$6::jsonb,'interval',1,'active','agent_prompt','Europe/Oslo',10,0,$7,$8,'failure',false,NOW())
             ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, target_url=EXCLUDED.target_url,
               json_rule=EXCLUDED.json_rule, interval_minutes=1, status='active', notification_destinations=EXCLUDED.notification_destinations`,
-            [`monitor-ti-${kind}`, existing.owner_id, kind === 'collection' ? 'Collection' : 'Enrichment',
-                kind === 'collection' ? 'Critical when no collection has completed for more than 5 minutes.' : 'Critical when GPU enrichment stops or adds no new evidence-backed profile facts in the past hour.',
-                `system:ti-${kind}`, JSON.stringify({ path: `${kind}.critical`, operator: 'eq', value: true, aggregate: 'first' }),
-                existing.model_name, existing.notification_destinations])
+        [`monitor-ti-${kind}`, existing.owner_id, kind === 'collection' ? 'Collection' : 'Enrichment',
+            kind === 'collection' ? 'Critical when no collection has completed for more than 5 minutes.' : 'Critical when GPU enrichment stops or adds no new evidence-backed profile facts in the past hour.',
+            `system:ti-${kind}`, JSON.stringify({ path: `${kind}.critical`, operator: 'eq', value: true, aggregate: 'first' }),
+            existing.model_name, existing.notification_destinations])
     }
     console.log('Collection and enrichment health checks configured with the existing Discord destination.')
 } finally { await closeDatabase() }
