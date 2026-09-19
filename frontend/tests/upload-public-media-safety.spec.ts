@@ -11,8 +11,8 @@ test('upload utility is framed as public media and blocks unsafe proxy targets',
     const imageRoute = await readFile(path.join(root, 'src/app/api/image/route.ts'), 'utf8')
 
     expect(uploadPage).toContain('data-upload-safety-boundary')
-    expect(uploadPage).toContain('It is not a malware scanner, evidence vault, or private document store.')
-    expect(uploadPage).toContain('Do not upload credentials, customer data, leaked material, or confidential evidence.')
+    expect(uploadPage).toContain('For public media only.')
+    expect(uploadPage).toContain('Don’t upload private, confidential, or sensitive files.')
     expect(uploadForm).toContain('Choose public photo or video')
     expect(uploadForm).toContain('direct public image/video URL')
     expect(uploadForm).toContain('MAX_PUBLIC_MEDIA_BYTES')
@@ -36,8 +36,8 @@ test('upload page renders public-media safety boundary', async ({ page }) => {
 
     await expect(page.getByRole('heading', { name: 'Upload files' })).toBeVisible()
     const boundary = page.locator('[data-upload-safety-boundary="true"]')
-    await expect(boundary).toContainText('Use this only for public media.')
-    await expect(boundary).toContainText('not a malware scanner')
-    await expect(boundary).toContainText('Do not upload credentials')
+    await expect(boundary).toContainText('For public media only.')
+    await expect(boundary).toContainText('Remote previews require direct public image/video URLs.')
+    await expect(boundary).toContainText('Don’t upload private, confidential, or sensitive files.')
     await expect(page.getByText('Choose public photo or video')).toBeVisible()
 })
