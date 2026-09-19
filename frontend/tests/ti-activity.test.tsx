@@ -16,7 +16,7 @@ globalThis.fetch = (async (input: string | URL | Request) => {
     return Response.json({
         status: { worker: { state: 'idle', lastRunAt: null, lastSuccessfulRunAt: null, currentFailure: null, snapshotFresh: false }, latestRun: null },
         profiles: mode === 'empty' ? [] : [{ id: 'actor-1', canonicalName: 'Example actor', updatedAt: now }],
-        updates: mode === 'empty' || mode === 'profiles-only' ? [] : [{ id: 'update-1', subjectId: 'actor-1', subjectType: 'actor_profile', observedAt: now }],
+        updates: mode === 'empty' || mode === 'profiles-only' ? [] : Array.from({ length: mode === 'many' ? 60 : 1 }, (_, i) => ({ id: `update-${i}`, subjectId: 'actor-1', subjectType: 'actor_profile', observedAt: now })),
     })
 }) as typeof fetch
 
@@ -31,6 +31,12 @@ try {
     assert.ok(!html.includes('Checking'))
     assert.ok(html.includes('name="q"'))
     assert.ok(html.includes('>Age</th>'))
+    mode = 'many'
+    html = renderToStaticMarkup(await TiActivityPage({ searchParams: Promise.resolve({ q: 'Example', page: '2' }) }))
+    assert.equal((html.match(/<tr class=/g) || []).length, 25)
+    assert.ok(html.includes('q=Example&amp;page=3'))
+    assert.ok(html.includes('q=Example&amp;page=1'))
+    mode = 'populated'
     for (const endpoint of ['/overview']) {
         failure = endpoint
         assert.equal((await getTiEnrichmentOverview()).dataAvailable, false)

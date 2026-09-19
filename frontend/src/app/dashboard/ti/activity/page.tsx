@@ -1,3 +1,5 @@
+import PageNavigation from '@/components/dashboard/page-navigation'
+import { pageNumber } from '@/utils/pagination'
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { Activity, AlertTriangle, CheckCircle2, Clock3, ExternalLink, Radio } from 'lucide-react'
@@ -7,10 +9,14 @@ import { formatTiDate } from '@/utils/tiAdmin/ops'
 
 export const dynamic = 'force-dynamic'
 
-export default async function TiActivityPage({ searchParams }: { searchParams?: Promise<{ q?: string }> }) {
-    const q = (await searchParams)?.q?.trim() || ''
+export default async function TiActivityPage({ searchParams }: { searchParams?: Promise<{ q?: string, page?: string }> }) {
+    const params = await searchParams
+    const q = params?.q?.trim() || ''
+    const requestedPage = pageNumber(params?.page)
     const { activity, updatedActors, worker, stats, dataAvailable } = await getTiEnrichmentOverview(q)
     const sortedActivity = [...activity].sort((a, b) => new Date(b.happenedAt).getTime() - new Date(a.happenedAt).getTime())
+    const page = Math.min(requestedPage, Math.max(1, Math.ceil(sortedActivity.length / 25)))
+    const visibleActivity = sortedActivity.slice((page - 1) * 25, page * 25)
     const badEvents = sortedActivity.filter(event => event.tone === 'bad')
     const watchEvents = sortedActivity.filter(event => event.tone === 'watch')
     const lastEvent = sortedActivity[0]
@@ -84,7 +90,7 @@ export default async function TiActivityPage({ searchParams }: { searchParams?: 
                             </tr>
                         </thead>
                         <tbody className='divide-y divide-ui-border bg-ui-panel'>
-                            {sortedActivity.map(event => (
+                            {visibleActivity.map(event => (
                                 <tr key={event.id} className='align-top hover:bg-ui-raised'>
                                     <td className='whitespace-nowrap px-4 py-2.5 text-ui-muted'>{formatTiDate(event.happenedAt)}</td>
                                     <td className='px-4 py-2.5'>
@@ -112,6 +118,7 @@ export default async function TiActivityPage({ searchParams }: { searchParams?: 
                         </tbody>
                     </table>
                 </div>
+                <PageNavigation page={page} total={sortedActivity.length} limit={25} hasNext={page * 25 < sortedActivity.length} label='Activity pages' href={next => `/ti/activity?${new URLSearchParams({ ...(q ? { q } : {}), page: String(next) })}`} />
             </DashboardPanel>
 
             <div className='grid gap-3 xl:grid-cols-[0.9fr_1.1fr]'>
