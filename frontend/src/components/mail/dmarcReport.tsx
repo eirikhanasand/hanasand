@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { mailBlobUrl } from '@/utils/mail/client'
-import { extractReportXml, parseDmarcReport, readReportResponse, type DmarcReport } from '@/utils/mail/dmarc'
+import { extractReportXml, parseDmarcReport, readReportResponse, MAX_ARCHIVE_BYTES, type DmarcReport } from '@/utils/mail/dmarc'
 import type { MailAttachment, MailMessage } from '@/utils/mail/types'
 
 export function reportAttachments(message: MailMessage) {
@@ -18,6 +18,10 @@ export default function DmarcReportPreview({ attachment, mailboxUser }: { attach
         const controller = new AbortController()
         setReports([])
         setError('')
+        if (attachment.size > MAX_ARCHIVE_BYTES) {
+            setError('This report is too large to preview. Download the attachment to read it.')
+            return
+        }
         const timer = setTimeout(() => controller.abort(), 20_000)
         void fetch(mailBlobUrl(mailboxUser, attachment.blobId, attachment.name), { signal: controller.signal, cache: 'no-store' })
             .then(readReportResponse)
@@ -29,7 +33,7 @@ export default function DmarcReportPreview({ attachment, mailboxUser }: { attach
             })
             .finally(() => clearTimeout(timer))
         return () => { clearTimeout(timer); controller.abort('Message closed') }
-    }, [mailboxUser, attachment.blobId, attachment.name, attempt])
+    }, [mailboxUser, attachment.blobId, attachment.name, attachment.size, attempt])
     return <section aria-label={`DMARC report ${attachment.name}`} className='min-w-0 rounded-lg border border-ui-border p-4 text-sm text-ui-text'>
         {error ? <p role='status' className='text-ui-muted'>{error} <button type='button' className='text-ui-primary underline' onClick={() => setAttempt(value => value + 1)}>Retry</button></p>
             : !reports.length ? <p role='status' className='text-ui-muted'>Reading report…</p>

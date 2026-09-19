@@ -1,7 +1,7 @@
 import { Gunzip, Unzip, UnzipInflate } from 'fflate'
 
 export const MAX_REPORT_BYTES = 2 * 1024 * 1024
-const MAX_ARCHIVE_BYTES = 1024 * 1024
+export const MAX_ARCHIVE_BYTES = 1024 * 1024
 
 export type DmarcReport = {
     domain: string
