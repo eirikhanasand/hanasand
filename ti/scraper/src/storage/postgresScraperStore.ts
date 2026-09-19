@@ -82,6 +82,7 @@ const DEFAULT_MIGRATIONS = [
   { version: "044_exposure_query_statistics", path: fileURLToPath(new URL("../../migrations/044_exposure_query_statistics.sql", import.meta.url)) },
   { version: "046_processing_backlog_indexes", path: fileURLToPath(new URL("../../migrations/046_processing_backlog_indexes.sql", import.meta.url)) },
   { version: "047_enrichment_activity_index", path: fileURLToPath(new URL("../../migrations/047_enrichment_activity_index.sql", import.meta.url)) },
+  { version: "048_active_actor_index", path: fileURLToPath(new URL("../../migrations/048_active_actor_index.sql", import.meta.url)) },
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 const MAINTENANCE_MIGRATION_VERSIONS = new Set(["037_remove_parser_fallback_artifacts"]);
@@ -2356,7 +2357,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         'firstSeenAt', first_seen_at, 'lastSeenAt', last_seen_at, 'updatedAt', updated_at, 'evidenceCount', evidence_count,
         'aliases', detail.aliases, 'sourceIds', detail."sourceIds", 'captureIds', jsonb_path_query_array(COALESCE(detail."captureIds", '[]'::jsonb), '$[0 to 4]')) AS record
         FROM threat_intel.actor_profiles CROSS JOIN LATERAL jsonb_to_record(record) AS detail(aliases jsonb, "sourceIds" jsonb, "captureIds" jsonb, "identityResolutionState" text) WHERE tenant_id = ${tenantId}
-        AND COALESCE(detail."identityResolutionState", 'active') <> 'archived'
+        AND COALESCE(record->>'identityResolutionState', 'active') <> 'archived'
         ORDER BY last_seen_at DESC LIMIT 100`,
       this.sql`SELECT jsonb_build_object('id', w.id, 'subjectId', detail."subjectId",
         'actorName', p.canonical_name, 'observedAt', w.updated_at, 'kind', detail."kind",
