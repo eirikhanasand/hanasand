@@ -120,9 +120,16 @@ export async function processStoredLogs() {
                     await processLogBatch(batch, scope, configured.get(scope)!)
                 }
             }
-            // Fresh events always finish before backfill. Both indexed cursors are
-            // bounded, so a completed million-row backfill is not scanned each tick.
+            // Bulk collector replay may put live commands far behind the ingestion
+            // cursor. Check recent event times first without advancing either cursor;
+            // the FIFO passes still guarantee every older event is eventually checked.
             if (watermark !== null) {
+                const priority = await run(`SELECT s.* FROM service_logs s
+                    WHERE s.created_at >= NOW() - INTERVAL '5 minutes' AND s.id <= $1
+                      AND NOT EXISTS (SELECT 1 FROM mill_events e WHERE e.log_key = 'service:' || s.id::text
+                        AND e.processing_status IN ('processed', 'skipped'))
+                    ORDER BY s.created_at DESC, s.id DESC LIMIT 1000`, [watermark])
+                await processScopes(priority.rows)
                 const recent = await run('SELECT * FROM service_logs WHERE id > $1 AND id <= $2 ORDER BY id LIMIT 1000', [cursor.recent_id, watermark])
                 await processScopes(recent.rows)
                 const recentId = recent.rows.at(-1)?.id || cursor.recent_id

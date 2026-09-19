@@ -10,7 +10,11 @@ const client = new pg.Client({ host: process.env.DB_HOST, port: Number(process.e
     database: process.env.DB, user: process.env.DB_USER, password: process.env.DB_PASSWORD })
 await client.connect()
 await client.query('BEGIN')
-const query = (sql: string, values: unknown[] = []) => client.query(sql, values)
+let queryObserver: ((sql: string, values: unknown[]) => Promise<void>) | undefined
+const query = async (sql: string, values: unknown[] = []) => {
+    await queryObserver?.(sql, values)
+    return client.query(sql, values)
+}
 mock.module('#db', () => ({ default: query, withTransaction: async (work: (run: typeof query) => Promise<unknown>) => work(query),
     withDatabaseAdvisoryLock: async (_key: string, work: () => Promise<unknown>) => work() }))
 try {
@@ -27,7 +31,7 @@ try {
     await query('ALTER TABLE mill_events ADD COLUMN log_key text UNIQUE')
     await query('ALTER TABLE mill_findings ADD COLUMN case_id text')
     await query('ALTER TABLE mill_findings ADD COLUMN case_delivery_attempted_at timestamptz')
-    const { processLogBatch } = await import('../src/utils/mill/processLogs.ts')
+    const { processLogBatch, processStoredLogs } = await import('../src/utils/mill/processLogs.ts')
     const { MILL_RULES, millDefaultDefinition, createMillFindings, normalizeMillEvent } = await import('../src/handlers/mill.ts')
     const { securityRules } = await import('../src/utils/mill/securityRules.ts')
     const { compileLogQuery } = await import('../src/utils/logs/kql.ts')
@@ -109,6 +113,57 @@ try {
         assert.equal(event.normalized.log_type, type)
         assert.equal(event.normalized.severity, severity)
     }
+    // A replayed collector batch must not hide newly executed commands behind its
+    // FIFO. Use the actual priority SQL, processor, configured rules and cursors.
+    await query(`INSERT INTO service_logs (service, host, level, message, created_at)
+        SELECT 'fixture', 'fixture-host', 'info', 'Historical replay', NOW() - INTERVAL '1 hour'
+        FROM generate_series(1, 1101)`)
+    const commandMetadata = { process: { executable: '/usr/bin/whoami', command_line: 'whoami', arguments: ['whoami'] } }
+    const insertCommand = `INSERT INTO service_logs (service, host, level, message, metadata)
+        VALUES ('audit', 'fixture-host', 'info', 'whoami', $1) RETURNING id::text`
+    const liveId = (await query(insertCommand, [commandMetadata])).rows[0].id
+    await query("INSERT INTO log_processing_cursors (name, last_id, recent_id) VALUES ('service_logs', 0, 0)")
+    let afterWatermarkId = '', observedPriorityBeforeFifo = false
+    queryObserver = async (sql, values) => {
+        if (sql.includes('SELECT s.* FROM service_logs s') && !afterWatermarkId) {
+            assert.equal(String(values[0]), liveId, 'Priority selection uses the stable source watermark')
+            afterWatermarkId = (await client.query(insertCommand, [commandMetadata])).rows[0].id
+        }
+        if (sql.includes('SELECT * FROM service_logs') && String(values[0]) === '0' && String(values[1]) === liveId) {
+            const priority = await client.query('SELECT processing_status, normalized FROM mill_events WHERE log_key = $1', [`service:${liveId}`])
+            assert.equal(priority.rows[0]?.processing_status, 'processed', 'Live command completes before older FIFO logs are read')
+            assert.equal(priority.rows[0].normalized.severity, 'high')
+            observedPriorityBeforeFifo = true
+        }
+    }
+    const previousPlatform = process.env.PLATFORM_LOG_ORGANIZATION_ID
+    process.env.PLATFORM_LOG_ORGANIZATION_ID = 'fixture'
+    try {
+        await processStoredLogs()
+        queryObserver = undefined
+        assert.ok(observedPriorityBeforeFifo)
+        const firstCursor = (await query("SELECT last_id, recent_id FROM log_processing_cursors WHERE name = 'service_logs'")).rows[0]
+        assert.equal(String(firstCursor.recent_id), '1000', 'Priority cannot jump the FIFO checkpoint')
+        assert.equal(String(firstCursor.last_id), '0')
+        assert.equal((await query('SELECT 1 FROM mill_events WHERE log_key = $1', [`service:${afterWatermarkId}`])).rowCount, 0,
+            'An insertion after the watermark is excluded from this entire service tick')
+        await processStoredLogs()
+        const findingCount = (await query('SELECT count(*)::int AS count FROM mill_findings')).rows[0].count
+        await processStoredLogs()
+        assert.equal((await query('SELECT count(*)::int AS count FROM mill_findings')).rows[0].count, findingCount,
+            'Later FIFO and historical overlap must not duplicate priority findings')
+        assert.equal((await query(`SELECT count(*)::int AS count FROM service_logs s
+            JOIN mill_events e ON e.log_key = 'service:' || s.id::text WHERE e.processing_status = 'processed'`)).rows[0].count, 1103,
+            'Priority and both cursors together preserve every old and live event')
+        const commandEvents = await query('SELECT normalized FROM mill_events WHERE log_key = ANY($1::text[])', [[`service:${liveId}`, `service:${afterWatermarkId}`]])
+        assert.equal(commandEvents.rowCount, 2)
+        assert.ok(commandEvents.rows.every(event => event.normalized.detections.some((finding: { rule_id: string }) => finding.rule_id === 'process.recon.whoami.v1')))
+    } finally {
+        queryObserver = undefined
+        if (previousPlatform === undefined) delete process.env.PLATFORM_LOG_ORGANIZATION_ID
+        else process.env.PLATFORM_LOG_ORGANIZATION_ID = previousPlatform
+    }
+    console.log('PostgreSQL worker verification passed: live priority before replay, stable watermark bounds, complete FIFO catch-up and finding deduplication.')
     const started = performance.now()
     await processLogBatch(Array.from({ length: 5000 }, (_, index) => ({ id: `volume-${index}`, service: 'fixture', host: 'fixture', level: 'info', message: 'Ordinary service log', created_at: new Date().toISOString() })), 'fixture', rules)
     console.log(`Ordinary-event throughput: ${Math.round(5000000 / (performance.now() - started))} events/second`)

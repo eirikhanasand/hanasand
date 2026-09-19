@@ -2,7 +2,7 @@ import { beforeEach, expect, mock, test } from 'bun:test'
 let locked = true, fail = false, watermark: string | null = '200', additionalRuns = 0
 let cursor: any, statements: string[], checked: string[], stored: Record<string, any>, pending: any[]
 const makeLog = (id: string, metadata: any = {}) => ({ id, service: 'audit', host: 'inspur', level: 'info', message: id, created_at: '2026-09-19T00:00:00Z', metadata })
-let fresh: any[], backlog: any[]
+let priority: any[], fresh: any[], backlog: any[]
 const query = async (sql: string, p: any[] = []): Promise<any> => {
     statements.push(sql)
     if (sql.includes('pg_try_advisory_xact_lock')) return { rows: [{ locked }] }
@@ -16,7 +16,12 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
         if (sql.includes('last_error = NULL')) cursor.last_error = null
         return { rows: [] }
     }
-    if (sql.includes('SELECT * FROM service_logs')) return { rows: p[1] === '100' ? backlog : fresh }
+    if (sql.includes('SELECT s.* FROM service_logs s')) return { rows: priority
+        .filter(row => BigInt(row.id) <= BigInt(p[0]) && Date.parse(row.created_at) >= Date.now() - 300_000
+            && !Object.values(stored).some(event => event.key === `service:${row.id}` && ['processed', 'skipped'].includes(event.processing_status)))
+        .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || Number(b.id) - Number(a.id))
+        .slice(0, 1000) }
+    if (sql.includes('SELECT * FROM service_logs')) return { rows: p[1] === watermark ? fresh : backlog }
     if (sql.includes('INSERT INTO mill_events')) {
         for (const item of JSON.parse(p[0])) stored[item.id] ||= { ...item, organization_id: p[1], processing_status: sql.includes("'skipped'") ? 'skipped' : 'pending' }
         return { rows: [] }
@@ -40,7 +45,7 @@ mock.module('../src/handlers/mill.ts', () => ({
     createMillFindings: async (_scope: string, _id: string, event: any) => { if (fail) throw new Error('Finding storage unavailable'); checked.push(event.normalized.message) },
 }))
 const { processStoredLogs } = await import('../src/utils/mill/processLogs.ts')
-beforeEach(() => { watermark = '200'; additionalRuns = 0; locked = true; fail = false; cursor = { last_id: '0', recent_id: '100' }; statements = []; checked = []; stored = {}; pending = []; fresh = [makeLog('101')]; backlog = [makeLog('1')] })
+beforeEach(() => { watermark = '200'; additionalRuns = 0; locked = true; fail = false; cursor = { last_id: '0', recent_id: '100' }; statements = []; checked = []; stored = {}; pending = []; priority = []; fresh = [makeLog('101')]; backlog = [makeLog('1')] })
 test('a replica that does not hold the shared lock performs no work', async () => {
     locked = false; await processStoredLogs()
     expect(statements).toHaveLength(1)
@@ -79,5 +84,39 @@ test('busy service-log writers do not block other streams and do not advance ser
     expect(checked).toEqual(['native'])
     expect(additionalRuns).toBe(1)
     expect(cursor).toMatchObject({ last_id: '0', recent_id: '100', last_error: 'Waiting for active log writes; will retry.' })
-    expect(statements.some(sql => sql.includes('SELECT * FROM service_logs'))).toBe(false)
+    expect(statements.some(sql => sql.includes('FROM service_logs'))).toBe(false)
+})
+
+test('recent event times are checked before replayed FIFO events without jumping the cursor', async () => {
+    priority = [{ ...makeLog('190'), created_at: new Date().toISOString() },
+        { ...makeLog('201'), created_at: new Date().toISOString() },
+        { ...makeLog('180'), created_at: new Date(Date.now() - 600_000).toISOString() }]
+    await processStoredLogs()
+    expect(checked).toEqual(['190', '101', '1'])
+    expect(cursor).toMatchObject({ last_id: '1', recent_id: '101' })
+    const sql = statements.find(value => value.includes('SELECT s.* FROM service_logs s'))!
+    expect(sql).toContain("s.created_at >= NOW() - INTERVAL '5 minutes'")
+    expect(sql).toContain('s.id <= $1')
+    expect(sql).toContain("e.log_key = 'service:' || s.id::text")
+    expect(sql).toContain("e.processing_status IN ('processed', 'skipped')")
+    expect(sql).toContain('ORDER BY s.created_at DESC, s.id DESC LIMIT 1000')
+    // When FIFO catches up it advances normally, without reevaluating the same log.
+    fresh = [priority[0]]; backlog = []
+    await processStoredLogs()
+    expect(checked).toEqual(['190', '101', '1'])
+    expect(cursor.recent_id).toBe('190')
+    expect(Object.values(stored)).toHaveLength(3)
+})
+
+test('a failed priority check remains pending and retries before the FIFO advances', async () => {
+    priority = [{ ...makeLog('190'), created_at: new Date().toISOString() }]
+    fail = true
+    await expect(processStoredLogs()).rejects.toThrow('Finding storage unavailable')
+    expect(cursor).toMatchObject({ last_id: '0', recent_id: '100' })
+    expect(Object.values(stored)).toHaveLength(1)
+    expect(Object.values(stored)[0].processing_status).toBe('pending')
+    fail = false
+    await processStoredLogs()
+    expect(checked).toEqual(['190', '101', '1'])
+    expect(Object.values(stored)).toHaveLength(3)
 })
