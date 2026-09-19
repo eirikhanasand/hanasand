@@ -43,3 +43,18 @@ for(const rule of securityRules) test(`${rule.id} produces a persisted Mill find
     await processLog(rule.field==='executable'?log(rule.positive,rule.positive):log('/bin/bash',rule.positive),'org-a',rules())
     expect(findings.some(finding=>finding.rule_id===rule.id)).toBe(true)
 })
+
+for (const [args, expectedRule, severity] of [
+    [['env', 'python3', '/usr/local/sbin/hanasand-log-collector', '--recent', '300'], null, 'low'],
+    [['env', 'bash', '/path/script'], null, 'low'], [['env', '-u', 'HOME'], 'process.recon.env.v1', 'high'],
+    [['env', 'printenv'], 'process.recon.printenv.v1', 'high'], [['env', '-i', 'xmrig'], 'process.tool.xmrig.v1', 'critical'],
+] as Array<[string[], string | null, string]>) test(`Mill applies env invocation semantics: ${args.join(' ')}`, async () => {
+    const input = log('/usr/bin/env', args.join(' '))
+    await processLog({ ...input, metadata: { process: { ...input.metadata.process, arguments: args } } }, 'org-a', rules())
+    const row = Object.values(stored)[0]
+    expect(row.processing_status).toBe('processed')
+    expect(row.normalized.rules_checked).toBe(MILL_RULES.length)
+    expect(row.normalized.severity).toBe(severity)
+    if (expectedRule) expect(findings.map(finding => finding.rule_id)).toEqual([expectedRule])
+    else expect(findings).toHaveLength(0)
+})

@@ -127,7 +127,7 @@ export const securityRules: SecurityRule[] = [
         'name': 'env reconnaissance',
         'family': 'Reconnaissance',
         'severity': 'high',
-        'explanation': 'The env command was executed. Review the user and surrounding activity; legitimate administration can also trigger this rule.',
+        'explanation': 'The env command listed environment variables without launching another program. Review the user and surrounding activity; legitimate administration can also trigger this rule.',
         'pattern': '(?:^|[/\\\\])env(?:\\.exe)?$',
         'field': 'executable',
         'positive': '/usr/bin/env',
@@ -1104,7 +1104,7 @@ const behaviorPrograms: Record<string, RegExp> = {
 type Command = { args: string[], text: string, next?: string }
 // Tokenize only to distinguish executed commands from quoted argument text. No
 // shell expansion or code execution occurs; audit child events cover expansions.
-function shellCommands(input: string): Command[] {
+function shellCommands(input: string, operators = true): Command[] {
     const commands: Command[] = []
     let args: string[] = [], word = '', quote = '', active = false, start = 0
     const flushWord = () => { if (active) args.push(word); word = ''; active = false }
@@ -1116,19 +1116,61 @@ function shellCommands(input: string): Command[] {
         if (char === '"' || char === '\'') { quote = char; active = true; continue }
         if (/\s/.test(char)) { flushWord(); continue }
         if (char === '#' && !active) { flushCommand(i); return commands }
-        if (';|&'.includes(char)) { flushCommand(i, char); continue }
+        if (operators && ';|&'.includes(char)) { flushCommand(i, char); continue }
         word += char; active = true
     }
     flushCommand(input.length)
     return commands
 }
+// env lists variables only when no command operand remains. Consume option
+// values before deciding; -S splits arguments, but does not run shell operators.
+// Unsupported options do not prove a child invocation; its own audit execution
+// still matches by executable, even when wrapper argument parsing is unavailable.
+function envArguments(args: string[], depth = 0): string[] | null {
+    if (depth > 4) return null
+    let index = 0
+    const split = (value: string) => envArguments([...shellCommands(value, false).flatMap(entry => entry.args), ...args.slice(index + 1)], depth + 1)
+    for (; index < args.length && args[index].startsWith('-'); index++) {
+        const option = args[index]
+        if (option === '--' || option === '-') { index++; break }
+        if (option.startsWith('--')) {
+            const equal = option.indexOf('=')
+            const name = equal < 0 ? option : option.slice(0, equal)
+            if (['--unset', '--chdir', '--argv0', '--split-string', '--env0-from'].includes(name)) {
+                const value = equal < 0 ? args[++index] : option.slice(equal + 1)
+                if (value === undefined) return null
+                if (name === '--split-string') return split(value)
+            } else if (!['--ignore-environment', '--null', '--debug', '--default-signal', '--ignore-signal', '--block-signal', '--list-signal-handling'].includes(name)) return null
+            continue
+        }
+        for (let at = 1; at < option.length; at++) {
+            const flag = option[at]
+            if ('uCaS'.includes(flag)) {
+                const value = option.slice(at + 1) || args[++index]
+                if (value === undefined) return null
+                if (flag === 'S') return split(value)
+                break
+            }
+            if (!'i0v'.includes(flag)) return null
+        }
+    }
+    while (index < args.length && /^[^=]+=/.test(args[index])) index++
+    return args.slice(index)
+}
 function executionContexts(executable: string, command: string, argv: unknown) {
     const commands: Command[] = []
-    const executables = new Set(executable ? [executable] : [])
+    const supplied = Array.isArray(argv) && argv.length && argv.every(value => typeof value === 'string') ? argv as string[] : null
+    const executables = new Set(executable && (base(executable) !== 'env' || (!supplied && !command.trim())) ? [executable] : [])
     const inspect = (entry: Command, depth = 0) => {
         if (!entry.args.length || depth > 4) return
         const name = base(entry.args[0])
-        if (name === 'sudo' || name === 'env') {
+        if (name === 'env') {
+            const child = envArguments(entry.args.slice(1))
+            if (child?.length) inspect({ ...entry, args: child, text: child.join(' ') }, depth + 1)
+            else if (child) executables.add(entry.args[0])
+            return
+        }
+        if (name === 'sudo') {
             const at = entry.args.findIndex((arg, index) => index > 0 && !arg.startsWith('-') && !/^[A-Za-z_]\w*=/.test(arg))
             if (at > 0) inspect({ ...entry, args: entry.args.slice(at), text: entry.args.slice(at).join(' ') }, depth + 1)
             return
@@ -1152,7 +1194,6 @@ function executionContexts(executable: string, command: string, argv: unknown) {
         executables.add(entry.args[0])
         commands.push(entry)
     }
-    const supplied = Array.isArray(argv) && argv.length && argv.every(value => typeof value === 'string') ? argv as string[] : null
     if (supplied) inspect({ args: supplied, text: command || supplied.join(' ') })
     else for (const entry of shellCommands(command)) inspect(entry)
     return { commands, executables }
