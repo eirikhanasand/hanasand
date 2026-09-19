@@ -1,16 +1,9 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import { createHash, timingSafeEqual } from 'node:crypto'
+import { hasLogIngestToken } from '#utils/auth/logIngestToken.ts'
+export { hasLogIngestToken } from '#utils/auth/logIngestToken.ts'
 import hasInternalToken from '#utils/auth/internalToken.ts'
 import recordLog from '#utils/logs/recordLog.ts'
 
-export function hasLogIngestToken(req: Pick<FastifyRequest, 'headers'>) {
-    const secret = process.env.LOG_INGEST_TOKEN
-    const header = req.headers.authorization
-    if (!secret || typeof header !== 'string' || !header.startsWith('Bearer ')) return false
-    let supplied = header.slice(7)
-    try { supplied = decodeURIComponent(supplied) } catch { /* Compare the literal token. */ }
-    return timingSafeEqual(createHash('sha256').update(supplied).digest(), createHash('sha256').update(secret).digest())
-}
 
 export default async function ingestLog(req: FastifyRequest, res: FastifyReply) {
     if (!hasLogIngestToken(req) && !hasInternalToken(req)) {

@@ -1,5 +1,5 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
-let locked = true, fail = false
+let locked = true, fail = false, watermark: string | null = '200', additionalRuns = 0
 let cursor: any, statements: string[], checked: string[], stored: Record<string, any>, pending: any[]
 const makeLog = (id: string, metadata: any = {}) => ({ id, service: 'audit', host: 'inspur', level: 'info', message: id, created_at: '2026-09-19T00:00:00Z', metadata })
 let fresh: any[], backlog: any[]
@@ -16,7 +16,7 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
         if (sql.includes('last_error = NULL')) cursor.last_error = null
         return { rows: [] }
     }
-    if (sql.includes('SELECT * FROM service_logs')) return { rows: sql.includes('id <= $2') ? backlog : fresh }
+    if (sql.includes('SELECT * FROM service_logs')) return { rows: p[1] === '100' ? backlog : fresh }
     if (sql.includes('INSERT INTO mill_events')) {
         for (const item of JSON.parse(p[0])) stored[item.id] ||= { ...item, organization_id: p[1], processing_status: sql.includes("'skipped'") ? 'skipped' : 'pending' }
         return { rows: [] }
@@ -32,14 +32,15 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
     throw new Error(sql)
 }
 mock.module('#db', () => ({ default: query, withTransaction: async (work: any) => work(query) }))
-mock.module('../src/utils/mill/storedSources.ts', () => ({ processAdditionalLogSources: async () => {} }))
+mock.module('../src/utils/mill/storedSources.ts', () => ({ processAdditionalLogSources: async () => { additionalRuns++ } }))
+mock.module('../src/utils/mill/logWatermark.ts', () => ({ stableLogWatermark: async () => watermark }))
 mock.module('../src/handlers/mill.ts', () => ({
     loadConfiguredMillRules: async () => [],
     normalizeMillEvent: (event: any) => ({ timestamp: event.timestamp, eventType: event.event_type, action: event.action, outcome: event.outcome, normalized: event }),
     createMillFindings: async (_scope: string, _id: string, event: any) => { if (fail) throw new Error('Finding storage unavailable'); checked.push(event.normalized.message) },
 }))
 const { processStoredLogs } = await import('../src/utils/mill/processLogs.ts')
-beforeEach(() => { locked = true; fail = false; cursor = { last_id: '0', recent_id: '100' }; statements = []; checked = []; stored = {}; pending = []; fresh = [makeLog('101')]; backlog = [makeLog('1')] })
+beforeEach(() => { watermark = '200'; additionalRuns = 0; locked = true; fail = false; cursor = { last_id: '0', recent_id: '100' }; statements = []; checked = []; stored = {}; pending = []; fresh = [makeLog('101')]; backlog = [makeLog('1')] })
 test('a replica that does not hold the shared lock performs no work', async () => {
     locked = false; await processStoredLogs()
     expect(statements).toHaveLength(1)
@@ -69,4 +70,14 @@ test('inactive scopes produce safe skipped markers and direct Mill pending event
     expect(JSON.stringify(stored)).not.toContain('never-copy-this')
     expect(checked).toEqual(['native', '1'])
     expect(pending).toHaveLength(0)
+})
+
+test('busy service-log writers do not block other streams and do not advance service cursors', async () => {
+    watermark = null
+    pending = [{ id: 'native', organization_id: 'platform', normalized: { timestamp: '2026-09-19T00:00:00Z', message: 'native' } }]
+    await processStoredLogs()
+    expect(checked).toEqual(['native'])
+    expect(additionalRuns).toBe(1)
+    expect(cursor).toMatchObject({ last_id: '0', recent_id: '100', last_error: 'Waiting for active log writes; will retry.' })
+    expect(statements.some(sql => sql.includes('SELECT * FROM service_logs'))).toBe(false)
 })

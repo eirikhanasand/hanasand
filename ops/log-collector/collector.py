@@ -43,21 +43,65 @@ def scrub_metadata(value):
     if isinstance(value, list): return [scrub_metadata(item) for item in value]
     return scrub(value) if isinstance(value, str) else value
 
+def json_size(value):
+    return len(json.dumps(value, ensure_ascii=False).encode())
+
+def fit_text(value, budget):
+    if json_size(value) <= budget: return value
+    low, high = 0, len(value)
+    while low < high:
+        middle = (low+high+1)//2
+        if json_size(value[:middle]) <= budget: low = middle
+        else: high = middle-1
+    return value[:low]
+
+def compact_metadata(value, depth=0, field=''):
+    if isinstance(value, str): return fit_text(value, 65536 if field in ('command_line','command') else 4096)
+    if isinstance(value, list):
+        result = []
+        budget = 65536 if field == 'arguments' else 16384
+        for item in value[:512 if field == 'arguments' else 16]:
+            item = compact_metadata(item, depth+1)
+            if json_size(result+[item]) > budget: break
+            result.append(item)
+        return result
+    if isinstance(value, dict):
+        if depth > 4: return {'truncated':True}
+        priority = ('process','executable','command_line','command','arguments','user','event_type','action','outcome','collector','physical_host','vm','structured')
+        keys = [key for key in priority if key in value]+[key for key in value if key not in priority]
+        result = {}
+        for key in keys[:32]:
+            item = compact_metadata(value[key],depth+1,key)
+            if json_size({**result,key:item}) <= 170000: result[key] = item
+        return result
+    return value
+
+def bounded_metadata(value):
+    clean = scrub_metadata(value)
+    size = json_size(clean)
+    if size <= 230000: return clean
+    result = compact_metadata(clean)
+    result.update(telemetry_truncated=True, metadata_original_bytes=size)
+    # Keep a redacted excerpt as evidence when arbitrary structured log fields are
+    # oversized. Explicit budgets keep even one event below the HTTP body limit.
+    result['metadata_preview'] = fit_text(json.dumps(clean,ensure_ascii=False),32000)
+    return result
+
 def event(config, source_id, service, message, timestamp, metadata=None, level='info'):
-    return dict(sourceEventId=hashlib.sha256((config['host']+':'+source_id).encode()).hexdigest(), service=service,
+    return dict(sourceEventId=hashlib.sha256((config['host']+':'+source_id).encode()).hexdigest(), service=service[:256],
                 host=config['host'], message=scrub(message)[:65536] or '(empty)', timestamp=timestamp,
-                level=level, metadata=scrub_metadata(metadata or {}))
+                level=level, metadata=bounded_metadata(metadata or {}))
 
 def send(config, events):
     def deliver(batch):
-        payload = json.dumps({'events': batch}).encode()
+        payload = json.dumps({'events': batch},ensure_ascii=False).encode()
         request = urllib.request.Request(config['url'], data=payload, headers={'Content-Type':'application/json','Authorization':'Bearer '+config['token']})
         with urllib.request.urlopen(request, timeout=30) as response:
             result = json.load(response)
             if not result.get('ok'): raise RuntimeError('Ingestion did not acknowledge the batch')
     batch = []; size = 0
     for item in events:
-        length = len(json.dumps(item).encode())
+        length = json_size(item)
         if batch and (len(batch) >= 100 or size + length > 512000): deliver(batch); batch = []; size = 0
         batch.append(item); size += length
     if batch: deliver(batch)

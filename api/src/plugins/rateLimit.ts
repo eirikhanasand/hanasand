@@ -1,3 +1,4 @@
+import { hasLogIngestToken } from '#utils/auth/logIngestToken.ts'
 import { recoveryReadOnly } from '#utils/resilience.ts'
 import fp from 'fastify-plugin'
 import type { FastifyInstance, FastifyReply, FastifyRequest, RouteOptions } from 'fastify'
@@ -69,9 +70,11 @@ async function enforceRateLimit(req: FastifyRequest, res: FastifyReply, database
         || isTrustedStatusIngest(req, path)
     ) return true
 
-    const actor: RateLimitActor = req.method === 'GET' && path === '/api/thesis/code-reviews' && hasInternalToken(req)
-        ? { scope: 'internal', identifier: 'service:code-review' }
-        : await resolveRateLimitActor(req)
+    const logIngest = req.method === 'POST' && path === '/api/logs/ingest' && (hasLogIngestToken(req) || hasInternalToken(req))
+    const actor: RateLimitActor = logIngest ? { scope: 'internal', identifier: 'service:log-ingest' }
+        : req.method === 'GET' && path === '/api/thesis/code-reviews' && hasInternalToken(req)
+            ? { scope: 'internal', identifier: 'service:code-review' }
+            : await resolveRateLimitActor(req)
     if (actor.invalidApiKey) {
         sendBoundaryError(req, res, 401, 'invalid_api_key', 'The presented API key is invalid, disabled, or expired.')
         return false

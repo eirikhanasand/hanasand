@@ -1,8 +1,11 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
-let checkpoints: Array<unknown[]> = []
+let checkpoints: Array<unknown[]> = [], skipped: string[] = []
+let busy: string | null = null
+mock.module('../src/utils/mill/logWatermark.ts', () => ({ stableLogWatermark: async (source: string) => source === busy ? null : '200' }))
 const query = async (sql: string, values: unknown[] = []) => {
     if (sql.includes('SELECT last_id, recent_id')) return { rows: [{ last_id: '0', recent_id: '100' }] }
-    if (sql.startsWith('SELECT *')) return { rows: [{ id: values.length === 1 ? '101' : '1', created_at: '2026-09-19T12:00:00Z', status: 'success' }] }
+    if (sql.startsWith('SELECT *')) return { rows: [{ id: values[1] === '200' ? '101' : '1', created_at: '2026-09-19T12:00:00Z', status: 'success' }] }
+    if (sql.startsWith('UPDATE log_processing_cursors SET last_error = $2')) skipped.push(String(values[0]))
     if (sql.startsWith('UPDATE log_processing_cursors SET recent_id = $2') || sql.startsWith('UPDATE log_processing_cursors SET last_id')) checkpoints.push(values)
     return { rows: [] }
 }
@@ -10,7 +13,7 @@ mock.module('#db', () => ({ default: query }))
 const { storedSourceLog, processAdditionalLogSources } = await import('../src/utils/mill/storedSources.ts')
 const { normalizeLogEvent } = await import('../src/utils/mill/logEvent.ts')
 const row = { id: 1, created_at: '2026-09-19T12:00:00Z' }
-beforeEach(() => { checkpoints = [] })
+beforeEach(() => { checkpoints = []; skipped = []; busy = null })
 test('website sign-ins retain real correlation fields without session credentials', () => {
     const log = normalizeLogEvent(storedSourceLog('login_events', { ...row, user_id: 'user-a', status: 'failed', ip: '192.0.2.1', token_id: 123, reason: 'bad_password' }))
     expect(log).toMatchObject({ log_type: 'SigninLogs', event_type: 'authentication', action: 'login', outcome: 'failure', user: { id: 'user-a' }, source: { ip: '192.0.2.1' } })
@@ -38,4 +41,13 @@ test('all fresh streams precede backfill and checkpoints follow successful proce
 test('failed evaluation leaves its delivery cursor unchanged for retry', async () => {
     await expect(processAdditionalLogSources(async () => { throw new Error('Evaluation failed') })).rejects.toThrow('Evaluation failed')
     expect(checkpoints).toHaveLength(0)
+})
+
+test('a busy source is visibly retried without starving other sources', async () => {
+    busy = 'traffic_events'
+    const received: string[] = []
+    await processAdditionalLogSources(async logs => { received.push(String(logs[0].id)) })
+    expect(received).toEqual(['login_events:101', 'system_events:101', 'login_events:1', 'system_events:1'])
+    expect(skipped).toEqual(['traffic_events'])
+    expect(checkpoints).toHaveLength(4)
 })

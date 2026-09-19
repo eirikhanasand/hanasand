@@ -3,6 +3,7 @@ import run, { withTransaction } from '#db'
 import { createMillFindings, loadConfiguredMillRules, normalizeMillEvent } from '../../handlers/mill.ts'
 import { normalizeLogEvent, severityOrder, type LogInput } from './logEvent.ts'
 import { processAdditionalLogSources } from './storedSources.ts'
+import { stableLogWatermark } from './logWatermark.ts'
 
 let running = false
 // Persist a pending event before evaluating it. A failure is retried with the same
@@ -91,7 +92,9 @@ export async function processStoredLogs() {
             const platform = await run('SELECT id FROM organizations WHERE status = \'active\' AND (id = $1 OR ($1::text IS NULL AND lower(name) = \'hanasand\')) ORDER BY created_at LIMIT 1', [process.env.PLATFORM_LOG_ORGANIZATION_ID || null])
             if (!platform.rows[0]) throw new Error('Configure an active platform log organization.')
             await run('INSERT INTO log_processing_cursors (name) VALUES (\'service_logs\') ON CONFLICT DO NOTHING')
-            await run('UPDATE log_processing_cursors SET recent_id = GREATEST(COALESCE((SELECT MAX(id) FROM service_logs), 0) - 200, 0) WHERE name = \'service_logs\' AND recent_id IS NULL')
+            const watermark = await stableLogWatermark('service_logs')
+            if (watermark === null) await run('UPDATE log_processing_cursors SET last_error = $1, updated_at = NOW() WHERE name = \'service_logs\'', ['Waiting for active log writes; will retry.'])
+            else await run('UPDATE log_processing_cursors SET recent_id = GREATEST($1::bigint - 200, 0) WHERE name = \'service_logs\' AND recent_id IS NULL', [watermark])
             const cursor = (await run('SELECT last_id, recent_id FROM log_processing_cursors WHERE name = \'service_logs\'')).rows[0]
             const configured = new Map<string, Awaited<ReturnType<typeof loadConfiguredMillRules>>>()
             const processScopes = async (logs: LogInput[]) => {
@@ -119,10 +122,12 @@ export async function processStoredLogs() {
             }
             // Fresh events always finish before backfill. Both indexed cursors are
             // bounded, so a completed million-row backfill is not scanned each tick.
-            const recent = await run('SELECT * FROM service_logs WHERE id > $1 ORDER BY id LIMIT 1000', [cursor.recent_id])
-            await processScopes(recent.rows)
-            const recentId = recent.rows.at(-1)?.id || cursor.recent_id
-            await run('UPDATE log_processing_cursors SET recent_id = $1, updated_at = NOW() WHERE name = \'service_logs\'', [recentId])
+            if (watermark !== null) {
+                const recent = await run('SELECT * FROM service_logs WHERE id > $1 AND id <= $2 ORDER BY id LIMIT 1000', [cursor.recent_id, watermark])
+                await processScopes(recent.rows)
+                const recentId = recent.rows.at(-1)?.id || cursor.recent_id
+                await run('UPDATE log_processing_cursors SET recent_id = $1, updated_at = NOW() WHERE name = \'service_logs\'', [recentId])
+            }
             await processAdditionalLogSources(processScopes)
             // Direct Mill ingestion is also pending until findings are durable.
             // Recover requests that stopped after persistence or during evaluation.
@@ -134,9 +139,11 @@ export async function processStoredLogs() {
                 await createMillFindings(row.organization_id, row.id, normalizeMillEvent(row.normalized, { vendor: row.source_vendor, product: row.source_product }), configured.get(row.organization_id)!)
                 await run('UPDATE mill_events SET processing_status = \'processed\' WHERE id = $1 AND organization_id = $2', [row.id, row.organization_id])
             }
-            const backlog = await run('SELECT * FROM service_logs WHERE id > $1 AND id <= $2 ORDER BY id LIMIT 1000', [cursor.last_id, cursor.recent_id])
-            await processScopes(backlog.rows)
-            await run('UPDATE log_processing_cursors SET last_id = GREATEST(last_id, $1), updated_at = NOW(), last_error = NULL WHERE name = \'service_logs\'', [backlog.rows.at(-1)?.id || cursor.last_id])
+            if (watermark !== null) {
+                const backlog = await run('SELECT * FROM service_logs WHERE id > $1 AND id <= $2 ORDER BY id LIMIT 1000', [cursor.last_id, cursor.recent_id])
+                await processScopes(backlog.rows)
+                await run('UPDATE log_processing_cursors SET last_id = GREATEST(last_id, $1), updated_at = NOW(), last_error = NULL WHERE name = \'service_logs\'', [backlog.rows.at(-1)?.id || cursor.last_id])
+            }
         })
     } catch (error) {
         await run('UPDATE log_processing_cursors SET last_error = $1 WHERE name = \'service_logs\'', [error instanceof Error ? error.message : 'Log processing failed']).catch(() => {})

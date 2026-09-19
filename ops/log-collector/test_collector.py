@@ -31,6 +31,15 @@ type=EXECVE msg=audit(1789817001.123:457): argc=2 a0="curl" a1=68747470733a2f2f6
     def test_metadata_redaction(self):
         value=c.scrub_metadata({'structured': {'authorization':'Bearer private', 'nested':[{'message':'token=private'}]}})
         self.assertNotIn('private',str(value))
+    def test_oversized_metadata_is_bounded_and_preserves_process_evidence(self):
+        for metadata in ({'process':{'executable':'/usr/bin/whoami','command_line':'whoami','arguments':['whoami']},'structured':{'huge':'x'*2000000}},
+                         {'structured':{'process':{'executable':'/usr/bin/whoami','command_line':'whoami','arguments':['whoami']},'huge':'x'*2000000}}):
+            row=c.event({'host':'inspur'},'large','application','🔥'*65536,'2026-09-19T00:00:00Z',metadata)
+            self.assertLess(c.json_size(row),512000)
+            self.assertTrue(row['metadata']['telemetry_truncated'])
+            self.assertGreater(row['metadata']['metadata_original_bytes'],2000000)
+            process=row['metadata'].get('process') or row['metadata']['structured']['process']
+            self.assertEqual(process['arguments'],['whoami'])
     def test_no_process_for_random_mentions(self):
         self.assertEqual(c.parse_audit('service: whoami xmrig',{'host':'inspur'}),[])
     def test_split_audit_arguments_and_argument_redaction(self):
