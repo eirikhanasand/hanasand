@@ -453,10 +453,12 @@ export async function createMillFindings(organizationId: string, eventId: string
     const rows = previous.rows as Array<{ id: string, event_timestamp: string, outcome: string, source_country: string | null, normalized: MillEvent }>
     if (enabled.has('auth.password_spray.v1') && event.outcome === 'failure' && event.sourceIp) {
         const { windowMinutes, minimumCount } = parameters('auth.password_spray.v1')
+        // Bound imported source text in the index; exact equality remains authoritative.
         const spray = await run(`
             SELECT id, user_id, event_timestamp, normalized
             FROM mill_events
             WHERE organization_id = $1 AND source_ip = $2 AND outcome = 'failure' AND id <> $3
+              AND md5(source_ip) = md5($2::text)
               AND event_type = 'authentication' AND action = 'login'
               AND event_timestamp BETWEEN ($4::timestamptz - $5 * INTERVAL '1 minute') AND $4::timestamptz
             ORDER BY event_timestamp DESC
