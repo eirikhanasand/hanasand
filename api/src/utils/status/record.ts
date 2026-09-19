@@ -1,3 +1,5 @@
+import { ensureStatusSnapshots } from './snapshotSchema.ts'
+import { recordSearchCase } from './searchCase.ts'
 import { withTransaction } from '#db'
 import { mailConfig } from '#utils/mail/config.ts'
 import { addressForUser } from '#utils/mail/helpers.ts'
@@ -15,6 +17,7 @@ export async function recordMonitorResult(
     latency: number,
     message = ''
 ) {
+    await ensureStatusSnapshots()
     const transition = await withTransaction(async query => {
         await query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`production-monitor:${service}:${checkName}`])
         // ponytail: bounded lookback covers the threshold and recovery retry window; use a durable monitor outbox if arbitrary replay is required.
@@ -31,6 +34,13 @@ export async function recordMonitorResult(
             RETURNING checked_at
         `, [service, checkName, status, latency, message])
         const checkedAt = new Date(inserted.rows[0].checked_at).toISOString()
+        await query(`
+            INSERT INTO service_status_snapshots (id, payload)
+            VALUES ($1, $2::jsonb)
+            ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()
+            WHERE (service_status_snapshots.payload->>'checked_at')::timestamptz <= (EXCLUDED.payload->>'checked_at')::timestamptz
+        `, [`check:${service}:${checkName}`, JSON.stringify({ service, check_name: checkName, status, latency_ms: latency, message, checked_at: checkedAt })])
+
         const history = [{ status, checkedAt, latencyMs: latency, message }, ...previous.rows.map((row: { status: MonitorStatus, checked_at: string | Date, latency_ms: number, message: string | null }) => ({
             status: row.status === 'down' ? 'down' as const : 'up' as const,
             checkedAt: new Date(row.checked_at).toISOString(),
@@ -62,10 +72,15 @@ export async function recordMonitorResult(
                 ? { service, checkName, status, latencyMs: latency, message, checkedAt, consecutiveFailures: 0, incidentStartedAt: outageStartedAt!, observations: [{ status: 'up', checkedAt, latencyMs: latency, message, consecutiveFailures: 0 }] }
                 : undefined
         return {
+            checkedAt,
             event: notificationEvent(status, previous.rows.map((row: { status: MonitorStatus }) => row.status)),
             incident,
         }
     })
+    if (service === 'threat-intelligence' && checkName === 'Public search') {
+        await recordSearchCase({ status, checkedAt: transition.checkedAt, latencyMs: latency, message })
+            .catch(error => console.error('[production-monitor] search case sync failed:', error))
+    }
     if (transition.incident) {
         void notifyServiceMonitorIncident(transition.incident).catch(error => console.error(`[production-monitor] incident state sync failed: ${error instanceof Error ? error.message : String(error)}`))
     }

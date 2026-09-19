@@ -24,7 +24,7 @@ export function toPublicServiceStatus(status: ServiceStatus, nowMs = Date.now())
         const check = currentChecks.get(checkKey(required))
         if (check) return toPublicServiceCheck(check)
         const previous = allChecks.get(checkKey(required))
-        return previous ? { ...toPublicServiceCheck(previous), status: 'unknown' as const } : missingPublicCheck(required)
+        return previous ? toPublicServiceCheck(previous) : missingPublicCheck(required)
     })
 
     const evidenceTimes = requiredPublicChecks.map(required => Date.parse(allChecks.get(checkKey(required))?.checked_at || ''))
@@ -35,7 +35,7 @@ export function toPublicServiceStatus(status: ServiceStatus, nowMs = Date.now())
             : checks.some((check) => check.status === 'degraded')
                 ? 'degraded'
                 : checks.some(check => check.status === 'unknown') ? 'unknown' : 'up',
-        monitoring: checks.every(check => check.status !== 'unknown') ? 'live' : 'unavailable',
+        monitoring: currentChecks.size >= requiredPublicChecks.length && requiredPublicChecks.every(required => currentChecks.has(checkKey(required))) ? 'live' : 'unavailable',
         last_verified_at: lastVerifiedAt,
         history_available: status.history_available,
         history_generated_at: status.history_generated_at,
@@ -187,15 +187,17 @@ export function isVerifiedStatus(status: ServiceStatus, now = Date.now()) {
 }
 
 export function retainVerifiedStatus(next: ServiceStatus, previous?: ServiceStatus): ServiceStatus {
-    if (isVerifiedStatus(next)) return next
-    if (!previous || !previous.last_verified_at) return { ...next, monitoring: 'unavailable' }
+    if (!previous) return next
     const checks = next.checks.map(check => {
-        if (check.status !== 'unknown') return check
         const last = previous.checks.find(row => row.service === check.service && row.check_name === check.check_name)
-        return last ? { ...last, status: 'unknown' as const } : check
+        if (check.status === 'unknown') return last || check
+        return last && Date.parse(last.checked_at) > Date.parse(check.checked_at) ? last : check
     })
-    return { ...next, checks: checks.length ? checks : previous.checks.map(check => ({ ...check, status: 'unknown' as const })),
+    const retained = checks.length ? checks : previous.checks
+    const overall = retained.some(check => check.status === 'down') ? 'down' : retained.some(check => check.status === 'degraded') ? 'degraded' : retained.some(check => check.status === 'unknown') ? 'unknown' : 'up'
+    return { ...next, overall, checks: retained,
         history: next.history.length ? next.history : previous.history,
         incidents: next.incidents.length ? next.incidents : previous.incidents,
-        last_verified_at: previous.last_verified_at, monitoring: 'unavailable' }
+        last_verified_at: retained.every(check => Number.isFinite(Date.parse(check.checked_at))) ? new Date(Math.min(...retained.map(check => Date.parse(check.checked_at)))).toISOString() : previous.last_verified_at,
+        monitoring: isVerifiedStatus(next) ? 'live' : 'unavailable' }
 }

@@ -16,6 +16,10 @@ export type ServiceHistoryDay = {
     date: string
     status: ServiceCheck['status']
     incident_ids: string[]
+    samples?: number
+    healthy_samples?: number
+    degraded_samples?: number
+    failed_samples?: number
 }
 
 export type ServiceIncident = {
@@ -56,9 +60,9 @@ export function unavailableServiceStatus(): ServiceStatus {
     }
 }
 
-export default async function getStatus({ summary = false, incidentId }: { summary?: boolean, incidentId?: string } = {}): Promise<ServiceStatus> {
+export default async function getStatus({ summary = false, incidentId, dashboard = false }: { summary?: boolean, incidentId?: string, dashboard?: boolean } = {}): Promise<ServiceStatus> {
     try {
-        const response = await fetch(`${config.url.api}/status${incidentId ? '?incident=' + encodeURIComponent(incidentId) : summary ? '?summary=true' : ''}`, { cache: 'no-store', signal: AbortSignal.timeout(5000) })
+        const response = await fetch(`${config.url.api}/status${incidentId ? '?incident=' + encodeURIComponent(incidentId) : summary ? '?summary=true' : dashboard ? '?dashboard=true' : ''}`, { cache: 'no-store', signal: AbortSignal.timeout(5000) })
         if (!response.ok) return unavailableServiceStatus()
 
         const payload = await response.json()
@@ -117,7 +121,8 @@ function normalizeHistory(value: unknown): ServiceHistoryDay[] {
             service: item.service || '',
             check_name: item.check_name || '',
             date: item.date || '',
-            status: item.status === 'up' || item.status === 'degraded' || item.status === 'down' ? item.status : 'up',
+            status: item.status === 'up' || item.status === 'degraded' || item.status === 'down' ? item.status : 'unknown',
+            samples: item.samples, healthy_samples: item.healthy_samples, degraded_samples: item.degraded_samples, failed_samples: item.failed_samples,
             incident_ids: Array.isArray(item.incident_ids) ? item.incident_ids.map(String) : [],
         }]
     })

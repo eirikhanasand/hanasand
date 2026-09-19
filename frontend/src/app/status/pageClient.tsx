@@ -2,10 +2,10 @@
 
 import Link from 'next/link'
 import IncidentReport from './incidentReport'
-import { isVerifiedStatus, retainVerifiedStatus, isCurrentPublicCheck } from '@/utils/status/publicStatus'
-import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { retainVerifiedStatus, isCurrentPublicCheck } from '@/utils/status/publicStatus'
+import { useEffect, useRef, useState } from 'react'
 import type { ServiceIncident, ServiceStatus } from '@/utils/status/getStatus'
-import { AlertCircle, CheckCircle, Clock, RefreshCw } from 'lucide-react'
+import { AlertCircle, CheckCircle } from 'lucide-react'
 
 type DashboardProps = {
     serviceStatus: ServiceStatus
@@ -20,9 +20,8 @@ const UPTIME_WINDOW = `${UPTIME_DAYS} days`
 export default function StatusDashboard({ serviceStatus, mode = 'status', incidentId }: DashboardProps) {
     const [now, setNow] = useState<number | null>(null)
     const [currentStatus, setCurrentStatus] = useState(serviceStatus)
-    const [isRefreshing, setIsRefreshing] = useState(false)
     const [refreshError, setRefreshError] = useState(false)
-    const verified = useRef<ServiceStatus | undefined>(isVerifiedStatus(serviceStatus) ? serviceStatus : undefined)
+    const verified = useRef<ServiceStatus | undefined>(serviceStatus.checks.some(check => check.checked_at && check.status !== 'unknown') ? serviceStatus : undefined)
 
     useEffect(() => {
         if (mode === 'incident') {
@@ -59,17 +58,17 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
         async function refreshStatus() {
             if (pending) return
             pending = true
-            setIsRefreshing(true)
             try {
-                const response = await fetch('/api/status', { cache: 'no-store', signal: AbortSignal.timeout(5000) })
+                const response = await fetch(mode === 'incidents' ? '/api/status?history=true' : '/api/status', { cache: 'no-store', signal: AbortSignal.timeout(5000) })
                 if (response.ok) {
                     const next = await response.json() as ServiceStatus
                     if (!next || !Array.isArray(next.checks) || !Array.isArray(next.history) || !Array.isArray(next.incidents)) throw new Error('Invalid status feed')
-                    if (isVerifiedStatus(next)) {
-                        verified.current = next
-                        try { localStorage.setItem('hanasand-verified-status', JSON.stringify(next)) } catch { /* Optional persistence. */ }
+                    const retained = retainVerifiedStatus(next, verified.current)
+                    if (retained.checks.some(check => check.checked_at && check.status !== 'unknown')) {
+                        verified.current = retained
+                        try { localStorage.setItem('hanasand-verified-status', JSON.stringify(retained)) } catch { /* Optional persistence. */ }
                     }
-                    setCurrentStatus(retainVerifiedStatus(next, verified.current))
+                    setCurrentStatus(retained)
                     setRefreshError(next.monitoring === 'unavailable')
                 } else {
                     setRefreshError(true)
@@ -78,7 +77,6 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
                 setRefreshError(true)
             } finally {
                 pending = false
-                setIsRefreshing(false)
             }
         }
 
@@ -95,9 +93,9 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
     const checks = currentStatus.checks
     const incidents = currentStatus.incidents
     const monitoringUnavailable = refreshError || currentStatus.monitoring === 'unavailable' || !currentStatus.checks.every(check => isCurrentPublicCheck(check, now || Date.now()))
-    const overall = refreshError || monitoringUnavailable && !checks.some(check => check.status === 'down' && isCurrentPublicCheck(check, now || Date.now())) ? 'unknown' : currentStatus.overall
+    const overall = currentStatus.overall
     const headline = overall === 'unknown' ? 'Monitoring unavailable' : overall === 'up'
-        ? 'Monitored services operational'
+        ? 'Everything operational'
         : overall === 'degraded'
             ? 'Some systems degraded'
             : 'Service interruption'
@@ -171,31 +169,12 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
                         <Link href='/status/incidents' className='inline-flex h-9 items-center rounded-md bg-white/15 px-3 text-sm font-semibold text-white transition hover:bg-white/25'>
                             Incident history
                         </Link>
-                        <span className='text-sm font-medium'>{monitoringUnavailable ? 'Live monitoring unavailable' : 'Live monitoring'}</span>
+                        <span className='text-sm font-medium'>{monitoringUnavailable ? 'Showing last verified results' : 'Live monitoring'}</span>
                     </div>
                 </div>
             </section>
 
             <p className='text-sm text-ui-muted'>{currentStatus.last_verified_at ? <>Last verified <time dateTime={currentStatus.last_verified_at}>{formatDateTime(currentStatus.last_verified_at)}</time>{monitoringUnavailable ? ' · showing the last received results' : ''}</> : 'No verified snapshot is available yet.'}</p>
-
-            <section className='grid gap-3 border-y border-ui-border py-4 text-sm text-ui-muted md:grid-cols-3'>
-                <StatusMeta icon={<RefreshCw className={isRefreshing ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />} label='Data interval' value={`${REFRESH_MS / 1000}s auto-refresh`} />
-                <StatusMeta icon={<Clock className='h-4 w-4' />} label='Uptime interval' value={UPTIME_WINDOW} />
-                <StatusMeta icon={<CheckCircle className='h-4 w-4' />} label='Components' value={`${checks.length} monitored checks`} />
-            </section>
-
-            <section className='grid gap-4 rounded-md border border-ui-border bg-ui-panel p-4'>
-                <div>
-                    <p className='text-xs font-semibold uppercase text-ui-primary'>How to read this page</p>
-                    <h2 className='mt-1 text-xl font-semibold text-ui-text'>Operational history is evidence, not a contract.</h2>
-                </div>
-                <div className='grid gap-3 text-sm md:grid-cols-3'>
-                    <ReliabilityNote title='Freshness' detail='Missing or stale checks mean monitoring is unavailable. They do not confirm a service outage.' />
-                    <ReliabilityNote title='Incident history' detail='The 90-day bars link to monitor incidents. Resolved means the observed check recovered; it does not erase the event.' />
-                    <ReliabilityNote title='Procurement boundary' detail='No standard uptime, response-time, maintenance, notification, or service-credit commitment is published. Put those terms in the signed order.' />
-                </div>
-                <Link href='/trust/sla-onboarding' className='w-fit text-sm font-semibold text-ui-primary hover:underline'>Review support and onboarding terms →</Link>
-            </section>
 
             <section>
                 <div className='flex flex-wrap items-end justify-between gap-2'>
@@ -216,11 +195,11 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
                                             <Link
                                                 key={day.date}
                                                 href={`/status/incidents/${day.incident.id}`}
-                                                title={`${formatDate(day.date)}: ${day.incident.title}. ${day.incident.summary}`}
-                                                className={`min-w-0 flex-1 rounded-[1px] ${barClass(day.displayStatus)}`}
+                                                title={day.description}
+                                                style={day.style} className={`min-w-0 flex-1 rounded-[1px] ${barClass(day.displayStatus)}`}
                                             />
                                         ) : (
-                                            <span key={day.date} title={`${day.displayStatus === 'unknown' ? 'No verified history for' : 'No incidents on'} ${formatDate(day.date)}`} className={`min-w-0 flex-1 rounded-[1px] ${barClass(day.displayStatus)}`} />
+                                            <span key={day.date} title={day.description} style={day.style} className={`min-w-0 flex-1 rounded-[1px] ${barClass(day.displayStatus)}`} />
                                         )
                                     ))}
                                 </div>
@@ -232,9 +211,9 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
                                     <span>{check.latency_ms}ms</span>
                                 </div>
                             </div>
-                            <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold ${statusPillClass(refreshError || !isCurrentPublicCheck(check, now || Date.now()) ? 'unknown' : check.status)}`}>
+                            <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold ${statusPillClass(check.status)}`}>
                                 {check.status === 'up' ? <CheckCircle className='h-4 w-4' /> : <AlertCircle className='h-4 w-4' />}
-                                {refreshError || !isCurrentPublicCheck(check, now || Date.now()) || check.status === 'unknown' ? 'Unverified' : check.status === 'up' ? 'Normal' : check.status}
+                                {check.status === 'unknown' ? 'Unverified' : check.status === 'up' ? 'Normal' : check.status}
                             </span>
                         </div>
                     ))}
@@ -244,27 +223,6 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
                 </div>
             </section>
         </main>
-    )
-}
-
-function StatusMeta({ icon, label, value }: { icon: ReactNode, label: string, value: string }) {
-    return (
-        <div className='flex items-center gap-3'>
-            <span className='grid h-9 w-9 place-items-center rounded-md border border-ui-border bg-ui-panel text-ui-primary'>{icon}</span>
-            <span>
-                <span className='block text-xs font-semibold uppercase'>{label}</span>
-                <span className='text-ui-text'>{value}</span>
-            </span>
-        </div>
-    )
-}
-
-function ReliabilityNote({ title, detail }: { title: string, detail: string }) {
-    return (
-        <div className='rounded-md border border-ui-border bg-ui-canvas p-3'>
-            <h3 className='font-semibold text-ui-text'>{title}</h3>
-            <p className='mt-1 leading-6 text-ui-muted'>{detail}</p>
-        </div>
     )
 }
 
@@ -324,6 +282,8 @@ function historyDaysFor(status: ServiceStatus, check: ServiceStatus['checks'][nu
             status: rowStatus,
             displayStatus: dayDisplayStatus(rowStatus, incident),
             incident,
+            description: row?.samples ? `${formatDate(date)}: ${((row.healthy_samples || 0) / row.samples * 100).toFixed(2)}% operational across ${row.samples} checks. ${row.failed_samples || 0} failed; ${row.degraded_samples || 0} degraded.` : `${formatDate(date)}: ${rowStatus === 'unknown' ? 'No verified history' : rowStatus === 'up' ? 'Operational' : incident?.summary || rowStatus}`,
+            style: row?.samples ? { background: `linear-gradient(to top, #86efac 0% ${(row.healthy_samples || 0) / row.samples * 100}%, #fbbf24 ${(row.healthy_samples || 0) / row.samples * 100}% ${((row.healthy_samples || 0) + (row.degraded_samples || 0)) / row.samples * 100}%, #ef4444 ${((row.healthy_samples || 0) + (row.degraded_samples || 0)) / row.samples * 100}% 100%)` } : undefined,
         }
     })
 }

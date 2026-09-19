@@ -12,14 +12,14 @@ const dockerfile = await read('Dockerfile')
 const apiTraffic = await readFromRepo('api/src/handlers/traffic/legacy.ts')
 const apiSchema = await readFromRepo('api/src/utils/db/ensureSchema.ts')
 
-for (const heading of ['Data interval', 'Uptime interval', 'Current Status: Hanasand.com', 'Recent incidents']) {
+for (const heading of ['Everything operational', 'Current Status: Hanasand.com', 'Recent incidents']) {
     assert.match(statusClient, new RegExp(escapeRegExp(heading)), `/status should render "${heading}"`)
 }
 
 assert.match(statusClient, /const REFRESH_MS = 3000/, '/status should refresh public status every 3 seconds')
 assert.match(statusClient, /const UPTIME_DAYS = 90/, '/status should show the 90-day uptime interval')
 
-for (const rawTrafficHeading of ['Most visited subdomains', 'Top endpoints']) {
+for (const rawTrafficHeading of ['Most visited subdomains', 'Top endpoints', 'Data interval', 'Uptime interval', 'How to read this page']) {
     assert.doesNotMatch(statusClient, new RegExp(escapeRegExp(rawTrafficHeading)), `/status should not expose raw traffic heading "${rawTrafficHeading}"`)
 }
 
