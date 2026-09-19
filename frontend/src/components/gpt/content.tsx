@@ -140,7 +140,7 @@ function PowerCard({ watts, monthlyKwh }: { watts: number | null, monthlyKwh: nu
             </div>
             <div className='mt-3 text-2xl font-semibold text-ui-text'>{watts === null ? 'Unavailable' : `${watts.toFixed(0)} W`}</div>
             <div className='mt-1 text-xs uppercase tracking-[0.18em] text-ui-muted'>
-                {monthlyKwh === null ? 'Waiting for power readings' : `${monthlyKwh.toFixed(2)} kWh recorded this month`}
+                {monthlyKwh === null ? 'Waiting for power readings' : `${monthlyKwh.toFixed(2)} kWh recorded this month · GPU power`}
             </div>
         </div>
     )
