@@ -26,7 +26,7 @@ try {
     assert.equal(first.dataAvailable, true)
     assert.equal(first.activity.length, 1, 'Cold requests must await their actual data')
     assert.equal(first.updatedActors[0].name, 'Example actor')
-    let html = renderToStaticMarkup(await TiActivityPage())
+    let html = renderToStaticMarkup(await TiActivityPage({}))
     assert.ok(html.includes('Example actor'))
     assert.ok(!html.includes('Checking'))
     assert.ok(html.includes('name="q"'))
@@ -34,19 +34,19 @@ try {
     for (const endpoint of ['/overview']) {
         failure = endpoint
         assert.equal((await getTiEnrichmentOverview()).dataAvailable, false)
-        html = renderToStaticMarkup(await TiActivityPage())
+        html = renderToStaticMarkup(await TiActivityPage({}))
         assert.ok(html.includes('Activity is temporarily unavailable.'))
         assert.ok(!html.includes('Welcome to activity'))
         assert.ok(!html.includes('No monitoring issues'))
     }
     failure = ''
     mode = 'empty'
-    html = renderToStaticMarkup(await TiActivityPage())
+    html = renderToStaticMarkup(await TiActivityPage({}))
     assert.ok(html.includes('Welcome to activity'))
     assert.ok(!html.includes('<table'))
     assert.ok(!html.includes('unavailable'))
     mode = 'profiles-only'
-    html = renderToStaticMarkup(await TiActivityPage())
+    html = renderToStaticMarkup(await TiActivityPage({}))
     assert.ok(html.includes('No events yet'))
     assert.ok(html.includes('Example actor'))
     assert.ok(!html.includes('Checking'))
