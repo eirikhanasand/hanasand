@@ -1,18 +1,19 @@
 import run, { withTransaction } from './db.ts'
 import { correlationKey, monitoringScope } from './monitoringCorrelation.ts'
 import type { AutomationRow } from './automations.ts'
+import { monitoringIssueFingerprint } from './monitoringIssues.ts'
 
 // Run with the scheduled worker stopped. Keep old case rows as permanent aliases; never discard evidence.
-export async function mergeMonitoringCases() {
+export async function mergeMonitoringCases(automationIds?: string[]) {
     const roots = await run(`SELECT a.*, i.id AS case_id FROM monitoring_issues i JOIN agent_automations a ON a.id=i.automation_id
-        WHERE i.merged_into IS NULL ORDER BY i.first_seen_at, i.id`)
+        WHERE i.merged_into IS NULL AND ($1::text[] IS NULL OR a.id=ANY($1)) ORDER BY i.first_seen_at, i.id`, [automationIds || null])
     const merged: Array<{ from: string, to: string }> = []
     for (const source of roots.rows) await withTransaction(async query => {
         const a = source as AutomationRow
         await query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [monitoringScope(a)])
         const row = (await query('SELECT * FROM monitoring_issues WHERE id=$1 AND merged_into IS NULL FOR UPDATE', [source.case_id])).rows[0]
         if (!row) return
-        const key = await correlationKey(query, a, row.fingerprint, row.kind, row.summary)
+        const key = await correlationKey(query, a, monitoringIssueFingerprint(a, row.kind, row.summary), row.kind, row.summary)
         const canonical = (await query('SELECT * FROM monitoring_issues WHERE correlation_key=$1 AND id<>$2 FOR UPDATE', [key, row.id])).rows[0]
         if (!canonical) { await query('UPDATE monitoring_issues SET correlation_key=$2 WHERE id=$1', [row.id,key]); return }
         const ids = [row.id, canonical.id]

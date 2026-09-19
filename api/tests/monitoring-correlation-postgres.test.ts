@@ -61,3 +61,45 @@ test('merges scoped socket failures, retains evidence and aliases, serializes no
  await event('different-port',a,'failure','connect ECONNREFUSED git.example.com:8443 Failed after 2 attempts.')
  expect(await load('a')).toHaveLength(2)
 })
+
+test('service cases retain a daily allowance through changing details, severity, merging and concurrent workers', async () => {
+ const {claimMonitoringNotification:claim}=await import('../src/utils/monitoringIssues.ts')
+ const a={id:'service-activity',owner_id:'owner',organization_id:null,target_url:'https://hanasand.com/api/status?service=dark-web-monitoring&check=Latest%20activity',monitoring_type:'fetch',action_type:'agent_prompt',notify_on:'failure',notify_warnings:true,notification_destinations:['test']} as any
+ await q('INSERT INTO agent_automations(id,owner_id,target_url,monitoring_type,action_type,notification_destinations) VALUES($1,$2,$3,$4,$5,$6)',[a.id,a.owner_id,a.target_url,a.monitoring_type,a.action_type,a.notification_destinations])
+ const legacy:string[]=[]
+ for (const age of [317,318]) {
+  const id=(await q("INSERT INTO monitoring_issues(automation_id,fingerprint,correlation_key,kind,summary) VALUES($1,$2,$2,'warning',$3) RETURNING id",[a.id,'legacy-age-'+age,`Latest customer activity is stale (${age} minutes).`])).rows[0].id
+  legacy.push(id)
+  await q('INSERT INTO monitoring_issue_checks VALUES($1,$2,true)',[id,a.id])
+  await q("INSERT INTO monitoring_issue_notifications(issue_id,destination,next_attempt_at,delivered_at) VALUES($1,'test',NOW()+($2 * interval '1 hour'),NOW()-interval '1 hour')",[id,age===317?22:23])
+  await q("INSERT INTO agent_automation_runs(id,automation_id,status,warning,issue_id,started_at,completed_at) VALUES($1,$2,'completed',true,$3,NOW()-interval '3 minutes',NOW()-interval '3 minutes')",['age-'+age,a.id,id])
+ }
+ const failure=(await q("INSERT INTO monitoring_issues(automation_id,fingerprint,kind,summary) VALUES($1,'failure-new','failure','Source unavailable') RETURNING id",[a.id])).rows[0].id
+ // An upgrade must honor old deliveries even before duplicate cases are merged.
+ expect(await claim(a,failure,'test')).toBe(false)
+ expect(await merge([a.id])).toEqual([{from:'HA-'+legacy[1],to:'HA-'+legacy[0]}])
+ expect(await merge([a.id])).toEqual([])
+ expect((await q('SELECT merged_into FROM monitoring_issues WHERE id=$1',[legacy[1]])).rows[0].merged_into).toBe(legacy[0])
+ const allowance=(await q('SELECT next_attempt_at FROM monitoring_issue_notifications WHERE issue_id=$1',[legacy[0]])).rows[0].next_attempt_at
+ expect(new Date(allowance).getTime()-Date.now()).toBeGreaterThan(22.9*3600_000)
+ const before=sent
+ for (const age of [319,320,321]) {
+  const id='age-'+age
+  await q("INSERT INTO agent_automation_runs(id,automation_id,status,warning) VALUES($1,$2,'completed',true)",[id,a.id])
+  await record(a,id,'warning',`Latest customer activity is stale (${age} minutes).`)
+ }
+ const active=(await load(a.id)).find(i=>i.kind==='warning')!
+ expect(active.id).toBe(legacy[0])
+ expect(active.occurrences).toBe(5)
+ expect(active.summary).toContain('321 minutes')
+ expect(sent).toBe(before)
+ expect(await claim(a,failure,'test')).toBe(false)
+ // Different destinations have independent daily allowances.
+ expect(await claim(a,failure,'another-destination')).toBe(true)
+ await q("UPDATE monitoring_issue_notifications SET next_attempt_at=NOW()-interval '1 second' WHERE issue_id IN (SELECT id FROM monitoring_issues WHERE automation_id=$1)",[a.id])
+ const results=await Promise.all([claim(a,legacy[0],'test'),claim(a,failure,'test')])
+ expect(results.filter(Boolean)).toHaveLength(1)
+ expect(await claim(a,failure,'test')).toBe(false)
+ const remaining=(await q("SELECT MAX(next_attempt_at)>NOW()+interval '23 hours 59 minutes' AS daily FROM monitoring_issue_notifications WHERE destination='test' AND issue_id IN (SELECT id FROM monitoring_issues WHERE automation_id=$1)",[a.id])).rows[0]
+ expect(remaining.daily).toBe(true)
+})

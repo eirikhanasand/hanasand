@@ -8,15 +8,40 @@ import run, { withTransaction } from '#db'
 import type { AutomationRow } from './automations.ts'
 import { deliverDiscordWebhookFile, redactSecretBearingText } from './alerts/discordWebhookFile.ts'
 
+export const isServiceStatusCheck = (automation: Pick<AutomationRow, 'target_url'>) => automation.target_url?.startsWith('https://hanasand.com/api/status?service=') === true
+
 export function monitoringIssueFingerprint(automation: Pick<AutomationRow, 'target_url' | 'monitoring_type' | 'json_rule'>, kind: string, message: string) {
     // A job keeps its case when the blocker changes, including after recovery.
     if (automation.target_url?.startsWith('system:cron:')) return createHash('sha256').update(automation.target_url).digest('hex')
+    // Synthetic service checks report changing ages, counts and affected sources.
+    // Those details update the case; they do not identify a new incident.
+    if (isServiceStatusCheck(automation)) return createHash('sha256').update(JSON.stringify([automation.monitoring_type, automation.target_url, kind])).digest('hex')
     // Group changing durations and retry counts, but retain HTTP codes and error details.
     const reason = automation.monitoring_type === 'json' && (automation.target_url === 'system:resilience' || message.startsWith('JSON threshold exceeded:') || automation.target_url === 'system:metrics' && isHostThresholdMessage(message))
         ? JSON.stringify(automation.json_rule) : redactSecretBearingText(message)
             .replace(/ Failed after \d+ attempts?\.$/, '')
-            .replace(/\b\d+(?:\.\d+)?\s*(?:milliseconds?|ms|seconds?)\b/gi, '<duration>')
+            .replace(/\b\d+(?:\.\d+)?\s*(?:milliseconds?|ms|seconds?|minutes?|hours?|days?)\b/gi, '<duration>')
     return createHash('sha256').update(JSON.stringify([automation.monitoring_type, automation.target_url, kind, reason])).digest('hex')
+}
+
+export async function claimMonitoringNotification(automation: AutomationRow, issue: string, destination: string) {
+    return withTransaction(async query => {
+        if (isServiceStatusCheck(automation)) {
+            // Share the daily allowance across changing severity and legacy duplicate
+            // cases. Serialize the check and reservation across worker processes.
+            await query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [monitoringScope(automation)])
+            const recent = await query(`SELECT 1 FROM monitoring_issue_notifications n JOIN monitoring_issues i ON i.id=n.issue_id
+                WHERE n.destination=$2 AND n.next_attempt_at>NOW() AND (i.automation_id=$1 OR EXISTS (
+                    SELECT 1 FROM monitoring_issue_checks c WHERE c.issue_id=i.id AND c.automation_id=$1)) LIMIT 1`, [automation.id, destination])
+            if (recent.rows.length) return false
+        }
+        const claim = await query(`INSERT INTO monitoring_issue_notifications (issue_id, destination, next_attempt_at)
+            VALUES ($1, $2, NOW() + INTERVAL '24 hours')
+            ON CONFLICT (issue_id, destination) DO UPDATE SET next_attempt_at = NOW() + INTERVAL '24 hours'
+            WHERE monitoring_issue_notifications.next_attempt_at <= NOW()
+            RETURNING issue_id`, [issue, destination])
+        return claim.rows.length > 0
+    })
 }
 
 export async function recordMonitoringOutcome(automation: AutomationRow, runId: string, kind: 'failure' | 'warning' | null, message: string) {
@@ -72,12 +97,7 @@ export async function recordMonitoringOutcome(automation: AutomationRow, runId: 
     const destinations = new Set(automation.notification_destinations?.length ? automation.notification_destinations : automation.model_name ? [automation.model_name] : [])
     for (const destination of destinations) {
         // Reserve in PostgreSQL before delivery: concurrent workers and restarts cannot send duplicates.
-        const claim = await run(`INSERT INTO monitoring_issue_notifications (issue_id, destination, next_attempt_at)
-            VALUES ($1, $2, NOW() + INTERVAL '24 hours')
-            ON CONFLICT (issue_id, destination) DO UPDATE SET next_attempt_at = NOW() + INTERVAL '24 hours'
-            WHERE monitoring_issue_notifications.next_attempt_at <= NOW()
-            RETURNING issue_id`, [issue, destination])
-        if (!claim.rows.length) continue
+        if (!await claimMonitoringNotification(automation, String(issue), destination)) continue
         try {
             const receipt = await deliverDiscordWebhookFile(destination, alert.content, true, alert.embeds)
             await run(`WITH delivered AS (
