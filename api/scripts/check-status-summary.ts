@@ -5,7 +5,7 @@ mock.module('#db', () => ({ withTransaction: () => { throw new Error('Summary mu
     if (sql.startsWith('CREATE TABLE')) return { rows: [] }
     queries++
     assert(sql.includes('FROM service_status_snapshots'))
-    assert(sql.includes("id LIKE 'check:%'"))
+    assert(sql.includes('id LIKE \'check:%\''))
     assert(!sql.includes('FROM service_monitor_results'))
     assert(!sql.includes('90 days') && !sql.includes('Window') && !sql.includes('LAG('))
     return { rows: [] }
