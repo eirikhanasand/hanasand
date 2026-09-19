@@ -24,16 +24,16 @@ test('host switch and refresh isolate data; scheduled waits are informational an
         const host = new URL(route.request().url()).searchParams.get('host')!
         requests.push(host)
         if (host === 'ovhcloud' && failOvh) return route.fulfill({ status: 503, json: { error: 'OVH unavailable' } })
-        return route.fulfill({ json: { status: { status: 'pending', checked_at: new Date().toISOString(), pending_updates: [{ package: `${host}-package`, version: '1', first_seen: Date.now() / 1000 - 6 * 3600, security }], policy: { non_security_delay_hours: 72 } }, history: [{ run_id: host, status: 'pending', occurred_at: new Date().toISOString(), packages: [`${host}-history`], error: null }] } })
+        return route.fulfill({ json: { status: { status: 'pending', checked_at: new Date().toISOString(), pending_updates: [{ package: `${host}-package`, version: '1', first_seen: Date.now() / 1000 - 6 * 3600, security }], policy: { non_security_delay_hours: 72 } }, history: [{ run_id: host, status: 'pending', occurred_at: new Date().toISOString(), packages: [`${host}-history v3.1`], error: null }] } })
     })
     await page.goto('https://updates.test/')
     await expect(page.getByText('inspur-package', { exact: true })).toBeVisible()
-    await expect(page.getByText('6/72 hours · Scheduled wait')).toBeVisible()
-    await expect(page.getByText('6/72 hours · Scheduled wait').locator('xpath=ancestor::td')).toHaveClass(/text-ui-muted/)
+    await expect(page.getByText('6/72 hours')).toBeVisible()
+    await expect(page.getByText('6/72 hours').locator('xpath=ancestor::td')).toHaveClass(/text-ui-muted/)
     await expect(page.locator('.text-ui-warning, .text-ui-danger')).toHaveCount(0)
     await page.getByRole('combobox', { name: 'Host' }).selectOption('ovhcloud')
     await expect(page.getByText('ovhcloud-package', { exact: true })).toBeVisible()
-    await expect(page.getByText('Installed: ovhcloud-history')).toBeVisible()
+    await expect(page.getByText('ovhcloud-history v3.1')).toBeVisible()
     await expect(page.getByText('inspur-package', { exact: true })).toHaveCount(0)
     await page.getByRole('button', { name: 'Refresh' }).click()
     await expect(page.getByRole('button', { name: 'Refresh' })).toBeEnabled()
@@ -78,4 +78,17 @@ test('empty updates use the compact controls and omit the empty package panel', 
     await expect(controls.getByText('Nothing pending', { exact: true })).toBeVisible()
     await expect(controls.getByText(/Checked 5h/)).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Pending packages' })).toHaveCount(0)
+})
+
+test('daily history shows package versions without hiding installation details behind errors', async ({ page }) => {
+    await page.route('https://updates.test/fixture.js', route => route.fulfill({ contentType: 'application/javascript', body: bundle }))
+    await page.route('https://updates.test/', route => route.fulfill({ contentType: 'text/html', body: '<meta charset="utf-8"><div id="root"></div><script src="/fixture.js"></script>' }))
+    await page.route('**/api/backend/system/updates?**', route => route.fulfill({ json: { status: { status: 'ok' }, history: [
+        { run_id: '2026-09-17', occurred_at: '2026-09-17', status: 'failed', packages: ['libsqlite3-0 v3.45.1', 'libaom3 v3.8.2'], error: 'A security update failed' },
+    ] } }))
+    await page.goto('https://updates.test/')
+    await expect(page.getByText('libsqlite3-0 v3.45.1, libaom3 v3.8.2', { exact: true })).toBeVisible()
+    await expect(page.getByText('A security update failed', { exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Update status details' })).toHaveCount(1)
+    await expect(page.getByText(/^Installed:/)).toHaveCount(0)
 })

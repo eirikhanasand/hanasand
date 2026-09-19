@@ -31,6 +31,7 @@ data = json.loads(old)
 data.update({'schema_version': 1, 'host': 'hanasand', 'run_id': run_id,
              'checked_at': now, 'status': 'failed',
              'last_error': 'apt-get update failed; no packages were installed.',
+             'installed_packages': [],
              'policy': {'non_security_delay_hours': 72, 'security_install': 'immediate',
                         'allowed_origin': 'Ubuntu noble/noble-updates/noble-security'}})
 json.dump(data, open(out, 'w'), indent=2); open(out, 'a').write('\n')
@@ -134,15 +135,16 @@ def candidate_is_installed(update):
     except (OSError, subprocess.CalledProcessError):
         return False
 
-installed_updates = [u['package'] for u in plan['updates'] if candidate_is_installed(u)]
-remaining = [u for u in plan['updates'] if u['package'] not in installed_updates]
+installed_updates = [{'package': u['package'], 'version': u['version']} for u in plan['updates'] if candidate_is_installed(u)]
+installed_names = {u['package'] for u in installed_updates}
+remaining = [u for u in plan['updates'] if u['package'] not in installed_names]
 failure_details = [error.removeprefix('Failed to install ') for error in errors]
 data = {
   'schema_version': 1, 'host': 'hanasand', 'run_id': run_id, 'checked_at': now,
   'status': 'failed' if errors else ('pending' if remaining else 'ok'),
   'last_error': f"Failed to install {' and '.join(failure_details)}" if failure_details else None,
   'pending_updates': remaining,
-  'installed_packages': [{'package': p} for p in installed_updates],
+  'installed_packages': installed_updates,
   'last_updated_packages': installed or old.get('last_updated_packages', []),
   'last_update_at': now if installed else old.get('last_update_at'),
   'policy': {'non_security_delay_hours': 72, 'security_install': 'immediate',
