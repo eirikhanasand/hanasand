@@ -1,3 +1,5 @@
+import { redactLogValue } from '#utils/logs/redact.ts'
+import { securityRules, matchSecurityRules } from '#utils/mill/securityRules.ts'
 import { randomUUID } from 'node:crypto'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run, { withTransaction } from '#db'
@@ -13,6 +15,7 @@ type MillDefinition = { match: 'all', conditions: MillCondition[], failureCondit
 type MillRule = { id: string, detectionLogic?: string, recordId?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'owned' | 'open_source', sourceReference?: string, definition?: MillDefinition }
 
 export const MILL_RULES: MillRule[] = [
+    ...securityRules.map(({ id, name, family, severity, explanation }) => ({ id, name, family, severity, explanation, version: '1', evidence: ['process executable', 'command line', 'host', 'user'] })),
     { id: 'auth.brute_force_success.v1', version: '1', name: 'Brute-force success', family: 'Authentication', severity: 'high', explanation: 'Multiple failed logins followed by a successful login for the same user.', evidence: ['failed event IDs', 'successful event ID', 'time window'] },
     { id: 'auth.password_spray.v1', version: '1', name: 'Password spray', family: 'Authentication', severity: 'high', explanation: 'One source IP produced failed logins for multiple users within 15 minutes.', evidence: ['source IP', 'target user IDs', 'failed event IDs', 'time window'] },
     { id: 'auth.impossible_travel.v1', version: '1', name: 'Impossible travel', family: 'Authentication', severity: 'high', explanation: 'Successful logins for one user occurred more than 500 km apart within 12 hours, with coordinates present in both events.', evidence: ['coordinates', 'distance', 'elapsed time', 'related event IDs'] },
@@ -96,7 +99,7 @@ export async function ingestMill(req: FastifyRequest, res: FastifyReply) {
                 id, ingestion_id, organization_id, source_vendor, source_product, event_timestamp,
                 event_type, action, outcome, user_id, user_email, source_ip, source_country,
                 source_city, device_id, normalized, original, parser_version, processing_status
-            ) VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 'processed')
+            ) VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 'pending')
             `, [
                 eventId, ingestionId, key.organizationId, normalized.sourceVendor, normalized.sourceProduct,
                 normalized.timestamp, normalized.eventType, normalized.action, normalized.outcome,
@@ -110,6 +113,7 @@ export async function ingestMill(req: FastifyRequest, res: FastifyReply) {
     // Persist the complete batch before correlating it, including out-of-order payloads.
     for (const { normalized, eventId } of normalizedEvents.sort((a, b) => Date.parse(a.normalized.timestamp) - Date.parse(b.normalized.timestamp))) {
         await createMillFindings(key.organizationId, eventId, normalized, configuredRules)
+        await run('UPDATE mill_events SET processing_status = \'processed\' WHERE id = $1 AND organization_id = $2', [eventId, key.organizationId])
     }
 
     return res.status(202).send({ accepted: true, ingestion_id: ingestionId, accepted_events: accepted.length, rejected_events: 0 })
@@ -371,7 +375,7 @@ async function organizationAccess(req: FastifyRequest, res: FastifyReply) {
     return { organizationId, userId, role: result.rows[0].role as string }
 }
 
-async function loadConfiguredMillRules(organizationId: string): Promise<MillRule[]> {
+export async function loadConfiguredMillRules(organizationId: string): Promise<MillRule[]> {
     const result = await run(`
         SELECT id, rule_id, version, name, family, severity, explanation, definition, source, source_reference, enabled
         FROM mill_rules
@@ -391,12 +395,15 @@ async function loadConfiguredMillRules(organizationId: string): Promise<MillRule
     return [...builtIns, ...custom]
 }
 
-async function createMillFindings(organizationId: string, eventId: string, event: NormalizedEvent, rules: MillRule[]) {
+export async function createMillFindings(organizationId: string, eventId: string, event: NormalizedEvent, rules: MillRule[]) {
     const insertFinding = async (org: string, id: string, severity: string, summary: string, eventIds: string[], evidence: MillEvent) => {
         const configured = rules.find(rule => rule.id === id)
         await persistFinding(org, id, configured?.severity || severity, summary, eventIds, { ...evidence, ruleVersion: configured?.version || '1', ruleName: configured?.name, ruleExplanation: configured?.explanation, detectionDefinition: configured?.definition })
     }
     const enabled = new Set(rules.filter(rule => rule.enabled !== false && (rule.source !== 'hanasand' || matchesMillRule(event.normalized, rule.definition?.conditions || []))).map(rule => rule.id))
+    for (const rule of matchSecurityRules(event.normalized).filter(rule => enabled.has(rule.id))) {
+        await insertFinding(organizationId, rule.id, rule.severity, rule.name, [eventId], { process: event.normalized.process, host: event.normalized.host, user: event.normalized.user, eventId })
+    }
     const parameters = (id: string) => rules.find(rule => rule.id === id)?.definition?.parameters || millDefaultDefinition(id).parameters!
     for (const rule of rules.filter(rule => (rule.source === 'owned' || rule.source === 'open_source') && rule.enabled !== false)) {
         if (rule.definition && matchesMillRule(event.normalized, rule.definition.conditions)) {
@@ -458,12 +465,14 @@ async function createMillFindings(organizationId: string, eventId: string, event
     }
     if (!event.userId) return
     if (event.outcome !== 'success') return
-    const priorSuccess = rows.slice(0, parameters('auth.new_country.v1').historyLimit).find(row => row.outcome === 'success' && row.source_country && event.sourceCountry && row.source_country !== event.sourceCountry)
+    const countryHistory = rows.slice(0, parameters('auth.new_country.v1').historyLimit).filter(row => row.outcome === 'success' && row.source_country)
+    const priorSuccess = event.sourceCountry && !countryHistory.some(row => row.source_country === event.sourceCountry) ? countryHistory[0] : undefined
     if (enabled.has('auth.new_country.v1') && priorSuccess) {
         await insertFinding(organizationId, 'auth.new_country.v1', 'medium', `Login from new country: ${event.sourceCountry}`, [eventId, priorSuccess.id], { currentCountry: event.sourceCountry, previousCountry: priorSuccess.source_country })
     }
     const currentDevice = event.deviceId
-    const priorDevice = currentDevice && rows.slice(0, parameters('auth.new_device.v1').historyLimit).find(row => row.outcome === 'success' && deviceIdFor(row.normalized) && deviceIdFor(row.normalized) !== currentDevice)
+    const deviceHistory = rows.slice(0, parameters('auth.new_device.v1').historyLimit).filter(row => row.outcome === 'success' && deviceIdFor(row.normalized))
+    const priorDevice = currentDevice && !deviceHistory.some(row => deviceIdFor(row.normalized) === currentDevice) ? deviceHistory[0] : undefined
     if (enabled.has('auth.new_device.v1') && priorDevice) {
         await insertFinding(organizationId, 'auth.new_device.v1', 'medium', 'Successful login from a new device', [eventId, priorDevice.id], { currentDevice, previousDevice: deviceIdFor(priorDevice.normalized) })
     }
@@ -666,11 +675,7 @@ function bearer(req: FastifyRequest) {
     const value = req.headers.authorization
     return typeof value === 'string' && value.startsWith('Bearer ') ? value.slice(7).trim() : ''
 }
-function redact(value: unknown): MillEvent {
-    if (Array.isArray(value)) return value.map(redact) as unknown as MillEvent
-    if (!value || typeof value !== 'object') return value as MillEvent
-    return Object.fromEntries(Object.entries(value).map(([key, child]) => /password|token|secret|cookie|authorization/i.test(key) ? [key, '[REDACTED]'] : [key, redact(child)]))
-}
+function redact(value: unknown): MillEvent { return redactLogValue(value) as MillEvent }
 function coordinatesFor(event: MillEvent) {
     const source = object(event.source)
     const coordinates = object(source.coordinates)

@@ -1,4 +1,5 @@
 import run from '#db'
+import { redactLogText, redactLogValue } from './redact.ts'
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'fatal'
 
@@ -25,14 +26,20 @@ export default async function recordLog({
     level,
     message,
     metadata = {},
+    sourceEventId,
+    timestamp,
 }: {
     service?: string
     host?: string
     level: LogLevel
     message: string
     metadata?: Record<string, unknown>
+    sourceEventId?: string
+    timestamp?: string
 }) {
-    if (!metadata || Array.isArray(metadata)) metadata = {}
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) metadata = {}
+    message = redactLogText(message)
+    metadata = redactLogValue(metadata) as Record<string, unknown>
     const scopeId = typeof metadata.organizationId === 'string' && metadata.organizationId
         ? metadata.organizationId
         : typeof metadata.tenantId === 'string' && metadata.tenantId
@@ -53,7 +60,7 @@ export default async function recordLog({
              WHERE id = $6
              FOR KEY SHARE
         )
-        INSERT INTO service_logs (service, host, level, message, metadata)
+        INSERT INTO service_logs (service, host, level, message, metadata, source_event_id, created_at)
         SELECT
             CASE WHEN private.deleted THEN 'hanasand-api' ELSE $1 END,
             CASE WHEN private.deleted THEN '' ELSE $2 END,
@@ -66,11 +73,13 @@ export default async function recordLog({
                 'tenantId', $6::text,
                 'outcome', 'recorded',
                 'privacyDeletionRunId', private.privacy_deletion_run_id
-            )) ELSE $5::jsonb END
+            )) ELSE $5::jsonb END,
+            $7, COALESCE($8::timestamptz, NOW())
         FROM (
             SELECT
                 COALESCE((SELECT status = 'deleted' OR (audit_safe_metadata ? 'privacyDeletedAt') FROM organization_privacy), FALSE) deleted,
                 (SELECT audit_safe_metadata->>'privacyDeletionRunId' FROM organization_privacy) privacy_deletion_run_id
         ) private
-    `, [service, host, level, message, JSON.stringify(metadata), scopeId])
+        ON CONFLICT (source_event_id) DO NOTHING
+    `, [service, host, level, message, JSON.stringify(metadata), scopeId, sourceEventId || null, timestamp || null])
 }

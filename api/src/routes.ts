@@ -1,3 +1,4 @@
+import { searchLogs } from './handlers/logs/search.ts'
 import { getManagementOrganizations } from './handlers/managementOrganizations.ts'
 import assignVmOrganization from './handlers/vms/organization.ts'
 import { caseRepositoryWebhooks, getCaseDevelopment, getCaseRepositories, postCaseRepository, deleteCaseRepository } from './handlers/caseDevelopment.ts'
@@ -572,6 +573,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/logs/services', getLogServices)
     fastify.get('/logs/realtime', getRealtimeLogs)
     fastify.post('/logs/ingest', ingestLog)
+    fastify.get('/logs/search', searchLogs)
 
     // Mill: customer event ingestion and tenant-scoped analyst workflow
     fastify.post('/mill', ingestMill)

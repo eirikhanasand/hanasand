@@ -23,6 +23,7 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
         events.push({ id: p[0], organization_id: p[2], event_timestamp: p[5], event_type: p[6], action: p[7], outcome: p[8], user_id: p[9], source_ip: p[11], normalized: JSON.parse(p[15]) })
         return { rows: [] }
     }
+    if (sql.includes('UPDATE mill_events')) return { rows: [] }
     if (sql.includes('FROM mill_events')) {
         const result = events.filter(row => row.organization_id === p[0] && (sql.includes('source_ip = $2') ? row.source_ip === p[1] : row.user_id === p[1]) && row.id !== p[2] && row.event_type === 'authentication' && row.action === 'login' && Date.parse(row.event_timestamp) <= Date.parse(p[3]))
             .sort((a, b) => Date.parse(b.event_timestamp) - Date.parse(a.event_timestamp))
