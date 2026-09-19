@@ -1,3 +1,5 @@
+import { getIntelOperationsHealth } from './ti/operationsHealth.ts'
+import { getDeliverySummary } from './ti/delivery.ts'
 import { createHash } from 'node:crypto'
 import { publicMonitoringRequest } from './publicMonitoringRequest.ts'
 import run, { withTransaction } from '#db'
@@ -41,6 +43,8 @@ export function evaluateJsonRule(payload: unknown, rule: JsonRule) {
 }
 
 async function fetchJson(source: JsonSource) {
+    if (['system:ti-collection', 'system:ti-enrichment'].includes(source.target_url || '')) return { payload: await getIntelOperationsHealth(), certificate: { status: 'not_applicable' as const, subject: null, issuer: null, expiresAt: null } }
+    if (source.target_url === 'system:ti-delivery') return { payload: await getDeliverySummary(), certificate: { status: 'not_applicable' as const, subject: null, issuer: null, expiresAt: null } }
     if (source.target_url === 'system:metrics') {
         const result = await getStats()
         return { payload: result.data, certificate: { status: 'not_applicable' as const, subject: null, issuer: null, expiresAt: null } }

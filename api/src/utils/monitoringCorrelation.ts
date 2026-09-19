@@ -10,7 +10,7 @@ export async function correlationKey(query: typeof queryOnce, a: AutomationRow, 
     if ((await query('SELECT to_regclass(\'public.monitoring_case_vms\') AS relation')).rows[0]?.relation) {
         resources = (await query('SELECT vm_name FROM monitoring_case_vms WHERE automation_id=$1 AND target_url=$2 ORDER BY vm_name', [a.id, a.target_url])).rows.map(row => row.vm_name)
     }
-    const restricted = a.target_url === 'system:metrics' || a.action_type === 'mail_health_check'
+    const restricted = ['system:metrics', 'system:ti-delivery', 'system:ti-collection', 'system:ti-enrichment'].includes(a.target_url || '') || a.action_type === 'mail_health_check'
         || [a.model_name, ...(a.notification_destinations || [])].some(value => value?.startsWith('discord-webhook-file:'))
     return createHash('sha256').update(JSON.stringify([monitoringScope(a), restricted, resources,
         a.expected_down || false, a.upside_down || false, kind, socket ? [socket[1], socket[2].toLowerCase()] : fingerprint])).digest('hex')

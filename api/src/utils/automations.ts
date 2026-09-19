@@ -230,7 +230,7 @@ export function normalizeAutomationInput(input: AutomationInput, existing?: Auto
     const prompt = clean(input.prompt) || existing?.prompt || ''
     const monitoringType = parseMonitoringType(input.monitoringType ?? input.monitoring_type ?? existing?.monitoring_type)
     const rawTarget = clean(input.targetUrl ?? input.target_url ?? existing?.target_url)
-    const targetUrl = monitoringType === 'tcp' || monitoringType === 'ssh' || monitoringType === 'json' && rawTarget === 'system:metrics' ? rawTarget : normalizeTargetUrl(rawTarget)
+    const targetUrl = monitoringType === 'tcp' || monitoringType === 'ssh' || monitoringType === 'json' && ['system:metrics', 'system:ti-delivery', 'system:ti-collection', 'system:ti-enrichment'].includes(rawTarget) ? rawTarget : normalizeTargetUrl(rawTarget)
     const jsonRule = monitoringType === 'json' ? normalizeJsonRule(input.jsonRule ?? input.json_rule ?? existing?.json_rule) : null
     const followRedirects = parseBoolean(input.followRedirects ?? input.follow_redirects ?? existing?.follow_redirects, true)
     const userAgent = clean(input.userAgent ?? input.user_agent ?? existing?.user_agent) || null
@@ -262,7 +262,7 @@ export function normalizeAutomationInput(input: AutomationInput, existing?: Auto
         if (!targetUrl) throw new Error('Monitoring needs a URL to check.')
         if (monitoringType === 'tcp' || monitoringType === 'ssh') {
             if (!/^[^:/\s]+(?::\d+)?$/.test(targetUrl)) throw new Error(`${monitoringType.toUpperCase()} checks need a host and optional port.`)
-        } else if (!(monitoringType === 'json' && targetUrl === 'system:metrics')) {
+        } else if (!(monitoringType === 'json' && ['system:metrics', 'system:ti-delivery', 'system:ti-collection', 'system:ti-enrichment'].includes(targetUrl!))) {
             let parsedUrl: URL
             try { parsedUrl = monitoringUrl(targetUrl) } catch { throw new Error('Monitoring URL must be a valid HTTP or HTTPS URL.') }
             if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error('Monitoring URL must use HTTP or HTTPS.')
