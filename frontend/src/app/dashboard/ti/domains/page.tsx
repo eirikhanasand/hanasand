@@ -25,7 +25,7 @@ export default async function TiDomainsPage() {
         <DashboardPage>
             <DashboardHeader
                 eyebrow='Threat intelligence'
-                title='Monitored entities'
+                title='Watchlist'
                 description='Triage companies, domains, vendors, and brands surfaced by monitored sources.'
             />
             <TiDataAvailability availability={overview.availability} />

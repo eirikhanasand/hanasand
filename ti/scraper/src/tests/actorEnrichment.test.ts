@@ -5,14 +5,15 @@ import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 const options = (store: InMemoryScraperStore) => ({ store, frontier: {} as any });
 
 describe("actor enrichment operations", () => {
-  test("records a durable run and reports idle status with its last successful run", async () => {
+  test("triggers the real worker and never fabricates a completed run", async () => {
     const store = new InMemoryScraperStore();
-    const created = await handleActorEnrichmentRequest(new Request("http://localhost/v1/intel/actor-enrichment/runs", { method: "POST", body: JSON.stringify({ tenantId: "tenant-a" }), headers: { "content-type": "application/json" } }), options(store) as any);
-    expect(created?.status).toBe(201);
-    const status = await handleActorEnrichmentRequest(new Request("http://localhost/v1/intel/actor-enrichment/status?tenantId=tenant-a"), options(store) as any);
-    const body = await status?.json();
-    expect(body.worker).toMatchObject({ state: "idle", snapshotFresh: true });
-    expect(body.latestRun).toMatchObject({ status: "completed", actorCount: 0, failureCount: 0 });
+    const request = () => new Request("http://localhost/v1/intel/actor-enrichment/runs", { method: "POST", body: JSON.stringify({ tenantId: "default" }), headers: { "content-type": "application/json" } });
+    expect((await handleActorEnrichmentRequest(request(), options(store) as any))?.status).toBe(503);
+    let started = false;
+    const response = await handleActorEnrichmentRequest(request(), { ...options(store), actorEnrichmentWorker: { run: () => { started = true; } } } as any);
+    expect(response?.status).toBe(202);
+    expect(started).toBe(true);
+    expect(store.listActorEnrichmentRuns()).toEqual([]);
   });
 
   test("keeps profile timeline tenant-scoped", async () => {
@@ -28,7 +29,7 @@ describe("actor enrichment operations", () => {
   test("returns stable pagination metadata for enrichment history", async () => {
     const store = new InMemoryScraperStore();
     for (let index = 0; index < 3; index += 1) {
-      await handleActorEnrichmentRequest(new Request("http://localhost/v1/intel/actor-enrichment/runs", { method: "POST", body: JSON.stringify({ tenantId: "tenant-a" }), headers: { "content-type": "application/json" } }), options(store) as any);
+      store.saveActorEnrichmentRun({ id: `run-${index}`, tenantId: 'tenant-a', status: 'completed', updatedAt: new Date().toISOString() });
     }
     const response = await handleActorEnrichmentRequest(new Request("http://localhost/v1/intel/actor-enrichment/runs?tenantId=tenant-a&limit=2&cursor=0"), options(store) as any);
     const body = await response?.json();

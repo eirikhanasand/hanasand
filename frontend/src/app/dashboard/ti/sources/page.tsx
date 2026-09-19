@@ -30,7 +30,7 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
     const executable = rows.filter(source => source.status === 'active')
 
     return <DashboardPage>
-        <DashboardHeader eyebrow='Threat intelligence' title='Source inventory' description='The feeds Hanasand can collect, their current health, and the customer value they produce.' actions={executable.length ? <ManualRunButton label='Run active sources' /> : undefined} />
+        <DashboardHeader eyebrow='Threat intelligence' title='Feeds' description='The feeds Hanasand can collect, their current health, and the customer value they produce.' actions={executable.length ? <ManualRunButton label='Run active feeds' /> : undefined} />
         <DashboardPanel className='flex flex-wrap items-center justify-between gap-3 border-ui-border bg-ui-panel p-4'>
             <div className='text-sm text-ui-muted'>{overview.sourcePage.total} sources · {overview.sourceTotals.executable} executable</div>
         </DashboardPanel>
@@ -44,7 +44,7 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
                 <SourceFilters />
                 <div className='overflow-x-auto'>
                     <div className='min-w-[78rem]'>
-                        <div className='grid grid-cols-[1.55fr_0.8fr_0.85fr_0.85fr_0.8fr_0.8fr_1.35fr] gap-3 border-b border-ui-border bg-ui-canvas px-4 py-2 text-[11px] font-semibold uppercase text-ui-muted'><SortHeader label='Source' field='source' scope={scope} sort={sort} direction={direction} filters={filters} /><SortHeader label='Access' field='access' scope={scope} sort={sort} direction={direction} filters={filters} /><SortHeader label='Status' field='status' scope={scope} sort={sort} direction={direction} filters={filters} /><SortHeader label='Last useful output' field='useful' scope={scope} sort={sort} direction={direction} filters={filters} /><span title='Collection runs that produced useful output'>Useful output count</span><SortHeader label='Matches' field='matches' scope={scope} sort={sort} direction={direction} filters={filters} /><span>Actions</span></div>
+                        <div className='grid grid-cols-[1.55fr_0.8fr_0.85fr_0.85fr_0.8fr_0.8fr_1.35fr] gap-3 border-b border-ui-border bg-ui-canvas px-4 py-2 text-[11px] font-semibold uppercase text-ui-muted'><SortHeader label='Feed' field='source' scope={scope} sort={sort} direction={direction} filters={filters} /><SortHeader label='Access' field='access' scope={scope} sort={sort} direction={direction} filters={filters} /><SortHeader label='Status' field='status' scope={scope} sort={sort} direction={direction} filters={filters} /><SortHeader label='Last useful output' field='useful' scope={scope} sort={sort} direction={direction} filters={filters} /><span title='Collection runs that produced useful output'>Useful output count</span><SortHeader label='Matches' field='matches' scope={scope} sort={sort} direction={direction} filters={filters} /><span>Actions</span></div>
                         {!rows.length ? <p className='p-4 text-sm text-ui-muted'>No sources on this page. Change the filters or return to the previous page.</p> : null}
                         {rows.map(source => <SourceRow key={source.id} source={source} scope={scope} />)}
                     </div>

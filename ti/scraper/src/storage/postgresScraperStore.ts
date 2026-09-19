@@ -80,7 +80,8 @@ const DEFAULT_MIGRATIONS = [
   { version: "042_organization_workflow_events", path: fileURLToPath(new URL("../../migrations/042_organization_workflow_events.sql", import.meta.url)) },
   { version: "043_skip_duplicate_capture_rows", path: fileURLToPath(new URL("../../migrations/043_skip_duplicate_capture_rows.sql", import.meta.url)) },
   { version: "044_exposure_query_statistics", path: fileURLToPath(new URL("../../migrations/044_exposure_query_statistics.sql", import.meta.url)) },
-  { version: "046_processing_backlog_indexes", path: fileURLToPath(new URL("../../migrations/046_processing_backlog_indexes.sql", import.meta.url)) }
+  { version: "046_processing_backlog_indexes", path: fileURLToPath(new URL("../../migrations/046_processing_backlog_indexes.sql", import.meta.url)) },
+  { version: "047_enrichment_activity_index", path: fileURLToPath(new URL("../../migrations/047_enrichment_activity_index.sql", import.meta.url)) },
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 const MAINTENANCE_MIGRATION_VERSIONS = new Set(["037_remove_parser_fallback_artifacts"]);
@@ -2320,6 +2321,69 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const last = pageRows.at(-1) as { id?: string, updated_at?: string } | undefined;
     return { records: pageRows.map(readRecord), total: Number(countRows[0]?.total ?? 0), nextCursor: hasNext ? encodeKeysetCursor(last?.updated_at, last?.id) : undefined };
   }
+  async queryIntelWorkerHealth() {
+    const [collection, enrichment] = await Promise.all([
+      this.sql`SELECT completed_at AS at, id, task_count FROM threat_intel.collection_runs
+        WHERE status IN ('completed', 'degraded') AND completed_at IS NOT NULL ORDER BY completed_at DESC LIMIT 1`,
+      this.sql`SELECT record FROM threat_intel.workflow_records WHERE record_type = 'actor_enrichment_run'
+        AND updated_at > now() - interval '1 hour' ORDER BY updated_at DESC LIMIT 500`
+    ]);
+    return { collection: collection[0] ?? null, enrichment: enrichment.map(readRecord) };
+  }
+
+  async queryActorsDueForEnrichment() {
+    const rows = await this.sql`SELECT p.record FROM threat_intel.actor_profiles p
+      LEFT JOIN LATERAL (SELECT max(updated_at) AS attempted FROM threat_intel.workflow_records w
+        WHERE w.record_type = 'actor_enrichment_run' AND w.record->>'actorId' = p.id) last ON true
+      WHERE p.tenant_id = 'default' AND COALESCE(p.record->>'identityResolutionState', 'active') <> 'archived'
+        AND (last.attempted IS NULL OR last.attempted < now() - interval '1 hour')
+      ORDER BY last.attempted ASC NULLS FIRST, p.last_seen_at DESC LIMIT 100`;
+    return rows.map(readRecord);
+  }
+  async queryActorEnrichmentCaptures(profile: any) {
+    const ids = (profile.captureIds ?? []).slice(-5000);
+    const rows = await this.sql`SELECT record FROM threat_intel.captures WHERE id IN (SELECT jsonb_array_elements_text(${JSON.stringify(ids)}::jsonb))
+      AND (tenant_id IS NULL OR tenant_id = ${profile.tenantId ?? null}) AND COALESCE(record->>'sensitive', 'false') <> 'true'
+      AND length(COALESCE(record#>>'{metadata,normalizedEvidence,text}', record->>'body', '')) >= 60
+      ORDER BY collected_at DESC LIMIT 2`;
+    return rows.map(readRecord);
+  }
+
+  async queryEnrichmentOverview(tenantId = "default", query = "") {
+    const pattern = query.trim() ? `%${query.trim().slice(0, 100)}%` : null;
+    const [profiles, updates, runs, queue] = await Promise.all([
+      this.sql`SELECT jsonb_build_object('id', id, 'canonicalName', canonical_name, 'confidence', confidence,
+        'firstSeenAt', first_seen_at, 'lastSeenAt', last_seen_at, 'updatedAt', updated_at, 'evidenceCount', evidence_count,
+        'aliases', detail.aliases, 'sourceIds', detail."sourceIds", 'captureIds', jsonb_path_query_array(COALESCE(detail."captureIds", '[]'::jsonb), '$[0 to 4]')) AS record
+        FROM threat_intel.actor_profiles CROSS JOIN LATERAL jsonb_to_record(record) AS detail(aliases jsonb, "sourceIds" jsonb, "captureIds" jsonb, "identityResolutionState" text) WHERE tenant_id = ${tenantId}
+        AND COALESCE(detail."identityResolutionState", 'active') <> 'archived'
+        ORDER BY last_seen_at DESC LIMIT 100`,
+      this.sql`SELECT jsonb_build_object('id', w.id, 'subjectId', detail."subjectId",
+        'actorName', p.canonical_name, 'observedAt', w.updated_at, 'kind', detail."kind",
+        'sourceId', detail."sourceId", 'sourceName', s.name,
+        'captureIds', '[]'::jsonb, 'metadata', jsonb_build_object(
+          'aliasesAdded', detail.metadata->'aliasesAdded',
+          'characterization', (SELECT jsonb_object_agg(key, true) FROM jsonb_object_keys(COALESCE(detail.metadata->'characterization', '{}'::jsonb)) key),
+          'wordsAdded', detail.metadata->'wordsAdded',
+          'newFacts', detail.metadata->'newFacts')) AS record
+        FROM threat_intel.workflow_records w
+        CROSS JOIN LATERAL jsonb_to_record(w.record) AS detail("subjectId" text, kind text, "sourceId" text, "subjectType" text, metadata jsonb)
+        LEFT JOIN threat_intel.actor_profiles p ON p.id = detail."subjectId" AND p.tenant_id = w.tenant_id
+        LEFT JOIN threat_intel.sources s ON s.id = detail."sourceId"
+        WHERE w.record_type = 'evidence_delta' AND w.tenant_id = ${tenantId} AND w.record->>'subjectType' = 'actor_profile'
+        AND (${pattern}::text IS NULL OR p.canonical_name ILIKE ${pattern} OR s.name ILIKE ${pattern}
+          OR detail."kind" ILIKE ${pattern})
+        ORDER BY w.updated_at DESC, w.id DESC LIMIT 100`,
+      this.sql`SELECT record FROM threat_intel.workflow_records WHERE record_type = 'actor_enrichment_run'
+        AND tenant_id = ${tenantId} ORDER BY updated_at DESC LIMIT 500`,
+      this.sql`SELECT count(*)::int AS count FROM threat_intel.actor_profiles p
+        WHERE p.tenant_id = ${tenantId} AND COALESCE(p.record->>'identityResolutionState', 'active') <> 'archived'
+        AND NOT EXISTS (SELECT 1 FROM threat_intel.workflow_records w WHERE w.record_type = 'actor_enrichment_run'
+          AND w.tenant_id = p.tenant_id AND w.record->>'actorId' = p.id AND w.updated_at > now() - interval '1 hour')`
+    ]);
+    return { profiles: profiles.map(readRecord), updates: updates.map(readRecord), runs: runs.map(readRecord), queued: Number(queue[0]?.count ?? 0) };
+  }
+
   async queryEvidenceDeltas(input: { tenantId?: string; query?: string; limit?: number; offset?: number } = {}) {
     const limit = Math.max(1, Math.min(100, Number(input.limit ?? 25)));
     const offset = Math.max(0, Number(input.offset ?? 0));

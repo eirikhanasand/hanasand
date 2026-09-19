@@ -32,6 +32,8 @@ export type TiActivityEvent = {
 export type TiProfileUpdate = {
     id: string
     actorId: string
+    actorName?: string
+    sourceName?: string
     observedAt: string
     sourceId: string
     captureIds: string[]
@@ -79,6 +81,8 @@ export type TiEnrichmentOverview = {
         automaticCoverage: number
         totalRefreshes: number
         profilesProcessed: number
+        wordsAdded: number
+        newFacts: number
         profilesChanged: number
         sourceRecords: number
         evidenceRecords: number
@@ -145,32 +149,26 @@ export type TiPipelineOverview = {
 }
 
 // Next's fetch cache handles reuse; await the first snapshot before rendering.
-export async function getTiEnrichmentOverview(): Promise<TiEnrichmentOverview> {
-    const [profiles, updates, status] = await Promise.all([
-        getPersistedActorProfiles(),
-        getPersistedProfileUpdates(),
-        getPersistedEnrichmentStatus(),
-    ])
-    return passiveOverview(profiles ?? [], updates ?? [], status, Boolean(profiles && updates && status))
+export async function getTiEnrichmentOverview(query = ''): Promise<TiEnrichmentOverview> {
+    try {
+        const target = new URL('/v1/intel/actor-enrichment/overview', tiScraperApiBase())
+        target.searchParams.set('tenantId', 'default')
+        if (query) target.searchParams.set('q', query.slice(0, 100))
+        const serviceToken = process.env.TI_SCRAPER_SERVICE_TOKEN?.trim()
+        const response = await fetch(target, { next: { revalidate: 5 }, headers: serviceToken ? { 'x-hanasand-service-token': serviceToken } : undefined, signal: AbortSignal.timeout(2_000) })
+        if (!response.ok) throw new Error('Enrichment overview unavailable')
+        const data = await response.json()
+        return passiveOverview(data.profiles.map(persistedProfile).filter(Boolean), data.updates.map(profileUpdate).filter(Boolean), data.status, true)
+    } catch {
+        return passiveOverview([], [], undefined, false)
+    }
 }
 
 type PersistedEnrichmentStatus = {
     worker: { state: TiWorkerState, lastRunAt: string | null, lastSuccessfulRunAt: string | null, currentFailure: string | null, snapshotFresh: boolean }
+    queued?: number
+    productivity?: { profiles: number, wordsAdded: number, newFacts: number }
     latestRun: { id: string, status: string, actorCount: number, sourceCount: number, changedFieldCount: number, evidenceCount: number, failureCount: number, finishedAt: string | null } | null
-}
-
-async function getPersistedEnrichmentStatus(): Promise<PersistedEnrichmentStatus | undefined> {
-    try {
-        const target = new URL('/v1/intel/actor-enrichment/status', tiScraperApiBase())
-        target.searchParams.set('tenantId', 'default')
-        const serviceToken = process.env.TI_SCRAPER_SERVICE_TOKEN?.trim()
-        const response = await fetch(target, { cache: 'force-cache', next: { revalidate: 5 }, headers: serviceToken ? { 'x-hanasand-service-token': serviceToken } : undefined, signal: AbortSignal.timeout(2_000) })
-        if (!response.ok) return undefined
-        const payload = await response.json() as PersistedEnrichmentStatus
-        return payload.worker && ['active', 'idle', 'unavailable'].includes(payload.worker.state) ? payload : undefined
-    } catch {
-        return undefined
-    }
 }
 
 type PersistedActorProfile = {
@@ -187,43 +185,6 @@ type PersistedActorProfile = {
     actorType: string
 }
 
-async function getPersistedActorProfiles(): Promise<PersistedActorProfile[] | undefined> {
-    try {
-        const base = tiScraperApiBase()
-        const target = new URL('/v1/intel/actor-profiles', base)
-        target.searchParams.set('tenantId', 'default')
-        target.searchParams.set('limit', '100')
-        const serviceToken = process.env.TI_SCRAPER_SERVICE_TOKEN?.trim()
-        const response = await fetch(target, {
-            cache: 'force-cache',
-            next: { revalidate: 5 },
-            headers: serviceToken ? { 'x-hanasand-service-token': serviceToken } : undefined,
-            signal: AbortSignal.timeout(5_000),
-        })
-        if (!response.ok) return undefined
-        const payload = await response.json() as { actorProfiles?: unknown[] }
-        return payload.actorProfiles?.map(profile => persistedProfile(profile)).filter((profile): profile is PersistedActorProfile => Boolean(profile))
-    } catch {
-        return undefined
-    }
-}
-
-async function getPersistedProfileUpdates(): Promise<TiProfileUpdate[] | undefined> {
-    try {
-        const target = new URL('/v1/intel/evidence-deltas', tiScraperApiBase())
-        target.searchParams.set('tenantId', 'default')
-        target.searchParams.set('q', 'actor_profile')
-        target.searchParams.set('limit', '100')
-        const serviceToken = process.env.TI_SCRAPER_SERVICE_TOKEN?.trim()
-        const response = await fetch(target, { cache: 'force-cache', next: { revalidate: 5 }, headers: serviceToken ? { 'x-hanasand-service-token': serviceToken } : undefined, signal: AbortSignal.timeout(5_000) })
-        if (!response.ok) return undefined
-        const payload = await response.json() as { evidenceDeltas?: unknown[] }
-        return payload.evidenceDeltas?.map(profileUpdate).filter((update): update is TiProfileUpdate => Boolean(update))
-    } catch {
-        return undefined
-    }
-}
-
 function profileUpdate(value: unknown): TiProfileUpdate | undefined {
     if (!value || typeof value !== 'object') return undefined
     const record = value as Record<string, unknown>
@@ -235,7 +196,7 @@ function profileUpdate(value: unknown): TiProfileUpdate | undefined {
     const aliases = listValue(metadata.aliasesAdded).map(stringValue).filter(Boolean)
     const fields = Object.keys(metadata.characterization && typeof metadata.characterization === 'object' ? metadata.characterization as object : {})
     const changedFields = [...new Set([...aliases.map(alias => `alias: ${alias}`), ...fields])]
-    return { id, actorId, observedAt, sourceId: stringValue(record.sourceId), captureIds: listValue(record.captureIds).map(stringValue).filter(Boolean), kind: stringValue(record.kind, 'updated'), changedFields, summary: changedFields.length ? changedFields.join(' · ') : 'New retained evidence linked to this profile.' }
+    return { id, actorId, actorName: stringValue(record.actorName), sourceName: stringValue(record.sourceName), observedAt, sourceId: stringValue(record.sourceId), captureIds: listValue(record.captureIds).map(stringValue).filter(Boolean), kind: stringValue(record.kind, 'updated'), changedFields, summary: changedFields.length ? changedFields.join(' · ') : 'New retained evidence linked to this profile.' }
 }
 
 function persistedProfile(value: unknown): PersistedActorProfile | undefined {
@@ -280,11 +241,11 @@ function passiveOverview(profiles: PersistedActorProfile[], updates: TiProfileUp
     }
     const activity = updates.map((update) => {
         const actor = actors.get(update.actorId)
-        const source = update.sourceId || 'retained evidence'
+        const source = update.sourceName || update.sourceId || 'retained evidence'
         return {
             id: update.id,
             actorId: update.actorId,
-            actorName: actor?.name || update.actorId,
+            actorName: update.actorName || actor?.name || update.actorId,
             happenedAt: update.observedAt,
             title: update.summary,
             detail: update.changedFields.join(' · ') || 'Profile evidence updated.',
@@ -316,12 +277,14 @@ function passiveOverview(profiles: PersistedActorProfile[], updates: TiProfileUp
         updates,
         auditLog: [],
         stats: {
-            updatedLastHour,
-            queued: 0,
+            updatedLastHour: status?.productivity?.profiles ?? updatedLastHour,
+            queued: status?.queued ?? 0,
             auditedEvents: 0,
             automaticCoverage: profiles.length,
             totalRefreshes: activity.length,
             profilesProcessed: status?.latestRun?.actorCount ?? 0,
+            wordsAdded: status?.productivity?.wordsAdded ?? 0,
+            newFacts: status?.productivity?.newFacts ?? 0,
             profilesChanged: status?.latestRun?.changedFieldCount ?? 0,
             sourceRecords: status?.latestRun?.sourceCount ?? 0,
             evidenceRecords: status?.latestRun?.evidenceCount ?? 0,

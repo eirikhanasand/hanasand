@@ -1,5 +1,5 @@
 import { paginationCursor } from "./pagination.ts";
-import { actorEnrichmentRun, actorEnrichmentRunSummary, actorProfileTimeline, type ActorEnrichmentRun } from "../product/actorEnrichment.ts";
+import { actorEnrichmentRunSummary, actorProfileTimeline, type ActorEnrichmentRun } from "../product/actorEnrichment.ts";
 import { error, json, readJson } from "./http.ts";
 import { inTenantScope, resolveTenantScope } from "./tenantScope.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
@@ -14,40 +14,54 @@ async function scopedRuns(store: any, tenantId?: string): Promise<ActorEnrichmen
   return (await records(store, "listActorEnrichmentRuns")).filter((run) => inTenantScope(run, tenantId));
 }
 
-function runFromData(tenantId: string | undefined, profiles: any[], deltas: any[], previous?: ActorEnrichmentRun | null, link: "resumeOf" | "retryOf" = "resumeOf") {
-  const startedAt = new Date().toISOString();
-  const changedFieldCount = deltas.reduce((count, delta) => {
-    const metadata = delta.metadata && typeof delta.metadata === "object" ? delta.metadata : {};
-    return count + Object.keys(metadata.characterization && typeof metadata.characterization === "object" ? metadata.characterization : {}).length + (Array.isArray(metadata.aliasesAdded) ? metadata.aliasesAdded.length : 0);
-  }, 0);
-  const run = actorEnrichmentRun({
-    tenantId,
-    status: "completed",
-    startedAt,
-    finishedAt: new Date().toISOString(),
-    actorCount: profiles.length,
-    sourceCount: new Set(deltas.map((delta) => delta.sourceId).filter(Boolean)).size,
-    changedFieldCount,
-    evidenceCount: new Set(deltas.flatMap((delta) => Array.isArray(delta.captureIds) ? delta.captureIds : [])).size,
-    failureCount: 0,
-    errorCategories: [],
-    cursor: profiles.length,
-    ...(previous ? { [link]: previous.id } : {}),
-  });
-  return run;
-}
 
 export async function handleActorEnrichmentRequest(request: Request, options: ApiServerOptions): Promise<Response | undefined> {
   const url = new URL(request.url);
+  const isHealth = url.pathname === "/v1/intel/operations/health" && request.method === "GET";
+  const isOverview = url.pathname === "/v1/intel/actor-enrichment/overview" && request.method === "GET";
   const isStatus = url.pathname === "/v1/intel/actor-enrichment/status" && request.method === "GET";
   const isRuns = url.pathname === "/v1/intel/actor-enrichment/runs";
   const isTimeline = /^\/v1\/intel\/actor-profiles\/[^/]+\/timeline$/.test(url.pathname) && request.method === "GET";
-  if (!isStatus && !isRuns && !isTimeline) return undefined;
+  if (!isHealth && !isOverview && !isStatus && !isRuns && !isTimeline) return undefined;
   const body = request.method === "POST" ? await readJson<any>(request) : undefined;
   const scope = resolveTenantScope(request, url, body?.tenantId);
   if (scope.error) return scope.error;
   const tenantId = scope.tenantId;
   const store = options.store as any;
+
+  if (isHealth) {
+    const data = await store.queryIntelWorkerHealth();
+    const at = data.collection?.at;
+    const ageSeconds = at ? Math.max(0, (Date.now() - Date.parse(at)) / 1000) : null;
+    const runs = data.enrichment;
+    const profiles = new Set(runs.flatMap((run: any) => run.changedActorIds ?? [])).size;
+    const newFacts = runs.reduce((n: number, run: any) => n + Number(run.newFacts ?? 0), 0);
+    const wordsAdded = runs.reduce((n: number, run: any) => n + Number(run.wordsAdded ?? 0), 0);
+    const last = runs[0];
+    const workerRunning = Boolean(last && Date.now() - Date.parse(last.updatedAt) < 3_600_000 && last.status !== "failed");
+    return json({ generatedAt: new Date().toISOString(),
+      collection: { critical: ageSeconds === null || ageSeconds > 300, lastRunAt: at, ageSeconds, thresholdSeconds: 300, runId: data.collection?.id },
+      enrichment: { critical: !workerRunning || profiles === 0 || newFacts === 0, workerRunning,
+        profilesEditedLastHour: profiles, newFactsLastHour: newFacts, wordsAddedLastHour: wordsAdded,
+        lastRunAt: last?.updatedAt ?? null, error: last?.error ?? null,
+        profiles: runs.filter((run: any) => run.newFacts > 0).map((run: any) => ({ actorId: run.actorId, wordsAdded: run.wordsAdded, newFacts: run.newFacts })) }
+    });
+  }
+
+  if (isOverview) {
+    const result = await store.queryEnrichmentOverview(tenantId ?? "default", url.searchParams.get("q") ?? "");
+    const latest = result.runs[0];
+    const recent = result.runs.filter((run: any) => Date.now() - Date.parse(run.finishedAt ?? run.startedAt) < 3_600_000);
+    return json({ profiles: result.profiles, updates: result.updates, status: {
+      worker: { state: latest?.status === "failed" ? "unavailable" : latest && Date.now() - Date.parse(latest.updatedAt) < 300_000 ? "active" : "idle",
+        lastRunAt: latest?.finishedAt, lastSuccessfulRunAt: result.runs.find((run: any) => run.status === "completed")?.finishedAt,
+        currentFailure: latest?.status === "failed" ? latest.error : null, snapshotFresh: Boolean(latest && Date.now() - Date.parse(latest.updatedAt) < 300_000) },
+      latestRun: actorEnrichmentRunSummary(latest), queued: result.queued ?? 0,
+      productivity: { profiles: new Set(recent.flatMap((run: any) => run.changedActorIds ?? [])).size,
+        wordsAdded: recent.reduce((n: number, run: any) => n + Number(run.wordsAdded ?? 0), 0),
+        newFacts: recent.reduce((n: number, run: any) => n + Number(run.newFacts ?? 0), 0) }
+    } });
+  }
 
   if (isTimeline) {
     const actorId = decodeURIComponent(url.pathname.split("/")[4] ?? "");
@@ -65,7 +79,7 @@ export async function handleActorEnrichmentRequest(request: Request, options: Ap
   }
 
   if (isStatus) {
-    const runs = await scopedRuns(store, tenantId);
+    const runs = typeof store.queryActorEnrichmentRuns === "function" ? (await store.queryActorEnrichmentRuns({ tenantId, limit: 100 })).records : await scopedRuns(store, tenantId);
     const latest = runs[0];
     const running = runs.find((run) => run.status === "running");
     const limit = Math.max(1, Math.min(100, Number(url.searchParams.get("limit") ?? 20)));
@@ -90,7 +104,7 @@ export async function handleActorEnrichmentRequest(request: Request, options: Ap
       nextCursor,
       previousCursor,
       pagination: { limit, cursor: String(offset), nextCursor, previousCursor, appliedFilters: {}, sortField: "updatedAt", direction: "desc" },
-      queued: 0,
+      queued: Number((latest as any)?.queued ?? 0),
     });
   }
 
@@ -111,13 +125,8 @@ export async function handleActorEnrichmentRequest(request: Request, options: Ap
   }
 
   if (request.method !== "POST") return error("method_not_allowed", "Method not allowed", 405);
-  const profiles = (await records(store, "listActorProfiles")).filter((profile) => inTenantScope(profile, tenantId));
-  const deltas = (await records(store, "listEvidenceDeltas"))
-    .filter((delta) => delta.subjectType === "actor_profile" && inTenantScope(delta, tenantId));
-  const runs = await scopedRuns(store, tenantId);
-  const previous = body?.runId ? runs.find((run) => run.id === body.runId) : runs[0];
-  const link = body?.action === "retry" ? "retryOf" : "resumeOf";
-  const run = runFromData(tenantId, profiles, deltas, body?.action === "retry" || body?.action === "resume" ? previous : null, link);
-  store.saveActorEnrichmentRun(run);
-  return json({ run: actorEnrichmentRunSummary(run) }, 201);
+  const worker = (options as any).actorEnrichmentWorker;
+  if (!worker) return error("enrichment_unavailable", "The GPU enrichment worker is unavailable.", 503);
+  worker.run();
+  return json({ accepted: true, status: "queued" }, 202);
 }

@@ -48,17 +48,14 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
         group('Threat intelligence', [
             group('Intelligence', [
                 link('Latest Activity', '/ti/activity', isAdmin),
-                link('Attacks', '/ti/attacks', isAdmin),
                 link('Actor Profiles', '/ti/enrichment', isAdmin),
             ]),
             group('Collection', [
                 link('Overview', '/ti/control', isAdmin),
-                link('Sources', '/ti/sources', isAdmin),
-                link('Watched Entities', '/ti/domains', isAdmin),
-                link('Collection Runs', '/ti/runs', isAdmin),
-            ]),
-            group('Quality & oversight', [
-                link('Timeliness', '/ti/timeliness', canReviewIntel),
+                link('Feeds', '/ti/sources', isAdmin),
+                link('Watchlist', '/ti/domains', isAdmin),
+                link('Collection', '/ti/runs', isAdmin),
+                link('Delivery', '/ti/timeliness', canReviewIntel),
             ]),
         ]),
         group('Automation', [

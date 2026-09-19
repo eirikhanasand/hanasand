@@ -387,6 +387,10 @@ export function operationalQueryRow(row: any, generatedAt: string) {
     family: sourceFamily(source),
     lifecycleStatus: source.status,
     executable: row.collection_executable === true,
+    nextRunAt: row.collection_executable === true ? new Date(Math.max(
+      Date.parse(source.crawlState?.nextEligibleAt ?? '') || ((Date.parse(qualification.lastCheckedAt ?? '') || Date.parse(generatedAt)) + Number(source.crawlFrequencySeconds ?? 3600) * 1000),
+      Date.parse(source.crawlState?.backoffUntil ?? '') || 0
+    )).toISOString() : null,
     operatingMode: {
       ...(safeSource as any).operatingMode,
       accessMethod: source.accessMethod,
