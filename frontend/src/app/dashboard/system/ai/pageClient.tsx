@@ -250,9 +250,18 @@ export default function GPT_Page() {
                             </Link>
                         </div>
                     </div>
-                    <EconomicsPanel economics={economics} error={economicsError} aiContainers={aiContainers} containerError={containerError} />
+                    <AIContainerHealth containers={aiContainers} error={containerError} />
                     <div id='ai-clients' data-ai-clients>
-                        {gpt.clients.length ? <GPT_Content clients={gpt.clients} onTestClient={gpt.openChat} /> : <GPT_EmptyState />}
+                        {gpt.clients.length ? (
+                            <GPT_Content clients={gpt.clients} onTestClient={gpt.openChat} metrics={<ReliabilityCards economics={economics} error={economicsError} />} />
+                        ) : (
+                            <div className='space-y-4'>
+                                <div className='grid gap-4 md:grid-cols-2'>
+                                    <ReliabilityCards economics={economics} error={economicsError} />
+                                </div>
+                                <GPT_EmptyState />
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -268,30 +277,6 @@ export default function GPT_Page() {
                 />
             ) : null}
         </>
-    )
-}
-
-function EconomicsPanel({ economics, error, aiContainers, containerError }: { economics: AIEconomics | null, error: string | null, aiContainers: DockerContainer[], containerError: string | null }) {
-    if (error) {
-        return (
-            <section className='rounded-xl bg-ui-panel p-4 border border-ui-border'>
-                <p className='text-sm text-ui-danger'>{error}</p>
-            </section>
-        )
-    }
-    if (!economics) {
-        return (
-            <section className='rounded-xl bg-ui-panel p-4 border border-ui-border'>
-                <p className='text-sm text-ui-muted'>Connecting AI worker telemetry...</p>
-            </section>
-        )
-    }
-
-    return (
-        <section className='space-y-4 rounded-xl bg-ui-panel p-4 border border-ui-border'>
-            <AIContainerHealth containers={aiContainers} error={containerError} />
-            <ReliabilityPanel reliability={economics.reliability} />
-        </section>
     )
 }
 
@@ -343,42 +328,48 @@ function healthToneClass(tone: ReturnType<typeof containerHealth>['tone']) {
     return 'border-ui-border bg-ui-raised text-ui-muted'
 }
 
-function ReliabilityPanel({ reliability }: { reliability: AIEconomics['reliability'] }) {
+function ReliabilityCards({ economics, error }: { economics: AIEconomics | null, error: string | null }) {
+    if (error || !economics) {
+        return <div className='rounded-lg border border-ui-border bg-ui-panel p-4 text-sm text-ui-muted' role={error ? 'alert' : 'status'}>{error || 'Loading activity…'}</div>
+    }
+    const { reliability } = economics
     const queuedRows = reliability.queueDepth.filter((row) => row.status === 'queued' || row.status === 'running')
 
     return (
-        <div className='rounded-lg border border-ui-border bg-ui-raised p-4' id='ai-reliability' data-ai-reliability>
-            <div className='grid gap-3 md:grid-cols-2'>
-                <EconomicsStat icon={<Activity className='h-4 w-4' />} label='Queue capacity' value={`${reliability.capacity.totalAvailableSessions} open`} detail={`${reliability.capacity.totalActiveSessions} active, ${reliability.capacity.totalQueued} queued across workers`} />
-                <EconomicsStat icon={<Timer className='h-4 w-4' />} label='Time to first response' value={reliability.promptTiming.sampleCount ? formatDuration(reliability.promptTiming.p50FirstUsefulOutputMs) : 'No runs yet'} detail={reliability.promptTiming.sampleCount ? `Typical response time · ${reliability.promptTiming.sampleCount} runs` : 'Shown after the first completed run'} />
-            </div>
-
-            <div className='mt-4 rounded-lg border border-ui-border bg-ui-raised p-4'>
-                <div className='flex items-center justify-between gap-3'>
-                    <h4 className='text-sm font-semibold text-ui-text'>Active and queued work</h4>
-                    <span className='text-xs text-ui-muted'>{queuedRows.reduce((total, row) => total + row.count, 0)} runs</span>
+        <>
+            <EconomicsStat icon={<Timer className='h-4 w-4' />} label='Time to first response' value={reliability.promptTiming.sampleCount ? formatDuration(reliability.promptTiming.p50FirstUsefulOutputMs) : 'No runs yet'} detail={reliability.promptTiming.sampleCount ? `Typical response time · ${reliability.promptTiming.sampleCount} runs` : 'Shown after the first completed run'} />
+            <div className='min-w-0 rounded-lg border border-ui-border bg-ui-panel p-4'>
+                <div className='flex items-center justify-between gap-2 text-ui-muted'>
+                    <span className='text-xs font-medium uppercase tracking-[0.18em]'>Active and queued work</span>
+                    <Activity className='h-4 w-4 shrink-0' />
                 </div>
-                <div className='mt-3 max-h-52 space-y-2 overflow-auto'>
-                    {queuedRows.length ? queuedRows.map((row) => (
-                        <div key={`${row.lane}-${row.kind}-${row.status}`} className='grid grid-cols-[1fr_auto] gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-xs'>
-                            <div>
-                                <p className='font-medium text-ui-text'>{row.lane} · {row.model}</p>
-                                <p className='mt-1 text-ui-muted'>{row.kind} · {row.status}</p>
-                            </div>
-                            <span className='self-center text-sm font-semibold text-ui-text'>{row.count}</span>
+                <div className='mt-3 text-2xl font-semibold text-ui-text'>{queuedRows.reduce((total, row) => total + row.count, 0)} runs</div>
+                {queuedRows.length ? (
+                    <details className='mt-1 text-xs text-ui-muted'>
+                        <summary className='cursor-pointer'>View work</summary>
+                        <div className='mt-2 max-h-40 space-y-2 overflow-auto'>
+                            {queuedRows.map((row) => (
+                                <div key={`${row.lane}-${row.model}-${row.kind}-${row.status}`} className='grid grid-cols-[minmax(0,1fr)_auto] gap-2 rounded-md border border-ui-border bg-ui-raised px-2 py-1'>
+                                    <div className='min-w-0 break-words'>
+                                        <p className='font-medium text-ui-text'>{row.lane} · {row.model}</p>
+                                        <p>{row.kind} · {row.status}</p>
+                                    </div>
+                                    <span className='self-center font-semibold text-ui-text'>{row.count}</span>
+                                </div>
+                            ))}
                         </div>
-                    )) : <p className='text-sm text-ui-muted'>No work is running or waiting.</p>}
-                </div>
+                    </details>
+                ) : <p className='mt-1 text-xs leading-5 text-ui-muted'>No work is running or waiting.</p>}
             </div>
-        </div>
+        </>
     )
 }
 
 function EconomicsStat({ icon, label, value, detail }: { icon: ReactNode, label: string, value: string, detail: string }) {
     return (
-        <div className='rounded-lg border border-ui-border bg-ui-raised p-4'>
-            <div className='flex items-center justify-between text-ui-muted'>
-                <span className='text-xs font-medium uppercase tracking-[0.16em]'>{label}</span>
+        <div className='min-w-0 rounded-lg border border-ui-border bg-ui-panel p-4'>
+            <div className='flex items-center justify-between gap-2 text-ui-muted'>
+                <span className='text-xs font-medium uppercase tracking-[0.18em]'>{label}</span>
                 <span className='text-ui-primary'>{icon}</span>
             </div>
             <div className='mt-3 text-2xl font-semibold text-ui-text'>{value}</div>
