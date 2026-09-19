@@ -154,6 +154,19 @@ with patch.object(isolated.subprocess, 'check_output', side_effect=[monitor.json
         assert 'did not stay running' in str(error)
 assert commands[-2:] == [['docker', 'rename', 'hanasand-tunnel-before-compression', 'hanasand-tunnel'], ['docker', 'start', 'hanasand-tunnel']]
 assert ['docker', 'rm', '-f', 'hanasand-tunnel-before-compression'] not in commands
+commands.clear()
+def missing_image(command, **_kwargs):
+    commands.append(command)
+    if command[:3] == ['docker', 'image', 'inspect']:
+        raise isolated.subprocess.CalledProcessError(1, command)
+    return SimpleNamespace(returncode=0)
+with patch.object(isolated.subprocess, 'check_output', side_effect=[monitor.json.dumps([metadata]).encode(), '0\n']), patch.object(isolated.subprocess, 'run', side_effect=missing_image):
+    try:
+        isolated.split_replication()
+        raise AssertionError('A missing image must stop migration before any service stops')
+    except isolated.subprocess.CalledProcessError:
+        pass
+assert ['docker', 'stop', 'hanasand-tunnel'] not in commands
 observed = monitor.transition_embed(primary, {**remote, 'observedFromSite': 'ovhcloud'}, [remote])
 assert observed['description'] == monitor.transition_embed(primary, remote, [remote])['description']
 assert 'outage' not in observed['description'].lower()

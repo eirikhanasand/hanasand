@@ -101,7 +101,7 @@ def replication_commands(command):
     return command[:index - 1] + command[index + 1:], command[:first_forward] + ['-C', '-R', forward, command[-1]]
 
 
-def split_replication():
+def split_replication(image=None):
     name, replica, saved = 'hanasand-tunnel', 'hanasand-tunnel-replication', 'hanasand-tunnel-before-compression'
     old = json.loads(subprocess.check_output(['docker', 'inspect', name]))[0]
     if GROUPS['replication'][1] not in old['Config']['Cmd']:
@@ -115,6 +115,8 @@ def split_replication():
     legacy_command, replica_command = replication_commands(old['Config']['Cmd'])
     if not old['State']['Running'] or old['HostConfig']['NetworkMode'] != 'host' or old['Config']['Entrypoint'] != ['ssh']:
         raise RuntimeError('Unexpected legacy tunnel configuration')
+    image = image or old['Image']
+    subprocess.run(['docker', 'image', 'inspect', image], check=True, stdout=subprocess.DEVNULL)
     for target in (replica, saved):
         if subprocess.run(['docker', 'inspect', target], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
             raise RuntimeError(f'{target} already exists; inspect it before continuing')
@@ -126,7 +128,7 @@ def split_replication():
             if mount['Type'] != 'bind': raise RuntimeError('Unexpected tunnel mount')
             args += ['-v', mount['Source'] + ':' + mount['Destination'] + ('' if mount['RW'] else ':ro')]
         for key in environment: args += ['-e', key]
-        subprocess.run([*args, '--entrypoint', 'ssh', old['Image'], *command], env={**os.environ, **environment}, check=True)
+        subprocess.run([*args, '--entrypoint', 'ssh', image, *command], env={**os.environ, **environment}, check=True)
     subprocess.run(['docker', 'stop', name], check=True)
     try:
         subprocess.run(['docker', 'rename', name, saved], check=True)
@@ -158,7 +160,7 @@ if __name__ == '__main__':
     if args.action == 'authorize':
         authorize()
     elif args.action == 'split-replication':
-        split_replication()
+        split_replication(args.image)
     elif args.action == 'start':
         if not args.image:
             parser.error('--image must identify the built tunnel image')
