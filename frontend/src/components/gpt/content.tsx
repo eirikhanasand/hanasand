@@ -1,14 +1,12 @@
 import type { ReactNode } from 'react'
-import { Coins, Cpu, Gauge, HardDrive, MemoryStick, Zap } from 'lucide-react'
+import { Cpu, Gauge, HardDrive, MemoryStick, Zap } from 'lucide-react'
 import DisplayClient from './displayClient'
 import Metric from './metric'
 
 export default function GPT_Content({
     clients,
     onTestClient,
-    costPerBuildNok,
 }: {
-    costPerBuildNok?: number
     clients: GPT_Client[]
     onTestClient: (client: GPT_Client) => void
 }) {
@@ -46,14 +44,7 @@ export default function GPT_Content({
                 <ThroughputCard tps={totalLoad.tps} />
                 <CapacityCard active={capacity.active} available={capacity.available} max={capacity.max} lanes={lanes.length} />
                 <PowerCard watts={power.watts} monthlyKwh={power.monthlyKwh} />
-                {costPerBuildNok !== undefined && <div className='rounded-lg bg-ui-panel p-4 border border-ui-border'>
-                    <div className='flex items-center justify-between text-ui-muted'>
-                        <span className='text-xs font-medium uppercase tracking-[0.18em]'>Cost / verified build</span>
-                        <Coins className='h-4 w-4' />
-                    </div>
-                    <div className='mt-3 text-2xl font-semibold text-ui-text'>{costPerBuildNok.toLocaleString('nb-NO', { maximumFractionDigits: 2 })} NOK</div>
-                    <p className='mt-1 text-xs text-ui-muted'>Cost per successful build or deployment</p>
-                </div>}
+
             </div>
 
             <div className='w-full rounded-lg bg-ui-panel p-4 border border-ui-border space-y-4'>
