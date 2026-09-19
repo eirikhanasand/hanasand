@@ -244,13 +244,175 @@ class DockerCollectionError(RuntimeError):
 def collection_error(error):
     return str(error) if isinstance(error,DockerCollectionError) else type(error).__name__
 
+def docker_event(config, container_id, name, timestamp, message, stream=None):
+    metadata = {'collector':'docker','container_id':container_id}
+    if stream: metadata['stream'] = stream
+    level = 'info'
+    try:
+        structured = json.loads(message)
+        if isinstance(structured,dict):
+            raw_level = structured.get('level')
+            if isinstance(raw_level,str):
+                raw_level=raw_level.strip().lower()
+                raw_level={'warning':'warn','critical':'fatal'}.get(raw_level,raw_level)
+            level = {10:'debug',20:'debug',30:'info',40:'warn',50:'error',60:'fatal'}.get(raw_level,raw_level if raw_level in ['debug','info','warn','error','fatal'] else 'info')
+            metadata['structured'] = structured
+    except (ValueError,TypeError):
+        if re.search(r'(?i)\b(error|exception|failed|failure|fatal|panic)\b',message): level='error'
+    return event(config,'docker:'+container_id+':'+timestamp+':'+message,name,message,timestamp,metadata,level)
+
+def docker_cli_events(config, container_id, name, output):
+    events=[]; timestamp=None; parts=[]
+    for line in output.splitlines(keepends=True):
+        match=re.match(r'^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})) ',line)
+        if match:
+            if timestamp is not None:
+                events.append(docker_event(config,container_id,name,timestamp,''.join(parts).removesuffix('\n').removesuffix('\r')))
+            timestamp=match.group(1);parts=[line[match.end():]]
+        elif timestamp is not None:parts.append(line)
+    if timestamp is not None:
+        events.append(docker_event(config,container_id,name,timestamp,''.join(parts).removesuffix('\n').removesuffix('\r')))
+    return events
+
+def docker_json_files(source):
+    path=Path(source['path'])
+    files=[]
+    for candidate in path.parent.glob(path.name+'*'):
+        suffix=candidate.name[len(path.name):]
+        if not suffix: rank=0
+        else:
+            match=re.fullmatch(r'\.(\d+)(?:\.gz)?',suffix)
+            if not match: continue
+            rank=int(match.group(1))
+        if candidate.is_file(): files.append((rank,candidate,candidate.stat()))
+    return sorted(files,key=lambda item:item[0],reverse=True)
+
+def register_docker_file(config, container_id, name, since):
+    """Switch a timed-out readable json-file source without changing its cutoff."""
+    try:
+        details=json.loads(command(['docker','inspect','--format','{"path":{{json .LogPath}},"driver":{{json .HostConfig.LogConfig.Type}}}',container_id],timeout=15))
+        if details['driver']!='json-file' or not Path(details['path']).is_file() or not os.access(details['path'],os.R_OK): return False
+        source={'name':name,'path':details['path'],'since':since}
+        # A fresh gzip seek repeats decompression from byte zero. Retain CLI
+        # collection rather than claiming a bounded resumable file path for it.
+        if any(path.suffix=='.gz' for _,path,_ in docker_json_files(source)): return False
+        sources=load('docker-file-sources.json',{})
+        sources[container_id]=source
+        save('docker-file-sources.json',sources)
+        return True
+    except Exception: return False
+
+def docker_file_notice(config, container_id, source, cursor, reason):
+    # This records discontinuity explicitly; it does not assert unverified loss.
+    identity='docker-file-notice:'+container_id+':'+str(cursor.get('inode'))+':'+str(cursor.get('offset'))+':'+str(cursor.get('anchor',''))+':'+reason
+    send(config,[event(config,identity,'host-log-collector',source['name']+': '+reason,iso(),
+        {'collector':'docker','container_id':container_id,'source_status':reason},'error')])
+
+def docker_fragment_event(config, container_id, source, stat, offset, raw):
+    digest=hashlib.sha256(raw).hexdigest()
+    identity='docker-fragment:'+container_id+':'+str(stat.st_ino)+':'+str(offset)+':'+digest
+    return event(config,identity,source['name'],raw.decode('utf8',errors='replace'),iso(),
+        {'collector':'docker','container_id':container_id,'event_type':'source_fragment',
+         'source_fragment':{'reason':'incomplete_rotated_record','inode':str(stat.st_ino),'offset':offset,
+                            'byte_length':len(raw),'sha256':digest,'file_modified_at':iso(stat.st_mtime),
+                            'encoding':'utf8-replacement','preview_truncated':len(raw)>65536}},'error')
+
+def docker_file_batch(config, container_id, source, live=False):
+    state_name='docker-file-'+('live-' if live else 'history-')+container_id+'.json'
+    cursor=load(state_name,None)
+    files=docker_json_files(source)
+    if not files: raise DockerCollectionError(source['name']+' (source files unavailable)')
+    selected=next((item for item in files if cursor and item[2].st_ino==cursor['inode'] and item[2].st_dev==cursor['device']),None)
+    if cursor and selected is None:
+        docker_file_notice(config,container_id,source,cursor,'previous source file unavailable; replaying retained history')
+        cursor=None
+    if selected is None:
+        selected=files[-1] if live else files[0]
+    rank,path,stat=selected
+    compressed=path.suffix=='.gz'
+    if compressed:
+        raise DockerCollectionError(source['name']+' (compressed history requires CLI recovery; file cursor preserved)')
+    offset=cursor['offset'] if cursor else 0
+    if cursor and stat.st_size<offset:
+        docker_file_notice(config,container_id,source,cursor,'source file truncated; replaying available contents')
+        offset=0
+    with open(path,'rb') as handle:
+        actual=os.fstat(handle.fileno())
+        if (actual.st_dev,actual.st_ino)!=(stat.st_dev,stat.st_ino):
+            raise DockerCollectionError(source['name']+' (source rotated during open; retrying)')
+        if live and cursor is None:
+            # Historical reading retains every earlier byte. The independent live
+            # cursor starts at the last complete line and captures new writes.
+            handle.seek(max(0,stat.st_size-8*1024*1024))
+            base=handle.tell(); tail=handle.read(stat.st_size-base)
+            offset=base+tail.rfind(b'\n')+1 if b'\n' in tail else 0
+        handle.seek(max(0,offset-128)); anchor_bytes=handle.read(min(offset,128))
+        if cursor and cursor.get('anchor') and offset==cursor['offset'] and hashlib.sha256(anchor_bytes).hexdigest()!=cursor['anchor']:
+            docker_file_notice(config,container_id,source,cursor,'source file rewritten or truncated; replaying available contents')
+            offset=0; anchor_bytes=b''
+        handle.seek(offset)
+        started=time.monotonic(); scanned=0; events=[]; complete=offset; eof=False
+        cutoff=datetime.datetime.fromisoformat(source['since'].replace('Z','+00:00')).timestamp()
+        while scanned<64*1024*1024 and len(events)<500 and time.monotonic()-started<1:
+            line=handle.readline(8*1024*1024+1)
+            if not line: eof=True; break
+            if not line.endswith(b'\n'):
+                if len(line)>8*1024*1024: raise DockerCollectionError(source['name']+' (JSON log record exceeds 8MB)')
+                if rank>0:
+                    # A closed rotated fragment cannot become a complete JSON
+                    # record. Preserve its redacted evidence before moving on.
+                    events.append(docker_fragment_event(config,container_id,source,stat,complete,line))
+                    complete=handle.tell();anchor_bytes=(anchor_bytes+line)[-128:];eof=True
+                break  # Active partial records wait; rotated evidence is ACKed below.
+            try:
+                record=json.loads(line)
+                timestamp=record['time']; message=record['log'].removesuffix('\n').removesuffix('\r')
+                if not isinstance(message,str) or record.get('stream') not in ('stdout','stderr'): raise ValueError()
+                seconds=datetime.datetime.fromisoformat(timestamp.replace('Z','+00:00')).timestamp()
+                # Docker CLI --timestamps pads nanoseconds to nine digits. Keep
+                # identical IDs when overlapping the original CLI cursor.
+                match=re.fullmatch(r'(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2})',timestamp)
+                if not match: raise ValueError()
+                timestamp=match.group(1)+'.'+(match.group(2) or '').ljust(9,'0')+match.group(3)
+            except (ValueError,KeyError,TypeError,AttributeError):
+                raise DockerCollectionError(source['name']+' (invalid JSON log record at byte '+str(complete)+')') from None
+            if seconds>=cutoff: events.append(docker_event(config,container_id,source['name'],timestamp,message,record['stream']))
+            scanned+=len(line); complete=handle.tell(); anchor_bytes=(anchor_bytes+line)[-128:]
+    send(config,events)
+    next_cursor={'device':stat.st_dev,'inode':stat.st_ino,'offset':complete,'anchor':hashlib.sha256(anchor_bytes).hexdigest()}
+    # Finish a rotated file before advancing to its newer successor.
+    index=files.index(selected)
+    if eof and index+1<len(files):
+        next_stat=files[index+1][2]
+        next_cursor={'device':next_stat.st_dev,'inode':next_stat.st_ino,'offset':0}
+    save(state_name,next_cursor)
+    remaining=max(0,stat.st_size-complete)+sum(item[2].st_size for item in files[index+1:])
+    return remaining
+
+def docker_file_source(config, live=False):
+    sources=load('docker-file-sources.json',{}); failures=[]; remaining=0
+    for container_id,source in sources.items():
+        try: remaining+=docker_file_batch(config,container_id,source,live)
+        except Exception as error:
+            if isinstance(error,DockerCollectionError): failures.append(str(error))
+            else:
+                detail='delivery HTTP '+str(error.code) if isinstance(error,HTTPError) else type(error).__name__
+                failures.append(source['name']+' ('+detail+')')
+    if failures: raise DockerCollectionError('; '.join(failures))
+    return {'sources':len(sources),'pendingFileBytes':remaining}
+
+def docker_file_history(config): return docker_file_source(config)
+def docker_file_live(config): return docker_file_source(config,True)
+
 def docker(config):
     if not shutil.which('docker'): return
     containers = command(['docker','ps','-a','--format','{{.ID}} {{.Names}}']).splitlines()
     checkpoints = load('docker.json', {})
     failures = []
+    file_sources=load('docker-file-sources.json',{})
     for container in containers:
         container_id, name = container.split(' ', 1)
+        if container_id in file_sources: continue
         since = checkpoints.get(container_id, config['start'])
         # Bound the initial historical read as well as memory: every container
         # advances independently through one minute, without skipping any range.
@@ -259,6 +421,7 @@ def docker(config):
         try:
             result = subprocess.run(['docker','logs','--timestamps','--since',since,'--until',until,container_id],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=60)
         except subprocess.TimeoutExpired:
+            if register_docker_file(config,container_id,name,since): continue
             failures.append(name+' (log read timed out after 60s)')
             continue
         except OSError as error:
@@ -272,22 +435,7 @@ def docker(config):
             ) if fragment in result.stdout),'log read exited '+str(result.returncode))
             failures.append(name+' ('+reason+')')
             continue
-        events = []
-        for ordinal, line in enumerate(result.stdout.splitlines()):
-            timestamp, separator, message = line.partition(' ')
-            if not separator or not re.match(r'^\d{4}-\d{2}-\d{2}T', timestamp): continue
-            metadata = {'collector':'docker','container_id':container_id}
-            level = 'info'
-            try:
-                structured = json.loads(message)
-                if isinstance(structured, dict):
-                    raw_level = structured.get('level')
-                    level = {10:'debug',20:'debug',30:'info',40:'warn',50:'error',60:'fatal'}.get(raw_level, raw_level if raw_level in ['debug','info','warn','error','fatal'] else 'info')
-                    metadata['structured'] = structured
-            except (ValueError, TypeError):
-                if re.search(r'(?i)\b(error|exception|failed|failure|fatal|panic)\b',message): level='error'
-            # Timestamp + complete line is stable when replaying the inclusive boundary.
-            events.append(event(config, 'docker:'+container_id+':'+timestamp+':'+message, name, message, timestamp, metadata, level))
+        events=docker_cli_events(config,container_id,name,result.stdout)
         try:
             send(config, events); checkpoints[container_id] = until; save('docker.json', checkpoints)
         except Exception as error:
@@ -297,10 +445,13 @@ def docker(config):
 
 def collect(config):
     failures = []
-    for source in (audit, journal, docker):
+    for source in (audit, journal, docker, docker_file_history, docker_file_live):
         try: source(config)
         except Exception as error: failures.append(source.__name__+': '+collection_error(error))
     return failures
+
+def checkpoint_files(root):
+    return ['audit.checkpoint','journal.json','docker.json',*(path.name for path in root.glob('docker-file-*.json'))]
 
 def guest_export(config):
     """Keep a replayable guest batch; only the host's acknowledgement commits cursors."""
@@ -312,7 +463,7 @@ def guest_export(config):
         pending = root/'pending'
         if pending.exists(): shutil.rmtree(pending)
         pending.mkdir(mode=0o700)
-        for name in ('audit.checkpoint', 'journal.json', 'docker.json'):
+        for name in checkpoint_files(root):
             if (root/name).exists(): shutil.copyfile(root/name, pending/name)
         events = []
         STATE = pending
@@ -333,7 +484,7 @@ def guest_ack(identity):
     payload = load('export.json', {})
     if payload.get('id') != identity: raise RuntimeError('Guest export acknowledgement mismatch')
     pending = STATE/'pending'
-    for name in ('audit.checkpoint', 'journal.json', 'docker.json'):
+    for name in checkpoint_files(pending):
         if (pending/name).exists(): (pending/name).replace(STATE/name)
     (STATE/'export.json').unlink()
     shutil.rmtree(pending)
@@ -401,15 +552,16 @@ def main():
                 time.sleep(interval)
                 continue
             try:
-                source(config)
+                details=source(config)
                 status = {'ok':True,'checkedAt':iso()}
+                if isinstance(details,dict): status.update(details)
             except Exception as error:
                 status = {'ok':False,'checkedAt':iso(),'error':str(error) if name=='guests' else collection_error(error)}
             with status_lock: statuses[name] = status
             time.sleep(interval)
     # Sources have independent cursors and workers. A historical journal/Docker
     # sweep must never prevent host command checks or VM collection from running.
-    for source, interval in ((audit,5),(journal,1),(docker,5),(guests,30)):
+    for source, interval in ((audit,5),(journal,1),(docker,5),(docker_file_history,1),(docker_file_live,1),(guests,30)):
         threading.Thread(target=worker,args=(source.__name__,source,interval),daemon=True).start()
     threading.Thread(target=worker,args=('audit_live',lambda cfg:audit(cfg,live=True),5,True),daemon=True).start()
     while True:
@@ -418,7 +570,7 @@ def main():
         coverage = load('guest-coverage.json', None)
         if coverage and coverage['failures'] and not any(item.startswith('guests:') for item in failures):
             failures.append('guests: '+', '.join(coverage['failures']))
-        health = {source:snapshot.get(source,{}).get('ok') for source in ('audit','journal','docker','guests')}
+        health = {source:snapshot.get(source,{}).get('ok') for source in ('audit','journal','docker','docker_file_history','docker_file_live','guests')}
         metadata = {'collector_health':health,'source_status':snapshot}
         if coverage:
             metadata['guest_coverage'] = {'checkedAt':coverage['checkedAt'], 'running':sum(guest['status']=='Running' for guest in coverage['instances']),
