@@ -1,5 +1,6 @@
 import ensureLogCatchupSchema from './logCatchupSchema.ts'
 import ensureSupportAiSchema from '#utils/support/schema.ts'
+import ensureContentOrganizationSchema from './contentOrganizationSchema.ts'
 import ensureOrganizationRolesSchema from './organizationRolesSchema.ts'
 import ensureRoleSchema from './roleSchema.ts'
 import ensureLogDimensionsSchema from './logDimensionsSchema.ts'
@@ -1548,6 +1549,7 @@ export default async function ensureSchema() {
     `)
     await run('CREATE INDEX IF NOT EXISTS idx_mail_recent_recipients_lookup ON mail_recent_recipients(owner_user_id, mailbox_user, last_used_at DESC)')
     await ensureVmOrganizationSchema()
+    await ensureContentOrganizationSchema()
 }
 
 async function columnExists(tableName: string, columnName: string) {

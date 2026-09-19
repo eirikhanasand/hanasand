@@ -1,6 +1,6 @@
 import DashboardThought from '@/components/thoughts/dashboardThought'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
-import fetchThoughts from '@/utils/thoughts/fetchThoughts'
+import fetchWorkspaceContent from '@/utils/organizations/fetchWorkspaceContent'
 import { BrainCircuit, Clock3, Plus, Radio, UserRound } from 'lucide-react'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
@@ -8,7 +8,7 @@ import type { ReactNode } from 'react'
 export const dynamic = 'force-dynamic'
 
 export default async function Page() {
-    const thoughts = await fetchThoughts()
+    const thoughts = await fetchWorkspaceContent<Thought>('thoughts')
     const latest = [...thoughts].sort((a, b) => dateMs(b.updated_at || b.created_at) - dateMs(a.updated_at || a.created_at))[0]
     const authors = new Set(thoughts.map((thought) => thought.created_by).filter(Boolean))
 

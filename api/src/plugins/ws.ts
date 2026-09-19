@@ -25,6 +25,7 @@ const browserWorkerSeccompProfile = fs.readFileSync(new URL('../../seccomp-chrom
 type PendingUpdates = {
     content: string
     timer: NodeJS.Timeout
+    userId?: string | null
 }
 
 const messageBuffer: Buffer[] = []

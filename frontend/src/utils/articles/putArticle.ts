@@ -4,7 +4,7 @@ import config from '@/config'
 import { getCookie } from '@/utils/cookies/cookies'
 import fetchWithRetry from '@/utils/fetchWithRetry'
 
-export async function putArticle(id: string, content: string[]): Promise<void | string> {
+export async function putArticle(id: string, content: string[] | string): Promise<void | string> {
     const token = getCookie('access_token')
     const username = getCookie('id')
 
@@ -16,7 +16,7 @@ export async function putArticle(id: string, content: string[]): Promise<void | 
                 'Authorization': `Bearer ${token}`,
                 id: username
             },
-            body: JSON.stringify({ id: username, content }),
+            body: JSON.stringify({ id: username, content: Array.isArray(content) ? content.join('\n') : content }),
             timeoutMs: config.abortTimeout,
             retries: 2,
         })

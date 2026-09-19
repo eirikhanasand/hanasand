@@ -1,14 +1,11 @@
 import run from '#db'
-import hasRole from '#utils/auth/hasRole.ts'
-import tokenWrapper from '#utils/auth/tokenWrapper.ts'
+import { requireEditorialWrite } from '#utils/contentOrganization.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
 export default async function putThought(req: FastifyRequest<{ Params: { id: string }, Body: { title: string } }>, res: FastifyReply) {
-    const { valid } = await tokenWrapper(req, res)
-    const { valid: validRole } = await hasRole(req, res, 'content_admin')
-    if (!valid || !validRole) {
-        return res.status(401).send({ error: 'Unauthorized.' })
-    }
+    const existing = await run('SELECT organization_id FROM thoughts WHERE id = $1', [req.params.id])
+    if (!existing.rows.length) return res.status(404).send({ error: 'Thought not found.' })
+    if (!await requireEditorialWrite(req, res, existing.rows[0].organization_id)) return
 
     const { id } = req.params
     const { title } = req.body
@@ -27,7 +24,7 @@ export default async function putThought(req: FastifyRequest<{ Params: { id: str
         }
 
         values.push(id)
-        const query = `UPDATE thoughts SET ${fields.join(', ')}, updated_at = NOW() WHERE id = $${values.length} RETURNING *`
+        const query = `UPDATE thoughts SET ${fields.join(', ')} WHERE id = $${values.length} RETURNING *`
         const result = await run(query, values)
 
         if (!result.rows.length) {

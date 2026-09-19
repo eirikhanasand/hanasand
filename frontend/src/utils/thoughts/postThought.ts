@@ -18,7 +18,7 @@ export async function postThought(title: string): Promise<{ status: number, mess
     const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
 
     try {
-        const response = await fetch(`${config.url.api}/thoughts`, {
+        const response = await fetch('/api/backend/thoughts', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

@@ -5,8 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 
 let articles: unknown[] = []
 let thoughts: unknown[] = []
-mock.module('../src/utils/articles/fetchArticles', () => ({ default: async () => articles }))
-mock.module('../src/utils/thoughts/fetchThoughts', () => ({ default: async () => thoughts }))
+mock.module('../src/utils/organizations/fetchWorkspaceContent', () => ({ default: async (kind: string) => kind === 'articles' ? articles : thoughts }))
 mock.module('../src/components/articles/dashboardArticle', () => ({ default: () => null }))
 mock.module('../src/components/thoughts/dashboardThought', () => ({ default: () => null }))
 const { default: Articles } = await import('../src/app/dashboard/articles/page')

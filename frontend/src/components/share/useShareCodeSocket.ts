@@ -131,6 +131,8 @@ export function useShareCodeSocket({
             if (pendingEditRef.current !== null) {
                 ws.send(JSON.stringify({
                     type: 'edit',
+                    userId: getCookie('id'),
+                    token: getCookie('access_token'),
                     id: shareId,
                     content: pendingEditRef.current,
                 }))
@@ -215,6 +217,8 @@ export function useShareCodeSocket({
 
         wsRef.current.send(JSON.stringify({
             type: 'edit',
+            userId: getCookie('id'),
+            token: getCookie('access_token'),
             id: shareId,
             content,
         }))

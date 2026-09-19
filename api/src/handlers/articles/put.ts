@@ -2,22 +2,19 @@ import commitAndPush from '#utils/git/commitAndPush.ts'
 import ensureRepositoryUpToDate from '#utils/git/ensureRepositoryUpToDate.ts'
 import fileExists from '#utils/git/fileExists.ts'
 import { ARTICLES_DIR } from '#utils/git/git.ts'
-import hasRole from '#utils/auth/hasRole.ts'
-import tokenWrapper from '#utils/auth/tokenWrapper.ts'
+import { articleOwnership, requireEditorialWrite } from '#utils/contentOrganization.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { writeFile } from 'fs/promises'
 import { join } from 'path'
 
 export default async function putArticle(req: FastifyRequest<{ Params: { id: string }, Body: { content: string } }>, res: FastifyReply) {
-    const { valid } = await tokenWrapper(req, res)
-    const { valid: validRole } = await hasRole(req, res, 'content_admin')
-    if (!valid || !validRole) {
-        return res.status(401).send({ error: 'Unauthorized.' })
-    }
-
     const { id: Id } = req.params
     const id = Id.endsWith('.md') ? Id : `${Id}.md`
+    if (!/^[\w.-]+\.md$/.test(id) || id.startsWith('.')) return res.status(400).send({ error: 'Invalid article id.' })
+    const ownership = await articleOwnership(id)
+    if (!await requireEditorialWrite(req, res, ownership?.organization_id || null)) return
     const content = req.body.content
+    if (typeof content !== 'string') return res.status(400).send({ error: 'Article content must be text.' })
     const filePath = join(ARTICLES_DIR, id)
 
     if (await fileExists(filePath)) {

@@ -1,14 +1,11 @@
 import run from '#db'
-import hasRole from '#utils/auth/hasRole.ts'
-import tokenWrapper from '#utils/auth/tokenWrapper.ts'
+import { requireEditorialWrite } from '#utils/contentOrganization.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
 export default async function deleteThought(req: FastifyRequest<{ Params: { id: string } }>, res: FastifyReply) {
-    const { valid } = await tokenWrapper(req, res)
-    const { valid: validRole } = await hasRole(req, res, 'content_admin')
-    if (!valid || !validRole) {
-        return res.status(401).send({ error: 'Unauthorized.' })
-    }
+    const existing = await run('SELECT organization_id FROM thoughts WHERE id = $1', [req.params.id])
+    if (!existing.rows.length) return res.status(404).send({ error: 'Thought not found.' })
+    if (!await requireEditorialWrite(req, res, existing.rows[0].organization_id)) return
 
     const { id } = req.params
     if (!id) {

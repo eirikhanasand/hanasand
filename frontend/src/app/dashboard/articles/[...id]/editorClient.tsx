@@ -4,6 +4,7 @@ import Editor from '@/components/editor/editor'
 import ErrorNotice from '@/components/error/errorNotice'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import deleteArticle from '@/utils/articles/deleteArticle'
+import { putArticle } from '@/utils/articles/putArticle'
 import { FileText, Trash } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
@@ -11,6 +12,7 @@ import { useState } from 'react'
 export default function EditorClient({ article }: { article: Article }) {
     const { condition: error, setCondition: setError } = useClearStateAfter()
     const [editing, setEditing] = useState(false)
+    const [content, setContent] = useState(article.content)
     const router = useRouter()
     const name = article.id.replace('.md', '')
     const text = editing ? `Editing ${name}` : name
@@ -45,11 +47,17 @@ export default function EditorClient({ article }: { article: Article }) {
             </div>
             <ErrorNotice compact message={error as string | null} />
             <Editor
+                customSaveLogic
+                save={async () => {
+                    try { await putArticle(article.id, content); setEditing(false) }
+                    catch (error) { setError(error instanceof Error ? error.message : 'Could not save article.') }
+                }}
+                onChange={setContent}
                 editing={editing}
                 setEditing={setEditing}
                 className='rounded-lg border border-ui-border bg-ui-raised p-2 shadow-sm shadow-ui-canvas/20'
                 id={article.id}
-                content={article.content.split('\n')}
+                content={content.split('\n')}
             />
         </div>
     )

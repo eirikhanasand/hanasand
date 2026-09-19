@@ -8,6 +8,8 @@ import { join } from 'path'
 import estimateReadingTime from '#utils/estimateReadTime.ts'
 import createdAt from '#utils/git/createdAt.ts'
 import updatedAt from '#utils/git/updatedAt.ts'
+import run from '#db'
+import { articleOwnership, requestedContentOrganization, requireContentOrganization } from '#utils/contentOrganization.ts'
 
 const two_weeks_in_ms = 1209600000
 
@@ -16,12 +18,15 @@ export default async function getArticles(req: FastifyRequest<{
         recent?: string,
         backfill?: string,
         sortBy: 'created' | 'updated',
-        featured?: string
+        featured?: string,
+        workspace?: string
     }
 }>, res: FastifyReply) {
     const recent = req.query.recent
     const backfill = req.query.backfill
     const sortBy = req.query.sortBy
+    const organizationId = requestedContentOrganization(req)
+    if (!await requireContentOrganization(req, res, organizationId)) return
     try {
         await ensureRepo()
         void ensureRepositoryUpToDate().catch(error => {
@@ -36,10 +41,14 @@ export default async function getArticles(req: FastifyRequest<{
     }
 
     const files = await readdir(ARTICLES_DIR)
+    const ownership = await run('SELECT id, organization_id FROM article_ownership')
+    const organizationById = new Map(ownership.rows.map(row => [row.id, row.organization_id as string | null]))
     const articles = []
     const old = []
 
     for (const file of files) {
+        const articleOrganization = organizationById.get(file) || null
+        if ((organizationId || req.query.workspace === 'true') && articleOrganization !== organizationId) continue
         const filePath = join(ARTICLES_DIR, file)
         const stats = await stat(filePath)
 
@@ -54,6 +63,7 @@ export default async function getArticles(req: FastifyRequest<{
             const title = titleMatch ? titleMatch[1].trim() : 'Untitled'
             const data = {
                 id: file,
+                organization_id: articleOrganization,
                 size: stats.size,
                 created,
                 modified: updated,
@@ -126,8 +136,10 @@ export async function getArticle(req: FastifyRequest<{ Params: { id: string } }>
     const readTime = estimateReadingTime(content)
     const titleMatch = content.match(/^#\s+(.*)/m)
     const title = titleMatch ? titleMatch[1].trim() : 'Untitled'
+    const ownership = await articleOwnership(id)
     return res.send({
         id,
+        organization_id: ownership?.organization_id || null,
         size: stats.size,
         created,
         modified: updated,
