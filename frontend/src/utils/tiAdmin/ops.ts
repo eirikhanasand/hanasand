@@ -14,6 +14,7 @@ export type TiAdminSource = {
     domain: string
     lastRunAt: string
     nextRunAt: string
+    executable?: boolean
     monitoredSince: string
     cadenceMinutes: number
     retainedEvidenceCount: number
@@ -93,6 +94,7 @@ export type TiAdminRun = {
     sourceId: string
     sourceName: string
     sourceFamily: string
+    sourceUrl: string
     status: 'completed' | 'queued' | 'running' | 'failed'
     startedAt: string
     finishedAt?: string
@@ -313,7 +315,8 @@ function toSource(record: ApiPayload, operations: ApiPayload | undefined, captur
     const cadenceMinutes = Math.max(1, Math.round(numberValue(collection.cadenceSeconds, 3600) / 60))
     const monitoredSince = isoValue(collection.createdAt)
     const lastRunAt = isoValue(health.lastAttemptAt, health.lastSuccessAt)
-    const nextRunAt = isoValue(record.nextRunAt) || (lastRunAt ? new Date(Date.parse(lastRunAt) + cadenceMinutes * 60_000).toISOString() : '')
+    const scheduledTimes = [record.nextRunAt, objectValue(record.crawlState).backoffUntil, objectValue(record.crawlState).nextEligibleAt, operations?.nextRunAt, health.backoffUntil].map(value => Date.parse(String(value ?? ''))).filter(Number.isFinite)
+    const nextRunAt = scheduledTimes.length ? new Date(Math.max(...scheduledTimes)).toISOString() : lastRunAt ? new Date(Date.parse(lastRunAt) + cadenceMinutes * 60_000).toISOString() : ''
     const sourceCaptures = captures.filter(capture => capture.sourceId === id)
     const retainedEvidenceCount = numberValue(coverage.captureCount, sourceCaptures.length)
     const url = stringValue(record.url)
@@ -332,6 +335,7 @@ function toSource(record: ApiPayload, operations: ApiPayload | undefined, captur
         domain: hostname(url) || textValue(operations?.family, record.type, 'source'),
         lastRunAt,
         nextRunAt,
+        executable: record.executable === true,
         monitoredSince,
         cadenceMinutes,
         retainedEvidenceCount,
@@ -461,6 +465,7 @@ function toRun(record: ApiPayload, sources: Map<string, TiAdminSource>): TiAdmin
         sourceId,
         sourceName: textValue(record.sourceName, source?.name, sourceId ? sourceId : 'Global source fleet'),
         sourceFamily: textValue(record.sourceFamily, source?.family, sourceId ? 'source' : 'collection'),
+        sourceUrl: source?.url || '',
         status: runStatus(record.status),
         startedAt,
         finishedAt: optionalIso(record.finishedAt, record.completedAt, record.updatedAt),
@@ -468,7 +473,7 @@ function toRun(record: ApiPayload, sources: Map<string, TiAdminSource>): TiAdmin
         rows: numberValue(record.rows, record.rowCount, record.processedCount, record.itemCount),
         captures: numberValue(record.captures, record.captureCount),
         screenshots: numberValue(record.screenshots, record.screenshotCount),
-        message: textValue(record.message, record.error, `Collection run ${textValue(record.status, 'recorded')}.`),
+        message: textValue(record.message, record.error),
         trigger: textValue(record.trigger, objectValue(record.metadata).trigger, '') === 'automated' ? 'automated' : textValue(record.trigger, objectValue(record.metadata).trigger, '') === 'manual' ? 'manual' : 'unknown',
     }
 }

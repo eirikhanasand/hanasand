@@ -10,7 +10,6 @@ export default async function TiEnrichmentPage() {
     const { updatedActors, activity, updates, worker, stats } = await getTiEnrichmentOverview()
     const actors = [...updatedActors].sort((left, right) => right.lastUpdatedAt.localeCompare(left.lastUpdatedAt))
     const recentActivity = activity.slice(0, 12)
-    const sourceCount = new Set(actors.flatMap(actor => actor.sourceLinks.map(source => source.name))).size
 
     return (
         <DashboardPage>
@@ -28,19 +27,18 @@ export default async function TiEnrichmentPage() {
                             <h2 className='text-lg font-semibold text-ui-text'>Automated enrichment</h2>
                             <StatusPill label={`worker ${worker.state}`} tone={worker.state === 'unavailable' ? 'bad' : 'ok'} />
                         </div>
-                        <p className='mt-1 max-w-2xl text-sm text-ui-muted'>Profiles are built from captured source evidence. The status below reflects the last durable run, not a guessed live process.</p>
-                        <p className='mt-2 text-xs text-ui-muted'>{worker.state === 'unavailable' ? 'The enrichment status service could not be reached.' : worker.lastSuccessfulRunAt ? `Last successful run ${formatTiDate(worker.lastSuccessfulRunAt)}${worker.snapshotFresh === false ? ' · snapshot is stale' : ''}.` : 'No enrichment run has been recorded yet.'}</p>
+                        <p className='mt-2 text-xs text-ui-muted'>{worker.state === 'unavailable' ? worker.lastError || 'The enrichment status service could not be reached.' : worker.lastSuccessfulRunAt ? `Last successful run ${formatTiDate(worker.lastSuccessfulRunAt)}${worker.snapshotFresh === false ? ' · snapshot is stale' : ''}.` : 'Waiting for the first GPU enrichment result.'}</p>
                     </div>
                     <div className='flex flex-wrap gap-2'>
                         <Link href='/ti/control' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm font-semibold text-ui-text hover:bg-ui-raised'>Collection control</Link>
-                        <Link href='/ti/sources' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm font-semibold text-ui-text hover:bg-ui-raised'>View sources <ArrowRight className='h-4 w-4' /></Link>
+                        <Link href='/ti/sources' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm font-semibold text-ui-text hover:bg-ui-raised'>View feeds <ArrowRight className='h-4 w-4' /></Link>
                     </div>
                 </div>
                 <div className='mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4'>
-                    <Metric label='Profiles processed' value={String(stats.profilesProcessed || actors.length)} />
-                    <Metric label='Profile fields changed' value={String(stats.profilesChanged)} />
-                    <Metric label='Source records added' value={String(stats.sourceRecords || sourceCount)} />
-                    <Metric label='Evidence records' value={String(stats.evidenceRecords || activity.length)} />
+                    <Metric label='Profiles enriched · past hour' value={String(stats.updatedLastHour)} />
+                    <Metric label='New facts · past hour' value={String(stats.newFacts)} />
+                    <Metric label='Evidence words added · past hour' value={String(stats.wordsAdded)} />
+                    <Metric label='Words per enriched profile' value={String(stats.updatedLastHour ? Math.round(stats.wordsAdded / stats.updatedLastHour) : 0)} />
                 </div>
                 <div className='mt-3 grid gap-2 text-xs text-ui-muted sm:grid-cols-3'>
                     <span>Queued: {stats.queued}</span><span>Failures: {stats.failures}</span><span>Last run: {worker.lastRunAt ? formatTiDate(worker.lastRunAt) : 'none'}</span>
@@ -51,9 +49,9 @@ export default async function TiEnrichmentPage() {
                 <DashboardPanel className='border-ui-border bg-ui-panel p-10 text-center'>
                     <Users className='mx-auto h-8 w-8 text-ui-primary' />
                     <h2 className='mt-3 text-lg font-semibold text-ui-text'>No actor profiles yet</h2>
-                    <p className='mx-auto mt-1 max-w-md text-sm leading-6 text-ui-muted'>Actor profiles appear automatically when collected public intelligence identifies a named actor or group. Start with the source inventory to see what is connected.</p>
+                    <p className='mx-auto mt-1 max-w-md text-sm leading-6 text-ui-muted'>Actor profiles appear automatically when collected public intelligence identifies a named actor or group. Start with the feed inventory to see what is connected.</p>
                     <Link href='/ti/sources' className='mt-5 inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas hover:opacity-90'>
-                        Open source inventory
+                        Open feed inventory
                         <ArrowRight className='h-4 w-4' />
                     </Link>
                 </DashboardPanel>

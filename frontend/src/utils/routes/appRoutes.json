@@ -44,10 +44,6 @@
     "/management"
   ],
   [
-    "/dashboard/ti/attacks",
-    "/ti/attacks"
-  ],
-  [
     "/dashboard/ti/control",
     "/ti/control"
   ],

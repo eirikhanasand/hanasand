@@ -1,3 +1,4 @@
+import { startActorEnrichmentWorker } from '../ops/actorEnrichmentWorker.ts';
 import { startApiServer } from "../api/server.ts";
 import { loadRuntimeConfig } from "../config/runtimeConfig.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
@@ -86,6 +87,7 @@ export function createScraperRuntimeStop(options: {
   restrictedMetadata: Stoppable;
   evaluation: Stoppable;
   automaticReview: Stoppable;
+  actorEnrichment?: Stoppable;
   store: { close: () => Promise<unknown> };
 }) {
   let stopPromise: Promise<void> | undefined;
@@ -98,6 +100,7 @@ export function createScraperRuntimeStop(options: {
       options.restrictedMetadata.stop(),
       options.evaluation.stop(),
       options.automaticReview.stop(),
+      options.actorEnrichment?.stop(),
       options.scheduledRuns.drain()
     ]);
     await options.store.close();
@@ -161,7 +164,8 @@ export async function startScraperRuntime() {
     : 0;
   const canaryOptions = {
     store, frontier, objectStore,
-    intervalSeconds: Number(Bun.env.TI_CANARY_INTERVAL_SECONDS ?? "300"),
+    // Poll due feeds every minute so a stalled collector breaches the five-minute health check.
+    intervalSeconds: Math.min(60, Number(Bun.env.TI_CANARY_INTERVAL_SECONDS ?? "60")),
     maxTasks: Number(Bun.env.TI_CANARY_MAX_TASKS ?? "25"),
     maxSources: Number(Bun.env.TI_CANARY_MAX_SOURCES ?? "50"),
     maxConcurrentTasks: collectionConcurrency - defaultCollectionConcurrency,
@@ -241,6 +245,8 @@ export async function startScraperRuntime() {
       onError: (error: unknown) => logger.warn("automatic intelligence review cycle failed", { event: "automatic_review.error", error: error instanceof Error ? error.message : String(error) })
     })
     : { stop: async () => undefined };
+  const actorEnrichment = startActorEnrichmentWorker({ store, frontier, runExecutor: executeRun });
+  Object.assign(serverOptions, { actorEnrichmentWorker: actorEnrichment });
   logger.info("ti-scraper started", { event: "service.started", port: server.port, apiVersion: config.apiVersion, memoryTargetMb: config.limits.maxMemoryMbTarget, memoryCeilingMb: config.limits.maxMemoryMbCeiling, storageBackend: "postgresql", storageSchema: "threat_intel", legacyImport, retentionAssignments, retentionMutations: retention.reduce((count, result) => count + result.deletionAudit.length, 0), publicCanaryEnabled: canaryEnabled, defaultCanaryEnabled, collectionConcurrency, publicCanaryAutoActivate: Bun.env.TI_CANARY_AUTO_ACTIVATE === "true", automaticEvaluationEnabled: automaticEvaluationEnabled(), recoveredRuns, sourceBootstrap, ...paths });
-  return { stop: createScraperRuntimeStop({ scheduledRuns, server, canary, defaultCanary, restrictedMetadata, evaluation, automaticReview, store }) };
+  return { stop: createScraperRuntimeStop({ scheduledRuns, server, canary, defaultCanary, restrictedMetadata, evaluation, automaticReview, actorEnrichment, store }) };
 }

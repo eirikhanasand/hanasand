@@ -16,6 +16,9 @@ try {
     assert.equal(recoveryRequestAllowed('GET', '/api/auth/logout/one'), false)
     process.env.RESILIENCE_ESSENTIAL_ONLY = '1'
     assert.equal(recoveryRequestAllowed('GET', '/api/vms'), false)
+    assert.equal(recoveryRequestAllowed('GET', '/api/system/updates'), true)
+    assert.equal(recoveryRequestAllowed('POST', '/api/system/updates'), false)
+    assert.equal(recoveryRequestAllowed('GET', '/api/system/updates/other'), false)
     assert.equal(recoveryRequestAllowed('GET', '/api/ws/pwned/one'), false)
     writeFileSync(process.env.RESILIENCE_STATE_FILE, JSON.stringify({ readOnly: false, updatedAt: new Date(0).toISOString() }))
     await Bun.sleep(1010)

@@ -18,7 +18,8 @@ export function recoveryState(): RecoveryState {
 }
 export function recoveryReadOnly() { return recoveryState().readOnly === true }
 export function recoveryRequestAllowed(method: string, path: string) {
-    if (process.env.RESILIENCE_ESSENTIAL_ONLY === '1' && !/^\/(ready$|api\/(health$|auth\/|user(?:\/|$)|organizations(?:\/|$)|ti\/search$|v1\/ti\/search(?:\/batch)?$))/.test(path)) return false
+    const hostUpdateRead = ['GET', 'HEAD'].includes(method) && path === '/api/system/updates'
+    if (process.env.RESILIENCE_ESSENTIAL_ONLY === '1' && !hostUpdateRead && !/^\/(ready$|api\/(health$|auth\/|user(?:\/|$)|organizations(?:\/|$)|ti\/search$|v1\/ti\/search(?:\/batch)?$))/.test(path)) return false
     if (!recoveryReadOnly()) return true
     const query = method === 'POST' && ['/api/ti/search', '/api/v1/ti/search', '/api/v1/ti/search/batch'].includes(path)
     return query || (['GET', 'HEAD', 'OPTIONS'].includes(method) && !/\/auth\/logout\/|\/restart\//.test(path))

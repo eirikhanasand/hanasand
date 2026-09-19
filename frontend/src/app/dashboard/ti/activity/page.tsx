@@ -7,14 +7,15 @@ import { formatTiDate } from '@/utils/tiAdmin/ops'
 
 export const dynamic = 'force-dynamic'
 
-export default async function TiActivityPage() {
-    const { activity, updatedActors, worker, stats, dataAvailable } = await getTiEnrichmentOverview()
+export default async function TiActivityPage({ searchParams }: { searchParams?: Promise<{ q?: string }> } = {}) {
+    const q = (await searchParams)?.q?.trim() || ''
+    const { activity, updatedActors, worker, stats, dataAvailable } = await getTiEnrichmentOverview(q)
     const sortedActivity = [...activity].sort((a, b) => new Date(b.happenedAt).getTime() - new Date(a.happenedAt).getTime())
     const badEvents = sortedActivity.filter(event => event.tone === 'bad')
     const watchEvents = sortedActivity.filter(event => event.tone === 'watch')
     const lastEvent = sortedActivity[0]
 
-    if (!dataAvailable || (!activity.length && !updatedActors.length)) {
+    if (!dataAvailable || (!activity.length && !updatedActors.length && !q)) {
         const unavailable = !dataAvailable
         const failed = Boolean(worker.lastError)
         return (
@@ -39,6 +40,12 @@ export default async function TiActivityPage() {
                 title='Latest activity'
                 description='Automated collection and profile updates observed by Hanasand.'
             />
+
+            <form method='get' action='/ti/activity' className='flex gap-2'>
+                <input name='q' defaultValue={q} aria-label='Search activity' placeholder='Search actors or feeds' maxLength={100} className='min-w-0 flex-1 rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-sm text-ui-text' />
+                <button className='rounded-md bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas'>Search</button>
+                {q ? <Link href='/ti/activity' className='px-3 py-2 text-sm text-ui-primary'>Clear</Link> : null}
+            </form>
 
             <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-5'>
                 <Metric title='Events' value={`${sortedActivity.length}`} icon={<Activity className='h-4 w-4' />} />
@@ -70,7 +77,8 @@ export default async function TiActivityPage() {
                                 <th className='px-4 py-2'>Time</th>
                                 <th className='px-4 py-2'>Actor</th>
                                 <th className='px-4 py-2'>Change</th>
-                                <th className='px-4 py-2'>Source</th>
+                                <th className='px-4 py-2'>Age</th>
+                                <th className='px-4 py-2'>Feed</th>
                                 <th className='px-4 py-2'>State</th>
                                 <th className='px-4 py-2 text-right'>Action</th>
                             </tr>
@@ -84,11 +92,8 @@ export default async function TiActivityPage() {
                                     </td>
                                     <td className='px-4 py-2.5'>
                                         <p className='font-semibold text-ui-text'>{event.title}</p>
-                                        <div className='mt-1.5 grid gap-1.5 text-xs text-ui-muted md:grid-cols-2'>
-                                            <ActivityFact label='detail' value={event.detail} />
-                                            <ActivityFact label='age' value={relativeAge(event.happenedAt)} />
-                                        </div>
                                     </td>
+                                    <td className='whitespace-nowrap px-4 py-2.5 text-ui-muted'>{relativeAge(event.happenedAt)}</td>
                                     <td className='px-4 py-2.5 text-ui-muted'>{event.source}</td>
                                     <td className='px-4 py-2.5'><StatusPill label={event.tone === 'bad' ? 'attention' : event.tone === 'watch' ? 'watching' : 'observed'} tone={event.tone} /></td>
                                     <td className='px-4 py-2.5 text-right'>
@@ -101,7 +106,7 @@ export default async function TiActivityPage() {
                             ))}
                             {!sortedActivity.length ? (
                                 <tr>
-                                    <td colSpan={6} className='px-4 py-8 text-center text-sm text-ui-muted'>No observations recorded yet for these actor profiles.</td>
+                                    <td colSpan={7} className='px-4 py-8 text-center text-sm text-ui-muted'>No observations recorded yet for these actor profiles.</td>
                                 </tr>
                             ) : null}
                         </tbody>
@@ -167,21 +172,13 @@ function AttentionRow({ event }: { event: TiActivityEvent }) {
             </div>
             <p className='mt-2 text-sm text-ui-muted'>{event.detail}</p>
             <div className='mt-2 grid gap-1.5 text-xs text-ui-muted sm:grid-cols-2'>
-                <ActivityFact label='source' value={event.source} />
-                <ActivityFact label='age' value={relativeAge(event.happenedAt)} />
+                <span>Feed: {event.source}</span>
+                <span>Age: {relativeAge(event.happenedAt)}</span>
             </div>
         </Link>
     )
 }
 
-function ActivityFact({ label, value }: { label: string, value: string }) {
-    return (
-        <div className='rounded-md border border-ui-border bg-ui-panel px-2 py-1'>
-            <p className='text-[9px] font-semibold uppercase text-ui-muted'>{label}</p>
-            <p className='mt-0.5 line-clamp-2 font-semibold text-ui-text'>{value}</p>
-        </div>
-    )
-}
 
 function StatusPill({ label, tone }: { label: string, tone: 'neutral' | 'ok' | 'watch' | 'bad' }) {
     const classes = toneClass(tone)

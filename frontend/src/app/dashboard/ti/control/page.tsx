@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { cookies } from 'next/headers'
 import { NextRequest } from 'next/server'
-import { Activity, ArrowLeft, DatabaseZap, ExternalLink } from 'lucide-react'
+import { ArrowLeft, DatabaseZap, ExternalLink } from 'lucide-react'
 import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
 import { proxyTiRequest } from '@/app/api/dwm/_tiProxy'
 import TiScraperControlClient from './scraperControlClient'
@@ -23,13 +23,10 @@ export default async function TiScraperControlPage() {
                             <ArrowLeft className='h-4 w-4' />
                             Intelligence
                         </Link>
-                        <Link href='/ti/attacks' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-raised'>
-                            <Activity className='h-4 w-4' />
-                            Attacks
-                        </Link>
+
                         <Link href='/ti/sources' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-panel'>
                             <DatabaseZap className='h-4 w-4' />
-                            Sources
+                            Feeds
                             <ExternalLink className='h-4 w-4' />
                         </Link>
                     </div>

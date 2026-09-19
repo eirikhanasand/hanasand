@@ -10,7 +10,7 @@ import ManualRunButton from '../manualRunButton'
 export const dynamic = 'force-dynamic'
 
 export default async function TiRunsPage(props: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
-    // Collection runs are global collector operations, not a customer tenant's
+    // Collection are global collector operations, not a customer tenant's
     // watchlist data. The default tenant lane is intentionally empty here.
     const params = await props.searchParams
     const page = pageNumber(params?.page)
@@ -27,8 +27,8 @@ export default async function TiRunsPage(props: { searchParams?: Promise<Record<
     const captureTotal = runs.reduce((sum, run) => sum + run.captures, 0)
     const screenshotTotal = runs.reduce((sum, run) => sum + run.screenshots, 0)
     const rowTotal = runs.reduce((sum, run) => sum + run.rows, 0)
-    const nextRun = [...runs].filter(run => run.nextRunAt).sort((a, b) => new Date(a.nextRunAt).getTime() - new Date(b.nextRunAt).getTime())[0]
-    const nextSource = [...sources].filter(source => Number.isFinite(new Date(source.nextRunAt).getTime())).sort((a, b) => new Date(a.nextRunAt).getTime() - new Date(b.nextRunAt).getTime())[0]
+    const nextRun = [...runs].filter(run => (run.status === 'queued' || run.status === 'running') && run.nextRunAt).sort((a, b) => new Date(a.nextRunAt).getTime() - new Date(b.nextRunAt).getTime())[0]
+    const nextSource = [...sources].filter(source => source.status === 'active' && source.executable && Number.isFinite(new Date(source.nextRunAt).getTime())).sort((a, b) => new Date(a.nextRunAt).getTime() - new Date(b.nextRunAt).getTime())[0]
     const attentionRuns = orderedRuns.filter(run => run.status !== 'completed' || Boolean(run.nextRunAt && isOverdue(run.nextRunAt)))
     const runUnavailable = !available
 
@@ -36,7 +36,7 @@ export default async function TiRunsPage(props: { searchParams?: Promise<Record<
         <DashboardPage>
             <DashboardHeader
                 eyebrow='Threat intelligence'
-                title='Collection runs'
+                title='Collection'
                 description='Watch collectors run, publish evidence, and surface stale sources.'
                 actions={<ManualRunButton label='Start manual run' queries={runQueries} />}
             />
@@ -49,7 +49,7 @@ export default async function TiRunsPage(props: { searchParams?: Promise<Record<
                     sourceName={orderedRuns[0]?.sourceName}
                 />
                 <LiveFact title='Evidence produced' value={`${captureTotal} captures`} detail={`${screenshotTotal} screenshots, ${rowTotal} parsed rows`} tone={captureTotal ? 'ok' : 'neutral'} />
-                <LiveFact title='Next source due' value={nextRun ? relativeUntil(nextRun.nextRunAt) : nextSource ? relativeUntil(nextSource.nextRunAt) : 'No upcoming source'} detail={nextRun?.sourceName || nextSource?.name || 'No active source is queued'} tone={(nextRun || nextSource) && isOverdue((nextRun || nextSource)!.nextRunAt) ? 'watch' : 'neutral'} />
+                <LiveFact title='Next feed due' value={nextRun ? relativeUntil(nextRun.nextRunAt) : nextSource ? relativeUntil(nextSource.nextRunAt) : 'No upcoming source'} detail={nextRun?.sourceName || nextSource?.name || 'No active feed is queued'} url={nextRun?.sourceUrl || nextSource?.url} tone={(nextRun || nextSource) && isOverdue((nextRun || nextSource)!.nextRunAt) ? 'watch' : 'neutral'} />
             </section>
 
             {runUnavailable ? <DashboardPanel className='border-ui-danger/35 bg-ui-danger/5 p-4'><p className='font-semibold text-ui-danger'>Collection history unavailable</p><p className='mt-1 text-sm text-ui-muted'>The collector status is available, but its run history could not be read. This is not the same as zero runs.</p></DashboardPanel> : null}
@@ -70,7 +70,7 @@ export default async function TiRunsPage(props: { searchParams?: Promise<Record<
                     <Metric title='Completed' value={String(completed)} detail='successful jobs' tone='ok' />
                     <Metric title='Failed' value={String(failed)} detail='needs retry' tone={failed ? 'warn' : 'ok'} />
                     <Metric title='Evidence' value={`${captureTotal} captures`} detail={`${screenshotTotal} screenshots · ${rowTotal} parsed rows`} tone='hold' />
-                    <Metric title='Next run' value={nextRun ? relativeUntil(nextRun.nextRunAt) : nextSource ? relativeUntil(nextSource.nextRunAt) : 'No upcoming source'} detail={nextRun?.sourceName || nextSource?.name || 'No active source is queued'} tone='hold' />
+                    <Metric title='Next run' value={nextRun ? relativeUntil(nextRun.nextRunAt) : nextSource ? relativeUntil(nextSource.nextRunAt) : 'No upcoming source'} detail={[nextRun?.sourceName || nextSource?.name, nextRun?.sourceUrl || nextSource?.url].filter(Boolean).join(' · ') || 'No active feed is queued'} tone='hold' />
                 </div>
             </details> : null}
 
@@ -91,7 +91,7 @@ export default async function TiRunsPage(props: { searchParams?: Promise<Record<
                     <div className='min-w-[78rem]'>
                         <div className='grid grid-cols-[1.15fr_1.25fr_0.7fr_0.75fr_0.75fr_0.75fr_0.9fr_0.85fr] gap-3 border-b border-ui-border bg-ui-canvas px-4 py-2 text-xs font-semibold uppercase text-ui-muted'>
                             <span>Run</span>
-                            <span>Source</span>
+                            <span>Feed</span>
                             <span>Status</span>
                             <span>Started</span>
                             <span>Duration</span>
@@ -104,20 +104,20 @@ export default async function TiRunsPage(props: { searchParams?: Promise<Record<
                                 <div key={run.id} className='grid grid-cols-[1.15fr_1.25fr_0.7fr_0.75fr_0.75fr_0.75fr_0.9fr_0.85fr] gap-3 border-b border-ui-border px-4 py-2.5 text-sm last:border-b-0 hover:bg-ui-panel'>
                                     <div className='min-w-0'>
                                         <p className='truncate font-mono text-xs font-semibold text-ui-text'>{run.id}</p>
-                                        <p className='mt-1 line-clamp-1 text-xs text-ui-muted'>{run.message}</p>
+                                        {run.message ? <p className='mt-1 line-clamp-1 text-xs text-ui-muted'>{run.message}</p> : null}
                                     </div>
                                     {run.sourceId ? <Link href={`/ti/sources/${run.sourceId}`} className='min-w-0 font-semibold text-ui-text hover:text-ui-primary'>
                                         <span className='block truncate'>{run.sourceName}</span>
-                                        <span className='mt-1 block truncate text-xs font-normal text-ui-muted'>{run.sourceFamily.replaceAll('_', ' ')}</span>
+                                        <span className='mt-1 block truncate text-xs font-normal text-ui-muted'>{run.sourceUrl || run.sourceFamily.replaceAll('_', ' ')}</span>
                                     </Link> : <div className='min-w-0'>
                                         <span className='block truncate font-semibold text-ui-text'>{run.sourceName}</span>
-                                        <span className='mt-1 block truncate text-xs text-ui-muted'>{run.sourceFamily.replaceAll('_', ' ')}</span>
+                                        <span className='mt-1 block truncate text-xs text-ui-muted'>{run.sourceUrl || run.sourceFamily.replaceAll('_', ' ')}</span>
                                     </div>}
                                     <span className={statusClass(run.status)}>{run.status}</span>
                                     <span className='text-ui-muted'>{shortDate(run.startedAt)}</span>
                                     <span className='font-semibold text-ui-text'>{durationLabel(run.startedAt, run.finishedAt)}</span>
                                     <span className='text-ui-primary'>{run.captures} cap · {run.screenshots} shots · {run.rows} rows</span>
-                                    <span className='text-ui-muted'>{run.nextRunAt ? relativeUntil(run.nextRunAt) : run.trigger === 'automated' ? 'automated run' : run.trigger === 'manual' ? 'manual run' : 'run origin unavailable'}</span>
+                                    <span className='text-ui-muted'>{run.nextRunAt ? shortDate(run.nextRunAt) : sources.find(source => source.id === run.sourceId)?.nextRunAt ? shortDate(sources.find(source => source.id === run.sourceId)!.nextRunAt) : 'Schedule unavailable'}</span>
                                     {run.sourceId ? <Link href={`/ti/sources/${run.sourceId}`} className='inline-flex h-8 w-fit items-center gap-1.5 rounded-md border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text hover:bg-ui-raised'>
                                         Source
                                         <ArrowRight className='h-3.5 w-3.5' />
@@ -224,7 +224,8 @@ function LiveRunCard({ title, run, sourceName }: { title: string, run?: TiAdminO
             </div>
             <div className='p-4'>
                 <p className='line-clamp-1 text-lg font-semibold text-ui-text'>{sourceName || (run ? 'Unknown source' : 'No active collection')}</p>
-                <p className='mt-1 line-clamp-2 min-h-10 text-sm leading-5 text-ui-muted'>{run?.message || 'No collector run is currently recorded.'}</p>
+                {run?.sourceUrl ? <p className='mt-1 break-all text-sm text-ui-muted'>{run.sourceUrl}</p> : null}
+                {run?.message ? <p className='mt-1 text-sm text-ui-muted'>{run.message}</p> : null}
                 <div className='mt-3 grid grid-cols-3 gap-2'>
                     <Mini label='Rows' value={String(run?.rows ?? 0)} />
                     <Mini label='Captures' value={String(run?.captures ?? 0)} />
@@ -235,7 +236,7 @@ function LiveRunCard({ title, run, sourceName }: { title: string, run?: TiAdminO
     )
 }
 
-function LiveFact({ title, value, detail, tone }: { title: string, value: string, detail: string, tone: 'neutral' | 'ok' | 'watch' }) {
+function LiveFact({ title, value, detail, url, tone }: { title: string, value: string, detail: string, url?: string, tone: 'neutral' | 'ok' | 'watch' }) {
     return (
         <DashboardPanel className='border-ui-border bg-ui-panel p-4'>
             <div className='flex items-center justify-between gap-3'>
@@ -243,7 +244,8 @@ function LiveFact({ title, value, detail, tone }: { title: string, value: string
                 <span className={tone === 'ok' ? 'text-ui-success' : tone === 'watch' ? 'text-ui-warning' : 'text-ui-primary'}><Rows3 className='h-4 w-4' /></span>
             </div>
             <p className='mt-3 text-xl font-semibold text-ui-text'>{value}</p>
-            <p className='mt-1 line-clamp-2 text-sm leading-5 text-ui-muted'>{detail}</p>
+            <p className='mt-1 text-sm leading-5 text-ui-muted'>{detail}</p>
+            {url ? <p className='mt-1 break-all text-xs text-ui-muted'>{url}</p> : null}
         </DashboardPanel>
     )
 }
