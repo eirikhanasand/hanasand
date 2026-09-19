@@ -1,3 +1,4 @@
+import { attachDiskDiagnostics } from './monitoringDiskDiagnostics.ts'
 import { monitoringAlertReady } from './monitoringAlertPolicy.ts'
 import { correlationKey, monitoringScope } from './monitoringCorrelation.ts'
 import { monitoringCaseDiscordAlert } from './alerts/monitoringCase.ts'
@@ -40,7 +41,8 @@ export async function recordMonitoringOutcome(automation: AutomationRow, runId: 
             VALUES (COALESCE((SELECT automation_id FROM monitoring_issues WHERE correlation_key=$6),$1),
                 COALESCE((SELECT fingerprint FROM monitoring_issues WHERE correlation_key=$6),$2), $3, $4, $6, $7)
             ON CONFLICT (correlation_key) DO UPDATE
-            SET occurrences = monitoring_issues.occurrences + 1, last_seen_at = NOW(), resolved_at = NULL, summary = EXCLUDED.summary,
+            SET disk_diagnostics = CASE WHEN monitoring_issues.resolved_at IS NOT NULL THEN NULL ELSE monitoring_issues.disk_diagnostics END,
+                occurrences = monitoring_issues.occurrences + 1, last_seen_at = NOW(), resolved_at = NULL, summary = EXCLUDED.summary,
                 history = monitoring_issues.history || CASE WHEN monitoring_issues.resolved_at IS NOT NULL THEN jsonb_build_array(jsonb_build_object(
                     'id', $5::text, 'at', NOW(), 'actor', 'Health monitoring', 'actorType', 'automation', 'action', 'recurred', 'note', EXCLUDED.summary, 'runId', $5::text)) ELSE '[]'::jsonb END,
                 resolution = CASE WHEN monitoring_issues.status_override IS NULL THEN NULL ELSE monitoring_issues.resolution END
@@ -50,6 +52,10 @@ export async function recordMonitoringOutcome(automation: AutomationRow, runId: 
         await query('UPDATE agent_automation_runs SET issue_id = $2 WHERE id = $1', [runId, id])
         return id
     })
+    if (issue && kind === 'failure') {
+        try { await attachDiskDiagnostics(String(issue), automation) }
+        catch (error) { console.error('Disk diagnostics could not be attached:', error instanceof Error ? error.message : 'unknown error') }
+    }
     if (!issue || automation.notify_on === 'never' || kind === 'warning' && !automation.notify_warnings && automation.notify_on !== 'always') return
     // Use persisted check history so restarts and intermittent successes do not
     // bypass the grace period. Cases and their raw outcomes remain immediate.

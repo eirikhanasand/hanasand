@@ -21,12 +21,19 @@ def read_snapshot():
     age = (datetime.datetime.now(datetime.timezone.utc) - sampled).total_seconds()
     if age < -5 or age > 90:
         raise ValueError('OVH host telemetry is stale')
-    return host
+    return host, status.get("diskDiagnostics")
 
 
 if __name__ == '__main__':
+    host, diagnostics = read_snapshot()
+    if isinstance(diagnostics, dict):
+        diagnostic_path = Path('/var/lib/hanasand/metrics/ovhcloud-disk-directories.json')
+        diagnostic_tmp = diagnostic_path.with_suffix('.tmp')
+        diagnostic_tmp.write_text(json.dumps(diagnostics, allow_nan=False))
+        diagnostic_tmp.chmod(0o644)
+        diagnostic_tmp.replace(diagnostic_path)
     destination = Path('/var/lib/hanasand/metrics/ovhcloud.json')
     temporary = destination.with_suffix('.tmp')
-    temporary.write_text(json.dumps(read_snapshot(), allow_nan=False))
+    temporary.write_text(json.dumps(host, allow_nan=False))
     temporary.chmod(0o644)
     temporary.replace(destination)
