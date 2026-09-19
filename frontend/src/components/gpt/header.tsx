@@ -13,12 +13,12 @@ export default function GPT_Header({
     return (
         <div className='flex flex-wrap items-center justify-end gap-2'>
             <GPT_HeaderCard label={participants === 1 ? 'Viewer' : 'Viewers'} value={String(participants)} icon={<Eye className='h-4 w-4' />} />
+            <GPT_ConnectionCard isConnected={isConnected} />
             {logsHref ? (
-                <Link href={logsHref} className='flex h-9 items-center rounded-md border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text hover:bg-ui-panel'>
+                <Link href={logsHref} className='flex h-9 items-center rounded-md border border-ui-border bg-ui-raised px-3 text-sm font-normal text-ui-text hover:bg-ui-panel'>
                     View logs
                 </Link>
             ) : null}
-            <GPT_ConnectionCard isConnected={isConnected} />
         </div>
     )
 }
