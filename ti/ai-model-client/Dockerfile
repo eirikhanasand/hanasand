@@ -2,7 +2,7 @@ FROM oven/bun:1.3.11-alpine
 
 WORKDIR /app
 
-COPY ti/ai-model-client/client.mjs /app/client.mjs
+COPY ti/ai-model-client/client.mjs ti/ai-model-client/power.mjs /app/
 
 EXPOSE 18182
 

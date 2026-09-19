@@ -1,3 +1,5 @@
+import { readPower } from './power.mjs';
+
 const API_WS = process.env.HANASAND_AI_CLIENT_API_WS ?? "ws://127.0.0.1:8080/api/client/ws/gpt";
 const OPENAI_BASE = process.env.HANASAND_AI_OPENAI_BASE ?? "http://127.0.0.1:18081";
 const MODEL = process.env.HANASAND_AI_MODEL ?? "hanasand";
@@ -180,11 +182,7 @@ function sendClientUpdate(status, overrides = {}) {
       cpu: [],
       gpu: [],
       lanes: modelLanes,
-      power: {
-        totalWatts: 0,
-        monthlyKwh: 0,
-        sampledAt: new Date().toISOString()
-      },
+      power: readPower(),
       model: {
         conversationId: overrides.conversationId ?? null,
         status,

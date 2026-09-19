@@ -296,6 +296,9 @@ services:
       HANASAND_AI_MODEL: ${HANASAND_AI_MODEL:-hanasand}
       HANASAND_AI_CLIENT_NAME: ${HANASAND_AI_CLIENT_NAME:-hanasand-inspur}
       HANASAND_AI_CLIENT_HEALTH_PORT: ${HANASAND_AI_CLIENT_HEALTH_PORT:-18182}
+    volumes:
+      - /var/lib/hanasand/metrics:/host-metrics:ro
+      - /var/lib/hanasand/ai-power:/power-state
     healthcheck:
       test: ["CMD-SHELL", "wget -T 2 -t 1 -qO- http://127.0.0.1:${HANASAND_AI_CLIENT_HEALTH_PORT:-18182}/health"]
       interval: 10s
