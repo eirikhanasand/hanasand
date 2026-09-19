@@ -240,7 +240,7 @@ export default function GPT_Page() {
         <>
             <div className='h-full w-full overflow-y-auto'>
                 <div className='mx-auto flex w-full max-w-330 flex-col gap-4 px-4 pb-4 pt-6 sm:px-6 md:px-8 md:pt-8'>
-                    <div className='flex items-end justify-between gap-4'>
+                    <div className='flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between'>
                         <div>
                             <h1 className='mt-1 text-2xl font-semibold text-ui-text'>AI operations</h1>
                         </div>
