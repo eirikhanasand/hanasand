@@ -31,6 +31,7 @@ import {
 import type { MailMessageSummary, MailOverview } from '@/utils/mail/types'
 import { DashboardPage, DashboardPanel, dashboardPanelClass } from '@/components/dashboard/ui'
 import ErrorNotice from '@/components/error/errorNotice'
+import DmarcReportPreview, { reportAttachments } from './dmarcReport'
 import { Composer, MessageRow, type MailQuickAction } from './mailWorkspaceParts'
 import {
     ActionIconButton,
@@ -509,6 +510,8 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                 </div>
                             )}
 
+                            {reportAttachments(selectedMessage).map(attachment => <DmarcReportPreview key={`${overview.mailboxUser}:${selectedMessage.id}:${attachment.blobId}`} attachment={attachment} mailboxUser={overview.mailboxUser} />)}
+
                             {selectedMessage.htmlBody ? (
                                 <iframe
                                     title='HTML mail'
@@ -517,11 +520,11 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                     sandbox='allow-popups allow-popups-to-escape-sandbox'
                                     srcDoc={renderedHtml}
                                 />
-                            ) : (
+                            ) : selectedMessage.textBody ? (
                                 <article className='min-w-0 wrap-anywhere rounded-lg border border-ui-border px-4 py-3 xl:min-h-40 xl:flex-1 xl:overflow-y-auto text-[13px] leading-6 whitespace-pre-wrap text-ui-text'>
                                     {selectedMessage.textBody}
                                 </article>
-                            )}
+                            ) : null}
                         </div>
                     )}
                 </section>}
