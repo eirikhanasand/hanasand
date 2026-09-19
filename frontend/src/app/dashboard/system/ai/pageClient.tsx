@@ -350,7 +350,7 @@ function ReliabilityCards({ economics, error }: { economics: AIEconomics | null,
                         <div className='mt-2 max-h-40 space-y-2 overflow-auto'>
                             {queuedRows.map((row) => (
                                 <div key={`${row.lane}-${row.model}-${row.kind}-${row.status}`} className='grid grid-cols-[minmax(0,1fr)_auto] gap-2 rounded-md border border-ui-border bg-ui-raised px-2 py-1'>
-                                    <div className='min-w-0 break-words'>
+                                    <div className='min-w-0 wrap-break-word'>
                                         <p className='font-medium text-ui-text'>{row.lane} · {row.model}</p>
                                         <p>{row.kind} · {row.status}</p>
                                     </div>
