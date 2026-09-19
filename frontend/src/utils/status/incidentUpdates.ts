@@ -2,6 +2,9 @@ import type { ServiceIncident } from './getStatus'
 
 type Update = ServiceIncident['updates'][number]
 const automated = new Set([
+    'A problem was detected.',
+    'The health check was still failing.',
+    'The service was still degraded.',
     'Automated monitoring detected a problem with this component.',
     'The availability check was still failing.',
     'The check was reporting degraded service. Recovery had not yet been confirmed.',
@@ -18,10 +21,10 @@ export default function meaningfulIncidentUpdates(updates: Update[]): Update[] {
         const evidence = update.evidence?.trim() || ''
         // A rising age is the same stale-feed observation, not a new finding.
         // Do not normalize arbitrary numbers: HTTP codes and other measurements matter.
-        const finding = evidence.replace(/(activity is stale) \(\d+(?:\.\d+)? minutes?\)/i, '$1').replace(/\s+/g, ' ')
+        const finding = evidence.replace(/(activity is stale) \(\d+(?:\.\d+)? minutes?\)/i, '$1').replace(/(The activity feed was) \d+(?:\.\d+)? minutes? (out of date\.)/i, '$1 $2').replace(/\s+/g, ' ')
         if (update.status !== 'investigating' && (!finding || findings.has(finding))) continue
         findings.add(finding)
-        const message = /activity is stale/i.test(evidence) ? 'The activity feed is out of date.'
+        const message = /activity is stale|activity feed was .*out of date/i.test(evidence) ? 'The activity feed is out of date.'
             : /^The operation timed out\.$/i.test(evidence) ? 'The monitoring check timed out.'
                 : evidence || 'Monitoring detected a problem.'
         result.push({ ...update, message, evidence: evidence === message ? undefined : update.evidence })
