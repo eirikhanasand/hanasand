@@ -11,6 +11,7 @@ type TestTask = {
 const bun = process.execPath
 
 const tasks: TestTask[] = [
+    { id: 'helpdesk-render', title: 'Helpdesk audit rendering and focus filters', command: [bun, 'tests/helpdesk-render.test.tsx'] },
     { id: 'share-statistics', title: 'Share line counts and empty statistics', command: [bun, 'test', 'tests/share-statistics.test.tsx'] },
     { id: 'content-pages', title: 'Article dates and thoughts copy', command: [bun, 'tests/content-pages.test.tsx'] },
     { id: 'workspace-organization-browser', title: 'Global organization switcher and shared links', command: [bun, 'scripts/check-workspace-organization.mjs'], requires: 'playwright' },

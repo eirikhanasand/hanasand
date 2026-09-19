@@ -7,18 +7,18 @@ import AccessRecoveryForm from './accessRecoveryForm'
 
 type AdminAuditEvent = {
     id: number
-    action_type: string
+    event_type: string
     severity: 'info' | 'notice' | 'warning' | 'critical'
     source: string
     service: string
     actor_id: string
     actor_name?: string | null
-    target_type?: string | null
-    target_id?: string | null
+    object_type?: string | null
+    object_id?: string | null
     target_name?: string | null
     organization_id?: string | null
     organization_name?: string | null
-    entity_id?: string | null
+    subject_id?: string | null
     request_id?: string | null
     outcome: 'success' | 'denied' | 'failed'
     reason: string
@@ -130,8 +130,8 @@ function stats(events: AdminAuditEvent[]) {
     return {
         denied: events.filter(event => event.outcome === 'denied').length,
         critical: events.filter(event => event.severity === 'critical').length,
-        impersonation: events.filter(event => event.action_type.startsWith('impersonation')).length,
-        recovery: events.filter(event => event.action_type.includes('recovery') || event.action_type.includes('invite')).length,
+        impersonation: events.filter(event => event.event_type.startsWith('impersonation')).length,
+        recovery: events.filter(event => event.event_type.includes('recovery') || event.event_type.includes('invite')).length,
     }
 }
 
@@ -143,19 +143,19 @@ function selectedAuditEvent(events: AdminAuditEvent[], params: AuditSearchParams
 
     return events.find(event => (
         (request && event.request_id === request)
-        || (entity && event.entity_id === entity)
-        || (action && event.action_type === action)
-        || (target && (event.target_id === target || event.target_name === target))
+        || (entity && event.subject_id === entity)
+        || (action && event.event_type === action)
+        || (target && (event.object_id === target || event.target_name === target))
     )) || events[0]
 }
 
 function auditDetailRows(event: AdminAuditEvent) {
     return [
         ['Actor', event.actor_name || event.actor_id],
-        ['Target', event.target_name || event.target_id || event.target_type],
+        ['Target', event.target_name || event.object_id || event.object_type],
         ['Organization', event.organization_name || event.organization_id],
         ['Request', event.request_id],
-        ['Entity', event.entity_id],
+        ['Entity', event.subject_id],
         ['Source', `${event.source}/${event.service}`],
     ].filter(([, value]) => value)
 }
@@ -195,7 +195,7 @@ export default async function HelpdeskPage({
             Authorization: `Bearer ${decodeAccessToken(token)}`,
             id,
         },
-        next: { revalidate: 5 },
+        cache: 'no-store',
     }).catch(() => null)
     const payload = response?.ok ? await response.json().catch(() => null) : null
     const events = Array.isArray(payload?.events) ? payload.events as AdminAuditEvent[] : []
@@ -304,8 +304,8 @@ export default async function HelpdeskPage({
                                 <div className='text-[10px] font-semibold uppercase tracking-[0.16em] text-ui-muted'>Selected detail</div>
                                 {selectedEvent ? (
                                     <div className='mt-2 min-w-0 text-sm text-ui-text'>
-                                        <div className='truncate font-semibold text-ui-text'>{selectedEvent.action_type}</div>
-                                        <div className='mt-1 truncate text-xs'>request {selectedEvent.request_id || 'checking'} · entity {selectedEvent.entity_id || 'checking'}</div>
+                                        <div className='truncate font-semibold text-ui-text'>{selectedEvent.event_type}</div>
+                                        <div className='mt-1 truncate text-xs'>request {selectedEvent.request_id || 'checking'} · entity {selectedEvent.subject_id || 'checking'}</div>
                                     </div>
                                 ) : (
                                     <p className='mt-2 text-sm text-ui-muted'>Select an audit row to inspect request and entity detail.</p>
@@ -328,7 +328,7 @@ export default async function HelpdeskPage({
                                     <article key={event.id} className={`grid gap-3 p-4 md:grid-cols-[minmax(0,1fr)_11rem] md:items-start ${focused ? 'bg-ui-primary/5 ring-1 ring-inset ring-ui-primary/25' : ''}`} data-helpdesk-focused-event={focused ? 'true' : undefined}>
                                         <div className='min-w-0'>
                                             <div className='flex flex-wrap items-center gap-2 text-sm text-ui-text'>
-                                                <strong className='min-w-0 truncate'>{event.action_type}</strong>
+                                                <strong className='min-w-0 truncate'>{event.event_type}</strong>
                                                 {focused ? <span className='rounded-md border border-ui-primary/35 bg-ui-primary/10 px-2 py-1 text-[11px] font-semibold uppercase text-ui-primary'>Focused</span> : null}
                                                 <span className={`rounded-md border px-2 py-1 text-[11px] font-semibold uppercase ${severityClass(event.severity)}`}>{event.severity}</span>
                                                 <span className={`rounded-md border px-2 py-1 text-[11px] font-semibold uppercase ${outcomeClass(event.outcome)}`}>{event.outcome}</span>
@@ -336,9 +336,9 @@ export default async function HelpdeskPage({
                                             </div>
                                             <div className='mt-2 flex flex-wrap gap-2 text-xs text-ui-muted'>
                                                 <span className='rounded-md bg-ui-raised px-2 py-1'>actor {event.actor_name || event.actor_id}</span>
-                                                {event.target_id ? <span className='rounded-md bg-ui-raised px-2 py-1'>{event.target_type || 'target'} {event.target_name || event.target_id}</span> : null}
+                                                {event.object_id ? <span className='rounded-md bg-ui-raised px-2 py-1'>{event.object_type || 'target'} {event.target_name || event.object_id}</span> : null}
                                                 {event.organization_id ? <span className='rounded-md bg-ui-primary/10 px-2 py-1 text-ui-primary'>{event.organization_name || event.organization_id}</span> : null}
-                                                {event.entity_id ? <span className='rounded-md bg-ui-raised px-2 py-1 font-mono'>entity {event.entity_id}</span> : null}
+                                                {event.subject_id ? <span className='rounded-md bg-ui-raised px-2 py-1 font-mono'>entity {event.subject_id}</span> : null}
                                                 {event.request_id ? <span className='rounded-md bg-ui-raised px-2 py-1 font-mono'>request {event.request_id}</span> : null}
                                             </div>
                                             {event.reason ? <p className='mt-2 text-sm text-ui-muted'>{event.reason}</p> : null}
@@ -347,7 +347,7 @@ export default async function HelpdeskPage({
                                         <div className='text-left text-xs text-ui-muted md:text-right'>
                                             <div>{formatTime(event.created_at)}</div>
                                             <div className='mt-1 max-w-xl truncate'>{event.ip}</div>
-                                            <Link className='mt-2 inline-flex rounded-md border border-ui-border px-2 py-1 font-semibold text-ui-text hover:bg-ui-raised' href={`/helpdesk?request=${encodeURIComponent(event.request_id || '')}&entity=${encodeURIComponent(event.entity_id || '')}&source=${encodeURIComponent(event.source)}&service=${encodeURIComponent(event.service)}`}>
+                                            <Link className='mt-2 inline-flex rounded-md border border-ui-border px-2 py-1 font-semibold text-ui-text hover:bg-ui-raised' href={`/helpdesk?request=${encodeURIComponent(event.request_id || '')}&entity=${encodeURIComponent(event.subject_id || '')}&source=${encodeURIComponent(event.source)}&service=${encodeURIComponent(event.service)}`}>
                                                 Focus
                                             </Link>
                                         </div>
@@ -373,7 +373,7 @@ export default async function HelpdeskPage({
                             <div className='flex flex-wrap items-start justify-between gap-2'>
                                 <div className='min-w-0'>
                                     <p className='text-[10px] font-semibold uppercase tracking-[0.16em] text-ui-muted'>Selected event</p>
-                                    <h2 className='mt-1 truncate text-sm font-semibold text-ui-text'>{selectedEvent.action_type}</h2>
+                                    <h2 className='mt-1 truncate text-sm font-semibold text-ui-text'>{selectedEvent.event_type}</h2>
                                 </div>
                                 <span className={`rounded-md border px-2 py-1 text-[11px] font-semibold uppercase ${outcomeClass(selectedEvent.outcome)}`}>{selectedEvent.outcome}</span>
                             </div>
