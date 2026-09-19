@@ -19,6 +19,27 @@ test('historical catch-up notice checks every source without losing bigint preci
     await expect(notice).toHaveCount(0)
 })
 
+
+test('command queue reports capped counts and clears its delay warning after processing', async ({ page }) => {
+    await page.clock.install()
+    let pending: { count: number, has_more: boolean, oldest_queued_at: string | null } = { count: 1, has_more: false, oldest_queued_at: '2026-09-19T15:01:30Z' }
+    await page.route('**/api/backend/logs/search?*', route => route.fulfill({ json: { ...result(), generated_at: '2026-09-19T15:02:00Z', processing: { ...result().processing, pending_commands: pending } } }))
+    await openLogs(page, '/logs')
+    await page.clock.runFor(300)
+    const notice = page.getByRole('status').filter({ hasText: 'Command checks are delayed.' })
+    await expect(notice).toHaveCount(0)
+    await page.getByText('Operational counters', { exact: true }).click()
+    await expect(page.getByText('Commands awaiting checks: 1', { exact: true })).toBeVisible()
+    pending = { count: 10000, has_more: true, oldest_queued_at: '2026-09-19T15:00:00Z' }
+    await page.clock.runFor(5000)
+    await expect(notice).toContainText(/More than 10[,. ]?000 commands are waiting/)
+    await expect(page.getByText(/Commands awaiting checks: more than 10[,. ]?000/)).toBeVisible()
+    pending = { count: 0, has_more: false, oldest_queued_at: null }
+    await page.clock.runFor(5000)
+    await expect(notice).toHaveCount(0)
+    await expect(page.getByText('Commands awaiting checks: 0', { exact: true })).toBeVisible()
+})
+
 test('dashboard lands on severity counts and keeps active services inside operational counters', async ({ page }) => {
     await page.route('**/api/backend/logs/search?*', route => route.fulfill({ json: result() }))
     await openLogs(page, '/logs?service=audit&hours=168')
