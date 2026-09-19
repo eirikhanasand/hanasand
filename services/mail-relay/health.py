@@ -50,13 +50,24 @@ def queue_probe(settings):
     queue = get('/api/queue/messages?limit=101')
     if queue['total'] > 100:
         raise ValueError('Queue limit exceeded')
-    # A small queue is normal; messages older than five minutes are not.
+    # Reports can be scheduled up to three hours after creation by Stalwart.
+    # Measure unattempted recipients from their due time, not enqueue time.
     for item in queue['items']:
         message = get('/api/queue/messages/' + str(item))
         created = message['created']
         at = datetime.fromisoformat(created.replace('Z', '+00:00')).timestamp() if isinstance(created, str) else float(created)
-        if time.time() - at > 300:
-            raise ValueError('Delivery backlog')
+        for recipient in message.get('recipients') or [{}]:
+            status = recipient.get('status')
+            if isinstance(status, dict) and 'completed' in status:
+                continue
+            due = at
+            if status == 'scheduled' and recipient.get('retry_num') == 0:
+                scheduled = recipient.get('next_retry')
+                if scheduled is not None:
+                    due = max(at, datetime.fromisoformat(scheduled.replace('Z', '+00:00')).timestamp()
+                              if isinstance(scheduled, str) else float(scheduled))
+            if time.time() - due > 300:
+                raise ValueError('Delivery backlog')
     return True
 
 

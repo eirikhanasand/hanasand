@@ -43,6 +43,49 @@ class HealthTests(unittest.TestCase):
         with patch.object(health.urllib.request, 'urlopen', return_value=io.BytesIO(b'{"error":"forbidden"}')):
             with self.assertRaises(ValueError): health.queue_probe(settings)
 
+    def test_scheduled_reports_only_become_backlog_after_the_first_attempt_is_due(self):
+        settings = {'url': 'http://mail', 'username': 'read-only', 'password': 'test'}
+        scheduled = {'status': 'scheduled', 'retry_num': 0,
+                     'next_retry': '2026-09-19T02:10:45Z'}
+        due = health.datetime.fromisoformat(scheduled['next_retry']).timestamp()
+        message = {'created': '2026-09-19T00:00:00Z', 'recipients': [scheduled]}
+        for now, healthy in [(due - 3600, True), (due, True), (due + 300, True), (due + 301, False)]:
+            with self.subTest(now=now):
+                responses = [io.BytesIO(json.dumps({'data': {'items': [1], 'total': 1}}).encode()),
+                             io.BytesIO(json.dumps({'data': message}).encode())]
+                with patch.object(health.urllib.request, 'urlopen', side_effect=responses), patch.object(health.time, 'time', return_value=now):
+                    if healthy:
+                        self.assertTrue(health.queue_probe(settings))
+                    else:
+                        with self.assertRaisesRegex(ValueError, 'Delivery backlog'):
+                            health.queue_probe(settings)
+
+    def test_scheduled_recipients_do_not_hide_failed_or_overdue_deliveries(self):
+        settings = {'url': 'http://mail', 'username': 'read-only', 'password': 'test'}
+        scheduled = {'status': 'scheduled', 'retry_num': 0, 'next_retry': 2000}
+        completed = {'status': {'completed': '250 OK'}}
+        for recipient in [
+            {'status': {'temp_fail': '451 Try later'}, 'retry_num': 1, 'next_retry': 2000},
+            {'status': {'perm_fail': '550 Rejected'}},
+            {**scheduled, 'retry_num': 1},
+            {**scheduled, 'next_retry': 600},
+            {'status': 'scheduled', 'retry_num': 0},
+            {},
+        ]:
+            with self.subTest(recipient=recipient):
+                message = {'created': 100, 'recipients': [completed, scheduled, recipient]}
+                responses = [io.BytesIO(json.dumps({'data': {'items': [1], 'total': 1}}).encode()),
+                             io.BytesIO(json.dumps({'data': message}).encode())]
+                with patch.object(health.urllib.request, 'urlopen', side_effect=responses), patch.object(health.time, 'time', return_value=1000):
+                    with self.assertRaisesRegex(ValueError, 'Delivery backlog'):
+                        health.queue_probe(settings)
+
+    def test_queue_limit_is_still_enforced(self):
+        response = io.BytesIO(b'{"data":{"items":[],"total":101}}')
+        with patch.object(health.urllib.request, 'urlopen', return_value=response):
+            with self.assertRaisesRegex(ValueError, 'Queue limit exceeded'):
+                health.queue_probe({'url': 'http://mail', 'username': 'read-only', 'password': 'test'})
+
     def test_submission_requires_authentication_and_never_sends_data(self):
         senders = []
         class SMTP:
