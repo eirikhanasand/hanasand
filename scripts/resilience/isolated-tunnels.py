@@ -81,7 +81,7 @@ def start(image):
             if legacy.returncode == 0 and GROUPS['replication'][1] in json.loads(legacy.stdout):
                 print('Replication still uses the legacy tunnel. Finish any backup before split-replication.')
                 continue
-        subprocess.run(['docker', 'run', '-d', '--name', name, '--restart', 'unless-stopped', '--network', 'host', '--memory', '128m', '--cpus', '.5',
+        subprocess.run(['docker', 'run', '-d', '--name', name, '--restart', 'unless-stopped', '--network', 'host', '--memory', '128m', '--cpus', '2' if group == 'replication' else '.5',
                         '-v', '/home/hanasand/resilience-secrets/reverse-tunnel-key:/run/key:ro',
                         '-v', '/home/hanasand/resilience-secrets/ovh-known-hosts:/run/known_hosts:ro',
                         '--entrypoint', 'ssh', image, '-NT',
@@ -122,8 +122,10 @@ def split_replication(image=None):
             raise RuntimeError(f'{target} already exists; inspect it before continuing')
     environment = dict(value.split('=', 1) for value in old['Config']['Env'])
     def launch(target, command):
+        # Compression must keep up with WAL; retain the legacy connection's limit.
+        cpus = 2 if target == replica else old['HostConfig']['NanoCpus'] / 1e9
         args = ['docker', 'run', '-d', '--name', target, '--restart', old['HostConfig']['RestartPolicy']['Name'], '--network', 'host',
-                '--memory', str(old['HostConfig']['Memory']), '--cpus', str(old['HostConfig']['NanoCpus'] / 1e9)]
+                '--memory', str(old['HostConfig']['Memory']), '--cpus', str(cpus)]
         for mount in old['Mounts']:
             if mount['Type'] != 'bind': raise RuntimeError('Unexpected tunnel mount')
             args += ['-v', mount['Source'] + ':' + mount['Destination'] + ('' if mount['RW'] else ':ro')]

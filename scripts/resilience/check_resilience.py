@@ -114,6 +114,7 @@ with patch.object(isolated.subprocess, 'run', side_effect=tunnel_command):
     isolated.start('test-image')
 assert len(started) == 1 and started[0][started[0].index('--name') + 1] == 'hanasand-tunnel-replication'
 assert '-C' in started[0] and '127.0.0.1:18503:127.0.0.1:8503' in started[0]
+assert started[0][started[0].index('--cpus') + 1] == '2'
 assert not any(value.startswith('127.0.0.1:28503:') for value in started[0])
 import tempfile
 with tempfile.TemporaryDirectory() as directory:
@@ -154,6 +155,9 @@ with patch.object(isolated.subprocess, 'check_output', side_effect=[monitor.json
         assert 'did not stay running' in str(error)
 assert commands[-2:] == [['docker', 'rename', 'hanasand-tunnel-before-compression', 'hanasand-tunnel'], ['docker', 'start', 'hanasand-tunnel']]
 assert ['docker', 'rm', '-f', 'hanasand-tunnel-before-compression'] not in commands
+launches = {command[command.index('--name') + 1]: command for command in commands if command[:2] == ['docker', 'run']}
+assert launches['hanasand-tunnel'][launches['hanasand-tunnel'].index('--cpus') + 1] == '0.5'
+assert launches['hanasand-tunnel-replication'][launches['hanasand-tunnel-replication'].index('--cpus') + 1] == '2'
 commands.clear()
 def missing_image(command, **_kwargs):
     commands.append(command)
