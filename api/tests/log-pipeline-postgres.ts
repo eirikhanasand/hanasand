@@ -1,5 +1,6 @@
 // Opt-in integration check: all fixtures use temporary tables and roll back.
 // LOG_PIPELINE_TEST_DATABASE=1 DB_* bun tests/log-pipeline-postgres.ts
+// Keep the repository layout; containers mounting api at /app also need scripts at /scripts:ro.
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { mock } from 'bun:test'
