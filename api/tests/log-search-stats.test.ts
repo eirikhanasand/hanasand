@@ -5,6 +5,7 @@ let statements: string[], parameters: any[][]
 const query = async (sql: string, params: any[] = []): Promise<any> => {
     statements.push(sql); parameters.push(params)
     if (sql.includes('FROM log_process_queue LIMIT 10001')) return { rows: [{ count: pendingCount, oldest_queued_at: pendingCount ? '2026-09-19T14:49:32.311Z' : null }] }
+    if (sql.startsWith('SELECT payload, last_error')) return { rows: [{ payload: { remaining: 3000, processed: 1000, total: 4000, rate: 50, estimated_seconds: 60 }, last_error: null }] }
     if (sql.startsWith('SELECT name, updated_at')) return { rows: [{ name: 'service_logs', last_error: null }] }
     if (sql === 'SELECT ready, last_error FROM mill_log_dimensions_state WHERE id = TRUE') return { rows: [{ ready }] }
     if (sql.includes('GROUP BY 1, 2')) return { rows: [{ severity: 'high', service: 'api', count: 4 }, { severity: 'low', service: 'api', count: 6 }] }
@@ -20,6 +21,7 @@ beforeEach(() => { ready = authorized = administrator = true; pendingCount = 0; 
 test('dashboard uses one exact compact grouping scan after complete backfill', async () => {
     const response = await app.inject('/logs/search?stats=1&service=api&severity=high,critical')
     expect(response.statusCode).toBe(200)
+    expect(response.json().processing.catchup).toMatchObject({ remaining: 3000, estimated_seconds: 60 })
     expect(response.json().counts).toEqual([{ severity: 'high', count: 4 }, { severity: 'low', count: 6 }])
     expect(response.json().services).toEqual([{ service: 'api', count: 10 }])
     const groups = statements.filter(sql => sql.includes('GROUP BY'))

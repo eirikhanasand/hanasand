@@ -12,8 +12,9 @@ test('historical catch-up notice checks every source without losing bigint preci
     await page.route('**/api/backend/logs/search?*', route => route.fulfill({ json: { ...result(), processing: { ...result().processing, sources } } }))
     await openLogs(page, '/logs')
     await page.clock.runFor(300)
-    const notice = page.getByRole('status').filter({ hasText: 'Historical logs are still being checked.' })
-    await expect(notice).toHaveText('Historical logs are still being checked. Search results and counters are incomplete until catch-up finishes.')
+    const notice = page.getByRole('region', { name: 'Historical log catch-up' })
+    await expect(notice).toContainText('Counting remaining logs…')
+    await expect(notice.getByRole('progressbar')).not.toHaveAttribute('aria-valuenow')
     sources[3].last_id = sources[3].recent_id
     await page.clock.runFor(5000)
     await expect(notice).toHaveCount(0)

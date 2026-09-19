@@ -38,8 +38,8 @@ export async function recoverProcessLogs(process: Process, limit = 1000) {
     [candidates.rows.map(row => row.id), limit]) : { rows: [] }
     await process(batch.rows)
     const lastInspected = batch.rows.length === limit ? batch.rows.at(-1)?.id : candidates.rows.at(-1)?.id
-    await run(`UPDATE log_processing_cursors SET recent_id = $1, updated_at = NOW(), last_error = NULL
-        WHERE name = 'process_logs_recovery'`, [lastInspected ? String(BigInt(lastInspected) - 1n) : '0'])
+    await run(`UPDATE log_processing_cursors SET recent_id = $1, checked_count = checked_count + $2, updated_at = NOW(), last_error = NULL
+        WHERE name = 'process_logs_recovery'`, [lastInspected ? String(BigInt(lastInspected) - 1n) : '0', batch.rows.length])
 }
 
 export async function readPendingProcessLogs(query = run) {

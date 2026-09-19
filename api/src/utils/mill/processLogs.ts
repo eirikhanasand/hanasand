@@ -1,3 +1,5 @@
+import { refreshLogCatchupProgress } from './catchupProgress.ts'
+import { recoverUnassignedLogs } from './recoverUnassignedLogs.ts'
 import { createHash } from 'node:crypto'
 import run, { withTransaction } from '#db'
 import { createMillFindings, loadConfiguredMillRules, normalizeMillEvent } from '../../handlers/mill.ts'
@@ -27,7 +29,13 @@ export async function processLogBatch(logs: LogInput[], organizationId: string, 
             item.action, item.outcome, item.user_id, item.user_email, item.source_ip, item.source_country, item.source_city, item.device_id, item.parser_version, item.normalized, jsonb_build_object('service_log_id', item.log_id), 'pending', item.key
         FROM jsonb_to_recordset($1::jsonb) AS item(id text, key text, timestamp text, event_type text, action text, outcome text, user_id text, user_email text, source_ip text, source_country text, source_city text, device_id text, parser_version text, normalized jsonb, log_id text)
         WHERE EXISTS (SELECT 1 FROM organizations WHERE id = $2 AND status = 'active')
-        ON CONFLICT (log_key) DO NOTHING`, [JSON.stringify(prepared.map(({ id, key, event, logId }) => ({ id, key, timestamp: event.timestamp, event_type: event.eventType, action: event.action, outcome: event.outcome, user_id: event.userId, user_email: event.userEmail, source_ip: event.sourceIp, source_country: event.sourceCountry, source_city: event.sourceCity, device_id: event.deviceId, parser_version: event.parserVersion, normalized: event.normalized, log_id: logId }))), organizationId])
+        ON CONFLICT (log_key) DO UPDATE SET organization_id=EXCLUDED.organization_id,
+            event_timestamp=EXCLUDED.event_timestamp, event_type=EXCLUDED.event_type, action=EXCLUDED.action, outcome=EXCLUDED.outcome,
+            user_id=EXCLUDED.user_id, user_email=EXCLUDED.user_email, source_ip=EXCLUDED.source_ip, source_country=EXCLUDED.source_country,
+            source_city=EXCLUDED.source_city, device_id=EXCLUDED.device_id, parser_version=EXCLUDED.parser_version,
+            normalized=EXCLUDED.normalized, original=EXCLUDED.original, processing_status='pending'
+        WHERE mill_events.ingestion_id='logs' AND (mill_events.processing_status='pending'
+          OR (mill_events.processing_status='skipped' AND mill_events.normalized->>'processing_reason'='Organization is missing or inactive')) `, [JSON.stringify(prepared.map(({ id, key, event, logId }) => ({ id, key, timestamp: event.timestamp, event_type: event.eventType, action: event.action, outcome: event.outcome, user_id: event.userId, user_email: event.userEmail, source_ip: event.sourceIp, source_country: event.sourceCountry, source_city: event.sourceCity, device_id: event.deviceId, parser_version: event.parserVersion, normalized: event.normalized, log_id: logId }))), organizationId])
     const pending = await run('SELECT id FROM mill_events WHERE id = ANY($1::text[]) AND organization_id = $2 AND processing_status <> \'processed\'', [prepared.map(item => item.id), organizationId])
     const pendingIds = new Set(pending.rows.map(row => row.id))
     const work = prepared.filter(item => pendingIds.has(item.id))
@@ -93,9 +101,11 @@ export async function processStoredLogs() {
             throw new Error('LOG_CATCHUP_BATCH_LIMIT must be an integer from 1 to 1000.')
         // The transaction owns the lock connection until both cursors are durable.
         // Another replica skips this tick instead of duplicating the same work.
+        let didWork = false
         await withTransaction(async query => {
             const lock = await query('SELECT pg_try_advisory_xact_lock(hashtextextended(\'mill:service-logs\', 0)) AS locked')
             if (!lock.rows[0].locked) return
+            didWork = true
             const platform = await run('SELECT id FROM organizations WHERE status = \'active\' AND (id = $1 OR ($1::text IS NULL AND lower(name) = \'hanasand\')) ORDER BY created_at LIMIT 1', [process.env.PLATFORM_LOG_ORGANIZATION_ID || null])
             if (!platform.rows[0]) throw new Error('Configure an active platform log organization.')
             await run('INSERT INTO log_processing_cursors (name) VALUES (\'service_logs\') ON CONFLICT DO NOTHING')
@@ -112,29 +122,16 @@ export async function processStoredLogs() {
                 }
                 for (const [scope, batch] of scopes) {
                     const active = await run('SELECT id FROM organizations WHERE id = $1 AND status = \'active\'', [scope])
-                    if (!active.rows.length) {
-                        // Retain an inspectable reason without copying a deleted/inactive
-                        // organization's content into another organization's Mill store.
-                        const markers = batch.map(row => ({ id: createHash('sha256').update(`service:${row.id}`).digest('hex'), key: `service:${row.id}`, timestamp: new Date(row.created_at).toISOString() }))
-                        await run(`INSERT INTO mill_events (id, ingestion_id, organization_id, source_vendor, source_product, event_timestamp, normalized, original, processing_status, log_key)
-                            SELECT item.id, 'logs', $2, 'Hanasand', 'Logs', item.timestamp::timestamptz,
-                                jsonb_build_object('processing_reason', 'Organization is missing or inactive', 'severity', 'low', 'log_type', 'SystemLogs'), '{}'::jsonb, 'skipped', item.key
-                            FROM jsonb_to_recordset($1::jsonb) AS item(id text, key text, timestamp text)
-                            ON CONFLICT (log_key) DO UPDATE SET organization_id = EXCLUDED.organization_id,
-                                normalized = EXCLUDED.normalized, original = '{}'::jsonb, processing_status = 'skipped',
-                                event_type = 'unknown', action = 'unknown', outcome = 'unknown', user_id = NULL, user_email = NULL,
-                                source_ip = NULL, source_country = NULL, source_city = NULL, device_id = NULL
-                            WHERE mill_events.ingestion_id = 'logs' AND mill_events.processing_status = 'pending'`, [JSON.stringify(markers), platform.rows[0].id])
-                        continue
-                    }
-                    if (!configured.has(scope)) configured.set(scope, await loadConfiguredMillRules(scope))
-                    await processLogBatch(batch, scope, configured.get(scope)!)
+                    const target = active.rows.length ? scope : platform.rows[0].id
+                    if (!configured.has(target)) configured.set(target, await loadConfiguredMillRules(target))
+                    await processLogBatch(batch, target, configured.get(target)!)
                 }
             }
             const { rows: [queue] } = await run(`SELECT COALESCE((SELECT queued_at < clock_timestamp() - INTERVAL '60 seconds'
                 FROM log_process_queue ORDER BY queued_at, log_id LIMIT 1), FALSE) AS delayed`)
             await processQueuedLogs(processScopes, queue.delayed)
             await recoverProcessLogs(processScopes, configuredLimit)
+            await recoverUnassignedLogs(processScopes)
             // Keep every cursor moving while delayed commands get more capacity.
             // A fixed snapshot restores ordinary limits on the next clear tick.
             const catchupLimit = Math.min(queue.delayed ? 100 : 1000, configuredLimit)
@@ -167,11 +164,13 @@ export async function processStoredLogs() {
             if (watermark !== null) {
                 const backlog = await run('SELECT * FROM service_logs WHERE id > $1 AND id <= $2 ORDER BY id LIMIT $3', [cursor.last_id, cursor.recent_id, catchupLimit])
                 await processScopes(backlog.rows)
-                await run('UPDATE log_processing_cursors SET last_id = GREATEST(last_id, $1), updated_at = NOW(), last_error = NULL WHERE name = \'service_logs\'', [backlog.rows.at(-1)?.id || cursor.last_id])
+                await run('UPDATE log_processing_cursors SET last_id = GREATEST(last_id, $1), checked_count = checked_count + $2, updated_at = NOW(), last_error = NULL WHERE name = \'service_logs\'', [backlog.rows.at(-1)?.id || cursor.recent_id, backlog.rows.length])
             }
         })
         // Counter initialization has its own lock and visible error state. Keep
         // its historical reads outside the lock used by live event processing.
+        // Progress scans run independently so fresh detection never waits on a historical count.
+        if (didWork) void refreshLogCatchupProgress()
         await backfillLogDimensions().catch(() => {})
     } catch (error) {
         await run('UPDATE log_processing_cursors SET last_error = $1 WHERE name = \'service_logs\'', [error instanceof Error ? error.message : 'Log processing failed']).catch(() => {})
