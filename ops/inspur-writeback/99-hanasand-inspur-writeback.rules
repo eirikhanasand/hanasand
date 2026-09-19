@@ -1,0 +1,3 @@
+# Inspur root disk: WBT at 2 ms and 20 ms repeatedly blocked container mount cleanup.
+# Match the stable disk identity; device names can change between boots.
+ACTION=="add|change", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", ENV{ID_WWN}=="0x5001b448b9107bc6", TEST=="queue/wbt_lat_usec", ATTR{queue/wbt_lat_usec}="0"
