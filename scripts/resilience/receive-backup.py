@@ -10,7 +10,7 @@ import tarfile
 import tempfile
 import time
 
-root = pathlib.Path('/home/ubuntu/hanasand-resilience')
+root = pathlib.Path(os.environ.get('RESILIENCE_ROOT', '/home/ubuntu/hanasand-resilience'))
 backups = root/'backups'
 backups.mkdir(mode=0o700,exist_ok=True)
 staging = pathlib.Path(tempfile.mkdtemp(prefix='incoming-',dir=backups))
