@@ -231,6 +231,11 @@ export default function GPT_Page() {
         }
     }, [])
 
+    const logContainer = aiContainers.find((container) => {
+        const tone = containerHealth(container).tone
+        return tone === 'bad' || tone === 'warn'
+    }) || aiContainers[0]
+
     return (
         <>
             <div className='h-full w-full overflow-y-auto'>
@@ -240,7 +245,7 @@ export default function GPT_Page() {
                             <h1 className='mt-1 text-2xl font-semibold text-ui-text'>AI operations</h1>
                         </div>
                         <div className='flex flex-wrap items-center justify-end gap-2'>
-                            <GPT_Header isConnected={gpt.isConnected} participants={gpt.participants} />
+                            <GPT_Header isConnected={gpt.isConnected} participants={gpt.participants} logsHref={logContainer ? `/logs?service=${encodeURIComponent(logContainer.name)}` : undefined} />
                             <Link
                                 href='/system'
                                 className='flex h-9 items-center gap-2 rounded-md bg-ui-raised px-4 text-sm text-ui-text border border-ui-border transition-colors hover:bg-ui-panel'
@@ -281,22 +286,9 @@ export default function GPT_Page() {
 }
 
 function AIContainerHealth({ containers, error }: { containers: DockerContainer[], error: string | null }) {
-    const unhealthy = containers.filter((container) => {
-        const tone = containerHealth(container).tone
-        return tone === 'bad' || tone === 'warn'
-    })
-    const primary = unhealthy[0] || containers[0] || null
-
     return (
         <div className='rounded-lg border border-ui-border bg-ui-raised p-4' data-ai-container-health>
             {error ? <p className='mb-3 text-sm text-ui-danger' role='alert'>{error}</p> : null}
-            {primary ? (
-                <div className='mb-3 flex justify-end'>
-                    <Link href={`/logs?service=${encodeURIComponent(primary.name)}`} className='rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-ui-text hover:border-ui-primary/40'>
-                        View logs
-                    </Link>
-                </div>
-            ) : null}
             <div className='grid gap-2 md:grid-cols-2'>
                 {containers.length ? containers.map((container) => {
                     const health = containerHealth(container)
