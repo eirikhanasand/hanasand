@@ -18,6 +18,11 @@ export async function getDockerStorage(req: FastifyRequest, res: FastifyReply) {
     res.header('Cache-Control', 'no-store')
     try {
         const state = JSON.parse(await readFile(`${root}/status.json`, 'utf8'))
+        if (!state.checkedAt || !Number.isFinite(state.cacheBytes) || !Array.isArray(state.unusedImages)) {
+            return res.status(503).send({ error: state.running
+                ? 'Cleanup is running. Storage figures will appear when it finishes.'
+                : state.error || 'Storage information is not available yet.' })
+        }
         const queued = await readFile(`${root}/request.json`, 'utf8').then(() => true).catch(() => false)
         const age = Date.now() - Date.parse(state.checkedAt)
         return res.send({ ...state, queued, stale: !Number.isFinite(age) || age < -5000 || age > 15 * 60_000 })

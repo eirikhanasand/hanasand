@@ -94,7 +94,7 @@ def snapshot():
 
 
 def command(args):
-    result = subprocess.run(args, capture_output=True, text=True, timeout=3600)
+    result = subprocess.run(['docker', '--host', 'unix:///var/run/docker.sock', *args], capture_output=True, text=True, timeout=3600)
     if result.returncode:
         raise RuntimeError(result.stderr.strip()[-2000:] or 'Docker cleanup failed')
     return result.stdout
@@ -117,7 +117,7 @@ def perform(clear=False):
         try:
             before = os.statvfs('/')
             if clear:
-                command(['docker', 'builder', 'prune', '--all', '--force', '--keep-storage', str(CACHE_BUDGET)])
+                command(['builder', 'prune', '--all', '--force', '--keep-storage', str(CACHE_BUDGET)])
                 inventory = snapshot()
                 for image in inventory['unusedImages']:
                     if not image['eligible']:
@@ -127,7 +127,7 @@ def perform(clear=False):
                         continue
                     inspect = docker('/images/' + image['id'] + '/json')
                     references = inspect.get('RepoTags') or [image['id']]
-                    command(['docker', 'image', 'rm', *references])
+                    command(['image', 'rm', *references])
             state.update(snapshot())
             state['running'] = False
             if clear:

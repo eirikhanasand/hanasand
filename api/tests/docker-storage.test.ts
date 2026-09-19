@@ -26,12 +26,18 @@ test('signed-out and non-admin requests cannot inspect or trigger cleanup', asyn
     expect((await invoke(clearDockerStorage)).code).toBe(403)
     admin = true
 })
+test('an initial failed scan does not return incomplete metrics to the dashboard', async () => {
+    await writeFile(`${root}/status.json`, JSON.stringify({ error: 'Docker is unavailable.', running: false }))
+    const response = await invoke(getDockerStorage)
+    expect(response.code).toBe(503)
+    expect(response.body).toEqual({ error: 'Docker is unavailable.' })
+})
 test('manual cleanup queues once and status comes from persistent host state', async () => {
     expect((await invoke(clearDockerStorage)).code).toBe(202)
     const request = await readFile(`${root}/request.json`, 'utf8')
     expect((await invoke(clearDockerStorage)).code).toBe(202)
     expect(await readFile(`${root}/request.json`, 'utf8')).toBe(request)
-    await writeFile(`${root}/status.json`, JSON.stringify({ checkedAt: new Date().toISOString(), lastSuccessAt: '2026-09-18T01:00:00Z' }))
+    await writeFile(`${root}/status.json`, JSON.stringify({ checkedAt: new Date().toISOString(), cacheBytes: 0, unusedImages: [], lastSuccessAt: '2026-09-18T01:00:00Z' }))
     const response = await invoke(getDockerStorage)
     expect(response.body).toMatchObject({ queued: true, stale: false, lastSuccessAt: '2026-09-18T01:00:00Z' })
 })
