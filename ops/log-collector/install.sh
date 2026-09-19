@@ -17,6 +17,7 @@ install -m 0755 "$(dirname "$0")/collector.py" /usr/local/sbin/hanasand-log-coll
 if [ "$mode" != --guest ]; then
     install -d -m 0755 /usr/local/lib/hanasand-log-collector
     install -m 0755 "$0" /usr/local/lib/hanasand-log-collector/install.sh
+    install -m 0755 "$(dirname "$0")/retention.py" /usr/local/lib/hanasand-log-collector/retention.py
 fi
 # Persistent exec auditing includes all users, services and noninteractive executions.
 cat > /etc/audit/rules.d/hanasand-exec.rules <<'RULES'
@@ -26,6 +27,7 @@ case "$(uname -m)" in
     x86_64) printf '%s\n' '-a always,exit -F arch=b32 -S execve,execveat -k hanasand_exec' >> /etc/audit/rules.d/hanasand-exec.rules;;
 esac
 systemctl enable --now auditd
+python3 "$(dirname "$0")/retention.py"
 augenrules --load
 # Guests expose telemetry only over the host management channel. No ingest token is copied.
 if [ "$mode" = --guest ]; then exit 0; fi

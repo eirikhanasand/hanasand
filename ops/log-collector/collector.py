@@ -216,15 +216,19 @@ def audit_behind():
     timestamp = checkpoint_time(STATE/'audit.checkpoint')
     return timestamp is None or timestamp < time.time()-30
 
+def recent_audit_start():
+    # ausearch interprets explicit dates in local time; command() fixes LC_ALL=C.
+    return datetime.datetime.fromtimestamp(time.time()-60).strftime('%m/%d/%y %H:%M:%S').split()
+
 def audit(config, live=False):
     prefix = 'audit-live' if live else 'audit'
     stable = STATE/(prefix+'.checkpoint'); pending = STATE/(prefix+'.pending')
     timestamp = checkpoint_time(stable) if live else None
-    reuse = stable.exists() and (not live or (timestamp is not None and timestamp >= time.time()-600))
+    reuse = stable.exists() and (not live or (timestamp is not None and timestamp >= time.time()-60))
     if reuse: shutil.copyfile(stable, pending)
     elif pending.exists(): pending.unlink()
     args = ['ausearch','--input-logs','--checkpoint',str(pending),'-k','hanasand_exec','--raw']
-    if live and not reuse: args += ['--start','recent']
+    if live and not reuse: args += ['--start',*recent_audit_start()]
     try: output = command(args, accepted=(0,1))
     except CommandError as error:
         if error.code not in (10,11,12) or not pending.exists(): raise
@@ -245,7 +249,11 @@ def docker(config):
         # advances independently through one minute, without skipping any range.
         since_time = datetime.datetime.fromisoformat(since.replace('Z','+00:00')).timestamp()
         until = iso(min(time.time()-1, since_time+60))
-        result = subprocess.run(['docker','logs','--timestamps','--since',since,'--until',until,container_id],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=60)
+        try:
+            result = subprocess.run(['docker','logs','--timestamps','--since',since,'--until',until,container_id],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=60)
+        except (subprocess.TimeoutExpired, OSError):
+            failures.append(name)
+            continue
         if result.returncode:
             failures.append(name)
             continue
@@ -315,7 +323,7 @@ def guest_ack(identity):
     shutil.rmtree(pending)
 
 def recent_audit(config):
-    output = command(['ausearch','--input-logs','-k','hanasand_exec','--raw','--start','recent'],accepted=(0,1))
+    output = command(['ausearch','--input-logs','-k','hanasand_exec','--raw','--start',*recent_audit_start()],accepted=(0,1))
     return list(reversed(parse_audit(output,config)))
 
 def guests(config):
@@ -340,6 +348,7 @@ def guests(config):
                 command([lxc, 'exec', name, '--', 'mkdir', '-p', staging])
                 command([lxc, 'file', 'push', '--uid=0', '--gid=0', str(binary), name+staging+'/collector.py'])
                 command([lxc, 'file', 'push', '--uid=0', '--gid=0', '/usr/local/lib/hanasand-log-collector/install.sh', name+staging+'/install.sh'])
+                command([lxc, 'file', 'push', '--uid=0', '--gid=0', '/usr/local/lib/hanasand-log-collector/retention.py', name+staging+'/retention.py'])
                 command([lxc, 'exec', name, '--', 'sh', staging+'/install.sh', config['host']+'/'+name, '--guest'], timeout=360)
                 installed[name] = identity
                 save('guests.json', installed)

@@ -12,6 +12,11 @@ spec=importlib.util.spec_from_file_location('collector',Path(__file__).with_name
 c=importlib.util.module_from_spec(spec);spec.loader.exec_module(c)
 
 class CollectorTests(unittest.TestCase):
+    def test_recent_audit_date_uses_ausearch_c_locale_two_digit_year(self):
+        with patch.object(c.time,'time',return_value=1789822896):
+            date,clock=c.recent_audit_start()
+        self.assertEqual(date,'09/19/26')
+        self.assertRegex(clock,r'^\d{2}:\d{2}:\d{2}$')
     def test_configuration_uses_api_origin_and_preserves_cursor_start(self):
         with tempfile.TemporaryDirectory() as tmp:
             config=Path(tmp)/'collector.json'; config.write_text(json.dumps({'start':'2026-09-01T00:00:00Z'}))
@@ -135,7 +140,7 @@ type=EXECVE msg=audit(1789817001.123:457): argc=1 a0="id"
             (c.STATE/'audit.checkpoint').write_text('historical')
             def query(args,**kwargs):
                 self.assertIn('--start',args)
-                self.assertEqual(args[-1],'recent')
+                self.assertEqual(args[-3:],['--start',*c.recent_audit_start()])
                 (c.STATE/'audit-live.pending').write_text('live')
                 return raw
             delivered=[]
@@ -152,10 +157,10 @@ type=EXECVE msg=audit(1789817001.123:457): argc=1 a0="id"
             self.assertFalse(c.audit_behind())
             checkpoint.write_text('dev=0x903\ninode=1\noutput=- 900.123:123 0x514\n')
             self.assertTrue(c.audit_behind())
-            (c.STATE/'audit-live.checkpoint').write_text('output=- 100.123:10 0x514\n')
+            (c.STATE/'audit-live.checkpoint').write_text('output=- 939.123:10 0x514\n')
             with patch.object(c,'command',return_value='') as query, patch.object(c,'send'):
                 c.audit({'host':'inspur'},live=True)
-            self.assertEqual(query.call_args.args[0][-2:],['--start','recent'])
+            self.assertEqual(query.call_args.args[0][-3:],['--start',*c.recent_audit_start()])
             self.assertIn('900.123',checkpoint.read_text())
     def test_journal_cursor_rotation_resumes_from_saved_time(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(c,'STATE',Path(tmp)):
@@ -186,4 +191,15 @@ type=EXECVE msg=audit(1789817001.123:457): argc=1 a0="id"
             args=query.call_args.args[0]
             self.assertEqual(args[args.index('--until')+1],'2026-09-19T00:01:00+00:00')
             self.assertEqual(c.load('docker.json',{})['one'],'2026-09-19T00:01:00+00:00')
+    def test_docker_timeout_keeps_its_cursor_and_collects_next_container(self):
+        class Result:
+            returncode=0
+            stdout='2026-09-19T00:00:30Z ready'
+        with tempfile.TemporaryDirectory() as tmp, patch.object(c,'STATE',Path(tmp)):
+            c.save('docker.json',{'slow':'2026-09-19T00:00:00Z'})
+            with patch.object(c.shutil,'which',return_value='/usr/bin/docker'), patch.object(c,'command',return_value='slow slow-service\ngood healthy-service'), patch.object(c.subprocess,'run',side_effect=[subprocess.TimeoutExpired('docker',60),Result()]), patch.object(c,'send') as sent:
+                with self.assertRaises(RuntimeError): c.docker({'host':'inspur','start':'2026-09-19T00:00:00Z'})
+            self.assertEqual(sent.call_args.args[1][0]['service'],'healthy-service')
+            self.assertEqual(c.load('docker.json',{})['slow'],'2026-09-19T00:00:00Z')
+            self.assertEqual(c.load('docker.json',{})['good'],'2026-09-19T00:01:00+00:00')
 if __name__=='__main__':unittest.main()
