@@ -17,10 +17,12 @@ export type AptUpdateStatus = {
     policy?: { non_security_delay_hours?: number, security_install?: string, allowed_origin?: string, repository_verification?: string }
 }
 export type AptUpdateHistory = { run_id: string, status: string, occurred_at: string, packages: string[], error: string | null }
+export type UpdateHost = 'inspur' | 'ovhcloud'
 
-export async function fetchAptUpdates() {
-    const response = await fetch('/api/backend/system/updates', {
+export async function fetchAptUpdates(host: UpdateHost = 'inspur', signal?: AbortSignal) {
+    const response = await fetch(`/api/backend/system/updates?host=${host}`, {
         cache: 'no-store',
+        signal,
         headers: { Authorization: `Bearer ${getCookie('access_token') || ''}`, id: getCookie('id') || '' },
     })
     const body = await response.json().catch(() => ({}))

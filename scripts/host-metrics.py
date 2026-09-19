@@ -55,6 +55,16 @@ def rapl_samples():
     return result
 
 
+def update_status(path=Path('/var/lib/hanasand/apt-updates/status.json')):
+    try:
+        status = json.loads(path.read_text())
+        if not isinstance(status, dict):
+            raise ValueError('Expected an update status object')
+        return status
+    except (OSError, ValueError) as error:
+        return {'status': 'unknown', 'last_error': 'Host update status unavailable: ' + type(error).__name__}
+
+
 def collect():
     first, energy = cpu_sample(), rapl_samples()
     time.sleep(1)
@@ -122,7 +132,8 @@ def collect():
     return {'name': socket.gethostname(), 'sampledAt': datetime.datetime.now(datetime.timezone.utc).isoformat(),
             'cpuPercent': cpu, 'memoryPercent': round(100 * (1 - memory['MemAvailable'] / memory['MemTotal']), 2),
             'memoryTotalBytes': memory['MemTotal'], 'memoryAvailableBytes': memory['MemAvailable'],
-            'storage': storage, 'gpus': gpus, 'temperatures': temperatures, 'power': power, 'unavailable': unavailable}
+            'storage': storage, 'gpus': gpus, 'temperatures': temperatures, 'power': power, 'unavailable': unavailable,
+            'aptUpdates': update_status()}
 
 
 if __name__ == '__main__':

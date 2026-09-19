@@ -102,6 +102,7 @@ export type MailOverview = {
     accessibleAccounts: Array<{ id: string, name: string, address: string, shared?: boolean, unreadCount?: number | null }>
     mailboxes: MailboxItem[]
     selectedMailboxId: string | null
+    nextCursor?: string | null
     messages: MailMessageSummary[]
     selectedMessage: MailMessage | null
     filters: MailRule[]

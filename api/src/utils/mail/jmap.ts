@@ -75,18 +75,23 @@ export async function getMailboxList(username: string, password: string) {
 }
 
 export async function listMessages(username: string, password: string, mailboxId: string, limit = 50) {
+    return (await listMessagePage(username, password, mailboxId, undefined, limit)).messages
+}
+
+export async function listMessagePage(username: string, password: string, mailboxId: string, after?: string, limit = 50) {
     const { session, accountId } = await getMailSession(username, password)
     const query = await jmapCall<{ ids?: string[] }>(username, password, session, [
-        ['Email/query', { accountId, filter: { inMailbox: mailboxId }, sort: [{ property: 'receivedAt', isAscending: false }], limit }, 'query']
+        ['Email/query', { accountId, filter: { inMailbox: mailboxId }, sort: [{ property: 'receivedAt', isAscending: false }], limit: limit + 1,
+            ...(after ? { anchor: after, anchorOffset: 1 } : {}) }, 'query']
     ])
-
     const ids = query.ids || []
-    if (!ids.length) {
-        return []
+    const pageIds = ids.slice(0, limit)
+    const messages = pageIds.length ? await getEmailsByIds(username, password, session, accountId, pageIds) : []
+    const byId = new Map(messages.map(message => [message.id, message]))
+    return {
+        messages: pageIds.flatMap(id => byId.has(id) ? [toSummary(byId.get(id)!)] : []),
+        nextCursor: ids.length > limit ? pageIds.at(-1)! : null,
     }
-
-    const messages = await getEmailsByIds(username, password, session, accountId, ids)
-    return messages.map(toSummary)
 }
 
 export async function getMessage(username: string, password: string, messageId: string) {
@@ -266,7 +271,9 @@ async function jmapCall<T = unknown>(username: string, password: string, session
     }
 
     const payload = await response.json() as { methodResponses?: Array<[string, T, string]> }
-    return payload.methodResponses?.[payload.methodResponses.length - 1]?.[1] as T
+    const result = payload.methodResponses?.[payload.methodResponses.length - 1]
+    if (!result || result[0] === 'error') throw new Error('Mail request failed. Please retry.')
+    return result[1] as T
 }
 
 function toApiUrl(apiUrl: string) {

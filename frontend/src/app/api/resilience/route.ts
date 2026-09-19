@@ -10,6 +10,8 @@ export async function GET() {
         delete state.compute
         delete state.sites
         delete state.replicaEligibility
+        // Package versions travel on the private telemetry feed, not the public status API.
+        if (state.hostMetrics) delete state.hostMetrics.aptUpdates
         if (process.env.RESILIENCE_STATE_FILE && await canViewHostMetrics()) {
             try {
                 const privateState = JSON.parse(await readFile(process.env.RESILIENCE_STATE_FILE, 'utf8'))

@@ -4,7 +4,7 @@ import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { getMailAccess, listAccessibleMailAccounts, rotateMailPasswordForUser } from '#utils/mail/accounts.ts'
 import { applyMailRules, listMailRules } from '#utils/mail/filters.ts'
 import { getMailHealth } from '#utils/mail/health.ts'
-import { getMailboxList, getMessage, listMessages } from '#utils/mail/jmap.ts'
+import { getMailboxList, getMessage, listMessagePage } from '#utils/mail/jmap.ts'
 import { mailConfig } from '#utils/mail/config.ts'
 import { listRecentRecipients } from '#utils/mail/recentRecipients.ts'
 import { addressForUser } from '#utils/mail/helpers.ts'
@@ -18,7 +18,7 @@ export default async function getMailOverview(req: FastifyRequest, res: FastifyR
     }
 
     try {
-        const query = req.query as { mailboxUser?: string, mailboxId?: string, messageId?: string }
+        const query = req.query as { mailboxUser?: string, mailboxId?: string, messageId?: string, after?: string }
         const access = await getMailAccess(id, query.mailboxUser)
         const accessibleAccounts = await listAccessibleMailAccounts(id)
         const accountCounts = loadAccountCounts(id, accessibleAccounts, access.targetUser)
@@ -71,7 +71,7 @@ export default async function getMailOverview(req: FastifyRequest, res: FastifyR
                     targetUser,
                     address,
                     canAccessAnyMailbox: false,
-                    accessibleAccounts: [{ id: targetUser, name: targetUser, address }],
+                    accessibleAccounts: [{ id: targetUser, name: targetUser, address, shared: false }],
                     recentRecipients: [],
                     health: null,
                     detail: 'Mail administration is not configured on this environment.',
@@ -98,7 +98,7 @@ async function loadMailboxOverviewData({
 }: {
     actorId: string
     access: MailAccess
-    query: { mailboxUser?: string, mailboxId?: string, messageId?: string }
+    query: { mailboxUser?: string, mailboxId?: string, messageId?: string, after?: string }
     health: Awaited<ReturnType<typeof getMailHealth>> | null
     accessibleAccounts: Awaited<ReturnType<typeof listAccessibleMailAccounts>>
     recentRecipients: Awaited<ReturnType<typeof listRecentRecipients>>
@@ -138,7 +138,8 @@ async function loadMailboxOverviewData({
         || refreshedMailboxData.mailboxes.find(mailbox => mailbox.role === (access.targetUser === 'shared:noreply' ? 'sent' : 'inbox'))?.id
         || refreshedMailboxData.mailboxes[0]?.id
         || null
-    const messages = selectedMailboxId ? await listMessages(repairedAccess.username, repairedAccess.password, selectedMailboxId) : []
+    const page = selectedMailboxId ? await listMessagePage(repairedAccess.username, repairedAccess.password, selectedMailboxId, query.after) : { messages: [], nextCursor: null }
+    const messages = page.messages
     const selectedMessageId = query.messageId || messages[0]?.id
     const selectedMessage = selectedMessageId ? await getMessage(repairedAccess.username, repairedAccess.password, selectedMessageId) : null
     const filters = await listMailRules(repairedAccess.targetUser)
@@ -151,6 +152,7 @@ async function loadMailboxOverviewData({
         mailboxes: refreshedMailboxData.mailboxes,
         selectedMailboxId,
         messages,
+        nextCursor: page.nextCursor,
         selectedMessage,
         filters,
         recentRecipients,

@@ -1486,6 +1486,7 @@ export default async function ensureSchema() {
     `)
     await ensureSharedMailSchema()
     await run('ALTER TABLE mail_accounts ADD COLUMN IF NOT EXISTS recovery_email TEXT')
+    await run('ALTER TABLE mail_accounts ADD COLUMN IF NOT EXISTS disabled_at TIMESTAMPTZ')
     await run(`
         CREATE TABLE IF NOT EXISTS mail_filters (
             id BIGSERIAL PRIMARY KEY,

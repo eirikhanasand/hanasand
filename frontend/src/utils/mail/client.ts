@@ -25,7 +25,7 @@ function authHeaders() {
     }
 }
 
-export async function fetchMailOverview(params: { mailboxUser?: string, mailboxId?: string | null, messageId?: string | null } = {}) {
+export async function fetchMailOverview(params: { mailboxUser?: string, mailboxId?: string | null, messageId?: string | null, after?: string } = {}) {
     const headers = authHeaders()
     if (!headers) {
         throw new Error('Unauthorized.')
@@ -41,6 +41,8 @@ export async function fetchMailOverview(params: { mailboxUser?: string, mailboxI
     if (params.messageId) {
         search.set('messageId', params.messageId)
     }
+
+    if (params.after) search.set('after', params.after)
 
     const response = await fetchWithTimeout(`/api/backend/mail/overview?${search.toString()}`, {
         headers,
@@ -167,6 +169,7 @@ function normalizeMailOverview(payload: Partial<MailOverview>): MailOverview {
         mailboxes: payload.mailboxes || [],
         selectedMailboxId: payload.selectedMailboxId || null,
         messages: payload.messages || [],
+        nextCursor: payload.nextCursor || null,
         selectedMessage: payload.selectedMessage || null,
         filters: payload.filters || [],
         recentRecipients: payload.recentRecipients || [],
