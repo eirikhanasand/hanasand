@@ -74,7 +74,7 @@ export default function RoleList({ roles, canManage, highestPriority }: { roles:
         }
     }
 
-    const iconClass = 'min-h-11 min-w-11 rounded p-2 text-ui-muted hover:bg-ui-raised hover:text-ui-text disabled:opacity-50'
+    const iconClass = 'inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded p-2 text-ui-muted hover:bg-ui-raised hover:text-ui-text disabled:opacity-50'
     const inputClass = 'min-h-11 min-w-0 w-full rounded-lg border border-ui-border bg-ui-canvas px-3 py-2 text-sm text-ui-text'
     return (
         <DashboardPanel className='grid h-fit min-w-0 w-full self-start gap-3 p-4'>
