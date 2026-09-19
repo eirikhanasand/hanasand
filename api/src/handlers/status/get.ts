@@ -91,7 +91,9 @@ async function statusPayload(summary: boolean) {
         return statusCache
     }).catch(error => {
         console.error('[production-monitor] current status unavailable:', error.message)
-        return { ...(statusCache || historySnapshot || { overall: 'unknown', generated_at: '', checks: [], history: [], incidents: [] }), monitoring: 'unavailable' }
+        expiresAt = Date.now() + STATUS_CACHE_MS
+        if (statusCache) statusCache = { ...statusCache, monitoring: 'unavailable' }
+        return statusCache || { ...(historySnapshot || { overall: 'unknown', generated_at: '', checks: [], history: [], incidents: [] }), monitoring: 'unavailable' }
     }).finally(() => { statusInflight = null })
     // A slow database refresh must not delay readers that already have evidence.
     const current = statusCache || await statusInflight
