@@ -15,3 +15,6 @@ GRANT USAGE, SELECT ON SEQUENCE public.tokens_token_id_seq, public.login_events_
 -- Preserve paid search enforcement when only the API fails over; no payment/subscription writes.
 GRANT SELECT ON public.billing_entitlements, public.billing_usage TO hanasand_standby_app;
 GRANT INSERT, UPDATE ON public.billing_usage TO hanasand_standby_app;
+
+-- System-administrator host update views use replicated snapshots; never write on standby.
+GRANT SELECT ON public.host_update_snapshots, public.host_update_events TO hanasand_standby_app;
