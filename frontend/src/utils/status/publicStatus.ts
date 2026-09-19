@@ -201,3 +201,16 @@ export function retainVerifiedStatus(next: ServiceStatus, previous?: ServiceStat
         last_verified_at: retained.every(check => Number.isFinite(Date.parse(check.checked_at))) ? new Date(Math.min(...retained.map(check => Date.parse(check.checked_at)))).toISOString() : previous.last_verified_at,
         monitoring: isVerifiedStatus(next) ? 'live' : 'unavailable' }
 }
+
+
+// Store enough history for an offline refresh without overflowing browser storage
+// when an older server or the incident page supplies full incident timelines.
+export function compactStatusSnapshot(status: ServiceStatus): ServiceStatus {
+    const ids = new Set(status.history.flatMap(day => day.incident_ids.slice(0, 1)))
+    for (const incident of status.incidents.slice(0, 25)) ids.add(incident.id)
+    return {
+        ...status,
+        history: status.history.map(day => ({ ...day, incident_ids: day.incident_ids.slice(0, 1) })),
+        incidents: status.incidents.filter(incident => ids.has(incident.id)).map(incident => ({ ...incident, updates: [] })),
+    }
+}
