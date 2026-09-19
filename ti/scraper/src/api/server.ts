@@ -98,7 +98,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       const body = request.method === "GET" ? undefined : await request.clone().json().catch(() => ({}));
       const scope = resolveOrganizationScope({ body, url, request }, options);
       if (scope.error) return scope.error;
-      const access = await authorizeOrganizationRequest(request, options, scope.organizationId, request.method !== "GET", ["owner", "admin", "analyst"]);
+      const access = await authorizeOrganizationRequest(request, options, scope.organizationId, request.method !== "GET", ["owner", "admin", "editor", "analyst"]);
       if (access.error) return access.error;
     }
     const orgAlertCaseActionLedgerResponse = await handleOrgAlertCaseActionLedgerRequest(request, {

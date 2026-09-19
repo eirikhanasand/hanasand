@@ -5,7 +5,7 @@ import type { RuntimeDwmWatchlist } from "./dwmAlertRepository.ts";
 export type OrgWatchlistTermFamily = "company" | "domain" | "vendor" | "actor" | "keyword";
 export type OrgWatchlistStatus = "active" | "paused" | "archived";
 export type OrgAlertVisibilityPolicy = "members" | "admins" | "owners";
-export type OrgWatchlistExportRole = "owner" | "admin" | "analyst" | "member" | "viewer" | "support" | "nonmember";
+export type OrgWatchlistExportRole = "owner" | "admin" | "editor" | "reader" | "analyst" | "member" | "viewer" | "support" | "nonmember";
 
 export type OrgWatchlistContractTerm = {
   watchlistId?: string;
@@ -331,7 +331,7 @@ export function buildOrgSharedWatchlistAlertGenerationExport(input: {
       userId: member.userId,
       email: member.email,
       allowed: canExport,
-      readOnly: member.role === "viewer" || member.role === "support"
+      readOnly: ["reader", "member", "viewer", "support"].includes(member.role)
     },
     termExport: {
       activeTermCount: activeTerms.length,
@@ -407,7 +407,7 @@ function normalizeExportMember(member: OrgWatchlistExportMember | null | undefin
 
 function normalizeExportRole(value: unknown): OrgWatchlistExportRole {
   const normalized = String(value ?? "").trim().toLowerCase();
-  if (normalized === "owner" || normalized === "admin" || normalized === "analyst" || normalized === "member" || normalized === "viewer" || normalized === "support") return normalized;
+  if (normalized === "editor" || normalized === "reader" || normalized === "owner" || normalized === "admin" || normalized === "analyst" || normalized === "member" || normalized === "viewer" || normalized === "support") return normalized;
   return "nonmember";
 }
 
@@ -420,7 +420,7 @@ function normalizeExportMemberStatus(member: OrgWatchlistExportMember | null | u
 }
 
 function orgWatchlistExportRoleAllowed(role: OrgWatchlistExportRole): boolean {
-  return role === "owner" || role === "admin" || role === "analyst" || role === "member";
+  return role === "editor" || role === "reader" || role === "owner" || role === "admin" || role === "analyst" || role === "member";
 }
 
 function orgWatchlistExportBlocker(
@@ -477,7 +477,7 @@ function orgMembershipContext(contract: OrgWatchlistAlertGenerationContractLike)
     visibilityPolicy: normalizeVisibilityPolicy(contract.visibilityPolicy),
     allowedViewerRoles: contract.allowedViewerRoles?.map((role) => String(role)).filter(Boolean)
       ?? contract.downstreamAuthorization?.visibility?.allowedRoles?.map(String).filter(Boolean)
-      ?? ["owner", "admin", "member", "viewer"],
+      ?? ["owner", "admin", "editor", "reader", "member", "viewer"],
     canGenerateAlerts: contract.canGenerateAlerts !== false && downstreamCanExport !== false && organizationLifecycleState === "active",
     blockedReasons,
     organizationLifecycleState,

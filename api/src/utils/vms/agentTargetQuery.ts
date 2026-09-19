@@ -6,7 +6,7 @@ export const agentTargetSelect = `
         v.organization_id,
         CASE WHEN v.organization_id IS NULL THEN v.access_users ELSE COALESCE((
             SELECT jsonb_agg(m.user_id) FROM organization_members m JOIN organizations o ON o.id = m.organization_id
-            WHERE m.organization_id = v.organization_id AND m.status = 'active' AND o.status = 'active'
+            WHERE m.organization_id = v.organization_id AND m.status = 'active' AND o.status = 'active' AND m.role IN ('owner', 'admin')
         ), '[]'::jsonb) END AS access_users,
         COALESCE(d.status, 'unknown') AS status,
         COALESCE(d.type, 'virtual-machine') AS type,

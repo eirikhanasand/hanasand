@@ -1232,7 +1232,7 @@ export async function patchOrganizationMemberRole(req: FastifyRequest<{ Params: 
                     schemaVersion: 'organization.member_role_delivery_readiness.v1',
                     contract: 'organization.webhook_alert_delivery_readiness.v1',
                     allowedRoles: ['owner', 'admin'],
-                    summaryVisibleRoles: ['owner', 'admin', 'member', 'viewer'],
+                    summaryVisibleRoles: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'],
                     deniedRoles: ['member', 'viewer'],
                     destinationOrgField: 'destination.org_id',
                     selectedDestinationIdField: 'webhookDestinationIds[]',
@@ -1296,9 +1296,9 @@ export async function patchOrganizationMemberRole(req: FastifyRequest<{ Params: 
                     roleGates: {
                         mutateWatchlists: ['owner', 'admin'] as const,
                         exportAlertTerms: ['owner', 'admin'] as const,
-                        assignCases: ['owner', 'admin'] as const,
+                        assignCases: ['owner', 'admin', 'editor'] as const,
                         webhookDelivery: ['owner', 'admin'] as const,
-                        readSharedWatchlists: ['owner', 'admin', 'member', 'viewer'] as const,
+                        readSharedWatchlists: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'] as const,
                     },
                     lifecycleBlockers: {
                         removedMember: 'member_revoked' as const,
@@ -1883,8 +1883,8 @@ export async function postOrganizationInviteAccept(req: FastifyRequest<{ Params:
             ON CONFLICT (organization_id, user_id)
             DO UPDATE SET role = CASE
                                 WHEN organization_members.role = 'owner' THEN 'owner'
-                                WHEN organization_members.role = 'admin' AND EXCLUDED.role IN ('member', 'viewer') THEN 'admin'
-                                WHEN organization_members.role = 'member' AND EXCLUDED.role = 'viewer' THEN 'member'
+                                WHEN organization_members.role = 'admin' AND EXCLUDED.role IN ('editor', 'reader', 'member', 'viewer') THEN 'admin'
+                                WHEN organization_members.role = 'editor' AND EXCLUDED.role IN ('reader', 'member', 'viewer') THEN 'editor'
                                 ELSE EXCLUDED.role
                               END,
                           status = 'active',
@@ -2851,7 +2851,7 @@ export async function postOrganizationWatchlist(req: FastifyRequest<{ Params: Or
             action: 'create_watchlist',
             requestId: normalizeWatchlistRequestId(req.body?.requestId ?? req.body?.request_id),
             reason: typeof req.body?.reason === 'string' ? req.body.reason.trim().slice(0, 1000) : null,
-            message: 'Only organization owners and admins can update watchlists.',
+            message: 'Only organization owners, admins, and editors can update watchlists.',
         })
     }
 
@@ -2966,7 +2966,7 @@ export async function putOrganizationWatchlist(req: FastifyRequest<{ Params: Wat
             itemId: req.params.itemId,
             requestId: normalizeWatchlistRequestId(req.body?.requestId ?? req.body?.request_id),
             reason: typeof req.body?.reason === 'string' ? req.body.reason.trim().slice(0, 1000) : null,
-            message: 'Only organization owners and admins can update watchlists.',
+            message: 'Only organization owners, admins, and editors can update watchlists.',
         })
     }
 
@@ -3059,7 +3059,7 @@ export async function deleteOrganizationWatchlist(req: FastifyRequest<{ Params: 
             itemId: req.params.itemId,
             requestId: normalizeWatchlistRequestId(req.body?.requestId ?? req.body?.request_id ?? req.query?.requestId ?? req.query?.request_id),
             reason: typeof req.body?.reason === 'string' ? req.body.reason.trim().slice(0, 1000) : null,
-            message: 'Only organization owners and admins can update watchlists.',
+            message: 'Only organization owners, admins, and editors can update watchlists.',
         })
     }
 
@@ -3139,7 +3139,7 @@ export async function postOrganizationWatchlistAction(req: FastifyRequest<{ Para
             itemId: req.params.itemId,
             requestId: normalizeWatchlistRequestId(req.body?.requestId ?? req.body?.request_id),
             reason: typeof req.body?.reason === 'string' ? req.body.reason.trim().slice(0, 1000) : null,
-            message: 'Only organization owners and admins can update watchlists.',
+            message: 'Only organization owners, admins, and editors can update watchlists.',
         })
     }
 
@@ -3235,7 +3235,7 @@ export async function postOrganizationWatchlistCleanup(req: FastifyRequest<{ Par
     const deletionBlocker = privacyDeletionMutationBlocker(organization, 'clean up shared watchlists')
     if (deletionBlocker) return sendOrganizationLifecycleBlocker(req, res, deletionBlocker, userId, organization.role)
 
-    if (!roleCanWriteWatchlist(organization.role)) {
+    if (!roleCanManageOrganization(organization.role)) {
         return sendWatchlistMutationDenial(req, res, organization, userId, {
             action: 'cleanup_watchlists',
             requestId: normalizeWatchlistRequestId(req.body?.requestId ?? req.body?.request_id),
@@ -3714,15 +3714,15 @@ function sendWatchlistLookupDenial(
 
 function removalPermissionError(actorRole: OrganizationRole | undefined, targetRole: OrganizationRole) {
     if (actorRole === 'owner') return null
-    if (actorRole === 'admin' && (targetRole === 'member' || targetRole === 'viewer')) return null
-    if (actorRole === 'admin') return 'Organization admins can only remove members and viewers.'
+    if (actorRole === 'admin' && ['editor', 'reader', 'member', 'viewer'].includes(targetRole)) return null
+    if (actorRole === 'admin') return 'Organization admins can only remove editors and readers.'
     return 'Only organization owners and admins can remove members.'
 }
 
 function roleUpdatePermissionError(actorRole: OrganizationRole | undefined, targetRole: OrganizationRole, newRole: OrganizationRole) {
     if (actorRole === 'owner') return null
-    if (actorRole === 'admin' && (targetRole === 'member' || targetRole === 'viewer') && (newRole === 'member' || newRole === 'viewer')) return null
-    if (actorRole === 'admin') return 'Organization admins can only update members and viewers to member or viewer roles.'
+    if (actorRole === 'admin' && ['editor', 'reader', 'member', 'viewer'].includes(targetRole) && ['editor', 'reader'].includes(newRole)) return null
+    if (actorRole === 'admin') return 'Organization admins can only update editors and readers to editor or reader roles.'
     return 'Only organization owners and admins can update member roles.'
 }
 
@@ -3833,9 +3833,9 @@ function organizationSharedWatchlistContract(organization: OrganizationRow, item
             canRead: true,
             canWrite: roleCanWriteWatchlist(organization.role),
             canArchive: roleCanWriteWatchlist(organization.role),
-            canCleanup: roleCanWriteWatchlist(organization.role),
+            canCleanup: roleCanManageOrganization(organization.role),
             writeRoles: ['owner', 'admin'],
-            readRoles: ['owner', 'admin', 'member', 'viewer'],
+            readRoles: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'],
             nonmemberEnumeration: false,
         },
     }
@@ -3866,7 +3866,7 @@ function organizationInviteListContract(organization: OrganizationRow, invites: 
             acceptInvite: 'POST /api/organizations/invites/:inviteId/accept',
             inviteActions: 'POST /api/organizations/:id/invites/:inviteId/actions',
         },
-        supportedRoles: ['admin', 'member', 'viewer'],
+        supportedRoles: ['admin', 'editor', 'reader'],
         supportedActions: ['revoke', 'resend'],
         idempotentActions: ['revoke', 'resend'],
         defaultExpiryDays: 14,
@@ -4023,9 +4023,9 @@ function organizationWatchlistOperation(
             disabledReasonAfter: nextLifecycle.disabledReasonAfter,
             roleGates: {
                 mutateWatchlists: ['owner', 'admin'],
-                readSharedWatchlists: ['owner', 'admin', 'member', 'viewer'],
+                readSharedWatchlists: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'],
                 exportAlertTerms: decision.allowedRoles,
-                assignCases: ['owner', 'admin'],
+                assignCases: ['owner', 'admin', 'editor'],
             },
             downstreamRoutes: {
                 sharedWatchlists: 'GET /api/organizations/:id/watchlists',

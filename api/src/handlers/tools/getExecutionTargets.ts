@@ -38,7 +38,7 @@ export default async function getExecutionTargets(req: FastifyRequest, res: Fast
             `)
             : await run(`
                 ${agentTargetSelect}
-                WHERE vm_user_has_access(v.name, $1)
+                WHERE vm_user_can_manage(v.name, $1)
                 ORDER BY v.name ASC
             `, [id])
 

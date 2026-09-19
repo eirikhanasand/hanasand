@@ -195,7 +195,7 @@ export type DwmAlertWorkflowExecutionReadiness = {
   idempotencyKey?: string;
 };
 
-export type DwmOrgAlertCaseRole = "owner" | "admin" | "analyst" | "member" | "viewer" | "support" | "nonmember";
+export type DwmOrgAlertCaseRole = "owner" | "admin" | "editor" | "reader" | "analyst" | "member" | "viewer" | "support" | "nonmember";
 export type DwmOrgAlertCaseCapability = "create_watchlist" | "edit_watchlist_terms" | "acknowledge_alert" | "assign_case" | "manage_invites";
 
 export type DwmOrgAlertCaseRoleGate = {
@@ -892,13 +892,14 @@ function capabilityForWorkflowAction(action: DwmAlertWorkflowExecutionReadiness[
 
 function normalizeOrgAlertCaseRole(value: unknown): DwmOrgAlertCaseRole {
   const role = String(value ?? "").trim().toLowerCase();
-  return role === "owner" || role === "admin" || role === "analyst" || role === "member" || role === "viewer" || role === "support"
+  return role === "editor" || role === "reader" || role === "owner" || role === "admin" || role === "analyst" || role === "member" || role === "viewer" || role === "support"
     ? role
     : "nonmember";
 }
 
 function roleCapabilities(role: DwmOrgAlertCaseRole): DwmOrgAlertCaseCapability[] {
   if (role === "owner" || role === "admin") return ["create_watchlist", "edit_watchlist_terms", "acknowledge_alert", "assign_case", "manage_invites"];
+  if (role === "editor") return ["create_watchlist", "edit_watchlist_terms", "acknowledge_alert", "assign_case"];
   if (role === "analyst") return ["acknowledge_alert", "assign_case"];
   return [];
 }
@@ -2930,8 +2931,8 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
       roleGates: {
         create_watchlist: ["owner", "admin"],
         edit_watchlist_terms: ["owner", "admin"],
-        acknowledge_alert: ["owner", "admin", "analyst"],
-        assign_case: ["owner", "admin", "analyst"],
+        acknowledge_alert: ["owner", "admin", "editor", "analyst"],
+        assign_case: ["owner", "admin", "editor", "analyst"],
         manage_invites: ["owner", "admin"]
       }
     },

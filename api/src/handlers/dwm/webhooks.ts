@@ -4,7 +4,7 @@ import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import {
     organizationVisibilityDecision,
-    roleCanManageOrganization,
+    roleCanEditOrganization,
     type OrganizationAlertVisibilityPolicy,
     type OrganizationRole,
 } from '#utils/organizations.ts'
@@ -1016,7 +1016,7 @@ export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring:
             allowed: true,
             reason: null,
             alertVisibilityPolicy: 'members',
-            allowedRoles: ['owner', 'admin', 'member', 'viewer'],
+            allowedRoles: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'],
         },
     }
     if (req.query?.includeAudit === 'true') {
@@ -1529,8 +1529,8 @@ async function configurationPermissionError(orgId: string, userId: string) {
     if (membership.privacy_deletion_run_id || membership.organization_status !== 'active') {
         return { status: 409, message: membership.privacy_deletion_run_id ? 'Organization deletion is in progress; writes are blocked.' : 'Organization lifecycle blocks webhook changes.' }
     }
-    if (!roleCanManageOrganization(membership.role)) {
-        return { status: 403, message: 'Only organization owners and admins can configure webhook destinations.' }
+    if (!roleCanEditOrganization(membership.role)) {
+        return { status: 403, message: 'Only organization owners, admins, and editors can configure webhook destinations.' }
     }
     return null
 }
@@ -1539,7 +1539,7 @@ function destinationLifecycleAccess(orgId: string, userId: string, membership: M
     const role = orgId && orgId !== userId ? membership?.role || null : 'owner'
     return {
         viewerRole: role,
-        canManage: roleCanManageOrganization(role || undefined),
+        canManage: roleCanEditOrganization(role || undefined),
     }
 }
 

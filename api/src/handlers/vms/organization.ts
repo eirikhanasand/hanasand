@@ -13,9 +13,9 @@ export default async function assignVmOrganization(req: FastifyRequest, res: Fas
         if (!vm || (!viewer.admin && vm.owner !== viewer.id)) return { status: 404, error: 'Personal VM not found.' }
         if (vm.deleted_at || vm.organization_id) return { status: 409, error: 'Only a personal VM that is not scheduled for deletion can be added.' }
         const org = (await query(`SELECT o.id, o.name FROM organizations o JOIN organization_members m ON m.organization_id = o.id
-            WHERE o.id = $1 AND o.status = 'active' AND m.user_id = $2 AND m.status = 'active' AND m.role IN ('owner', 'admin', 'member')
+            WHERE o.id = $1 AND o.status = 'active' AND m.user_id = $2 AND m.status = 'active' AND m.role IN ('owner', 'admin')
             FOR SHARE OF o, m`, [organizationId, viewer.id])).rows[0]
-        if (!org) return { status: 403, error: 'Join this organization as a member before adding a VM.' }
+        if (!org) return { status: 403, error: 'An organization owner or admin must add VMs.' }
         await query('UPDATE vms SET organization_id = $2, access_users = \'[]\'::jsonb WHERE name = $1', [id, org.id])
         await query(`INSERT INTO system_events (event_type, actor_id, object_type, object_id, organization_id, source, service, outcome, reason)
             VALUES ('vm.organization_assigned', $1, 'vm', $2, $3, 'api', 'hanasand-api', 'success', 'VM access now follows organization membership')`, [viewer.id, id, org.id])

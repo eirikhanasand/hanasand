@@ -1,4 +1,5 @@
-export type OrganizationRole = 'owner' | 'admin' | 'member' | 'viewer'
+import { normalizeOrganizationRole, roleCanManageOrganization, roleCanEditOrganization, type OrganizationRole } from './organizationRoles.ts'
+export { normalizeOrganizationRole, roleCanManageOrganization, roleCanEditOrganization, type OrganizationRole } from './organizationRoles.ts'
 export type OrganizationAlertCaseRole = OrganizationRole | 'analyst' | 'support' | 'nonmember'
 export type OrganizationAlertCaseAction =
     | 'create_watchlist'
@@ -726,7 +727,7 @@ export type OrganizationSharedWatchlistDownstreamProof = {
             roleGates: {
                 automaticDeliveryAllowed: boolean
                 manualTriggerAllowed: boolean
-                manualTriggerAllowedRoles: Array<'owner' | 'admin'>
+                manualTriggerAllowedRoles: Array<'owner' | 'admin' | 'editor'>
                 memberManualTriggerAllowed: false
                 denialReason: OrganizationWatchlistAlertBridgeBlockerCode | OrganizationVisibilityDenyReason | 'manual_webhook_selection_required' | null
             }
@@ -1192,7 +1193,7 @@ export type OrganizationWatchlistAlertTermsExport = {
         }
         roleGates: {
             exportTerms: OrganizationRole[]
-            mutateWatchlists: Array<'owner' | 'admin'>
+            mutateWatchlists: Array<'owner' | 'admin' | 'editor'>
             readSharedWatchlists: OrganizationRole[]
         }
         denialContract: {
@@ -1257,8 +1258,8 @@ export type OrganizationWatchlistAlertTermsExport = {
                     selectedDestinationIdField: 'webhookDestinationIds[]'
                     dryRunVisibility: {
                         allowed: boolean
-                        allowedRoles: Array<'owner' | 'admin'>
-                        deniedRoles: Array<'member' | 'viewer'>
+                        allowedRoles: Array<'owner' | 'admin' | 'editor'>
+                        deniedRoles: Array<'reader' | 'member' | 'viewer'>
                         redactedFields: Array<'destination.secret' | 'destination.endpoint'>
                     }
                     blockerCodes: string[]
@@ -1327,7 +1328,7 @@ export type OrganizationWatchlistAlertTermsExport = {
         }
         roleGates: {
             exportTerms: OrganizationRole[]
-            mutateWatchlists: Array<'owner' | 'admin'>
+            mutateWatchlists: Array<'owner' | 'admin' | 'editor'>
             readSharedWatchlists: OrganizationRole[]
         }
         blockerCodes: string[]
@@ -1424,8 +1425,8 @@ export type OrganizationWatchlistAlertTermsExport = {
         }
         roleGates: {
             exportTerms: OrganizationRole[]
-            mutateWatchlists: Array<'owner' | 'admin'>
-            manualWebhookTrigger: Array<'owner' | 'admin'>
+            mutateWatchlists: Array<'owner' | 'admin' | 'editor'>
+            manualWebhookTrigger: Array<'owner' | 'admin' | 'editor'>
             assignCase: OrganizationAlertCaseRole[]
         }
         lifecycleAccess: {
@@ -1547,7 +1548,7 @@ export type OrganizationWatchlistAlertTermsExportDenial = {
         canMutateWatchlists: boolean
         allowedExportRoles: OrganizationRole[]
         readSharedWatchlistRoles: OrganizationRole[]
-        mutateWatchlistRoles: Array<'owner' | 'admin'>
+        mutateWatchlistRoles: Array<'owner' | 'admin' | 'editor'>
         denialReason: OrganizationVisibilityDenyReason | 'alert_export_unavailable'
         safeFields: Array<'organizationId' | 'tenantId' | 'member.role' | 'allowedExportRoles' | 'denialReason' | 'requestId'>
         noLeakFields: Array<'activeTerms[]' | 'activeWatchlistTerms[]' | 'alertGeneratorKeys[]' | 'watchlistScope.alertGeneratorKeys' | 'otherOrg.watchlistItemIds'>
@@ -1586,7 +1587,7 @@ export type OrganizationWebhookDestinationOwnershipContract = {
     roleGates: {
         automaticDeliveryAllowed: boolean
         manualTriggerAllowed: boolean
-        manualTriggerAllowedRoles: Array<'owner' | 'admin'>
+        manualTriggerAllowedRoles: Array<'owner' | 'admin' | 'editor'>
         memberManualTriggerAllowed: false
         denialReason: OrganizationWatchlistAlertBridgeBlockerCode | OrganizationVisibilityDenyReason | 'manual_webhook_selection_required' | null
     }
@@ -1621,9 +1622,9 @@ export type OrganizationWebhookDestinationAccessDecision = {
         readDeliverySummary: true
     }
     roleGates: {
-        automaticDelivery: Array<'owner' | 'admin'>
-        manualTrigger: Array<'owner' | 'admin'>
-        configureDestination: Array<'owner' | 'admin'>
+        automaticDelivery: Array<'owner' | 'admin' | 'editor'>
+        manualTrigger: Array<'owner' | 'admin' | 'editor'>
+        configureDestination: Array<'owner' | 'admin' | 'editor'>
         readDeliverySummary: OrganizationRole[]
     }
     denialReason: OrganizationWatchlistAlertBridgeBlockerCode | OrganizationVisibilityDenyReason | 'manual_webhook_selection_required' | 'role_not_allowed' | null
@@ -1658,9 +1659,9 @@ export type OrganizationWebhookDestinationAccessDecision = {
             status: 'active'
         }
         allowed: boolean
-        allowedRoles: Array<'owner' | 'admin'>
+        allowedRoles: Array<'owner' | 'admin' | 'editor'>
         summaryVisibleRoles: OrganizationRole[]
-        deniedRoles: Array<'member' | 'viewer'>
+        deniedRoles: Array<'reader' | 'member' | 'viewer'>
         denialReason: 'role_not_allowed' | 'manual_webhook_selection_required' | null
         destinationScope: {
             requiredDestinationOrgId: string
@@ -1711,8 +1712,8 @@ export type OrganizationWebhookDestinationAccessDecision = {
             idempotencyKeyFields: Array<'eventType' | 'organizationId' | 'destinationId' | 'alert.dedupeKey'>
         }
         roleGates: {
-            automaticDelivery: Array<'owner' | 'admin'>
-            manualTrigger: Array<'owner' | 'admin'>
+            automaticDelivery: Array<'owner' | 'admin' | 'editor'>
+            manualTrigger: Array<'owner' | 'admin' | 'editor'>
             readDeliverySummary: OrganizationRole[]
         }
         blockerCodes: string[]
@@ -1734,8 +1735,8 @@ export type OrganizationWebhookDestinationAccessDecision = {
         dryRunReady: boolean
         blockerReason: string | null
         roleGates: {
-            automaticDelivery: Array<'owner' | 'admin'>
-            manualTrigger: Array<'owner' | 'admin'>
+            automaticDelivery: Array<'owner' | 'admin' | 'editor'>
+            manualTrigger: Array<'owner' | 'admin' | 'editor'>
             readDeliverySummary: OrganizationRole[]
         }
         destinationScope: {
@@ -1837,9 +1838,9 @@ export type OrganizationSharedWatchlistConsumerReadiness = {
         dashboardReadinessReady: boolean
     }
     roleGates: {
-        mutateWatchlists: Array<'owner' | 'admin'>
+        mutateWatchlists: Array<'owner' | 'admin' | 'editor'>
         exportTerms: OrganizationRole[]
-        manualWebhookTrigger: Array<'owner' | 'admin'>
+        manualWebhookTrigger: Array<'owner' | 'admin' | 'editor'>
         assignCase: OrganizationAlertCaseRole[]
     }
     blockers: string[]
@@ -2157,13 +2158,13 @@ export type OrganizationLifecycleReadiness = {
             alertReadiness: 'GET /api/organizations/:id/alert-readiness'
         }
         roleGates: {
-            readOrganization: Array<'owner' | 'admin' | 'member' | 'viewer'>
+            readOrganization: OrganizationRole[]
             updateSettings: Array<'owner' | 'admin'>
             archiveOrganization: Array<'owner' | 'admin'>
             deleteOrganization: Array<'owner' | 'admin'>
             manageInvites: Array<'owner' | 'admin'>
-            mutateWatchlists: Array<'owner' | 'admin'>
-            readSharedWatchlists: Array<'owner' | 'admin' | 'member' | 'viewer'>
+            mutateWatchlists: Array<'owner' | 'admin' | 'editor'>
+            readSharedWatchlists: OrganizationRole[]
         }
         actorPermissions: {
             canReadOrganization: true
@@ -2267,9 +2268,9 @@ export type OrganizationReadinessProof = {
             allowedActions: OrganizationAlertCaseAction[]
         }
         roleGates: {
-            assignCase: Array<'owner' | 'admin' | 'analyst'>
-            linkCase: Array<'owner' | 'admin' | 'analyst'>
-            acknowledgeAlert: Array<'owner' | 'admin' | 'analyst' | 'member'>
+            assignCase: Array<'owner' | 'admin' | 'editor' | 'analyst'>
+            linkCase: Array<'owner' | 'admin' | 'editor' | 'analyst'>
+            acknowledgeAlert: Array<'owner' | 'admin' | 'editor' | 'analyst'>
             memberReadOnly: true
             viewerReadOnly: true
         }
@@ -2330,7 +2331,7 @@ export type OrganizationReadinessProof = {
         nonmemberDestinationEnumeration: false
         ownerAdminConfigureAllowed: boolean
         memberConfigureAllowed: false
-        manualTriggerAllowedRoles: Array<'owner' | 'admin'>
+        manualTriggerAllowedRoles: Array<'owner' | 'admin' | 'editor'>
         automaticDeliveryAllowed: boolean
         supportInspection: {
             route: '/api/admin/support/organizations/:id'
@@ -2626,12 +2627,11 @@ export type OrganizationReadinessProof = {
 }
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const watchlistWriteRoles = new Set<OrganizationRole>(['owner', 'admin'])
-const inviteRoles = new Set<OrganizationRole>(['admin', 'member', 'viewer'])
+const inviteRoles = new Set<OrganizationRole>(['admin', 'editor', 'reader'])
 const inviteActions = new Set<OrganizationInviteAction>(['revoke', 'resend'])
 const watchlistActions = new Set<OrganizationWatchlistAction>(['pause', 'resume', 'archive', 'restore'])
 const watchlistKinds = new Set<WatchlistKind>(['company', 'domain', 'vendor', 'actor', 'keyword'])
-const memberRoleTargets = new Set<OrganizationRole>(['admin', 'member', 'viewer'])
+const memberRoleTargets = new Set<OrganizationRole>(['admin', 'editor', 'reader'])
 const defaultWebhookPolicies = new Set<OrganizationDefaultWebhookPolicy>(['active_destinations', 'manual_selection', 'disabled'])
 const alertVisibilityPolicies = new Set<OrganizationAlertVisibilityPolicy>(['members', 'admins', 'owners'])
 const organizationLifecycleStatuses = new Set<OrganizationLifecycleStatus>(['active', 'archived', 'deleted'])
@@ -2761,9 +2761,9 @@ export function normalizeOwnershipTransferInput(body: OrganizationOwnershipTrans
 }
 
 export function normalizeMemberRoleInput(body: OrganizationMemberRoleInput | undefined) {
-    const role = cleanText(body?.role).toLowerCase()
+    const role = normalizeOrganizationRole(cleanText(body?.role).toLowerCase() as OrganizationRole)
     if (!memberRoleTargets.has(role as OrganizationRole)) {
-        throw new Error('Member role must be admin, member, or viewer.')
+        throw new Error('Member role must be admin, editor, or reader.')
     }
 
     const reason = cleanText(body?.reason)
@@ -2837,12 +2837,8 @@ export function normalizeWatchlistCleanupInput(body: WatchlistCleanupInput | und
     return { itemIds, reason, requestId }
 }
 
-export function roleCanManageOrganization(role: OrganizationRole | undefined) {
-    return role === 'owner' || role === 'admin'
-}
-
 export function roleCanWriteWatchlist(role: OrganizationRole | undefined) {
-    return watchlistWriteRoles.has(role as OrganizationRole)
+    return roleCanEditOrganization(role)
 }
 
 export function organizationAlertCaseRoleActions(role: OrganizationAlertCaseRole | undefined): OrganizationAlertCaseAction[] {
@@ -2863,8 +2859,8 @@ export function organizationAlertCaseRoleActions(role: OrganizationAlertCaseRole
         return ['acknowledge_alert', 'assign_case', 'link_case']
     }
 
-    if (role === 'member') {
-        return ['acknowledge_alert']
+    if (role === 'editor') {
+        return ['create_watchlist', 'edit_watchlist_terms', 'archive_watchlist', 'restore_watchlist', 'acknowledge_alert', 'assign_case', 'link_case']
     }
 
     return []
@@ -2880,13 +2876,13 @@ export function organizationAlertCaseRoleActionContract(member: { userId: string
             allowedActions: organizationAlertCaseRoleActions(member.role),
         },
         roleGates: {
-            create_watchlist: ['owner', 'admin'],
-            edit_watchlist_terms: ['owner', 'admin'],
-            archive_watchlist: ['owner', 'admin'],
-            restore_watchlist: ['owner', 'admin'],
-            acknowledge_alert: ['owner', 'admin', 'analyst', 'member'],
-            assign_case: ['owner', 'admin', 'analyst'],
-            link_case: ['owner', 'admin', 'analyst'],
+            create_watchlist: ['owner', 'admin', 'editor'],
+            edit_watchlist_terms: ['owner', 'admin', 'editor'],
+            archive_watchlist: ['owner', 'admin', 'editor'],
+            restore_watchlist: ['owner', 'admin', 'editor'],
+            acknowledge_alert: ['owner', 'admin', 'editor', 'analyst'],
+            assign_case: ['owner', 'admin', 'editor', 'analyst'],
+            link_case: ['owner', 'admin', 'editor', 'analyst'],
             manage_invites: ['owner', 'admin'],
         } satisfies Record<OrganizationAlertCaseAction, OrganizationAlertCaseRole[]>,
         lifecycleDenials: {
@@ -2911,6 +2907,8 @@ export function organizationMemberAccessContract(
     }, {
         owner: 0,
         admin: 0,
+        editor: 0,
+        reader: 0,
         member: 0,
         viewer: 0,
     } satisfies Record<OrganizationRole, number>)
@@ -2944,18 +2942,20 @@ export function organizationMemberAccessContract(
             activeMemberCount: activeMembers.length,
             ownerCount: roleCounts.owner,
             adminCount: roleCounts.admin,
+            editorCount: roleCounts.editor,
+            readerCount: roleCounts.reader + roleCounts.member + roleCounts.viewer,
             memberCount: roleCounts.member,
             viewerCount: roleCounts.viewer,
             activeAdminCount: roleCounts.owner + roleCounts.admin,
         },
         roleGates: {
-            createWatchlist: ['owner', 'admin'],
-            updateWatchlist: ['owner', 'admin'],
-            pauseWatchlist: ['owner', 'admin'],
-            archiveWatchlist: ['owner', 'admin'],
+            createWatchlist: ['owner', 'admin', 'editor'],
+            updateWatchlist: ['owner', 'admin', 'editor'],
+            pauseWatchlist: ['owner', 'admin', 'editor'],
+            archiveWatchlist: ['owner', 'admin', 'editor'],
             manageInvites: ['owner', 'admin'],
             manageMembers: ['owner', 'admin'],
-            readSharedWatchlists: ['owner', 'admin', 'member', 'viewer'],
+            readSharedWatchlists: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'],
             exportAlertTerms: visibility.allowedRoles,
             acknowledgeAlert: roleActionContract.roleGates.acknowledge_alert,
             assignCase: roleActionContract.roleGates.assign_case,
@@ -2971,18 +2971,18 @@ export function organizationMemberAccessContract(
             },
             actorRole,
             allowedMutators: ['owner', 'admin'],
-            roleTargets: ['admin', 'member', 'viewer'],
+            roleTargets: ['admin', 'editor', 'reader'],
             roleChange: {
-                ownerCanAssign: ['admin', 'member', 'viewer'],
-                adminCanAssign: ['member', 'viewer'],
+                ownerCanAssign: ['admin', 'editor', 'reader'],
+                adminCanAssign: ['editor', 'reader'],
                 memberCanAssign: [],
                 viewerCanAssign: [],
                 requestMetadataFields: ['requestId', 'reason', 'previousRole', 'newRole'],
                 serviceLogAction: 'organization_member_role_updated',
             },
             removal: {
-                ownerCanRemove: ['admin', 'member', 'viewer'],
-                adminCanRemove: ['member', 'viewer'],
+                ownerCanRemove: ['admin', 'editor', 'reader'],
+                adminCanRemove: ['editor', 'reader'],
                 lastOwnerBlocked: true,
                 ownerRemovalRequiresTransfer: true,
                 removedMemberStatus: 'removed',
@@ -3141,7 +3141,7 @@ export function organizationAnalystPortalVisibilityAdapter(
             allowed: downstreamAuthorization.visibility.allowed
                 && downstreamAuthorization.allowedActions.includes('acknowledge_alert')
                 && alertBlockers.length === 0,
-            allowedRoles: ['owner', 'admin', 'member'],
+            allowedRoles: ['owner', 'admin', 'editor'],
             denialReason: visibilityDenied ?? (downstreamAuthorization.allowedActions.includes('acknowledge_alert') ? null : 'role_not_allowed'),
             blockerCodes: downstreamAuthorization.visibility.allowed ? alertBlockers : [visibilityDenied ?? 'role_not_allowed'],
         },
@@ -3149,7 +3149,7 @@ export function organizationAnalystPortalVisibilityAdapter(
             allowed: downstreamAuthorization.visibility.allowed
                 && downstreamAuthorization.allowedActions.includes('assign_case')
                 && caseBlockers.length === 0,
-            allowedRoles: ['owner', 'admin', 'analyst'],
+            allowedRoles: ['owner', 'admin', 'editor', 'analyst'],
             denialReason: visibilityDenied ?? (downstreamAuthorization.allowedActions.includes('assign_case') ? null : 'role_not_allowed'),
             blockerCodes: downstreamAuthorization.visibility.allowed ? caseBlockers : [visibilityDenied ?? 'role_not_allowed'],
         },
@@ -3157,20 +3157,20 @@ export function organizationAnalystPortalVisibilityAdapter(
             allowed: downstreamAuthorization.visibility.allowed
                 && downstreamAuthorization.allowedActions.includes('link_case')
                 && caseBlockers.length === 0,
-            allowedRoles: ['owner', 'admin', 'analyst'],
+            allowedRoles: ['owner', 'admin', 'editor', 'analyst'],
             denialReason: visibilityDenied ?? (downstreamAuthorization.allowedActions.includes('link_case') ? null : 'role_not_allowed'),
             blockerCodes: downstreamAuthorization.visibility.allowed ? caseBlockers : [visibilityDenied ?? 'role_not_allowed'],
         },
         replay_alert: {
-            allowed: downstreamAuthorization.visibility.allowed && alertBlockers.length === 0,
-            allowedRoles: downstreamAuthorization.visibility.allowedRoles,
+            allowed: downstreamAuthorization.visibility.allowed && roleCanEditOrganization(downstreamAuthorization.member.role) && alertBlockers.length === 0,
+            allowedRoles: ['owner', 'admin', 'editor'],
             denialReason: visibilityDenied ?? (alertBlockers[0] as OrganizationWatchlistAlertBridgeBlockerCode | undefined) ?? null,
             blockerCodes: downstreamAuthorization.visibility.allowed ? alertBlockers : [visibilityDenied ?? 'role_not_allowed'],
         },
         deliver_webhook: {
             allowed: proof.webhookBridge.deliveryContract.roleGates.manualTriggerAllowed
                 && webhookBlockers.length === 0,
-            allowedRoles: ['owner', 'admin'],
+            allowedRoles: ['owner', 'admin', 'editor'],
             denialReason: proof.webhookBridge.deliveryContract.roleGates.denialReason
                 ?? (webhookBlockers[0] as OrganizationWatchlistAlertBridgeBlockerCode | undefined)
                 ?? null,
@@ -3380,7 +3380,7 @@ export function organizationAlertCaseWorkflowState(
                 crossTenantCollisionAllowed: false as const,
             },
             allowed: caseWorkflow.actorActions.canAssignCase,
-            allowedRoles: ['owner', 'admin', 'analyst'] as const,
+            allowedRoles: ['owner', 'admin', 'editor', 'analyst'] as const,
             actorRole: downstreamAuthorization.member.role,
             denialReason: caseWorkflow.actorActions.canAssignCase
                 ? null
@@ -3480,7 +3480,7 @@ export function organizationSharedWatchlistDownstreamProof(
         downstreamAuthorization.downstream.webhook.denialReason,
         downstreamAuthorization.downstream.webhook.canUseDefaultDestinations ? undefined : 'manual_webhook_selection_required',
     ].filter(Boolean).map(String)))
-    const webhookDeliveryAllowedByRole = member.role === 'owner' || member.role === 'admin'
+    const webhookDeliveryAllowedByRole = roleCanEditOrganization(member.role)
     const webhookPolicy = downstreamAuthorization.downstream.webhook.defaultPolicy
     const selectedDestinationSource = webhookPolicy === 'active_destinations' && downstreamAuthorization.downstream.webhook.canUseDefaultDestinations
         ? 'org_active_destinations'
@@ -3686,7 +3686,7 @@ export function organizationSharedWatchlistDownstreamProof(
                     assignAllowed: alertReadAllowed && downstreamAuthorization.allowedActions.includes('assign_case'),
                     linkCaseAllowed: alertReadAllowed && downstreamAuthorization.allowedActions.includes('link_case'),
                     replayAllowed: alertReadAllowed && downstreamAuthorization.downstream.alertGeneration.canExportActiveTerms,
-                    mutateAllowedRoles: ['owner', 'admin', 'analyst'],
+                    mutateAllowedRoles: ['owner', 'admin', 'editor', 'analyst'],
                 },
                 requiredAlertFields: [
                     'organizationId',
@@ -3831,7 +3831,7 @@ export function organizationSharedWatchlistDownstreamProof(
                 roleGates: {
                     automaticDeliveryAllowed: downstreamAuthorization.downstream.webhook.canUseDefaultDestinations,
                     manualTriggerAllowed: webhookDeliveryAllowedByRole && downstreamAuthorization.organizationLifecycleState === 'active',
-                    manualTriggerAllowedRoles: ['owner', 'admin'],
+                    manualTriggerAllowedRoles: ['owner', 'admin', 'editor'],
                     memberManualTriggerAllowed: false,
                     denialReason: webhookManualDenialReason,
                 },
@@ -4172,7 +4172,7 @@ function organizationSharedWatchlistMonitoringWorkflow(input: {
                 storageModule: 'ti/scraper/src/api/caseRoutes.ts',
                 requiredPayloadFields: ['organizationId', 'tenantId', 'alertId', 'casePath', 'watchlistItemIds', 'evidence.provenance'],
                 requiredAuditActions: ['organization_watchlist_alert_terms_exported'],
-                allowedRoles: ['owner', 'admin', 'analyst'],
+                allowedRoles: ['owner', 'admin', 'editor', 'analyst'],
                 state: caseLinkReady ? 'ready' : 'blocked',
                 blockerCodes: caseLinkReady ? [] : Array.from(new Set(input.caseBlockers.length ? input.caseBlockers : ['role_not_allowed'])).sort(),
                 redactedFields: ['activeTerms[].term', 'case.evidence.rawContent'],
@@ -4233,7 +4233,7 @@ function organizationSharedWatchlistAnalystPortalWorkflow(input: {
     const canAcknowledge = input.alertReadAllowed && input.allowedActions.includes('acknowledge_alert')
     const canAssignCase = input.caseReadAllowed && input.allowedActions.includes('assign_case')
     const canLinkCase = input.caseReadAllowed && input.allowedActions.includes('link_case')
-    const canReplay = input.alertReadAllowed && input.alertBlockers.length === 0
+    const canReplay = input.alertReadAllowed && roleCanEditOrganization(input.actorRole) && input.alertBlockers.length === 0
     const canDeliverWebhook = input.webhookManualAllowed && input.webhookBlockers.length === 0
     const portalBlockers = Array.from(new Set([
         ...(input.alertReadAllowed ? [] : ['role_not_allowed']),
@@ -4279,7 +4279,7 @@ function organizationSharedWatchlistAnalystPortalWorkflow(input: {
                 action: 'review_alert',
                 route: 'GET /v1/dwm/alerts/:id',
                 method: 'GET',
-                requiredRoles: ['owner', 'admin', 'member'],
+                requiredRoles: ['owner', 'admin', 'editor'],
                 allowed: input.alertReadAllowed,
                 requiredPayloadFields: ['organizationId', 'alertId'],
                 auditEventActions: ['organization_watchlist_alert_terms_exported'],
@@ -4289,7 +4289,7 @@ function organizationSharedWatchlistAnalystPortalWorkflow(input: {
                 action: 'acknowledge_alert',
                 route: 'PATCH /v1/dwm/alerts/:id',
                 method: 'PATCH',
-                requiredRoles: ['owner', 'admin', 'member', 'analyst'],
+                requiredRoles: ['owner', 'admin', 'editor', 'analyst'],
                 allowed: canAcknowledge,
                 requiredPayloadFields: ['organizationId', 'alertId', 'rationale'],
                 auditEventActions: ['organization_watchlist_alert_terms_exported'],
@@ -4299,7 +4299,7 @@ function organizationSharedWatchlistAnalystPortalWorkflow(input: {
                 action: 'assign_case',
                 route: 'PATCH /v1/cases/:id',
                 method: 'PATCH',
-                requiredRoles: ['owner', 'admin', 'analyst'],
+                requiredRoles: ['owner', 'admin', 'editor', 'analyst'],
                 allowed: canAssignCase,
                 requiredPayloadFields: ['organizationId', 'caseId', 'assigneeId', 'rationale'],
                 auditEventActions: ['organization_watchlist_alert_terms_exported'],
@@ -4309,7 +4309,7 @@ function organizationSharedWatchlistAnalystPortalWorkflow(input: {
                 action: 'link_case',
                 route: 'POST /v1/cases',
                 method: 'POST',
-                requiredRoles: ['owner', 'admin', 'analyst'],
+                requiredRoles: ['owner', 'admin', 'editor', 'analyst'],
                 allowed: canLinkCase,
                 requiredPayloadFields: ['organizationId', 'alertId', 'watchlistItemIds', 'casePath'],
                 auditEventActions: ['organization_watchlist_alert_terms_exported'],
@@ -4319,7 +4319,7 @@ function organizationSharedWatchlistAnalystPortalWorkflow(input: {
                 action: 'replay_alert',
                 route: 'POST /v1/dwm/alerts/:id/replay',
                 method: 'POST',
-                requiredRoles: ['owner', 'admin'],
+                requiredRoles: ['owner', 'admin', 'editor'],
                 allowed: canReplay,
                 requiredPayloadFields: ['organizationId', 'alertId', 'watchlistItemIds'],
                 auditEventActions: ['organization_watchlist_alert_terms_exported'],
@@ -4329,7 +4329,7 @@ function organizationSharedWatchlistAnalystPortalWorkflow(input: {
                 action: 'deliver_webhook',
                 route: 'POST /v1/dwm/webhooks/deliver',
                 method: 'POST',
-                requiredRoles: ['owner', 'admin'],
+                requiredRoles: ['owner', 'admin', 'editor'],
                 allowed: canDeliverWebhook,
                 requiredPayloadFields: ['organizationId', 'alertId', 'destinationId', 'idempotencyKey'],
                 auditEventActions: ['organization_watchlist_alert_terms_exported'],
@@ -4929,6 +4929,8 @@ export function organizationSharedWatchlistAlertQueueVisibility(
             allowedActionsByRole: {
                 owner: organizationAlertCaseRoleActions('owner'),
                 admin: organizationAlertCaseRoleActions('admin'),
+                editor: organizationAlertCaseRoleActions('editor'),
+                reader: organizationAlertCaseRoleActions('reader'),
                 analyst: organizationAlertCaseRoleActions('analyst'),
                 member: organizationAlertCaseRoleActions('member'),
                 viewer: organizationAlertCaseRoleActions('viewer'),
@@ -5156,8 +5158,8 @@ export function organizationWatchlistAlertTermsExportDenial(input: {
             canExportAlertTerms: false,
             canMutateWatchlists: roleCanWriteWatchlist(input.member.role),
             allowedExportRoles: input.visibility.allowedRoles,
-            readSharedWatchlistRoles: ['owner', 'admin', 'member', 'viewer'],
-            mutateWatchlistRoles: ['owner', 'admin'],
+            readSharedWatchlistRoles: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'],
+            mutateWatchlistRoles: ['owner', 'admin', 'editor'],
             denialReason: input.visibility.reason ?? 'alert_export_unavailable',
             safeFields: [
                 'organizationId',
@@ -5226,7 +5228,7 @@ export function toOrganization(row: OrganizationRow) {
         name: row.name,
         slug: row.slug,
         lifecycleStatus: normalizeOrganizationStatus(row.status),
-        role: row.role,
+        role: row.role ? normalizeOrganizationRole(row.role) : undefined,
         memberCount: Number(row.member_count ?? 0),
         ownerCount: Number(row.owner_count ?? 0),
         activeAdminCount: Number(row.admin_count ?? row.owner_count ?? 0),
@@ -5289,7 +5291,7 @@ export function organizationLifecycleReadiness(row: OrganizationRow): Organizati
         memberRoleReadiness: {
             ownerCanMutate: actorRole === 'owner',
             adminCanMutate: actorRole === 'owner' || actorRole === 'admin',
-            memberCanReadAndExport: actorRole === 'owner' || actorRole === 'admin' || actorRole === 'member' || actorRole === 'viewer',
+            memberCanReadAndExport: allowedOrganizationVisibilityRoles('members').includes(actorRole),
             supportReadMode: 'redacted_support_contract_only',
             nonmemberEnumeration: false,
             revokedMemberDenial: 'member_revoked',
@@ -5372,13 +5374,13 @@ export function organizationLifecycleReadiness(row: OrganizationRow): Organizati
                 alertReadiness: 'GET /api/organizations/:id/alert-readiness',
             },
             roleGates: {
-                readOrganization: ['owner', 'admin', 'member', 'viewer'],
+                readOrganization: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'],
                 updateSettings: ['owner', 'admin'],
                 archiveOrganization: ['owner', 'admin'],
                 deleteOrganization: ['owner', 'admin'],
                 manageInvites: ['owner', 'admin'],
-                mutateWatchlists: ['owner', 'admin'],
-                readSharedWatchlists: ['owner', 'admin', 'member', 'viewer'],
+                mutateWatchlists: ['owner', 'admin', 'editor'],
+                readSharedWatchlists: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'],
             },
             actorPermissions: {
                 canReadOrganization: true,
@@ -5580,9 +5582,9 @@ export function organizationReadinessProof(input: {
                 allowedActions: actorCaseActions,
             },
             roleGates: {
-                assignCase: ['owner', 'admin', 'analyst'],
-                linkCase: ['owner', 'admin', 'analyst'],
-                acknowledgeAlert: ['owner', 'admin', 'analyst', 'member'],
+                assignCase: ['owner', 'admin', 'editor', 'analyst'],
+                linkCase: ['owner', 'admin', 'editor', 'analyst'],
+                acknowledgeAlert: ['owner', 'admin', 'editor', 'analyst'],
                 memberReadOnly: true,
                 viewerReadOnly: true,
             },
@@ -5719,9 +5721,9 @@ export function organizationReadinessProof(input: {
             selectedDestinationSource: webhookSelectedDestinationSource,
             crossOrgDestinationAllowed: false,
             nonmemberDestinationEnumeration: false,
-            ownerAdminConfigureAllowed: input.downstreamAuthorization.member.role === 'owner' || input.downstreamAuthorization.member.role === 'admin',
+            ownerAdminConfigureAllowed: roleCanEditOrganization(input.downstreamAuthorization.member.role),
             memberConfigureAllowed: false,
-            manualTriggerAllowedRoles: ['owner', 'admin'],
+            manualTriggerAllowedRoles: ['owner', 'admin', 'editor'],
             automaticDeliveryAllowed: input.downstreamAuthorization.downstream.webhook.canUseDefaultDestinations,
             supportInspection: {
                 route: '/api/admin/support/organizations/:id',
@@ -6224,7 +6226,7 @@ export function toInvite(row: OrganizationInviteRow) {
         acceptanceToken: row.id,
         acceptancePath: `/api/organizations/invites/${encodeURIComponent(row.id)}/accept`,
         email: row.email,
-        role: row.role,
+        role: row.role ? normalizeOrganizationRole(row.role) : undefined,
         invitedBy: row.invited_by,
         acceptedBy: row.accepted_by ?? null,
         status: row.status,
@@ -6383,7 +6385,7 @@ export function toMember(row: OrganizationMemberRow) {
         userId: row.user_id,
         name: row.name,
         avatar: row.avatar,
-        role: row.role,
+        role: row.role ? normalizeOrganizationRole(row.role) : undefined,
         status: row.status,
         invitedBy: row.invited_by ?? null,
         joinedAt: row.joined_at,
@@ -6418,9 +6420,9 @@ export function organizationMemberMutationDenial(input: {
         statusCode: 403,
         allowedRoles: ['owner', 'admin'] as Array<'owner' | 'admin'>,
         allowedTargetRoles: input.action === 'remove_member'
-            ? ['admin', 'member', 'viewer'] as OrganizationRole[]
-            : ['admin', 'member', 'viewer'] as OrganizationRole[],
-        adminAllowedTargetRoles: ['member', 'viewer'] as Array<'member' | 'viewer'>,
+            ? ['admin', 'editor', 'reader'] as OrganizationRole[]
+            : ['admin', 'editor', 'reader'] as OrganizationRole[],
+        adminAllowedTargetRoles: ['editor', 'reader'] as Array<'editor' | 'reader'>,
         ownerCanMutateOwners: true,
         adminCanMutateOwners: false,
         nonmemberEnumeration: false as const,
@@ -6486,8 +6488,8 @@ export function organizationWatchlistMutationDenial(input: {
         denialReason: 'role_not_allowed' as const,
         message: input.message,
         statusCode: 403,
-        allowedRoles: ['owner', 'admin'] as Array<'owner' | 'admin'>,
-        readRoles: ['owner', 'admin', 'member', 'viewer'] as OrganizationRole[],
+        allowedRoles: (input.action === 'cleanup_watchlists' ? ['owner', 'admin'] : ['owner', 'admin', 'editor']) as OrganizationRole[],
+        readRoles: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'] as OrganizationRole[],
         memberCanReadSharedWatchlists: true,
         memberCanMutateSharedWatchlists: false,
         viewerCanReadSharedWatchlists: true,
@@ -6586,7 +6588,7 @@ export function organizationSettingsMutationDenial(input: {
         message: input.message,
         statusCode: 403,
         allowedRoles: ['owner', 'admin'] as Array<'owner' | 'admin'>,
-        readableRoles: ['owner', 'admin', 'member', 'viewer'] as OrganizationRole[],
+        readableRoles: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'] as OrganizationRole[],
         editableFields: ['name', 'slug', 'defaultWebhookPolicy', 'alertVisibilityPolicy', 'retentionDays', 'auditSafeMetadata'] as const,
         memberCanReadSettings: true,
         memberCanUpdateSettings: false,
@@ -7115,7 +7117,7 @@ export function organizationWatchlistAlertTermsExport(
         sharedWatchlistDownstreamProof,
         downstreamAuthorization
     ).webhookDestinationOwnership
-    const canManageWebhookDestinations = roleCanManageOrganization(member.role)
+    const canManageWebhookDestinations = roleCanEditOrganization(member.role)
     const webhookDestinationAccessDecision: OrganizationWebhookDestinationAccessDecision = {
         schemaVersion: 'organization.webhook_destination_access_decision.v1',
         organizationId: organization.id,
@@ -7141,10 +7143,10 @@ export function organizationWatchlistAlertTermsExport(
             readDeliverySummary: true,
         },
         roleGates: {
-            automaticDelivery: ['owner', 'admin'],
+            automaticDelivery: ['owner', 'admin', 'editor'],
             manualTrigger: webhookDestinationOwnership.roleGates.manualTriggerAllowedRoles,
-            configureDestination: ['owner', 'admin'],
-            readDeliverySummary: ['owner', 'admin', 'member', 'viewer'],
+            configureDestination: ['owner', 'admin', 'editor'],
+            readDeliverySummary: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'],
         },
         denialReason: webhookDestinationOwnership.roleGates.denialReason ?? (canManageWebhookDestinations ? null : 'role_not_allowed'),
         blockerCodes: Array.from(new Set([
@@ -7201,9 +7203,9 @@ export function organizationWatchlistAlertTermsExport(
                 status: 'active',
             },
             allowed: canManageWebhookDestinations,
-            allowedRoles: ['owner', 'admin'],
-            summaryVisibleRoles: ['owner', 'admin', 'member', 'viewer'],
-            deniedRoles: ['member', 'viewer'],
+            allowedRoles: ['owner', 'admin', 'editor'],
+            summaryVisibleRoles: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'],
+            deniedRoles: ['reader', 'member', 'viewer'],
             denialReason: canManageWebhookDestinations
                 ? (webhookDestinationOwnership.blockerCodes.includes('manual_webhook_selection_required') ? 'manual_webhook_selection_required' : null)
                 : 'role_not_allowed',
@@ -7286,9 +7288,9 @@ export function organizationWatchlistAlertTermsExport(
                 idempotencyKeyFields: webhookDestinationOwnership.idempotency.keyFields,
             },
             roleGates: {
-                automaticDelivery: ['owner', 'admin'],
+                automaticDelivery: ['owner', 'admin', 'editor'],
                 manualTrigger: webhookDestinationOwnership.roleGates.manualTriggerAllowedRoles,
-                readDeliverySummary: ['owner', 'admin', 'member', 'viewer'],
+                readDeliverySummary: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'],
             },
             blockerCodes: Array.from(new Set([
                 ...alertGeneration.blockedReasons,
@@ -7328,9 +7330,9 @@ export function organizationWatchlistAlertTermsExport(
                 ...(canManageWebhookDestinations ? [] : ['role_not_allowed']),
             ].map(String)))[0] ?? null,
             roleGates: {
-                automaticDelivery: ['owner', 'admin'],
+                automaticDelivery: ['owner', 'admin', 'editor'],
                 manualTrigger: webhookDestinationOwnership.roleGates.manualTriggerAllowedRoles,
-                readDeliverySummary: ['owner', 'admin', 'member', 'viewer'],
+                readDeliverySummary: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'],
             },
             destinationScope: {
                 selectedDestinationOrgField: webhookDestinationOwnership.selectedDestinationOrgField,
@@ -7516,7 +7518,7 @@ export function organizationWatchlistAlertTermsExport(
             dashboardReadinessReady: true,
         },
         roleGates: {
-            mutateWatchlists: ['owner', 'admin'],
+            mutateWatchlists: ['owner', 'admin', 'editor'],
             exportTerms: sharedWatchlistAlertQueueVisibility.visibility.allowedRoles,
             manualWebhookTrigger: webhookDestinationOwnership.roleGates.manualTriggerAllowedRoles,
             assignCase: sharedWatchlistAlertQueueVisibility.roleActionMatrix.roleGates.assign_case,
@@ -7573,8 +7575,8 @@ export function organizationWatchlistAlertTermsExport(
         },
         roleGates: {
             exportTerms: sharedWatchlistAlertQueueVisibility.visibility.allowedRoles,
-            mutateWatchlists: ['owner', 'admin'],
-            readSharedWatchlists: ['owner', 'admin', 'member', 'viewer'],
+            mutateWatchlists: ['owner', 'admin', 'editor'],
+            readSharedWatchlists: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'],
         },
         denialContract: {
             nonmember: 'organization.access_denial.v1',
@@ -7669,7 +7671,7 @@ export function organizationWatchlistAlertTermsExport(
                         dryRunVisibility: {
                             allowed: canManageWebhookDestinations,
                             allowedRoles: ['owner', 'admin'],
-                            deniedRoles: ['member', 'viewer'],
+                            deniedRoles: ['reader', 'member', 'viewer'],
                             redactedFields: ['destination.secret', 'destination.endpoint'],
                         },
                         blockerCodes: webhookDestinationAccessDecision.blockerCodes,
@@ -7758,8 +7760,8 @@ export function organizationWatchlistAlertTermsExport(
         },
         roleGates: {
             exportTerms: sharedWatchlistAlertQueueVisibility.visibility.allowedRoles,
-            mutateWatchlists: ['owner', 'admin'],
-            readSharedWatchlists: ['owner', 'admin', 'member', 'viewer'],
+            mutateWatchlists: ['owner', 'admin', 'editor'],
+            readSharedWatchlists: ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'],
         },
         blockerCodes: Array.from(new Set([
             ...alertGeneration.blockedReasons,
@@ -8337,9 +8339,9 @@ function organizationWatchlistMatchProvenanceHash(term: OrganizationWatchlistTer
 }
 
 function normalizeInviteRole(value: unknown): OrganizationRole {
-    const role = cleanText(value).toLowerCase() || 'member'
+    const role = normalizeOrganizationRole((cleanText(value).toLowerCase() || 'reader') as OrganizationRole)
     if (!inviteRoles.has(role as OrganizationRole)) {
-        throw new Error('Invite role must be admin, member, or viewer.')
+        throw new Error('Invite role must be admin, editor, or reader.')
     }
 
     return role as OrganizationRole
@@ -8348,7 +8350,7 @@ function normalizeInviteRole(value: unknown): OrganizationRole {
 function allowedOrganizationVisibilityRoles(policy: OrganizationAlertVisibilityPolicy): OrganizationRole[] {
     if (policy === 'owners') return ['owner']
     if (policy === 'admins') return ['owner', 'admin']
-    return ['owner', 'admin', 'member', 'viewer']
+    return ['owner', 'admin', 'editor', 'reader', 'member', 'viewer']
 }
 
 function normalizeSettingsName(value: unknown) {

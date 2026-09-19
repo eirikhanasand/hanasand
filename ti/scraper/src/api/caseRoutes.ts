@@ -1,3 +1,4 @@
+import { canEditOrganization } from "./organizationRoles.ts";
 import { authenticateRequest } from "./requestAuthentication.ts";
 import { paginationCursor, legacyOffset } from "./pagination.ts";
 import { createHash } from "node:crypto";
@@ -1734,6 +1735,10 @@ function authorizeCaseAccess(input: { options: ApiServerOptions; scope: { organi
   const allowedRoles = allowedCaseVisibilityRoles(visibilityPolicy);
   const openDecision: CaseVisibilityDecision = { allowed: true, reason: null, alertVisibilityPolicy: visibilityPolicy, allowedRoles };
   const members = organizationMembers(input.options, input.scope.organizationId);
+  if ((input.scope.organization as any)?.accountOrganization && !members.length) {
+    const visibilityDecision: CaseVisibilityDecision = { allowed: false, reason: "not_member", alertVisibilityPolicy: visibilityPolicy, allowedRoles };
+    return { readOnly: true, visibilityDecision, error: caseVisibilityError(visibilityDecision, "Organization access requires an active membership.") };
+  }
   if (!input.scope.organizationId || !members.length) return { readOnly: false, visibilityDecision: openDecision };
 
   const identity = requestIdentity(input.request, input.body, input.url);
@@ -1752,9 +1757,9 @@ function authorizeCaseAccess(input: { options: ApiServerOptions; scope: { organi
   if (!visibilityDecision.allowed) {
     return { member, readOnly: true, visibilityDecision, error: caseVisibilityError(visibilityDecision, "Case evidence is not visible for this organization membership.") };
   }
-  const readOnly = member.role === "viewer";
+  const readOnly = !canEditOrganization(member.role);
   if (input.mode === "mutate" && readOnly) {
-    return { member, readOnly, visibilityDecision, error: json({ error: { code: "case_read_only_member", message: "Viewer members can read cases but cannot assign, close, suppress, or escalate them." }, visibilityDecision }, 403) };
+    return { member, readOnly, visibilityDecision, error: json({ error: { code: "case_read_only_member", message: "Readers can read cases but cannot assign, close, suppress, or escalate them." }, visibilityDecision }, 403) };
   }
   return { member, readOnly, visibilityDecision };
 }
@@ -1767,8 +1772,8 @@ function validateAssignedOwner(options: ApiServerOptions, organizationId: string
   if (!owner) {
     return json({ error: { code: "invalid_case_owner", message: "Assigned owner must be an active member of this organization." } }, 400);
   }
-  if (owner.role === "viewer") {
-    return json({ error: { code: "invalid_case_owner_role", message: "Viewer members cannot own mutable analyst cases." } }, 400);
+  if (!canEditOrganization(owner.role)) {
+    return json({ error: { code: "invalid_case_owner_role", message: "Readers cannot own mutable analyst cases." } }, 400);
   }
   return undefined;
 }
@@ -1863,12 +1868,12 @@ function organizationAlertVisibilityPolicy(organization: unknown): CaseVisibilit
 function allowedCaseVisibilityRoles(policy: CaseVisibilityPolicy): string[] {
   if (policy === "owners") return ["owner"];
   if (policy === "admins") return ["owner", "admin"];
-  return ["owner", "admin", "analyst", "member", "viewer"];
+  return ["owner", "admin", "editor", "reader", "analyst", "member", "viewer"];
 }
 
 function normalizeVisibilityRole(role: unknown): string {
   const value = String(role ?? "").trim().toLowerCase();
-  return value === "member" ? "analyst" : value;
+  return value === "member" || value === "viewer" ? "reader" : value;
 }
 
 function nextActionsForCase(caseRecord: AnalystCase, alert: any, deliveries: any[]) {
@@ -3390,7 +3395,7 @@ function buildCaseHandoffActionReadiness(input: {
 }) {
   const readOnlyBlockers = input.access?.readOnly === true ? [{
     code: "case_read_only_member",
-    message: "Viewer members can inspect case handoff state but cannot replay alerts or send webhook deliveries.",
+    message: "Readers can inspect case handoff state but cannot replay alerts or send webhook deliveries.",
     path: "access.readOnly"
   }] : [];
   const handoffBlockers = Array.isArray(input.handoff?.readiness?.blockers) ? input.handoff.readiness.blockers : [];

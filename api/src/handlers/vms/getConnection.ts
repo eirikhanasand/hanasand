@@ -19,7 +19,7 @@ export default async function getVmConnection(req: FastifyRequest, res: FastifyR
         return res.status(400).send({ error: 'VM name is required.' })
     }
 
-    if (!await requireVmAccess(req, res, vmName)) return
+    if (!await requireVmAccess(req, res, vmName, false, true)) return
 
     try {
         const certificatesResult = await run(`

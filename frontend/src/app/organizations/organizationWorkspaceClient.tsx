@@ -9,7 +9,7 @@ import type { KeyboardEvent, ReactNode } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Archive, BellRing, Building2, CheckCircle2, CircleAlert, Copy, ExternalLink, KeyRound, Loader2, Pause, Pencil, Play, RefreshCw, Settings, ShieldCheck, Trash2, UserPlus, Users, Webhook } from 'lucide-react'
 
-type OrganizationRole = 'owner' | 'admin' | 'member' | 'viewer' | 'support'
+type OrganizationRole = 'owner' | 'admin' | 'editor' | 'reader' | 'member' | 'viewer' | 'support'
 type OrganizationStatus = 'active' | 'archived' | 'deleted' | string
 type WatchlistStatus = 'active' | 'paused' | 'archived' | string
 type WatchlistKind = 'company' | 'domain' | 'vendor' | 'actor' | 'keyword'
@@ -353,7 +353,7 @@ const initialBundle: OrgBundle = {
     loadErrors: [],
 }
 
-const roleOptions: OrganizationRole[] = ['admin', 'member', 'viewer', 'support']
+const roleOptions: OrganizationRole[] = ['admin', 'editor', 'reader']
 const watchlistKinds: WatchlistKind[] = ['company', 'domain', 'vendor', 'actor', 'keyword']
 const watchlistTemplates: Array<{ label: string, kind: WatchlistKind, notes: string }> = [
     { label: 'Corporate domain', kind: 'domain', notes: 'Primary company domain monitored for exposure mentions.' },
@@ -647,9 +647,9 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
     const [workspaceQuery, setWorkspaceQuery] = useState('')
     const [createFirstWatchlist, setCreateFirstWatchlist] = useState({ kind: 'domain' as WatchlistKind, value: '', notes: '' })
     const [createInviteEmails, setCreateInviteEmails] = useState('')
-    const [createInviteRole, setCreateInviteRole] = useState<OrganizationRole>('member')
+    const [createInviteRole, setCreateInviteRole] = useState<OrganizationRole>('reader')
     const [inviteEmails, setInviteEmails] = useState('')
-    const [inviteRole, setInviteRole] = useState<OrganizationRole>('member')
+    const [inviteRole, setInviteRole] = useState<OrganizationRole>('reader')
     const [watchlistDraft, setWatchlistDraft] = useState({ kind: 'domain' as WatchlistKind, value: '', notes: '' })
     const [settingsDraft, setSettingsDraft] = useState<OrganizationSettings>({})
     const [editingWatchlist, setEditingWatchlist] = useState<Record<string, { kind: WatchlistKind, value: string, notes: string }>>({})
@@ -672,6 +672,10 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
     )
     const selectedOrganizationRole = selectedOrganization?.role?.toLowerCase()
     const canManage = selectedOrganizationRole === 'owner' || selectedOrganizationRole === 'admin'
+    const canEdit = canManage || selectedOrganizationRole === 'editor'
+    const requireEdit = () => {
+        if (!canEdit) throw new Error('Editor access required.')
+    }
     const requireManage = () => {
         if (!canManage) throw new Error('Owner or admin required.')
     }
@@ -973,7 +977,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
         if (!firstWatchlistValue || firstWatchlistAdded) setCreateFirstWatchlist({ kind: 'domain', value: '', notes: '' })
         if (!firstInviteEmails.length || firstInviteCount) {
             setCreateInviteEmails('')
-            setCreateInviteRole('member')
+            setCreateInviteRole('reader')
         }
         return {
             organizationId,
@@ -1120,7 +1124,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
     }, `member-${member.userId}`)
 
     const createWatchlist = () => selectedOrganization && runAction('create-watchlist', async () => {
-        requireManage()
+        requireEdit()
         if (watchlistDraftDuplicate) {
             throw new Error('This watchlist term already exists in this organization.')
         }
@@ -1137,7 +1141,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
     }, 'watchlist-create')
 
     const saveWatchlistEdit = (item: WatchlistItem) => selectedOrganization && runAction('save-watchlist', async () => {
-        requireManage()
+        requireEdit()
         const draft = editingWatchlist[item.id]
         if (!draft) throw new Error('Open the watchlist term before saving.')
         if (isDuplicateWatchlistTerm(bundle.watchlists, draft.kind, draft.value, item.id)) {
@@ -1163,7 +1167,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
     }, `watchlist-${item.id}`)
 
     const watchlistAction = (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => selectedOrganization && runAction(`${action}-watchlist`, async () => {
-        requireManage()
+        requireEdit()
         await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/watchlists/${encodeURIComponent(item.id)}/actions`, {
             method: 'POST',
             body: JSON.stringify({
@@ -1176,7 +1180,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
     }, `watchlist-${item.id}`)
 
     const deleteWatchlist = (item: WatchlistItem) => selectedOrganization && runAction('delete-watchlist', async () => {
-        requireManage()
+        requireEdit()
         await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/watchlists/${encodeURIComponent(item.id)}`, {
             method: 'DELETE',
             body: JSON.stringify({
@@ -1201,7 +1205,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
     }, 'watchlists-cleanup')
 
     const testSavedDestination = (destination: WebhookDestination) => selectedOrganization && runAction('test-destination', async () => {
-        requireManage()
+        requireEdit()
         const result = await requestJson<DeliveryResult>(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/webhooks/test`, {
             method: 'POST',
             body: JSON.stringify({
@@ -1217,7 +1221,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
     }, `destination-${destination.id}`)
 
     const replayDelivery = (delivery: DeliveryRow) => selectedOrganization && runAction('replay-delivery', async () => {
-        requireManage()
+        requireEdit()
         if (!canReplayDelivery(delivery, bundle.webhooks)) throw new Error('Delivery replay needs a destination or saved watchlist route.')
         const result = await requestJson<DeliveryResult>('/api/dwm/webhooks/deliver', {
             method: 'POST',
@@ -1231,7 +1235,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
     }, `delivery-${delivery.id}`, activitySubjectForDelivery(delivery, bundle.webhooks))
 
     const createSavedDestination = () => selectedOrganization && runAction('create-destination', async () => {
-        requireManage()
+        requireEdit()
         const url = destinationCreateDraft.url.trim()
         if (!validDestinationUrl(url)) throw new Error('Enter a valid HTTPS destination URL.')
         const kind = destinationCreateDraft.kind
@@ -1254,7 +1258,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
     }, 'destination-create')
 
     const updateSavedDestination = (destination: WebhookDestination, draft: DestinationEditDraft) => selectedOrganization && runAction('update-destination', async () => {
-        requireManage()
+        requireEdit()
         const url = draft.url.trim()
         if (url && !validDestinationUrl(url)) throw new Error('Enter a valid HTTPS destination URL.')
         if (!destinationEditChanged(destination, draft)) return 'No destination changes.'
@@ -1281,7 +1285,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
     }, `destination-${destination.id}`)
 
     const refreshOrganizationAlerts = () => selectedOrganization && runAction('refresh-alerts', async () => {
-        requireManage()
+        requireEdit()
         const payload = await requestJson<{ savedAlertCount?: number, alertIds?: string[] }>('/api/dwm/alerts/rebuild', {
             method: 'POST',
             body: JSON.stringify({
@@ -1296,7 +1300,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
     }, 'watchlist-refresh')
 
     const requestFreshCollection = () => selectedOrganization && runAction('fresh-collection', async () => {
-        requireManage()
+        requireEdit()
         const organizationId = selectedOrganization.id
         const existingKey = collectionRequestKeyRef.current
         const idempotencyKey = existingKey?.organizationId === organizationId
@@ -1324,7 +1328,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
     }, 'collection-status')
 
     const rotateDestinationSigningSecret = (destination: WebhookDestination) => selectedOrganization && runAction('rotate-destination-secret', async () => {
-        requireManage()
+        requireEdit()
         const payload = await requestJson<{ destination?: WebhookDestination }>(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/webhooks/${encodeURIComponent(destination.id)}`, {
             method: 'PATCH',
             body: JSON.stringify({ rotateSigningSecret: true, requestId: `org-ui-${Date.now()}` }),
@@ -1334,7 +1338,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
     }, `destination-${destination.id}`)
 
     const deleteSavedDestination = (destination: WebhookDestination) => selectedOrganization && runAction('delete-destination', async () => {
-        requireManage()
+        requireEdit()
         await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/webhooks/${encodeURIComponent(destination.id)}`, {
             method: 'DELETE',
         })
@@ -1477,7 +1481,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
                                         >
                                             <span className='min-w-0 wrap-break-word text-sm font-semibold'>
                                                 {organizationDisplayName(organization)}{' '}
-                                                <RoleBadge role={organization.role || 'member'} compact />
+                                                <RoleBadge role={organization.role || 'reader'} compact />
                                             </span>
                                             <span className='truncate text-xs text-ui-muted dark:text-ui-muted'>{organizationWorkspaceMeta(organization)}</span>
                                         </button>
@@ -1501,7 +1505,8 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
                                         watchlists={bundle.watchlists}
                                         activeTerms={bundle.alertTerms}
                                         members={bundle.members}
-                                        canManage={canManage}
+                                        canManage={canEdit}
+                                        canCleanup={canManage}
                                         busy={busy}
                                         draft={watchlistDraft}
                                         setDraft={setWatchlistDraft}
@@ -1525,7 +1530,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
                                         selectedSubject={selectedActivitySubject}
                                         onSelectSubject={selectActivitySubject}
                                     />}
-                                    {activePage === 'destinations' && <DestinationPanel destinations={bundle.webhooks} deliveries={bundle.deliveries} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} createDraft={destinationCreateDraft} setCreateDraft={setDestinationCreateDraft} editing={editingDestinations} setEditing={setEditingDestinations} onSelectSubject={selectActivitySubject} onCreate={() => void createSavedDestination()} onTest={destination => void testSavedDestination(destination)} onUpdate={(destination, draft) => void updateSavedDestination(destination, draft)} onRotateSigningSecret={destination => void rotateDestinationSigningSecret(destination)} onDelete={destination => void deleteSavedDestination(destination)} signingSecret={newWebhookSigningSecret} onClearSigningSecret={() => setNewWebhookSigningSecret('')} />}
+                                    {activePage === 'destinations' && <DestinationPanel destinations={bundle.webhooks} deliveries={bundle.deliveries} canManage={canEdit} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} createDraft={destinationCreateDraft} setCreateDraft={setDestinationCreateDraft} editing={editingDestinations} setEditing={setEditingDestinations} onSelectSubject={selectActivitySubject} onCreate={() => void createSavedDestination()} onTest={destination => void testSavedDestination(destination)} onUpdate={(destination, draft) => void updateSavedDestination(destination, draft)} onRotateSigningSecret={destination => void rotateDestinationSigningSecret(destination)} onDelete={destination => void deleteSavedDestination(destination)} signingSecret={newWebhookSigningSecret} onClearSigningSecret={() => setNewWebhookSigningSecret('')} />}
                                     {activePage === 'api-keys' && (canManage ? <MillApiKeyPanel apiKeys={bundle.apiKeys} secret={newApiKeySecret} canManage={canManage} busy={busy} rowMessage={rowMessages['mill-api-key']} onCreate={() => void createMillApiKey()} onRevoke={key => void revokeMillApiKey(key)} onClearSecret={() => setNewApiKeySecret('')} /> : <p className='rounded-lg border border-ui-border bg-ui-panel p-4 text-sm text-ui-muted'>Only this organization’s owners and admins can manage API keys.</p>)}
                                     {activePage === 'privacy' && <PrivacyLifecyclePanel organization={selectedOrganization} privacy={bundle.privacy} retentionDays={Number(bundle.settings?.retentionDays || 365)} canManage={canManage} busy={busy} rowMessage={rowMessages.privacy} onRun={() => void runRetention()} onExport={() => void exportPrivacyData()} onDelete={(confirmation, currentPassword) => void requestPrivacyDeletion(confirmation, currentPassword)} />}
                                     {activePage === 'delivery' && <DeliveryHistoryPanel
@@ -1533,7 +1538,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
                                         deliveries={bundle.deliveries}
                                         destinations={bundle.webhooks}
                                         selectedSubject={selectedActivitySubject}
-                                        canManage={canManage}
+                                        canManage={canEdit}
                                         busy={busy}
                                         rowMessages={rowMessages}
                                         onReplay={delivery => void replayDelivery(delivery)}
@@ -1656,7 +1661,7 @@ function EmptyWorkspacePreview() {
 
 function WorkspaceSummary({ organization, activeWatchlists, pausedWatchlists, archivedWatchlists, memberCount, inviteCount, webhookCount }: { organization: OrganizationSummary, activeWatchlists: number, pausedWatchlists: number, archivedWatchlists: number, memberCount: number, inviteCount: number, webhookCount: number }) {
     const rows = [
-        { id: 'role', icon: <ShieldCheck className='h-4 w-4' />, label: 'Role', value: organization.role || 'member', detail: organization.status || 'active' },
+        { id: 'role', icon: <ShieldCheck className='h-4 w-4' />, label: 'Role', value: organizationRoleLabel(organization.role || 'reader'), detail: organization.status || 'active' },
         { id: 'members', icon: <Users className='h-4 w-4' />, label: 'Members', value: String(memberCount ?? organization.memberCount ?? organization.activeMemberCount ?? 0), detail: `${inviteCount ?? organization.pendingInviteCount ?? 0} pending` },
         { id: 'watchlists', icon: <BellRing className='h-4 w-4' />, label: 'Watchlists', value: String(activeWatchlists ?? organization.sharedWatchlistCount ?? 0), detail: `${pausedWatchlists} paused · ${archivedWatchlists} archived` },
         { id: 'destinations', icon: <Webhook className='h-4 w-4' />, label: 'Destinations', value: String(webhookCount), detail: 'Workspace routes' },
@@ -2126,7 +2131,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                             {canMutateMember ? (
                                                 <div className='grid grid-cols-[minmax(0,1fr)_auto] gap-2'>
                                                     <select className={compactSelectClass} value={selectedRole} disabled={Boolean(busy)} onChange={event => setPendingRoles(current => ({ ...current, [member.userId]: event.target.value as OrganizationRole }))}>
-                                                        {roleOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                                                        {roleOptions.map(option => <option key={option} value={option}>{organizationRoleLabel(option)}</option>)}
                                                     </select>
                                                     <button
                                                         type='button'
@@ -2193,7 +2198,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                                 {canMutateMember ? (
                                                     <div className='flex flex-wrap items-center gap-2' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
                                                         <select className={compactSelectClass} value={selectedRole} disabled={Boolean(busy)} onChange={event => setPendingRoles(current => ({ ...current, [member.userId]: event.target.value as OrganizationRole }))}>
-                                                            {roleOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                                                            {roleOptions.map(option => <option key={option} value={option}>{organizationRoleLabel(option)}</option>)}
                                                         </select>
                                                         {roleChanged && (
                                                             <button
@@ -2365,8 +2370,8 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                     const draftNameDuplicate = draft ? destinationNameInUse(destinations, normalizeDestinationName(draft.name) || destinationName, destination.id) : false
                     const draftChanged = draft ? destinationEditChanged(destination, draft) : false
                     const selected = selectedSubject.type === 'destination' && selectedSubject.id === destination.id
-                    const testDisabledReason = !canManage ? 'Owner or admin required' : ''
-                    const destinationManageReason = !canManage ? 'Owner or admin required' : ''
+                    const testDisabledReason = !canManage ? 'Editor access required' : ''
+                    const destinationManageReason = !canManage ? 'Editor access required' : ''
                     const routeLabel = sanitizeOrganizationDisplayCopy(destination.endpointHint) || compactReference(destination.endpointHash, 'route') || (destination.deliveryReady ? 'Saved route' : 'Route pending')
                     return (
                         <div
@@ -2497,7 +2502,7 @@ function WebhookSigningSecret({ secret, onClear }: { secret: string, onClear: ()
     )
 }
 
-function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, draft, setDraft, suggestions, editing, setEditing, onCreate, onSave, onAction, onDelete, organization, alerts, deliveries, onCleanup, onRefreshAlerts, onRequestFreshCollection, onRefreshCollectionStatus, collectionRequest, rowMessages, draftDuplicate, selectedSubject, onSelectSubject }: { watchlists: WatchlistItem[], activeTerms: AlertTerm[], members: OrganizationMember[], canManage: boolean, busy: string, draft: { kind: WatchlistKind, value: string, notes: string }, setDraft: (next: { kind: WatchlistKind, value: string, notes: string }) => void, suggestions: WatchlistSuggestion[], editing: Record<string, { kind: WatchlistKind, value: string, notes: string }>, setEditing: (next: Record<string, { kind: WatchlistKind, value: string, notes: string }> | ((current: Record<string, { kind: WatchlistKind, value: string, notes: string }>) => Record<string, { kind: WatchlistKind, value: string, notes: string }>)) => void, onCreate: () => void, onSave: (item: WatchlistItem) => void, onAction: (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => void, onDelete: (item: WatchlistItem) => void, organization: OrganizationSummary, alerts: ScopedAlert[], deliveries: DeliveryRow[], onCleanup: () => void, onRefreshAlerts: () => void, onRequestFreshCollection: () => void, onRefreshCollectionStatus: () => void, collectionRequest: CollectionRequest | null, rowMessages: Record<string, RowMessage>, draftDuplicate: boolean, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void }) {
+function WatchlistPanel({ watchlists, activeTerms, members, canManage, canCleanup, busy, draft, setDraft, suggestions, editing, setEditing, onCreate, onSave, onAction, onDelete, organization, alerts, deliveries, onCleanup, onRefreshAlerts, onRequestFreshCollection, onRefreshCollectionStatus, collectionRequest, rowMessages, draftDuplicate, selectedSubject, onSelectSubject }: { watchlists: WatchlistItem[], activeTerms: AlertTerm[], members: OrganizationMember[], canManage: boolean, canCleanup: boolean, busy: string, draft: { kind: WatchlistKind, value: string, notes: string }, setDraft: (next: { kind: WatchlistKind, value: string, notes: string }) => void, suggestions: WatchlistSuggestion[], editing: Record<string, { kind: WatchlistKind, value: string, notes: string }>, setEditing: (next: Record<string, { kind: WatchlistKind, value: string, notes: string }> | ((current: Record<string, { kind: WatchlistKind, value: string, notes: string }>) => Record<string, { kind: WatchlistKind, value: string, notes: string }>)) => void, onCreate: () => void, onSave: (item: WatchlistItem) => void, onAction: (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => void, onDelete: (item: WatchlistItem) => void, organization: OrganizationSummary, alerts: ScopedAlert[], deliveries: DeliveryRow[], onCleanup: () => void, onRefreshAlerts: () => void, onRequestFreshCollection: () => void, onRefreshCollectionStatus: () => void, collectionRequest: CollectionRequest | null, rowMessages: Record<string, RowMessage>, draftDuplicate: boolean, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void }) {
     const [watchlistQuery, setWatchlistQuery] = useState('')
     const [watchlistStatusFilter, setWatchlistStatusFilter] = useState('all')
     const activeCount = watchlists.filter(item => item.status.toLowerCase() === 'active').length
@@ -2525,7 +2530,7 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
                         <RefreshCw className='h-4 w-4' />
                         Refresh alerts
                     </button>
-                    <button type='button' className={secondaryButtonClass} disabled={!canManage || archivedCount === 0 || Boolean(busy)} onClick={onCleanup}>
+                    <button type='button' className={secondaryButtonClass} disabled={!canCleanup || archivedCount === 0 || Boolean(busy)} onClick={onCleanup}>
                         <Archive className='h-4 w-4' />
                         Cleanup archived
                     </button>
@@ -2740,7 +2745,7 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
                                                     {status !== 'archived' && <ConfirmActionButton ariaLabel='Archive watchlist term' disabled={Boolean(busy)} onConfirm={() => onDelete(item)} icon={<Trash2 className='h-4 w-4' />} />}
                                                 </>
                                             ) : (
-                                                <span className='inline-flex min-h-10 items-center rounded-lg border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-raised dark:text-ui-muted' aria-disabled='true' title='Owner or admin required' aria-label='Watchlist actions: Owner or admin required'>
+                                                <span className='inline-flex min-h-10 items-center rounded-lg border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-raised dark:text-ui-muted' aria-disabled='true' title='Editor access required' aria-label='Watchlist actions: Editor access required'>
                                                     Read-only
                                                 </span>
                                             )}
@@ -3342,14 +3347,18 @@ function SelectField({ label, value, options, onChange, disabled }: { label: str
         <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
             {label}
             <select value={value} disabled={disabled} onChange={event => onChange(event.target.value)} className={inputClass}>
-                {options.map(option => <option key={option} value={option}>{option.replaceAll('_', ' ')}</option>)}
+                {options.map(option => <option key={option} value={option}>{['Role', 'Invite role'].includes(label) ? organizationRoleLabel(option) : option.replaceAll('_', ' ')}</option>)}
             </select>
         </label>
     )
 }
 
+function organizationRoleLabel(role: string) {
+    return sentenceCase(role === 'member' || role === 'viewer' ? 'reader' : role)
+}
+
 function RoleBadge({ role, compact = false }: { role: OrganizationRole, compact?: boolean }) {
-    return <span className={`shrink-0 rounded-md bg-ui-primary/10 font-semibold text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary ${compact ? 'inline-flex whitespace-nowrap px-1.5 text-[10px] leading-4 align-middle' : 'px-2 py-1 text-xs'}`}>{role}</span>
+    return <span className={`shrink-0 rounded-md bg-ui-primary/10 font-semibold text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary ${compact ? 'inline-flex whitespace-nowrap px-1.5 text-[10px] leading-4 align-middle' : 'px-2 py-1 text-xs'}`}>{organizationRoleLabel(role)}</span>
 }
 
 function StatusPill({ status }: { status: string }) {
@@ -3930,7 +3939,7 @@ function selectedContextRows(subject: ActivitySubject, organization: Organizatio
         return compactMetadata([
             ['Org', organizationDisplayId(organization)],
             ['Workspace', sanitizeOrganizationDisplayCopy(organization.status || organization.slug || organization.id) || 'Active workspace'],
-            ['Role', organization.role || 'member'],
+            ['Role', organization.role || 'reader'],
             ['Members', String(bundle.members.length)],
             ['Closed access', closedMemberCount ? String(closedMemberCount) : undefined],
             ['Pending invites', String(bundle.invites.filter(invite => invite.status.toLowerCase() === 'pending').length)],
@@ -4248,7 +4257,7 @@ function memberStatusCounts(members: OrganizationMember[]) {
 }
 
 function memberRoleStatusCounts(members: OrganizationMember[]) {
-    return ['owner', 'admin', 'member', 'viewer', 'support'].map(role => ({
+    return ['owner', 'admin', 'editor', 'reader'].map(role => ({
         role,
         label: sentenceCase(role),
         count: members.filter(member => member.role.toLowerCase() === role).length,

@@ -1,3 +1,4 @@
+import { roleCanEditOrganization } from '#utils/organizationRoles.ts'
 import { redactLogValue } from '#utils/logs/redact.ts'
 import { securityRules, matchSecurityRules } from '#utils/mill/securityRules.ts'
 import { randomUUID } from 'node:crypto'
@@ -178,7 +179,7 @@ export async function getMillRules(req: FastifyRequest, res: FastifyReply) {
 export async function postMillRule(req: FastifyRequest, res: FastifyReply) {
     const access = await organizationAccess(req, res)
     if (!access) return
-    if (!canManageMillRules(access.role)) return res.status(403).send({ error: 'Owner or admin access is required to manage Mill rules.' })
+    if (!canManageMillRules(access.role)) return res.status(403).send({ error: 'Editor access is required to manage Mill rules.' })
     const body = req.body as { name?: unknown, explanation?: unknown, severity?: unknown, conditions?: unknown } | undefined
     const name = typeof body?.name === 'string' ? body.name.trim() : ''
     const explanation = typeof body?.explanation === 'string' ? body.explanation.trim() : ''
@@ -195,7 +196,7 @@ export async function postMillRule(req: FastifyRequest, res: FastifyReply) {
 export async function postMillRulePack(req: FastifyRequest, res: FastifyReply) {
     const access = await organizationAccess(req, res)
     if (!access) return
-    if (!canManageMillRules(access.role)) return res.status(403).send({ error: 'Owner or admin access is required to import Mill rules.' })
+    if (!canManageMillRules(access.role)) return res.status(403).send({ error: 'Editor access is required to import Mill rules.' })
     const body = req.body as { packName?: unknown, packVersion?: unknown, sourceReference?: unknown, rules?: unknown } | undefined
     const packName = typeof body?.packName === 'string' ? body.packName.trim() : ''
     const packVersion = typeof body?.packVersion === 'string' ? body.packVersion.trim() : ''
@@ -228,7 +229,7 @@ export async function postMillRulePack(req: FastifyRequest, res: FastifyReply) {
 export async function postMillSigmaPack(req: FastifyRequest, res: FastifyReply) {
     const access = await organizationAccess(req, res)
     if (!access) return
-    if (!canManageMillRules(access.role)) return res.status(403).send({ error: 'Owner or admin access is required to import Sigma rules.' })
+    if (!canManageMillRules(access.role)) return res.status(403).send({ error: 'Editor access is required to import Sigma rules.' })
     const body = req.body as { packName?: unknown, packVersion?: unknown, sourceReference?: unknown, yaml?: unknown } | undefined
     const packName = typeof body?.packName === 'string' ? body.packName.trim() : ''
     const packVersion = typeof body?.packVersion === 'string' ? body.packVersion.trim() : ''
@@ -255,7 +256,7 @@ export async function postMillSigmaPack(req: FastifyRequest, res: FastifyReply) 
 export async function postMillRuleAction(req: FastifyRequest<{ Params: { id: string }, Querystring: { organizationId?: string }, Body: { action?: unknown } }>, res: FastifyReply) {
     const access = await organizationAccess(req, res)
     if (!access) return
-    if (!canManageMillRules(access.role)) return res.status(403).send({ error: 'Owner or admin access is required to manage Mill rules.' })
+    if (!canManageMillRules(access.role)) return res.status(403).send({ error: 'Editor access is required to manage Mill rules.' })
     const action = req.body?.action === 'enable' || req.body?.action === 'disable' ? req.body.action : null
     if (!action) return res.status(400).send({ error: 'Action must be enable or disable.' })
     const rule = (await loadConfiguredMillRules(access.organizationId)).find(rule => millRuleSlug(rule.id) === millRuleSlug(req.params.id) || rule.recordId === req.params.id)
@@ -300,7 +301,7 @@ export async function getMillRule(req: FastifyRequest<{ Params: { id: string }, 
 export async function putMillRule(req: FastifyRequest<{ Params: { id: string } }>, res: FastifyReply) {
     const access = await organizationAccess(req, res)
     if (!access) return
-    if (!canManageMillRules(access.role)) return res.status(403).send({ error: 'Owner or admin access is required to manage rules.' })
+    if (!canManageMillRules(access.role)) return res.status(403).send({ error: 'Editor access is required to manage rules.' })
     const rule = (await loadConfiguredMillRules(access.organizationId)).find(rule => millRuleSlug(rule.id) === millRuleSlug(req.params.id))
     if (!rule) return res.status(404).send({ error: 'Rule not found.' })
     const body = (req.body || {}) as Record<string, unknown>
@@ -579,7 +580,7 @@ export function validateMillEventFields(events: MillEvent[]) {
 
 function object(value: unknown): MillEvent { return value && typeof value === 'object' && !Array.isArray(value) ? value as MillEvent : {} }
 function stringValue(value: unknown): string | null { return typeof value === 'string' && value.trim() ? value.trim() : null }
-function canManageMillRules(role: string) { return role === 'owner' || role === 'admin' }
+function canManageMillRules(role: string) { return roleCanEditOrganization(role) }
 function deviceIdFor(event: MillEvent) { return stringValue(object(event.device).id || event.device_id) }
 export function normalizeMillConditions(value: unknown): { conditions: MillCondition[], error?: string } {
     if (!Array.isArray(value) || value.length < 1 || value.length > 8) return { conditions: [], error: 'Conditions must contain 1-8 items.' }

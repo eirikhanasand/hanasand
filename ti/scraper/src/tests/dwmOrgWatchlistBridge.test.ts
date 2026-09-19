@@ -137,7 +137,7 @@ describe("DWM org watchlist bridge", () => {
         downstreamAuthorization: {
           schemaVersion: "organization.downstream_authorization_export.v1",
           organizationLifecycleState: "active",
-          visibility: { allowed: true, allowedRoles: ["owner", "admin", "analyst", "member", "viewer"] },
+          visibility: { allowed: true, allowedRoles: ["owner", "admin", "editor", "reader", "analyst", "member", "viewer"] },
           downstream: { alertGeneration: { canExportActiveTerms: true, blockerCodes: [] } }
         },
         activeTerms: [{
@@ -695,20 +695,20 @@ describe("DWM org watchlist bridge", () => {
       visibilityDecision: {
         allowed: true,
         alertVisibilityPolicy: "members",
-        allowedRoles: ["owner", "admin", "analyst", "member", "viewer"]
+        allowedRoles: ["owner", "admin", "editor", "reader", "analyst", "member", "viewer"]
       },
       member: {
         userId: "member-org-bridge",
         role: "member",
         status: "active",
-        readOnly: false
+        readOnly: true
       },
-      allowedActions: ["acknowledge_alert"],
+      allowedActions: [],
       actionGates: {
-        acknowledge_alert: { allowed: true },
-        assign_case: { allowed: false, denialReason: "role_not_allowed" },
-        replay_alert: { allowed: false, denialReason: "role_not_allowed" },
-        deliver_webhook: { allowed: false, denialReason: "role_not_allowed" }
+        acknowledge_alert: { allowed: false, denialReason: "read_only_member" },
+        assign_case: { allowed: false, denialReason: "read_only_member" },
+        replay_alert: { allowed: false, denialReason: "read_only_member" },
+        deliver_webhook: { allowed: false, denialReason: "read_only_member" }
       },
       counts: {
         visibleAlertCount: 3,
@@ -752,9 +752,9 @@ describe("DWM org watchlist bridge", () => {
       organizationId,
       tenantId: organizationId,
       member: { userId: "member-org-bridge", role: "member", status: "active" },
-      allowedActions: ["acknowledge_alert"],
+      allowedActions: [],
       actionGates: {
-        assign_case: { allowed: false, denialReason: "role_not_allowed" }
+        assign_case: { allowed: false, denialReason: "read_only_member" }
       },
       counts: {
         visibleAlertCount: 1,

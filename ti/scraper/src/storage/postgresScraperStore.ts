@@ -245,7 +245,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       }
       for (const member of members) super.saveOrganizationMember({
         id: this.listOrganizationMembers().find(row => row.organizationId === organizationId && row.userId === member.user_id)?.id ?? `account:${organizationId}:${member.user_id}`, organizationId, userId: member.user_id,
-        role: member.role === 'member' ? 'analyst' : member.role, status: member.status,
+        role: ['member', 'viewer'].includes(member.role) ? 'reader' : member.role, status: member.status,
         userActive: member.user_active, createdAt: String(member.created_at), updatedAt: String(member.created_at)
       });
     });

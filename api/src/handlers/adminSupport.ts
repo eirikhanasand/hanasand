@@ -5762,7 +5762,7 @@ async function activeOwnerCount(organizationId: string) {
 
 function supportRoleRecoveryPermissionError(currentRole: OrganizationRole, newRole: OrganizationRole, ownerCount: number) {
     if (newRole === 'owner') return 'Support role recovery cannot grant organization owner.'
-    if (!['owner', 'admin', 'member', 'viewer'].includes(currentRole)) return 'Unsupported current member role.'
+    if (!['owner', 'admin', 'editor', 'reader', 'member', 'viewer'].includes(currentRole)) return 'Unsupported current member role.'
     if (currentRole === 'owner' && ownerCount <= 1) return 'Support role recovery cannot demote the last active owner.'
     return ''
 }

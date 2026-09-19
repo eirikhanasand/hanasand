@@ -1,3 +1,4 @@
+import ensureOrganizationRolesSchema from './organizationRolesSchema.ts'
 import ensureRoleSchema from './roleSchema.ts'
 import ensureLogDimensionsSchema from './logDimensionsSchema.ts'
 import ensureLogProcessQueueSchema from './logProcessQueueSchema.ts'
@@ -897,7 +898,7 @@ export default async function ensureSchema() {
         CREATE TABLE IF NOT EXISTS organization_members (
             organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
             user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'admin', 'member', 'viewer')),
+            role TEXT NOT NULL DEFAULT 'reader' CHECK (role IN ('owner', 'admin', 'editor', 'reader', 'member', 'viewer')),
             status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'removed')),
             invited_by TEXT REFERENCES users(id) ON DELETE SET NULL,
             joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -910,7 +911,7 @@ export default async function ensureSchema() {
             id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
             organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
             email TEXT NOT NULL,
-            role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('admin', 'member', 'viewer')),
+            role TEXT NOT NULL DEFAULT 'reader' CHECK (role IN ('admin', 'editor', 'reader', 'member', 'viewer')),
             invited_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'revoked')),
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -920,12 +921,9 @@ export default async function ensureSchema() {
             UNIQUE (organization_id, email)
         )
     `)
-    await run('ALTER TABLE organization_members DROP CONSTRAINT IF EXISTS organization_members_role_check')
-    await run('ALTER TABLE organization_members ADD CONSTRAINT organization_members_role_check CHECK (role IN (\'owner\', \'admin\', \'member\', \'viewer\'))')
+    await ensureOrganizationRolesSchema()
     await run('ALTER TABLE organization_members ADD COLUMN IF NOT EXISTS removed_at TIMESTAMPTZ')
     await run('UPDATE organization_members SET removed_at = NOW() WHERE status = \'removed\' AND removed_at IS NULL')
-    await run('ALTER TABLE organization_invites DROP CONSTRAINT IF EXISTS organization_invites_role_check')
-    await run('ALTER TABLE organization_invites ADD CONSTRAINT organization_invites_role_check CHECK (role IN (\'admin\', \'member\', \'viewer\'))')
     await run('ALTER TABLE organization_invites ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL \'14 days\')')
     await run('ALTER TABLE organization_invites ADD COLUMN IF NOT EXISTS accepted_by TEXT REFERENCES users(id) ON DELETE SET NULL')
     await run('ALTER TABLE organization_invites ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ')

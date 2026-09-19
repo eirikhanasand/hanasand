@@ -28,6 +28,7 @@ export default async function postVmFailover(req: FastifyRequest, res: FastifyRe
             }
 
             const vm = currentResult.rows[0] as {
+                name: string
                 owner: string
                 created_by: string
                 access_users: string[] | null
@@ -36,7 +37,7 @@ export default async function postVmFailover(req: FastifyRequest, res: FastifyRe
                 deleted_at: string | null
                 failover_host: string | null
             }
-            const canManage = isAdmin || await hasVmAccess(vm.name, userId)
+            const canManage = isAdmin || await hasVmAccess(vm.name, userId, true)
             if (!canManage) {
                 return res.status(403).send({ error: 'You do not have access to this VM.' })
             }

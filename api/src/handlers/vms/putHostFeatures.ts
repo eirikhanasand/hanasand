@@ -52,7 +52,7 @@ export default async function putVmHostFeatures(req: FastifyRequest, res: Fastif
                 deleted_at: string | null
                 failover_host: string | null
             }
-            const canManage = isAdmin || await hasVmAccess(vm.name, userId)
+            const canManage = isAdmin || await hasVmAccess(vm.name, userId, true)
             if (!canManage) {
                 return res.status(403).send({ error: 'You do not have access to this VM.' })
             }

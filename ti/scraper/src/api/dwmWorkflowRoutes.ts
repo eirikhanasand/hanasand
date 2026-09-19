@@ -1,3 +1,4 @@
+import { canEditOrganization } from "./organizationRoles.ts";
 import { paginationCursor, legacyOffset } from "./pagination.ts";
 import { captureEvidenceTiming, classifySourceFamily, customerStateForEvidence, matchTimingForEvidence, normalizeWatchlist, withDwmAlertMatchTiming, type DwmMatchTimingBasis, type DwmSourceFamily, type DwmWatchTerm } from "../product/dwmProduct.ts";
 import { buildDwmAlertCustomerProofHandoffRow, buildDwmAlertDownstreamHandoff, buildDwmAlertGenerationReadiness, buildDwmAlertRetentionAudit, buildDwmAlertWorkflowExecutionReadiness, buildDwmPersistedDeliveryReadinessContext, rebuildDwmRuntimeAlerts, type RuntimeDwmWatchlist } from "../storage/dwmAlertRepository.ts";
@@ -1150,9 +1151,9 @@ export function authorizeDwmWorkflowAccess(input: { options: ApiServerOptions; s
     return { member, readOnly: true, visibilityDecision, error: dwmVisibilityError(visibilityDecision, "DWM alert evidence is not visible for this organization membership.") };
   }
 
-  const readOnly = member.role === "viewer";
+  const readOnly = !canEditOrganization(member.role);
   if (input.mode === "mutate" && readOnly) {
-    return { member, readOnly, visibilityDecision, error: json({ error: { code: "dwm_read_only_member", message: "Viewer members can read DWM alerts but cannot mutate workflow state, replay evidence, or deliver webhooks." }, visibilityDecision }, 403) };
+    return { member, readOnly, visibilityDecision, error: json({ error: { code: "dwm_read_only_member", message: "Readers can read DWM alerts but cannot mutate workflow state, replay evidence, or deliver webhooks." }, visibilityDecision }, 403) };
   }
   return { member, readOnly, visibilityDecision };
 }
@@ -1232,12 +1233,12 @@ function organizationAlertVisibilityPolicy(organization: unknown): DwmVisibility
 function allowedDwmVisibilityRoles(policy: DwmVisibilityPolicy): string[] {
   if (policy === "owners") return ["owner"];
   if (policy === "admins") return ["owner", "admin"];
-  return ["owner", "admin", "analyst", "member", "viewer"];
+  return ["owner", "admin", "editor", "reader", "analyst", "member", "viewer"];
 }
 
 function normalizeVisibilityRole(role: unknown): string {
   const value = String(role ?? "").trim().toLowerCase();
-  return value === "member" ? "analyst" : value;
+  return value === "member" || value === "viewer" ? "reader" : value;
 }
 
 function findDwmAlert(options: ApiServerOptions, alertId: string | undefined) {
@@ -1365,11 +1366,11 @@ function sourceMatchedOrgRuntime(input: {
       tenantId: input.tenantId,
       ownerOrganizationId: input.organizationId,
       visibilityPolicy: "members",
-      allowedViewerRoles: ["owner", "admin", "analyst", "member", "viewer"],
+      allowedViewerRoles: ["owner", "admin", "editor", "reader", "analyst", "member", "viewer"],
       canGenerateAlerts: true,
       downstreamAuthorization: {
         organizationLifecycleState: "active",
-        visibility: { allowed: true, allowedRoles: ["owner", "admin", "analyst", "member", "viewer"] },
+        visibility: { allowed: true, allowedRoles: ["owner", "admin", "editor", "reader", "analyst", "member", "viewer"] },
         downstream: { alertGeneration: { canExportActiveTerms: true, blockerCodes: [] } }
       },
       activeTerms: input.terms.map((term) => ({
@@ -2248,11 +2249,11 @@ function buildDwmAlertQueueVisibility(input: {
     } : null,
     allowedActions: dwmAlertQueueAllowedActions(role, input.access.readOnly),
     actionGates: {
-      acknowledge_alert: dwmAlertQueueActionGate(role, input.access.readOnly, ["owner", "admin", "analyst", "member"]),
-      assign_case: dwmAlertQueueActionGate(role, input.access.readOnly, ["owner", "admin", "analyst"]),
-      link_case: dwmAlertQueueActionGate(role, input.access.readOnly, ["owner", "admin", "analyst"]),
-      replay_alert: dwmAlertQueueActionGate(role, input.access.readOnly, ["owner", "admin", "analyst"]),
-      deliver_webhook: dwmAlertQueueActionGate(role, input.access.readOnly, ["owner", "admin", "analyst"])
+      acknowledge_alert: dwmAlertQueueActionGate(role, input.access.readOnly, ["owner", "admin", "editor", "analyst"]),
+      assign_case: dwmAlertQueueActionGate(role, input.access.readOnly, ["owner", "admin", "editor", "analyst"]),
+      link_case: dwmAlertQueueActionGate(role, input.access.readOnly, ["owner", "admin", "editor", "analyst"]),
+      replay_alert: dwmAlertQueueActionGate(role, input.access.readOnly, ["owner", "admin", "editor", "analyst"]),
+      deliver_webhook: dwmAlertQueueActionGate(role, input.access.readOnly, ["owner", "admin", "editor", "analyst"])
     },
     counts: {
       visibleAlertCount: input.alerts.length,
@@ -2468,8 +2469,8 @@ function buildDwmAlertDetailOrgWorkflowBridge(alert: any, options: ApiServerOpti
 
 function dwmAlertQueueAllowedActions(role: string, readOnly: boolean): string[] {
   if (readOnly || role === "viewer" || role === "support" || role === "nonmember") return [];
-  if (role === "owner" || role === "admin" || role === "analyst") return ["acknowledge_alert", "assign_case", "link_case", "replay_alert", "deliver_webhook"];
-  if (role === "member") return ["acknowledge_alert"];
+  if (canEditOrganization(role)) return ["acknowledge_alert", "assign_case", "link_case", "replay_alert", "deliver_webhook"];
+
   return [];
 }
 

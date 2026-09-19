@@ -31,13 +31,13 @@ afterAll(async () => { await app.close(); await db.end() })
 test('personal automation persistence, owner and organization isolation, privileged actions and revoked scheduled access', async () => {
     await query(`DROP SCHEMA public CASCADE; CREATE SCHEMA public;
         CREATE TABLE organizations(id text PRIMARY KEY,status text);
-        CREATE TABLE organization_members(organization_id text,user_id text,status text);
+        CREATE TABLE organization_members(organization_id text,user_id text,status text,role text DEFAULT 'editor');
         CREATE TABLE user_roles(user_id text,role_id text);
         CREATE TABLE agent_automations(id text PRIMARY KEY,owner_id text,name text,prompt text,target_url text,monitoring_type text,follow_redirects boolean,user_agent text,expected_down boolean,upside_down boolean,timeout_seconds int,retry_count int,schedule_kind text,interval_minutes int,run_at timestamptz,status text,action_type text,organization_id text,timezone text,model_name text,notify_on text,notify_warnings boolean,next_run_at timestamptz,notification_destinations text[],json_rule jsonb,consecutive_failures int DEFAULT 0,paused_reason text,last_status text,last_run_at timestamptz,last_error text,last_completed_at timestamptz,last_result text,run_count int DEFAULT 0,certificate_status text,certificate_subject text,certificate_issuer text,certificate_expires_at timestamptz,created_at timestamptz DEFAULT NOW(),updated_at timestamptz DEFAULT NOW());
         CREATE TABLE agent_automation_runs(id text,automation_id text,owner_id text,status text,warning boolean,started_at timestamptz,result text,error text,provider text,model text,completed_at timestamptz,duration_ms int,artifacts jsonb);
         CREATE TABLE monitoring_issues(id bigint,automation_id text,last_seen_at timestamptz);
         INSERT INTO organizations VALUES ('org-a','active'),('org-b','active');
-        INSERT INTO organization_members VALUES ('org-a','alice','active'),('org-b','bob','active');`)
+        INSERT INTO organization_members(organization_id,user_id,status) VALUES ('org-a','alice','active'),('org-b','bob','active');`)
     const payload = { name: 'Private reminder', prompt: 'Renew certificate', actionType: 'echo', scheduleKind: 'interval', intervalMinutes: 10, notifyOn: 'never' }
     expect((await app.inject('/automations')).json()).toEqual({ canManageSystem: false, automations: [] })
     const created = await app.inject({ method: 'POST', url: '/automations', payload })
