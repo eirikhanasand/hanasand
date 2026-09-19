@@ -136,7 +136,6 @@ export default function NotesClient() {
                             </div>
                         </button>
                     ))}
-                    {!sortedNotes.length && <div className='rounded-md border border-dashed border-ui-border bg-ui-raised p-3 text-sm text-ui-muted'>Ready to capture the first note.</div>}
                     {Boolean(sortedNotes.length && !visibleNotes.length) && <div className='rounded-md border border-dashed border-ui-border bg-ui-raised p-3 text-sm text-ui-muted'>No notes match that search.</div>}
                 </div>
             </DashboardPanel>
@@ -190,7 +189,6 @@ export default function NotesClient() {
                                 <p className='truncate text-xs text-ui-muted'>{formatNoteDate(note.updated_at)}</p>
                             </button>
                         ))}
-                        {!sortedNotes.length && <p className='text-sm text-ui-muted'>Create the first note to start the log.</p>}
                         {Boolean(sortedNotes.length && !visibleNotes.length) && <p className='text-sm text-ui-muted'>Search has no matches.</p>}
                     </div>
                 </div>
