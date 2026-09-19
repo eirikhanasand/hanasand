@@ -316,7 +316,7 @@ function AIContainerHealth({ containers, error }: { containers: DockerContainer[
                 {containers.length ? containers.map((container) => {
                     const health = containerHealth(container)
                     return (
-                        <div key={container.id} className='rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-xs' data-ai-container-row>
+                        <div key={container.id} className='min-w-0 rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-xs' data-ai-container-row>
                             <div className='flex items-start justify-between gap-2'>
                                 <div className='min-w-0'>
                                     <p className='truncate font-semibold text-ui-text'>{container.name}</p>
