@@ -18,3 +18,8 @@ GRANT INSERT, UPDATE ON public.billing_usage TO hanasand_standby_app;
 
 -- System-administrator host update views use replicated snapshots; never write on standby.
 GRANT SELECT ON public.host_update_snapshots, public.host_update_events TO hanasand_standby_app;
+
+-- Administrator-only Logs pages read collected events, errors, processing progress and exact counters.
+GRANT SELECT ON public.service_logs, public.traffic_events, public.mill_events,
+    public.log_processing_cursors, public.log_process_queue,
+    public.mill_log_dimensions, public.mill_log_dimensions_state TO hanasand_standby_app;
