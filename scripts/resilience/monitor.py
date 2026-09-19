@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Independent recovery status and transition alerts; never promotes a database."""
 import dns
-import uuid
 import datetime
 import csv
 import socket
@@ -95,17 +94,6 @@ def transition_embed(previous, current, services, drill=False):
             'timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
 
 
-def notify(config, embed):
-    webhook = pathlib.Path(config['discordWebhookFile']).read_text().strip()
-    if not webhook.startswith('https://discord.com/api/webhooks/'):
-        raise ValueError('Invalid monitoring webhook configuration')
-    payload = json.dumps({'embeds': [embed], 'allowed_mentions': {'parse': []}}).encode()
-    req = urllib.request.Request(webhook + '?wait=true', data=payload, headers={'Content-Type': 'application/json', 'User-Agent': 'Hanasand-Resilience/1.0'}, method='POST')
-    with urllib.request.urlopen(req, timeout=10) as response:
-        body = json.loads(response.read())
-        return {'status': 'delivered', 'messageId': body.get('id'), 'at': time.time()}
-
-
 def database_status(config):
     container = config.get('databaseContainer')
     if not container:
@@ -114,15 +102,27 @@ def database_status(config):
         sql = "SELECT json_build_object('replica', pg_is_in_recovery(), 'replayLsn', pg_last_wal_replay_lsn(), 'replayAt', pg_last_xact_replay_timestamp(), 'databaseBytes', pg_database_size(current_database()), 'receiverStatus', (SELECT status FROM pg_stat_wal_receiver LIMIT 1))"
         result = subprocess.run(['docker', 'exec', container, 'psql', '-U', 'hanasand', '-d', 'hanasand', '-p', str(config.get('databasePort', 5432)), '-Atc', sql], capture_output=True, text=True, timeout=5, check=True)
         status = {'status': 'up', **json.loads(result.stdout)}
-        if config.get('primaryDatabaseContainer'):
-            try:
-                slots_sql = "SELECT coalesce(json_agg(json_build_object('slot', slot_name, 'walStatus', wal_status, 'active', active, 'lagBytes', pg_wal_lsn_diff(pg_current_wal_lsn(), replay_lsn))), '[]'::json) FROM pg_replication_slots s LEFT JOIN pg_stat_replication r ON r.pid=s.active_pid WHERE slot_name IN ('hanasand_inspur_standby','hanasand_ovh_standby')"
-                slots = subprocess.run(['docker', 'exec', config['primaryDatabaseContainer'], 'psql', '-U', 'hanasand', '-d', 'hanasand', '-Atc', slots_sql], capture_output=True, text=True, timeout=5, check=True)
-                status['slots'] = json.loads(slots.stdout)
-            except (subprocess.SubprocessError, ValueError): status['sourceStatus'] = 'unavailable'
-        return status
     except (subprocess.SubprocessError, ValueError):
-        return {'status': 'unavailable', 'reason': 'Database status could not be verified; automatic promotion is disabled.'}
+        status = {'status': 'unavailable', 'reason': 'Cannot check the replica.'}
+    # A failed standby query must not hide the primary's replication slots.
+    if config.get('primaryDatabaseContainer'):
+        try:
+            sql = "SELECT coalesce(json_agg(json_build_object('slot', slot_name, 'walStatus', wal_status, 'active', active, 'lagBytes', pg_wal_lsn_diff(pg_current_wal_lsn(), replay_lsn))), '[]'::json) FROM pg_replication_slots s LEFT JOIN pg_stat_replication r ON r.pid=s.active_pid WHERE slot_name IN ('hanasand_inspur_standby','hanasand_ovh_standby')"
+            slots = subprocess.run(['docker', 'exec', config['primaryDatabaseContainer'], 'psql', '-U', 'hanasand', '-d', 'hanasand', '-Atc', sql], capture_output=True, text=True, timeout=5, check=True)
+            status['slots'] = json.loads(slots.stdout)
+        except (subprocess.SubprocessError, ValueError):
+            status['sourceStatus'] = 'unavailable'
+    return status
+
+
+def restore_slots(source_database, previous):
+    required = set(previous)
+    for slot in source_database.get('slots', []):
+        if slot['walStatus'] == 'lost':
+            required.add(slot['slot'])
+        elif slot.get('active') and slot.get('lagBytes') is not None and slot['lagBytes'] <= 1048576:
+            required.discard(slot['slot'])
+    return sorted(required)
 
 
 def sample(config, previous):
@@ -196,11 +196,12 @@ def sample(config, previous):
     sites = {config['site']: {'compute': compute, 'database': database, 'fresh': True}}
     other = 'ovhcloud' if config['site'] == 'inspur' else 'inspur'
     sites[other] = {'compute': peer.get('compute'), 'database': peer.get('database'), 'fresh': bool(peer)}
-    backup = read_json(ROOT / 'backup-status.json', {'status': 'not_verified', 'restoreRequired': False})
-    if config['site'] == 'inspur' and peer.get('backups'): backup = peer['backups']
+    backup = read_json(ROOT / 'backups' / 'status.json', read_json(ROOT / 'backup-status.json', {'status': 'not_verified', 'restoreRequired': False}))
+    if config['site'] == 'inspur' and peer.get('backupReceipt'): backup = peer['backupReceipt']
+    receipt = dict(backup)
     backup_job = read_json(ROOT / 'backup-job-status.json', {}) if config['site'] == 'inspur' else peer.get('backupJob', {})
     if backup_job.get('status') == 'failed':
-        backup = {**backup, 'status': 'backup_failed', 'reason': 'The latest backup, isolated restore verification or off-site upload failed. The previous verified backup remains available.'}
+        backup = {**backup, 'status': 'backup_failed', 'reason': 'The latest backup failed.'}
     source_database = database if config['site'] == 'inspur' else peer.get('database', {})
     local_slot = 'hanasand_inspur_standby' if config['site']=='inspur' else 'hanasand_ovh_standby'
     prior_database = previous.get('database', {})
@@ -225,19 +226,14 @@ def sample(config, previous):
                         connection.shutdown(socket.SHUT_WR)
                         connection.recv(4096)
                 except OSError: pass
-    if 'slots' in source_database:
-        slots = {slot['slot']: slot for slot in source_database['slots']}
-        required = {name for name, slot in slots.items() if slot['walStatus'] == 'lost'}
-        for name in previous.get('backups', {}).get('restoreSlots', []):
-            slot = slots.get(name, {})
-            if not slot.get('active') or slot.get('lagBytes') is None or slot['lagBytes'] > 1048576: required.add(name)
-        if required: backup = {**backup, 'status': 'restore_required', 'restoreRequired': True, 'restoreSlots': sorted(required), 'reason': 'Required replication WAL was lost. Reseed the affected replica from a verified source before treating it as recovered.'}
+    required = restore_slots(source_database, previous.get('backups', {}).get('restoreSlots', []))
+    if required: backup = {**backup, 'status': 'restore_required', 'restoreRequired': True, 'restoreSlots': required, 'reason': 'WAL replication lost. Restore the replica from a backup.'}
     if config.get('requireBackups') and not backup.get('restoreRequired'):
 
         try:
             age = time.time() - datetime.datetime.fromisoformat(backup.get('receivedAt', '').replace('Z', '+00:00')).timestamp()
         except ValueError: age = float('inf')
-        if age > 36 * 3600: backup = {**backup, 'status': 'backup_failed', 'reason': 'No verified off-site backup has arrived within 36 hours.'}
+        if age > 36 * 3600: backup = {**backup, 'status': 'backup_failed', 'reason': 'No backup taken in 36 hours.'}
 
     return {'sampledAt': time.time(), 'updatedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'site': config['site'],
             'mode': 'read_only_recovery' if read_only else 'service_failover' if affected else 'normal',
@@ -248,7 +244,7 @@ def sample(config, previous):
             'notifications': previous.get('notifications', [])[-99:],
             'safety': {'automaticDatabasePromotion': False, 'fencingRequired': True,
                        'aiOnOvhcloud': False, 'existingOvhcloudServicesPreserved': True},
-            'backups': backup, 'backupJob': backup_job}
+            'backups': backup, 'backupReceipt': receipt, 'backupJob': backup_job}
 
 
 def public_state(state, include_host=False):
@@ -277,7 +273,7 @@ def run_monitor():
                 if dns_job is not None and dns_job.done():
                     try:
                         current['dns'], dns_events = dns_job.result()
-                        current.setdefault('pendingNotifications', []).extend(dns_events)
+                        current['events'].extend({'at': current['updatedAt'], 'service': 'dns', 'summary': event['description']} for event in dns_events)
                     except Exception as error:
                         current['dns'] = {**current['dns'], 'status': 'error', 'reason': type(error).__name__}
                     dns_job = None
@@ -293,54 +289,20 @@ def run_monitor():
                     continue
                 embed = transition_embed(old, service, current['services'], config.get('drill', False))
                 current['events'].append({'at': current['updatedAt'], 'service': service['id'], 'from': old.get('activeInstance'), 'to': service.get('activeInstance'), 'summary': embed['description']})
-                current.setdefault('pendingNotifications', []).append(embed)
             old_backup = previous.get('backups', {})
             backup = current['backups']
             failed_backup = backup.get('restoreRequired') or backup.get('status') in ('backup_failed', 'restore_required')
             if old_backup and (old_backup.get('status'), old_backup.get('restoreRequired')) != (backup.get('status'), backup.get('restoreRequired')):
                 if failed_backup or backup.get('status') == 'verified':
-                    current.setdefault('pendingNotifications', []).append({
-                        'title': ('[TEST] ' if config.get('drill') else '') + ('Database restore required' if backup.get('restoreRequired') else 'Backup verification failed' if failed_backup else 'Database backup recovery verified'),
-                        'description': backup.get('reason') or ('Operator action is required; no database will be promoted automatically.' if failed_backup else 'A separately stored backup passed verification and an isolated restore check.'),
-                        'color': 0xFF0000 if failed_backup else 0x00CC66,
-                        'fields': [{'name': 'Still affected', 'value': ', '.join(current['affected']) or 'All monitored services are back to normal.'}]})
+                    current['events'].append({'at': current['updatedAt'], 'service': 'backup', 'summary': backup.get('reason') or 'Backup completed.'})
             with LOCK:
-                # Network delivery cannot delay health sampling or overwrite a newer outbox update.
-                latest = read_json(STATE, {})
-                current['notifications'] = latest.get('notifications', [])[-99:]
-                current['notificationHealth'] = latest.get('notificationHealth', 'idle')
-                new_events = [{'id': uuid.uuid4().hex, 'embed': embed} for embed in current.get('pendingNotifications', [])]
-                current['pendingNotifications'] = latest.get('pendingNotifications', []) + new_events if config.get('notify', True) else []
+                # The API collects these observations into HA cases and owns delivery.
+                current['notificationHealth'] = 'case_monitoring'
                 atomic_json(STATE, current)
         except Exception as error:
             # Do not log webhook URLs, response bodies or credentials.
             print(f'Resilience sample failed: {type(error).__name__}', flush=True)
         time.sleep(max(1, config.get('interval', 5) - (time.monotonic() - started)))
-
-
-def run_notifications():
-    while True:
-        config = read_json(CONFIG, {})
-        with LOCK:
-            pending = read_json(STATE, {}).get('pendingNotifications', [])
-        if not pending or not config.get('notify', True):
-            time.sleep(2)
-            continue
-        event = pending[0]
-        try:
-            delivery = notify(config, event['embed'])
-            with LOCK:
-                state = read_json(STATE, {})
-                state['pendingNotifications'] = [item for item in state.get('pendingNotifications', []) if item['id'] != event['id']]
-                state.setdefault('notifications', []).append({**delivery, 'title': event['embed']['title'], 'color': event['embed']['color']})
-                state['notificationHealth'] = 'delivered'
-                atomic_json(STATE, state)
-        except (OSError, ValueError, urllib.error.URLError):
-            with LOCK:
-                state = read_json(STATE, {})
-                state['notificationHealth'] = 'delivery_retry_pending'
-                atomic_json(STATE, state)
-            time.sleep(15)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -376,5 +338,4 @@ if __name__ == '__main__':
     ROOT.mkdir(parents=True, exist_ok=True)
     STATE.parent.mkdir(parents=True, exist_ok=True)
     threading.Thread(target=run_monitor, daemon=True).start()
-    threading.Thread(target=run_notifications, daemon=True).start()
     ThreadingHTTPServer(('127.0.0.1', int(os.environ.get('RESILIENCE_PORT', '19901'))), Handler).serve_forever()

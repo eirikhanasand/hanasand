@@ -38,7 +38,12 @@ try:
     if final.exists(): raise ValueError('Backup already received')
     staging.rename(final)
     state = dict(status='verified', backup=stamp, verifiedAt=proof['verifiedAt'], restoreVerifiedAt=proof['verifiedAt'], receivedAt=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()), bytes=total, restoreRequired=False)
-    temporary=root/'backup-status.tmp';temporary.write_text(json.dumps(state));temporary.replace(root/'backup-status.json')
+    # The receiver owns backups/, while deployment owns the parent directory.
+    with tempfile.NamedTemporaryFile(mode='w', dir=backups, prefix='status-', delete=False) as temporary:
+        json.dump(state, temporary)
+        temporary.flush()
+        os.fsync(temporary.fileno())
+    os.replace(temporary.name, backups/'status.json')
     # Only this receiver's timestamped verified bundles are eligible for retention.
     bundles=sorted(path for path in backups.iterdir() if len(path.name)==16 and (path/'verification.json').is_file())
     for old in bundles[:-14]: shutil.rmtree(old)

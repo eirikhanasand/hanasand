@@ -22,6 +22,12 @@ Hanasand combines threat intelligence, AI development tools, and infrastructure 
 
 ## Monitoring issues
 
+All monitoring alerts, including replication, backups and failover, must go through HA cases. Never post individual events directly to Discord. Repeated events update the same case; only that case may notify Discord, once per destination every 24 hours. Recovery and recurrence do not reset that limit.
+
+Recovery checks run every minute using `system:resilience` and the monitor's read-only state file. Run `bun scripts/setup-resilience-monitoring.ts` in the API worker to configure them with the existing Hanasand owner, organization and Discord destination. The independent recovery monitor keeps sampling and routing traffic; the API creates cases when it can reach the writable database.
+
+Use simple, natural language in alerts, cases, UI text and documentation. Say what happened and what to do next. For example: “WAL replication lost. Restore the replica from a backup.” and “No backup taken in 36 hours.” Keep diagnostic details in the case. Do not say services have recovered while the case is still failing. See [copy style](docs/copy-style.md).
+
 Health-check failures and slow responses are grouped by monitor, target and failure reason in `monitoring_issues`. Each has a stable `HA-<number>` reference, occurrence count, first/last seen times and recovery time. Check records link to the issue; recovery closes it, and recurrence reopens the same number. Details are returned by the authenticated `GET /api/automations/:id` endpoint and shown in the monitoring dashboard.
 
 Discord receives `@everyone` and the case number, at most once per issue and destination every 24 hours. PostgreSQL reserves delivery before sending, so restarts and concurrent workers do not reset the limit. Failed or uncertain delivery is recorded in the issue and waits for the same 24-hour window before retrying. Monitoring results remain independent of notification delivery. These persisted records appear alongside other cases at `/cases`, with details at `/cases/HA-<number>`. The shared case page is independent of DWM and reports unavailable sources without hiding cases from the remaining sources. Existing `/dwm/cases` links redirect to `/cases`; old `MON-` links redirect to the corresponding `HA-` case.
