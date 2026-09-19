@@ -34,7 +34,7 @@ test('upload utility is framed as public media and blocks unsafe proxy targets',
 test('upload page renders public-media safety boundary', async ({ page }) => {
     await page.goto('/upload')
 
-    await expect(page.getByRole('heading', { name: 'Share public screenshots and previews.' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Upload files' })).toBeVisible()
     const boundary = page.locator('[data-upload-safety-boundary="true"]')
     await expect(boundary).toContainText('Use this only for public media.')
     await expect(boundary).toContainText('not a malware scanner')
