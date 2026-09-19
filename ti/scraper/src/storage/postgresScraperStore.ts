@@ -1607,6 +1607,25 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     };
   }
 
+  async queryDeliveryRecords(tenantId?: string) {
+    return (await this.sql`SELECT record FROM threat_intel.timeliness_records WHERE tenant_id IS NOT DISTINCT FROM ${tenantId ?? null}`).map(readRecord);
+  }
+
+  async queryDeliveryWorkbench(tenantId?: string) {
+    const rows = await this.sql`
+      SELECT t.record AS timeline, c.record AS capture, i.record AS incident, s.record AS source
+      FROM threat_intel.timeliness_records t
+      LEFT JOIN threat_intel.captures c ON c.id=t.capture_id AND c.tenant_id IS NOT DISTINCT FROM t.tenant_id
+      LEFT JOIN threat_intel.incidents i ON i.id=t.incident_id AND i.tenant_id IS NOT DISTINCT FROM t.tenant_id
+      LEFT JOIN threat_intel.sources s ON s.id=t.source_id AND s.tenant_id IS NOT DISTINCT FROM t.tenant_id
+      WHERE t.tenant_id IS NOT DISTINCT FROM ${tenantId ?? null}`;
+    const validations = await this.sql`SELECT record FROM threat_intel.validation_records WHERE tenant_id IS NOT DISTINCT FROM ${tenantId ?? null}`;
+    return { records: rows.map((r: any) => r.timeline), context: {
+      captures: rows.map((r: any) => r.capture).filter(Boolean), incidents: rows.map((r: any) => r.incident).filter(Boolean),
+      sources: rows.map((r: any) => r.source).filter(Boolean), validationRecords: validations.map(readRecord)
+    } };
+  }
+
   async queryPublicCoverageLatency() {
     const [row] = await this.sql`
       SELECT count(*)::int AS sample_count,
@@ -2230,7 +2249,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   override saveDwmAlert(alert: any): any {
     const captureIds = new Set(linkedAlertCaptureIds(alert));
     const linkedIncidentIds = new Set(this.listTimelinessRecords()
-      .filter((record: any) => record.incidentId === alert.incidentId || captureIds.has(record.captureId))
+      .filter((record: any) => this.timelinessMatchesAlert(record, alert, captureIds))
       .map((record: any) => record.incidentId));
     const stored = super.saveDwmAlert(alert);
     this.enqueue(`alert:${stored.id}`, () => this.persistAlert(stored));
@@ -2244,7 +2263,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const alert = this.getDwmAlert(record.alertId);
     const captureIds = new Set(alert ? linkedAlertCaptureIds(alert) : []);
     const linkedIncidentIds = new Set(this.listTimelinessRecords()
-      .filter((timeliness: any) => alert && (timeliness.incidentId === alert.incidentId || captureIds.has(timeliness.captureId)))
+      .filter((timeliness: any) => alert && (this.timelinessMatchesAlert(timeliness, alert, captureIds)))
       .map((timeliness: any) => timeliness.incidentId));
     const stored = this.saveWorkflow("dwm_webhook_delivery", record, () => super.saveDwmWebhookDelivery(record));
     for (const incidentId of linkedIncidentIds) {

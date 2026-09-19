@@ -5,7 +5,7 @@ import { isDiscordWebhookFileDestination, isDiscordWebhookUrl } from '#utils/ale
 type AccessInput = { actionType: string, targetUrl: string | null, organizationId: string | null, modelName: string | null, notificationDestinations?: string[] }
 
 export function needsSystemAutomationAccess(input: AccessInput) {
-    return input.actionType === 'mail_health_check' || input.targetUrl === 'system:metrics'
+    return input.actionType === 'mail_health_check' || ['system:metrics', 'system:ti-delivery', 'system:ti-collection', 'system:ti-enrichment'].includes(input.targetUrl || '')
         || [input.modelName, ...(input.notificationDestinations || [])].some(isDiscordWebhookFileDestination)
 }
 
@@ -29,7 +29,7 @@ export async function checkScheduledAutomationAccess(input: AccessInput, ownerId
 export function automationReadScope(alias: string, admin: string, owner: string) {
     const a = alias ? `${alias}.` : ''
     return `(${admin}::boolean OR (${a}owner_id = ${owner}
-        AND ${a}action_type <> 'mail_health_check' AND ${a}target_url IS DISTINCT FROM 'system:metrics'
+        AND ${a}action_type <> 'mail_health_check' AND ${a}target_url IS DISTINCT FROM 'system:metrics' AND ${a}target_url IS DISTINCT FROM 'system:ti-delivery' AND ${a}target_url IS DISTINCT FROM 'system:ti-collection' AND ${a}target_url IS DISTINCT FROM 'system:ti-enrichment'
         AND COALESCE(${a}model_name, '') NOT LIKE 'discord-webhook-file:%'
         AND NOT EXISTS (SELECT 1 FROM unnest(${a}notification_destinations) destination WHERE destination LIKE 'discord-webhook-file:%')
         AND (${a}organization_id IS NULL OR EXISTS (SELECT 1 FROM organizations o JOIN organization_members m ON m.organization_id = o.id
