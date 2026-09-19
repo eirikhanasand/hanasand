@@ -16,6 +16,8 @@ type DashboardProps = {
 const REFRESH_MS = 3000
 const UPTIME_DAYS = 90
 const UPTIME_WINDOW = `${UPTIME_DAYS} days`
+const dateFormatter = new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeZone: 'UTC' })
+const dateTimeFormatter = new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' })
 
 export default function StatusDashboard({ serviceStatus, mode = 'status', incidentId }: DashboardProps) {
     const [now, setNow] = useState<number | null>(null)
@@ -246,7 +248,7 @@ function relativeTime(value: string, now: number | null) {
     const minutes = Math.floor(seconds / 60)
     if (minutes < 60) return `${minutes}m ago`
 
-    return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(new Date(value)) + ' UTC'
+    return dateTimeFormatter.format(new Date(value)) + ' UTC'
 }
 
 function formatUptime(value: string) {
@@ -305,9 +307,9 @@ function lastDays(count: number) {
 }
 
 function formatDate(value: string) {
-    return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(value))
+    return dateFormatter.format(new Date(value))
 }
 
 function formatDateTime(value: string) {
-    return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(new Date(value)) + ' UTC'
+    return dateTimeFormatter.format(new Date(value)) + ' UTC'
 }
