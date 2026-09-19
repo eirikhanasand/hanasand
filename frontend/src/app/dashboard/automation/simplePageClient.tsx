@@ -189,7 +189,7 @@ export default function AutomationsClient({ setup, initial, mode = 'health' }: {
     }
 
     if (!automations.length && loadError) return <ErrorNotice message={loadError} actionLabel={busy ? 'Retrying…' : 'Try again'} onAction={() => void load()} />
-    if (!automations.length && !editing) return <div className='grid min-h-64 place-items-center rounded-xl border border-ui-border bg-ui-panel p-6 text-center'><div><h2 className='text-xl font-semibold text-ui-text'>{mode === 'cron' ? 'No personal jobs yet' : 'No health checks yet'}</h2><p className='mt-2 text-sm text-ui-muted'>{mode === 'cron' ? 'Create a scheduled check or reminder for your account.' : 'Add your first check to start monitoring a service.'}</p><button type='button' onClick={beginCreate} className='mt-4 rounded-lg bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas'>{mode === 'cron' ? 'Create job' : 'Create health check'}</button></div></div>
+    if (!automations.length && !editing) return <div className='grid min-h-64 place-items-center rounded-xl border border-ui-border bg-ui-panel p-6 text-center'><div><h2 className='text-xl font-semibold text-ui-text'>{mode === 'cron' ? 'No jobs yet' : 'No health checks yet'}</h2><p className='mt-2 text-sm text-ui-muted'>{mode === 'cron' ? 'Got something to keep an eye on? Schedule it here.' : 'Add your first check to start monitoring a service.'}</p><button type='button' onClick={beginCreate} className='mt-4 rounded-lg bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas'>{mode === 'cron' ? 'Create job' : 'Create health check'}</button></div></div>
 
     return (
         <div className='grid gap-4'>

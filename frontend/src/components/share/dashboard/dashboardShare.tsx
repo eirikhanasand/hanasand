@@ -8,11 +8,13 @@ import { useState } from 'react'
 import Notify from '../../notify/notify'
 import { useRouter } from 'next/navigation'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
+import { countLines } from '@/utils/share/countLines'
 
 export default function DashboardShare({ share }: { share: Share }) {
     const [deleted, setDeleted] = useState(false)
     const { condition: error, setCondition: setError } = useClearStateAfter()
     const router = useRouter()
+    const lines = countLines(share.content)
 
     async function handleDelete() {
         const token = getCookie('access_token')
@@ -34,7 +36,7 @@ export default function DashboardShare({ share }: { share: Share }) {
                 <div className='min-w-0'>
                     <h3 key={share.id} className='truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{share.alias || share.path || share.id}</h3>
                     <p className='mt-0.5 truncate text-xs text-ui-muted dark:text-ui-muted'>
-                        {share.locked ? 'Locked' : 'Open'} · {share.wordCount || 0} words · {share.path || share.id}
+                        {share.locked ? 'Locked' : 'Open'} · {lines} {lines === 1 ? 'line' : 'lines'} · {share.path || share.id}
                     </p>
                 </div>
                 <div className='flex shrink-0 items-center gap-1.5'>
