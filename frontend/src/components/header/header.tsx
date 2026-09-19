@@ -198,7 +198,7 @@ export default function Header({ token, path: serverPath, initialMode = 'normal'
                     <Menu />
                 </div>
             </div>
-            <SupportAssistant />
+            <SupportAssistant internal />
         </header>
     )
 }

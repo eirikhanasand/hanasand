@@ -100,6 +100,7 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
                 link('Thesis', '/content/thesis', isAdmin),
             ]),
             group('Support', [
+                link('Support chats', '/support'),
                 link('Helpdesk', '/helpdesk', isAdmin),
                 link('Mail', '/mail'),
             ]),

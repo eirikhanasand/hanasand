@@ -31,7 +31,6 @@ export default function isPublicProductPath(path: string | null | undefined) {
         || pathname === '/status'
         || pathname === '/trust'
         || pathname.startsWith('/trust/')
-        || pathname === '/support'
         || pathname === '/gallery'
         || pathname === '/upload'
         || pathname === '/login'
