@@ -1435,7 +1435,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
 
                 {(createFormOpen || organizations.length === 0) && createOrganizationPanel}
 
-                <div className={organizations.length === 0 ? 'grid gap-5' : 'grid gap-5 lg:grid-cols-[15rem_minmax(0,1fr)]'}>
+                <div className={organizations.length === 0 ? 'grid gap-5' : 'grid gap-5 lg:grid-cols-[18rem_minmax(0,1fr)]'}>
                     <aside className={`${organizations.length === 0 ? 'hidden' : activePage === 'overview' ? 'flex' : 'hidden lg:flex'} min-w-0 flex-col gap-4`}>
 
                         {(loading || organizations.length > 0) && (
@@ -1473,11 +1473,11 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
                                             key={organization.id}
                                             onClick={() => selectOrganization(organization.id)}
                                             aria-current={selectedOrganization?.id === organization.id ? 'true' : undefined}
-                                            className={`grid gap-1 rounded-lg px-3 py-3 text-left transition ${selectedOrganization?.id === organization.id ? 'bg-ui-primary/10 text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary' : 'hover:bg-ui-raised dark:hover:bg-ui-panel/6'}`}
+                                            className={`grid min-w-0 gap-1 rounded-lg px-3 py-3 text-left transition ${selectedOrganization?.id === organization.id ? 'bg-ui-primary/10 text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary' : 'hover:bg-ui-raised dark:hover:bg-ui-panel/6'}`}
                                         >
-                                            <span className='flex items-center justify-between gap-2 text-sm font-semibold'>
-                                                <span className='truncate'>{organizationDisplayName(organization)}</span>
-                                                <RoleBadge role={organization.role || 'member'} />
+                                            <span className='min-w-0 wrap-break-word text-sm font-semibold'>
+                                                {organizationDisplayName(organization)}{' '}
+                                                <RoleBadge role={organization.role || 'member'} compact />
                                             </span>
                                             <span className='truncate text-xs text-ui-muted dark:text-ui-muted'>{organizationWorkspaceMeta(organization)}</span>
                                         </button>
@@ -2264,7 +2264,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
     return (
         <details id='destinations' open className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-destinations-disclosure>
             <summary className='flex cursor-pointer list-none flex-col gap-3 p-4 outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 dark:hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
-                <SectionTitle icon={<Webhook className='h-4 w-4' />} title='Saved destinations' detail='Inventory, tests, and removal stay available after a destination is saved.' />
+                <SectionTitle icon={<Webhook className='h-4 w-4' />} title='Saved destinations' detail='' />
                 <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>
                     {visibleDestinations.length}/{destinations.length} destination{destinations.length === 1 ? '' : 's'}
                 </span>
@@ -2303,7 +2303,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                         <RowStatus message={rowMessages['destination-create']} />
                     </div>
                 )}
-                {destinations.length === 0 && <EmptyLine text={canManage ? 'Add a Discord or webhook destination to enable delivery tests.' : 'Destination access appears after an owner adds one.'} />}
+                {destinations.length === 0 && <EmptyLine text={canManage ? 'Add a Discord or webhook destination to enable delivery tests.' : 'Maintainers can add destinations'} />}
                 {destinations.length > 0 && (
                     <div className='grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas md:grid-cols-[minmax(0,1fr)_8rem_8rem_auto]' data-org-destination-filter-strip='true'>
                         <label className='grid min-w-0 gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
@@ -3348,8 +3348,8 @@ function SelectField({ label, value, options, onChange, disabled }: { label: str
     )
 }
 
-function RoleBadge({ role }: { role: OrganizationRole }) {
-    return <span className='shrink-0 rounded-md bg-ui-primary/10 px-2 py-1 text-xs font-semibold text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary'>{role}</span>
+function RoleBadge({ role, compact = false }: { role: OrganizationRole, compact?: boolean }) {
+    return <span className={`shrink-0 rounded-md bg-ui-primary/10 font-semibold text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary ${compact ? 'inline-flex whitespace-nowrap px-1.5 text-[10px] leading-4 align-middle' : 'px-2 py-1 text-xs'}`}>{role}</span>
 }
 
 function StatusPill({ status }: { status: string }) {
