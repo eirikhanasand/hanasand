@@ -1,12 +1,14 @@
 import type { ReactNode } from 'react'
-import { Cpu, Gauge, HardDrive, MemoryStick, Zap } from 'lucide-react'
+import { Coins, Cpu, Gauge, HardDrive, MemoryStick, Zap } from 'lucide-react'
 import DisplayClient from './displayClient'
 import Metric from './metric'
 
 export default function GPT_Content({
     clients,
     onTestClient,
+    costPerBuildNok,
 }: {
+    costPerBuildNok?: number
     clients: GPT_Client[]
     onTestClient: (client: GPT_Client) => void
 }) {
@@ -24,9 +26,10 @@ export default function GPT_Content({
         tps: averageValue(clients.map(client => client.model.tps || 0)),
     }
     const lanes = clients.flatMap(client => client.lanes || [])
+    const powerClients = clients.filter(client => client.power && Number.isFinite(client.power.totalWatts))
     const power = {
-        watts: clients.reduce((sum, client) => sum + (client.power?.totalWatts || 0), 0),
-        monthlyKwh: clients.reduce((sum, client) => sum + (client.power?.monthlyKwh || 0), 0),
+        watts: powerClients.length ? powerClients.reduce((sum, client) => sum + (client.power?.totalWatts || 0), 0) : null,
+        monthlyKwh: powerClients.length ? powerClients.reduce((sum, client) => sum + (client.power?.monthlyKwh || 0), 0) : null,
     }
     const capacity = {
         active: lanes.reduce((sum, lane) => sum + lane.activeRequests, 0),
@@ -43,6 +46,14 @@ export default function GPT_Content({
                 <ThroughputCard tps={totalLoad.tps} />
                 <CapacityCard active={capacity.active} available={capacity.available} max={capacity.max} lanes={lanes.length} />
                 <PowerCard watts={power.watts} monthlyKwh={power.monthlyKwh} />
+                {costPerBuildNok !== undefined && <div className='rounded-lg bg-ui-panel p-4 border border-ui-border'>
+                    <div className='flex items-center justify-between text-ui-muted'>
+                        <span className='text-xs font-medium uppercase tracking-[0.18em]'>Cost / verified build</span>
+                        <Coins className='h-4 w-4' />
+                    </div>
+                    <div className='mt-3 text-2xl font-semibold text-ui-text'>{costPerBuildNok.toLocaleString('nb-NO', { maximumFractionDigits: 2 })} NOK</div>
+                    <p className='mt-1 text-xs text-ui-muted'>Cost per successful build or deployment</p>
+                </div>}
             </div>
 
             <div className='w-full rounded-lg bg-ui-panel p-4 border border-ui-border space-y-4'>
@@ -120,16 +131,16 @@ function CapacityCard({ active, available, max, lanes }: { active: number, avail
     )
 }
 
-function PowerCard({ watts, monthlyKwh }: { watts: number, monthlyKwh: number }) {
+function PowerCard({ watts, monthlyKwh }: { watts: number | null, monthlyKwh: number | null }) {
     return (
         <div className='rounded-lg bg-ui-panel p-4 border border-ui-border'>
             <div className='flex items-center justify-between text-ui-muted'>
                 <span className='text-xs font-medium uppercase tracking-[0.18em]'>Power</span>
                 <Zap className='h-4 w-4' />
             </div>
-            <div className='mt-3 text-2xl font-semibold text-ui-text'>{watts.toFixed(0)} W</div>
+            <div className='mt-3 text-2xl font-semibold text-ui-text'>{watts === null ? 'Unavailable' : `${watts.toFixed(0)} W`}</div>
             <div className='mt-1 text-xs uppercase tracking-[0.18em] text-ui-muted'>
-                {monthlyKwh.toFixed(2)} kWh this month
+                {monthlyKwh === null ? 'Waiting for power readings' : `${monthlyKwh.toFixed(2)} kWh recorded this month`}
             </div>
         </div>
     )

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Activity, AlertTriangle, ArrowLeft, CheckCircle2, Coins, Layers3, LineChart, Timer } from 'lucide-react'
+import { Activity, ArrowLeft, Timer } from 'lucide-react'
 import GPT_Content from '@components/gpt/content'
 import GPT_EmptyState from '@components/gpt/emptyState'
 import GPT_Header from '@components/gpt/header'
@@ -252,7 +252,7 @@ export default function GPT_Page() {
                     </div>
                     <EconomicsPanel economics={economics} error={economicsError} aiContainers={aiContainers} containerError={containerError} />
                     <div id='ai-clients' data-ai-clients>
-                        {gpt.clients.length ? <GPT_Content clients={gpt.clients} onTestClient={gpt.openChat} /> : <GPT_EmptyState />}
+                        {gpt.clients.length ? <GPT_Content clients={gpt.clients} onTestClient={gpt.openChat} costPerBuildNok={economics?.reliability.costPerSuccessfulVerifiedBuildNok} /> : <GPT_EmptyState />}
                     </div>
                 </div>
             </div>
@@ -287,9 +287,6 @@ function EconomicsPanel({ economics, error, aiContainers, containerError }: { ec
         )
     }
 
-    const summary = economics.summary
-    const cacheRate = summary.cacheableEvents ? Math.round((summary.cacheHits / summary.cacheableEvents) * 100) : 0
-
     return (
         <section className='space-y-4 rounded-xl bg-ui-panel p-4 border border-ui-border'>
             <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
@@ -300,24 +297,9 @@ function EconomicsPanel({ economics, error, aiContainers, containerError }: { ec
                 <div className='flex flex-wrap items-center justify-end gap-2 text-xs font-semibold'>
                     <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-ui-muted'>{economics.reliability.capacity.totalAvailableSessions} open sessions</span>
                     <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-ui-muted'>{economics.reliability.capacity.totalQueued} queued</span>
-                    <span className='rounded-full bg-ui-primary/10 px-3 py-1 font-medium uppercase tracking-[0.16em] text-ui-primary outline outline-ui-primary/20'>
-                        {economics.windowDays} day window
-                    </span>
+
                 </div>
             </div>
-
-            <details className='overflow-hidden rounded-lg border border-ui-border bg-ui-raised' data-ai-economics-disclosure>
-                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
-                    <span>Spend and output counters</span>
-                    <span className='text-xs font-medium text-ui-muted'>{formatNok(summary.estimatedCostNok)} NOK, {formatCompact(summary.verifiedUnits)} verified units, {cacheRate}% cached</span>
-                </summary>
-                <div className='grid gap-3 border-t border-ui-border p-3 md:grid-cols-2 xl:grid-cols-4' data-ai-economics-metrics>
-                    <EconomicsStat icon={<Coins className='h-4 w-4' />} label='Spend' value={`${formatNok(summary.estimatedCostNok)} NOK`} detail={`${formatCompact(summary.billableUnits)} billable work units`} />
-                    <EconomicsStat icon={<CheckCircle2 className='h-4 w-4' />} label='Verified output' value={formatMetric(summary.verifiedProgressPerMinutePerNok)} detail={`${formatCompact(summary.verifiedUnits)} verified units over ${formatDuration(summary.productiveMinutes * 60_000)} productive time`} />
-                    <EconomicsStat icon={<LineChart className='h-4 w-4' />} label='Token flow' value={formatCompact(summary.tokenUnits)} detail={`${formatCompact(summary.platformErrorUnits)} platform-error units excluded from value`} />
-                    <EconomicsStat icon={<Layers3 className='h-4 w-4' />} label='Cached work' value={`${cacheRate}%`} detail={`${summary.cacheHits} cache hits from ${summary.cacheableEvents} cacheable events`} />
-                </div>
-            </details>
 
             <AIContainerHealth containers={aiContainers} error={containerError} />
             <ReliabilityPanel reliability={economics.reliability} />
@@ -391,51 +373,19 @@ function healthToneClass(tone: ReturnType<typeof containerHealth>['tone']) {
 }
 
 function ReliabilityPanel({ reliability }: { reliability: AIEconomics['reliability'] }) {
-    const incidentTone = incidentToneClass(reliability.incidentStatus.state)
     const queuedRows = reliability.queueDepth.filter((row) => row.status === 'queued' || row.status === 'running')
     const buildRate = reliability.buildDeploy.find((row) => row.kind === 'build')
     const deployRate = reliability.buildDeploy.find((row) => row.kind === 'deploy')
 
     return (
         <div className='rounded-lg border border-ui-border bg-ui-raised p-4' id='ai-reliability' data-ai-reliability>
-            <div className='flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between'>
-                <div>
-                    <p className='text-xs font-medium uppercase tracking-[0.18em] text-ui-muted'>Reliability and observability</p>
-                    <h3 className='mt-1 text-lg font-semibold text-ui-text'>Can users get work done right now?</h3>
-                </div>
-                <div className={`rounded-lg px-3 py-2 outline ${incidentTone}`}>
-                    <div className='flex items-center gap-2 text-sm font-semibold'>
-                        {reliability.incidentStatus.state === 'operational' ? <CheckCircle2 className='h-4 w-4' /> : <AlertTriangle className='h-4 w-4' />}
-                        {reliability.incidentStatus.label}
-                    </div>
-                    <p className='mt-1 max-w-xl text-xs leading-5 opacity-80'>{reliability.incidentStatus.message}</p>
-                </div>
-            </div>
-
-            <div className='mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
+            <div className='grid gap-3 md:grid-cols-2'>
                 <EconomicsStat icon={<Activity className='h-4 w-4' />} label='Queue capacity' value={`${reliability.capacity.totalAvailableSessions} open`} detail={`${reliability.capacity.totalActiveSessions} active, ${reliability.capacity.totalQueued} queued across workers`} />
                 <EconomicsStat icon={<Timer className='h-4 w-4' />} label='Time to first response' value={reliability.promptTiming.sampleCount ? formatDuration(reliability.promptTiming.p50FirstUsefulOutputMs) : 'No runs yet'} detail={reliability.promptTiming.sampleCount ? `Typical response time · ${reliability.promptTiming.sampleCount} runs` : 'Shown after the first completed run'} />
-                <EconomicsStat icon={<CheckCircle2 className='h-4 w-4' />} label='Verified deploy' value={reliability.deployTiming.sampleCount ? formatDuration(reliability.deployTiming.p50PromptToVerifiedDeployMs) : 'No deployments yet'} detail={reliability.deployTiming.sampleCount ? `Typical deployment time · ${reliability.deployTiming.sampleCount} deploys` : 'Shown after the first verified deployment'} />
-                <EconomicsStat icon={<Coins className='h-4 w-4' />} label='Cost / verified build' value={`${formatNok(reliability.costPerSuccessfulVerifiedBuildNok)} NOK`} detail='Cost per successful build or deploy run' />
             </div>
 
             <div className='mt-4 grid gap-4 xl:grid-cols-[1fr_1.1fr]'>
                 <div className='grid gap-4'>
-                    <div className='rounded-lg border border-ui-border bg-ui-raised p-4'>
-                        <div className='flex items-center justify-between gap-3'>
-                            <h4 className='text-sm font-semibold text-ui-text'>Verification latency</h4>
-                            <span className='text-xs text-ui-muted'>p50 / p95</span>
-                        </div>
-                        <div className='mt-3 grid gap-2'>
-                            {reliability.verificationLatency.length ? reliability.verificationLatency.map((row) => (
-                                <div key={row.kind} className='flex items-center justify-between gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-sm'>
-                                    <span className='capitalize text-ui-text'>{row.kind}</span>
-                                    <span className='text-ui-muted'>{formatDuration(row.p50Ms)} / {formatDuration(row.p95Ms)} · {row.sampleCount}</span>
-                                </div>
-                            )) : <p className='text-sm text-ui-muted'>No completed verification runs.</p>}
-                        </div>
-                    </div>
-
                     <div className='rounded-lg border border-ui-border bg-ui-raised p-4'>
                         <h4 className='text-sm font-semibold text-ui-text'>Build and deploy success</h4>
                         <div className='mt-3 grid gap-3'>
@@ -459,8 +409,8 @@ function ReliabilityPanel({ reliability }: { reliability: AIEconomics['reliabili
                 <div className='grid gap-4'>
                     <div className='rounded-lg border border-ui-border bg-ui-raised p-4'>
                         <div className='flex items-center justify-between gap-3'>
-                            <h4 className='text-sm font-semibold text-ui-text'>Queue depth by worker/model</h4>
-                            <span className='text-xs text-ui-muted'>{queuedRows.length} active buckets</span>
+                            <h4 className='text-sm font-semibold text-ui-text'>Active and queued work</h4>
+                            <span className='text-xs text-ui-muted'>{queuedRows.reduce((total, row) => total + row.count, 0)} runs</span>
                         </div>
                         <div className='mt-3 max-h-52 space-y-2 overflow-auto'>
                             {queuedRows.length ? queuedRows.map((row) => (
@@ -471,7 +421,7 @@ function ReliabilityPanel({ reliability }: { reliability: AIEconomics['reliabili
                                     </div>
                                     <span className='self-center text-sm font-semibold text-ui-text'>{row.count}</span>
                                 </div>
-                            )) : <p className='text-sm text-ui-muted'>Verification queue is clear; active and queued runs stream here.</p>}
+                            )) : <p className='text-sm text-ui-muted'>No work is running or waiting.</p>}
                         </div>
                     </div>
 
@@ -509,21 +459,6 @@ function EconomicsStat({ icon, label, value, detail }: { icon: ReactNode, label:
     )
 }
 
-function formatNok(value: number) {
-    return value.toLocaleString('nb-NO', { maximumFractionDigits: 2 })
-}
-
-function formatCompact(value: number) {
-    return Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(value)
-}
-
-function formatMetric(value: number) {
-    if (!value) return '0'
-    if (value < 0.01) return value.toFixed(4)
-    if (value < 1) return value.toFixed(2)
-    return value.toFixed(1)
-}
-
 function formatKind(kind: string) {
     return kind.replace(/_/g, ' ')
 }
@@ -536,11 +471,4 @@ function formatDuration(value: number) {
     const minutes = seconds / 60
     if (minutes < 60) return `${minutes.toFixed(minutes < 10 ? 1 : 0)} min`
     return `${(minutes / 60).toFixed(1)} h`
-}
-
-function incidentToneClass(state: string) {
-    if (state === 'operational') return 'bg-ui-success/10 text-ui-success outline-ui-success/25'
-    if (state === 'busy') return 'bg-ui-warning/10 text-ui-warning outline-ui-warning/25'
-    if (state === 'watching') return 'bg-ui-primary/10 text-ui-primary outline-ui-primary/25'
-    return 'bg-ui-danger/10 text-ui-danger outline-ui-danger/25'
 }
