@@ -1,7 +1,7 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
 
 let role = 'owner', valid = true, auditFailure = false
-let rows: any[] = [], audits: any[] = [], findings: any[] = []
+let rows: any[] = [], audits: any[] = [], findings: any[] = [], events: any[] = []
 const query = async (sql: string, p: any[] = []): Promise<any> => {
     if (sql.includes('FROM organizations')) return { rows: p[0] === 'org-a' ? [{ role }] : [] }
     if (sql.includes('pg_advisory_xact_lock')) return { rows: [] }
@@ -17,8 +17,17 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
         return { rows: [] }
     }
     if (sql.includes('SELECT count(*)::text AS count FROM mill_findings')) return { rows: [{ count: String(findings.filter(row => row.organizationId === p[0] && row.ruleId === p[1]).length) }] }
+    if (sql.includes("context->'after'->>'version'")) return { rows: audits.filter(row => row.organization_id === p[0] && row.object_id === p[1] && (row.context.after?.version === p[3] || row.context.before?.version === p[3])).slice(-1) }
     if (sql.includes('FROM system_events')) return { rows: audits.filter(row => row.organization_id === p[0] && (row.object_id === p[1] || row.object_id === p[2])).slice(p[3], p[3] + 51) }
-    if (sql.includes('INSERT INTO mill_events')) return { rows: [] }
+    if (sql.includes('INSERT INTO mill_events')) {
+        events.push({ id: p[0], organization_id: p[2], event_timestamp: p[5], event_type: p[6], action: p[7], outcome: p[8], user_id: p[9], source_ip: p[11], normalized: JSON.parse(p[15]) })
+        return { rows: [] }
+    }
+    if (sql.includes('FROM mill_events')) {
+        const result = events.filter(row => row.organization_id === p[0] && (sql.includes('source_ip = $2') ? row.source_ip === p[1] : row.user_id === p[1]) && row.id !== p[2] && row.event_type === 'authentication' && row.action === 'login' && Date.parse(row.event_timestamp) <= Date.parse(p[3]))
+            .sort((a, b) => Date.parse(b.event_timestamp) - Date.parse(a.event_timestamp))
+        return { rows: sql.includes("INTERVAL '1 minute'") ? result.filter(row => row.outcome === 'failure' && Date.parse(row.event_timestamp) >= Date.parse(p[3]) - p[4] * 60000) : result.slice(0, p[4]) }
+    }
     if (sql.includes('INSERT INTO mill_findings')) { findings.push({ organizationId: p[1], ruleId: p[3], severity: p[4], evidence: JSON.parse(p[6]) }); return { rows: [] } }
     throw new Error(`Unexpected query: ${sql}`)
 }
@@ -31,10 +40,10 @@ mock.module('#utils/auth/apiKeys.ts', () => ({ validateApiKey: async () => ({ or
 const { getMillRule, putMillRule, postMillRuleAction, postMillRule, postMillRulePack, ingestMill } = await import('../src/handlers/mill.ts')
 const builtin = 'network.signature_alert.v1'
 const reply = () => ({ statusCode: 200, status(code: number) { this.statusCode = code; return this }, send(body: any) { return body } })
-const request = (id = builtin, body: any = {}, organizationId = 'org-a') => ({ params: { id }, query: { organizationId }, body, ip: '127.0.0.1', headers: { authorization: 'Bearer test-key' }, id: 'request-test' }) as any
+const request = (id = builtin.replace(/\.v\d+$/, ''), body: any = {}, organizationId = 'org-a') => ({ params: { id }, query: { organizationId }, body, ip: '127.0.0.1', headers: { authorization: 'Bearer test-key' }, id: 'request-test' }) as any
 const edit = { version: '1', name: 'Custom network alert', explanation: 'An important signature matched a network event.', severity: 'critical', enabled: true }
 const network = { source: {}, events: [{ timestamp: '2026-09-14T12:00:00Z', event_type: 'network', action: 'alert', signature: 'Test signature' }] }
-beforeEach(() => { rows = []; audits = []; findings = []; role = 'owner'; valid = true; auditFailure = false })
+beforeEach(() => { rows = []; audits = []; findings = []; role = 'owner'; valid = true; auditFailure = false; events = [] })
 
 test('built-in detail ID survives editing, and new detections use saved severity and revision', async () => {
     const initial = await getMillRule(request(), reply() as any)
@@ -108,7 +117,7 @@ test('reimport retains ID and disabled state and adds a per-rule audit revision'
     await postMillRuleAction(request(recordId, { action: 'disable' }), reply() as any)
     await postMillRulePack(request('', pack), reply() as any)
     expect(rows[0]).toMatchObject({ id: recordId, rule_id: id, enabled: false, version: '3' })
-    const detail = await getMillRule(request(id), reply() as any)
+    const detail = await getMillRule(request(id.replace(/\.v\d+$/, '')), reply() as any)
     expect(detail.audit).toHaveLength(3)
     expect(detail.audit.every((entry: any) => entry.context.ruleId === id)).toBe(true)
 })
@@ -140,4 +149,85 @@ test('trigger count includes all saved detections only for this organization and
     )
     expect((await getMillRule(request(), reply() as any)).triggerCount).toBe(2)
     expect((await getMillRule(request('auth.impossible_travel.v1'), reply() as any)).triggerCount).toBe(1)
+})
+
+const bruteId = 'auth.brute_force_success'
+const bruteDefinition = (windowMinutes = 15, minimumCount = 3) => ({ match: 'all', parameters: { windowMinutes, minimumCount }, conditions: [{ path: 'EventID', operator: 'equals', value: '4624' }], failureConditions: [{ path: 'EventID', operator: 'regex', value: '^(4625|4771)$' }] })
+const login = (minutes: number, outcome: string, EventID: number, extra = {}) => ({ timestamp: new Date(Date.UTC(2026, 8, 14, 12, minutes)).toISOString(), event_type: 'authentication', action: 'login', outcome, EventID, user: { id: 'alice' }, ...extra })
+const ingest = (items: any[]) => ingestMill(request('', { events: items }), reply() as any)
+const bruteFindings = () => findings.filter(item => item.ruleId === `${bruteId}.v1`)
+
+test('stable links return latest; historical links return immutable, read-only signatures', async () => {
+    await putMillRule(request(bruteId, { ...edit, definition: bruteDefinition(20, 4) }), reply() as any)
+    expect((await getMillRule(request(bruteId), reply() as any)).rule.definition.parameters).toEqual({ windowMinutes: 20, minimumCount: 4 })
+    const old = await getMillRule(request(`${bruteId}.v1`), reply() as any)
+    expect(old).toMatchObject({ canEdit: false, isHistorical: true, currentVersion: '2', rule: { version: '1', definition: { parameters: { windowMinutes: 15, minimumCount: 3 } } } })
+    const latest = await getMillRule(request(`${bruteId}.v2`), reply() as any)
+    expect(latest).toMatchObject({ canEdit: true, isHistorical: false })
+    const missing = reply()
+    await getMillRule(request(`${bruteId}.v99`), missing as any)
+    expect(missing.statusCode).toBe(404)
+})
+
+test('saved window, threshold and both event-ID selectors control actual ingestion, including out-of-order batches', async () => {
+    await putMillRule(request(bruteId, { ...edit, definition: bruteDefinition(5, 2) }), reply() as any)
+    await ingest([login(10, 'success', 4624), login(5, 'failure', 4625), login(6, 'failure', 4771)])
+    expect(bruteFindings()).toHaveLength(1)
+    expect(bruteFindings()[0].evidence).toMatchObject({ windowMinutes: 5, minimumCount: 2, ruleVersion: '2' })
+    findings = []
+    await ingest([login(10, 'success', 9999), login(12, 'success', 4624)])
+    expect(bruteFindings()).toHaveLength(0)
+    await putMillRule(request(bruteId, { ...edit, version: '2', definition: bruteDefinition(10, 2) }), reply() as any)
+    await ingest([login(12, 'success', 4624)])
+    expect(bruteFindings()).toHaveLength(1)
+    await putMillRule(request(bruteId, { ...edit, version: '3', definition: bruteDefinition(10, 3) }), reply() as any)
+    findings = []
+    await ingest([login(12, 'success', 4624)])
+    expect(bruteFindings()).toHaveLength(0)
+})
+
+test('correlation excludes other users, tenants, future events, wrong actions and wrong event IDs', async () => {
+    await putMillRule(request(bruteId, { ...edit, definition: bruteDefinition(5, 2) }), reply() as any)
+    await ingest([login(6, 'failure', 4625), login(7, 'failure', 1), login(8, 'failure', 4625, { user: { id: 'bob' } }), login(8, 'failure', 4625, { action: 'logout' }), login(11, 'failure', 4625)])
+    events.push({ ...events[0], id: 'other-org', organization_id: 'org-b' })
+    await ingest([login(10, 'success', 4624)])
+    expect(bruteFindings()).toHaveLength(0)
+})
+
+test('more than 30 intervening events cannot hide in-window failures', async () => {
+    await putMillRule(request(bruteId, { ...edit, definition: bruteDefinition(15, 3) }), reply() as any)
+    await ingest([login(1, 'failure', 4625), login(2, 'failure', 4625), login(3, 'failure', 4771), ...Array.from({ length: 35 }, () => login(4, 'unknown', 0)), login(10, 'success', 4624)])
+    expect(bruteFindings()).toHaveLength(1)
+})
+
+test('invalid parameters and expressions never overwrite a saved detection', async () => {
+    for (const definition of [bruteDefinition(0), bruteDefinition(10081), bruteDefinition(1.5), bruteDefinition(5, 0), { ...bruteDefinition(), parameters: { windowMinutes: '5', minimumCount: 2 } }, { ...bruteDefinition(), failureConditions: [{ path: 'EventID', operator: 'regex', value: '[' }] }, { ...bruteDefinition(), script: 'arbitrary' }]) {
+        const response = reply()
+        await putMillRule(request(bruteId, { ...edit, definition }), response as any)
+        expect(response.statusCode).toBe(400)
+    }
+    expect(rows).toHaveLength(0)
+    expect(audits).toHaveLength(0)
+})
+
+test('password spray honors the saved distinct-user threshold, window and event selector', async () => {
+    const id = 'auth.password_spray'
+    const definition = { match: 'all', parameters: { windowMinutes: 2, minimumCount: 2 }, conditions: [{ path: 'EventID', operator: 'equals', value: '4625' }] }
+    await putMillRule(request(id, { ...edit, definition }), reply() as any)
+    await ingest([login(1, 'failure', 4625, { source: { ip: '192.0.2.1' } }), login(2, 'failure', 4625, { source: { ip: '192.0.2.1' }, user: { id: 'bob' } })])
+    expect(findings.filter(row => row.ruleId === `${id}.v1`)).toHaveLength(1)
+    findings = []
+    await ingest([login(5, 'failure', 4625, { source: { ip: '192.0.2.1' }, user: { id: 'charlie' } })])
+    expect(findings.filter(row => row.ruleId === `${id}.v1`)).toHaveLength(0)
+})
+
+test('built-in network event selector gates findings and survives enable/disable', async () => {
+    await putMillRule(request(builtin, { ...edit, definition: { match: 'all', conditions: [{ path: 'signature', operator: 'equals', value: 'Other' }], parameters: {} } }), reply() as any)
+    await ingestMill(request('', network), reply() as any)
+    expect(findings).toHaveLength(0)
+    await postMillRuleAction(request(builtin, { action: 'disable' }), reply() as any)
+    await postMillRuleAction(request(builtin, { action: 'enable' }), reply() as any)
+    expect((await getMillRule(request(), reply() as any)).rule.definition.conditions[0].value).toBe('Other')
+    await ingestMill(request('', network), reply() as any)
+    expect(findings).toHaveLength(0)
 })

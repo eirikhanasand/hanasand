@@ -11,7 +11,7 @@ const matchRules = new Set(['network.signature_alert.v1', 'vulnerability.cve_ass
 
 export function getRuleCategory(rule: { id: string, source?: string }): RuleCategory {
     // Custom and imported rules are evaluated as normalized event-field conditions.
-    if (rule.source === 'owned' || rule.source === 'open_source' || matchRules.has(rule.id)) return 'match'
-    if (analysisRules.has(rule.id)) return 'analysis'
+    if (rule.source === 'owned' || rule.source === 'open_source' || matchRules.has(`${rule.id.replace(/\.v\d+$/, '')}.v1`)) return 'match'
+    if (analysisRules.has(`${rule.id.replace(/\.v\d+$/, '')}.v1`)) return 'analysis'
     return 'detection'
 }
