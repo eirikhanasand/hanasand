@@ -1,4 +1,4 @@
-import { test } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 import assert from 'node:assert/strict'
 test('service account creation and session deletion confirmation', async ({ browser, baseURL }) => {
     assert(baseURL)
@@ -17,6 +17,9 @@ test('service account creation and session deletion confirmation', async ({ brow
     const errors: string[]=[];page.on('pageerror',e=>errors.push(e.message))
     await page.goto(`${baseURL}/management/service-accounts`)
     await page.getByText('Existing monitor',{exact:true}).waitFor()
+    await expect(page.getByLabel('Name',{exact:true})).toBeHidden()
+    await page.getByRole('button',{name:'Add service account',exact:true}).click()
+    await expect(page.getByLabel('Name',{exact:true})).toBeFocused()
     await page.getByLabel('Name',{exact:true}).fill('Database check')
     await page.getByLabel(/Read database overview/).check()
     await page.getByRole('button',{name:'Create service account',exact:true}).click()
@@ -39,5 +42,76 @@ test('service account creation and session deletion confirmation', async ({ brow
     assert.equal(deletes,2)
     assert.deepEqual(errors,[])
     console.log('UI passed: creation, endpoint scope payload, one-time secret, cancellation/Escape, confirmed deletion, session-only direct deletion across reload. No browser errors.')
+    await context.close()
+})
+
+test('service account search, sorting, dialog keyboard controls and failed creation', async ({ browser, baseURL }) => {
+    assert(baseURL)
+    const context = await browser.newContext({viewport:{width:1280,height:900},extraHTTPHeaders:{'x-hanasand-render-proof-auth':'local-dashboard-render-proof'}})
+    await context.addCookies([{name:'id',value:'dashboard-render-proof-user',url:baseURL},{name:'access_token',value:'local-dashboard-render-proof-token',url:baseURL},{name:'roles',value:JSON.stringify([{id:'system_admin',name:'System administrator',priority:0}]),url:baseURL}])
+    const endpoints = [{method:'GET',route:'/api/db',label:'Read database'},{method:'POST',route:'/api/db',label:'Write database'}]
+    const accounts = [
+        {id:'svc_zulu',name:'Zulu monitor',active:true,created_at:null,keys:[]},
+        {id:'svc_alpha',name:'alpha database',active:true,created_at:null,keys:[{lastUsedAt:null,scopes:[endpoints[0]]}]},
+        {id:'svc_beta',name:'Beta monitor',active:true,created_at:null,keys:[]},
+        {id:'svc_revoked',name:'Revoked monitor',active:false,created_at:null,keys:[]},
+    ]
+    await context.route(url=>url.pathname.startsWith('/api/service-accounts'),async route=>{
+        if(route.request().method()==='POST') {
+            assert.deepEqual(route.request().postDataJSON(), {name:'New monitor',scopes:[{method:'GET',route:'/api/db'}]})
+            await route.fulfill({status:400,json:{error:'Creation failed; try again.'}})
+        } else await route.fulfill({json:{accounts,endpoints}})
+    })
+    const page = await context.newPage()
+    await page.goto(`${baseURL}/management/service-accounts`)
+    const names = page.locator('tbody tr > td:first-child')
+    await expect(names).toHaveText(['alpha database','Beta monitor','Zulu monitor'])
+    await page.getByLabel('Sort service accounts').selectOption('desc')
+    await expect(names).toHaveText(['Zulu monitor','Beta monitor','alpha database'])
+    const search = page.getByRole('searchbox',{name:'Search service accounts'})
+    await page.keyboard.press('Meta+j')
+    await expect(search).toBeFocused()
+    await search.fill('  ALPHA  ')
+    await expect(names).toHaveText(['alpha database'])
+    await search.fill('/api/db')
+    await expect(names).toHaveText(['alpha database'])
+    await search.fill('svc_beta')
+    await expect(names).toHaveText(['Beta monitor'])
+    await search.fill('no match')
+    await expect(page.getByText('No service accounts match your search.')).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(names).toHaveCount(3)
+    await search.blur()
+    await page.keyboard.press('Control+j')
+    await expect(search).toBeFocused()
+    const add = page.getByRole('button',{name:'Add service account',exact:true})
+    await add.click()
+    const dialog = page.getByRole('dialog',{name:'Add service account'})
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByLabel('Name',{exact:true})).toBeFocused()
+    await page.keyboard.press('Shift+Tab')
+    await expect(dialog.getByRole('button',{name:'Close create service account'})).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(dialog.getByLabel('Name',{exact:true})).toBeFocused()
+    await page.keyboard.press('Meta+j')
+    await expect(dialog.getByLabel('Name',{exact:true})).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(dialog).toBeHidden()
+    await expect(add).toBeFocused()
+    await add.click()
+    await dialog.getByLabel('Name',{exact:true}).fill('New monitor')
+    await dialog.getByLabel(/Read database/).check()
+    await expect(dialog.getByLabel(/Write database/)).not.toBeChecked()
+    await dialog.getByRole('button',{name:'Create service account',exact:true}).click()
+    await expect(dialog.getByRole('alert')).toHaveText('Creation failed; try again.')
+    await expect(dialog.getByLabel('Name',{exact:true})).toHaveValue('New monitor')
+    await dialog.getByRole('button',{name:'Cancel',exact:true}).click()
+    await page.screenshot({path:'/tmp/service-accounts-desktop.png',fullPage:true})
+    await page.setViewportSize({width:390,height:844})
+    await add.click()
+    await expect(dialog).toBeVisible()
+    const box = await dialog.boundingBox()
+    assert(box && box.x >= 0 && box.x + box.width <= 390 && box.height <= 844)
+    await page.screenshot({path:'/tmp/service-accounts-mobile-dialog.png',fullPage:true})
     await context.close()
 })
