@@ -9,32 +9,20 @@ export type UserUpload = {
     path: string
     owner: string
     uploaded_at: string
+    size_bytes?: number | string
 }
-
-export async function getUserFiles(limit = 60): Promise<UserUpload[]> {
+export async function getUserFiles(limit = 60, offset = 0): Promise<UserUpload[]> {
     const token = getCookie('access_token')
     const userId = getCookie('id')
-
-    if (!token || !userId) {
-        return []
-    }
-
-    try {
-        const response = await fetch(`${config.url.cdn}/files/user/${encodeURIComponent(userId)}?limit=${limit}`, {
-            headers: {
-                Authorization: `Bearer ${token}`,
-                id: userId
-            }
-        })
-
-        if (!response.ok) {
-            return []
-        }
-
-        const data = await response.json()
-        return Array.isArray(data) ? data : []
-    } catch (error) {
-        console.error('Failed to fetch upload history:', error)
-        return []
-    }
+    if (!token || !userId) throw new Error('Sign in to see your library.')
+    const response = await fetch(`${config.url.cdn}/files/user/${encodeURIComponent(userId)}?limit=${limit}&offset=${offset}`, {
+        headers: { Authorization: `Bearer ${token}`, id: userId },
+        signal: AbortSignal.timeout(15000),
+        cache: 'no-store',
+    })
+    if (response.status === 401) throw new Error('Sign in to see your library.')
+    if (!response.ok) throw new Error('Your files could not be loaded. Try again.')
+    const data = await response.json()
+    if (!Array.isArray(data)) throw new Error('Your files could not be loaded.')
+    return data
 }

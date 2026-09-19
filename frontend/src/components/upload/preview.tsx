@@ -73,6 +73,9 @@ export default function Preview({ url, file, setFile, setPreview, setUrl }: Prev
                 setError('Path is already taken. Choose another.')
             }
 
+            if (status === 401) return setError('Sign in to upload files.')
+            if (status === 429) return setError('Upload limit reached. Try again later.')
+            if (status === 507) return setError('Uploads are paused because storage is full.')
             if (status === 413) {
                 return setError('File is too large for the current upload limit.')
             }
@@ -82,7 +85,7 @@ export default function Preview({ url, file, setFile, setPreview, setUrl }: Prev
             }
 
             if (status.id) {
-                setUrl(`${config.url.cdn}/files/${path ? `path/${path}` : status.id}`)
+                setUrl(`${config.url.cdn}/files/${encodeURIComponent(status.id)}`)
             }
         } catch (error) {
             console.error(error)

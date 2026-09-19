@@ -15,7 +15,7 @@ export function appPagePath(path: string) {
 }
 
 export function isInternalAppPath(path: string) {
-    return matches(path, '/support') || matches(path, '/dashboard') || matches(path, '/organizations') || appPagePath(path) !== path
+    return matches(path, '/gallery') || matches(path, '/upload') || matches(path, '/support') || matches(path, '/dashboard') || matches(path, '/organizations') || appPagePath(path) !== path
 }
 
 export function hasAppSidebar(path: string) {

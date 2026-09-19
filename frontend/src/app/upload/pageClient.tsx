@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import Preview from '@/components/upload/preview'
 import Upload from '@/components/upload/upload'
 import config from '@/config'
@@ -8,8 +9,6 @@ import Image from 'next/image'
 import { useState } from 'react'
 import copy from '@/utils/copy'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
-import { saveRecentUpload } from '@/utils/upload/storage'
-import { useEffect } from 'react'
 
 export default function UploadPageClient() {
     const [url, setUrl] = useState('')
@@ -28,12 +27,6 @@ export default function UploadPageClient() {
         setPreview(null)
     }
 
-    useEffect(() => {
-        if (isUploaded) {
-            saveRecentUpload(url)
-        }
-    }, [isUploaded, url])
-
     if (isUploaded) {
         return (
             <section className='grid min-h-[calc(100vh-4.5rem)] w-full place-items-center bg-ui-canvas px-4 py-10 text-ui-text md:px-10'>
@@ -47,7 +40,7 @@ export default function UploadPageClient() {
                                 Uploaded
                             </div>
                             <div className='grid place-items-center rounded-lg border border-ui-border bg-ui-raised p-2'>
-                                <Image alt='Uploaded image' src={url} height={300} width={348} className='max-h-[360px] w-auto rounded-lg object-contain' />
+                                {file?.type.startsWith('video/') ? <video src={url} controls className='max-h-[360px] w-full' /> : <Image alt='Uploaded image' src={url} height={300} width={348} className='max-h-[360px] w-auto rounded-lg object-contain' />}
                             </div>
                             <button
                                 type='button'
@@ -59,6 +52,7 @@ export default function UploadPageClient() {
                             </button>
                         </div>
                     </div>
+                    <Link href='/gallery' className='text-center text-sm font-semibold text-ui-primary'>Open library</Link>
                     <button
                         type='button'
                         onClick={handleReset}
@@ -76,9 +70,9 @@ export default function UploadPageClient() {
         <section className='grid min-h-[calc(100vh-4.5rem)] w-full place-items-center bg-ui-canvas px-4 py-10 text-ui-text md:px-10'>
             <div className='w-full max-w-4xl'>
                 <div className='mb-6 grid gap-2'>
-                    <p className='text-sm font-semibold uppercase text-ui-primary'>Media utility</p>
-                    <h1 className='text-3xl font-semibold tracking-normal md:text-4xl'>Share public screenshots and previews.</h1>
-                    <p className='max-w-2xl text-sm leading-6 text-ui-muted'>A small utility for public, non-sensitive screenshots, previews, and shareable media assets.</p>
+                    <p className='text-sm font-semibold uppercase text-ui-primary'>Content</p>
+                    <h1 className='text-3xl font-semibold tracking-normal md:text-4xl'>Upload files</h1>
+                    <p className='max-w-2xl text-sm leading-6 text-ui-muted'>Upload public images and videos to your library.</p>
                     <div className='mt-2 grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-4 text-sm leading-6 text-ui-muted shadow-sm sm:grid-cols-3' data-upload-safety-boundary='true'>
                         <div className='flex items-start gap-2 sm:col-span-3'>
                             <ShieldCheck className='mt-1 h-4 w-4 shrink-0 text-ui-primary' />
@@ -89,6 +83,7 @@ export default function UploadPageClient() {
                         <span>Uploaded links are meant to be shareable assets.</span>
                     </div>
                 </div>
+                <Link href='/gallery' className='text-sm font-semibold text-ui-primary'>Open library</Link>
                 <Upload
                     url={url}
                     setUrl={setUrl}
