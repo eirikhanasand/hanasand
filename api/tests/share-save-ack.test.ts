@@ -6,12 +6,20 @@ let fail = false
 let missing = false
 let saved = ''
 mock.module('../src/plugins/ws', () => ({ pendingUpdates }))
-mock.module('../src/utils/db.ts', () => ({ default: async (_sql: string, values: string[]) => {
+mock.module('../src/utils/db.ts', () => ({ default: async (_sql: string, values: Array<string | null>) => {
+    if (_sql === 'SELECT organization_id FROM share WHERE id = $1') {
+        expect(values).toEqual(['test-share'])
+        return { rows: [{ organization_id: null }] }
+    }
+    expect(_sql).toMatch(/^UPDATE share SET content = \$1/)
     expect(_sql).toContain('updated_at = NOW()')
+    expect(_sql).toContain('organization_id IS NULL OR content_organization_access(organization_id, $3, TRUE)')
+    expect(values.slice(1)).toEqual(['test-share', null])
     expect(_sql).not.toMatch(/\btimestamp\b/)
     if (fail) throw new Error('database unavailable')
-    saved = values[0]
-    return { rows: missing ? [] : [{ id: values[1] }] }
+    if (missing) return { rows: [] }
+    saved = values[0] as string
+    return { rows: [{ id: values[1] }] }
 } }))
 const { handleMessage } = await import('../src/utils/ws/handleMessage.ts')
 
@@ -35,5 +43,7 @@ test('share edits acknowledge persisted content, and report failed or missing sa
     await edit('deleted share')
     await Bun.sleep(1100)
     expect(messages.at(-1)?.type).toBe('error')
+    expect(messages.map(message => message.type)).toEqual(['ack', 'error', 'error'])
+    expect(saved).toBe('latest')
     expect(pendingUpdates.size).toBe(0)
 })
