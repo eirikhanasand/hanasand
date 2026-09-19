@@ -3,9 +3,10 @@ import config from '@/config'
 type GetUserSharesProps = {
     id: string
     token: string
+    organizationId?: string
 }
 
-export async function getUserShares({ id, token }: GetUserSharesProps): Promise<Share[] | string> {
+export async function getUserShares({ id, token, organizationId }: GetUserSharesProps): Promise<Share[] | string> {
     try {
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
@@ -13,6 +14,7 @@ export async function getUserShares({ id, token }: GetUserSharesProps): Promise<
         const response = await fetch(`${config.url.api}/share/user/${id}`, {
             headers: {
                 'Authorization': `Bearer ${normalizedToken}`,
+                ...(organizationId ? { 'x-organization-id': organizationId } : {}),
                 id
             },
             signal: controller.signal
@@ -32,6 +34,6 @@ export async function getUserShares({ id, token }: GetUserSharesProps): Promise<
     } catch (error) {
         return error instanceof Error && error.name === 'AbortError'
             ? 'Unable to load shares.'
-            : []
+            : 'Unable to load shares.'
     }
 }

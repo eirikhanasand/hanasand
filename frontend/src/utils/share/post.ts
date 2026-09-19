@@ -33,7 +33,8 @@ export default async function postShare({
     )
 
     try {
-        const response = await fetch(`${config.url.api}/share`, {
+        const url = typeof window !== 'undefined' && token && userId ? '/api/backend/share' : `${config.url.api}/share`
+        const response = await fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

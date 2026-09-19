@@ -28,7 +28,7 @@ export default function CreateClient() {
         }
 
         const result = await postArticle(id, content)
-        if (result.status === 200) {
+        if (result.status === 200 || result.status === 201) {
             router.push(`/content/articles?message=${result.message}`)
         } else {
             setError(result.message)

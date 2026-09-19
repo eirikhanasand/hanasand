@@ -8,6 +8,7 @@ import { AlarmClockCheck, ChevronDown, ChevronsUp, FolderKanban, NotebookText, P
 import { useEffect, useId, useState, useSyncExternalStore } from 'react'
 import { getDashboardViewMode, setDashboardViewMode } from '@/utils/layout/viewMode'
 import { getDashboardNavigation, navigationLinks, type NavigationAccess, type NavigationItem } from '@/utils/layout/dashboardNavigation'
+import { useWorkspace } from '@/components/organizations/workspaceProvider'
 
 const sectionIcons: Record<string, typeof ShieldCheck> = {
     'Security operations': ShieldCheck,
@@ -21,6 +22,7 @@ const sectionIcons: Record<string, typeof ShieldCheck> = {
 }
 
 export default function DashboardSidebar({ initialPreferences = { expanded: {}, pinned: [] }, initialMode = 'normal', ...access }: NavigationAccess & { initialPreferences?: Preferences, initialMode?: 'normal' | 'compact' }) {
+    const { organizationId } = useWorkspace()
     const pathname = usePathname()
     const domId = useId()
     const storageKey = `dashboard-navigation:v1:${access.id}`
@@ -60,7 +62,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
         window.addEventListener('vms-updated', refresh)
         return () => { controller.abort(); window.removeEventListener('vms-updated', refresh) }
     }, [access.id, pathname])
-    const sections = getDashboardNavigation({ ...access, hasVMs })
+    const sections = getDashboardNavigation({ ...access, hasVMs, hasContentOrganization: Boolean(organizationId) })
     const links = navigationLinks(sections)
     const route = pathname
     const active = links.filter(item => route === item.href || route.startsWith(`${item.href}/`))

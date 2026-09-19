@@ -16,7 +16,7 @@ export async function postArticle(id: string, content: string): Promise<{ status
     }
 
     try {
-        const response = await fetchWithRetry(`${config.url.api}/article/${id}`, {
+        const response = await fetchWithRetry(`/api/backend/article/${encodeURIComponent(id)}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

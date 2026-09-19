@@ -52,6 +52,11 @@ async function handler(req: NextRequest, context: Context) {
     })
     if (token) headers.set('Authorization', `Bearer ${token}`)
     if (id) headers.set('id', id)
+    if (['notes', 'share', 'article', 'articles', 'thought', 'thoughts'].includes(pathSegments[0])) {
+        headers.delete('x-organization-id')
+        const organizationId = await activeOrganizationId()
+        if (organizationId) headers.set('x-organization-id', organizationId)
+    }
 
     const impersonationToken = cookieStore.get('impersonation_token')?.value
     if (impersonationToken) {

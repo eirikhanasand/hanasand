@@ -5,18 +5,15 @@ import { unlink } from 'fs/promises'
 import ensureRepositoryUpToDate from '#utils/git/ensureRepositoryUpToDate.ts'
 import commitAndPush from '#utils/git/commitAndPush.ts'
 import { join } from 'path'
-import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import { articleOwnership, requireEditorialWrite } from '#utils/contentOrganization.ts'
+import run from '#db'
 
 export default async function deleteArticle(req: FastifyRequest<{ Params: { id: string } }>, res: FastifyReply) {
-    const { valid } = await tokenWrapper(req, res)
-    const { valid: validRole } = await hasRole(req, res, 'content_admin')
-    if (!valid || !validRole) {
-        return res.status(401).send({ error: 'Unauthorized.' })
-    }
-
     const { id: Id } = req.params
     const id = Id.endsWith('.md') ? Id : `${Id}.md`
+    if (!/^[\w.-]+\.md$/.test(id) || id.startsWith('.')) return res.status(400).send({ error: 'Invalid article id.' })
+    const ownership = await articleOwnership(id)
+    if (!await requireEditorialWrite(req, res, ownership?.organization_id || null)) return
     const filePath = join(ARTICLES_DIR, id)
     let deleted = false
 
@@ -36,5 +33,6 @@ export default async function deleteArticle(req: FastifyRequest<{ Params: { id: 
     }
 
     await commitAndPush(`Deleted article ${id}.`)
+    await run('DELETE FROM article_ownership WHERE id = $1', [id])
     return res.send({ deleted: true, id })
 }

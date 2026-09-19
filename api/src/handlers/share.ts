@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import { validateSession } from '#utils/auth/session.ts'
+import { requestedContentOrganization, requireContentOrganization } from '#utils/contentOrganization.ts'
 
 type ShareRow = {
     id: string
@@ -9,6 +10,7 @@ type ShareRow = {
     git: string | null
     locked: boolean
     owner: string
+    organization_id: string | null
     parent: string
     alias: string
     type: 'file' | 'folder'
@@ -57,12 +59,15 @@ export async function getUserShares(req: FastifyRequest, res: FastifyReply) {
     const { id } = req.params as { id: string }
     const auth = await authenticatedUser(req)
     if (!auth || auth !== id) return res.status(401).send({ error: 'Unauthorized.' })
+    const organizationId = requestedContentOrganization(req)
+    if (!await requireContentOrganization(req, res, organizationId)) return
     const result = await run(`
         SELECT * FROM share
-        WHERE owner = $1 AND COALESCE(parent, '') = ''
+        WHERE (($2::text IS NULL AND organization_id IS NULL AND owner = $1) OR organization_id = $2)
+          AND COALESCE(parent, '') = ''
         ORDER BY updated_at DESC
         LIMIT 100
-    `, [id])
+    `, [id, organizationId])
     return res.send(result.rows.map(row => toShare(row as ShareRow)))
 }
 
@@ -70,12 +75,15 @@ export async function getUserProjects(req: FastifyRequest, res: FastifyReply) {
     const { id } = req.params as { id: string }
     const auth = await authenticatedUser(req)
     if (!auth || auth !== id) return res.status(401).send({ error: 'Unauthorized.' })
+    const organizationId = requestedContentOrganization(req)
+    if (!await requireContentOrganization(req, res, organizationId)) return
 
     const result = await run(`
         WITH RECURSIVE roots AS (
             SELECT *
             FROM share
-            WHERE owner = $1 AND COALESCE(parent, '') = ''
+            WHERE (($2::text IS NULL AND organization_id IS NULL AND owner = $1) OR organization_id = $2)
+              AND COALESCE(parent, '') = ''
             ORDER BY updated_at DESC
             LIMIT 100
         ),
@@ -97,7 +105,7 @@ export async function getUserProjects(req: FastifyRequest, res: FastifyReply) {
         JOIN tree ON tree.root_id = root.id
         GROUP BY root.id, root.alias, root.owner, root.updated_at
         ORDER BY root.updated_at DESC
-    `, [id])
+    `, [id, organizationId])
 
     return res.send(result.rows.map(row => ({
         alias: row.alias,
@@ -115,7 +123,9 @@ export async function getProject(req: FastifyRequest, res: FastifyReply) {
     if (!root) return res.status(404).send({ error: 'Project not found.' })
 
     const auth = await authenticatedUser(req)
-    if (root.owner !== 'anonymous' && auth !== root.owner) {
+    if (root.organization_id && root.owner !== 'anonymous') {
+        if (!await requireContentOrganization(req, res, root.organization_id)) return
+    } else if (root.owner !== 'anonymous' && auth !== root.owner) {
         return res.status(401).send({ error: 'Unauthorized.' })
     }
 
@@ -135,10 +145,17 @@ export async function postShare(req: FastifyRequest, res: FastifyReply) {
     const path = body.path || body.name || id
     const alias = cleanAlias(body.name || body.path || id)
     const parent = body.parent || ''
+    const existing = await findShare(id)
+    const parentShare = parent ? await findShare(parent) : undefined
+    if (parent && !parentShare) return res.status(404).send({ error: 'Parent share not found.' })
+    const organizationId = existing?.organization_id ?? parentShare?.organization_id ?? requestedContentOrganization(req)
+    if (existing && (existing.organization_id || null) !== (organizationId || null)) return res.status(409).send({ error: 'Share already belongs to another workspace.' })
+    if (parentShare && (parentShare.organization_id || null) !== (organizationId || null)) return res.status(409).send({ error: 'Parent belongs to another workspace.' })
+    if (!await requireContentOrganization(req, res, organizationId, true)) return
     const content = typeof body.content === 'string' ? body.content : null
     const result = await run(`
-        INSERT INTO share (id, path, content, owner, parent, alias, type, updated_at)
-        VALUES ($1, $2, COALESCE($3, ''), $4, $5, $6, $7, NOW())
+        INSERT INTO share (id, path, content, owner, parent, alias, type, organization_id, updated_at)
+        VALUES ($1, $2, COALESCE($3, ''), $4, $5, $6, $7, $8, NOW())
         ON CONFLICT (id) DO UPDATE SET
             path = EXCLUDED.path,
             content = COALESCE($3, share.content),
@@ -147,8 +164,10 @@ export async function postShare(req: FastifyRequest, res: FastifyReply) {
             alias = EXCLUDED.alias,
             type = EXCLUDED.type,
             updated_at = NOW()
+        WHERE share.organization_id IS NOT DISTINCT FROM $8
         RETURNING *
-    `, [id, path, content, owner, parent, alias, type])
+    `, [id, path, content, owner, parent, alias, type, organizationId])
+    if (!result.rows.length) return res.status(409).send({ error: 'Share ownership changed. Reload and try again.' })
     const share = result.rows[0] as ShareRow
     if (body.includeTree) {
         const rows = await listSharesForRoot(share)
@@ -162,6 +181,11 @@ export async function putShare(req: FastifyRequest, res: FastifyReply) {
     const body = req.body as Partial<ShareInput & { locked?: boolean, alias?: string }> ?? {}
     const existing = await findShare(id)
     if (!existing) return res.status(404).send({ error: 'Share not found.' })
+    if (!await requireContentOrganization(req, res, existing.organization_id, true)) return
+    if (body.parent) {
+        const parent = await findShare(body.parent)
+        if (!parent || parent.organization_id !== existing.organization_id) return res.status(409).send({ error: 'Parent belongs to another workspace.' })
+    }
     const result = await run(`
         UPDATE share
         SET path = COALESCE($2, path),
@@ -187,6 +211,9 @@ export async function putShare(req: FastifyRequest, res: FastifyReply) {
 
 export async function deleteShare(req: FastifyRequest, res: FastifyReply) {
     const { id } = req.params as { id: string }
+    const existing = await findShare(id)
+    if (!existing) return res.status(404).send({ error: 'Share not found.' })
+    if (!await requireContentOrganization(req, res, existing.organization_id, true)) return
     await deleteShareTree(id)
     return res.send({ deleted: id })
 }
@@ -197,7 +224,9 @@ export async function deleteProject(req: FastifyRequest, res: FastifyReply) {
     if (!root) return res.status(404).send({ error: 'Project not found.' })
 
     const auth = await authenticatedUser(req)
-    if (!auth || auth !== root.owner) return res.status(401).send({ error: 'Unauthorized.' })
+    if (root.organization_id) {
+        if (!await requireContentOrganization(req, res, root.organization_id, true)) return
+    } else if (!auth || auth !== root.owner) return res.status(401).send({ error: 'Unauthorized.' })
 
     await deleteShareTree(root.id)
     return res.send({ deleted: root.alias || root.id })
@@ -205,6 +234,9 @@ export async function deleteProject(req: FastifyRequest, res: FastifyReply) {
 
 export async function toggleShareLock(req: FastifyRequest, res: FastifyReply) {
     const { id } = req.params as { id: string }
+    const existing = await findShare(id)
+    if (!existing) return res.status(404).send({ error: 'Share not found.' })
+    if (!await requireContentOrganization(req, res, existing.organization_id, true)) return
     const result = await run('UPDATE share SET locked = NOT locked, updated_at = NOW() WHERE id = $1 RETURNING *', [id])
     const share = result.rows[0] as ShareRow | undefined
     if (!share) return res.status(404).send({ error: 'Share not found.' })
@@ -227,13 +259,14 @@ async function findShare(id: string) {
 async function deleteShareTree(id: string) {
     await run(`
         WITH RECURSIVE descendants AS (
-            SELECT id
+            SELECT id, organization_id
             FROM share
             WHERE id = $1
             UNION ALL
-            SELECT child.id
+            SELECT child.id, child.organization_id
             FROM share child
             JOIN descendants ON child.parent = descendants.id
+              AND child.organization_id IS NOT DISTINCT FROM descendants.organization_id
         )
         DELETE FROM share
         WHERE id IN (SELECT id FROM descendants)
@@ -241,7 +274,9 @@ async function deleteShareTree(id: string) {
 }
 
 async function listSharesForRoot(root: ShareRow) {
-    const result = await run('SELECT * FROM share WHERE owner = $1 ORDER BY parent ASC, type DESC, path ASC', [root.owner])
+    const result = await run(`SELECT * FROM share WHERE
+        (organization_id IS NULL AND $2::text IS NULL AND owner = $1) OR organization_id = $2
+        ORDER BY parent ASC, type DESC, path ASC`, [root.owner, root.organization_id])
     const rows = result.rows as ShareRow[]
     const descendants = new Set([root.id])
     let changed = true
@@ -284,6 +319,7 @@ function toShare(row: ShareRow) {
         git: row.git,
         locked: row.locked,
         owner: row.owner,
+        organization_id: row.organization_id,
         parent: row.parent || '',
         alias: row.alias,
         type: row.type,

@@ -1,24 +1,21 @@
-import hasRole from '#utils/auth/hasRole.ts'
-import tokenWrapper from '#utils/auth/tokenWrapper.ts'
+import { requestedContentOrganization, requireEditorialWrite } from '#utils/contentOrganization.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 
 export default async function postThought(req: FastifyRequest<{ Body: { title: string, id: string } }>, res: FastifyReply) {
-    const { valid } = await tokenWrapper(req, res)
-    const { valid: validRole } = await hasRole(req, res, 'content_admin')
-    if (!valid || !validRole) {
-        return res.status(401).send({ error: 'Unauthorized.' })
-    }
+    const organizationId = requestedContentOrganization(req)
+    if (!await requireEditorialWrite(req, res, organizationId)) return
 
-    const { title, id } = req.body ?? {}
+    const { title } = req.body ?? {}
+    const id = req.headers.id as string
     if (!title || !id) {
         return res.status(400).send({ error: 'Missing thought title or creator.' })
     }
 
     try {
         const result = await run(
-            'INSERT INTO thoughts (title, created_by) VALUES ($1, $2) RETURNING *',
-            [title, id]
+            'INSERT INTO thoughts (title, created_by, organization_id) VALUES ($1, $2, $3) RETURNING *',
+            [title, id, organizationId]
         )
 
         return res.status(201).send(result.rows[0])

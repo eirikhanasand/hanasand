@@ -12,11 +12,12 @@ export type NavigationAccess = {
     isAdmin: boolean
     canManageSystem: boolean
     canManageContent: boolean
+    hasContentOrganization?: boolean
     hasVMs?: boolean
     canReviewIntel?: boolean
 }
 
-export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = false, canManageSystem, canManageContent, canReviewIntel = isAdmin, hasVMs = false }: NavigationAccess): NavigationItem[] {
+export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = false, canManageSystem, canManageContent, hasContentOrganization = false, canReviewIntel = isAdmin, hasVMs = false }: NavigationAccess): NavigationItem[] {
     const link = (label: string, href: string, visible = true): NavigationItem => ({ label, href, visible })
     const group = (label: string, items: NavigationItem[]): NavigationItem => ({ label, items })
     const sections = [
@@ -91,9 +92,9 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
             link('Upload', '/upload'),
             link('Content Management', '/content', canManageContent),
             group('Writing', [
-                link('Notes', '/notes', canManageContent),
-                link('Articles', '/content/articles', canManageContent),
-                link('Thoughts', '/content/thoughts', canManageContent),
+                link('Notes', '/notes', canManageContent || hasContentOrganization),
+                link('Articles', '/content/articles', canManageContent || hasContentOrganization),
+                link('Thoughts', '/content/thoughts', canManageContent || hasContentOrganization),
             ]),
             link('Shares', '/shares'),
         ]),

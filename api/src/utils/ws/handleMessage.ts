@@ -2,6 +2,8 @@ import type { RawData } from 'ws'
 import { WebSocket as WS } from 'ws'
 import { pendingUpdates } from '../../plugins/ws'
 import run from '#db'
+import { validateSession } from '#utils/auth/session.ts'
+import { contentOrganizationAccess } from '#utils/contentOrganization.ts'
 
 export async function handleMessage(
     id: string,
@@ -15,8 +17,21 @@ export async function handleMessage(
             return
         }
 
+        const share = await run('SELECT organization_id FROM share WHERE id = $1', [id])
+        if (!share.rows.length) return
+        let userId: string | null = null
+        if (share.rows[0].organization_id) {
+            const session = typeof msg.userId === 'string' && typeof msg.token === 'string'
+                ? await validateSession({ id: msg.userId, token: msg.token }).catch(() => null) : null
+            userId = session?.user.id || null
+            if (!userId || !await contentOrganizationAccess(share.rows[0].organization_id, userId, true)) {
+                socket.send(JSON.stringify({ type: 'error', error: 'You do not have permission to edit this organization’s share.' }))
+                return
+            }
+        }
+
         broadcastUpdate(id, socket, msg.content, clients)
-        queueSave(id, socket, msg.content)
+        queueSave(id, socket, msg.content, userId)
     } catch (error) {
         console.error(`Invalid WebSocket message: ${error}`)
     }
@@ -42,7 +57,7 @@ function broadcastUpdate(id: string, sender: WS, content: string, Clients: Map<s
     }
 }
 
-function queueSave(id: string, socket: WS, content: string) {
+function queueSave(id: string, socket: WS, content: string, userId: string | null) {
     if (pendingUpdates.has(id)) {
         const entry = pendingUpdates.get(id)!
         clearTimeout(entry.timer)
@@ -53,8 +68,9 @@ function queueSave(id: string, socket: WS, content: string) {
         if (!entry) return
         try {
             const result = await run(
-                'UPDATE share SET content = $1, updated_at = NOW() WHERE id = $2 RETURNING id',
-                [entry.content, id]
+                `UPDATE share SET content = $1, updated_at = NOW() WHERE id = $2
+                 AND (organization_id IS NULL OR content_organization_access(organization_id, $3, TRUE)) RETURNING id`,
+                [entry.content, id, entry.userId || null]
             )
             if (!result.rows.length) throw new Error('Share no longer exists')
             if (socket.readyState === WS.OPEN) socket.send(JSON.stringify({ type: 'ack', content: entry.content }))
@@ -66,5 +82,5 @@ function queueSave(id: string, socket: WS, content: string) {
         }
     }, 1000)
 
-    pendingUpdates.set(id, { content, timer })
+    pendingUpdates.set(id, { content, timer, userId })
 }

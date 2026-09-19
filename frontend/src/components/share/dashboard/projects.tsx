@@ -8,6 +8,7 @@ import { redirect } from 'next/navigation'
 import { DashboardPanel } from '@/components/dashboard/ui'
 import ErrorNotice from '@/components/error/errorNotice'
 import type { ReactNode } from 'react'
+import { activeOrganizationId } from '@/utils/organizations/serverWorkspace'
 
 export default async function Shares() {
     const Cookies = await cookies()
@@ -17,7 +18,7 @@ export default async function Shares() {
         return redirect('/logout?path=/login%3Fpath%3D/dashboard%26expired=true')
     }
 
-    const shares = await getUserShares({ id, token })
+    const shares = await getUserShares({ id, token, organizationId: await activeOrganizationId() })
     const shareRows = typeof shares === 'string' ? [] : shares as Share[]
     const latestShare = [...shareRows].sort((a, b) => dateMs(b.timestamp) - dateMs(a.timestamp))[0]
     const lockedCount = shareRows.filter(share => share.locked).length

@@ -1,12 +1,12 @@
 import DashboardArticle from '@/components/articles/dashboardArticle'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
-import fetchArticles from '@/utils/articles/fetchArticles'
+import fetchWorkspaceContent from '@/utils/organizations/fetchWorkspaceContent'
 import { Clock3, FileText, Plus, Radio, Timer } from 'lucide-react'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 
 export default async function Page() {
-    const articles = await fetchArticles() as Article[]
+    const articles = await fetchWorkspaceContent<Article>('articles')
     const latest = [...articles].sort((a, b) => dateMs(b.modified || b.created) - dateMs(a.modified || a.created))[0]
     const totalWords = articles.reduce((sum, article) => sum + (article.metadata?.wordCount || countWords(article.content)), 0)
     const totalMinutes = articles.reduce((sum, article) => sum + (article.metadata?.estimatedMinutes || 0), 0)
