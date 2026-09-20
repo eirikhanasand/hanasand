@@ -3,6 +3,13 @@ from pathlib import Path
 release=sys.argv[1]
 if not re.fullmatch(r'[0-9a-f]{40}', release):
     raise SystemExit('Pass the full built release commit.')
+catchup={}
+for key,minimum,maximum in [('LOG_CATCHUP_BATCH_LIMIT',1,1000),('LOG_CATCHUP_INTERVAL_MS',50,5000)]:
+    if key in os.environ:
+        value=os.environ[key]
+        if not value.isdecimal() or not minimum <= int(value) <= maximum:
+            raise SystemExit(f'{key} must be an integer from {minimum} to {maximum}.')
+        catchup[key]=value
 image='hanasand-resilience-api:'+release
 root='/home/hanasand/hanasand'
 lock=open('/tmp/hanasand-frontend-deploy.lock','a')
@@ -52,7 +59,7 @@ def ready(expected):
 try:
     try:
         # This worker owns the Inspur LXD socket; do not inherit the old OVH default.
-        apply(image,{**settings,'HANASAND_RELEASE_COMMIT':release,'VM_HOST_ID':'inspur'})
+        apply(image,{**settings,**catchup,'HANASAND_RELEASE_COMMIT':release,'VM_HOST_ID':'inspur'})
         ready(release)
     except Exception:
         apply(original['Image'],settings)
