@@ -117,10 +117,7 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
                     <span className='grid h-12 w-12 place-items-center rounded-lg border border-ui-border bg-ui-raised text-ui-primary'>
                         <UploadCloud className='h-5 w-5' />
                     </span>
-                    <span className='grid gap-1'>
-                        <span className='text-sm font-semibold text-ui-text'>Drop public media here</span>
-                        <span className='text-xs leading-5 text-ui-muted'>Images and videos only. Do not upload secrets or customer evidence.</span>
-                    </span>
+                    <span className='text-sm font-semibold text-ui-text'>Drop files here</span>
                     <input
                         id='fileInputDesktop'
                         type='file'
