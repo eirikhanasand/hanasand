@@ -45,7 +45,9 @@ export default async function postMailAction(req: FastifyRequest, res: FastifyRe
             }
 
             const keywordPatch: Record<string, boolean | null> = {}
-            if (body.action === 'junk') {
+            if (body.action === 'archive') {
+                keywordPatch.$seen = true
+            } else if (body.action === 'junk') {
                 keywordPatch.$junk = true
                 keywordPatch.$seen = true
             } else if (body.action === 'ham' || body.action === 'restore') {
