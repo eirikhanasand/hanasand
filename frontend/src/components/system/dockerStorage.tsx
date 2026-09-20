@@ -63,8 +63,8 @@ export default function DockerStoragePanel() {
             <details className='rounded-lg border border-ui-border'>
                 <summary className='cursor-pointer px-3 py-2 text-sm font-semibold'>Unused images ({state.unusedImages.length})</summary>
                 <div className='max-h-72 overflow-auto border-t border-ui-border'><table className='w-full text-left text-sm'><thead><tr className='text-xs text-ui-muted'><th className='p-3'>Image</th><th className='p-3'>Size</th><th className='p-3'>Cleanup</th></tr></thead><tbody>{state.unusedImages.map(image => <tr key={image.id} className='border-t border-ui-border'><td className='max-w-xs break-all p-3 font-mono text-xs'>{image.names.join(', ')}</td><td className='whitespace-nowrap p-3 tabular-nums'>{bytes(image.sizeBytes)}</td><td className='p-3 text-xs text-ui-muted'>{image.retainedReason || 'Will be removed'}</td></tr>)}</tbody></table>{state.unusedImages.length === 0 && <p className='p-3 text-sm text-ui-muted'>No unused images.</p>}</div>
+                <p className='border-t border-ui-border p-3 text-xs text-ui-muted'>Recent images and two releases per image are kept for rollback. Image sizes include shared layers.</p>
             </details>
-            <p className='text-xs text-ui-muted'>Recent images and two releases per image are kept for rollback. Image sizes include shared layers.</p>
             <p className='text-right text-[11px] text-ui-muted'>Checked <time dateTime={state.checkedAt}>{date(state.checkedAt)}</time></p>
         </>}
     </section>
