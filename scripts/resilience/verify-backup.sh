@@ -1,6 +1,9 @@
 #!/bin/sh
 set -eu
 backup=${1:?backup directory required}
+recovery_timeout=${BACKUP_VERIFY_RECOVERY_TIMEOUT_SECONDS:-7200}
+case "$recovery_timeout" in ''|*[!0-9]*) printf 'Backup recovery timeout must be a positive number of seconds.\n' >&2; exit 1;; esac
+test "$recovery_timeout" -gt 0
 image=postgres@sha256:29342cb52157b098821961d2c14eec3c019071f56a5d559e990cf07cf541ea9b
 volume=hanasand-resilience-restore-check-$(date -u +%Y%m%d%H%M%S)
 name=$volume
@@ -24,7 +27,7 @@ cleanup() { docker rm -f "$name" >/dev/null 2>&1 || true; docker volume rm "$vol
 trap cleanup EXIT
 # Every restore uses a new isolated volume; no production database is stopped or overwritten.
 docker volume create "$volume" >/dev/null
-docker run --rm "$@" --network none --cpus 2 --memory 512m -v "$backup:/backup:ro" -v "$volume:/verify" "$image" sh -ec '
+docker run --rm "$@" --network none --cpus 2 --memory 16g --memory-swap 16g -v "$backup:/backup:ro" -v "$volume:/verify" "$image" sh -ec '
  tar -xzf /backup/base.tar.gz -C /verify
  mkdir -p /verify/pg_wal
  tar -xzf /backup/pg_wal.tar.gz -C /verify/pg_wal
@@ -36,14 +39,19 @@ docker run --rm "$@" --network none --cpus 2 --memory 512m -v "$backup:/backup:r
  chown -R postgres:postgres /verify
  chmod 700 /verify
 '
-docker run -d --name "$name" "$@" --network none --memory 1g --cpus 1 -v "$volume:/var/lib/postgresql/data" "$image" postgres -p 5432 -c listen_addresses=127.0.0.1 -c shared_buffers=128MB >/dev/null
+docker run -d --name "$name" "$@" --network none --memory 16g --memory-swap 16g --cpus 1 -v "$volume:/var/lib/postgresql/data" "$image" postgres -p 5432 -c listen_addresses=127.0.0.1 -c shared_buffers=4GB >/dev/null
 ready=0
 # Recovery has the same I/O budget, so allow it time to replay the backup WAL.
-for attempt in $(seq 1 300); do
- if docker exec "$name" pg_isready -U hanasand -d hanasand >/dev/null 2>&1; then ready=1; break; fi
- sleep 1
+deadline=$(($(date +%s) + recovery_timeout))
+while test "$(date +%s)" -lt "$deadline"; do
+ if docker exec "$name" pg_isready -t 2 -U hanasand -d hanasand >/dev/null 2>&1; then ready=1; break; fi
+ if test "$(docker inspect --format '{{.State.Running}}' "$name")" != true; then
+  printf 'Backup recovery stopped before the database was ready.\n' >&2
+  exit 1
+ fi
+ sleep 5
 done
-test "$ready" = 1
+test "$ready" = 1 || { printf 'Backup recovery did not finish within %s seconds.\n' "$recovery_timeout" >&2; exit 1; }
 docker exec "$name" psql -U hanasand -d hanasand -v ON_ERROR_STOP=1 -c "CREATE TABLE public.resilience_restore_probe (id integer PRIMARY KEY); INSERT INTO public.resilience_restore_probe VALUES (1); SELECT pg_is_in_recovery(), count(*) FROM public.resilience_restore_probe; DROP TABLE public.resilience_restore_probe;" >/dev/null
 python3 - "$backup" <<'JSON'
 import datetime,hashlib,json,pathlib,sys
