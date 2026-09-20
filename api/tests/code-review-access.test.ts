@@ -6,7 +6,7 @@ mock.module('../src/utils/auth/session.ts', () => ({ validateSession: async() =>
 mock.module('../src/utils/db.ts', () => ({ default: async() => ({ rows: [] }), queryOnce: async() => ({ rows: [] }), withTransaction: async() => {}, isTransientDatabaseError: () => false }))
 mock.module('../src/utils/resilience.ts', () => ({ recoveryReadOnly: () => false }))
 mock.module('../src/utils/rateLimit/config.ts', () => ({
-    registerRateLimitRoute: () => {}, resetSharedRateLimitBuckets: async() => {}, consumeSharedRateLimitBucket: async() => {},
+    registerRateLimitRoute: () => {}, resetSharedRateLimitBuckets: async() => {}, consumeSharedRateLimitPair: async () => {}, consumeSharedRateLimitBucket: async() => {},
     getRateLimitSettings: async() => ({ enabled: false }),
 }))
 mock.module('../src/utils/auth/apiKeys.ts', () => ({ organizationPublicApiScopes: () => [], matchApiKeyScope: () => null, validateApiKey: async() => null }))

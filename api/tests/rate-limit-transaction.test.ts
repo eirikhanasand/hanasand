@@ -18,12 +18,14 @@ mock.module('#utils/resilience.ts', () => ({ recoveryReadOnly: () => false }))
 mock.module('#utils/rateLimit/config.ts', () => ({
     registerRateLimitRoute: () => {}, resetSharedRateLimitBuckets: () => {},
     getRateLimitSettings: async () => ({ enabled: true, defaults: { authenticated: { windowMs: 60000, maxRequests: 100 } }, overrides: [] }),
-    consumeSharedRateLimitBucket: async ({ key }: { key: string }, query: unknown) => {
-        expect(query).toBe(transactionQuery)
-        const kind = key.includes(':global:') ? 'global' : 'route'
-        operations.push(kind)
-        if (kind === 'route' && failRoute) throw new Error('Database write failed')
-        return { allowed: denied !== kind, remaining: 5, resetAt: Date.now() + 60000, retryAfterMs: 60000 }
+    consumeSharedRateLimitBucket: async () => {},
+    consumeSharedRateLimitPair: async (global: {key: string}, route: {key: string}) => {
+        expect(global.key).toBe('user:audit-user:global:authenticated')
+        expect(route.key).toBe('user:audit-user:route:authenticated:GET:/api/system/events')
+        operations.push('pair')
+        if (failRoute) throw new Error('Database write failed')
+        const check = (kind: string) => ({ allowed: denied !== kind, remaining: 5, resetAt: Date.now() + 60000, retryAfterMs: 60000 })
+        return {globalCheck: check('global'), routeCheck: denied === 'global' ? null : check('route')}
     },
 }))
 const { default: rateLimit } = await import('../src/plugins/rateLimit.ts')
@@ -35,9 +37,9 @@ beforeEach(() => { operations.length = 0; denied = ''; failRoute = false })
 afterAll(() => app.close())
 const request = () => app.inject({ method: 'GET', url: '/api/system/events', headers: { authorization: 'Bearer fixture' } })
 
-test('both counters commit once before running the endpoint', async () => {
+test('both counters are checked atomically before running the endpoint', async () => {
     expect((await request()).statusCode).toBe(200)
-    expect(operations).toEqual(['begin', 'global', 'route', 'commit', 'handler'])
+    expect(operations).toEqual(['pair', 'handler'])
 })
 
 test('a denied global limit commits its count without consuming the route quota', async () => {
@@ -45,17 +47,17 @@ test('a denied global limit commits its count without consuming the route quota'
     const response = await request()
     expect(response.statusCode).toBe(429)
     expect(response.headers['retry-after']).toBeDefined()
-    expect(operations).toEqual(['begin', 'global', 'commit'])
+    expect(operations).toEqual(['pair'])
 })
 
 test('a denied route limit commits both counters and never runs the endpoint', async () => {
     denied = 'route'
     expect((await request()).statusCode).toBe(429)
-    expect(operations).toEqual(['begin', 'global', 'route', 'commit'])
+    expect(operations).toEqual(['pair'])
 })
 
-test('a failed counter write rolls back and fails closed', async () => {
+test('a failed atomic counter write fails closed', async () => {
     failRoute = true
     expect((await request()).statusCode).toBe(500)
-    expect(operations).toEqual(['begin', 'global', 'route', 'rollback'])
+    expect(operations).toEqual(['pair'])
 })
