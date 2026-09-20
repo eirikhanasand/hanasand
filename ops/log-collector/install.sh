@@ -51,6 +51,15 @@ SyslogIdentifier=hanasand-log-collector
 [Install]
 WantedBy=multi-user.target
 UNIT
+# Audit replay must not compete at equal disk priority with the OVH replica.
+if [ "$host" = ovhcloud ]; then
+    install -d -m 0755 /etc/systemd/system/hanasand-log-collector.service.d
+    cat > /etc/systemd/system/hanasand-log-collector.service.d/io-priority.conf <<'PRIORITY'
+[Service]
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+PRIORITY
+fi
 systemctl daemon-reload
 # Configuration is installed separately with the existing internal ingestion token.
 test -f /etc/hanasand/log-collector.json
