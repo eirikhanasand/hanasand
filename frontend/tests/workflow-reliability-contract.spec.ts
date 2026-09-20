@@ -55,3 +55,15 @@ test('public workflow reliability contracts are not demo-only', async () => {
     expect(contactHandler).toContain('security review material')
 
 })
+
+test('legacy plaintext password lookup is retired', async () => {
+    const apiSockets = await readFile(path.join(root, '../api/src/plugins/ws.ts'), 'utf8')
+    const apiConfig = await readFile(path.join(root, '../api/src/constants.ts'), 'utf8')
+    const rangeRoute = await readFile(path.join(root, 'src/app/api/pwned/route.ts'), 'utf8')
+    expect(apiSockets).not.toContain('/api/ws/pwned/')
+    expect(apiSockets).not.toContain('pwnedClients')
+    expect(apiConfig).not.toContain('PWNED_API_URL')
+    expect(apiConfig).not.toContain('PWNED_WS_URL')
+    expect(rangeRoute).toContain('PWNED_RANGE_API')
+    expect(rangeRoute).toContain('^[A-F0-9]{5}$')
+})

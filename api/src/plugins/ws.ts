@@ -31,7 +31,6 @@ type PendingUpdates = {
     userId?: string | null
 }
 
-const messageBuffer: Buffer[] = []
 const browserRunWarningLogTimes = new Map<string, number>()
 const browserRunFailureLogTimes = new Map<string, number>()
 const browserRunUnreachableLogTimes = new Map<string, number>()
@@ -53,7 +52,6 @@ type BrowserRunLogContext = {
     framesDelivered?: number
 }
 
-export const pwnedClients = new Map<string, Set<WebSocket>>()
 export const testClients = new Map<string, Set<WebSocket>>()
 export const shareClients = new Map<string, Set<WebSocket>>()
 export const pendingUpdates = new Map<string, PendingUpdates>()
@@ -83,53 +81,6 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
         fastify.addHook('onReady', async () => { maintain(); timer = setInterval(maintain, 5000); timer.unref() })
         fastify.addHook('onClose', async () => { clearInterval(timer) })
     }
-
-    // pwned
-    fastify.get('/api/ws/pwned/:id', { websocket: true }, (connection, req: FastifyRequest) => {
-        const id = (req.params as { id: string}).id
-
-        registerClient(id, connection, pwnedClients)
-
-        const internalWs = new WebSocket(`${process.env.PWNED_WS_URL || 'ws://pwned:8080/api/pwned/ws'}/${id}`)
-
-        internalWs.on('message', (msg) => {
-            connection.send(msg)
-        })
-
-        internalWs.on('open', () => {
-            messageBuffer.forEach((msg) => internalWs.send(msg))
-            messageBuffer.length = 0
-        })
-
-        connection.on('message', (msg: Buffer) => {
-            if (internalWs.readyState === WebSocket.OPEN) {
-                internalWs.send(msg)
-            } else {
-                messageBuffer.push(msg)
-            }
-        })
-
-        connection.on('close', () => {
-            removeClient(id, connection, pwnedClients)
-            internalWs.close()
-        })
-
-        internalWs.on('close', () => {
-            try {
-                connection.close()
-            } catch (error) {
-                void recordWebsocketFailure('pwned', id, error)
-            }
-        })
-
-        internalWs.on('error', (error) => {
-            void recordWebsocketFailure('pwned-internal', id, error)
-        })
-
-        connection.on('error', (error) => {
-            void recordWebsocketFailure('pwned-client', id, error)
-        })
-    })
 
     // test
     fastify.get('/api/ws/test/:id', { websocket: true }, (connection, req: FastifyRequest) => {
