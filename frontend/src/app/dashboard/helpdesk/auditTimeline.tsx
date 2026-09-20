@@ -242,7 +242,7 @@ export default function AuditTimeline({ events: initialEvents, params, responseE
                                             <div className='min-w-0'>
                                                 <div className='flex flex-wrap items-center gap-2 text-sm text-ui-text'>
                                                     <strong className='min-w-0 truncate'>{event.event_type}</strong>
-                                                    {event.acknowledged_at ? <span className='text-xs text-ui-muted'>Acknowledged</span> : null}
+                                                    {event.acknowledged_at ? <span className={`rounded-md border px-2 py-1 text-[11px] font-semibold uppercase ${outcomeClass('success')}`}>Acknowledged</span> : null}
                                                     {focused ? <span className='rounded-md border border-ui-primary/35 bg-ui-primary/10 px-2 py-1 text-[11px] font-semibold uppercase text-ui-primary'>Selected</span> : null}
                                                     <span className={`rounded-md border px-2 py-1 text-[11px] font-semibold uppercase ${severityClass(event.severity)}`}>{event.severity}</span>
                                                     <span className={`rounded-md border px-2 py-1 text-[11px] font-semibold uppercase ${outcomeClass(event.outcome)}`}>{event.outcome}</span>
