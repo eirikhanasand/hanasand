@@ -4,6 +4,9 @@ import Fastify from 'fastify'
 import websocket from '@fastify/websocket'
 import WebSocket from 'ws'
 import { once } from 'node:events'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { supportNotifications } from '../src/utils/support/live.ts'
 import registerSupportStream, { supportChangeAllowed } from '../src/handlers/supportStream.ts'
 import { queryOnce as query, closeDatabase } from '../src/utils/db.ts'
@@ -33,6 +36,28 @@ app.post('/support/tickets/:id/feedback', postSupportFeedback)
 const session = () => supportSessionHash(randomBytes(32).toString('hex'))
 const input = (message: string, handoff = false) => ({ requestId: randomUUID(), message, handoff })
 const reply = async () => 'You can reset your password from the sign-in page.'
+
+async function duringFailover(work: (standby: () => Promise<void>) => Promise<void>) {
+    const directory = mkdtempSync(join(tmpdir(), 'support-active-test-'))
+    const original = { ...process.env }
+    process.env.RESILIENCE_STATE_FILE = join(directory, 'state.json')
+    process.env.RESILIENCE_SITE = 'ovhcloud'
+    process.env.RESILIENCE_ESSENTIAL_ONLY = '1'
+    const placement = async (activeSite: string) => {
+        writeFileSync(process.env.RESILIENCE_STATE_FILE!, JSON.stringify({ site: 'ovhcloud', readOnly: false,
+            updatedAt: new Date().toISOString(), services: [{ id: 'api', activeSite, status: 'failed_over' }] }))
+        await Bun.sleep(1050)
+    }
+    try { await placement('ovhcloud'); await work(() => placement('inspur')) }
+    finally {
+        for (const key of ['RESILIENCE_STATE_FILE', 'RESILIENCE_SITE', 'RESILIENCE_ESSENTIAL_ONLY']) {
+            if (original[key] === undefined) delete process.env[key]
+            else process.env[key] = original[key]
+        }
+        rmSync(directory, { recursive: true })
+        await Bun.sleep(1050)
+    }
+}
 
 beforeAll(async () => {
     // This file refuses to run outside its disposable database.
@@ -97,6 +122,26 @@ test('AI failure saves the message; retry completes it exactly once', async () =
     const recovered = await sendSupportChat(hash, request, reply)
     expect(recovered.messages).toHaveLength(2)
     expect(recovered.error).toBeUndefined()
+})
+
+test('active failover sends unavailable AI to the human queue without reopening a resolved chat', async () => {
+    await duringFailover(async () => {
+        const hash = session()
+        const result = await sendSupportChat(hash, input('Help with my account'), async () => { throw new Error('Primary AI offline') })
+        expect(result.channel).toBe('human')
+        expect(result.error).toBeUndefined()
+        expect(result.messages.at(-1)?.body).toBe('Waiting for support.')
+        const queue = (await app.inject({ url: '/support/tickets', headers: { 'test-user': 'agent' } })).json()
+        expect(queue.tickets.some((ticket: any) => ticket.id === result.id)).toBe(true)
+        const other = session(), id = randomUUID()
+        const resolved = await sendSupportChat(other, { ...input('A slow AI answer'), conversationId: id }, async () => {
+            const response = await app.inject({ method: 'POST', url: `/support/tickets/${id}/status`, headers: { 'test-user': 'agent' }, payload: { status: 'closed' } })
+            expect(response.statusCode).toBe(200)
+            throw new Error('Late AI failure')
+        })
+        expect(resolved.status).toBe('closed')
+        expect(resolved.messages.filter(message => message.body === 'Waiting for support.')).toHaveLength(0)
+    })
 })
 
 test('handoff wins over pending AI, and duplicate handoff does not duplicate messages', async () => {
@@ -242,6 +287,14 @@ test('WebSockets use one-use visitor tickets and deliver committed changes acros
     const unauthorized = new WebSocket(address.replace('http:', 'ws:') + '/api/ws/support', { headers: { Origin: 'https://evil.example' } })
     expect((await once(unauthorized, 'close'))[0]).toBe(1008)
     a.socket.close(); b.socket.close(); unsubscribe(); await secondReplica.close()
+    await duringFailover(async standby => {
+        const active = await connect(token)
+        await Bun.sleep(100)
+        const stopped = once(active.socket, 'close')
+        await standby()
+        await sendSupportChat(hash, { ...input('Reply after failback', true), conversationId: id }, reply)
+        expect((await stopped)[0]).toBe(1013)
+    })
 })
 
 

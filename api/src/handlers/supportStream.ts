@@ -4,6 +4,7 @@ import { queryOnce } from '#db'
 import { validateSession } from '#utils/auth/session.ts'
 import { supportSessionHash } from '#utils/support/conversation.ts'
 import { supportNotifications, type SupportChange } from '#utils/support/live.ts'
+import { recoveryRequestAllowed } from '#utils/resilience.ts'
 
 export function supportChangeAllowed(change: SupportChange, viewer: { visitor?: string; id?: string; support?: boolean }) {
     return Boolean(viewer.visitor && viewer.visitor === change.visitor || viewer.id && (change.user === viewer.id || viewer.support && change.channel === 'human'))
@@ -29,13 +30,14 @@ export default function registerSupportStream(fastify: FastifyInstance) {
         socket.on('error', cleanup)
         socket.on('pong', () => { alive = true })
         const send = (value: unknown) => {
-            if (socket.bufferedAmount > 1024 * 1024) socket.close(1013)
+            if (!recoveryRequestAllowed('GET', '/api/ws/support') || socket.bufferedAmount > 1024 * 1024) socket.close(1013)
             else if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(value))
         }
         socket.on('message', async raw => {
             if (authenticated || authenticating) return
             authenticating = true
             try {
+                if (!recoveryRequestAllowed('GET', '/api/ws/support')) throw new Error('Support is not active on this site')
                 if (Buffer.byteLength(raw.toString()) > 4096) throw new Error('Invalid authentication')
                 const auth = JSON.parse(raw.toString())
                 const viewer: { visitor?: string; id?: string; support?: boolean } = {}
@@ -68,7 +70,11 @@ export default function registerSupportStream(fastify: FastifyInstance) {
                     if (!change || supportChangeAllowed(change, viewer)) send({ type: 'changed', ...(change ? { id: change.id } : {}) })
                 })
                 send({ type: 'ready' })
-                heartbeat = setInterval(() => { if (!alive) socket.terminate(); else { alive = false; socket.ping() } }, 20000)
+                heartbeat = setInterval(() => {
+                    if (!recoveryRequestAllowed('GET', '/api/ws/support')) socket.close(1013)
+                    else if (!alive) socket.terminate()
+                    else { alive = false; socket.ping() }
+                }, 20000)
             } catch (error) { request.log.warn({ err: error }, 'Support socket authentication failed'); socket.close(1008); cleanup() }
         })
     })

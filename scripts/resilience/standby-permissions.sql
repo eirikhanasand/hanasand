@@ -46,3 +46,8 @@ GRANT SELECT (name, organization_id, owner, created_by, access_users, deleted_at
 GRANT SELECT (id, owner_id, organization_id, provider, repository_url, last_received_at, last_warning, created_at)
     ON public.case_repositories TO hanasand_standby_app;
 -- End monitoring case reads.
+
+-- Support routes open only when this recovery site is active with a writable database.
+-- Keep grants limited to conversations and one-use live-connection tickets.
+GRANT SELECT, INSERT, UPDATE ON public.support_tickets, public.support_messages TO hanasand_standby_app;
+GRANT SELECT, INSERT, DELETE ON public.support_live_tickets TO hanasand_standby_app;
