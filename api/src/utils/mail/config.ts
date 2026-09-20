@@ -21,11 +21,11 @@ const mailUserAliases = new Map(
 const systemMailboxOwner = process.env.MAIL_SYSTEM_MAILBOX_USER || 'eirikhanasand'
 const systemAliasLocalParts = [...new Set([
     systemSenderLocalPart,
-    ...(process.env.MAIL_SYSTEM_ALIASES || 'postmaster,abuse,hostmaster,tls-reports,noreply,noreply-dmarc')
+    ...(process.env.MAIL_SYSTEM_ALIASES || 'abuse,hostmaster,tls-reports,noreply,noreply-dmarc')
         .split(',')
         .map(value => value.trim())
         .filter(Boolean),
-])]
+])].filter(localPart => localPart.toLowerCase() !== 'postmaster')
 
 export const mailConfig = {
     host: mailHost,

@@ -255,7 +255,7 @@ async function getEmailsByIds(username: string, password: string, session: JmapS
     return response.list || []
 }
 
-async function jmapCall<T = unknown>(username: string, password: string, session: JmapSession, methodCalls: Array<[string, Record<string, unknown>, string]>, using: string[] = [CORE, MAIL]) {
+export async function jmapCall<T = unknown>(username: string, password: string, session: JmapSession, methodCalls: Array<[string, Record<string, unknown>, string]>, using: string[] = [CORE, MAIL]) {
     const response = await fetch(toMailServiceUrl(session.apiUrl), {
         method: 'POST',
         headers: {

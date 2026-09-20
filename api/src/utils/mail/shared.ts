@@ -6,6 +6,7 @@ import { createPrincipal, findPrincipalByName, patchPrincipal } from './stalwart
 export const sharedMailboxes = [
     { id: 'shared:support', name: 'Support', localPart: 'support' },
     { id: 'shared:sales', name: 'Sales', localPart: 'sales' },
+    { id: 'shared:postmaster', name: 'Postmaster', localPart: 'postmaster' },
     { id: 'shared:security', name: 'Security', localPart: 'security' },
     { id: 'shared:noreply', name: 'Noreply', localPart: mailConfig.systemSenderLocalPart },
 ]
@@ -38,8 +39,8 @@ export async function sharedMailAccess(id: string) {
 }
 
 // Run during deployment, not on every inbox poll. Existing credentials are retained.
-export async function provisionSharedMailboxes() {
-    for (const mailbox of sharedMailboxes) {
+export async function provisionSharedMailboxes(ids = sharedMailboxes.map(mailbox => mailbox.id)) {
+    for (const mailbox of sharedMailboxes.filter(mailbox => ids.includes(mailbox.id))) {
         if (mailbox.id === 'shared:noreply') {
             const { ensureSystemSender } = await import('./system.ts')
             const account = await ensureSystemSender()
