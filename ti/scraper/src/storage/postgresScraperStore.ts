@@ -731,7 +731,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       SELECT id, tenant_id,
         record->>'name' AS name,
         record->'metadata'->>'sourceFamily' AS source_family,
-        record::text AS record_text
+        record::text AS record_text,
+        NULLIF(COALESCE(record->'health'->>'lastSuccessAt',
+          CASE WHEN record->'health'->>'status' = 'healthy' THEN record->'health'->>'checkedAt' END), '')::timestamptz AS last_success_at
       FROM threat_intel.sources
     )`;
     const filtered = `
@@ -744,7 +746,8 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         count(*) FILTER (WHERE capture.record->'metadata'->'review'->>'state' = 'needs_review' OR capture.published_at IS NULL) OVER () AS needs_review,
         count(*) FILTER (WHERE capture.storage_kind = 'metadata_only') OVER () AS metadata_only,
         max(capture.published_at) OVER () AS latest_claim_at,
-        max(capture.collected_at) OVER () AS latest_collected_at${filtered}
+        max(capture.collected_at) OVER () AS latest_collected_at,
+        max(source.last_success_at) OVER () AS latest_collection_check_at${filtered}
       ORDER BY COALESCE(capture.published_at, capture.collected_at) DESC, capture.id DESC
       LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
       [...values, Math.max(1, Math.min(250, Math.floor(input.limit))), Math.max(0, Math.floor(input.offset))]);
@@ -755,7 +758,8 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           count(*) FILTER (WHERE capture.record->'metadata'->'review'->>'state' = 'needs_review' OR capture.published_at IS NULL) AS needs_review,
           count(*) FILTER (WHERE capture.storage_kind = 'metadata_only') AS metadata_only,
           max(capture.published_at) AS latest_claim_at,
-          max(capture.collected_at) AS latest_collected_at${filtered}`, values);
+          max(capture.collected_at) AS latest_collected_at,
+          max(source.last_success_at) AS latest_collection_check_at${filtered}`, values);
       first = summaryRows[0] as Record<string, unknown> | undefined;
     }
     return {
@@ -764,7 +768,8 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       needsReview: Number(first?.needs_review ?? 0),
       metadataOnly: Number(first?.metadata_only ?? 0),
       latestClaimAt: first?.latest_claim_at,
-      latestCollectedAt: first?.latest_collected_at
+      latestCollectedAt: first?.latest_collected_at,
+      latestCollectionCheckAt: first?.latest_collection_check_at
     };
   }
 

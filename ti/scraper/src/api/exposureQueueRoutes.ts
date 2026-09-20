@@ -94,7 +94,10 @@ export async function listExposureQueue(request: Request, url: URL, options: Api
     return health.lastSuccessAt || (health.status === "healthy" ? health.checkedAt : undefined);
   });
   const currentSourceHealth = sourceHealthTimes.filter((value) => epoch(value) >= Date.now() - 60 * 60_000);
-  const latestCollectionCheckAt = latestTime(currentSourceHealth.length
+  // PostgreSQL freshness covers the whole filtered queue, regardless of page size.
+  const latestCollectionCheckAt = postgresPage?.latestCollectionCheckAt
+    ? new Date(String(postgresPage.latestCollectionCheckAt)).toISOString()
+    : latestTime(currentSourceHealth.length
     ? currentSourceHealth
     : (options.store.listSourceHealthObservations?.() ?? [])
       .filter((observation: any) => observation.success === true && sourceIds.has(observation.sourceId) && (!observation.tenantId || observation.tenantId === tenantId))
