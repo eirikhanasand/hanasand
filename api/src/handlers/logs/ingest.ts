@@ -4,7 +4,12 @@ import { hasLogIngestToken } from '#utils/auth/logIngestToken.ts'
 export { hasLogIngestToken } from '#utils/auth/logIngestToken.ts'
 import hasInternalToken from '#utils/auth/internalToken.ts'
 import recordLog from '#utils/logs/recordLog.ts'
+import config from '#constants'
 
+// Each batch holds a connection through up to 200 writes. Leave capacity for
+// interactive requests; collectors retain unacknowledged batches for retry.
+export const logIngestCapacity = Math.max(1, Math.min(2, Math.floor((Number(config.DB_MAX_CONN) || 20) / 4)))
+let activeBatches = 0
 
 export default async function ingestLog(req: FastifyRequest, res: FastifyReply) {
     if (!hasLogIngestToken(req) && !hasInternalToken(req)) {
@@ -25,8 +30,16 @@ export default async function ingestLog(req: FastifyRequest, res: FastifyReply) 
             return res.status(400).send({ error: 'Invalid log event.' })
         }
     }
-    await withTransaction(async query => {
-        for (const entry of entries) await recordLog({ ...entry, level: entry.level || 'info' }, query)
-    })
+    if (activeBatches >= logIngestCapacity) {
+        return res.header('Retry-After', '1').status(503).send({ code: 'LOG_INGEST_BUSY', error: 'Log ingestion is busy. Retry this batch shortly.' })
+    }
+    activeBatches++
+    try {
+        await withTransaction(async query => {
+            for (const entry of entries) await recordLog({ ...entry, level: entry.level || 'info' }, query)
+        })
+    } finally {
+        activeBatches--
+    }
     return res.status(201).send({ ok: true, accepted: entries.length })
 }
