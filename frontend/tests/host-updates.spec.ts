@@ -28,6 +28,8 @@ test('host switch and refresh isolate data; scheduled waits are informational an
     })
     await page.goto('https://updates.test/')
     await expect(page.getByText('inspur-package', { exact: true })).toBeVisible()
+    await expect(page.getByText('Updates', { exact: true }).locator('xpath=../..')).toHaveText('Updates1 pending')
+    await expect(page.getByText('State', { exact: true })).toHaveCount(0)
     await expect(page.getByText('6/72 hours')).toBeVisible()
     await expect(page.getByText('6/72 hours').locator('xpath=ancestor::td')).toHaveClass(/text-ui-muted/)
     await expect(page.locator('.text-ui-warning, .text-ui-danger')).toHaveCount(0)
@@ -72,11 +74,27 @@ test('empty updates use the compact controls and omit the empty package panel', 
     await page.route('https://updates.test/', route => route.fulfill({ contentType: 'text/html', body: '<meta charset="utf-8"><div id="root"></div><script src="/fixture.js"></script>' }))
     await page.route('**/api/backend/system/updates?**', route => route.fulfill({ json: { status: { status: 'ok', checked_at: new Date(Date.now() - 5 * 3600000).toISOString(), pending_updates: [] }, history: [] } }))
     await page.goto('https://updates.test/')
-    await expect(page.getByText('Healthy', { exact: true })).toBeVisible()
+    await expect(page.getByText('Updates', { exact: true }).locator('xpath=../..')).toHaveClass(/text-ui-success/)
     await expect(page.getByText('Security Updates', { exact: true })).toBeVisible()
     await expect(page.getByText('Nothing pending', { exact: true })).toBeVisible()
     await expect(page.getByText(/Checked 5h/)).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Pending packages' })).toHaveCount(0)
+})
+
+test('merged update summary keeps failed and unreported host states visible', async ({ page }) => {
+    let status = 'failed'
+    await page.route('https://updates.test/fixture.js', route => route.fulfill({ contentType: 'application/javascript', body: bundle }))
+    await page.route('https://updates.test/', route => route.fulfill({ contentType: 'text/html', body: '<meta charset="utf-8"><div id="root"></div><script src="/fixture.js"></script>' }))
+    await page.route('**/api/backend/system/updates?**', route => route.fulfill({ json: { status: { status, pending_updates: [] }, history: [] } }))
+    await page.goto('https://updates.test/')
+    const summary = page.getByText('Updates', { exact: true }).locator('xpath=../..')
+    await expect(summary).toHaveText('UpdatesUpdate failed')
+    await expect(summary).toHaveClass(/text-ui-danger/)
+    await expect(page.getByText('Nothing pending', { exact: true })).toHaveCount(0)
+    status = 'unknown'
+    await page.getByRole('button', { name: 'Refresh' }).click()
+    await expect(summary).toHaveText('UpdatesWaiting for host check-in')
+    await expect(page.getByText('Nothing pending', { exact: true })).toHaveCount(0)
 })
 
 test('daily history shows package versions without hiding installation details behind errors', async ({ page }) => {

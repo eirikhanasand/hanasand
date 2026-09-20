@@ -32,6 +32,7 @@ export default function AptUpdatesClient() {
     const available = !loading && !error && status && status.status !== 'unknown'
     const delayHours = status?.policy?.non_security_delay_hours ?? 72
     const tone = status?.status === 'failed' || error || status?.last_error ? 'danger' : security.length ? 'danger' : !available || pending.length ? 'info' : 'success'
+    const updateSummary = loading ? 'Checking host' : error || (status?.status === 'failed' ? 'Update failed' : !available ? 'Waiting for host check-in' : regular.length ? `${regular.length} pending` : 'Nothing pending')
     return <div className='grid gap-3'>
         <DashboardPanel className='grid gap-4 p-4'>
             <div className='flex flex-wrap items-start justify-between gap-3'>
@@ -42,9 +43,8 @@ export default function AptUpdatesClient() {
                 </div>
             </div>
             <div className='flex flex-wrap items-center gap-2'>
-                <Summary icon={tone === 'danger' ? <AlertTriangle /> : tone === 'info' ? <Info /> : <CheckCircle2 />} label='State' value={loading ? 'Checking host' : error || label(status?.status)} tone={tone} />
+                <Summary icon={tone === 'danger' ? <AlertTriangle /> : tone === 'info' ? <Info /> : <CheckCircle2 />} label='Updates' value={updateSummary} tone={tone} />
                 <Summary icon={<ShieldCheck />} label='Security Updates' value={available ? `${security.length} package${security.length === 1 ? '' : 's'}` : 'Not reported'} tone={!available ? 'info' : security.length ? 'danger' : 'success'} />
-                <Summary icon={<Clock3 />} label='Updates' value={available ? regular.length ? `${regular.length} package${regular.length === 1 ? '' : 's'}` : 'Nothing pending' : 'Not reported'} tone={!available || regular.length ? 'info' : 'success'} />
             </div>
             <div className='grid gap-2 lg:grid-cols-3'>
                 <div className='rounded-lg border border-ui-border bg-ui-raised p-3 min-w-0'><div className='flex flex-wrap items-center justify-between gap-2'><p className='text-xs font-semibold text-ui-muted'>Last installed</p><p className='text-right text-sm text-ui-muted'>{status?.last_update_at ? formatLastCheck(status.last_update_at) : 'Never'}</p></div>{status?.last_updated_packages?.length ? <p className='mt-2 wrap-break-word text-sm'>{status.last_updated_packages.join(', ')}</p> : null}</div>
@@ -60,7 +60,6 @@ export default function AptUpdatesClient() {
 
 function Summary({ icon, label, value, tone }: { icon: ReactNode, label: string, value: string, tone: string }) { return <div className={`inline-flex min-h-9 items-center gap-2 rounded-lg border px-2.5 py-1.5 ${tone === 'danger' ? 'border-ui-danger bg-ui-danger/10 text-ui-danger' : tone === 'info' ? 'border-ui-border bg-ui-raised text-ui-muted' : 'border-ui-success bg-ui-success/10 text-ui-success'}`}><div className='flex items-center gap-1.5 text-xs font-semibold [&>svg]:h-4 [&>svg]:w-4'>{icon}<span>{label}</span></div><p className='wrap-break-word text-sm font-semibold'>{value}</p></div> }
 function Detail({ label, value }: { label: string, value: string }) { return <div className='rounded-lg border border-ui-border bg-ui-raised p-3'><p className='text-xs font-semibold text-ui-muted'>{label}</p><p className='mt-1 wrap-break-word text-sm'>{value}</p></div> }
-function label(value?: string) { return value === 'ok' ? 'Healthy' : value === 'pending' ? 'Updates pending' : value === 'failed' ? 'Update failed' : 'Waiting for host check-in' }
 function formatDate(value?: string | null) { return value ? new Date(value).toLocaleString() : 'Not reported' }
 function formatUpdateError(value: string) { return value === 'security package installation failed regular package installation failed' ? 'Failed to install security and regular updates.' : value }
 function formatLastCheck(value?: string | null) {
