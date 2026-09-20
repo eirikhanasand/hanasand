@@ -36,6 +36,8 @@ afterAll(async () => { await app.close() })
 
 test('private service rejects untrusted traffic and caches only hashed verified sessions', async () => {
     expect((await app.inject({ url: '/api/support/tickets' })).statusCode).toBe(403)
+    expect((await app.inject({ url: '/backup' })).statusCode).toBe(403)
+    expect((await app.inject({ url: '/backup', headers: key })).statusCode).toBe(503)
     expect((await app.inject({ url: '/api/support/chat', headers: { 'x-support-service-key': 'é'.repeat(process.env.SUPPORT_SERVICE_KEY!.length) } })).statusCode).toBe(403)
     expect((await app.inject({ url: '/api/support/tickets', headers: key })).statusCode).toBe(401)
     expect((await app.inject({ url: '/api/support/tickets', headers: staff })).statusCode).toBe(200)

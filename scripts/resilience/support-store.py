@@ -61,7 +61,8 @@ def start(release):
         settings.pop(key, None)
     config = json.loads(CONFIG.read_text())
     settings.update({key: value for key, value in config.items() if key != 'SUPPORT_SERVICE_BASE'})
-    settings.update(PORT='19181', SUPPORT_INTERNAL_SERVICE='1', API_HTTP_ONLY='1', AUTH_SERVICE_ONLY='1',
+    (ROOT / 'backups').mkdir(mode=0o700, exist_ok=True)
+    settings.update(SUPPORT_BACKUP_FILE='/support-backups/latest.dump', PORT='19181', SUPPORT_INTERNAL_SERVICE='1', API_HTTP_ONLY='1', AUTH_SERVICE_ONLY='1',
                     DB_TIMEOUT_MS='1000', DB_MAX_CONN='3', SUPPORT_AI_BASE='https://api.hanasand.com', HANASAND_RELEASE_COMMIT=release)
     previous = None
     if subprocess.run(['docker', 'inspect', SERVICE], capture_output=True).returncode == 0:
@@ -70,7 +71,7 @@ def start(release):
         run(['docker', 'rename', SERVICE, previous])
     try:
         run(['docker', 'run', '-d', '--name', SERVICE, '--restart', 'unless-stopped', '--network', 'host', '--memory', '512m', '--cpus', '1',
-             '--stop-timeout', '65', '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3',
+             '-v', str(ROOT / 'backups') + ':/support-backups:ro', '--stop-timeout', '65', '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3',
              *sum((['-e', key] for key in settings), []), '--entrypoint', 'bun', 'hanasand-resilience-api:' + release, 'src/supportServer.ts'], settings, stdout=subprocess.DEVNULL)
         for _ in range(45):
             try:
@@ -103,8 +104,12 @@ def backup():
         raise RuntimeError('Support backup was empty')
     temporary.chmod(0o600)
     temporary.replace(saved)
+    link = destination / 'latest.next'
+    link.unlink(missing_ok=True)
+    link.symlink_to(saved.name)
+    link.replace(destination / 'latest.dump')
     # Keep 48 hourly snapshots. This directory contains only this service's backups.
-    for old in sorted(destination.glob('*.dump'))[:-48]:
+    for old in sorted(path for path in destination.glob('*.dump') if not path.is_symlink())[:-48]:
         old.unlink()
     print(str(saved))
 

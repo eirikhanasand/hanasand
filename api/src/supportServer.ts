@@ -1,5 +1,6 @@
 import Fastify from 'fastify'
 import websocket from '@fastify/websocket'
+import { createReadStream, existsSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { hasSupportServiceKey } from './utils/support/transport.ts'
 import { independentSupport, queryOnce, closeSupportDatabase } from './utils/support/db.ts'
@@ -20,7 +21,7 @@ export async function createSupportServer() {
     app.addHook('onRequest', (req, res, done) => {
         if (req.url === '/ready') return done()
         if (!hasSupportServiceKey(req)) { res.code(403).send({ error: 'Forbidden' }); return }
-        if (process.env.SUPPORT_MAINTENANCE === '1') { res.code(503).header('Retry-After', '5').send({ error: 'Support is being updated. Please retry shortly.' }); return }
+        if (process.env.SUPPORT_MAINTENANCE === '1' && req.url !== '/backup') { res.code(503).header('Retry-After', '5').send({ error: 'Support is being updated. Please retry shortly.' }); return }
         res.header('Cache-Control', 'no-store')
         done()
     })
@@ -54,6 +55,11 @@ export async function createSupportServer() {
     })
     app.get('/ready', async () => ({ ok: !(await queryOnce('SELECT pg_is_in_recovery() AS replica')).rows[0].replica,
         service: 'support', release: process.env.HANASAND_RELEASE_COMMIT }))
+    app.get('/backup', async (_req, res) => {
+        const path = process.env.SUPPORT_BACKUP_FILE
+        if (!path || !existsSync(path)) return res.code(503).send({ error: 'Support backup is not available yet.' })
+        return res.type('application/octet-stream').send(createReadStream(path))
+    })
     app.get('/api/support/chat', publicSupportChat)
     app.post('/api/support/chat', publicSupportChat)
     app.get('/api/support/tickets', getSupportTickets)
