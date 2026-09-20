@@ -63,6 +63,7 @@ export default async function ensureLogCountsSchema() {
         for (const statement of logCountsSchema) await query(statement)
         const state = (await query('SELECT ready FROM mill_log_counts_state WHERE id = TRUE')).rows[0]
         if (!state.ready) {
+            await query('SET LOCAL work_mem = \'64MB\'')
             await query(logCountsBootstrapSql)
             await query('UPDATE mill_log_counts_state SET ready = TRUE WHERE id = TRUE')
         }
