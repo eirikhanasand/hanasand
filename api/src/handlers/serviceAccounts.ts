@@ -67,12 +67,18 @@ export async function postServiceAccount(req: FastifyRequest, res: FastifyReply)
 export async function patchServiceAccount(req: FastifyRequest, res: FastifyReply) {
     const actorId = await authorize(req, res)
     if (!actorId) return
-    const { description } = (req.body || {}) as { description?: unknown }
-    if (typeof description !== 'string' || description.length > 2000) {
+    const { name, description } = (req.body || {}) as { name?: unknown, description?: unknown }
+    if (name === undefined && description === undefined) {
+        return res.status(400).send({ error: 'Provide a name or description to update.' })
+    }
+    if (name !== undefined && (typeof name !== 'string' || !name.trim() || name.trim().length > 100)) {
+        return res.status(400).send({ error: 'Enter a name up to 100 characters.' })
+    }
+    if (description !== undefined && (typeof description !== 'string' || description.length > 2000)) {
         return res.status(400).send({ error: 'Description must be text up to 2,000 characters.' })
     }
     const { id } = req.params as { id: string }
-    const result = await run('UPDATE users SET service_description = $2 WHERE id = $1 AND account_type = \'service\' AND active = TRUE RETURNING id, service_description AS description', [id, description.trim()])
+    const result = await run('UPDATE users SET name = COALESCE($2, name), service_description = COALESCE($3, service_description) WHERE id = $1 AND account_type = \'service\' AND active = TRUE RETURNING id, name, service_description AS description', [id, typeof name === 'string' ? name.trim() : null, typeof description === 'string' ? description.trim() : null])
     if (!result.rows.length) return res.status(404).send({ error: 'Service account not found.' })
     await recordSystemEvent(req, { actionType: 'service_account.updated', actorId, targetType: 'service_account', targetId: id })
     return res.send(result.rows[0])

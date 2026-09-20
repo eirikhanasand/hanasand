@@ -7,6 +7,7 @@ import { getCookie } from '@/utils/cookies/cookies'
 import DeleteAccountButton from './deleteAccountButton'
 import AccountDate from './accountDate'
 import ServiceAccountDescription from './serviceAccountDescription'
+import EditServiceAccountButton from './editServiceAccountButton'
 
 type Endpoint = { method: string, route: string, label: string }
 type Account = { id: string, name: string, description?: string, active: boolean, created_at: string | null, keys: { lastUsedAt: string | null, scopes: Endpoint[] }[] }
@@ -129,10 +130,10 @@ export default function ServiceAccounts() {
                 {copyError && <p role='alert' className='text-sm text-ui-text'>{copyError}</p>}
             </section>}
             <div className='overflow-x-auto'><table className='w-full text-left text-sm'><thead><tr><th className='p-2'>Name</th><th className='p-2'>Description</th><th className='p-2'>Endpoints</th><th className='p-2'>Created</th><th className='p-2'>Last used</th><th className='p-2'><span className='sr-only'>Actions</span></th></tr></thead><tbody>
-                {visibleAccounts.map(account => <tr key={account.id} className='border-t border-ui-border'><td className='p-2'>{account.name}</td><td className='p-2'><ServiceAccountDescription name={account.name} description={account.description || ''} onSave={async description => {
-                    const saved = await request(`/${encodeURIComponent(account.id)}`, { method: 'PATCH', body: JSON.stringify({ description }) })
-                    setAccounts(current => current.map(item => item.id === account.id ? { ...item, description: saved.description } : item))
-                }} /></td><td className='p-2'>{account.keys.flatMap(key => key.scopes).map(scope => <div key={`${scope.method} ${scope.route}`}><code className='text-xs'>{scope.method} {scope.route}</code></div>)}</td><td className='p-2 whitespace-nowrap'><AccountDate value={account.created_at} /></td><td className='p-2 whitespace-nowrap'><AccountDate value={account.keys.map(key => key.lastUsedAt).filter((value): value is string => Boolean(value)).sort().at(-1)} empty='Never' /></td><td className='p-2'><DeleteAccountButton alwaysConfirm name={account.name} onDelete={async () => { await request(`/${encodeURIComponent(account.id)}`, { method: 'DELETE' }); await load() }} /></td></tr>)}
+                {visibleAccounts.map(account => <tr key={account.id} className='border-t border-ui-border'><td className='p-2'>{account.name}</td><td className='p-2'><ServiceAccountDescription name={account.name} description={account.description || ''} /></td><td className='p-2'>{account.keys.flatMap(key => key.scopes).map(scope => <div key={`${scope.method} ${scope.route}`}><code className='text-xs'>{scope.method} {scope.route}</code></div>)}</td><td className='p-2 whitespace-nowrap'><AccountDate value={account.created_at} /></td><td className='p-2 whitespace-nowrap'><AccountDate value={account.keys.map(key => key.lastUsedAt).filter((value): value is string => Boolean(value)).sort().at(-1)} empty='Never' /></td><td className='p-2'><div className='flex items-center justify-end gap-1'><EditServiceAccountButton name={account.name} description={account.description || ''} onSave={async details => {
+                    const saved = await request(`/${encodeURIComponent(account.id)}`, { method: 'PATCH', body: JSON.stringify(details) })
+                    setAccounts(current => current.map(item => item.id === account.id ? { ...item, name: saved.name, description: saved.description } : item))
+                }} /><DeleteAccountButton alwaysConfirm name={account.name} onDelete={async () => { await request(`/${encodeURIComponent(account.id)}`, { method: 'DELETE' }); await load() }} /></div></td></tr>)}
             </tbody></table></div>
             {!visibleAccounts.length && <p className='text-sm text-ui-muted'>{activeAccounts.length ? 'No service accounts match your search.' : 'No service accounts yet.'}</p>}
         </>}

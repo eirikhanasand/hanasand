@@ -130,6 +130,8 @@ function requestDocker(path: string, options: { method?: string; body?: unknown;
             return
         }
 
+        let response: http.IncomingMessage | undefined
+        const fail = (error: Error) => { clearTimeout(timeout); reject(error) }
         const body = options.body === undefined ? null : Buffer.from(JSON.stringify(options.body))
         const req = http.request(
             {
@@ -142,15 +144,17 @@ function requestDocker(path: string, options: { method?: string; body?: unknown;
                 } : undefined,
             },
             (res) => {
+                response = res
                 const chunks: Buffer[] = []
-                res.on('error', reject)
-                res.once('aborted', () => reject(new Error(`Docker response interrupted for ${path}`)))
+                res.on('error', fail)
+                res.once('aborted', () => fail(new Error(`Docker response interrupted for ${path}`)))
 
                 res.on('data', (chunk) => {
                     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
                 })
 
                 res.on('end', () => {
+                    clearTimeout(timeout)
                     const body = Buffer.concat(chunks)
                     if ((res.statusCode || 500) >= 400) {
                         reject(new Error(body.toString('utf8') || `Docker API responded with ${res.statusCode}`))
@@ -162,8 +166,14 @@ function requestDocker(path: string, options: { method?: string; body?: unknown;
             }
         )
 
-        req.setTimeout(options.timeoutMs || 4_000, () => req.destroy(new Error(`Docker API timed out for ${path}`)))
-        req.on('error', reject)
+        // Socket timeouts reset on each chunk; bound the whole collection too.
+        const timeout = setTimeout(() => {
+            const error = new Error(`Docker API timed out for ${path}`)
+            response?.destroy(error)
+            req.destroy(error)
+            fail(error)
+        }, options.timeoutMs || 4_000)
+        req.on('error', fail)
         if (body) req.write(body)
         req.end()
     })
