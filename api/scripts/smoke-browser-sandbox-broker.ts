@@ -117,7 +117,7 @@ const pages = new Map<string, string>([
 <body><main><h1>Final landing</h1><p>Redirect complete after staged invoice lure.</p></main></body></html>`],
     ['/virustotal', `<!doctype html>
 <html><head><title>VirusTotal fixture</title></head>
-<body><main><h1>VirusTotal</h1><p>12/94 security vendors flagged this URL as malicious.</p><p>3 community comments</p></main><script>console.warn('Provider diagnostic only')</script></body></html>`],
+<body><a href="/unexpected-provider-navigation" style="position:fixed;left:0;top:0;width:18px;height:18px">Home</a><main><h1>VirusTotal</h1><p>12/94 security vendors flagged this URL as malicious.</p><p>3 community comments</p></main><script>console.warn('Provider diagnostic only')</script></body></html>`],
     ['/urlquery', `<!doctype html>
 <html><head><title>urlquery fixture</title></head>
 <body><main><h1>urlquery.net</h1><p>4 alerts were raised for malicious requests.</p><!-- <div class="relative mx-auto"><table><tr><th>Date</th></tr></table></div> --></main></body></html>`],
@@ -253,6 +253,7 @@ assert(initialEvidence?.threatAssociations?.some(item => item.name === 'LockBit'
 assert(initialEvidence?.indicators?.domains?.includes('credential.example.test'), 'extracts form-action domain indicators')
 
 const vt = payloads.find(payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'virustotal' && payload.toolAnalysis.vendorFlagged !== undefined)
+assert(!payloads.some(payload => payload.url?.includes('/unexpected-provider-navigation')), 'Cookie dismissal must not activate ordinary links with blind clicks or keyboard shortcuts')
 assert.equal(vt?.toolAnalysis?.vendorFlagged, 12)
 assert.equal(vt?.toolAnalysis?.vendorTotal, 94)
 assert.equal(vt?.toolAnalysis?.communityCommentCount, 3)

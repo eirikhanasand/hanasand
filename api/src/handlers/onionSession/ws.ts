@@ -1967,13 +1967,6 @@ async function dismissCookieOverlays(page: Page) {
         }
     }).catch(() => undefined)
 
-    const pressCookieShortcuts = async () => {
-        await page.keyboard.press('Escape').catch(() => undefined)
-        await page.keyboard.press('Tab').catch(() => undefined)
-        await page.keyboard.press('Enter').catch(() => undefined)
-        await page.mouse.click(8, 8).catch(() => undefined)
-    }
-
     for (let attempt = 0; attempt < passLimit; attempt++) {
         let touched = false
         const frames = [page.mainFrame(), ...page.frames()]
@@ -1989,9 +1982,6 @@ async function dismissCookieOverlays(page: Page) {
         const bodyStillHasCookieText = await hasCookieCopy(page.mainFrame())
         const visibleConsentWidgets = await page.locator('iframe, [role="dialog"]').count().catch(() => 0)
         await hideTopLevelConsentFrame(page).catch(() => undefined)
-        if (attempt % 2 === 0) {
-            await pressCookieShortcuts()
-        }
         if (!touched && !bodyStillHasCookieText && visibleConsentWidgets === 0) break
         await page.waitForTimeout(420).catch(() => undefined)
     }
