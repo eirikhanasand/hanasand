@@ -2604,13 +2604,17 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           WHERE record_type = 'collection_plan'
           ORDER BY updated_at DESC, id DESC
           LIMIT ${collectionPlanHydrationLimit}
+        ), pending_collection_plans AS MATERIALIZED (
+          SELECT id FROM threat_intel.workflow_records
+          WHERE record_type = 'collection_plan'
+            AND (record->>'status' IN ('queued', 'running', 'failed')
+              OR NULLIF(record->>'nextEligibleAt', '') IS NOT NULL)
         ), selected_collection_plans AS (
           SELECT id FROM recent_collection_plans
           UNION
           SELECT id FROM threat_intel.workflow_records
           WHERE record_type = 'collection_plan'
-            AND (record->>'status' IN ('queued', 'running', 'failed')
-              OR NULLIF(record->>'nextEligibleAt', '') IS NOT NULL)
+            AND id = ANY(ARRAY(SELECT id FROM pending_collection_plans))
             AND (record->>'status' IN ('queued', 'running', 'failed')
               OR COALESCE(NULLIF(record->>'nextEligibleAt', '')::timestamptz, '-infinity'::timestamptz) >= now())
         )
