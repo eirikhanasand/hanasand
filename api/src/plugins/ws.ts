@@ -1,5 +1,6 @@
 import fp from 'fastify-plugin'
 import { proxyModelSocket } from '../utils/ws/proxyModelSocket.ts'
+import { connectBrowserWorkerSocket } from '../utils/ws/connectBrowserWorker.ts'
 import registerSupportStream from '../handlers/supportStream.ts'
 import registerSystemStream from '../handlers/metrics/systemStream.ts'
 import registerVmConsole from '../handlers/vms/console.ts'
@@ -390,6 +391,7 @@ function proxyBrowserSocket(connection: WebSocket, id: string, route: 'browser' 
 }
 
 function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: 'browser' | 'browser-sandbox' | 'onion-session') {
+    const startup = new AbortController()
     const pending: RawData[] = []
     let upstream: WebSocket | null = null
     let containerId = ''
@@ -410,6 +412,7 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
     const closeBoth = () => {
         if (closed) return
         closed = true
+        startup.abort()
         if (connection.readyState === WebSocket.OPEN) connection.close()
         if (upstream && (upstream.readyState === WebSocket.OPEN || upstream.readyState === WebSocket.CONNECTING)) upstream.close()
         if (streamMetricsTimer) clearInterval(streamMetricsTimer)
@@ -490,7 +493,7 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
                 if (closed && timer) clearInterval(timer)
                 else streamMetricsTimer = timer
             })
-            return connectBrowserWorkerSocket(`${wsUrl.replace(/\/$/, '')}/${route}/${encodeURIComponent(id)}`)
+            return connectBrowserWorkerSocket(`${wsUrl.replace(/\/$/, '')}/${route}/${encodeURIComponent(id)}`, startup.signal)
         })
         .then(nextUpstream => {
             if (!nextUpstream) return
@@ -848,34 +851,6 @@ function sendStatus(connection: WebSocket, state: string, message: string) {
 function sendErrorThenClose(connection: WebSocket, message: string) {
     connection.send(JSON.stringify({ type: 'error', message }), () => {
         if (connection.readyState === WebSocket.OPEN) connection.close()
-    })
-}
-
-function connectBrowserWorkerSocket(url: string, attempts = 20): Promise<WebSocket> {
-    return new Promise((resolve, reject) => {
-        let attempt = 0
-        const connect = () => {
-            const socket = new WebSocket(url)
-            let settled = false
-            const retry = (error: unknown) => {
-                if (settled) return
-                settled = true
-                socket.terminate()
-                attempt += 1
-                if (attempt >= attempts) {
-                    reject(error instanceof Error ? error : new Error(String(error)))
-                    return
-                }
-                setTimeout(connect, 500).unref()
-            }
-            socket.once('open', () => {
-                settled = true
-                resolve(socket)
-            })
-            socket.once('error', retry)
-            socket.once('close', () => retry(new Error('Browser worker websocket closed before opening.')))
-        }
-        connect()
     })
 }
 
