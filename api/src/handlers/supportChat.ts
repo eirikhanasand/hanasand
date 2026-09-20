@@ -118,8 +118,8 @@ export async function postSupportStatus(req: FastifyRequest<{ Params: { id: stri
     if (!supportIdPattern.test(req.params.id) || (req.body?.status !== 'open' && req.body?.status !== 'closed')) return res.status(400).send({ error: 'Invalid chat status.' })
     try {
         if (!await isSupport(userId)) return res.status(403).send({ error: 'Only support agents can resolve or reopen chats.' })
-        await setSupportStatus(req.params.id, req.body.status as 'open' | 'closed', userId)
-        return res.send({ ok: true })
+        const result = await setSupportStatus(req.params.id, req.body.status as 'open' | 'closed', userId)
+        return res.send({ ok: true, ...result })
     } catch (error) {
         if (error instanceof SupportStateError) return res.status(error.status).send({ error: error.message })
         req.log.error(error)

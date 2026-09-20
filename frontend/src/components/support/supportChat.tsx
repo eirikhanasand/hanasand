@@ -35,6 +35,9 @@ export default function SupportChat({ embedded = false }: { embedded?: boolean }
     const [signedOut, setSignedOut] = useState(false)
     const [sending, setSending] = useState(false)
     const [updatingStatus, setUpdatingStatus] = useState(false)
+    const [statusChange, setStatusChange] = useState<{ id: string; status: 'open' | 'closed' } | null>(null)
+    const statusPending = useRef(false)
+    const [statusError, setStatusError] = useState<{ id: string; message: string } | null>(null)
     const [userId, setUserId] = useState('')
 
     const loadTickets = useCallback(async () => {
@@ -48,6 +51,7 @@ export default function SupportChat({ embedded = false }: { embedded?: boolean }
         setTickets(payload.tickets || [])
         setRole(payload.role || 'user')
         setSelectedId(current => creating.current ? current : current || payload.tickets?.[0]?.id || '')
+        return payload.tickets || []
     }, [])
 
     const loadMessages = useCallback(async (id: string, signal?: AbortSignal) => {
@@ -56,7 +60,10 @@ export default function SupportChat({ embedded = false }: { embedded?: boolean }
         const response = await fetch(`/api/backend/support/tickets/${encodeURIComponent(id)}/messages`, { cache: 'no-store', signal })
         if (!response.ok) throw new Error('We could not load this conversation.')
         const payload = await response.json() as { messages?: Message[] }
-        if (!signal?.aborted && selectedRef.current === id && version === messageRevision.current) { setMessages(payload.messages || []) }
+        if (!signal?.aborted && selectedRef.current === id && version === messageRevision.current) {
+            // Messages are immutable; retain a committed status message if an earlier read finishes later.
+            setMessages(current => Array.from(new Map([...current, ...(payload.messages || [])].map(message => [message.id, message])).values()).sort((a, b) => (a.created_at || '').localeCompare(b.created_at || '') || a.id.localeCompare(b.id)))
+        }
     }, [])
 
     useEffect(() => {
@@ -89,7 +96,7 @@ export default function SupportChat({ embedded = false }: { embedded?: boolean }
     async function send(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
         const body = input.trim()
-        if (!body || sending) return
+        if (!body || sending || statusPending.current) return
         setSending(true)
         setError('')
         try {
@@ -110,15 +117,30 @@ export default function SupportChat({ embedded = false }: { embedded?: boolean }
     }
 
     async function updateStatus(status: 'open' | 'closed') {
-        if (updatingStatus) return
-        setUpdatingStatus(true); setError('')
+        if (statusPending.current) return
+        statusPending.current = true
         const id = selectedId
+        ++ticketRevision.current
+        setStatusChange({ id, status }); setUpdatingStatus(true); setStatusError(null); setError('')
         try {
             const response = await fetch(`/api/backend/support/tickets/${encodeURIComponent(id)}/status`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ status }) })
-            const payload = await response.json()
+            const payload = await response.json() as { error?: string; ticket?: Partial<Ticket> & { id: string }; message?: Message }
             if (!response.ok) throw new Error(payload.error || 'Could not update this chat.')
-            await Promise.all([loadTickets(), loadMessages(id)])
-        } catch (error) { setError(error instanceof Error ? error.message : 'Could not update this chat.') } finally { setUpdatingStatus(false) }
+            if (payload.ticket?.id === id) {
+                // The committed response replaces two round trips. Ignore reads begun before this acknowledgement.
+                ++ticketRevision.current
+                setTickets(current => current.map(ticket => ticket.id === id ? { ...ticket, ...payload.ticket, ...(payload.message ? { last_message: payload.message.body } : {}) } : ticket))
+                const message = payload.message
+                if (selectedRef.current === id && message) {
+                    setMessages(current => current.some(existing => existing.id === message.id) ? current : [...current, message])
+                }
+            } else await Promise.all([loadTickets(), loadMessages(id)]) // Older API during a rolling release.
+        } catch (error) {
+            setStatusError({ id, message: error instanceof Error ? error.message : 'Could not update this chat.' })
+            // A lost response may still have committed; reconcile before removing the pending display.
+            const refreshed = await loadTickets().catch(() => undefined)
+            if (refreshed?.some(ticket => ticket.id === id && ticket.status === status)) setStatusError(null)
+        } finally { statusPending.current = false; setStatusChange(null); setUpdatingStatus(false) }
     }
     async function sendFeedback(rating: number, comment: string) {
         const ticket = tickets.find(ticket => ticket.id === selectedId)
@@ -130,7 +152,8 @@ export default function SupportChat({ embedded = false }: { embedded?: boolean }
 
     if (signedOut) return <PublicSupportPanel />
 
-    const selected = tickets.find(ticket => ticket.id === selectedId)
+    const displayedTickets = tickets.map(ticket => ticket.id === statusChange?.id ? { ...ticket, status: statusChange.status, ...(statusChange.status === 'closed' ? { feedback_rating: null, feedback_comment: null } : {}) } : ticket)
+    const selected = displayedTickets.find(ticket => ticket.id === selectedId)
     const shell = embedded
         ? 'grid h-[calc(100dvh-7rem)] min-h-[30rem] min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm lg:grid-cols-[18rem_minmax(0,1fr)] lg:grid-rows-1'
         : 'grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-ui-panel'
@@ -145,7 +168,7 @@ export default function SupportChat({ embedded = false }: { embedded?: boolean }
                     </div>
                     {role !== 'support' ? <button type='button' onClick={() => selectChat('')} className='mx-4 mb-2 rounded-lg border border-ui-border px-3 py-2 text-xs font-medium text-ui-primary hover:bg-ui-panel'>New chat</button> : null}
                     <div className='max-h-36 overflow-y-auto p-2 lg:max-h-none lg:flex-1'>
-                        {tickets.map(ticket => (
+                        {displayedTickets.map(ticket => (
                             <button key={ticket.id} type='button' aria-pressed={selectedId === ticket.id} onClick={() => selectChat(ticket.id)} className={`grid w-full min-w-0 gap-1 rounded-lg p-3 text-left focus-visible:outline-2 focus-visible:outline-ui-primary ${selectedId === ticket.id ? 'bg-ui-primary/10' : 'hover:bg-ui-panel'}`}>
                                 <span className='truncate text-sm font-semibold text-ui-text'>{role === 'support' && ticket.user_name !== 'Visitor' ? ticket.user_name || ticket.subject : ticket.subject}</span>
                                 {ticket.status === 'closed' || ticket.feedback_rating ? <span className='flex flex-wrap items-center gap-2'>{ticket.status === 'closed' ? <span className='rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-300'>Resolved</span> : null}{ticket.feedback_rating ? <SupportStars rating={ticket.feedback_rating} /> : null}</span> : null}
@@ -167,7 +190,7 @@ export default function SupportChat({ embedded = false }: { embedded?: boolean }
                         <h2 className='truncate text-sm font-semibold text-ui-text'>{selected?.subject || (role === 'support' ? 'Customer conversation' : 'Start a support chat')}</h2>
                         <p className='text-xs text-ui-muted'>{selected ? selected.status === 'closed' ? 'Chat resolved' : selected.agent_name ? `Speaking with ${selected.agent_name}` : 'Waiting for support.' : role === 'support' ? 'Choose a conversation from the queue.' : 'Tell us what you need help with.'}</p>
                     </div>
-                    {role === 'support' && selected ? <button type='button' disabled={updatingStatus || sending} onClick={() => void updateStatus(selected.status === 'closed' ? 'open' : 'closed')} className='shrink-0 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-xs font-medium text-ui-text hover:bg-ui-raised disabled:opacity-50'>{updatingStatus ? 'Saving…' : selected.status === 'closed' ? 'Reopen chat' : 'Resolve chat'}</button> : null}
+                    {role === 'support' && selected ? <div className='flex shrink-0 items-center gap-2'>{statusChange?.id === selectedId ? <span role='status' className='text-xs text-ui-muted'>Saving…</span> : null}<button type='button' disabled={updatingStatus || sending} onClick={() => void updateStatus(selected.status === 'closed' ? 'open' : 'closed')} className='shrink-0 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-xs font-medium text-ui-text hover:bg-ui-raised disabled:opacity-50'>{selected.status === 'closed' ? 'Reopen chat' : 'Resolve'}</button></div> : null}
                 </header>
                 <div ref={log} role='log' aria-label='Messages' className='min-h-0 overflow-y-auto p-4'>
                     {role === 'support' && selected?.feedback_rating ? <section aria-label='Customer feedback' className='mb-4 grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3'><h3 className='text-xs font-semibold text-ui-text'>Customer feedback</h3><SupportStars rating={selected.feedback_rating} />{selected.feedback_comment ? <p className='whitespace-pre-wrap text-sm text-ui-text [overflow-wrap:anywhere]'>{selected.feedback_comment}</p> : null}</section> : null}
@@ -176,12 +199,13 @@ export default function SupportChat({ embedded = false }: { embedded?: boolean }
                 <div className='border-t border-ui-border p-4'>
                     {!error && connection === 'reconnecting' ? <p role='status' className='mb-2 text-xs text-ui-muted'>Reconnecting…</p> : null}
                     {error ? <p role='alert' className='mb-3 text-sm text-ui-danger'>{error}</p> : null}
+                    {statusError?.id === selectedId ? <p role='alert' className='mb-3 text-sm text-ui-danger'>{statusError.message}</p> : null}
                     {selected?.status === 'closed' ? role === 'support' ? <p className='text-xs text-ui-muted'>Chat resolved. Reopen it to continue the conversation.</p> : <SupportFeedback key={`${selectedId}:${selected.resolution_version}`} feedback={selected} submit={sendFeedback} /> : role !== 'support' || selectedId ? (
                         <form onSubmit={send} className='grid min-w-0 gap-3'>
                             {!selectedId ? <input aria-label='Subject' maxLength={160} value={subject} onChange={event => setSubject(event.target.value)} placeholder='Subject' className={`h-10 ${fieldClass}`} /> : null}
                             <div className='flex min-w-0 items-end gap-2'>
-                                <textarea aria-label='Message' rows={2} maxLength={10000} disabled={sending || loading} value={input} onChange={event => setInput(event.target.value)} placeholder='Write a message…' className={`max-h-32 min-h-20 flex-1 resize-y disabled:opacity-60 ${fieldClass}`} />
-                                <button type='submit' disabled={sending || loading || !input.trim()} className='inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-canvas transition hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary disabled:cursor-not-allowed disabled:opacity-50'><Send aria-hidden='true' className='h-4 w-4' />{sending ? 'Sending…' : 'Send'}</button>
+                                <textarea aria-label='Message' rows={2} maxLength={10000} disabled={sending || loading || updatingStatus} value={input} onChange={event => setInput(event.target.value)} placeholder='Write a message…' className={`max-h-32 min-h-20 flex-1 resize-y disabled:opacity-60 ${fieldClass}`} />
+                                <button type='submit' disabled={sending || loading || updatingStatus || !input.trim()} className='inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-canvas transition hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary disabled:cursor-not-allowed disabled:opacity-50'><Send aria-hidden='true' className='h-4 w-4' />{sending ? 'Sending…' : 'Send'}</button>
                             </div>
                         </form>
                     ) : <p className='text-xs text-ui-muted'>Select a conversation to reply.</p>}
