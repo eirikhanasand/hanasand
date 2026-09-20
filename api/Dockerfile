@@ -76,9 +76,11 @@ COPY browser-worker/patch-stream-input.py /tmp/patch-stream-input.py
 COPY browser-worker/touch-input.js /tmp/touch-input.js
 COPY browser-worker/patch-stream-playback.py /tmp/patch-stream-playback.py
 COPY browser-worker/patch-stream-framerate.py /tmp/patch-stream-framerate.py
+COPY browser-worker/patch-stream-h264.py /tmp/patch-stream-h264.py
 RUN python3 /tmp/patch-stream-input.py \
     && python3 /tmp/patch-stream-playback.py \
     && python3 /tmp/patch-stream-framerate.py \
+    && python3 /tmp/patch-stream-h264.py \
     && chmod +x /usr/local/bin/hanasand-browser-worker \
     && sed -i 's/selkies-gstreamer-resize 1920x1080/selkies-gstreamer-resize "${BROWSER_STREAM_RESOLUTION:-1280x720}"/' /etc/entrypoint.sh \
     && sed -i '/\.scale {/,/}/s/height: 100%;/height: 100%;\n      object-fit: contain;/' /opt/gst-web/index.html \
@@ -87,6 +89,7 @@ RUN python3 /tmp/patch-stream-input.py \
 
 RUN BROWSER_STREAM_ASSET_DIR=/opt/gst-web bun test tests/browser-stream-watchdog.test.ts \
     && bun scripts/check-browser-player-image.ts
+RUN GSTREAMER_PATH=/opt/gstreamer bash -c '. /opt/gstreamer/gst-env && python3 browser-worker/check-stream-h264.py'
 
 ENV CHROMIUM_BIN=/usr/bin/google-chrome-stable \
     BROWSER_STREAM_RESOLUTION=1280x720 \

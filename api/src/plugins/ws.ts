@@ -1001,6 +1001,7 @@ async function startEphemeralBrowserWorker(sessionId: string, resolution = '1280
             'SELKIES_ENABLE_RESIZE=false',
             'SELKIES_ENCODER=x264enc',
             'SELKIES_FRAMERATE=60',
+            'SELKIES_KEYFRAME_DISTANCE=1',
             'SELKIES_CONGESTION_CONTROL=true',
             'SELKIES_VIDEO_BITRATE=4000',
             `SELKIES_TURN_HOST=${turn.host}`,
