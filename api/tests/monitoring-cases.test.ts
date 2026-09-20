@@ -33,6 +33,30 @@ test('list preserves owner and organization boundaries; elevated access is check
     expect(values).toEqual([true, 'owner', null, null])
     expect((await app.inject('/cases/monitoring?tenantId=someone-else')).statusCode).toBe(403)
 })
+test('summary list preserves list fields and scope without loading detail bodies', async () => {
+    rows = [{ id: '3', monitor_name: 'Monitor', kind: 'failure', summary: 'HTTP 503',
+        first_seen_at: '2026-09-01T00:00:00Z', last_seen_at: '2026-09-02T00:00:00Z',
+        updated_at: '2026-09-03T00:00:00Z',
+        resolution: { type: 'ai', actor: 'owner', confirmedAt: '2026-09-03T00:00:00Z' } }]
+    const result = await app.inject('/cases/monitoring?view=summary&organizationId=org-1&tenantId=org-1')
+    expect(result.statusCode).toBe(200)
+    expect(values).toEqual([false, 'owner', 'org-1', null])
+    expect(sql).toContain('GREATEST(i.last_seen_at')
+    expect(sql).not.toContain('SELECT i.*')
+    expect(sql).toContain('a.owner_id = $2')
+    expect(result.json().items[0]).toMatchObject({ id: 'HA-3', updatedAt: '2026-09-03T00:00:00Z', resolution: rows[0].resolution })
+    for (const field of ['history', 'comments', 'diskDiagnostics']) expect(result.json().items[0]).not.toHaveProperty(field)
+    expect((await app.inject('/cases/monitoring?view=summary&tenantId=other')).statusCode).toBe(403)
+    authorized = false
+    expect((await app.inject('/cases/monitoring?view=summary')).statusCode).toBe(401)
+})
+test('default lists and details retain full history even if summary is requested on a detail', async () => {
+    rows = [{ id: '3', automation_id: 'monitor', history: [{ id: 'event', at: '2026-09-03T00:00:00Z', note: 'Evidence' }], comments: [{ id: 'comment', body: 'Keep me' }], disk_diagnostics: { host: 'server' } }]
+    expect((await app.inject('/cases/monitoring')).json().items[0]).toMatchObject({ comments: rows[0].comments, diskDiagnostics: { host: 'server' } })
+    expect(sql).toContain('SELECT i.*')
+    expect((await app.inject('/cases/monitoring/HA-3?view=summary')).json().case.history).toContainEqual(rows[0].history[0])
+    expect(sql).toContain('SELECT i.*')
+})
 test('existing MON references expose persisted lifecycle and notification details', async () => {
     rows = [{ id: '3', monitor_name: 'Inference', summary: 'HTTP 503', kind: 'failure', occurrences: 53, automation_id: 'monitor', resolved_at: null }]
     let result = await app.inject('/cases/monitoring/HA-3')

@@ -28,6 +28,8 @@ for (const delayed of ['monitoring', 'intelligence']) {
         let finishRefresh: () => void = () => {}
         const refreshGate = new Promise<void>(resolve => { finishRefresh = resolve })
         await page.route('**/api/cases?**', async route => {
+            const requested = new URL(route.request().url()).searchParams
+            expect(requested.get('view')).toBe(requested.get('collection') === 'monitoring' ? 'summary' : null)
             const params = new URL(route.request().url()).searchParams
             expect(params.get('organizationId')).toBe('org-a')
             const collection = params.get('collection')

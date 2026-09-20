@@ -73,9 +73,11 @@ async function enforceRateLimit(req: FastifyRequest, res: FastifyReply, database
 
     let phaseStarted = performance.now()
     if (path === '/api/system/events') req.auditBoundaryTiming = []
+    if (path === '/api/cases/monitoring' || path === '/api/cases/monitoring/:id') req.caseBoundaryTiming = []
     const measure = (name: string) => {
         const now = performance.now()
         req.auditBoundaryTiming?.push(`${name};dur=${(now - phaseStarted).toFixed(2)}`)
+        req.caseBoundaryTiming?.push(`${name};dur=${(now - phaseStarted).toFixed(2)}`)
         phaseStarted = now
     }
     const logIngest = req.method === 'POST' && path === '/api/logs/ingest' && (hasLogIngestToken(req) || hasInternalToken(req))

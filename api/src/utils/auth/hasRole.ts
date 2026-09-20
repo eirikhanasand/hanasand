@@ -3,6 +3,7 @@ import { loadSQL } from '#utils/loadSQL.ts'
 import run from '#db'
 import { serviceAccountEndpoints } from './serviceAccountScopes.ts'
 import { matchApiKeyScope } from './apiKeys.ts'
+import type { validateSession } from './session.ts'
 
 type Valid = {
     valid: boolean
@@ -45,6 +46,12 @@ export default async function hasRole(req: FastifyRequest, res: FastifyReply, ro
     }
 
     try {
+        // The boundary has already read current roles for this request. Never
+        // reuse the actor's roles for a different impersonated user or API key.
+        const session = (req as FastifyRequest & { rateLimitSession?: Awaited<ReturnType<typeof validateSession>> }).rateLimitSession
+        if (!apiKeyOwnerId && session?.user.id === id) {
+            return session.roles.some(entry => entry.id === role) ? { valid: true } : { valid: false, error: 'Unauthorized.' }
+        }
         const roleQuery = await loadSQL('hasRole.sql')
         const { rows } = await run(roleQuery, [id!, role])
 

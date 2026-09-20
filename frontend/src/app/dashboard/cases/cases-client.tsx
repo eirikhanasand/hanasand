@@ -37,6 +37,7 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
         for (const collection of sources) {
             const params = new URLSearchParams(organizationId ? { organizationId } : {})
             params.set('collection', collection)
+            if (collection === 'monitoring') params.set('view', 'summary')
             if (!cursor) params.set('page', String(page))
             if (cursor) params.set('cursor', cursor)
             void fetch(`/api/cases?${params}`, { cache: 'no-store', signal: controller.signal }).then(async response => {

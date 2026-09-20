@@ -11,7 +11,9 @@ import type { AutomationRow } from '#utils/automations.ts'
 import { loadMonitoringIssues } from '#utils/monitoringIssues.ts'
 
 // Monitoring owns the lifecycle; expose its persisted issues through the shared case surface.
-export async function getMonitoringCases(req: FastifyRequest<{ Params: { id?: string }, Querystring: { organizationId?: string, tenantId?: string, eventsPage?: string, eventsAt?: string } }>, res: FastifyReply) {
+export async function getMonitoringCases(req: FastifyRequest<{ Params: { id?: string }, Querystring: { organizationId?: string, tenantId?: string, eventsPage?: string, eventsAt?: string, view?: string } }>, res: FastifyReply) {
+    const boundaryMs = res.elapsedTime
+    const started = performance.now()
     const { valid, id } = await tokenWrapper(req, res)
     if (!valid || !id) return res.status(401).send({ error: 'Unauthorized.' })
     const includeAll = (await hasRole(req, res, 'system_admin')).valid
@@ -23,27 +25,43 @@ export async function getMonitoringCases(req: FastifyRequest<{ Params: { id?: st
     if (!Number.isSafeInteger(page) || page < 0 || page > 100000) return res.status(400).send({ error: 'Invalid events page.' })
     const organizationId = req.query.organizationId || null
     if (req.query.tenantId && req.query.tenantId !== (organizationId || id)) return res.status(403).send({ error: 'Invalid case scope.' })
-    const result = await run(`SELECT i.*, (SELECT count(*)::int FROM monitoring_issue_checks c WHERE c.issue_id=i.id) AS check_count, ${automationWriteScope('a', '$1', '$2')} AS can_manage, a.name AS monitor_name, a.owner_id, a.organization_id, a.target_url, a.monitoring_type, a.timeout_seconds, a.retry_count, a.follow_redirects, a.expected_down, a.upside_down
+    const summary = !caseId && req.query.view === 'summary'
+    // The list needs the latest history timestamp, not the full comments,
+    // diagnostics and history bodies. Keep the default API and detail contract.
+    const projection = summary ? `i.id, i.automation_id, i.summary, i.kind, i.status_override, i.severity_override,
+        i.notifications_enabled, i.resolution, i.first_seen_at, i.last_seen_at, i.resolved_at, i.occurrences,
+        GREATEST(i.last_seen_at, (SELECT max((event->>'at')::timestamptz) FROM jsonb_array_elements(i.history) event)) AS updated_at` : 'i.*'
+    const authorizedAt = performance.now()
+    const result = await run(`SELECT ${projection}, (SELECT count(*)::int FROM monitoring_issue_checks c WHERE c.issue_id=i.id) AS check_count, ${automationWriteScope('a', '$1', '$2')} AS can_manage, a.name AS monitor_name, a.owner_id, a.organization_id, a.target_url, a.monitoring_type, a.timeout_seconds, a.retry_count, a.follow_redirects, a.expected_down, a.upside_down
         FROM monitoring_issues i JOIN agent_automations a ON a.id = i.automation_id
         WHERE ${monitoringCaseReadScope('a', '$1', '$2')}
           AND (a.organization_id IS NOT DISTINCT FROM $3::text)
           AND i.merged_into IS NULL AND ($4::text IS NULL OR i.id = (SELECT COALESCE(merged_into,id) FROM monitoring_issues WHERE id::text=$4))
         ORDER BY i.last_seen_at DESC, i.id DESC`, [includeAll, id, organizationId, caseId?.slice(3) || null])
+    const queriedAt = performance.now()
     const items = result.rows.map(row => ({
         canManage: row.can_manage === true, id: `HA-${row.id}`, caseNumber: `HA-${row.id}`, source: 'monitoring',
         title: `HA-${row.id} · ${row.monitor_name}${row.check_count > 1 ? ` (+${row.check_count - 1} ${row.check_count === 2 ? 'check' : 'checks'})` : ''}`, summary: readableMonitoringMessage(row.summary),
         status: row.status_override || (row.resolved_at ? 'resolved' : 'open'), severity: row.severity_override || (row.kind === 'failure' ? 'high' : 'medium'),
-        notificationsEnabled: row.notifications_enabled ?? true, comments: row.comments || [], diskDiagnostics: row.disk_diagnostics,
-        history: monitoringCaseHistory(row), resolution: monitoringCaseResolution(row),
+        notificationsEnabled: row.notifications_enabled ?? true,
+        ...(!summary ? { comments: row.comments || [], diskDiagnostics: row.disk_diagnostics, history: monitoringCaseHistory(row) } : {}),
+        resolution: monitoringCaseResolution(row),
         assignedOwner: row.owner_id, organizationId: row.organization_id,
-        createdAt: row.first_seen_at, lastSeenAt: row.last_seen_at, updatedAt: (row.history || []).reduce((latest: string, event: { at: string }) => new Date(event.at) > new Date(latest) ? event.at : latest, row.last_seen_at), resolvedAt: row.resolved_at,
+        createdAt: row.first_seen_at, lastSeenAt: row.last_seen_at, updatedAt: row.updated_at || (row.history || []).reduce((latest: string, event: { at: string }) => new Date(event.at) > new Date(latest) ? event.at : latest, row.last_seen_at), resolvedAt: row.resolved_at,
         occurrences: row.occurrences, automationId: row.automation_id,
     }))
-    if (!caseId) return res.send({ items })
+    if (!caseId) {
+        const timing = { boundaryMs, authorizationMs: authorizedAt - started, queryMs: queriedAt - authorizedAt, mappingMs: performance.now() - queriedAt }
+        res.header('Server-Timing', [...(req.caseBoundaryTiming || []), ...Object.entries(timing).map(([name, duration]) => `${name};dur=${duration.toFixed(2)}`)].join(', '))
+        if (res.elapsedTime >= 20) req.log.info({ ...timing, phases: req.caseBoundaryTiming }, 'Slow monitoring cases request')
+        return res.send({ items })
+    }
     if (!items.length) return res.status(404).send({ error: 'Case not found.' })
-    const issues = await loadMonitoringIssues(items[0].automationId)
-    const relatedChecks = await loadMonitoringRelatedChecks(items[0].id.slice(3), items[0].resolvedAt ? new Date(items[0].resolvedAt).toISOString() : snapshot)
-    const events = await loadMonitoringCaseEvents(items[0].id.slice(3), page, snapshot)
+    const [issues, relatedChecks, events] = await Promise.all([
+        loadMonitoringIssues(items[0].automationId),
+        loadMonitoringRelatedChecks(items[0].id.slice(3), items[0].resolvedAt ? new Date(items[0].resolvedAt).toISOString() : snapshot),
+        loadMonitoringCaseEvents(items[0].id.slice(3), page, snapshot),
+    ])
     return res.send({ case: { ...items[0], ...events, relatedChecks, currentCheck: monitoringCheckDetails(result.rows[0] as AutomationRow), notifications: issues.find(issue => issue.caseNumber === items[0].id)?.notifications || [] } })
 }
 
