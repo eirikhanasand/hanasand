@@ -1030,6 +1030,7 @@ function timelinessRecord(capture: any, incident: any, previous?: any): any {
     captureId: capture.id,
     incidentId: incident.id,
     ...reporting,
+    useFirstSeenFallback: previous?.useFirstSeenFallback,
     observedAt: previous?.observedAt ?? capture.observedAt ?? capture.metadata?.fetchProvenance?.fetchedAt ?? capture.collectedAt,
     publishedAt: reporting.publisherReportedAt,
     collectedAt: capture.collectedAt,

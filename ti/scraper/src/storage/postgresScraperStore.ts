@@ -1727,7 +1727,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const rows = await this.sql`
       SELECT t.record || CASE WHEN w.record IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('reportRecovery',w.record) END AS timeline,
         jsonb_build_object('id',c.id,'observedAt',c.record->'observedAt','publishedAt',c.record->'publishedAt','collectedAt',c.record->'collectedAt','processedAt',c.record->'processedAt','firstVisibleAt',c.record->'firstVisibleAt','reviewedAt',c.record->'reviewedAt') AS capture,
-        jsonb_build_object('id',i.id,'captureId',i.record->'captureId','tenantId',i.record->'tenantId','reviewState',i.record->'reviewState','reviewedBy',i.record->'reviewedBy','title',i.title,'entities',i.record->'entities','actorName',i.record->'actorName','actor',i.record->'actor','canonicalActorName',i.record->'canonicalActorName','observedAt',i.record->'observedAt','reviewedAt',i.record->'reviewedAt','publishedAt',i.record->'publishedAt','collectedAt',i.record->'collectedAt','processedAt',i.record->'processedAt','firstVisibleAt',i.record->'firstVisibleAt','metadata',jsonb_build_object('observedAt',i.record->'metadata'->'observedAt','actorName',i.record->'metadata'->'actorName')) AS incident,
+        jsonb_build_object('id',i.id,'captureId',i.record->'captureId','tenantId',i.record->'tenantId','reviewState',i.record->'reviewState','reviewedBy',i.record->'reviewedBy','title',i.title,'summary',i.summary,'analystReport',jsonb_build_object('sources',i.record->'analystReport'->'sources'),'entities',i.record->'entities','actorName',i.record->'actorName','actor',i.record->'actor','canonicalActorName',i.record->'canonicalActorName','observedAt',i.record->'observedAt','reviewedAt',i.record->'reviewedAt','publishedAt',i.record->'publishedAt','collectedAt',i.record->'collectedAt','processedAt',i.record->'processedAt','firstVisibleAt',i.record->'firstVisibleAt','metadata',jsonb_build_object('observedAt',i.record->'metadata'->'observedAt','actorName',i.record->'metadata'->'actorName')) AS incident,
         jsonb_build_object('id', s.id, 'name', s.name, 'type', s.record->'type', 'metadata', jsonb_build_object('sourceFamily', s.record->'metadata'->'sourceFamily')) AS source
       FROM threat_intel.timeliness_records t
       LEFT JOIN threat_intel.workflow_records w ON w.record_type='delivery_report_recovery' AND w.id=t.id
@@ -1750,6 +1750,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       FROM threat_intel.timeliness_records
       WHERE tenant_id IS NULL
         AND first_reported_at IS NOT NULL
+        AND first_reported_kind IS DISTINCT FROM 'server_first_seen'
         AND alerted_at IS NOT NULL
         AND alerted_at >= first_reported_at
     `;
