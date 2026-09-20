@@ -27,10 +27,10 @@ const pool = new Pool({
     // Keep one API connection between ten-second polls; burst connections still
     // expire normally and authentication/worker pools retain their own policy.
     min: process.env.API_HTTP_ONLY === '1' && process.env.AUTH_SERVICE_ONLY !== '1' ? 1 : 0,
-    // Scheduled jobs run every minute. Retain their bounded pool between runs
-    // instead of paying for a burst of new database authentications each minute.
+    // Retain API and worker burst connections between polls, avoiding repeated
+    // database authentications under load. Authentication keeps its own policy.
     idleTimeoutMillis: Number(DB_IDLE_TIMEOUT_MS) || (
-        process.env.AUTH_SERVICE_ONLY === '1' || process.env.API_HTTP_ONLY === '1' ? 5000 : 120_000
+        process.env.AUTH_SERVICE_ONLY === '1' ? 5000 : 120_000
     ),
     connectionTimeoutMillis: Number(DB_TIMEOUT_MS) || 3000,
     statement_timeout: (process.env.AUTH_SERVICE_ONLY === '1' || process.env.API_HTTP_ONLY === '1') ? 5000 : undefined,
@@ -64,7 +64,15 @@ export default async function run(query: string, params?: SQLParamType, name?: s
 }
 
 export async function queryOnce(query: string, params?: SQLParamType, name?: string) {
-    const client = await pool.connect()
+    const client = await pool.connect().catch(error => {
+        // No query has been submitted yet: one retry can survive a brief pool
+        // shortage without replaying writes or extending authentication retries.
+        if (process.env.API_HTTP_ONLY === '1' && process.env.AUTH_SERVICE_ONLY !== '1'
+            && (isTransientDatabaseError(error) || error?.message === 'timeout exceeded when trying to connect')) {
+            return pool.connect()
+        }
+        throw error
+    })
     let failure: Error | undefined
     try {
         return name
