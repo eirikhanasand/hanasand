@@ -30,7 +30,7 @@ def main():
         return result
 
     prefix = 'auth.dmarc.verify'
-    old = call('/settings/list?prefix=' + prefix)['data']['items']
+    old = call('/settings/keys?keys=' + prefix + '&prefixes=' + prefix)['data']
     values = {
         prefix + '.0.if': "local_port == 25 && is_empty(authenticated_as)",
         prefix + '.0.then': 'strict',
@@ -46,7 +46,7 @@ def main():
 
     try:
         save(values)
-        if call('/settings/list?prefix=' + prefix)['data']['items'] != values:
+        if call('/settings/keys?keys=' + prefix + '&prefixes=' + prefix)['data'] != values:
             raise RuntimeError('Sender authentication settings did not persist.')
     except Exception:
         save(old)
