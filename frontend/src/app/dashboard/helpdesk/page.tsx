@@ -42,5 +42,5 @@ export default async function HelpdeskPage({
             ? 'Audit API is unavailable.'
             : ''
 
-    return <AuditTimeline events={events.map(event => ({ ...event, user_agent: '', context: typeof event.context?.name === 'string' ? { name: event.context.name } : null }))} params={params} responseError={responseError} />
+    return <AuditTimeline events={events.map(event => ({ ...event, user_agent: '', context: Object.fromEntries(['name', 'targetName', 'targetId', 'targetSource'].filter(key => typeof event.context?.[key] === 'string').map(key => [key, event.context![key]])) }))} params={params} responseError={responseError} />
 }
