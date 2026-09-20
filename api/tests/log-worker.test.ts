@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, mock, test } from 'bun:test'
 let locked = true, fail = false, watermark: string | null = '200', additionalRuns = 0, queueRuns = 0, recoveryRuns = 0
 let delayed = false, historyLimits: number[], recentLimits: number[], queueModes: boolean[], recoveryLimits: number[], reads: Array<{ sql: string, params: any[] }>
+let historyScans: any[][] = []
 let cursor: any, statements: string[], checked: string[], stored: Record<string, any>, pending: any[]
 const makeLog = (id: string, metadata: any = {}) => ({ id, service: 'audit', host: 'inspur', level: 'info', message: id, created_at: '2026-09-19T00:00:00Z', metadata })
 let priority: any[], fresh: any[], backlog: any[], inactiveScopes: Set<string>
@@ -24,9 +25,11 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
             && !Object.values(stored).some(event => event.key === `service:${row.id}` && ['processed', 'skipped'].includes(event.processing_status)))
         .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || Number(b.id) - Number(a.id))
         .slice(0, 1000) }
+    if (sql.startsWith('SELECT id FROM service_logs')) { historyScans.push(p); return { rows: backlog.filter(row => BigInt(row.id) > BigInt(p[0]) && BigInt(row.id) <= BigInt(p[1])).slice(0, 10000).map(row => ({ id: row.id })) } }
     if (sql.includes('SELECT * FROM service_logs')) {
         reads.push({ sql, params: p })
-        return { rows: (p[1] === watermark ? fresh : backlog).filter(row => BigInt(row.id) > BigInt(p[0]) && BigInt(row.id) <= BigInt(p[1])).slice(0, p[2] || 1000) }
+        const processed = new Set(Object.values(stored).filter(event => event.processing_status === 'processed').map(event => event.key))
+        return { rows: (p[1] === watermark ? fresh : backlog).filter(row => BigInt(row.id) > BigInt(p[0]) && BigInt(row.id) <= BigInt(p[1]) && (!p[3] || !processed.has(`service:${row.id}`))).slice(0, p[2] || 1000) }
     }
     if (sql.startsWith('SELECT log_key FROM mill_events')) return { rows: Object.values(stored)
         .filter(row => p[0].includes(row.key) && row.processing_status === 'processed').map(row => ({ log_key: row.key })) }
@@ -64,7 +67,7 @@ mock.module('../src/handlers/mill.ts', () => ({
 const { processStoredLogs } = await import('../src/utils/mill/processLogs.ts')
 const originalLimit = process.env.LOG_CATCHUP_BATCH_LIMIT
 afterEach(() => { if (originalLimit === undefined) delete process.env.LOG_CATCHUP_BATCH_LIMIT; else process.env.LOG_CATCHUP_BATCH_LIMIT = originalLimit })
-beforeEach(() => { delete process.env.LOG_CATCHUP_BATCH_LIMIT; inactiveScopes = new Set(['inactive']); watermark = '200'; additionalRuns = 0; queueRuns = 0; recoveryRuns = 0; locked = true; fail = false; delayed = false; historyLimits = []; recentLimits = []; queueModes = []; recoveryLimits = []; reads = []; cursor = { last_id: '0', recent_id: '100' }; statements = []; checked = []; stored = {}; pending = []; priority = []; fresh = [makeLog('101')]; backlog = [makeLog('1')] })
+beforeEach(() => { delete process.env.LOG_CATCHUP_BATCH_LIMIT; historyScans = []; inactiveScopes = new Set(['inactive']); watermark = '200'; additionalRuns = 0; queueRuns = 0; recoveryRuns = 0; locked = true; fail = false; delayed = false; historyLimits = []; recentLimits = []; queueModes = []; recoveryLimits = []; reads = []; cursor = { last_id: '0', recent_id: '100' }; statements = []; checked = []; stored = {}; pending = []; priority = []; fresh = [makeLog('101')]; backlog = [makeLog('1')] })
 test('a replica that does not hold the shared lock performs no work', async () => {
     locked = false; await processStoredLogs()
     expect(statements).toHaveLength(1)
@@ -221,7 +224,23 @@ test('new forward rows never extend the fixed historical range', async () => {
     fresh = [makeLog('102')]
     backlog = [makeLog('101')]
     await processStoredLogs()
-    expect(reads.at(-1)!.params.slice(0, 2)).toEqual(['1', '100'])
+    expect(historyScans.at(-1)!.slice(0, 2)).toEqual(['1', '100'])
     expect(cursor).toMatchObject({ last_id: '100', history_end_id: '100', recent_id: '102' })
     expect(checked).toEqual(['101', '1', '102'])
+})
+
+test('acknowledged history advances in narrow pages without skipping pending rows or increasing evaluation cap', async () => {
+    process.env.LOG_CATCHUP_BATCH_LIMIT = '1'
+    cursor.recent_id = '10000'; watermark = '10001'; fresh = []
+    backlog = Array.from({ length: 10000 }, (_, i) => makeLog(String(i + 1)))
+    for (const row of backlog) if (!['4000', '8000'].includes(row.id)) stored[row.id] = { key: `service:${row.id}`, processing_status: 'processed' }
+    await processStoredLogs()
+    expect(cursor.last_id).toBe('4000')
+    expect(checked).toEqual(['4000'])
+    await processStoredLogs()
+    expect(cursor.last_id).toBe('8000')
+    expect(checked).toEqual(['4000', '8000'])
+    await processStoredLogs()
+    expect(cursor.last_id).toBe('10000')
+    expect(checked).toEqual(['4000', '8000'])
 })
