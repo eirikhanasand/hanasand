@@ -39,8 +39,15 @@ export async function recoverDeliveryReport(item: any, options: any = {}) {
   let evidence = retained, modelUsed = false, contentSha256: string | undefined;
   if (!evidence) {
     if (!referenceUrl || source?.status !== 'active') return { status: 'unavailable', reason: 'No retained report evidence or active public source is available.' };
+    if (new URL(referenceUrl).hostname === 'www.cisa.gov'
+      && new URL(referenceUrl).pathname === '/sites/default/files/feeds/known_exploited_vulnerabilities.json'
+      && /^\d{4}-\d{2}-\d{2}$/.test(capture.metadata?.structuredFields?.dateAdded ?? '')) {
+      return { status: 'unavailable', reason: 'The retained CISA record provides a date without a publication time or timezone.' };
+    }
     const response = await (options.fetchPublic || publicAdvisoryFetcher(undefined, 8000))(referenceUrl, { headers: { 'user-agent': 'Hanasand delivery evidence recovery' } });
     if (!response.ok) throw new Error(`Source returned HTTP ${response.status}`);
+    // A catalog can contain thousands of unrelated records; page-level extraction cannot establish this record's date.
+    if (/\bjson\b/i.test(response.headers.get('content-type') || '')) return { status: 'unavailable', reason: 'The JSON source needs publication evidence for the matching record.' };
     const html = await response.text();
     contentSha256 = createHash('sha256').update(html).digest('hex');
     evidence = publicationEvidence(html, referenceUrl);

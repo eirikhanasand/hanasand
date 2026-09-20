@@ -32,6 +32,11 @@ test('known source evidence avoids AI; fresh pages cannot invent an earlier firs
   expect(result.reference?.contentSha256).toHaveLength(64);
   expect(await recoverDeliveryReport(item,{fetchPublic:async()=>new Response('<meta property="article:published_time" content="2026-10-01T10:00:00Z">')})).toMatchObject({status:'unavailable'});
 });
+test('date-only catalog entries do not trigger repeated AI guesses or use unrelated record dates', async () => {
+  const catalog = { ...item, capture:{url:'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json',metadata:{structuredFields:{cveID:'CVE-2026-1234',dateAdded:'2026-08-01'}}} };
+  expect(await recoverDeliveryReport(catalog,{fetchPublic:()=>{throw Error('date-only evidence needs no refetch')}})).toMatchObject({status:'unavailable',reason:'The retained CISA record provides a date without a publication time or timezone.'});
+  expect(await recoverDeliveryReport(item,{fetchPublic:async()=>Response.json({items:[{datePublished:'2026-08-01T10:00:00Z'}]}),fetchModel:()=>{throw Error('must not ask AI to select an unrelated record')}})).toMatchObject({status:'unavailable',reason:'The JSON source needs publication evidence for the matching record.'});
+});
 test('AI must ground its result; failures remain retryable and private references are not fetched', async () => {
   const html='Published: 2026-08-01T10:00:00Z';
   expect(await recoverDeliveryReport(item,{fetchPublic:async()=>new Response(html),fetchModel:async()=>Response.json({message:JSON.stringify({timestamp:'2026-08-01T10:00:00Z',quote:html})})})).toMatchObject({status:'resolved',modelUsed:true});
