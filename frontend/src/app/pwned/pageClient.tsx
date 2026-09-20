@@ -52,7 +52,7 @@ export default function PwnedPageClient() {
                     <div className='grid gap-1'>
                         <div className='flex items-center gap-2 text-lg font-semibold text-ui-text'>
                             <Eye className={`h-5 w-5 ${didSearch ? breached ? 'text-ui-danger' : 'text-ui-success' : 'text-ui-primary'}`} />
-                            {didSearch ? 'Result' : 'Check Bloom hash exposure'}
+                            {didSearch ? 'Result' : 'Check password'}
                         </div>
                         <p className='text-sm leading-6 text-ui-muted'>
                             {didSearch
