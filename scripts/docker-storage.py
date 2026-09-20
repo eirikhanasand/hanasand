@@ -84,7 +84,8 @@ def image_inventory(images, containers, clock=None):
 
 
 def snapshot():
-    df = docker('/system/df')
+    # Container writable-layer accounting is unrelated and can fail during deployment.
+    df = docker('/system/df?type=build-cache&type=image')
     containers = docker('/containers/json?all=1')
     cache = df.get('BuildCache') or []
     return {'checkedAt': now(), 'cacheBytes': sum(c['Size'] for c in cache),
@@ -128,13 +129,19 @@ def perform(clear=False):
                     references = inspect.get('RepoTags') or [image['id']]
                     command(['image', 'rm', *references])
             state.update(snapshot())
+            # A recovered metrics scan must not conceal a failed cleanup.
+            recovered_scan = state.get('errorStage') == 'refresh' or (
+                state.get('lastAttemptAt') and state.get('lastSuccessAt') and
+                state['lastAttemptAt'] <= state['lastSuccessAt'] < state.get('failedAt', ''))
+            if clear or recovered_scan:
+                state.update(error=None, errorStage=None)
             state['running'] = False
             if clear:
                 after = os.statvfs('/')
                 state.update(lastSuccessAt=now(), lastFreedBytes=max(0, after.f_bavail * after.f_frsize - before.f_bavail * before.f_frsize))
             save(state_path, state)
         except Exception as error:
-            state.update(running=False, error=str(error), failedAt=now())
+            state.update(running=False, error=str(error), errorStage='cleanup' if clear else 'refresh', failedAt=now())
             save(state_path, state)
             raise
         finally:

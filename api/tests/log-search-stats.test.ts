@@ -1,13 +1,13 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
 import Fastify from 'fastify'
-let ready = true, authorized = true, administrator = true, pendingCount = 0
+let ready = true, authorized = true, administrator = true, pendingCount = 0, rollupsReady = true
 let statements: string[], parameters: any[][]
 const query = async (sql: string, params: any[] = []): Promise<any> => {
     statements.push(sql); parameters.push(params)
     if (sql.includes('FROM log_process_queue LIMIT 10001')) return { rows: [{ count: pendingCount, oldest_queued_at: pendingCount ? '2026-09-19T14:49:32.311Z' : null }] }
     if (sql.startsWith('SELECT payload, last_error')) return { rows: [{ payload: { remaining: 3000, processed: 1000, total: 4000, rate: 50, estimated_seconds: 60 }, last_error: null }] }
     if (sql.startsWith('SELECT name, updated_at')) return { rows: [{ name: 'service_logs', last_error: null }] }
-    if (sql === 'SELECT ready, last_error FROM mill_log_dimensions_state WHERE id = TRUE') return { rows: [{ ready }] }
+    if (sql.startsWith('SELECT ready, last_error')) return { rows: [{ ready, counts_ready: rollupsReady }] }
     if (sql.includes('GROUP BY 1, 2')) return { rows: [{ severity: 'high', service: 'api', count: 4 }, { severity: 'low', service: 'api', count: 6 }] }
     return { rows: [] }
 }
@@ -17,7 +17,7 @@ mock.module('../src/utils/auth/hasRole.ts', () => ({ default: async () => ({ val
 const { searchLogs } = await import('../src/handlers/logs/search.ts')
 const app = Fastify()
 app.get('/logs/search', searchLogs)
-beforeEach(() => { ready = authorized = administrator = true; pendingCount = 0; statements = []; parameters = [] })
+beforeEach(() => { ready = authorized = administrator = true; pendingCount = 0; rollupsReady = true; statements = []; parameters = [] })
 test('dashboard uses one exact compact grouping scan after complete backfill', async () => {
     const response = await app.inject('/logs/search?stats=1&service=api&severity=high,critical')
     expect(response.statusCode).toBe(200)
@@ -102,4 +102,23 @@ test('HQL and legacy KQL links compile to the same parameterized query', async (
         results.push({ sql: statements[index], params: parameters[index] })
     }
     expect(results[0]).toEqual(results[1])
+})
+
+
+test('ordinary dashboard filters sum maintained buckets plus exact boundary rows', async () => {
+    expect((await app.inject('/logs/search?stats=1&service=api')).statusCode).toBe(200)
+    const grouped = statements.find(sql => sql.includes('GROUP BY'))
+    expect(grouped).toContain('FROM mill_log_counts mill_events')
+    expect(grouped).toContain('bucket_seconds = 3600')
+    expect(grouped).toContain('bucket_seconds = 60')
+    expect(grouped).toContain('FROM mill_log_dimensions mill_events')
+    expect(grouped).toContain("INTERVAL '1 minute'")
+})
+
+test('unready rollups preserve exact compact counts', async () => {
+    rollupsReady = false
+    expect((await app.inject('/logs/search?stats=1&service=api')).statusCode).toBe(200)
+    const grouped = statements.find(sql => sql.includes('GROUP BY'))
+    expect(grouped).toContain('FROM mill_log_dimensions mill_events')
+    expect(grouped).not.toContain('FROM mill_log_counts ')
 })

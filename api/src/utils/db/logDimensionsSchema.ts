@@ -1,5 +1,6 @@
 import { withTransaction } from '#db'
 import ensureLogSearchIndexes from './logSearchIndexes.ts'
+import ensureLogCountsSchema from './logCountsSchema.ts'
 
 // Reporting fields stay separate from wide command/metadata JSON. Statement-level
 // triggers preserve exact counts for every writer, including replay and retention.
@@ -49,4 +50,5 @@ export default async function ensureLogDimensionsSchema() {
         for (const statement of logDimensionsSchema) await query(statement)
     })
     await ensureLogSearchIndexes()
+    await ensureLogCountsSchema()
 }

@@ -7,6 +7,7 @@ import { readPendingProcessLogs } from '#utils/mill/processQueue.ts'
 import { basicLogSearchPredicate } from '#utils/logs/searchText.ts'
 import { searchLogPage } from '#utils/logs/searchPage.ts'
 import { dimensionLogWhere, foldLogCounts } from '#utils/logs/dimensions.ts'
+import { rollupLogCountsSql } from '#utils/logs/counts.ts'
 
 export async function searchLogs(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
@@ -21,7 +22,8 @@ export async function searchLogs(req: FastifyRequest, res: FastifyReply) {
         const bind = (value: string | number) => { params.push(value); return `$${params.length}` }
         const hours = Number(input.hours || 24)
         if (!Number.isFinite(hours) || hours < 1 || hours > 24 * 90) throw new Error('Time range must be between one hour and 90 days.')
-        const where = ['ingestion_id = \'logs\'', 'processing_status = \'processed\'', `event_timestamp >= NOW() - ${bind(hours)} * INTERVAL '1 hour'`, ...compiled.where,
+        const timeWhere = `event_timestamp >= NOW() - ${bind(hours)} * INTERVAL '1 hour'`
+        const where = ['ingestion_id = \'logs\'', 'processing_status = \'processed\'', timeWhere, ...compiled.where,
             'EXISTS (SELECT 1 FROM organizations o WHERE o.id = mill_events.organization_id AND o.status = \'active\')']
         if (input.search) where.push(basicLogSearchPredicate(bind(input.search)))
         if (input.service) where.push(`normalized->>'service' = ${bind(input.service)}`)
@@ -43,10 +45,11 @@ export async function searchLogs(req: FastifyRequest, res: FastifyReply) {
             let countersLastError: string | null = null
             if (input.stats === '1') {
                 const compact = dimensionLogWhere(where)
-                const projection = (await query('SELECT ready, last_error FROM mill_log_dimensions_state WHERE id = TRUE')).rows[0]
+                const projection = (await query('SELECT ready, last_error, (SELECT ready FROM mill_log_counts_state WHERE id = TRUE) AS counts_ready FROM mill_log_dimensions_state WHERE id = TRUE')).rows[0]
                 const ready = compact && projection?.ready
                 countersLastError = projection?.last_error || null
-                const grouped = ready
+                const rollup = ready && projection?.counts_ready ? rollupLogCountsSql(compact!, timeWhere) : null
+                const grouped = rollup ? await query(rollup, params) : ready
                     ? await query(`SELECT severity, service, COUNT(*)::int AS count FROM mill_log_dimensions mill_events WHERE ${compact!.join(' AND ')} GROUP BY 1, 2`, params)
                     : await query(`SELECT normalized->>'severity' AS severity, normalized->>'service' AS service, COUNT(*)::int AS count FROM mill_events WHERE ${where.join(' AND ')} GROUP BY 1, 2`, params)
                 counts = foldLogCounts(grouped.rows)
