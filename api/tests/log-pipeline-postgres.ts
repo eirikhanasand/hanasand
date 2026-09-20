@@ -258,7 +258,7 @@ try {
     const recoveredCommand = (await query('SELECT normalized, processing_status FROM mill_events WHERE log_key=$1', [`service:${oldCommand}`])).rows[0]
     assert.equal(recoveredCommand?.processing_status, 'processed', 'Aged pre-upgrade command recovers automatically despite newer arrivals')
     assert.equal(recoveredCommand.normalized.severity, 'high')
-    assert.equal(recoveredCommand.normalized.rules_checked, 105)
+    assert.equal(recoveredCommand.normalized.rules_checked, rules.filter(rule => rule.enabled !== false).length)
     const finalFindingCount = (await query('SELECT COUNT(*)::int AS count FROM mill_findings')).rows[0].count
     await recoverProcessLogs(logs => processLogBatch(logs, 'fixture', rules))
     assert.equal((await query('SELECT COUNT(*)::int AS count FROM mill_findings')).rows[0].count, finalFindingCount)
