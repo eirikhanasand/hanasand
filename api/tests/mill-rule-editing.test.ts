@@ -29,7 +29,7 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
             .sort((a, b) => Date.parse(b.event_timestamp) - Date.parse(a.event_timestamp))
         return { rows: sql.includes("INTERVAL '1 minute'") ? result.filter(row => row.outcome === 'failure' && Date.parse(row.event_timestamp) >= Date.parse(p[3]) - p[4] * 60000) : result.slice(0, p[4]) }
     }
-    if (sql.includes('INSERT INTO mill_findings')) { findings.push({ organizationId: p[1], ruleId: p[3], severity: p[4], evidence: JSON.parse(p[6]) }); return { rows: [] } }
+    if (sql.includes('INSERT INTO mill_findings')) { findings.push(...JSON.parse(p[0]).map((item: any) => ({ organizationId: item.organization_id, ruleId: item.rule_id, severity: item.severity, evidence: item.evidence }))); return { rows: [] } }
     throw new Error(`Unexpected query: ${sql}`)
 }
 mock.module('#db', () => ({ default: query, withTransaction: async (work: any) => {

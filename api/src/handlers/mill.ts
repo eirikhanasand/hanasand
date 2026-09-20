@@ -430,7 +430,7 @@ export function collectMillEventFindings(organizationId: string, eventId: string
 
 export async function createMillFindings(organizationId: string, eventId: string, event: NormalizedEvent, rules: MillRule[]) {
     const { enabled, findings } = collectMillEventFindings(organizationId, eventId, event, rules)
-    for (const finding of findings) await persistFinding(...finding)
+    await persistMillEventFindings(findings)
     const insertFinding = async (org: string, id: string, severity: string, summary: string, eventIds: string[], evidence: MillEvent) => {
         const configured = rules.find(rule => rule.id === id)
         await persistFinding(org, id, configured?.severity || severity, summary, eventIds, { ...evidence, ruleVersion: configured?.version || '1', ruleName: configured?.name, ruleExplanation: configured?.explanation, detectionDefinition: configured?.definition })
@@ -505,14 +505,28 @@ export async function createMillFindings(organizationId: string, eventId: string
 }
 
 async function persistFinding(organizationId: string, ruleId: string, severity: string, summary: string, eventIds: string[], evidence: MillEvent) {
-    const findingKey = `${organizationId}:${ruleId}:${eventIds.slice().sort().join(',')}`
-    await run(`
-        INSERT INTO mill_findings (id, organization_id, finding_key, rule_id, severity, status, summary, evidence, event_ids, first_observed, last_observed)
-        VALUES ($1, $2, $3, $4, $5, 'new', $6,
-            $7::jsonb || jsonb_build_object('restrictedLog', EXISTS (SELECT 1 FROM mill_events WHERE organization_id = $2 AND id = ANY($8::text[]) AND ingestion_id = 'logs')),
-            $8, NOW(), NOW())
-        ON CONFLICT (finding_key) DO NOTHING
-    `, [randomUUID(), organizationId, findingKey, ruleId, severity, summary, JSON.stringify(evidence), eventIds])
+    await persistMillEventFindings([[organizationId, ruleId, severity, summary, eventIds, evidence]])
+}
+
+// Preserve the same finding identity and restricted-log flag while committing
+// bounded groups together, rather than fsyncing once for every matched rule.
+export async function persistMillEventFindings(findings: Parameters<typeof persistFinding>[]) {
+    for (let offset = 0; offset < findings.length; offset += 1000) {
+        const rows = findings.slice(offset, offset + 1000).map(([organizationId, ruleId, severity, summary, eventIds, evidence]) => ({
+            id: randomUUID(), organization_id: organizationId,
+            finding_key: `${organizationId}:${ruleId}:${eventIds.slice().sort().join(',')}`,
+            rule_id: ruleId, severity, summary, event_ids: eventIds, evidence,
+        }))
+        await run(`INSERT INTO mill_findings (id, organization_id, finding_key, rule_id, severity, status, summary, evidence, event_ids, first_observed, last_observed)
+            SELECT item.id, item.organization_id, item.finding_key, item.rule_id, item.severity, 'new', item.summary,
+                item.evidence || jsonb_build_object('restrictedLog', EXISTS (
+                    SELECT 1 FROM mill_events e WHERE e.organization_id = item.organization_id
+                        AND e.id = ANY(item.event_ids) AND e.ingestion_id = 'logs')),
+                item.event_ids, NOW(), NOW()
+            FROM jsonb_to_recordset($1::jsonb) AS item(id text, organization_id text, finding_key text,
+                rule_id text, severity text, summary text, evidence jsonb, event_ids text[])
+            ORDER BY item.finding_key ON CONFLICT (finding_key) DO NOTHING`, [JSON.stringify(rows)])
+    }
 }
 
 type NormalizedEvent = {

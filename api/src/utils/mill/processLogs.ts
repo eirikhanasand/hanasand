@@ -2,7 +2,7 @@ import { refreshLogCatchupProgress } from './catchupProgress.ts'
 import { recoverUnassignedLogs } from './recoverUnassignedLogs.ts'
 import { createHash } from 'node:crypto'
 import run, { withTransaction } from '#db'
-import { collectMillEventFindings, createMillFindings, loadConfiguredMillRules, normalizeMillEvent } from '../../handlers/mill.ts'
+import { collectMillEventFindings, persistMillEventFindings, createMillFindings, loadConfiguredMillRules, normalizeMillEvent } from '../../handlers/mill.ts'
 import { normalizeLogEvent, severityOrder, type LogInput } from './logEvent.ts'
 import { processAdditionalLogSources } from './storedSources.ts'
 import { stableLogWatermark } from './logWatermark.ts'
@@ -28,11 +28,12 @@ export async function processLogBatch(logs: LogInput[], organizationId: string, 
         const id = createHash('sha256').update(key).digest('hex')
         // Stateless rules can finish before persistence. Authentication still needs
         // the durable event-time history; matches retain the retryable pending path.
-        const complete = event.eventType !== 'authentication'
-            && collectMillEventFindings(organizationId, id, event, rules).findings.length === 0
+        const findings = event.eventType === 'authentication' ? []
+            : collectMillEventFindings(organizationId, id, event, rules).findings
+        const complete = event.eventType !== 'authentication' && findings.length === 0
         if (complete) Object.assign(event.normalized, { detections: [], evaluated_at: new Date().toISOString(),
             rules_checked: rules.filter(rule => rule.enabled !== false).length })
-        return { id, key, event, complete, logId: String(log.id) }
+        return { id, key, event, complete, findings, logId: String(log.id) }
     })
     if (!prepared.length) return
     await run(`INSERT INTO mill_events (id, ingestion_id, organization_id, source_vendor, source_product, event_timestamp,
@@ -70,13 +71,16 @@ export async function processLogBatch(logs: LogInput[], organizationId: string, 
                     AND e.event_timestamp <= c.timestamp + $3 * INTERVAL '1 minute'
                     AND (e.user_id = c.user_id OR e.source_ip = c.source_ip))
                 ORDER BY e.event_timestamp, e.id LIMIT 500 OFFSET $4`, [JSON.stringify(changed), organizationId, windowMinutes, offset])
-            for (const row of later.rows) work.push({ id: row.id, key: '', logId: '', complete: false, event: normalizeMillEvent(row.normalized, { vendor: 'Hanasand', product: 'Logs' }) })
+            for (const row of later.rows) work.push({ id: row.id, key: '', logId: '', complete: false, findings: [], event: normalizeMillEvent(row.normalized, { vendor: 'Hanasand', product: 'Logs' }) })
             if (later.rows.length < 500) break
         }
     }
     // Events are persisted together before correlation, then checked in event-time order.
     work.sort((a, b) => Date.parse(a.event.timestamp) - Date.parse(b.event.timestamp))
-    for (const { id, event } of work) await createMillFindings(organizationId, id, event, rules)
+    await persistMillEventFindings(work.flatMap(item => item.findings))
+    for (const { id, event } of work) {
+        if (event.eventType === 'authentication') await createMillFindings(organizationId, id, event, rules)
+    }
     if (!work.length) return
     const matches = await run('SELECT rule_id, severity, summary, evidence, event_ids FROM mill_findings WHERE organization_id = $1 AND event_ids && $2::text[]', [organizationId, work.map(item => item.id)])
     const byEvent = new Map<string, typeof matches.rows>()
@@ -163,7 +167,7 @@ export async function processStoredLogs() {
                 const recent = await run('SELECT * FROM service_logs WHERE id > $1 AND id <= $2 ORDER BY id LIMIT $3', [cursor.recent_id, watermark, catchupLimit])
                 await processScopes(recent.rows)
                 const recentId = recent.rows.at(-1)?.id || cursor.recent_id
-                await run('UPDATE log_processing_cursors SET recent_id = $1, checked_count = checked_count + $2, updated_at = NOW() WHERE name = \'service_logs\'', [recentId, recent.rows.length])
+                await run('UPDATE log_processing_cursors SET recent_id = $1, checked_count = checked_count + $2, updated_at = NOW(), last_error = NULL WHERE name = \'service_logs\'', [recentId, recent.rows.length])
             }
             await processAdditionalLogSources(processScopes, catchupLimit, catchupLimit)
             // Direct Mill ingestion is also pending until findings are durable.
@@ -176,10 +180,10 @@ export async function processStoredLogs() {
                 await createMillFindings(row.organization_id, row.id, normalizeMillEvent(row.normalized, { vendor: row.source_vendor, product: row.source_product }), configured.get(row.organization_id)!)
                 await run('UPDATE mill_events SET processing_status = \'processed\' WHERE id = $1 AND organization_id = $2', [row.id, row.organization_id])
             }
-            if (watermark !== null) {
+            if (cursor.history_end_id !== null) {
                 const backlog = await run('SELECT * FROM service_logs WHERE id > $1 AND id <= $2 ORDER BY id LIMIT $3', [cursor.last_id, cursor.history_end_id, catchupLimit])
                 await processScopes(backlog.rows)
-                await run('UPDATE log_processing_cursors SET last_id = GREATEST(last_id, $1), checked_count = checked_count + $2, updated_at = NOW(), last_error = NULL WHERE name = \'service_logs\'', [backlog.rows.at(-1)?.id || cursor.history_end_id, backlog.rows.length])
+                await run('UPDATE log_processing_cursors SET last_id = GREATEST(last_id, $1), checked_count = checked_count + $2, updated_at = NOW() WHERE name = \'service_logs\'', [backlog.rows.at(-1)?.id || cursor.history_end_id, backlog.rows.length])
             }
         })
         // Counter initialization has its own lock and visible error state. Keep

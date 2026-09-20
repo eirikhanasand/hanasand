@@ -39,28 +39,29 @@ export function storedSourceLog(source: Source, row: StoredRow): LogInput {
 // instead of copying every traffic/sign-in/audit record into service_logs again.
 // The caller owns the shared processing lock across all stream cursors.
 export async function processAdditionalLogSources(processScopes: (logs: LogInput[]) => Promise<void>, historyLimit = 1000, recentLimit = 1000) {
-    const cursors: Array<{ source: Source, last_id: string, recent_id: string, history_end_id: string, watermark: string }> = []
+    const cursors: Array<{ source: Source, last_id: string, recent_id: string, history_end_id: string | null, watermark: string | null }> = []
     for (const source of sources) {
         await run('INSERT INTO log_processing_cursors (name) VALUES ($1) ON CONFLICT DO NOTHING', [source])
         const watermark = await stableLogWatermark(source)
         if (watermark === null) {
             await run('UPDATE log_processing_cursors SET last_error = $2, updated_at = NOW() WHERE name = $1', [source, 'Waiting for active log writes; will retry.'])
-            continue
         }
-        await run('UPDATE log_processing_cursors SET recent_id = GREATEST($2::bigint - 200, 0) WHERE name = $1 AND recent_id IS NULL', [source, watermark])
+        if (watermark !== null) await run('UPDATE log_processing_cursors SET recent_id = GREATEST($2::bigint - 200, 0) WHERE name = $1 AND recent_id IS NULL', [source, watermark])
         await run('UPDATE log_processing_cursors SET history_end_id = recent_id WHERE name = $1 AND history_end_id IS NULL', [source])
         const { rows: [cursor] } = await run('SELECT last_id, recent_id, history_end_id FROM log_processing_cursors WHERE name = $1', [source])
         cursors.push({ source, ...cursor, watermark })
     }
     // Each forward cursor gets a turn before any historical backfill.
     for (const { source, recent_id, watermark } of cursors) {
+        if (watermark === null) continue
         const recent = await run(`SELECT * FROM ${source} WHERE id > $1 AND id <= $2 ORDER BY id LIMIT $3`, [recent_id, watermark, recentLimit])
         await processScopes(recent.rows.map(row => storedSourceLog(source, row)))
         await run('UPDATE log_processing_cursors SET recent_id = $2, checked_count = checked_count + $3, updated_at = NOW(), last_error = NULL WHERE name = $1', [source, recent.rows.at(-1)?.id || recent_id, recent.rows.length])
     }
     for (const { source, last_id, history_end_id } of cursors) {
+        if (history_end_id === null) continue
         const backlog = await run(`SELECT * FROM ${source} WHERE id > $1 AND id <= $2 ORDER BY id LIMIT $3`, [last_id, history_end_id, historyLimit])
         await processScopes(backlog.rows.map(row => storedSourceLog(source, row)))
-        await run('UPDATE log_processing_cursors SET last_id = GREATEST(last_id, $2), checked_count = checked_count + $3, updated_at = NOW(), last_error = NULL WHERE name = $1', [source, backlog.rows.at(-1)?.id || history_end_id, backlog.rows.length])
+        await run('UPDATE log_processing_cursors SET last_id = GREATEST(last_id, $2), checked_count = checked_count + $3, updated_at = NOW() WHERE name = $1', [source, backlog.rows.at(-1)?.id || history_end_id, backlog.rows.length])
     }
 }

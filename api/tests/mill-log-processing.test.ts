@@ -1,13 +1,14 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
-let stored: Record<string, any> = {}, findings: any[] = [], fail = false
+let stored: Record<string, any> = {}, findings: any[] = [], fail = false, findingWrites = 0
 const query = async (sql: string, p: any[] = []): Promise<any> => {
     if (sql.includes('SELECT log_key FROM mill_events')) return { rows: Object.values(stored)
         .filter(row => p[0].includes(row.log_key) && row.processing_status === 'processed').map(row => ({ log_key: row.log_key })) }
     if (sql.includes('INSERT INTO mill_events')) { for (const item of JSON.parse(p[0])) stored[item.id] ||= { id: item.id, log_key: item.key, processing_status: item.processing_status, normalized: item.normalized }; return { rows: [] } }
     if (sql.includes('SELECT id FROM mill_events')) return { rows: Object.values(stored).filter(row => row.processing_status !== 'processed') }
     if (sql.includes('INSERT INTO mill_findings')) {
+        findingWrites++
         if (fail) throw new Error('Storage temporarily failed')
-        if (!findings.some(row => row.key === p[2])) findings.push({ key:p[2], rule_id:p[3], severity:p[4], summary:p[5], evidence:JSON.parse(p[6]),event_ids:p[7] })
+        for (const item of JSON.parse(p[0])) if (!findings.some(row => row.key === item.finding_key)) findings.push({ ...item, key: item.finding_key })
         return { rows: [] }
     }
     if (sql.includes('SELECT rule_id, severity')) return { rows: findings }
@@ -15,12 +16,12 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
     throw new Error('Unexpected SQL '+sql)
 }
 mock.module('#db',()=>({ default:query, withTransaction: async(work:any)=>work(query) }))
-const { processLog } = await import('../src/utils/mill/processLogs.ts')
+const { processLog, processLogBatch } = await import('../src/utils/mill/processLogs.ts')
 const { MILL_RULES, millDefaultDefinition } = await import('../src/handlers/mill.ts')
 const { securityRules } = await import('../src/utils/mill/securityRules.ts')
 const rules = () => MILL_RULES.map(rule => ({...rule,enabled:true,source:'hanasand' as const,definition:millDefaultDefinition(rule.id)}))
 const log = (executable='/usr/bin/whoami',command='whoami') => ({id:'real-log',service:'audit',host:'inspur',level:'info',message:command,created_at:'2026-09-19T10:00:00Z',metadata:{process:{executable,command_line:command}}})
-beforeEach(()=>{stored={};findings=[];fail=false})
+beforeEach(()=>{stored={};findings=[];fail=false;findingWrites=0})
 test('an info-level whoami executes Mill and persists high severity plus evidence',async()=>{
     await processLog(log(),'org-a',rules())
     const row:any=Object.values(stored)[0]
@@ -65,4 +66,15 @@ test('id execution persists a low-severity finding', async () => {
     await processLog(log('/usr/bin/id', 'id'), 'org-a', rules())
     expect(findings.find(finding => finding.rule_id === 'process.recon.id.v1')?.severity).toBe('low')
     expect(Object.values(stored)[0].normalized.severity).toBe('low')
+})
+
+test('stateless detections use bounded bulk writes without dropping or duplicating findings', async () => {
+    const logs = Array.from({ length: 1001 }, (_, i) => ({ ...log(), id: String(i) }))
+    await processLogBatch(logs, 'org-a', rules())
+    expect(findings).toHaveLength(1001)
+    expect(findingWrites).toBe(2)
+    expect(Object.values(stored).every(row => row.processing_status === 'processed')).toBe(true)
+    await processLogBatch(logs, 'org-a', rules())
+    expect(findings).toHaveLength(1001)
+    expect(findingWrites).toBe(2)
 })
