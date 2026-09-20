@@ -140,20 +140,24 @@ async function enforceRateLimit(req: FastifyRequest, res: FastifyReply, database
 
     const scopeRule = settings.defaults[actor.scope]
     const routeRule = resolveRouteRule(settings, req.method, path, actor.scope)
-    const globalCheck = await consumeSharedRateLimitBucket({
-        key: `${actor.identifier}:global:${actor.scope}`,
-        rule: scopeRule,
+    // Commit both shared counters together instead of waiting for two WAL flushes.
+    const { globalCheck, routeCheck } = await withTransaction(async query => {
+        const globalCheck = await consumeSharedRateLimitBucket({
+            key: `${actor.identifier}:global:${actor.scope}`,
+            rule: scopeRule,
+        }, query)
+        const routeCheck = globalCheck.allowed ? await consumeSharedRateLimitBucket({
+            key: `${actor.identifier}:route:${actor.scope}:${req.method}:${path}`,
+            rule: routeRule,
+        }, query) : null
+        return { globalCheck, routeCheck }
     })
     applyRateLimitHeaders(res, globalCheck, scopeRule, actor.scope, 'global')
-    if (!globalCheck.allowed) {
+    if (!routeCheck) {
         sendRateLimitExceeded(req, res, globalCheck, actor.scope, 'global')
         return false
     }
 
-    const routeCheck = await consumeSharedRateLimitBucket({
-        key: `${actor.identifier}:route:${actor.scope}:${req.method}:${path}`,
-        rule: routeRule,
-    })
     applyRateLimitHeaders(res, routeCheck, routeRule, actor.scope, path)
     if (!routeCheck.allowed) {
         sendRateLimitExceeded(req, res, routeCheck, actor.scope, path)
