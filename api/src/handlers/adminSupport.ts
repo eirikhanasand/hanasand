@@ -601,12 +601,17 @@ export async function getSystemEvents(req: FastifyRequest, res: FastifyReply) {
             e.context,
             e.ip,
             e.user_agent,
+            acknowledgement.acknowledged_at,
+            acknowledgement.acknowledged_by,
+            acknowledged_actor.name AS acknowledged_by_name,
             e.created_at
         `}
         FROM system_events e
         LEFT JOIN users actor ON actor.id = e.actor_id
         LEFT JOIN users target_user ON target_user.id = e.object_id
         LEFT JOIN organizations organization ON organization.id = e.organization_id
+        ${timelineOnly ? '' : `LEFT JOIN system_event_acknowledgments acknowledgement ON acknowledgement.event_id = e.id
+        LEFT JOIN users acknowledged_actor ON acknowledged_actor.id = acknowledgement.acknowledged_by`}
         ${where.length ? `WHERE ${where.join('\n          AND ')}` : ''}
         ORDER BY e.created_at DESC, e.id DESC
         LIMIT ${add(limit + 1)} OFFSET ${add((page - 1) * limit)}
@@ -714,11 +719,16 @@ export async function getSystemEvent(req: FastifyRequest<{ Params: AuditEventPar
             e.context,
             e.ip,
             e.user_agent,
+            acknowledgement.acknowledged_at,
+            acknowledgement.acknowledged_by,
+            acknowledged_actor.name AS acknowledged_by_name,
             e.created_at
         FROM system_events e
         LEFT JOIN users actor ON actor.id = e.actor_id
         LEFT JOIN users target_user ON target_user.id = e.object_id
         LEFT JOIN organizations organization ON organization.id = e.organization_id
+        LEFT JOIN system_event_acknowledgments acknowledgement ON acknowledgement.event_id = e.id
+        LEFT JOIN users acknowledged_actor ON acknowledged_actor.id = acknowledgement.acknowledged_by
         WHERE e.id = $1
         LIMIT 1
     `, [id])
@@ -4759,7 +4769,7 @@ async function decideSupportAccessRecovery(
     })
 }
 
-async function requireAdminSupport(req: FastifyRequest, res: FastifyReply) {
+export async function requireAdminSupport(req: FastifyRequest, res: FastifyReply) {
     const actor = await tokenWrapper(req, res)
     if (!actor.valid || !actor.id || actor.impersonating) {
         res.status(401).send(supportError('support_auth_required', actor.error || 'Unauthorized.'))
@@ -12507,8 +12517,8 @@ function supportError(code: string, message: string, extra: Record<string, unkno
 }
 
 function toSystemEvent(row: Record<string, unknown>): Record<string, any> {
-    const event = row as Record<string, any>
-    const context = redactAuditValue(event.context || {}) as Record<string, unknown>
+    const context = redactAuditValue(row.context || {}) as Record<string, unknown>
+    const event = { ...row, target_name: text(context.targetName) || row.target_name || null } as Record<string, any>
     const beforeAfter = auditBeforeAfter(context)
     const id = Number(event.id)
     const entityId = event.subject_id || event.object_id || event.organization_id || null

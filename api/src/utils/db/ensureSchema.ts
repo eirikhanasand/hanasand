@@ -1,3 +1,4 @@
+import ensureAuditAcknowledgmentsSchema from './auditAcknowledgmentsSchema.ts'
 import ensureLogCatchupSchema from './logCatchupSchema.ts'
 import ensureSupportAiSchema from '#utils/support/schema.ts'
 import ensureContentOrganizationSchema from './contentOrganizationSchema.ts'
@@ -1092,6 +1093,7 @@ export default async function ensureSchema() {
     await run('ALTER TABLE system_events ALTER COLUMN actor_id DROP NOT NULL')
     await run('ALTER TABLE system_events DROP CONSTRAINT IF EXISTS system_events_actor_id_fkey')
     await run('ALTER TABLE system_events ADD CONSTRAINT system_events_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE SET NULL')
+    await ensureAuditAcknowledgmentsSchema()
     await run('CREATE INDEX IF NOT EXISTS idx_system_events_created_at ON system_events(created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_system_events_cursor ON system_events(created_at DESC, id DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_system_events_outcome_cursor ON system_events(outcome, created_at DESC, id DESC)')

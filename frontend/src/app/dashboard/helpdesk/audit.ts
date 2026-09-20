@@ -18,6 +18,9 @@ export type AdminAuditEvent = {
     context?: Record<string, unknown> | null
     ip: string
     user_agent: string
+    acknowledged_at?: string | null
+    acknowledged_by?: string | null
+    acknowledged_by_name?: string | null
     created_at: string
 }
 
