@@ -15,7 +15,7 @@ export default function PwnedSearch({ breached, breachCount }: PwnedSearchProps)
                     <div className='flex items-start gap-3'>
                         <ShieldAlert className='mt-0.5 h-4 w-4 shrink-0' />
                         <div className='grid gap-1'>
-                            <p className='font-semibold'>Exact match found</p>
+                            <p className='font-semibold'>Match found</p>
                             <p className='leading-6'>
                                 This password has been breached {count.toLocaleString()} {count === 1 ? 'time' : 'times'}.
                             </p>

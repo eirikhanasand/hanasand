@@ -8,7 +8,8 @@ const markup = renderToStaticMarkup(React.createElement(PwnedSearch, {
     breachCount: 1,
 }))
 
-assert.match(markup, /Exact match found/)
+assert.match(markup, /Match found/)
+assert.doesNotMatch(markup, /Exact match found/)
 assert.match(markup, /This password has been breached 1 time\./)
 assert.doesNotMatch(markup, /Privacy check:|Next action:|Rotate the underlying secret/)
 assert.doesNotMatch(markup, /password123|all_in_one_sorted|byte\s+\d+/i)

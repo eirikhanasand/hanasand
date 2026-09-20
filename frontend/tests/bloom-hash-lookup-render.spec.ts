@@ -61,7 +61,8 @@ test('Bloom hash lookup checks exposure without collecting a raw password', asyn
     await page.getByLabel('SHA-1 hash').filter({ visible: true }).fill('5baa61e4c9b93f3f0682250b6cf8331b7ee68fd8')
     await page.getByRole('button', { name: 'Run Bloom lookup' }).click()
 
-    await expect(page.getByText('Exact match found')).toBeVisible()
+    await expect(page.getByText('Match found', { exact: true })).toBeVisible()
+    await expect(page.getByText('Exact match found', { exact: true })).toHaveCount(0)
     await expect(page.getByText('Result', { exact: true })).toBeVisible()
     await expect(page.getByText('Hash matched leaked password.')).toBeVisible()
     await expect(page.getByText('This password has been breached 23 times.')).toBeVisible()
