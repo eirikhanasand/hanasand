@@ -9,7 +9,7 @@ export const SOURCE_SPECIFIC_EXTRACTOR_VERSION = "ti-source-specific-extractor-v
 
 export function extractSourceSpecificEntities(item: CollectedItem, context: ExtractionContext, actorIdentities?: ActorIdentityRecord[], fallbackEntities: ExtractedEntity[] = []): ExtractedEntity[] {
   const profile = item.metadata?.extractionProfile;
-  const entities = profile === "ransomware_victim_blog" ? victimBlogEntities(item, context)
+  const entities = (profile === "ransomware_victim_blog" || item.metadata?.leakSite?.claimType === "ransomware_victim_publication") ? victimBlogEntities(item, context)
     : profile === "ransomware_group_metadata" ? ransomwareGroupEntities(item, context)
       : profile === "cisa_kev" ? cisaKevEntities(item, context)
         : profile === "cert_ua_public_channel" ? certUaEntities(item, context)

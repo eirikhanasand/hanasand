@@ -10,6 +10,8 @@ type Metric = { sampleSize: number, medianSeconds: number | null, p95Seconds: nu
 type Item = {
     id: string
     incidentId: string
+    summary?: string
+    sources?: Array<{ title?: string, url?: string }>
     captureId: string
     sourceId: string
     actorName?: string
@@ -226,6 +228,7 @@ function RecordDetail({ item, form, setForm, saving, onSubmit }: { item: Item, f
             {item.reportRecovery?.reason ? <p className='mt-1'>{item.reportRecovery.reason}</p> : null}
             {item.reportRecovery?.nextAttemptAt && item.reportRecovery.status !== 'running' ? <p className='mt-1'>Next attempt: {date(item.reportRecovery.nextAttemptAt)}</p> : null}
         </div> : null}
+        {item.summary ? <div className='border-b border-ui-border p-3 text-xs leading-relaxed text-ui-text'><p className='whitespace-pre-line'>{item.summary}</p>{item.sources?.filter(source => source.url && /^https:\/\//.test(source.url)).map(source => <a key={source.url} href={source.url} target='_blank' rel='noreferrer' className='mr-3 mt-2 inline-block text-ui-primary underline'>{source.title || source.url}</a>)}</div> : null}
         {item.timestampAnomalies.length ? <div className='border-b border-ui-danger/30 bg-ui-danger/10 px-3 py-2 text-xs text-ui-danger'><strong>Ordering/source anomaly:</strong> {item.timestampAnomalies.join(', ')}</div> : null}
         <div className='grid lg:grid-cols-[minmax(0,1fr)_21rem]'>
             <section className='min-w-0 border-b border-ui-border p-3 lg:border-b-0 lg:border-r'>
@@ -254,7 +257,7 @@ function RecordDetail({ item, form, setForm, saving, onSubmit }: { item: Item, f
 function StageRow({ stage, timestamp, provenance }: { stage: string, timestamp?: string, provenance?: Record<string, unknown> }) {
     const url = typeof provenance?.referenceUrl === 'string' ? provenance.referenceUrl : undefined
     return <div className='grid grid-cols-[7.5rem_minmax(0,1fr)] gap-2 rounded-md border border-ui-border px-2.5 py-2 text-xs'>
-        <span className='flex items-center gap-1.5 font-medium text-ui-muted'>{timestamp ? <CheckCircle2 className='h-3.5 w-3.5 text-ui-success' /> : <Clock3 className='h-3.5 w-3.5' />}{label(stage)}</span>
+        <span className='flex items-center gap-1.5 font-medium text-ui-muted'>{timestamp ? <CheckCircle2 className='h-3.5 w-3.5 text-ui-success' /> : <Clock3 className='h-3.5 w-3.5' />}{provenance?.event === 'server_first_seen' ? 'First seen on Hanasand' : label(stage)}</span>
         <span className='min-w-0'><span className='block font-mono text-[11px] text-ui-text'>{timestamp ? date(timestamp) : ({ reviewed: 'No review recorded', alert_created: 'No alert recorded', delivery_attempt: 'No attempt recorded', delivered: 'No delivery confirmed' } as Record<string, string>)[stage] || 'Not supplied by source'}</span>{provenance ? <span className='mt-0.5 block truncate text-[10px] text-ui-muted'>{String(provenance.evidencePath || provenance.event || 'stored provenance')}{url ? <> · <a href={url} target='_blank' rel='noopener noreferrer' className='inline-flex items-center gap-0.5 text-ui-primary hover:underline'>reference<ExternalLink className='h-2.5 w-2.5' /></a></> : null}</span> : null}</span>
     </div>
 }

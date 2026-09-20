@@ -111,3 +111,10 @@ describe("compact pipeline value path", () => {
     ]);
   });
 });
+
+
+test("does not extract clock strings as IPv6 indicators", () => {
+  const rawText = "First seen 23:48:58 and 00:00:00; address 2001:db8:0:0:0:0:0:1";
+  const result = processCollectedItem({ sourceId: "src_public", url: "https://example.test/report", collectedAt: "2026-08-10T03:47:53.002Z", rawText, contentHash: hashContent(rawText), links: [], metadata: {}, sensitive: false });
+  expect(result.indicators.filter((i: any) => i.type === "ipv6").map((i: any) => i.value)).toEqual(["2001:db8:0:0:0:0:0:1"]);
+});

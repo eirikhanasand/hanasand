@@ -49,6 +49,8 @@ export type TimelinessRecordView = {
   sourceName?: string;
   sourceFamily?: string;
   title?: string;
+  summary?: string;
+  sources?: JsonObject[];
   status: TimelinessQueueStatus;
   reportRecovery?: JsonObject;
   exclusion?: JsonObject;
@@ -180,6 +182,8 @@ export function buildTimelinessWorkbench(records: JsonObject[], context: Timelin
       sourceName: string(source?.name),
       sourceFamily: string(object(source?.metadata)?.sourceFamily) ?? string(source?.type),
       title: string(incident?.title) ?? string(capture?.title),
+      summary: string(incident?.summary),
+      sources: objectArray(object(incident?.analystReport)?.sources),
     }, provenance);
     if (incident?.reviewState === "rejected" && string(incident.reviewedBy) && validIso(incident.reviewedAt)
       && string(incident.tenantId) === string(record.tenantId)) {
@@ -224,7 +228,11 @@ export function deriveTimeliness(
   additionalAnomalies: string[] = [],
 ): JsonObject {
   const reportTimestamps = sortReferences(reportReferences(input));
-  const first = reportTimestamps[0];
+  const first = reportTimestamps[0] ?? (input.useFirstSeenFallback === true && zonedIso(input.collectedAt) ? {
+    role: "server_first_seen", timestamp: zonedIso(input.collectedAt), event: "server_first_seen",
+    sourceId: input.sourceId, captureId: input.captureId, evidencePath: "capture.collectedAt",
+    label: "First seen on Hanasand",
+  } : undefined);
   const actor = reportTimestamps.find((item) => item.role === "actor");
   const victim = reportTimestamps.find((item) => item.role === "victim");
   const publisher = reportTimestamps.find((item) => item.role === "publisher");
@@ -248,7 +256,7 @@ export function deriveTimeliness(
 
 function toView(
   record: JsonObject,
-  labels: { actorName?: string; sourceName?: string; sourceFamily?: string; title?: string },
+  labels: { actorName?: string; sourceName?: string; sourceFamily?: string; title?: string; summary?: string; sources?: JsonObject[] },
   provenance = stageProvenance(record),
 ): TimelinessRecordView {
   const stages = Object.fromEntries(STAGES.map(([field, name]) => [name, string(record[field])])) as Record<string, string | undefined>;
@@ -379,7 +387,7 @@ function sourceQualityIssues(record: JsonObject, capture: JsonObject | undefined
 }
 
 function latencyFields(record: JsonObject): Record<string, number | undefined> {
-  return Object.fromEntries(INTERVALS.map(([name, from, to]) => [name, elapsed(string(record[from]), string(record[to]))]));
+  return Object.fromEntries(INTERVALS.map(([name, from, to]) => [name, record.firstReportedKind === "server_first_seen" && from === "firstReportedAt" ? undefined : elapsed(string(record[from]), string(record[to]))]));
 }
 
 function zeroEvidence(record: JsonObject, latencies: Record<string, number | undefined>, provenance: Record<string, JsonObject | undefined>): JsonObject {

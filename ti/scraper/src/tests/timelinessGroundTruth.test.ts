@@ -166,3 +166,18 @@ test("retains rejected incidents for audit without treating them as undelivered 
   const global = buildTimelinessWorkbench([{ ...record, tenantId: undefined }], { generatedAt, incidents: [{ ...incident, tenantId: null }] });
   expect(global.items[0].status).toBe("excluded");
 });
+
+
+test("uses an explicitly accepted server sighting without fabricating public-report latency", () => {
+  const record = retainedRecord({ useFirstSeenFallback: true, publishedAt: undefined });
+  const snapshot = buildTimelinessWorkbench([record], { generatedAt });
+  const item = snapshot.items[0];
+  expect(item.stages.first_report).toBe(record.collectedAt);
+  expect(item.provenance.first_report?.role).toBe("server_first_seen");
+  expect(item.timestampAnomalies).toEqual([]);
+  expect(item.status).toBe("complete");
+  expect(item.latencies.firstReportToCollectionSeconds).toBeUndefined();
+  expect(snapshot.metrics.overall.reportToDeliveredSeconds.sampleSize).toBe(0);
+  const verified = mergePublicReportReference(record, { role: "publisher", timestamp: "2026-07-22T10:00:00Z", referenceUrl: "https://publisher.example/report", evidencePath: "time", recordedBy: "analyst", recordedAt: generatedAt });
+  expect(buildTimelinessWorkbench([verified.record], { generatedAt }).items[0].provenance.first_report?.role).toBe("publisher");
+});

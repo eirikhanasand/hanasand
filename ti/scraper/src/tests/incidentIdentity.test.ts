@@ -71,3 +71,14 @@ describe("logical incident identity", () => {
     expect(buildIncidentCandidate(fallback, "cap-fallback", [], [{ type: "victim", value: "Example Industries", confidence: 0.9 }] as any)).toBeUndefined();
   });
 });
+
+
+test("separates JSON ransomware victims and keeps the same claim stable on later collection", () => {
+  const claim = (victimName: string, actorName = "Qilin") => ({ jsonApi: true, feedItem: false, sourceUrl: "https://reports.example.test/api/recent", leakSite: { claimType: "ransomware_victim_publication", victimName, actorName } });
+  const first = logicalIncidentIdentity(item({ url: "https://reports.example.test/api/recent", metadata: claim("Hong Kong Baptist University") }));
+  const second = logicalIncidentIdentity(item({ url: "https://reports.example.test/api/recent", metadata: claim("Eva Care") }));
+  expect(first.strategy).toBe("ransomware_victim");
+  expect(first.keyHash).not.toBe(second.keyHash);
+  expect(logicalIncidentIdentity(item({ url: "https://reports.example.test/api/recent", metadata: claim("Hong Kong Baptist University"), title: "Updated", publishedAt: undefined }))).toEqual(first);
+  expect(logicalIncidentIdentity(item({ metadata: claim("Hong Kong Baptist University", "Play") })).keyHash).not.toBe(first.keyHash);
+});
