@@ -12,7 +12,7 @@ async function state(services: unknown, overrides = {}) {
     await Bun.sleep(1050)
 }
 afterAll(() => {
-    for (const key of ['RESILIENCE_STATE_FILE', 'RESILIENCE_ESSENTIAL_ONLY', 'RESILIENCE_SITE']) {
+    for (const key of ['RESILIENCE_STATE_FILE', 'RESILIENCE_ESSENTIAL_ONLY', 'RESILIENCE_SITE', 'SUPPORT_SERVICE_BASE', 'SUPPORT_SERVICE_KEY']) {
         if (original[key] === undefined) delete process.env[key]
         else process.env[key] = original[key]
     }
@@ -41,6 +41,12 @@ test('support follows active placement, fails closed, and leaves unrelated recov
         expect(allowed()).toBe(false)
         expect(recoveryRequestAllowed('GET', '/api/ws/support')).toBe(false)
     }
+    process.env.SUPPORT_SERVICE_BASE = 'http://127.0.0.1:19181'
+    process.env.SUPPORT_SERVICE_KEY = 'a'.repeat(64)
+    await state(active, { readOnly: true })
+    expect(allowed()).toBe(true)
+    expect(recoveryRequestAllowed('GET', '/api/ws/support')).toBe(true)
+    expect(recoveryRequestAllowed('POST', '/api/ai/deployments')).toBe(false)
     await state({ invalid: true })
     expect(supportFailoverActive()).toBe(false)
     await state([{ id: 'api', activeSite: 'ovhcloud', status: 'unavailable' }])

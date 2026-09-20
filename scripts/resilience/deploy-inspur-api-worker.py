@@ -1,5 +1,6 @@
 import fcntl,json,os,re,subprocess,sys,tempfile,time,urllib.request
 from pathlib import Path
+from support_config import support_settings
 release=sys.argv[1]
 if not re.fullmatch(r'[0-9a-f]{40}', release):
     raise SystemExit('Pass the full built release commit.')
@@ -22,6 +23,7 @@ if index_builds != '0':
     raise SystemExit('Wait for the database index build to finish before restarting the scheduled worker. The existing worker has been left running.')
 original=json.loads(subprocess.check_output(['docker','inspect','hanasand_api']))[0]
 settings=dict(value.split('=',1) for value in original['Config']['Env'])
+settings.update(support_settings(worker=True))
 # Collectors receive a credential that authenticates only log ingestion.
 log_ingest_file = Path('/home/hanasand/resilience/log-ingest.json')
 if log_ingest_file.exists():

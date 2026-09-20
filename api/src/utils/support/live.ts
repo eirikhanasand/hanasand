@@ -1,5 +1,5 @@
 import pg from 'pg'
-import config from '#constants'
+import { supportConnection } from './db.ts'
 
 export type SupportChange = { id: string; visitor: string | null; user: string | null; channel: string }
 
@@ -12,8 +12,7 @@ export function supportNotifications(onError: (error: Error) => void) {
     let stopped = false
     async function connect() {
         if (client || stopped || !listeners.size) return
-        const next = new pg.Client({ host: config.DB_HOST, port: Number(config.DB_PORT) || 5432,
-            user: config.DB_USER || 'hanasand', password: config.DB_PASSWORD, database: config.DB || 'hanasand',
+        const next = new pg.Client({ ...supportConnection(),
             application_name: 'support-live', connectionTimeoutMillis: 5000, query_timeout: 5000, keepAlive: true })
         client = next
         let failed = false

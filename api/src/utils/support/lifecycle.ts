@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { withTransaction } from '#db'
+import { withTransaction } from './db.ts'
 
 export class SupportStateError extends Error {
     constructor(message: string, public status = 409) { super(message) }

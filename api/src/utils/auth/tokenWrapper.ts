@@ -195,7 +195,7 @@ async function auditImpersonationScopeDenied(req: FastifyRequest, session: Imper
  * @returns Object with a `valid` parameter, and optionally an `error` parameter
  * if an error occured while verifying the token.
  */
-export default async function tokenWrapper(req: FastifyRequest, res: FastifyReply): Promise<Valid> {
+export default async function tokenWrapper(req: FastifyRequest, res: FastifyReply, validate = validateSession): Promise<Valid> {
     const authHeader = req.headers['authorization']
     const id = headerValue(req.headers['id'])
     const impersonationToken = headerValue(req.headers['x-impersonation-token'])
@@ -232,7 +232,7 @@ export default async function tokenWrapper(req: FastifyRequest, res: FastifyRepl
     try {
         const session = cachedSession && cachedSession.user.id === id
             ? cachedSession
-            : await validateSession({ id, token })
+            : await validate({ id, token })
         if (!session) {
             return {
                 valid: false,

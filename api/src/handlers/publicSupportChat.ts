@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto'
 import { asksForHuman } from '#utils/support/assistant.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { consumeSharedRateLimitBucket } from '#utils/rateLimit/config.ts'
-import { queryOnce } from '#db'
+import { queryOnce } from '#utils/support/db.ts'
 import { readSupportConversation, sendSupportChat, supportSessionHash, supportIdPattern, SupportConversationNotFound } from '#utils/support/conversation.ts'
 
 type ChatBody = { requestId?: unknown; message?: unknown; handoff?: unknown; conversationId?: unknown; action?: unknown; rating?: unknown; comment?: unknown; resolutionVersion?: unknown }

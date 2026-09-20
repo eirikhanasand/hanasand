@@ -1,6 +1,6 @@
 import { SupportStateError } from './lifecycle.ts'
 import { createHash, randomUUID } from 'node:crypto'
-import { queryOnce, withTransaction } from '#db'
+import { queryOnce, withTransaction, independentSupport } from './db.ts'
 import { answerSupport, asksForHuman, handoffMarker, handoffMessage } from './assistant.ts'
 import { supportFailoverActive } from '../resilience.ts'
 
@@ -93,7 +93,7 @@ export async function sendSupportChat(hash: string, input: Input, answer = answe
                 const ticket = (await query('SELECT status, channel, ai_pending_id FROM support_tickets WHERE id=$1 FOR UPDATE', [pending.ticketId!])).rows[0]
                 // A late AI failure must never reopen a resolved chat or take over a newer reply.
                 if (ticket?.ai_pending_id !== pending.messageId) return
-                if (supportFailoverActive() && ticket.status === 'open' && ticket.channel === 'ai') await transfer(query, pending.ticketId!)
+                if ((supportFailoverActive() || independentSupport) && ticket.status === 'open' && ticket.channel === 'ai') await transfer(query, pending.ticketId!)
                 else await query('UPDATE support_tickets SET ai_pending_id = NULL, ai_pending_at = NULL WHERE id = $1 AND ai_pending_id = $2', [pending.ticketId!, pending.messageId!])
             })
             error = 'Hanasand AI could not answer right now. Retry your message or talk to a human.'

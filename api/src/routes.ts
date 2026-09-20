@@ -210,6 +210,8 @@ import { getBrowserSandboxProfiles, putBrowserSandboxProfiles } from './handlers
 import { getBrowserRunReport, getBrowserRuns, getBrowserRunStats, postBrowserRunReport } from './handlers/browserSandboxRuns.ts'
 import { publicSupportChat } from './handlers/publicSupportChat.ts'
 import { getSupportMessages, getSupportTickets, postSupportMessage, postSupportTicket, postSupportStatus, postSupportFeedback } from './handlers/supportChat.ts'
+import { forwardSupportRequest } from './utils/support/transport.ts'
+import { supportModel } from './handlers/supportModel.ts'
 import { getCommercialContactRequests, postCommercialContactRequest } from './handlers/commercialContactRequests.ts'
 import { getOrganizationPrivacy, postOrganizationPrivacy } from './handlers/organizationPrivacy.ts'
 import { deleteSavedSearch, getSavedSearches, postSavedSearch } from './handlers/ti/savedSearches.ts'
@@ -224,6 +226,9 @@ import { createBillingPortal, getBillingSubscription, receiveStripeWebhook } fro
  * @param _ Fastify Plugin Options
  */
 export default async function apiRoutes(fastify: FastifyInstance, options: FastifyPluginOptions) {
+    fastify.addHook('preHandler', (req, res, done) => {
+        void forwardSupportRequest(req, res).then(proxied => { if (!proxied) done() }, error => done(error))
+    })
     void options
     if (process.env.API_HTTP_ONLY !== '1') startLoadTestQueue()
 
@@ -338,6 +343,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/browser/runs/:id/report', postBrowserRunReport)
     fastify.get('/support/chat', publicSupportChat)
     fastify.post('/support/chat', publicSupportChat)
+    fastify.post('/support/model', supportModel)
     fastify.get('/support/tickets', getSupportTickets)
     fastify.post('/support/tickets', postSupportTicket)
     fastify.get('/support/tickets/:id/messages', getSupportMessages)

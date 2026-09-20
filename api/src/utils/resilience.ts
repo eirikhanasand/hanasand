@@ -22,14 +22,16 @@ export function supportFailoverActive() {
     if (process.env.RESILIENCE_ESSENTIAL_ONLY !== '1') return false
     const state = recoveryState()
     const site = process.env.RESILIENCE_SITE
-    return Boolean(site && state.site === site && state.readOnly === false && Array.isArray(state.services) && state.services.some(service =>
+    const writableSupport = state.readOnly === false || Boolean(process.env.SUPPORT_SERVICE_BASE && process.env.SUPPORT_SERVICE_KEY)
+    return Boolean(site && state.site === site && typeof state.readOnly === 'boolean' && writableSupport && Array.isArray(state.services) && state.services.some(service =>
         ['api', 'frontend'].includes(service.id || '') && service.activeSite === site && ['up', 'failed_over'].includes(service.status || '')))
 }
 export function recoveryRequestAllowed(method: string, path: string) {
+    if (process.env.SUPPORT_INTERNAL_SERVICE === '1' && /^\/api\/(support(?:\/|$)|ws\/support$)/.test(path)) return true
     const publicRead = ['GET', 'HEAD'].includes(method) && ['/api/system/updates', '/api/status'].includes(path)
     const activeSupport = /^\/api\/(support(?:\/|$)|ws\/support$)/.test(path) && supportFailoverActive()
     if (process.env.RESILIENCE_ESSENTIAL_ONLY === '1' && !publicRead && !activeSupport && !/^\/(ready$|api\/(health$|auth\/|user(?:\/|$)|organizations(?:\/|$)|ti\/search$|v1\/ti\/search(?:\/batch)?$))/.test(path)) return false
-    if (!recoveryReadOnly()) return true
+    if (activeSupport || !recoveryReadOnly()) return true
     const query = method === 'POST' && ['/api/ti/search', '/api/v1/ti/search', '/api/v1/ti/search/batch'].includes(path)
     return query || (['GET', 'HEAD', 'OPTIONS'].includes(method) && !/\/auth\/logout\/|\/restart\//.test(path))
 }

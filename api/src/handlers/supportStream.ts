@@ -1,10 +1,11 @@
 import type { FastifyInstance } from 'fastify'
 import WebSocket from 'ws'
-import { queryOnce } from '#db'
-import { validateSession } from '#utils/auth/session.ts'
+import { queryOnce } from '#utils/support/db.ts'
+import { validateSupportSession as validateSession } from '#utils/support/auth.ts'
 import { supportSessionHash } from '#utils/support/conversation.ts'
 import { supportNotifications, type SupportChange } from '#utils/support/live.ts'
 import { recoveryRequestAllowed } from '#utils/resilience.ts'
+import { forwardSupportSocket } from '#utils/support/transport.ts'
 
 export function supportChangeAllowed(change: SupportChange, viewer: { visitor?: string; id?: string; support?: boolean }) {
     return Boolean(viewer.visitor && viewer.visitor === change.visitor || viewer.id && (change.user === viewer.id || viewer.support && change.channel === 'human'))
@@ -18,6 +19,8 @@ export default function registerSupportStream(fastify: FastifyInstance) {
         const origin = request.headers.origin
         if (origin !== 'https://hanasand.com' && !(process.env.NODE_ENV !== 'production' && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin || ''))) { socket.close(1008); return }
         sockets.add(socket)
+        socket.on('close', () => sockets.delete(socket))
+        if (forwardSupportSocket(socket)) return
         let authenticating = false
         let authenticated = false
         let unsubscribe: (() => void) | undefined

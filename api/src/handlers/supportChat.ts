@@ -2,18 +2,36 @@ import { setSupportStatus, saveSupportFeedback, SupportStateError } from '#utils
 import { supportIdPattern } from '#utils/support/conversation.ts'
 import { randomUUID } from 'node:crypto'
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import run, { withTransaction } from '#db'
+import run, { withTransaction, independentSupport } from '#utils/support/db.ts'
+import primaryQuery from '#db'
+import { validateSupportSession } from '#utils/support/auth.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 
 type SupportBody = { subject?: string; message?: string }
+const actors = new WeakMap<FastifyRequest, { id: string; support: boolean }>()
 
 async function auth(req: FastifyRequest, res: FastifyReply) {
-    const result = await tokenWrapper(req, res)
+    let session: Awaited<ReturnType<typeof validateSupportSession>> | undefined
+    const result = await tokenWrapper(req, res, async credentials => { session = await validateSupportSession(credentials); return session })
+    session ||= (req as typeof req & { rateLimitSession?: Awaited<ReturnType<typeof validateSupportSession>> }).rateLimitSession
+    if (!result.valid || !result.id) {
+        if (!res.sent && res.statusCode < 400) res.status(401).send({ error: 'Sign in to view your support conversations.' })
+        return null
+    }
+    if (independentSupport && session && session.user.id === result.id) actors.set(req, { id: result.id, support: session.roles.some(role => role.id === 'support') })
+    else if (independentSupport) {
+        // API keys and impersonation remain authoritative in the main authentication database.
+        const user = (await primaryQuery('SELECT name FROM users WHERE id=$1', [result.id])).rows[0]
+        if (!user) { res.code(401).send({ error: 'Unauthorized.' }); return null }
+        await run('INSERT INTO users(id,name) VALUES($1,$2) ON CONFLICT(id) DO UPDATE SET name=EXCLUDED.name', [result.id, user.name])
+    }
     return result.valid && result.id ? result.id : null
 }
 
-async function isSupport(userId: string) {
-    const result = await run(`
+async function isSupport(userId: string, req: FastifyRequest) {
+    const actor = actors.get(req)
+    if (actor?.id === userId) return actor.support
+    const result = await primaryQuery(`
         SELECT EXISTS (
             SELECT 1 FROM user_roles ur
             JOIN roles r ON r.id = ur.role_id
@@ -27,7 +45,7 @@ export async function getSupportTickets(req: FastifyRequest, res: FastifyReply) 
     const userId = await auth(req, res)
     if (!userId) return
     try {
-        const support = await isSupport(userId)
+        const support = await isSupport(userId, req)
         const result = await run(`
             SELECT t.id, t.user_id, t.subject, t.status, t.created_at, t.updated_at, t.channel, t.resolution_version, t.feedback_rating, t.feedback_comment,
                    (SELECT u2.name FROM support_messages m2 JOIN users u2 ON u2.id=m2.sender_id WHERE m2.ticket_id=t.id AND m2.sender_kind='support' ORDER BY m2.created_at DESC, m2.id DESC LIMIT 1) AS agent_name,
@@ -70,7 +88,7 @@ export async function getSupportMessages(req: FastifyRequest<{ Params: { id: str
     const userId = await auth(req, res)
     if (!userId) return
     try {
-        const support = await isSupport(userId)
+        const support = await isSupport(userId, req)
         const access = await run('SELECT EXISTS (SELECT 1 FROM support_tickets WHERE id = $1 AND ($2::boolean OR user_id = $3)) AS allowed', [req.params.id, support, userId])
         if (!access.rows[0]?.allowed) return res.status(404).send({ error: 'Support ticket not found.' })
         const result = await run(`
@@ -92,7 +110,7 @@ export async function postSupportMessage(req: FastifyRequest<{ Params: { id: str
     const body = String(req.body?.message || '').trim().slice(0, 10_000)
     if (!body) return res.status(400).send({ error: 'Message is required.' })
     try {
-        const support = await isSupport(userId)
+        const support = await isSupport(userId, req)
         const access = await run('SELECT EXISTS (SELECT 1 FROM support_tickets WHERE id = $1 AND ($2::boolean OR user_id = $3)) AS allowed', [req.params.id, support, userId])
         if (!access.rows[0]?.allowed) return res.status(404).send({ error: 'Support ticket not found.' })
         await withTransaction(async query => {
@@ -117,7 +135,7 @@ export async function postSupportStatus(req: FastifyRequest<{ Params: { id: stri
     if (!userId) return
     if (!supportIdPattern.test(req.params.id) || (req.body?.status !== 'open' && req.body?.status !== 'closed')) return res.status(400).send({ error: 'Invalid chat status.' })
     try {
-        if (!await isSupport(userId)) return res.status(403).send({ error: 'Only support agents can resolve or reopen chats.' })
+        if (!await isSupport(userId, req)) return res.status(403).send({ error: 'Only support agents can resolve or reopen chats.' })
         const result = await setSupportStatus(req.params.id, req.body.status as 'open' | 'closed', userId)
         return res.send({ ok: true, ...result })
     } catch (error) {
