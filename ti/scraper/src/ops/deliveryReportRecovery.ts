@@ -1,9 +1,26 @@
 import { createHash } from 'node:crypto';
 import { publicAdvisoryFetcher } from '../api/exposureQueueRoutes.ts';
 import { sourceFieldReportTimestamp, publicSourceReferenceUrl, zonedSourceTimestamp } from '../pipeline/sourceFieldReportTimestamp.ts';
+import { parseRssItems } from '../adapters/rssXml.ts';
+
+export function feedPublicationEvidence(xml: string, articleUrl: string, feedUrl: string) {
+  const canonical = (url: string) => { const u = new URL(url); u.hash = ''; u.pathname = u.pathname.replace(/\/$/, ''); return u.href; };
+  for (const block of xml.match(/<item\b[\s\S]*?<\/item>|<entry\b[\s\S]*?<\/entry>/gi) ?? []) {
+    const item = parseRssItems(block, feedUrl)[0];
+    if (!item?.link || canonical(item.link) !== canonical(articleUrl)) continue;
+    // Atom updated is not the original publication date.
+    const date = block.match(/<(pubDate|published)\b[^>]*>([^<]+)<\/\1>/i);
+    const timestamp = zonedSourceTimestamp(date?.[2]);
+    if (timestamp) return { timestamp, quote: block, evidencePath: `feed.matching_entry.${date![1]}`, referenceUrl: feedUrl };
+  }
+}
 
 const attribute = (tag: string, key: string) => tag.match(new RegExp(`\\b${key}\\s*=\\s*["']([^"']+)["']`, 'i'))?.[1];
 export function publicationEvidence(html: string, referenceUrl?: string) {
+  if (referenceUrl && new URL(referenceUrl).hostname === 'lists.debian.org') {
+    const date = html.match(/<li><em>Date<\/em>:\s*([^<]+)<\/li>/i);
+    if (date && zonedSourceTimestamp(date[1])) return { timestamp: date[1], quote: date[0], evidencePath: 'html.message_headers.Date' };
+  }
   for (const tag of html.match(/<meta\b[^>]*>/gi) ?? []) {
     const key = attribute(tag, 'property') || attribute(tag, 'name') || attribute(tag, 'itemprop');
     const timestamp = zonedSourceTimestamp(attribute(tag, 'content'));
@@ -53,6 +70,15 @@ export async function recoverDeliveryReport(item: any, options: any = {}) {
     const html = await response.text();
     contentSha256 = createHash('sha256').update(html).digest('hex');
     evidence = publicationEvidence(html, referenceUrl);
+    const feedUrl = publicSourceReferenceUrl(capture.metadata?.sourceUrl || source?.url);
+    if (!evidence && capture.metadata?.feedItem && feedUrl && feedUrl !== referenceUrl) {
+      const feed = await (options.fetchPublic || publicAdvisoryFetcher(undefined, 8000))(feedUrl);
+      if (feed.ok) {
+        const xml = await feed.text();
+        evidence = feedPublicationEvidence(xml, referenceUrl, feedUrl);
+        if (evidence) contentSha256 = createHash('sha256').update(xml).digest('hex');
+      }
+    }
     if (!evidence) {
       modelUsed = true;
       const response = await (options.fetchModel || fetch)(Bun.env.HANASAND_AI_EVALUATION_API || 'http://api:8080/api/tools/ai', {

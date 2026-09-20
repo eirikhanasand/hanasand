@@ -1,8 +1,18 @@
 import { expect, test } from 'bun:test';
-import { recoverDeliveryReport, publicationEvidence, verifiedModelEvidence, startDeliveryReportRecovery } from '../ops/deliveryReportRecovery.ts';
+import { recoverDeliveryReport, publicationEvidence, verifiedModelEvidence, startDeliveryReportRecovery, feedPublicationEvidence } from '../ops/deliveryReportRecovery.ts';
 import { PostgresScraperStore } from '../storage/postgresScraperStore.ts';
 
 const item = { timeline: { id:'i',incidentId:'i',captureId:'c',sourceId:'s',collectedAt:'2026-09-01T10:00:00Z' }, capture:{url:'https://example.org/incident'},source:{status:'active',name:'Publisher'} };
+test('feed recovery matches the article and excludes update-only timestamps', () => {
+  const xml = '<feed><entry><link href="/other"/><published>2026-08-01T10:00:00Z</published></entry><entry><link href="/incident"/><updated>2026-08-03T10:00:00Z</updated></entry></feed>';
+  expect(feedPublicationEvidence(xml, item.capture.url, 'https://example.org/feed')).toBeUndefined();
+  expect(feedPublicationEvidence(xml.replace('<updated>', '<published>').replace('</updated>', '</published>'), item.capture.url, 'https://example.org/feed')).toMatchObject({timestamp:'2026-08-03T10:00:00Z'});
+});
+test('Debian message publication uses the sender header, not archive receipt time', () => {
+  const html = '<!--X-Date: Sat, 8 Aug 2026 21:55:51 +0000 (UTC) --><li><em>Date</em>: Sat, 8 Aug 2026 18:55:21 -0300</li>';
+  expect(publicationEvidence(html, 'https://lists.debian.org/debian-lts-announce/2026/08/msg00015.html')).toMatchObject({timestamp:'Sat, 8 Aug 2026 18:55:21 -0300'});
+  expect(publicationEvidence(html, 'https://example.org/')).toBeUndefined();
+});
 test('retired sources retain usable report evidence and its original reporter role', async () => {
   const reference = { role:'actor', timestamp:'2026-08-01T10:00:00Z', referenceUrl:'https://example.org/original', evidencePath:'feed.entry.pubDate', extractionMethod:'source_field' };
   const archived = { ...item, source:{...item.source,status:'retired'}, capture:{...item.capture,metadata:{reportTimestamps:[reference]}} };
