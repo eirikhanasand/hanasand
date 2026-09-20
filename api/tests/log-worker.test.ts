@@ -56,7 +56,8 @@ mock.module('../src/utils/mill/storedSources.ts', () => ({ processAdditionalLogS
 mock.module('../src/utils/mill/logWatermark.ts', () => ({ stableLogWatermark: async () => watermark }))
 mock.module('../src/handlers/mill.ts', () => ({
     loadConfiguredMillRules: async () => [],
-    collectMillEventFindings: () => ({ findings: [true] }),
+    collectMillEventFindings: (_scope: string, _id: string, event: any) => ({ findings: [event.normalized.message] }),
+    persistMillEventFindings: async (findings: string[]) => { if (fail) throw new Error('Finding storage unavailable'); checked.push(...findings) },
     normalizeMillEvent: (event: any) => ({ timestamp: event.timestamp, eventType: event.event_type, action: event.action, outcome: event.outcome, normalized: event }),
     createMillFindings: async (_scope: string, _id: string, event: any) => { if (fail) throw new Error('Finding storage unavailable'); checked.push(event.normalized.message) },
 }))
@@ -117,16 +118,17 @@ test('inactive scopes fall back to Hanasand and direct Mill pending events retry
     expect(pending).toHaveLength(0)
 })
 
-test('busy service-log writers do not block other streams and do not advance service cursors', async () => {
+test('busy service-log writers still allow committed history and other streams to advance', async () => {
     watermark = null
     pending = [{ id: 'native', organization_id: 'platform', normalized: { timestamp: '2026-09-19T00:00:00Z', message: 'native' } }]
     await processStoredLogs()
-    expect(checked).toEqual(['native'])
+    expect(checked).toEqual(['native', '1'])
     expect(additionalRuns).toBe(1)
     expect(queueRuns).toBe(1)
     expect(recoveryRuns).toBe(1)
-    expect(cursor).toMatchObject({ last_id: '0', recent_id: '100', last_error: 'Waiting for active log writes; will retry.' })
-    expect(statements.some(sql => sql.includes('FROM service_logs'))).toBe(false)
+    expect(cursor).toMatchObject({ last_id: '1', recent_id: '100', last_error: 'Waiting for active log writes; will retry.' })
+    expect(reads).toHaveLength(1)
+    expect(reads[0].params.slice(0, 2)).toEqual(['0', '100'])
 })
 
 test('recent event times are checked before replayed FIFO events without jumping the cursor', async () => {

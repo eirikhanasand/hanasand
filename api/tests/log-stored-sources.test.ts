@@ -66,9 +66,9 @@ test('a busy source is visibly retried without starving other sources', async ()
     busy = 'traffic_events'
     const received: string[] = []
     await processAdditionalLogSources(async logs => { received.push(String(logs[0].id)) })
-    expect(received).toEqual(['login_events:101', 'system_events:101', 'login_events:1', 'system_events:1'])
+    expect(received).toEqual(['login_events:101', 'system_events:101', 'login_events:1', 'traffic_events:1', 'system_events:1'])
     expect(skipped).toEqual(['traffic_events'])
-    expect(checkpoints).toHaveLength(4)
+    expect(checkpoints).toHaveLength(5)
 })
 
 test('delayed command scheduling bounds all forward streams without jumping remaining source IDs', async () => {

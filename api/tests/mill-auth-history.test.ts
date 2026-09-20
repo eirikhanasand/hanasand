@@ -2,7 +2,7 @@ import { beforeEach, expect, mock, test } from 'bun:test'
 let findings: any[] = [], previous: any[] = []
 const query = async (sql: string, p: any[] = []) => {
     if (sql.trimStart().startsWith('SELECT') && sql.includes('FROM mill_events')) return { rows: previous }
-    if (sql.includes('INSERT INTO mill_findings')) { findings.push({ id: p[3] }); return { rows: [] } }
+    if (sql.includes('INSERT INTO mill_findings')) { findings.push(...JSON.parse(p[0]).map((item: any) => ({ id: item.rule_id }))); return { rows: [] } }
     throw new Error(sql)
 }
 mock.module('#db', () => ({ default: query, withTransaction: async (work: any) => work(query) }))

@@ -10,7 +10,7 @@ mock.module('#db', () => ({ withTransaction: async () => { throw new Error('Inge
     if (sql.includes('INSERT INTO mill_events')) { expect(sql).toContain("'pending'"); events.push({ ingestion_id: p[1], processing_status: 'pending', id: p[0], organization_id: p[2], source_vendor: p[3], source_product: p[4], event_timestamp: p[5], event_type: p[6], action: p[7], outcome: p[8], normalized: JSON.parse(p[15]) }); return { rows: [] } }
     if (sql.includes('INSERT INTO mill_findings')) {
         if (failFinding) throw new Error('Finding persistence unavailable')
-        if (!findings.some(row => row.finding_key === p[2])) findings.push({ id: p[0], organization_id: p[1], finding_key: p[2], rule_id: p[3], severity: p[4], status: 'new', summary: p[5], evidence: { ...JSON.parse(p[6]), restrictedLog: events.some(event => event.ingestion_id === 'logs' && event.organization_id === p[1] && p[7].includes(event.id)) }, event_ids: p[7], first_observed: new Date().toISOString(), last_observed: new Date().toISOString() })
+        for (const item of JSON.parse(p[0])) if (!findings.some(row => row.finding_key === item.finding_key)) findings.push({ ...item, status: 'new', evidence: { ...item.evidence, restrictedLog: events.some(event => event.ingestion_id === 'logs' && event.organization_id === item.organization_id && item.event_ids.includes(event.id)) }, first_observed: new Date().toISOString(), last_observed: new Date().toISOString() })
         return { rows: [] }
     }
     if (sql.includes("UPDATE mill_events SET processing_status = 'processed'")) {
