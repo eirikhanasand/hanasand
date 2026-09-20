@@ -422,8 +422,10 @@ export async function getSystemEvents(req: FastifyRequest, res: FastifyReply) {
     if (!actor) return
 
     const query = req.query as AuditQuery
-    if (query.format !== undefined && query.format !== 'timeline') return res.status(400).send(supportError('invalid_format', 'Format must be timeline when specified.'))
+    if (query.format !== undefined && !['timeline', 'helpdesk'].includes(query.format)) return res.status(400).send(supportError('invalid_format', 'Unknown audit format.'))
     const timelineOnly = query.format === 'timeline'
+    const helpdeskOnly = query.format === 'helpdesk'
+    if (helpdeskOnly && query.hql !== undefined) return res.status(400).send(supportError('invalid_hql', 'HQL is not supported by the helpdesk format.'))
     const authorized = performance.now()
     let compiled: ReturnType<typeof compileAuditQuery> | undefined
     try {
@@ -538,7 +540,7 @@ export async function getSystemEvents(req: FastifyRequest, res: FastifyReply) {
     if (from && !Number.isNaN(Date.parse(from))) where.push(`e.created_at >= ${add(new Date(from).toISOString())}`)
     if (to && !Number.isNaN(Date.parse(to))) where.push(`e.created_at <= ${add(new Date(to).toISOString())}`)
     // Timeline batches retain the first page total; support clients keep their existing contract.
-    const countResult = timelineOnly && cursor ? null : await run(`
+    const countResult = helpdeskOnly || (timelineOnly && cursor) ? null : await run(`
         SELECT COUNT(*)::int AS total
         FROM system_events e
         LEFT JOIN users actor ON actor.id = e.actor_id
@@ -598,9 +600,14 @@ export async function getSystemEvents(req: FastifyRequest, res: FastifyReply) {
             e.request_id,
             e.outcome,
             e.reason,
-            e.context,
+            ${helpdeskOnly ? `jsonb_strip_nulls(jsonb_build_object(
+                'name', CASE WHEN jsonb_typeof(e.context->'name') = 'string' THEN e.context->'name' END,
+                'targetName', CASE WHEN jsonb_typeof(e.context->'targetName') = 'string' THEN e.context->'targetName' END,
+                'targetId', CASE WHEN jsonb_typeof(e.context->'targetId') = 'string' THEN e.context->'targetId' END,
+                'targetSource', CASE WHEN jsonb_typeof(e.context->'targetSource') = 'string' THEN e.context->'targetSource' END
+            )) AS context` : 'e.context'},
             e.ip,
-            e.user_agent,
+            ${helpdeskOnly ? '\'\'::text AS user_agent' : 'e.user_agent'},
             acknowledgement.acknowledged_at,
             acknowledgement.acknowledged_by,
             acknowledged_actor.name AS acknowledged_by_name,
@@ -625,6 +632,10 @@ export async function getSystemEvents(req: FastifyRequest, res: FastifyReply) {
             events: pageRows,
             pagination: { total: countResult ? Number(countResult.rows[0].total) : null, nextCursor },
         })
+    }
+    if (helpdeskOnly) {
+        res.header('Server-Timing', `auth;dur=${(authorized - started).toFixed(2)}, query;dur=${(performance.now() - authorized).toFixed(2)}`)
+        return res.send({ events: pageRows })
     }
     const events = pageRows.map(toSystemEvent)
     const timeline = events.map(event => event.detail.timelineEvent)

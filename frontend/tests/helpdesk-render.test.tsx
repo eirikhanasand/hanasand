@@ -46,6 +46,8 @@ const render = async (params: Record<string, string> = {}) => {
 }
 
 const html = await render()
+assert.equal(new URL(requestUrl).pathname.endsWith('/system/events'), true)
+assert.equal(new URL(requestUrl).searchParams.get('format'), 'helpdesk')
 for (const text of ['Search audit events', 'impersonation.start', 'support.organization.invite', 'Example customer', 'Example organization', 'session-1']) {
     assert(html.includes(text), `Missing audit content: ${text}`)
 }
@@ -133,3 +135,9 @@ const before = fetchCount
 await assert.rejects(render(), /redirect:.*login/)
 assert.equal(fetchCount, before, 'Unauthenticated visits must not query audit events')
 console.log('Helpdesk renders current audit events, counts, focus filters, empty/error states and authentication correctly.')
+
+const { helpdeskEvent } = await import('../src/app/dashboard/helpdesk/audit')
+const projected = helpdeskEvent({ ...events[0], detail: { unusedReport: 'x'.repeat(1_000_000) }, context: { targetId: 'deleted-user', password: 'private', arbitrary: 'unused' } } as typeof events[0])
+assert(!('detail' in projected), 'Unused reports must never cross into the client payload')
+assert.deepEqual(projected.context, { targetId: 'deleted-user' })
+assert(JSON.stringify(projected).length < 1500)
