@@ -5,29 +5,18 @@ recovery_timeout=${BACKUP_VERIFY_RECOVERY_TIMEOUT_SECONDS:-7200}
 case "$recovery_timeout" in ''|*[!0-9]*) printf 'Backup recovery timeout must be a positive number of seconds.\n' >&2; exit 1;; esac
 test "$recovery_timeout" -gt 0
 image=postgres@sha256:29342cb52157b098821961d2c14eec3c019071f56a5d559e990cf07cf541ea9b
-volume=hanasand-resilience-restore-check-$(date -u +%Y%m%d%H%M%S)
-name=$volume
-# Restore checks share storage with the live database. Cap physical-disk I/O
-# for both extraction and recovery, including LVM-backed Docker volumes.
-io_devices=$(
- for path in "$backup" "$(docker info --format '{{.DockerRootDir}}')"; do
-  source=$(findmnt -n -o SOURCE --target "$path") || exit 1
-  parents=$(lsblk -s -n -p -o PATH,TYPE "$source") || exit 1
-  disks=$(printf '%s\n' "$parents" | awk '$2 == "disk" {print $1}')
-  test -n "$disks" || { printf 'Cannot determine backup verification disks.\n' >&2; exit 1; }
-  printf '%s\n' "$disks"
- done
-)
-io_devices=$(printf '%s\n' "$io_devices" | sort -u)
-set --
-for device in $io_devices; do
- set -- "$@" --device-read-bps "$device:20mb" --device-write-bps "$device:10mb"
-done
-cleanup() { docker rm -f "$name" >/dev/null 2>&1 || true; docker volume rm "$volume" >/dev/null 2>&1 || true; }
+name=hanasand-resilience-restore-check-$(date -u +%Y%m%d%H%M%S)
+# This runs on Inspur. Leave 64 GiB beyond the check's maximum memory allowance.
+available_kib=$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo)
+test "${available_kib:-0}" -ge 201326592 || { printf 'Backup verification needs 192 GiB of available memory.\n' >&2; exit 1; }
+cleanup() { docker rm -f "$name" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
-# Every restore uses a new isolated volume; no production database is stopped or overwritten.
-docker volume create "$volume" >/dev/null
-docker run --rm "$@" --network none --cpus 2 --memory 16g --memory-swap 16g -v "$backup:/backup:ro" -v "$volume:/verify" "$image" sh -ec '
+# One container keeps the same temporary filesystem through extraction and replay.
+# Disk throttles on the shared filesystem can also delay live database writes.
+docker run --rm --name "$name" --network none --cpus 2 --memory 128g --memory-swap 128g \
+ --tmpfs /verify:rw,noexec,nosuid,mode=0700,size=96g \
+ -e BACKUP_VERIFY_RECOVERY_TIMEOUT_SECONDS="$recovery_timeout" \
+ -v "$backup:/backup:ro" "$image" sh -ec '
  tar -xzf /backup/base.tar.gz -C /verify
  mkdir -p /verify/pg_wal
  tar -xzf /backup/pg_wal.tar.gz -C /verify/pg_wal
@@ -38,21 +27,11 @@ docker run --rm "$@" --network none --cpus 2 --memory 16g --memory-swap 16g -v "
  : > /verify/postgresql.auto.conf
  chown -R postgres:postgres /verify
  chmod 700 /verify
+ gosu postgres pg_ctl -D /verify -w -t "$BACKUP_VERIFY_RECOVERY_TIMEOUT_SECONDS" \
+  -o "-p 5432 -c listen_addresses=127.0.0.1 -c shared_buffers=4GB" start
+ psql -U hanasand -d hanasand -v ON_ERROR_STOP=1 -c "CREATE TABLE public.resilience_restore_probe (id integer PRIMARY KEY); INSERT INTO public.resilience_restore_probe VALUES (1); SELECT pg_is_in_recovery(), count(*) FROM public.resilience_restore_probe; DROP TABLE public.resilience_restore_probe;"
+ gosu postgres pg_ctl -D /verify -w -t 120 -m fast stop
 '
-docker run -d --name "$name" "$@" --network none --memory 16g --memory-swap 16g --cpus 1 -v "$volume:/var/lib/postgresql/data" "$image" postgres -p 5432 -c listen_addresses=127.0.0.1 -c shared_buffers=4GB >/dev/null
-ready=0
-# Recovery has the same I/O budget, so allow it time to replay the backup WAL.
-deadline=$(($(date +%s) + recovery_timeout))
-while test "$(date +%s)" -lt "$deadline"; do
- if docker exec "$name" pg_isready -t 2 -U hanasand -d hanasand >/dev/null 2>&1; then ready=1; break; fi
- if test "$(docker inspect --format '{{.State.Running}}' "$name")" != true; then
-  printf 'Backup recovery stopped before the database was ready.\n' >&2
-  exit 1
- fi
- sleep 5
-done
-test "$ready" = 1 || { printf 'Backup recovery did not finish within %s seconds.\n' "$recovery_timeout" >&2; exit 1; }
-docker exec "$name" psql -U hanasand -d hanasand -v ON_ERROR_STOP=1 -c "CREATE TABLE public.resilience_restore_probe (id integer PRIMARY KEY); INSERT INTO public.resilience_restore_probe VALUES (1); SELECT pg_is_in_recovery(), count(*) FROM public.resilience_restore_probe; DROP TABLE public.resilience_restore_probe;" >/dev/null
 python3 - "$backup" <<'JSON'
 import datetime,hashlib,json,pathlib,sys
 root=pathlib.Path(sys.argv[1]);checksums={}
