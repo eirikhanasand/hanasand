@@ -25,3 +25,48 @@ test('paid runs allow tools and clamp duration, including malformed requests', (
     for (const value of [undefined, -1, 'invalid', Infinity]) expect(browserStartOptions({ durationSeconds: value }, access).durationSeconds).toBe(1800)
     expect(browserStartOptions({ durationSeconds: 1, profileTools: 'invalid' }, access)).toMatchObject({ durationSeconds: 60, profileTools: [] })
 })
+
+
+test('browser leases tolerate transient failures but close before the persisted lease expires', async () => {
+    const { browserLeaseHeartbeat, BrowserLeaseExpiredError } = await import('../src/utils/ws/browserLease.ts')
+    let now = 0, lost = 0, failure: Error | null = null
+    const beat = browserLeaseHeartbeat(async () => { if (failure) throw failure }, () => lost++, () => now)
+    now = 30_000
+    await beat()
+    failure = new Error('Connection terminated unexpectedly')
+    now = 60_000
+    await beat()
+    expect(lost).toBe(0)
+    failure = null
+    now = 90_000
+    await beat()
+    expect(lost).toBe(0)
+    failure = new Error('Database unavailable')
+    for (now of [120_000, 150_000]) await beat()
+    expect(lost).toBe(0)
+    now = 180_000
+    await beat()
+    await beat()
+    expect(lost).toBe(1)
+    const expired = browserLeaseHeartbeat(async () => { throw new BrowserLeaseExpiredError('expired') }, () => lost++, () => now)
+    await expired()
+    expect(lost).toBe(2)
+})
+
+test('a hung renewal cannot keep a session alive beyond its safe deadline', async () => {
+    const { browserLeaseHeartbeat } = await import('../src/utils/ws/browserLease.ts')
+    let now = 0, lost = 0, calls = 0, resolve!: () => void
+    const pending = new Promise<void>(done => { resolve = done })
+    const beat = browserLeaseHeartbeat(() => { calls++; return pending }, () => lost++, () => now)
+    const first = beat()
+    now = 30_000
+    await beat()
+    expect(calls).toBe(1)
+    now = 90_000
+    await beat()
+    expect(lost).toBe(1)
+    resolve()
+    await first
+    await beat()
+    expect(lost).toBe(1)
+})

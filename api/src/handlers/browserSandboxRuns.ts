@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import run, { withTransaction } from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { validateSession } from '#utils/auth/session.ts'
+import { BrowserLeaseExpiredError } from '../utils/ws/browserLease.ts'
 import { browserAccess, type BrowserAccess } from '../utils/ws/browserAccess.ts'
 
 export type BrowserNetwork = 'regular' | 'tor'
@@ -221,7 +222,7 @@ export async function refreshBrowserRunLease(id: string) {
     const result = await run(`UPDATE browser_runs SET metadata = metadata || jsonb_build_object('leaseExpiresAt', NOW() + INTERVAL '2 minutes')
         WHERE id = $1 AND status IN ('running', 'unreachable')
             AND (metadata->>'leaseExpiresAt')::timestamptz > NOW()`, [id])
-    if (!result.rowCount) throw new Error('Browser run lease expired')
+    if (!result.rowCount) throw new BrowserLeaseExpiredError('Browser run lease expired')
 }
 
 export async function finishBrowserRun(id: string, status: 'ended' | 'failed' | 'unreachable' = 'ended', title = '') {

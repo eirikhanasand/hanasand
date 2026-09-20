@@ -1,3 +1,4 @@
+import { browserLeaseHeartbeat } from '../utils/ws/browserLease.ts'
 import fp from 'fastify-plugin'
 import { proxyModelSocket } from '../utils/ws/proxyModelSocket.ts'
 import { connectBrowserWorkerSocket } from '../utils/ws/connectBrowserWorker.ts'
@@ -405,12 +406,10 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
             if (closed) { await finishBrowserRun(id, 'ended'); return }
             payload = start
             runPrepared = true
-            leaseTimer = setInterval(() => {
-                void refreshBrowserRunLease(id).catch(() => {
-                    if (connection.readyState === WebSocket.OPEN) sendErrorThenClose(connection, 'Browser session tracking is unavailable. Please try again.')
-                    closeBoth()
-                })
-            }, 30_000)
+            leaseTimer = setInterval(browserLeaseHeartbeat(() => refreshBrowserRunLease(id), () => {
+                if (connection.readyState === WebSocket.OPEN) sendErrorThenClose(connection, 'Browser session tracking is unavailable. Please try again.')
+                closeBoth()
+            }), 30_000)
             leaseTimer.unref()
             resolveStreamResolution({ resolution: browserStreamResolution(payload), regular: payload.network !== 'tor' && route !== 'onion-session' })
         } else if (payload.type === 'start') return
