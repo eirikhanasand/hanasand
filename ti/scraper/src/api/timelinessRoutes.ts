@@ -44,9 +44,10 @@ export async function handleTimelinessRequest(request: Request, options: ApiServ
     return json({ generatedAt: snapshot.generatedAt, summary: { recordCount: snapshot.summary.recordCount, needsReportCount,
       unresolvedReferenceCount: needsReportCount, criticalThreshold: 10, status: needsReportCount > 10 ? "critical" : "ok" } });
   }
-  const authentication = await authenticateRequest(request, options);
+  const serviceRead = url.pathname === WORKBENCH && request.method === "GET";
+  const authentication = serviceRead ? await authenticateOperatorRequest(request, options) : await authenticateRequest(request, options);
   if (authentication.error) return authentication.error;
-  if (!authentication.identity?.roles.some((role) => ROLES.has(role))) return error("timeliness_forbidden", "Timeliness operations require an analyst role", 403);
+  if (!authentication.identity?.roles.some((role) => ROLES.has(role) || serviceRead && role === "service")) return error("timeliness_forbidden", "Timeliness operations require an analyst role", 403);
   if (url.pathname === WORKBENCH && request.method === "GET") return workbench(request, url, options);
   if (url.pathname === REFERENCES && request.method === "POST") return addReference(request, url, options, authentication.identity.id);
   return error("timeliness_method_not_allowed", "Use GET for the workbench or POST for report references", 405);

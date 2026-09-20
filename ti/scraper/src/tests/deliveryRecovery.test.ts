@@ -42,3 +42,14 @@ test('worker persists failures and does not overlap cycles',async()=>{
   await Promise.all([worker.run(),worker.run()]);await worker.stop();
   expect(claims).toBe(1);expect(finished[0][1]).toMatchObject({status:'failed',attempts:1});
 });
+
+
+test('internal workbench reads require a valid service token; writes still require an analyst session', async () => {
+  const { InMemoryScraperStore } = await import('../storage/memoryStore.ts');
+  const { handleTimelinessRequest } = await import('../api/timelinessRoutes.ts');
+  const options:any={store:new InMemoryScraperStore(),serviceToken:'test-service'};
+  const request=(path:string,token:string,method='GET')=>handleTimelinessRequest(new Request('http://test/v1/intel/timeliness/'+path,{method,headers:{'x-hanasand-service-token':token}}),options);
+  expect((await request('workbench','wrong'))?.status).toBe(401);
+  expect((await request('workbench','test-service'))?.status).toBe(200);
+  expect((await request('references','test-service','POST'))?.status).toBe(401);
+});
