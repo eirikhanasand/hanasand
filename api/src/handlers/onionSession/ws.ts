@@ -864,7 +864,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 if (activeRemoteTabId === toolId) send({ type: 'status', state: 'tab_navigated', tabId: toolId, url: toolPage.url(), message: `${tool.name || toolId} navigated.` })
             })
             await focusRemoteTab()
-            const providerBodies = collectProviderResponses(toolPage, tool.name || toolUrl)
+            const providerBodies = collectProviderResponses(toolPage, tool.name || toolUrl, target)
             try {
                 toolPage.setDefaultTimeout(providerTimeoutMs(tool))
                 send({
@@ -915,40 +915,19 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     target,
                     error: navigationError || 'Provider tab opened; verdict parsing is still running.',
                 })
-                let providerText = officialProviderKind(preparedUrl)
-                    ? await waitForProviderData(tool, toolPage, providerBodies.text)
+                const providerText = officialProviderKind(preparedUrl)
+                    ? await waitForProviderData(tool, toolPage, providerBodies.text, target)
                     : [providerBodies.text(), await withTimeout(collectFastRenderedText(toolPage), 1000, '')].filter(Boolean).join('\n')
                 navigationError ||= providerAccessIssue(tool, providerText, toolPage.url())
                 if (providerText && hasParsedProviderData(tool, providerText)) {
                     navigationError = ''
-                    const reportUrl = isUrlQueryTool(tool, toolPage.url()) && !/\/report\//i.test(toolPage.url())
-                        ? await firstUrlQueryReportUrl(toolPage, target)
-                        : ''
-                    if (reportUrl) {
-                        await toolPage.goto(reportUrl, { waitUntil: 'domcontentloaded', timeout: providerTimeoutMs(tool) }).catch(() => undefined)
-                        await withTimeout(dismissCookieOverlays(toolPage), 800, undefined).catch(() => undefined)
-                        const reportText = [providerBodies.text(), await collectRenderedText(toolPage)].filter(Boolean).join('\n')
-                        if (!urlQueryReportMatchesTarget(reportText, target)) {
-                            send({
-                                type: 'tool_capture',
-                                sessionId,
-                                id: tool.id || safeToolId(tool.name || toolUrl),
-                                name: tool.name || toolUrl,
-                                url: toolPage.url() || reportUrl,
-                                title: await toolPage.title().catch(() => ''),
-                                capturedAt: startedAt,
-                                evidence: providerPendingEvidence(toolPage.url() || reportUrl, tool.name || toolUrl, target),
-                                toolAnalysis: analyzeToolEvidence(tool.name || toolUrl, providerPendingEvidence(toolPage.url() || reportUrl, tool.name || toolUrl, target)),
-                                target,
-                                error: `urlquery report did not match submitted target ${target}`,
-                            })
-                            return
-                        }
-                        providerText = [providerText, reportText].filter(Boolean).join('\n')
-                    }
                     await waitForProviderVisual(tool, toolPage)
                     const fetchedComments = await fetchProviderCommunityComments(toolPage, tool, target)
-                    const parsedEvidence = enrichProviderEvidence(providerPendingEvidence(toolPage.url() || preparedUrl, tool.name || toolUrl, target), providerText, tool.name || toolUrl, [...providerBodies.comments(), ...fetchedComments])
+                    const parsedEvidence = enrichProviderEvidence({
+                        ...providerPendingEvidence(toolPage.url() || preparedUrl, tool.name || toolUrl, target),
+                        textExcerpt: '',
+                        reasons: [],
+                    }, providerText, tool.name || toolUrl, [...providerBodies.comments(), ...fetchedComments])
                     const parsedAnalysis = analyzeToolEvidence(tool.name || toolUrl, parsedEvidence)
                     maybeExtendSuspiciousRun(parsedEvidence, parsedAnalysis)
                     const parsedScreenshotTimeout = providerScreenshotTimeoutMs(tool, 1500)
@@ -968,6 +947,16 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                         target,
                     })
                     if (officialProviderKind(preparedUrl)) return
+                }
+                // An unverified provider page (including search results) is not a verdict.
+                if (officialProviderKind(preparedUrl)) {
+                    const evidence = providerPendingEvidence(toolPage.url() || preparedUrl, tool.name || toolUrl, target)
+                    send({ type: 'tool_capture', sessionId, id: toolId, name: tool.name || toolUrl,
+                        url: toolPage.url() || preparedUrl, capturedAt: startedAt, image: openedImage?.toString('base64') || null,
+                        evidence, toolAnalysis: analyzeToolEvidence(tool.name || toolUrl, evidence), target,
+                        error: navigationError || providerText || 'No verified report returned for the submitted URL within the provider time limit.',
+                    })
+                    return
                 }
                 let webcrackLoad: WebCrackLoadResult | undefined
                 if (webcrackTool) {
@@ -2057,52 +2046,78 @@ async function interactWithProvider(page: Page, tool: { id?: string; name?: stri
     return ''
 }
 
-async function firstUrlQueryReportUrl(page: Page, target: string) {
-    const host = domainFromUrl(target)?.replace(/^www\./, '').toLowerCase() || ''
-    return page.evaluate((targetHost) => {
-        const links = Array.from(document.links).filter(item => /\/report\/[a-f0-9-]{24,}/i.test(item.href))
-        const matching = links.find(item => {
-            const rowText = [
-                item.href,
-                item.textContent || '',
-                item.closest('tr,li,article,section,div')?.textContent || '',
-            ].join(' ').toLowerCase()
-            return targetHost && rowText.includes(targetHost)
-        })
-        return matching?.href || ''
-    }, host).catch(() => '')
+export async function firstUrlQueryReportUrl(page: Page, target: string) {
+    const links = await page.evaluate(() => Array.from(document.links)
+        .filter(item => /^https:\/\/urlquery\.net\/report\/[a-f0-9-]{24,}$/i.test(item.href))
+        .map(item => ({ url: item.href, target: item.textContent?.trim() || '' }))).catch(() => [])
+    return links.find(item => urlQueryTargetMatches(item.target, target))?.url || ''
 }
 
-function urlQueryReportMatchesTarget(reportText: string, target: string) {
-    const host = domainFromUrl(target).replace(/^www\./, '').toLowerCase()
-    if (!host) return false
-    return reportText.toLowerCase().includes(host)
+export function urlQueryTargetMatches(value: string, target: string) {
+    const normalize = (input: string) => {
+        try {
+            const url = new URL(/^https?:\/\//i.test(input) ? input : `https://${input}`)
+            return `${url.hostname.replace(/^www\./, '')}:${url.port}${url.pathname}${url.search}`
+        } catch { return '' }
+    }
+    try {
+        if (/^https?:\/\//i.test(value) && new URL(value).protocol !== new URL(target).protocol) return false
+    } catch { return false }
+    return Boolean(value && target && normalize(value) && normalize(value) === normalize(target))
 }
 
-function collectProviderResponses(page: Page, toolName: string) {
+export function urlQueryReportMatchesTarget(reportText: string, target: string) {
+    const reported = reportText.match(/\bURL\s+(\S+)\s+Finishing URL\b/i)?.[1]
+    return Boolean(reported && urlQueryTargetMatches(reported, target))
+}
+
+// Keep the URL object's result, not scores for its serving IP or parent domain.
+export function virusTotalUrlResponse(body: string, target: string) {
+    try {
+        const { data } = JSON.parse(body)
+        if (data?.type !== 'url' || new URL(data.attributes?.url).href !== new URL(target).href) return ''
+        const stats = data.attributes?.last_analysis_stats
+        if (!stats || !Object.values(stats).every(value => Number.isInteger(value) && Number(value) >= 0)) return ''
+        const summary = providerSummaryText(JSON.stringify({ last_analysis_stats: stats }), 'virustotal')
+        if (!summary) return ''
+        const date = Number(data.attributes.last_analysis_date)
+        return [summary, Number.isFinite(date) && date > 0 ? `Existing VirusTotal analysis: ${new Date(date * 1000).toISOString()}.` : ''].filter(Boolean).join('\n')
+    } catch { return '' }
+}
+
+export function collectProviderResponses(page: Page, toolName: string, target: string) {
     const bodies: string[] = []
+    let verifiedResult = ''
     page.on('response', response => {
         const url = response.url()
         if (!providerResponseUrl(toolName, url)) return
+        if (!response.ok()) {
+            if (!verifiedResult && !/\/comments(?:\?|$)/.test(url)) {
+                if (response.status() === 404) verifiedResult = 'VirusTotal has no existing analysis for the submitted URL.'
+                else if (response.status() === 429) verifiedResult = 'VirusTotal rate-limited the lookup. No verdict was returned.'
+                else if (response.status() === 403) verifiedResult = 'VirusTotal denied access to the URL report. No verdict was returned.'
+            }
+            return
+        }
         const contentType = response.headers()['content-type'] || ''
         if (!/json|html|text/i.test(contentType)) return
         void response.text()
             .then(body => {
-                if (body) bodies.push(body.slice(0, 80_000))
+                const result = virusTotalUrlResponse(body, target)
+                if (result) verifiedResult = result
+                if (/\/comments(?:\?|$)/.test(url) && body) bodies.push(body.slice(0, 80_000))
                 if (bodies.length > 8) bodies.shift()
             })
             .catch(() => undefined)
     })
     return {
-        text: () => bodies.join('\n'),
+        text: () => verifiedResult,
         comments: () => uniqueStrings(bodies.flatMap(providerCommunityComments)).slice(0, 8),
     }
 }
 
 function providerResponseUrl(toolName: string, url: string) {
-    const lower = `${toolName} ${url}`.toLowerCase()
-    return lower.includes('virustotal') && /\/ui\/(?:search|urls\/|comments)/i.test(url)
-        || lower.includes('urlquery') && /\/(?:api\/htmx\/search|search\?)/i.test(url)
+    return /virustotal/i.test(toolName) && /^https:\/\/www\.virustotal\.com\/ui\/urls\/[^/?]+(?:\/comments)?(?:\?|$)/i.test(url)
 }
 
 function enrichProviderEvidence<T extends Awaited<ReturnType<typeof collectPageEvidence>>>(evidence: T, providerText: string, providerHint = '', communityComments: string[] = []): T {
@@ -2186,15 +2201,36 @@ function uniqueStrings(values: string[]) {
     return [...new Set(values.filter(Boolean))]
 }
 
-async function waitForProviderData(tool: { id?: string; name?: string; url?: string }, page: Page, providerText: () => string) {
+export async function waitForProviderData(tool: { id?: string; name?: string; url?: string }, page: Page, providerText: () => string, target: string) {
     const deadline = Date.now() + providerDataTimeoutMs(tool)
-    let text = [providerText(), await collectRenderedText(page)].filter(Boolean).join('\n')
+    let reportOpened = /\/report\//i.test(page.url())
     while (Date.now() < deadline) {
-        if (hasParsedProviderData(tool, text)) return text
+        if (isVirusTotalTool(tool) && providerText()) return providerText()
+        const text = await page.locator('body').innerText({ timeout: 1000 }).catch(() => '')
+        const accessIssue = providerAccessIssue(tool, text, page.url())
+        if (accessIssue) return accessIssue
+        if (isUrlQueryTool(tool)) {
+            if (!reportOpened) {
+                const reportUrl = await firstUrlQueryReportUrl(page, target)
+                if (reportUrl) {
+                    await page.goto(reportUrl, { waitUntil: 'domcontentloaded', timeout: providerTimeoutMs(tool) })
+                    reportOpened = true
+                    continue
+                }
+            } else if (urlQueryReportMatchesTarget(text, target)) {
+                const summary = text.match(/Detections\s+urlquery\s+\d+\s+Network Intrusion Detection\s+\d+\s+Threat Detection Systems\s+\d+/i)?.[0] || ''
+                const score = parseUrlQueryScores(summary)
+                if (score) {
+                    const visited = text.match(/\bVisited\s+(?:public\s+)?(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?)/i)?.[1]
+                    return `${score.alerts} urlquery alerts were found.\n${summary}\nExisting urlquery report${visited ? `: ${visited}` : ''}.`
+                }
+            }
+        }
         await new Promise(resolve => setTimeout(resolve, 250))
-        text = [providerText(), await collectRenderedText(page)].filter(Boolean).join('\n')
     }
-    return text
+    return isUrlQueryTool(tool) && !reportOpened
+        ? 'No matching urlquery report was available for the submitted URL. No clean verdict was inferred.'
+        : 'No verified report returned for the submitted URL within the provider time limit.'
 }
 
 function providerTimeoutMs(tool: { id?: string; name?: string; url?: string }) {
@@ -2464,7 +2500,6 @@ function analyzeToolEvidence(toolName: string, evidence: Awaited<ReturnType<type
         || text.match(/(\d{1,3})\s+(?:of)\s+(\d{1,3})\s+security engines?/i)
         || text.match(/(\d{1,3})\s+out of\s+(\d{1,3})\s+engines?/i)
     const urlqueryNoAlertText = /no\s+(?:alerts?|detections?)\s+(?:were|was)?\s*(?:found|detected)?/i.test(text) || /\b0\s+alerts?/i.test(text)
-    const vtNoDetectionsText = /\b(?:no\s+detections?|0\s*\/\s*\d+\s+security\s+vendors?|no detections|undetected|clean)\b/i.test(text)
     const communityMatch = text.match(/(\d{1,3})\s+(?:community\s*)?(?:comments?|votes?|reviews?)/i)
     const isVirusTotal = /virus\s*total|virustotal/.test(tool) || /virustotal\.com/i.test(text)
     const isUrlQuery = !isVirusTotal && (/urlquery|urlquery\.net/.test(tool) || /urlquery\.net/i.test(text))
@@ -2475,7 +2510,7 @@ function analyzeToolEvidence(toolName: string, evidence: Awaited<ReturnType<type
     const vtStats = parseVirusTotalStats(text)
     const urlqueryScores = parseUrlQueryScores(text)
     const rawFlagged = vtStats ? vtStats.flagged : vendorMatch ? Number(vendorMatch[1]) : undefined
-    const flagged = Number.isFinite(rawFlagged) ? rawFlagged : vtNoDetectionsText ? 0 : undefined
+    const flagged = Number.isFinite(rawFlagged) ? rawFlagged : undefined
     const total = vtStats?.total || (vendorMatch?.[2] ? Number(vendorMatch[2]) : undefined)
     const alertCount = isUrlQuery ? Number.isFinite(urlqueryScores?.alerts) ? urlqueryScores?.alerts : alertMatch ? Number(alertMatch[1]) : urlqueryNoAlertText ? 0 : undefined : undefined
     const communityComments = uniqueStrings((evidence.communityComments || []).map(comment => cleanAnalystText(comment, 500)).filter(Boolean)).slice(0, 8)
@@ -2488,13 +2523,9 @@ function analyzeToolEvidence(toolName: string, evidence: Awaited<ReturnType<type
     const hasParsedProviderSignal = vendorMatch !== null || alertMatch !== null || communityMatch !== null || Boolean(vtStats || urlqueryScores)
 
     const verdict = isVirusTotal
-        ? vendorMatch || vtStats
-            ? (hasVendorDetections ? 'suspicious' : hasExplicitBenignIndicator ? 'clean' : 'clean')
-            : vtNoDetectionsText
-                ? 'clean'
-                : hasProviderNoDetectionText
-                    ? 'clean'
-                    : 'unknown'
+        ? total && flagged !== undefined && flagged <= total
+            ? (hasVendorDetections ? 'suspicious' : 'clean')
+            : 'unknown'
         : isUrlQuery
             ? alertCount !== undefined
                 ? (hasUrlQueryAlerts ? 'suspicious' : 'clean')
@@ -2543,9 +2574,12 @@ function providerRunResult(analysis: SandboxToolAnalysis, error = ''): BrowserPr
     return null
 }
 
-function parseVirusTotalStats(text: string) {
+export function parseVirusTotalStats(text: string) {
     const renderedScore = text.match(/(\d{1,3})\s*\/\s*(\d{1,3})\s+(?:Community\s+Score|security\s+vendors?)/i)
-    if (renderedScore) return { flagged: Number(renderedScore[1]), total: Number(renderedScore[2]) }
+    if (renderedScore) {
+        const flagged = Number(renderedScore[1]), total = Number(renderedScore[2])
+        return total > 0 && flagged <= total ? { flagged, total } : null
+    }
 
     const match = text.match(/"last_analysis_stats"\s*:\s*\{([^}]+)\}/)
     if (!match) return null
@@ -2556,7 +2590,7 @@ function parseVirusTotalStats(text: string) {
     const timeout = numberFromJsonField(match[1], 'timeout')
     const flagged = malicious + suspicious
     const total = malicious + suspicious + harmless + undetected + timeout
-    return { flagged, total }
+    return total > 0 ? { flagged, total } : null
 }
 
 function numberFromJsonField(text: string, field: string) {
@@ -2565,6 +2599,9 @@ function numberFromJsonField(text: string, field: string) {
 }
 
 export function parseUrlQueryScores(text: string) {
+    // Parse the report's own complete detector summary before related-report rows.
+    const report = text.match(/Detections\s+urlquery\s+(\d+)\s+Network Intrusion Detection\s+(\d+)\s+Threat Detection Systems\s+(\d+)/i)
+    if (report) return { alerts: Number(report[1]) + Number(report[2]) + Number(report[3]) }
     const rows = Array.from(text.matchAll(/\b(\d{1,3})\s*-\s*(\d{1,3})\s*-\s*(\d{1,3})\b/g))
     if (!rows.length) return null
     const alerts = rows.reduce((max, row) => Math.max(max, Number(row[1]) + Number(row[2]) + Number(row[3])), 0)

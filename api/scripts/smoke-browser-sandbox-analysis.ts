@@ -6,7 +6,7 @@ import {
     sandboxUrlSafety,
     summarizeDeobfuscationTask,
 } from '../src/handlers/onionSession/analysis.ts'
-import { parseCymruAsn, parseUrlQueryScores, providerStartUrl, providerCommunityComments, providerSummaryText, sandboxResolvedAddressSafety } from '../src/handlers/onionSession/ws.ts'
+import { parseCymruAsn, parseUrlQueryScores, parseVirusTotalStats, virusTotalUrlResponse, urlQueryTargetMatches, urlQueryReportMatchesTarget, providerStartUrl, providerCommunityComments, providerSummaryText, sandboxResolvedAddressSafety } from '../src/handlers/onionSession/ws.ts'
 
 assert.deepEqual(sandboxUrlSafety('https://example.com/path'), { ok: true })
 assert.equal(sandboxUrlSafety('ftp://example.com').ok, false)
@@ -58,3 +58,27 @@ assert.equal(providerStartUrl({ id: 'urlquery' }, 'https://urlquery.net/search?q
 assert.equal(parseUrlQueryScores('Search: 0 hits'), null, 'missing reports are not a clean verdict')
 assert.equal(parseUrlQueryScores('Search: 5 hits'), null, 'a result count alone is not an alert verdict')
 assert.deepEqual(parseUrlQueryScores('<td>0 - 0 - 0</td>'), { alerts: 0 })
+
+const report = 'Report Overview Visited public 2026-09-15 07:19:14 URL vg.no Finishing URL www.vg.no/ IP / ASN 3.174.2.5 Title VG Detections urlquery 0 Network Intrusion Detection 0 Threat Detection Systems 0 Host Summary Related reports UQ 8 IDS 1 TDS 2'
+assert.deepEqual(parseUrlQueryScores(report), { alerts: 0 }, 'reads current report format, excluding related report counts')
+assert.deepEqual(parseUrlQueryScores(report.replace('urlquery 0 Network', 'urlquery 3 Network') + ' No alerts detected'), { alerts: 3 }, 'a clean subsection cannot override detections')
+assert.equal(urlQueryReportMatchesTarget(report, 'https://vg.no/'), true)
+assert.equal(urlQueryReportMatchesTarget(report, 'https://vg.no/news'), false)
+assert.equal(urlQueryReportMatchesTarget(report.replace('URL vg.no Finishing', 'URL evil.test Finishing'), 'https://vg.no/'), false, 'contacted domains are not the report target')
+assert.equal(urlQueryTargetMatches('notvg.no', 'https://vg.no/'), false)
+assert.equal(urlQueryTargetMatches('https://vg.no.evil.test', 'https://vg.no/'), false)
+assert.equal(urlQueryTargetMatches('www.vg.no/', 'https://vg.no/'), true)
+assert.equal(urlQueryTargetMatches('vg.no/?a=1', 'https://vg.no/'), false)
+assert.equal(urlQueryTargetMatches('http://vg.no/', 'https://vg.no/'), false)
+assert.equal(urlQueryTargetMatches('https://', 'https://vg.no/'), false)
+assert.equal(parseVirusTotalStats('0/0 security vendors'), null)
+assert.equal(parseVirusTotalStats('95/90 security vendors'), null)
+assert.equal(parseVirusTotalStats('clean undetected'), null)
+const vtResponse = { data: { type: 'url', attributes: { url: 'https://vg.no/', padding: 'x'.repeat(90_000), last_analysis_stats: { malicious: 2, suspicious: 1, harmless: 80, undetected: 12, timeout: 0 }, last_analysis_date: 1_789_000_000 } } }
+assert.match(virusTotalUrlResponse(JSON.stringify(vtResponse), 'https://vg.no'), /3\/95 security vendors/)
+assert.match(virusTotalUrlResponse(JSON.stringify(vtResponse), 'https://vg.no'), /Existing VirusTotal analysis:/)
+assert.equal(virusTotalUrlResponse(JSON.stringify(vtResponse), 'https://vg.no/news'), '')
+assert.equal(virusTotalUrlResponse(JSON.stringify({ data: { ...vtResponse.data, type: 'ip_address' } }), 'https://vg.no/'), '')
+assert.equal(virusTotalUrlResponse(JSON.stringify({ data: { ...vtResponse.data, type: 'domain' } }), 'https://vg.no/'), '')
+assert.equal(virusTotalUrlResponse('{"error":{"code":"NotFoundError"}}', 'https://vg.no/'), '')
+console.log('Provider target attribution and current urlquery format passed.')
