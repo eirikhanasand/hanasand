@@ -1,5 +1,6 @@
 import { expect, mock, test } from 'bun:test'
 import Fastify from 'fastify'
+mock.module('#constants', () => ({ default: { DB_MAX_CONN: '8' } }))
 let checkouts = 0
 let authorized = true
 const query = async (sql: string): Promise<any> => ({ rows: sql.includes('FROM log_process_queue LIMIT') ? [{ count: 0 }] : [] })
@@ -10,6 +11,7 @@ const { withLogSearchTransaction, logSearchCapacity } = await import('../src/uti
 const { searchLogs } = await import('../src/handlers/logs/search.ts')
 
 test('saturated searches reject before checkout, preserve authorization and recover', async () => {
+    expect(logSearchCapacity).toBe(2)
     let release!: () => void
     const held = new Promise<void>(resolve => { release = resolve })
     const active = Array.from({ length: logSearchCapacity }, () => withLogSearchTransaction(async () => held))
