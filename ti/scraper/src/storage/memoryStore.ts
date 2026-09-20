@@ -19,7 +19,7 @@ import { canonicalizeUrl, captureDedupeKey, dedupeIndexKeys, enforceSensitiveMet
 import { nowIso, stableId } from "../utils.ts";
 import { canonicalActorIdentity, normalizeActorLabel, resolveMitreActorIdentity, type ActorIdentityRecord, type MitreActorCatalogSnapshot } from "../pipeline/mitreActorCatalog.ts";
 import type { RansomwareOperationCatalogSnapshot } from "../pipeline/ransomwareOperationCatalog.ts";
-import { publicReferenceUrl } from "../pipeline/timelinessGroundTruth.ts";
+import { deriveTimeliness, publicReferenceUrl } from "../pipeline/timelinessGroundTruth.ts";
 import { mayContainExposureQueueClaim } from "../product/exposureQueueCandidate.ts";
 import { isLegacySourceReviewCandidate } from "../policy/sourceAutomaticReview.ts";
 export interface RawEvidenceStore extends CaptureMetadataStore {} export interface ScraperStore extends CaptureMetadataStore {}
@@ -1030,7 +1030,7 @@ function timelinessRecord(capture: any, incident: any, previous?: any): any {
     captureId: capture.id,
     incidentId: incident.id,
     ...reporting,
-    useFirstSeenFallback: previous?.useFirstSeenFallback,
+    useFirstSeenFallback: previous?.useFirstSeenFallback ?? (capture.metadata?.useFirstSeenFallback === true),
     observedAt: previous?.observedAt ?? capture.observedAt ?? capture.metadata?.fetchProvenance?.fetchedAt ?? capture.collectedAt,
     publishedAt: reporting.publisherReportedAt,
     collectedAt: capture.collectedAt,
@@ -1074,6 +1074,7 @@ function withDelivery(record: any, delivery: any): any {
   return enrichTimeliness(next);
 }
 function enrichTimeliness(record: any) {
+  if (record.useFirstSeenFallback === true) return deriveTimeliness(record, record.updatedAt ?? nowIso());
   const latencies = latencyFields(record);
   return { ...record, latencies, zeroSecondEvidence: zeroSecondEvidence(record, latencies), timestampAnomalies: timestampAnomalies(record, latencies) };
 }

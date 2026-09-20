@@ -22,12 +22,17 @@ export class DarknetMetadataAdapter implements CollectionAdapter {
     const network = networkForSourceType(this.type);
     const cfg = this.proxyBoundary.config ?? DARKNET_METADATA_NETWORK_CONFIGS[network];
     const fetched = await this.proxyBoundary.fetchMetadata({ sourceId: source.id, network, url, taskId: task?.id, maxBytes: Math.min(task?.maxBytes ?? cfg.maxMetadataBytes, cfg.maxMetadataBytes), timeoutClass: cfg.timeoutClass, isolationId: this.proxyBoundary.id, actorName: source.metadata?.actorName ?? source.metadata?.actors?.[0], allowedOperations: ["metadata_only"], blockedOperations: BLOCKED_OPERATIONS });
-    const leakSite = buildLeakSiteMetadata(url, { ...fetched, actorName: fetched.actorName ?? source.metadata?.actorName ?? source.metadata?.actors?.[0] });
+    const actorName = fetched.actorName ?? source.metadata?.actorName ?? source.metadata?.actors?.[0];
+    const victimNames = [...new Set((fetched.victimNames ?? []).map((name: string) => name.trim()).filter(Boolean))];
+    const separateVictims = !!actorName && victimNames.length > 0;
+    const multipleVictims = victimNames.length > 1;
     const configuredRole = String(source.metadata?.reporterRole ?? "publisher");
     const reporterRole = ["actor", "victim"].includes(configuredRole) && source.metadata?.reporterRoleVerified === true ? configuredRole : "publisher";
+    // A listing's newest timestamp and description do not describe every victim in the list.
+    const publishedAt = multipleVictims ? undefined : fetched.sourceTimestamp;
     const reportTimestamp = sourceFieldReportTimestamp({
       role: reporterRole,
-      timestamp: fetched.sourceTimestamp,
+      timestamp: publishedAt,
       referenceUrl: fetched.publicReferenceUrl,
       sourceId: source.id,
       sourceName: source.name,
@@ -35,8 +40,16 @@ export class DarknetMetadataAdapter implements CollectionAdapter {
       parserVersion: "darknet-metadata-v2"
     });
     const captureUrl = `https://restricted.invalid/capture/${hashContent(url)}`;
+    const collectedAt = nowIso();
+    const items = (separateVictims ? victimNames : [fetched.victimName]).map((victimName) => {
+      const title = separateVictims ? `${actorName} ransomware claim: ${victimName}` : fetched.title;
+      const leakSite = buildLeakSiteMetadata(url, multipleVictims
+        ? { title, actorName, victimName, victimNames: [victimName], parserProfile: fetched.parserProfile }
+        : { ...fetched, title, actorName, victimName });
+      return { tenantId: source.tenantId, sourceId: source.id, taskId: task?.id, url: captureUrl, collectedAt, publishedAt, title, rawText: serializeLeakSite(leakSite, title), contentHash: hashContent(JSON.stringify({ leakSite, title })), language: source.language, links: sanitizeLinks(fetched.links ?? []), sensitive: true, metadata: { adapter: "darknet_metadata", network, sourceType: this.type, extractionProfile: "ransomware_victim_blog", proxyBoundaryId: this.proxyBoundary.id, captureMode: "metadata_only", urlHash: leakSite.urlHash, leakSite: { ...leakSite, ...(separateVictims ? { claimType: "ransomware_victim_publication" } : {}) }, jsonApi: separateVictims, useFirstSeenFallback: separateVictims, policyDecision: decision, blockedOperations: BLOCKED_OPERATIONS, extractorVersion: "darknet-metadata-v2", reportTimestamps: reportTimestamp ? [reportTimestamp] : undefined } };
+    });
     return {
-      items: [{ tenantId: source.tenantId, sourceId: source.id, taskId: task?.id, url: captureUrl, collectedAt: nowIso(), publishedAt: fetched.sourceTimestamp, title: fetched.title, rawText: serializeLeakSite(leakSite, fetched.title), contentHash: hashContent(JSON.stringify({ leakSite, title: fetched.title })), language: source.language, links: sanitizeLinks(fetched.links ?? []), sensitive: true, metadata: { adapter: "darknet_metadata", network, sourceType: this.type, extractionProfile: "ransomware_victim_blog", proxyBoundaryId: this.proxyBoundary.id, captureMode: "metadata_only", urlHash: leakSite.urlHash, leakSite, policyDecision: decision, blockedOperations: BLOCKED_OPERATIONS, extractorVersion: "darknet-metadata-v2", reportTimestamps: reportTimestamp ? [reportTimestamp] : undefined } }],
+      items,
       discovered: [],
       warnings: ["metadata only; no leaked contents or payload bodies captured"]
     };
