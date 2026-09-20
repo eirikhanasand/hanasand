@@ -1,4 +1,4 @@
-import { withTransaction } from '#db'
+import run, { withTransaction } from '#db'
 
 export const logCountsSchema = [
     `CREATE TABLE IF NOT EXISTS mill_log_counts (
@@ -53,7 +53,7 @@ export const logCountsBootstrapSql = `INSERT INTO mill_log_counts (bucket_second
     GROUP BY 1,2,3,4,5,6`
 
 export default async function ensureLogCountsSchema() {
-    await withTransaction(async query => {
+    const initialized = await withTransaction(async query => {
         await query('SET LOCAL lock_timeout = \'2s\'')
         await query('SET LOCAL statement_timeout = \'30s\'')
         await query('SELECT pg_advisory_xact_lock(hashtextextended(\'mill:log-counts-schema\', 0))')
@@ -67,5 +67,7 @@ export default async function ensureLogCountsSchema() {
             await query(logCountsBootstrapSql)
             await query('UPDATE mill_log_counts_state SET ready = TRUE WHERE id = TRUE')
         }
+        return !state.ready
     })
+    if (initialized) await run('ANALYZE mill_log_counts')
 }
