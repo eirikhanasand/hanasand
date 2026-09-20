@@ -17,6 +17,7 @@ export default function SupportChat({ embedded = false }: { embedded?: boolean }
     const [tickets, setTickets] = useState<Ticket[]>([])
     const [selectedId, setSelectedId] = useState('')
     const selectedRef = useRef('')
+    const messageRevision = useRef(0)
     selectedRef.current = selectedId
     const creating = useRef(false)
     const drafts = useRef<Record<string, string>>({})
@@ -44,10 +45,11 @@ export default function SupportChat({ embedded = false }: { embedded?: boolean }
 
     const loadMessages = useCallback(async (id: string, signal?: AbortSignal) => {
         if (!id) return
+        const version = ++messageRevision.current
         const response = await fetch(`/api/backend/support/tickets/${encodeURIComponent(id)}/messages`, { cache: 'no-store', signal })
         if (!response.ok) throw new Error('We could not load this conversation.')
         const payload = await response.json() as { messages?: Message[] }
-        if (!signal?.aborted && selectedRef.current === id) { setMessages(payload.messages || []) }
+        if (!signal?.aborted && selectedRef.current === id && version === messageRevision.current) { setMessages(payload.messages || []) }
     }, [])
 
     useEffect(() => {

@@ -123,6 +123,9 @@ test('model handoff handles other languages without transferring general questio
     expect(asksForHuman('I do not want a human')).toBe(false)
     expect(asksForHuman('Are you a human?')).toBe(false)
     expect(asksForHuman('Please connect me to a real person')).toBe(true)
+    expect(asksForHuman('let me speakk with support')).toBe(true)
+    expect(asksForHuman('Kan jeg snakke med support?')).toBe(true)
+    expect(asksForHuman('I do not want to speak with support')).toBe(false)
 })
 
 test('public endpoint validates session and message length; handoff works without login or AI', async () => {
@@ -130,7 +133,7 @@ test('public endpoint validates session and message length; handoff works withou
     const headers = { 'x-support-session': randomBytes(32).toString('hex') }
     expect((await app.inject({ url: '/support/chat?ticketId=anything', headers })).json().messages).toHaveLength(0)
     expect((await app.inject({ method: 'POST', url: '/support/chat', headers, payload: input('x'.repeat(4001)) })).statusCode).toBe(400)
-    const response = await app.inject({ method: 'POST', url: '/support/chat', headers, payload: input('Talk to a human', true) })
+    const response = await app.inject({ method: 'POST', url: '/support/chat', headers, payload: input('let me speakk with support') })
     expect(response.statusCode).toBe(200)
     expect(response.json().channel).toBe('human')
 })

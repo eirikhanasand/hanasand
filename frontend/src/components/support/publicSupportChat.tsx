@@ -44,7 +44,7 @@ export default function PublicSupportChat({ active = true, onUnreadChange }: { a
 
 
     const refresh = useCallback(async () => {
-        const version = revision.current
+        const version = ++revision.current
         const response = await fetch(`/api/support/chat${selection.current ? `?conversationId=${encodeURIComponent(selection.current)}` : ''}`, { cache: 'no-store' })
         const payload = await response.json()
         if (!response.ok) throw new Error(payload.error || 'We could not load your conversation.')

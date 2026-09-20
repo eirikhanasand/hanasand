@@ -9,7 +9,7 @@ export function asksForHuman(message: string) {
     return /\b(human|real person|live agent|support agent|representative|menneske|kundebehandler)\b/.test(text)
         && /\b(talk|speak|chat|connect|transfer|want|need|please|can i|snakke|prate|kontakt|ønsker|vil)\b/.test(text)
         || /^(human|live agent|agent|menneske)( please)?[.!?]*$/.test(text.trim())
-        || /\b(speak|talk) (to|with) (someone|somebody)\b/.test(text)
+        || /\b(speak+|talk|chat|snakke|prate) (to|with|med) (someone|somebody|support(?: team)?|kundeservice)\b/.test(text)
 }
 
 const instructions = `You are Hanasand AI, the AI support assistant on hanasand.com. Identify yourself as AI when asked. Answer in the visitor's language with short, helpful replies. Focus on Hanasand product, account, billing, and troubleshooting questions. Ask one clarifying question when needed.
