@@ -1,4 +1,5 @@
 import crypto from 'node:crypto'
+import type { MailAddress } from './types.ts'
 import { mailConfig } from './config.ts'
 import { storeSentMessage } from './jmap.ts'
 import { sendMailViaSmtp } from './smtp.ts'
@@ -9,19 +10,22 @@ export async function sendSystemMail(params: {
     subject: string
     textBody: string
     htmlBody?: string
+    senderName?: string
+    replyTo?: MailAddress[]
 }) {
     const access = await ensureSystemSender()
 
     const result = await sendMailViaSmtp({
         username: access.username,
         password: access.password,
-        from: { email: access.address, name: 'Hanasand' },
+        from: { email: access.address, name: params.senderName || 'Hanasand' },
         to: [{ email: params.to }],
+        replyTo: params.replyTo,
         subject: params.subject,
         textBody: params.textBody,
         htmlBody: params.htmlBody,
     })
-    await storeSentMessage({ ...access, from: { email: access.address, name: 'Hanasand' }, to: [{ email: params.to }], subject: params.subject, textBody: params.textBody, htmlBody: params.htmlBody }).catch(() => {
+    await storeSentMessage({ ...access, from: { email: access.address, name: params.senderName || 'Hanasand' }, to: [{ email: params.to }], subject: params.subject, textBody: params.textBody, htmlBody: params.htmlBody }).catch(() => {
         console.warn('System email sent, but its Sent copy could not be saved.')
     })
     console.info('System email accepted by mail server', { messageId: result.messageId, acceptedCount: result.accepted.length })

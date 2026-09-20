@@ -1,4 +1,5 @@
 import type { MailAddress, MailAttachment, MailMessage, MailMessageSummary, MailboxItem } from './types.ts'
+import { attributeContactSenders } from './contactSender.ts'
 import { mailConfig } from './config.ts'
 import { normalizeMessageText, stripHtml } from './helpers.ts'
 
@@ -252,7 +253,9 @@ async function getEmailsByIds(username: string, password: string, session: JmapS
         }, 'emails']
     ])
 
-    return response.list || []
+    const messages = response.list || []
+    await attributeContactSenders(messages)
+    return messages
 }
 
 export async function jmapCall<T = unknown>(username: string, password: string, session: JmapSession, methodCalls: Array<[string, Record<string, unknown>, string]>, using: string[] = [CORE, MAIL]) {

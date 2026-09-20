@@ -3,6 +3,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import hasRole from '#utils/auth/hasRole.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
+import { isExternalContactAddress } from '#utils/mail/contactSender.ts'
 import { sendSystemMail } from '#utils/mail/system.ts'
 
 type ContactBody = {
@@ -153,6 +154,7 @@ export function normalizeCommercialContactRequest(body: ContactBody | undefined)
 
     if (!name || !email || !subject || !message) return { ok: false, error: 'Name, email, subject, and message are required.' }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: 'Use a valid email address.' }
+    if (!isExternalContactAddress(email)) return { ok: false, error: 'Use your own external email address. Hanasand addresses cannot be used on this public form.' }
     if (message.length < 20) return { ok: false, error: 'Message must be at least 20 characters.' }
     if (securityReview && !company) return { ok: false, error: 'Company is required for security review requests.' }
 
@@ -209,6 +211,8 @@ async function notifyCommercialOwner(input: ContactInput, ticketId: string) {
     await sendSystemMail({
         to: process.env.COMMERCIAL_CONTACT_RECIPIENT || 'contact@hanasand.com',
         subject: `[${ticketId}] ${input.subject}`,
+        senderName: `${input.name} (${input.email}, via contact form)`,
+        replyTo: [{ email: input.email, name: input.name }],
         textBody: [
             `Ticket: ${ticketId}`,
             `Name: ${input.name}`,

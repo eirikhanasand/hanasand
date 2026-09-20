@@ -17,6 +17,9 @@ describe('commercial contact intake', () => {
         expect(normalizeCommercialContactRequest({ ...body, email: 'not-an-email' })).toEqual({ ok: false, error: 'Use a valid email address.' })
         expect(normalizeCommercialContactRequest({ ...body, company: '' })).toEqual({ ok: false, error: 'Company is required for security review requests.' })
         expect(normalizeCommercialContactRequest({ ...body, subject: 'x'.repeat(301) })).toEqual({ ok: false, error: 'subject exceeds the 300 character limit.' })
+        for (const email of ['eirik@hanasand.com', 'NOREPLY@HANASAND.COM', 'admin@sub.hanasand.com', 'a,b@example.com']) {
+            expect(normalizeCommercialContactRequest({ ...body, email }).ok).toBe(false)
+        }
         expect(normalizeCommercialContactRequest(body)).toMatchObject({ ok: true, input: { email: 'avery@acme.test', plan: 'monitoring', securityReview: true } })
     })
 
