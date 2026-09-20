@@ -4,11 +4,27 @@ backup=${1:?backup directory required}
 image=postgres@sha256:29342cb52157b098821961d2c14eec3c019071f56a5d559e990cf07cf541ea9b
 volume=hanasand-resilience-restore-check-$(date -u +%Y%m%d%H%M%S)
 name=$volume
+# Restore checks share storage with the live database. Cap physical-disk I/O
+# for both extraction and recovery, including LVM-backed Docker volumes.
+io_devices=$(
+ for path in "$backup" "$(docker info --format '{{.DockerRootDir}}')"; do
+  source=$(findmnt -n -o SOURCE --target "$path") || exit 1
+  parents=$(lsblk -s -n -p -o PATH,TYPE "$source") || exit 1
+  disks=$(printf '%s\n' "$parents" | awk '$2 == "disk" {print $1}')
+  test -n "$disks" || { printf 'Cannot determine backup verification disks.\n' >&2; exit 1; }
+  printf '%s\n' "$disks"
+ done
+)
+io_devices=$(printf '%s\n' "$io_devices" | sort -u)
+set --
+for device in $io_devices; do
+ set -- "$@" --device-read-bps "$device:20mb" --device-write-bps "$device:10mb"
+done
 cleanup() { docker rm -f "$name" >/dev/null 2>&1 || true; docker volume rm "$volume" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 # Every restore uses a new isolated volume; no production database is stopped or overwritten.
 docker volume create "$volume" >/dev/null
-docker run --rm --network none --cpus 2 --memory 512m -v "$backup:/backup:ro" -v "$volume:/verify" "$image" sh -ec '
+docker run --rm "$@" --network none --cpus 2 --memory 512m -v "$backup:/backup:ro" -v "$volume:/verify" "$image" sh -ec '
  tar -xzf /backup/base.tar.gz -C /verify
  mkdir -p /verify/pg_wal
  tar -xzf /backup/pg_wal.tar.gz -C /verify/pg_wal
@@ -20,9 +36,10 @@ docker run --rm --network none --cpus 2 --memory 512m -v "$backup:/backup:ro" -v
  chown -R postgres:postgres /verify
  chmod 700 /verify
 '
-docker run -d --name "$name" --network none --memory 1g --cpus 1 -v "$volume:/var/lib/postgresql/data" "$image" postgres -p 5432 -c listen_addresses=127.0.0.1 -c shared_buffers=128MB >/dev/null
+docker run -d --name "$name" "$@" --network none --memory 1g --cpus 1 -v "$volume:/var/lib/postgresql/data" "$image" postgres -p 5432 -c listen_addresses=127.0.0.1 -c shared_buffers=128MB >/dev/null
 ready=0
-for attempt in $(seq 1 60); do
+# Recovery has the same I/O budget, so allow it time to replay the backup WAL.
+for attempt in $(seq 1 300); do
  if docker exec "$name" pg_isready -U hanasand -d hanasand >/dev/null 2>&1; then ready=1; break; fi
  sleep 1
 done
