@@ -44,7 +44,8 @@ test('members see only their VM scope, and host metrics remain admin-only', asyn
     expect(queries.at(-1)?.params).toEqual(['member'])
     expect(queries.at(-1)?.sql).toContain('vm_user_has_access(v.name, $1)')
     await app.inject({ url: '/vm/metrics', headers: { id: 'member' } })
-    expect(queries.at(-1)?.sql).toContain('JOIN vms v')
+    expect(queries.at(-1)?.sql).toContain('FROM vms v JOIN LATERAL')
+    expect(queries.at(-1)?.sql).toContain('vm_user_has_access(v.name, $1)')
     expect(queries.at(-1)?.params).toEqual(['member'])
     for (const url of ['/metrics', '/docker']) {
         expect((await app.inject({ url, headers: { id: 'member' } })).statusCode).toBe(403)
