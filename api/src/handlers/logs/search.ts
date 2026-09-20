@@ -23,8 +23,10 @@ export async function searchLogs(req: FastifyRequest, res: FastifyReply) {
         const hours = Number(input.hours || 24)
         if (!Number.isFinite(hours) || hours < 1 || hours > 24 * 90) throw new Error('Time range must be between one hour and 90 days.')
         const timeWhere = `event_timestamp >= NOW() - ${bind(hours)} * INTERVAL '1 hour'`
+        // Evaluate active organizations once without a join that can lose the
+        // timestamp index order and sort every matching event before LIMIT.
         const where = ['ingestion_id = \'logs\'', 'processing_status = \'processed\'', timeWhere, ...compiled.where,
-            'EXISTS (SELECT 1 FROM organizations o WHERE o.id = mill_events.organization_id AND o.status = \'active\')']
+            'organization_id = ANY(ARRAY(SELECT o.id FROM organizations o WHERE o.status = \'active\'))']
         if (input.search) where.push(basicLogSearchPredicate(bind(input.search)))
         if (input.service) where.push(`normalized->>'service' = ${bind(input.service)}`)
         if (input.severity === 'high,critical') where.push('normalized->>\'severity\' IN (\'high\', \'critical\')')

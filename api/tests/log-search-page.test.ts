@@ -42,11 +42,11 @@ test('a complete recent page avoids scanning older matches and preserves the cur
     expect(first.next_cursor).toBeString()
     expect(calls[0].sql).toContain("o.status = 'active'")
     expect(calls[0].sql).toContain('event_timestamp >= $4::timestamptz')
-    expect(Date.parse(calls[0].params[2] as string) - Date.parse(calls[0].params[3] as string)).toBe(300_000)
+    expect(Date.parse(calls[0].params[2] as string) - Date.parse(calls[0].params[3] as string)).toBe(900_000)
     await searchLogPage(query, { ...input, recentFirst: true, cursor: first.next_cursor! })
     expect(calls[1].sql).toContain('(event_timestamp, id) < ($4::timestamptz, $5::text)')
     expect(calls[1].params[3]).toBe('2026-09-20 00:00:00.123456+00')
-    expect(calls[1].params[5]).toBe('2026-09-19T23:55:00.123Z')
+    expect(calls[1].params[5]).toBe('2026-09-19T23:45:00.123Z')
 })
 test('sparse and exactly full recent pages fall back to the entire original range', async () => {
     for (const recent of [[], [{ id: 'c' }], [{ id: 'c' }, { id: 'b' }]]) {

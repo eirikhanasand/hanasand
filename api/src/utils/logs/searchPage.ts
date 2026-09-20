@@ -26,10 +26,10 @@ export async function searchLogPage(query: typeof queryOnce, input: Input) {
     if (cursor) where.push(`(event_timestamp, id) < (${bind(cursor.time)}::timestamptz, ${bind(cursor.id)}::text)`)
     const select = (clauses: string[]) => `SELECT id, normalized, event_timestamp, organization_id, event_timestamp::text AS cursor_time FROM mill_events WHERE ${clauses.join(' AND ')} ORDER BY ${input.order} LIMIT ${input.limit + 1}`
     // Common phrases can match tens of thousands of events. A full page from
-    // the newest five minutes is already the correct page for the entire range.
+    // the newest fifteen minutes is already the correct page for the entire range.
     // Otherwise fall back to the complete search, never a partial result set.
     let result = input.recentFirst ? await query(select([...where, `event_timestamp >= $${params.length + 1}::timestamptz`]),
-        [...params, new Date(Date.parse(cursor?.time || until) - 5 * 60_000).toISOString()]) : undefined
+        [...params, new Date(Date.parse(cursor?.time || until) - 15 * 60_000).toISOString()]) : undefined
     if (!result || result.rows.length < input.limit + 1) result = await query(select(where), params)
     const page = result.rows.slice(0, input.limit)
     const last = page.at(-1)
