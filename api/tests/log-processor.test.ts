@@ -13,12 +13,19 @@ const settle = async () => { for (let i = 0; i < 8; i++) await Promise.resolve()
 
 test('busy passes use configured cadence, idle passes back off, and shutdown cancels the next pass', async () => {
     let busy = true, interval = 100
-    const stop = startLogProcessor(async () => busy, () => {}, () => interval)
+    const stop = startLogProcessor(async () => busy, () => {}, () => interval, () => 0)
     expect(delay).toBe(0)
     callback(); await settle(); expect(delay).toBe(100)
     interval = 5000; callback(); await settle(); expect(delay).toBe(5000)
     busy = false; interval = 100; callback(); await settle(); expect(delay).toBe(5000)
     await stop(); expect(clear).toHaveBeenCalledTimes(1)
+})
+test('busy cadence includes processing time instead of adding another idle interval', async () => {
+    let elapsed = 0, duration = 3000
+    const stop = startLogProcessor(async () => { elapsed += duration; return true }, () => {}, () => 5000, () => elapsed)
+    callback(); await settle(); expect(delay).toBe(2000)
+    duration = 7000; callback(); await settle(); expect(delay).toBe(50)
+    await stop()
 })
 test('no next pass is scheduled until persistence completes, including during shutdown', async () => {
     let finish!: (value: boolean) => void

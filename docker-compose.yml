@@ -408,6 +408,8 @@ services:
   postgres:
     image: postgres:15
     container_name: hanasand_database
+    # Parallel queries share memory here; Docker's 64 MiB default exhausts it.
+    shm_size: "2gb"
     mem_limit: 96g
     memswap_limit: 96g
     cpus: "16.0"
