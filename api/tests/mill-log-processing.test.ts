@@ -78,3 +78,11 @@ test('stateless detections use bounded bulk writes without dropping or duplicati
     expect(findings).toHaveLength(1001)
     expect(findingWrites).toBe(2)
 })
+
+for (const [program, command] of [['uname', 'uname -o'], ['uname', 'uname -r'], ['ps', 'ps -eo pid,comm,args'], ['ps', 'ps aux']]) {
+    test(`${command} persists a low-severity finding`, async () => {
+        await processLog(log(`/usr/bin/${program}`, command), 'org-a', rules())
+        expect(findings.find(finding => finding.rule_id === `process.recon.${program}.v1`)?.severity).toBe('low')
+        expect(Object.values(stored)[0].normalized.severity).toBe('low')
+    })
+}
