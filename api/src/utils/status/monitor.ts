@@ -22,18 +22,22 @@ export async function check(
     recorder: MonitorRecorder = recordMonitorResult,
 ) {
     const started = performance.now()
+    let status: MonitorStatus
+    let message: string
     try {
         const result = await fn()
         const latency = Math.round(performance.now() - started)
         const explicit = typeof result === 'object' && result ? result : undefined
-        const status = explicit?.status || latencyStatus(latency, latencyThresholds)
-        const message = explicit?.message || (typeof result === 'string' ? result : '')
-        await recorder(service, checkName, status, latency, explicit || status === 'up' ? message : `Response took ${latency} ms.`)
+        status = explicit?.status || latencyStatus(latency, latencyThresholds)
+        const detail = explicit?.message || (typeof result === 'string' ? result : '')
+        message = explicit || status === 'up' ? detail : `Response took ${latency} ms.`
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        await recorder(service, checkName, 'down', Math.round(performance.now() - started), message)
+        status = 'down'
+        message = error instanceof Error ? error.message : String(error)
         console.error(`[synthetic-monitor] ${service}/${checkName}: ${message}`)
     }
+    // Persistence failures belong to the monitor job, not the service being checked.
+    await recorder(service, checkName, status, Math.round(performance.now() - started), message)
 }
 
 export async function fetchJson(path: string, options: RequestInit = {}, base = apiBase, timeoutMs = MONITOR_REQUEST_TIMEOUT_MS) {

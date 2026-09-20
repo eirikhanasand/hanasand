@@ -84,6 +84,35 @@ describe('production monitor notification transitions', () => {
         expect(recorded[0]?.message).not.toContain('completed successfully')
     })
 
+    test.each(['up', 'degraded', 'down'] as const)('recording failure preserves the %s probe result and fails the monitor job', async status => {
+        const recorded: Array<{ status: string, message: string }> = []
+        const persistenceError = new Error('timeout exceeded when trying to connect')
+        await expect(check(
+            'website', 'Public website',
+            async () => ({ status, message: 'Original check result' }),
+            undefined,
+            async (_service, _name, recordedStatus, _latency, message) => {
+                recorded.push({ status: recordedStatus, message })
+                throw persistenceError
+            },
+        )).rejects.toBe(persistenceError)
+        expect(recorded).toEqual([{ status, message: 'Original check result' }])
+    })
+
+    test('a failed probe is recorded once even if persistence also fails', async () => {
+        const recorded: Array<{ status: string, message: string }> = []
+        await expect(check(
+            'website', 'Public website',
+            async () => { throw new Error('Website returned HTTP 503.') },
+            undefined,
+            async (_service, _name, status, _latency, message) => {
+                recorded.push({ status, message })
+                throw new Error('Database unavailable')
+            },
+        )).rejects.toThrow('Database unavailable')
+        expect(recorded).toEqual([{ status: 'down', message: 'Website returned HTTP 503.' }])
+    })
+
     test('status monitor bounds unavailable dependency requests', async () => {
         const source = await readFile(path.join(import.meta.dir, '../src/utils/status/monitor.ts'), 'utf8')
         expect(source).toContain('const MONITOR_REQUEST_TIMEOUT_MS = 5_000')
