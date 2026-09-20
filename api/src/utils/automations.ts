@@ -383,6 +383,7 @@ export async function recoverStaleAutomationRuns() {
 
 export async function executeAutomation(automation: AutomationRow) {
     let accessGranted = false
+    let actionCompleted = false
     let outcome: { kind: 'failure' | 'warning' | null, message: string }
     const runId = crypto.randomUUID()
     const startedAt = Date.now()
@@ -395,6 +396,7 @@ export async function executeAutomation(automation: AutomationRow) {
         await checkScheduledAutomationAccess({ actionType: automation.action_type, targetUrl: automation.target_url, organizationId: automation.organization_id, modelName: automation.model_name, notificationDestinations: automation.notification_destinations }, automation.owner_id)
         accessGranted = true
         const result = await runAutomationAction(automation)
+        actionCompleted = true
         outcome = { kind: 'warning' in result && result.warning === true ? 'warning' : null, message: result.message }
         const durationMs = Date.now() - startedAt
         const nextRunAt = automation.schedule_kind === 'interval'
@@ -435,6 +437,9 @@ export async function executeAutomation(automation: AutomationRow) {
              WHERE id = $1
         `, [automation.id, nextRunAt, result.message, 'certificate' in result ? result.certificate.status : automation.certificate_status, 'certificate' in result ? result.certificate.subject : automation.certificate_subject, 'certificate' in result ? result.certificate.issuer : automation.certificate_issuer, 'certificate' in result ? result.certificate.expiresAt : automation.certificate_expires_at, 'warning' in result && result.warning === true])
     } catch (error) {
+        // A failed save is not evidence that the checked service failed.
+        // Let the scheduler report/recover the unfinished run without a false case event.
+        if (actionCompleted && automation.action_type === 'agent_prompt') throw error
         const durationMs = Date.now() - startedAt
         const message = error instanceof Error ? error.message : 'Automation run failed.'
         outcome = { kind: 'failure', message }

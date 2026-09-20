@@ -26,6 +26,8 @@ All monitoring alerts, including replication, backups and failover, must go thro
 
 Recovery checks run every minute using `system:resilience` and the monitor's read-only state file. Run `bun scripts/setup-resilience-monitoring.ts` in the API worker to configure them with the existing Hanasand owner, organization and Discord destination. The independent recovery monitor keeps sampling and routing traffic; the API creates cases when it can reach the writable database.
 
+A failed save must not turn a successful check into a service outage. Report the monitoring job's error without adding a false failure to the checked service's case.
+
 Use simple, natural language in alerts, cases, UI text and documentation. Say what happened and what to do next. For example: “WAL replication lost. Restore the replica from a backup.” and “No backup taken in 36 hours.” Keep diagnostic details in the case. Do not say services have recovered while the case is still failing. See [copy style](docs/copy-style.md).
 
 Health-check failures and slow responses are grouped by monitor, target and failure reason in `monitoring_issues`. Each has a stable `HA-<number>` reference, occurrence count, first/last seen times and recovery time. Check records link to the issue; recovery closes it, and recurrence reopens the same number. Details are returned by the authenticated `GET /api/automations/:id` endpoint and shown in the monitoring dashboard.
