@@ -3,7 +3,7 @@ import { publicAdvisoryFetcher } from '../api/exposureQueueRoutes.ts';
 import { sourceFieldReportTimestamp, publicSourceReferenceUrl, zonedSourceTimestamp } from '../pipeline/sourceFieldReportTimestamp.ts';
 
 const attribute = (tag: string, key: string) => tag.match(new RegExp(`\\b${key}\\s*=\\s*["']([^"']+)["']`, 'i'))?.[1];
-export function publicationEvidence(html: string) {
+export function publicationEvidence(html: string, referenceUrl?: string) {
   for (const tag of html.match(/<meta\b[^>]*>/gi) ?? []) {
     const key = attribute(tag, 'property') || attribute(tag, 'name') || attribute(tag, 'itemprop');
     const timestamp = zonedSourceTimestamp(attribute(tag, 'content'));
@@ -13,6 +13,11 @@ export function publicationEvidence(html: string) {
     // Only datePublished is publication evidence; dateModified is not interchangeable.
     const match = tag.match(/"datePublished"\s*:\s*"([^"]+)"/i);
     if (match && zonedSourceTimestamp(match[1])) return { timestamp: match[1], quote: match[0], evidencePath: 'html.jsonld.datePublished' };
+  }
+  // This publisher labels its first report as Discovered; its JSON-LD retains only the day.
+  if (referenceUrl && /^(www\.)?ransomware\.live$/.test(new URL(referenceUrl).hostname)) {
+    const match = html.match(/<span\b[^>]*class=["']rl-info-label["'][^>]*>(?:<i\b[^>]*><\/i>\s*)?\s*Discovered\s*<\/span>\s*<span\b[^>]*class=["']rl-info-value["'][^>]*>\s*(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}(?::\d{2})?)\s*<small\b[^>]*>UTC<\/small>\s*<\/span>/i);
+    if (match) return { timestamp: `${match[1]}T${match[2]}Z`, quote: match[0], evidencePath: 'html.rl-info.Discovered' };
   }
   return undefined;
 }
@@ -38,7 +43,7 @@ export async function recoverDeliveryReport(item: any, options: any = {}) {
     if (!response.ok) throw new Error(`Source returned HTTP ${response.status}`);
     const html = await response.text();
     contentSha256 = createHash('sha256').update(html).digest('hex');
-    evidence = publicationEvidence(html);
+    evidence = publicationEvidence(html, referenceUrl);
     if (!evidence) {
       modelUsed = true;
       const response = await (options.fetchModel || fetch)(Bun.env.HANASAND_AI_EVALUATION_API || 'http://api:8080/api/tools/ai', {

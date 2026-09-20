@@ -8,6 +8,7 @@ if (!Number.isSafeInteger(batches) || batches < 1 || batches > 400) throw new Er
 const store = await PostgresScraperStore.create({ hydrate: false, deferStartupChecks: true, runMaintenanceMigrations: false });
 const totals: Record<string, number> = {};
 let claimed = 0;
+let stopping = false;
 const worker = startDeliveryReportRecovery({ store: {
   claimDeliveryRecovery: async (limit: number) => {
     const items = await store.claimDeliveryRecovery(limit);
@@ -20,8 +21,10 @@ const worker = startDeliveryReportRecovery({ store: {
     console.log(JSON.stringify({ id, ...outcome }));
   },
 } });
+process.once('SIGTERM', () => { stopping = true; void worker.stop(); });
+process.once('SIGINT', () => { stopping = true; void worker.stop(); });
 try {
-  for (let batch = 0; batch < batches; batch++) {
+  for (let batch = 0; batch < batches && !stopping; batch++) {
     await worker.run();
     if (!claimed) break;
   }

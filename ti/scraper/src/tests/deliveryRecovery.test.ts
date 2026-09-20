@@ -17,6 +17,15 @@ test('publication evidence accepts explicit dates, not updates or unzoned guesse
   expect(verifiedModelEvidence('Published: 2026-08-01T10:00:00Z', {timestamp:'2026-08-01T10:00:00Z',quote:'Published: 2026-08-01T10:00:00Z'})).toBeDefined();
   expect(verifiedModelEvidence('No date', {timestamp:'2026-08-01T10:00:00Z',quote:'Published: 2026-08-01T10:00:00Z'})).toBeUndefined();
 });
+test('Ransomware.live discovery timestamps retain the displayed UTC precision', async () => {
+  const html = '<span class="rl-info-label"><i class="fa-solid fa-calendar-check"></i> Discovered</span>\n<span class="rl-info-value">2026-07-27 04:20 <small class="text-muted">UTC</small></span>';
+  const url = 'https://www.ransomware.live/id/example';
+  expect(publicationEvidence(html, url)).toMatchObject({timestamp:'2026-07-27T04:20Z',evidencePath:'html.rl-info.Discovered',quote:html});
+  expect(publicationEvidence(html, 'https://example.org/')).toBeUndefined();
+  expect(publicationEvidence(html.replace('Discovered','Est. attack date'),url)).toBeUndefined();
+  expect(publicationEvidence(html.replace('UTC',''),url)).toBeUndefined();
+  expect(await recoverDeliveryReport({...item,capture:{url}},{fetchPublic:async()=>new Response(html),fetchModel:()=>{throw Error('must not call AI')}})).toMatchObject({status:'resolved',modelUsed:false,reference:{timestamp:'2026-07-27T04:20:00.000Z',rawTimestamp:'2026-07-27T04:20Z'}});
+});
 test('known source evidence avoids AI; fresh pages cannot invent an earlier first report', async () => {
   const result=await recoverDeliveryReport(item,{fetchPublic:async()=>new Response('<meta property="article:published_time" content="2026-08-01T10:00:00Z">'),fetchModel:()=>{throw Error('must not call AI')}});
   expect(result).toMatchObject({status:'resolved',modelUsed:false,reference:{role:'publisher',timestamp:'2026-08-01T10:00:00.000Z',captureId:'c',extractionMethod:'source_field'}});
