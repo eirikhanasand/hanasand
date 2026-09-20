@@ -1,25 +1,27 @@
 import { strict as assert } from 'node:assert'
-import { readFile } from 'node:fs/promises'
+import { readFile, readdir } from 'node:fs/promises'
 import { chromium } from '@playwright/test'
 import postcss from 'postcss'
 import tailwindcss from '@tailwindcss/postcss'
 
-// Render the real menu, sidebar and page shell with only framework routing and the unused footer replaced.
+// Render the shared header, sidebar and frame without backend-dependent workspace/support data.
 const build = await Bun.build({ entrypoints: ['mobile-test-entry'], target: 'browser', plugins: [{ name: 'mobile-fixture', setup(builder) {
-    builder.onResolve({ filter: /^(mobile-test-entry|next\/link|next\/navigation|@\/components\/footer\/footer)$/ }, args => ({ path: args.path, namespace: 'fixture' }))
+    builder.onResolve({ filter: /^(mobile-test-entry|next\/link|next\/image|next\/navigation|@\/components\/footer\/footer|@\/components\/organizations\/workspaceProvider|@\/components\/support\/supportAssistant)$/ }, args => ({ path: args.path, namespace: 'fixture' }))
     builder.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ loader: 'tsx', resolveDir: process.cwd(), contents: args.path === 'next/navigation'
         ? 'import {useSyncExternalStore} from \'react\'; export function usePathname(){return useSyncExternalStore(callback=>{window.addEventListener(\'popstate\',callback);return()=>window.removeEventListener(\'popstate\',callback)},()=>location.pathname,()=>\'/cases/HA-1991\')}'
         : args.path === 'next/link'
             ? 'export default function Link({href,children,onClick,...props}){return <a {...props} href={href} onClick={event=>{onClick?.(event);event.preventDefault();history.pushState({},\'\',href);window.dispatchEvent(new Event(\'popstate\'))}}>{children}</a>}'
-            : args.path === '@/components/footer/footer' ? 'export default function Footer(){return null}'
-                : `import {createRoot} from 'react-dom/client';
+            : args.path === 'next/image' ? 'export default function Image({priority,...props}){return <img {...props}/>}'
+                : args.path === '@/components/organizations/workspaceProvider' ? 'export function useWorkspace(){return {organizationId:"",organizations:[]}}; export function OrganizationSwitcher(){return <select aria-label="Org"><option>Personal workspace</option><option>Hanasand</option></select>}'
+                    : args.path === '@/components/support/supportAssistant' || args.path === '@/components/footer/footer' ? 'export default function Empty(){return null}'
+                        : `import {createRoot} from 'react-dom/client';
 import MobileNavigation from './src/components/layout/mobileNavigation';
 import RouteFrame from './src/components/layout/routeFrame';
 import Sidebar from './src/components/dashboard/dashboardSidebar';
-import Menu from './src/components/menu/menu';
-import ViewModeToggle from './src/components/header/viewModeToggle';
+import Header from './src/components/header/header';
 const access={id:'navigation-fixture',isAdmin:true,canManageSystem:true,canManageContent:true};
-createRoot(document.getElementById('root')).render(<MobileNavigation enabled><header className="fixed inset-x-0 top-0 z-1000 flex h-16 items-center justify-between bg-ui-panel px-3"><span>Hanasand</span><div className="flex"><ViewModeToggle initialMode="compact"/><Menu/></div></header><RouteFrame serverPath="/cases/HA-1991" token sidebar={<Sidebar {...access} initialMode="compact"/>} banner={null}><article className="rounded-lg border border-ui-border bg-ui-panel p-5"><h1>HA-1991 · Host storage</h1><p>Case details</p><div style={{height:1200}}>Comments</div><button>Post comment</button></article></RouteFrame></MobileNavigation>);`,
+const token=!location.search.includes('anonymous');
+createRoot(document.getElementById('root')).render(<MobileNavigation enabled={token}><Header token={token} path={location.pathname} initialMode="compact"/><RouteFrame serverPath={location.pathname} token={token} sidebar={token ? <Sidebar {...access} initialMode="compact"/> : null} banner={null}><article className="rounded-lg border border-ui-border bg-ui-panel p-5"><h1>HA-1991 · Host storage</h1><p>Case details</p><div style={{height:1200}}>Comments</div><button>Post comment</button></article></RouteFrame></MobileNavigation>);`,
     }))
 } }] })
 assert(build.success, build.logs.join('\n'))
@@ -37,6 +39,48 @@ try {
     const errors = []
     page.on('pageerror', error => errors.push(error.message))
     await page.context().addCookies([{ name: 'dashboard_view_mode', value: 'compact', url: server.url.href }])
+    // Every page pathname uses the same header, with and without a signed-in session.
+    const routes = (await readdir('src/app', { recursive: true })).filter(file => /(^|\/)page\.tsx$/.test(file))
+        .map(file => `/${file.replace(/(^|\/)page\.tsx$/, '').replace(/\[[^/]+\]/g, 'example')}`)
+    for (const token of [false, true]) {
+        await page.setViewportSize({ width: 1440, height: 900 })
+        await page.goto(`${server.url}pwned${token ? '' : '?anonymous'}`)
+        for (const route of routes) {
+            await page.evaluate(path => { history.pushState({}, '', path); window.dispatchEvent(new Event('popstate')) }, route)
+            const header = page.locator('[data-site-header]')
+            await header.getByRole('button', { name: 'Product', exact: true }).waitFor()
+            assert.equal(await header.count(), 1, `One shared header on ${route}`)
+            assert.equal(await header.getByRole('button', { name: 'Developers', exact: true }).count(), 1)
+            assert.equal(await header.getByRole('button', { name: 'Resources', exact: true }).count(), 1)
+            assert.equal(await header.getByRole('link', { name: 'API docs', exact: true }).count(), 0, `No old topbar on ${route}`)
+        }
+        for (const width of [320, 390, 768, 1280, 1440]) {
+            await page.setViewportSize({ width, height: 900 })
+            await page.goto(`${server.url}pwned${token ? '' : '?anonymous'}`)
+            const header = page.locator('[data-site-header]')
+            await header.waitFor()
+            const bounds = await header.evaluate(el => ({ width: el.clientWidth, scroll: el.scrollWidth, height: el.getBoundingClientRect().height }))
+            assert(bounds.scroll <= bounds.width, `Header fits at ${width}px, token=${token}`)
+            assert.equal(bounds.height, 73)
+            assert.equal((await page.locator('[data-route-frame]').boundingBox()).y, 72)
+            if (token) {
+                await page.getByLabel('Account and workspace').click()
+                await page.getByRole('combobox', { name: 'Org', exact: true }).selectOption('Hanasand')
+                assert(await page.getByRole('link', { name: 'Sign out', exact: true }).isVisible())
+                const panel = await header.locator('details > div').boundingBox()
+                assert(panel.x >= 0 && panel.x + panel.width <= width, 'Account panel fits')
+                await page.keyboard.press('Escape')
+                assert(!await page.getByRole('link', { name: 'Sign out', exact: true }).isVisible())
+            }
+            if (width < 1280) {
+                const label = token ? 'Open site navigation' : 'Open navigation'
+                await page.getByRole('button', { name: label, exact: true }).click()
+                await header.getByRole('link', { name: 'Hash Exposure Lookup', exact: true }).click()
+                assert(!await header.getByRole('link', { name: 'Hash Exposure Lookup', exact: true }).isVisible())
+            }
+            if (width === 1440 || width === 390) await page.screenshot({ path: `/tmp/shared-header-${token ? 'signed-in' : 'public'}-${width}.png` })
+        }
+    }
     for (const width of [390, 768, 1023]) {
         await page.setViewportSize({ width, height: 844 })
         await page.goto(`${server.url}cases/HA-1991`)
@@ -77,7 +121,7 @@ try {
         assert(!await sidebar.isVisible(), 'Returning from desktop must close the mobile overlay')
     }
     assert.deepEqual(errors, [])
-    console.log('Mobile navigation passed at 390, 768 and 1023px: content position, labels, search, destinations, Escape/focus, backdrop, resizing and desktop compact preference.')
+    console.log(`Shared header passed on ${routes.length} page paths, signed in and out. Desktop/mobile menus, account controls, sizing, sidebar search, Escape/focus, backdrop and view preference passed.`)
 } finally {
     await browser.close()
     server.stop(true)

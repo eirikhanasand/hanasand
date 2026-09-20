@@ -1,13 +1,9 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import ShareIcon from '@/components/menu/shareIcon'
 import ThemeSwitch from '@/components/theme/themeSwitch'
-import { ActivityIcon, BellRing, BookOpen, ChevronDown, Code2, FileJson, Gauge, LockKeyhole, MenuIcon, Network, Radar, Search, ShieldAlert, ShieldCheck, X } from 'lucide-react'
-import Login from '@/components/login/login'
-import Logout from '@/components/logout/logout'
+import { ActivityIcon, BellRing, BookOpen, ChevronDown, Code2, FileJson, Gauge, LockKeyhole, MenuIcon, Network, Radar, ShieldAlert, ShieldCheck, UserRound, X } from 'lucide-react'
 import { isInternalAppPath, hasAppSidebar } from '@/utils/routes/appRoutes'
-import Dashboard from '@/components/dashboard/dashboard'
 import Menu from '@/components/menu/menu'
 import Link from 'next/link'
 import ViewModeToggle from './viewModeToggle'
@@ -18,6 +14,7 @@ import { useState } from 'react'
 import SiteSearch from './siteSearch'
 import { OrganizationSwitcher } from '@/components/organizations/workspaceProvider'
 import SupportAssistant from '@/components/support/supportAssistant'
+import { useMobileNavigation } from '@/components/layout/mobileNavigation'
 
 const productItems = [
     { title: 'Dark Web Monitoring', detail: 'Company and vendor alerts from watched exposure sources.', href: '/dwm', icon: BellRing },
@@ -80,6 +77,7 @@ const mobilePublicLinks = [
 
 function PublicMobileMenu({ token }: { token: boolean }) {
     const [open, setOpen] = useState(false)
+    const mobile = useMobileNavigation()
     const links = token
         ? mobilePublicLinks.map(item => {
             if (item.href === '/dwm') return { ...item, href: '/dwm' }
@@ -94,7 +92,7 @@ function PublicMobileMenu({ token }: { token: boolean }) {
                 type='button'
                 onClick={() => setOpen((next) => !next)}
                 className='grid h-11 w-11 place-items-center rounded-lg border border-ui-border text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'
-                aria-label={open ? 'Close navigation' : 'Open navigation'}
+                aria-label={mobile.enabled ? (open ? 'Close site navigation' : 'Open site navigation') : (open ? 'Close navigation' : 'Open navigation')}
                 aria-expanded={open}
             >
                 {open ? <X className='h-5 w-5' /> : <MenuIcon className='h-5 w-5' />}
@@ -119,9 +117,8 @@ function PublicMobileMenu({ token }: { token: boolean }) {
 }
 
 export default function Header({ token, path: serverPath, initialMode = 'normal' }: { token: boolean, path: string, initialMode?: 'normal' | 'compact' }) {
-    const baseStyles = 'group grid h-10 w-10 place-items-center rounded-lg border border-ui-border text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'
+    const mobile = useMobileNavigation()
     const pathname = usePathname() || serverPath
-    const isStatus = pathname.includes('/status')
     const isShare = isSharePath(pathname)
     const isAI = pathname.endsWith('/ai') || pathname.includes('/ai/')
     const isDashboard = isInternalAppPath(pathname)
@@ -130,74 +127,51 @@ export default function Header({ token, path: serverPath, initialMode = 'normal'
     const isLoggedInConsoleProduct = token && (pathname === '/ti' || pathname.startsWith('/ti/'))
     const isOrganizations = pathname.startsWith('/organizations')
     const isAppSurface = isDashboard || (token && hasAppSidebar(pathname)) || isLoggedInConsoleProduct || (!isPublicProduct && (isShare || isAI || isDashboard || isProfile || isOrganizations))
-    const darkWebHref = token ? '/dwm' : '/dwm'
     const pricingHref = token ? '/subscription' : '/pricing'
 
-    if (!isAppSurface) {
-        return (
-            <header className='fixed left-0 top-0 z-1000 w-full border-b border-ui-border bg-ui-panel px-3 sm:px-5 md:px-10 lg:px-16'>
-                <div className='mx-auto flex h-18 w-full max-w-7xl items-center justify-between gap-5'>
-                    <BrandLogo />
-
-                    <nav aria-label='Main navigation' className='mr-auto hidden items-center gap-3 xl:flex'>
-                        <PublicDropdown label='Product' items={token ? productItems.map(item => item.href === '/dwm' ? { ...item, href: '/dwm' } : item) : productItems} />
-                        <PublicDropdown label='Developers' items={developerItems} />
-                        <PublicDropdown label='Resources' items={resourceItems} />
-                        <Link href={pricingHref} className='inline-flex h-10 min-w-20 items-center justify-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Pricing</Link>
-                    </nav>
-
-                    <div className='flex items-center justify-end gap-2'>
-                        <SiteSearch token={token} />
-                        <ThemeSwitch />
-                        <Link href='/support' className='hidden h-10 min-w-20 items-center justify-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text md:inline-flex'>Support</Link>
-                        <Link href={token ? '/dashboard' : '/login'} className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90'>
-                            Go to Dashboard
-                        </Link>
-                        <Link href='/ti' aria-label='Search intelligence' className='hidden h-11 w-11 place-items-center rounded-lg border border-ui-border text-ui-muted transition hover:bg-ui-raised hover:text-ui-text sm:grid xl:hidden'>
-                            <Search className='h-5 w-5' />
-                        </Link>
-                        <PublicMobileMenu token={token} />
-                    </div>
-                </div>
-                <SupportAssistant />
-            </header>
-        )
-    }
-
     return (
-        <header className='fixed left-0 top-0 z-1000 w-full border-b border-ui-border bg-ui-panel/95 px-3 shadow-[0_1px_0_rgba(17,24,39,0.03)] backdrop-blur sm:px-5 md:px-8'>
-            <div className='mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-2 sm:gap-4'>
-                <div className='flex min-w-0 items-center gap-4'>
-                    <BrandLogo className='[&>span]:hidden md:[&>span]:inline' />
-                    {!isDashboard && !isProfile && !isOrganizations && (
-                        <nav className='hidden items-center gap-1 lg:flex'>
-                            {token ? (
-                                <Link href='/dashboard' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Dashboard</Link>
-                            ) : null}
-                            <Link href='/ti' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Threat search</Link>
-                            <Link href='/browser' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Browser</Link>
-                            <Link href={darkWebHref} className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Dark web</Link>
-                            <Link href='/developers' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>API docs</Link>
-                            <Link href={pricingHref} className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Pricing</Link>
-                        </nav>
-                    )}
-                </div>
-                <div className='flex min-w-0 items-center justify-end gap-1 sm:gap-2'>
-                    {token && <OrganizationSwitcher />}
-                    {token && isDashboard && <ViewModeToggle initialMode={initialMode} />}
-                    {isShare ? <ShareIcon baseStyles={baseStyles} isShare={isShare} href='/s' /> : null}
+        <header data-site-header className='fixed left-0 top-0 z-1000 w-full border-b border-ui-border bg-ui-panel px-3 sm:px-5 md:px-10 lg:px-16'>
+            <div className='mx-auto flex h-18 w-full max-w-7xl items-center justify-between gap-2 sm:gap-5'>
+                <BrandLogo />
+
+                <nav aria-label='Main navigation' className='mr-auto hidden items-center gap-3 xl:flex'>
+                    <PublicDropdown label='Product' items={token ? productItems.map(item => item.href === '/dwm' ? { ...item, href: '/dwm' } : item) : productItems} />
+                    <PublicDropdown label='Developers' items={developerItems} />
+                    <PublicDropdown label='Resources' items={resourceItems} />
+                    <Link href={pricingHref} className='inline-flex h-10 min-w-20 items-center justify-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Pricing</Link>
+                </nav>
+
+                <div className='flex shrink-0 items-center justify-end gap-1 sm:gap-2'>
                     <SiteSearch token={token} />
-                    <Link href='/status' aria-label='Status' title='Status' className={`${baseStyles} hidden sm:grid`}>
-                        <ActivityIcon className={`h-4.5 w-4.5 ${isStatus ? 'text-ui-success' : ''}`} />
+                    <span className='[&_button]:w-10'><ThemeSwitch /></span>
+                    <Link href='/support' className='hidden h-10 min-w-20 items-center justify-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text md:inline-flex'>Support</Link>
+                    <Link href={token ? '/dashboard' : '/login'} className={`${token ? 'hidden sm:inline-flex' : 'inline-flex'} h-11 items-center gap-2 rounded-lg bg-ui-text px-3 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90 sm:px-4`}>
+                        <span className='sm:hidden'>Dashboard</span><span className='hidden sm:inline'>Go to Dashboard</span>
                     </Link>
-                    <ThemeSwitch />
-                    <span className='hidden sm:block'><Dashboard href='/dashboard' serverToken={token} /></span>
-                    <Logout baseStyles={baseStyles} serverToken={token} />
-                    <Login serverToken={token} />
-                    <Menu />
+                    {token && <details key={`account:${pathname}`} className='relative' onKeyDown={event => {
+                        if (event.key === 'Escape') {
+                            event.currentTarget.open = false
+                            event.currentTarget.querySelector('summary')?.focus()
+                        }
+                    }}>
+                        <summary aria-label='Account and workspace' className='grid h-10 w-10 cursor-pointer list-none place-items-center rounded-lg border border-ui-border text-ui-muted hover:bg-ui-raised hover:text-ui-text [&::-webkit-details-marker]:hidden'>
+                            <UserRound className='h-5 w-5' />
+                        </summary>
+                        <div className='fixed inset-x-3 top-18 z-30 grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-3 text-sm text-ui-text shadow-xl sm:absolute sm:left-auto sm:right-0 sm:top-13 sm:w-60'>
+                            {hasAppSidebar(pathname) && <OrganizationSwitcher />}
+                            {isDashboard && <ViewModeToggle initialMode={initialMode} />}
+                            <Link href='/dashboard' className='rounded-lg p-2 hover:bg-ui-raised'>Dashboard</Link>
+                            <Link href='/profile' className='rounded-lg p-2 hover:bg-ui-raised'>Profile</Link>
+                            <Link href='/s' className='rounded-lg p-2 hover:bg-ui-raised'>Workspace</Link>
+                            <Link href='/ai' className='rounded-lg p-2 hover:bg-ui-raised'>Workspace assistant</Link>
+                            <Link href='/logout' className='rounded-lg p-2 hover:bg-ui-raised'>Sign out</Link>
+                        </div>
+                    </details>}
+                    <PublicMobileMenu key={pathname} token={token} />
+                    {mobile.enabled && <Menu />}
                 </div>
             </div>
-            <SupportAssistant internal />
+            <SupportAssistant internal={isAppSurface} />
         </header>
     )
 }

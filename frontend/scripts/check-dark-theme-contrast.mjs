@@ -156,7 +156,6 @@ for (const required of [
     'text-ui-text',
     'text-ui-muted',
     'text-ui-primary',
-    'text-ui-success',
     'text-ui-canvas',
 ]) {
     if (!publicHeader.includes(required)) {

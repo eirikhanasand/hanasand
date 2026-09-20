@@ -1,5 +1,32 @@
 import { expect, test } from '@playwright/test'
 
+for (const signedIn of [false, true]) {
+    test(`hash lookup uses the shared navigation when ${signedIn ? 'signed in' : 'signed out'}`, async ({ page, baseURL }) => {
+        await page.setViewportSize({ width: 1440, height: 900 })
+        if (signedIn) {
+            await page.context().addCookies([
+                { name: 'access_token', value: 'navigation-render-test', url: baseURL! },
+                { name: 'id', value: 'navigation-render-test', url: baseURL! },
+            ])
+            await page.route('**/api/organizations', route => route.fulfill({ json: { organizations: [] } }))
+        }
+        await page.goto('/pwned')
+        const header = page.locator('[data-site-header]')
+        await expect(header).toBeVisible()
+        for (const name of ['Product', 'Developers', 'Resources']) {
+            await expect(header.getByRole('button', { name, exact: true })).toBeVisible()
+        }
+        await expect(header.getByRole('link', { name: 'API docs', exact: true })).toHaveCount(0)
+        await header.getByRole('button', { name: 'Resources', exact: true }).hover()
+        await expect(header.getByRole('link', { name: /Hash Exposure Lookup/ })).toBeVisible()
+        if (signedIn) {
+            await header.getByLabel('Account and workspace').click()
+            await expect(header.getByRole('combobox', { name: 'Org', exact: true })).toBeVisible()
+            await expect(header.getByRole('link', { name: 'Sign out' })).toHaveAttribute('href', '/logout')
+        }
+    })
+}
+
 test('Bloom hash lookup checks exposure without collecting a raw password', async ({ page }) => {
     let count = 23
     await page.route('**/api/pwned', async (route) => {

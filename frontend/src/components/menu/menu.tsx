@@ -1,75 +1,15 @@
 'use client'
 
-import { getCookie } from '@/utils/cookies/cookies'
-import { ActivityIcon, Menu as MenuIcon, Sparkles, X } from 'lucide-react'
-import { usePathname } from 'next/navigation'
-import { useEffect, useState } from 'react'
-import Link from 'next/link'
-import Dashboard from '@/components/dashboard/dashboard'
-import ShareIcon from './shareIcon'
-import isSharePath from '@/utils/routes/isSharePath'
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { useMobileNavigation } from '@/components/layout/mobileNavigation'
 
 export default function Menu() {
     const mobile = useMobileNavigation()
-    const [open, setOpen] = useState(false)
-    const [token, setToken] = useState<boolean>(false)
-    const path = usePathname()
-    const baseStyles = 'group grid h-12 w-12 cursor-pointer place-items-center rounded-lg text-ui-muted transition-colors hover:bg-ui-raised hover:text-ui-text'
-    const isShare = isSharePath(path)
-    const isStatus = path.includes('/status')
-    const isAI = path.includes('/ai')
+    if (!mobile.enabled) return null
 
-    function toggleOpen() {
-        setOpen(prev => !prev)
-    }
-
-    useEffect(() => {
-        const cookieToken = getCookie('access_token')
-        setToken(Boolean(cookieToken))
-    }, [])
-
-    if (mobile.enabled) {
-        return <button type='button' onClick={mobile.toggle} aria-label={mobile.open ? 'Close navigation' : 'Open navigation'}
-            aria-expanded={mobile.open} aria-controls='mobile-navigation'
-            className='grid h-11 w-11 place-items-center rounded-lg text-ui-muted hover:bg-ui-raised focus-visible:outline-2 focus-visible:outline-ui-primary lg:hidden'>
-            {mobile.open ? <X /> : <MenuIcon />}
-        </button>
-    }
-
-    if (!open) {
-        return (
-            <div onClick={() => setOpen(prev => !prev)} className='group grid h-11 w-11 cursor-pointer place-items-center rounded-lg text-ui-muted transition-colors hover:bg-ui-raised hover:text-ui-text md:hidden'>
-                <MenuIcon />
-            </div>
-        )
-    }
-
-    return (
-        <div className='group z-105 grid h-11 w-11 place-items-center rounded-lg md:hidden'>
-            <X onClick={toggleOpen} />
-            <div onClick={(e) => e.preventDefault()} className='absolute right-3 top-16 z-105 h-fit w-[min(18rem,calc(100vw-1.5rem))] overflow-hidden rounded-lg border border-ui-border bg-ui-panel p-1.5 text-ui-text shadow-[0_24px_90px_var(--soft-shadow)] backdrop-blur-xl sm:right-5 sm:top-18'>
-                <Link href='/s' onClick={toggleOpen} className='flex rounded-lg pl-2 pr-5 transition-colors hover:bg-ui-raised'>
-                    <ShareIcon baseStyles={baseStyles} isShare={isShare} />
-                    <h1 className='self-center font-semibold'>Workspace</h1>
-                </Link>
-                <Link href='/ai' onClick={toggleOpen} className='flex rounded-lg pl-2 pr-5 transition-colors hover:bg-ui-raised'>
-                    <div className={baseStyles}>
-                        <Sparkles className={`group-hover:stroke-ui-warning ${isAI && 'stroke-ui-warning'}`} />
-                    </div>
-                    <h1 className='self-center font-semibold'>Workspace assistant</h1>
-                </Link>
-                <Link href='/status' onClick={toggleOpen} className='flex rounded-lg pl-2 pr-5 transition-colors hover:bg-ui-raised'>
-                    <div className={baseStyles}>
-                        <ActivityIcon className={`group-hover:stroke-ui-success ${isStatus && 'stroke-ui-success'}`} />
-                    </div>
-                    <h1 className='self-center font-semibold'>Status</h1>
-                </Link>
-                <Link href='/dashboard' onClick={toggleOpen} className='flex rounded-lg pl-2 pr-5 transition-colors hover:bg-ui-raised'>
-                    <Dashboard serverToken={token} />
-                    {token && <h1 className='self-center font-semibold'>Dashboard</h1>}
-                </Link>
-            </div>
-        </div>
-    )
+    return <button type='button' onClick={mobile.toggle} aria-label={mobile.open ? 'Close navigation' : 'Open navigation'}
+        aria-expanded={mobile.open} aria-controls='mobile-navigation'
+        className='grid h-11 w-11 place-items-center rounded-lg border border-ui-border text-ui-muted hover:bg-ui-raised focus-visible:outline-2 focus-visible:outline-ui-primary lg:hidden'>
+        {mobile.open ? <PanelLeftClose /> : <PanelLeftOpen />}
+    </button>
 }
