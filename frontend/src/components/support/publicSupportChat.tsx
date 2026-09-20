@@ -3,7 +3,7 @@
 import { ArrowUp, LoaderCircle, Sparkles, UserRound } from 'lucide-react'
 import useSupportLive from './useSupportLive'
 import useSupportUnread from './useSupportUnread'
-import { FormEvent, useCallback, useEffect, useRef, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 type Message = { id: string; body: string; sender_kind: 'user' | 'assistant' | 'support' | 'system'; sender_name: string; request_id?: string }
 type Ticket = { id: string; subject: string; reply_count: number }
@@ -24,6 +24,7 @@ export default function PublicSupportChat({ active = true, onUnreadChange }: { a
     const [selectedId, setSelectedId] = useState('')
     const selection = useRef('')
     const restoredSelection = useRef(false)
+    const realtime = useRef(false)
     const drafts = useRef<Record<string, string>>({})
     const [conversation, setConversation] = useState<Conversation>(empty)
     const [input, setInput] = useState('')
@@ -49,6 +50,8 @@ export default function PublicSupportChat({ active = true, onUnreadChange }: { a
         const payload = await response.json()
         if (!response.ok) throw new Error(payload.error || 'We could not load your conversation.')
         if (mounted.current && version === revision.current) {
+            realtime.current = Array.isArray(payload.tickets)
+            if (!realtime.current) { selection.current = ''; setSelectedId('') }
             if (restoredSelection.current) {
                 restoredSelection.current = false
                 if (!payload.id && selection.current) { selection.current = crypto.randomUUID(); setSelectedId(selection.current) }
@@ -57,10 +60,11 @@ export default function PublicSupportChat({ active = true, onUnreadChange }: { a
             try {
                 const key = 'hanasand-support-read:visitor'
                 const read = JSON.parse(localStorage.getItem(key) || '{}')
-                if (payload.id && read[payload.id] === undefined) {
+                const readId = payload.id || 'legacy'
+                if (read[readId] === undefined) {
                     const replies = payload.messages.filter((message: Message) => ['assistant', 'support'].includes(message.sender_kind))
                     const index = replies.findIndex((message: Message) => message.id === localStorage.getItem('hanasand-support-last-read'))
-                    if (index >= 0) { read[payload.id] = index + 1; localStorage.setItem(key, JSON.stringify(read)) }
+                    if (index >= 0) { read[readId] = index + 1; localStorage.setItem(key, JSON.stringify(read)) }
                 }
             } catch { /* Read markers are optional when browser storage is unavailable. */ }
             setConversation(payload); setRefreshError(''); setLoading(false)
@@ -75,10 +79,11 @@ export default function PublicSupportChat({ active = true, onUnreadChange }: { a
     }, [])
     useEffect(() => { if (selectedId) try { localStorage.setItem('hanasand-support-selected', selectedId) } catch { /* Selection is still available in this tab. */ } }, [selectedId])
     const connection = useSupportLive(async () => {
-        try { await refresh() } catch (error) { if (mounted.current) { setRefreshError(error instanceof Error ? error.message : 'Reconnecting…'); setLoading(false) } }
+        try { await refresh(); return realtime.current } catch (error) { if (mounted.current) { setRefreshError(error instanceof Error ? error.message : 'Reconnecting…'); setLoading(false) } }
     }, true)
-    const tickets = conversation.tickets || emptyTickets
-    const unread = useSupportUnread(tickets, selectedId, active, 'visitor')
+    const legacy = !Array.isArray(conversation.tickets)
+    const tickets = useMemo(() => conversation.tickets || (conversation.messages.length ? [{ id: 'legacy', subject: 'Support', reply_count: conversation.messages.filter(message => ['assistant', 'support'].includes(message.sender_kind)).length }] : emptyTickets), [conversation])
+    const unread = useSupportUnread(tickets, legacy ? 'legacy' : selectedId, active, 'visitor')
     useEffect(() => { onUnreadChange?.(Object.values(unread).reduce((sum, count) => sum + count, 0)) }, [unread, onUnreadChange])
     async function selectChat(id: string) {
         drafts.current[selection.current] = input
@@ -93,9 +98,9 @@ export default function PublicSupportChat({ active = true, onUnreadChange }: { a
     useEffect(() => { if (active && log.current) log.current.scrollTop = log.current.scrollHeight }, [active, conversation.messages.length, sending])
 
     async function submit(submission: Submission) {
-        const id = submission.conversationId || selection.current || crypto.randomUUID()
-        submission = { ...submission, conversationId: id }
-        if (!selection.current) { selection.current = id; setSelectedId(id) }
+        const id = submission.conversationId || selection.current || (legacy ? '' : crypto.randomUUID())
+        submission = { ...submission, conversationId: id || undefined }
+        if (!selection.current && id) { selection.current = id; setSelectedId(id) }
         const handoff = submission.handoff === true
         const key = `${id}:${handoff ? 'handoff' : 'message'}`
         if (inFlight.current.has(key)) return
@@ -140,6 +145,7 @@ export default function PublicSupportChat({ active = true, onUnreadChange }: { a
         void submit(retry?.message === message ? retry : { requestId: crypto.randomUUID(), message })
     }
     const human = conversation.channel === 'human'
+    const agentName = conversation.agent_name || conversation.messages.filter(message => message.sender_kind === 'support').at(-1)?.sender_name
     const busy = sending || conversation.pending
     const lastMessage = conversation.messages.at(-1)
     const unanswered = !human && !busy && lastMessage?.sender_kind === 'user' && lastMessage.request_id
@@ -149,14 +155,14 @@ export default function PublicSupportChat({ active = true, onUnreadChange }: { a
         : conversation.messages
     return (
         <section aria-label='Support chat' className='grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto]'>
-            <div className='flex min-w-0 items-center gap-2 border-b border-ui-border px-4 py-2'>
+            {!legacy ? <div className='flex min-w-0 items-center gap-2 border-b border-ui-border px-4 py-2'>
                 <select aria-label='Conversation' value={selectedId} onChange={event => void selectChat(event.target.value)} className='min-w-0 flex-1 rounded-lg border border-ui-border bg-ui-panel px-2 py-1.5 text-xs text-ui-text'>
                     {!tickets.some(ticket => ticket.id === selectedId) ? <option value={selectedId}>New chat</option> : null}
                     {tickets.map(ticket => <option key={ticket.id} value={ticket.id}>{ticket.subject}{unread[ticket.id] ? ` (${unread[ticket.id]} unread)` : ''}</option>)}
                 </select>
                 {Object.values(unread).some(count => count > 0) ? <span role='status' aria-label='Unread replies in other chats' className='rounded-full bg-ui-primary px-2 py-0.5 text-xs text-ui-canvas'>{Object.values(unread).reduce((sum, count) => sum + count, 0)}</span> : null}
                 <button type='button' onClick={() => void selectChat(crypto.randomUUID())} className='shrink-0 rounded-lg px-2 py-1.5 text-xs font-medium text-ui-primary hover:bg-ui-raised disabled:opacity-50'>New chat</button>
-            </div>
+            </div> : <div />}
             <div ref={log} role='log' aria-label='Messages' className='min-h-0 overflow-y-auto overscroll-contain px-5 py-5'>
                 {!visibleMessages.length ? <div className='flex min-h-full flex-col justify-center pb-3'>
                     <div className='mb-5 grid h-11 w-11 place-items-center rounded-2xl bg-ui-primary/10 text-ui-primary'><Sparkles className='h-5 w-5' aria-hidden='true' /></div>
@@ -180,7 +186,7 @@ export default function PublicSupportChat({ active = true, onUnreadChange }: { a
                     <button type='submit' disabled={loading || busy || !input.trim()} aria-label='Send message' className='grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-ui-primary text-ui-canvas transition hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary disabled:opacity-40'>{sending ? <LoaderCircle className='h-4 w-4 animate-spin' /> : <ArrowUp className='h-4 w-4' />}</button>
                 </form>
                 <div className='mt-3 flex min-h-7 items-center justify-center'>
-                    {human ? <p className='flex items-center gap-1.5 text-xs text-ui-muted'><UserRound className='h-3.5 w-3.5' />{conversation.status === 'closed' ? 'Conversation closed · Send a message to reopen' : conversation.agent_name ? `Speaking with ${conversation.agent_name}` : 'Waiting for support.'}</p> : <button type='button' disabled={loading || transferring} onClick={() => void submit({ requestId: crypto.randomUUID(), message: 'I\'d like to speak with a human.', handoff: true })} className='inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-ui-muted transition hover:bg-ui-raised hover:text-ui-text disabled:opacity-50'><UserRound className='h-3.5 w-3.5' />{transferring ? 'Connecting…' : 'Talk to a human'}</button>}
+                    {human ? <p className='flex items-center gap-1.5 text-xs text-ui-muted'><UserRound className='h-3.5 w-3.5' />{conversation.status === 'closed' ? 'Conversation closed · Send a message to reopen' : agentName ? `Speaking with ${agentName}` : 'Waiting for support.'}</p> : <button type='button' disabled={loading || transferring} onClick={() => void submit({ requestId: crypto.randomUUID(), message: 'I\'d like to speak with a human.', handoff: true })} className='inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-ui-muted transition hover:bg-ui-raised hover:text-ui-text disabled:opacity-50'><UserRound className='h-3.5 w-3.5' />{transferring ? 'Connecting…' : 'Talk to a human'}</button>}
                 </div>
             </div>
         </section>

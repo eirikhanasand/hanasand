@@ -4,16 +4,16 @@ import { useEffect, useRef, useState } from 'react'
 import config from '@/config'
 import { getCookie } from '@/utils/cookies/cookies'
 
-export default function useSupportLive(refresh: () => Promise<void>, guest: boolean, enabled = true) {
+export default function useSupportLive(refresh: () => Promise<void | boolean>, guest: boolean, enabled = true) {
     const latest = useRef(refresh)
     latest.current = refresh
-    const [connection, setConnection] = useState<'connecting' | 'connected' | 'reconnecting'>('connecting')
+    const [connection, setConnection] = useState<'connecting' | 'connected' | 'reconnecting' | 'legacy'>('connecting')
     useEffect(() => {
         if (!enabled) return
         let disposed = false, running = false, pending = false, attempts = 0
         let socket: WebSocket | undefined
         let retry: ReturnType<typeof setTimeout> | undefined
-        let ready = false, connecting = false
+        let ready = false, connecting = false, available = true
         const sync = async () => {
             pending = true
             if (running) return
@@ -21,7 +21,7 @@ export default function useSupportLive(refresh: () => Promise<void>, guest: bool
             try {
                 while (pending && !disposed) {
                     pending = false
-                    try { await latest.current() } catch { /* The view preserves its data and shows the request error. */ }
+                    try { const supported = await latest.current(); if (typeof supported === 'boolean') available = supported } catch { /* The view preserves its data and shows the request error. */ }
                 }
             } finally { running = false }
         }
@@ -37,6 +37,7 @@ export default function useSupportLive(refresh: () => Promise<void>, guest: bool
             try {
                 // Initial GET establishes the HttpOnly guest session before issuing a one-use socket ticket.
                 await sync()
+                if (!available) { setConnection('legacy'); return }
                 let auth: { type: string; ticket?: string; id?: string; token?: string }
                 if (guest) {
                     const response = await fetch('/api/support/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'connect' }) })
@@ -63,8 +64,8 @@ export default function useSupportLive(refresh: () => Promise<void>, guest: bool
         const visible = () => { if (document.visibilityState === 'visible') { void sync(); if (!ready && !retry) void connect() } }
         const online = () => { clearTimeout(retry); retry = undefined; if (socket) socket.close(); else void connect() }
         void connect()
-        // Recovery only: healthy connections receive events instead of polling.
-        const fallback = setInterval(() => { if (!ready) void sync() }, 15000)
+        // Keep older servers usable during rolling releases; upgraded servers switch to events.
+        const fallback = setInterval(() => { if (!ready) void sync().then(() => { if (available && !socket && !retry) void connect() }) }, 4000)
         window.addEventListener('online', online)
         document.addEventListener('visibilitychange', visible)
         return () => { disposed = true; clearTimeout(retry); clearInterval(fallback); socket?.close(); window.removeEventListener('online', online); document.removeEventListener('visibilitychange', visible) }

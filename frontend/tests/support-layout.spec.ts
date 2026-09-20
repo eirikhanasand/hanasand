@@ -8,7 +8,7 @@ for (const width of [390, 1440]) {
     test(`support uses the internal frame and fits at ${width}px`, async ({ page, baseURL }) => {
         await page.setViewportSize({ width, height: 900 })
         await page.context().addCookies([{ name: 'id', value: 'customer', url: baseURL! }, { name: 'access_token', value: 'local-test', url: baseURL! }])
-        await page.route('**/api/backend/support/tickets', route => route.fulfill({ json: { role: 'support', tickets: [ticket] } }))
+        await page.route('**/api/backend/support/tickets', route => route.fulfill({ json: { realtime: true, role: 'support', tickets: [ticket] } }))
         await page.route('**/api/backend/support/tickets/*/messages', route => route.fulfill({ json: { messages: [message] } }))
         await mockSupportLive(page)
         await page.goto('/support')
@@ -35,7 +35,7 @@ for (const width of [390, 1440]) {
 
 test('an empty staff queue has no composer', async ({ page, baseURL }) => {
     await page.context().addCookies([{ name: 'id', value: 'agent', url: baseURL! }, { name: 'access_token', value: 'local-test', url: baseURL! }])
-    await page.route('**/api/backend/support/tickets', route => route.fulfill({ json: { role: 'support', tickets: [] } }))
+    await page.route('**/api/backend/support/tickets', route => route.fulfill({ json: { realtime: true, role: 'support', tickets: [] } }))
     await mockSupportLive(page)
     await page.goto('/support')
     await expect(page.getByText('Select a customer chat to read and reply.')).toBeVisible()

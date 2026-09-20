@@ -65,7 +65,7 @@ test('staff receives live queue updates and a recovered refresh clears the error
     const tickets = [{ id: 'chat-a', subject: 'First question', user_name: 'Visitor', reply_count: 1 }, { id: 'chat-b', subject: 'Other question', user_name: 'Visitor', reply_count: 0 }]
     let fail = false
     const messages = [{ id: 'q1', sender_id: null, sender_kind: 'user', sender_name: 'Visitor', body: 'Hello' }]
-    await page.route('**/api/backend/support/tickets', route => route.fulfill({ json: { role: 'support', tickets } }))
+    await page.route('**/api/backend/support/tickets', route => route.fulfill({ json: { realtime: true, role: 'support', tickets } }))
     await page.route('**/api/backend/support/tickets/*/messages', route => route.fulfill(fail ? { status: 503, json: { error: 'Temporary failure' } } : { json: { messages } }))
     const live = await mockSupportLive(page)
     await page.goto('/support')
@@ -111,4 +111,38 @@ test('starting another chat while AI is answering keeps the reply with its origi
     await dialog.getByLabel('Conversation', { exact: true }).selectOption(first)
     await expect(dialog.getByRole('log')).toContainText('The answer to the first question.')
     await expect(dialog.getByLabel('Message', { exact: true })).toHaveValue('')
+})
+
+test('an older server keeps chat usable and upgrades to live history when ready', async ({ page }) => {
+    let upgraded = false, connections = 0
+    const id = '33333333-3333-4333-8333-333333333333'
+    const messages = [{ id: 'hello', sender_kind: 'user', sender_name: 'You', body: 'Hello' }]
+    await page.route('**/api/support/chat*', async route => {
+        const body = route.request().method() === 'POST' ? route.request().postDataJSON() : null
+        if (body?.action === 'connect') { connections++; return route.fulfill({ json: { ticket: 'a'.repeat(64) } }) }
+        if (body) { expect(body.conversationId).toBeUndefined(); messages.push({ id: body.requestId, sender_kind: 'user', sender_name: 'You', body: body.message }) }
+        await route.fulfill({ json: { channel: 'human', status: 'open', pending: false, messages,
+            ...(upgraded ? { id, tickets: [{ id, subject: 'Hello', reply_count: messages.filter(message => message.sender_kind === 'support').length }] } : {}) } })
+    })
+    await page.routeWebSocket('**/api/ws/support', socket => socket.onMessage(() => socket.send(JSON.stringify({ type: 'ready' }))))
+    await page.goto('/contact')
+    await page.getByLabel('Open support assistant', { exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: 'Support assistant' })
+    await expect(dialog.getByRole('log')).toContainText('Hello')
+    await expect(dialog.getByRole('button', { name: 'New chat', exact: true })).toHaveCount(0)
+    await dialog.getByLabel('Message', { exact: true }).fill('Can you help?')
+    await dialog.getByLabel('Send message', { exact: true }).click()
+    await expect(dialog.getByRole('log')).toContainText('Can you help?')
+    await expect(dialog.getByLabel('Message', { exact: true })).toHaveValue('')
+    expect(connections).toBe(0)
+    await page.getByLabel('Close support assistant').click()
+    messages.push({ id: 'answer', sender_kind: 'support', sender_name: 'Eirik Hanasand', body: 'Yes, happy to help.' })
+    await expect(page.getByRole('status', { name: '1 unread support reply' })).toBeVisible({ timeout: 6000 })
+    expect(connections).toBe(0)
+    upgraded = true
+    await page.getByLabel('Open support assistant', { exact: true }).click()
+    await expect(dialog.getByRole('button', { name: 'New chat', exact: true })).toBeVisible({ timeout: 6000 })
+    await expect.poll(() => connections).toBeGreaterThan(0)
+    await expect(dialog.getByText('Speaking with Eirik Hanasand', { exact: true })).toBeVisible()
+    await expect(dialog.getByRole('log')).toContainText('Yes, happy to help.')
 })

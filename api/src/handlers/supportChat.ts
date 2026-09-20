@@ -38,7 +38,7 @@ export async function getSupportTickets(req: FastifyRequest, res: FastifyReply) 
             ORDER BY t.updated_at DESC
             LIMIT 100
         `, [support, userId])
-        return res.send({ role: support ? 'support' : 'user', tickets: result.rows })
+        return res.send({ role: support ? 'support' : 'user', tickets: result.rows, realtime: true })
     } catch (error) {
         req.log.error(error)
         return res.status(500).send({ error: 'Failed to load support tickets.' })

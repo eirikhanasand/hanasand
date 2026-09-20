@@ -18,6 +18,7 @@ export default function SupportChat({ embedded = false }: { embedded?: boolean }
     const [selectedId, setSelectedId] = useState('')
     const selectedRef = useRef('')
     const messageRevision = useRef(0)
+    const realtime = useRef(false)
     selectedRef.current = selectedId
     const creating = useRef(false)
     const drafts = useRef<Record<string, string>>({})
@@ -37,7 +38,8 @@ export default function SupportChat({ embedded = false }: { embedded?: boolean }
         const response = await fetch('/api/backend/support/tickets', { cache: 'no-store' })
         setSignedOut(response.status === 401)
         if (!response.ok) throw new Error(response.status === 401 ? 'Sign in to chat with support.' : 'Support is temporarily unavailable.')
-        const payload = await response.json() as { tickets?: Ticket[]; role?: 'user' | 'support' }
+        const payload = await response.json() as { tickets?: Ticket[]; role?: 'user' | 'support'; realtime?: boolean }
+        realtime.current = payload.realtime === true
         setTickets(payload.tickets || [])
         setRole(payload.role || 'user')
         setSelectedId(current => creating.current ? current : current || payload.tickets?.[0]?.id || '')
@@ -66,7 +68,7 @@ export default function SupportChat({ embedded = false }: { embedded?: boolean }
     const connection = useSupportLive(async () => {
         const id = selectedRef.current
         setSyncedId('')
-        try { await Promise.all([loadTickets(), loadMessages(id)]); setError(''); setSyncedId(id) }
+        try { await Promise.all([loadTickets(), loadMessages(id)]); setError(''); setSyncedId(id); return realtime.current }
         catch (error) { setError(error instanceof Error ? error.message : 'Reconnecting…') }
         finally { setLoading(false) }
     }, false, !signedOut)
