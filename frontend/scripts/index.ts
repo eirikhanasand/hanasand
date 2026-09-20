@@ -11,6 +11,8 @@ type TestTask = {
 const bun = process.execPath
 
 const tasks: TestTask[] = [
+    { id: 'cases-layout-streaming', title: 'Cases render independently of navigation permissions', command: [bun, 'tests/cases-layout-streaming.test.tsx'] },
+    { id: 'shared-cases-route', title: 'Independent case sources and access boundaries', command: [bun, 'test', 'tests/shared-cases-route.test.ts'] },
     { id: 'logs-catchup', title: 'Log catch-up measurements and progress states', command: [bun, 'test', 'tests/log-catchup-progress.test.tsx'] },
     { id: 'content-workspace', title: 'Content workspace selection and access failures', command: [bun, 'test', 'tests/content-workspace.test.ts'] },
     { id: 'support-proxy', title: 'Anonymous support session and origin protection', command: [bun, 'test', 'tests/support-proxy.test.ts'] },

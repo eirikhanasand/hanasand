@@ -5,7 +5,7 @@ import { NAVIGATION_COOKIE, readNavigationPreferences } from '@/utils/layout/nav
 import parseCookie from '@/utils/cookies/parseCookie'
 import DashboardSidebar from '@/components/dashboard/dashboardSidebar'
 import ImpersonationBanner from '@/components/impersonation/impersonationBanner'
-import { ReactNode } from 'react'
+import { ReactNode, Suspense, type ComponentProps } from 'react'
 import { cookies, headers } from 'next/headers'
 import './globals.css'
 import Header from '@/components/header/header'
@@ -34,9 +34,9 @@ export default async function layout({ children }: { children: ReactNode }) {
     const canManageSystem = isAdmin || roleIds.includes('system_admin')
     const canManageContent = isAdmin || roleIds.includes('content_admin')
     const canReviewIntel = canManageSystem || roleIds.includes('analyst') || roleIds.includes('owner')
-    const organizationsAccess = token && id ? await canManageOrganizations() : false
     const initialMode = Cookies.get('dashboard_view_mode')?.value === 'compact' ? 'compact' : 'normal'
     const initialPreferences = readNavigationPreferences(Cookies.get(NAVIGATION_COOKIE)?.value, id)
+    const sidebarProps = { initialPreferences, initialMode, id, isAdmin, canManageSystem, canManageContent, canReviewIntel } satisfies ComponentProps<typeof DashboardSidebar>
     const impersonatingId = Cookies.get('impersonating_id')?.value || Headers.get('x-impersonating-id') || ''
     const impersonatingName = Cookies.get('impersonating_name')?.value || Headers.get('x-impersonating-name') || ''
 
@@ -49,7 +49,9 @@ export default async function layout({ children }: { children: ReactNode }) {
                         <Header token={token} path={path} initialMode={initialMode} />
                         <DetachedBoxHost />
                         <RouteFrame serverPath={path} token={token}
-                            sidebar={id && token ? <DashboardSidebar initialPreferences={initialPreferences} initialMode={initialMode} id={id} canManageOrganizations={organizationsAccess} isAdmin={isAdmin} canManageSystem={canManageSystem} canManageContent={canManageContent} canReviewIntel={canReviewIntel} /> : null}
+                            sidebar={id && token ? <Suspense fallback={<DashboardSidebar {...sidebarProps} canManageOrganizations={false} />}>
+                                <AuthorizedSidebar {...sidebarProps} />
+                            </Suspense> : null}
                             banner={<><RecoveryBanner />{impersonatingId ? <ImpersonationBanner id={impersonatingId} name={impersonatingName} /> : null}</>}>
                             {children}
                         </RouteFrame>
@@ -58,4 +60,8 @@ export default async function layout({ children }: { children: ReactNode }) {
             </body>
         </html>
     )
+}
+
+async function AuthorizedSidebar(props: ComponentProps<typeof DashboardSidebar>) {
+    return <DashboardSidebar {...props} canManageOrganizations={await canManageOrganizations()} />
 }

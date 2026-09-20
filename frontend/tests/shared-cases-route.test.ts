@@ -37,3 +37,13 @@ test('authorization errors are not presented as a successful partial list', asyn
     expect(response.status).toBe(403)
     expect(await response.json()).toEqual({ error: 'Forbidden' })
 })
+
+test('independent collections preserve authorization and never wait for the other backend', async () => {
+    intelligence = async () => { throw new Error('Must not fetch intelligence') }
+    const response = await GET(new NextRequest('http://localhost/api/cases?collection=monitoring'))
+    expect((await response.json()).items[0].id).toBe('HA-3')
+    monitoring = async () => { throw new Error('Must not fetch monitoring') }
+    intelligence = async () => NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    expect((await GET(new NextRequest('http://localhost/api/cases?collection=intelligence'))).status).toBe(403)
+    expect((await GET(new NextRequest('http://localhost/api/cases?collection=unknown'))).status).toBe(400)
+})

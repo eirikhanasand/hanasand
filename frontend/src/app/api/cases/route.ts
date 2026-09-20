@@ -6,6 +6,10 @@ import { GET as monitoringCases } from './monitoring/route'
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
+    const collection = request.nextUrl.searchParams.get('collection')
+    if (collection === 'intelligence') return proxyTiRequest(request, '/v1/cases', { method: 'GET' })
+    if (collection === 'monitoring') return monitoringCases(request)
+    if (collection !== null) return NextResponse.json({ error: 'Unknown case collection.' }, { status: 400 })
     const responses = await Promise.allSettled([
         proxyTiRequest(request, '/v1/cases', { method: 'GET' }), monitoringCases(request),
     ])

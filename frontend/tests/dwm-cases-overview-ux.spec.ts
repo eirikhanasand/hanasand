@@ -31,8 +31,9 @@ test('monitoring and unrelated cases share the list, links, search and paginatio
     await authenticate(context, baseURL)
     const monitor = { id: 'HA-3', title: 'HA-3 · Inference health', summary: 'FETCH check failed: HTTP 503.', source: 'monitoring', status: 'open', severity: 'high', occurrences: 53, automationId: 'inference', notifications: [], createdAt: '2026-09-07T09:00:00Z', updatedAt: '2026-09-07T09:20:00Z' }
     await page.route('**/api/cases?**', async route => {
+        if (new URL(route.request().url()).searchParams.get('collection') === 'monitoring') return route.fulfill({ json: { items: [monitor] } })
         const later = new URL(route.request().url()).searchParams.has('cursor')
-        await route.fulfill({ json: { items: later ? [{ id: 'manual-2', title: 'Unrelated service review', status: 'closed' }] : [monitor, { id: 'case-1', title: 'Credential exposure', actor: 'Lumma', company: 'acme.com', status: 'open', organizationId: 'org_acme' }], nextCursor: later ? null : 'next', warnings: ['One source is temporarily unavailable.'] } })
+        await route.fulfill({ json: { items: later ? [{ id: 'manual-2', title: 'Unrelated service review', status: 'closed' }] : [{ id: 'case-1', title: 'Credential exposure', actor: 'Lumma', company: 'acme.com', status: 'open', organizationId: 'org_acme' }], nextCursor: later ? null : 'next', warnings: ['One source is temporarily unavailable.'] } })
     })
     await page.route('**/api/cases/HA-3?**', route => route.fulfill({ json: { case: monitor } }))
     await page.goto('/cases')
@@ -83,7 +84,7 @@ test('case filters hide resolved cases by default and reveal AI resolutions need
         { id: 'HA-2', title: 'AI resolved monitor', status: 'resolved', severity: 'low', source: 'monitoring', assignedOwner: 'bob', resolution: { id: 'r1', type: 'ai', actor: 'agent', at: '2026-09-12T10:00:00Z' } },
         { id: 'HA-3', title: 'Confirmed AI monitor', status: 'closed', severity: 'critical', source: 'monitoring', resolution: { id: 'r2', type: 'ai', confirmedAt: '2026-09-12T11:00:00Z' } },
     ]
-    await page.route('**/api/cases?**', route => route.fulfill({ json: { items } }))
+    await page.route('**/api/cases?**', route => route.fulfill({ json: { items: new URL(route.request().url()).searchParams.get('collection') === 'monitoring' ? items : [] } }))
     await page.goto('/cases')
     await expect(page.getByRole('link', { name: 'Active high monitor' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'AI resolved monitor', exact: true })).toHaveCount(0)

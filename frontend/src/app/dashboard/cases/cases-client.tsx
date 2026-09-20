@@ -3,7 +3,7 @@
 import Link from '@/components/organizations/workspaceLink'
 import { CreateCase } from './create-case'
 import { RefreshCw } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 export type CaseResolution = { id?: string, type: 'human' | 'ai' | 'automation' | 'unknown', actor?: string, at?: string, note?: string, confirmedBy?: string, confirmedAt?: string }
 
@@ -14,9 +14,11 @@ export type CaseRow = {
 }
 
 export default function CasesClient({ organizationId }: { organizationId?: string }) {
-    const [rows, setRows] = useState<CaseRow[]>([])
-    const [warnings, setWarnings] = useState<string[]>([])
-    const [loading, setLoading] = useState(true)
+    const [collections, setCollections] = useState<{ intelligence: CaseRow[], monitoring: CaseRow[] }>({ intelligence: [], monitoring: [] })
+    const rows = useMemo(() => [...collections.intelligence, ...collections.monitoring].sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || '')), [collections])
+    const [warnings, setWarnings] = useState<Partial<Record<'intelligence' | 'monitoring', string>>>({})
+    const [pending, setPending] = useState(2)
+    const loading = pending > 0
     const [revision, setRevision] = useState(0)
     const [page, setPage] = useState(1)
     const [nextCursor, setNextCursor] = useState<string | null>(null)
@@ -30,20 +32,33 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
     const [cursor, setCursor] = useState<string | null>(null)
     useEffect(() => {
         const controller = new AbortController()
-        setLoading(true)
-        const params = new URLSearchParams(organizationId ? { organizationId } : {})
-        if (!cursor) params.set('page', String(page))
-        if (cursor) params.set('cursor', cursor)
-        fetch(`/api/cases?${params}`, { cache: 'no-store', signal: controller.signal }).then(async response => {
-            const payload = await response.json()
-            if (!response.ok) throw new Error(typeof payload.error === 'string' ? payload.error : payload.error?.message || 'Cases are unavailable. Please retry.')
-            const incoming: CaseRow[] = payload.items || payload.cases || []
-            setRows(current => page > 1 ? Array.from(new Map([...current, ...incoming].map(row => [row.caseId || row.id, row])).values()) : incoming)
-            setNextCursor(payload.nextCursor || null)
-            setWarnings(payload.warnings || [])
-        }).catch(error => {
-            if (!controller.signal.aborted) setWarnings([error.message || 'Cases are unavailable.'])
-        }).finally(() => { if (!controller.signal.aborted) setLoading(false) })
+        const sources = page > 1 ? ['intelligence'] as const : ['intelligence', 'monitoring'] as const
+        setPending(sources.length)
+        for (const collection of sources) {
+            const params = new URLSearchParams(organizationId ? { organizationId } : {})
+            params.set('collection', collection)
+            if (!cursor) params.set('page', String(page))
+            if (cursor) params.set('cursor', cursor)
+            void fetch(`/api/cases?${params}`, { cache: 'no-store', signal: controller.signal }).then(async response => {
+                const payload = await response.json()
+                if (controller.signal.aborted) return
+                if ([401, 403].includes(response.status)) {
+                    setCollections({ intelligence: [], monitoring: [] })
+                    setWarnings({ [collection]: 'Case access could not be verified. Sign in again or check your organization access.' })
+                    setNextCursor(null)
+                    setPending(0)
+                    controller.abort()
+                    return
+                }
+                if (!response.ok) throw new Error(typeof payload.error === 'string' ? payload.error : payload.error?.message || `${collection === 'intelligence' ? 'Intelligence' : 'Monitoring'} cases are unavailable. Please retry.`)
+                const incoming: CaseRow[] = payload.items || payload.cases || []
+                setCollections(current => ({ ...current, [collection]: page > 1 ? Array.from(new Map([...current[collection], ...incoming].map(row => [row.caseId || row.id, row])).values()) : incoming }))
+                if (collection === 'intelligence') setNextCursor(payload.nextCursor || null)
+                setWarnings(current => ({ ...current, [collection]: payload.warnings?.join(' ') || undefined }))
+            }).catch(error => {
+                if (!controller.signal.aborted) setWarnings(current => ({ ...current, [collection]: error.message || 'Cases are unavailable.' }))
+            }).finally(() => { if (!controller.signal.aborted) setPending(current => current - 1) })
+        }
         return () => controller.abort()
     }, [organizationId, revision, page, cursor])
     const visible = rows.filter(row => {
@@ -75,10 +90,11 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
             <button type='button' className='px-2 py-2 text-sm text-ui-primary' onClick={() => { setQuery(''); setStatus('active'); setSeverity('all'); setSource('all'); setOwner('all'); setResolutionType('all'); setReview('all') }}>Reset filters</button>
             <input aria-label='Search cases' placeholder='Search cases' value={query} onChange={event => setQuery(event.target.value)} className='w-44 min-w-0 max-w-full rounded border border-ui-border bg-ui-canvas p-2 text-sm text-ui-text' />
         </div>
-        {warnings.map(warning => <p role='alert' key={warning} className='px-4 pb-3 text-sm text-ui-danger'>{warning}</p>)}
-        {loading ? <p className='p-4 text-ui-muted'>Loading cases…</p> : <>
+        {Object.values(warnings).filter(Boolean).map(warning => <p role='alert' key={warning} className='px-4 pb-3 text-sm text-ui-danger'>{warning}</p>)}
+        {loading && <p role='status' className='px-4 pb-3 text-sm text-ui-muted'>{rows.length ? 'Updating cases…' : 'Loading cases…'}</p>}
+        {(!loading || rows.length > 0) && <>
             <p className='px-4 pb-3 text-xs text-ui-muted'>{visible.length} matching · {rows.length} cases loaded{nextCursor ? ' · More cases available below' : ''}</p>
-            {!visible.length ? <p className='p-4 text-ui-muted'>{warnings.length ? 'No cases could be displayed from the available sources.' : rows.length ? 'No cases match the current filters.' : 'No cases yet.'}</p> : <div className='overflow-x-auto'><table className='w-full text-left text-sm'>
+            {!visible.length ? <p className='p-4 text-ui-muted'>{Object.values(warnings).some(Boolean) ? 'No cases could be displayed from the available sources.' : rows.length ? 'No cases match the current filters.' : 'No cases yet.'}</p> : <div className='overflow-x-auto'><table className='w-full text-left text-sm'>
                 <thead className='border-y border-ui-border bg-ui-raised text-ui-muted'><tr>{['Case', 'Severity', 'Status', 'Owner', 'Updated'].map(label => <th key={label} scope='col' className='p-4'>{label}</th>)}</tr></thead>
                 <tbody className='divide-y divide-ui-border'>{visible.map(row => <tr key={row.caseId || row.id} className='text-ui-text'>
                     <td className='p-4'><Link className='font-semibold text-ui-primary hover:underline' href={`/cases/${encodeURIComponent(row.caseId || row.id)}${row.organizationId || organizationId ? `?organizationId=${encodeURIComponent(row.organizationId || organizationId!)}` : ''}`}>{row.title || row.id}</Link>{[row.actor, row.victimName || row.company, row.organizationId].filter(Boolean).map(value => <p className='mt-1 text-xs text-ui-muted' key={value}>{value}</p>)}{row.summary && <p className='mt-1 max-w-xl wrap-break-word text-xs text-ui-muted'>{row.summary}</p>}</td>
@@ -86,7 +102,7 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
                     <td className='p-4'>{row.status.replaceAll('_', ' ')}{row.resolution && <p className='mt-1 text-xs text-ui-muted'>{row.resolution.type === 'ai' ? 'AI resolved' : row.resolution.type === 'automation' ? 'Automatically recovered' : row.resolution.type === 'unknown' ? 'Resolver not recorded' : `Resolved by ${row.resolution.actor || 'human'}`}{['ai', 'automation'].includes(row.resolution.type) && (row.resolution.confirmedAt ? ' · Human confirmed' : ' · Needs human review')}</p>}</td><td className='p-4'>{row.assignedOwner || 'Unassigned'}</td><td className='p-4'>{row.updatedAt || row.createdAt ? new Date(row.updatedAt || row.createdAt!).toLocaleString() : '—'}</td>
                 </tr>)}</tbody>
             </table></div>}
-            {nextCursor && <button className='p-4 text-ui-primary' onClick={() => { setCursor(nextCursor); setPage(current => current + 1) }}>Load more cases</button>}
+            {nextCursor && <button disabled={loading} className='p-4 text-ui-primary disabled:opacity-50' onClick={() => { setCursor(nextCursor); setPage(current => current + 1) }}>Load more cases</button>}
         </>}
     </section>
 }
