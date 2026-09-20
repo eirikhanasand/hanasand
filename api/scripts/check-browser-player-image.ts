@@ -95,3 +95,13 @@ mouse._mouseButtonMovement({ type: 'mousedown', button: 0, preventDefault() {} }
 mouse._mouseButtonMovement({ type: 'mouseup', button: 0, preventDefault() {} })
 assert.deepEqual(messages, [[100, 200, 1, 0], [100, 200, 0, 0]], 'Hybrid devices retain ordinary mouse clicks')
 console.log('Installed touch input verified: immediate scrolling, tap click, cancellation, multitouch and hybrid mouse.')
+
+const framerateAction = appSource.match(/const framerateSetting = app.getIntParam[\s\S]+?(?=\n {4}} else if)/)?.[0]
+assert(framerateAction, 'Framerate action found')
+assert.match(appSource, /this.setIntParam\("videoFramerateV2", newValue\)/)
+for (const saved of [null, 45]) {
+    const player = { videoFramerate: 0, getIntParam: (key: string) => key === 'videoFramerateV2' ? saved : 30 }
+    runInNewContext(framerateAction, { app: player, action: 'framerate,60' })
+    assert.equal(player.videoFramerate, saved ?? 60, 'Ignore the old automatic 30 FPS preference while preserving new user choices')
+}
+console.log('Installed framerate migration verified: new 60 FPS default and explicit preferences.')
