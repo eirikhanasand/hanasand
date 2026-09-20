@@ -1174,7 +1174,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                                     {paidBrowserPlan ? <span className='ml-auto shrink-0 rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-ui-primary'>Edit</span> : null}
                                 </summary>
                                 <div className='grid gap-3'>
-                                    {!paidBrowserPlan ? <a href='/pricing#browser' className='text-sm font-semibold text-ui-primary'>Upgrade for automated analysis profiles</a> : null}
+                                    {!paidBrowserPlan ? <Link href='/pricing#browser' className='text-sm font-semibold text-ui-primary'>Upgrade for automated analysis profiles</Link> : null}
                                     <p className='text-sm text-ui-muted'>Profiles run the selected URL through external triage surfaces in the remote sandbox context.</p>
                                     <p className='text-xs text-ui-muted'>{profileSyncLabel(profileSyncState)}</p>
                                     <div className='flex gap-2'>
@@ -1538,7 +1538,7 @@ function ProfilePicker({ paid, profiles, selectedProfileId, onSelect, onDelete }
             {profiles.map(profile => {
                 const selected = selectedProfileId === profile.id
                 const locked = defaultProfiles.some(item => item.id === profile.id)
-                if (!paid && profile.tools.length) return <a key={profile.id} href='/pricing#browser' className='inline-flex min-h-9 shrink-0 items-center gap-2 rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-primary'>{profile.name} · Upgrade</a>
+                if (!paid && profile.tools.length) return <Link key={profile.id} href='/pricing#browser' className='inline-flex min-h-9 shrink-0 items-center gap-2 rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-primary'>{profile.name} · Upgrade</Link>
                 return (
                     <span key={profile.id} className={`inline-flex min-h-9 shrink-0 items-center overflow-hidden rounded-md border transition ${selected ? 'border-ui-primary bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-panel text-ui-text'}`}>
                         <button
@@ -1573,7 +1573,7 @@ function HistoryPanel({ history, quota, onRerun, onExpand, embedded = false }: {
             <div className='flex flex-wrap items-start justify-between gap-3'>
                 <div>
                     <h2 className='text-sm font-semibold text-ui-text'>Recent browser runs</h2>
-                    {!quota?.paid ? <a href='/pricing#browser' className='text-xs font-semibold text-ui-primary'>Upgrade for 30-minute runs and 3 simultaneous browsers</a> : null}
+                    {!quota?.paid ? <Link href='/pricing#browser' className='text-xs font-semibold text-ui-primary'>Upgrade for 30-minute runs and 3 simultaneous browsers</Link> : null}
                     <p className='mt-1 text-xs text-ui-muted'>{`${Math.round((quota?.sessionSeconds || 300) / 60)} minutes per run · ${quota?.concurrentLimit || 1} simultaneous browser${(quota?.concurrentLimit || 1) > 1 ? 's' : ''}`}</p>
                 </div>
             </div>
