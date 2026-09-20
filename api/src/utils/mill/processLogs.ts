@@ -181,9 +181,17 @@ export async function processStoredLogs() {
                 await run('UPDATE mill_events SET processing_status = \'processed\' WHERE id = $1 AND organization_id = $2', [row.id, row.organization_id])
             }
             if (cursor.history_end_id !== null) {
-                const backlog = await run('SELECT * FROM service_logs WHERE id > $1 AND id <= $2 ORDER BY id LIMIT $3', [cursor.last_id, cursor.history_end_id, catchupLimit])
+                // Already acknowledged rows need no wide JSON reads or evaluation.
+                // Inspect narrow IDs in larger pages, while retaining the operator
+                // limit for actual detection work and never skipping a pending row.
+                const candidates = await run('SELECT id FROM service_logs WHERE id > $1 AND id <= $2 ORDER BY id LIMIT 10000', [cursor.last_id, cursor.history_end_id])
+                const backlog = candidates.rows.length ? await run(`SELECT * FROM service_logs s WHERE id > $1 AND id <= $2 AND id = ANY($4::bigint[])
+                    AND NOT EXISTS (SELECT 1 FROM mill_events e WHERE e.log_key = 'service:' || s.id::text AND e.processing_status = 'processed')
+                    ORDER BY id LIMIT $3`, [cursor.last_id, cursor.history_end_id, catchupLimit, candidates.rows.map(row => row.id)]) : { rows: [] }
                 await processScopes(backlog.rows)
-                await run('UPDATE log_processing_cursors SET last_id = GREATEST(last_id, $1), checked_count = checked_count + $2, updated_at = NOW() WHERE name = \'service_logs\'', [backlog.rows.at(-1)?.id || cursor.history_end_id, backlog.rows.length])
+                const lastId = backlog.rows.length === catchupLimit ? backlog.rows.at(-1)!.id : candidates.rows.at(-1)?.id || cursor.history_end_id
+                const checked = candidates.rows.filter(row => BigInt(row.id) <= BigInt(lastId)).length
+                await run('UPDATE log_processing_cursors SET last_id = GREATEST(last_id, $1), checked_count = checked_count + $2, updated_at = NOW() WHERE name = \'service_logs\'', [lastId, checked])
             }
         })
         // Counter initialization has its own lock and visible error state. Keep
