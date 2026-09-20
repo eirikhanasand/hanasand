@@ -6,11 +6,13 @@ export async function monitorSystemCronJobs(list = listUnifiedScheduledJobs, rec
     const jobs = await list()
     const checkedAt = new Date().toISOString()
     const results = await Promise.allSettled(jobs.map(async job => {
-        if (job.id === 'api-cron-health-monitor' || !['blocked', 'failed', 'enabled', 'running', 'observable'].includes(job.status)) return null
+        if (job.id === 'api-cron-health-monitor' || !['blocked', 'failed', 'enabled', 'running', 'observable', 'paused'].includes(job.status)) return null
         const blocked = job.status === 'blocked' || job.status === 'failed'
         const message = blocked
             ? `${job.name} is ${job.status}. ${job.lastError || 'The job cannot run.'} Review the job and fix the blocker at https://hanasand.com/automation/cron?scope=system.`
-            : `${job.name} is no longer blocked. Current status: ${job.status}.`
+            : job.status === 'paused'
+                ? `${job.name} is paused. No run is expected while it is paused.`
+                : `${job.name} is no longer blocked. Current status: ${job.status}.`
         await record('scheduled-jobs', job.name, { checkId: job.id, status: blocked ? 'down' : 'up', checkedAt, latencyMs: 0, message })
         return { id: job.id, status: job.status }
     }))

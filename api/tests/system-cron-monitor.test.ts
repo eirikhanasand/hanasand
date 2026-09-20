@@ -6,7 +6,7 @@ import { correlationKey } from '../src/utils/monitoringCorrelation.ts'
 import { needsSystemAutomationAccess, automationReadScope } from '../src/utils/automationAccess.ts'
 import type { AutomationRow } from '../src/utils/automations.ts'
 
-test('fresh blocked and failed jobs are recorded independently; only observed healthy states recover', async () => {
+test('fresh job observations resolve cases for healthy or paused jobs, but not unknown jobs', async () => {
     const observations: unknown[][] = []
     const states = ['blocked', 'failed', 'enabled', 'running', 'observable', 'paused', 'unknown'] as const
     const jobs = states.map(status => ({ id: status, name: `Job ${status}`, status, enabled: false, lastError: 'HTTP 503' } as UnifiedScheduledJob))
@@ -15,9 +15,23 @@ test('fresh blocked and failed jobs are recorded independently; only observed he
         expect(options?.fast).not.toBe(true)
         return jobs
     }, async (...args) => { observations.push(args) })
-    expect(result.jobs.map(job => job.id)).toEqual(states.slice(0, 5))
-    expect(observations.map(row => (row[2] as { status: string }).status)).toEqual(['down', 'down', 'up', 'up', 'up'])
+    expect(result.jobs.map(job => job.id)).toEqual(states.slice(0, 6))
+    expect(observations.map(row => (row[2] as { status: string }).status)).toEqual(['down', 'down', 'up', 'up', 'up', 'up'])
     expect(observations[0][2]).toMatchObject({ checkId: 'blocked', message: expect.stringContaining('HTTP 503') })
+    expect(observations[5][2]).toMatchObject({ checkId: 'paused', message: 'Job paused is paused. No run is expected while it is paused.' })
+})
+
+test('disabled evaluation clears its outage only after a fresh paused observation', async () => {
+    const observations: { checkId?: string, status: string, message: string }[] = []
+    for (const status of ['blocked', 'paused', 'blocked'] as const) {
+        await monitorSystemCronJobs(async () => [{
+            id: 'ti-automatic-evaluation', name: 'Independent automatic accuracy evaluation',
+            status, enabled: false, lastError: status === 'blocked' ? 'TI scraper returned 503' : null,
+        } as UnifiedScheduledJob], async (_service, _name, result) => { observations.push(result) })
+    }
+    expect(observations.map(row => row.status)).toEqual(['down', 'up', 'down'])
+    expect(observations.every(row => row.checkId === 'ti-automatic-evaluation')).toBe(true)
+    expect(observations[1].message).toContain('No run is expected')
 })
 
 test('recording one job failing does not silently skip the other jobs', async () => {
