@@ -143,3 +143,24 @@ describe("timeliness ground truth", () => {
     })).toThrow("include an explicit timezone");
   });
 });
+
+
+test("retains rejected incidents for audit without treating them as undelivered reports", () => {
+  const record = retainedRecord();
+  const incident = { id: record.incidentId, captureId: record.captureId, tenantId: record.tenantId,
+    reviewState: "rejected", reviewedBy: "reviewer_1", reviewedAt: generatedAt };
+  const snapshot = buildTimelinessWorkbench([record], { generatedAt, incidents: [incident] });
+  expect(snapshot.summary).toMatchObject({ recordCount: 1, unresolvedReferenceCount: 0, excludedMetricRecordCount: 1, completeCount: 0 });
+  expect(snapshot.items[0]).toMatchObject({ status: "excluded", exclusion: { reason: "Incident rejected", reviewedBy: "reviewer_1" }, reportReferences: [] });
+  expect(snapshot.items[0].missingStages).toContain("first_report");
+  expect(snapshot.metrics.overall.collectionToProcessingSeconds.sampleSize).toBe(0);
+  expect(snapshot.metrics.byActor).toEqual([]);
+  expect(record.reportTimestamps).toEqual([]);
+  for (const change of [{ reviewState: "needs_review" }, { reviewState: "confirmed" }, { reviewedBy: "" }, { reviewedAt: "invalid" }, { captureId: "another_capture" }, { tenantId: "another_tenant" }]) {
+    const pending = buildTimelinessWorkbench([record], { generatedAt, incidents: [{ ...incident, ...change }] });
+    expect(pending.summary.unresolvedReferenceCount).toBe(1);
+    expect(pending.items[0].status).not.toBe("excluded");
+  }
+  const global = buildTimelinessWorkbench([{ ...record, tenantId: undefined }], { generatedAt, incidents: [{ ...incident, tenantId: null }] });
+  expect(global.items[0].status).toBe("excluded");
+});

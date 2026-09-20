@@ -39,9 +39,13 @@ export class TorMetadataHttpBoundary {
       }
       if (!response.ok) throw Object.assign(new Error(`Tor metadata HTTP ${response.status}`), { httpStatus: response.status });
       const contentType = response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
-      if (contentType && !["text/html", "application/xhtml+xml", "text/plain", "application/json"].includes(contentType)) throw new Error(`Tor metadata unsupported media type: ${contentType}`);
+      const actor = request.actorName?.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const javascriptMetadata = ["application/javascript", "text/javascript"].includes(contentType ?? "")
+        && (actor === "abyssdata" && target.pathname === "/static/data.js" || actor === "atomsilo" && target.pathname === "/javascript/data.js");
+      if (contentType && !javascriptMetadata && !["text/html", "application/xhtml+xml", "text/plain", "application/json"].includes(contentType)) throw new Error(`Tor metadata unsupported media type: ${contentType}`);
       const body = await boundedText(response, maxBytes, this.requestTimeoutMs);
-      return contentType === "application/json" ? metadataFromJson(body.text, request.actorName) : metadataFromHtml(body.text, request.actorName);
+      if (javascriptMetadata) return metadataFromJavascript(body.text, request.actorName);
+      return contentType === "application/json" ? metadataFromJson(body.text, request.actorName, target.pathname) : metadataFromHtml(body.text, request.actorName);
     }
     throw new Error("Tor metadata redirect limit exceeded");
   }
@@ -88,7 +92,7 @@ function metadataFromHtml(html: string, actorName?: string) {
   const title = safeMetadataText(tag(html, "title") || tag(html, "h1")).slice(0, 300) || undefined;
   const visible = clean(html.replace(/<script\b[\s\S]*?<\/script>|<style\b[\s\S]*?<\/style>|<!--[\s\S]*?-->/gi, " "));
   const rawDescription = safeMetadataText(meta(html, "description") || visible).slice(0, 1_000) || undefined;
-  const parsed = victimNamesFromHtml(html, actorName);
+  const parsed = victimNamesFromHtml(html.replace(/<script\b[\s\S]*?<\/script>/gi, " "), actorName);
   const victimNames = parsed.victimNames;
   const description = clean(victimNames.length ? [title, ...victimNames].filter(Boolean).join(" | ") : rawDescription ?? "").slice(0, 1_000) || undefined;
   return {
@@ -236,7 +240,7 @@ function validDmyTimestamp(value: unknown): string | undefined {
 function labeled(text: string | undefined, labels: string[]): string | undefined { if (!text) return undefined; const match = text.match(new RegExp(`(?:${labels.join("|")})\\s*[:\\-]\\s*([^|;\\n]{2,120})`, "i")); return match?.[1]?.trim(); }
 function clean(value: string): string { return value.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&#39;|&apos;/g, "'").replace(/\s+/g, " ").trim(); }
 function safeVictimNames(values: string[]): string[] {
-  return [...new Set(values.map(safeMetadataText).filter((name) => name.length >= 2 && name.length <= 160 && !name.includes("[redacted-")))].slice(0, 24);
+  return [...new Set(values.map(safeMetadataText).filter((name) => name.length >= 2 && name.length <= 160 && !name.includes("[redacted-") && !/\$\{|\{\{|<%|^stay tuned for upcoming leaks[.!]*$/i.test(name)))].slice(0, 24);
 }
 function safeMetadataText(value: string): string {
   return clean(value)

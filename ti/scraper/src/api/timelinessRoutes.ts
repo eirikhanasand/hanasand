@@ -24,7 +24,7 @@ const WORKBENCH = "/v1/intel/timeliness/workbench";
 const SUMMARY = "/v1/intel/timeliness/summary";
 const REFERENCES = "/v1/intel/timeliness/references";
 const ROLES = new Set(["owner", "admin", "administrator", "system_admin", "analyst"]);
-const STATUSES = new Set<TimelinessQueueStatus>(["unresolved_reference", "anomaly", "awaiting_alert", "awaiting_delivery", "complete"]);
+const STATUSES = new Set<TimelinessQueueStatus>(["unresolved_reference", "anomaly", "awaiting_alert", "awaiting_delivery", "complete", "excluded"]);
 
 export async function handleTimelinessRequest(request: Request, options: ApiServerOptions): Promise<Response | undefined> {
   const url = new URL(request.url);
@@ -39,7 +39,7 @@ export async function handleTimelinessRequest(request: Request, options: ApiServ
     const store = options.store as unknown as TimelinessStore;
     const snapshot = (store as any).queryDeliverySnapshot
       ? await (store as any).queryDeliverySnapshot(scope.tenantId)
-      : buildTimelinessWorkbench(store.listTimelinessRecords().filter(record => inTenantScope(record, scope.tenantId)));
+      : buildTimelinessWorkbench(store.listTimelinessRecords().filter(record => inTenantScope(record, scope.tenantId)), { incidents: store.listIncidents().filter(record => inTenantScope(record, scope.tenantId)) });
     const needsReportCount = snapshot.summary.unresolvedReferenceCount;
     return json({ generatedAt: snapshot.generatedAt, summary: { recordCount: snapshot.summary.recordCount, needsReportCount,
       unresolvedReferenceCount: needsReportCount, criticalThreshold: 10, status: needsReportCount > 10 ? "critical" : "ok" } });

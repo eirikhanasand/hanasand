@@ -745,3 +745,15 @@ function approveSourceReview(store: InMemoryScraperStore, sourceId: string) {
     }
   } as any);
 }
+
+
+test("does not extract script templates or upcoming-leak notices as victims", async () => {
+  const html = '<script>const card = `<div class="news-content"><h3 class="news-title">Fake Company</h3></div>`;</script>'
+    + '<div class="news-content"><h3 class="news-title">${news.title}</h3></div>'
+    + '<div class="news-content"><h3 class="news-title">{{ company }}</h3></div>'
+    + '<div class="news-content"><h3 class="news-title">STAY TUNED FOR UPCOMING LEAKS</h3></div>'
+    + '<div class="news-content"><h3 class="news-title">Northwind Telecommunications</h3></div>';
+  const boundary = new TorMetadataHttpBoundary({ proxyUrl: "http://onion-tor:8118", fetcher: async () => new Response(html, { headers: { "content-type": "text/html" } }) });
+  const parsed = await boundary.fetchMetadata({ url: `http://${"a".repeat(56)}.onion/`, actorName: "Nasir Security" });
+  expect(parsed.victimNames).toEqual(["Northwind Telecommunications"]);
+});

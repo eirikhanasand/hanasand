@@ -2,7 +2,7 @@ import { zonedSourceTimestamp } from "./sourceFieldReportTimestamp.ts";
 import { stableId } from "../utils.ts";
 
 export type ReportRole = "actor" | "victim" | "publisher";
-export type TimelinessQueueStatus = "unresolved_reference" | "anomaly" | "awaiting_alert" | "awaiting_delivery" | "complete";
+export type TimelinessQueueStatus = "unresolved_reference" | "anomaly" | "awaiting_alert" | "awaiting_delivery" | "complete" | "excluded";
 
 type JsonObject = Record<string, unknown>;
 
@@ -51,6 +51,7 @@ export type TimelinessRecordView = {
   title?: string;
   status: TimelinessQueueStatus;
   reportRecovery?: JsonObject;
+  exclusion?: JsonObject;
   missingStages: string[];
   stages: Record<string, string | undefined>;
   provenance: Record<string, JsonObject | undefined>;
@@ -174,34 +175,41 @@ export function buildTimelinessWorkbench(records: JsonObject[], context: Timelin
     const preliminary = deriveTimeliness({ ...record, ...contextStages.values }, generatedAt);
     const provenance = stageProvenance(preliminary, sourceStageProvenance(preliminary, capture, incident, contextStages.provenance));
     const derived = deriveTimeliness(preliminary, generatedAt, provenance, sourceQualityIssues(preliminary, capture, provenance));
-    return toView(derived, {
+    const view = toView(derived, {
       actorName: actorName(incident, entities, incidentId, captureId),
       sourceName: string(source?.name),
       sourceFamily: string(object(source?.metadata)?.sourceFamily) ?? string(source?.type),
       title: string(incident?.title) ?? string(capture?.title),
     }, provenance);
+    if (incident?.reviewState === "rejected" && string(incident.reviewedBy) && validIso(incident.reviewedAt)
+      && incident.captureId === captureId && string(incident.tenantId) === string(record.tenantId)) {
+      view.status = "excluded";
+      view.exclusion = { reason: "Incident rejected", reviewedBy: incident.reviewedBy, reviewedAt: incident.reviewedAt };
+    }
+    return view;
   }).sort((left, right) => priority(left.status) - priority(right.status) || Date.parse(right.updatedAt ?? "") - Date.parse(left.updatedAt ?? ""));
-  const overall = metrics(items);
+  const eligible = items.filter((item) => item.status !== "excluded");
+  const overall = metrics(eligible);
   return {
     schemaVersion: "ti.timeliness_workbench.v2",
     generatedAt,
     summary: {
       recordCount: items.length,
-      unresolvedReferenceCount: items.filter((item) => !item.stages.first_report).length,
-      anomalyCount: items.filter((item) => item.timestampAnomalies.length).length,
+      unresolvedReferenceCount: eligible.filter((item) => !item.stages.first_report).length,
+      anomalyCount: eligible.filter((item) => item.timestampAnomalies.length).length,
       awaitingAlertCount: count(items, "awaiting_alert"),
       awaitingDeliveryCount: count(items, "awaiting_delivery"),
       completeCount: count(items, "complete"),
-      observedCoverage: stageCoverage(items, "observed"),
-      reviewedCoverage: stageCoverage(items, "reviewed"),
-      reportToAlertCoverage: coverage(items, "reportToAlertSeconds"),
-      reportToDeliveredCoverage: coverage(items, "reportToDeliveredSeconds"),
-      excludedMetricRecordCount: items.filter((item) => item.timestampAnomalies.length).length,
+      observedCoverage: stageCoverage(eligible, "observed"),
+      reviewedCoverage: stageCoverage(eligible, "reviewed"),
+      reportToAlertCoverage: coverage(eligible, "reportToAlertSeconds"),
+      reportToDeliveredCoverage: coverage(eligible, "reportToDeliveredSeconds"),
+      excludedMetricRecordCount: items.filter((item) => item.status === "excluded" || item.timestampAnomalies.length).length,
     },
     metrics: {
       overall,
-      bySourceFamily: groupedMetrics(items, (item) => item.sourceFamily ?? "unclassified"),
-      byActor: groupedMetrics(items, (item) => item.actorName ?? "unattributed"),
+      bySourceFamily: groupedMetrics(eligible, (item) => item.sourceFamily ?? "unclassified"),
+      byActor: groupedMetrics(eligible, (item) => item.actorName ?? "unattributed"),
       byStage: Object.entries(overall).map(([name, metric]) => ({ name, ...metric })),
     },
     quality: quality(items),
@@ -403,7 +411,7 @@ function metrics(items: TimelinessRecordView[]): Record<string, TimelinessMetric
 
 function validMetric(item: TimelinessRecordView, field: string): boolean {
   const value = item.latencies[field];
-  if (value === undefined || value < 0 || item.timestampAnomalies.length) return false;
+  if (item.status === "excluded" || value === undefined || value < 0 || item.timestampAnomalies.length) return false;
   const evidence = object(item.provenance.first_report);
   if (field.startsWith("report") || field.startsWith("firstReport")) return Boolean(evidence);
   return true;
@@ -472,7 +480,7 @@ function sortReferences(values: JsonObject[]): JsonObject[] {
 }
 
 function roleRank(value?: string): number { return value === "actor" ? 0 : value === "victim" ? 1 : 2; }
-function priority(value: TimelinessQueueStatus): number { return ["unresolved_reference", "anomaly", "awaiting_alert", "awaiting_delivery", "complete"].indexOf(value); }
+function priority(value: TimelinessQueueStatus): number { return ["unresolved_reference", "anomaly", "awaiting_alert", "awaiting_delivery", "complete", "excluded"].indexOf(value); }
 function count(items: TimelinessRecordView[], status: TimelinessQueueStatus): number { return items.filter((item) => item.status === status).length; }
 function coverage(items: TimelinessRecordView[], field: string): number { return items.length ? items.filter((item) => validMetric(item, field)).length / items.length : 0; }
 function elapsed(from?: string, to?: string): number | undefined { const start = Date.parse(from ?? ""), end = Date.parse(to ?? ""); return Number.isFinite(start) && Number.isFinite(end) ? Math.round((end - start) / 1000) : undefined; }

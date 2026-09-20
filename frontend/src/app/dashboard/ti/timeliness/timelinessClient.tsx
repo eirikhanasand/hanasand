@@ -5,7 +5,7 @@ import type { FormEvent, ReactNode } from 'react'
 import { AlertTriangle, CheckCircle2, Clock3, ExternalLink, LoaderCircle, RefreshCw, Search, Send } from 'lucide-react'
 import { DashboardPanel } from '@/components/dashboard/ui'
 
-type QueueStatus = 'unresolved_reference' | 'anomaly' | 'awaiting_alert' | 'awaiting_delivery' | 'complete'
+type QueueStatus = 'unresolved_reference' | 'anomaly' | 'awaiting_alert' | 'awaiting_delivery' | 'complete' | 'excluded'
 type Metric = { sampleSize: number, medianSeconds: number | null, p95Seconds: number | null, p99Seconds: number | null }
 type Item = {
     id: string
@@ -16,6 +16,7 @@ type Item = {
     sourceName?: string
     sourceFamily?: string
     title?: string
+    exclusion?: { reason: string, reviewedBy: string, reviewedAt: string }
     reportRecovery?: { status: string, attempts?: number, reason?: string, nextAttemptAt?: string }
     status: QueueStatus
     missingStages: string[]
@@ -61,6 +62,7 @@ const statuses: Array<{ value: '' | QueueStatus, label: string }> = [
     { value: 'awaiting_alert', label: 'Awaiting alert' },
     { value: 'awaiting_delivery', label: 'Awaiting delivery' },
     { value: 'complete', label: 'Complete' },
+    { value: 'excluded', label: 'Rejected incidents' },
 ]
 const stageOrder = ['observed', 'first_report', 'publication', 'collection', 'processing', 'first_visible', 'reviewed', 'alert_created', 'delivery_attempt', 'delivered']
 
@@ -201,7 +203,8 @@ function QueueRow({ item, active, onClick }: { item: Item, active: boolean, onCl
     return <button type='button' onClick={onClick} className={`grid w-full gap-1 border-b border-ui-border px-3 py-2.5 text-left hover:bg-ui-raised ${active ? 'bg-ui-raised' : ''}`}>
         <span className='flex min-w-0 items-center gap-2'><Status status={item.status} /><span className='truncate text-xs font-semibold text-ui-text'>{item.actorName || item.title || item.incidentId}</span></span>
         <span className='truncate text-[11px] text-ui-muted'>{item.sourceName || item.sourceId} · {item.title || item.incidentId}</span>
-        {!item.stages.first_report ? <div className='border-b border-ui-border px-3 py-2 text-xs text-ui-muted'>
+        {item.exclusion ? <p className='border-b border-ui-border px-3 py-2 text-xs text-ui-muted'>{item.exclusion.reason} · {item.exclusion.reviewedBy} · {date(item.exclusion.reviewedAt)}</p> : null}
+        {!item.exclusion && !item.stages.first_report ? <div className='border-b border-ui-border px-3 py-2 text-xs text-ui-muted'>
             Report lookup: {({ running: 'Collecting evidence', failed: 'Retry scheduled', unavailable: 'No verified date found' } as Record<string, string>)[item.reportRecovery?.status || ''] || 'Queued'}
             {item.reportRecovery?.attempts ? ` · ${item.reportRecovery.attempts} attempts` : ''}
             {item.reportRecovery?.reason ? <p className='mt-1'>{item.reportRecovery.reason}</p> : null}
