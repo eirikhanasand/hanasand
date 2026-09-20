@@ -1,3 +1,4 @@
+import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { describe, expect, test } from "bun:test";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { SOURCE_SPECIFIC_EXTRACTOR_VERSION } from "../pipeline/sourceSpecificExtraction.ts";
@@ -117,4 +118,15 @@ test("does not extract clock strings as IPv6 indicators", () => {
   const rawText = "First seen 23:48:58 and 00:00:00; address 2001:db8:0:0:0:0:0:1";
   const result = processCollectedItem({ sourceId: "src_public", url: "https://example.test/report", collectedAt: "2026-08-10T03:47:53.002Z", rawText, contentHash: hashContent(rawText), links: [], metadata: {}, sensitive: false });
   expect(result.indicators.filter((i: any) => i.type === "ipv6").map((i: any) => i.value)).toEqual(["2001:db8:0:0:0:0:0:1"]);
+});
+
+
+test("keeps a reviewed claim report when the collector sees its source again", () => {
+  const store = new InMemoryScraperStore();
+  const rawText = "Qilin has just published a new victim: Example Energy";
+  const result = processCollectedItem({ sourceId: "src_public", url: "https://example.test/feed", title: rawText, collectedAt: "2026-08-10T03:47:53.002Z", rawText, contentHash: hashContent(rawText), links: [], metadata: { jsonApi: true, leakSite: { actorName: "Qilin", victimName: "Example Energy", claimType: "ransomware_victim_publication" } }, sensitive: false });
+  const saved = store.savePipelineResult(result);
+  store.saveIncident({ ...saved.incident, title: "Reviewed claim", summary: "Corroborated listing; breach unconfirmed.", reviewState: "accepted", reviewedAt: "2026-09-20T12:00:00Z", reviewedBy: "hanasand-ai:operator:codex", analystReport: { reviewedAt: "2026-09-20T12:00:00Z", reviewedBy: "hanasand-ai:operator:codex" } } as any);
+  store.savePipelineResult(result);
+  expect(store.getIncident(saved.incident!.id)).toMatchObject({ title: "Reviewed claim", summary: "Corroborated listing; breach unconfirmed.", reviewState: "accepted", analystReport: { reviewedBy: "hanasand-ai:operator:codex" } });
 });

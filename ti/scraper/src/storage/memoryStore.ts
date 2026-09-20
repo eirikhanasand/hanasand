@@ -611,7 +611,8 @@ function preservedIncidentReview(previous: any, candidate: any) {
   if (Number.isFinite(candidateReviewedAt) && (!Number.isFinite(previousReviewedAt) || candidateReviewedAt > previousReviewedAt)) return {};
   const humanTerminal = ["confirmed", "rejected", "contradicted"].includes(previous.reviewState)
     && !String(previous.reviewedBy ?? "").startsWith("hanasand-ai:");
-  if (!humanTerminal && !previous.automaticReview) return {};
+  const analystReport = previous.analystReport?.reviewedAt && previous.analystReport?.reviewedBy ? previous.analystReport : undefined;
+  if (!humanTerminal && !previous.automaticReview && !analystReport) return {};
   return {
     reviewState: previous.reviewState,
     reviewedBy: previous.reviewedBy,
@@ -620,7 +621,8 @@ function preservedIncidentReview(previous: any, candidate: any) {
     actorAttribution: previous.actorAttribution,
     actorIdentityId: previous.actorIdentityId,
     actorName: previous.actorName,
-    automaticReview: previous.automaticReview
+    automaticReview: previous.automaticReview,
+    ...(analystReport ? { analystReport, title: previous.title, summary: previous.summary } : {})
   };
 }
 installMemoryStoreReplayMethods(InMemoryScraperStore); installMemoryStoreDiscoveryMethods(InMemoryScraperStore);
