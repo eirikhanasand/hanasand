@@ -492,6 +492,7 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
             capacity: slot.status,
             message: 'Sandbox capacity is available. Starting this browser.',
         }))
+        assertBrowserWorkerEgress()
         const warm = options.regular ? await browserWarmPool.take(id).catch(error => {
             console.error('Browser pool claim failed; starting a fresh worker:', error instanceof Error ? error.message : String(error))
             return null
@@ -993,10 +994,14 @@ function warmWorkerRequest(worker: WarmWorker, body?: { sessionId?: string; reti
     })
 }
 
-async function startEphemeralBrowserWorker(sessionId: string, resolution = '1280x720', warmSlot?: number) {
+function assertBrowserWorkerEgress() {
     if (process.env.NODE_ENV === 'production' && process.env.BROWSER_SANDBOX_EGRESS_FIREWALL_READY !== '1') {
         throw new Error('Browser sandbox egress firewall is not marked ready. Run ops/browser-worker/install-egress-firewall.sh before enabling production browser sessions.')
     }
+}
+
+async function startEphemeralBrowserWorker(sessionId: string, resolution = '1280x720', warmSlot?: number) {
+    assertBrowserWorkerEgress()
     const containerName = warmSlot === undefined ? `hanasand_browser_session_${sessionId.replace(/[^a-zA-Z0-9_.-]/g, '-').slice(0, 48)}_${randomUUID().slice(0, 8)}` : `hanasand_browser_warm_${warmSlot}`
     const networkName = process.env.BROWSER_SANDBOX_WORKER_NETWORK || 'hanasand_browsernet'
     const turn = browserTurnCredentials(sessionId, warmSlot === undefined ? 60 * 60 : 120 * 60)
