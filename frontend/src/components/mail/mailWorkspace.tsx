@@ -483,9 +483,15 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                             aria-pressed={selectionMode} disabled={loading || archiving}
                             onClick={() => {
                                 setSelectionMode(!selectionMode)
-                                setCheckedMessages(selectionMode ? new Set() : new Set(filteredMessages.map(message => message.id)))
+                                setCheckedMessages(new Set())
                             }}>
                             {selectionMode ? 'Unselect' : 'Select'}
+                        </button>}
+                        {selectionMode && <button type='button'
+                            className='shrink-0 px-2.5 text-[11px] font-semibold text-ui-primary hover:underline'
+                            disabled={loading || archiving || !filteredMessages.length}
+                            onClick={() => setCheckedMessages(new Set(filteredMessages.map(message => message.id)))}>
+                            Select all
                         </button>}
                     </div>
 
