@@ -1,7 +1,9 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
 let stored: Record<string, any> = {}, findings: any[] = [], fail = false
 const query = async (sql: string, p: any[] = []): Promise<any> => {
-    if (sql.includes('INSERT INTO mill_events')) { for (const item of JSON.parse(p[0])) stored[item.id] ||= { id: item.id, processing_status: 'pending', normalized: item.normalized }; return { rows: [] } }
+    if (sql.startsWith('SELECT log_key FROM mill_events')) return { rows: Object.values(stored)
+        .filter(row => p[0].includes(row.log_key) && row.processing_status === 'processed').map(row => ({ log_key: row.log_key })) }
+    if (sql.includes('INSERT INTO mill_events')) { for (const item of JSON.parse(p[0])) stored[item.id] ||= { id: item.id, log_key: item.key, processing_status: item.processing_status, normalized: item.normalized }; return { rows: [] } }
     if (sql.includes('SELECT id FROM mill_events')) return { rows: Object.values(stored).filter(row => row.processing_status !== 'processed') }
     if (sql.includes('INSERT INTO mill_findings')) {
         if (fail) throw new Error('Storage temporarily failed')
