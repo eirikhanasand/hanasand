@@ -15,6 +15,10 @@ try {
     assert.equal(recoveryRequestAllowed('DELETE', '/api/organizations/one'), false)
     assert.equal(recoveryRequestAllowed('GET', '/api/auth/logout/one'), false)
     process.env.RESILIENCE_ESSENTIAL_ONLY = '1'
+    assert.equal(recoveryRequestAllowed('GET', '/api/status'), true)
+    assert.equal(recoveryRequestAllowed('HEAD', '/api/status'), true)
+    assert.equal(recoveryRequestAllowed('POST', '/api/status'), false)
+    assert.equal(recoveryRequestAllowed('GET', '/api/status/other'), false)
     assert.equal(recoveryRequestAllowed('GET', '/api/vms'), false)
     assert.equal(recoveryRequestAllowed('GET', '/api/system/updates'), true)
     assert.equal(recoveryRequestAllowed('POST', '/api/system/updates'), false)
