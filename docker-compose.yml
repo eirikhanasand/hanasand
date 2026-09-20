@@ -87,6 +87,7 @@ services:
     environment:
       TI_SCRAPER_API_BASE: ${TI_SCRAPER_API_BASE:-http://ti-scraper:8097}
       LOG_CATCHUP_BATCH_LIMIT: ${LOG_CATCHUP_BATCH_LIMIT:-1000}
+      LOG_CATCHUP_HISTORY_LIMIT: ${LOG_CATCHUP_HISTORY_LIMIT:-1000}
       LOG_CATCHUP_INTERVAL_MS: ${LOG_CATCHUP_INTERVAL_MS:-50}
       TI_SCRAPER_SERVICE_TOKEN: ${TI_SCRAPER_SERVICE_TOKEN:-}
       DWM_WEBHOOK_LIVE_DELIVERY: ${DWM_WEBHOOK_LIVE_DELIVERY:-true}
@@ -410,7 +411,43 @@ services:
   postgres:
     image: postgres:15
     container_name: hanasand_database
-    command: ["postgres", "-c", "shared_buffers=${DB_SHARED_BUFFERS:-32GB}"]
+    # Startup arguments also apply to restored volumes, overriding old ALTER SYSTEM values.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${DB_SHARED_BUFFERS:-32GB}
+      - -c
+      - effective_cache_size=48GB
+      - -c
+      - work_mem=16MB
+      - -c
+      - maintenance_work_mem=1GB
+      - -c
+      - max_wal_size=32GB
+      - -c
+      - checkpoint_timeout=15min
+      - -c
+      - checkpoint_completion_target=0.9
+      - -c
+      - wal_compression=zstd
+      - -c
+      - wal_buffers=16MB
+      - -c
+      - max_slot_wal_keep_size=64GB
+      - -c
+      - gin_pending_list_limit=4MB
+      - -c
+      - bgwriter_lru_maxpages=100
+      - -c
+      - bgwriter_delay=200ms
+      - -c
+      - bgwriter_lru_multiplier=2
+      - -c
+      - fsync=on
+      - -c
+      - full_page_writes=on
+      - -c
+      - synchronous_commit=on
     # Parallel queries share memory here; Docker's 64 MiB default exhausts it.
     shm_size: "2gb"
     mem_limit: 96g

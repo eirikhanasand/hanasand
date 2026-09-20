@@ -1,0 +1,39 @@
+# Restore and verify the replica volume and its replication credentials first.
+# Select exactly one profile: docker compose -f ... --profile ovhcloud up -d
+# Never use the primary's 32 GB cache configuration on the smaller OVH host.
+x-replica: &replica
+  image: ${POSTGRES_REPLICA_IMAGE:?Set the pinned PostgreSQL image used by the primary}
+  network_mode: host
+  restart: unless-stopped
+  cpus: "1.0"
+  shm_size: 64m
+  stop_grace_period: 15m
+  # Refuse an empty volume rather than accidentally creating a writable database.
+  entrypoint: [sh, -ec, 'test -s /var/lib/postgresql/data/PG_VERSION; test -f /var/lib/postgresql/data/standby.signal; exec /usr/local/bin/docker-entrypoint.sh "$$@"', --]
+
+services:
+  inspur-standby:
+    <<: *replica
+    profiles: [inspur]
+    container_name: hanasand-db-standby
+    mem_limit: 16g
+    memswap_limit: 18g
+    volumes: [inspur-data:/var/lib/postgresql/data]
+    command: [postgres, -p, "18502", -c, listen_addresses=127.0.0.1, -c, shared_buffers=512MB, -c, fsync=on, -c, full_page_writes=on, -c, synchronous_commit=on]
+
+  ovh-standby:
+    <<: *replica
+    profiles: [ovhcloud]
+    container_name: hanasand-db
+    mem_limit: 26g
+    memswap_limit: 26g
+    volumes: [ovh-data:/var/lib/postgresql/data]
+    command: [postgres, -p, "18506", -c, listen_addresses=127.0.0.1, -c, shared_buffers=16GB, -c, max_wal_size=32GB, -c, checkpoint_timeout=15min, -c, fsync=on, -c, full_page_writes=on, -c, synchronous_commit=on]
+
+volumes:
+  inspur-data:
+    external: true
+    name: ${INSPUR_STANDBY_VOLUME:-hanasand_resilience_pg_local}
+  ovh-data:
+    external: true
+    name: ${OVH_STANDBY_VOLUME:-hanasand_resilience_pg_case_20260920}

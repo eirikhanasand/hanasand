@@ -18,6 +18,7 @@ if [ "$mode" != --guest ]; then
     install -d -m 0755 /usr/local/lib/hanasand-log-collector
     install -m 0755 "$0" /usr/local/lib/hanasand-log-collector/install.sh
     install -m 0755 "$(dirname "$0")/retention.py" /usr/local/lib/hanasand-log-collector/retention.py
+    install -m 0644 "$(dirname "$0")/ovh-memory.conf" /usr/local/lib/hanasand-log-collector/ovh-memory.conf
 fi
 # Persistent exec auditing includes all users, services and noninteractive executions.
 cat > /etc/audit/rules.d/hanasand-exec.rules <<'RULES'
@@ -53,6 +54,8 @@ WantedBy=multi-user.target
 UNIT
 # Audit replay must not compete at equal disk priority with the OVH replica.
 if [ "$host" = ovhcloud ]; then
+    install -m 0644 "$(dirname "$0")/ovh-memory.conf" /etc/sysctl.d/99-hanasand-memory.conf
+    sysctl -p /etc/sysctl.d/99-hanasand-memory.conf
     install -d -m 0755 /etc/systemd/system/hanasand-log-collector.service.d
     cat > /etc/systemd/system/hanasand-log-collector.service.d/io-priority.conf <<'PRIORITY'
 [Service]
