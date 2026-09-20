@@ -11,7 +11,7 @@ const databaseUrl = Bun.env.TI_TEST_DATABASE_URL;
   try {
     for (const [label, at] of [["newest", "2026-09-19T12:00:00Z"], ["older", "2026-09-19T11:00:00Z"]]) {
       const id = `${marker}-${label}`;
-      store.saveSource(source({ id, url: `https://example.test/${id}`, name: `Victim feed ${marker}`, health: { status: "healthy", lastSuccessAt: at } }));
+      store.saveSource(source({ id, url: `https://example.test/${id}`, name: `Victim feed ${marker}`, metadata: { exposureQueueSource: true }, health: { status: "healthy", lastSuccessAt: at } }));
       store.saveCapture(fixtureCapture({ id: `capture_${id}`, contentHash: `hash_${id}`, sourceId: id, collectedAt: at, publishedAt: at,
         metadata: { leakSite: { actorName: "Example", victimName: id } } }));
     }
@@ -28,6 +28,16 @@ const databaseUrl = Bun.env.TI_TEST_DATABASE_URL;
       expect(new Date(String(page.latestCollectionCheckAt)).toISOString()).toBe(checkedAt);
       expect(page.total).toBe(2);
     }
+    const partial = await PostgresScraperStore.create({ databaseUrl, hydrate: false });
+    try {
+      await partial.queryExposureQueuePage(input);
+      const nextCheck = "2026-09-20T03:00:00.000Z";
+      partial.saveSource({ ...store.getSource(`${marker}-older`)!, health: { status: "healthy", lastSuccessAt: nextCheck } });
+      await partial.flush();
+      await Promise.all([...(partial as any).exposureQueuePageCache.values()].map((entry: any) => entry.refreshing));
+      expect(new Date(String((await partial.queryExposureQueuePage(input)).latestCollectionCheckAt)).toISOString()).toBe(nextCheck);
+    } finally { await partial.close(); }
+
   } finally { await store.close(); }
 });
 
