@@ -103,3 +103,49 @@ test('service cases retain a daily allowance through changing details, severity,
  const remaining=(await q("SELECT MAX(next_attempt_at)>NOW()+interval '23 hours 59 minutes' AS daily FROM monitoring_issue_notifications WHERE destination='test' AND issue_id IN (SELECT id FROM monitoring_issues WHERE automation_id=$1)",[a.id])).rows[0]
  expect(remaining.daily).toBe(true)
 })
+
+test('TI health and transport failures merge into the original case, preserve evidence and recover together', async () => {
+ const {claimMonitoringNotification:claim}=await import('../src/utils/monitoringIssues.ts')
+ const {correlationKey}=await import('../src/utils/monitoringCorrelation.ts')
+ const a={id:'ti-enrichment',owner_id:'ti-owner',organization_id:null,target_url:'system:ti-enrichment',monitoring_type:'json',action_type:'agent_prompt',notify_on:'failure',notification_destinations:['test'],json_rule:{path:'enrichment.critical',aggregate:'first',operator:'eq',value:true}} as any
+ await q('INSERT INTO agent_automations(id,owner_id,target_url,monitoring_type,action_type,notification_destinations,json_rule) VALUES($1,$2,$3,$4,$5,$6,$7)',[a.id,a.owner_id,a.target_url,a.monitoring_type,a.action_type,a.notification_destinations,a.json_rule])
+ // Production monitors are loaded from JSONB, including its field ordering.
+ a.json_rule=(await q('SELECT json_rule FROM agent_automations WHERE id=$1',[a.id])).rows[0].json_rule
+ const messages=['JSON threshold exceeded: enrichment.critical = true; alert eq true (first).', 'timeout exceeded when trying to connect Failed after 1 attempt.', 'Unable to connect. Is the computer able to access the url? Failed after 1 attempt.']
+ const originalKey=await correlationKey(q,a,fingerprint(a,'failure',messages[0]!), 'failure',messages[0]!)
+ const ids:string[]=[]
+ for (const [index,message] of messages.entries()) {
+  const id=(await q("INSERT INTO monitoring_issues(automation_id,fingerprint,correlation_key,kind,summary,comments) VALUES($1,$2,$3,'failure',$4,$5) RETURNING id",[a.id,'ti-legacy-'+index,index===0?originalKey:'ti-key-'+index,message,JSON.stringify([{id:'comment-'+index,body:message}])])).rows[0].id
+  ids.push(id)
+  await q('INSERT INTO monitoring_issue_checks VALUES($1,$2,true)',[id,a.id])
+  await q("INSERT INTO agent_automation_runs(id,automation_id,status,issue_id,started_at,completed_at) VALUES($1,$2,'failed',$3,NOW()-interval '3 minutes',NOW()-interval '3 minutes')",['ti-old-'+index,a.id,id])
+  await q("INSERT INTO monitoring_issue_messages(issue_id,message_id,delivered_at,message) VALUES($1,$2,NOW(),$3)",[id,'ti-receipt-'+index,JSON.stringify({content:message})])
+ }
+ await q("INSERT INTO monitoring_issue_notifications(issue_id,destination,next_attempt_at,delivered_at) VALUES($1,'test',NOW()+interval '23 hours',NOW()-interval '1 hour')",[ids[2]])
+ expect(await claim(a,ids[0]!,'test')).toBe(false)
+ expect(await merge([a.id])).toEqual(ids.slice(1).map(id=>({from:'HA-'+id,to:'HA-'+ids[0]})))
+ expect(await merge([a.id])).toEqual([])
+ expect((await load(a.id))).toHaveLength(1)
+ expect((await load(a.id))[0]).toMatchObject({id:ids[0],occurrences:3,resolvedAt:null})
+ expect((await load(a.id))[0].notifications).toHaveLength(3)
+ expect((await q('SELECT comments FROM monitoring_issues WHERE id=$1',[ids[0]])).rows[0].comments).toHaveLength(3)
+ expect((await q('SELECT merged_into FROM monitoring_issues WHERE id=ANY($1::bigint[])',[ids.slice(1)])).rows.every(row=>row.merged_into===ids[0])).toBe(true)
+ expect((await q('SELECT count(*)::int n FROM agent_automation_runs WHERE issue_id=$1',[ids[0]])).rows[0].n).toBe(3)
+ const before=sent
+ async function event(id:string,message:string,kind:'failure'|null='failure') {
+  await q('INSERT INTO agent_automation_runs(id,automation_id,status) VALUES($1,$2,$3)',[id,a.id,kind?'failed':'completed'])
+  await record(a,id,kind,message)
+ }
+ await Promise.all(messages.concat('connect ECONNREFUSED ti:8097').map((message,index)=>event('ti-new-'+index,message)))
+ expect((await load(a.id))).toHaveLength(1)
+ expect((await load(a.id))[0].occurrences).toBe(7)
+ expect(sent).toBe(before)
+ expect(await claim(a,ids[0]!,'test')).toBe(false)
+ await event('ti-recovered','Enrichment is healthy.',null)
+ expect((await load(a.id))[0].resolvedAt).not.toBeNull()
+ await event('ti-recurred',messages[1]!)
+ expect((await load(a.id))[0]).toMatchObject({id:ids[0],occurrences:8,resolvedAt:null})
+ expect(sent).toBe(before)
+ await q("UPDATE monitoring_issue_notifications SET next_attempt_at=NOW()-interval '1 second' WHERE issue_id=ANY($1::bigint[])",[ids])
+ expect((await Promise.all([claim(a,ids[0]!,'test'),claim(a,ids[0]!,'test')])).filter(Boolean)).toHaveLength(1)
+})

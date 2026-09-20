@@ -3,9 +3,10 @@ import type { AutomationRow } from './automations.ts'
 import type { queryOnce } from './db.ts'
 
 export const monitoringScope = (a: AutomationRow) => JSON.stringify([a.owner_id || a.id, a.organization_id || null])
+export const isIntelHealthCheck = (a: Pick<AutomationRow, 'target_url'>) => ['system:ti-delivery', 'system:ti-collection', 'system:ti-enrichment'].includes(a.target_url || '')
 export async function correlationKey(query: typeof queryOnce, a: AutomationRow, fingerprint: string, kind: string, message: string) {
     // A transport refusal identifies a socket, not a URL path. HTTP/application errors retain the full fingerprint.
-    const socket = a.target_url?.startsWith('system:cron:') ? null : message.match(/\bconnect (ECONNREFUSED|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH) (\S+:\d+)/)
+    const socket = a.target_url?.startsWith('system:cron:') || isIntelHealthCheck(a) ? null : message.match(/\bconnect (ECONNREFUSED|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH) (\S+:\d+)/)
     let resources: unknown[] = []
     if ((await query('SELECT to_regclass(\'public.monitoring_case_vms\') AS relation')).rows[0]?.relation) {
         resources = (await query('SELECT vm_name FROM monitoring_case_vms WHERE automation_id=$1 AND target_url=$2 ORDER BY vm_name', [a.id, a.target_url])).rows.map(row => row.vm_name)

@@ -23,6 +23,19 @@ test('changing threshold observations share one case; source failures remain sep
     expect(fingerprint('JSON source unavailable')).not.toBe(fingerprint('JSON threshold exceeded: value = 93'))
 })
 
+test('TI checks keep one identity through health and transport failures without combining different rules', () => {
+    const monitor = { target_url: 'system:ti-enrichment', monitoring_type: 'json' as const,
+        json_rule: normalizeJsonRule({ path: 'enrichment.critical', aggregate: 'first', operator: 'eq', value: true }) }
+    const health = monitoringIssueFingerprint(monitor, 'failure', 'JSON threshold exceeded: enrichment.critical = true')
+    for (const message of ['timeout exceeded when trying to connect Failed after 1 attempt.',
+        'Unable to connect. Is the computer able to access the url? Failed after 1 attempt.',
+        'connect ECONNREFUSED ti:8097', 'Enrichment has added no new facts in the past hour.']) {
+        expect(monitoringIssueFingerprint(monitor, 'failure', message)).toBe(health)
+    }
+    expect(monitoringIssueFingerprint({ ...monitor, target_url: 'system:ti-collection' }, 'failure', 'Unavailable')).not.toBe(health)
+    expect(monitoringIssueFingerprint({ ...monitor, json_rule: { ...monitor.json_rule, path: 'collection.critical' } }, 'failure', 'Unavailable')).not.toBe(health)
+})
+
 test('temperature threshold evaluates actual sensor values, including sensors without hardware limits', () => {
     const temperature = normalizeJsonRule({ path: 'host.temperatures.*.value', aggregate: 'max', operator: 'gt', value: 50 })
     expect(evaluateJsonRule({ host: { temperatures: [{ value: 30, margin: null }, { value: 50, margin: 34 }] } }, temperature)).toEqual({ exceeded: false, observed: 50 })
