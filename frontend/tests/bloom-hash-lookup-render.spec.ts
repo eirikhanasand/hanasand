@@ -22,7 +22,7 @@ test('Bloom hash lookup checks exposure without collecting a raw password', asyn
     await expect(page.getByRole('heading', { name: 'Has your password been leaked?' })).toBeVisible()
     await expect(page.locator('input[type="password"]')).toHaveCount(0)
     await expect(page.getByText('Paste a SHA-1 hash. We check it against leaked passwords.').filter({ visible: true })).toBeVisible()
-    await expect(page.getByText('printf %s \'HelloWorld\' | shasum').filter({ visible: true })).toBeVisible()
+    await expect(page.getByText('printf %s \'superman123\' | shasum').filter({ visible: true })).toBeVisible()
     await expect(page.getByText('Bloom prefix boundary')).toHaveCount(0)
     await expect(page.getByText('Exact matches only.', { exact: false })).toHaveCount(0)
 
@@ -62,7 +62,7 @@ test('local hash command is distinct and copyable on mobile', async ({ page }) =
     const command = page.getByRole('region', { name: 'Create a hash locally' })
     await command.getByRole('button', { name: 'Copy code' }).click()
     await expect(command.getByRole('button', { name: 'Copy code' })).toHaveText('Copied')
-    await expect(page.locator('html')).toHaveAttribute('data-copied-command', 'printf %s \'HelloWorld\' | shasum')
+    await expect(page.locator('html')).toHaveAttribute('data-copied-command', 'printf %s \'superman123\' | shasum')
     const colors = await command.evaluate(element => ({
         panel: getComputedStyle(element).backgroundColor,
         code: getComputedStyle(element.querySelector('pre')!).backgroundColor,

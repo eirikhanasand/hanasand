@@ -4,7 +4,7 @@ import { buildRouteMetadata } from '../seo'
 import { Terminal } from 'lucide-react'
 import CopyCodeButton from '../developers/copyCodeButton'
 
-const hashCommand = 'printf %s \'HelloWorld\' | shasum'
+const hashCommand = 'printf %s \'superman123\' | shasum'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Bloom Hash Exposure Lookup',
