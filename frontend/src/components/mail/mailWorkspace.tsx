@@ -594,7 +594,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                     srcDoc={renderedHtml}
                                 />
                             ) : selectedMessage.textBody ? (
-                                <article className='min-w-0 wrap-anywhere rounded-lg border border-ui-border px-4 py-3 xl:min-h-40 xl:flex-1 xl:overflow-y-auto text-[13px] leading-6 whitespace-pre-wrap text-ui-text'>
+                                <article className='min-w-0 wrap-anywhere rounded-lg border border-ui-border px-4 py-3 xl:min-h-40 xl:flex-1 xl:overflow-y-auto text-xs leading-5 whitespace-pre-wrap text-ui-text'>
                                     {selectedMessage.textBody}
                                 </article>
                             ) : null}

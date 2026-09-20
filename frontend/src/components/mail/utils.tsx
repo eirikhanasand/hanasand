@@ -177,7 +177,8 @@ export function buildMailFrameHtml(html: string, theme: 'light' | 'dark' = 'ligh
     }
     body {
       padding: 12px;
-      line-height: 1.65;
+      font-size: 14px;
+      line-height: 1.6;
     }
     img, iframe, video {
       max-width: 100%;
