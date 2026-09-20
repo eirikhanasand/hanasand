@@ -7,6 +7,12 @@ image='hanasand-resilience-api:'+release
 root='/home/hanasand/hanasand'
 lock=open('/tmp/hanasand-frontend-deploy.lock','a')
 fcntl.flock(lock,fcntl.LOCK_EX)
+# Worker startup changes schemas. Queuing those changes behind an online index
+# build also queues ordinary reads, even though the build itself allows them.
+index_builds=subprocess.check_output(['docker','exec','hanasand_database','psql','-X','-At','-v','ON_ERROR_STOP=1','-U','hanasand','-d','hanasand',
+    '-c',"SELECT count(*) FROM pg_stat_progress_create_index WHERE datname=current_database()"],text=True).strip()
+if index_builds != '0':
+    raise SystemExit('Wait for the database index build to finish before restarting the scheduled worker. The existing worker has been left running.')
 original=json.loads(subprocess.check_output(['docker','inspect','hanasand_api']))[0]
 settings=dict(value.split('=',1) for value in original['Config']['Env'])
 # Collectors receive a credential that authenticates only log ingestion.
