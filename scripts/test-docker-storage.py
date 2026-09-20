@@ -27,6 +27,20 @@ class StorageTest(unittest.TestCase):
         self.assertEqual([r['id'] for r in storage.image_inventory(images, [], 2_000_000) if r['eligible']], ['c'])
 
 class CleanupStateTest(unittest.TestCase):
+    def test_snapshot_only_requests_images_and_cache(self):
+        with patch.object(storage, 'docker', side_effect=[{}, []]) as docker:
+            storage.snapshot()
+        self.assertEqual(docker.call_args_list[0].args[0], '/system/df?type=build-cache&type=image')
+
+    def test_successful_refresh_clears_only_refresh_error(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(storage, 'STATE_DIR', Path(directory)):
+            root = Path(directory)
+            storage.save(root / 'status.json', {'error': 'scan failed', 'errorStage': 'refresh', 'lastSuccessAt': 'previous-success'})
+            with patch.object(storage, 'snapshot', return_value={'checkedAt': 'later'}):
+                storage.perform()
+            self.assertIsNone(storage.read(root / 'status.json')['error'])
+            self.assertEqual(storage.read(root / 'status.json')['lastSuccessAt'], 'previous-success')
+
     def test_metrics_refresh_leaves_cleanup_queued(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(storage, 'STATE_DIR', Path(directory)):
             root = Path(directory)
