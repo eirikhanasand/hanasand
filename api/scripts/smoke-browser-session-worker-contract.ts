@@ -61,6 +61,7 @@ assert.match(dockerfile, /selkies-gstreamer\/gst-py-example@sha256:[a-f0-9]{64} 
 assert.match(dockerfile, /google-chrome-stable_current_amd64\.deb/, 'Chromium should live only in the browser-worker image target')
 assert.match(dockerfile, /object-fit: contain/, 'Selkies should preserve the remote display aspect ratio instead of cropping it')
 assert.match(dockerfile, /apt-get purge -y git/, 'browser-worker image should strip operational source-control tools')
+assert.match(ws, /SELKIES_ENCODER=x264enc/, 'browser worker should use low-latency H.264 for 60 FPS software encoding')
 assert.match(ws, /SELKIES_FRAMERATE=60/, 'browser worker should target 60 FPS streaming')
 assert.match(ws, /SELKIES_CONGESTION_CONTROL=true/, 'browser stream should adapt bitrate to cellular congestion')
 assert.match(onionWs, /resizeBrowserDisplay\(viewport\)/, 'the captured X display should follow the selected browser resolution')

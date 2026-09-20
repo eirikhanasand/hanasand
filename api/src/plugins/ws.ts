@@ -999,7 +999,7 @@ async function startEphemeralBrowserWorker(sessionId: string, resolution = '1280
             ...(warmSlot === undefined ? [] : [`BROWSER_SANDBOX_POOL_TOKEN=${randomUUID()}`]),
             'SELKIES_ENABLE_BASIC_AUTH=false',
             'SELKIES_ENABLE_RESIZE=false',
-            'SELKIES_ENCODER=vp8enc',
+            'SELKIES_ENCODER=x264enc',
             'SELKIES_FRAMERATE=60',
             'SELKIES_CONGESTION_CONTROL=true',
             'SELKIES_VIDEO_BITRATE=4000',
