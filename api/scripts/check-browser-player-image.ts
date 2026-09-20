@@ -48,3 +48,50 @@ for (const failure of [null, 'AbortError', 'NotAllowedError']) {
     assert.equal(prompts, failure === 'NotAllowedError' ? 1 : 0)
 }
 console.log('Installed player verified: current watchdog, muted inline video, separate audio consent, no playback reset.')
+
+const inputSource = read('input.js')
+const touchMethod = inputSource.slice(inputSource.indexOf('    _touch(event) {'), inputSource.indexOf('\n    /**', inputSource.indexOf('    _touch(event) {'))).trim()
+assert.equal(touchMethod, readFileSync(new URL('../browser-worker/touch-input.js', import.meta.url), 'utf8').trim(), 'Installed touch handler must match this release')
+assert.match(inputSource, /addListener\(this.element, 'touchstart'/)
+assert.match(inputSource, /addListener\(this.element, 'touchcancel'/)
+assert.match(inputSource, /name.startsWith\('touch'\) \? \{ passive: false \}/)
+const messages: number[][] = []
+const input = runInNewContext(`({${touchMethod}})`)
+Object.assign(input, { buttonMask: 0, _windowMath: () => {}, _clientToServerX: (x: number) => x,
+    _clientToServerY: (y: number) => y, send: (message: string) => messages.push(message.split(',').slice(1).map(Number)) })
+const touch = (type: string, y: number, count = 1) => input._touch({ type, cancelable: true, preventDefault() {},
+    touches: Array.from({ length: type === 'touchend' ? 0 : count }, () => ({})), changedTouches: [{ identifier: 7, clientX: 100, clientY: y }] })
+touch('touchstart', 200)
+assert.equal(messages.length, 0, 'Touch down must not hold the mouse button')
+touch('touchmove', 176)
+assert.deepEqual(messages, [[100, 176, 8, 2], [100, 176, 0, 0]], 'First swipe movement sends scroll immediately, without timers')
+touch('touchend', 176)
+assert.equal(messages.length, 2, 'Swipes must not click or select text on release')
+messages.length = 0
+touch('touchstart', 200)
+touch('touchmove', 224)
+assert.equal(messages[0][2], 16, 'Downward finger movement scrolls up')
+touch('touchcancel', 224)
+assert.equal(input._touchGesture, null)
+messages.length = 0
+touch('touchstart', 200)
+touch('touchmove', 202)
+touch('touchend', 202)
+assert.deepEqual(messages, [[100, 202, 1, 0], [100, 202, 0, 0]], 'Tap remains a single click despite small finger jitter')
+messages.length = 0
+touch('touchstart', 200)
+touch('touchstart', 200, 2)
+touch('touchend', 200)
+assert.equal(messages.length, 0, 'Multitouch must not leave a pressed button or accidental click')
+const mouseMethod = inputSource.match(/ {4}_mouseButtonMovement\(event\) \{[\s\S]+?(?=\n {4}\/\*\*)/)?.[0]
+assert(mouseMethod)
+const mouse = runInNewContext(`({${mouseMethod}})`, { document: { pointerLockElement: null } })
+Object.assign(mouse, { buttonMask: 0, x: 100, y: 200, _suppressTouchMouseUntil: Date.now() + 800,
+    send: (message: string) => messages.push(message.split(',').slice(1).map(Number)) })
+mouse._mouseButtonMovement({ type: 'mousedown', button: 0, preventDefault() {} })
+assert.equal(messages.length, 0, 'Synthetic mouse events after a tap must not duplicate input')
+mouse._suppressTouchMouseUntil = 0
+mouse._mouseButtonMovement({ type: 'mousedown', button: 0, preventDefault() {} })
+mouse._mouseButtonMovement({ type: 'mouseup', button: 0, preventDefault() {} })
+assert.deepEqual(messages, [[100, 200, 1, 0], [100, 200, 0, 0]], 'Hybrid devices retain ordinary mouse clicks')
+console.log('Installed touch input verified: immediate scrolling, tap click, cancellation, multitouch and hybrid mouse.')

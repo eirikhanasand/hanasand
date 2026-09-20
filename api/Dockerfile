@@ -73,6 +73,7 @@ COPY browser-worker/supervisor.conf /etc/supervisor/conf.d/browser-worker.conf
 COPY browser-worker/start.sh /usr/local/bin/hanasand-browser-worker
 COPY browser-worker/reconnect-watchdog.js /opt/gst-web/reconnect-watchdog.js
 COPY browser-worker/patch-stream-input.py /tmp/patch-stream-input.py
+COPY browser-worker/touch-input.js /tmp/touch-input.js
 COPY browser-worker/patch-stream-playback.py /tmp/patch-stream-playback.py
 RUN python3 /tmp/patch-stream-input.py \
     && python3 /tmp/patch-stream-playback.py \
