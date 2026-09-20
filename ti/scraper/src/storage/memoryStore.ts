@@ -27,7 +27,11 @@ const mapValues = <T>(map: Map<string, T>) => [...map.values()];
 const put = <T extends { id: string }>(map: Map<string, T>, item: T) => (map.set(item.id, item), item);
 const indexKeys = (index: Map<string, Set<string>>, id: string, previous: unknown[], next: unknown[]) => {
   for (const key of previous.map(String)) { const ids = index.get(key); ids?.delete(id); if (!ids?.size) index.delete(key); }
-  for (const key of next.map(String)) index.set(key, new Set([...(index.get(key) ?? []), id]));
+  for (const key of next.map(String)) {
+    let ids = index.get(key);
+    if (!ids) index.set(key, ids = new Set());
+    ids.add(id);
+  }
 };
 const indexedValues = <T extends { id: string; tenantId?: string }>(index: Map<string, Set<string>>, keys: Iterable<string>, records: Map<string, T>, tenantId?: string) => {
   const ids = new Set([...keys].flatMap((key) => [...(index.get(key) ?? [])]));

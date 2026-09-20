@@ -9,6 +9,26 @@ import { fixtureCapture } from "./helpers/apiFixtures.ts";
 import { source } from "./helpers/plannerFixtures.ts";
 
 describe("search capture index", () => {
+  test("hydrates a large single-source archive within the startup budget", () => {
+    class RestoredStore extends InMemoryScraperStore {
+      restore(capture: ReturnType<typeof fixtureCapture>) { return this.hydrateCaptureSnapshot(capture); }
+    }
+    const store = new RestoredStore();
+    const sourceRecord = source({ id: "bulk_restore_source" });
+    store.saveSource(sourceRecord);
+    const started = performance.now();
+    for (let i = 0; i < 30_000; i++) {
+      store.restore(fixtureCapture({ id: `restored_${i}`, sourceId: sourceRecord.id, body: undefined, contentHash: `hash_${i}` }));
+    }
+    expect(performance.now() - started).toBeLessThan(5_000);
+    expect(store.listCaptures()).toHaveLength(30_000);
+    const revision = store.listSearchCaptureChanges().revision;
+    store.saveSource({ ...sourceRecord, name: "Updated restored source" });
+    const changes = store.listSearchCaptureChanges(revision).captures;
+    expect(changes).toHaveLength(30_000);
+    expect(new Set(changes.map(capture => capture.id)).size).toBe(30_000);
+  });
+
   test("does not build an in-memory index for PostgreSQL-backed search", () => {
     const store = {
       usesPostgresSearchIndex: false,
