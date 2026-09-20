@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 test('Bloom hash lookup checks exposure without collecting a raw password', async ({ page }) => {
+    let count = 23
     await page.route('**/api/pwned', async (route) => {
         const body = route.request().postDataJSON() as { prefix?: string }
         expect(body).toEqual({ prefix: '5BAA6' })
@@ -11,7 +12,7 @@ test('Bloom hash lookup checks exposure without collecting a raw password', asyn
             body: JSON.stringify({
                 schemaVersion: 'bloom_hash.range_proxy.v1',
                 prefix: '5BAA6',
-                range: '1E4C9B93F3F0682250B6CF8331B7EE68FD8:3303003',
+                range: `1E4C9B93F3F0682250B6CF8331B7EE68FD8:${count}`,
             }),
         })
     })
@@ -34,9 +35,19 @@ test('Bloom hash lookup checks exposure without collecting a raw password', asyn
     await page.getByRole('button', { name: 'Run Bloom lookup' }).click()
 
     await expect(page.getByText('Exact match found')).toBeVisible()
-    await expect(page.getByText(/This hash appears 3,303,003 times in the Bloom exposure index\./)).toBeVisible()
-    await expect(page.getByText(/The full hash and underlying secret were not sent to Hanasand/i)).toBeVisible()
+    await expect(page.getByText('Result', { exact: true })).toBeVisible()
+    await expect(page.getByText('Hash matched leaked password.')).toBeVisible()
+    await expect(page.getByText('This password has been breached 23 times.')).toBeVisible()
+    await expect(page.getByText(/Privacy check:|Next action:|Rotate the underlying secret/)).toHaveCount(0)
     await expect(command).toBeVisible()
+
+    await page.getByRole('button', { name: 'Check another hash' }).click()
+    await expect(page.getByLabel('SHA-1 hash').filter({ visible: true })).toHaveValue('')
+    count = 0
+    await page.getByLabel('SHA-1 hash').filter({ visible: true }).fill('5baa61e4c9b93f3f0682250b6cf8331b7ee68fd8')
+    await page.getByRole('button', { name: 'Run Bloom lookup' }).click()
+    await expect(page.getByText('No exact match found', { exact: true })).toBeVisible()
+    await expect(page.getByText(/This password has been breached|Privacy check:|Next action:/)).toHaveCount(0)
 })
 
 test('local hash command is distinct and copyable on mobile', async ({ page }) => {

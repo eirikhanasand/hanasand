@@ -3,10 +3,9 @@ import { CheckCircle2, ShieldAlert } from 'lucide-react'
 type PwnedSearchProps = {
     breached: boolean
     breachCount: number | null
-    checkedPrefix?: string
 }
 
-export default function PwnedSearch({ breached, breachCount, checkedPrefix }: PwnedSearchProps) {
+export default function PwnedSearch({ breached, breachCount }: PwnedSearchProps) {
     const count = breachCount || 0
 
     return (
@@ -18,12 +17,9 @@ export default function PwnedSearch({ breached, breachCount, checkedPrefix }: Pw
                         <div className='grid gap-1'>
                             <p className='font-semibold'>Exact match found</p>
                             <p className='leading-6'>
-                                This hash appears {count.toLocaleString()} {count === 1 ? 'time' : 'times'} in the Bloom exposure index. Rotate the underlying secret wherever it was used.
+                                This password has been breached {count.toLocaleString()} {count === 1 ? 'time' : 'times'}.
                             </p>
                         </div>
-                    </div>
-                    <div className='rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-xs leading-5 text-ui-text'>
-                        Next action: replace it with a unique value from your secret manager, then check dependent accounts or tokens.
                     </div>
                 </div>
             ) : (
@@ -35,9 +31,6 @@ export default function PwnedSearch({ breached, breachCount, checkedPrefix }: Pw
                     </div>
                 </div>
             )}
-            <p className='text-xs leading-5 text-ui-muted'>
-                Privacy check: prefix {checkedPrefix || '-----'} was sent to the range API. The full hash and underlying secret were not sent to Hanasand.
-            </p>
         </div>
     )
 }

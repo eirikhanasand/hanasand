@@ -12,7 +12,6 @@ export default function PwnedPageClient() {
     const [didSearch, setDidSearch] = useState(false)
     const [breached, setBreached] = useState(false)
     const [breachCount, setBreachCount] = useState<number | null>(null)
-    const [checkedPrefix, setCheckedPrefix] = useState('')
     const [busy, setBusy] = useState(false)
     const { condition: error, setCondition: setError } = useClearStateAfter()
 
@@ -29,7 +28,6 @@ export default function PwnedPageClient() {
             const result = await postBloomHashLookup(hashInput)
             setBreached(!result.ok)
             setBreachCount(result.count)
-            setCheckedPrefix(result.checkedPrefix || '')
             setDidSearch(true)
             setHashInput('')
         } catch (error) {
@@ -44,7 +42,6 @@ export default function PwnedPageClient() {
         setBreached(false)
         setDidSearch(false)
         setBreachCount(null)
-        setCheckedPrefix('')
         setError(null)
     }
 
@@ -55,11 +52,11 @@ export default function PwnedPageClient() {
                     <div className='grid gap-1'>
                         <div className='flex items-center gap-2 text-lg font-semibold text-ui-text'>
                             <Eye className={`h-5 w-5 ${didSearch ? breached ? 'text-ui-danger' : 'text-ui-success' : 'text-ui-primary'}`} />
-                            {didSearch ? 'Hash exposure result' : 'Check Bloom hash exposure'}
+                            {didSearch ? 'Result' : 'Check Bloom hash exposure'}
                         </div>
                         <p className='text-sm leading-6 text-ui-muted'>
                             {didSearch
-                                ? breached ? 'The submitted hash matched the Bloom-indexed exposure range.' : 'No exact hash match was found in the checked Bloom range.'
+                                ? breached ? 'Hash matched leaked password.' : 'No exact hash match was found in the checked Bloom range.'
                                 : 'Submit a complete SHA-1 hash. Only the first five characters leave this page.'}
                         </p>
                     </div>
@@ -71,7 +68,7 @@ export default function PwnedPageClient() {
                 </div>
 
                 {didSearch ? (
-                    <PwnedSearch breached={breached} breachCount={breachCount} checkedPrefix={checkedPrefix} />
+                    <PwnedSearch breached={breached} breachCount={breachCount} />
                 ) : (
                     <form onSubmit={handleSubmit} className='grid gap-3'>
                         <ErrorNotice compact message={error} />
@@ -110,7 +107,7 @@ export default function PwnedPageClient() {
                             className='inline-flex h-10 items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary'
                         >
                             <ArrowLeft className='h-4 w-4' />
-                            Check another SHA-1 hash
+                            Check another hash
                         </button>
                     </div>
                 ) : null}
