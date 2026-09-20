@@ -209,7 +209,7 @@ import {
 import { getBrowserSandboxProfiles, putBrowserSandboxProfiles } from './handlers/browserSandboxProfiles.ts'
 import { getBrowserRunReport, getBrowserRuns, getBrowserRunStats, postBrowserRunReport } from './handlers/browserSandboxRuns.ts'
 import { publicSupportChat } from './handlers/publicSupportChat.ts'
-import { getSupportMessages, getSupportTickets, postSupportMessage, postSupportTicket } from './handlers/supportChat.ts'
+import { getSupportMessages, getSupportTickets, postSupportMessage, postSupportTicket, postSupportStatus, postSupportFeedback } from './handlers/supportChat.ts'
 import { getCommercialContactRequests, postCommercialContactRequest } from './handlers/commercialContactRequests.ts'
 import { getOrganizationPrivacy, postOrganizationPrivacy } from './handlers/organizationPrivacy.ts'
 import { deleteSavedSearch, getSavedSearches, postSavedSearch } from './handlers/ti/savedSearches.ts'
@@ -342,6 +342,8 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/support/tickets', postSupportTicket)
     fastify.get('/support/tickets/:id/messages', getSupportMessages)
     fastify.post('/support/tickets/:id/messages', postSupportMessage)
+    fastify.post('/support/tickets/:id/status', postSupportStatus)
+    fastify.post('/support/tickets/:id/feedback', postSupportFeedback)
 
     // Article handlers
     fastify.get('/articles', getArticles)

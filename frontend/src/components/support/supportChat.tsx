@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import SupportFeedback, { SupportStars, type Feedback } from './supportFeedback'
 import useSupportLive from './useSupportLive'
 import useSupportUnread from './useSupportUnread'
 import { PublicSupportPanel } from './publicSupportChat'
@@ -8,7 +9,7 @@ import { MessageCircle, Send } from 'lucide-react'
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { getCookie } from '@/utils/cookies/cookies'
 
-type Ticket = { id: string; subject: string; status: string; user_name?: string; last_message?: string; updated_at: string; agent_name?: string; channel?: string; reply_count?: number }
+type Ticket = Feedback & { id: string; subject: string; status: string; user_name?: string; last_message?: string; updated_at: string; agent_name?: string; channel?: string; reply_count?: number }
 type Message = { id: string; sender_id: string | null; sender_kind?: string; sender_name: string; body: string; created_at: string }
 
 const fieldClass = 'min-w-0 rounded-lg border border-ui-border bg-ui-canvas px-3 py-2 text-sm text-ui-text outline-none placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
@@ -18,6 +19,7 @@ export default function SupportChat({ embedded = false }: { embedded?: boolean }
     const [selectedId, setSelectedId] = useState('')
     const selectedRef = useRef('')
     const messageRevision = useRef(0)
+    const ticketRevision = useRef(0)
     const realtime = useRef(false)
     selectedRef.current = selectedId
     const creating = useRef(false)
@@ -32,13 +34,16 @@ export default function SupportChat({ embedded = false }: { embedded?: boolean }
     const [syncedId, setSyncedId] = useState('')
     const [signedOut, setSignedOut] = useState(false)
     const [sending, setSending] = useState(false)
+    const [updatingStatus, setUpdatingStatus] = useState(false)
     const [userId, setUserId] = useState('')
 
     const loadTickets = useCallback(async () => {
+        const version = ++ticketRevision.current
         const response = await fetch('/api/backend/support/tickets', { cache: 'no-store' })
         setSignedOut(response.status === 401)
         if (!response.ok) throw new Error(response.status === 401 ? 'Sign in to chat with support.' : 'Support is temporarily unavailable.')
         const payload = await response.json() as { tickets?: Ticket[]; role?: 'user' | 'support'; realtime?: boolean }
+        if (version !== ticketRevision.current) return
         realtime.current = payload.realtime === true
         setTickets(payload.tickets || [])
         setRole(payload.role || 'user')
@@ -104,6 +109,25 @@ export default function SupportChat({ embedded = false }: { embedded?: boolean }
         }
     }
 
+    async function updateStatus(status: 'open' | 'closed') {
+        if (updatingStatus) return
+        setUpdatingStatus(true); setError('')
+        const id = selectedId
+        try {
+            const response = await fetch(`/api/backend/support/tickets/${encodeURIComponent(id)}/status`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ status }) })
+            const payload = await response.json()
+            if (!response.ok) throw new Error(payload.error || 'Could not update this chat.')
+            await Promise.all([loadTickets(), loadMessages(id)])
+        } catch (error) { setError(error instanceof Error ? error.message : 'Could not update this chat.') } finally { setUpdatingStatus(false) }
+    }
+    async function sendFeedback(rating: number, comment: string) {
+        const ticket = tickets.find(ticket => ticket.id === selectedId)
+        const response = await fetch(`/api/backend/support/tickets/${encodeURIComponent(selectedId)}/feedback`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ rating, comment, resolutionVersion: ticket?.resolution_version }) })
+        const payload = await response.json()
+        if (!response.ok) throw new Error(payload.error || 'Could not save feedback.')
+        await Promise.all([loadTickets(), loadMessages(selectedId)])
+    }
+
     if (signedOut) return <PublicSupportPanel />
 
     const selected = tickets.find(ticket => ticket.id === selectedId)
@@ -124,6 +148,7 @@ export default function SupportChat({ embedded = false }: { embedded?: boolean }
                         {tickets.map(ticket => (
                             <button key={ticket.id} type='button' aria-pressed={selectedId === ticket.id} onClick={() => selectChat(ticket.id)} className={`grid w-full min-w-0 gap-1 rounded-lg p-3 text-left focus-visible:outline-2 focus-visible:outline-ui-primary ${selectedId === ticket.id ? 'bg-ui-primary/10' : 'hover:bg-ui-panel'}`}>
                                 <span className='truncate text-sm font-semibold text-ui-text'>{role === 'support' && ticket.user_name !== 'Visitor' ? ticket.user_name || ticket.subject : ticket.subject}</span>
+                                {ticket.status === 'closed' || ticket.feedback_rating ? <span className='flex flex-wrap items-center gap-2'>{ticket.status === 'closed' ? <span className='rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-300'>Resolved</span> : null}{ticket.feedback_rating ? <SupportStars rating={ticket.feedback_rating} /> : null}</span> : null}
                                 {unread[ticket.id] ? <span role='status' aria-label={`${unread[ticket.id]} unread replies`} className='w-fit rounded-full bg-ui-primary px-2 py-0.5 text-[11px] text-ui-canvas'>{unread[ticket.id]}</span> : null}
                                 <span className='truncate text-xs text-ui-muted'>{ticket.last_message || 'No messages yet'}</span>
                             </button>
@@ -137,17 +162,21 @@ export default function SupportChat({ embedded = false }: { embedded?: boolean }
                 </div>
             )}
             <div className='grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto]'>
-                <header className={headingClass}>
-                    <h2 className='truncate text-sm font-semibold text-ui-text'>{selected?.subject || (role === 'support' ? 'Customer conversation' : 'Start a support chat')}</h2>
-                    <p className='text-xs text-ui-muted'>{selected ? selected.status === 'closed' ? 'Conversation closed' : selected.agent_name ? `Speaking with ${selected.agent_name}` : 'Waiting for support.' : role === 'support' ? 'Choose a conversation from the queue.' : 'Tell us what you need help with.'}</p>
+                <header className='flex min-h-20 items-center justify-between gap-3 border-b border-ui-border px-4 py-3'>
+                    <div className='grid min-w-0 gap-1'>
+                        <h2 className='truncate text-sm font-semibold text-ui-text'>{selected?.subject || (role === 'support' ? 'Customer conversation' : 'Start a support chat')}</h2>
+                        <p className='text-xs text-ui-muted'>{selected ? selected.status === 'closed' ? 'Chat resolved' : selected.agent_name ? `Speaking with ${selected.agent_name}` : 'Waiting for support.' : role === 'support' ? 'Choose a conversation from the queue.' : 'Tell us what you need help with.'}</p>
+                    </div>
+                    {role === 'support' && selected ? <button type='button' disabled={updatingStatus || sending} onClick={() => void updateStatus(selected.status === 'closed' ? 'open' : 'closed')} className='shrink-0 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-xs font-medium text-ui-text hover:bg-ui-raised disabled:opacity-50'>{updatingStatus ? 'Saving…' : selected.status === 'closed' ? 'Reopen chat' : 'Resolve chat'}</button> : null}
                 </header>
                 <div ref={log} role='log' aria-label='Messages' className='min-h-0 overflow-y-auto p-4'>
+                    {role === 'support' && selected?.feedback_rating ? <section aria-label='Customer feedback' className='mb-4 grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3'><h3 className='text-xs font-semibold text-ui-text'>Customer feedback</h3><SupportStars rating={selected.feedback_rating} />{selected.feedback_comment ? <p className='whitespace-pre-wrap text-sm text-ui-text [overflow-wrap:anywhere]'>{selected.feedback_comment}</p> : null}</section> : null}
                     {messages.length ? <div className='grid gap-3'>{messages.map(message => message.sender_kind === 'system' ? <p key={message.id} className='px-3 py-1 text-center text-xs leading-5 text-ui-muted'>{message.body}</p> : <div key={message.id} className={`min-w-0 max-w-[90%] rounded-lg px-3 py-2 text-sm text-ui-text ${message.sender_id === userId ? 'justify-self-end bg-ui-primary/10' : 'justify-self-start bg-ui-raised'}`}><p className='text-xs font-semibold text-ui-muted'>{message.sender_name}</p><p className='mt-1 whitespace-pre-wrap [overflow-wrap:anywhere]'>{message.body}</p></div>)}</div> : <div className='grid h-full content-center justify-items-center gap-3 text-center text-sm text-ui-muted'><MessageCircle aria-hidden='true' className='h-8 w-8 text-ui-muted' /><p>{loading ? 'Loading conversations…' : role === 'support' ? 'Select a customer chat to read and reply.' : 'Your conversation starts here.'}</p></div>}
                 </div>
                 <div className='border-t border-ui-border p-4'>
                     {!error && connection === 'reconnecting' ? <p role='status' className='mb-2 text-xs text-ui-muted'>Reconnecting…</p> : null}
                     {error ? <p role='alert' className='mb-3 text-sm text-ui-danger'>{error}</p> : null}
-                    {role !== 'support' || selectedId ? (
+                    {selected?.status === 'closed' ? role === 'support' ? <p className='text-xs text-ui-muted'>Chat resolved. Reopen it to continue the conversation.</p> : <SupportFeedback key={`${selectedId}:${selected.resolution_version}`} feedback={selected} submit={sendFeedback} /> : role !== 'support' || selectedId ? (
                         <form onSubmit={send} className='grid min-w-0 gap-3'>
                             {!selectedId ? <input aria-label='Subject' maxLength={160} value={subject} onChange={event => setSubject(event.target.value)} placeholder='Subject' className={`h-10 ${fieldClass}`} /> : null}
                             <div className='flex min-w-0 items-end gap-2'>

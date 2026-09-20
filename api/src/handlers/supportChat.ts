@@ -1,3 +1,5 @@
+import { setSupportStatus, saveSupportFeedback, SupportStateError } from '#utils/support/lifecycle.ts'
+import { supportIdPattern } from '#utils/support/conversation.ts'
 import { randomUUID } from 'node:crypto'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run, { withTransaction } from '#db'
@@ -27,9 +29,9 @@ export async function getSupportTickets(req: FastifyRequest, res: FastifyReply) 
     try {
         const support = await isSupport(userId)
         const result = await run(`
-            SELECT t.id, t.user_id, t.subject, t.status, t.created_at, t.updated_at, t.channel,
+            SELECT t.id, t.user_id, t.subject, t.status, t.created_at, t.updated_at, t.channel, t.resolution_version, t.feedback_rating, t.feedback_comment,
                    (SELECT u2.name FROM support_messages m2 JOIN users u2 ON u2.id=m2.sender_id WHERE m2.ticket_id=t.id AND m2.sender_kind='support' ORDER BY m2.created_at DESC, m2.id DESC LIMIT 1) AS agent_name,
-                   (SELECT COUNT(*)::int FROM support_messages m3 WHERE m3.ticket_id=t.id AND m3.sender_kind<>'system' AND m3.sender_id IS DISTINCT FROM $2) AS reply_count,
+                   (SELECT COUNT(*)::int FROM support_messages m3 WHERE m3.ticket_id=t.id AND (m3.sender_kind<>'system' OR m3.event=CASE WHEN $1::boolean THEN 'feedback' ELSE 'resolved' END OR (NOT $1::boolean AND m3.event='reopened')) AND m3.sender_id IS DISTINCT FROM $2) AS reply_count,
                    COALESCE(u.name, 'Visitor') AS user_name,
                    (SELECT body FROM support_messages WHERE ticket_id = t.id ORDER BY created_at DESC LIMIT 1) AS last_message
             FROM support_tickets t
@@ -84,7 +86,7 @@ export async function getSupportMessages(req: FastifyRequest<{ Params: { id: str
     }
 }
 
-export async function postSupportMessage(req: FastifyRequest<{ Params: { id: string }; Body: SupportBody & { status?: 'open' | 'closed' } }>, res: FastifyReply) {
+export async function postSupportMessage(req: FastifyRequest<{ Params: { id: string }; Body: SupportBody }>, res: FastifyReply) {
     const userId = await auth(req, res)
     if (!userId) return
     const body = String(req.body?.message || '').trim().slice(0, 10_000)
@@ -94,16 +96,47 @@ export async function postSupportMessage(req: FastifyRequest<{ Params: { id: str
         const access = await run('SELECT EXISTS (SELECT 1 FROM support_tickets WHERE id = $1 AND ($2::boolean OR user_id = $3)) AS allowed', [req.params.id, support, userId])
         if (!access.rows[0]?.allowed) return res.status(404).send({ error: 'Support ticket not found.' })
         await withTransaction(async query => {
-            await query('SELECT id FROM support_tickets WHERE id = $1 FOR UPDATE', [req.params.id])
+            const ticket = (await query('SELECT id, status FROM support_tickets WHERE id = $1 FOR UPDATE', [req.params.id])).rows[0]
+            if (ticket.status === 'closed') throw new SupportStateError('Chat resolved. Reopen it before sending a message.')
             await query('INSERT INTO support_messages (id, ticket_id, sender_id, sender_kind, body) VALUES ($1, $2, $3, $4, $5)', [randomUUID(), req.params.id, userId, support ? 'support' : 'user', body])
             await query(`UPDATE support_tickets SET status = $2, updated_at = NOW(),
                 channel = CASE WHEN $3 THEN 'human' ELSE channel END,
                 ai_pending_id = CASE WHEN $3 THEN NULL ELSE ai_pending_id END,
-                ai_pending_at = CASE WHEN $3 THEN NULL ELSE ai_pending_at END WHERE id = $1`, [req.params.id, req.body?.status === 'closed' ? 'closed' : 'open', support])
+                ai_pending_at = CASE WHEN $3 THEN NULL ELSE ai_pending_at END WHERE id = $1`, [req.params.id, 'open', support])
         })
         return res.send({ ok: true })
     } catch (error) {
+        if (error instanceof SupportStateError) return res.status(error.status).send({ error: error.message })
         req.log.error(error)
         return res.status(500).send({ error: 'Failed to send support message.' })
+    }
+}
+
+export async function postSupportStatus(req: FastifyRequest<{ Params: { id: string }; Body: { status?: unknown } }>, res: FastifyReply) {
+    const userId = await auth(req, res)
+    if (!userId) return
+    if (!supportIdPattern.test(req.params.id) || (req.body?.status !== 'open' && req.body?.status !== 'closed')) return res.status(400).send({ error: 'Invalid chat status.' })
+    try {
+        if (!await isSupport(userId)) return res.status(403).send({ error: 'Only support agents can resolve or reopen chats.' })
+        await setSupportStatus(req.params.id, req.body.status as 'open' | 'closed', userId)
+        return res.send({ ok: true })
+    } catch (error) {
+        if (error instanceof SupportStateError) return res.status(error.status).send({ error: error.message })
+        req.log.error(error)
+        return res.status(500).send({ error: 'Could not update this chat.' })
+    }
+}
+
+export async function postSupportFeedback(req: FastifyRequest<{ Params: { id: string }; Body: { rating?: unknown; comment?: unknown; resolutionVersion?: unknown } }>, res: FastifyReply) {
+    const userId = await auth(req, res)
+    if (!userId) return
+    if (!supportIdPattern.test(req.params.id)) return res.status(400).send({ error: 'Invalid conversation.' })
+    try {
+        await saveSupportFeedback(req.params.id, { user: userId }, req.body?.rating, req.body?.comment ?? '', req.body?.resolutionVersion)
+        return res.send({ ok: true })
+    } catch (error) {
+        if (error instanceof SupportStateError) return res.status(error.status).send({ error: error.message })
+        req.log.error(error)
+        return res.status(500).send({ error: 'Could not save feedback.' })
     }
 }

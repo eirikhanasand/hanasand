@@ -1,3 +1,4 @@
+import { SupportStateError } from './lifecycle.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { queryOnce, withTransaction } from '#db'
 import { answerSupport, asksForHuman, handoffMarker, handoffMessage } from './assistant.ts'
@@ -13,11 +14,11 @@ export class SupportConversationNotFound extends Error {}
 export const supportIdPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i
 
 export async function readSupportConversation(hash: string, conversationId?: string) {
-    const tickets = (await queryOnce(`SELECT t.id, t.subject, t.channel, t.status, t.updated_at,
+    const tickets = (await queryOnce(`SELECT t.id, t.subject, t.channel, t.status, t.updated_at, t.resolution_version, t.feedback_rating, t.feedback_comment,
         t.ai_pending_id IS NOT NULL AND t.ai_pending_at > NOW() - INTERVAL '90 seconds' AS pending,
         (SELECT u.name FROM support_messages m JOIN users u ON u.id=m.sender_id
             WHERE m.ticket_id=t.id AND m.sender_kind='support' ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS agent_name,
-        (SELECT COUNT(*)::int FROM support_messages m WHERE m.ticket_id=t.id AND m.sender_kind IN ('support','assistant')) AS reply_count
+        (SELECT COUNT(*)::int FROM support_messages m WHERE m.ticket_id=t.id AND (m.sender_kind IN ('support','assistant') OR m.event IN ('resolved','reopened'))) AS reply_count
         FROM support_tickets t WHERE COALESCE(t.visitor_session_hash, t.visitor_token_hash)=$1 ORDER BY t.updated_at DESC, t.id`, [hash])).rows
     const ticket = conversationId ? tickets.find(ticket => ticket.id === conversationId) : tickets[0]
     if (!ticket) return { id: null, channel: 'ai', status: 'open', pending: false, messages: [], tickets }
@@ -48,6 +49,7 @@ export async function sendSupportChat(hash: string, input: Input, answer = answe
         const ticket = (await query(`SELECT *, ai_pending_at > NOW() - INTERVAL '90 seconds' AS pending_fresh
             FROM support_tickets WHERE id=$1 AND COALESCE(visitor_session_hash, visitor_token_hash)=$2 FOR UPDATE`, [ticketId, hash])).rows[0]
         if (!ticket) throw new SupportConversationNotFound('Conversation not found.')
+        if (ticket.status === 'closed') throw new SupportStateError('Chat resolved. Start a new chat for more help.')
         const human = input.handoff || asksForHuman(input.message)
         const existing = (await query('SELECT id, body FROM support_messages WHERE ticket_id = $1 AND request_id = $2', [ticket.id, input.requestId])).rows[0]
         if (existing && existing.body !== input.message) throw new Error('Request already used for another message.')
@@ -74,9 +76,9 @@ export async function sendSupportChat(hash: string, input: Input, answer = answe
         try {
             const content = await answer(pending.history)
             await withTransaction(async query => {
-                const ticket = (await query('SELECT channel, ai_pending_id FROM support_tickets WHERE id = $1 FOR UPDATE', [pending.ticketId!])).rows[0]
+                const ticket = (await query('SELECT channel, status, ai_pending_id FROM support_tickets WHERE id = $1 FOR UPDATE', [pending.ticketId!])).rows[0]
                 // A human handoff wins over a late model response.
-                if (ticket?.channel !== 'ai' || ticket.ai_pending_id !== pending.messageId) return
+                if (ticket?.status === 'closed' || ticket?.channel !== 'ai' || ticket.ai_pending_id !== pending.messageId) return
                 if (content.trim() === handoffMarker) await transfer(query, pending.ticketId!)
                 else {
                     await query(`INSERT INTO support_messages (id, ticket_id, sender_kind, body, reply_to, created_at)

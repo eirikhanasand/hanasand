@@ -1,13 +1,14 @@
 'use client'
 
 import { ArrowUp, LoaderCircle, Sparkles, UserRound } from 'lucide-react'
+import SupportFeedback, { type Feedback } from './supportFeedback'
 import useSupportLive from './useSupportLive'
 import useSupportUnread from './useSupportUnread'
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 type Message = { id: string; body: string; sender_kind: 'user' | 'assistant' | 'support' | 'system'; sender_name: string; request_id?: string }
 type Ticket = { id: string; subject: string; reply_count: number }
-type Conversation = { id?: string; tickets?: Ticket[]; agent_name?: string; channel: 'ai' | 'human'; status: string; pending: boolean; messages: Message[]; error?: string; accepted?: boolean }
+type Conversation = Feedback & { id?: string; tickets?: Ticket[]; agent_name?: string; channel: 'ai' | 'human'; status: string; pending: boolean; messages: Message[]; error?: string; accepted?: boolean }
 type Submission = { requestId: string; message: string; handoff?: boolean; conversationId?: string }
 const emptyTickets: Ticket[] = []
 const empty: Conversation = { channel: 'ai', status: 'open', pending: false, messages: [] }
@@ -141,8 +142,15 @@ export default function PublicSupportChat({ active = true, onUnreadChange }: { a
     function send(event: FormEvent) {
         event.preventDefault()
         const message = input.trim()
-        if (!message) return
+        if (!message || conversation.status === 'closed') return
         void submit(retry?.message === message ? retry : { requestId: crypto.randomUUID(), message })
+    }
+    const resolved = conversation.status === 'closed'
+    async function sendFeedback(rating: number, comment: string) {
+        const response = await fetch('/api/support/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'feedback', conversationId: selectedId, resolutionVersion: conversation.resolution_version, rating, comment }) })
+        const payload = await response.json()
+        if (!response.ok) throw new Error(payload.error || 'Could not save feedback.')
+        await refresh()
     }
     const human = conversation.channel === 'human'
     const agentName = conversation.agent_name || conversation.messages.filter(message => message.sender_kind === 'support').at(-1)?.sender_name
@@ -175,19 +183,19 @@ export default function PublicSupportChat({ active = true, onUnreadChange }: { a
                         <p className={`mb-1.5 text-[11px] font-medium text-ui-muted ${message.sender_kind === 'user' ? 'text-right' : ''}`}>{message.sender_name}</p>
                         <div className={`rounded-2xl px-3.5 py-2.5 text-sm leading-6 ${message.sender_kind === 'user' ? 'rounded-tr-md bg-ui-primary text-ui-canvas' : 'rounded-tl-md bg-ui-raised text-ui-text'}`}><MessageBody text={message.body} /></div>
                     </div>)}</div>}
-                {busy && !human ? <p role='status' className='mt-4 flex items-center gap-2 text-xs text-ui-muted'><LoaderCircle className='h-3.5 w-3.5 animate-spin' aria-hidden='true' />Hanasand AI is thinking…</p> : null}
+                {busy && !human && !resolved ? <p role='status' className='mt-4 flex items-center gap-2 text-xs text-ui-muted'><LoaderCircle className='h-3.5 w-3.5 animate-spin' aria-hidden='true' />Hanasand AI is thinking…</p> : null}
             </div>
             <div className='min-w-0 border-t border-ui-border bg-ui-panel px-4 pb-3 pt-3'>
                 {error ? <div role='alert' className='mb-3 text-xs leading-5 text-ui-danger'>{error}{retry ? <button type='button' disabled={sending || transferring} className='ml-2 font-semibold underline disabled:opacity-50' onClick={() => void submit(retry)}>Retry</button> : null}</div> : null}
                 {!error && (refreshError || connection === 'reconnecting') ? <p role='status' className='mb-2 text-xs text-ui-muted'>{refreshError || 'Reconnecting…'}</p> : null}
                 {!error && unanswered ? <button type='button' onClick={() => void submit(unanswered)} className='mb-2 text-xs font-medium text-ui-primary hover:underline'>Retry AI answer</button> : null}
-                <form onSubmit={send} className='flex min-w-0 items-end gap-2 rounded-2xl border border-ui-border bg-ui-canvas p-2 focus-within:border-ui-primary focus-within:ring-2 focus-within:ring-ui-primary/10'>
+                {resolved ? <SupportFeedback key={`${selectedId}:${conversation.resolution_version}`} feedback={conversation} submit={sendFeedback} /> : <><form onSubmit={send} className='flex min-w-0 items-end gap-2 rounded-2xl border border-ui-border bg-ui-canvas p-2 focus-within:border-ui-primary focus-within:ring-2 focus-within:ring-ui-primary/10'>
                     <textarea aria-label='Message' rows={2} maxLength={4000} value={input} onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (!loading && !busy) send(event) } }} placeholder={human ? 'Message the support team…' : 'Ask a question…'} className='min-h-12 min-w-0 flex-1 resize-none bg-transparent px-2 py-1 text-sm leading-6 text-ui-text outline-none placeholder:text-ui-muted' />
                     <button type='submit' disabled={loading || busy || !input.trim()} aria-label='Send message' className='grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-ui-primary text-ui-canvas transition hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary disabled:opacity-40'>{sending ? <LoaderCircle className='h-4 w-4 animate-spin' /> : <ArrowUp className='h-4 w-4' />}</button>
                 </form>
                 <div className='mt-3 flex min-h-7 items-center justify-center'>
-                    {human ? <p className='flex items-center gap-1.5 text-xs text-ui-muted'><UserRound className='h-3.5 w-3.5' />{conversation.status === 'closed' ? 'Conversation closed · Send a message to reopen' : agentName ? `Speaking with ${agentName}` : 'Waiting for support.'}</p> : <button type='button' disabled={loading || transferring} onClick={() => void submit({ requestId: crypto.randomUUID(), message: 'I\'d like to speak with a human.', handoff: true })} className='inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-ui-muted transition hover:bg-ui-raised hover:text-ui-text disabled:opacity-50'><UserRound className='h-3.5 w-3.5' />{transferring ? 'Connecting…' : 'Talk to a human'}</button>}
-                </div>
+                    {human ? <p className='flex items-center gap-1.5 text-xs text-ui-muted'><UserRound className='h-3.5 w-3.5' />{agentName ? `Speaking with ${agentName}` : 'Waiting for support.'}</p> : <button type='button' disabled={loading || transferring} onClick={() => void submit({ requestId: crypto.randomUUID(), message: 'I\'d like to speak with a human.', handoff: true })} className='inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-ui-muted transition hover:bg-ui-raised hover:text-ui-text disabled:opacity-50'><UserRound className='h-3.5 w-3.5' />{transferring ? 'Connecting…' : 'Talk to a human'}</button>}
+                </div></>}
             </div>
         </section>
     )

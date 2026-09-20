@@ -19,7 +19,7 @@ mock.module('../src/utils/auth/tokenWrapper.ts', () => ({ default: async (req: a
     if (!id) { res.status(401).send({ error: 'Unauthorized' }); return { valid: false } }
     return { valid: true, id }
 } }))
-const { getSupportTickets, getSupportMessages, postSupportMessage } = await import('../src/handlers/supportChat.ts')
+const { getSupportTickets, getSupportMessages, postSupportMessage, postSupportStatus, postSupportFeedback } = await import('../src/handlers/supportChat.ts')
 const app = Fastify({ forceCloseConnections: true })
 await app.register(websocket)
 registerSupportStream(app)
@@ -28,6 +28,8 @@ app.post('/support/chat', publicSupportChat)
 app.get('/support/tickets', getSupportTickets)
 app.get('/support/tickets/:id/messages', getSupportMessages)
 app.post('/support/tickets/:id/messages', postSupportMessage)
+app.post('/support/tickets/:id/status', postSupportStatus)
+app.post('/support/tickets/:id/feedback', postSupportFeedback)
 const session = () => supportSessionHash(randomBytes(32).toString('hex'))
 const input = (message: string, handoff = false) => ({ requestId: randomUUID(), message, handoff })
 const reply = async () => 'You can reset your password from the sign-in page.'
@@ -240,4 +242,62 @@ test('WebSockets use one-use visitor tickets and deliver committed changes acros
     const unauthorized = new WebSocket(address.replace('http:', 'ws:') + '/api/ws/support', { headers: { Origin: 'https://evil.example' } })
     expect((await once(unauthorized, 'close'))[0]).toBe(1008)
     a.socket.close(); b.socket.close(); unsubscribe(); await secondReplica.close()
+})
+
+
+test('resolving locks chat, notifies the visitor, stores private feedback and allows staff to reopen', async () => {
+    const token = randomBytes(32).toString('hex'), hash = supportSessionHash(token)
+    const chat = await sendSupportChat(hash, input('Resolution verification', true), reply)
+    const url = `/support/tickets/${chat.id}/status`
+    const close = () => app.inject({ method: 'POST', url, headers: { 'test-user': 'agent' }, payload: { status: 'closed' } })
+    expect((await app.inject({ method: 'POST', url, headers: { 'test-user': 'customer' }, payload: { status: 'closed' } })).statusCode).toBe(403)
+    expect((await close()).statusCode).toBe(200)
+    await close()
+    let resolved = await readSupportConversation(hash, chat.id)
+    expect(resolved.status).toBe('closed')
+    expect(resolved.resolution_version).toBe(1)
+    expect(resolved.reply_count).toBe(1)
+    expect(resolved.messages.filter(m => m.body.startsWith('Chat resolved.'))).toHaveLength(1)
+    expect((await app.inject({ method: 'POST', url: '/support/chat', headers: { 'x-support-session': token }, payload: { ...input('Do not reopen', true), conversationId: chat.id } })).statusCode).toBe(409)
+    expect((await app.inject({ method: 'POST', url: `/support/tickets/${chat.id}/messages`, headers: { 'test-user': 'agent' }, payload: { message: 'Blocked reply' } })).statusCode).toBe(409)
+    const feedback = { action: 'feedback', conversationId: chat.id, resolutionVersion: 1, rating: 2, comment: 'Please reply sooner.' }
+    const rate = (payload = feedback, visitor = token) => app.inject({ method: 'POST', url: '/support/chat', headers: { 'x-support-session': visitor }, payload })
+    expect((await rate(feedback, randomBytes(32).toString('hex'))).statusCode).toBe(404)
+    expect((await rate({ ...feedback, rating: 6 })).statusCode).toBe(400)
+    expect((await rate({ ...feedback, rating: 2.5 })).statusCode).toBe(400)
+    expect((await rate({ ...feedback, comment: 'x'.repeat(2001) })).statusCode).toBe(400)
+    expect((await rate()).statusCode).toBe(200)
+    expect((await rate()).statusCode).toBe(200)
+    expect((await rate({ ...feedback, rating: 4 })).statusCode).toBe(409)
+    const tickets = (await app.inject({ url: '/support/tickets', headers: { 'test-user': 'agent' } })).json().tickets
+    expect(tickets.find((t: any) => t.id === chat.id)).toMatchObject({ status: 'closed', feedback_rating: 2, feedback_comment: 'Please reply sooner.' })
+    expect((await app.inject({ method: 'POST', url, headers: { 'test-user': 'agent' }, payload: { status: 'open' } })).statusCode).toBe(200)
+    expect((await rate()).statusCode).toBe(409)
+    await sendSupportChat(hash, { ...input('Reopened message'), conversationId: chat.id }, reply)
+    await close()
+    expect((await rate()).statusCode).toBe(409)
+    expect((await rate({ ...feedback, resolutionVersion: 2, rating: 5, comment: 'Ignored high-rating comment' })).statusCode).toBe(200)
+    resolved = await readSupportConversation(hash, chat.id)
+    expect(resolved).toMatchObject({ status: 'closed', feedback_rating: 5, feedback_comment: '', resolution_version: 2 })
+    expect(resolved.messages.filter(m => m.body.startsWith('Customer feedback:'))).toHaveLength(2)
+    expect(resolved.messages.some(m => m.body.includes('Please reply sooner.'))).toBe(true)
+})
+
+test('resolution cancels a pending AI answer and authenticated feedback is owner-only', async () => {
+    const hash = session(), id = randomUUID()
+    let finish!: (value: string) => void, started!: () => void
+    const ready = new Promise<void>(resolve => { started = resolve })
+    const pending = sendSupportChat(hash, { ...input('Pending resolution'), conversationId: id }, () => { started(); return new Promise<string>(resolve => { finish = resolve }) })
+    await ready
+    await app.inject({ method: 'POST', url: `/support/tickets/${id}/status`, headers: { 'test-user': 'agent' }, payload: { status: 'closed' } })
+    finish('This late answer must be suppressed')
+    const chat = await pending
+    expect(chat.status).toBe('closed')
+    expect(chat.pending).toBe(false)
+    expect(chat.messages.some(m => m.sender_kind === 'assistant')).toBe(false)
+    const ownId = randomUUID()
+    await query("INSERT INTO support_tickets(id,user_id,subject,status,resolution_version) VALUES($1,'customer','Account chat','closed',0)", [ownId])
+    const request = { method: 'POST' as const, url: `/support/tickets/${ownId}/feedback`, payload: { rating: 3, comment: 'More detail please', resolutionVersion: 0 } }
+    expect((await app.inject({ ...request, headers: { 'test-user': 'agent' } })).statusCode).toBe(404)
+    expect((await app.inject({ ...request, headers: { 'test-user': 'customer' } })).statusCode).toBe(200)
 })
