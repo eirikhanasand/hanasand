@@ -1,0 +1,17 @@
+[Unit]
+Description=Isolate browser workers from internal networks
+Requires=docker.service
+After=docker.service
+PartOf=docker.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /home/hanasand/hanasand/ops/browser-worker/install-egress-firewall.sh
+ExecStartPost=/bin/sh /home/hanasand/hanasand/ops/browser-worker/verify-egress-firewall.sh
+RemainAfterExit=yes
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target docker.service

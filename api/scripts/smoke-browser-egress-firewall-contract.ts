@@ -43,4 +43,15 @@ assert.match(verifyScript, /HANASAND-BROWSER-EGRESS/, 'browser egress verifier s
 assert.match(verifyScript, /does not block browser-worker initiated API access/, 'browser egress verifier should prove workers cannot call the privileged API')
 assert.match(verifyScript, /Browser egress firewall verified/, 'browser egress verifier should print a clear success line')
 
+for (const setting of ['net.bridge.bridge-nf-call-iptables', 'net.bridge.bridge-nf-call-ip6tables']) {
+    assert(script.includes(`sysctl -w ${setting}=1`), 'same-bridge traffic must pass through the firewall')
+    assert(verifyScript.includes(`sysctl -n ${setting}`), 'verification must reject disabled bridge filtering')
+}
+assert.match(script, /modprobe br_netfilter/, 'load bridge filtering before installing rules')
+assert.match(script, /-I INPUT 1 -i "\$bridge" -j "\$host_chain"/, 'guard host services as well as forwarded containers')
+assert.match(script, /--ctstate RELATED,ESTABLISHED --ctdir REPLY -j ACCEPT/, 'host guard must only accept replies to host-initiated connections')
+const service = readFileSync(new URL('../../ops/browser-worker/hanasand-browser-egress.service', import.meta.url), 'utf8')
+assert(service.includes('PartOf=docker.service') && service.includes('WantedBy=multi-user.target docker.service'), 'restore isolation after boot and Docker restart')
+assert(service.includes('ExecStartPost=/bin/sh /home/hanasand/hanasand/ops/browser-worker/verify-egress-firewall.sh'), 'service must fail when firewall verification fails')
+
 console.log('Browser egress firewall contract passed.')

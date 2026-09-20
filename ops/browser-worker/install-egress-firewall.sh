@@ -7,6 +7,11 @@ TOR_CONTAINER="${HANASAND_BROWSER_TOR_CONTAINER:-hanasand_onion_tor}"
 API_CONTAINER="${HANASAND_BROWSER_API_CONTAINER:-hanasand_api}"
 TOR_PORT="${HANASAND_BROWSER_TOR_PORT:-9050}"
 
+# Same-bridge container traffic otherwise bypasses Docker's forwarding rules.
+modprobe br_netfilter
+sysctl -w net.bridge.bridge-nf-call-iptables=1
+sysctl -w net.bridge.bridge-nf-call-ip6tables=1
+
 bridge_name() {
     bridge="$(docker network inspect -f '{{ index .Options "com.docker.network.bridge.name" }}' "$NETWORK" 2>/dev/null || true)"
     if [ -n "$bridge" ] && [ "$bridge" != "<no value>" ]; then
@@ -33,10 +38,29 @@ ensure_rule() {
 ensure_jump() {
     table="$1"
     shift
+    "$table" -N DOCKER-USER 2>/dev/null || true
+    if ! "$table" -C FORWARD -j DOCKER-USER 2>/dev/null; then
+        "$table" -I FORWARD 1 -j DOCKER-USER
+    fi
     if "$table" -C DOCKER-USER "$@" -j "$CHAIN" 2>/dev/null; then
         return
     fi
     "$table" -I DOCKER-USER 1 "$@" -j "$CHAIN"
+}
+
+install_host_guard() {
+    table="$1"
+    bridge="$2"
+    host_chain="${CHAIN}-HOST"
+    "$table" -N "$host_chain" 2>/dev/null || true
+    "$table" -F "$host_chain"
+    # Allow replies to host-initiated browser control, never worker-initiated
+    # connections to services listening on the bridge gateway or host address.
+    ensure_rule "$table" "$host_chain" -m conntrack --ctstate RELATED,ESTABLISHED --ctdir REPLY -j ACCEPT
+    ensure_rule "$table" "$host_chain" -j REJECT
+    if ! "$table" -C INPUT -i "$bridge" -j "$host_chain" 2>/dev/null; then
+        "$table" -I INPUT 1 -i "$bridge" -j "$host_chain"
+    fi
 }
 
 install_ipv4() {
@@ -60,6 +84,7 @@ install_ipv4() {
     done
     ensure_rule iptables "$CHAIN" -j RETURN
     ensure_jump iptables -i "$bridge"
+    install_host_guard iptables "$bridge"
 }
 
 install_ipv6() {
@@ -73,6 +98,7 @@ install_ipv6() {
     done
     ensure_rule ip6tables "$CHAIN" -j RETURN
     ensure_jump ip6tables -i "$bridge"
+    install_host_guard ip6tables "$bridge"
 }
 
 bridge="$(bridge_name)"

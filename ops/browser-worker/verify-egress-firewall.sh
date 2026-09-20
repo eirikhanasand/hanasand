@@ -38,12 +38,22 @@ api_ip="$(container_ip "$API_CONTAINER")"
 
 [ -n "$tor_ip" ] || fail "could not resolve Tor container $TOR_CONTAINER on $NETWORK"
 [ -n "$api_ip" ] || fail "could not resolve API container $API_CONTAINER on $NETWORK"
+[ "$(sysctl -n net.bridge.bridge-nf-call-iptables)" = 1 ] || fail "IPv4 bridge filtering is disabled"
+[ "$(sysctl -n net.bridge.bridge-nf-call-ip6tables)" = 1 ] || fail "IPv6 bridge filtering is disabled"
+has_rule iptables FORWARD -j DOCKER-USER || fail "Docker forwarding bypasses DOCKER-USER"
 has_rule iptables DOCKER-USER -i "$bridge" -j "$CHAIN" || fail "DOCKER-USER does not jump from $bridge to $CHAIN"
 has_rule iptables "$CHAIN" -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN || fail "$CHAIN does not allow established control responses"
 has_rule iptables "$CHAIN" -d "$tor_ip" -p tcp --dport "$TOR_PORT" -j RETURN || fail "$CHAIN does not allow Tor SOCKS at $tor_ip:$TOR_PORT"
 has_rule iptables "$CHAIN" ! -s "$api_ip" -d "$api_ip" -j REJECT || fail "$CHAIN does not block browser-worker initiated API access to $api_ip"
 for port in 8080 8090 9081; do
     has_rule iptables "$CHAIN" -s "$api_ip" -p tcp --dport "$port" -j RETURN || fail "$CHAIN does not allow API browser stream/control traffic on $port"
+done
+
+for table in iptables ip6tables; do
+    command -v "$table" >/dev/null 2>&1 || continue
+    has_rule "$table" INPUT -i "$bridge" -j "${CHAIN}-HOST" || fail "$table does not guard browser access to the host"
+    has_rule "$table" "${CHAIN}-HOST" -m conntrack --ctstate RELATED,ESTABLISHED --ctdir REPLY -j ACCEPT || fail "$table does not allow replies to host browser control"
+    has_rule "$table" "${CHAIN}-HOST" -j REJECT || fail "$table does not reject browser-initiated host access"
 done
 
 for cidr in 0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.168.0.0/16 224.0.0.0/4 240.0.0.0/4; do
