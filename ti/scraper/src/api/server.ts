@@ -80,8 +80,10 @@ async function handleDurableApiRequest(request: Request, options: ApiServerOptio
 }
 export async function handleApiRequest(request: Request, options: ApiServerOptions): Promise<Response> {
   if (options.readOnly && !["GET", "HEAD", "OPTIONS"].includes(request.method)) return error("recovery_read_only", "Existing intelligence is available. Collection and changes are paused during recovery.", 503);
-  if (options.ready === false) return error("service_starting", "Source storage is still loading; retry shortly.", 503);
   const url = new URL(request.url);
+  const parserHealthRequest = request.method === "GET" && ["/v1/dwm/exposure-parser/health", "/api/dwm/exposure-parser/health"].includes(url.pathname);
+  // Parser health probes the bridge directly and does not depend on hydrated source storage.
+  if (options.ready === false && !parserHealthRequest) return error("service_starting", "Source storage is still loading; retry shortly.", 503);
   try {
     if (url.searchParams.has("page")) {
       try { paginationCursor(url.searchParams, 500); }
