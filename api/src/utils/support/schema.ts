@@ -1,6 +1,6 @@
-import run, { independentSupport } from './db.ts'
+import defaultQuery, { independentSupport } from './db.ts'
 
-export default async function ensureSupportAiSchema() {
+export default async function ensureSupportAiSchema(run = defaultQuery) {
     if (independentSupport) {
         await run('CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT NOT NULL)')
         await run(`CREATE TABLE IF NOT EXISTS support_tickets (id UUID PRIMARY KEY, user_id TEXT REFERENCES users(id),

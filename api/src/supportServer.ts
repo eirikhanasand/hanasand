@@ -3,7 +3,7 @@ import websocket from '@fastify/websocket'
 import { createReadStream, existsSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { hasSupportServiceKey } from './utils/support/config.ts'
-import { independentSupport, queryOnce, closeSupportDatabase } from './utils/support/db.ts'
+import { independentSupport, queryOnce, closeSupportDatabase, withTransaction } from './utils/support/db.ts'
 import { closeDatabase } from './utils/db.ts'
 import ensureSupportAiSchema from './utils/support/schema.ts'
 import { consumeSharedRateLimitBucket } from './utils/rateLimit/config.ts'
@@ -21,7 +21,7 @@ export async function createSupportServer() {
     app.addHook('onRequest', (req, res, done) => {
         if (req.url === '/ready') return done()
         if (!hasSupportServiceKey(req)) { res.code(403).send({ error: 'Forbidden' }); return }
-        if (process.env.SUPPORT_MAINTENANCE === '1' && req.url !== '/backup') { res.code(503).header('Retry-After', '5').send({ error: 'Support is being updated. Please retry shortly.' }); return }
+        if ((process.env.SUPPORT_MAINTENANCE_FILE ? existsSync(process.env.SUPPORT_MAINTENANCE_FILE) : process.env.SUPPORT_MAINTENANCE === '1') && req.url !== '/backup') { res.code(503).header('Retry-After', '5').send({ error: 'Support is being updated. Please retry shortly.' }); return }
         res.header('Cache-Control', 'no-store')
         done()
     })
@@ -75,7 +75,9 @@ export async function createSupportServer() {
 
 if ((import.meta as ImportMeta & { main?: boolean }).main) {
     const app = await createSupportServer()
-    await ensureSupportAiSchema()
+    app.log.info('Preparing independent support storage')
+    await withTransaction(ensureSupportAiSchema)
+    app.log.info('Independent support storage is ready')
     process.once('SIGTERM', () => { void app.close() })
     await app.listen({ port: Number(process.env.PORT || 19181), host: '127.0.0.1' })
 }

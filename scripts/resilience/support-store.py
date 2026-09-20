@@ -46,7 +46,7 @@ def initialize(image):
          '-v', 'hanasand-support-data:/var/lib/postgresql/data', *sum((['-e', key] for key in settings), []), image,
          'postgres', '-p', '18508', '-c', 'listen_addresses=127.0.0.1', '-c', 'shared_buffers=128MB', '-c', 'max_connections=30',
          '-c', 'wal_level=replica', '-c', 'max_wal_size=1GB'], settings, stdout=subprocess.DEVNULL)
-    for _ in range(30):
+    for _ in range(300):
         if subprocess.run(['docker', 'exec', DB, 'pg_isready', '-p', '18508', '-U', 'support', '-d', 'hanasand_support'], stdout=subprocess.DEVNULL).returncode == 0:
             return
         time.sleep(1)
@@ -62,7 +62,8 @@ def start(release):
     config = json.loads(CONFIG.read_text())
     settings.update({key: value for key, value in config.items() if key != 'SUPPORT_SERVICE_BASE'})
     (ROOT / 'backups').mkdir(mode=0o700, exist_ok=True)
-    settings.update(SUPPORT_BACKUP_FILE='/support-backups/latest.dump', PORT='19181', SUPPORT_INTERNAL_SERVICE='1', API_HTTP_ONLY='1', AUTH_SERVICE_ONLY='1',
+    if config.get('SUPPORT_MAINTENANCE') == '1': (ROOT / 'maintenance').touch(mode=0o600)
+    settings.update(SUPPORT_MAINTENANCE_FILE='/support-control/maintenance', SUPPORT_BACKUP_FILE='/support-backups/latest.dump', PORT='19181', SUPPORT_INTERNAL_SERVICE='1', API_HTTP_ONLY='1', AUTH_SERVICE_ONLY='1',
                     DB_TIMEOUT_MS='1000', DB_MAX_CONN='3', SUPPORT_AI_BASE='https://api.hanasand.com', HANASAND_RELEASE_COMMIT=release)
     previous = None
     if subprocess.run(['docker', 'inspect', SERVICE], capture_output=True).returncode == 0:
@@ -71,9 +72,9 @@ def start(release):
         run(['docker', 'rename', SERVICE, previous])
     try:
         run(['docker', 'run', '-d', '--name', SERVICE, '--restart', 'unless-stopped', '--network', 'host', '--memory', '512m', '--cpus', '1',
-             '-v', str(ROOT / 'backups') + ':/support-backups:ro', '--stop-timeout', '65', '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3',
+             '-v', str(ROOT) + ':/support-control:ro', '-v', str(ROOT / 'backups') + ':/support-backups:ro', '--stop-timeout', '65', '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3',
              *sum((['-e', key] for key in settings), []), '--entrypoint', 'bun', 'hanasand-resilience-api:' + release, 'src/supportServer.ts'], settings, stdout=subprocess.DEVNULL)
-        for _ in range(45):
+        for _ in range(180):
             try:
                 with urllib.request.urlopen('http://127.0.0.1:19181/ready', timeout=2) as response:
                     state = json.load(response)
@@ -85,6 +86,8 @@ def start(release):
             time.sleep(1)
         raise RuntimeError('Independent support service did not become ready')
     except Exception:
+        logs = subprocess.run(['docker', 'logs', '--tail', '40', SERVICE], capture_output=True, text=True)
+        (ROOT / 'last-start-error.log').write_text(logs.stdout + logs.stderr)
         subprocess.run(['docker', 'rm', '-f', SERVICE], stdout=subprocess.DEVNULL)
         if previous:
             run(['docker', 'rename', previous, SERVICE])
@@ -116,7 +119,7 @@ def backup():
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('action', choices=('init', 'start', 'backup'))
+    parser.add_argument('action', choices=('init', 'start', 'backup', 'pause', 'resume'))
     parser.add_argument('value', nargs='?')
     args = parser.parse_args()
     ROOT.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -124,4 +127,12 @@ if __name__ == '__main__':
         fcntl.flock(lock, fcntl.LOCK_EX)
         if args.action == 'init': initialize(args.value)
         elif args.action == 'start': start(args.value)
-        else: backup()
+        elif args.action == 'backup': backup()
+        else:
+            config = json.loads(CONFIG.read_text())
+            config['SUPPORT_MAINTENANCE'] = '1' if args.action == 'pause' else '0'
+            temporary = CONFIG.with_suffix('.next')
+            temporary.write_text(json.dumps(config)); temporary.chmod(0o600); temporary.replace(CONFIG)
+            if args.action == 'pause': (ROOT / 'maintenance').touch(mode=0o600)
+            else: (ROOT / 'maintenance').unlink(missing_ok=True)
+            print('Support ' + ('paused' if args.action == 'pause' else 'resumed'))

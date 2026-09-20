@@ -1,11 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import WebSocket from 'ws'
-import { createRequire } from 'node:module'
-import { dirname, join } from 'node:path'
-
-// Use the installed client: Bun's built-in ws shim mishandles some proxied upgrades.
-const require = createRequire(import.meta.url)
-const UpstreamSocket: typeof WebSocket = require(join(dirname(require.resolve('ws/package.json')), 'lib/websocket.js'))
 import { supportServiceConfigured, shouldProxySupport } from './config.ts'
 export { supportServiceConfigured, shouldProxySupport, supportRequestPath, hasSupportServiceKey } from './config.ts'
 import { recoveryRequestAllowed } from '../resilience.ts'
@@ -35,7 +29,7 @@ export async function forwardSupportRequest(req: FastifyRequest, res: FastifyRep
 
 export function forwardSupportSocket(socket: WebSocket) {
     if (!supportServiceConfigured() || process.env.SUPPORT_INTERNAL_SERVICE === '1') return false
-    const upstream = new UpstreamSocket(process.env.SUPPORT_SERVICE_BASE!.replace(/^http/, 'ws').replace(/\/$/, '') + '/api/ws/support', {
+    const upstream = new WebSocket(process.env.SUPPORT_SERVICE_BASE!.replace(/^http/, 'ws').replace(/\/$/, '') + '/api/ws/support', {
         headers: { origin: 'https://hanasand.com', 'x-support-service-key': process.env.SUPPORT_SERVICE_KEY! }, handshakeTimeout: 5000,
     })
     const pending: Buffer[] = []
@@ -47,11 +41,11 @@ export function forwardSupportSocket(socket: WebSocket) {
     socket.on('error', close)
     upstream.on('error', () => socket.close(1011))
     upstream.on('close', () => socket.close(1013))
-    upstream.on('open', () => { for (const data of pending) upstream.send(data); pending.length = 0 })
+    upstream.on('open', () => { for (const data of pending) upstream.send(data.toString()); pending.length = 0 })
     socket.on('message', data => {
         const body = Buffer.from(data.toString())
         if (!allowed() || body.length > 4096 || upstream.bufferedAmount > 1024 * 1024) { socket.close(1013); return }
-        if (upstream.readyState === WebSocket.OPEN) upstream.send(body)
+        if (upstream.readyState === WebSocket.OPEN) upstream.send(body.toString())
         else if (upstream.readyState === WebSocket.CONNECTING && (bytes += body.length) <= 4096) pending.push(body)
         else socket.close(1008)
     })

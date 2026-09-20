@@ -1,5 +1,8 @@
 import { afterAll, beforeAll, expect, mock, test } from 'bun:test'
 import WebSocket from 'ws'
+import { mkdtempSync, writeFileSync, unlinkSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { once } from 'node:events'
 import { randomBytes, randomUUID } from 'node:crypto'
 
@@ -17,7 +20,7 @@ mock.module('../src/utils/auth/session.ts', () => ({ validateSession: async (aut
         session: { token, timestamp: new Date().toISOString() }, refreshed: { token, expires_at: new Date(Date.now() + 3600000).toISOString() } }
 } }))
 const { createSupportServer } = await import('../src/supportServer.ts')
-const { queryOnce: query } = await import('../src/utils/support/db.ts')
+const { queryOnce: query, withTransaction } = await import('../src/utils/support/db.ts')
 const { default: schema } = await import('../src/utils/support/schema.ts')
 const { validateSupportSession } = await import('../src/utils/support/auth.ts')
 const { sendSupportChat, supportSessionHash } = await import('../src/utils/support/conversation.ts')
@@ -29,8 +32,8 @@ const guest = { ...key, 'x-support-session': visitor, 'x-support-client-ip': '19
 let id = ''
 beforeAll(async () => {
     await query('DROP TABLE IF EXISTS support_auth_sessions, support_live_tickets, support_messages, support_tickets, users, api_rate_limit_buckets CASCADE')
-    await schema()
-    await schema()
+    await withTransaction(schema)
+    await withTransaction(schema)
 })
 afterAll(async () => { await app.close() })
 
@@ -119,4 +122,28 @@ test('one-use guest connections receive committed changes from the independent d
         await until(() => events.some(event => event.type === 'changed' && event.id === id))
         expect((await query('SELECT COUNT(*)::int AS count FROM support_live_tickets WHERE token_hash=$1', [supportSessionHash(ticket)])).rows[0].count).toBe(0)
     } finally { socket.terminate() }
+})
+
+
+test('maintenance resumes without restarting the service and backups stay private', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'support-maintenance-'))
+    const marker = join(directory, 'paused')
+    const backup = join(directory, 'snapshot.dump')
+    process.env.SUPPORT_MAINTENANCE_FILE = marker
+    process.env.SUPPORT_BACKUP_FILE = backup
+    try {
+        writeFileSync(marker, '')
+        expect((await app.inject({ url: '/api/support/chat', headers: guest })).statusCode).toBe(503)
+        writeFileSync(backup, 'PGDMPtest snapshot')
+        expect((await app.inject({ url: '/backup' })).statusCode).toBe(403)
+        const saved = await app.inject({ url: '/backup', headers: key })
+        expect(saved.statusCode).toBe(200)
+        expect(saved.body).toBe('PGDMPtest snapshot')
+        unlinkSync(marker)
+        expect((await app.inject({ url: '/api/support/chat', headers: { ...guest, 'x-support-client-ip': '192.0.2.4' } })).statusCode).toBe(200)
+    } finally {
+        delete process.env.SUPPORT_MAINTENANCE_FILE
+        delete process.env.SUPPORT_BACKUP_FILE
+        rmSync(directory, { recursive: true })
+    }
 })
