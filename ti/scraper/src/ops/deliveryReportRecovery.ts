@@ -38,7 +38,9 @@ export async function recoverDeliveryReport(item: any, options: any = {}) {
     && publicSourceReferenceUrl(r.referenceUrl) && zonedSourceTimestamp(r.timestamp));
   let evidence = retained, modelUsed = false, contentSha256: string | undefined;
   if (!evidence) {
-    if (!referenceUrl || source?.status !== 'active') return { status: 'unavailable', reason: 'No retained report evidence or active public source is available.' };
+    const approvedCandidate = options.allowApprovedPublicCandidates === true && source?.status === 'candidate'
+      && source.risk === 'low' && source.accessMethod === 'public_http' && source.governance?.approvalState === 'approved';
+    if (!referenceUrl || source?.status !== 'active' && !approvedCandidate) return { status: 'unavailable', reason: 'No retained report evidence or active public source is available.' };
     if (new URL(referenceUrl).hostname === 'www.cisa.gov'
       && new URL(referenceUrl).pathname === '/sites/default/files/feeds/known_exploited_vulnerabilities.json'
       && /^\d{4}-\d{2}-\d{2}$/.test(capture.metadata?.structuredFields?.dateAdded ?? '')) {

@@ -9,6 +9,16 @@ test('retired sources retain usable report evidence and its original reporter ro
   expect(await recoverDeliveryReport(archived,{fetchPublic:()=>{throw Error('retired source must not be fetched')}})).toMatchObject({status:'resolved',modelUsed:false,reference:{role:'actor',referenceUrl:reference.referenceUrl,evidencePath:reference.evidencePath}});
   expect(await recoverDeliveryReport({...archived,capture:{...item.capture,metadata:{reportTimestamps:[{...reference,evidencePath:''}]}}})).toMatchObject({status:'unavailable'});
 });
+test('explicit repairs can read approved public candidates without activating or bypassing source approval', async () => {
+  const candidate = { ...item,source:{...item.source,status:'candidate',risk:'low',accessMethod:'public_http',governance:{approvalState:'approved'}} };
+  const options = {allowApprovedPublicCandidates:true,fetchPublic:async()=>new Response('<meta property="article:published_time" content="2026-08-01T10:00:00Z">')};
+  expect(await recoverDeliveryReport(candidate)).toMatchObject({status:'unavailable'});
+  expect(await recoverDeliveryReport(candidate,options)).toMatchObject({status:'resolved'});
+  expect(candidate.source.status).toBe('candidate');
+  for (const source of [{...candidate.source,status:'retired'},{...candidate.source,status:'quarantined'},{...candidate.source,governance:{approvalState:'pending'}},{...candidate.source,risk:'high'}]) {
+    expect(await recoverDeliveryReport({...candidate,source},{...options,fetchPublic:()=>{throw Error('must not fetch')}})).toMatchObject({status:'unavailable'});
+  }
+});
 test('publication evidence accepts explicit dates, not updates or unzoned guesses', () => {
   expect(publicationEvidence('<meta content="2026-08-01T10:00:00Z" property="article:published_time">')?.timestamp).toBe('2026-08-01T10:00:00Z');
   expect(publicationEvidence('<script type="application/ld+json">{"datePublished":"2026-08-01T10:00:00Z"}</script>')?.timestamp).toBe('2026-08-01T10:00:00Z');

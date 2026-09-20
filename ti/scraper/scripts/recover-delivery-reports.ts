@@ -5,13 +5,15 @@ const batches = Number(process.argv[2] ?? 1);
 if (!Number.isSafeInteger(batches) || batches < 1 || batches > 400) throw new Error('Specify 1–400 recovery batches.');
 const scope = process.argv[3];
 if (scope !== undefined && scope !== 'global') throw new Error('The optional scope must be global.');
+const candidateFlag = process.argv[4];
+if (candidateFlag !== undefined && candidateFlag !== '--approved-candidates') throw new Error('The optional repair flag must be --approved-candidates.');
 
 // Recovery uses persisted claims and needs no collector history in memory.
 const store = await PostgresScraperStore.create({ hydrate: false, deferStartupChecks: true, runMaintenanceMigrations: false });
 const totals: Record<string, number> = {};
 let claimed = 0;
 let stopping = false;
-const worker = startDeliveryReportRecovery({ store: {
+const worker = startDeliveryReportRecovery({ allowApprovedPublicCandidates: candidateFlag === '--approved-candidates', store: {
   claimDeliveryRecovery: async (limit: number) => {
     const items = await store.claimDeliveryRecovery(limit, scope === 'global' ? null : undefined);
     claimed = items.length;
