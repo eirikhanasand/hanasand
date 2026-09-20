@@ -34,7 +34,7 @@ export default config
 
 function resolveApiUrl() {
     if (typeof window === 'undefined') {
-        return resolveServerApiUrl(internalApiUrl)
+        return internalApiUrl
     }
 
     const { hostname, protocol } = window.location
@@ -47,12 +47,6 @@ function resolveApiUrl() {
     }
 
     return publicApiUrl
-}
-
-function resolveServerApiUrl(url: string) {
-    return process.env.NODE_ENV === 'production' && isLoopbackUrl(url)
-        ? publicApiUrl
-        : url
 }
 
 function resolveCdnUrl() {
@@ -110,13 +104,4 @@ function shouldIgnoreBrowserPublicApi(url: string, hostname: string) {
         && isLocalUrl(url)
         && hostname !== 'localhost'
         && hostname !== '127.0.0.1'
-}
-
-function isLoopbackUrl(url: string) {
-    try {
-        const parsed = new URL(url)
-        return parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1'
-    } catch {
-        return false
-    }
 }

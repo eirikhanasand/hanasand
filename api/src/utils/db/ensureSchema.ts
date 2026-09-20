@@ -18,6 +18,7 @@ import ensureThesisSchema from './thesisSchema.ts'
 import { reservedUsernames } from '#utils/auth/reservedUsernames.ts'
 
 export default async function ensureSchema() {
+    await run('CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_vm_metrics_name_created ON vm_metrics(name, created_at DESC)')
     await ensureRoleSchema()
     await ensureAccountIdentitySchema()
     await ensureServiceAccountsSchema()

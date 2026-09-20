@@ -15,6 +15,7 @@ const tasks: TestTask[] = [
     { id: 'content-workspace', title: 'Content workspace selection and access failures', command: [bun, 'test', 'tests/content-workspace.test.ts'] },
     { id: 'support-proxy', title: 'Anonymous support session and origin protection', command: [bun, 'test', 'tests/support-proxy.test.ts'] },
     { id: 'support-ui', title: 'AI support, human handoff and internal queue layout', command: [bun, 'x', 'playwright', 'test', 'tests/support-ai.spec.ts', 'tests/support-layout.spec.ts', '--workers=2'], requires: 'playwright' },
+    { id: 'system-upstream', title: 'System internal API routing', command: [bun, 'test', 'tests/system-upstream.test.ts'] },
     { id: 'vm-console-start', title: 'Console startup and permission failures', command: [bun, 'test', 'tests/vm-console-start.test.ts'] },
     { id: 'logs-ui', title: 'Log severity, search, inline evidence and realtime reader', command: [bun, 'x', 'playwright', 'test', 'tests/realtime-logs.spec.ts', 'tests/logs-ux-triage.spec.ts', '--workers=1'], env: { PLAYWRIGHT_MANAGED_SERVERS: '0' }, requires: 'playwright' },
     { id: 'logs-pages', title: 'Logs routes on desktop/mobile in light/dark mode', command: [bun, 'scripts/check-dashboard-logs-ui.mjs'], requires: 'playwright' },
