@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, Radar, Search, ShieldCheck } from 'lucide-react'
+import { ArrowRight, Network, Radar, Search, ShieldCheck } from 'lucide-react'
 import type { Metadata } from 'next'
 import { buildRouteMetadata } from './seo'
 import NotFoundSuggestions from './not-found-suggestions'
@@ -31,6 +31,12 @@ const recoveryLinks = [
         href: '/pricing',
         icon: ShieldCheck,
     },
+    {
+        title: 'Browser',
+        body: 'Open suspicious sites in an isolated browser.',
+        href: '/browser',
+        icon: Network,
+    },
 ]
 
 export default function NotFound() {
@@ -42,7 +48,7 @@ export default function NotFound() {
                     <p className='text-sm font-semibold uppercase text-ui-primary'>Page not found</p>
                     <h1 className='text-4xl font-semibold tracking-normal md:text-6xl'>This page is not available.</h1>
                     <p className='text-base leading-7 text-ui-muted md:text-lg'>
-                        The link may have moved, or the route may belong to a private workspace. The main product paths below will get you back to the monitoring data, API, and buying flow.
+                        The link may have moved, or the route may belong to a private workspace.
                     </p>
                     <div className='flex flex-wrap gap-3'>
                         <Link href='/ti' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
@@ -55,7 +61,7 @@ export default function NotFound() {
                     </div>
                 </div>
 
-                <div className='grid gap-3 md:grid-cols-3'>
+                <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-4'>
                     {recoveryLinks.map((item) => {
                         const Icon = item.icon
                         return (
