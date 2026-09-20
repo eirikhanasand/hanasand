@@ -228,7 +228,7 @@ function RecordDetail({ item, form, setForm, saving, onSubmit }: { item: Item, f
             {item.reportRecovery?.reason ? <p className='mt-1'>{item.reportRecovery.reason}</p> : null}
             {item.reportRecovery?.nextAttemptAt && item.reportRecovery.status !== 'running' ? <p className='mt-1'>Next attempt: {date(item.reportRecovery.nextAttemptAt)}</p> : null}
         </div> : null}
-        {item.summary ? <div className='border-b border-ui-border p-3 text-xs leading-relaxed text-ui-text'><p className='whitespace-pre-line'>{item.summary}</p>{item.sources?.filter(source => source.url && /^https:\/\//.test(source.url)).map(source => <a key={source.url} href={source.url} target='_blank' rel='noreferrer' className='mr-3 mt-2 inline-block text-ui-primary underline'>{source.title || source.url}</a>)}</div> : null}
+        {item.summary ? <div className='border-b border-ui-border p-3 text-xs leading-relaxed text-ui-text'><p className='whitespace-pre-line'>{item.summary}</p>{item.sources?.filter(source => source.url && /^https:\/\//.test(source.url)).map(source => <a key={source.url} href={source.url} target='_blank' rel='noopener noreferrer' className='mr-3 mt-2 inline-block text-ui-primary underline'>{source.title || source.url}</a>)}</div> : null}
         {item.timestampAnomalies.length ? <div className='border-b border-ui-danger/30 bg-ui-danger/10 px-3 py-2 text-xs text-ui-danger'><strong>Ordering/source anomaly:</strong> {item.timestampAnomalies.join(', ')}</div> : null}
         <div className='grid lg:grid-cols-[minmax(0,1fr)_21rem]'>
             <section className='min-w-0 border-b border-ui-border p-3 lg:border-b-0 lg:border-r'>
