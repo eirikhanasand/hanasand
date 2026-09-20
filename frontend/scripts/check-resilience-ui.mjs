@@ -23,7 +23,7 @@ try {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
     page.on('pageerror', error => console.error(error.message))
     await page.goto(server.url.href)
-    await page.getByText('Preferred services are available.', { exact: true }).waitFor()
+    await page.getByText('All services are healthy.', { exact: true }).waitFor()
     await page.getByRole('heading', { name: 'Overview', exact: true }).waitFor()
     state = { mode: 'read_only_recovery', readOnly: true, services: [{ id: 'api', name: 'API', activeInstance: 'ovh-api', activeSite: 'ovhcloud', activeEndpoint: 'ovhcloud:19080', status: 'failed_over', instances: [{ id: 'inspur-api-1', site: 'inspur', healthy: false }, { id: 'inspur-api-2', site: 'inspur', healthy: false }, { id: 'ovh-api', site: 'ovhcloud', healthy: true }] }] }
     await page.reload()
@@ -38,12 +38,12 @@ try {
     await page.getByText('Status is reconnecting; availability has not been verified.', { exact: true }).waitFor()
     state = { mode: 'normal', readOnly: false, services: [] }
     await page.reload()
-    await page.getByText('Preferred services are available.', { exact: true }).waitFor()
+    await page.getByText('All services are healthy.', { exact: true }).waitFor()
     assert.equal(await page.getByText('Database recovery is read-only. Changes are paused.', { exact: true }).count(), 0)
     const longId = 'instance-' + 'a'.repeat(128)
     state = { mode: 'normal', readOnly: false, updatedAt: '2026-09-17T00:03:50.118914+00:00', services: ['Frontend', 'API', 'Authentication', 'Threat intelligence queries', 'Database'].map((name, index) => ({ id: String(index), name, activeInstance: longId, activeEndpoint: 'https://' + 'b'.repeat(128) + '.example.test:8080', status: 'healthy', instances: [{ id: longId, site: 'inspur', healthy: true }, { id: 'ovh-alternate', site: 'ovhcloud', healthy: false }] })), sites: { inspur: { fresh: true }, ovhcloud: { fresh: true } }, database: { status: 'up', replica: true, replayAt: '2026-09-17T00:03:50.118914+00:00' }, backups: { status: 'backup_failed', verifiedAt: '2026-09-13T02:29:31.106847+00:00' }, dns: { [longId + '.example.test']: { activeSite: 'inspur' } }, notifications: [{ title: longId, status: 'pending' }] }
     await page.reload()
-    await page.getByText('Preferred services are available.', { exact: true }).waitFor()
+    await page.getByText('All services are healthy.', { exact: true }).waitFor()
     for (const width of [320, 375, 390, 540, 640, 768, 820, 1024, 1279, 1280, 1440, 1920]) {
         await page.setViewportSize({ width, height: 900 })
         assert.equal(await page.locator('[data-resilience-cards]').isVisible(), width < 1280)
@@ -59,7 +59,7 @@ try {
         state.notifications = []
         await page.setViewportSize({ width: 1440, height: 900 })
         await page.reload()
-        await page.getByText('Preferred services are available.', { exact: true }).waitFor()
+        await page.getByText('All services are healthy.', { exact: true }).waitFor()
         const panel = page.getByRole('region', { name: 'Overview', exact: true })
         assert((await panel.boundingBox()).height < 700, 'Overview should fit within a desktop screen')
         for (const theme of ['dark', 'light']) {
@@ -68,7 +68,7 @@ try {
         }
         await page.setViewportSize({ width: 390, height: 844 })
         await page.reload()
-        await page.getByText('Preferred services are available.', { exact: true }).waitFor()
+        await page.getByText('All services are healthy.', { exact: true }).waitFor()
         await page.screenshot({ path: process.env.SYSTEM_LAYOUT_SCREENSHOT, fullPage: true })
     }
     console.log('Responsive layouts passed 320–1920px, including long IDs and endpoints.')

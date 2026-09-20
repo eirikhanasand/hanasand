@@ -52,7 +52,7 @@ export default function ResiliencePanel() {
         {!state ? <p>Loading service status…</p> : <>
             <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${normal ? 'border-ui-success/25 bg-ui-success/5 text-ui-success' : 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'}`} role='status'>
                 {normal ? <CheckCircle2 className='h-4 w-4 shrink-0' aria-hidden /> : <TriangleAlert className='h-4 w-4 shrink-0' aria-hidden />}
-                <span>{state.mode === 'unknown' || state.stale ? 'Status is reconnecting; availability has not been verified.' : state.readOnly ? 'Database recovery is read-only. Changes are paused.' : normal ? 'Preferred services are available.' : 'Backup services are active.'}</span>
+                <span>{state.mode === 'unknown' || state.stale ? 'Status is reconnecting; availability has not been verified.' : state.readOnly ? 'Database recovery is read-only. Changes are paused.' : normal ? 'All services are healthy.' : 'Backup services are active.'}</span>
                 <span className='ml-auto hidden text-ui-muted sm:inline'>Each service recovers independently</span>
             </div>
             <div className='grid min-w-0 gap-3 sm:grid-cols-2 xl:hidden' data-resilience-cards>
