@@ -371,7 +371,7 @@ async function main(): Promise<void> {
   try {
     await store.flush();
     const database = await store.databaseHealth();
-    if (!database.ok) throw new Error("restored threat-intelligence database is not readable");
+    if (!database.ok) throw new Error(`restored threat-intelligence database is not readable: ${JSON.stringify(database)}`);
     const captures = store.listCaptures();
     const objectEvidence = await reconcileRestoredObjectEvidence(captures, evidenceRoot, objectLedger);
 

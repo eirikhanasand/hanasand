@@ -286,6 +286,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   async databaseHealth(): Promise<DatabaseHealth> {
     let health: DatabaseHealth;
     try {
+      // Actor resolution treats the public default tenant as global. Keep named tenants isolated.
       const [row] = await this.sql<{ schema_ready: boolean; migration_ready: boolean; actor_profile_scope_ready: boolean }[]>`
         SELECT
           to_regnamespace('threat_intel') IS NOT NULL AS schema_ready,
@@ -302,13 +303,13 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             ) capture_id
             JOIN threat_intel.captures capture ON capture.id = capture_id
             WHERE COALESCE(profile.record->>'identityResolutionState', 'active') <> 'archived'
-              AND profile.tenant_id IS DISTINCT FROM capture.tenant_id
+              AND NULLIF(profile.tenant_id, 'default') IS DISTINCT FROM NULLIF(capture.tenant_id, 'default')
           )
           AND NOT EXISTS (
             SELECT 1
             FROM threat_intel.actor_aliases alias
             JOIN threat_intel.actor_profiles profile ON profile.id = alias.actor_profile_id
-            WHERE alias.tenant_id IS DISTINCT FROM profile.tenant_id
+            WHERE NULLIF(alias.tenant_id, 'default') IS DISTINCT FROM NULLIF(profile.tenant_id, 'default')
           )
           AND NOT EXISTS (
             SELECT 1
@@ -316,7 +317,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             JOIN threat_intel.captures capture ON capture.id = link.capture_id
             LEFT JOIN threat_intel.actor_profiles profile ON profile.id = link.subject_id
             WHERE link.subject_type = 'actor_profile'
-              AND (profile.id IS NULL OR profile.tenant_id IS DISTINCT FROM capture.tenant_id)
+              AND (profile.id IS NULL OR NULLIF(profile.tenant_id, 'default') IS DISTINCT FROM NULLIF(capture.tenant_id, 'default'))
           )
           AND NOT EXISTS (
             SELECT 1
@@ -327,15 +328,18 @@ export class PostgresScraperStore extends InMemoryScraperStore {
                 SELECT 1
                 FROM threat_intel.actor_profiles profile
               WHERE profile.id = workflow.record->>'subjectId'
-                AND profile.tenant_id IS NOT DISTINCT FROM workflow.tenant_id
+                AND NULLIF(profile.tenant_id, 'default') IS NOT DISTINCT FROM NULLIF(workflow.tenant_id, 'default')
               )
               AND NOT EXISTS (
                 SELECT 1
                 FROM threat_intel.actor_profile_scope_lineage lineage
                 LEFT JOIN threat_intel.actor_profiles target ON target.id = lineage.target_actor_profile_id
                 WHERE lineage.source_actor_profile_id = workflow.record->>'subjectId'
-                  AND lineage.scope_key = CASE WHEN workflow.tenant_id IS NULL THEN 'global' ELSE 'tenant:' || md5(workflow.tenant_id) END
-                  AND (lineage.target_actor_profile_id IS NULL OR target.tenant_id IS NOT DISTINCT FROM workflow.tenant_id)
+                  AND (
+                    lineage.scope_key = CASE WHEN workflow.tenant_id IS NULL THEN 'global' ELSE 'tenant:' || md5(workflow.tenant_id) END
+                    OR (NULLIF(workflow.tenant_id, 'default') IS NULL AND lineage.scope_key IN ('global', 'tenant:' || md5('default')))
+                  )
+                  AND (lineage.target_actor_profile_id IS NULL OR NULLIF(target.tenant_id, 'default') IS NOT DISTINCT FROM NULLIF(workflow.tenant_id, 'default'))
               )
           ) AS actor_profile_scope_ready
       `;
