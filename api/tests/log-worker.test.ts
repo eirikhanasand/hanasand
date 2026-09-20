@@ -12,6 +12,7 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
     if (sql.includes('INSERT INTO log_processing_cursors')) return { rows: [] }
     if (sql.includes('SELECT last_id, recent_id')) return { rows: [{ ...cursor }] }
     if (sql.includes('UPDATE log_processing_cursors')) {
+        if (sql.includes('history_end_id = recent_id') && cursor.history_end_id == null) cursor.history_end_id = cursor.recent_id
         if (sql.includes('recent_id = $1')) cursor.recent_id = p[0]
         if (sql.includes('last_id = GREATEST')) cursor.last_id = p[0]
         if (sql.includes('last_error = $1')) cursor.last_error = p[0]
@@ -27,6 +28,8 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
         reads.push({ sql, params: p })
         return { rows: (p[1] === watermark ? fresh : backlog).filter(row => BigInt(row.id) > BigInt(p[0]) && BigInt(row.id) <= BigInt(p[1])).slice(0, p[2] || 1000) }
     }
+    if (sql.startsWith('SELECT log_key FROM mill_events')) return { rows: Object.values(stored)
+        .filter(row => p[0].includes(row.key) && row.processing_status === 'processed').map(row => ({ log_key: row.key })) }
     if (sql.includes('INSERT INTO mill_events')) {
         for (const item of JSON.parse(p[0])) {
             if (!stored[item.id] || stored[item.id].processing_status === 'pending' || stored[item.id].processing_status === 'skipped' && stored[item.id].normalized.processing_reason === 'Organization is missing or inactive')
@@ -53,6 +56,7 @@ mock.module('../src/utils/mill/storedSources.ts', () => ({ processAdditionalLogS
 mock.module('../src/utils/mill/logWatermark.ts', () => ({ stableLogWatermark: async () => watermark }))
 mock.module('../src/handlers/mill.ts', () => ({
     loadConfiguredMillRules: async () => [],
+    collectMillEventFindings: () => ({ findings: [true] }),
     normalizeMillEvent: (event: any) => ({ timestamp: event.timestamp, eventType: event.event_type, action: event.action, outcome: event.outcome, normalized: event }),
     createMillFindings: async (_scope: string, _id: string, event: any) => { if (fail) throw new Error('Finding storage unavailable'); checked.push(event.normalized.message) },
 }))
@@ -207,4 +211,15 @@ test('an empty retained history range advances to its inspected upper bound', as
     fresh = []; backlog = []
     await processStoredLogs()
     expect(cursor.last_id).toBe('100')
+})
+
+test('new forward rows never extend the fixed historical range', async () => {
+    await processStoredLogs()
+    expect(cursor.history_end_id).toBe('100')
+    fresh = [makeLog('102')]
+    backlog = [makeLog('101')]
+    await processStoredLogs()
+    expect(reads.at(-1)!.params.slice(0, 2)).toEqual(['1', '100'])
+    expect(cursor).toMatchObject({ last_id: '100', history_end_id: '100', recent_id: '102' })
+    expect(checked).toEqual(['101', '1', '102'])
 })

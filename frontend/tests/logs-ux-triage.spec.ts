@@ -39,7 +39,7 @@ test('historical catch-up notice checks every source without losing bigint preci
     const sources = [
         { name: 'invalid', last_id: 'not-a-number', recent_id: '100' },
         { name: 'missing', last_id: null, recent_id: '100' },
-        { name: 'complete', last_id: '100', recent_id: '100' },
+        { name: 'complete', last_id: '100', recent_id: '200', history_end_id: '100' },
         { name: 'backfill', last_id: '9007199254740992', recent_id: '9007199254740993' },
     ]
     await page.route('**/api/backend/logs/search?*', route => route.fulfill({ json: { ...result(), processing: { ...result().processing, sources } } }))

@@ -399,23 +399,23 @@ export async function loadConfiguredMillRules(organizationId: string): Promise<M
     return [...builtIns, ...custom]
 }
 
-export async function createMillFindings(organizationId: string, eventId: string, event: NormalizedEvent, rules: MillRule[]) {
-    const insertFinding = async (org: string, id: string, severity: string, summary: string, eventIds: string[], evidence: MillEvent) => {
+export function collectMillEventFindings(organizationId: string, eventId: string, event: NormalizedEvent, rules: MillRule[]) {
+    const findings: Parameters<typeof persistFinding>[] = []
+    const insertFinding = (org: string, id: string, severity: string, summary: string, eventIds: string[], evidence: MillEvent) => {
         const configured = rules.find(rule => rule.id === id)
-        await persistFinding(org, id, configured?.severity || severity, summary, eventIds, { ...evidence, ruleVersion: configured?.version || '1', ruleName: configured?.name, ruleExplanation: configured?.explanation, detectionDefinition: configured?.definition })
+        findings.push([org, id, configured?.severity || severity, summary, eventIds, { ...evidence, ruleVersion: configured?.version || '1', ruleName: configured?.name, ruleExplanation: configured?.explanation, detectionDefinition: configured?.definition }])
     }
     const enabled = new Set(rules.filter(rule => rule.enabled !== false && (rule.source !== 'hanasand' || matchesMillRule(event.normalized, rule.definition?.conditions || []))).map(rule => rule.id))
     for (const rule of matchSecurityRules(event.normalized).filter(rule => enabled.has(rule.id))) {
-        await insertFinding(organizationId, rule.id, rule.severity, rule.name, [eventId], { process: event.normalized.process, host: event.normalized.host, user: event.normalized.user, eventId })
+        insertFinding(organizationId, rule.id, rule.severity, rule.name, [eventId], { process: event.normalized.process, host: event.normalized.host, user: event.normalized.user, eventId })
     }
-    const parameters = (id: string) => rules.find(rule => rule.id === id)?.definition?.parameters || millDefaultDefinition(id).parameters!
     for (const rule of rules.filter(rule => (rule.source === 'owned' || rule.source === 'open_source') && rule.enabled !== false)) {
         if (rule.definition && matchesMillRule(event.normalized, rule.definition.conditions)) {
-            await insertFinding(organizationId, rule.id, rule.severity, rule.name, [eventId], { ruleId: rule.id, matchedConditions: rule.definition.conditions, eventId })
+            insertFinding(organizationId, rule.id, rule.severity, rule.name, [eventId], { ruleId: rule.id, matchedConditions: rule.definition.conditions, eventId })
         }
     }
     if (enabled.has('network.signature_alert.v1') && event.eventType === 'network' && (event.action === 'alert' || stringValue(event.normalized.signature_id) || stringValue(event.normalized.signature))) {
-        await insertFinding(organizationId, 'network.signature_alert.v1', 'high', `Network signature matched: ${stringValue(event.normalized.signature) || stringValue(event.normalized.signature_id) || 'unlabelled signature'}`, [eventId], { signatureId: stringValue(event.normalized.signature_id), signature: stringValue(event.normalized.signature), protocol: stringValue(object(event.normalized.protocol).name || event.normalized.proto || object(event.normalized.flow).proto), sourceIp: event.sourceIp, destinationIp: stringValue(event.normalized.dest_ip || event.normalized.destip), eventId })
+        insertFinding(organizationId, 'network.signature_alert.v1', 'high', `Network signature matched: ${stringValue(event.normalized.signature) || stringValue(event.normalized.signature_id) || 'unlabelled signature'}`, [eventId], { signatureId: stringValue(event.normalized.signature_id), signature: stringValue(event.normalized.signature), protocol: stringValue(object(event.normalized.protocol).name || event.normalized.proto || object(event.normalized.flow).proto), sourceIp: event.sourceIp, destinationIp: stringValue(event.normalized.dest_ip || event.normalized.destip), eventId })
     }
     const vulnerability = object(event.normalized.vulnerability)
     const asset = object(event.normalized.asset)
@@ -423,8 +423,19 @@ export async function createMillFindings(organizationId: string, eventId: string
     const assetId = stringValue(asset.id || asset.asset_id || asset.hostname || event.normalized.asset_id || event.normalized.hostname)
     const assetVersion = stringValue(asset.version || asset.software_version || event.normalized.asset_version || event.normalized.version)
     if (enabled.has('vulnerability.cve_asset_context.v1') && event.eventType === 'vulnerability' && cve && /^CVE-\d{4}-\d{4,}$/i.test(cve) && assetId && assetVersion) {
-        await insertFinding(organizationId, 'vulnerability.cve_asset_context.v1', 'high', `${cve} reported on ${assetId}`, [eventId], { cve, assetId, assetVersion, eventId })
+        insertFinding(organizationId, 'vulnerability.cve_asset_context.v1', 'high', `${cve} reported on ${assetId}`, [eventId], { cve, assetId, assetVersion, eventId })
     }
+    return { enabled, findings }
+}
+
+export async function createMillFindings(organizationId: string, eventId: string, event: NormalizedEvent, rules: MillRule[]) {
+    const { enabled, findings } = collectMillEventFindings(organizationId, eventId, event, rules)
+    for (const finding of findings) await persistFinding(...finding)
+    const insertFinding = async (org: string, id: string, severity: string, summary: string, eventIds: string[], evidence: MillEvent) => {
+        const configured = rules.find(rule => rule.id === id)
+        await persistFinding(org, id, configured?.severity || severity, summary, eventIds, { ...evidence, ruleVersion: configured?.version || '1', ruleName: configured?.name, ruleExplanation: configured?.explanation, detectionDefinition: configured?.definition })
+    }
+    const parameters = (id: string) => rules.find(rule => rule.id === id)?.definition?.parameters || millDefaultDefinition(id).parameters!
     if (event.eventType !== 'authentication' || event.action !== 'login') return
     const brute = rules.find(rule => rule.id === 'auth.brute_force_success.v1')
     if (enabled.has('auth.brute_force_success.v1') && event.userId && event.outcome === 'success') {

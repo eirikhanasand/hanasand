@@ -405,9 +405,9 @@ services:
   postgres:
     image: postgres:15
     container_name: hanasand_database
-    mem_limit: 32g
-    memswap_limit: 32g
-    cpus: "8.0"
+    mem_limit: 64g
+    memswap_limit: 64g
+    cpus: "16.0"
     restart: always
     environment:
       POSTGRES_USER: ${DB_USER:-hanasand}

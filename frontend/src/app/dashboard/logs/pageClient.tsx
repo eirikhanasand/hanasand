@@ -13,7 +13,7 @@ import { dashboardPanelClass } from '@/components/dashboard/ui'
 
 type Event = { id: string, event_timestamp: string, normalized: { severity: string, level: string, log_type: string, service: string, host: string, message: string, process?: { executable?: string, command_line?: string }, detections?: Array<{ rule_id: string, summary: string, severity: string }>, rules_checked?: number, [key: string]: unknown } }
 type PendingCommands = { count: number, has_more: boolean, oldest_queued_at: string | null }
-type ProcessingSource = { name: string, last_id?: string | null, recent_id?: string | null }
+type ProcessingSource = { name: string, last_id?: string | null, recent_id?: string | null, history_end_id?: string | null }
 type Result = { rows: Event[], next_cursor?: string | null, counts: Array<{ severity: string, count: number }>, services: Array<{ service: string, count: number }>, processing: { updated_at: string, last_error?: string, skipped_events?: number, catchup?: CatchupProgress | null, sources?: ProcessingSource[], pending_commands?: PendingCommands } | null, generated_at?: string, summarize?: string, projection?: string[], limit: number }
 const colors: Record<string, string> = { low: 'text-ui-muted bg-ui-raised', medium: 'text-ui-warning bg-ui-warning/10', high: 'text-ui-danger bg-ui-danger/10', critical: 'text-ui-danger bg-ui-danger/20 ring-1 ring-ui-danger' }
 const fieldClass = 'rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm text-ui-text'
@@ -22,7 +22,8 @@ const fieldNames: Record<string, string> = { TimeGenerated: 'timestamp', Severit
 function projected(event: Event, fields: string[]) {
     return Object.fromEntries(fields.map(field => [field, field === 'TimeGenerated' ? event.event_timestamp : field === 'RuleId' ? event.normalized.detections?.map(rule => rule.rule_id) : fieldNames[field]?.split('.').reduce<unknown>((value, key) => value && typeof value === 'object' ? (value as Record<string, unknown>)[key] : undefined, event.normalized)]))
 }
-function isCatchingUp({ last_id, recent_id }: ProcessingSource) {
+function isCatchingUp({ last_id, recent_id, history_end_id }: ProcessingSource) {
+    recent_id = history_end_id ?? recent_id
     return typeof last_id === 'string' && typeof recent_id === 'string'
         && /^\d+$/.test(last_id) && /^\d+$/.test(recent_id)
         && BigInt(last_id) < BigInt(recent_id)

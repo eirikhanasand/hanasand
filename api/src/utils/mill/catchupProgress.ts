@@ -30,13 +30,14 @@ async function sampleProgress() {
             const previous = (await query('SELECT * FROM log_catchup_progress WHERE id = TRUE')).rows[0]
             const now = new Date()
             if (!previous || previous.attempted_at && now.getTime() - new Date(previous.attempted_at).getTime() < 30_000) return
-            const cursors = (await query('SELECT name, last_id, recent_id, checked_count FROM log_processing_cursors')).rows
+            const cursors = (await query('SELECT name, last_id, recent_id, history_end_id, checked_count FROM log_processing_cursors')).rows
             const parts: string[] = [], params: string[] = []
             const bind = (value: string) => { params.push(value); return '$' + params.length }
             for (const source of ['service_logs', 'login_events', 'traffic_events', 'system_events']) {
                 const cursor = cursors.find(row => row.name === source)
                 if (!cursor?.recent_id) continue
-                parts.push(`SELECT COUNT(*) AS count FROM ${source} WHERE id > ${bind(cursor.last_id)} AND id <= ${bind(cursor.recent_id)}`)
+                parts.push(`SELECT COUNT(*) AS count FROM ${source} WHERE id > ${bind(cursor.last_id)} AND id <= ${bind(cursor.history_end_id ?? cursor.recent_id)}`)
+                parts.push(`SELECT COUNT(*) AS count FROM ${source} WHERE id > ${bind(cursor.recent_id)}`)
             }
             const recovery = cursors.find(row => row.name === 'process_logs_recovery')
             if (recovery?.recent_id && BigInt(recovery.recent_id) > 0n) {
