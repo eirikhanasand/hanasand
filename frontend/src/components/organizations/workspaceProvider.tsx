@@ -8,8 +8,8 @@ import { cleanWorkspaceUrl, organizationFromParams, type Workspace } from '@/uti
 import WorkspaceSwitchNotice, { type WorkspaceSwitchNoticeState } from './workspaceSwitchNotice'
 
 type Organization = { id: string, name?: string, slug?: string, role?: string, lifecycleStatus?: string }
-type Context = { organizationId: string, organizations: Organization[], loading: boolean, switching: boolean, switchOrganization: (id: string) => Promise<void> }
-const WorkspaceContext = createContext<Context>({ organizationId: '', organizations: [], loading: true, switching: false, switchOrganization: async () => {} })
+type Context = { organizationId: string, organizationName: string, organizations: Organization[], loading: boolean, unavailable: boolean, switching: boolean, switchOrganization: (id: string) => Promise<void> }
+const WorkspaceContext = createContext<Context>({ organizationId: '', organizationName: '', organizations: [], loading: true, unavailable: false, switching: false, switchOrganization: async () => {} })
 export const useWorkspace = () => useContext(WorkspaceContext)
 export default function WorkspaceProvider({ initial, enabled: authenticated, children }: { initial: Workspace | null, enabled: boolean, children: ReactNode }) {
     const params = useSearchParams()
@@ -21,6 +21,8 @@ export default function WorkspaceProvider({ initial, enabled: authenticated, chi
     const [loading, setLoading] = useState(true)
     const [switching, setSwitching] = useState(false)
     const [error, setError] = useState('')
+    const [organizationError, setOrganizationError] = useState('')
+    const [listAttempt, setListAttempt] = useState(0)
     const [notice, setNotice] = useState<WorkspaceSwitchNoticeState | null>(null)
     const [pendingWorkspace, setPendingWorkspace] = useState<Workspace | null>(null)
     const attempted = useRef('')
@@ -45,13 +47,42 @@ export default function WorkspaceProvider({ initial, enabled: authenticated, chi
     useEffect(() => {
         if (!enabled) { setLoading(false); return }
         setLoading(true)
+        setOrganizationError('')
         const controller = new AbortController()
-        fetch('/api/organizations', { signal: controller.signal, cache: 'no-store' }).then(async response => {
-            if (!response.ok) throw new Error('Organizations could not be loaded.')
-            const payload = await response.json(); setOrganizations(payload.organizations || [])
-        }).catch(cause => { if (!controller.signal.aborted) setError(cause.message) }).finally(() => { if (!controller.signal.aborted) setLoading(false) })
-        return () => controller.abort()
-    }, [enabled])
+        let retryTimer: ReturnType<typeof setTimeout>
+        let attempt = 0
+        async function load() {
+            let retryable = true
+            let message = 'Organizations could not be loaded.'
+            try {
+                const response = await fetch('/api/organizations', { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]), cache: 'no-store' })
+                retryable = response.status === 408 || response.status === 429 || response.status >= 500
+                if (response.status === 401) message = 'Your session expired. Sign in again to load organizations.'
+                if (!response.ok) throw new Error(message)
+                const payload = await response.json()
+                if (!Array.isArray(payload.organizations)) throw new Error('Organizations could not be loaded.')
+                if (controller.signal.aborted) return
+                setOrganizations(payload.organizations); setOrganizationError(''); setLoading(false)
+            } catch {
+                if (controller.signal.aborted) return
+                if (retryable && attempt < 2) {
+                    retryTimer = setTimeout(() => void load(), [1000, 3000][attempt++])
+                    return
+                }
+                setOrganizationError(message)
+                setLoading(false)
+            }
+        }
+        void load()
+        return () => { controller.abort(); clearTimeout(retryTimer) }
+    }, [enabled, listAttempt])
+    useEffect(() => {
+        if (!enabled || !organizationError) return
+        const retry = () => setListAttempt(current => current + 1)
+        window.addEventListener('focus', retry)
+        window.addEventListener('online', retry)
+        return () => { window.removeEventListener('focus', retry); window.removeEventListener('online', retry) }
+    }, [enabled, organizationError])
     useEffect(() => {
         if (!enabled || !requested) return
         const key = `${pathname}:${params.toString()}`
@@ -83,7 +114,7 @@ export default function WorkspaceProvider({ initial, enabled: authenticated, chi
         window.addEventListener('focus', refresh)
         return () => { channel?.close(); window.removeEventListener('focus', refresh) }
     }, [enabled, organizationId, switching, requested])
-    return <WorkspaceContext.Provider value={{ organizationId, organizations, loading, switching, switchOrganization }}>
+    return <WorkspaceContext.Provider value={{ organizationId, organizationName: initial?.name || '', organizations, loading, unavailable: Boolean(organizationError), switching, switchOrganization }}>
         {enabled && notice && <WorkspaceSwitchNotice notice={notice} onDismiss={() => setNotice(null)} />}
         {enabled && (switching && linkedSwitch.current || requested && requested !== organizationId) ? <main className='fixed inset-0 z-[1200] flex min-h-dvh flex-col overflow-auto bg-ui-canvas text-ui-text'>
             <header className='flex h-20 shrink-0 items-center border-b border-ui-border bg-ui-panel px-6 sm:px-10'><BrandLogo /></header>
@@ -99,15 +130,15 @@ export default function WorkspaceProvider({ initial, enabled: authenticated, chi
                     </div></> : <><p className='mt-3 text-sm leading-6 text-ui-muted'>Loading your workspace. This should only take a moment.</p><div role='status' className='mt-7 flex items-center justify-center gap-2 text-sm text-ui-muted'><LoaderCircle aria-hidden className='h-4 w-4 animate-spin motion-reduce:animate-none' />Switching organization…</div></>}
                 </section>
             </div>
-        </main> : <><Fragment key={organizationId}>{children}</Fragment>{enabled && error && <div role='alert' className='fixed bottom-4 right-4 z-[1100] max-w-sm rounded-lg border border-ui-border bg-ui-panel p-3 text-sm text-ui-danger'>{error}</div>}</>}
+        </main> : <><Fragment key={organizationId}>{children}</Fragment>{enabled && (error || organizationError) && <div role='alert' className='fixed bottom-4 right-4 z-[1100] max-w-sm rounded-lg border border-ui-border bg-ui-panel p-3 text-sm text-ui-danger'>{error || organizationError}{organizationError && <button type='button' onClick={() => setListAttempt(current => current + 1)} className='ml-3 rounded px-2 py-1 font-semibold text-ui-text hover:bg-ui-raised focus-visible:outline-ui-primary'>Retry organizations</button>}</div>}</>}
     </WorkspaceContext.Provider>
 }
 export function OrganizationSwitcher() {
-    const { organizationId, organizations, loading, switching, switchOrganization } = useWorkspace()
+    const { organizationId, organizationName, organizations, loading, unavailable, switching, switchOrganization } = useWorkspace()
     return <label className='flex min-w-0 items-center gap-2 text-sm font-semibold text-ui-text'>
-        <select aria-label='Org' aria-busy={switching} value={organizationId} disabled={loading || switching} onChange={event => void switchOrganization(event.target.value)} className='h-10 min-w-0 max-w-20 rounded-lg border border-ui-border bg-ui-panel px-2 text-sm text-ui-text sm:max-w-48'>
+        <select aria-label='Org' aria-busy={loading || switching} value={organizationId} disabled={loading || switching || unavailable} onChange={event => void switchOrganization(event.target.value)} className='h-10 min-w-0 max-w-20 rounded-lg border border-ui-border bg-ui-panel px-2 text-sm text-ui-text sm:max-w-48'>
             <option value=''>Personal workspace</option>
-            {organizationId && !organizations.some(org => org.id === organizationId) && <option value={organizationId}>Organization unavailable</option>}
+            {organizationId && !organizations.some(org => org.id === organizationId) && <option value={organizationId}>{loading || unavailable ? organizationName || 'Loading organization…' : 'Organization unavailable'}</option>}
             {organizations.map(org => <option key={org.id} value={org.id} disabled={org.lifecycleStatus !== 'active'}>{org.name || org.slug || org.id}</option>)}
         </select>
     </label>
