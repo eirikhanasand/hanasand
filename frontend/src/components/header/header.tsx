@@ -20,7 +20,6 @@ import { OrganizationSwitcher } from '@/components/organizations/workspaceProvid
 import SupportAssistant from '@/components/support/supportAssistant'
 
 const productItems = [
-    { title: 'All products and solutions', detail: 'Explore monitoring, investigation, and security tools.', href: '/solutions', icon: ShieldCheck },
     { title: 'Dark Web Monitoring', detail: 'Company and vendor alerts from watched exposure sources.', href: '/dwm', icon: BellRing },
     { title: 'Security Monitoring', detail: 'Find suspicious logins and other security events.', href: '/solutions/mill', icon: ShieldAlert },
     { title: 'Security Scanner', detail: 'Safe validation scans for approved Hanasand assets.', href: '/solutions/scanner', icon: ShieldAlert },

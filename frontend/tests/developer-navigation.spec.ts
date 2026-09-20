@@ -4,6 +4,22 @@ test.beforeEach(async ({ page }) => {
     await page.route('**/api/organizations', route => route.fulfill({ status: 401, json: { error: 'Unauthorized.' } }))
 })
 
+test('retired Solutions page is unavailable and absent from navigation', async ({ page, request }) => {
+    const response = await page.goto('/solutions')
+    expect(response?.status()).toBe(404)
+    await expect(page.getByRole('heading', { name: 'This page is not available.' })).toBeVisible()
+    await expect(page.locator('a[href="/solutions"]')).toHaveCount(0)
+
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.getByRole('button', { name: 'Open navigation', exact: true }).click()
+    await expect(page.locator('a[href="/solutions"]')).toHaveCount(0)
+    await expect(page.getByRole('link', { name: 'Dark Web Monitoring', exact: true }).first()).toBeVisible()
+
+    const sitemap = await request.get('/sitemap.xml')
+    expect(sitemap.ok()).toBe(true)
+    expect(await sitemap.text()).not.toContain('<loc>https://hanasand.com/solutions</loc>')
+})
+
 test('public navigation has distinct destinations and useful developer shortcuts', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto('/developers')
@@ -13,7 +29,8 @@ test('public navigation has distinct destinations and useful developer shortcuts
     await navigation.getByRole('button', { name: 'Product', exact: true }).hover()
     const destinations = await navigation.locator('a[href]').evaluateAll(links => links.map(link => link.getAttribute('href')))
     expect(new Set(destinations).size).toBe(destinations.length)
-    await expect(navigation.getByRole('link', { name: /All products and solutions/ })).toBeVisible()
+    await expect(navigation.getByRole('link', { name: /^Dark Web Monitoring/ })).toBeVisible()
+    await expect(page.locator('a[href="/solutions"]')).toHaveCount(0)
     await navigation.getByRole('button', { name: 'Developers', exact: true }).focus()
     await page.mouse.move(0, 800)
     const reference = navigation.getByRole('link', { name: /^API reference/ })

@@ -22,7 +22,6 @@ const footerGroups = [
     {
         title: 'Solutions',
         links: [
-            { label: 'All Solutions', href: '/solutions', icon: ShieldCheck },
             { label: 'Browser', href: '/browser', icon: Network },
             { label: 'API docs', href: '/developers', icon: Code2 },
             { label: 'Pricing', href: '/pricing', icon: Activity },

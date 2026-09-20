@@ -8,7 +8,6 @@ test('pricing and subscription use one truthful commercial access contract', asy
     const contract = await readFile(path.join(root, 'src/utils/commercialAccess.ts'), 'utf8')
     const pricing = await readFile(path.join(root, 'src/app/pricing/page.tsx'), 'utf8')
     const subscription = await readFile(path.join(root, 'src/app/dashboard/subscription/page.tsx'), 'utf8')
-    const solutions = await readFile(path.join(root, 'src/app/solutions/page.tsx'), 'utf8')
     const loadTesting = await readFile(path.join(root, 'src/app/dashboard/load-testing/page.tsx'), 'utf8')
     const homepage = await readFile(path.join(root, 'src/app/page.tsx'), 'utf8')
     const contact = await readFile(path.join(root, 'src/components/contact/contact.tsx'), 'utf8')
@@ -33,7 +32,6 @@ test('pricing and subscription use one truthful commercial access contract', asy
         expect(contract).not.toContain(unsupported)
     }
     for (const unsupported of ['$19/mo', '$79/mo', '$249/mo', 'Starter and team tiers', 'Bundled with monitoring', 'Slack, webhooks, cases', 'email, webhook, Slack/Jira/SIEM']) {
-        expect(solutions).not.toContain(unsupported)
         expect(loadTesting).not.toContain(unsupported)
         expect(homepage).not.toContain(unsupported)
     }

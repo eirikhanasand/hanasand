@@ -10,7 +10,6 @@ test('legacy onion and regular sandbox routes redirect to the unified browser wo
     const regularRouteSource = await readFile(path.join(root, 'src/app/browser-sandbox/page.tsx'), 'utf8')
     const browserRouteSource = await readFile(path.join(root, 'src/app/browser/page.tsx'), 'utf8')
     const browserClientSource = await readFile(path.join(root, 'src/app/browser/pageClient.tsx'), 'utf8')
-    const solutionsSource = await readFile(path.join(root, 'src/app/solutions/page.tsx'), 'utf8')
     const headerSource = await readFile(path.join(root, 'src/components/header/header.tsx'), 'utf8')
     const footerSource = await readFile(path.join(root, 'src/components/footer/footer.tsx'), 'utf8')
 
@@ -18,7 +17,6 @@ test('legacy onion and regular sandbox routes redirect to the unified browser wo
     assert(regularRouteSource.includes('redirect(\'/browser\')'))
     assert(browserRouteSource.includes('path: \'/browser\''))
     assert(browserRouteSource.includes('<BrowserPageClient />'))
-    assert(solutionsSource.includes('href: \'/browser\''))
     assert(headerSource.includes('href: \'/browser\''))
     assert(footerSource.includes('href: \'/browser\''))
 
