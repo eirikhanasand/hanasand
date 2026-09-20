@@ -20,7 +20,7 @@ export async function processLogBatch(logs: LogInput[], organizationId: string, 
     if (!logs.length) return
     // Priority delivery and retry can overlap the historical cursor. Read the
     // acknowledgement before normalization instead of locking completed rows again.
-    const completed = await run("SELECT log_key FROM mill_events WHERE log_key = ANY($1::text[]) AND processing_status = 'processed'", [logs.map(log => `service:${log.id}`)])
+    const completed = await run('SELECT log_key FROM mill_events WHERE log_key = ANY($1::text[]) AND processing_status = \'processed\'', [logs.map(log => `service:${log.id}`)])
     const completedKeys = new Set(completed.rows.map(row => row.log_key))
     const prepared = logs.filter(log => !completedKeys.has(`service:${log.id}`)).map(log => {
         const key = `service:${log.id}`
@@ -126,7 +126,7 @@ export async function processStoredLogs() {
             else await run('UPDATE log_processing_cursors SET recent_id = GREATEST($1::bigint - 200, 0) WHERE name = \'service_logs\' AND recent_id IS NULL', [watermark])
             // Freeze the historical range. Forward delivery must not keep adding
             // already checked rows to the tail of the backfill.
-            await run("UPDATE log_processing_cursors SET history_end_id = recent_id WHERE name = 'service_logs' AND history_end_id IS NULL")
+            await run('UPDATE log_processing_cursors SET history_end_id = recent_id WHERE name = \'service_logs\' AND history_end_id IS NULL')
             const cursor = (await run('SELECT last_id, recent_id, history_end_id FROM log_processing_cursors WHERE name = \'service_logs\'')).rows[0]
             const configured = new Map<string, Awaited<ReturnType<typeof loadConfiguredMillRules>>>()
             const processScopes = async (logs: LogInput[]) => {
