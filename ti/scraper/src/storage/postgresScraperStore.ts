@@ -86,6 +86,7 @@ const DEFAULT_MIGRATIONS = [
   { version: "047_enrichment_activity_index", path: fileURLToPath(new URL("../../migrations/047_enrichment_activity_index.sql", import.meta.url)) },
   { version: "048_active_actor_index", path: fileURLToPath(new URL("../../migrations/048_active_actor_index.sql", import.meta.url)) },
   { version: "049_actor_activity_projection", path: fileURLToPath(new URL("../../migrations/049_actor_activity_projection.sql", import.meta.url)) },
+  { version: "050_collection_plan_startup_indexes", path: fileURLToPath(new URL("../../migrations/050_collection_plan_startup_indexes.sql", import.meta.url)) },
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 const MAINTENANCE_MIGRATION_VERSIONS = new Set(["037_remove_parser_fallback_artifacts"]);
@@ -2601,10 +2602,19 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           WHERE record_type = 'collection_plan'
           ORDER BY updated_at DESC, id DESC
           LIMIT ${collectionPlanHydrationLimit}
+        ), selected_collection_plans AS (
+          SELECT id FROM recent_collection_plans
+          UNION
+          SELECT id FROM threat_intel.workflow_records
+          WHERE record_type = 'collection_plan'
+            AND (record->>'status' IN ('queued', 'running', 'failed')
+              OR NULLIF(record->>'nextEligibleAt', '') IS NOT NULL)
+            AND (record->>'status' IN ('queued', 'running', 'failed')
+              OR COALESCE(NULLIF(record->>'nextEligibleAt', '')::timestamptz, '-infinity'::timestamptz) >= now())
         )
-        SELECT record_type, record FROM threat_intel.workflow_records
+        SELECT record_type, record, created_at FROM threat_intel.workflow_records
           WHERE record_type IN (
-            'collection_plan', 'collection_run', 'replay_job', 'discovery_evidence', 'live_search_snapshot',
+            'collection_run', 'replay_job', 'discovery_evidence', 'live_search_snapshot',
             'dwm_watchlist', 'dwm_webhook_delivery', 'organization', 'organization_member',
             'organization_invite', 'webhook_destination', 'case', 'actor_org_relevance_review',
             'analyst_source_activation_packet', 'analyst_victim_notification_packet',
@@ -2612,17 +2622,20 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             'evaluation_annotation', 'evaluation_adjudication'
           )
           AND (
-            record_type <> 'collection_plan'
-            OR id IN (SELECT id FROM recent_collection_plans)
-            OR record->>'status' IN ('queued', 'running', 'failed')
-            OR COALESCE(NULLIF(record->>'nextEligibleAt', '')::timestamptz, '-infinity'::timestamptz) >= now()
-          )
-          AND (
             NOT ${deferHighVolumeHydration}
-            OR record_type NOT IN ('collection_plan', 'collection_run')
+            OR record_type <> 'collection_run'
             OR record->>'status' IN ('queued', 'running', 'failed')
             OR created_at >= now() - interval '30 days'
           )
+        UNION ALL
+        SELECT record_type, record, created_at FROM threat_intel.workflow_records
+          WHERE record_type = 'collection_plan'
+            AND id IN (SELECT id FROM selected_collection_plans)
+            AND (
+              NOT ${deferHighVolumeHydration}
+              OR record->>'status' IN ('queued', 'running', 'failed')
+              OR created_at >= now() - interval '30 days'
+            )
           ORDER BY created_at`,
         workflowHistoryLimit > 0
           ? this.sql`SELECT record_type, record FROM threat_intel.workflow_records WHERE record_type = 'analyst_metadata_review_task' AND record->>'recordKind' = 'automatic_intelligence_review_task' ORDER BY created_at DESC LIMIT ${workflowHistoryLimit}`
