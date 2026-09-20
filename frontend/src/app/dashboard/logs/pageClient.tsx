@@ -14,7 +14,7 @@ import { dashboardPanelClass } from '@/components/dashboard/ui'
 type Event = { id: string, event_timestamp: string, normalized: { severity: string, level: string, log_type: string, service: string, host: string, message: string, process?: { executable?: string, command_line?: string }, detections?: Array<{ rule_id: string, summary: string, severity: string }>, rules_checked?: number, [key: string]: unknown } }
 type PendingCommands = { count: number, has_more: boolean, oldest_queued_at: string | null }
 type ProcessingSource = { name: string, last_id?: string | null, recent_id?: string | null }
-type Result = { rows: Event[], counts: Array<{ severity: string, count: number }>, services: Array<{ service: string, count: number }>, processing: { updated_at: string, last_error?: string, skipped_events?: number, catchup?: CatchupProgress | null, sources?: ProcessingSource[], pending_commands?: PendingCommands } | null, generated_at?: string, summarize?: string, projection?: string[], limit: number }
+type Result = { rows: Event[], next_cursor?: string | null, counts: Array<{ severity: string, count: number }>, services: Array<{ service: string, count: number }>, processing: { updated_at: string, last_error?: string, skipped_events?: number, catchup?: CatchupProgress | null, sources?: ProcessingSource[], pending_commands?: PendingCommands } | null, generated_at?: string, summarize?: string, projection?: string[], limit: number }
 const colors: Record<string, string> = { low: 'text-ui-muted bg-ui-raised', medium: 'text-ui-warning bg-ui-warning/10', high: 'text-ui-danger bg-ui-danger/10', critical: 'text-ui-danger bg-ui-danger/20 ring-1 ring-ui-danger' }
 const fieldClass = 'rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm text-ui-text'
 const logTables = ['Logs', 'ProcessLogs', 'SigninLogs', 'ApplicationLogs', 'HttpLogs', 'SystemLogs']
@@ -48,6 +48,8 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
     const [copied, setCopied] = useState('')
     const [errors, setErrors] = useState(initialErrors)
     const [refresh, setRefresh] = useState(0)
+    const [paged, setPaged] = useState(false)
+    const loadMore = useRef<(cursor: string) => void>(() => {})
     const editing = useRef(false)
     const pausedUpdates = useRef(false)
     const queryIdentity = useRef('')
@@ -79,9 +81,11 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
         const identity = JSON.stringify([view, service, search, table, advanced, appliedHql, hours, severity])
         if (queryIdentity.current !== identity) { setData(null); setError(''); queryIdentity.current = identity }
         setBusy(false)
+        setPaged(false)
         const controller = new AbortController()
         let inFlight = false
-        async function load(manual = false) {
+        let browsingPages = false
+        async function load(manual = false, cursor?: string) {
             if (inFlight || (!manual && (pausedUpdates.current || editing.current))) return
             inFlight = true; setBusy(true)
             const params = new URLSearchParams({ hours, hql: advanced && appliedHql ? appliedHql : `${table} | take 200` })
@@ -90,13 +94,24 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
             if (view === 'realtime') params.set('severity', 'high,critical')
             else if (severity !== 'all') params.set('severity', severity)
             if (view === 'dashboard') params.set('stats', '1')
+            if (view === 'search' && !advanced) params.set('paginate', '1')
+            if (cursor) params.set('cursor', cursor)
             try {
                 const response = await fetch(view === 'errors' ? '/api/backend/logs/errors?limit=150' : `/api/backend/logs/search?${params}`, { signal: controller.signal, cache: 'no-store' })
                 const body = await response.json().catch(() => ({}))
                 if (!response.ok) throw new Error(body.error || 'Could not search logs.')
                 if (!controller.signal.aborted && (manual || !pausedUpdates.current)) {
                     if (view === 'errors') setErrors(body)
-                    else setData(previous => view === 'realtime' && previous && !body.summarize ? { ...body, rows: retainEvents(previous.rows, body.rows) } : body)
+                    else setData(previous => {
+                        if (cursor && previous) {
+                            const seen = new Set(previous.rows.map(row => row.id))
+                            return { ...body, rows: [...previous.rows, ...body.rows.filter((row: Event) => !seen.has(row.id))] }
+                        }
+                        // Keep the pages being read in place while progress keeps refreshing.
+                        if (browsingPages && previous) return { ...previous, processing: body.processing, generated_at: body.generated_at }
+                        return view === 'realtime' && previous && !body.summarize ? { ...body, rows: retainEvents(previous.rows, body.rows) } : body
+                    })
+                    if (cursor) { browsingPages = true; setPaged(true) }
                     setError('')
                 }
             } catch (cause) { if (!controller.signal.aborted && (manual || !pausedUpdates.current)) setError(cause instanceof Error ? cause.message : 'Could not load logs.') }
@@ -105,8 +120,9 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
         // Pause freezes automatic updates; explicit filters, retries and Resume
         // still load once even while an event's text is selected.
         const debounce = setTimeout(() => void load(true), 250)
+        loadMore.current = cursor => void load(true, cursor)
         const interval = view !== 'errors' ? setInterval(() => void load(), view === 'search' ? 10_000 : 5000) : undefined
-        return () => { controller.abort(); clearTimeout(debounce); clearInterval(interval) }
+        return () => { controller.abort(); clearTimeout(debounce); clearInterval(interval); loadMore.current = () => {} }
     }, [view, service, search, table, advanced, appliedHql, hours, severity, refresh])
     function togglePaused() {
         pausedUpdates.current = !pausedUpdates.current
@@ -158,7 +174,7 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
                 <div className={`${dashboardPanelClass} flex flex-wrap gap-4 p-5`}><Link className='text-sm font-semibold text-ui-primary' href='/logs/realtime'>Investigate high and critical activity →</Link><Link className='text-sm font-semibold text-ui-primary' href='/logs/errors'>Review application errors →</Link></div>
                 <details className={`${dashboardPanelClass} p-4`}><summary className='cursor-pointer text-sm font-semibold'>Operational counters</summary>{pendingCommands && <p className='mt-3 text-sm'>Commands awaiting checks: {pendingCommands.has_more ? 'more than ' : ''}{pendingCommands.count.toLocaleString()}</p>}<p className='mt-3 text-xs text-ui-muted'>Most active services in the selected time range</p><dl className='mt-2 grid gap-2'>{data?.services.map(item => <div key={item.service} className='flex justify-between gap-3 text-sm'><dt>{item.service}</dt><dd>{item.count.toLocaleString()}</dd></div>)}</dl></details>
             </> : <section className={`${dashboardPanelClass} min-w-0 overflow-hidden`} aria-label='Log events'>
-                <div className='flex flex-wrap justify-between gap-2 border-b border-ui-border p-3 text-xs text-ui-muted'><span>{data?.rows.length || 0} results{data && data.rows.length === data.limit ? ` · limited to ${data.limit}; narrow your search or use take up to 500` : ''}</span><span role='status'>{busy ? 'Searching…' : paused ? 'Paused' : view === 'realtime' ? 'Updates every 5 seconds' : 'Results'}{copied ? ' · Event copied' : ''}</span></div>
+                <div className='flex flex-wrap justify-between gap-2 border-b border-ui-border p-3 text-xs text-ui-muted'><span>{data?.rows.length || 0} results{data && data.rows.length === data.limit && (view !== 'search' || advanced) ? ` · limited to ${data.limit}; narrow your search or use take up to 500` : ''}</span><span role='status'>{busy ? 'Searching…' : paused ? 'Paused' : view === 'realtime' ? 'Updates every 5 seconds' : 'Results'}{copied ? ' · Event copied' : ''}</span></div>
                 <EventFeed rows={data?.rows || []}>{data?.summarize ? <table className='w-full text-left text-sm'><thead><tr><th className='p-3'>{data.summarize}</th><th className='p-3'>Count</th></tr></thead><tbody>{(data.rows as unknown as Array<{value: string,count: number}>).map(row => <tr key={row.value}><td className='p-3'>{row.value}</td><td className='p-3'>{row.count}</td></tr>)}</tbody></table> : data?.rows.map(event => <article key={event.id} className='select-text border-b border-ui-border p-4 last:border-b-0' onPointerDown={() => { editing.current = true }} onPointerUp={() => { editing.current = false }} onPointerLeave={() => { editing.current = false }}>
                     <div className='flex flex-wrap items-start justify-between gap-3'>
                         <button type='button' onClick={() => toggle(event.id)} aria-expanded={!!expanded[event.id]} aria-controls={`log-details-${event.id}`} className='flex min-w-0 flex-wrap items-center gap-2 break-all text-left text-sm font-semibold'><ChevronDown size={16} aria-hidden className={expanded[event.id] ? '' : '-rotate-90'} />{event.normalized.service}<span className='font-normal text-ui-muted'>{event.normalized.host}</span></button>
@@ -170,6 +186,10 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
                     {expanded[event.id] && <div id={`log-details-${event.id}`} className='mt-3 rounded-md border border-ui-border bg-ui-raised p-3'><p className='mb-2 text-xs text-ui-muted'>{typeof event.normalized.rules_checked === 'number' ? `Mill checked ${event.normalized.rules_checked} enabled rules. ` : ''}Full event and detection evidence:</p><pre className='max-h-96 select-text overflow-auto whitespace-pre-wrap wrap-break-word font-mono text-xs'>{JSON.stringify(event.normalized, null, 2)}</pre></div>}
                 </article>)}
                 </EventFeed>
+                {view === 'search' && !advanced && (data?.next_cursor || paged) && <div className='flex justify-center gap-3 border-t border-ui-border p-3'>
+                    {data?.next_cursor && <button type='button' disabled={busy} className={fieldClass} onClick={() => loadMore.current(data.next_cursor!)}>Load more results</button>}
+                    {paged && <button type='button' disabled={busy} className={fieldClass} onClick={() => setRefresh(value => value + 1)}>Refresh results</button>}
+                </div>}
                 {!busy && !data?.rows.length && !error && <p className='p-6 text-sm text-ui-muted'>No events match this search.</p>}
             </section>}
         </>}

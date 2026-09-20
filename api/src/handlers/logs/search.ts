@@ -5,15 +5,18 @@ import hasRole from '#utils/auth/hasRole.ts'
 import { compileLogQuery } from '#utils/logs/kql.ts'
 import { readPendingProcessLogs } from '#utils/mill/processQueue.ts'
 import { basicLogSearchPredicate } from '#utils/logs/searchText.ts'
+import { searchLogPage } from '#utils/logs/searchPage.ts'
 import { dimensionLogWhere, foldLogCounts } from '#utils/logs/dimensions.ts'
 
 export async function searchLogs(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
     if (!valid) return res.status(401).send({ error: 'Unauthorized.' })
     if (!(await hasRole(req, res, 'system_admin')).valid) return res.status(403).send({ error: 'Missing system_admin role.' })
-    const input = req.query as { hql?: string, kql?: string, search?: string, service?: string, severity?: string, hours?: string, stats?: string }
+    const input = req.query as { hql?: string, kql?: string, search?: string, service?: string, severity?: string, hours?: string, stats?: string, paginate?: string, cursor?: string }
     try {
         const compiled = compileLogQuery(input.hql || input.kql || 'Logs | take 200')
+        const paginate = input.paginate === '1'
+        if ((paginate && (compiled.summarize || compiled.order !== 'event_timestamp DESC, id DESC' || input.stats === '1')) || (input.cursor && !paginate)) throw new Error('Pagination requires a newest-first event search without counters.')
         const params = [...compiled.params]
         const bind = (value: string | number) => { params.push(value); return `$${params.length}` }
         const hours = Number(input.hours || 24)
@@ -29,7 +32,7 @@ export async function searchLogs(req: FastifyRequest, res: FastifyReply) {
         }
         const result = await withLogSearchTransaction(async query => {
             await query('SET LOCAL statement_timeout = \'8s\'')
-            const result = compiled.summarize
+            const result = paginate ? await searchLogPage(query, { where, params, order: compiled.order, limit: compiled.limit, cursor: input.cursor }) : compiled.summarize
                 ? await query(`SELECT ${compiled.fields[compiled.summarize]} AS value, COUNT(*)::int AS count FROM mill_events WHERE ${where.join(' AND ')} GROUP BY 1 ORDER BY count DESC LIMIT ${compiled.limit}`, params)
                 : await query(`SELECT id, normalized, event_timestamp, organization_id FROM mill_events WHERE ${where.join(' AND ')} ORDER BY ${compiled.order} LIMIT ${compiled.limit}`, params)
             const status = await query('SELECT name, updated_at, last_error, last_id, recent_id, (SELECT COUNT(*)::int FROM mill_events WHERE ingestion_id = \'logs\' AND processing_status = \'skipped\') AS skipped_events FROM log_processing_cursors ORDER BY name')
@@ -50,7 +53,7 @@ export async function searchLogs(req: FastifyRequest, res: FastifyReply) {
             }
             const primary = status.rows.find(row => row.name === 'service_logs')
             const stalled = status.rows.find(row => row.last_error)
-            return { rows: result.rows, processing: primary ? { ...primary, catchup, pending_commands: pendingCommands, last_error: stalled ? `${stalled.name}: ${stalled.last_error}` : countersLastError ? `Log counters: ${countersLastError}` : null, sources: status.rows } : null, ...counts }
+            return { rows: result.rows, next_cursor: 'next_cursor' in result ? result.next_cursor : undefined, processing: primary ? { ...primary, catchup, pending_commands: pendingCommands, last_error: stalled ? `${stalled.name}: ${stalled.last_error}` : countersLastError ? `Log counters: ${countersLastError}` : null, sources: status.rows } : null, ...counts }
         })
         return res.send({ ...result, projection: compiled.projection, summarize: compiled.summarize, limit: compiled.limit, hours, generated_at: new Date().toISOString() })
     } catch (error) {
