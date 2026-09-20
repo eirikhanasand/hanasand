@@ -100,7 +100,7 @@ test('basic search sends the chosen log type, service, severity and time range a
     await page.getByRole('combobox', { name: 'Service', exact: true }).selectOption('audit')
     await page.getByRole('combobox', { name: 'Severity' }).selectOption('high')
     await page.getByRole('combobox', { name: 'Time range' }).selectOption('168')
-    await expect.poll(() => Object.fromEntries(requests.at(-1)?.searchParams || [])).toEqual({ hours: '168', hql: 'ProcessLogs | take 200', search: 'whoami', service: 'audit', severity: 'high' })
+    await expect.poll(() => Object.fromEntries(requests.at(-1)?.searchParams || [])).toEqual({ hours: '168', hql: 'ProcessLogs | take 200', search: 'whoami', service: 'audit', severity: 'high', paginate: '1' })
     await page.reload()
     await expect(page.getByRole('searchbox', { name: 'Search logs' })).toHaveValue('whoami')
     await expect(page.getByRole('combobox', { name: 'Log type' })).toHaveValue('ProcessLogs')

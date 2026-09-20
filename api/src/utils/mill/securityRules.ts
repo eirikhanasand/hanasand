@@ -16,7 +16,7 @@ export const securityRules: SecurityRule[] = [
         'id': 'process.recon.id.v1',
         'name': 'id reconnaissance',
         'family': 'Reconnaissance',
-        'severity': 'high',
+        'severity': 'low',
         'explanation': 'The id command was executed. Review the user and surrounding activity; legitimate administration can also trigger this rule.',
         'pattern': '(?:^|[/\\\\])id(?:\\.exe)?$',
         'field': 'executable',
