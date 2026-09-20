@@ -28,11 +28,12 @@ export function verifiedModelEvidence(html: string, answer: any) {
 export async function recoverDeliveryReport(item: any, options: any = {}) {
   const { timeline, capture, source } = item;
   const referenceUrl = publicSourceReferenceUrl(capture.url);
-  if (!referenceUrl || source?.status !== 'active') return { status: 'unavailable', reason: 'No active public source is available.' };
   const retained = (capture.metadata?.reportTimestamps ?? []).find((r: any) => r.extractionMethod === 'source_field'
+    && ['actor', 'victim', 'publisher'].includes(r.role) && typeof r.evidencePath === 'string' && r.evidencePath.trim()
     && publicSourceReferenceUrl(r.referenceUrl) && zonedSourceTimestamp(r.timestamp));
   let evidence = retained, modelUsed = false, contentSha256: string | undefined;
   if (!evidence) {
+    if (!referenceUrl || source?.status !== 'active') return { status: 'unavailable', reason: 'No retained report evidence or active public source is available.' };
     const response = await (options.fetchPublic || publicAdvisoryFetcher(undefined, 8000))(referenceUrl, { headers: { 'user-agent': 'Hanasand delivery evidence recovery' } });
     if (!response.ok) throw new Error(`Source returned HTTP ${response.status}`);
     const html = await response.text();
@@ -55,7 +56,7 @@ export async function recoverDeliveryReport(item: any, options: any = {}) {
   if (!evidence) return { status: 'unavailable', modelUsed, reason: 'The source did not provide a verifiable publication timestamp with timezone.' };
   const normalized = new Date(evidence.timestamp).toISOString();
   if (Date.parse(normalized) > Date.parse(timeline.collectedAt)) return { status: 'unavailable', modelUsed, reason: 'The page date is newer than the original collection; it cannot establish the first report.' };
-  const reference = sourceFieldReportTimestamp({ role: 'publisher', timestamp: normalized, referenceUrl: evidence.referenceUrl || referenceUrl,
+  const reference = sourceFieldReportTimestamp({ role: retained?.role || 'publisher', timestamp: normalized, referenceUrl: evidence.referenceUrl || referenceUrl,
     sourceId: timeline.sourceId, sourceName: source?.name, evidencePath: evidence.evidencePath, parserVersion: 'delivery-recovery-v1' });
   return { status: 'resolved', modelUsed, reference: { ...reference, captureId: timeline.captureId, incidentId: timeline.incidentId,
     rawTimestamp: evidence.timestamp, quote: evidence.quote, contentSha256, retrievedAt: new Date().toISOString() } };

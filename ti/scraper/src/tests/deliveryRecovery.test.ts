@@ -3,6 +3,12 @@ import { recoverDeliveryReport, publicationEvidence, verifiedModelEvidence, star
 import { PostgresScraperStore } from '../storage/postgresScraperStore.ts';
 
 const item = { timeline: { id:'i',incidentId:'i',captureId:'c',sourceId:'s',collectedAt:'2026-09-01T10:00:00Z' }, capture:{url:'https://example.org/incident'},source:{status:'active',name:'Publisher'} };
+test('retired sources retain usable report evidence and its original reporter role', async () => {
+  const reference = { role:'actor', timestamp:'2026-08-01T10:00:00Z', referenceUrl:'https://example.org/original', evidencePath:'feed.entry.pubDate', extractionMethod:'source_field' };
+  const archived = { ...item, source:{...item.source,status:'retired'}, capture:{...item.capture,metadata:{reportTimestamps:[reference]}} };
+  expect(await recoverDeliveryReport(archived,{fetchPublic:()=>{throw Error('retired source must not be fetched')}})).toMatchObject({status:'resolved',modelUsed:false,reference:{role:'actor',referenceUrl:reference.referenceUrl,evidencePath:reference.evidencePath}});
+  expect(await recoverDeliveryReport({...archived,capture:{...item.capture,metadata:{reportTimestamps:[{...reference,evidencePath:''}]}}})).toMatchObject({status:'unavailable'});
+});
 test('publication evidence accepts explicit dates, not updates or unzoned guesses', () => {
   expect(publicationEvidence('<meta content="2026-08-01T10:00:00Z" property="article:published_time">')?.timestamp).toBe('2026-08-01T10:00:00Z');
   expect(publicationEvidence('<script type="application/ld+json">{"datePublished":"2026-08-01T10:00:00Z"}</script>')?.timestamp).toBe('2026-08-01T10:00:00Z');
