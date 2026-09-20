@@ -53,15 +53,6 @@ function activeFilterEntries(params: AuditSearchParams) {
         .filter(([, value]) => value)
 }
 
-function stats(events: AdminAuditEvent[]) {
-    return {
-        denied: events.filter(event => event.outcome === 'denied').length,
-        critical: events.filter(event => event.severity === 'critical').length,
-        impersonation: events.filter(event => event.event_type.startsWith('impersonation')).length,
-        recovery: events.filter(event => event.event_type.includes('recovery') || event.event_type.includes('invite')).length,
-    }
-}
-
 function selectedAuditEvent(events: AdminAuditEvent[], params: AuditSearchParams) {
     const eventId = param(params, 'event').trim()
     if (eventId) return events.find(event => String(event.id) === eventId) || events[0]
@@ -96,7 +87,6 @@ export default function AuditTimeline({ events, params, responseError }: { event
     const selectedEvent = selectedAuditEvent(events, { ...params, event: searchParams?.get('event') || undefined })
     const notificationPanel = useRef<HTMLDetailsElement>(null)
     const timeline = useRef<HTMLDivElement>(null)
-    const eventStats = stats(events)
     const reviewEvents = events.filter(event => event.severity === 'critical' || event.outcome === 'denied' || event.outcome === 'failed')
     const filterEntries = activeFilterEntries(params)
     const primarySearch = param(params, 'q')
@@ -136,19 +126,14 @@ export default function AuditTimeline({ events, params, responseError }: { event
                                 <button className='h-9 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90' type='submit'>Search</button>
                                 <Link className={quietButtonClass} href='/helpdesk'>Clear</Link>
                                 <details className='relative' ref={notificationPanel} onKeyDown={event => { if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus() } }}>
-                                    <summary aria-label={`Notifications: ${reviewEvents.length} event${reviewEvents.length === 1 ? '' : 's'} to review`} className={`${quietButtonClass} flex cursor-pointer list-none gap-1 [&::-webkit-details-marker]:hidden`}>
-                                        <Bell size={18} aria-hidden='true' />
-                                        {reviewEvents.length ? <span className='text-xs text-ui-warning'>{reviewEvents.length}</span> : null}
+                                    <summary aria-label={`Notifications: ${reviewEvents.length} event${reviewEvents.length === 1 ? '' : 's'} to review`} className='flex h-9 cursor-pointer list-none items-center justify-center rounded-lg border border-ui-border bg-ui-raised px-3 text-ui-text transition hover:border-ui-primary hover:bg-ui-panel [&::-webkit-details-marker]:hidden'>
+                                        <span className='relative inline-flex'>
+                                            <Bell size={24} aria-hidden='true' />
+                                            {reviewEvents.length ? <span aria-hidden='true' className='absolute -right-1.5 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold leading-none text-white'>{reviewEvents.length}</span> : null}
+                                        </span>
                                     </summary>
                                     <div className='absolute right-0 z-20 mt-2 w-80 max-w-[calc(100vw-3rem)] rounded-lg border border-ui-border bg-ui-panel p-3 shadow-lg' aria-label='Audit notifications'>
-                                        <h2 className='text-sm font-semibold text-ui-text'>In these results</h2>
-                                        <div className='my-3 grid grid-cols-3 gap-2 text-xs text-ui-muted'>
-                                            <SnapshotFact label='Events' value={String(events.length)} />
-                                            <SnapshotFact label='Critical' value={String(eventStats.critical)} />
-                                            <SnapshotFact label='Denied' value={String(eventStats.denied)} />
-                                            <SnapshotFact label='Recovery' value={String(eventStats.recovery)} />
-                                            <SnapshotFact label='Sessions' value={String(eventStats.impersonation)} />
-                                        </div>
+                                        <h2 className='mb-3 text-sm font-semibold text-ui-text'>Notifications</h2>
                                         <div className='grid max-h-72 gap-2 overflow-auto'>
                                             {responseError ? <p className='text-sm text-ui-warning'>Events could not be loaded.</p> : reviewEvents.length ? reviewEvents.map(event => (
                                                 <button type='button' key={event.id} onClick={() => selectEvent(event.id, true)} className='grid gap-1 rounded-md border border-ui-border p-2 text-left text-sm hover:bg-ui-raised focus-visible:outline-2 focus-visible:outline-ui-primary'>
@@ -271,13 +256,5 @@ export default function AuditTimeline({ events, params, responseError }: { event
                 </div>
             </section>
         </DashboardPage>
-    )
-}
-function SnapshotFact({ label, value, tone = 'quiet' }: { label: string, value: string, tone?: 'quiet' | 'warn' }) {
-    return (
-        <div className='rounded-md border border-ui-border bg-ui-raised px-3 py-2'>
-            <div className='font-semibold uppercase text-ui-muted'>{label}</div>
-            <div className={`mt-0.5 text-sm font-semibold ${tone === 'warn' ? 'text-ui-warning' : 'text-ui-text'}`}>{value}</div>
-        </div>
     )
 }

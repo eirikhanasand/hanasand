@@ -55,8 +55,6 @@ assert(!html.includes('undefined'), 'Current audit fields must not render as und
 assert(html.includes('Notifications: 1 event to review'))
 assert(html.includes('aria-label="Audit notifications"'))
 assert(!/<details[^>]* open/.test(html), 'Notifications and filters must stay collapsed initially')
-assert(/>Sessions<\/div><div[^>]*>1<\/div>/.test(html), 'Session count must use event_type')
-assert(/>Recovery<\/div><div[^>]*>1<\/div>/.test(html), 'Recovery count must use event_type')
 const focusFilters: Record<string, string>[] = [{ action: events[1].event_type }, { entity: 'invite-2' }, { target: 'org-2' }]
 for (const params of focusFilters) {
     const focusedHtml = await render(params)
@@ -111,7 +109,8 @@ const criticalHtml = await render()
 assert(criticalHtml.includes('Notifications: 2 events to review'), 'An event that is critical and denied must only be counted once')
 const notifications = criticalHtml.split('aria-label="Audit notifications"')[1].split('</details>')[0]
 assert(notifications.includes('impersonation.start') && notifications.includes('support.organization.invite'), 'The notification panel must expose every counted event')
-assert(/>Critical<\/div><div[^>]*>2<\/div>/.test(notifications), 'Critical count must match available events')
+assert(notifications.includes('>Notifications</h2>'))
+assert(!notifications.includes('In these results') && !notifications.includes('>Critical</div>'), 'The panel should only list notifications')
 
 response = () => Response.json({ events: [] })
 assert((await render()).includes('No matching support events'))
