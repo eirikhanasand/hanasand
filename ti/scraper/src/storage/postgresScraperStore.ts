@@ -2103,7 +2103,11 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     for (const capture of super.listCaptures()) {
       if (capture.sourceId === stored.id) this.indexPostgresExposureQueueCapture(capture);
     }
-    this.enqueue(`source:${stored.id}`, () => this.persistSource(stored));
+    const affectsExposureQueue = super.listExposureQueueCaptures().some(capture => capture.sourceId === stored.id);
+    this.enqueue(`source:${stored.id}`, async () => {
+      await this.persistSource(stored);
+      if (affectsExposureQueue) this.invalidateExposureQueuePageCache();
+    });
     return stored;
   }
 
