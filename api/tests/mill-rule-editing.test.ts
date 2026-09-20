@@ -1,6 +1,7 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
 
 let role = 'owner', valid = true, auditFailure = false
+let systemAdmin = false
 let rows: any[] = [], audits: any[] = [], findings: any[] = [], events: any[] = []
 const query = async (sql: string, p: any[] = []): Promise<any> => {
     if (sql.includes('FROM organizations')) return { rows: p[0] === 'org-a' ? [{ role }] : [] }
@@ -37,6 +38,7 @@ mock.module('#db', () => ({ default: query, withTransaction: async (work: any) =
     try { return await work(query) } catch (error) { rows = beforeRows; audits = beforeAudit; throw error }
 } }))
 mock.module('#utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid, id: 'editor' }) }))
+mock.module('#utils/auth/hasRole.ts', () => ({ default: async () => ({ valid: systemAdmin }) }))
 mock.module('#utils/auth/apiKeys.ts', () => ({ validateApiKey: async () => ({ organizationId: 'org-a', apiKey: { scopes: [] } }), matchApiKeyScope: () => true }))
 const { getMillRule, putMillRule, postMillRuleAction, postMillRule, postMillRulePack, ingestMill } = await import('../src/handlers/mill.ts')
 const builtin = 'network.signature_alert.v1'
@@ -44,7 +46,27 @@ const reply = () => ({ statusCode: 200, status(code: number) { this.statusCode =
 const request = (id = builtin.replace(/\.v\d+$/, ''), body: any = {}, organizationId = 'org-a') => ({ params: { id }, query: { organizationId }, body, ip: '127.0.0.1', headers: { authorization: 'Bearer test-key' }, id: 'request-test' }) as any
 const edit = { version: '1', name: 'Custom network alert', explanation: 'An important signature matched a network event.', severity: 'critical', enabled: true }
 const network = { source: {}, events: [{ timestamp: '2026-09-14T12:00:00Z', event_type: 'network', action: 'alert', signature: 'Test signature' }] }
-beforeEach(() => { rows = []; audits = []; findings = []; role = 'owner'; valid = true; auditFailure = false; events = [] })
+beforeEach(() => { rows = []; audits = []; findings = []; role = 'owner'; valid = true; auditFailure = false; events = []; systemAdmin = false })
+
+test('only system administrators can change platform Analyze retention; changes are versioned and audited', async () => {
+    const id = 'http.routine_access.v1'
+    const definition = { match: 'all', stage: 'analyze', action: 'drop', conditions: [], parameters: { windowMinutes: 1, requestThreshold: 50 } }
+    rows = [{ id: 'platform-rule', organization_id: 'org-a', rule_id: id, version: '1', name: 'Routine successful requests', family: 'HTTP', severity: 'high', explanation: 'Count and drop routine successful HTTP requests.', source: 'hanasand', enabled: true, definition }]
+    expect((await getMillRule(request(id), reply() as any)).canEdit).toBe(false)
+    const denied = reply()
+    await postMillRuleAction(request(id, { action: 'disable' }), denied as any)
+    expect(denied.statusCode).toBe(403)
+    systemAdmin = true
+    const body = { ...edit, severity: 'high', definition: { ...definition, action: 'keep' } }
+    const saved = await putMillRule(request(id, body), reply() as any)
+    expect(saved.rule.definition.action).toBe('keep')
+    expect(saved.rule.version).toBe('2')
+    expect(audits[0].context.before.definition.action).toBe('drop')
+    expect(audits[0].context.after.definition.action).toBe('keep')
+    const invalid = reply()
+    await putMillRule(request(id, { ...body, version: '2', definition: { ...definition, stage: 'detection' } }), invalid as any)
+    expect(invalid.statusCode).toBe(400)
+})
 
 test('built-in detail ID survives editing, and new detections use saved severity and revision', async () => {
     const initial = await getMillRule(request(), reply() as any)

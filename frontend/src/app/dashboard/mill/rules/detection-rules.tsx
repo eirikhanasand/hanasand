@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import { getRuleCategory, ruleCategories, type RuleCategory } from './rule-categories'
 import { DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 
-export type MillRule = { id: string, detectionLogic?: string, recordId?: string, rule_id?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'owned' | 'open_source', sourceReference?: string, definition?: { match?: 'all', parameters?: Record<string, number>, failureConditions?: Array<{ path: string, operator: string, value: string }>, conditions?: Array<{ path: string, operator: string, value: string }> } }
+export type MillRule = { id: string, detectionLogic?: string, recordId?: string, rule_id?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'owned' | 'open_source', sourceReference?: string, definition?: { stage?: 'analyze', action?: 'drop' | 'keep', match?: 'all', parameters?: Record<string, number>, failureConditions?: Array<{ path: string, operator: string, value: string }>, conditions?: Array<{ path: string, operator: string, value: string }> } }
 
 export default function DetectionRules({ category }: { category: RuleCategory }) {
     const latestOrganization = useRef('')

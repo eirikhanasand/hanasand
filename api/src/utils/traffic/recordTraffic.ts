@@ -1,6 +1,9 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import { verifiedClientIp } from '#utils/http/publicBoundary.ts'
+import { inspectAccess } from '#utils/mill/analyzeAccess.ts'
+import { analyzeAccess } from '#utils/mill/analyzeLog.ts'
+import { redactLogText, redactLogValue } from '#utils/logs/redact.ts'
 
 const ignoredPathPrefixes = [
     '/api/traffic',
@@ -8,9 +11,19 @@ const ignoredPathPrefixes = [
     '/api/logs/realtime',
 ]
 
-export default function recordTraffic(req: FastifyRequest, res: FastifyReply) {
+export default async function recordTraffic(req: FastifyRequest, res: FastifyReply, persist = true) {
     const path = normalizePath(req.url)
-    if (ignoredPathPrefixes.some(prefix => path.startsWith(prefix))) {
+    const access = { key: `http-api:${req.id}`, ip: verifiedClientIp(req), timestamp: new Date().toISOString(),
+        path, method: req.method, status: res.statusCode, inspection: inspectAccess(req) }
+    try {
+        if (persist && await analyzeAccess(access)) return
+    } catch (error) {
+        // If analysis fails, retain the request; never silently lose evidence.
+        req.log.warn({ error }, 'Access analysis failed; retaining request')
+    }
+    req.log.info({ access, req: { method: req.method, url: redactLogText(req.url), remoteAddress: req.ip,
+        ...(!access.inspection.headersSafe ? { headers: redactLogValue(req.headers) } : {}) } }, 'http_access')
+    if (!persist || ignoredPathPrefixes.some(prefix => path.startsWith(prefix))) {
         return
     }
 
@@ -28,7 +41,7 @@ export default function recordTraffic(req: FastifyRequest, res: FastifyReply) {
     )
     const elapsed = Math.max(0, Math.round(Number(res.elapsedTime || 0)))
 
-    void run(`
+    await run(`
         INSERT INTO traffic_events (domain, path, method, status, ip, country_iso, user_agent, referer, request_time_ms)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     `, [

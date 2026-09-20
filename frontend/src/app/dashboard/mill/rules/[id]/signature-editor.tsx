@@ -9,10 +9,12 @@ const parameterLabels: Record<string, { label: string, unit: string, max: number
     minimumCount: { label: 'Minimum count', unit: 'events', max: 1000 },
     distanceKm: { label: 'Minimum distance', unit: 'km', max: 20040 },
     historyLimit: { label: 'History depth', unit: 'prior logins', max: 1000 },
+    requestThreshold: { label: 'Alert above', unit: 'requests per IP', max: 1000 },
 }
 
 export default function SignatureEditor({ rule, disabled, onChange }: { rule: MillRule, disabled: boolean, onChange: (definition: Definition) => void }) {
     const definition = rule.definition || { match: 'all', conditions: [] }
+    const analyze = definition.stage === 'analyze'
     const brute = rule.id.startsWith('auth.brute_force_success.')
     const spray = rule.id.startsWith('auth.password_spray.')
     const builtIn = rule.source === 'hanasand'
@@ -37,19 +39,21 @@ export default function SignatureEditor({ rule, disabled, onChange }: { rule: Mi
     }
     const signature = {
         rule: rule.id.replace(/\.v\d+$/, ''),
+        ...(analyze ? { stage: 'before storage', action: definition.action } : {}),
         ...(builtIn ? { engine: brute ? 'sequence' : spray ? 'distinct_count' : 'builtin', ...(brute ? { group_by: 'user.id', sequence: [{ event_type: 'authentication', action: 'login', outcome: 'failure', where: definition.failureConditions || [], count_at_least: definition.parameters?.minimumCount }, { event_type: 'authentication', action: 'login', outcome: 'success', where: conditions }] } : { where: conditions }), ...definition.parameters } : { match: 'all', where: conditions }),
     }
     return <DashboardPanel className='overflow-hidden'>
-        <header className='flex flex-wrap items-center justify-between gap-2 border-b border-ui-border px-5 py-4'><div><h2 className='font-semibold'>Detection signature</h2><p className='mt-1 text-xs text-ui-muted'>Selectors and parameters are executed on new events and replays.</p></div><span className='rounded-md border border-ui-border px-2 py-1 font-mono text-xs'>{brute ? 'SEQUENCE' : spray ? 'DISTINCT COUNT' : 'MATCH'}</span></header>
+        <header className='flex flex-wrap items-center justify-between gap-2 border-b border-ui-border px-5 py-4'><div><h2 className='font-semibold'>{analyze ? 'Analyze rule' : 'Detection signature'}</h2><p className='mt-1 text-xs text-ui-muted'>{analyze ? 'Runs before storage and detection. Dropped logs cannot be recovered.' : 'Selectors and parameters are executed on new events and replays.'}</p></div><span className='rounded-md border border-ui-border px-2 py-1 font-mono text-xs'>{analyze ? 'ANALYZE FIRST' : brute ? 'SEQUENCE' : spray ? 'DISTINCT COUNT' : 'MATCH'}</span></header>
         <div className='grid min-w-0 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]'>
             <fieldset disabled={disabled} className='grid min-w-0 content-start gap-4 p-4 sm:p-5'>
+                {analyze && <><label className='grid gap-2 text-sm'>Action<select aria-label='Action' className={inputClass} value={definition.action} onChange={event => onChange({ ...definition, action: event.target.value as 'drop' | 'keep' })}><option value='drop'>Count and drop</option><option value='keep'>Keep</option></select></label><p className='text-sm text-ui-muted'>Ordinary GET/200 requests only. Bodies, suspicious requests and authentication or admin activity are kept. Counts use a rolling window; alerts appear in Realtime.</p></>}
                 {Object.keys(definition.parameters || {}).length > 0 && <div className='grid gap-3 sm:grid-cols-2'>{Object.entries(definition.parameters || {}).map(([key, value]) => {
                     const meta = parameterLabels[key]
                     return <label key={key} className='grid gap-1.5 text-xs font-medium'>{key === 'minimumCount' ? (spray ? 'Minimum distinct users' : 'Minimum failed logins') : meta?.label || key}<div className='flex items-center gap-2'><input required type='number' min={1} max={meta?.max} step={1} value={Number.isFinite(value) ? value : ''} onChange={event => onChange({ ...definition, parameters: { ...definition.parameters, [key]: event.target.value === '' ? NaN : Number(event.target.value) } })} className={inputClass} /><span className='shrink-0 text-ui-muted'>{key === 'minimumCount' && spray ? 'users' : meta?.unit}</span></div></label>
                 })}</div>}
                 {brute && <><p className='font-mono text-xs text-ui-muted'>GROUP BY user.id · failure → success</p>{selectors('failureConditions', 'Failure selector', 'event_type = authentication AND action = login AND outcome = failure')}</>}
-                {selectors('conditions', brute ? 'Success selector' : 'Event selector', builtIn ? brute ? 'event_type = authentication AND action = login AND outcome = success' : rule.id.startsWith('auth.') ? `event_type = authentication AND action = login AND outcome = ${spray ? 'failure' : 'success'}` : rule.detectionLogic || '' : '')}
-                <p className='text-xs leading-5 text-ui-muted'>Fields use paths in the normalized event, such as EventID, event.code, signature_id, or source.ip. Field names are case-sensitive; values are case-insensitive. Use regex <code className='font-mono'>^(4625|4771)$</code> to select multiple event IDs. Empty built-in selectors accept every event matching the required fields.</p>
+                {!analyze && selectors('conditions', brute ? 'Success selector' : 'Event selector', builtIn ? brute ? 'event_type = authentication AND action = login AND outcome = success' : rule.id.startsWith('auth.') ? `event_type = authentication AND action = login AND outcome = ${spray ? 'failure' : 'success'}` : rule.detectionLogic || '' : '')}
+                {!analyze && <p className='text-xs leading-5 text-ui-muted'>Fields use paths in the normalized event, such as EventID, event.code, signature_id, or source.ip. Field names are case-sensitive; values are case-insensitive. Use regex <code className='font-mono'>^(4625|4771)$</code> to select multiple event IDs. Empty built-in selectors accept every event matching the required fields.</p>}
             </fieldset>
             <aside className='min-w-0 border-t border-ui-border bg-ui-raised p-5 xl:border-t-0 xl:border-l'><h3 className='mb-3 text-xs font-semibold uppercase tracking-wide text-ui-muted'>Signature preview</h3><pre aria-label='Signature preview' className='max-h-[38rem] overflow-auto whitespace-pre-wrap wrap-break-word font-mono text-xs leading-6 text-ui-text'>{JSON.stringify(signature, null, 2)}</pre></aside>
         </div>

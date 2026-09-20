@@ -9,6 +9,8 @@ import { processAdditionalLogSources } from './storedSources.ts'
 import { stableLogWatermark } from './logWatermark.ts'
 import { processQueuedLogs, recoverProcessLogs } from './processQueue.ts'
 import { backfillLogDimensions } from '../logs/dimensions.ts'
+import { pruneAccessLogs } from './pruneAccessLogs.ts'
+import { accessRuleId } from './analyzeAccess.ts'
 
 let running = false
 // Persist a pending event before evaluating it. A failure is retried with the same
@@ -19,6 +21,11 @@ export async function processLog(log: LogInput, organizationId: string, rules: A
 
 export async function processLogBatch(logs: LogInput[], organizationId: string, rules: Awaited<ReturnType<typeof loadConfiguredMillRules>>) {
     if (!logs.length) return
+    if (rules.some(rule => rule.id === accessRuleId && rule.enabled !== false && rule.definition?.action === 'drop')) {
+        const dropped = await pruneAccessLogs(logs, organizationId)
+        logs = logs.filter(log => !dropped.has(String(log.id)))
+        if (!logs.length) return
+    }
     // Priority delivery and retry can overlap the historical cursor. Read the
     // acknowledgement before normalization instead of locking completed rows again.
     const completed = await run('SELECT log_key FROM mill_events WHERE log_key = ANY($1::text[]) AND processing_status = \'processed\'', [logs.map(log => `service:${log.id}`)])

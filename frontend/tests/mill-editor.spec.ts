@@ -10,8 +10,8 @@ const definition = { match: 'all', parameters: { windowMinutes: 15, minimumCount
 const initial = { id: 'auth.brute_force_success.v1', version: '1', source: 'hanasand', name: 'Brute-force success', family: 'Authentication', severity: 'high', explanation: 'Multiple failed logins followed by a successful login for the same user.', evidence: [], enabled: true, definition }
 test.beforeAll(async () => {
     output = mkdtempSync(path.join(tmpdir(), 'mill-editor-'))
-    execFileSync('bun', ['build', 'tests/fixtures/mill-editor.tsx', '--target=browser', '--define', 'process.env={"NODE_ENV":"production"}', '--outfile', path.join(output, 'fixture.js')])
-    bundle = readFileSync(path.join(output, 'fixture.js'), 'utf8')
+    execFileSync('bun', ['build', 'tests/fixtures/mill-editor.tsx', '--target=browser', '--define', 'process.env={"NODE_ENV":"production"}', '--outdir', output])
+    bundle = readFileSync(path.join(output, 'mill-editor.js'), 'utf8')
     css = (await postcss([tailwind()]).process(readFileSync('src/app/globals.css', 'utf8'), { from: path.resolve('src/app/globals.css') })).css
 })
 test.afterAll(() => rmSync(output, { recursive: true, force: true }))
@@ -71,4 +71,25 @@ test('failed saves preserve the draft and show the server error', async ({ page 
     await page.getByRole('button', { name: 'Save changes' }).click()
     await expect(page.getByRole('alert')).toContainText('This rule changed')
     await expect(page.getByLabel('Time window')).toHaveValue('25')
+})
+
+test('Analyze rule exposes reversible retention and persists its action', async ({ page }) => {
+    let saved = { ...initial, id: 'http.routine_access.v1', name: 'Routine successful requests',
+        definition: { match: 'all', stage: 'analyze', action: 'drop', conditions: [], parameters: { windowMinutes: 1, requestThreshold: 50 } } }
+    await page.route('**/api/backend/mill/rules/*?*', async route => {
+        if (route.request().method() === 'PUT') {
+            saved = { ...saved, ...route.request().postDataJSON(), version: '2' }
+            return route.fulfill({ json: { rule: saved } })
+        }
+        return route.fulfill({ json: { rule: saved, canEdit: true, currentVersion: saved.version, triggerCount: 0, audit: [], nextOffset: null } })
+    })
+    await page.goto('http://mill-editor.test/mill/rules/http.routine_access')
+    await expect(page.getByText('ANALYZE FIRST', { exact: true })).toBeVisible()
+    await expect(page.getByLabel('Alert above')).toHaveValue('50')
+    await page.getByLabel('Action', { exact: true }).selectOption('keep')
+    await page.getByRole('button', { name: 'Save changes' }).click()
+    await page.reload()
+    await expect(page.getByLabel('Action', { exact: true })).toHaveValue('keep')
+    await expect(page.getByRole('button', { name: 'Add event selector condition' })).toHaveCount(0)
+    await page.screenshot({ path: '/tmp/hanasand-analyze-rule.png', fullPage: true })
 })

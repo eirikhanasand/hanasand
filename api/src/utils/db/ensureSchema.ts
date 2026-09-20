@@ -1,4 +1,5 @@
 import ensureAuditAcknowledgmentsSchema from './auditAcknowledgmentsSchema.ts'
+import ensureLogAnalyzeSchema from './logAnalyzeSchema.ts'
 import ensureLogCatchupSchema from './logCatchupSchema.ts'
 import ensureSupportAiSchema from '#utils/support/schema.ts'
 import ensureContentOrganizationSchema from './contentOrganizationSchema.ts'
@@ -1477,6 +1478,7 @@ export default async function ensureSchema() {
     await run('ALTER TABLE mill_rules DROP CONSTRAINT IF EXISTS mill_rules_source_check')
     await run('ALTER TABLE mill_rules ADD CONSTRAINT mill_rules_source_check CHECK (source IN (\'owned\', \'open_source\', \'hanasand\'))')
     await run('CREATE INDEX IF NOT EXISTS idx_mill_rules_org_enabled ON mill_rules(organization_id, enabled, updated_at DESC)')
+    await ensureLogAnalyzeSchema()
     await run(`
         CREATE TABLE IF NOT EXISTS mill_findings (
             id TEXT PRIMARY KEY,

@@ -1,5 +1,7 @@
 import run from '#db'
 import { redactLogText, redactLogValue } from './redact.ts'
+import { accessFromLog } from '../mill/analyzeAccess.ts'
+import { analyzeAccess } from '../mill/analyzeLog.ts'
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'fatal'
 
@@ -38,6 +40,8 @@ export default async function recordLog({
     timestamp?: string
 }, query: typeof run = run) {
     if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) metadata = {}
+    const access = accessFromLog({ service, level, metadata, sourceEventId, timestamp })
+    if (access && await analyzeAccess(access, query === run ? undefined : query)) return
     message = redactLogText(message)
     metadata = redactLogValue(metadata) as Record<string, unknown>
     const scopeId = typeof metadata.organizationId === 'string' && metadata.organizationId

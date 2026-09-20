@@ -38,6 +38,7 @@ process.on('uncaughtException', error => {
 
 const fastify = Fastify({
     logger: true,
+    disableRequestLogging: process.env.BROWSER_SANDBOX_WORKER_ONLY !== '1',
     trustProxy: TRUSTED_API_PROXIES,
     genReqId: () => randomUUID(),
 })
@@ -92,7 +93,7 @@ if (!browserWorkerOnly) {
         return payload
     })
     fastify.addHook('onResponse', async (req, res) => {
-        if (!recoveryReadOnly() && process.env.RESILIENCE_ESSENTIAL_ONLY !== '1') recordTraffic(req, res)
+        await recordTraffic(req, res, !recoveryReadOnly() && process.env.RESILIENCE_ESSENTIAL_ONLY !== '1')
     })
     fastify.register(publicTiApi, { prefix: '/api/v1' })
     fastify.register(apiRoutes, { prefix: '/api' })
