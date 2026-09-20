@@ -17,7 +17,7 @@ export default async function Page() {
                     <p className='text-sm font-semibold uppercase text-ui-primary'>Bloom exposure lookup</p>
                     <h1 className='text-4xl font-semibold tracking-normal md:text-5xl'>Bloom-index checks from a SHA-1 hash.</h1>
                     <p className='max-w-xl text-base leading-7 text-ui-muted'>
-                        Paste a complete SHA-1 hash. Hanasand requests only the five-character prefix, then compares the returned range in your browser.
+                        Paste a SHA-1 hash. We check it against leaked passwords.
                     </p>
                 </div>
                 <PwnedPageClient />

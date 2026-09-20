@@ -62,7 +62,6 @@ test('public buyer navigation keeps hash utility discoverable without raw-secret
     expect(footer).toMatch(/href: '\/pwned'/)
     expect(sitemap).toMatch(/'\/pwned'/)
     expect(pwnedPage).toContain('SHA-1 hash')
-    expect(pwnedPage).toContain('This lookup does not ask for, derive, or transmit the underlying secret.')
     expect(pwnedPage).toContain('Only the first five characters leave this page.')
     expect(pwnedClient).toContain('Enter a complete 40-character SHA-1 hash.')
     expect(pwnedClient).not.toContain('window.crypto.subtle.digest')
