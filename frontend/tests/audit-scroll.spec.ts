@@ -29,9 +29,26 @@ test('scroll appends 50, preserves filters and rows on failure, retries and stop
     await page.goto('http://audit.test/')
     await expect(page.getByText('50/125', { exact: true })).toBeVisible()
     const scroll = page.getByTestId('audit-scroll')
+    const backToTop = page.getByRole('button', { name: 'Back to top of timeline', exact: true })
+    await expect(backToTop).toHaveCount(0)
     await scroll.evaluate(el => { el.scrollTop = el.scrollHeight })
     await expect(page.getByText('100/125', { exact: true })).toBeVisible()
     await expect(page.locator('tbody tr')).toHaveCount(100)
+    await scroll.evaluate(el => {
+        const row = el.querySelector('tbody tr:nth-child(50)')!
+        const header = el.querySelector('thead')!
+        el.scrollTop += row.getBoundingClientRect().bottom - el.getBoundingClientRect().top - header.getBoundingClientRect().height - 1
+    })
+    await expect(backToTop).toHaveCount(0)
+    await scroll.evaluate(el => { el.scrollTop += 2 })
+    await expect(backToTop).toBeVisible()
+    await page.getByRole('button', { name: 'Fullscreen timeline', exact: true }).click()
+    await expect(backToTop).toBeVisible()
+    await backToTop.click()
+    await expect.poll(() => scroll.evaluate(el => el.scrollTop)).toBe(0)
+    await expect(backToTop).toHaveCount(0)
+    await expect(page.locator('tbody tr')).toHaveCount(100)
+    await page.getByRole('button', { name: 'Minimize timeline', exact: true }).click()
     await scroll.evaluate(el => { el.scrollTop = el.scrollHeight })
     await expect(page.getByRole('button', { name: 'Could not load more events. Retry' })).toBeVisible()
     await expect(page.locator('tbody tr')).toHaveCount(100)
