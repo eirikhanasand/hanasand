@@ -156,11 +156,13 @@ test("retains rejected incidents for audit without treating them as undelivered 
   expect(snapshot.metrics.overall.collectionToProcessingSeconds.sampleSize).toBe(0);
   expect(snapshot.metrics.byActor).toEqual([]);
   expect(record.reportTimestamps).toEqual([]);
-  for (const change of [{ reviewState: "needs_review" }, { reviewState: "confirmed" }, { reviewedBy: "" }, { reviewedAt: "invalid" }, { captureId: "another_capture" }, { tenantId: "another_tenant" }]) {
+  for (const change of [{ reviewState: "needs_review" }, { reviewState: "confirmed" }, { reviewedBy: "" }, { reviewedAt: "invalid" }, { id: "another_incident" }, { tenantId: "another_tenant" }]) {
     const pending = buildTimelinessWorkbench([record], { generatedAt, incidents: [{ ...incident, ...change }] });
     expect(pending.summary.unresolvedReferenceCount).toBe(1);
     expect(pending.items[0].status).not.toBe("excluded");
   }
+  // An incident review also covers earlier captures retained after deduplication.
+  expect(buildTimelinessWorkbench([record], { generatedAt, incidents: [{ ...incident, captureId: "later_capture" }] }).items[0].status).toBe("excluded");
   const global = buildTimelinessWorkbench([{ ...record, tenantId: undefined }], { generatedAt, incidents: [{ ...incident, tenantId: null }] });
   expect(global.items[0].status).toBe("excluded");
 });

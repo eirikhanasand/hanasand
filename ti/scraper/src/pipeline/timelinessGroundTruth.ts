@@ -182,7 +182,7 @@ export function buildTimelinessWorkbench(records: JsonObject[], context: Timelin
       title: string(incident?.title) ?? string(capture?.title),
     }, provenance);
     if (incident?.reviewState === "rejected" && string(incident.reviewedBy) && validIso(incident.reviewedAt)
-      && incident.captureId === captureId && string(incident.tenantId) === string(record.tenantId)) {
+      && string(incident.tenantId) === string(record.tenantId)) {
       view.status = "excluded";
       view.exclusion = { reason: "Incident rejected", reviewedBy: incident.reviewedBy, reviewedAt: incident.reviewedAt };
     }
