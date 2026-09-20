@@ -141,7 +141,18 @@ export function registerPrestartedBrowser(fastify: FastifyInstance) {
             const browser = await chromium.launch(chromiumLaunchOptions())
             const probe = await browser.newContext()
             const blank = await probe.newPage()
-            await blank.screenshot()
+            await fullscreenBrowserPage(probe, blank)
+            await blank.goto('about:blank')
+            await blank.bringToFront()
+            // X11/Chromium can be connected before the first composited frame.
+            // Keep that initialization inside the pool, not the user's request.
+            let rendered = false
+            for (let attempt = 0; attempt < 20; attempt++) {
+                rendered = await blank.screenshot({ timeout: 2000 }).then(() => true).catch(() => false)
+                if (rendered) break
+                await new Promise(resolve => setTimeout(resolve, 250))
+            }
+            if (!rendered) { await browser.close(); throw new Error('Prestarted browser did not render a frame.') }
             await probe.close()
             if (prestartedBrowser.state !== 'starting') { await browser.close(); return }
             browser.on('disconnected', () => { prestartedBrowser.state = 'retired' })
