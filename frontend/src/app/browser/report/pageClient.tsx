@@ -8,6 +8,8 @@ type BrowserReport = {
     target?: string
     finalUrl?: string
     exportedAt?: string
+    consoleEvents?: string[]
+    providerConsoleEvents?: string[]
     status?: { run?: string; connection?: string; capacity?: { activeSessions?: number; maxSessions?: number; queuedSessions?: number; queuePosition?: number } }
     captures?: Array<{
         kind?: string
@@ -221,6 +223,12 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
                                 ].filter(Boolean).join('\n')).join('\n\n')}</pre>
                             ) : null}
                         </ReportPanel>
+                        <ReportPanel title='Console logs'>
+                            <pre className='max-h-96 overflow-auto whitespace-pre-wrap break-all font-mono text-xs text-ui-muted'>{report.consoleEvents?.join('\n') || 'No console output saved from the inspected page.'}</pre>
+                        </ReportPanel>
+                        {report.providerConsoleEvents?.length ? <ReportPanel title='Provider diagnostics'>
+                            <pre className='max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono text-xs text-ui-muted'>{report.providerConsoleEvents.join('\n')}</pre>
+                        </ReportPanel> : null}
                         <ReportPanel title='Script artifacts'>
                             <ReportList items={(analystReport.scriptArtifacts || []).map(script => [
                                 script.assessment || 'script',

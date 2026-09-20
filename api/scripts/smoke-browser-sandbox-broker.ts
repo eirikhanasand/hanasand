@@ -14,6 +14,11 @@ type BrokerPayload = {
     url?: string
     target?: string
     title?: string
+    text?: string
+    source?: string
+    tabId?: string
+    level?: string
+    line?: number
     image?: string | null
     width?: number
     height?: number
@@ -105,14 +110,14 @@ const pages = new Map<string, string>([
     <form action="https://credential.example.test/login"><input name="email"><input name="password" type="password"></form>
   </main>
   <script type="text/plain">eval(atob("${encoded}"));</script>
-  <script>setTimeout(() => { location.href = "/final" }, 10000)</script>
+  <script>console.log('Target startup welcome'); setTimeout(() => { location.href = "/final" }, 10000)</script>
 </body></html>`],
     ['/final', `<!doctype html>
 <html><head><title>Final redirect page</title></head>
 <body><main><h1>Final landing</h1><p>Redirect complete after staged invoice lure.</p></main></body></html>`],
     ['/virustotal', `<!doctype html>
 <html><head><title>VirusTotal fixture</title></head>
-<body><main><h1>VirusTotal</h1><p>12/94 security vendors flagged this URL as malicious.</p><p>3 community comments</p></main></body></html>`],
+<body><main><h1>VirusTotal</h1><p>12/94 security vendors flagged this URL as malicious.</p><p>3 community comments</p></main><script>console.warn('Provider diagnostic only')</script></body></html>`],
     ['/urlquery', `<!doctype html>
 <html><head><title>urlquery fixture</title></head>
 <body><main><h1>urlquery.net</h1><p>4 alerts were raised for malicious requests.</p><!-- <div class="relative mx-auto"><table><tr><th>Date</th></tr></table></div> --></main></body></html>`],
@@ -189,7 +194,9 @@ client.send(JSON.stringify({
 await waitForPayload(payloads, payload => payload.type === 'ready')
 await waitForPayload(payloads, payload => payload.type === 'frame' && Boolean(payload.image) && payload.url?.endsWith('/start'))
 client.send(JSON.stringify({ type: 'click', x: 80, y: 48, button: 0 }))
-await waitForPayload(payloads, payload => payload.type === 'frame' && payload.title === 'Interactive click received', 8_000)
+const clickStarted = Date.now()
+const clickFrame = await waitForPayload(payloads, payload => payload.type === 'frame' && payload.reason === 'interaction' && payload.title === 'Interactive click received', 2_000)
+assert((clickFrame.receivedAt || Date.now()) - clickStarted < 1500, 'Click feedback must not wait for a navigation or heavy evidence capture')
 client.send(JSON.stringify({ type: 'click', x: 80, y: 108, button: 0 }))
 for (const key of 'abc') client.send(JSON.stringify({ type: 'key', key }))
 await waitForPayload(payloads, payload => payload.type === 'frame' && payload.title === 'Typed proof: abc', 8_000)
@@ -200,6 +207,13 @@ await waitForPayload(payloads, payload => payload.type === 'tool_capture' && pay
 await waitForPayload(payloads, payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'urlquery' && payload.toolAnalysis.alertCount !== undefined)
 await waitForPayload(payloads, payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'webcrack' && payload.webcrackLoad?.loaded === true)
 assert(payloads.some(payload => payload.type === 'tool_capture' && payload.error === 'provider_navigation_pending'), 'provider tabs surface a pending capture immediately')
+const targetLog = payloads.find(payload => payload.type === 'console' && payload.text === 'Target startup welcome')
+assert.equal(targetLog?.source, 'target')
+assert.equal(targetLog?.tabId, 'browser')
+assert.equal(targetLog?.level, 'log')
+assert(targetLog?.url?.endsWith('/start') && targetLog.line, 'Target console retains its original source and line')
+assert(payloads.some(payload => payload.type === 'console' && payload.text === 'Provider diagnostic only' && payload.source === 'provider' && payload.tabId === 'virustotal'), 'Provider diagnostics are explicitly separated')
+assert(!payloads.some(payload => payload.type === 'status' && payload.state === 'tab_selected' && payload.tabId !== 'browser'), 'Automatic checks must not select a provider tab for the user')
 const suspiciousTiming = await waitForPayload(payloads, payload => payload.type === 'run_time' && payload.suspiciousExtended === true)
 assert(new Date(suspiciousTiming.expiresAt || 0).getTime() - (suspiciousTiming.receivedAt || 0) > 120_000, 'suspicious evidence extends the live run to about three minutes')
 client.send(JSON.stringify({ type: 'select_tab', tabId: 'virustotal' }))
@@ -271,6 +285,7 @@ console.log(JSON.stringify({
     target,
     pageUrls: Array.from(new Set(pageFrames.map(payload => payload.url).filter(Boolean))),
     pageCaptureCount: pageFrames.length,
+    clickFeedbackMs: (clickFrame.receivedAt || 0) - clickStarted,
     toolCaptures: payloads.filter(payload => payload.type === 'tool_capture').map(payload => payload.toolAnalysis?.toolKind),
 }, null, 2))
 process.exit(0)

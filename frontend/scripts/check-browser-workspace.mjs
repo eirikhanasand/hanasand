@@ -6,11 +6,13 @@ import tailwind from '@tailwindcss/postcss'
 
 let bundle = ''
 let streamLoads = 0
+let savedReport = null
 const css = (await postcss([tailwind()]).process(await readFile('src/app/globals.css', 'utf8'), { from: 'src/app/globals.css' })).css
 const server = Bun.serve({ port: 0, fetch(request) {
     const url = new URL(request.url)
     if (url.pathname === '/app.js') return new Response(bundle, { headers: { 'content-type': 'text/javascript' } })
     if (url.pathname === '/app.css') return new Response(css, { headers: { 'content-type': 'text/css' } })
+    if (url.pathname.endsWith('/report')) return Response.json(savedReport)
     if (url.pathname.startsWith('/api/')) return Response.json({ runs: [], profiles: [] })
     if (url.pathname === '/stream/index.html') {
         streamLoads++
@@ -20,7 +22,7 @@ const server = Bun.serve({ port: 0, fetch(request) {
 } })
 const build = await Bun.build({ entrypoints: ['browser-test-entry'], target: 'browser', define: { 'process.env': JSON.stringify({ NEXT_PUBLIC_API: `${server.url}api` }) }, plugins: [{ name: 'browser-fixture', setup(builder) {
     builder.onResolve({ filter: /^(browser-test-entry|next\/(link|image))$/ }, args => ({ path: args.path, namespace: 'fixture' }))
-    builder.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ loader: 'tsx', resolveDir: process.cwd(), contents: args.path === 'next/link' ? 'export default function Link(props){return <a {...props}/>}' : args.path === 'next/image' ? 'export default function Image({unoptimized,...props}){return <img {...props}/>}' : 'import {createRoot} from \'react-dom/client\'; import Browser from \'./src/app/browser/pageClient\'; createRoot(document.getElementById(\'root\')).render(<Browser initialData={{history:[],quota:null,stats:{runs24h:0,darkwebRuns24h:0}}}/>);' }))
+    builder.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ loader: 'tsx', resolveDir: process.cwd(), contents: args.path === 'next/link' ? 'export default function Link(props){return <a {...props}/>}' : args.path === 'next/image' ? 'export default function Image({unoptimized,...props}){return <img {...props}/>}' : 'import {createRoot} from \'react-dom/client\'; import Browser from \'./src/app/browser/pageClient\'; import Report from \'./src/app/browser/report/pageClient\'; createRoot(document.getElementById(\'root\')).render(location.pathname === \'/saved\' ? <Report runId="fixture" token="fixture"/> : <Browser initialData={{history:[],quota:null,stats:{runs24h:0,darkwebRuns24h:0}}}/>);' }))
 } }] })
 assert(build.success, build.logs.join('\n'))
 bundle = await build.outputs[0].text()
@@ -48,6 +50,18 @@ try {
     const loading = page.locator('[data-browser-loading]')
     const workspace = page.locator('[data-browser-workspace]')
     await loading.waitFor()
+    assert.equal(await loading.locator('[aria-current="step"]').innerText(), 'Connect')
+    await page.evaluate(() => window.deliver({ type: 'status', state: 'launching_worker' }))
+    await loading.getByText('Starting browser…', { exact: true }).waitFor()
+    await page.evaluate(() => window.deliver({ type: 'status', state: 'navigating' }))
+    await loading.getByText('Loading page…', { exact: true }).waitFor()
+    await page.evaluate(() => window.deliver({ type: 'status', state: 'profile_tool_started' }))
+    assert.equal(await loading.locator('[aria-current="step"]').innerText(), 'Load page', 'Unrelated status must not reset real progress')
+    await page.waitForTimeout(1100)
+    assert.notEqual(await loading.getByLabel('Elapsed time').innerText(), '0:00')
+    await page.setViewportSize({ width: 390, height: 844 })
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Startup fits mobile')
+    await page.setViewportSize({ width: 1440, height: 900 })
     assert.equal(await workspace.evaluate(element => getComputedStyle(element).opacity), '0')
     assert.equal(await workspace.getAttribute('inert'), '')
     assert.equal(await page.getByRole('tablist').count(), 0, 'Startup controls and evidence must not be exposed before the first frame')
@@ -109,6 +123,12 @@ try {
     await page.getByText('sample.txt', { exact: true }).waitFor()
     await page.evaluate(() => window.deliver({ type: 'downloads', networkSummary: { requestCount: 8, uniqueDomainCount: 2, downloads: [{ id: 'file-1', fileName: 'sample.txt', sha256: 'a'.repeat(64), bytes: 32, virusTotal: { status: 'known', flagged: 2, total: 70 } }] } }))
     await page.getByText('VirusTotal 2/70 detections', { exact: true }).waitFor()
+    await page.evaluate(() => {
+        window.deliver({ type: 'console', source: 'target', level: 'log', text: 'Target startup welcome', url: 'https://example.com/', line: 135 })
+        for (let i = 0; i < 30; i++) window.deliver({ type: 'console', source: 'provider', name: 'VirusTotal', level: 'warning', text: `Provider warning ${i}` })
+        for (let i = 0; i < 25; i++) window.deliver({ type: 'console', source: 'target', level: 'info', text: `Target message ${i}` })
+        window.deliver({ type: 'pageerror', source: 'target', message: 'Target error' })
+    })
     await page.evaluate(() => window.deliver({ type: 'ended' }))
     const result = page.locator('[data-run-result]')
     await result.waitFor()
@@ -116,6 +136,25 @@ try {
     assert.equal(await viewport.isVisible(), false, 'Saved screenshots must not dominate a completed run')
     await result.click()
     assert.equal(await result.getAttribute('aria-expanded'), 'true')
+    const consolePanel = page.locator('details').filter({ has: page.locator('summary', { hasText: /^Console logs/ }) }).last()
+    await consolePanel.locator('summary').click()
+    assert((await consolePanel.innerText()).includes('[log] Target startup welcome (https://example.com/:135)'))
+    assert((await consolePanel.innerText()).includes('Target message 24'), 'All retained target messages are visible, not only ten')
+    assert(!(await consolePanel.innerText()).includes('Provider warning'), 'Provider warnings never displace the target console')
+    const downloadPromise = page.waitForEvent('download')
+    await page.getByRole('button', { name: 'Export', exact: true }).click()
+    const report = JSON.parse(await readFile(await (await downloadPromise).path(), 'utf8'))
+    assert.equal(report.consoleEvents.length, 27)
+    assert.equal(report.providerConsoleEvents.length, 30)
+    assert(report.consoleEvents[0].includes('Target startup welcome'))
+    savedReport = report
+    const savedPage = await browser.newPage()
+    await savedPage.goto(new URL('/saved', server.url).toString())
+    const savedConsole = savedPage.locator('details').filter({ has: savedPage.locator('summary', { hasText: /^Console logs/ }) }).last()
+    await savedConsole.locator('summary').click()
+    assert((await savedConsole.innerText()).includes('Target startup welcome'))
+    assert(!(await savedConsole.innerText()).includes('Provider warning'))
+    await savedPage.close()
     await page.getByText('VirusTotal 2/70 detections', { exact: true }).waitFor()
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Expanded mobile report must not overflow')
     await result.click()

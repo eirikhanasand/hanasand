@@ -317,6 +317,8 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
     let lastHeavyFrameAt = 0
     let firstFrameAttemptedAt = 0
     let fastFrameInFlight = false
+    let interactionFrameTimer: NodeJS.Timeout | null = null
+    let openingBackgroundTabs = 0
     let documentEvidencePromises: Promise<void>[] = []
 
     const send = (payload: Record<string, unknown>) => {
@@ -349,6 +351,8 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         releaseAdmission?.()
         releaseAdmission = null
         if (closeTimer) clearTimeout(closeTimer)
+        if (interactionFrameTimer) clearTimeout(interactionFrameTimer)
+        interactionFrameTimer = null
         closeTimer = null
         const runId = currentRunId
         currentRunId = null
@@ -432,16 +436,19 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
 
         if (message.type === 'pointer' || message.type === 'click') {
             await handlePointer(message)
+            if (message.type === 'click' || message.event !== 'pointermove' || message.buttons) scheduleInteractionFrame()
             return
         }
 
         if (message.type === 'wheel') {
             await handleWheel(message)
+            scheduleInteractionFrame()
             return
         }
 
         if (message.type === 'key') {
             await handleKey(message)
+            scheduleInteractionFrame()
             return
         }
 
@@ -488,12 +495,48 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
     }
 
     async function syncVisibleRemoteTab(selectedPage: Page) {
+        if (openingBackgroundTabs) return
         if (!await selectedPage.evaluate(() => document.visibilityState === 'visible').catch(() => false)) return
+        if (openingBackgroundTabs) return
         const tabId = remoteTabIdForPage(selectedPage)
         if (!tabId || tabId === activeRemoteTabId) return
         activeRemoteTabId = tabId
         trace('native_tab_selected', { tabId, url: selectedPage.url() })
         send({ type: 'status', state: 'tab_selected', tabId, url: selectedPage.url(), message: 'Remote browser tab selected.' })
+    }
+
+    async function newBackgroundPage(context: BrowserContext) {
+        openingBackgroundTabs++
+        try {
+            return await context.newPage()
+        } finally {
+            // Creating a Chromium tab activates it. Restore the user's selected
+            // tab before allowing native visibility events to select a tab.
+            await focusRemoteTab()
+            openingBackgroundTabs--
+        }
+    }
+
+    function watchConsole(targetPage: Page, tabId = 'browser', name = 'Browser') {
+        const source = tabId === 'browser' ? 'target' : 'provider'
+        targetPage.on('console', entry => {
+            const location = entry.location()
+            send({ type: 'console', source, tabId, name, level: entry.type(), text: entry.text(),
+                url: location.url || targetPage.url(), line: location.lineNumber === undefined ? undefined : location.lineNumber + 1,
+                capturedAt: new Date().toISOString() })
+        })
+        targetPage.on('pageerror', error => send({ type: 'pageerror', source, tabId, name, level: 'error', message: error.message,
+            url: targetPage.url(), capturedAt: new Date().toISOString() }))
+    }
+
+    function scheduleInteractionFrame() {
+        if (interactionFrameTimer || closed) return
+        // Coalesce pointer/key bursts without delaying the input queue behind
+        // screenshots or full evidence collection.
+        interactionFrameTimer = setTimeout(() => {
+            interactionFrameTimer = null
+            void sendFrame(false, 'interaction')
+        }, 40)
     }
 
     async function focusRemoteTab(report = false) {
@@ -685,7 +728,6 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     void notify?.()
                 }
                 document.addEventListener('visibilitychange', reportVisibleTab)
-                window.addEventListener('pageshow', reportVisibleTab)
             })
             await context.route('**/*', async (route) => {
                 const requestUrl = route.request().url()
@@ -708,8 +750,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             page = await context.newPage()
             await fullscreenBrowserPage(context, page)
             trace('page_created')
-            page.on('console', (entry) => send({ type: 'console', level: entry.type(), text: entry.text() }))
-            page.on('pageerror', (error) => send({ type: 'pageerror', message: error.message }))
+            watchConsole(page)
             page.on('request', (request) => {
                 trackNetwork({
                     kind: 'request',
@@ -852,12 +893,11 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             const toolUrl = tool.url!.replaceAll('{url}', encodeURIComponent(target)).replaceAll('{rawUrl}', target)
             const webcrackTool = isWebCrackTool(tool, toolUrl)
             const toolId = cleanRemoteTabId(tool.id || safeToolId(tool.name || toolUrl))
-            const toolPage = await context.newPage().catch(() => null)
+            const toolPage = await newBackgroundPage(context).catch(() => null)
             if (!toolPage) return
             toolPages.set(toolId, toolPage)
             toolPage.on('close', () => toolPages.delete(toolId))
-            toolPage.on('console', entry => send({ type: 'console', level: entry.type(), text: `[${tool.name || toolId}] ${entry.text()}` }))
-            toolPage.on('pageerror', error => send({ type: 'pageerror', message: `[${tool.name || toolId}] ${error.message}` }))
+            watchConsole(toolPage, toolId, tool.name || toolId)
             toolPage.on('framenavigated', frame => {
                 if (frame !== toolPage.mainFrame()) return
                 trace('provider_tab_navigated', { tabId: toolId, url: toolPage.url(), activeRemoteTabId })
@@ -1086,7 +1126,8 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
 
     async function lookupFile(sha256: string): Promise<FileReputation> {
         if (closed || !context) return { status: 'interrupted', detail: 'Run ended before the hash lookup finished' }
-        const lookupPage = await context.newPage()
+        const lookupPage = await newBackgroundPage(context)
+        watchConsole(lookupPage, 'virustotal-file', 'VirusTotal file')
         try {
             await focusRemoteTab()
             const bodies: string[] = []
@@ -1202,7 +1243,6 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             await page.mouse.move(clampNumber(message.x, 0, 2400, 0), clampNumber(message.y, 0, 1600, 0)).catch(() => undefined)
         }
         await page.mouse.wheel(deltaX, deltaY)
-        await page.waitForTimeout(80).catch(() => undefined)
     }
 
     async function handleKey(message: BrokerMessage) {
@@ -1284,7 +1324,10 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
 
     async function sendFrame(force: boolean, reason = 'interval') {
         if (!page || closed || connection.readyState !== connection.OPEN) return
-        if (!force && fastFrameInFlight) return
+        if (!force && fastFrameInFlight) {
+            if (reason === 'interaction') scheduleInteractionFrame()
+            return
+        }
         fastFrameInFlight = !force
         if (!lastFrame && !firstFrameAttemptedAt) firstFrameAttemptedAt = Date.now()
         try {
@@ -1296,10 +1339,10 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 return
             }
             const image = buffer.toString('base64')
-            if (!force && image === lastFrame) return
+            if (!force && reason !== 'interaction' && image === lastFrame) return
             lastFrame = image
             const viewport = page.viewportSize()
-            const heavyFrame = force || !cachedPageEvidence || Date.now() - lastHeavyFrameAt > 5_000
+            const heavyFrame = reason !== 'interaction' && (force || !cachedPageEvidence || Date.now() - lastHeavyFrameAt > 5_000)
             let frameQuality = cachedFrameQuality
             let evidence = cachedPageEvidence
             if (heavyFrame) {

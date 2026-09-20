@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowUp, Check, ChevronDown, Clipboard, Download, Globe2, Hourglass, PackageCheck, Play, Plus, RotateCcw, Share2, ShieldCheck, SlidersHorizontal, Square, Trash2 } from 'lucide-react'
+import { ArrowUp, Check, ChevronDown, Clipboard, Download, Globe2, Hourglass, LoaderCircle, PackageCheck, Play, Plus, RotateCcw, Share2, ShieldCheck, SlidersHorizontal, Square, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -379,6 +379,8 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     const [runBlocker, setRunBlocker] = useState('')
     const [events, setEvents] = useState<string[]>(['Sandbox ready.'])
     const [consoleEvents, setConsoleEvents] = useState<string[]>([])
+    const [providerConsoleEvents, setProviderConsoleEvents] = useState<string[]>([])
+    const [startupStage, setStartupStage] = useState(0)
     const [activeSandboxTab, setActiveSandboxTab] = useState('browser')
     const [customProfileName, setCustomProfileName] = useState('')
     const [customToolName, setCustomToolName] = useState('')
@@ -448,8 +450,14 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     const pushEvent = useCallback((event: string) => {
         setEvents(current => [event, ...current].slice(0, 8))
     }, [])
-    const pushConsoleEvent = useCallback((event: string) => {
-        setConsoleEvents(current => [event, ...current].slice(0, 20))
+    const pushConsoleEvent = useCallback((event: string, provider = false) => {
+        const update = provider ? setProviderConsoleEvents : setConsoleEvents
+        update(current => {
+            const next = [...current, event.slice(0, 8000)].slice(-500)
+            let length = next.reduce((total, entry) => total + entry.length, 0)
+            while (length > 96_000) length -= next.shift()!.length
+            return next
+        })
     }, [])
 
     const exportReport = useCallback(() => {
@@ -463,6 +471,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
             captures,
             events,
             consoleEvents,
+            providerConsoleEvents,
             capacity,
         }), null, 2)], { type: 'application/json' })
         const url = URL.createObjectURL(blob)
@@ -471,7 +480,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
         link.download = `browser-sandbox-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
         link.click()
         URL.revokeObjectURL(url)
-    }, [activeUrl, capacity, captures, consoleEvents, events, normalizedTarget, selectedProfile, sessionState, socketState, summary])
+    }, [activeUrl, capacity, captures, consoleEvents, providerConsoleEvents, events, normalizedTarget, selectedProfile, sessionState, socketState, summary])
 
     const saveReport = useCallback(async () => {
         if (!currentRunId || !captures.length) return
@@ -492,6 +501,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                     captures,
                     events,
                     consoleEvents,
+                    providerConsoleEvents,
                     capacity,
                 }),
             }),
@@ -505,7 +515,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
         if (reportUrl) await navigator.clipboard?.writeText(reportUrl).catch(() => undefined)
         setHistory(current => persistHistory(current.map(run => run.id === currentRunId ? { ...run, reportUrl } : run)))
         setShareStatus(reportUrl ? 'copied' : 'saved')
-    }, [activeUrl, capacity, captures, consoleEvents, currentRunId, events, normalizedTarget, selectedProfile, sessionState, socketState, summary])
+    }, [activeUrl, capacity, captures, consoleEvents, providerConsoleEvents, currentRunId, events, normalizedTarget, selectedProfile, sessionState, socketState, summary])
 
     useEffect(() => {
         let cancelled = false
@@ -627,6 +637,8 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
         setCaptures([])
         setReportOpen(false)
         setConsoleEvents([])
+        setProviderConsoleEvents([])
+        setStartupStage(0)
         setRunBlocker('')
         setActiveImage(null)
         setStreamUrl('')
@@ -804,6 +816,10 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
             }
             if (payload.type === 'status') {
                 const statusState = stringValue(payload.state)
+                const stage = ['launching_worker', 'worker_connected', 'launching'].includes(statusState) ? 1
+                    : ['navigating', 'navigated'].includes(statusState) ? 2
+                        : ['domcontentloaded', 'loaded'].includes(statusState) ? 3 : 0
+                setStartupStage(current => Math.max(current, stage))
                 const remoteTabId = stringValue(payload.tabId)
                 const remoteTabUrl = stringValue(payload.url)
                 if ((statusState === 'tab_selected' || statusState === 'tab_navigated') && remoteTabId) {
@@ -830,12 +846,13 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                 pushEvent(String(payload.message || payload.state || 'Browser status updated.'))
                 return
             }
-            if (payload.type === 'console') {
-                pushConsoleEvent(cleanConsoleEvent(stringValue(payload.text)))
-                return
-            }
-            if (payload.type === 'pageerror') {
-                pushConsoleEvent(cleanConsoleEvent(`pageerror: ${stringValue(payload.message)}`))
+            if (payload.type === 'console' || payload.type === 'pageerror') {
+                const text = stringValue(payload.text) || stringValue(payload.message)
+                const provider = payload.source === 'provider' || (payload.source !== 'target' && /^\[(?:VirusTotal|urlquery|WebCrack)\]/i.test(text))
+                const level = stringValue(payload.level) || (payload.type === 'pageerror' ? 'error' : 'log')
+                const location = stringValue(payload.url)
+                const name = provider && payload.name ? `[${stringValue(payload.name)}] ` : ''
+                pushConsoleEvent(`${name}[${level}] ${cleanConsoleEvent(text)}${location ? ` (${location}${payload.line ? `:${payload.line}` : ''})` : ''}`, provider)
                 return
             }
             if (payload.type === 'navigation_error' || payload.type === 'error') {
@@ -1184,10 +1201,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
 
     return (
         <main className='relative min-h-[calc(100vh-4.5rem)] overflow-x-hidden bg-ui-canvas text-ui-text'>
-            {loadingBrowser ? <div className='grid min-h-[50vh] place-content-center justify-items-center gap-4' data-browser-loading>
-                <p role='status' className='text-lg font-semibold'>Loading…</p>
-                <button type='button' onClick={stopRun} className='text-sm text-ui-muted underline hover:text-ui-text'>Cancel</button>
-            </div> : null}
+            {loadingBrowser ? <BrowserLoading stage={startupStage} elapsed={runStartedAt ? Math.max(0, Math.floor((clockNow - runStartedAt) / 1000)) : 0} target={normalizedTarget} queuePosition={capacity?.queuePosition} onCancel={stopRun} /> : null}
             {/* Keep the stream mounted and sized so it can deliver its first frame. */}
             <section data-browser-workspace inert={loadingBrowser} aria-hidden={loadingBrowser || undefined} className={`grid min-w-0 min-h-[calc(100vh-4.5rem)] grid-cols-1 grid-rows-[auto_minmax(0,1fr)] ${loadingBrowser ? 'pointer-events-none absolute inset-x-0 top-0 opacity-0' : ''}`}>
                 <header className='sticky top-0 z-40 border-b border-ui-border bg-ui-panel px-4 py-3'>
@@ -1314,7 +1328,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                             </details>
                         </div>
                         <div className='mt-4 grid min-w-0 gap-4'>
-                            <EvidenceWorkspace captures={captures} profile={selectedProfile} target={normalizedTarget} summary={summary} events={events} consoleEvents={consoleEvents} />
+                            <EvidenceWorkspace captures={captures} profile={selectedProfile} target={normalizedTarget} summary={summary} events={events} consoleEvents={consoleEvents} providerConsoleEvents={providerConsoleEvents} />
                             <details className='rounded-lg border border-ui-border p-3'><summary className='cursor-pointer text-sm font-semibold'>Analyst notes and captures</summary><div className='mt-3 grid min-w-0 gap-4 xl:grid-cols-2'>
                                 <AnalystSummary summary={summary} captures={captures} />
                                 <CaptureTimeline captures={captures} />
@@ -1325,6 +1339,41 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
             </section>
         </main>
     )
+}
+
+function BrowserLoading({ stage, elapsed, target, queuePosition, onCancel }: { stage: number; elapsed: number; target: string; queuePosition?: number; onCancel: () => void }) {
+    const steps = ['Connect', 'Start browser', 'Load page', 'First frame']
+    const labels = ['Connecting…', 'Starting browser…', 'Loading page…', 'Preparing your view…']
+    return <div className='flex min-h-[65vh] items-center justify-center p-5' data-browser-loading>
+        <section className='w-full max-w-xl overflow-hidden rounded-2xl border border-ui-border bg-ui-panel shadow-xl shadow-black/5' aria-label='Browser startup'>
+            <div className='relative border-b border-ui-border bg-ui-primary/5 px-6 pb-7 pt-8 sm:px-8'>
+                <div className='mb-6 flex items-center justify-between'>
+                    <div className='relative grid size-14 place-items-center rounded-2xl border border-ui-primary/20 bg-ui-primary/10 text-ui-primary'>
+                        <Globe2 className='size-7' aria-hidden='true' />
+                        <span className='absolute -bottom-1 -right-1 size-3 rounded-full border-2 border-ui-panel bg-ui-primary motion-safe:animate-pulse' />
+                    </div>
+                    <span className='font-mono text-xs tabular-nums text-ui-muted' aria-label='Elapsed time'>{formatRunDuration(elapsed)}</span>
+                </div>
+                <div className='flex items-center gap-3' role='status' aria-live='polite'>
+                    <LoaderCircle className='size-5 shrink-0 text-ui-primary motion-safe:animate-spin' aria-hidden='true' />
+                    <h1 className='text-xl font-semibold tracking-tight'>{queuePosition ? `Waiting for a browser · #${queuePosition}` : labels[stage]}</h1>
+                </div>
+                <p className='mt-3 truncate font-mono text-xs text-ui-muted' title={target}>{target}</p>
+            </div>
+            <div className='px-6 py-6 sm:px-8'>
+                <ol className='grid grid-cols-4 gap-2' aria-label='Startup progress'>
+                    {steps.map((label, index) => <li key={label} aria-current={index === stage ? 'step' : undefined} className={index <= stage ? 'text-ui-primary' : 'text-ui-muted'}>
+                        <div className={`mb-3 h-1.5 rounded-full ${index < stage ? 'bg-ui-primary' : index === stage ? 'bg-ui-primary/40 motion-safe:animate-pulse' : 'bg-ui-border'}`} />
+                        <span className='flex items-center gap-1 text-[11px] font-medium sm:text-xs'>{index < stage ? <Check className='size-3 shrink-0' aria-hidden='true' /> : null}{label}</span>
+                    </li>)}
+                </ol>
+                <div className='mt-7 flex items-center justify-between gap-4'>
+                    <span className='text-xs text-ui-muted'>{elapsed >= 20 ? 'Taking longer than usual. You can cancel and retry.' : 'Opening an isolated session'}</span>
+                    <button type='button' onClick={onCancel} className='rounded-lg border border-ui-border px-4 py-2 text-sm font-medium transition hover:border-ui-primary hover:text-ui-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary'>Cancel</button>
+                </div>
+            </div>
+        </section>
+    </div>
 }
 
 function SandboxTabStrip({
@@ -1747,6 +1796,7 @@ function EvidenceWorkspace({
     summary,
     events,
     consoleEvents,
+    providerConsoleEvents,
 }: {
     captures: Capture[]
     profile: SandboxProfile
@@ -1754,6 +1804,7 @@ function EvidenceWorkspace({
     summary: ReturnType<typeof buildAnalystSummary>
     events: string[]
     consoleEvents: string[]
+    providerConsoleEvents: string[]
 }) {
     const pageCaptures = captures.filter(capture => capture.kind === 'page')
     const toolCaptures = captures.filter(capture => capture.kind === 'tool')
@@ -1920,13 +1971,19 @@ function EvidenceWorkspace({
 
                 <EvidencePanel title='Console logs' status={`${consoleEvents.length} log${consoleEvents.length === 1 ? '' : 's'}`}>
                     {consoleEvents.length ? (
-                        <div className='grid gap-1 text-xs text-ui-muted'>
-                            {consoleEvents.slice(0, 10).map((event, index) => <p key={`${index}-${event}`} className='wrap-break-word font-mono'>{event}</p>)}
+                        <div className='grid max-h-96 gap-2 overflow-auto text-xs text-ui-muted'>
+                            {consoleEvents.map((event, index) => <p key={index} className='wrap-break-word whitespace-pre-wrap font-mono'>{event}</p>)}
                         </div>
                     ) : (
                         <p className='text-xs leading-5 text-ui-muted'>No console output was emitted by the inspected page.</p>
                     )}
                 </EvidencePanel>
+
+                {providerConsoleEvents.length ? <EvidencePanel title='Provider diagnostics' status={`${providerConsoleEvents.length} logs`}>
+                    <div className='grid max-h-64 gap-2 overflow-auto text-xs text-ui-muted'>
+                        {providerConsoleEvents.map((event, index) => <p key={index} className='wrap-break-word whitespace-pre-wrap font-mono'>{event}</p>)}
+                    </div>
+                </EvidencePanel> : null}
 
                 <EvidencePanel title='Indicators' status={`${summary.indicators.length} copied-ready`}>
                     {summary.indicators.length ? (
@@ -2266,6 +2323,7 @@ function buildExportReport(input: {
     captures: Capture[]
     events: string[]
     consoleEvents: string[]
+    providerConsoleEvents: string[]
     capacity: SandboxCapacity | null
 }) {
     return {
@@ -2305,6 +2363,7 @@ function buildExportReport(input: {
         })),
         activityEvents: input.events,
         consoleEvents: input.consoleEvents,
+        providerConsoleEvents: input.providerConsoleEvents,
         events: input.events,
     }
 }
