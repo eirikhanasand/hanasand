@@ -1,5 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import { withTransaction } from '#db'
+import { withLogSearchTransaction } from '#utils/logs/searchCapacity.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import { compileLogQuery } from '#utils/logs/kql.ts'
@@ -27,7 +27,7 @@ export async function searchLogs(req: FastifyRequest, res: FastifyReply) {
             if (!['low', 'medium', 'high', 'critical'].includes(input.severity)) throw new Error('Invalid severity.')
             where.push(`normalized->>'severity' = ${bind(input.severity)}`)
         }
-        const result = await withTransaction(async query => {
+        const result = await withLogSearchTransaction(async query => {
             await query('SET LOCAL statement_timeout = \'8s\'')
             const result = compiled.summarize
                 ? await query(`SELECT ${compiled.fields[compiled.summarize]} AS value, COUNT(*)::int AS count FROM mill_events WHERE ${where.join(' AND ')} GROUP BY 1 ORDER BY count DESC LIMIT ${compiled.limit}`, params)
@@ -54,6 +54,9 @@ export async function searchLogs(req: FastifyRequest, res: FastifyReply) {
         })
         return res.send({ ...result, projection: compiled.projection, summarize: compiled.summarize, limit: compiled.limit, hours, generated_at: new Date().toISOString() })
     } catch (error) {
+        if ((error as { code?: string }).code === 'LOG_SEARCH_BUSY') {
+            return res.header('Retry-After', '1').status(503).send({ error: (error as Error).message })
+        }
         const timeout = (error as { code?: string }).code === '57014'
         return res.status(timeout ? 503 : 400).send({ error: timeout ? 'Search took too long. Narrow the time range or add a service filter.' : error instanceof Error ? error.message : 'Unable to search logs.' })
     }
