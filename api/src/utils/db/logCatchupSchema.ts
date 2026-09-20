@@ -1,6 +1,7 @@
 import run from '#db'
 
 export const logCatchupSchema = [
+    'ALTER TABLE log_processing_cursors ADD COLUMN IF NOT EXISTS history_end_id BIGINT',
     'ALTER TABLE log_processing_cursors ADD COLUMN IF NOT EXISTS checked_count BIGINT NOT NULL DEFAULT 0',
     `CREATE TABLE IF NOT EXISTS log_catchup_progress (
         id BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (id),

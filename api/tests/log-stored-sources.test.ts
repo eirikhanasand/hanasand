@@ -4,7 +4,7 @@ let busy: string | null = null
 let recentId = '100', watermark = '200', historyRows = 1, recentRows = 1, reads: Array<{ sql: string, values: unknown[] }>
 mock.module('../src/utils/mill/logWatermark.ts', () => ({ stableLogWatermark: async (source: string) => source === busy ? null : watermark }))
 const query = async (sql: string, values: unknown[] = []) => {
-    if (sql.includes('SELECT last_id, recent_id')) return { rows: [{ last_id: '0', recent_id: recentId }] }
+    if (sql.includes('SELECT last_id, recent_id')) return { rows: [{ last_id: '0', recent_id: recentId, history_end_id: recentId }] }
     if (sql.startsWith('SELECT *')) {
         reads.push({ sql, values })
         return { rows: Array.from({ length: Math.min(values[1] === watermark ? recentRows : historyRows, Number(values[2] || 1000)) }, (_, index) => ({ id: values[1] === watermark ? String(BigInt(recentId) + BigInt(index + 1)) : String(index + 1), created_at: '2026-09-19T12:00:00Z', status: 'success' })) }
@@ -54,12 +54,12 @@ test('throttled history keeps every recent stream and advances only the evaluate
     expect(received.slice(3).map(batch => batch.last)).toEqual(['login_events:100', 'traffic_events:100', 'system_events:100'])
     expect(reads.slice(0, 3).every(read => read.values[2] === 1000)).toBe(true)
     expect(reads.slice(3).every(read => read.values[2] === 100)).toBe(true)
-    expect(checkpoints).toEqual([['login_events', '1001'], ['traffic_events', '1001'], ['system_events', '1001'], ['login_events', '100', 100], ['traffic_events', '100', 100], ['system_events', '100', 100]])
+    expect(checkpoints).toEqual([['login_events', '1001', 1], ['traffic_events', '1001', 1], ['system_events', '1001', 1], ['login_events', '100', 100], ['traffic_events', '100', 100], ['system_events', '100', 100]])
 })
 test('throttled historical failure leaves that cursor unchanged after fresh streams succeed', async () => {
     let runs = 0
     await expect(processAdditionalLogSources(async () => { if (++runs === 4) throw new Error('History evaluation failed') }, 100)).rejects.toThrow('History evaluation failed')
-    expect(checkpoints).toEqual([['login_events', '101'], ['traffic_events', '101'], ['system_events', '101']])
+    expect(checkpoints).toEqual([['login_events', '101', 1], ['traffic_events', '101', 1], ['system_events', '101', 1]])
 })
 
 test('a busy source is visibly retried without starving other sources', async () => {
@@ -77,5 +77,5 @@ test('delayed command scheduling bounds all forward streams without jumping rema
     await processAdditionalLogSources(async logs => { batches.push(logs.map(log => String(log.id))) }, 100, 100)
     expect(batches.map(rows => rows.length)).toEqual([100, 100, 100, 100, 100, 100])
     expect(batches.slice(0, 3).map(rows => rows.at(-1))).toEqual(['login_events:1100', 'traffic_events:1100', 'system_events:1100'])
-    expect(checkpoints.slice(0, 3)).toEqual([['login_events', '1100'], ['traffic_events', '1100'], ['system_events', '1100']])
+    expect(checkpoints.slice(0, 3)).toEqual([['login_events', '1100', 100], ['traffic_events', '1100', 100], ['system_events', '1100', 100]])
 })

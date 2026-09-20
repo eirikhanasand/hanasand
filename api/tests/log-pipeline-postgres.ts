@@ -37,6 +37,8 @@ try {
             ('legacy-z', 'logs', 'fixture', NOW()-INTERVAL '25 hours', '{"severity":"high","service":null}')`)
     const { logDimensionsSchema } = await import('../src/utils/db/logDimensionsSchema.ts')
     for (const statement of logDimensionsSchema) await query(statement.replace('CREATE TABLE IF NOT EXISTS', 'CREATE TEMP TABLE'))
+    const { logCountsSchema } = await import('../src/utils/db/logCountsSchema.ts')
+    for (const statement of logCountsSchema) await query(statement.replace('CREATE TABLE IF NOT EXISTS', 'CREATE TEMP TABLE IF NOT EXISTS'))
     const { backfillLogDimensions, dimensionLogWhere, foldLogCounts } = await import('../src/utils/logs/dimensions.ts')
     const { processLogBatch, processStoredLogs } = await import('../src/utils/mill/processLogs.ts')
     const { MILL_RULES, millDefaultDefinition, createMillFindings, normalizeMillEvent } = await import('../src/handlers/mill.ts')
@@ -61,6 +63,17 @@ try {
             assert.equal(row.normalized.detections.some((match: { rule_id: string }) => match.rule_id === rule.id), positive, `${rule.id} ${positive}`)
         }
     }
+    const cleanWrites: string[] = []
+    queryObserver = async sql => { if (/^(INSERT INTO mill_events|UPDATE mill_events)/.test(sql.trim())) cleanWrites.push(sql) }
+    await processLogBatch([{ id: 'single-write-http', service: 'http-traffic', host: 'fixture.test', level: 'info',
+        message: 'GET /help → 200', created_at: new Date(time).toISOString(), metadata: { category: 'http' } }], 'fixture', rules)
+    queryObserver = undefined
+    assert.equal(cleanWrites.length, 1, 'Clean stateless events finish in one durable write')
+    const clean = (await query("SELECT normalized, processing_status FROM mill_events WHERE log_key='service:single-write-http'")).rows[0]
+    assert.equal(clean.processing_status, 'processed')
+    assert.equal(clean.normalized.rules_checked, rules.length)
+    assert.deepEqual(clean.normalized.detections, [])
+
     const before = Number((await query('SELECT count(*) AS count FROM mill_findings')).rows[0].count)
     await processLogBatch(rows, 'fixture', rules)
     assert.equal(Number((await query('SELECT count(*) AS count FROM mill_findings')).rows[0].count), before, 'Retry must not duplicate findings')
@@ -273,7 +286,7 @@ try {
         const ids = inserted.rows.map(row => row.id as string).sort((a,b) => BigInt(a) < BigInt(b) ? -1 : 1)
         histories.push({ source, ids })
         await query(`INSERT INTO log_processing_cursors(name,last_id,recent_id) VALUES($1,$2,$3)
-            ON CONFLICT(name) DO UPDATE SET last_id=EXCLUDED.last_id,recent_id=EXCLUDED.recent_id`,
+            ON CONFLICT(name) DO UPDATE SET last_id=EXCLUDED.last_id,recent_id=EXCLUDED.recent_id,history_end_id=NULL`,
         [source, String(BigInt(ids[0])-1n), ids[249]])
     }
     const previousCatchupLimit = process.env.LOG_CATCHUP_BATCH_LIMIT
@@ -325,7 +338,7 @@ try {
         assert.ok(recovered.rows.every(row => row.normalized.rules_checked === 105))
         for (const { source, ids } of histories) {
             const state = (await query('SELECT last_id::text,recent_id::text FROM log_processing_cursors WHERE name=$1', [source])).rows[0]
-            assert.equal(state.last_id, ids[449], `${source} restores enough historical capacity to cover all250 remaining rows below its previous forward cursor`)
+            assert.equal(state.last_id, ids[249], `${source} finishes its fixed historical range without rechecking forward rows`)
             assert.ok(BigInt(state.recent_id) >= BigInt(ids[500]), `${source} resumes full forward capacity`)
             const keys = ids.map(id => `service:${source==='service_logs'?'':source+':'}${id}`)
             assert.equal((await query("SELECT COUNT(*)::int AS count FROM mill_events WHERE log_key=ANY($1::text[]) AND processing_status='processed'", [keys])).rows[0].count,501, `${source} retains complete coverage through cursor overlap`)
@@ -412,7 +425,7 @@ try {
     const permissions = readFileSync(new URL('../../scripts/resilience/standby-permissions.sql', import.meta.url), 'utf8')
     const logsGrant = permissions.match(/-- Administrator-only Logs pages[^\n]*\n(GRANT SELECT[\s\S]*?;)/)?.[1]
     assert.ok(logsGrant, 'The explicit standby Logs grant must exist')
-    const logTables = ['service_logs', 'traffic_events', 'mill_events', 'log_processing_cursors', 'log_catchup_progress', 'log_process_queue', 'mill_log_dimensions', 'mill_log_dimensions_state']
+    const logTables = ['service_logs', 'traffic_events', 'mill_events', 'log_processing_cursors', 'log_catchup_progress', 'log_process_queue', 'mill_log_dimensions', 'mill_log_dimensions_state', 'mill_log_counts', 'mill_log_counts_state']
     assert.deepEqual([...logsGrant.matchAll(/public\.(\w+)/g)].map(match => match[1]), logTables)
     const navigationGrant = permissions.match(/-- Organization selector[^\n]*\n(GRANT SELECT[\s\S]*?;)/)?.[1]
     assert.ok(navigationGrant, 'The explicit standby organization/Traffic read grant must exist')
@@ -566,8 +579,9 @@ try {
     const progress = (await query("SELECT payload FROM log_catchup_progress")).rows[0].payload
     let remaining = 0
     for (const source of ['service_logs','login_events','traffic_events','system_events']) {
-        const c = (await query("SELECT last_id,recent_id FROM log_processing_cursors WHERE name=$1",[source])).rows[0]
-        remaining += Number((await query('SELECT count(*) FROM '+source+' WHERE id>$1 AND id<=$2',[c.last_id,c.recent_id])).rows[0].count)
+        const c = (await query("SELECT last_id,recent_id,history_end_id FROM log_processing_cursors WHERE name=$1",[source])).rows[0]
+        remaining += Number((await query('SELECT count(*) FROM '+source+' WHERE id>$1 AND id<=$2',[c.last_id,c.history_end_id ?? c.recent_id])).rows[0].count)
+        remaining += Number((await query('SELECT count(*) FROM '+source+' WHERE id>$1',[c.recent_id])).rows[0].count)
     }
     assert.equal(progress.remaining,remaining,'Progress counts retained rows, not sequence gaps')
     assert.equal(progress.estimated_seconds,remaining ? null : 0,'No fabricated rate in the first sample')
