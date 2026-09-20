@@ -143,6 +143,8 @@ function requestDocker(path: string, options: { method?: string; body?: unknown;
             },
             (res) => {
                 const chunks: Buffer[] = []
+                res.on('error', reject)
+                res.once('aborted', () => reject(new Error(`Docker response interrupted for ${path}`)))
 
                 res.on('data', (chunk) => {
                     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
