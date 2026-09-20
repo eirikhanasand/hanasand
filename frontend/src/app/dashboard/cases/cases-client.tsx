@@ -40,7 +40,6 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
             if (!cursor) params.set('page', String(page))
             if (cursor) params.set('cursor', cursor)
             void fetch(`/api/cases?${params}`, { cache: 'no-store', signal: controller.signal }).then(async response => {
-                const payload = await response.json()
                 if (controller.signal.aborted) return
                 if ([401, 403].includes(response.status)) {
                     setCollections({ intelligence: [], monitoring: [] })
@@ -50,8 +49,10 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
                     controller.abort()
                     return
                 }
-                if (!response.ok) throw new Error(typeof payload.error === 'string' ? payload.error : payload.error?.message || `${collection === 'intelligence' ? 'Intelligence' : 'Monitoring'} cases are unavailable. Please retry.`)
-                const incoming: CaseRow[] = payload.items || payload.cases || []
+                const payload = await response.json().catch(() => null)
+                if (controller.signal.aborted) return
+                const incoming: CaseRow[] = payload?.items || payload?.cases
+                if (!response.ok || !Array.isArray(incoming)) throw new Error(typeof payload?.error === 'string' ? payload.error : payload?.error?.message || `${collection === 'intelligence' ? 'Intelligence' : 'Monitoring'} cases are unavailable. Please retry.`)
                 setCollections(current => ({ ...current, [collection]: page > 1 ? Array.from(new Map([...current[collection], ...incoming].map(row => [row.caseId || row.id, row])).values()) : incoming }))
                 if (collection === 'intelligence') setNextCursor(payload.nextCursor || null)
                 setWarnings(current => ({ ...current, [collection]: payload.warnings?.join(' ') || undefined }))

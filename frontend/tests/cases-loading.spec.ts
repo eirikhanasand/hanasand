@@ -94,3 +94,44 @@ test('partial failures are explicit, retry recovers, and authorization denial cl
     await expect(page.getByRole('alert')).toContainText('Case access could not be verified')
     await expect(page.getByRole('link')).toHaveCount(0)
 })
+
+for (const status of [401, 403]) {
+    test(`HTML ${status} clears retained cases without requiring a JSON error body`, async ({ page }) => {
+        let denied = false
+        await page.route('**/api/cases?**', route => denied
+            ? route.fulfill({ status, contentType: 'text/html', body: '<h1>Access denied</h1>' })
+            : route.fulfill({ json: { items: [new URL(route.request().url()).searchParams.get('collection') === 'monitoring' ? monitor : intel] } }))
+        await page.goto('http://cases.test/')
+        await expect(page.getByRole('link', { name: monitor.title })).toBeVisible()
+        denied = true
+        await page.getByRole('button', { name: 'Refresh cases' }).click()
+        await expect(page.getByRole('alert')).toContainText('Case access could not be verified')
+        await expect(page.getByRole('link')).toHaveCount(0)
+        await expect(page.getByRole('status')).toHaveCount(0)
+    })
+}
+
+for (const failure of [
+    { name: 'HTML outage', status: 503, contentType: 'text/html', body: '<h1>Service unavailable</h1>' },
+    { name: 'HTML success', status: 200, contentType: 'text/html', body: '<h1>Unexpected page</h1>' },
+    { name: 'invalid JSON payload', status: 200, contentType: 'application/json', body: 'null' },
+]) {
+    test(`${failure.name} preserves cases and provides a retry message`, async ({ page }) => {
+        let failed = false
+        await page.route('**/api/cases?**', route => {
+            const monitoring = new URL(route.request().url()).searchParams.get('collection') === 'monitoring'
+            return monitoring && failed
+                ? route.fulfill({ status: failure.status, contentType: failure.contentType, body: failure.body })
+                : route.fulfill({ json: { items: [monitoring ? monitor : intel] } })
+        })
+        await page.goto('http://cases.test/')
+        await expect(page.getByRole('link', { name: monitor.title })).toBeVisible()
+        failed = true
+        await page.getByRole('button', { name: 'Refresh cases' }).click()
+        await expect(page.getByRole('alert')).toHaveText('Monitoring cases are unavailable. Please retry.')
+        await expect(page.getByRole('link', { name: monitor.title })).toBeVisible()
+        failed = false
+        await page.getByRole('button', { name: 'Refresh cases' }).click()
+        await expect(page.getByRole('alert')).toHaveCount(0)
+    })
+}
