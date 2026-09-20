@@ -4,7 +4,9 @@ import { GET, POST } from '../src/app/api/support/chat/route'
 
 const originalFetch = globalThis.fetch
 const tokens: string[] = []
+const targets: string[] = []
 globalThis.fetch = (async (_url: unknown, options?: RequestInit) => {
+    targets.push(String(_url))
     tokens.push(new Headers(options?.headers).get('x-support-session') || '')
     return Response.json({ channel: 'ai', pending: false, status: 'open', messages: [] })
 }) as typeof fetch
@@ -29,4 +31,13 @@ test('cross-site and malformed origins cannot post to support', async () => {
         expect(response.status).toBe(403)
     }
     expect(tokens.length).toBe(before)
+})
+
+
+test('conversation selection reaches the backend without changing the visitor session', async () => {
+    const id = '11111111-1111-4111-8111-111111111111'
+    const token = 'a'.repeat(64)
+    await GET(new NextRequest(`https://hanasand.com/api/support/chat?conversationId=${id}`, { headers: { cookie: `hanasand_support_session=${token}` } }))
+    expect(targets.at(-1)).toEndWith(`/support/chat?conversationId=${id}`)
+    expect(tokens.at(-1)).toBe(token)
 })

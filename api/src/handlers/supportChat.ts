@@ -27,7 +27,9 @@ export async function getSupportTickets(req: FastifyRequest, res: FastifyReply) 
     try {
         const support = await isSupport(userId)
         const result = await run(`
-            SELECT t.id, t.user_id, t.subject, t.status, t.created_at, t.updated_at,
+            SELECT t.id, t.user_id, t.subject, t.status, t.created_at, t.updated_at, t.channel,
+                   (SELECT u2.name FROM support_messages m2 JOIN users u2 ON u2.id=m2.sender_id WHERE m2.ticket_id=t.id AND m2.sender_kind='support' ORDER BY m2.created_at DESC, m2.id DESC LIMIT 1) AS agent_name,
+                   (SELECT COUNT(*)::int FROM support_messages m3 WHERE m3.ticket_id=t.id AND m3.sender_kind<>'system' AND m3.sender_id IS DISTINCT FROM $2) AS reply_count,
                    COALESCE(u.name, 'Visitor') AS user_name,
                    (SELECT body FROM support_messages WHERE ticket_id = t.id ORDER BY created_at DESC LIMIT 1) AS last_message
             FROM support_tickets t

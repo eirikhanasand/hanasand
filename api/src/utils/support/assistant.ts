@@ -1,6 +1,6 @@
 import { requestGptCompletion } from '#utils/ws/handleGptMessage.ts'
 
-export const handoffMessage = 'You’re in the support queue. A member of the team can read this conversation and reply here.'
+export const handoffMessage = 'Waiting for support.'
 export const handoffMarker = '[[HUMAN_HANDOFF]]'
 
 export function asksForHuman(message: string) {

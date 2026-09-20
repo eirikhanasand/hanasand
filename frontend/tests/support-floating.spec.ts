@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { mockSupportLive, supportSnapshot } from './support-fixture'
 
 async function edgeDistances(locator: import('@playwright/test').Locator, width: number, height: number) {
     const box = (await locator.boundingBox())!
@@ -6,8 +7,9 @@ async function edgeDistances(locator: import('@playwright/test').Locator, width:
 }
 
 test('slow drops snap to an edge, corners are preferred, and reset restores the default', async ({ page }) => {
-    await page.route('**/api/support/chat', route => route.fulfill({ json: { channel: 'ai', status: 'open', pending: false, messages: [] } }))
+    await page.route('**/api/support/chat*', route => route.fulfill({ json: { channel: 'ai', status: 'open', pending: false, messages: [] } }))
     await page.setViewportSize({ width: 1000, height: 800 })
+    await mockSupportLive(page)
     await page.goto('/contact')
     const bubble = page.getByLabel('Open support assistant', { exact: true })
     await bubble.click()
@@ -55,7 +57,8 @@ test('slow drops snap to an edge, corners are preferred, and reset restores the 
 
 test('a fast throw carries the bubble to the far corner and keyboard docking works', async ({ page }) => {
     await page.setViewportSize({ width: 1000, height: 800 })
-    await page.route('**/api/support/chat', route => route.fulfill({ json: { channel: 'ai', status: 'open', pending: false, messages: [] } }))
+    await page.route('**/api/support/chat*', route => route.fulfill({ json: { channel: 'ai', status: 'open', pending: false, messages: [] } }))
+    await mockSupportLive(page)
     await page.goto('/contact')
     const bubble = page.getByLabel('Open support assistant', { exact: true })
     const box = (await bubble.boundingBox())!
@@ -88,7 +91,8 @@ test('a fast throw carries the bubble to the far corner and keyboard docking wor
 test('touch throwing docks without opening and reduced motion still snaps', async ({ page, context }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.setViewportSize({ width: 390, height: 844 })
-    await page.route('**/api/support/chat', route => route.fulfill({ json: { channel: 'ai', status: 'open', pending: false, messages: [] } }))
+    await page.route('**/api/support/chat*', route => route.fulfill({ json: { channel: 'ai', status: 'open', pending: false, messages: [] } }))
+    await mockSupportLive(page)
     await page.goto('/contact')
     const bubble = page.getByLabel('Open support assistant', { exact: true })
     const start = (await bubble.boundingBox())!
@@ -107,7 +111,8 @@ test('touch throwing docks without opening and reduced motion still snaps', asyn
 test('closed chat notifies for new replies, persists unread state, and clears when read', async ({ page }) => {
     await page.clock.install()
     const messages = [{ id: 'first', sender_kind: 'assistant', sender_name: 'Hanasand AI', body: 'How can I help?' }]
-    await page.route('**/api/support/chat', route => route.fulfill({ json: { channel: 'human', status: 'open', pending: false, messages } }))
+    await page.route('**/api/support/chat*', route => route.fulfill({ json: supportSnapshot(messages, 'human') }))
+    const live = await mockSupportLive(page)
     await page.goto('/contact')
     await expect(page.getByRole('status', { name: '1 unread support reply' })).toBeVisible()
     await page.getByLabel('Open support assistant', { exact: true }).click()
@@ -116,10 +121,10 @@ test('closed chat notifies for new replies, persists unread state, and clears wh
     await page.getByLabel('Close support assistant').click()
     await expect(page.getByRole('status', { name: /unread support/ })).toHaveCount(0)
     messages.push({ id: 'user', sender_kind: 'user', sender_name: 'You', body: 'My question' }, { id: 'system', sender_kind: 'system', sender_name: 'Support', body: 'In queue' })
-    await page.clock.fastForward(16000)
+    live.notify()
     await expect(page.getByRole('status', { name: /unread support/ })).toHaveCount(0)
     messages.push({ id: 'agent', sender_kind: 'support', sender_name: 'Alex', body: 'I can help you.' })
-    await page.clock.fastForward(16000)
+    live.notify()
     await expect(page.getByRole('status', { name: '1 unread support reply' })).toBeVisible()
     await page.screenshot({ path: '/tmp/support-unread-badge.png' })
     await page.reload()
@@ -138,15 +143,16 @@ test('closed chat notifies for new replies, persists unread state, and clears wh
 test('an AI reply arriving after closing the window raises the badge', async ({ page }) => {
     const messages: { id: string; request_id?: string; sender_kind: string; sender_name: string; body: string }[] = []
     let finishReply: (() => void) | undefined
-    await page.route('**/api/support/chat', async route => {
+    await page.route('**/api/support/chat*', async route => {
         if (route.request().method() === 'POST') {
             const body = route.request().postDataJSON()
             messages.push({ id: body.requestId, request_id: body.requestId, sender_kind: 'user', sender_name: 'You', body: body.message })
             await new Promise<void>(resolve => { finishReply = resolve })
             messages.push({ id: 'late-answer', sender_kind: 'assistant', sender_name: 'Hanasand AI', body: 'Here is your answer.' })
         }
-        await route.fulfill({ json: { channel: 'ai', status: 'open', pending: false, accepted: true, messages } })
+        await route.fulfill({ json: { ...supportSnapshot(messages), accepted: true } })
     })
+    await mockSupportLive(page)
     await page.goto('/contact')
     await page.getByLabel('Open support assistant', { exact: true }).click()
     const dialog = page.getByRole('dialog', { name: 'Support assistant' })

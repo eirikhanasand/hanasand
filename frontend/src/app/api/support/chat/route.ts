@@ -21,7 +21,7 @@ async function handler(req: NextRequest) {
     try {
         const body = req.method === 'POST' ? await req.text() : undefined
         if (body && body.length > 20_000) return NextResponse.json({ error: 'Your message is too long.' }, { status: 400 })
-        const response = await fetch(`${config.url.api}/support/chat`, {
+        const response = await fetch(`${config.url.api}/support/chat${req.nextUrl.search}`, {
             method: req.method,
             headers: { 'content-type': 'application/json', 'x-support-session': session },
             body, cache: 'no-store', signal: AbortSignal.timeout(65_000),
