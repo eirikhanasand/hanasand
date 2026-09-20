@@ -139,7 +139,9 @@ case " $* " in
       printf '%s\\n' 'sha256:fake-scraper-image'
     fi
     ;;
+  *" container inspect hanasand_ti_scraper --format {{.Id}} "*) printf '%s\\n' 'fake-source-scraper-container' ;;
   *" compose ps -q ti-scraper "*)
+    [ "\${FAKE_NO_COMPOSE_SCRAPER:-}" != true ] || exit 0
     if [ -n "\${FAKE_SOURCE_SCRAPER_REPLACED:-}" ] && [ -e "$FAKE_SOURCE_SCRAPER_REPLACED" ]; then
       printf '%s\\n' 'replacement-source-scraper-container'
     else
@@ -306,6 +308,7 @@ describe("backup and restore scripts", () => {
       );
       expect(scraperRuns.length).toBeGreaterThan(0);
       expect(scraperRuns.every((line) => line.includes("sha256:fake-scraper-image"))).toBe(true);
+      expect(dockerRuns.some((line) => line.includes("--volume /var/lib/postgresql/data"))).toBe(true);
       const postgresRuns = dockerRuns.filter((line) => line.includes("pg_restore") || line.includes("POSTGRES_USER"));
       expect(postgresRuns.length).toBeGreaterThan(0);
       expect(postgresRuns.every((line) => line.includes("sha256:fake-postgres-image") || line.startsWith("exec "))).toBe(true);
@@ -315,7 +318,7 @@ describe("backup and restore scripts", () => {
     }
   });
 
-  test("backup pins the source containers and receipts every image role", () => {
+  test.each([false, true])("backup pins source containers with Compose scraper absent=%s", (noComposeScraper) => {
     const root = mkdtempSync(join(tmpdir(), "ti-backup-source-pin-"));
     try {
       const archive = join(root, "archive");
@@ -324,6 +327,7 @@ describe("backup and restore scripts", () => {
       const env = {
         ...process.env,
         PATH: `${bin}:${process.env.PATH}`,
+        FAKE_NO_COMPOSE_SCRAPER: String(noComposeScraper),
         FAKE_DATABASE_BUNDLE: databaseBundle,
         FAKE_DATABASE_INVENTORY: join(root, "backup-source", "DATABASE-INVENTORY.tsv"),
         FAKE_OBJECT_LEDGER: join(root, "empty-object-ledger.tsv"),

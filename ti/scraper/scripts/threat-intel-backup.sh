@@ -38,6 +38,15 @@ resolve_source_container() {
   attempts=0
   while [ "$attempts" -lt 5 ]; do
     resolved_container=$(compose ps -q "$1")
+    # Rolling deployments keep the service name but do not carry Compose labels.
+    if [ -z "$resolved_container" ]; then
+      case "$1" in
+        ti-scraper) source_name=hanasand_ti_scraper ;;
+        postgres) source_name=hanasand_database ;;
+        *) return 1 ;;
+      esac
+      resolved_container=$(docker container inspect "$source_name" --format '{{.Id}}' 2>/dev/null || true)
+    fi
     if [ -n "$resolved_container" ] && [ "$(docker container inspect "$resolved_container" --format '{{.State.Running}}' 2>/dev/null || true)" = true ]; then
       printf '%s\n' "$resolved_container"
       return 0
@@ -404,7 +413,13 @@ case "$action" in
     drill_user=ti_restore
     drill_database=ti_restore
     drill_password="ti_restore_$$_$(date -u +%s)"
-    drill_tmpfs=${TI_RESTORE_TMPFS_SIZE:-8g}
+    # Anonymous volumes are removed with the disposable container, and avoid a
+    # fixed memory-disk ceiling as the production database grows.
+    if [ -n "${TI_RESTORE_TMPFS_SIZE:-}" ]; then
+      set -- --tmpfs "/var/lib/postgresql/data:rw,noexec,nosuid,size=$TI_RESTORE_TMPFS_SIZE"
+    else
+      set -- --volume /var/lib/postgresql/data
+    fi
     archive_parent=$(CDPATH= cd -- "$(dirname -- "$archive")" && pwd)
     receipt_stage=
     pointer_tmp=
@@ -470,7 +485,7 @@ case "$action" in
       --name "$drill_container" \
       --network "$drill_network" \
       --shm-size 256m \
-      --tmpfs "/var/lib/postgresql/data:rw,noexec,nosuid,size=$drill_tmpfs" \
+      "$@" \
       -e POSTGRES_USER="$drill_user" \
       -e POSTGRES_PASSWORD="$drill_password" \
       -e POSTGRES_DB="$drill_database" \
