@@ -95,3 +95,12 @@ test('retries malformed model output before recording a review', async () => {
   expect(calls).toBe(2);
   expect(runs.at(-1)).toMatchObject({ status: 'completed', newFacts: 0, reviewedCaptureIds: [capture.id] });
 });
+
+test('retries a temporary HTTP model failure without losing pending evidence', async () => {
+  const runs: any[] = []; let calls = 0;
+  const store = { saveActorEnrichmentRun: (run: any) => runs.push(structuredClone(run)), listSources: () => [], getActorProfile: () => actor,
+    queryActorEnrichmentCaptures: async () => [capture] };
+  await enrichActor({ store, fetch: async () => ++calls === 1 ? new Response('', { status: 503 }) : Response.json({ message: '{"facts":[]}' }) }, actor);
+  expect(calls).toBe(2);
+  expect(runs.at(-1)).toMatchObject({ status: 'completed', reviewedCaptureIds: [capture.id] });
+});
