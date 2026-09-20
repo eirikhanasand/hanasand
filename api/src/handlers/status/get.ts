@@ -43,6 +43,7 @@ let statusCache: Awaited<ReturnType<typeof loadStatusPayload>> | null = null
 let expiresAt = 0
 let statusInflight: Promise<object> | null = null
 let historyRefresh: Promise<void> | null = null
+let historyLoad: Promise<void> | null = null
 let historyRetryAt = 0
 let dashboardCache: { current: unknown, history: unknown, json: string } | undefined
 const serializeDashboard = createDashboardSerializer()
@@ -84,7 +85,12 @@ export function selectStatusIncident<T extends { checks: unknown[], history: unk
 
 async function statusPayload(summary: boolean) {
     await ensureStatusSnapshots()
-    if (!summary) refreshHistory()
+    if (!summary) {
+        refreshHistory()
+        // A new or idle replica must load the saved history before answering.
+        // The expensive rebuild still runs in the background.
+        if (!historySnapshot || Date.now() - Date.parse(historySnapshot.generated_at) >= MONITOR_STALE_MS) await historyLoad?.catch(() => {})
+    }
     if (statusCache && expiresAt > Date.now()) return summary ? statusCache : withHistory(statusCache)
     statusInflight ||= loadStatusPayload(true).then(payload => {
         statusCache = payload.checks.length ? payload : { ...(statusCache || historySnapshot || payload), monitoring: 'unavailable' }
@@ -101,7 +107,8 @@ async function statusPayload(summary: boolean) {
         return statusCache || { ...(historySnapshot || { overall: 'unknown', generated_at: '', checks: [], history: [], incidents: [] }), monitoring: 'unavailable' }
     }).finally(() => { statusInflight = null })
     // A slow database refresh must not delay readers that already have evidence.
-    const current = statusCache || await statusInflight
+    const current = statusCache && statusCache.monitoring === 'live'
+        && Date.now() - Date.parse(statusCache.generated_at) < MONITOR_STALE_MS ? statusCache : await statusInflight
     return summary ? current : withHistory(current)
 }
 
@@ -127,14 +134,18 @@ function withHistory(current: object) {
 function refreshHistory() {
     if (historyRefresh || Date.now() < historyRetryAt) return
     historyRetryAt = Date.now() + MONITOR_STALE_MS
-    historyRefresh = (async () => {
+    let savedIsFresh = false
+    historyLoad = (async () => {
         const saved = await run('SELECT payload, updated_at FROM service_status_snapshots WHERE id = \'history-v2\'')
         if (saved.rows[0]) {
             historySnapshot = saved.rows[0].payload
             if (!statusCache && historySnapshot) statusCache = { ...historySnapshot, history: [], incidents: [] }
             prepareDashboard()
-            if (Date.now() - new Date(saved.rows[0].updated_at).getTime() < MONITOR_STALE_MS) return
+            savedIsFresh = Date.now() - new Date(saved.rows[0].updated_at).getTime() < MONITOR_STALE_MS
         }
+    })()
+    historyRefresh = historyLoad.then(async () => {
+        if (savedIsFresh) return
         // History scans never block current checks. A database lock shares one
         // refresh across API instances; the persisted snapshot survives restarts.
         await withTransaction(async query => {
@@ -147,9 +158,10 @@ function refreshHistory() {
             historySnapshot = payload
             prepareDashboard()
         })
-    })().catch(error => {
+    }).catch(error => {
+        historyRetryAt = Date.now() + STATUS_CACHE_MS
         console.error('[production-monitor] status history unavailable:', error.message)
-    }).finally(() => { historyRefresh = null })
+    }).finally(() => { historyRefresh = null; historyLoad = null })
 }
 
 async function loadStatusPayload(summary = false, query = run) {

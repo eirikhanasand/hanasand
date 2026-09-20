@@ -1,5 +1,5 @@
 import getStatus, { type ServiceStatus } from './getStatus'
-import { retainVerifiedStatus, toPublicServiceStatus } from './publicStatus'
+import { isVerifiedStatus, retainVerifiedStatus, toPublicServiceStatus } from './publicStatus'
 
 // Refresh away from the rendering path. Failures retain the actual last result.
 const snapshots = new Map<string, { value?: ServiceStatus, nextRefresh: number, pending?: Promise<ServiceStatus> }>()
@@ -17,6 +17,7 @@ export default async function getPublicStatus({ incidentId, summary = false, das
             return state.value
         }).finally(() => { state.pending = undefined })
     }
-    if (state.value) return state.value
+    if (state.value && (!state.pending || isVerifiedStatus(state.value)
+        && (summary || state.value.history_available && Date.now() - Date.parse(state.value.history_generated_at || '') < 15 * 60_000))) return state.value
     return state.pending!
 }
