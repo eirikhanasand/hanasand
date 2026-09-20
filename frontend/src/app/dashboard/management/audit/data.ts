@@ -28,7 +28,7 @@ export function param(params: AuditSearchParams, key: string) {
 }
 
 export function auditQuery(params: AuditSearchParams, cursor?: string | null) {
-    const query = new URLSearchParams({ limit: '50' })
+    const query = new URLSearchParams({ limit: '50', format: 'timeline' })
     for (const key of auditFilterKeys) {
         const value = param(params, key)
         if (value) query.set(key, value)
@@ -37,7 +37,7 @@ export function auditQuery(params: AuditSearchParams, cursor?: string | null) {
     return query
 }
 
-export function readAuditPage(payload: { events: Array<Record<string, unknown>>, pagination: { nextCursor?: string | null, total?: number }, queryResult?: AuditPage['queryResult'] }): AuditPage {
+export function readAuditPage(payload: { events: Array<Record<string, unknown>>, pagination: { nextCursor?: string | null, total?: number | null }, queryResult?: AuditPage['queryResult'] }): AuditPage {
     if (!Array.isArray(payload.events) || !payload.pagination) throw new Error('Invalid audit response.')
     return {
         available: true,

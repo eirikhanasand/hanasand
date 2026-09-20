@@ -2,18 +2,19 @@ import { beforeEach, expect, mock, test } from 'bun:test'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
 let administrator = true
+let eventRows: Record<string, unknown>[] = []
 const queries: Array<{ sql: string, values: unknown[] }> = []
 async function run(sql: string, values: unknown[] = []) {
     if (sql.includes('FROM roles r')) return { rows: administrator ? [{ id: 'system_admin' }] : [] }
     queries.push({ sql, values })
-    return { rows: sql.includes('AS total') ? [{ total: 125 }] : sql.includes('GROUP BY 1') ? [{ value: 'test', count: 12 }] : sql.includes('AS "Action"') ? [{ Action: 'restart', Description: 'matched' }] : [] }
+    return { rows: sql.includes('AS total') ? [{ total: 125 }] : sql.includes('GROUP BY 1') ? [{ value: 'test', count: 12 }] : sql.includes('AS "Action"') ? [{ Action: 'restart', Description: 'matched' }] : eventRows }
 }
 mock.module('../src/utils/db.ts', () => ({ default: run, queryOnce: run, closeDatabase: async () => {} }))
 mock.module('../src/utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: true, id: 'test-admin' }) }))
 const { getSystemEvents } = await import('../src/handlers/adminSupport.ts')
-beforeEach(() => { administrator = true; queries.length = 0 })
+beforeEach(() => { administrator = true; eventRows = []; queries.length = 0 })
 async function request(query: Record<string, string>) {
-    const result = { statusCode: 200, body: undefined as any, status(code: number) { this.statusCode = code; return this }, send(body: unknown) { this.body = body; return this } }
+    const result = { statusCode: 200, body: undefined as any, header() { return this }, status(code: number) { this.statusCode = code; return this }, send(body: unknown) { this.body = body; return this } }
     await getSystemEvents({ query } as FastifyRequest, result as unknown as FastifyReply)
     return result
 }
@@ -72,4 +73,33 @@ test('HQL summarizes filtered matches and rejects unsupported syntax without que
     expect(queries).toHaveLength(0)
     administrator = false
     expect((await request({ hql: 'AuditEvents' })).statusCode).toBe(403)
+})
+
+
+test('timeline pages return only display rows; cursor batches skip counts and support reports', async () => {
+    eventRows = [3, 2, 1].map(id => ({ id, created_at: '2026-09-20T00:00:00.000Z', event_type: 'read', reason: 'Displayed description' }))
+    const first = await request({ format: 'timeline', limit: '2', outcome: 'failed' })
+    expect(first.body.events).toEqual(eventRows.slice(0, 2))
+    expect(first.body.detail).toBeUndefined()
+    expect(first.body.pagination.total).toBe(125)
+    expect(JSON.parse(decodeURIComponent(first.body.pagination.nextCursor))).toEqual({ createdAt: '2026-09-20T00:00:00.000Z', id: 2 })
+    expect(queries[1].sql).not.toContain('e.context')
+    expect(queries[1].sql).not.toContain('e.user_agent')
+    queries.length = 0
+    eventRows = [eventRows[2]]
+    const next = await request({ format: 'timeline', limit: '2', outcome: 'failed', cursor: first.body.pagination.nextCursor })
+    expect(queries).toHaveLength(1)
+    expect(queries[0].sql).not.toContain('COUNT(*)')
+    expect(queries[0].sql).toContain('(e.created_at, e.id) <')
+    expect(queries[0].values).toEqual(['failed', '2026-09-20T00:00:00.000Z', 2, 3, 0])
+    expect(next.body.events).toEqual(eventRows)
+    expect(next.body.pagination).toEqual({ total: null, nextCursor: null })
+})
+
+test('timeline format retains validation and administrator authorization', async () => {
+    expect((await request({ format: 'unknown' })).statusCode).toBe(400)
+    expect((await request({ format: 'timeline', cursor: 'invalid' })).statusCode).toBe(400)
+    administrator = false
+    expect((await request({ format: 'timeline' })).statusCode).toBe(403)
+    expect(queries).toHaveLength(0)
 })

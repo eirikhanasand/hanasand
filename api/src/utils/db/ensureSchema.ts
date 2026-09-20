@@ -1092,6 +1092,8 @@ export default async function ensureSchema() {
     await run('ALTER TABLE system_events DROP CONSTRAINT IF EXISTS system_events_actor_id_fkey')
     await run('ALTER TABLE system_events ADD CONSTRAINT system_events_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE SET NULL')
     await run('CREATE INDEX IF NOT EXISTS idx_system_events_created_at ON system_events(created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_system_events_cursor ON system_events(created_at DESC, id DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_system_events_outcome_cursor ON system_events(outcome, created_at DESC, id DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_system_events_source_service_created ON system_events(source, service, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_system_events_org_created ON system_events(organization_id, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_system_events_actor_created ON system_events(actor_id, created_at DESC)')

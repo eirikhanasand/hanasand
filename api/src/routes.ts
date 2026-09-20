@@ -247,7 +247,13 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/impersonation/start', startImpersonation)
     fastify.delete('/impersonation', stopImpersonation)
     fastify.get('/impersonation/events', getImpersonationEvents)
-    fastify.get('/system/events', getSystemEvents)
+    fastify.get('/system/events', {
+        onSend: async (_req, reply, payload) => {
+            const timing = reply.getHeader('Server-Timing')
+            reply.header('Server-Timing', `${timing ? `${timing}, ` : ''}app;dur=${reply.elapsedTime.toFixed(2)}`)
+            return payload
+        },
+    }, getSystemEvents)
     fastify.get('/system/events/:id', getSystemEvent)
     // Compatibility aliases for existing clients; system events are the canonical name.
     fastify.get('/admin/audit-events', getSystemEvents)
