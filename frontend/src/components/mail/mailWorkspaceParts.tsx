@@ -11,13 +11,14 @@ import { fileToDraftAttachment, formatDate, formatRelativeTime, prettyBytes, sub
 
 export type MailQuickAction = 'reply' | 'replyAll' | 'forward' | 'archive' | 'trash' | 'read' | 'unread' | 'flag' | 'unflag'
 
-export function MessageRow({ message, active, onClick, onAction, canSend = true, archived, checked, onToggle, selectionDisabled }: {
+export function MessageRow({ message, active, onClick, onAction, canSend = true, archived, selectionMode, checked, onToggle, selectionDisabled }: {
     message: MailMessageSummary
     active: boolean
     onClick: () => void
     onAction: (action: MailQuickAction) => void
     canSend?: boolean
     archived: boolean
+    selectionMode: boolean
     checked: boolean
     onToggle: () => void
     selectionDisabled: boolean
@@ -55,10 +56,10 @@ export function MessageRow({ message, active, onClick, onAction, canSend = true,
         <div className={`flex min-w-0 items-center rounded-lg border transition ${
             checked || active ? 'border-ui-primary bg-ui-primary/10' : 'border-transparent bg-ui-raised hover:border-ui-border hover:bg-ui-panel'
         }`}>
-            <label className='flex shrink-0 cursor-pointer items-center self-stretch pl-3 pr-1'>
+            {selectionMode && <label className='flex shrink-0 cursor-pointer items-center self-stretch pl-3 pr-1'>
                 <input type='checkbox' aria-label={`Select ${message.subject}`} checked={checked} onChange={onToggle}
                     disabled={selectionDisabled} className='h-4 w-4 accent-ui-primary' />
-            </label>
+            </label>}
             <button
                 ref={row}
                 onContextMenu={event => { event.preventDefault(); setMenu({ x: event.clientX, y: event.clientY }) }}
