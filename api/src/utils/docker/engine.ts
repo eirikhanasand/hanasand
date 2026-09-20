@@ -168,7 +168,7 @@ function requestDocker(path: string, options: { method?: string; body?: unknown;
 
         // Socket timeouts reset on each chunk; bound the whole collection too.
         const timeout = setTimeout(() => {
-            const error = new Error(`Docker API timed out for ${path}`)
+            const error = Object.assign(new Error(`Docker API timed out for ${path}`), { code: 'ETIMEDOUT' })
             response?.destroy(error)
             req.destroy(error)
             fail(error)
@@ -238,14 +238,23 @@ async function inspectRuntimeContainer(id: string) {
 }
 
 export async function createRuntimeContainer(name: string, body: Record<string, unknown>) {
-    const response = await requestDocker(`/containers/create?name=${encodeURIComponent(name)}`, { method: 'POST', body, timeoutMs: 8_000 })
+    let response: Buffer
+    try {
+        // Image/container filesystem setup can outlast ordinary Docker reads on a busy host.
+        response = await requestDocker(`/containers/create?name=${encodeURIComponent(name)}`, { method: 'POST', body, timeoutMs: 60_000 })
+    } catch (error) {
+        // A timed-out create may still have completed in Docker. Do not remove a
+        // pre-existing container on other errors (particularly name conflicts).
+        if ((error as NodeJS.ErrnoException).code === 'ETIMEDOUT') await removeRuntimeContainer(name).catch(() => undefined)
+        throw error
+    }
     const parsed = JSON.parse(response.toString('utf8')) as { Id?: string }
     if (!parsed.Id) throw new Error('Docker did not return a container id.')
     return parsed.Id
 }
 
 export async function startRuntimeContainer(id: string) {
-    await requestDocker(`/containers/${encodeURIComponent(id)}/start`, { method: 'POST', timeoutMs: 8_000 })
+    await requestDocker(`/containers/${encodeURIComponent(id)}/start`, { method: 'POST', timeoutMs: 60_000 })
 }
 
 export async function removeRuntimeContainer(id: string) {
