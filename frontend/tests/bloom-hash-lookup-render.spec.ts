@@ -20,11 +20,11 @@ test('Bloom hash lookup checks exposure without collecting a raw password', asyn
 
     await expect(page.getByRole('heading', { name: /Bloom-index checks from a SHA-1 hash/i })).toBeVisible()
     await expect(page.locator('input[type="password"]')).toHaveCount(0)
-    await expect(page.getByText('Paste a SHA-1 hash. We check it against leaked passwords.')).toBeVisible()
-    await expect(page.getByText('printf %s \'HelloWorld\' | shasum')).toBeVisible()
+    await expect(page.getByText('Paste a SHA-1 hash. We check it against leaked passwords.').filter({ visible: true })).toBeVisible()
+    await expect(page.getByText('printf %s \'HelloWorld\' | shasum').filter({ visible: true })).toBeVisible()
     await expect(page.getByText('Bloom prefix boundary')).toHaveCount(0)
 
-    await page.getByLabel('SHA-1 hash').fill('5baa61e4c9b93f3f0682250b6cf8331b7ee68fd8')
+    await page.getByLabel('SHA-1 hash').filter({ visible: true }).fill('5baa61e4c9b93f3f0682250b6cf8331b7ee68fd8')
     await page.getByRole('button', { name: 'Run Bloom lookup' }).click()
 
     await expect(page.getByText('Exact match found')).toBeVisible()
