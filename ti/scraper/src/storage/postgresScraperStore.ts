@@ -1676,11 +1676,12 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     await Promise.all([...keys].map(key => this.queryDeliverySnapshot(JSON.parse(key) ?? undefined, true)));
   }
 
-  async claimDeliveryRecovery(limit = 8) {
+  async claimDeliveryRecovery(limit = 8, tenantId?: string | null) {
     return this.sql.begin(async tx => {
       const due = await tx`SELECT t.id FROM threat_intel.timeliness_records t
         LEFT JOIN threat_intel.workflow_records w ON w.record_type='delivery_report_recovery' AND w.id=t.id
         WHERE t.first_reported_at IS NULL AND (w.id IS NULL OR (w.record->>'nextAttemptAt')::timestamptz <= now())
+          AND (${tenantId === undefined} OR t.tenant_id IS NOT DISTINCT FROM ${tenantId ?? null})
         ORDER BY w.updated_at NULLS FIRST, t.id LIMIT ${limit} FOR UPDATE OF t SKIP LOCKED`;
       const result: any[] = [];
       for (const row of due) {

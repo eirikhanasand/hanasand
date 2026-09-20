@@ -3,6 +3,8 @@ import { startDeliveryReportRecovery } from '../src/ops/deliveryReportRecovery.t
 
 const batches = Number(process.argv[2] ?? 1);
 if (!Number.isSafeInteger(batches) || batches < 1 || batches > 400) throw new Error('Specify 1–400 recovery batches.');
+const scope = process.argv[3];
+if (scope !== undefined && scope !== 'global') throw new Error('The optional scope must be global.');
 
 // Recovery uses persisted claims and needs no collector history in memory.
 const store = await PostgresScraperStore.create({ hydrate: false, deferStartupChecks: true, runMaintenanceMigrations: false });
@@ -11,7 +13,7 @@ let claimed = 0;
 let stopping = false;
 const worker = startDeliveryReportRecovery({ store: {
   claimDeliveryRecovery: async (limit: number) => {
-    const items = await store.claimDeliveryRecovery(limit);
+    const items = await store.claimDeliveryRecovery(limit, scope === 'global' ? null : undefined);
     claimed = items.length;
     return items;
   },
