@@ -352,6 +352,8 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     const [activeImage, setActiveImage] = useState<string | null>(null)
     const [streamUrl, setStreamUrl] = useState('')
     const [streamHasFrame, setStreamHasFrame] = useState(false)
+    const receivedEvidenceRef = useRef(false)
+    const stoppedRunRef = useRef(false)
     const streamRef = useRef<HTMLIFrameElement | null>(null)
     useEffect(() => {
         setStreamHasFrame(false)
@@ -359,7 +361,10 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
         const origin = new URL(streamUrl).origin
         const receive = (event: MessageEvent) => {
             if (event.source !== streamRef.current?.contentWindow || event.origin !== origin || event.data?.type !== 'hanasand-browser-stream') return
-            if (event.data.state === 'ready' || event.data.state === 'gesture') setStreamHasFrame(true)
+            if (event.data.state === 'ready' || event.data.state === 'gesture') {
+                receivedEvidenceRef.current = true
+                setStreamHasFrame(true)
+            }
         }
         window.addEventListener('message', receive)
         return () => window.removeEventListener('message', receive)
@@ -614,6 +619,9 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
         if (override?.target) setTarget(override.target)
         socketRef.current?.close()
         socketRef.current = socket
+        let receivedEnd = false
+        receivedEvidenceRef.current = false
+        stoppedRunRef.current = false
         setCurrentRunId(id)
         setShareStatus('')
         setCaptures([])
@@ -657,7 +665,10 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
             setSocketState('closed')
             setStreamUrl('')
             setStreamStats({})
-            setSessionState(current => current === 'prompt' || current === 'failed' || current === 'unreachable' ? current : 'ended')
+            if (!receivedEnd && !stoppedRunRef.current) {
+                setRunBlocker(current => current || 'The browser connection was lost before the run finished. Try again.')
+                setSessionState(current => current === 'prompt' || current === 'unreachable' ? current : 'failed')
+            }
             pushEvent('Sandbox closed.')
         }
         socket.onerror = () => {
@@ -666,7 +677,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
             pushEvent('Sandbox broker errored.')
         }
         socket.onmessage = (message) => {
-            if (socketRef.current !== socket) return
+            if (socketRef.current !== socket || stoppedRunRef.current) return
             if (typeof message.data !== 'string') return
             const payload = parsePayload(message.data)
             if (!payload) return
@@ -707,15 +718,19 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                 return
             }
             if (payload.type === 'ended') {
+                receivedEnd = true
+                const failed = payload.reason === 'launch_failed' || payload.reason === 'quota_exhausted' || !receivedEvidenceRef.current
                 setStreamUrl('')
                 setStreamStats({})
-                setSessionState(current => current === 'failed' || current === 'unreachable' ? current : 'ended')
+                if (failed) setRunBlocker(current => current || stringValue(payload.message) || 'The browser stopped before capturing any evidence. Try again.')
+                setSessionState(current => current === 'failed' || current === 'unreachable' ? current : failed ? 'failed' : 'ended')
                 pushEvent('Sandbox run ended.')
                 return
             }
             if (payload.type === 'downloads') {
                 const networkSummary = networkSummaryValue(payload.networkSummary)
                 if (!networkSummary) return
+                if (networkSummary.downloads?.length) receivedEvidenceRef.current = true
                 setCaptures(current => [{
                     id: 'file-evidence',
                     kind: 'page', label: 'File evidence', url: url,
@@ -726,7 +741,10 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
             if (payload.type === 'frame' && typeof payload.image === 'string') {
                 const image = `data:image/jpeg;base64,${payload.image}`
                 const evidence = evidenceValue(payload.evidence)
-                if (isUsefulFrameImage(image)) setActiveImage(image)
+                if (isUsefulFrameImage(image)) {
+                    receivedEvidenceRef.current = true
+                    setActiveImage(image)
+                }
                 const urlValue = String(payload.url || url)
                 const frameWidth = finiteNumber(payload.width) || 1280
                 const frameHeight = finiteNumber(payload.height) || 720
@@ -760,6 +778,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
             if (payload.type === 'tool_capture') {
                 const image = typeof payload.image === 'string' ? `data:image/jpeg;base64,${payload.image}` : null
                 const toolAnalysis = toolAnalysisValue(payload.toolAnalysis)
+                if (hasParsedProviderResult(toolAnalysis)) receivedEvidenceRef.current = true
                 const providerResult = providerRunResult(toolAnalysis, stringValue(payload.error))
                 setCaptures(current => addCapture(current, {
                     id: `tool-${payload.id || current.length}-${payload.capturedAt || Date.now()}`,
@@ -848,8 +867,10 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
 
     const stopRun = useCallback(() => {
         const socket = socketRef.current
+        stoppedRunRef.current = true
         if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'end' }))
         setSessionState('ended')
+        socket?.close()
         pushEvent('Sandbox stopped.')
     }, [pushEvent])
 
@@ -1222,7 +1243,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                                 <PackageCheck className='h-10 w-10 shrink-0 text-ui-primary' />
                                 <span className='min-w-40 flex-1'>
                                     <span role='status' className='block text-2xl font-semibold'>{sessionState === 'failed' ? 'Run failed' : sessionState === 'unreachable' || summary.navigationFailed ? 'Target unreachable' : 'Run complete'}</span>
-                                    <span className='mt-1 block text-sm text-ui-muted'>{summary.brief.verdict}</span>
+                                    <span className='mt-1 block text-sm text-ui-muted'>{runBlocker || summary.brief.verdict}</span>
                                 </span>
                                 <span className='ml-auto flex shrink-0 items-center gap-2 text-sm font-semibold text-ui-primary'>{reportOpen ? 'Close report' : 'Open report'}<ChevronDown className={`h-5 w-5 transition-transform ${reportOpen ? 'rotate-180' : ''}`} /></span>
                             </span>
@@ -1234,6 +1255,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                             </span>
                         </button>
                     ) : null}
+                    {sessionState === 'failed' ? <button type='button' onClick={() => startRun({ target: normalizedTarget })} className='justify-self-start rounded-md border border-ui-primary bg-ui-primary/10 px-4 py-2 text-sm font-semibold text-ui-primary'>Try again</button> : null}
                     <div id='browser-run-evidence' hidden={!runIsActive && !reportOpen}>
                         <div className='grid min-w-0 items-start gap-4'>
                             <section className={`grid min-w-0 w-full overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm ${streamUrl || activeViewportImage ? '' : 'max-w-xl justify-self-center'}`}>
@@ -1271,7 +1293,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                                             <div className='grid max-w-md gap-2 text-center'>
                                                 <ShieldCheck className='mx-auto h-8 w-8 text-ui-primary' />
                                                 <p className='text-lg font-semibold text-ui-text'>{activeTool ? `${activeTool.name} tab loading` : runBlocker ? 'Browser run blocked' : waitingSeconds >= 5 ? 'Taking longer than expected...' : sessionState === 'queued' ? 'Queued for sandbox capacity' : sessionState === 'connecting' ? 'Waiting for first browser frame' : 'No browser frame captured yet'}</p>
-                                                <p className='text-sm leading-6 text-ui-muted'>{activeTool ? providerDetail(activeToolCapture?.toolAnalysis, activeToolCapture) : runBlocker || (sessionState === 'queued' ? queueCopy(capacity) : waitingSeconds >= 5 ? 'The remote browser is still starting.' : 'Starting your isolated browser…')}</p>
+                                                <p className='text-sm leading-6 text-ui-muted'>{activeTool ? providerDetail(activeToolCapture?.toolAnalysis, activeToolCapture) : runBlocker || (!runIsActive ? 'This run did not capture a browser frame.' : sessionState === 'queued' ? queueCopy(capacity) : waitingSeconds >= 5 ? 'The remote browser is still starting.' : 'Starting your isolated browser…')}</p>
                                                 {waitingForFrame && waitingSeconds >= 10 ? <div className='mt-2 flex flex-wrap justify-center gap-2'><button type='button' onClick={() => { stopRun(); startRun({ target: normalizedTarget }) }} className='rounded-md border border-ui-primary bg-ui-primary/10 px-3 py-2 text-xs font-semibold text-ui-primary'>Try again</button><button type='button' onClick={() => window.dispatchEvent(new CustomEvent('hanasand:open-support'))} className='rounded-md border border-ui-border px-3 py-2 text-xs font-semibold text-ui-text'>Contact us</button></div> : null}
                                             </div>
                                         </div>
