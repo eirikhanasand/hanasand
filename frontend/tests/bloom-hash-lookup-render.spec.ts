@@ -18,7 +18,7 @@ test('Bloom hash lookup checks exposure without collecting a raw password', asyn
 
     await page.goto('/pwned')
 
-    await expect(page.getByRole('heading', { name: 'Has your password leaked?' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Has your password been leaked?' })).toBeVisible()
     await expect(page.locator('input[type="password"]')).toHaveCount(0)
     await expect(page.getByText('Paste a SHA-1 hash. We check it against leaked passwords.').filter({ visible: true })).toBeVisible()
     await expect(page.getByText('printf %s \'HelloWorld\' | shasum').filter({ visible: true })).toBeVisible()

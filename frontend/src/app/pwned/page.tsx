@@ -19,7 +19,7 @@ export default async function Page() {
             <div className='grid w-full max-w-5xl gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center'>
                 <div className='grid gap-4'>
                     <p className='text-sm font-semibold uppercase text-ui-primary'>Bloom exposure lookup</p>
-                    <h1 className='text-4xl font-semibold tracking-normal md:text-5xl'>Has your password leaked?</h1>
+                    <h1 className='text-4xl font-semibold tracking-normal md:text-5xl'>Has your password been leaked?</h1>
                     <p className='max-w-xl text-base leading-7 text-ui-muted'>
                         Paste a SHA-1 hash. We check it against leaked passwords.
                     </p>
