@@ -36,7 +36,7 @@ export default async function recordLog({
     metadata?: Record<string, unknown>
     sourceEventId?: string
     timestamp?: string
-}) {
+}, query: typeof run = run) {
     if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) metadata = {}
     message = redactLogText(message)
     metadata = redactLogValue(metadata) as Record<string, unknown>
@@ -53,7 +53,7 @@ export default async function recordLog({
         metadata = { category: 'organization_request_error', surface: 'organizations' }
     }
 
-    await run(`
+    await query(`
         WITH organization_privacy AS MATERIALIZED (
             SELECT status, audit_safe_metadata
               FROM organizations

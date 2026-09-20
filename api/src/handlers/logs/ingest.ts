@@ -1,4 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
+import { withTransaction } from '#db'
 import { hasLogIngestToken } from '#utils/auth/logIngestToken.ts'
 export { hasLogIngestToken } from '#utils/auth/logIngestToken.ts'
 import hasInternalToken from '#utils/auth/internalToken.ts'
@@ -24,6 +25,8 @@ export default async function ingestLog(req: FastifyRequest, res: FastifyReply) 
             return res.status(400).send({ error: 'Invalid log event.' })
         }
     }
-    for (const entry of entries) await recordLog({ ...entry, level: entry.level || 'info' })
+    await withTransaction(async query => {
+        for (const entry of entries) await recordLog({ ...entry, level: entry.level || 'info' }, query)
+    })
     return res.status(201).send({ ok: true, accepted: entries.length })
 }
