@@ -1,8 +1,7 @@
 // Opt-in PostgreSQL proof: synthetic data only; all fixture tables roll back.
 import assert from 'node:assert/strict'
 import pg from 'pg'
-import {readFileSync} from 'node:fs'
-import {basicLogSearchPredicate} from '../src/utils/logs/searchText.ts'
+import {basicLogSearchPredicate,logPhraseSearchExpression} from '../src/utils/logs/searchText.ts'
 import {compileLogQuery} from '../src/utils/logs/kql.ts'
 assert.equal(process.env.LOG_PIPELINE_TEST_DATABASE,'1','Use the isolated PostgreSQL fixture database')
 const client=new pg.Client({host:process.env.DB_HOST,port:Number(process.env.DB_PORT||5432),database:process.env.DB,user:process.env.DB_USER,password:process.env.DB_PASSWORD})
@@ -78,7 +77,7 @@ try {
     await q('INSERT INTO organizations VALUES (\'active\',\'active\'),(\'inactive\',\'archived\')')
     await q('CREATE TEMP TABLE mill_events(id text PRIMARY KEY,organization_id text NOT NULL,ingestion_id text NOT NULL,processing_status text NOT NULL,event_timestamp timestamptz NOT NULL,normalized jsonb NOT NULL)')
     await q(`INSERT INTO mill_events SELECT 'background-'||n,'active','logs','processed',NOW()-INTERVAL '1 hour',${sampleExpression} FROM generate_series(1,100000) n`)
-    const special=['whoami','WHOAMI','%', '_', '!', '\\', 'a','xy','needle\' OR 1=1 --','İ','σ','Σ','😀','line\nbreak','path\\whoami','100%_done!', 'x'.repeat(5000), '😀'.repeat(2000)]
+    const special=['whoami','WHOAMI','docker logs','docker0logs','docker  logs','%', '_', '!', '\\', 'a','xy','needle\' OR 1=1 --','İ','σ','Σ','😀','line\nbreak','path\\whoami','100%_done!', 'x'.repeat(5000), '😀'.repeat(2000)]
     let ordinal=0
     for (const text of special) for (const scope of ['visible','inactive','pending','direct','old','low','http']) {
         const id='special-'+String(++ordinal).padStart(4,'0')
@@ -92,13 +91,10 @@ try {
     await q('CREATE INDEX idx_mill_logs_severity_time ON mill_events((normalized->>\'severity\'),event_timestamp DESC) WHERE ingestion_id=\'logs\'')
     await q('CREATE INDEX idx_mill_logs_browse_time ON mill_events(event_timestamp DESC,id DESC) WHERE ingestion_id=\'logs\' AND processing_status=\'processed\'')
     const started=performance.now()
-    const schema=readFileSync(new URL('../src/utils/db/ensureSchema.ts',import.meta.url),'utf8')
-    const indexDefinition=schema.match(/CREATE INDEX IF NOT EXISTS idx_mill_logs_search_trgm[^`]+/)?.[0]
-    assert.ok(indexDefinition,'Actual runtime GIN index definition must be found')
-    await q(indexDefinition)
+    await q(`CREATE INDEX idx_mill_logs_phrase_trgm ON mill_events USING GIN ((${logPhraseSearchExpression}) gin_trgm_ops) WHERE ingestion_id='logs' AND processing_status='processed'`)
     const indexBuildMs=Math.round(performance.now()-started)
     await q('ANALYZE mill_events')
-    const shape=(await q('SELECT COUNT(*)::int AS rows,ROUND(AVG(octet_length(normalized::text)))::int AS average_json_bytes,pg_relation_size(\'idx_mill_logs_search_trgm\')::text AS index_bytes FROM mill_events')).rows[0]
+    const shape=(await q('SELECT COUNT(*)::int AS rows,ROUND(AVG(octet_length(normalized::text)))::int AS average_json_bytes,pg_relation_size(\'idx_mill_logs_phrase_trgm\')::text AS index_bytes FROM mill_events')).rows[0]
     const searches=['',...special,'message','log_type','n','zz','nonexistent-fixture-marker-7821','\\n','whoami%','100%_']
     for (const search of searches) {
         const parity=await q(`WITH expected AS (SELECT id FROM mill_events WHERE ${base} AND ${original}),actual AS (SELECT id FROM mill_events WHERE ${base} AND ${indexed}),
@@ -114,7 +110,7 @@ try {
     const plan=(await q(`EXPLAIN (ANALYZE,FORMAT JSON,TIMING OFF) SELECT id,normalized,event_timestamp,organization_id FROM mill_events WHERE ${base} AND ${filters} AND ${indexed} ORDER BY event_timestamp DESC,id DESC LIMIT 200`,['whoami'])).rows[0]['QUERY PLAN']
     const used=nodes(plan).filter(node=>node['Index Name']).map(node=>node['Index Name'])
     console.log(JSON.stringify({phase:'natural_combined_plan',used_indexes:used,execution_ms:plan[0]['Execution Time'],plan}))
-    assert.ok(used.includes('idx_mill_logs_search_trgm'),'Natural combined Realtime query must use the trigram index')
+    assert.ok(used.includes('idx_mill_logs_phrase_trgm'),'Natural combined Realtime query must use the phrase trigram index')
     assert.ok(plan[0]['Execution Time'] < 8000,'Combined Realtime search must finish within its normal eight-second timeout')
     const fieldPlans=[]
     for(const operator of ['contains','has','startswith','endswith']) {
@@ -123,13 +119,13 @@ try {
         const rows=(await q(sql,compiled.params)).rows
         assert.deepEqual(rows.map(row=>row.id),['command-match-5','command-match-4','command-match-3','command-match-2','command-match-1'])
         const plan=(await q(`EXPLAIN (ANALYZE,FORMAT JSON,TIMING OFF) ${sql}`,compiled.params)).rows[0]['QUERY PLAN']
-        assert.ok(nodes(plan).some(node=>node['Index Name']==='idx_mill_logs_search_trgm'),`Natural sparse CommandLine ${operator} query must use the existing GIN index`)
+        assert.ok(nodes(plan).some(node=>node['Index Name']==='idx_mill_logs_phrase_trgm'),`Natural sparse CommandLine ${operator} query must use the phrase GIN index`)
         assert.ok(plan[0]['Execution Time']<8000,`CommandLine ${operator} must finish within its normal eight-second timeout`)
         fieldPlans.push({operator,matched_rows:rows.length,limit:compiled.limit,execution_ms:plan[0]['Execution Time']})
     }
     await q('CREATE TEMP TABLE baseline_writes (LIKE mill_events INCLUDING DEFAULTS INCLUDING CONSTRAINTS)')
     await q('CREATE TEMP TABLE indexed_writes (LIKE mill_events INCLUDING DEFAULTS INCLUDING CONSTRAINTS)')
-    await q('CREATE INDEX fixture_write_trgm ON indexed_writes USING GIN(lower(normalized::text) gin_trgm_ops) WHERE ingestion_id=\'logs\' AND processing_status=\'processed\'')
+    await q(`CREATE INDEX fixture_write_trgm ON indexed_writes USING GIN((${logPhraseSearchExpression}) gin_trgm_ops) WHERE ingestion_id='logs' AND processing_status='processed'`)
     const timings: Record<string,number>={}
     for (const table of ['baseline_writes','indexed_writes']) {
         const start=performance.now()

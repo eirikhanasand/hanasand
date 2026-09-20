@@ -71,7 +71,7 @@ test('basic search stays literal and parameterized for rows and exact full-data 
         const selected = statements.findIndex(sql => sql.startsWith('SELECT id, normalized'))
         const grouped = statements.findIndex(sql => sql.includes('GROUP BY'))
         for (const index of [selected, grouped]) {
-            expect(statements[index]).toContain("lower(normalized::text) LIKE '%' ||")
+            expect(statements[index]).toContain("translate(lower(normalized::text), ' ', '0') LIKE '%' ||")
             expect(statements[index]).toContain("ESCAPE '!' AND strpos(lower(normalized::text), lower($2::text)) > 0")
             expect(parameters[index]).toEqual([24, search])
             expect(statements[index]).toContain("o.status = 'active'")

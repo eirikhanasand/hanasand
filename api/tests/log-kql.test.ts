@@ -59,7 +59,7 @@ test('JSON field searches retain exact predicates inside each Boolean atom', () 
             const query = compileLogQuery(`Logs | where not ${field} ${operator} "path\\\\%_!"`)
             expect(query.params).toEqual(['path\\%_!'])
             expect(query.where[0]).toStartWith('(NOT ((')
-            expect(query.where[0]).toContain('lower(normalized::text) LIKE')
+            expect(query.where[0]).toContain("translate(lower(normalized::text), ' ', '0') LIKE")
             expect(query.where[0]).toContain('to_jsonb(lower($1::text))::text')
             expect(query.where[0]).toContain('ESCAPE \'!\'')
         }

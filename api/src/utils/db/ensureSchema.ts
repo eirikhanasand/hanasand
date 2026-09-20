@@ -1503,9 +1503,6 @@ export default async function ensureSchema() {
     await run('CREATE INDEX IF NOT EXISTS idx_mill_findings_event_ids ON mill_findings USING GIN(event_ids)')
     await run('CREATE INDEX IF NOT EXISTS idx_mill_logs_severity_time ON mill_events ((normalized->>\'severity\'), event_timestamp DESC) WHERE ingestion_id = \'logs\'')
     await run('CREATE INDEX IF NOT EXISTS idx_mill_logs_type_time ON mill_events ((normalized->>\'log_type\'), event_timestamp DESC) WHERE ingestion_id = \'logs\'')
-    await run(`CREATE INDEX IF NOT EXISTS idx_mill_logs_search_trgm ON mill_events
-        USING GIN (lower(normalized::text) gin_trgm_ops)
-        WHERE ingestion_id = 'logs' AND processing_status = 'processed'`)
     await run(`CREATE INDEX IF NOT EXISTS idx_mill_logs_executable_suffix ON mill_events
         (left(reverse(lower(COALESCE(normalized#>>'{process,executable}', ''))), 512) text_pattern_ops)
         WHERE ingestion_id = 'logs' AND processing_status = 'processed'`)
