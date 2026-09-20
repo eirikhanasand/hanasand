@@ -1,6 +1,39 @@
 import { expect, test } from '@playwright/test'
 import { event, openLogs, result } from './fixtures/logs-browser'
 
+test('search refreshes progress every ten seconds without advancing the timestamp on failure', async ({ page }) => {
+    await page.clock.install()
+    let requests = 0
+    let fail = false
+    let generatedAt = '2026-09-20T12:00:00Z'
+    await page.route('**/api/backend/logs/search?*', route => {
+        requests++
+        return fail ? route.fulfill({ status: 503, json: { error: 'Search unavailable.' } }) : route.fulfill({ json: {
+            ...result(), generated_at: generatedAt,
+            processing: { updated_at: generatedAt, last_error: 'service_logs: Waiting for active log writes; will retry.',
+                catchup: { remaining: 3000, processed: 1000, total: 4000, rate: 50, estimated_seconds: 60, updated_at: generatedAt } },
+        } })
+    })
+    await openLogs(page, '/logs/search')
+    await page.clock.runFor(300)
+    const progress = page.getByRole('region', { name: 'Historical log catch-up' })
+    await expect(progress.locator('time')).toHaveAttribute('datetime', generatedAt)
+    await expect(progress).toContainText('25.0% · About 1 min remaining')
+    await expect(page.getByText('Mill processing is delayed:', { exact: false })).toHaveCount(0)
+    await expect(progress).not.toContainText('Results and counters will update')
+    await page.clock.runFor(9000)
+    expect(requests).toBe(1)
+    generatedAt = '2026-09-20T12:00:10Z'
+    await page.clock.runFor(1000)
+    await expect(progress.locator('time')).toHaveAttribute('datetime', generatedAt)
+    expect(requests).toBe(2)
+    fail = true
+    await page.clock.runFor(10_000)
+    await expect(page.getByRole('alert')).toContainText('Search unavailable.')
+    await expect(progress.locator('time')).toHaveAttribute('datetime', generatedAt)
+    expect(requests).toBe(3)
+})
+
 test('historical catch-up notice checks every source without losing bigint precision', async ({ page }) => {
     await page.clock.install()
     const sources = [

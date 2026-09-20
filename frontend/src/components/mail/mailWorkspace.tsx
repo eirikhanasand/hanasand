@@ -123,6 +123,9 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 setError('')
             }
 
+            if (params.messageId && !silent) {
+                await messageAction(params.messageId, { mailboxUser: params.mailboxUser ?? selection.current.user ?? mailboxUser ?? undefined, action: 'read' })
+            }
             const next = await fetchMailOverview({
                 mailboxUser: params.mailboxUser ?? selection.current.user ?? mailboxUser ?? undefined,
                 mailboxId: params.mailboxId === undefined ? selection.current.mailbox : params.mailboxId,
@@ -497,6 +500,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                         {filteredMessages.map(message => (
                             <MessageRow
                                 key={`${overview?.mailboxUser}:${message.id}`}
+                                archived={overview?.mailboxes.some(mailbox => message.mailboxIds.includes(mailbox.id) && (mailbox.role === 'archive' || /^archives?$/i.test(mailbox.name))) ?? false}
                                 checked={checkedMessages.has(message.id)}
                                 selectionDisabled={loading || archiving}
                                 onToggle={() => setCheckedMessages(current => {

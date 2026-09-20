@@ -11,12 +11,13 @@ import { fileToDraftAttachment, formatDate, formatRelativeTime, prettyBytes, sub
 
 export type MailQuickAction = 'reply' | 'replyAll' | 'forward' | 'archive' | 'trash' | 'read' | 'unread' | 'flag' | 'unflag'
 
-export function MessageRow({ message, active, onClick, onAction, canSend = true, checked, onToggle, selectionDisabled }: {
+export function MessageRow({ message, active, onClick, onAction, canSend = true, archived, checked, onToggle, selectionDisabled }: {
     message: MailMessageSummary
     active: boolean
     onClick: () => void
     onAction: (action: MailQuickAction) => void
     canSend?: boolean
+    archived: boolean
     checked: boolean
     onToggle: () => void
     selectionDisabled: boolean
@@ -75,7 +76,7 @@ export function MessageRow({ message, active, onClick, onAction, canSend = true,
                 <div className='flex items-start justify-between gap-3'>
                     <div className='min-w-0 flex-1'>
                         <div className='flex min-w-0 items-center gap-2'>
-                            {!message.isRead && <span className='h-1.5 w-1.5 shrink-0 rounded-full bg-ui-primary' />}
+                            {!message.isRead && !archived && <span aria-label='Unread message' className='h-1.5 w-1.5 shrink-0 rounded-full bg-ui-primary' />}
                             <p className='truncate text-xs font-medium text-ui-text'>{message.subject}</p>
                         </div>
                         <div className='mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-ui-muted'>
