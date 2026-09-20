@@ -23,11 +23,12 @@ export function addressedTo(message: Message, address: string) {
 }
 
 export async function verifyAndRemoveOriginal(params: {
-    source: Message, target: Message, mailboxIds: Record<string, boolean>,
+    source: Message, target: Message, mailboxIds: Record<string, boolean>, sourceMailboxIds?: Record<string, boolean>,
     sourceBytes: () => Promise<ArrayBuffer>, targetBytes: () => Promise<ArrayBuffer>, remove: () => Promise<void>,
 }) {
     const { source, target, mailboxIds } = params
     const keys = (record: Record<string, boolean>) => Object.keys(record).filter(key => record[key]).sort().join('\n')
+    if (params.sourceMailboxIds && keys(params.sourceMailboxIds) !== keys(source.mailboxIds)) throw new Error(`Original folders changed for ${source.id}; original retained.`)
     if (source.size !== target.size || source.receivedAt !== target.receivedAt
         || keys(source.keywords) !== keys(target.keywords) || keys(mailboxIds) !== keys(target.mailboxIds)) {
         throw new Error(`Copy metadata verification failed for ${source.id}; original retained.`)
@@ -92,10 +93,21 @@ async function main() {
             if (!targetId) throw new Error(`Unmapped folder ${id}.`)
             return [targetId, true]
         }))
-        const copied = await adminCall<{ created?: Record<string, { id: string }>, notCreated?: Record<string, { type: string, existingId?: string }> }>('Email/copy', {
-            fromAccountId: source.accountId, accountId: target.accountId, onSuccessDestroyOriginal: false,
-            create: { copy: { id: message.id, mailboxIds, keywords: message.keywords, receivedAt: message.receivedAt } },
+        const raw = await (await downloadBlob(row.mail_username, password, message.blobId, 'message.eml')).arrayBuffer()
+        const uploadUrl = new URL(target.session.uploadUrl.replace('{accountId}', target.accountId))
+        const internal = new URL(mailConfig.internalUrl)
+        uploadUrl.protocol = internal.protocol
+        uploadUrl.host = internal.host
+        const uploaded = await fetch(uploadUrl, {
+            method: 'POST', headers: { Authorization: `Basic ${Buffer.from(`${access.username}:${access.password}`).toString('base64')}`, 'Content-Type': 'message/rfc822' },
+            body: raw, signal: AbortSignal.timeout(30000),
         })
+        if (!uploaded.ok) throw new Error(`Original message upload failed (${uploaded.status}); original retained.`)
+        const blob = await uploaded.json() as { blobId: string, size: number }
+        if (!blob.blobId || blob.size !== raw.byteLength) throw new Error('Uploaded message size differs; original retained.')
+        const copied = await jmapCall<{ created?: Record<string, { id: string }>, notCreated?: Record<string, { type: string, existingId?: string }> }>(access.username, access.password, target.session, [
+            ['Email/import', { accountId: target.accountId, emails: { copy: { blobId: blob.blobId, mailboxIds, keywords: message.keywords, receivedAt: message.receivedAt } } }, 'import'],
+        ])
         const targetId = copied.created?.copy?.id || (copied.notCreated?.copy?.type === 'alreadyExists' ? copied.notCreated.copy.existingId : null)
         if (!targetId) throw new Error(`Copy failed for ${message.id}: ${copied.notCreated?.copy?.type}; original retained.`)
         const verified = await adminCall<{ list: Message[] }>('Email/get', { accountId: target.accountId, ids: [targetId], properties })
@@ -103,8 +115,8 @@ async function main() {
         if (!destination) throw new Error('Copied message is unavailable; original retained.')
         const latest = await adminCall<{ list: Message[], state: string }>('Email/get', { accountId: source.accountId, ids: [message.id], properties })
         if (!latest.list[0]) throw new Error('Original changed during migration; copied message retained.')
-        await verifyAndRemoveOriginal({ source: latest.list[0], target: destination, mailboxIds,
-            sourceBytes: async () => (await downloadBlob(row.mail_username, password, message.blobId, 'message.eml')).arrayBuffer(),
+        await verifyAndRemoveOriginal({ source: latest.list[0], target: destination, mailboxIds, sourceMailboxIds: message.mailboxIds,
+            sourceBytes: async () => raw,
             targetBytes: async () => (await downloadBlob(access.username, access.password, destination.blobId, 'message.eml')).arrayBuffer(),
             remove: async () => {
                 const removed = await adminCall<{ destroyed?: string[] }>('Email/set', { accountId: source.accountId, ifInState: latest.state, destroy: [message.id] })

@@ -22,6 +22,7 @@ test('removes originals only after content, flags, date and destination folders 
         await expect(verifyAndRemoveOriginal({ ...params, target: { ...target, ...bad } })).rejects.toThrow('original retained')
     }
     await expect(verifyAndRemoveOriginal({ ...params, targetBytes: async () => new TextEncoder().encode('oops').buffer })).rejects.toThrow('original retained')
+    await expect(verifyAndRemoveOriginal({ ...params, sourceMailboxIds: { moved: true } })).rejects.toThrow('original retained')
     expect(removed).toBe(1)
 })
 
