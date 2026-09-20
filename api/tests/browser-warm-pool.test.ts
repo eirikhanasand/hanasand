@@ -102,7 +102,7 @@ test('single-use reservation rejects other sessions, duplicate sockets, reuse an
     expect(state.claim('first')).toBe(false)
     state.ready({ browser: true })
     expect(state.claim('first')).toBe(true)
-    expect(state.claim('first')).toBe(true)
+    expect(state.claim('first')).toBe(false)
     expect(state.claim('second')).toBe(false)
     expect(state.retire()).toBe(false)
     expect(state.connect('second')).toBe(false)

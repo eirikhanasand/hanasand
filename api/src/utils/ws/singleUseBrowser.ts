@@ -6,7 +6,6 @@ export class SingleUseBrowser<T> {
 
     ready(value: T) { this.value = value; this.state = 'ready' }
     claim(sessionId: string) {
-        if (this.state === 'claimed') return this.sessionId === sessionId
         if (this.state !== 'ready') return false
         this.state = 'claimed'
         this.sessionId = sessionId

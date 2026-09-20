@@ -308,7 +308,7 @@ function isBrowserErrorUrl(value: string) {
 }
 
 function sessionId() {
-    return `regular-${Date.now().toString(36)}`
+    return `regular-${crypto.randomUUID()}`
 }
 
 function scrollRouteFrameToTop(behavior: ScrollBehavior) {
