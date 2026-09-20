@@ -24,7 +24,8 @@ def main():
             data=json.dumps(body).encode() if body is not None else None)
         with urllib.request.urlopen(request, timeout=20) as response:
             result = json.load(response)
-        if result.get('error') or result.get('data', {}).get('errors'):
+        data = result.get('data')
+        if result.get('error') or (isinstance(data, dict) and data.get('errors')):
             raise RuntimeError('Sender authentication configuration failed; inspect the mail server logs.')
         return result
 
