@@ -572,19 +572,20 @@ try {
     assert.equal(replayed.organization_id,'fixture')
     assert.equal(replayed.normalized.message,'Unknown org original')
     assert.equal((await query("SELECT processing_status FROM mill_events WHERE log_key=$1", ['service:'+replayIds[1]])).rows[0].processing_status,'processed')
+    for (const cursorColumn of ['last_id', 'recent_id']) {
     const acknowledgedHistory = (await query(`INSERT INTO service_logs(service,level,message,metadata,created_at)
         SELECT 'history-fixture','info','Historical acknowledgement '||n,'{}'::jsonb,NOW()-INTERVAL '2 days'
         FROM generate_series(1,500) n RETURNING *`)).rows
     const holes = [acknowledgedHistory[199].id, acknowledgedHistory[399].id]
     await processLogBatch(acknowledgedHistory.filter(row => !holes.includes(row.id)), 'fixture', rules)
     await query("UPDATE log_processing_cursors SET last_id=$1,recent_id=$2,history_end_id=$2 WHERE name='service_logs'",
-        [String(BigInt(acknowledgedHistory[0].id)-1n), acknowledgedHistory.at(-1).id])
+        [String(BigInt(acknowledgedHistory[0].id)-1n), cursorColumn === 'last_id' ? acknowledgedHistory.at(-1).id : String(BigInt(acknowledgedHistory[0].id)-1n)])
     const previousHistoryLimit = process.env.LOG_CATCHUP_BATCH_LIMIT
     process.env.LOG_CATCHUP_BATCH_LIMIT = '1'
     try {
         for (const expected of [...holes, acknowledgedHistory.at(-1).id]) {
             await processStoredLogs()
-            assert.equal(String((await query("SELECT last_id FROM log_processing_cursors WHERE name='service_logs'")).rows[0].last_id), String(expected),
+            assert.equal(String((await query("SELECT " + cursorColumn + " AS position FROM log_processing_cursors WHERE name='service_logs'")).rows[0].position), String(expected),
                 'Acknowledged rows may be passed, but the next pending row must obey the evaluation cap')
         }
     } finally {
@@ -593,7 +594,8 @@ try {
     }
     assert.equal(Number((await query("SELECT count(*) FROM mill_events WHERE log_key=ANY($1::text[]) AND processing_status='processed'",
         [acknowledgedHistory.map(row => 'service:'+row.id)])).rows[0].count), 500)
-    console.log('PostgreSQL acknowledged-history scan passed: pending holes processed in order at cap1, acknowledged rows skipped, complete durable coverage.')
+    console.log(`PostgreSQL ${cursorColumn} scan passed: pending holes processed in order at cap1, acknowledged rows skipped, complete durable coverage.`)
+    }
     const { refreshLogCatchupProgress } = await import('../src/utils/mill/catchupProgress.ts')
     await refreshLogCatchupProgress()
     await query("UPDATE log_catchup_progress SET sampled_at=NULL, attempted_at=NULL")

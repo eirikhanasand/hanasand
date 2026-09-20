@@ -116,7 +116,7 @@ export async function processStoredLogs() {
         const configuredLimit = readLogCatchupLimit()
         // The transaction owns the lock connection until both cursors are durable.
         // Another replica skips this tick instead of duplicating the same work.
-        let didWork = false
+        let didWork = false, advanced = false
         await withTransaction(async query => {
             const lock = await query('SELECT pg_try_advisory_xact_lock(hashtextextended(\'mill:service-logs\', 0)) AS locked')
             if (!lock.rows[0].locked) return
@@ -133,10 +133,12 @@ export async function processStoredLogs() {
             const cursor = (await run('SELECT last_id, recent_id, history_end_id FROM log_processing_cursors WHERE name = \'service_logs\'')).rows[0]
             const configured = new Map<string, Awaited<ReturnType<typeof loadConfiguredMillRules>>>()
             const processScopes = async (logs: LogInput[]) => {
+                if (logs.length) advanced = true
                 const scopes = new Map<string, LogInput[]>()
                 for (const row of logs) {
                     const scope = String(row.metadata?.organizationId || row.metadata?.tenantId || platform.rows[0].id)
-                    scopes.set(scope, [...(scopes.get(scope) || []), row])
+                    if (!scopes.has(scope)) scopes.set(scope, [])
+                    scopes.get(scope)!.push(row)
                 }
                 for (const [scope, batch] of scopes) {
                     const active = await run('SELECT id FROM organizations WHERE id = $1 AND status = \'active\'', [scope])
@@ -153,6 +155,17 @@ export async function processStoredLogs() {
             // Keep every cursor moving while delayed commands get more capacity.
             // A fixed snapshot restores ordinary limits on the next clear tick.
             const catchupLimit = Math.min(queue.delayed ? 100 : 1000, configuredLimit)
+            const processPage = async (after: string, until: string) => {
+                const candidates = await run('SELECT id FROM service_logs WHERE id > $1 AND id <= $2 ORDER BY id LIMIT 10000', [after, until])
+                const batch = candidates.rows.length ? await run(`SELECT * FROM service_logs s WHERE id > $1 AND id <= $2 AND id = ANY($4::bigint[])
+                    AND NOT EXISTS (SELECT 1 FROM mill_events e WHERE e.log_key = 'service:' || s.id::text AND e.processing_status = 'processed')
+                    ORDER BY id LIMIT $3`, [after, until, catchupLimit, candidates.rows.map(row => row.id)]) : { rows: [] }
+                await processScopes(batch.rows)
+                const lastId = batch.rows.length === catchupLimit ? batch.rows.at(-1)!.id : candidates.rows.at(-1)?.id || until
+                const checked = candidates.rows.filter(row => BigInt(row.id) <= BigInt(lastId)).length
+                if (checked) advanced = true
+                return { lastId, checked }
+            }
             // Bulk collector replay may put live commands far behind the ingestion
             // cursor. Check recent event times first without advancing either cursor;
             // the FIFO passes still guarantee every older event is eventually checked.
@@ -163,10 +176,8 @@ export async function processStoredLogs() {
                         AND e.processing_status IN ('processed', 'skipped'))
                     ORDER BY s.created_at DESC, s.id DESC LIMIT 1000`, [watermark])
                 await processScopes(priority.rows)
-                const recent = await run('SELECT * FROM service_logs WHERE id > $1 AND id <= $2 ORDER BY id LIMIT $3', [cursor.recent_id, watermark, catchupLimit])
-                await processScopes(recent.rows)
-                const recentId = recent.rows.at(-1)?.id || cursor.recent_id
-                await run('UPDATE log_processing_cursors SET recent_id = $1, checked_count = checked_count + $2, updated_at = NOW(), last_error = NULL WHERE name = \'service_logs\'', [recentId, recent.rows.length])
+                const recent = await processPage(cursor.recent_id, watermark)
+                await run('UPDATE log_processing_cursors SET recent_id = $1, checked_count = checked_count + $2, updated_at = NOW(), last_error = NULL WHERE name = \'service_logs\'', [recent.lastId, recent.checked])
             }
             await processAdditionalLogSources(processScopes, catchupLimit, catchupLimit)
             // Direct Mill ingestion is also pending until findings are durable.
@@ -175,6 +186,7 @@ export async function processStoredLogs() {
                 WHERE e.ingestion_id <> 'logs' AND e.processing_status = 'pending' AND o.status = 'active'
                 ORDER BY e.event_timestamp, e.id LIMIT 100`)
             for (const row of pending.rows) {
+                advanced = true
                 if (!configured.has(row.organization_id)) configured.set(row.organization_id, await loadConfiguredMillRules(row.organization_id))
                 await createMillFindings(row.organization_id, row.id, normalizeMillEvent(row.normalized, { vendor: row.source_vendor, product: row.source_product }), configured.get(row.organization_id)!)
                 await run('UPDATE mill_events SET processing_status = \'processed\' WHERE id = $1 AND organization_id = $2', [row.id, row.organization_id])
@@ -183,14 +195,8 @@ export async function processStoredLogs() {
                 // Already acknowledged rows need no wide JSON reads or evaluation.
                 // Inspect narrow IDs in larger pages, while retaining the operator
                 // limit for actual detection work and never skipping a pending row.
-                const candidates = await run('SELECT id FROM service_logs WHERE id > $1 AND id <= $2 ORDER BY id LIMIT 10000', [cursor.last_id, cursor.history_end_id])
-                const backlog = candidates.rows.length ? await run(`SELECT * FROM service_logs s WHERE id > $1 AND id <= $2 AND id = ANY($4::bigint[])
-                    AND NOT EXISTS (SELECT 1 FROM mill_events e WHERE e.log_key = 'service:' || s.id::text AND e.processing_status = 'processed')
-                    ORDER BY id LIMIT $3`, [cursor.last_id, cursor.history_end_id, catchupLimit, candidates.rows.map(row => row.id)]) : { rows: [] }
-                await processScopes(backlog.rows)
-                const lastId = backlog.rows.length === catchupLimit ? backlog.rows.at(-1)!.id : candidates.rows.at(-1)?.id || cursor.history_end_id
-                const checked = candidates.rows.filter(row => BigInt(row.id) <= BigInt(lastId)).length
-                await run('UPDATE log_processing_cursors SET last_id = GREATEST(last_id, $1), checked_count = checked_count + $2, updated_at = NOW() WHERE name = \'service_logs\'', [lastId, checked])
+                const backlog = await processPage(cursor.last_id, cursor.history_end_id)
+                await run('UPDATE log_processing_cursors SET last_id = GREATEST(last_id, $1), checked_count = checked_count + $2, updated_at = NOW() WHERE name = \'service_logs\'', [backlog.lastId, backlog.checked])
             }
         })
         // Counter initialization has its own lock and visible error state. Keep
@@ -198,6 +204,7 @@ export async function processStoredLogs() {
         // Progress scans run independently so fresh detection never waits on a historical count.
         if (didWork) void refreshLogCatchupProgress()
         await backfillLogDimensions().catch(() => {})
+        return advanced
     } catch (error) {
         await run('UPDATE log_processing_cursors SET last_error = $1 WHERE name = \'service_logs\'', [error instanceof Error ? error.message : 'Log processing failed']).catch(() => {})
         throw error

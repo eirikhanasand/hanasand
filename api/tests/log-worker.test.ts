@@ -25,7 +25,7 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
             && !Object.values(stored).some(event => event.key === `service:${row.id}` && ['processed', 'skipped'].includes(event.processing_status)))
         .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || Number(b.id) - Number(a.id))
         .slice(0, 1000) }
-    if (sql.startsWith('SELECT id FROM service_logs')) { historyScans.push(p); return { rows: backlog.filter(row => BigInt(row.id) > BigInt(p[0]) && BigInt(row.id) <= BigInt(p[1])).slice(0, 10000).map(row => ({ id: row.id })) } }
+    if (sql.startsWith('SELECT id FROM service_logs')) { historyScans.push(p); return { rows: (p[1] === watermark ? fresh : backlog).filter(row => BigInt(row.id) > BigInt(p[0]) && BigInt(row.id) <= BigInt(p[1])).slice(0, 10000).map(row => ({ id: row.id })) } }
     if (sql.includes('SELECT * FROM service_logs')) {
         reads.push({ sql, params: p })
         const processed = new Set(Object.values(stored).filter(event => event.processing_status === 'processed').map(event => event.key))
@@ -243,4 +243,18 @@ test('acknowledged history advances in narrow pages without skipping pending row
     await processStoredLogs()
     expect(cursor.last_id).toBe('10000')
     expect(checked).toEqual(['4000', '8000'])
+})
+
+test('forward catch-up skips durable acknowledgements without skipping pending holes or inflating its evaluation limit', async () => {
+    process.env.LOG_CATCHUP_BATCH_LIMIT = '1'
+    cursor.recent_id = '100'; cursor.history_end_id = '100'; cursor.last_id = '100'; watermark = '10100'; backlog = []
+    fresh = Array.from({ length: 10000 }, (_, i) => makeLog(String(i + 101)))
+    for (const row of fresh) if (!['4000', '8000'].includes(row.id)) stored[row.id] = { key: `service:${row.id}`, processing_status: 'processed' }
+    expect(await processStoredLogs()).toBe(true)
+    expect(cursor.recent_id).toBe('4000'); expect(checked).toEqual(['4000'])
+    await processStoredLogs()
+    expect(cursor.recent_id).toBe('8000'); expect(checked).toEqual(['4000', '8000'])
+    await processStoredLogs()
+    expect(cursor.recent_id).toBe('10100'); expect(checked).toEqual(['4000', '8000'])
+    expect(await processStoredLogs()).toBe(false)
 })
