@@ -56,6 +56,9 @@ def authorize():
         permission = f'permitlisten="127.0.0.1:{port}"'
         if permission not in lines[index]:
             lines[index] = permission + ',' + lines[index]
+    permission = 'permitopen="127.0.0.1:19181"'
+    if permission not in lines[index]:
+        lines[index] = permission + ',' + lines[index]
     if ''.join(lines) == original:
         return
     backup = path.with_name('authorized_keys.before-isolated-tunnels')
