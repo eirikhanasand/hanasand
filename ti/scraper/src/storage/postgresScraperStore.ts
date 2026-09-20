@@ -2630,7 +2630,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         UNION ALL
         SELECT record_type, record, created_at FROM threat_intel.workflow_records
           WHERE record_type = 'collection_plan'
-            AND id IN (SELECT id FROM selected_collection_plans)
+            AND id = ANY(ARRAY(SELECT id FROM selected_collection_plans))
             AND (
               NOT ${deferHighVolumeHydration}
               OR record->>'status' IN ('queued', 'running', 'failed')
