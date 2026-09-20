@@ -1,3 +1,4 @@
+import systemSnapshot from './handlers/metrics/systemSnapshot.ts'
 import { getDockerStorage, clearDockerStorage } from './handlers/dockerStorage.ts'
 import { searchLogs } from './handlers/logs/search.ts'
 import { getManagementOrganizations } from './handlers/managementOrganizations.ts'
@@ -247,7 +248,14 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/impersonation/start', startImpersonation)
     fastify.delete('/impersonation', stopImpersonation)
     fastify.get('/impersonation/events', getImpersonationEvents)
-    fastify.get('/system/events', getSystemEvents)
+    fastify.get('/system/events', {
+        onSend: async (_req, reply, payload) => {
+            const timing = reply.getHeader('Server-Timing')
+            if (timing && reply.elapsedTime >= 20) _req.log.info({ timing, elapsedMs: reply.elapsedTime }, 'Slow audit timeline request')
+            reply.header('Server-Timing', `${timing ? `${timing}, ` : ''}app;dur=${reply.elapsedTime.toFixed(2)}`)
+            return payload
+        },
+    }, getSystemEvents)
     fastify.get('/system/events/:id', getSystemEvent)
     // Compatibility aliases for existing clients; system events are the canonical name.
     fastify.get('/admin/audit-events', getSystemEvents)
@@ -459,6 +467,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
 
     // Server metrics
     fastify.get('/metrics', getMetrics)
+    fastify.get('/system/snapshot', systemSnapshot)
     fastify.get('/db', getDatabaseOverview)
     fastify.get('/db/health', getDatabaseHealth)
     fastify.get('/db/rows', getDatabaseRows)

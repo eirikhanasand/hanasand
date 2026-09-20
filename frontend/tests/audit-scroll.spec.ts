@@ -19,11 +19,12 @@ test('scroll appends 50, preserves filters and rows on failure, retries and stop
         calls++
         const q = new URL(route.request().url()).searchParams
         expect(q.get('limit')).toBe('50')
+        expect(q.get('format')).toBe('timeline')
         expect(q.get('service')).toBe('test')
         expect(q.has('page')).toBe(false)
         if (calls === 2) return route.fulfill({ status: 503 })
         const first = q.get('cursor') === 'first'
-        await route.fulfill({ json: { events: Array.from({ length: first ? 50 : 25 }, (_, i) => ({ id: (first ? 75 : 25)-i, created_at: '2026-09-13T00:00:00Z', actor_id: 'operator', service: 'test', event_type: 'read', outcome: 'success' })), pagination: { total: 125, nextCursor: first ? 'second' : null } } })
+        await route.fulfill({ json: { events: Array.from({ length: first ? 50 : 25 }, (_, i) => ({ id: (first ? 75 : 25)-i, created_at: '2026-09-13T00:00:00Z', actor_id: 'operator', service: 'test', event_type: 'read', outcome: 'success' })), pagination: { total: null, nextCursor: first ? 'second' : null } } })
     })
     await page.goto('http://audit.test/')
     await expect(page.getByText('50/125', { exact: true })).toBeVisible()

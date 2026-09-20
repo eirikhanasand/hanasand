@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
+import { loadSQL } from '#utils/loadSQL.ts'
 import { vmViewer, requireVmAccess } from '#utils/vms/access.ts'
 
 export default async function getVMMetrics(req: FastifyRequest, res: FastifyReply) {
@@ -16,8 +17,8 @@ export default async function getVMMetrics(req: FastifyRequest, res: FastifyRepl
             result = await run('SELECT * FROM vm_metrics WHERE name = $1 ORDER BY created_at DESC LIMIT 120', [name])
         } else {
             result = viewer.admin
-                ? await run('SELECT DISTINCT ON (name) * FROM vm_metrics ORDER BY name, created_at DESC')
-                : await run('SELECT DISTINCT ON (m.name) m.* FROM vm_metrics m JOIN vms v ON LOWER(v.name) = LOWER(m.name) WHERE vm_user_has_access(v.name, $1) ORDER BY m.name, m.created_at DESC', [viewer.id])
+                ? await run(await loadSQL('getLatestVmMetrics.sql'))
+                : await run('SELECT m.* FROM vms v JOIN LATERAL (SELECT * FROM vm_metrics WHERE name = v.name ORDER BY created_at DESC LIMIT 1) m ON TRUE WHERE vm_user_has_access(v.name, $1) ORDER BY m.name', [viewer.id])
         }
 
         return res.send(result.rows)

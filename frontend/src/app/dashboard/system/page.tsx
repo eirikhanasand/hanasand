@@ -4,11 +4,8 @@ import ResiliencePanel from '@/components/system/resilience'
 import DockerStoragePanel from '@/components/system/dockerStorage'
 import { cookies } from 'next/headers'
 import SystemDashboard from './clientPage'
-import getDockerContainers from '@/utils/vms/fetch/metrics/getDockerContainers'
-import getSystemMetrics from '@/utils/vms/fetch/metrics/getSystemMetrics'
-import getVMsMetrics from '@/utils/vms/fetch/metrics/getVMsMetrics'
+import getSystemSnapshot from '@/utils/vms/fetch/getSystemSnapshot'
 import { redirect } from 'next/navigation'
-import getVMList from '@/utils/vms/fetch/getVMList'
 import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
 
 export default async function page() {
@@ -22,12 +19,7 @@ export default async function page() {
 
     if (!await canViewHostMetrics()) return <VmPage />
 
-    const [systemTelemetry, dockerTelemetry, vms, vmMetrics] = await Promise.all([
-        getSystemMetrics({ id, token }),
-        getDockerContainers({ id, token }),
-        getVMList(id, token),
-        getVMsMetrics({ id, token })
-    ])
+    const { systemTelemetry, dockerTelemetry, vms, vmMetrics } = await getSystemSnapshot(id, token)
 
     return (
         <DashboardPage className='h-full min-w-0 grid-cols-[minmax(0,1fr)] max-xl:[overflow-wrap:anywhere] max-xl:[&_*]:min-w-0'>

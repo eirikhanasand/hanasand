@@ -19,6 +19,7 @@ import {
 } from '#utils/organizations.ts'
 
 type AuditQuery = {
+    format?: string
     hql?: string
     q?: string
     org?: string
@@ -363,6 +364,7 @@ const supportInspectionFilters = new Set([
 ])
 
 const systemEventFilters = new Set([
+    'format',
     'q',
     'hql',
     'org',
@@ -415,10 +417,14 @@ const systemEventFilters = new Set([
 ])
 
 export async function getSystemEvents(req: FastifyRequest, res: FastifyReply) {
+    const started = performance.now()
     const actor = await requireAdminSupport(req, res)
     if (!actor) return
 
     const query = req.query as AuditQuery
+    if (query.format !== undefined && query.format !== 'timeline') return res.status(400).send(supportError('invalid_format', 'Format must be timeline when specified.'))
+    const timelineOnly = query.format === 'timeline'
+    const authorized = performance.now()
     let compiled: ReturnType<typeof compileAuditQuery> | undefined
     try {
         if (query.hql !== undefined) compiled = compileAuditQuery(text(query.hql))
@@ -531,8 +537,8 @@ export async function getSystemEvents(req: FastifyRequest, res: FastifyReply) {
     if (outcome) where.push(`e.outcome = ${add(outcome)}`)
     if (from && !Number.isNaN(Date.parse(from))) where.push(`e.created_at >= ${add(new Date(from).toISOString())}`)
     if (to && !Number.isNaN(Date.parse(to))) where.push(`e.created_at <= ${add(new Date(to).toISOString())}`)
-    // Count matching events before the cursor so every batch reports the full filtered total.
-    const countResult = await run(`
+    // Timeline batches retain the first page total; support clients keep their existing contract.
+    const countResult = timelineOnly && cursor ? null : await run(`
         SELECT COUNT(*)::int AS total
         FROM system_events e
         LEFT JOIN users actor ON actor.id = e.actor_id
@@ -563,7 +569,7 @@ export async function getSystemEvents(req: FastifyRequest, res: FastifyReply) {
                 limit: compiled.limit,
                 summarized: !!compiled.summarize,
             },
-            pagination: { total: Number(countResult.rows[0].total), nextCursor: null },
+            pagination: { total: Number(countResult!.rows[0].total), nextCursor: null },
         })
     }
     if (cursor) {
@@ -571,7 +577,11 @@ export async function getSystemEvents(req: FastifyRequest, res: FastifyReply) {
     }
 
     const result = await run(`
-        SELECT
+        SELECT ${timelineOnly ? `
+            e.id, e.created_at, e.event_type, e.service, e.source,
+            e.actor_id, actor.name AS actor_name, e.object_id, e.object_type,
+            target_user.name AS target_name, e.outcome, e.reason
+        ` : `
             e.id,
             e.event_type,
             e.severity,
@@ -592,6 +602,7 @@ export async function getSystemEvents(req: FastifyRequest, res: FastifyReply) {
             e.ip,
             e.user_agent,
             e.created_at
+        `}
         FROM system_events e
         LEFT JOIN users actor ON actor.id = e.actor_id
         LEFT JOIN users target_user ON target_user.id = e.object_id
@@ -602,14 +613,21 @@ export async function getSystemEvents(req: FastifyRequest, res: FastifyReply) {
     `, values)
 
     const pageRows = result.rows.slice(0, limit)
+    const nextCursor = result.rows.length > limit && pageRows.length ? encodeAuditCursor(pageRows[pageRows.length - 1].created_at, pageRows[pageRows.length - 1].id) : null
+    if (timelineOnly) {
+        res.header('Server-Timing', `auth;dur=${(authorized - started).toFixed(2)}, query;dur=${(performance.now() - authorized).toFixed(2)}`)
+        return res.send({
+            events: pageRows,
+            pagination: { total: countResult ? Number(countResult.rows[0].total) : null, nextCursor },
+        })
+    }
     const events = pageRows.map(toSystemEvent)
     const timeline = events.map(event => event.detail.timelineEvent)
-    const nextCursor = result.rows.length > limit && pageRows.length ? encodeAuditCursor(pageRows[pageRows.length - 1].created_at, pageRows[pageRows.length - 1].id) : null
     const filters = { q, org, actor: actorFilter, target, action, severity, source, service, entity, entityType, request, correlation, idempotency, supportSession, workflow, blocker, reason, scope, context: contextFilter, outcome, from, to, limit, cursor: text(query.cursor) }
     return res.send({
         events,
         pagination: {
-            total: Number(countResult.rows[0].total),
+            total: Number(countResult!.rows[0].total),
             limit,
             page,
             nextPage: result.rows.length > limit ? page + 1 : null,

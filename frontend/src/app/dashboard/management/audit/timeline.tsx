@@ -1,9 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { memo, useMemo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { getCookie } from '@/utils/cookies/cookies'
-import { auditQuery, param, readAuditPage, type AuditPage, type AuditSearchParams } from './data'
+import { auditQuery, param, readAuditPage, type AuditEvent, type AuditPage, type AuditSearchParams } from './data'
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import config from '@/config'
@@ -51,7 +51,7 @@ export default function AuditTimeline({ initialAudit, filters }: { initialAudit:
             if (abort.signal.aborted) return
             setAudit(current => {
                 const ids = new Set(current.events.map(event => event.id))
-                return cursor ? { ...result, events: [...current.events, ...result.events.filter(event => !ids.has(event.id))] } : result
+                return cursor ? { ...result, total: result.total ?? current.total, events: [...current.events, ...result.events.filter(event => !ids.has(event.id))] } : result
             })
             if (!cursor) {
                 setActiveFilters(nextFilters)
@@ -122,9 +122,8 @@ export default function AuditTimeline({ initialAudit, filters }: { initialAudit:
         window.addEventListener('keydown', onKeyDown)
         return () => window.removeEventListener('keydown', onKeyDown)
     }, [fullscreen])
-    const failedEvents = sortedEvents.filter(event => !['ok', 'ready', 'success', 'completed', 'published'].includes(event.result.toLowerCase()))
+    const failedCount = useMemo(() => sortedEvents.filter(isFailed).length, [sortedEvents])
     const lastEvent = sortedEvents[0]
-    const failedIds = new Set(failedEvents.map(event => event.id))
 
     const timeline = (
         <DashboardPanel className={`min-h-0 overflow-hidden border-ui-border bg-ui-panel p-0 ${fullscreen ? 'flex h-full flex-col rounded-none border-0' : ''}`}>
@@ -166,21 +165,7 @@ export default function AuditTimeline({ initialAudit, filters }: { initialAudit:
                         </tr>
                     </thead>
                     <tbody className='bg-ui-panel'>
-                        {sortedEvents.map(event => (
-                            <tr key={event.id} id={`event-${event.id}`} className='align-top transition hover:bg-ui-raised'>
-                                <td className='whitespace-nowrap border-b border-ui-border px-3 py-1.5 text-ui-muted'>{compactTime(event.happenedAt)}</td>
-                                <td className='border-b border-ui-border px-3 py-1.5 text-ui-text'>{event.service}</td>
-                                <td className='max-w-28 border-b border-ui-border px-3 py-1.5 font-mono text-ui-text'>{event.actor}</td>
-                                <td className='whitespace-nowrap border-b border-ui-border px-3 py-1.5 font-mono font-semibold text-ui-primary'>{event.action}</td>
-                                <td className='max-w-44 border-b border-ui-border px-3 py-1.5 font-mono text-ui-text'>
-                                    {event.target}
-                                </td>
-                                <td className='whitespace-nowrap border-b border-ui-border px-3 py-1.5'><StatusPill label={event.result} tone={failedIds.has(event.id) ? 'bad' : 'ok'} /></td>
-                                <td className='max-w-[34rem] border-b border-ui-border px-3 py-1.5 text-ui-muted'>
-                                    <span className='line-clamp-2'>{event.detail}</span>
-                                </td>
-                            </tr>
-                        ))}
+                        {sortedEvents.map(event => <AuditRow key={event.id} event={event} />)}
                         {!sortedEvents.length && !searchError ? (
                             <tr>
                                 <td colSpan={7} className='px-4 py-8 text-center text-sm text-ui-muted'>{audit.available ? 'No audit events match these filters.' : 'Audit storage is unavailable. The result is not being treated as an empty log.'}</td>
@@ -206,7 +191,7 @@ export default function AuditTimeline({ initialAudit, filters }: { initialAudit:
 
                 {!queryResult && <div className='grid gap-2 sm:grid-cols-3'>
                     <Metric title='Events' value={`${sortedEvents.length}/${audit.total ?? '—'}`} icon={<ClipboardList className='h-4 w-4' />} />
-                    <Metric title='Failures' value={`${failedEvents.length}`} tone={failedEvents.length ? 'bad' : 'ok'} icon={<AlertTriangle className='h-4 w-4' />} />
+                    <Metric title='Failures' value={`${failedCount}`} tone={failedCount ? 'bad' : 'ok'} icon={<AlertTriangle className='h-4 w-4' />} />
                     <Metric title='Last action' value={lastEvent ? shortTime(lastEvent.happenedAt) : '—'} icon={<Clock3 className='h-4 w-4' />} />
                 </div>}
 
@@ -258,22 +243,34 @@ function toneClass(tone: 'neutral' | 'ok' | 'watch' | 'bad') {
     return { bg: 'bg-ui-primary/15', text: 'text-ui-primary' }
 }
 
+const dateFormatter = new Intl.DateTimeFormat('en', {
+    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Oslo',
+})
+
 function compactTime(value: string) {
-    return new Intl.DateTimeFormat('en', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        timeZone: 'Europe/Oslo',
-    }).format(new Date(value))
+    return dateFormatter.format(new Date(value))
 }
 
-function shortTime(value: string) {
-    return new Intl.DateTimeFormat('en', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        timeZone: 'Europe/Oslo',
-    }).format(new Date(value))
+const shortTime = compactTime
+
+function isFailed(event: AuditEvent) {
+    return !['ok', 'ready', 'success', 'completed', 'published'].includes(event.result.toLowerCase())
 }
+
+const AuditRow = memo(function AuditRow({ event }: { event: AuditEvent }) {
+    return (
+        <tr id={`event-${event.id}`} className='align-top transition hover:bg-ui-raised'>
+            <td className='whitespace-nowrap border-b border-ui-border px-3 py-1.5 text-ui-muted'>{compactTime(event.happenedAt)}</td>
+            <td className='border-b border-ui-border px-3 py-1.5 text-ui-text'>{event.service}</td>
+            <td className='max-w-28 border-b border-ui-border px-3 py-1.5 font-mono text-ui-text'>{event.actor}</td>
+            <td className='whitespace-nowrap border-b border-ui-border px-3 py-1.5 font-mono font-semibold text-ui-primary'>{event.action}</td>
+            <td className='max-w-44 border-b border-ui-border px-3 py-1.5 font-mono text-ui-text'>
+                {event.target}
+            </td>
+            <td className='whitespace-nowrap border-b border-ui-border px-3 py-1.5'><StatusPill label={event.result} tone={isFailed(event) ? 'bad' : 'ok'} /></td>
+            <td className='max-w-[34rem] border-b border-ui-border px-3 py-1.5 text-ui-muted'>
+                <span className='line-clamp-2'>{event.detail}</span>
+            </td>
+        </tr>
+    )
+})
