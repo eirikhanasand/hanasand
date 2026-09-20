@@ -493,7 +493,10 @@ function failureCategory(message?: string) { return !message ? undefined : /time
 function itemLimit(source: any, options: any, task?: any) {
   const sourceLimit = maxItemsFor(source, task), profile = task?.planning?.extractionProfile ?? source.metadata?.extractionProfile;
   if (["mitre_actor_catalog", "ransomware_operation_catalog", "ransomware_group_metadata"].includes(profile)) return sourceLimit ?? Number(options.maxItemsPerTask ?? 40);
-  return Math.max(1, Math.min(Number(options.maxItemsPerTask ?? 40), Number(sourceLimit ?? Infinity), Number(source.metadata?.maxItemsPerProcess ?? Infinity)));
+  // Actor discovery requests a bounded evidence batch, independent of the ordinary
+  // background sweep's small per-feed budget. Keep explicit source processing caps.
+  const schedulerLimit = task?.planning?.actorEnrichment ? 20 : Number(options.maxItemsPerTask ?? 40);
+  return Math.max(1, Math.min(schedulerLimit, Number(sourceLimit ?? Infinity), Number(source.metadata?.maxItemsPerProcess ?? Infinity)));
 }
 function isProductionCollectionSource(source: any, generatedAt: string, store: any) {
   if (sourceCollectionLane(source) !== "public" && !governedPortfolioCandidate(source, generatedAt, store)) return false;

@@ -104,3 +104,23 @@ test('retries a temporary HTTP model failure without losing pending evidence', a
   expect(calls).toBe(2);
   expect(runs.at(-1)).toMatchObject({ status: 'completed', reviewedCaptureIds: [capture.id] });
 });
+
+test('actor discovery collects beyond the ordinary two-item sweep without changing ordinary limits', async () => {
+  const { InMemoryScraperStore } = await import('../storage/memoryStore.ts');
+  const { FocusedFrontier } = await import('../frontier/frontier.ts');
+  const { createCollectionPlan } = await import('../planner/intelligencePlanner.ts');
+  const { executeScheduledCollectionRun } = await import('../ops/scheduledCollection.ts');
+  const { source } = await import('./helpers/apiSourceFixtures.ts');
+  for (const enrichment of [false, true]) {
+    const store = new InMemoryScraperStore(), frontier = new FocusedFrontier();
+    const feed = source({ metadata: { sourceFamily: 'public_news_search', maxItemsPerFetch: 4 }, url: 'https://example.test/search?q={query}' });
+    store.saveSource(feed);
+    const at = new Date().toISOString();
+    const plan = createCollectionPlan({ id: 'request', query: 'BrainCipher ransomware', entityType: 'free_text', includeClearWeb: true, includeTelegram: false, includeDarknetMetadata: false, budgetClass: 'broad_daily_sweep', maxTasks: 1, createdAt: at, requesterId: 'test', reason: 'Discover evidence' } as any, [feed], frontier);
+    store.savePlan({ ...plan, tasks: plan.tasks.map(task => ({ ...task, runId: 'run', planning: { ...task.planning, maxItemsPerFetch: 20, ...(enrichment ? { actorEnrichment: { actorId: 'actor' } } : {}) } })) });
+    store.saveRun({ id: 'run', planId: plan.id, requestId: 'request', status: 'queued', trigger: 'automated', createdAt: at, startedAt: at, updatedAt: at, taskCount: plan.tasks.length, captureCount: 0, incidentCount: 0 } as any);
+    const items = Array.from({ length: 6 }, (_, i) => `<item><title>BrainCipher attacked Company ${i}</title><link>https://example.test/article/${i}</link><description>BrainCipher ransomware attacked Company ${i} and claimed theft of customer records.</description><pubDate>${new Date().toUTCString()}</pubDate></item>`).join('');
+    const result = await executeScheduledCollectionRun({ store, frontier, maxItemsPerTask: 2, fetch: async () => new Response(`<rss><channel>${items}</channel></rss>`, { headers: { 'content-type': 'application/rss+xml' } }) }, 'run');
+    expect(result.captureIds).toHaveLength(enrichment ? 6 : 2);
+  }
+});
