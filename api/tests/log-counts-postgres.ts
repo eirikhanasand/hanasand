@@ -21,7 +21,7 @@ try {
     for (const sql of logCountsSchema) await c.query(sql.replace('CREATE TABLE IF NOT EXISTS', 'CREATE TEMP TABLE IF NOT EXISTS'))
     await c.query(logCountsBootstrapSql)
     const times = ['2026-09-20 12:34:55.999999Z','2026-09-20 12:34:56Z','2026-09-20 12:34:59.999999Z',
-        '2026-09-20 12:35:00Z','2026-09-20 12:59:59.999999Z','2026-09-20 13:00:00Z','2026-09-21 00:00:00Z']
+        '2026-09-20 12:35:00Z','2026-09-20 12:59:59.999999Z','2026-09-20 13:00:00Z','2026-09-21 00:00:00Z','2026-10-25 00:30:00Z','2026-10-25 01:30:00Z']
     let id = 0
     for (const time of times) for (const org of ['a','b']) for (const service of ['api',null]) {
         await c.query('INSERT INTO mill_log_dimensions VALUES($1,$2,$3,$4,$5,$6)',
