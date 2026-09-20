@@ -57,7 +57,7 @@ export default function PwnedPageClient() {
                         <p className='text-sm leading-6 text-ui-muted'>
                             {didSearch
                                 ? breached ? 'Hash matched leaked password.' : 'No exact hash match was found in the checked Bloom range.'
-                                : 'Submit a complete SHA-1 hash. Only the first five characters leave this page.'}
+                                : 'Submit a SHA-1 hash. Only the first five characters leave this page.'}
                         </p>
                     </div>
                     {didSearch ? (
