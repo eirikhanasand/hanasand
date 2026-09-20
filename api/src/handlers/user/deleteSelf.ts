@@ -101,7 +101,7 @@ export default async function deleteSelf(req: FastifyRequest, res: FastifyReply)
             targetType: 'user',
             targetId: id,
             severity: wasAdmin ? 'critical' : 'warning',
-            context: { deletionMode: 'scheduled', administrativeAccount: wasAdmin },
+            context: { deletionMode: 'scheduled', administrativeAccount: wasAdmin, targetName: outcome.user.name, targetId: id },
         })
         if (wasAdmin) {
             await recordSystemEvent(req, {
@@ -111,7 +111,7 @@ export default async function deleteSelf(req: FastifyRequest, res: FastifyReply)
                 targetType: 'user',
                 targetId: id,
                 severity: 'critical',
-                context: { deletionMode: 'scheduled' },
+                context: { deletionMode: 'scheduled', targetName: outcome.user.name, targetId: id },
             })
         }
 

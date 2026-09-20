@@ -7,6 +7,7 @@ const client = new pg.Client({ host: process.env.DB_HOST, port: Number(process.e
     database: process.env.DB, user: process.env.DB_USER, password: process.env.DB_PASSWORD })
 await client.connect()
 try {
+    await client.query('CREATE EXTENSION IF NOT EXISTS pg_trgm')
     await client.query('BEGIN')
     await client.query(`CREATE TEMP TABLE mill_events(id text PRIMARY KEY, organization_id text, ingestion_id text,
         processing_status text, event_timestamp timestamptz, normalized jsonb)`)

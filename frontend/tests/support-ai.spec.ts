@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { mockSupportLive, supportSnapshot } from './support-fixture'
 
 type Message = { id: string; sender_kind: string; sender_name: string; body: string; request_id?: string }
 for (const width of [390, 1440]) {
@@ -6,7 +7,7 @@ for (const width of [390, 1440]) {
         await page.setViewportSize({ width, height: 844 })
         let channel = 'ai'
         const messages: Message[] = []
-        await page.route('**/api/support/chat', async route => {
+        await page.route('**/api/support/chat*', async route => {
             if (route.request().method() === 'POST') {
                 const body = route.request().postDataJSON()
                 messages.push({ id: body.requestId, request_id: body.requestId, sender_kind: 'user', sender_name: 'You', body: body.message })
@@ -15,8 +16,9 @@ for (const width of [390, 1440]) {
                     messages.push({ id: 'handoff', sender_kind: 'system', sender_name: 'Support', body: 'You’re in the support queue. A member of the team can read this conversation and reply here.' })
                 } else messages.push({ id: 'answer', sender_kind: 'assistant', sender_name: 'Hanasand AI', body: 'Open [Subscriptions](/subscription) to view your plan.' })
             }
-            await route.fulfill({ json: { channel, status: 'open', pending: false, accepted: true, messages } })
+            await route.fulfill({ json: { ...supportSnapshot(messages, channel), accepted: true } })
         })
+        const live = await mockSupportLive(page)
         await page.goto('/contact')
         if (width === 390) await page.getByRole('button', { name: 'Switch to dark mode' }).click()
         await page.getByLabel('Open support assistant').click()
@@ -42,9 +44,10 @@ for (const width of [390, 1440]) {
         await expect(dialog.getByRole('log')).toContainText('view your plan')
         await expect(dialog.getByRole('link', { name: 'Subscriptions', exact: true })).toHaveAttribute('href', '/subscription')
         await dialog.getByRole('button', { name: 'Talk to a human', exact: true }).click()
-        await expect(dialog.getByText('Connected to the support queue')).toBeVisible()
+        await expect(dialog.getByText('Waiting for support.')).toBeVisible()
         await expect(dialog.getByRole('log')).toContainText('view your plan')
         messages.push({ id: 'agent', sender_kind: 'support', sender_name: 'Alex · Support', body: 'I can help with your subscription.' })
+        live.notify()
         await expect(dialog.getByRole('log')).toContainText('I can help with your subscription.')
         await checkLayout()
         await page.screenshot({ path: `/tmp/support-ai-handoff-${width}.png` })
@@ -60,7 +63,7 @@ test('failed sends retain their draft and retry ID; handoff stays available duri
     let fail = true
     let finishAi: (() => void) | undefined
     let channel = 'ai'
-    await page.route('**/api/support/chat', async route => {
+    await page.route('**/api/support/chat*', async route => {
         if (route.request().method() === 'POST') {
             const body = route.request().postDataJSON()
             ids.push(body.requestId)
@@ -71,8 +74,9 @@ test('failed sends retain their draft and retry ID; handoff stays available duri
                 await new Promise<void>(resolve => { finishAi = resolve })
             }
         }
-        await route.fulfill({ json: { channel, status: 'open', pending: false, accepted: true, messages } })
+        await route.fulfill({ json: { ...supportSnapshot(messages, channel), accepted: true } })
     })
+    await mockSupportLive(page)
     await page.goto('/contact')
     await page.getByLabel('Open support assistant').click()
     const dialog = page.getByRole('dialog')
@@ -86,7 +90,7 @@ test('failed sends retain their draft and retry ID; handoff stays available duri
     await expect(dialog.getByRole('status')).toContainText('thinking')
     await expect(dialog.getByRole('log')).toContainText('Keep this draft')
     await dialog.getByRole('button', { name: 'Talk to a human', exact: true }).click()
-    await expect(dialog.getByText('Connected to the support queue')).toBeVisible()
+    await expect(dialog.getByText('Waiting for support.')).toBeVisible()
     expect(ids[0]).toBe(ids[1])
 })
 
@@ -98,22 +102,23 @@ for (const expiredSession of [false, true]) {
         await page.route('**/api/backend/support/tickets', route => route.fulfill({ status: 401, json: { error: 'Unauthorized' } }))
         let channel = 'ai'
         const messages: Message[] = []
-        await page.route('**/api/support/chat', async route => {
+        await page.route('**/api/support/chat*', async route => {
             if (route.request().method() === 'POST') {
                 const body = route.request().postDataJSON()
                 expect(body.handoff).toBe(true)
                 channel = 'human'
                 messages.push({ id: body.requestId, sender_kind: 'user', sender_name: 'You', body: body.message })
             }
-            await route.fulfill({ json: { channel, status: 'open', pending: false, accepted: true, messages } })
+            await route.fulfill({ json: { ...supportSnapshot(messages, channel), accepted: true } })
         })
+        await mockSupportLive(page)
         await page.goto('/support')
         await expect(page.getByRole('heading', { name: 'How can we help?' })).toBeVisible()
         await expect(page.getByRole('link', { name: 'Sign in to support' })).toHaveCount(0)
         await page.getByRole('button', { name: 'Talk to a human', exact: true }).click()
-        await expect(page.getByText('Connected to the support queue')).toBeVisible()
+        await expect(page.getByText('Waiting for support.')).toBeVisible()
         await page.reload()
-        await expect(page.getByText('Connected to the support queue')).toBeVisible()
+        await expect(page.getByText('Waiting for support.')).toBeVisible()
         expect(new URL(page.url()).pathname).toBe('/support')
         const panel = page.getByRole('region', { name: 'Guest support', exact: true })
         expect(await panel.evaluate(el => el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight)).toBe(true)

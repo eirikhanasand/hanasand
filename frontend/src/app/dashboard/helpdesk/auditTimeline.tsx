@@ -1,6 +1,8 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
+import { getCookie } from '@/utils/cookies/cookies'
+import config from '@/config'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Bell } from 'lucide-react'
@@ -30,8 +32,8 @@ function auditTargetName(event: AdminAuditEvent) {
         ? ((!event.organization_id || event.organization_id === event.object_id) ? event.organization_name : '')
             || (typeof event.context?.name === 'string' ? event.context.name : '')
         : ''
-    const name = event.target_name || organizationName
-    return name ? auditDisplayText(name, event.object_type || undefined) : event.object_id || event.object_type || ''
+    const name = (typeof event.context?.targetName === 'string' ? event.context.targetName : '') || event.target_name || organizationName
+    return name ? auditDisplayText(name, event.object_type || undefined) : event.object_id || (typeof event.context?.targetId === 'string' ? event.context.targetId : '') || (event.object_type === 'user' ? 'Unknown user' : event.object_type || '')
 }
 
 function severityClass(severity: AdminAuditEvent['severity']) {
@@ -76,21 +78,45 @@ function auditDetailRows(event: AdminAuditEvent) {
         ['Organization', event.object_type === 'organization' && event.object_id === event.organization_id
             ? undefined
             : event.organization_name ? auditDisplayText(event.organization_name, 'organization') : event.organization_id],
+        ['Target source', typeof event.context?.targetSource === 'string' ? event.context.targetSource : undefined],
         ['Request', event.request_id],
         ['Entity', event.subject_id],
         ['Source', `${event.source}/${event.service}`],
     ].filter(([, value]) => value)
 }
 
-export default function AuditTimeline({ events, params, responseError }: { events: AdminAuditEvent[], params: AuditSearchParams, responseError: string }) {
+export default function AuditTimeline({ events: initialEvents, params, responseError }: { events: AdminAuditEvent[], params: AuditSearchParams, responseError: string }) {
+    const [acknowledgments, setAcknowledgments] = useState<Record<number, Partial<AdminAuditEvent>>>({})
+    const [pendingEvent, setPendingEvent] = useState<number | null>(null)
+    const [acknowledgmentError, setAcknowledgmentError] = useState<{ id: number, message: string } | null>(null)
+    const events = initialEvents.map(event => ({ ...event, ...acknowledgments[event.id] }))
     const searchParams = useSearchParams()
     const selectedEvent = selectedAuditEvent(events, { ...params, event: searchParams?.get('event') || undefined })
     const notificationPanel = useRef<HTMLDetailsElement>(null)
     const timeline = useRef<HTMLDivElement>(null)
-    const reviewEvents = events.filter(event => event.severity === 'critical' || event.outcome === 'denied' || event.outcome === 'failed')
+    const reviewEvents = events.filter(event => !event.acknowledged_at && (event.severity === 'critical' || event.outcome === 'denied' || event.outcome === 'failed'))
     const filterEntries = activeFilterEntries(params)
     const primarySearch = param(params, 'q')
     const advancedFilterCount = filterEntries.filter(([key]) => key !== 'q').length
+
+    async function acknowledge(event: AdminAuditEvent) {
+        if (pendingEvent !== null) return
+        setPendingEvent(event.id)
+        setAcknowledgmentError(null)
+        try {
+            const response = await fetch(`${config.url.api}/admin/audit-events/${event.id}/acknowledgment`, {
+                method: event.acknowledged_at ? 'DELETE' : 'POST',
+                headers: { Authorization: `Bearer ${getCookie('access_token') || ''}`, id: getCookie('id') || '' },
+            })
+            const result = await response.json()
+            if (!response.ok) throw new Error(typeof result.error === 'string' ? result.error : 'Could not save acknowledgment.')
+            setAcknowledgments(current => ({ ...current, [event.id]: { acknowledged_at: result.acknowledged_at, acknowledged_by: result.acknowledged_by, acknowledged_by_name: null } }))
+        } catch (error) {
+            setAcknowledgmentError({ id: event.id, message: error instanceof Error ? error.message : 'Could not save acknowledgment. Try again.' })
+        } finally {
+            setPendingEvent(null)
+        }
+    }
 
     function selectEvent(id: number, reveal = false) {
         const url = new URL(window.location.href)
@@ -141,7 +167,7 @@ export default function AuditTimeline({ events, params, responseError }: { event
                                                     <span className='text-xs text-ui-warning'>{event.severity} · {event.outcome}</span>
                                                     <span className='wrap-break-word text-xs text-ui-muted'>{auditTargetName(event) || auditDisplayText(event.reason)}</span>
                                                 </button>
-                                            )) : <p className='text-sm text-ui-muted'>No critical, denied or failed events in these results.</p>}
+                                            )) : <p className='text-sm text-ui-muted'>No unread notifications.</p>}
                                         </div>
                                     </div>
                                 </details>
@@ -216,6 +242,7 @@ export default function AuditTimeline({ events, params, responseError }: { event
                                             <div className='min-w-0'>
                                                 <div className='flex flex-wrap items-center gap-2 text-sm text-ui-text'>
                                                     <strong className='min-w-0 truncate'>{event.event_type}</strong>
+                                                    {event.acknowledged_at ? <span className={`rounded-md border px-2 py-1 text-[11px] font-semibold uppercase ${outcomeClass('success')}`}>Acknowledged</span> : null}
                                                     {focused ? <span className='rounded-md border border-ui-primary/35 bg-ui-primary/10 px-2 py-1 text-[11px] font-semibold uppercase text-ui-primary'>Selected</span> : null}
                                                     <span className={`rounded-md border px-2 py-1 text-[11px] font-semibold uppercase ${severityClass(event.severity)}`}>{event.severity}</span>
                                                     <span className={`rounded-md border px-2 py-1 text-[11px] font-semibold uppercase ${outcomeClass(event.outcome)}`}>{event.outcome}</span>
@@ -223,7 +250,7 @@ export default function AuditTimeline({ events, params, responseError }: { event
                                                 </div>
                                                 <div className='mt-2 flex flex-wrap gap-2 text-xs text-ui-muted'>
                                                     {event.actor_name || event.actor_id ? <span className='rounded-md bg-ui-raised px-2 py-1'>actor {event.actor_name ? auditDisplayText(event.actor_name) : event.actor_id}</span> : null}
-                                                    {event.object_id ? <span className='rounded-md bg-ui-raised px-2 py-1'>{event.object_type || 'target'} {auditTargetName(event)}</span> : null}
+                                                    {event.object_id || event.target_name || event.context?.targetId || event.context?.targetName ? <span className='rounded-md bg-ui-raised px-2 py-1'>{event.object_type || 'target'} {auditTargetName(event)}</span> : null}
                                                     {event.organization_id && !(event.object_type === 'organization' && event.object_id === event.organization_id) ? <span className='rounded-md bg-ui-primary/10 px-2 py-1 text-ui-primary'>{event.organization_name ? auditDisplayText(event.organization_name, 'organization') : event.organization_id}</span> : null}
                                                     {event.subject_id ? <span className='rounded-md bg-ui-raised px-2 py-1 font-mono'>entity {event.subject_id}</span> : null}
                                                     {event.request_id ? <span className='rounded-md bg-ui-raised px-2 py-1 font-mono'>request {event.request_id}</span> : null}
@@ -247,6 +274,13 @@ export default function AuditTimeline({ events, params, responseError }: { event
                                                     </div>
                                                 ))}
                                             </dl> : null}
+                                            {focused ? <div className='flex flex-wrap items-center gap-3 border-t border-ui-border px-4 py-3'>
+                                                <button type='button' disabled={pendingEvent !== null} onClick={() => void acknowledge(event)} className={`${quietButtonClass} disabled:opacity-50`}>
+                                                    {pendingEvent === event.id ? 'Saving…' : event.acknowledged_at ? 'Mark unread' : 'Acknowledge'}
+                                                </button>
+                                                {event.acknowledged_at ? <span className='text-xs text-ui-muted'>Acknowledged by {event.acknowledged_by_name || event.acknowledged_by || 'an administrator'} · <time dateTime={event.acknowledged_at} suppressHydrationWarning>{formatTime(event.acknowledged_at)}</time></span> : null}
+                                                {acknowledgmentError?.id === event.id ? <p role='alert' className='text-sm text-ui-danger'>{acknowledgmentError.message}</p> : null}
+                                            </div> : null}
                                         </div>
                                     </article>
                                 )

@@ -9,7 +9,6 @@ const enterpriseFacingSources = [
     'src/app/trust/trustArtifacts.ts',
     'src/app/pricing/page.tsx',
     'src/app/developers/page.tsx',
-    'src/app/solutions/page.tsx',
 ] as const
 
 const bannedVisibleTone = [

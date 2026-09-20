@@ -1,6 +1,11 @@
 import { afterAll, beforeAll, expect, mock, test } from 'bun:test'
 import { randomBytes, randomUUID } from 'node:crypto'
 import Fastify from 'fastify'
+import websocket from '@fastify/websocket'
+import WebSocket from 'ws'
+import { once } from 'node:events'
+import { supportNotifications } from '../src/utils/support/live.ts'
+import registerSupportStream, { supportChangeAllowed } from '../src/handlers/supportStream.ts'
 import { queryOnce as query, closeDatabase } from '../src/utils/db.ts'
 import ensureSupportAiSchema from '../src/utils/support/schema.ts'
 import { readSupportConversation, sendSupportChat, supportSessionHash } from '../src/utils/support/conversation.ts'
@@ -15,7 +20,9 @@ mock.module('../src/utils/auth/tokenWrapper.ts', () => ({ default: async (req: a
     return { valid: true, id }
 } }))
 const { getSupportTickets, getSupportMessages, postSupportMessage } = await import('../src/handlers/supportChat.ts')
-const app = Fastify()
+const app = Fastify({ forceCloseConnections: true })
+await app.register(websocket)
+registerSupportStream(app)
 app.get('/support/chat', publicSupportChat)
 app.post('/support/chat', publicSupportChat)
 app.get('/support/tickets', getSupportTickets)
@@ -27,7 +34,7 @@ const reply = async () => 'You can reset your password from the sign-in page.'
 
 beforeAll(async () => {
     // This file refuses to run outside its disposable database.
-    await query('DROP TABLE IF EXISTS support_messages, support_tickets, user_roles, roles, users, api_rate_limit_buckets CASCADE')
+    await query('DROP TABLE IF EXISTS support_live_tickets, support_messages, support_tickets, user_roles, roles, users, api_rate_limit_buckets CASCADE')
     await query('CREATE TABLE users (id TEXT PRIMARY KEY, name TEXT)')
     await query('CREATE TABLE roles (id TEXT PRIMARY KEY)')
     await query('CREATE TABLE user_roles (user_id TEXT, role_id TEXT)')
@@ -40,7 +47,7 @@ beforeAll(async () => {
     await ensureSupportAiSchema()
     await ensureSupportAiSchema()
 })
-afterAll(async () => { await app.close(); await closeDatabase() })
+afterAll(async () => { for (const socket of app.websocketServer.clients) socket.terminate(); await app.close(); await closeDatabase() })
 
 test('guest AI history persists; retry is idempotent and separate visitors cannot read it', async () => {
     const hash = session(), request = input('How do I reset my password?')
@@ -116,6 +123,9 @@ test('model handoff handles other languages without transferring general questio
     expect(asksForHuman('I do not want a human')).toBe(false)
     expect(asksForHuman('Are you a human?')).toBe(false)
     expect(asksForHuman('Please connect me to a real person')).toBe(true)
+    expect(asksForHuman('let me speakk with support')).toBe(true)
+    expect(asksForHuman('Kan jeg snakke med support?')).toBe(true)
+    expect(asksForHuman('I do not want to speak with support')).toBe(false)
 })
 
 test('public endpoint validates session and message length; handoff works without login or AI', async () => {
@@ -123,7 +133,7 @@ test('public endpoint validates session and message length; handoff works withou
     const headers = { 'x-support-session': randomBytes(32).toString('hex') }
     expect((await app.inject({ url: '/support/chat?ticketId=anything', headers })).json().messages).toHaveLength(0)
     expect((await app.inject({ method: 'POST', url: '/support/chat', headers, payload: input('x'.repeat(4001)) })).statusCode).toBe(400)
-    const response = await app.inject({ method: 'POST', url: '/support/chat', headers, payload: input('Talk to a human', true) })
+    const response = await app.inject({ method: 'POST', url: '/support/chat', headers, payload: input('let me speakk with support') })
     expect(response.statusCode).toBe(200)
     expect(response.json().channel).toBe('human')
 })
@@ -169,4 +179,65 @@ test('HTTP replica forwards inference to the model worker with only the session 
         if (originalBase === undefined) delete process.env.AI_HEALTH_WORKER_BASE
         else process.env.AI_HEALTH_WORKER_BASE = originalBase
     }
+})
+
+
+test('one visitor can create and revisit independent chats without accessing another visitor', async () => {
+    const hash = session(), first = randomUUID(), second = randomUUID()
+    const firstInput = { ...input('First chat'), conversationId: first }
+    await sendSupportChat(hash, firstInput, reply)
+    await sendSupportChat(hash, { ...input('Second chat'), conversationId: second }, reply)
+    await sendSupportChat(hash, firstInput, reply)
+    const old = await readSupportConversation(hash, first)
+    expect(old.tickets).toHaveLength(2)
+    expect(old.messages).toHaveLength(2)
+    expect(old.messages[0].body).toBe('First chat')
+    expect((await readSupportConversation(hash, second)).messages[0].body).toBe('Second chat')
+    expect((await readSupportConversation(session(), first)).messages).toHaveLength(0)
+    await expect(sendSupportChat(session(), { ...input('Intrusion'), conversationId: first }, reply)).rejects.toThrow('Conversation not found')
+    expect((await readSupportConversation(hash, first)).messages).toHaveLength(2)
+    const url = `/support/tickets/${first}/messages`
+    await app.inject({ method: 'POST', url, headers: { 'test-user': 'agent' }, payload: { message: 'Hello from your agent.' } })
+    expect((await readSupportConversation(hash, first)).agent_name).toBe('Support Agent')
+    expect((await readSupportConversation(hash, second)).agent_name).toBeNull()
+})
+
+test('WebSockets use one-use visitor tickets and deliver committed changes across database connections', async () => {
+    const address = await app.listen({ port: 0, host: '127.0.0.1' })
+    const connect = async (token: string) => {
+        const response = await app.inject({ method: 'POST', url: '/support/chat', headers: { 'x-support-session': token }, payload: { action: 'connect' } })
+        expect(response.statusCode).toBe(200)
+        const ticket = response.json().ticket
+        const socket = new WebSocket(address.replace('http:', 'ws:') + '/api/ws/support', { headers: { Origin: 'https://hanasand.com' } })
+        await once(socket, 'open')
+        const messages: any[] = []
+        socket.on('message', raw => messages.push(JSON.parse(raw.toString())))
+        socket.send(JSON.stringify({ type: 'auth', ticket }))
+        for (let i=0; i<100 && !messages.some(message => message.type === 'ready'); i++) await Bun.sleep(10)
+        expect(messages.some(message => message.type === 'ready')).toBe(true)
+        return { socket, messages, ticket }
+    }
+    const token = randomBytes(32).toString('hex'), hash = supportSessionHash(token)
+    const a = await connect(token), b = await connect(randomBytes(32).toString('hex'))
+    const secondReplica = supportNotifications(error => { throw error })
+    const changes: string[] = []
+    const unsubscribe = secondReplica.subscribe(change => { if (change) changes.push(change.id) })
+    await Bun.sleep(100)
+    a.messages.length = 0; b.messages.length = 0
+    const id = randomUUID(), started = Date.now()
+    await sendSupportChat(hash, { ...input('Talk to a human', true), conversationId: id }, reply)
+    for (let i=0; i<100 && !a.messages.some(message => message.id === id); i++) await Bun.sleep(10)
+    expect(a.messages.some(message => message.id === id)).toBe(true)
+    expect(Date.now()-started).toBeLessThan(1000)
+    expect(b.messages.some(message => message.id === id)).toBe(false)
+    expect(changes).toContain(id)
+    expect(supportChangeAllowed({ id, visitor: hash, user: null, channel: 'human' }, { id: 'agent', support: true })).toBe(true)
+    expect(supportChangeAllowed({ id, visitor: hash, user: null, channel: 'ai' }, { id: 'agent', support: true })).toBe(false)
+    const reused = new WebSocket(address.replace('http:', 'ws:') + '/api/ws/support', { headers: { Origin: 'https://hanasand.com' } })
+    await once(reused, 'open'); const closed = once(reused, 'close')
+    reused.send(JSON.stringify({ type: 'auth', ticket: a.ticket }))
+    expect((await closed)[0]).toBe(1008)
+    const unauthorized = new WebSocket(address.replace('http:', 'ws:') + '/api/ws/support', { headers: { Origin: 'https://evil.example' } })
+    expect((await once(unauthorized, 'close'))[0]).toBe(1008)
+    a.socket.close(); b.socket.close(); unsubscribe(); await secondReplica.close()
 })

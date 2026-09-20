@@ -1,3 +1,4 @@
+import { deliveryResponse } from "./deliveryWorkbenchResponse.ts";
 import { paginationCursor } from "./pagination.ts";
 import { buildTimelinessWorkbench, mergePublicReportReference, type ReportRole, type TimelinessQueueStatus } from "../pipeline/timelinessGroundTruth.ts";
 import { authenticateRequest, authenticateOperatorRequest } from "./requestAuthentication.ts";
@@ -36,17 +37,17 @@ export async function handleTimelinessRequest(request: Request, options: ApiServ
     const scope = resolveTenantScope(request, url);
     if (scope.error) return scope.error;
     const store = options.store as unknown as TimelinessStore;
-    const records = typeof (store as any).queryDeliveryRecords === "function"
-      ? await (store as any).queryDeliveryRecords(scope.tenantId)
-      : store.listTimelinessRecords().filter(record => inTenantScope(record, scope.tenantId));
-    const snapshot = buildTimelinessWorkbench(records);
+    const snapshot = (store as any).queryDeliverySnapshot
+      ? await (store as any).queryDeliverySnapshot(scope.tenantId)
+      : buildTimelinessWorkbench(store.listTimelinessRecords().filter(record => inTenantScope(record, scope.tenantId)));
     const needsReportCount = snapshot.summary.unresolvedReferenceCount;
-    return json({ generatedAt: snapshot.generatedAt, summary: { recordCount: records.length, needsReportCount,
+    return json({ generatedAt: snapshot.generatedAt, summary: { recordCount: snapshot.summary.recordCount, needsReportCount,
       unresolvedReferenceCount: needsReportCount, criticalThreshold: 10, status: needsReportCount > 10 ? "critical" : "ok" } });
   }
-  const authentication = await authenticateRequest(request, options);
+  const serviceRead = url.pathname === WORKBENCH && request.method === "GET";
+  const authentication = serviceRead ? await authenticateOperatorRequest(request, options) : await authenticateRequest(request, options);
   if (authentication.error) return authentication.error;
-  if (!authentication.identity?.roles.some((role) => ROLES.has(role))) return error("timeliness_forbidden", "Timeliness operations require an analyst role", 403);
+  if (!authentication.identity?.roles.some((role) => ROLES.has(role) || serviceRead && role === "service")) return error("timeliness_forbidden", "Timeliness operations require an analyst role", 403);
   if (url.pathname === WORKBENCH && request.method === "GET") return workbench(request, url, options);
   if (url.pathname === REFERENCES && request.method === "POST") return addReference(request, url, options, authentication.identity.id);
   return error("timeliness_method_not_allowed", "Use GET for the workbench or POST for report references", 405);
@@ -56,28 +57,24 @@ async function workbench(request: Request, url: URL, options: ApiServerOptions):
   const scope = resolveTenantScope(request, url);
   if (scope.error) return scope.error;
   const store = options.store as unknown as TimelinessStore;
-  const records = store.listTimelinessRecords().filter((record) => inTenantScope(record, scope.tenantId));
-  const context = {
-    sources: store.listSources().filter((record) => inTenantScope(record, scope.tenantId)),
-    incidents: store.listIncidents().filter((record) => inTenantScope(record, scope.tenantId)),
-    captures: store.listCaptures().filter((record) => inTenantScope(record, scope.tenantId)),
-    entities: store.listExtractedEntities().filter((record) => inTenantScope(record, scope.tenantId)),
-    validationRecords: store.listValidationRecords().filter((record) => inTenantScope(record, scope.tenantId)),
-  };
-  const persisted = await (store as any).queryDeliveryWorkbench?.(scope.tenantId);
-  const snapshot = persisted ? buildTimelinessWorkbench(persisted.records, persisted.context) : buildTimelinessWorkbench(records, context);
+  const started = performance.now();
+  const snapshot = (store as any).queryDeliverySnapshot ? await (store as any).queryDeliverySnapshot(scope.tenantId)
+    : buildTimelinessWorkbench(store.listTimelinessRecords().filter(record => inTenantScope(record, scope.tenantId)), {
+      sources: store.listSources().filter(record => inTenantScope(record, scope.tenantId)),
+      incidents: store.listIncidents().filter(record => inTenantScope(record, scope.tenantId)),
+      captures: store.listCaptures().filter(record => inTenantScope(record, scope.tenantId)),
+      entities: store.listExtractedEntities().filter(record => inTenantScope(record, scope.tenantId)),
+      validationRecords: store.listValidationRecords().filter(record => inTenantScope(record, scope.tenantId)),
+    });
   const requestedStatus = url.searchParams.get("status") as TimelinessQueueStatus | null;
   if (requestedStatus && !STATUSES.has(requestedStatus)) return error("invalid_timeliness_status", "Unsupported timeliness queue status", 400);
   const query = url.searchParams.get("q")?.trim().toLowerCase();
   const limit = Math.floor(Math.min(200, Math.max(1, numberQuery(url.searchParams.get("limit")) ?? 100)));
   const offset = Math.floor(Math.max(0, numberQuery(paginationCursor(url.searchParams, limit) ?? null) ?? 0));
-  const filtered = snapshot.items.filter((item) => (!requestedStatus || item.status === requestedStatus)
-    && (!query || JSON.stringify([item.actorName, item.title, item.sourceName, item.sourceId, item.incidentId, item.captureId, item.reportReferences, item.timestampAnomalies]).toLowerCase().includes(query)));
-  return json({
-    ...snapshot,
-    items: filtered.slice(offset, offset + limit),
-    page: { total: filtered.length, limit, cursor: offset, nextCursor: offset + limit < filtered.length ? String(offset + limit) : null },
-  });
+  const response = deliveryResponse(snapshot, { status: requestedStatus, query, offset, limit });
+  response.headers.set("server-timing", `delivery;dur=${(performance.now() - started).toFixed(3)}`);
+  response.headers.set("x-delivery-snapshot-at", snapshot.generatedAt);
+  return response;
 }
 
 async function addReference(request: Request, url: URL, options: ApiServerOptions, recordedBy: string): Promise<Response> {
@@ -114,6 +111,8 @@ async function addReference(request: Request, url: URL, options: ApiServerOption
     recordedAt: new Date().toISOString(),
   });
   const saved = merged.created ? store.saveTimelinessRecord(merged.record) : merged.record;
+  await (store as any).flush?.();
+  await (store as any).queryDeliverySnapshot?.(scope.tenantId, true);
   const snapshot = buildTimelinessWorkbench([saved], {
     sources: store.listSources().filter((record) => inTenantScope(record, scope.tenantId)),
     incidents: store.listIncidents().filter((record) => inTenantScope(record, scope.tenantId)),

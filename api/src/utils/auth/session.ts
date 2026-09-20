@@ -101,12 +101,19 @@ export async function validateSession({ id, token }: { id?: string, token: strin
     const ttlHours = sessionTTLHours(session.user_agent)
 
     const readOnly = recoveryReadOnly() || session.database_read_only === true
-    if (!readOnly) await run(`
-        UPDATE tokens
-        SET timestamp = NOW()
-        WHERE id = $1
-          AND token = $2
-    `, [userId, token])
+    // Recheck access on every request, but avoid a durable timestamp write for
+    // every parallel dashboard fetch. The SQL guard also covers concurrent touches.
+    if (!readOnly && Date.now() - new Date(session.timestamp).getTime() >= 30_000) {
+        const touched = await run(`
+            UPDATE tokens
+            SET timestamp = NOW()
+            WHERE id = $1
+              AND token = $2
+              AND timestamp <= NOW() - INTERVAL '30 seconds'
+            RETURNING timestamp
+        `, [userId, token])
+        if (touched.rows[0]?.timestamp) session.timestamp = touched.rows[0].timestamp
+    }
 
     return {
         user,
@@ -114,7 +121,7 @@ export async function validateSession({ id, token }: { id?: string, token: strin
         session,
         refreshed: {
             token,
-            expires_at: new Date((readOnly ? new Date(session.timestamp).getTime() : Date.now()) + ttlHours * 60 * 60 * 1000).toISOString(),
+            expires_at: new Date(new Date(session.timestamp).getTime() + ttlHours * 60 * 60 * 1000).toISOString(),
         }
     }
 }

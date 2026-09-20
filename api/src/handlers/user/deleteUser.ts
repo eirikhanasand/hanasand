@@ -41,7 +41,7 @@ export default async function deleteUser(req: FastifyRequest, res: FastifyReply)
             targetType: 'user',
             targetId: id,
             severity: wasAdmin ? 'critical' : 'warning',
-            context: { deletionMode: 'scheduled', administrativeAccount: wasAdmin },
+            context: { deletionMode: 'scheduled', administrativeAccount: wasAdmin, targetName: userResult.rows[0].name, targetId: id },
         })
         if (wasAdmin) {
             await recordSystemEvent(req, {
@@ -51,7 +51,7 @@ export default async function deleteUser(req: FastifyRequest, res: FastifyReply)
                 targetType: 'user',
                 targetId: id,
                 severity: 'critical',
-                context: { deletionMode: 'scheduled' },
+                context: { deletionMode: 'scheduled', targetName: userResult.rows[0].name, targetId: id },
             })
         }
         const user: User = userResult.rows[0]

@@ -1,3 +1,4 @@
+import { setAuditAcknowledgment } from './handlers/auditAcknowledgments.ts'
 import systemSnapshot from './handlers/metrics/systemSnapshot.ts'
 import { getDockerStorage, clearDockerStorage } from './handlers/dockerStorage.ts'
 import { searchLogs } from './handlers/logs/search.ts'
@@ -250,7 +251,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/impersonation/events', getImpersonationEvents)
     fastify.get('/system/events', {
         onSend: async (_req, reply, payload) => {
-            const timing = reply.getHeader('Server-Timing')
+            const timing = [...(_req.auditBoundaryTiming || []), reply.getHeader('Server-Timing')].filter(Boolean).join(', ')
             if (timing && reply.elapsedTime >= 20) _req.log.info({ timing, elapsedMs: reply.elapsedTime }, 'Slow audit timeline request')
             reply.header('Server-Timing', `${timing ? `${timing}, ` : ''}app;dur=${reply.elapsedTime.toFixed(2)}`)
             return payload
@@ -260,6 +261,8 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     // Compatibility aliases for existing clients; system events are the canonical name.
     fastify.get('/admin/audit-events', getSystemEvents)
     fastify.get('/admin/audit-events/:id', getSystemEvent)
+    fastify.post('/admin/audit-events/:id/acknowledgment', setAuditAcknowledgment)
+    fastify.delete('/admin/audit-events/:id/acknowledgment', setAuditAcknowledgment)
     fastify.get('/admin/support/readiness', getSupportReadiness)
     fastify.get('/admin/support/inspect', getSupportInspection)
     fastify.get('/admin/support/users/:id', getSupportUser)

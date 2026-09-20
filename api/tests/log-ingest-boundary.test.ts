@@ -10,6 +10,7 @@ mock.module('#utils/resilience.ts', () => ({ recoveryReadOnly: () => false }))
 mock.module('#utils/logs/recordLog.ts', () => ({ default: async () => { stored++ } }))
 mock.module('#utils/rateLimit/config.ts', () => ({ registerRateLimitRoute: () => {}, resetSharedRateLimitBuckets: () => {},
     getRateLimitSettings: async () => ({enabled:true, defaults: {internal:{windowMs:60000,maxRequests:6000},anonymous:{windowMs:60000,maxRequests:90}},overrides:[]}),
+    consumeSharedRateLimitPair: async () => ({globalCheck:{allowed:rateAllowed,remaining:5,resetAt:Date.now()+60000,retryAfterMs:60000},routeCheck:rateAllowed?{allowed:true,remaining:5,resetAt:Date.now()+60000,retryAfterMs:60000}:null}),
     consumeSharedRateLimitBucket: async () => ({allowed:rateAllowed,remaining:5,resetAt:Date.now()+60000,retryAfterMs:60000}) }))
 const { default: rateLimit } = await import('../src/plugins/rateLimit.ts')
 const { default: ingestLog } = await import('../src/handlers/logs/ingest.ts')

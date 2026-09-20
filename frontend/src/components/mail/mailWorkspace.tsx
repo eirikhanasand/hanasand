@@ -100,6 +100,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
     const nextPageTrigger = useRef<HTMLDivElement>(null)
     const [loadingMore, setLoadingMore] = useState(false)
     const [pageError, setPageError] = useState('')
+    const [selectionMode, setSelectionMode] = useState(false)
     const [checkedMessages, setCheckedMessages] = useState<Set<string>>(new Set())
     const [archiving, setArchiving] = useState(false)
     const archivingRef = useRef(false)
@@ -142,7 +143,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 const tail = current.messages.slice(boundary >= 0 ? boundary + 1 : 50)
                 return { ...next, messages: [...next.messages, ...tail.filter(message => !ids.has(message.id))], nextCursor: current.nextCursor }
             })
-            if (switched) { setPageError(''); setCheckedMessages(new Set()) }
+            if (switched) { setPageError(''); setCheckedMessages(new Set()); setSelectionMode(false) }
             setSelectedMailboxId(next.selectedMailboxId)
             const nextSelectedMessageId = params.messageId
                 || next.selectedMessage?.id
@@ -269,6 +270,8 @@ export default function MailWorkspace({ mailboxUser }: Props) {
     }, [overview?.messages, query, mailFilter])
 
     const checkedVisible = filteredMessages.filter(message => checkedMessages.has(message.id))
+
+    const allVisibleSelected = filteredMessages.length > 0 && checkedVisible.length === filteredMessages.length
 
     async function archiveSelected() {
         if (!overview || archivingRef.current || !checkedVisible.length) return
@@ -477,30 +480,35 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                 <span className='rounded bg-ui-panel px-1.5 py-0.5 font-mono text-[10px]'>{option.count}</span>
                             </button>
                         ))}
+                        {(selectionMode || !!filteredMessages.length) && <button type='button'
+                            className='shrink-0 px-2.5 text-[11px] font-semibold text-ui-primary hover:underline'
+                            aria-pressed={selectionMode} disabled={loading || archiving}
+                            onClick={() => {
+                                setSelectionMode(!selectionMode)
+                                setCheckedMessages(new Set())
+                            }}>
+                            {selectionMode ? 'Hide' : 'Select'}
+                        </button>}
+                        {selectionMode && <button type='button'
+                            className='shrink-0 px-2.5 text-[11px] font-semibold text-ui-primary hover:underline'
+                            disabled={loading || archiving || !filteredMessages.length}
+                            onClick={() => setCheckedMessages(allVisibleSelected ? new Set() : new Set(filteredMessages.map(message => message.id)))}>
+                            {allVisibleSelected ? 'Unselect all' : 'Select all'}
+                        </button>}
                     </div>
 
-                    {!!filteredMessages.length && <div className='mb-2 flex flex-wrap items-center gap-3 px-1 text-xs text-ui-muted'>
-                        <label className='flex cursor-pointer items-center gap-2'>
-                            <input type='checkbox' aria-label='Select all visible messages' disabled={loading || archiving}
-                                className='h-4 w-4 accent-ui-primary'
-                                checked={checkedVisible.length === filteredMessages.length}
-                                ref={element => { if (element) element.indeterminate = checkedVisible.length > 0 && checkedVisible.length < filteredMessages.length }}
-                                onChange={event => setCheckedMessages(event.target.checked ? new Set(filteredMessages.map(message => message.id)) : new Set())} />
-                            Select all visible
-                        </label>
-                        {!!checkedVisible.length && <>
-                            <span role='status'>{checkedVisible.length} selected</span>
-                            <button type='button' className={toolbarButton} disabled={archiving || loading} onClick={() => void archiveSelected()}>
-                                <Archive className='h-4 w-4' />{archiving ? 'Archiving…' : 'Archive selected'}
-                            </button>
-                            <button type='button' className='hover:text-ui-text' disabled={archiving} onClick={() => setCheckedMessages(new Set())}>Clear selection</button>
-                        </>}
+                    {!!checkedVisible.length && <div className='mb-2 flex flex-wrap items-center gap-3 px-1 text-xs text-ui-muted'>
+                        <span role='status'>{checkedVisible.length} selected</span>
+                        <button type='button' className={toolbarButton} disabled={archiving || loading} onClick={() => void archiveSelected()}>
+                            <Archive className='h-4 w-4' />{archiving ? 'Archiving…' : 'Archive selected'}
+                        </button>
                     </div>}
                     <div className='grid min-w-0 grid-cols-1 gap-1.5'>
                         {filteredMessages.map(message => (
                             <MessageRow
                                 key={`${overview?.mailboxUser}:${message.id}`}
                                 archived={overview?.mailboxes.some(mailbox => message.mailboxIds.includes(mailbox.id) && (mailbox.role === 'archive' || /^archives?$/i.test(mailbox.name))) ?? false}
+                                selectionMode={selectionMode}
                                 checked={checkedMessages.has(message.id)}
                                 selectionDisabled={loading || archiving}
                                 onToggle={() => setCheckedMessages(current => {

@@ -1,5 +1,6 @@
 import fp from 'fastify-plugin'
 import { proxyModelSocket } from '../utils/ws/proxyModelSocket.ts'
+import registerSupportStream from '../handlers/supportStream.ts'
 import registerSystemStream from '../handlers/metrics/systemStream.ts'
 import registerVmConsole from '../handlers/vms/console.ts'
 import { subscribeThesis } from '#utils/thesis.ts'
@@ -63,6 +64,7 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
 
     registerVmConsole(fastify)
     registerSystemStream(fastify)
+    registerSupportStream(fastify)
 
     fastify.get('/api/ws/thesis', { websocket: true }, socket => subscribeThesis(socket))
     registerBrowserStreamRoute(fastify)

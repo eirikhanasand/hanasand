@@ -6,6 +6,7 @@ import { matchApiKeyScope, organizationPublicApiScopes, validateApiKey } from '#
 import { validateSession } from '#utils/auth/session.ts'
 import {
     consumeSharedRateLimitBucket,
+    consumeSharedRateLimitPair,
     getRateLimitSettings,
     registerRateLimitRoute,
     resetSharedRateLimitBuckets,
@@ -70,11 +71,19 @@ async function enforceRateLimit(req: FastifyRequest, res: FastifyReply, database
         || isTrustedStatusIngest(req, path)
     ) return true
 
+    let phaseStarted = performance.now()
+    if (path === '/api/system/events') req.auditBoundaryTiming = []
+    const measure = (name: string) => {
+        const now = performance.now()
+        req.auditBoundaryTiming?.push(`${name};dur=${(now - phaseStarted).toFixed(2)}`)
+        phaseStarted = now
+    }
     const logIngest = req.method === 'POST' && path === '/api/logs/ingest' && (hasLogIngestToken(req) || hasInternalToken(req))
     const actor: RateLimitActor = logIngest ? { scope: 'internal', identifier: 'service:log-ingest' }
         : req.method === 'GET' && path === '/api/thesis/code-reviews' && hasInternalToken(req)
             ? { scope: 'internal', identifier: 'service:code-review' }
             : await resolveRateLimitActor(req)
+    measure('session')
     if (actor.invalidApiKey) {
         sendBoundaryError(req, res, 401, 'invalid_api_key', 'The presented API key is invalid, disabled, or expired.')
         return false
@@ -111,6 +120,7 @@ async function enforceRateLimit(req: FastifyRequest, res: FastifyReply, database
         return false
     }
     const settings = await getRateLimitSettings()
+    measure('settings')
     if (!settings.enabled) return true
 
     const periodLimits = credentialPeriodLimits({
@@ -140,18 +150,12 @@ async function enforceRateLimit(req: FastifyRequest, res: FastifyReply, database
 
     const scopeRule = settings.defaults[actor.scope]
     const routeRule = resolveRouteRule(settings, req.method, path, actor.scope)
-    // Commit both shared counters together instead of waiting for two WAL flushes.
-    const { globalCheck, routeCheck } = await withTransaction(async query => {
-        const globalCheck = await consumeSharedRateLimitBucket({
-            key: `${actor.identifier}:global:${actor.scope}`,
-            rule: scopeRule,
-        }, query)
-        const routeCheck = globalCheck.allowed ? await consumeSharedRateLimitBucket({
-            key: `${actor.identifier}:route:${actor.scope}:${req.method}:${path}`,
-            rule: routeRule,
-        }, query) : null
-        return { globalCheck, routeCheck }
+    const { globalCheck, routeCheck } = await consumeSharedRateLimitPair({
+        key: `${actor.identifier}:global:${actor.scope}`, rule: scopeRule,
+    }, {
+        key: `${actor.identifier}:route:${actor.scope}:${req.method}:${path}`, rule: routeRule,
     })
+    measure('quota')
     applyRateLimitHeaders(res, globalCheck, scopeRule, actor.scope, 'global')
     if (!routeCheck) {
         sendRateLimitExceeded(req, res, globalCheck, actor.scope, 'global')

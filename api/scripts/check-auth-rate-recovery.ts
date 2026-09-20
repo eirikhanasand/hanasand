@@ -7,7 +7,7 @@ let handled = 0
 let sharedChecks = 0
 mock.module('../src/utils/resilience.ts', () => ({ recoveryReadOnly: () => false }))
 mock.module('../src/utils/rateLimit/config.ts', () => ({
-    registerRateLimitRoute: () => {}, resetSharedRateLimitBuckets: async () => {}, consumeSharedRateLimitBucket: async () => {},
+    registerRateLimitRoute: () => {}, resetSharedRateLimitBuckets: async () => {}, consumeSharedRateLimitPair: async () => {}, consumeSharedRateLimitBucket: async () => {},
     getRateLimitSettings: async () => { sharedChecks++; throw Object.assign(new Error('Replica rejects shared limiter writes'), { code: '25006' }) },
 }))
 mock.module('#db', () => ({ default: async () => ({ rows: [] }), queryOnce: async () => ({ rows: [] }), withTransaction: async () => {}, isTransientDatabaseError: (error: { code?: string }) => error.code === 'ECONNRESET' }))

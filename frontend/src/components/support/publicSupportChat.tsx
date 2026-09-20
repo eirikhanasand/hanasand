@@ -1,11 +1,15 @@
 'use client'
 
 import { ArrowUp, LoaderCircle, Sparkles, UserRound } from 'lucide-react'
-import { FormEvent, useCallback, useEffect, useRef, useState } from 'react'
+import useSupportLive from './useSupportLive'
+import useSupportUnread from './useSupportUnread'
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 type Message = { id: string; body: string; sender_kind: 'user' | 'assistant' | 'support' | 'system'; sender_name: string; request_id?: string }
-type Conversation = { channel: 'ai' | 'human'; status: string; pending: boolean; messages: Message[]; error?: string; accepted?: boolean }
-type Submission = { requestId: string; message: string; handoff?: boolean }
+type Ticket = { id: string; subject: string; reply_count: number }
+type Conversation = { id?: string; tickets?: Ticket[]; agent_name?: string; channel: 'ai' | 'human'; status: string; pending: boolean; messages: Message[]; error?: string; accepted?: boolean }
+type Submission = { requestId: string; message: string; handoff?: boolean; conversationId?: string }
+const emptyTickets: Ticket[] = []
 const empty: Conversation = { channel: 'ai', status: 'open', pending: false, messages: [] }
 
 // Render only same-site links from the assistant, never HTML or arbitrary model URLs.
@@ -17,58 +21,92 @@ function MessageBody({ text }: { text: string }) {
 }
 
 export default function PublicSupportChat({ active = true, onUnreadChange }: { active?: boolean; onUnreadChange?: (count: number) => void }) {
+    const [selectedId, setSelectedId] = useState('')
+    const selection = useRef('')
+    const restoredSelection = useRef(false)
+    const realtime = useRef(false)
+    const drafts = useRef<Record<string, string>>({})
     const [conversation, setConversation] = useState<Conversation>(empty)
     const [input, setInput] = useState('')
     const [loading, setLoading] = useState(true)
-    const [sending, setSending] = useState(false)
-    const [transferring, setTransferring] = useState(false)
+    const [pendingMessages, setPendingMessages] = useState<Record<string, Submission>>({})
+    const [transfers, setTransfers] = useState<Record<string, boolean>>({})
+    const sending = Boolean(pendingMessages[selectedId])
+    const transferring = Boolean(transfers[selectedId])
+    const outgoing = pendingMessages[selectedId] || null
     const [error, setError] = useState('')
     const [refreshError, setRefreshError] = useState('')
-    const [outgoing, setOutgoing] = useState<Submission | null>(null)
     const [retry, setRetry] = useState<Submission | null>(null)
     const log = useRef<HTMLDivElement>(null)
     const mounted = useRef(true)
     const revision = useRef(0)
-    const sendingRef = useRef(false)
-    const lastRead = useRef<string | null>(null)
+    const inFlight = useRef(new Map<string, string>())
+    const failures = useRef<Record<string, { message: string; submission: Submission }>>({})
+
 
     const refresh = useCallback(async () => {
-        const version = revision.current
-        const response = await fetch('/api/support/chat', { cache: 'no-store' })
+        const version = ++revision.current
+        const response = await fetch(`/api/support/chat${selection.current ? `?conversationId=${encodeURIComponent(selection.current)}` : ''}`, { cache: 'no-store' })
         const payload = await response.json()
         if (!response.ok) throw new Error(payload.error || 'We could not load your conversation.')
-        if (mounted.current && version === revision.current) { setConversation(payload); setRefreshError('') }
+        if (mounted.current && version === revision.current) {
+            realtime.current = Array.isArray(payload.tickets)
+            if (!realtime.current) { selection.current = ''; setSelectedId('') }
+            if (restoredSelection.current) {
+                restoredSelection.current = false
+                if (!payload.id && selection.current) { selection.current = crypto.randomUUID(); setSelectedId(selection.current) }
+            }
+            // Keep the old single-chat read marker when upgrading to per-chat history.
+            try {
+                const key = 'hanasand-support-read:visitor'
+                const read = JSON.parse(localStorage.getItem(key) || '{}')
+                const readId = payload.id || 'legacy'
+                if (read[readId] === undefined) {
+                    const replies = payload.messages.filter((message: Message) => ['assistant', 'support'].includes(message.sender_kind))
+                    const index = replies.findIndex((message: Message) => message.id === localStorage.getItem('hanasand-support-last-read'))
+                    if (index >= 0) { read[readId] = index + 1; localStorage.setItem(key, JSON.stringify(read)) }
+                }
+            } catch { /* Read markers are optional when browser storage is unavailable. */ }
+            setConversation(payload); setRefreshError(''); setLoading(false)
+            if (!selection.current && payload.id) { selection.current = payload.id; setSelectedId(payload.id) }
+        }
     }, [])
 
     useEffect(() => {
         mounted.current = true
-        void refresh().catch(error => { if (mounted.current) setError(error.message) }).finally(() => { if (mounted.current) setLoading(false) })
-        const timer = window.setInterval(() => { if (!sendingRef.current) void refresh().catch(() => { if (mounted.current) setRefreshError('Could not refresh your conversation. Reconnecting…') }) }, active ? 4000 : 15000)
-        return () => { mounted.current = false; window.clearInterval(timer) }
-    }, [active, refresh])
-    useEffect(() => {
-        const updateUnread = () => {
-            const replies = conversation.messages.filter(message => message.sender_kind === 'assistant' || message.sender_kind === 'support')
-            try { lastRead.current = localStorage.getItem('hanasand-support-last-read') } catch { /* Keep the in-memory read marker. */ }
-            if (active && document.visibilityState === 'visible' && replies.length) {
-                lastRead.current = replies.at(-1)!.id
-                try { localStorage.setItem('hanasand-support-last-read', lastRead.current) } catch { /* Reading still works without storage. */ }
-            }
-            const readIndex = replies.findIndex(message => message.id === lastRead.current)
-            onUnreadChange?.(replies.length - readIndex - 1)
-        }
-        updateUnread()
-        window.addEventListener('storage', updateUnread)
-        document.addEventListener('visibilitychange', updateUnread)
-        return () => { window.removeEventListener('storage', updateUnread); document.removeEventListener('visibilitychange', updateUnread) }
-    }, [active, conversation.messages, onUnreadChange])
+        try { selection.current = localStorage.getItem('hanasand-support-selected') || ''; restoredSelection.current = Boolean(selection.current); setSelectedId(selection.current) } catch { /* Use the newest conversation. */ }
+        return () => { mounted.current = false }
+    }, [])
+    useEffect(() => { if (selectedId) try { localStorage.setItem('hanasand-support-selected', selectedId) } catch { /* Selection is still available in this tab. */ } }, [selectedId])
+    const connection = useSupportLive(async () => {
+        try { await refresh(); return realtime.current } catch (error) { if (mounted.current) { setRefreshError(error instanceof Error ? error.message : 'Reconnecting…'); setLoading(false) } }
+    }, true)
+    const legacy = !Array.isArray(conversation.tickets)
+    const tickets = useMemo(() => conversation.tickets || (conversation.messages.length ? [{ id: 'legacy', subject: 'Support', reply_count: conversation.messages.filter(message => ['assistant', 'support'].includes(message.sender_kind)).length }] : emptyTickets), [conversation])
+    const unread = useSupportUnread(tickets, legacy ? 'legacy' : selectedId, active, 'visitor')
+    useEffect(() => { onUnreadChange?.(Object.values(unread).reduce((sum, count) => sum + count, 0)) }, [unread, onUnreadChange])
+    async function selectChat(id: string) {
+        drafts.current[selection.current] = input
+        selection.current = id; setSelectedId(id)
+        try { localStorage.setItem('hanasand-support-selected', id) } catch { /* Selection still works in this tab. */ }
+        revision.current += 1
+        setInput(drafts.current[id] || ''); setError(failures.current[id]?.message || ''); setRetry(failures.current[id]?.submission || null)
+        setConversation(current => ({ ...empty, id, tickets: current.tickets }))
+        setLoading(true)
+        try { await refresh() } catch { setRefreshError('Could not load this chat. Reconnecting…') } finally { setLoading(false) }
+    }
     useEffect(() => { if (active && log.current) log.current.scrollTop = log.current.scrollHeight }, [active, conversation.messages.length, sending])
 
     async function submit(submission: Submission) {
+        const id = submission.conversationId || selection.current || (legacy ? '' : crypto.randomUUID())
+        submission = { ...submission, conversationId: id || undefined }
+        if (!selection.current && id) { selection.current = id; setSelectedId(id) }
         const handoff = submission.handoff === true
-        if (handoff ? transferring : sendingRef.current) return
-        if (handoff) setTransferring(true)
-        else { setSending(true); sendingRef.current = true; setOutgoing(submission) }
+        const key = `${id}:${handoff ? 'handoff' : 'message'}`
+        if (inFlight.current.has(key)) return
+        inFlight.current.set(key, submission.requestId)
+        if (handoff) setTransfers(current => ({ ...current, [id]: true }))
+        else setPendingMessages(current => ({ ...current, [id]: submission }))
         revision.current += 1
         setError('')
         try {
@@ -79,17 +117,25 @@ export default function PublicSupportChat({ active = true, onUnreadChange }: { a
             // Fetch current state after the write so a concurrent handoff cannot be overwritten by an older reply.
             revision.current += 1
             await refresh()
-            if (payload.accepted !== false && !handoff) setInput(current => current.trim() === submission.message ? '' : current)
-            setRetry(payload.error && !handoff ? submission : null)
-            setError(payload.error || '')
+            if (payload.accepted !== false && !handoff && (!submission.conversationId || selection.current === submission.conversationId)) setInput(current => current.trim() === submission.message ? '' : current)
+            if (payload.accepted !== false && drafts.current[id]?.trim() === submission.message) delete drafts.current[id]
+            if (payload.error && !handoff) failures.current[id] = { message: payload.error, submission }
+            else delete failures.current[id]
+            if (selection.current === id) { setRetry(payload.error && !handoff ? submission : null); setError(payload.error || '') }
+            if (handoff) {
+                inFlight.current.delete(`${id}:message`)
+                setPendingMessages(current => { const next = { ...current }; delete next[id]; return next })
+            }
         } catch (error) {
             if (mounted.current) {
-                setError(error instanceof Error ? error.message : 'We could not send your message. Please try again.')
-                setRetry(submission)
+                const message = error instanceof Error ? error.message : 'We could not send your message. Please try again.'
+                failures.current[id] = { message, submission }
+                if (selection.current === id) { setError(message); setRetry(submission) }
             }
         } finally {
-            if (handoff) setTransferring(false)
-            else { setSending(false); sendingRef.current = false; setOutgoing(null) }
+            if (inFlight.current.get(key) === submission.requestId) inFlight.current.delete(key)
+            if (handoff) setTransfers(current => { const next = { ...current }; delete next[id]; return next })
+            else setPendingMessages(current => { if (current[id]?.requestId !== submission.requestId) return current; const next = { ...current }; delete next[id]; return next })
         }
     }
     function send(event: FormEvent) {
@@ -99,6 +145,7 @@ export default function PublicSupportChat({ active = true, onUnreadChange }: { a
         void submit(retry?.message === message ? retry : { requestId: crypto.randomUUID(), message })
     }
     const human = conversation.channel === 'human'
+    const agentName = conversation.agent_name || conversation.messages.filter(message => message.sender_kind === 'support').at(-1)?.sender_name
     const busy = sending || conversation.pending
     const lastMessage = conversation.messages.at(-1)
     const unanswered = !human && !busy && lastMessage?.sender_kind === 'user' && lastMessage.request_id
@@ -107,7 +154,15 @@ export default function PublicSupportChat({ active = true, onUnreadChange }: { a
         ? [...conversation.messages, { id: outgoing.requestId, body: outgoing.message, sender_kind: 'user' as const, sender_name: 'You' }]
         : conversation.messages
     return (
-        <section aria-label='Support chat' className='grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto]'>
+        <section aria-label='Support chat' className='grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto]'>
+            {!legacy ? <div className='flex min-w-0 items-center gap-2 border-b border-ui-border px-4 py-2'>
+                <select aria-label='Conversation' value={selectedId} onChange={event => void selectChat(event.target.value)} className='min-w-0 flex-1 rounded-lg border border-ui-border bg-ui-panel px-2 py-1.5 text-xs text-ui-text'>
+                    {!tickets.some(ticket => ticket.id === selectedId) ? <option value={selectedId}>New chat</option> : null}
+                    {tickets.map(ticket => <option key={ticket.id} value={ticket.id}>{ticket.subject}{unread[ticket.id] ? ` (${unread[ticket.id]} unread)` : ''}</option>)}
+                </select>
+                {Object.values(unread).some(count => count > 0) ? <span role='status' aria-label='Unread replies in other chats' className='rounded-full bg-ui-primary px-2 py-0.5 text-xs text-ui-canvas'>{Object.values(unread).reduce((sum, count) => sum + count, 0)}</span> : null}
+                <button type='button' onClick={() => void selectChat(crypto.randomUUID())} className='shrink-0 rounded-lg px-2 py-1.5 text-xs font-medium text-ui-primary hover:bg-ui-raised disabled:opacity-50'>New chat</button>
+            </div> : <div />}
             <div ref={log} role='log' aria-label='Messages' className='min-h-0 overflow-y-auto overscroll-contain px-5 py-5'>
                 {!visibleMessages.length ? <div className='flex min-h-full flex-col justify-center pb-3'>
                     <div className='mb-5 grid h-11 w-11 place-items-center rounded-2xl bg-ui-primary/10 text-ui-primary'><Sparkles className='h-5 w-5' aria-hidden='true' /></div>
@@ -124,14 +179,14 @@ export default function PublicSupportChat({ active = true, onUnreadChange }: { a
             </div>
             <div className='min-w-0 border-t border-ui-border bg-ui-panel px-4 pb-3 pt-3'>
                 {error ? <div role='alert' className='mb-3 text-xs leading-5 text-ui-danger'>{error}{retry ? <button type='button' disabled={sending || transferring} className='ml-2 font-semibold underline disabled:opacity-50' onClick={() => void submit(retry)}>Retry</button> : null}</div> : null}
-                {!error && refreshError ? <p role='status' className='mb-2 text-xs text-ui-muted'>{refreshError}</p> : null}
+                {!error && (refreshError || connection === 'reconnecting') ? <p role='status' className='mb-2 text-xs text-ui-muted'>{refreshError || 'Reconnecting…'}</p> : null}
                 {!error && unanswered ? <button type='button' onClick={() => void submit(unanswered)} className='mb-2 text-xs font-medium text-ui-primary hover:underline'>Retry AI answer</button> : null}
                 <form onSubmit={send} className='flex min-w-0 items-end gap-2 rounded-2xl border border-ui-border bg-ui-canvas p-2 focus-within:border-ui-primary focus-within:ring-2 focus-within:ring-ui-primary/10'>
                     <textarea aria-label='Message' rows={2} maxLength={4000} value={input} onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (!loading && !busy) send(event) } }} placeholder={human ? 'Message the support team…' : 'Ask a question…'} className='min-h-12 min-w-0 flex-1 resize-none bg-transparent px-2 py-1 text-sm leading-6 text-ui-text outline-none placeholder:text-ui-muted' />
                     <button type='submit' disabled={loading || busy || !input.trim()} aria-label='Send message' className='grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-ui-primary text-ui-canvas transition hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary disabled:opacity-40'>{sending ? <LoaderCircle className='h-4 w-4 animate-spin' /> : <ArrowUp className='h-4 w-4' />}</button>
                 </form>
                 <div className='mt-3 flex min-h-7 items-center justify-center'>
-                    {human ? <p className='flex items-center gap-1.5 text-xs text-ui-muted'><UserRound className='h-3.5 w-3.5' />{conversation.status === 'closed' ? 'Conversation closed · Send a message to reopen' : 'Connected to the support queue'}</p> : <button type='button' disabled={loading || transferring} onClick={() => void submit({ requestId: crypto.randomUUID(), message: 'I\'d like to speak with a human.', handoff: true })} className='inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-ui-muted transition hover:bg-ui-raised hover:text-ui-text disabled:opacity-50'><UserRound className='h-3.5 w-3.5' />{transferring ? 'Connecting…' : 'Talk to a human'}</button>}
+                    {human ? <p className='flex items-center gap-1.5 text-xs text-ui-muted'><UserRound className='h-3.5 w-3.5' />{conversation.status === 'closed' ? 'Conversation closed · Send a message to reopen' : agentName ? `Speaking with ${agentName}` : 'Waiting for support.'}</p> : <button type='button' disabled={loading || transferring} onClick={() => void submit({ requestId: crypto.randomUUID(), message: 'I\'d like to speak with a human.', handoff: true })} className='inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-ui-muted transition hover:bg-ui-raised hover:text-ui-text disabled:opacity-50'><UserRound className='h-3.5 w-3.5' />{transferring ? 'Connecting…' : 'Talk to a human'}</button>}
                 </div>
             </div>
         </section>

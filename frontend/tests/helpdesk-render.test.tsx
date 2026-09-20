@@ -46,6 +46,8 @@ const render = async (params: Record<string, string> = {}) => {
 }
 
 const html = await render()
+assert.equal(new URL(requestUrl).pathname.endsWith('/system/events'), true)
+assert.equal(new URL(requestUrl).searchParams.get('format'), 'helpdesk')
 for (const text of ['Search audit events', 'impersonation.start', 'support.organization.invite', 'Example customer', 'Example organization', 'session-1']) {
     assert(html.includes(text), `Missing audit content: ${text}`)
 }
@@ -112,6 +114,16 @@ assert(notifications.includes('impersonation.start') && notifications.includes('
 assert(notifications.includes('>Notifications</h2>'))
 assert(!notifications.includes('In these results') && !notifications.includes('>Critical</div>'), 'The panel should only list notifications')
 
+response = () => Response.json({ events: [{ ...events[0], object_type: 'user', object_id: null, target_name: null, context: { targetId: 'deleted-admin', targetSource: 'Retained request log' } }] })
+const recoveredHtml = await render()
+assert(recoveredHtml.includes('deleted-admin') && recoveredHtml.includes('Retained request log'), 'Recovered user identity and its source must survive the server/client boundary')
+assert(recoveredHtml.includes('Acknowledge'))
+response = () => Response.json({ events: [{ ...events[0], severity: 'critical', acknowledged_at: '2026-09-20T01:00:00Z', acknowledged_by: 'operator', context: { targetName: 'Former administrator', targetId: 'deleted-admin' }, target_name: null, object_id: null }] })
+const acknowledgedHtml = await render()
+assert(acknowledgedHtml.includes('Former administrator'), 'Deleted account names must use the recorded snapshot')
+assert(acknowledgedHtml.includes('Notifications: 0 events to review') && acknowledgedHtml.includes('Mark unread'))
+assert(acknowledgedHtml.includes('impersonation.start'), 'Acknowledgment must retain the original audit entry')
+
 response = () => Response.json({ events: [] })
 assert((await render()).includes('No matching support events'))
 response = () => Response.json({ error: 'Forbidden' }, { status: 403 })
@@ -123,3 +135,9 @@ const before = fetchCount
 await assert.rejects(render(), /redirect:.*login/)
 assert.equal(fetchCount, before, 'Unauthenticated visits must not query audit events')
 console.log('Helpdesk renders current audit events, counts, focus filters, empty/error states and authentication correctly.')
+
+const { helpdeskEvent } = await import('../src/app/dashboard/helpdesk/audit')
+const projected = helpdeskEvent({ ...events[0], detail: { unusedReport: 'x'.repeat(1_000_000) }, context: { targetId: 'deleted-user', password: 'private', arbitrary: 'unused' } } as typeof events[0])
+assert(!('detail' in projected), 'Unused reports must never cross into the client payload')
+assert.deepEqual(projected.context, { targetId: 'deleted-user' })
+assert(JSON.stringify(projected).length < 1500)

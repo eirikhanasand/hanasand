@@ -2,7 +2,7 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import config from '@/config'
 import AuditTimeline from './auditTimeline'
-import { buildApiQuery, type AdminAuditEvent, type AuditSearchParams } from './audit'
+import { buildApiQuery, helpdeskEvent, type AdminAuditEvent, type AuditSearchParams } from './audit'
 
 function decodeAccessToken(value: string) {
     try {
@@ -27,7 +27,7 @@ export default async function HelpdeskPage({
     }
 
     const query = buildApiQuery(params)
-    const response = await fetch(`${config.url.api}/admin/audit-events${query ? `?${query}` : ''}`, {
+    const response = await fetch(`${config.url.api}/system/events${query ? `?${query}` : ''}`, {
         headers: {
             Authorization: `Bearer ${decodeAccessToken(token)}`,
             id,
@@ -42,5 +42,5 @@ export default async function HelpdeskPage({
             ? 'Audit API is unavailable.'
             : ''
 
-    return <AuditTimeline events={events.map(event => ({ ...event, user_agent: '', context: typeof event.context?.name === 'string' ? { name: event.context.name } : null }))} params={params} responseError={responseError} />
+    return <AuditTimeline events={events.map(helpdeskEvent)} params={params} responseError={responseError} />
 }

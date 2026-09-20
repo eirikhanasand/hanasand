@@ -18,7 +18,6 @@ export default function isPublicProductPath(path: string | null | undefined) {
         || pathname.startsWith('/browser/')
         || pathname === '/browser-sandbox'
         || pathname === '/onion-session'
-        || pathname === '/solutions'
         || pathname.startsWith('/solutions/')
         || pathname === '/contact'
         || pathname === '/developers'

@@ -103,3 +103,21 @@ test('timeline format retains validation and administrator authorization', async
     expect((await request({ format: 'timeline' })).statusCode).toBe(403)
     expect(queries).toHaveLength(0)
 })
+
+test('helpdesk loads one bounded batch with acknowledgment and identity data, without support reports or a total count', async () => {
+    eventRows = [{ id: 38316, created_at: '2026-09-13T00:00:00Z', event_type: 'admin.account.deleted', context: { targetId: 'deleted-user' }, acknowledged_at: '2026-09-20T00:00:00Z' }]
+    const result = await request({ format: 'helpdesk', limit: '200' })
+    expect(result.statusCode).toBe(200)
+    expect(result.body).toEqual({ events: eventRows })
+    expect(queries).toHaveLength(1)
+    expect(queries[0].sql).not.toContain('COUNT(*)')
+    expect(queries[0].sql).toContain('acknowledgement.acknowledged_at')
+    expect(queries[0].sql).toContain('jsonb_strip_nulls')
+    expect(queries[0].sql).not.toContain('e.user_agent')
+    expect(queries[0].values).toEqual([201, 0])
+    queries.length = 0
+    expect((await request({ format: 'helpdesk', hql: 'AuditEvents' })).statusCode).toBe(400)
+    administrator = false
+    expect((await request({ format: 'helpdesk' })).statusCode).toBe(403)
+    expect(queries).toHaveLength(0)
+})

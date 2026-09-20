@@ -560,9 +560,15 @@ export async function getDwmAlertGenerationReadiness(url: URL, options: ApiServe
   if (scope.error) return scope.error;
   const access = authorizeDwmWorkflowAccess({ options, scope, request, url, mode: "read" });
   if (access.error) return access.error;
-  const evidence = await queryDwmEvidence(options, scope.tenantId);
+  const watchlists: RuntimeDwmWatchlist[] = (options.store as any).listDwmWatchlists?.() ?? [];
+  const needsCaptures = watchlists.some((watchlist) => watchlist.tenantId === scope.tenantId
+    && watchlist.status === "active"
+    && (!watchlist.organizationId || watchlist.organizationId === scope.organizationId)
+    && watchlist.terms.some((term) => term.value.trim()));
+  // An empty scope has no evidence to match; avoid loading the entire capture archive.
+  const evidence = await queryDwmEvidence(options, scope.tenantId, needsCaptures ? undefined : []);
   const readiness = buildDwmAlertGenerationReadiness({
-    watchlists: (options.store as any).listDwmWatchlists?.() ?? [],
+    watchlists,
     tenantId: scope.tenantId,
     organizationId: scope.organizationId,
     visibilityPolicy: organizationAlertVisibilityPolicy(scope.organization),
