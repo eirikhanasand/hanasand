@@ -9,6 +9,7 @@ export interface ApiServerOptions {
   frontier: FocusedFrontier;
   config?: RuntimeConfig;
   objectStore?: unknown;
+  automaticReviewEnabled?: boolean;
   canaryLoop?: unknown;
   defaultCanaryLoop?: unknown;
   runExecutor?: (runId: string) => void;

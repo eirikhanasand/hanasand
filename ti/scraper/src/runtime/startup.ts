@@ -130,7 +130,8 @@ export async function startScraperRuntime() {
     crawlBudgetPolicies: { "public-canary": { taskLimit: Number(Bun.env.TI_CANARY_BUDGET_TASKS ?? "1000"), byteLimit: Number(Bun.env.TI_CANARY_BUDGET_BYTES ?? "512000000") } }
   });
   const objectStore = new FileObjectEvidenceStore({ rootDir: paths.evidenceObjectDir });
-  const serverOptions: ApiServerOptions = { port: config.port, store, frontier, config, objectStore, ready: false };
+  const reviewEnabled = automaticReviewEnabled();
+  const serverOptions: ApiServerOptions = { port: config.port, store, frontier, config, objectStore, ready: false, automaticReviewEnabled: reviewEnabled };
   const server = startApiServer(serverOptions);
   startupPhase("api_server_started", { port: server.port });
   const startupChecks = Promise.all([
@@ -245,7 +246,7 @@ export async function startScraperRuntime() {
     .then((result) => startupPhase("search_index_built", result))
     .catch((error) => logger.error("search index warm failed", { event: "search_index.warm_failed", error: error instanceof Error ? error.message : String(error) })), 0);
   startupPhase("runtime_workers_started");
-  const automaticReview = automaticReviewEnabled()
+  const automaticReview = reviewEnabled
     ? startAutomaticReviewWorker({ store, frontier, config } as any, {
       intervalMs: Number(Bun.env.HANASAND_AI_REVIEW_INTERVAL_MS ?? "60000"),
       limit: Number(Bun.env.HANASAND_AI_REVIEW_MAX_TASKS_PER_CYCLE ?? "10"),

@@ -2,6 +2,16 @@ import { describe, expect, test, mkdtempSync, rmSync, join, tmpdir, handleApiReq
 import type { AnalystClaimLedgerEntry, CanaryOperatorResponseForTest, CanaryReadinessResponseForTest, CanarySoakResponseForTest, RawCapture, SourceRecord } from "../apiTestHarness.ts";
 
 describe("api v1", () => {
+  test("resource snapshot reports the configured automatic review worker state", async () => {
+    for (const enabled of [false, true]) {
+      const response = await handleApiRequest(api("/v1/ops/resource-snapshot"), {
+        store: new InMemoryScraperStore(), frontier: new FocusedFrontier(),
+        config: loadRuntimeConfig({}), automaticReviewEnabled: enabled
+      });
+      expect(response.status).toBe(200);
+      expect(await body(response)).toMatchObject({ pressure: { automaticReview: { enabled } } });
+    }
+  });
   test("exposes safe ops resource snapshot with queue and configured pool state", async () => {
     const store = new InMemoryScraperStore();
     const frontier = new FocusedFrontier();

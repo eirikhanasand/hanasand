@@ -733,12 +733,14 @@ async function listTiScheduledJobs(): Promise<UnifiedScheduledJob[]> {
     ]
 }
 
-function tiAutomaticReviewJob(result: TiFetchResult, resourceUsage: ScheduledJobTelemetry): UnifiedScheduledJob {
+export function tiAutomaticReviewJob(result: TiFetchResult, resourceUsage: ScheduledJobTelemetry): UnifiedScheduledJob {
     const pressure = record(record(record(result.json).pressure).automaticReview)
     const counts = record(pressure.counts)
     const backlog = numberValue(pressure.backlog) ?? 0
     const deadLetters = numberValue(counts.dead_letter) ?? 0
-    const running = (numberValue(counts.running) ?? 0) > 0
+    const known = result.ok && typeof pressure.enabled === 'boolean'
+    const enabled = known && pressure.enabled === true
+    const running = enabled && (numberValue(counts.running) ?? 0) > 0
     return {
         id: 'ti-automatic-review',
         name: 'Automatic claim and incident review',
@@ -748,9 +750,9 @@ function tiAutomaticReviewJob(result: TiFetchResult, resourceUsage: ScheduledJob
         service: 'ti-scraper',
         schedule: 'Every minute',
         cadenceSeconds: 60,
-        enabled: result.ok,
+        enabled,
         running,
-        status: !result.ok ? 'blocked' : running ? 'running' : 'enabled',
+        status: !known ? 'blocked' : !enabled ? 'paused' : running ? 'running' : 'enabled',
         lastRunAt: null,
         lastSuccessAt: null,
         lastFinishedAt: null,
@@ -758,8 +760,8 @@ function tiAutomaticReviewJob(result: TiFetchResult, resourceUsage: ScheduledJob
         currentRunDurationMs: null,
         averageRuntimeMs: null,
         failureCount: deadLetters,
-        lastError: deadLetters ? `${deadLetters} automatic review task${deadLetters === 1 ? '' : 's'} in dead letter.` : result.error,
-        logExcerpt: result.ok ? `${pressure.total ?? 0} tasks; ${backlog} queued/running/retrying; ${counts.terminal ?? 0} terminal; ${deadLetters} dead letter.` : result.error,
+        lastError: deadLetters ? `${deadLetters} automatic review task${deadLetters === 1 ? '' : 's'} in dead letter.` : result.error || (!known ? 'Automatic review worker state is unavailable.' : null),
+        logExcerpt: result.ok ? `${pressure.total ?? 0} tasks; ${backlog} queued/running/retrying; ${counts.terminal ?? 0} terminal; ${deadLetters} dead letter.` : result.error || (!known ? 'Automatic review worker state is unavailable.' : null),
         controls: [],
         controlMode: 'observable_only',
         resourceUsage: { ...resourceUsage, queueDepth: backlog },

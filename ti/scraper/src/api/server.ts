@@ -487,7 +487,10 @@ function runtimeQueuePressure(options: ApiServerOptions) {
       queuedRuns: runs.filter((run: any) => run.status === "queued").length,
       runningRuns: runs.filter((run: any) => run.status === "running").length
     },
-    automaticReview: automaticReviewPressure((options.store as any).listAnalystMetadataReviewTasks?.() ?? []),
+    automaticReview: {
+      ...automaticReviewPressure((options.store as any).listAnalystMetadataReviewTasks?.() ?? []),
+      enabled: options.automaticReviewEnabled === true
+    },
     automaticEvaluation: {
       benchmarkCount: automaticBenchmarks.length,
       activeBenchmarkCount: automaticBenchmarks.filter((benchmark: any) => benchmark.status !== "complete").length,
