@@ -128,7 +128,9 @@ try {
         source: { country: 'US', latitude: 40.7, longitude: -74 }, device: { id: 'two' } }, 2)
     await native('network', { event_type: 'network', action: 'alert', signature: 'Fixture signature' }, 3)
     await native('vulnerability', { event_type: 'vulnerability', cve: 'CVE-2026-12345', asset: { id: 'fixture-host', version: '1' } }, 4)
-    for (const rule of MILL_RULES) assert.ok((await query('SELECT 1 FROM mill_findings WHERE rule_id = $1', [rule.id])).rowCount, `Persisted finding for ${rule.id}`)
+    // Pre-storage Analyze rules have their own threshold/retention integration
+    // check; a single stored fixture must not trigger their aggregate alert.
+    for (const rule of MILL_RULES.filter(rule => millDefaultDefinition(rule.id).stage !== 'analyze')) assert.ok((await query('SELECT 1 FROM mill_findings WHERE rule_id = $1', [rule.id])).rowCount, `Persisted finding for ${rule.id}`)
     for (const text of ['ProcessLogs | where Executable endswith "whoami"', 'SigninLogs | where Severity == "high"',
         'Logs | where RuleId == "process.recon.whoami.v1"', 'Logs | where Message contains "whoami"']) {
         const compiled = compileLogQuery(text)
@@ -243,7 +245,7 @@ try {
         const row = (await query('SELECT normalized, processing_status FROM mill_events WHERE log_key=$1', [`service:${id}`])).rows[0]
         assert.equal(row?.processing_status, 'processed')
         assert.equal(row.normalized.severity, 'high')
-        assert.equal(row.normalized.rules_checked, 105)
+        assert.equal(row.normalized.rules_checked, rules.filter(rule => rule.enabled !== false).length)
     }
     assert.equal((await readPendingProcessLogs()).count, 2000, 'Later arrivals remain queued without displacing older admitted work')
     await recoverProcessLogs(logs => processLogBatch(logs, 'fixture', rules))

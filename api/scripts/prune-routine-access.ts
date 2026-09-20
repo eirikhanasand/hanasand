@@ -18,6 +18,8 @@ try {
             await run(`INSERT INTO log_processing_cursors(name,last_id,history_end_id) SELECT $1,0,COALESCE(MAX(id),0) FROM ${source} ON CONFLICT DO NOTHING`, [cursorName])
             let finished = false, total = 0
             while (!finished) {
+                const replicas = await run(`SELECT COALESCE(MAX(pg_wal_lsn_diff(pg_current_wal_lsn(),replay_lsn)),0)::text AS lag FROM pg_stat_replication`)
+                if (Number(replicas.rows[0].lag) > 32 * 1024 ** 3) throw new Error('Historical cleanup paused: a database replica is over 32 GiB behind. Retry after it catches up; the cleanup cursor is saved.')
                 await withTransaction(async query => {
                     await query('SET LOCAL lock_timeout = \'2s\'')
                     await query('SET LOCAL statement_timeout = \'20s\'')
