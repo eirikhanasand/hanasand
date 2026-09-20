@@ -16,7 +16,7 @@ function MessageBody({ text }: { text: string }) {
     })}</p>
 }
 
-export default function PublicSupportChat() {
+export default function PublicSupportChat({ active = true, onUnreadChange }: { active?: boolean; onUnreadChange?: (count: number) => void }) {
     const [conversation, setConversation] = useState<Conversation>(empty)
     const [input, setInput] = useState('')
     const [loading, setLoading] = useState(true)
@@ -30,6 +30,7 @@ export default function PublicSupportChat() {
     const mounted = useRef(true)
     const revision = useRef(0)
     const sendingRef = useRef(false)
+    const lastRead = useRef<string | null>(null)
 
     const refresh = useCallback(async () => {
         const version = revision.current
@@ -42,10 +43,26 @@ export default function PublicSupportChat() {
     useEffect(() => {
         mounted.current = true
         void refresh().catch(error => { if (mounted.current) setError(error.message) }).finally(() => { if (mounted.current) setLoading(false) })
-        const timer = window.setInterval(() => { if (!sendingRef.current) void refresh().catch(() => { if (mounted.current) setRefreshError('Could not refresh your conversation. Reconnecting…') }) }, 4000)
+        const timer = window.setInterval(() => { if (!sendingRef.current) void refresh().catch(() => { if (mounted.current) setRefreshError('Could not refresh your conversation. Reconnecting…') }) }, active ? 4000 : 15000)
         return () => { mounted.current = false; window.clearInterval(timer) }
-    }, [refresh])
-    useEffect(() => { if (log.current) log.current.scrollTop = log.current.scrollHeight }, [conversation.messages.length, sending])
+    }, [active, refresh])
+    useEffect(() => {
+        const updateUnread = () => {
+            const replies = conversation.messages.filter(message => message.sender_kind === 'assistant' || message.sender_kind === 'support')
+            try { lastRead.current = localStorage.getItem('hanasand-support-last-read') } catch { /* Keep the in-memory read marker. */ }
+            if (active && document.visibilityState === 'visible' && replies.length) {
+                lastRead.current = replies.at(-1)!.id
+                try { localStorage.setItem('hanasand-support-last-read', lastRead.current) } catch { /* Reading still works without storage. */ }
+            }
+            const readIndex = replies.findIndex(message => message.id === lastRead.current)
+            onUnreadChange?.(replies.length - readIndex - 1)
+        }
+        updateUnread()
+        window.addEventListener('storage', updateUnread)
+        document.addEventListener('visibilitychange', updateUnread)
+        return () => { window.removeEventListener('storage', updateUnread); document.removeEventListener('visibilitychange', updateUnread) }
+    }, [active, conversation.messages, onUnreadChange])
+    useEffect(() => { if (active && log.current) log.current.scrollTop = log.current.scrollHeight }, [active, conversation.messages.length, sending])
 
     async function submit(submission: Submission) {
         const handoff = submission.handoff === true
