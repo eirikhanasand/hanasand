@@ -22,6 +22,16 @@ case "${1:-}" in
   esac;;
  *) exit 2;;
 esac
+if test "$kind" = api; then
+ # Inspect the selected image, not a newer checkout; legacy rollback stays safe.
+ search_index=$(docker run --rm --network none --entrypoint bun "$image" -e 'import { readFileSync } from "node:fs"; process.stdout.write(readFileSync("/app/src/utils/logs/searchText.ts", "utf8").includes("logPhraseSearchExpression") ? "phrase" : "legacy")')
+ if test "$search_index" = phrase; then
+  valid=$(docker exec hanasand_database psql -X -At -v ON_ERROR_STOP=1 -U hanasand -d hanasand -c "SELECT COALESCE((SELECT indisvalid AND indisready FROM pg_index WHERE indexrelid = to_regclass('idx_mill_logs_phrase_trgm')), false)")
+  test "$valid" = t || { echo 'The search index is not ready. The serving API has been left unchanged.' >&2; exit 1; }
+ else
+  test "$search_index" = legacy || { echo 'Unable to verify the API search index requirement.' >&2; exit 1; }
+ fi
+fi
 if test "$kind" = frontend; then sh scripts/resilience/deploy-code-indexer.sh; fi
 old_ports=$(python3 - "$root/config.json" "$kind" <<'JSON'
 import json,sys
