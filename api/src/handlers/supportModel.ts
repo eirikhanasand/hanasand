@@ -1,5 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import { hasSupportServiceKey } from '#utils/support/transport.ts'
+import { hasSupportServiceKey } from '#utils/support/config.ts'
 import { answerSupport } from '#utils/support/assistant.ts'
 
 export async function supportModel(req: FastifyRequest<{ Body: { history?: unknown } }>, res: FastifyReply) {

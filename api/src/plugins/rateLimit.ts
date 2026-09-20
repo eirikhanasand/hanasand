@@ -1,4 +1,4 @@
-import { shouldProxySupport, hasSupportServiceKey } from '#utils/support/transport.ts'
+import { shouldProxySupport, hasSupportServiceKey } from '#utils/support/config.ts'
 import { hasLogIngestToken } from '#utils/auth/logIngestToken.ts'
 import { recoveryReadOnly } from '#utils/resilience.ts'
 import fp from 'fastify-plugin'

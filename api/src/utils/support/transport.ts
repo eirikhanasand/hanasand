@@ -1,4 +1,3 @@
-import { timingSafeEqual } from 'node:crypto'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import WebSocket from 'ws'
 import { createRequire } from 'node:module'
@@ -7,21 +6,10 @@ import { dirname, join } from 'node:path'
 // Use the installed client: Bun's built-in ws shim mishandles some proxied upgrades.
 const require = createRequire(import.meta.url)
 const UpstreamSocket: typeof WebSocket = require(join(dirname(require.resolve('ws/package.json')), 'lib/websocket.js'))
+import { supportServiceConfigured, shouldProxySupport } from './config.ts'
+export { supportServiceConfigured, shouldProxySupport, supportRequestPath, hasSupportServiceKey } from './config.ts'
 import { recoveryRequestAllowed } from '../resilience.ts'
 
-export function supportServiceConfigured() { return Boolean(process.env.SUPPORT_SERVICE_BASE && process.env.SUPPORT_SERVICE_KEY) }
-export function shouldProxySupport(path: string) {
-    return supportServiceConfigured() && process.env.SUPPORT_INTERNAL_SERVICE !== '1' && supportRequestPath(path.split('?')[0])
-}
-export function hasSupportServiceKey(req: FastifyRequest) {
-    const expected = process.env.SUPPORT_SERVICE_KEY
-    const received = req.headers['x-support-service-key']
-    return Boolean(expected && typeof received === 'string' && expected.length >= 32 && Buffer.byteLength(received) === Buffer.byteLength(expected)
-        && timingSafeEqual(Buffer.from(received), Buffer.from(expected)))
-}
-export function supportRequestPath(path: string) {
-    return /^\/api\/support\/(chat|tickets(?:\/[^/]+\/(?:messages|status|feedback))?)$/.test(path)
-}
 export async function forwardSupportRequest(req: FastifyRequest, res: FastifyReply) {
     if (!shouldProxySupport(req.url)) return
     const headers = new Headers({ 'content-type': 'application/json', 'x-support-service-key': process.env.SUPPORT_SERVICE_KEY!, 'x-support-client-ip': req.ip })
