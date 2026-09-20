@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   chmodSync,
+  existsSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
@@ -181,6 +182,10 @@ case " $* " in
     [ ! -e "$FAKE_FAIL_MARKER" ] || exit 41
     printf '%s\\n' '{"schemaVersion":"hanasand.ti_restore_application_read.v2"}'
     ;;
+  *"exec hanasand-ti-restore-20260920042119-1348741 psql "*) printf '%s\\n' ti_restore ;;
+  *"container inspect hanasand-ti-restore-20260920042119-1348741 --format "*) printf '%s\\n' POSTGRES_PASSWORD=fixture ;;
+  *"rm -f hanasand-ti-restore-20260920042119-1348741"*) : > "$FAKE_REUSE_REMOVED" ;;
+  *"network inspect hanasand-ti-restore-20260920042119-1348741-network"*|*"volume inspect hanasand-ti-restore-20260920042119-1348741-evidence"*) [ ! -e "$FAKE_REUSE_REMOVED" ] ;;
   *" container inspect "*|*" network inspect "*|*" volume inspect "*) exit 1 ;;
   *) exit 0 ;;
 esac
@@ -201,6 +206,15 @@ exec /usr/bin/shasum -a 256 "$@"
 }
 
 describe("backup and restore scripts", () => {
+  test("rejects reusing a production container", () => {
+    const result = Bun.spawnSync({
+      cmd: ["sh", backupScript, "drill", "/tmp/unused-restore-target"],
+      stderr: "inherit",
+      env: { ...process.env, TI_RESTORE_EXISTING_CONTAINER: "hanasand_database" },
+    });
+    expect(result.exitCode).toBe(2);
+  });
+
   test.each(["SIGINT", "SIGTERM"] as const)("PostgreSQL helper cleans up and exits nonzero on %s", async (signal) => {
     const root = mkdtempSync(join(tmpdir(), "ti-postgres-signal-"));
     const bin = join(root, "bin");
@@ -272,7 +286,7 @@ describe("backup and restore scripts", () => {
     }
   });
 
-  test("a concurrent tag change cannot change drill execution or receipt provenance", () => {
+  test.each([false, true])("pins verifier provenance and reconciles a preserved drill=%s", (reuse) => {
     const root = mkdtempSync(join(tmpdir(), "ti-restore-retag-"));
     try {
       const { archive } = makeArchive(root);
@@ -291,6 +305,8 @@ describe("backup and restore scripts", () => {
         FAKE_RETAG_MARKER: retagMarker,
         FAKE_POSTGRES_RETAG_MARKER: postgresRetagMarker,
         TI_RESTORE_IO_DEVICE: "/dev/test-storage",
+        TI_RESTORE_EXISTING_CONTAINER: reuse ? "hanasand-ti-restore-20260920042119-1348741" : "",
+        FAKE_REUSE_REMOVED: join(root, "reused-target-removed"),
       };
 
       const drill = Bun.spawnSync({ cmd: ["sh", backupScript, "drill", archive], env });
@@ -309,9 +325,16 @@ describe("backup and restore scripts", () => {
       );
       expect(scraperRuns.length).toBeGreaterThan(0);
       expect(scraperRuns.every((line) => line.includes("sha256:fake-scraper-image"))).toBe(true);
-      expect(dockerRuns.some((line) => line.includes("--volume /var/lib/postgresql/data"))).toBe(true);
-      expect(dockerRuns.some((line) => line.includes("postgres -c fsync=off -c full_page_writes=off"))).toBe(true);
-      expect(dockerRuns.some((line) => line.includes("--device-read-bps /dev/test-storage:20mb --device-write-bps /dev/test-storage:10mb"))).toBe(true);
+      if (!reuse) {
+        expect(dockerRuns.some((line) => line.includes("--volume /var/lib/postgresql/data"))).toBe(true);
+        expect(dockerRuns.some((line) => line.includes("postgres -c fsync=off -c full_page_writes=off"))).toBe(true);
+        expect(dockerRuns.some((line) => line.includes("--device-read-bps /dev/test-storage:20mb --device-write-bps /dev/test-storage:10mb"))).toBe(true);
+      } else {
+        expect(dockerRuns.some(line => line.includes("--detach"))).toBe(false);
+        expect(dockerRuns.some(line => line.includes("--exit-on-error"))).toBe(false);
+        expect(dockerRuns.some(line => line.includes("sh -s -- inventory"))).toBe(true);
+        expect(existsSync(env.FAKE_REUSE_REMOVED)).toBe(true);
+      }
       const postgresRuns = dockerRuns.filter((line) => line.includes("pg_restore") || line.includes("POSTGRES_USER"));
       expect(postgresRuns.length).toBeGreaterThan(0);
       expect(postgresRuns.every((line) => line.includes("sha256:fake-postgres-image") || line.startsWith("exec "))).toBe(true);

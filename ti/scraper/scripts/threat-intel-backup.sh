@@ -407,12 +407,23 @@ case "$action" in
     verify
     ;;
   drill)
-    drill_container="hanasand-ti-restore-$(date -u +%Y%m%d%H%M%S)-$$"
+    drill_container=${TI_RESTORE_EXISTING_CONTAINER:-hanasand-ti-restore-$(date -u +%Y%m%d%H%M%S)-$$}
+    printf '%s\n' "$drill_container" | grep -Eq '^hanasand-ti-restore-[0-9]{14}-[0-9]+$' || {
+      echo "restore target must be an isolated drill container" >&2; exit 2;
+    }
     drill_network="$drill_container-network"
     drill_evidence="$drill_container-evidence"
     drill_user=ti_restore
     drill_database=ti_restore
     drill_password="ti_restore_$$_$(date -u +%s)"
+    if [ -n "${TI_RESTORE_EXISTING_CONTAINER:-}" ]; then
+      # Recheck a preserved drill after upgrading its verifier, never a live database.
+      [ "$(docker exec "$drill_container" psql -U "$drill_user" -d "$drill_database" -Atc 'SELECT current_database()')" = "$drill_database" ] || exit 2
+      docker network inspect "$drill_network" >/dev/null
+      docker volume inspect "$drill_evidence" >/dev/null
+      drill_password=$(docker container inspect "$drill_container" --format '{{range .Config.Env}}{{println .}}{{end}}' | sed -n 's/^POSTGRES_PASSWORD=//p')
+      [ -n "$drill_password" ] || { echo "isolated restore credentials are missing" >&2; exit 2; }
+    fi
     # Anonymous volumes are removed with the disposable container, and avoid a
     # fixed memory-disk ceiling as the production database grows.
     if [ -n "${TI_RESTORE_TMPFS_SIZE:-}" ]; then
@@ -481,7 +492,7 @@ case "$action" in
     trap 'exit 130' INT
     trap 'exit 143' TERM
 
-    verifier_commit=$(git -C "$repo_root" rev-parse HEAD)
+    verifier_commit=${TI_RESTORE_VERIFIER_COMMIT:-$(git -C "$repo_root" rev-parse HEAD)}
     verifier_image=$(resolve_image "$verifier_image_ref")
     postgres_image=$(resolve_image "$postgres_image_ref")
     receipt_phase=verify
@@ -489,35 +500,37 @@ case "$action" in
     receipt_stage=$(mktemp -d "$archive_parent/.hanasand-ti-restore-receipt.XXXXXX")
 
     receipt_phase=database_restore
-    docker network create "$drill_network" >/dev/null
-    docker volume create "$drill_evidence" >/dev/null
-    # This target is discarded after verification; avoid durability writes that
-    # compete with production storage. A failed run never publishes a receipt.
-    docker run \
-      --detach \
-      --rm \
-      --name "$drill_container" \
-      --network "$drill_network" \
-      --shm-size 256m \
-      "$@" \
-      -e POSTGRES_USER="$drill_user" \
-      -e POSTGRES_PASSWORD="$drill_password" \
-      -e POSTGRES_DB="$drill_database" \
-      "$postgres_image" postgres -c fsync=off -c full_page_writes=off >/dev/null
+    if [ -z "${TI_RESTORE_EXISTING_CONTAINER:-}" ]; then
+      docker network create "$drill_network" >/dev/null
+      docker volume create "$drill_evidence" >/dev/null
+      # This target is discarded after verification; avoid durability writes that
+      # compete with production storage. A failed run never publishes a receipt.
+      docker run \
+        --detach \
+        --rm \
+        --name "$drill_container" \
+        --network "$drill_network" \
+        --shm-size 256m \
+        "$@" \
+        -e POSTGRES_USER="$drill_user" \
+        -e POSTGRES_PASSWORD="$drill_password" \
+        -e POSTGRES_DB="$drill_database" \
+        "$postgres_image" postgres -c fsync=off -c full_page_writes=off >/dev/null
 
-    attempts=0
-    until docker exec "$drill_container" pg_isready -U "$drill_user" -d "$drill_database" >/dev/null 2>&1; do
-      attempts=$((attempts + 1))
-      [ "$attempts" -lt 60 ] || { echo "isolated PostgreSQL restore target did not become ready" >&2; exit 1; }
-      sleep 1
-    done
+      attempts=0
+      until docker exec "$drill_container" pg_isready -U "$drill_user" -d "$drill_database" >/dev/null 2>&1; do
+        attempts=$((attempts + 1))
+        [ "$attempts" -lt 60 ] || { echo "isolated PostgreSQL restore target did not become ready" >&2; exit 1; }
+        sleep 1
+      done
 
-    docker exec -i "$drill_container" pg_restore \
-      -U "$drill_user" \
-      -d "$drill_database" \
-      --no-owner \
-      --no-privileges \
-      --exit-on-error < "$dump"
+      docker exec -i "$drill_container" pg_restore \
+        -U "$drill_user" \
+        -d "$drill_database" \
+        --no-owner \
+        --no-privileges \
+        --exit-on-error < "$dump"
+    fi
 
     receipt_phase=database_reconcile
     restored_inventory="$receipt_stage/RESTORE-INVENTORY.tsv"
