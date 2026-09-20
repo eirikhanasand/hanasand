@@ -24,6 +24,9 @@ const pool = new Pool({
     password: DB_PASSWORD,
     port: Number(DB_PORT) || 5432,
     max: Number(DB_MAX_CONN) || 20,
+    // Keep one API connection between ten-second polls; burst connections still
+    // expire normally and authentication/worker pools retain their own policy.
+    min: process.env.API_HTTP_ONLY === '1' && process.env.AUTH_SERVICE_ONLY !== '1' ? 1 : 0,
     // Scheduled jobs run every minute. Retain their bounded pool between runs
     // instead of paying for a burst of new database authentications each minute.
     idleTimeoutMillis: Number(DB_IDLE_TIMEOUT_MS) || (
