@@ -417,6 +417,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     const runRemainingSeconds = runTiming ? Math.max(0, Math.ceil((new Date(runTiming.expiresAt).getTime() - clockNow) / 1000)) : 0
     const paidBrowserPlan = Boolean(quota && quota.plan !== 'anonymous' && quota.plan !== 'free')
     const runIsActive = sessionState === 'queued' || sessionState === 'connecting' || sessionState === 'live'
+    const loadingBrowser = runIsActive && !runBlocker && !activeImage && !latestPageImage && !streamHasFrame
     const fallbackInteractive = runIsActive && !streamUrl && !activeTool && Boolean(activeViewportImage)
     const waitingForFrame = runIsActive && !activeViewportImage && !streamUrl
     const waitingSeconds = runStartedAt && runIsActive && waitingForFrame ? Math.floor((clockNow - runStartedAt) / 1000) : 0
@@ -621,6 +622,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
         setRunBlocker('')
         setActiveImage(null)
         setStreamUrl('')
+        setStreamHasFrame(false)
         setStreamStats({})
         setRunTiming(null)
         setRunStartedAt(Date.now())
@@ -1160,8 +1162,13 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     }
 
     return (
-        <main className='min-h-[calc(100vh-4.5rem)] overflow-x-hidden bg-ui-canvas text-ui-text'>
-            <section className='grid min-w-0 min-h-[calc(100vh-4.5rem)] grid-cols-1 grid-rows-[auto_minmax(0,1fr)]'>
+        <main className='relative min-h-[calc(100vh-4.5rem)] overflow-x-hidden bg-ui-canvas text-ui-text'>
+            {loadingBrowser ? <div className='grid min-h-[50vh] place-content-center justify-items-center gap-4' data-browser-loading>
+                <p role='status' className='text-lg font-semibold'>Loading…</p>
+                <button type='button' onClick={stopRun} className='text-sm text-ui-muted underline hover:text-ui-text'>Cancel</button>
+            </div> : null}
+            {/* Keep the stream mounted and sized so it can deliver its first frame. */}
+            <section data-browser-workspace inert={loadingBrowser} aria-hidden={loadingBrowser || undefined} className={`grid min-w-0 min-h-[calc(100vh-4.5rem)] grid-cols-1 grid-rows-[auto_minmax(0,1fr)] ${loadingBrowser ? 'pointer-events-none absolute inset-x-0 top-0 opacity-0' : ''}`}>
                 <header className='sticky top-0 z-40 border-b border-ui-border bg-ui-panel px-4 py-3'>
                     <div className='mx-auto flex max-w-[96rem] flex-wrap items-start justify-between gap-3'>
                         <div className='min-w-0 flex-1 basis-72'>
