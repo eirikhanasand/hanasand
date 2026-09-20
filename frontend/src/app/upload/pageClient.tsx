@@ -73,10 +73,9 @@ export default function UploadPageClient() {
                     <p className='text-sm font-semibold uppercase text-ui-primary'>Content</p>
                     <h1 className='text-3xl font-semibold tracking-normal md:text-4xl'>Upload files</h1>
                     <p className='max-w-2xl text-sm leading-6 text-ui-muted' data-upload-safety-boundary='true'>
-                        Upload public images and videos to your library. For public media only. Don’t upload private, confidential, or sensitive files.
+                        Upload images and video. Do not upload private or confidential content.
                     </p>
                 </div>
-                <Link href='/gallery' className='text-sm font-semibold text-ui-primary'>Open library</Link>
                 <Upload
                     url={url}
                     setUrl={setUrl}
