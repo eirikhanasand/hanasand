@@ -70,7 +70,7 @@ export default function WorkspaceProvider({ initial, enabled: authenticated, chi
     }, [pendingWorkspace, organizationId])
     useEffect(() => {
         if (!notice?.complete) return
-        const timer = setTimeout(() => setNotice(null), 4000)
+        const timer = setTimeout(() => setNotice(null), 900)
         return () => clearTimeout(timer)
     }, [notice])
     useEffect(() => {
