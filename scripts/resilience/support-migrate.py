@@ -53,7 +53,7 @@ def restore():
         raise RuntimeError('Invalid support snapshot')
     # COPY a single JSON document: customer text cannot become SQL.
     buffer = io.StringIO()
-    csv.writer(buffer).writerow([json.dumps(data)])
+    csv.writer(buffer, lineterminator='\n').writerow([json.dumps(data)])
     sql = "BEGIN; SET LOCAL standard_conforming_strings=on; CREATE TEMP TABLE support_import(document JSON);\nCOPY support_import FROM STDIN WITH (FORMAT csv);\n"
     sql += buffer.getvalue() + "\\.\n"
     sql += "DO $$ BEGIN IF EXISTS(SELECT 1 FROM support_tickets) OR EXISTS(SELECT 1 FROM support_messages) THEN RAISE EXCEPTION 'Support destination must be empty'; END IF; END $$;\n"
