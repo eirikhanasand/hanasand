@@ -75,10 +75,6 @@ export default function PwnedPageClient() {
                 ) : (
                     <form onSubmit={handleSubmit} className='grid gap-3'>
                         <ErrorNotice compact message={error} />
-                        <div className='grid gap-1 text-xs leading-5 text-ui-muted'>
-                            <p>Generate locally (macOS/Linux):</p>
-                            <code className='overflow-x-auto whitespace-nowrap text-ui-text'>{'printf %s \'HelloWorld\' | shasum'}</code>
-                        </div>
                         <label className='grid gap-2'>
                             <span className='text-xs font-semibold uppercase text-ui-primary'>SHA-1 hash</span>
                             <input
@@ -117,11 +113,7 @@ export default function PwnedPageClient() {
                             Check another SHA-1 hash
                         </button>
                     </div>
-                ) : (
-                    <p className='text-xs leading-5 text-ui-muted'>
-                        Exact matches only. The full hash stays in the browser; the API receives only the prefix needed for the range query.
-                    </p>
-                )}
+                ) : null}
             </div>
         </div>
     )
