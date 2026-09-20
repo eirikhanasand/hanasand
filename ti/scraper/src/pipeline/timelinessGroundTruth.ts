@@ -50,6 +50,7 @@ export type TimelinessRecordView = {
   sourceFamily?: string;
   title?: string;
   status: TimelinessQueueStatus;
+  reportRecovery?: JsonObject;
   missingStages: string[];
   stages: Record<string, string | undefined>;
   provenance: Record<string, JsonObject | undefined>;
@@ -208,7 +209,7 @@ export function buildTimelinessWorkbench(records: JsonObject[], context: Timelin
   };
 }
 
-function deriveTimeliness(
+export function deriveTimeliness(
   input: JsonObject,
   generatedAt: string,
   provenance = stageProvenance(input),
@@ -253,6 +254,7 @@ function toView(
     tenantId: string(record.tenantId),
     ...labels,
     status: statusFor(stages, timestampAnomalies),
+    reportRecovery: object(record.reportRecovery),
     missingStages,
     stages,
     provenance: stageProvenance(record, provenance),

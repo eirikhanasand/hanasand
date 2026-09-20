@@ -43,7 +43,7 @@ async function forward(request: NextRequest, path: string, body?: string | NextR
             cache: 'no-store',
             signal: AbortSignal.timeout(12_000),
         })
-        return new NextResponse(response.body, { status: response.status, headers: { 'content-type': response.headers.get('content-type') || 'application/json', 'cache-control': 'no-store' } })
+        return new NextResponse(response.body, { status: response.status, headers: { 'content-type': response.headers.get('content-type') || 'application/json', 'cache-control': 'no-store', 'server-timing': response.headers.get('server-timing') || '', 'x-delivery-snapshot-at': response.headers.get('x-delivery-snapshot-at') || '' } })
     } catch {
         return failure(503, 'timeliness_unavailable', 'The timeliness service did not respond.')
     }

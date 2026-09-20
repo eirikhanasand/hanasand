@@ -1,3 +1,4 @@
+import { startDeliveryReportRecovery } from "../ops/deliveryReportRecovery.ts";
 import { startActorEnrichmentWorker } from '../ops/actorEnrichmentWorker.ts';
 import { startApiServer } from "../api/server.ts";
 import { loadRuntimeConfig } from "../config/runtimeConfig.ts";
@@ -88,10 +89,13 @@ export function createScraperRuntimeStop(options: {
   evaluation: Stoppable;
   automaticReview: Stoppable;
   actorEnrichment?: Stoppable;
+  deliveryRecovery?: Stoppable;
+  deliveryRefresh?: ReturnType<typeof setInterval>;
   store: { close: () => Promise<unknown> };
 }) {
   let stopPromise: Promise<void> | undefined;
   return () => stopPromise ??= (async () => {
+    clearInterval(options.deliveryRefresh);
     options.scheduledRuns.beginStopping();
     await options.server.stop();
     await Promise.all([
@@ -101,6 +105,7 @@ export function createScraperRuntimeStop(options: {
       options.evaluation.stop(),
       options.automaticReview.stop(),
       options.actorEnrichment?.stop(),
+      options.deliveryRecovery?.stop(),
       options.scheduledRuns.drain()
     ]);
     await options.store.close();
@@ -225,6 +230,10 @@ export async function startScraperRuntime() {
     onCycle: (result) => logger.info("automatic evaluation cycle", { event: "automatic_evaluation.cycle", ...result }),
     onError: (error: unknown) => logger.warn("automatic evaluation cycle failed", { event: "automatic_evaluation.error", error: error instanceof Error ? error.message : String(error) })
   });
+  store.enableDeliverySnapshotWorker();
+  await store.queryDeliverySnapshot(undefined, true);
+  const deliveryRefresh = setInterval(() => void store.refreshDeliverySnapshots().catch(error => logger.warn("Delivery snapshot refresh failed", { error: error.message })), 5000);
+  const deliveryRecovery = startDeliveryReportRecovery({ store });
   Object.assign(serverOptions, { ready: true, canaryLoop: canary, defaultCanaryLoop: defaultCanary, restrictedMetadataLoop: restrictedMetadata, evaluationLoop: evaluation, sourceBootstrap, runExecutor: executeRun });
   // ponytail: warm the common global inventory page once; later reads are served
   // from the bounded five-second backend cache instead of repeating cold joins.
@@ -248,5 +257,5 @@ export async function startScraperRuntime() {
   const actorEnrichment = startActorEnrichmentWorker({ store, frontier, runExecutor: executeRun });
   Object.assign(serverOptions, { actorEnrichmentWorker: actorEnrichment });
   logger.info("ti-scraper started", { event: "service.started", port: server.port, apiVersion: config.apiVersion, memoryTargetMb: config.limits.maxMemoryMbTarget, memoryCeilingMb: config.limits.maxMemoryMbCeiling, storageBackend: "postgresql", storageSchema: "threat_intel", legacyImport, retentionAssignments, retentionMutations: retention.reduce((count, result) => count + result.deletionAudit.length, 0), publicCanaryEnabled: canaryEnabled, defaultCanaryEnabled, collectionConcurrency, publicCanaryAutoActivate: Bun.env.TI_CANARY_AUTO_ACTIVATE === "true", automaticEvaluationEnabled: automaticEvaluationEnabled(), recoveredRuns, sourceBootstrap, ...paths });
-  return { stop: createScraperRuntimeStop({ scheduledRuns, server, canary, defaultCanary, restrictedMetadata, evaluation, automaticReview, actorEnrichment, store }) };
+  return { stop: createScraperRuntimeStop({ scheduledRuns, server, canary, defaultCanary, restrictedMetadata, evaluation, automaticReview, actorEnrichment, deliveryRecovery, deliveryRefresh, store }) };
 }

@@ -16,6 +16,7 @@ type Item = {
     sourceName?: string
     sourceFamily?: string
     title?: string
+    reportRecovery?: { status: string, attempts?: number, reason?: string, nextAttemptAt?: string }
     status: QueueStatus
     missingStages: string[]
     stages: Record<string, string | undefined>
@@ -158,17 +159,17 @@ export default function TimelinessClient() {
                 </div>
                 {error ? <div role='alert' className='flex items-start gap-2 border-b border-ui-danger/30 bg-ui-danger/10 px-3 py-2 text-xs text-ui-danger'><AlertTriangle className='mt-0.5 h-4 w-4 shrink-0' />{error}</div> : null}
                 <div className='grid grid-cols-2 divide-x divide-y divide-ui-border sm:grid-cols-4 lg:grid-cols-6'>
-                    <Summary label='Retained' value={coverage?.recordCount ?? 0} />
-                    <Summary label='Needs report' value={coverage?.unresolvedReferenceCount ?? 0} attention />
-                    <Summary label='Anomalies' value={coverage?.anomalyCount ?? 0} attention />
-                    <Summary label='Awaiting alert' value={coverage?.awaitingAlertCount ?? 0} />
-                    <Summary label='Awaiting delivery' value={coverage?.awaitingDeliveryCount ?? 0} />
-                    <Summary label='Complete' value={coverage?.completeCount ?? 0} />
+                    <Summary label='Retained' value={coverage?.recordCount ?? '—'} />
+                    <Summary label='Needs report' value={coverage?.unresolvedReferenceCount ?? '—'} attention />
+                    <Summary label='Anomalies' value={coverage?.anomalyCount ?? '—'} attention />
+                    <Summary label='Awaiting alert' value={coverage?.awaitingAlertCount ?? '—'} />
+                    <Summary label='Awaiting delivery' value={coverage?.awaitingDeliveryCount ?? '—'} />
+                    <Summary label='Complete' value={coverage?.completeCount ?? '—'} />
                     <Summary label='Observed' value={percent(coverage?.observedCoverage)} />
                     <Summary label='Reviewed' value={percent(coverage?.reviewedCoverage)} />
                     <Summary label='Report → alert' value={percent(coverage?.reportToAlertCoverage)} />
                     <Summary label='Report → delivered' value={percent(coverage?.reportToDeliveredCoverage)} />
-                    <Summary label='Excluded from metrics' value={coverage?.excludedMetricRecordCount ?? 0} attention />
+                    <Summary label='Excluded from metrics' value={coverage?.excludedMetricRecordCount ?? '—'} attention />
                 </div>
             </DashboardPanel>
 
@@ -200,6 +201,12 @@ function QueueRow({ item, active, onClick }: { item: Item, active: boolean, onCl
     return <button type='button' onClick={onClick} className={`grid w-full gap-1 border-b border-ui-border px-3 py-2.5 text-left hover:bg-ui-raised ${active ? 'bg-ui-raised' : ''}`}>
         <span className='flex min-w-0 items-center gap-2'><Status status={item.status} /><span className='truncate text-xs font-semibold text-ui-text'>{item.actorName || item.title || item.incidentId}</span></span>
         <span className='truncate text-[11px] text-ui-muted'>{item.sourceName || item.sourceId} · {item.title || item.incidentId}</span>
+        {!item.stages.first_report ? <div className='border-b border-ui-border px-3 py-2 text-xs text-ui-muted'>
+            Report lookup: {({ running: 'Collecting evidence', failed: 'Retry scheduled', unavailable: 'No verified date found' } as Record<string, string>)[item.reportRecovery?.status || ''] || 'Queued'}
+            {item.reportRecovery?.attempts ? ` · ${item.reportRecovery.attempts} attempts` : ''}
+            {item.reportRecovery?.reason ? <p className='mt-1'>{item.reportRecovery.reason}</p> : null}
+            {item.reportRecovery?.nextAttemptAt && item.reportRecovery.status !== 'running' ? <p className='mt-1'>Next attempt: {date(item.reportRecovery.nextAttemptAt)}</p> : null}
+        </div> : null}
         {item.timestampAnomalies.length ? <span className='truncate text-[10px] text-ui-danger'>{item.timestampAnomalies.join(', ')}</span> : null}
     </button>
 }
@@ -210,6 +217,12 @@ function RecordDetail({ item, form, setForm, saving, onSubmit }: { item: Item, f
             <div className='min-w-0'><p className='text-[10px] font-semibold uppercase text-ui-primary'>{item.actorName || 'Unattributed actor'}</p><h2 className='mt-0.5 truncate text-sm font-semibold text-ui-text'>{item.title || item.incidentId}</h2><p className='mt-1 truncate text-[11px] text-ui-muted'>{item.sourceName || item.sourceId} · {item.incidentId}</p></div>
             <Status status={item.status} />
         </div>
+        {!item.stages.first_report ? <div className='border-b border-ui-border px-3 py-2 text-xs text-ui-muted'>
+            Report lookup: {({ running: 'Collecting evidence', failed: 'Retry scheduled', unavailable: 'No verified date found' } as Record<string, string>)[item.reportRecovery?.status || ''] || 'Queued'}
+            {item.reportRecovery?.attempts ? ` · ${item.reportRecovery.attempts} attempts` : ''}
+            {item.reportRecovery?.reason ? <p className='mt-1'>{item.reportRecovery.reason}</p> : null}
+            {item.reportRecovery?.nextAttemptAt && item.reportRecovery.status !== 'running' ? <p className='mt-1'>Next attempt: {date(item.reportRecovery.nextAttemptAt)}</p> : null}
+        </div> : null}
         {item.timestampAnomalies.length ? <div className='border-b border-ui-danger/30 bg-ui-danger/10 px-3 py-2 text-xs text-ui-danger'><strong>Ordering/source anomaly:</strong> {item.timestampAnomalies.join(', ')}</div> : null}
         <div className='grid lg:grid-cols-[minmax(0,1fr)_21rem]'>
             <section className='min-w-0 border-b border-ui-border p-3 lg:border-b-0 lg:border-r'>

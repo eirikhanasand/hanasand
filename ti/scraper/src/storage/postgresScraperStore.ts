@@ -1,3 +1,5 @@
+import { prepareDeliveryResponse } from "../api/deliveryWorkbenchResponse.ts";
+import { buildTimelinessWorkbench, deriveTimeliness } from "../pipeline/timelinessGroundTruth.ts";
 import { SQL } from "bun";
 import { fileURLToPath } from "node:url";
 import type {
@@ -273,6 +275,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   }
 
   async close(): Promise<void> {
+    this.deliverySnapshotWorker?.terminate();
+    for (const pending of this.deliverySnapshotRequests.values()) pending.reject(new Error("Store is closing"));
+    this.deliverySnapshotRequests.clear();
     await this.flush();
     await this.sql.close({ timeout: 5 });
   }
@@ -1610,14 +1615,111 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     };
   }
 
+  private deliverySnapshotWorker?: Worker;
+  private deliverySnapshotRequests = new Map<string, { resolve: (value: any) => void; reject: (error: Error) => void }>();
+  enableDeliverySnapshotWorker() {
+    if (this.deliverySnapshotWorker) return;
+    const worker = this.deliverySnapshotWorker = new Worker(new URL('../ops/deliverySnapshotWorker.ts', import.meta.url).href);
+    worker.onmessage = event => {
+      const message = event.data;
+      const pending = this.deliverySnapshotRequests.get(message.id);
+      this.deliverySnapshotRequests.delete(message.id);
+      if (message.error) pending?.reject(new Error(message.error));
+      else pending?.resolve(message);
+    };
+    worker.onerror = event => {
+      for (const pending of this.deliverySnapshotRequests.values()) pending.reject(new Error(event.message));
+      this.deliverySnapshotRequests.clear();
+    };
+  }
+  private async buildDeliverySnapshot(tenantId?: string) {
+    if (this.deliverySnapshotWorker) {
+      const id = crypto.randomUUID();
+      return new Promise<any>((resolve, reject) => {
+        this.deliverySnapshotRequests.set(id, { resolve, reject });
+        this.deliverySnapshotWorker!.postMessage({ id, tenantId });
+      });
+    }
+    const { records, context } = await this.queryDeliveryWorkbench(tenantId);
+    return { snapshot: buildTimelinessWorkbench(records, context) };
+  }
+
+  private deliverySnapshots = new Map<string, { value?: ReturnType<typeof buildTimelinessWorkbench>; refreshedAt: number; pending?: Promise<any> }>();
+  async queryDeliverySnapshot(tenantId?: string, refresh = false) {
+    const key = JSON.stringify(tenantId ?? null);
+    let entry = this.deliverySnapshots.get(key);
+    if (!entry) {
+      if (this.deliverySnapshots.size >= 100) this.deliverySnapshots.delete(this.deliverySnapshots.keys().next().value!);
+      entry = { refreshedAt: 0 }; this.deliverySnapshots.set(key, entry);
+    }
+    if (!entry.pending && (refresh || Date.now() - entry.refreshedAt > 5000)) {
+      const current = entry;
+      current.pending = this.buildDeliverySnapshot(tenantId).then(({ snapshot, prepared }) => {
+        current.value = snapshot; prepareDeliveryResponse(snapshot, prepared); current.refreshedAt = Date.now();
+        return current.value;
+      }).finally(() => { current.pending = undefined; });
+      // Keep the last successful snapshot during a refresh; never serve it indefinitely.
+      void current.pending.catch(() => undefined);
+    }
+    if (!refresh && entry.value && Date.now() - entry.refreshedAt < 30_000) return entry.value;
+    return entry.pending;
+  }
+
+  async refreshDeliverySnapshots() {
+    const keys = new Set(['null', ...this.deliverySnapshots.keys()]);
+    await Promise.all([...keys].map(key => this.queryDeliverySnapshot(JSON.parse(key) ?? undefined, true)));
+  }
+
+  async claimDeliveryRecovery(limit = 8) {
+    return this.sql.begin(async tx => {
+      const due = await tx`SELECT t.id FROM threat_intel.timeliness_records t
+        LEFT JOIN threat_intel.workflow_records w ON w.record_type='delivery_report_recovery' AND w.id=t.id
+        WHERE t.first_reported_at IS NULL AND (w.id IS NULL OR (w.record->>'nextAttemptAt')::timestamptz <= now())
+        ORDER BY w.updated_at NULLS FIRST, t.id LIMIT ${limit} FOR UPDATE OF t SKIP LOCKED`;
+      const result: any[] = [];
+      for (const row of due) {
+        const [job] = await tx`INSERT INTO threat_intel.workflow_records(record_type,id,tenant_id,record)
+          SELECT 'delivery_report_recovery',id,tenant_id,jsonb_build_object('status','running','attempts',1,'startedAt',now(),'nextAttemptAt',now()+interval '10 minutes')
+          FROM threat_intel.timeliness_records WHERE id=${row.id}
+          ON CONFLICT(record_type,id) DO UPDATE SET updated_at=now(), record=threat_intel.workflow_records.record ||
+            jsonb_build_object('status','running','startedAt',now(),'nextAttemptAt',now()+interval '10 minutes','attempts',COALESCE((threat_intel.workflow_records.record->>'attempts')::int,0)+1)
+          RETURNING record`;
+        const [item] = await tx`SELECT t.record AS timeline,c.record AS capture,s.record AS source
+          FROM threat_intel.timeliness_records t JOIN threat_intel.captures c ON c.id=t.capture_id
+          LEFT JOIN threat_intel.sources s ON s.id=t.source_id WHERE t.id=${row.id}`;
+        if (item) result.push({ ...item, job: readRecord(job) });
+      }
+      return result;
+    });
+  }
+
+  async finishDeliveryRecovery(id: string, recovery: any, reference?: any) {
+    await this.sql.begin(async tx => {
+      const [row] = await tx`SELECT record FROM threat_intel.timeliness_records WHERE id=${id} FOR UPDATE`;
+      if (!row) return;
+      const current = readRecord(row);
+      const now = new Date().toISOString();
+      const next = reference ? deriveTimeliness({ ...current, reportTimestamps: [...(current.reportTimestamps ?? []), reference], updatedAt: now }, now) : current;
+      const status = next.firstReportedAt ? 'resolved' : recovery.status;
+      const state = { ...recovery, status, finishedAt: now, nextAttemptAt: new Date(Date.now() + (status === 'failed' ? 3600_000 : 86400_000)).toISOString() };
+      await this.persistTimeliness({ ...next, reportRecovery: state }, tx);
+      await tx`UPDATE threat_intel.workflow_records SET updated_at=now(),record=record || ${JSON.stringify(state)}::jsonb
+        WHERE record_type='delivery_report_recovery' AND id=${id}`;
+    });
+  }
+
   async queryDeliveryRecords(tenantId?: string) {
     return (await this.sql`SELECT record FROM threat_intel.timeliness_records WHERE tenant_id IS NOT DISTINCT FROM ${tenantId ?? null}`).map(readRecord);
   }
 
   async queryDeliveryWorkbench(tenantId?: string) {
     const rows = await this.sql`
-      SELECT t.record AS timeline, c.record AS capture, i.record AS incident, s.record AS source
+      SELECT t.record || CASE WHEN w.record IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('reportRecovery',w.record) END AS timeline,
+        jsonb_build_object('id',c.id,'observedAt',c.record->'observedAt','publishedAt',c.record->'publishedAt','collectedAt',c.record->'collectedAt','processedAt',c.record->'processedAt','firstVisibleAt',c.record->'firstVisibleAt','reviewedAt',c.record->'reviewedAt') AS capture,
+        jsonb_build_object('id',i.id,'title',i.title,'entities',i.record->'entities','actorName',i.record->'actorName','actor',i.record->'actor','canonicalActorName',i.record->'canonicalActorName','observedAt',i.record->'observedAt','reviewedAt',i.record->'reviewedAt','publishedAt',i.record->'publishedAt','collectedAt',i.record->'collectedAt','processedAt',i.record->'processedAt','firstVisibleAt',i.record->'firstVisibleAt','metadata',jsonb_build_object('observedAt',i.record->'metadata'->'observedAt','actorName',i.record->'metadata'->'actorName')) AS incident,
+        jsonb_build_object('id', s.id, 'name', s.name, 'type', s.record->'type', 'metadata', jsonb_build_object('sourceFamily', s.record->'metadata'->'sourceFamily')) AS source
       FROM threat_intel.timeliness_records t
+      LEFT JOIN threat_intel.workflow_records w ON w.record_type='delivery_report_recovery' AND w.id=t.id
       LEFT JOIN threat_intel.captures c ON c.id=t.capture_id AND c.tenant_id IS NOT DISTINCT FROM t.tenant_id
       LEFT JOIN threat_intel.incidents i ON i.id=t.incident_id AND i.tenant_id IS NOT DISTINCT FROM t.tenant_id
       LEFT JOIN threat_intel.sources s ON s.id=t.source_id AND s.tenant_id IS NOT DISTINCT FROM t.tenant_id
