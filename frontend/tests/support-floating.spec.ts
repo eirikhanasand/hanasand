@@ -1,46 +1,92 @@
 import { expect, test } from '@playwright/test'
 
-test('bubble and window drag, remember position, and remain reachable after resizing', async ({ page }) => {
+async function edgeDistances(locator: import('@playwright/test').Locator, width: number, height: number) {
+    const box = (await locator.boundingBox())!
+    return [box.x, width - box.x - box.width, box.y, height - box.y - box.height]
+}
+
+test('slow drops snap to an edge, corners are preferred, and reset restores the default', async ({ page }) => {
     await page.route('**/api/support/chat', route => route.fulfill({ json: { channel: 'ai', status: 'open', pending: false, messages: [] } }))
-    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.setViewportSize({ width: 1000, height: 800 })
     await page.goto('/contact')
     const bubble = page.getByLabel('Open support assistant', { exact: true })
-    const start = (await bubble.boundingBox())!
-    await page.mouse.move(start.x + 32, start.y + 32)
+    await bubble.click()
+    await expect(page.getByLabel('Reset support position')).toHaveCount(0)
+    await page.getByLabel('Close support assistant').click()
+    let box = (await bubble.boundingBox())!
+    await page.mouse.move(box.x + 32, box.y + 32)
     await page.mouse.down()
-    await page.mouse.move(start.x - 350, start.y - 200, { steps: 8 })
+    await page.mouse.move(550, 420, { steps: 8 })
+    // A paused release should not retain the earlier throwing velocity.
+    await page.waitForTimeout(160)
     await page.mouse.up()
     await expect(page.getByRole('dialog', { name: 'Support assistant' })).toBeHidden()
-    const moved = (await bubble.boundingBox())!
-    expect(moved.x).toBeLessThan(start.x - 300)
-    expect(moved.y).toBeLessThan(start.y - 150)
+    await expect.poll(async () => (await edgeDistances(bubble, 1000, 800))[3]).toBeCloseTo(16, 0)
+    expect((await bubble.boundingBox())!.x).toBeGreaterThan(200)
+    box = (await bubble.boundingBox())!
+    await page.mouse.move(box.x + 32, box.y + 32)
+    await page.mouse.down()
+    await page.mouse.move(100, 110, { steps: 8 })
+    await page.waitForTimeout(160)
+    await page.mouse.up()
+    await expect.poll(async () => (await bubble.boundingBox())!.x).toBeCloseTo(16, 0)
+    await expect.poll(async () => (await bubble.boundingBox())!.y).toBeCloseTo(16, 0)
     await page.reload()
-    await expect.poll(async () => (await bubble.boundingBox())!.x).toBeCloseTo(moved.x, 0)
+    await expect.poll(async () => (await bubble.boundingBox())!.x).toBeCloseTo(16, 0)
     await bubble.click()
     const dialog = page.getByRole('dialog', { name: 'Support assistant' })
-    await expect(dialog).toBeVisible()
-    const handle = page.getByRole('button', { name: 'Move support window', exact: true })
-    const before = (await dialog.boundingBox())!
+    await expect.poll(async () => (await dialog.boundingBox())!.x).toBeCloseTo(16, 0)
+    await expect.poll(async () => (await dialog.boundingBox())!.y).toBeCloseTo(16, 0)
+    const reset = page.getByRole('button', { name: 'Reset support position' })
+    await expect(reset).toBeVisible()
+    await expect(reset.locator('svg circle')).toHaveAttribute('class', 'fill-blue-600')
+    await page.screenshot({ path: '/tmp/support-reset-control.png' })
+    await page.setViewportSize({ width: 390, height: 650 })
+    await expect.poll(async () => Math.min(...await edgeDistances(dialog, 390, 650))).toBeCloseTo(16, 0)
+    await expect(dialog.getByLabel('Message', { exact: true })).toBeVisible()
+    await reset.click()
+    await expect(reset).toHaveCount(0)
+    await expect.poll(async () => (await edgeDistances(dialog, 390, 650))[3]).toBeCloseTo(16, 0)
+    await page.getByLabel('Close support assistant').click()
+    await page.reload()
+    await expect.poll(async () => (await edgeDistances(bubble, 390, 650))[1]).toBeCloseTo(16, 0)
+    await expect.poll(async () => (await edgeDistances(bubble, 390, 650))[3]).toBeCloseTo(16, 0)
+})
+
+test('a fast throw carries the bubble to the far corner and keyboard docking works', async ({ page }) => {
+    await page.setViewportSize({ width: 1000, height: 800 })
+    await page.route('**/api/support/chat', route => route.fulfill({ json: { channel: 'ai', status: 'open', pending: false, messages: [] } }))
+    await page.goto('/contact')
+    const bubble = page.getByLabel('Open support assistant', { exact: true })
+    const box = (await bubble.boundingBox())!
+    await page.mouse.move(box.x + 32, box.y + 32)
+    await page.mouse.down()
+    await page.mouse.move(550, 420, { steps: 3 })
+    await page.mouse.up()
+    await expect(page.getByRole('dialog', { name: 'Support assistant' })).toBeHidden()
+    await expect.poll(async () => (await bubble.boundingBox())!.x).toBeCloseTo(16, 0)
+    await expect.poll(async () => (await bubble.boundingBox())!.y).toBeCloseTo(16, 0)
+    await bubble.click()
+    const handle = page.getByRole('button', { name: 'Move support window' })
+    await handle.focus()
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('ArrowDown')
+    await expect(page.getByLabel('Reset support position')).toHaveCount(0)
+    const dialog = page.getByRole('dialog', { name: 'Support assistant' })
+    await expect.poll(async () => (await edgeDistances(dialog, 1000, 800))[1]).toBeCloseTo(16, 0)
+    await expect.poll(async () => (await edgeDistances(dialog, 1000, 800))[3]).toBeCloseTo(16, 0)
     const grip = (await handle.boundingBox())!
     await page.mouse.move(grip.x + 20, grip.y + 20)
     await page.mouse.down()
-    await page.mouse.move(grip.x - 300, grip.y + 50, { steps: 8 })
+    await page.mouse.move(grip.x - 260, grip.y - 100, { steps: 3 })
     await page.mouse.up()
-    expect((await dialog.boundingBox())!.x).toBeLessThan(before.x - 250)
-    await handle.focus()
-    const keyboardStart = (await dialog.boundingBox())!.x
-    await page.keyboard.press('ArrowLeft')
-    await expect.poll(async () => (await dialog.boundingBox())!.x).toBeCloseTo(keyboardStart - 10, 0)
-    await page.setViewportSize({ width: 390, height: 650 })
-    await expect.poll(async () => {
-        const box = (await dialog.boundingBox())!
-        return box.x >= 8 && box.y >= 8 && box.x + box.width <= 382 && box.y + box.height <= 642
-    }).toBe(true)
-    await expect(dialog.getByLabel('Message', { exact: true })).toBeVisible()
-    await page.screenshot({ path: '/tmp/support-floating-mobile.png' })
+    await expect.poll(async () => (await dialog.boundingBox())!.x).toBeCloseTo(16, 0)
+    await expect.poll(async () => (await dialog.boundingBox())!.y).toBeCloseTo(16, 0)
+    await expect(page.getByLabel('Reset support position')).toBeVisible()
 })
 
-test('touch dragging moves the bubble without opening it', async ({ page, context }) => {
+test('touch throwing docks without opening and reduced motion still snaps', async ({ page, context }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.setViewportSize({ width: 390, height: 844 })
     await page.route('**/api/support/chat', route => route.fulfill({ json: { channel: 'ai', status: 'open', pending: false, messages: [] } }))
     await page.goto('/contact')
@@ -52,7 +98,8 @@ test('touch dragging moves the bubble without opening it', async ({ page, contex
     await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 60, y: 250 }] })
     await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
     await expect(page.getByRole('dialog', { name: 'Support assistant' })).toBeHidden()
-    await expect.poll(async () => (await bubble.boundingBox())!.y).toBeLessThan(300)
+    await expect.poll(async () => (await bubble.boundingBox())!.x).toBeCloseTo(16, 0)
+    await expect.poll(async () => (await bubble.boundingBox())!.y).toBeCloseTo(16, 0)
     await bubble.click()
     await expect(page.getByRole('dialog', { name: 'Support assistant' })).toBeVisible()
 })
