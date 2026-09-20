@@ -1,5 +1,5 @@
 // Match process telemetry, never free-text mentions in application messages.
-export type SecurityRule = { id: string, name: string, family: string, severity: 'high' | 'critical', explanation: string, pattern: string, field: 'executable' | 'command', positive: string, negative: string }
+export type SecurityRule = { id: string, name: string, family: string, severity: 'low' | 'medium' | 'high' | 'critical', explanation: string, pattern: string, field: 'executable' | 'command', positive: string, negative: string }
 export const securityRules: SecurityRule[] = [
     {
         'id': 'process.recon.whoami.v1',

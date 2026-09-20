@@ -49,6 +49,10 @@ const browser = await chromium.launch()
 try {
     const context = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'], viewport: { width: 1440, height: 1000 } })
     const page = await context.newPage();page.setDefaultTimeout(10000);page.on('pageerror', error => console.log('Browser error:', error.message))
+    const assertNoticeAtTop = async () => {
+        const { top, headerBottom } = await page.locator('[data-workspace-notice]').evaluate(el => ({ top: el.parentElement.getBoundingClientRect().top, headerBottom: document.querySelector('header').getBoundingClientRect().bottom }))
+        assert(top >= headerBottom && top <= headerBottom + 32, 'Workspace notification sits just below the header')
+    }
     await page.clock.install()
     await page.goto(`${server.url}mill/rules?organizationId=org-one`)
     await page.getByRole('link', { name: 'Rule for org-one' }).waitFor().catch(async error => { console.log(await page.locator('body').innerText()); throw error })
@@ -81,6 +85,7 @@ try {
     await page.getByRole('heading', { name: 'Cases for org-two' }).waitFor()
     await page.getByRole('status').filter({ hasText: 'Switched to Second org' }).waitFor()
     assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('[data-workspace-notice]')).pointerEvents), 'none')
+    await assertNoticeAtTop()
     await page.getByRole('button', { name: 'Copy scoped link' }).click()
     await page.screenshot({ path: '/tmp/workspace-switch-light.png', fullPage: true })
     await page.getByRole('button', { name: 'Dismiss workspace notification' }).click()
@@ -98,6 +103,7 @@ try {
     await page.getByRole('combobox', { name: 'Org', exact: true }).selectOption('org-one')
     await page.getByRole('status').filter({ hasText: 'Switched to First org' }).waitFor()
     assert.equal(await page.locator('[data-workspace-notice]').evaluate(el => getComputedStyle(el).animationName), 'none')
+    await assertNoticeAtTop()
     await page.screenshot({ path: '/tmp/workspace-switch-dark-mobile.png', fullPage: true })
     await page.clock.runFor(900)
     assert.equal(await page.locator('[data-workspace-notice]').count(), 0, 'Reduced-motion confirmation is removed within 900ms')
@@ -107,6 +113,7 @@ try {
     await page.getByRole('status').filter({ hasText: `Switched to ${organizations[1].name}` }).waitFor()
     const noticeBounds = await page.locator('[data-workspace-notice]').boundingBox()
     assert(noticeBounds.x >= 0 && noticeBounds.x + noticeBounds.width <= 320, 'Long organization names stay within the viewport')
+    await assertNoticeAtTop()
     await page.getByRole('button', { name: 'Dismiss workspace notification' }).click()
     await page.emulateMedia({ reducedMotion: 'no-preference' })
     const since = calls.length
