@@ -29,3 +29,20 @@ GRANT SELECT ON public.service_logs, public.traffic_events, public.mill_events,
 
 -- Organization selector counts pending invites; Traffic reads the owner-security aggregate view.
 GRANT SELECT ON public.organization_invites, public.traffic_aggregate_events TO hanasand_standby_app;
+
+-- Monitoring case reads: the API still checks user and organization access.
+-- No case writes, monitor changes, VM credentials or repository secrets are granted.
+GRANT SELECT ON public.monitoring_issues, public.monitoring_issue_checks,
+    public.monitoring_issue_messages, public.monitoring_case_vms, public.case_development TO hanasand_standby_app;
+GRANT SELECT (issue_id, next_attempt_at, delivered_at, last_error)
+    ON public.monitoring_issue_notifications TO hanasand_standby_app;
+GRANT SELECT (id, name, owner_id, organization_id, action_type, target_url, model_name,
+    notification_destinations, monitoring_type, timeout_seconds, retry_count, follow_redirects, expected_down, upside_down)
+    ON public.agent_automations TO hanasand_standby_app;
+GRANT SELECT (id, automation_id, issue_id, started_at, completed_at, duration_ms, status, warning, error, result, check_details)
+    ON public.agent_automation_runs TO hanasand_standby_app;
+GRANT SELECT (name, organization_id, owner, created_by, access_users, deleted_at)
+    ON public.vms TO hanasand_standby_app;
+GRANT SELECT (id, owner_id, organization_id, provider, repository_url, last_received_at, last_warning, created_at)
+    ON public.case_repositories TO hanasand_standby_app;
+-- End monitoring case reads.

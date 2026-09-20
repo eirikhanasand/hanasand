@@ -1,4 +1,6 @@
 import { expect, mock, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import pg from 'pg'
 if (process.env.DB_HOST !== 'monitor-test-db') throw Error('Requires isolated monitor-test-db')
 let sent=0
 mock.module('../src/utils/alerts/discordWebhookFile.ts',()=>({redactSecretBearingText:(s:string)=>s,deliverDiscordWebhookFile:async()=>({id:String(++sent)})}))
@@ -148,4 +150,39 @@ test('TI health and transport failures merge into the original case, preserve ev
  expect(sent).toBe(before)
  await q("UPDATE monitoring_issue_notifications SET next_attempt_at=NOW()-interval '1 second' WHERE issue_id=ANY($1::bigint[])",[ids])
  expect((await Promise.all([claim(a,ids[0]!,'test'),claim(a,ids[0]!,'test')])).filter(Boolean)).toHaveLength(1)
+})
+
+test('standby case grants allow reader fields but not case writes or unrelated secrets', async () => {
+ await q(`CREATE ROLE hanasand_standby_app NOLOGIN;
+ CREATE TABLE vms(name text,organization_id text,owner text,created_by text,access_users jsonb,deleted_at timestamptz,password text);
+ CREATE TABLE case_repositories(id uuid,owner_id text,organization_id text,provider text,repository_url text,last_received_at timestamptz,last_warning text,created_at timestamptz,secret_encrypted text);
+ CREATE TABLE case_development(repository_id uuid,title text);
+ ALTER TABLE agent_automations ADD COLUMN name text,ADD COLUMN model_name text,ADD COLUMN timeout_seconds int,
+ ADD COLUMN retry_count int,ADD COLUMN follow_redirects boolean,ADD COLUMN expected_down boolean,ADD COLUMN upside_down boolean;
+ ALTER TABLE agent_automation_runs ADD COLUMN duration_ms int,ADD COLUMN error text,ADD COLUMN result text;`)
+ const grants=readFileSync(new URL('../../scripts/resilience/standby-permissions.sql',import.meta.url),'utf8')
+   .split('-- Monitoring case reads:')[1]!.split('-- End monitoring case reads.')[0]!
+ await q('-- Monitoring case reads:'+grants)
+ const client=new pg.Client({host:process.env.DB_HOST,user:process.env.DB_USER||'hanasand',password:process.env.DB_PASSWORD,database:process.env.DB||'hanasand',port:Number(process.env.DB_PORT)||5432})
+ await client.connect()
+ try {
+  await client.query('SET ROLE hanasand_standby_app')
+  const cases=await client.query(`SELECT i.*,a.name,c.active,n.next_attempt_at,m.message,r.check_details,v.deleted_at,d.title,repo.repository_url
+    FROM monitoring_issues i JOIN agent_automations a ON a.id=i.automation_id
+    LEFT JOIN monitoring_issue_checks c ON c.issue_id=i.id
+    LEFT JOIN monitoring_issue_notifications n ON n.issue_id=i.id
+    LEFT JOIN monitoring_issue_messages m ON m.issue_id=i.id
+    LEFT JOIN agent_automation_runs r ON r.issue_id=i.id
+    LEFT JOIN monitoring_case_vms resource ON resource.automation_id=a.id
+    LEFT JOIN vms v ON v.name=resource.vm_name
+    LEFT JOIN case_development d ON false LEFT JOIN case_repositories repo ON repo.id=d.repository_id
+    WHERE i.automation_id='ti-enrichment' AND i.merged_into IS NULL`)
+  expect(cases.rows.length).toBeGreaterThan(0)
+  for(const sql of ["UPDATE monitoring_issues SET summary='Changed'",'DELETE FROM monitoring_issues',
+    "INSERT INTO monitoring_issue_notifications(issue_id,destination,next_attempt_at) VALUES(1,'new',NOW())",
+    "UPDATE agent_automations SET name='Changed'",'SELECT password FROM vms',
+    'SELECT secret_encrypted FROM case_repositories','SELECT destination FROM monitoring_issue_notifications']) {
+   await expect(client.query(sql)).rejects.toMatchObject({code:'42501'})
+  }
+ } finally {await client.end()}
 })

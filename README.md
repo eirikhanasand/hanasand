@@ -26,6 +26,8 @@ All monitoring alerts, including replication, backups and failover, must go thro
 
 Each intelligence health check keeps the same case when its error changes, including connection failures. Collection, enrichment and delivery remain separate checks. When duplicate cases are merged, keep their old links, events, comments and notification history, and preserve the latest notification deadline.
 
+The standby case reader uses the read-only grants in `scripts/resilience/standby-permissions.sql`. Keep case writes, VM passwords and repository secrets out of that role.
+
 Recovery checks run every minute using `system:resilience` and the monitor's read-only state file. Run `bun scripts/setup-resilience-monitoring.ts` in the API worker to configure them with the existing Hanasand owner, organization and Discord destination. The independent recovery monitor keeps sampling and routing traffic; the API creates cases when it can reach the writable database.
 
 A failed save must not turn a successful check into a service outage. Report the monitoring job's error without adding a false failure to the checked service's case.
