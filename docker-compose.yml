@@ -408,6 +408,7 @@ services:
   postgres:
     image: postgres:15
     container_name: hanasand_database
+    command: ["postgres", "-c", "shared_buffers=${DB_SHARED_BUFFERS:-32GB}"]
     # Parallel queries share memory here; Docker's 64 MiB default exhausts it.
     shm_size: "2gb"
     mem_limit: 96g

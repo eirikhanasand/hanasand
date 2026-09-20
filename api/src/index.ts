@@ -1,8 +1,6 @@
 import { processStoredLogs } from '#utils/mill/processLogs.ts'
 import { startLogProcessor } from '#utils/mill/processor.ts'
-import { warmTrafficStatistics } from './handlers/traffic/legacy.ts'
-import { refreshTrafficHistory } from './utils/traffic/history.ts'
-import { warmLogSnapshots, refreshLogSnapshots } from '#utils/logs/warm.ts'
+import { startBackgroundAnalytics } from './utils/backgroundAnalytics.ts'
 import { recoveryRequestAllowed, recoveryState, recoveryReadOnly } from './utils/resilience.ts'
 import { queryOnce, closeDatabase } from './utils/db.ts'
 import Fastify from 'fastify'
@@ -183,21 +181,8 @@ async function start() {
             fastify.addHook('onClose', stopProcessing)
         }
         if (!browserWorkerOnly) {
-            await warmLogSnapshots()
-            const stopLogRefresh = refreshLogSnapshots()
-            fastify.addHook('onClose', async () => { stopLogRefresh() })
-        }
-        if (!browserWorkerOnly && process.env.AUTH_SERVICE_ONLY !== '1') {
-            await warmTrafficStatistics().catch(error => fastify.log.warn({ error }, 'Traffic startup snapshots will retry in the background'))
-            const stopTrafficRefresh = refreshTrafficHistory()
-            const snapshotTimer = setInterval(() => {
-                void warmTrafficStatistics().catch(error => fastify.log.warn({ error }, 'Traffic snapshot refresh failed'))
-            }, 30000)
-            snapshotTimer.unref()
-            fastify.addHook('onClose', async () => {
-                stopTrafficRefresh()
-                clearInterval(snapshotTimer)
-            })
+            const stopAnalytics = await startBackgroundAnalytics(fastify.log)
+            fastify.addHook('onClose', async () => { stopAnalytics() })
         }
         await fastify.listen({ port, host: process.env.LISTEN_HOST || '0.0.0.0' })
         if (browserWorkerOnly || httpWorkerOnly) return
