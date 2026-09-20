@@ -54,6 +54,7 @@ for (const source of [script, verifyScript]) {
     assert(source.includes('HANASAND_BROWSER_TURN_CONTAINER:-hanasand_browser_turn'), 'identify the dedicated live video relay')
     assert(source.includes('-d "$turn_ip" -p udp --dport "$TURN_RELAY_PORTS" -j RETURN'), 'preserve negotiated relay destinations')
     assert(source.includes('-s "$turn_ip" ! -d "$api_ip" -p udp --sport "$TURN_RELAY_PORTS" -j RETURN'), 'allow relay video without permitting delivery to the API')
+    assert(source.includes('-d "$turn_public_ip" -p udp --dport "$TURN_RELAY_PORTS" -j ACCEPT'), 'host TURN exceptions must be limited to its public address and relay ports')
 }
 const service = readFileSync(new URL('../../ops/browser-worker/hanasand-browser-egress.service', import.meta.url), 'utf8')
 assert(service.includes('PartOf=docker.service') && service.includes('WantedBy=multi-user.target docker.service'), 'restore isolation after boot and Docker restart')

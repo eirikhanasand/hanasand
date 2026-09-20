@@ -60,6 +60,14 @@ install_host_guard() {
     # Allow replies to host-initiated browser control, never worker-initiated
     # connections to services listening on the bridge gateway or host address.
     ensure_rule "$table" "$host_chain" -m conntrack --ctstate RELATED,ESTABLISHED --ctdir REPLY -j ACCEPT
+    # Docker can use its host listener for same-bridge access to published TURN
+    # ports. Permit only the configured public relay address and ports.
+    if [ "$table" = iptables ]; then
+        for protocol in tcp udp; do
+            ensure_rule "$table" "$host_chain" -d "$turn_public_ip" -p "$protocol" --dport "$TURN_PORT" -j ACCEPT
+        done
+        ensure_rule "$table" "$host_chain" -d "$turn_public_ip" -p udp --dport "$TURN_RELAY_PORTS" -j ACCEPT
+    fi
     ensure_rule "$table" "$host_chain" -j REJECT
     if ! "$table" -C INPUT -i "$bridge" -j "$host_chain" 2>/dev/null; then
         "$table" -I INPUT 1 -i "$bridge" -j "$host_chain"
@@ -114,9 +122,11 @@ bridge="$(bridge_name)"
 tor_ip="$(container_ip "$TOR_CONTAINER")"
 api_ip="$(container_ip "$API_CONTAINER")"
 turn_ip="$(container_ip "$TURN_CONTAINER")"
+turn_public_ip="${HANASAND_BROWSER_TURN_HOST:-$(docker inspect -f '{{range .Config.Cmd}}{{println .}}{{end}}' "$TURN_CONTAINER" | sed -n 's/^--external-ip=//p' | cut -d/ -f1)}"
 [ -n "$tor_ip" ] || { printf 'FAIL: could not resolve Tor container %s on %s\n' "$TOR_CONTAINER" "$NETWORK" >&2; exit 1; }
 [ -n "$api_ip" ] || { printf 'FAIL: could not resolve API container %s on %s\n' "$API_CONTAINER" "$NETWORK" >&2; exit 1; }
 [ -n "$turn_ip" ] || { printf 'FAIL: could not resolve TURN container %s on %s\n' "$TURN_CONTAINER" "$NETWORK" >&2; exit 1; }
+[ -n "$turn_public_ip" ] || { printf 'FAIL: TURN public address is not configured\n' >&2; exit 1; }
 install_ipv4 "$bridge" "$tor_ip" "$api_ip"
 install_ipv6 "$bridge"
 
