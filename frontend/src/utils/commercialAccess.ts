@@ -27,9 +27,9 @@ export const commercialAccessPlans = [
         id: 'browser',
         name: 'Browser',
         priceNok: 99,
-        quota: '100 browser runs',
-        summary: 'Inspect clearweb and darkweb sources through the controlled Browser product.',
-        features: ['Clearweb browsing', 'Safe darkweb previews', 'Evidence capture', 'Run history'],
+        quota: '30-minute runs · 3 simultaneous browsers',
+        summary: 'Browse free for 5 minutes per run. Upgrade for longer sessions and automated analysis.',
+        features: ['30-minute browser sessions', '3 simultaneous browsers', 'Automated analysis profiles', 'Evidence capture and run history'],
     },
 ] as const
 

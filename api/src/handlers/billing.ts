@@ -7,7 +7,7 @@ const plans = {
     'threat-intelligence': { quotas: { searchesPerDay: 100 }, features: ['actor profiles', 'intelligence search', 'API access', 'saved searches'] },
     monitoring: { quotas: { watchTerms: 25 }, features: ['customer watchlists', 'evidence-backed alerts', 'case workflow', 'source freshness'] },
     scanner: { quotas: { monitoredTargets: 10 }, features: ['scheduled scans', 'severity findings', 'scan history', 'run-now controls'] },
-    browser: { quotas: { browserRunsPerMonth: 100 }, features: ['clearweb browsing', 'safe darkweb previews', 'evidence capture', 'run history'] },
+    browser: { quotas: {}, features: ['30-minute browser sessions', '3 simultaneous browsers', 'automated analysis profiles', 'evidence capture and run history'] },
 } as const
 
 export type BillingQuotaKey = 'searchesPerDay' | 'watchTerms' | 'monitoredTargets' | 'browserRunsPerMonth'
@@ -84,7 +84,7 @@ export async function getBillingSubscription(req: FastifyRequest, reply: Fastify
         ORDER BY updated_at DESC
     `, [auth.id])
     const subscription = result.rows[0]
-    const quotaKeys: BillingQuotaKey[] = ['searchesPerDay', 'watchTerms', 'monitoredTargets', 'browserRunsPerMonth']
+    const quotaKeys: BillingQuotaKey[] = ['searchesPerDay', 'watchTerms', 'monitoredTargets']
     const quotas = await Promise.all(quotaKeys.map(key => getBillingQuota(auth.id!, key)))
     return reply.send({
         subscription: subscription ? {
@@ -94,7 +94,7 @@ export async function getBillingSubscription(req: FastifyRequest, reply: Fastify
             currentPeriodEnd: subscription.current_period_end,
             cancelAtPeriodEnd: subscription.cancel_at_period_end,
         } : null,
-        entitlements: entitlements.rows.map(row => ({ planId: row.plan_id, quotas: row.quotas, features: row.features })),
+        entitlements: entitlements.rows.map(row => ({ planId: row.plan_id, quotas: row.plan_id === 'browser' ? plans.browser.quotas : row.quotas, features: row.plan_id === 'browser' ? plans.browser.features : row.features })),
         quotas: quotas.map(quota => ({ ...quota, periodStart: quota.periodStart?.toISOString() || null, resetsAt: quota.resetsAt?.toISOString() || null })),
     })
 }

@@ -1,3 +1,4 @@
+import { browserStartOptions } from '../../utils/ws/browserAccess.ts'
 import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { lookup, resolveTxt } from 'node:dns/promises'
@@ -9,7 +10,7 @@ import WebSocket, { type RawData } from 'ws'
 import { chromium, type Browser, type BrowserContext, type Download, type Frame, type Page, type Request } from 'playwright'
 import { fileReputation, inspectDownload, type FileReputation } from './downloads.ts'
 import recordLog from '#utils/logs/recordLog.ts'
-import { finishBrowserRun, prepareBrowserRun, updateBrowserRunProviderResult, type BrowserProviderRunResult } from '../browserSandboxRuns.ts'
+import { browserPaidExtensionAllowed, refreshBrowserRunLease, finishBrowserRun, prepareBrowserRun, updateBrowserRunProviderResult, type BrowserProviderRunResult } from '../browserSandboxRuns.ts'
 import {
     extractIndicators,
     extractThreatAssociations,
@@ -360,6 +361,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
     let cancelAdmission: (() => void) | null = null
     let releaseAdmission: (() => void) | null = null
     let currentRunId: string | null = null
+    let runLeaseTimer: NodeJS.Timeout | null = null
     let terminalRunStatus: 'ended' | 'failed' | 'unreachable' = 'ended'
     let closed = false
     let lastFrame = ''
@@ -403,6 +405,8 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
     const cleanup = async (runStatus: 'ended' | 'failed' | 'unreachable' = terminalRunStatus) => {
         trace('cleanup', { runStatus, hasPage: Boolean(page), hasContext: Boolean(context), ownsBrowser })
         closed = true
+        if (runLeaseTimer) clearInterval(runLeaseTimer)
+        runLeaseTimer = null
         for (const file of downloads) {
             if (file.virusTotal?.status === 'checking') file.virusTotal = { status: 'interrupted', detail: 'Run ended before the hash lookup finished' }
             if (file.hashStatus === 'downloading') file.hashStatus = 'Download interrupted when the run ended'
@@ -487,7 +491,9 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         }
 
         if (message.type === 'extend') {
-            extendRun(message.extension, message.paidAuthorized === true)
+            extendRun(message.extension, process.env.BROWSER_SANDBOX_SKIP_RUN_DB === '1'
+                ? message.paidAuthorized === true
+                : Boolean(currentRunId && await browserPaidExtensionAllowed(currentRunId)))
             return
         }
 
@@ -699,14 +705,10 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         const target = normalizeTarget(message.target || DEFAULT_TARGET)
         const network = message.network === 'regular' || message.network === 'tor' ? message.network : defaultNetwork
         const proxy = network === 'tor' ? process.env.ONION_SESSION_PROXY || process.env.TOR_SOCKS_PROXY || '' : ''
-        const requestedDurationMs = Number(message.durationSeconds) > 0
-            ? Number(message.durationSeconds) * 1000
-            : Number(message.durationMinutes) > 0 ? Number(message.durationMinutes) * 60_000 : DEFAULT_DURATION_MS
-        const durationMs = Math.min(MAX_DURATION_MS, Math.max(60_000, requestedDurationMs))
         const skipRunDb = process.env.BROWSER_SANDBOX_SKIP_RUN_DB === '1'
         const browserRun = skipRunDb
             ? {
-                allowed: true,
+                allowed: true as const,
                 run: null,
                 quota: null,
             }
@@ -721,17 +723,29 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         if (!browserRun.allowed) {
             send({
                 type: 'status',
-                state: 'quota_exhausted',
+                state: browserRun.reason,
                 sessionId,
                 network,
                 quota: browserRun.quota,
-                message: `Browser run limit reached for ${browserRun.quota?.plan || 'this account'}.`,
+                message: 'Close an active browser or upgrade for more simultaneous runs.',
             })
-            send({ type: 'ended', reason: 'quota_exhausted', sessionId })
+            send({ type: 'ended', reason: browserRun.reason, sessionId })
             connection.close()
             return
         }
+        if (browserRun.quota) message = browserStartOptions(message as unknown as Record<string, unknown>, browserRun.quota) as BrokerMessage
+        const requestedDurationMs = Number(message.durationSeconds) > 0
+            ? Number(message.durationSeconds) * 1000
+            : Number(message.durationMinutes) > 0 ? Number(message.durationMinutes) * 60_000 : DEFAULT_DURATION_MS
+        const durationMs = Math.min(MAX_DURATION_MS, Math.max(60_000, requestedDurationMs))
         currentRunId = browserRun.run?.id || null
+        if (currentRunId) {
+            const runId = currentRunId
+            runLeaseTimer = setInterval(() => {
+                void refreshBrowserRunLease(runId).catch(() => { void cleanup('failed'); connection.close() })
+            }, 30_000)
+            runLeaseTimer.unref()
+        }
         const admission = requestBrowserAdmission(sessionId, send)
         cancelAdmission = admission?.cancel || null
 

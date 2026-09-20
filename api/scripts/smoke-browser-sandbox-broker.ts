@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict'
+
+// Exercise the isolated worker; admission and entitlements are tested at the broker.
+process.env.BROWSER_SANDBOX_SKIP_RUN_DB = '1'
 import { existsSync, readdirSync } from 'node:fs'
 import http from 'node:http'
 import type { AddressInfo } from 'node:net'

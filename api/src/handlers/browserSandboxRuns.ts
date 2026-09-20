@@ -1,17 +1,18 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { createHash, randomUUID } from 'node:crypto'
-import run from '#db'
+import run, { withTransaction } from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { validateSession } from '#utils/auth/session.ts'
-import { consumeBillingQuota, getBillingQuota } from './billing.ts'
+import { browserAccess, type BrowserAccess } from '../utils/ws/browserAccess.ts'
 
 export type BrowserNetwork = 'regular' | 'tor'
 
-export type BrowserQuota = {
+export type BrowserQuota = BrowserAccess & {
     plan: string
-    limit: number
+    limit: null
     used: number
-    remaining: number
+    active: number
+    remaining: null
     resetsAt: string | null
     identityKind: 'anonymous' | 'user'
 }
@@ -45,8 +46,7 @@ type BrowserRunIdentity = {
     clientIdHash: string | null
     periodStart: Date | null
     resetsAt: Date | null
-    limit: number
-    billingQuotaKey?: 'browserRunsPerMonth'
+    access: BrowserAccess
 }
 
 type PrepareBrowserRunInput = {
@@ -62,16 +62,8 @@ type BrowserReportParams = { id: string }
 type BrowserReportQuery = { clientId?: string; token?: string }
 type BrowserReportBody = { clientId?: string; report?: unknown }
 
-const anonymousRunLimit = Math.max(3, Number(process.env.BROWSER_SANDBOX_ANONYMOUS_DAILY_LIMIT || 20) || 20)
 const maxReportBytes = 2_000_000
 let browserRunStatsCache: { expiresAt: number; value: BrowserRunStats } | null = null
-const dailyPlanLimits: Record<string, number> = {
-    free: 5,
-    starter: 20,
-    team: 100,
-    business: 500,
-    volume: 2000,
-}
 
 export async function getBrowserRuns(req: FastifyRequest<{ Querystring: { clientId?: string } }>, res: FastifyReply) {
     try {
@@ -86,9 +78,11 @@ export async function getBrowserRuns(req: FastifyRequest<{ Querystring: { client
                 runs: [],
                 quota: {
                     plan: 'anonymous',
-                    limit: anonymousRunLimit,
+                    limit: null,
                     used: 0,
-                    remaining: anonymousRunLimit,
+                    remaining: null,
+                    active: 0,
+                    ...browserAccess('anonymous'),
                     resetsAt: null,
                     identityKind: 'anonymous',
                 } satisfies BrowserQuota,
@@ -201,50 +195,33 @@ export async function postBrowserRunReport(req: FastifyRequest<{ Params: Browser
     }
 }
 
-export async function prepareBrowserRun(input: PrepareBrowserRunInput): Promise<{ allowed: true; run: BrowserRunRecord | null; quota: BrowserQuota | null } | { allowed: false; quota: BrowserQuota; reason: 'quota_exhausted' }> {
+export async function prepareBrowserRun(input: PrepareBrowserRunInput): Promise<
+    { allowed: true; run: BrowserRunRecord; quota: BrowserQuota } |
+    { allowed: false; quota: BrowserQuota | null; reason: 'concurrency_limit' | 'identity_required' | 'run_exists' }
+> {
     const identity = await browserRunIdentityForSocket(input)
-    if (!identity) return { allowed: true, run: null, quota: null }
+    if (!identity) return { allowed: false, quota: null, reason: 'identity_required' }
+    return withTransaction(async query => {
+        await query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [identity.quotaIdentity])
+        const quota = await loadBrowserQuota(identity, query)
+        if (quota.active >= quota.concurrentLimit) return { allowed: false as const, quota, reason: 'concurrency_limit' as const }
+        const result = await query(`
+            INSERT INTO browser_runs (id, owner_id, quota_identity, quota_plan, client_id_hash, target, network, status, metadata)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, 'running', $8::jsonb)
+            ON CONFLICT (id) DO NOTHING
+            RETURNING id, target, network, status, title, created_at
+        `, [input.id, identity.ownerId, identity.quotaIdentity, identity.quotaPlan, identity.clientIdHash, input.target, input.network,
+            JSON.stringify({ identityKind: identity.identityKind, leaseExpiresAt: new Date(Date.now() + 120_000).toISOString() })])
+        if (!result.rows.length) return { allowed: false as const, quota, reason: 'run_exists' as const }
+        return { allowed: true as const, run: rowToRunRecord(result.rows[0]), quota: { ...quota, active: quota.active + 1, used: quota.used + 1 } }
+    })
+}
 
-    let quota: BrowserQuota
-    if (identity.billingQuotaKey) {
-        const billingQuota = await consumeBillingQuota(identity.ownerId!, identity.billingQuotaKey)
-        quota = billingBrowserQuota(billingQuota)
-        if (!billingQuota.allowed) return { allowed: false, quota, reason: 'quota_exhausted' }
-    } else {
-        quota = await loadBrowserQuota(identity)
-        if (quota.remaining <= 0) return { allowed: false, quota, reason: 'quota_exhausted' }
-    }
-
-    const result = await run(`
-        INSERT INTO browser_runs (id, owner_id, quota_identity, quota_plan, client_id_hash, target, network, status, metadata)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, 'running', $8::jsonb)
-        ON CONFLICT (id)
-        DO UPDATE SET
-            target = EXCLUDED.target,
-            network = EXCLUDED.network,
-            status = 'running',
-            updated_at = NOW(),
-            metadata = browser_runs.metadata || EXCLUDED.metadata
-        RETURNING id, target, network, status, title, created_at
-    `, [
-        input.id,
-        identity.ownerId,
-        identity.quotaIdentity,
-        identity.quotaPlan,
-        identity.clientIdHash,
-        input.target,
-        input.network,
-        JSON.stringify({ identityKind: identity.identityKind }),
-    ])
-
-    const nextQuota = identity.billingQuotaKey
-        ? billingBrowserQuota(await getBillingQuota(identity.ownerId!, identity.billingQuotaKey))
-        : await loadBrowserQuota(identity)
-    return {
-        allowed: true,
-        run: rowToRunRecord(result.rows[0]),
-        quota: nextQuota,
-    }
+export async function refreshBrowserRunLease(id: string) {
+    const result = await run(`UPDATE browser_runs SET metadata = metadata || jsonb_build_object('leaseExpiresAt', NOW() + INTERVAL '2 minutes')
+        WHERE id = $1 AND status IN ('running', 'unreachable')
+            AND (metadata->>'leaseExpiresAt')::timestamptz > NOW()`, [id])
+    if (!result.rowCount) throw new Error('Browser run lease expired')
 }
 
 export async function finishBrowserRun(id: string, status: 'ended' | 'failed' | 'unreachable' = 'ended', title = '') {
@@ -256,6 +233,8 @@ export async function finishBrowserRun(id: string, status: 'ended' | 'failed' | 
                 ELSE $2
             END,
             title = COALESCE(NULLIF($3, ''), title),
+            metadata = CASE WHEN $2 IN ('ended', 'failed')
+                THEN metadata || jsonb_build_object('leaseExpiresAt', NOW()) ELSE metadata END,
             updated_at = NOW()
         WHERE id = $1
     `, [id, status, title])
@@ -273,17 +252,9 @@ export async function updateBrowserRunProviderResult(id: string, provider: strin
 
 export async function browserPaidExtensionAllowed(id: string) {
     if (!id) return false
-    const result = await run(`
-        SELECT EXISTS (
-            SELECT 1
-            FROM browser_runs runs
-            JOIN browser_subscriptions subscriptions ON subscriptions.owner_id = runs.owner_id
-            WHERE runs.id = $1
-              AND subscriptions.active IS TRUE
-              AND subscriptions.plan <> 'free'
-        ) AS allowed
-    `, [id])
-    return result.rows[0]?.allowed === true
+    const result = await run('SELECT owner_id FROM browser_runs WHERE id = $1', [id])
+    const owner = result.rows[0]?.owner_id
+    return owner ? (await browserRunIdentityForUser(owner)).access.paid : false
 }
 
 async function browserRunIdentityForSocket(input: { clientId?: string; userId?: string; sessionToken?: string }) {
@@ -298,42 +269,17 @@ async function browserRunIdentityForSocket(input: { clientId?: string; userId?: 
 }
 
 async function browserRunIdentityForUser(userId: string, clientId?: string): Promise<BrowserRunIdentity> {
-    const billingQuota = await getBillingQuota(userId, 'browserRunsPerMonth')
-    if (billingQuota.limit !== null) {
-        const now = new Date()
-        const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
-        return {
-            identityKind: 'user',
-            quotaIdentity: `browser:user:${userId}`,
-            quotaPlan: 'browser',
-            ownerId: userId,
-            clientIdHash: clientId ? hashValue(clientId) : null,
-            periodStart,
-            resetsAt: billingQuota.resetsAt,
-            limit: billingQuota.limit,
-            billingQuotaKey: 'browserRunsPerMonth',
-        }
-    }
-    const planResult = await run(`
-        SELECT plan
-        FROM browser_subscriptions
-        WHERE owner_id = $1
-          AND active IS TRUE
-        LIMIT 1
+    const result = await run(`
+        SELECT EXISTS (SELECT 1 FROM billing_entitlements WHERE user_id = $1 AND plan_id = 'browser' AND active IS TRUE) AS paid,
+            (SELECT plan FROM browser_subscriptions WHERE owner_id = $1 AND active IS TRUE LIMIT 1) AS legacy_plan
     `, [userId])
-    const plan = cleanText(planResult.rows[0]?.plan) || 'free'
+    const plan = result.rows[0]?.paid ? 'browser' : cleanText(result.rows[0]?.legacy_plan) || 'free'
     const now = new Date()
-    const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
-    const resetsAt = new Date(periodStart.getTime() + 24 * 60 * 60 * 1000)
     return {
-        identityKind: 'user',
-        quotaIdentity: `browser:user:${userId}`,
-        quotaPlan: plan,
-        ownerId: userId,
-        clientIdHash: clientId ? hashValue(clientId) : null,
-        periodStart,
-        resetsAt,
-        limit: dailyPlanLimits[plan] ?? dailyPlanLimits.free,
+        identityKind: 'user', quotaIdentity: `browser:user:${userId}`, quotaPlan: plan,
+        ownerId: userId, clientIdHash: clientId ? hashValue(clientId) : null,
+        periodStart: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())),
+        resetsAt: null, access: browserAccess(plan),
     }
 }
 
@@ -351,32 +297,20 @@ function browserRunIdentityForClient(clientId?: string): BrowserRunIdentity | nu
         clientIdHash: hashValue(clean),
         periodStart,
         resetsAt,
-        limit: anonymousRunLimit,
+        access: browserAccess('anonymous'),
     }
 }
 
-async function loadBrowserQuota(identity: BrowserRunIdentity): Promise<BrowserQuota> {
-    const params = identity.periodStart
-        ? [identity.quotaIdentity, identity.periodStart.toISOString()]
-        : [identity.quotaIdentity]
-    const result = await run(identity.periodStart ? `
-        SELECT COUNT(*)::int AS used
-        FROM browser_runs
-        WHERE quota_identity = $1
-          AND created_at >= $2::timestamptz
-    ` : `
-        SELECT COUNT(*)::int AS used
-        FROM browser_runs
-        WHERE quota_identity = $1
-    `, params)
-    const used = Number(result.rows[0]?.used || 0)
+async function loadBrowserQuota(identity: BrowserRunIdentity, query: typeof run = run): Promise<BrowserQuota> {
+    const result = await query(`
+        SELECT COUNT(*) FILTER (WHERE created_at >= $2::timestamptz)::int AS used,
+            COUNT(*) FILTER (WHERE status IN ('running', 'unreachable') AND
+                COALESCE((metadata->>'leaseExpiresAt')::timestamptz, updated_at + INTERVAL '2 minutes') > NOW())::int AS active
+        FROM browser_runs WHERE quota_identity = $1
+    `, [identity.quotaIdentity, identity.periodStart?.toISOString() || new Date(0).toISOString()])
     return {
-        plan: identity.quotaPlan,
-        limit: identity.limit,
-        used,
-        remaining: Math.max(0, identity.limit - used),
-        resetsAt: identity.resetsAt ? identity.resetsAt.toISOString() : null,
-        identityKind: identity.identityKind,
+        ...identity.access, plan: identity.quotaPlan, limit: null, used: Number(result.rows[0]?.used || 0),
+        active: Number(result.rows[0]?.active || 0), remaining: null, resetsAt: null, identityKind: identity.identityKind,
     }
 }
 
@@ -392,17 +326,6 @@ function rowToRunRecord(row: Record<string, any>): BrowserRunRecord {
         title: String(row.title || ''),
         providerResults: providerResultsValue(row.metadata?.providerResults),
         reportUrl: reportToken ? browserReportViewerUrl(String(row.id || ''), String(reportToken)) : undefined,
-    }
-}
-
-function billingBrowserQuota(quota: Awaited<ReturnType<typeof consumeBillingQuota>> | Awaited<ReturnType<typeof getBillingQuota>>): BrowserQuota {
-    return {
-        plan: 'browser',
-        limit: quota.limit || 0,
-        used: quota.used,
-        remaining: quota.remaining || 0,
-        resetsAt: quota.resetsAt?.toISOString() || null,
-        identityKind: 'user',
     }
 }
 

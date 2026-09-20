@@ -22,7 +22,7 @@ export default function PricingPage() {
                 </header>
                 <section className='grid gap-3 md:grid-cols-2 xl:grid-cols-4' aria-label='Available plans'>
                     {commercialAccessPlans.map(plan => (
-                        <article key={plan.id} className={`flex flex-col rounded-md border bg-ui-panel p-5 ${plan.id === 'monitoring' ? 'border-ui-primary ring-1 ring-ui-primary/30' : 'border-ui-border'}`}>
+                        <article id={plan.id} key={plan.id} className={`flex flex-col rounded-md border bg-ui-panel p-5 ${plan.id === 'monitoring' ? 'border-ui-primary ring-1 ring-ui-primary/30' : 'border-ui-border'}`}>
                             <div className='flex-1'>
                                 {plan.id === 'monitoring' ? <span className='rounded-full border border-ui-primary/40 bg-ui-primary/10 px-2 py-1 text-[11px] font-semibold text-ui-primary'>Most popular</span> : null}
                                 <h2 className='mt-3 text-xl font-semibold'>{plan.name}</h2>
@@ -30,6 +30,7 @@ export default function PricingPage() {
                                 <p className='mt-4 text-base font-normal normal-case'>{plan.priceNok} kr / month</p>
                                 <p className='mt-1 text-sm font-semibold text-ui-primary'>{plan.quota}</p>
                                 <Link href={`/api/billing/checkout?plan=${plan.id}`} className={`mt-4 inline-flex h-10 w-full items-center justify-center rounded-md px-3 text-sm font-semibold ${plan.id === 'monitoring' ? 'bg-ui-primary text-ui-canvas' : 'border border-ui-border bg-ui-raised text-ui-text'}`}>Buy now</Link>
+                                {plan.id === 'browser' ? <Link href='/browser' className='mt-2 inline-flex h-10 w-full items-center justify-center text-sm font-semibold text-ui-primary'>Browse free</Link> : null}
                                 <div className='mt-4 border-t border-ui-border pt-3'>
                                     <p className='text-sm font-semibold'>What's included</p>
                                     <ul className='mt-3 grid gap-2 text-sm text-ui-muted'>

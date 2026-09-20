@@ -135,9 +135,14 @@ type ProviderRunResult = {
 }
 type BrowserQuota = {
     plan: string
-    limit: number
+    limit: number | null
     used: number
-    remaining: number
+    remaining: number | null
+    paid: boolean
+    advancedAnalysis: boolean
+    sessionSeconds: number
+    concurrentLimit: number
+    active: number
     resetsAt?: string | null
     identityKind?: string
 }
@@ -401,7 +406,9 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     const touchFrameRef = useRef<{ clientX: number; clientY: number; lastX: number; lastY: number; moved: boolean } | null>(null)
 
     const normalizedTarget = useMemo(() => normalizeTarget(target), [target])
-    const selectedProfile = useMemo(() => profiles.find(profile => profile.id === selectedProfileId) || profiles[0], [profiles, selectedProfileId])
+    const selectedProfile = useMemo(() => quota?.advancedAnalysis
+        ? profiles.find(profile => profile.id === selectedProfileId) || profiles[0]
+        : defaultProfiles.find(profile => profile.id === 'browser-only')!, [profiles, selectedProfileId, quota?.advancedAnalysis])
     const selectedFingerprint = useMemo(() => browserFingerprints.find(item => item.id === fingerprintId) || browserFingerprints[0], [fingerprintId])
     const activeUserAgentLabel = useMemo(() => userAgentLabel(customUserAgent, selectedFingerprint.label), [customUserAgent, selectedFingerprint.label])
     const browserMetadata = useMemo(() => ({
@@ -422,7 +429,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     const activeViewportImage = activeTool ? activeToolCapture?.image : activeImage || latestPageImage
     const activeViewportUrl = activeTool ? remoteTabUrls[activeTool.id] || activeToolCapture?.url || resolveToolUrl(activeTool.url, activeUrl || normalizedTarget) : remoteTabUrls.browser || activeUrl || normalizedTarget
     const runRemainingSeconds = runTiming ? Math.max(0, Math.ceil((new Date(runTiming.expiresAt).getTime() - clockNow) / 1000)) : 0
-    const paidBrowserPlan = Boolean(quota && quota.plan !== 'anonymous' && quota.plan !== 'free')
+    const paidBrowserPlan = Boolean(quota?.paid)
     const runIsActive = sessionState === 'queued' || sessionState === 'connecting' || sessionState === 'live'
     const loadingBrowser = runIsActive && !runBlocker && !activeImage && !latestPageImage && !streamHasFrame
     const fallbackInteractive = runIsActive && !streamUrl && !activeTool && Boolean(activeViewportImage)
@@ -656,15 +663,13 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
 
         socket.onopen = () => {
             setSocketState('open')
-            const profileTools = selectedProfileId === 'browser-only'
-                ? []
-                : selectedProfile.tools.length ? selectedProfile.tools : defaultTools
+            const profileTools = quota?.advancedAnalysis ? selectedProfile.tools : []
             socket.send(JSON.stringify({
                 type: 'start',
                 sessionId: id,
                 network: runNetwork,
                 target: url,
-                durationSeconds: 90,
+                durationSeconds: quota?.sessionSeconds || 300,
                 profileTools,
                 ...browserMetadata,
                 clientId: getOrCreateBrowserClientId(),
@@ -835,7 +840,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                     setSessionState('queued')
                 } else if (statusState === 'capacity_admitted' || statusState === 'launching') {
                     setSessionState('connecting')
-                } else if (statusState === 'quota_exhausted') {
+                } else if (['quota_exhausted', 'concurrency_limit', 'identity_required', 'run_exists'].includes(statusState)) {
                     setSessionState('failed')
                     setRunBlocker(String(payload.message || 'Browser run limit reached.'))
                 } else if (statusState === 'failed') {
@@ -867,7 +872,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                 pushEvent(String(payload.message || 'Sandbox navigation failed.'))
             }
         }
-    }, [browserMetadata, pushConsoleEvent, pushEvent, selectedProfile.tools, selectedProfileId, target])
+    }, [browserMetadata, pushConsoleEvent, pushEvent, selectedProfile.tools, quota?.advancedAnalysis, quota?.sessionSeconds, target])
 
     const selectSandboxTab = useCallback((tabId: string) => {
         setActiveSandboxTab(tabId)
@@ -887,7 +892,6 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
         stoppedRunRef.current = true
         if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'end' }))
         setSessionState('ended')
-        socket?.close()
         pushEvent('Sandbox stopped.')
     }, [pushEvent])
 
@@ -1166,10 +1170,11 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                             </div>
                             <details className='grid gap-3'>
                                 <summary className='flex cursor-pointer list-none items-center gap-3 [&::-webkit-details-marker]:hidden'>
-                                    <ProfilePicker profiles={profiles} selectedProfileId={selectedProfileId} onSelect={setSelectedProfileId} onDelete={deleteProfile} />
-                                    <span className='ml-auto shrink-0 rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-ui-primary'>Edit</span>
+                                    <ProfilePicker paid={paidBrowserPlan} profiles={profiles} selectedProfileId={selectedProfile.id} onSelect={setSelectedProfileId} onDelete={deleteProfile} />
+                                    {paidBrowserPlan ? <span className='ml-auto shrink-0 rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-ui-primary'>Edit</span> : null}
                                 </summary>
                                 <div className='grid gap-3'>
+                                    {!paidBrowserPlan ? <a href='/pricing#browser' className='text-sm font-semibold text-ui-primary'>Upgrade for automated analysis profiles</a> : null}
                                     <p className='text-sm text-ui-muted'>Profiles run the selected URL through external triage surfaces in the remote sandbox context.</p>
                                     <p className='text-xs text-ui-muted'>{profileSyncLabel(profileSyncState)}</p>
                                     <div className='flex gap-2'>
@@ -1180,7 +1185,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                                     </div>
                                     <ProfileToolEditor
                                         profile={selectedProfile}
-                                        locked={isDefaultProfile(selectedProfile.id)}
+                                        locked={!paidBrowserPlan || isDefaultProfile(selectedProfile.id)}
                                         toolName={customToolName}
                                         toolUrl={customToolUrl}
                                         onToolName={setCustomToolName}
@@ -1527,12 +1532,13 @@ function ProfileToolEditor({
     )
 }
 
-function ProfilePicker({ profiles, selectedProfileId, onSelect, onDelete }: { profiles: SandboxProfile[]; selectedProfileId: string; onSelect: (id: string) => void; onDelete: (id: string) => void }) {
+function ProfilePicker({ paid, profiles, selectedProfileId, onSelect, onDelete }: { paid: boolean; profiles: SandboxProfile[]; selectedProfileId: string; onSelect: (id: string) => void; onDelete: (id: string) => void }) {
     return (
         <div className='flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1'>
             {profiles.map(profile => {
                 const selected = selectedProfileId === profile.id
                 const locked = defaultProfiles.some(item => item.id === profile.id)
+                if (!paid && profile.tools.length) return <a key={profile.id} href='/pricing#browser' className='inline-flex min-h-9 shrink-0 items-center gap-2 rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-primary'>{profile.name} · Upgrade</a>
                 return (
                     <span key={profile.id} className={`inline-flex min-h-9 shrink-0 items-center overflow-hidden rounded-md border transition ${selected ? 'border-ui-primary bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-panel text-ui-text'}`}>
                         <button
@@ -1562,14 +1568,13 @@ function ProfilePicker({ profiles, selectedProfileId, onSelect, onDelete }: { pr
 }
 
 function HistoryPanel({ history, quota, onRerun, onExpand, embedded = false }: { history: BrowserRunHistory[]; quota: BrowserQuota | null; onRerun: (run: BrowserRunHistory) => void; onExpand: (run: BrowserRunHistory) => void; embedded?: boolean }) {
-    const used = quota?.used ?? history.length
-    const limit = quota?.limit ?? 3
     return (
         <section className={embedded ? 'grid gap-3 border-t border-ui-border pt-3' : 'grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-4'}>
             <div className='flex flex-wrap items-start justify-between gap-3'>
                 <div>
                     <h2 className='text-sm font-semibold text-ui-text'>Recent browser runs</h2>
-                    <p className='mt-1 text-xs text-ui-muted'>{quota ? `${used}/${limit} ${quota.plan} run${limit === 1 ? '' : 's'} used${quota.resetsAt ? ` · resets ${new Date(quota.resetsAt).toLocaleDateString()}` : ''}.` : 'Anonymous history is saved to this browser and synced when available.'}</p>
+                    {!quota?.paid ? <a href='/pricing#browser' className='text-xs font-semibold text-ui-primary'>Upgrade for 30-minute runs and 3 simultaneous browsers</a> : null}
+                    <p className='mt-1 text-xs text-ui-muted'>{`${Math.round((quota?.sessionSeconds || 300) / 60)} minutes per run · ${quota?.concurrentLimit || 1} simultaneous browser${(quota?.concurrentLimit || 1) > 1 ? 's' : ''}`}</p>
                 </div>
             </div>
             <div className='grid max-h-[10.75rem] gap-2 overflow-y-auto pr-1'>
@@ -2991,9 +2996,14 @@ function quotaValue(value: unknown): BrowserQuota | null {
     const limit = finiteNumber(record.limit)
     const used = finiteNumber(record.used)
     const remaining = finiteNumber(record.remaining)
-    if (limit === null || used === null || remaining === null) return null
+    if (used === null) return null
     return {
         plan: stringValue(record.plan) || 'anonymous',
+        paid: record.paid === true,
+        advancedAnalysis: record.advancedAnalysis === true,
+        sessionSeconds: finiteNumber(record.sessionSeconds) || 300,
+        concurrentLimit: finiteNumber(record.concurrentLimit) || 1,
+        active: finiteNumber(record.active) || 0,
         limit,
         used,
         remaining,
