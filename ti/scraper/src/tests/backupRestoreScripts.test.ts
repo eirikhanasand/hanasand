@@ -309,6 +309,7 @@ describe("backup and restore scripts", () => {
       expect(scraperRuns.length).toBeGreaterThan(0);
       expect(scraperRuns.every((line) => line.includes("sha256:fake-scraper-image"))).toBe(true);
       expect(dockerRuns.some((line) => line.includes("--volume /var/lib/postgresql/data"))).toBe(true);
+      expect(dockerRuns.some((line) => line.includes("postgres -c fsync=off -c full_page_writes=off"))).toBe(true);
       const postgresRuns = dockerRuns.filter((line) => line.includes("pg_restore") || line.includes("POSTGRES_USER"));
       expect(postgresRuns.length).toBeGreaterThan(0);
       expect(postgresRuns.every((line) => line.includes("sha256:fake-postgres-image") || line.startsWith("exec "))).toBe(true);

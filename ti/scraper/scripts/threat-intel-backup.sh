@@ -479,6 +479,8 @@ case "$action" in
     receipt_phase=database_restore
     docker network create "$drill_network" >/dev/null
     docker volume create "$drill_evidence" >/dev/null
+    # This target is discarded after verification; avoid durability writes that
+    # compete with production storage. A failed run never publishes a receipt.
     docker run \
       --detach \
       --rm \
@@ -489,7 +491,7 @@ case "$action" in
       -e POSTGRES_USER="$drill_user" \
       -e POSTGRES_PASSWORD="$drill_password" \
       -e POSTGRES_DB="$drill_database" \
-      "$postgres_image" >/dev/null
+      "$postgres_image" postgres -c fsync=off -c full_page_writes=off >/dev/null
 
     attempts=0
     until docker exec "$drill_container" pg_isready -U "$drill_user" -d "$drill_database" >/dev/null 2>&1; do
