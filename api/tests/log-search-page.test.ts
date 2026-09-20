@@ -32,3 +32,35 @@ test('malformed and different-search cursors fail before any query', async () =>
     expect(calls).toBe(0)
     expect((await searchLogPage(query, input)).next_cursor).toBeNull()
 })
+test('a complete recent page avoids scanning older matches and preserves the cursor', async () => {
+    const calls: Array<{ sql: string, params: unknown[] }> = []
+    const rows = ['c', 'b', 'a'].map(id => ({ id, normalized: {}, cursor_time: '2026-09-20 00:00:00.123456+00' }))
+    const query = (async (sql: string, params: unknown[]) => { calls.push({ sql, params }); return { rows } }) as unknown as typeof queryOnce
+    const first = await searchLogPage(query, { ...input, recentFirst: true })
+    expect(calls).toHaveLength(1)
+    expect(first.rows.map(row => row.id)).toEqual(['c', 'b'])
+    expect(first.next_cursor).toBeString()
+    expect(calls[0].sql).toContain("o.status = 'active'")
+    expect(calls[0].sql).toContain('event_timestamp >= $4::timestamptz')
+    expect(Date.parse(calls[0].params[2] as string) - Date.parse(calls[0].params[3] as string)).toBe(300_000)
+    await searchLogPage(query, { ...input, recentFirst: true, cursor: first.next_cursor! })
+    expect(calls[1].sql).toContain('(event_timestamp, id) < ($4::timestamptz, $5::text)')
+    expect(calls[1].params[3]).toBe('2026-09-20 00:00:00.123456+00')
+    expect(calls[1].params[5]).toBe('2026-09-19T23:55:00.123Z')
+})
+test('sparse and exactly full recent pages fall back to the entire original range', async () => {
+    for (const recent of [[], [{ id: 'c' }], [{ id: 'c' }, { id: 'b' }]]) {
+        const calls: Array<{ sql: string, params: unknown[] }> = []
+        const query = (async (sql: string, params: unknown[]) => {
+            calls.push({ sql, params })
+            return { rows: calls.length === 1 ? recent : [{ id: 'c' }, { id: 'b' }, { id: 'older', cursor_time: '2026-09-19 12:00:00+00' }] }
+        }) as unknown as typeof queryOnce
+        const result = await searchLogPage(query, { ...input, recentFirst: true })
+        expect(calls).toHaveLength(2)
+        expect(calls[1].params).toEqual(calls[0].params.slice(0, -1))
+        expect(calls[1].sql).not.toContain('event_timestamp >= $4::timestamptz')
+        expect(calls[1].sql).toContain("event_timestamp >= $3::timestamptz - $1 * INTERVAL '1 hour'")
+        expect(result.rows.map(row => row.id)).toEqual(['c', 'b'])
+        expect(result.next_cursor).toBeString()
+    }
+})
