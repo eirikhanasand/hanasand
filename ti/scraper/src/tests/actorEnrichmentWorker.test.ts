@@ -40,7 +40,7 @@ test('flushes fresh collection evidence before querying it for enrichment', asyn
   let pending = false;
   let readFresh = false;
   const store = {
-    saveActorEnrichmentRun() {}, savePlan(plan: any) { expect(plan.tasks[0].availableAt).toBeUndefined(); expect(plan.tasks[0].planning.actorEnrichment.actorId).toBe(actor.id); }, saveRun() {}, getActorProfile: () => actor,
+    saveActorEnrichmentRun() {}, savePlan(plan: any) { expect(plan.tasks[0].planning.maxItemsPerFetch).toBe(20); expect(plan.tasks[0].availableAt).toBeUndefined(); expect(plan.tasks[0].planning.actorEnrichment.actorId).toBe(actor.id); }, saveRun() {}, getActorProfile: () => actor,
     listSources: () => [{ id: 'search', name: 'Public news', type: 'rss', status: 'active', url: 'https://example.com/?q={query}', accessMethod: 'public_http', risk: 'low', legalNotes: 'Public news', metadata: { sourceFamily: 'public_news_search' }, crawlState: { nextEligibleAt: '2099-01-01T00:00:00Z' } }],
     flush: async () => { pending = false; },
     queryActorEnrichmentCaptures: async (profile: any) => { expect(pending).toBe(false); expect(profile.captureIds).toContain(capture.id); readFresh = true; return []; },
@@ -75,4 +75,23 @@ test('victim evidence requires an attack relationship, not a publisher, tool or 
   expect(explicitVictimRelation(['APT28'], 'PixyNetLoader', 'APT28 PixyNetLoader Evolves with PNG Steganography')).toBe(false);
   expect(explicitVictimRelation(['Termite'], 'ClickFix', 'Termite ransomware breaches linked to ClickFix CastleRAT attacks')).toBe(false);
   expect(explicitVictimRelation(['Sandworm'], 'OT environments', 'Sandworm uses pre-compromised OT environments instead of zero-days to escalate OT attacks')).toBe(false);
+});
+
+test('persists reviewed empty evidence but leaves failed evidence available for retry', async () => {
+  const runs: any[] = []; let calls = 0;
+  const second = { ...capture, id: 'capture-two' };
+  const store = { saveActorEnrichmentRun: (run: any) => runs.push(structuredClone(run)), listSources: () => [], getActorProfile: () => actor,
+    queryActorEnrichmentCaptures: async () => [capture, second], flush: async () => {} };
+  await enrichActor({ store, fetch: async () => Response.json({ message: ++calls === 1 ? '{"facts":[]}' : '{"unexpected":true}' }) }, actor);
+  expect(calls).toBe(3);
+  expect(runs.at(-1)).toMatchObject({ status: 'failed', reviewedCaptureIds: [capture.id], error: 'Hanasand AI returned an invalid facts response' });
+  expect(runs.some(run => run.status === 'running' && run.reviewedCaptureIds.includes(capture.id))).toBe(true);
+});
+test('retries malformed model output before recording a review', async () => {
+  const runs: any[] = []; let calls = 0;
+  const store = { saveActorEnrichmentRun: (run: any) => runs.push(structuredClone(run)), listSources: () => [], getActorProfile: () => actor,
+    queryActorEnrichmentCaptures: async () => [capture] };
+  await enrichActor({ store, fetch: async () => Response.json({ message: ++calls === 1 ? 'not JSON' : '{"facts":[]}' }) }, actor);
+  expect(calls).toBe(2);
+  expect(runs.at(-1)).toMatchObject({ status: 'completed', newFacts: 0, reviewedCaptureIds: [capture.id] });
 });

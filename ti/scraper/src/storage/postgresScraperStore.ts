@@ -2462,10 +2462,20 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   }
   async queryActorEnrichmentCaptures(profile: any) {
     const ids = (profile.captureIds ?? []).slice(-5000);
-    const rows = await this.sql`SELECT record FROM threat_intel.captures WHERE id IN (SELECT jsonb_array_elements_text(${JSON.stringify(ids)}::jsonb))
-      AND (tenant_id IS NULL OR tenant_id = ${profile.tenantId ?? null}) AND COALESCE(record->>'sensitive', 'false') <> 'true'
-      AND length(COALESCE(record#>>'{metadata,normalizedEvidence,text}', record->>'body', '')) >= 60
-      ORDER BY collected_at DESC LIMIT 2`;
+    const rows = await this.sql`WITH attempts AS MATERIALIZED (
+        SELECT record FROM threat_intel.workflow_records WHERE record_type = 'actor_enrichment_run'
+          AND record->>'actorId' = ${profile.id} AND tenant_id IS NOT DISTINCT FROM ${profile.tenantId ?? null}::text
+      ), candidates AS (
+        SELECT jsonb_array_elements_text(${JSON.stringify(ids)}::text::jsonb) AS id
+        UNION SELECT jsonb_array_elements_text(COALESCE(record->'discoveredCaptureIds', '[]'::jsonb)) FROM attempts
+      ), reviewed AS (
+        SELECT jsonb_array_elements_text(COALESCE(record->'reviewedCaptureIds', '[]'::jsonb)) AS id FROM attempts
+      )
+      SELECT c.record FROM threat_intel.captures c WHERE c.id IN (SELECT id FROM candidates)
+      AND NOT EXISTS (SELECT 1 FROM reviewed r WHERE r.id = c.id)
+      AND (c.tenant_id IS NULL OR c.tenant_id = ${profile.tenantId ?? null}) AND COALESCE(c.record->>'sensitive', 'false') <> 'true'
+      AND length(COALESCE(c.record#>>'{metadata,normalizedEvidence,text}', c.record->>'body', '')) >= 60
+      ORDER BY c.collected_at DESC, c.id DESC LIMIT 4`;
     return rows.map(readRecord);
   }
 
