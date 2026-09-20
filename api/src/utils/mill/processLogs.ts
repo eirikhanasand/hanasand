@@ -1,3 +1,4 @@
+import { readLogCatchupLimit } from './catchupLimit.ts'
 import { refreshLogCatchupProgress } from './catchupProgress.ts'
 import { recoverUnassignedLogs } from './recoverUnassignedLogs.ts'
 import { createHash } from 'node:crypto'
@@ -112,9 +113,7 @@ export async function processStoredLogs() {
     try {
         // Operators can temporarily bound catch-up during replication recovery.
         // Fresh command admission and the event-time priority pass remain unchanged.
-        const rawLimit = process.env.LOG_CATCHUP_BATCH_LIMIT ?? '1000', configuredLimit = Number(rawLimit)
-        if (!/^\d+$/.test(rawLimit) || !Number.isInteger(configuredLimit) || configuredLimit < 1 || configuredLimit > 1000)
-            throw new Error('LOG_CATCHUP_BATCH_LIMIT must be an integer from 1 to 1000.')
+        const configuredLimit = readLogCatchupLimit()
         // The transaction owns the lock connection until both cursors are durable.
         // Another replica skips this tick instead of duplicating the same work.
         let didWork = false
