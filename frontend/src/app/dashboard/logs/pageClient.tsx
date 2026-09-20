@@ -105,7 +105,7 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
         // Pause freezes automatic updates; explicit filters, retries and Resume
         // still load once even while an event's text is selected.
         const debounce = setTimeout(() => void load(true), 250)
-        const interval = view === 'realtime' || view === 'dashboard' ? setInterval(() => void load(), 5000) : undefined
+        const interval = view !== 'errors' ? setInterval(() => void load(), view === 'search' ? 10_000 : 5000) : undefined
         return () => { controller.abort(); clearTimeout(debounce); clearInterval(interval) }
     }, [view, service, search, table, advanced, appliedHql, hours, severity, refresh])
     function togglePaused() {
@@ -145,7 +145,7 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
                     <details className='text-xs text-ui-muted'><summary className='cursor-pointer'>HQL syntax and tables</summary><p className='mt-2'>Tables: Logs, ProcessLogs, SigninLogs, ApplicationLogs, HttpLogs, SystemLogs. HQL (Hanasand Query Language) supports this subset: where, project, order by, take (1–500), summarize count() by. Conditions: ==, !=, &gt;, &gt;=, &lt;, &lt;=, contains, has, startswith, endswith, in, and, or, not, parentheses and ago(24h). Other operators are rejected.</p><p className='mt-2'>Put where before order by. After project or summarize, only take is supported. Put take last. Fields: {Object.keys(fieldNames).join(', ')}. The selected time range, service and severity filters always apply.</p><pre className='mt-2 whitespace-pre-wrap'>ProcessLogs | where CommandLine contains &quot;whoami&quot; | project TimeGenerated, Host, CommandLine</pre></details>
                 </form>}
             </section>
-            {data?.processing?.last_error && <p role='alert' className='text-sm text-ui-danger'>Mill processing is delayed: {data.processing.last_error}</p>}
+            {data?.processing?.last_error && !data.processing.last_error.endsWith('Waiting for active log writes; will retry.') && <p role='alert' className='text-sm text-ui-danger'>Mill processing is delayed: {data.processing.last_error}</p>}
             {commandChecksDelayed && <p role='status' className='text-sm text-ui-warning'>Command checks are delayed. {pendingCommands.has_more ? 'More than ' : ''}{pendingCommands.count.toLocaleString()} {pendingCommands.count === 1 ? 'command is' : 'commands are'} waiting; oldest received {new Date(pendingCommands.oldest_queued_at!).toLocaleString()}.</p>}
             <LogCatchupProgress progress={data?.processing?.catchup} catchingUp={!!data?.processing?.sources?.some(isCatchingUp)} now={data?.generated_at || new Date().toISOString()} stalled={!!data?.processing?.last_error} />
             {!!data?.processing?.skipped_events && <p role='status' className='text-sm text-ui-warning'>{data.processing.skipped_events.toLocaleString()} events remain excluded from detection.</p>}
