@@ -4,7 +4,7 @@ import config from '@/config'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { Activity, ArrowUpRight, BellRing, BookOpen, Code2, FileText, Gauge, Globe, LockKeyhole, Network, Radar, ShieldCheck, Waypoints } from 'lucide-react'
+import { Activity, ArrowUpRight, BellRing, BookOpen, Code2, FileText, Gauge, LockKeyhole, Network, Radar, ShieldCheck, Waypoints } from 'lucide-react'
 import isSharePath from '@/utils/routes/isSharePath'
 import BrandLogo from '@/components/brand/brandLogo'
 import type { ServiceStatus } from '@/utils/status/getStatus'
@@ -93,28 +93,6 @@ export default function Footer() {
                     <p className='mt-4 max-w-md text-sm leading-6 text-ui-muted'>
                         Monitor company exposure and review dark web alerts with the details your team needs.
                     </p>
-                    <div className='mt-4 flex flex-wrap gap-2'>
-                        <span className='inline-flex items-center gap-1.5 rounded-full border border-ui-border bg-ui-panel px-2.5 py-1 text-[11px] text-ui-text'>
-                            <Radar className='h-3.5 w-3.5 text-ui-primary' />
-                            monitoring
-                        </span>
-                        <span className='inline-flex items-center gap-1.5 rounded-full border border-ui-border bg-ui-panel px-2.5 py-1 text-[11px] text-ui-text'>
-                            <BellRing className='h-3.5 w-3.5 text-ui-success' />
-                            alerts
-                        </span>
-                        <span className='inline-flex items-center gap-1.5 rounded-full border border-ui-border bg-ui-panel px-2.5 py-1 text-[11px] text-ui-text'>
-                            <ShieldCheck className='h-3.5 w-3.5 text-ui-primary' />
-                            cases
-                        </span>
-                        <span className='inline-flex items-center gap-1.5 rounded-full border border-ui-border bg-ui-panel px-2.5 py-1 text-[11px] text-ui-text'>
-                            <Globe className='h-3.5 w-3.5 text-ui-success' />
-                            threat intelligence
-                        </span>
-                        <span className='inline-flex items-center gap-1.5 rounded-full border border-ui-border bg-ui-panel px-2.5 py-1 text-[11px] text-ui-text'>
-                            <Network className='h-3.5 w-3.5 text-ui-primary' />
-                            browser sandbox
-                        </span>
-                    </div>
                 </div>
 
                 <nav aria-label='Footer' className='grid gap-6 sm:grid-cols-2 lg:grid-cols-5'>
