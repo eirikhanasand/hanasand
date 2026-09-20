@@ -419,6 +419,18 @@ case "$action" in
       set -- --tmpfs "/var/lib/postgresql/data:rw,noexec,nosuid,size=$TI_RESTORE_TMPFS_SIZE"
     else
       set -- --volume /var/lib/postgresql/data
+      # Bound the disposable restore on the Docker storage device so scheduled
+      # drills do not saturate the disk shared with production services.
+      restore_io_device=${TI_RESTORE_IO_DEVICE:-}
+      if [ -z "$restore_io_device" ] && command -v findmnt >/dev/null 2>&1; then
+        docker_root=$(docker info --format '{{.DockerRootDir}}')
+        restore_io_device=$(findmnt -n -o SOURCE -T "$docker_root" 2>/dev/null || true)
+        [ -b "$restore_io_device" ] || restore_io_device=
+      fi
+      if [ -n "$restore_io_device" ]; then
+        set -- "$@" --device-read-bps "$restore_io_device:${TI_RESTORE_READ_BPS:-20mb}" \
+          --device-write-bps "$restore_io_device:${TI_RESTORE_WRITE_BPS:-10mb}"
+      fi
     fi
     archive_parent=$(CDPATH= cd -- "$(dirname -- "$archive")" && pwd)
     receipt_stage=
