@@ -42,6 +42,13 @@ test('all fresh streams precede backfill and checkpoints follow successful proce
     expect(received).toEqual(['login_events:101', 'traffic_events:101', 'system_events:101', 'login_events:1', 'traffic_events:1', 'system_events:1'])
     expect(checkpoints).toHaveLength(6)
 })
+test('large historical pages yield to fresh commands between sources', async () => {
+    const order: string[] = []
+    await processAdditionalLogSources(async logs => { order.push(String(logs[0].id)) }, 5000, 1000, query as any,
+        async () => { order.push('fresh commands') })
+    expect(order).toEqual(['login_events:101', 'traffic_events:101', 'system_events:101',
+        'fresh commands', 'login_events:1', 'fresh commands', 'traffic_events:1', 'fresh commands', 'system_events:1'])
+})
 test('failed evaluation leaves its delivery cursor unchanged for retry', async () => {
     await expect(processAdditionalLogSources(async () => { throw new Error('Evaluation failed') })).rejects.toThrow('Evaluation failed')
     expect(checkpoints).toHaveLength(0)

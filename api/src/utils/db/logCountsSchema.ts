@@ -20,10 +20,13 @@ export const logCountsSchema = [
             TRUNCATE mill_log_counts;
             RETURN NULL;
         ELSIF TG_OP = 'INSERT' THEN
+            IF NOT EXISTS (SELECT 1 FROM new_dimensions) THEN RETURN NULL; END IF;
             changes := 'SELECT *, 1::bigint AS delta FROM new_dimensions';
         ELSIF TG_OP = 'DELETE' THEN
+            IF NOT EXISTS (SELECT 1 FROM old_dimensions) THEN RETURN NULL; END IF;
             changes := 'SELECT *, -1::bigint AS delta FROM old_dimensions';
         ELSE
+            IF NOT EXISTS (SELECT 1 FROM new_dimensions) AND NOT EXISTS (SELECT 1 FROM old_dimensions) THEN RETURN NULL; END IF;
             changes := 'SELECT *, -1::bigint AS delta FROM old_dimensions UNION ALL SELECT *, 1::bigint AS delta FROM new_dimensions';
         END IF;
         EXECUTE 'INSERT INTO mill_log_counts (bucket_seconds,bucket,organization_id,service,severity,log_type,event_count)

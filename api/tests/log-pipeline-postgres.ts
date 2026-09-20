@@ -52,7 +52,16 @@ try {
             message: command, created_at: new Date(time + index * 10).toISOString(),
             metadata: { process: { executable: rule.field === 'executable' ? command : '/bin/bash', command_line: command } } }
     }))
+    const detectionUpdates: Array<{ sql: string, values: unknown[] }> = []
+    queryObserver = async (sql, values) => {
+        if (sql.startsWith('UPDATE mill_events e SET normalized')) detectionUpdates.push({ sql, values })
+    }
     await processLogBatch(rows, 'fixture', rules)
+    queryObserver = undefined
+    const detectionUpdate = detectionUpdates.at(-1)
+    assert.ok(detectionUpdate)
+    assert.equal((await query(detectionUpdate.sql, detectionUpdate.values)).rowCount, 0,
+        'Identical detection updates must not rewrite events or any of their indexes')
     const restricted = await query("SELECT COUNT(*)::int AS count FROM mill_findings WHERE evidence->>'restrictedLog' IS DISTINCT FROM 'true'")
     assert.equal(restricted.rows[0].count, 0, 'Every collected-log finding must carry the durable administrator-only flag')
     for (const rule of securityRules) {
@@ -73,6 +82,10 @@ try {
     assert.equal(clean.processing_status, 'processed')
     assert.equal(clean.normalized.rules_checked, rules.length)
     assert.deepEqual(clean.normalized.detections, [])
+    const projectionLock = (await query("SELECT xmax::text FROM mill_log_dimensions WHERE event_id=(SELECT id FROM mill_events WHERE log_key='service:single-write-http')")).rows[0].xmax
+    await query("UPDATE mill_events SET normalized=normalized||jsonb_build_object('evaluated_at',clock_timestamp()) WHERE log_key='service:single-write-http'")
+    assert.equal((await query("SELECT xmax::text FROM mill_log_dimensions WHERE event_id=(SELECT id FROM mill_events WHERE log_key='service:single-write-http')")).rows[0].xmax,
+        projectionLock, 'An evidence-only update must not lock or rewrite the unchanged reporting projection')
 
     const before = Number((await query('SELECT count(*) AS count FROM mill_findings')).rows[0].count)
     await processLogBatch(rows, 'fixture', rules)

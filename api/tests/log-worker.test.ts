@@ -72,6 +72,9 @@ mock.module('../src/handlers/mill.ts', () => ({
 }))
 const { processStoredLogs } = await import('../src/utils/mill/processLogs.ts')
 const originalLimit = process.env.LOG_CATCHUP_BATCH_LIMIT
+const originalHistoryLimit = process.env.LOG_CATCHUP_HISTORY_LIMIT
+afterEach(() => { if (originalHistoryLimit === undefined) delete process.env.LOG_CATCHUP_HISTORY_LIMIT; else process.env.LOG_CATCHUP_HISTORY_LIMIT = originalHistoryLimit })
+beforeEach(() => { delete process.env.LOG_CATCHUP_HISTORY_LIMIT })
 beforeEach(() => { transactionStatements = []; failHistory = false; additionalCursorQuery = undefined })
 afterEach(() => { if (originalLimit === undefined) delete process.env.LOG_CATCHUP_BATCH_LIMIT; else process.env.LOG_CATCHUP_BATCH_LIMIT = originalLimit })
 beforeEach(() => { delete process.env.LOG_CATCHUP_BATCH_LIMIT; historyScans = []; inactiveScopes = new Set(['inactive']); watermark = '200'; additionalRuns = 0; queueRuns = 0; recoveryRuns = 0; locked = true; fail = false; delayed = false; historyLimits = []; recentLimits = []; queueModes = []; recoveryLimits = []; reads = []; cursor = { last_id: '0', recent_id: '100' }; statements = []; checked = []; stored = {}; pending = []; priority = []; fresh = [makeLog('101')]; backlog = [makeLog('1')] })
@@ -240,6 +243,19 @@ test('an empty retained history range advances to its inspected upper bound', as
     fresh = []; backlog = []
     await processStoredLogs()
     expect(cursor.last_id).toBe('100')
+})
+for (const limit of [5000, 10000]) test(`history batch ${limit} leaves fresh and recovery limits unchanged and services commands again`, async () => {
+    process.env.LOG_CATCHUP_HISTORY_LIMIT = String(limit)
+    cursor.recent_id = '20000'; watermark = '30000'; fresh = [makeLog('20001')]
+    backlog = Array.from({ length: limit + 1 }, (_, i) => makeLog(String(i + 1)))
+    await processStoredLogs()
+    expect(historyLimits).toEqual([limit]); expect(recentLimits).toEqual([1000]); expect(recoveryLimits).toEqual([1000])
+    expect(reads.map(read => read.params[2])).toEqual([1000, limit])
+    expect(cursor.last_id).toBe(String(limit)); expect(cursor.recent_id).toBe('20001')
+    expect(queueRuns).toBe(2)
+    delayed = true
+    await processStoredLogs()
+    expect(historyLimits.at(-1)).toBe(100); expect(recentLimits.at(-1)).toBe(100)
 })
 
 test('new forward rows never extend the fixed historical range', async () => {

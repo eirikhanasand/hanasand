@@ -22,26 +22,37 @@ export const logDimensionsSchema = [
     )`,
     'INSERT INTO mill_log_dimensions_state (id) VALUES (TRUE) ON CONFLICT DO NOTHING',
     `CREATE OR REPLACE FUNCTION sync_mill_log_dimensions() RETURNS TRIGGER LANGUAGE plpgsql AS $function$
+    DECLARE changes TEXT := 'SELECT * FROM changed_events';
     BEGIN
-        DELETE FROM mill_log_dimensions d USING changed_events e
-            WHERE d.event_id = e.id AND (e.ingestion_id <> 'logs' OR e.processing_status <> 'processed');
-        INSERT INTO mill_log_dimensions (event_id, organization_id, event_timestamp, severity, service, log_type)
-            SELECT id, organization_id, event_timestamp, normalized->>'severity', normalized->>'service', normalized->>'log_type'
-            FROM changed_events WHERE ingestion_id = 'logs' AND processing_status = 'processed'
+        IF NOT EXISTS (SELECT 1 FROM changed_events) THEN RETURN NULL; END IF;
+        IF TG_OP = 'UPDATE' THEN
+            -- Detection evidence and evaluation timestamps do not change counts.
+            -- Exclude them before the upsert, which otherwise locks unchanged rows.
+            changes := 'SELECT e.* FROM changed_events e LEFT JOIN previous_events p ON p.id=e.id
+                WHERE p.id IS NULL OR (e.ingestion_id,e.processing_status,e.organization_id,e.event_timestamp,
+                    e.normalized->>''severity'',e.normalized->>''service'',e.normalized->>''log_type'')
+                IS DISTINCT FROM (p.ingestion_id,p.processing_status,p.organization_id,p.event_timestamp,
+                    p.normalized->>''severity'',p.normalized->>''service'',p.normalized->>''log_type'')';
+            DELETE FROM mill_log_dimensions d USING changed_events e
+                WHERE d.event_id = e.id AND (e.ingestion_id <> 'logs' OR e.processing_status <> 'processed');
+        END IF;
+        EXECUTE 'INSERT INTO mill_log_dimensions (event_id, organization_id, event_timestamp, severity, service, log_type)
+            SELECT id, organization_id, event_timestamp, normalized->>''severity'', normalized->>''service'', normalized->>''log_type''
+            FROM (' || changes || ') e WHERE ingestion_id = ''logs'' AND processing_status = ''processed''
             ON CONFLICT (event_id) DO UPDATE SET organization_id = EXCLUDED.organization_id,
                 event_timestamp = EXCLUDED.event_timestamp, severity = EXCLUDED.severity,
                 service = EXCLUDED.service, log_type = EXCLUDED.log_type
             WHERE (mill_log_dimensions.organization_id, mill_log_dimensions.event_timestamp,
                 mill_log_dimensions.severity, mill_log_dimensions.service, mill_log_dimensions.log_type)
                 IS DISTINCT FROM (EXCLUDED.organization_id, EXCLUDED.event_timestamp,
-                EXCLUDED.severity, EXCLUDED.service, EXCLUDED.log_type);
+                EXCLUDED.severity, EXCLUDED.service, EXCLUDED.log_type)';
         RETURN NULL;
     END
     $function$`,
     `CREATE OR REPLACE TRIGGER mill_log_dimensions_insert AFTER INSERT ON mill_events
         REFERENCING NEW TABLE AS changed_events FOR EACH STATEMENT EXECUTE FUNCTION sync_mill_log_dimensions()`,
     `CREATE OR REPLACE TRIGGER mill_log_dimensions_update AFTER UPDATE ON mill_events
-        REFERENCING NEW TABLE AS changed_events FOR EACH STATEMENT EXECUTE FUNCTION sync_mill_log_dimensions()`,
+        REFERENCING OLD TABLE AS previous_events NEW TABLE AS changed_events FOR EACH STATEMENT EXECUTE FUNCTION sync_mill_log_dimensions()`,
 ]
 
 export default async function ensureLogDimensionsSchema() {

@@ -1,4 +1,4 @@
-import { readLogCatchupLimit } from './catchupLimit.ts'
+import { readLogCatchupSettings } from './catchupLimit.ts'
 import { refreshLogCatchupProgress } from './catchupProgress.ts'
 import { recoverUnassignedLogs } from './recoverUnassignedLogs.ts'
 import { createHash } from 'node:crypto'
@@ -104,7 +104,8 @@ export async function processLogBatch(logs: LogInput[], organizationId: string, 
         }
     }
     await run(`UPDATE mill_events e SET normalized = e.normalized || item.result, processing_status = 'processed'
-        FROM jsonb_to_recordset($1::jsonb) AS item(id text, result jsonb) WHERE e.id = item.id`, [JSON.stringify(updates)])
+        FROM jsonb_to_recordset($1::jsonb) AS item(id text, result jsonb) WHERE e.id = item.id
+        AND (e.processing_status IS DISTINCT FROM 'processed' OR e.normalized IS DISTINCT FROM e.normalized || item.result)`, [JSON.stringify(updates)])
 }
 
 export async function processStoredLogs() {
@@ -113,7 +114,8 @@ export async function processStoredLogs() {
     try {
         // Operators can temporarily bound catch-up during replication recovery.
         // Fresh command admission and the event-time priority pass remain unchanged.
-        const configuredLimit = readLogCatchupLimit()
+        const settings = readLogCatchupSettings()
+        const configuredLimit = settings.limit
         // The transaction owns the lock connection until both cursors are durable.
         // Another replica skips this tick instead of duplicating the same work.
         let didWork = false, advanced = false
@@ -157,13 +159,15 @@ export async function processStoredLogs() {
             // Keep every cursor moving while delayed commands get more capacity.
             // A fixed snapshot restores ordinary limits on the next clear tick.
             const catchupLimit = Math.min(queue.delayed ? 100 : 1000, configuredLimit)
-            const processPage = async (after: string, until: string) => {
+            const historyLimit = Math.min(queue.delayed ? 100 : 10000, settings.historyLimit)
+            const beforeHistory = historyLimit > catchupLimit ? () => processQueuedLogs(processScopes) : undefined
+            const processPage = async (after: string, until: string, pageLimit = catchupLimit) => {
                 const candidates = await run('SELECT id FROM service_logs WHERE id > $1 AND id <= $2 ORDER BY id LIMIT 10000', [after, until])
                 const batch = candidates.rows.length ? await run(`SELECT * FROM service_logs s WHERE id > $1 AND id <= $2 AND id = ANY($4::bigint[])
                     AND NOT EXISTS (SELECT 1 FROM mill_events e WHERE e.log_key = 'service:' || s.id::text AND e.processing_status = 'processed')
-                    ORDER BY id LIMIT $3`, [after, until, catchupLimit, candidates.rows.map(row => row.id)]) : { rows: [] }
+                    ORDER BY id LIMIT $3`, [after, until, pageLimit, candidates.rows.map(row => row.id)]) : { rows: [] }
                 await processScopes(batch.rows)
-                const lastId = batch.rows.length === catchupLimit ? batch.rows.at(-1)!.id : candidates.rows.at(-1)?.id || until
+                const lastId = batch.rows.length === pageLimit ? batch.rows.at(-1)!.id : candidates.rows.at(-1)?.id || until
                 const checked = candidates.rows.filter(row => BigInt(row.id) <= BigInt(lastId)).length
                 if (checked) advanced = true
                 return { lastId, checked }
@@ -181,7 +185,7 @@ export async function processStoredLogs() {
                 const recent = await processPage(cursor.recent_id, watermark)
                 await query('UPDATE log_processing_cursors SET recent_id = $1, checked_count = checked_count + $2, updated_at = clock_timestamp(), last_error = NULL WHERE name = \'service_logs\'', [recent.lastId, recent.checked])
             }
-            await processAdditionalLogSources(processScopes, catchupLimit, catchupLimit, query)
+            await processAdditionalLogSources(processScopes, historyLimit, catchupLimit, query, beforeHistory)
             // Direct Mill ingestion is also pending until findings are durable.
             // Recover requests that stopped after persistence or during evaluation.
             const pending = await run(`SELECT e.* FROM mill_events e JOIN organizations o ON o.id = e.organization_id
@@ -197,7 +201,8 @@ export async function processStoredLogs() {
                 // Already acknowledged rows need no wide JSON reads or evaluation.
                 // Inspect narrow IDs in larger pages, while retaining the operator
                 // limit for actual detection work and never skipping a pending row.
-                const backlog = await processPage(cursor.last_id, cursor.history_end_id)
+                await beforeHistory?.()
+                const backlog = await processPage(cursor.last_id, cursor.history_end_id, historyLimit)
                 await query('UPDATE log_processing_cursors SET last_id = GREATEST(last_id, $1), checked_count = checked_count + $2, updated_at = clock_timestamp() WHERE name = \'service_logs\'', [backlog.lastId, backlog.checked])
             }
         })

@@ -38,7 +38,7 @@ export function storedSourceLog(source: Source, row: StoredRow): LogInput {
 // These database-backed streams already have durable IDs. Process them directly
 // instead of copying every traffic/sign-in/audit record into service_logs again.
 // The caller owns the shared processing lock across all stream cursors.
-export async function processAdditionalLogSources(processScopes: (logs: LogInput[]) => Promise<void>, historyLimit = 1000, recentLimit = 1000, cursorQuery = run) {
+export async function processAdditionalLogSources(processScopes: (logs: LogInput[]) => Promise<void>, historyLimit = 1000, recentLimit = 1000, cursorQuery = run, beforeHistory?: () => Promise<void>) {
     const cursors: Array<{ source: Source, last_id: string, recent_id: string, history_end_id: string | null, watermark: string | null }> = []
     for (const source of sources) {
         await cursorQuery('INSERT INTO log_processing_cursors (name) VALUES ($1) ON CONFLICT DO NOTHING', [source])
@@ -61,6 +61,7 @@ export async function processAdditionalLogSources(processScopes: (logs: LogInput
     for (const { source, last_id, history_end_id } of cursors) {
         if (history_end_id === null) continue
         const backlog = await run(`SELECT * FROM ${source} WHERE id > $1 AND id <= $2 ORDER BY id LIMIT $3`, [last_id, history_end_id, historyLimit])
+        if (backlog.rows.length) await beforeHistory?.()
         await processScopes(backlog.rows.map(row => storedSourceLog(source, row)))
         await cursorQuery('UPDATE log_processing_cursors SET last_id = GREATEST(last_id, $2), checked_count = checked_count + $3, updated_at = clock_timestamp() WHERE name = $1', [source, backlog.rows.at(-1)?.id || history_end_id, backlog.rows.length])
     }
