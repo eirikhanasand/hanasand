@@ -1,7 +1,9 @@
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
-const source = readFileSync(new URL('../browser-worker/reconnect-watchdog.js', import.meta.url), 'utf8')
+const source = readFileSync(process.env.BROWSER_STREAM_ASSET_DIR
+    ? `${process.env.BROWSER_STREAM_ASSET_DIR}/reconnect-watchdog.js`
+    : new URL('../browser-worker/reconnect-watchdog.js', import.meta.url), 'utf8')
 
 test('stale loading text, hidden tabs, and autoplay prompts never reload a healthy stream', () => {
     let now = 1000
