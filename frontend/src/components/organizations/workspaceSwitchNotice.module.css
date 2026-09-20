@@ -1,7 +1,7 @@
 .position {
     position: fixed;
     z-index: 1100;
-    bottom: max(1.5rem, env(safe-area-inset-bottom));
+    top: calc(5rem + env(safe-area-inset-top, 0px));
     left: 50%;
     width: min(23rem, calc(100vw - 2rem));
     transform: translateX(-50%);
@@ -67,11 +67,11 @@
 .card[data-complete='true'] .progress { animation: countdown 900ms linear both; }
 .card[data-complete='true'] { animation: leave 150ms ease-in 750ms forwards; }
 
-@keyframes arrive { from { opacity: 0; transform: translateY(18px) scale(.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes arrive { from { opacity: 0; transform: translateY(-12px) scale(.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes confirm { from { transform: scale(.5); } to { transform: scale(1); } }
 @keyframes connecting { from { transform: translateX(-110%); } to { transform: translateX(390%); } }
 @keyframes countdown { to { transform: scaleX(0); } }
-@keyframes leave { to { opacity: 0; transform: translateY(8px) scale(.98); } }
+@keyframes leave { to { opacity: 0; transform: translateY(-8px) scale(.98); } }
 
 @media (prefers-reduced-motion: reduce) {
     .card, .card[data-complete='true'], .card[data-complete='true'] .badge, .card[data-complete] .progress { animation: none; }
