@@ -123,14 +123,16 @@ export async function processStoredLogs() {
             didWork = true
             const platform = await run('SELECT id FROM organizations WHERE status = \'active\' AND (id = $1 OR ($1::text IS NULL AND lower(name) = \'hanasand\')) ORDER BY created_at LIMIT 1', [process.env.PLATFORM_LOG_ORGANIZATION_ID || null])
             if (!platform.rows[0]) throw new Error('Configure an active platform log organization.')
-            await run('INSERT INTO log_processing_cursors (name) VALUES (\'service_logs\') ON CONFLICT DO NOTHING')
+            // Commit cursor bookkeeping together. Event batches still commit on
+            // their own connections first; rollback can replay, but never skip them.
+            await query('INSERT INTO log_processing_cursors (name) VALUES (\'service_logs\') ON CONFLICT DO NOTHING')
             const watermark = await stableLogWatermark('service_logs')
-            if (watermark === null) await run('UPDATE log_processing_cursors SET last_error = $1, updated_at = NOW() WHERE name = \'service_logs\'', ['Waiting for active log writes; will retry.'])
-            else await run('UPDATE log_processing_cursors SET recent_id = GREATEST($1::bigint - 200, 0) WHERE name = \'service_logs\' AND recent_id IS NULL', [watermark])
+            if (watermark === null) await query('UPDATE log_processing_cursors SET last_error = $1, updated_at = clock_timestamp() WHERE name = \'service_logs\'', ['Waiting for active log writes; will retry.'])
+            else await query('UPDATE log_processing_cursors SET recent_id = GREATEST($1::bigint - 200, 0) WHERE name = \'service_logs\' AND recent_id IS NULL', [watermark])
             // Freeze the historical range. Forward delivery must not keep adding
             // already checked rows to the tail of the backfill.
-            await run('UPDATE log_processing_cursors SET history_end_id = recent_id WHERE name = \'service_logs\' AND history_end_id IS NULL')
-            const cursor = (await run('SELECT last_id, recent_id, history_end_id FROM log_processing_cursors WHERE name = \'service_logs\'')).rows[0]
+            await query('UPDATE log_processing_cursors SET history_end_id = recent_id WHERE name = \'service_logs\' AND history_end_id IS NULL')
+            const cursor = (await query('SELECT last_id, recent_id, history_end_id FROM log_processing_cursors WHERE name = \'service_logs\'')).rows[0]
             const configured = new Map<string, Awaited<ReturnType<typeof loadConfiguredMillRules>>>()
             const processScopes = async (logs: LogInput[]) => {
                 if (logs.length) advanced = true
@@ -177,9 +179,9 @@ export async function processStoredLogs() {
                     ORDER BY s.created_at DESC, s.id DESC LIMIT 1000`, [watermark])
                 await processScopes(priority.rows)
                 const recent = await processPage(cursor.recent_id, watermark)
-                await run('UPDATE log_processing_cursors SET recent_id = $1, checked_count = checked_count + $2, updated_at = NOW(), last_error = NULL WHERE name = \'service_logs\'', [recent.lastId, recent.checked])
+                await query('UPDATE log_processing_cursors SET recent_id = $1, checked_count = checked_count + $2, updated_at = clock_timestamp(), last_error = NULL WHERE name = \'service_logs\'', [recent.lastId, recent.checked])
             }
-            await processAdditionalLogSources(processScopes, catchupLimit, catchupLimit)
+            await processAdditionalLogSources(processScopes, catchupLimit, catchupLimit, query)
             // Direct Mill ingestion is also pending until findings are durable.
             // Recover requests that stopped after persistence or during evaluation.
             const pending = await run(`SELECT e.* FROM mill_events e JOIN organizations o ON o.id = e.organization_id
@@ -196,7 +198,7 @@ export async function processStoredLogs() {
                 // Inspect narrow IDs in larger pages, while retaining the operator
                 // limit for actual detection work and never skipping a pending row.
                 const backlog = await processPage(cursor.last_id, cursor.history_end_id)
-                await run('UPDATE log_processing_cursors SET last_id = GREATEST(last_id, $1), checked_count = checked_count + $2, updated_at = NOW() WHERE name = \'service_logs\'', [backlog.lastId, backlog.checked])
+                await query('UPDATE log_processing_cursors SET last_id = GREATEST(last_id, $1), checked_count = checked_count + $2, updated_at = clock_timestamp() WHERE name = \'service_logs\'', [backlog.lastId, backlog.checked])
             }
         })
         // Counter initialization has its own lock and visible error state. Keep

@@ -46,6 +46,17 @@ test('failed evaluation leaves its delivery cursor unchanged for retry', async (
     await expect(processAdditionalLogSources(async () => { throw new Error('Evaluation failed') })).rejects.toThrow('Evaluation failed')
     expect(checkpoints).toHaveLength(0)
 })
+test('the caller can commit cursor bookkeeping together without extending source-read transactions', async () => {
+    const cursorStatements: string[] = []
+    await processAdditionalLogSources(async () => {}, 100, 100, async (sql: string, values?: unknown[]) => {
+        cursorStatements.push(sql)
+        return query(sql, values) as any
+    })
+    expect(cursorStatements).toHaveLength(18)
+    expect(cursorStatements.every(sql => sql.includes('log_processing_cursors'))).toBe(true)
+    expect(reads).toHaveLength(6)
+    expect(checkpoints).toHaveLength(6)
+})
 test('throttled history keeps every recent stream and advances only the evaluated historical rows', async () => {
     recentId = '1000'; watermark = '2000'; historyRows = 250
     const received: Array<{ first: string, last: string, count: number }> = []
