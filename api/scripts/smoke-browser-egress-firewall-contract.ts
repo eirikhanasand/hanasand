@@ -50,6 +50,11 @@ for (const setting of ['net.bridge.bridge-nf-call-iptables', 'net.bridge.bridge-
 assert.match(script, /modprobe br_netfilter/, 'load bridge filtering before installing rules')
 assert.match(script, /-I INPUT 1 -i "\$bridge" -j "\$host_chain"/, 'guard host services as well as forwarded containers')
 assert.match(script, /--ctstate RELATED,ESTABLISHED --ctdir REPLY -j ACCEPT/, 'host guard must only accept replies to host-initiated connections')
+for (const source of [script, verifyScript]) {
+    assert(source.includes('HANASAND_BROWSER_TURN_CONTAINER:-hanasand_browser_turn'), 'identify the dedicated live video relay')
+    assert(source.includes('-d "$turn_ip" -p udp --dport "$TURN_RELAY_PORTS" -j RETURN'), 'preserve negotiated relay destinations')
+    assert(source.includes('-s "$turn_ip" ! -d "$api_ip" -p udp --sport "$TURN_RELAY_PORTS" -j RETURN'), 'allow relay video without permitting delivery to the API')
+}
 const service = readFileSync(new URL('../../ops/browser-worker/hanasand-browser-egress.service', import.meta.url), 'utf8')
 assert(service.includes('PartOf=docker.service') && service.includes('WantedBy=multi-user.target docker.service'), 'restore isolation after boot and Docker restart')
 assert(service.includes('ExecStartPost=/bin/sh /home/hanasand/hanasand/ops/browser-worker/verify-egress-firewall.sh'), 'service must fail when firewall verification fails')

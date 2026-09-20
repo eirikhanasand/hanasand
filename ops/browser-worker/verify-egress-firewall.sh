@@ -6,6 +6,9 @@ CHAIN="${HANASAND_BROWSER_EGRESS_CHAIN:-HANASAND-BROWSER-EGRESS}"
 TOR_CONTAINER="${HANASAND_BROWSER_TOR_CONTAINER:-hanasand_onion_tor}"
 API_CONTAINER="${HANASAND_BROWSER_API_CONTAINER:-hanasand_api}"
 TOR_PORT="${HANASAND_BROWSER_TOR_PORT:-9050}"
+TURN_CONTAINER="${HANASAND_BROWSER_TURN_CONTAINER:-hanasand_browser_turn}"
+TURN_PORT="${HANASAND_BROWSER_TURN_PORT:-3478}"
+TURN_RELAY_PORTS="${HANASAND_BROWSER_TURN_RELAY_PORTS:-49152:49252}"
 
 fail() {
     printf 'FAIL: %s\n' "$*" >&2
@@ -35,9 +38,16 @@ has_rule() {
 bridge="$(bridge_name)"
 tor_ip="$(container_ip "$TOR_CONTAINER")"
 api_ip="$(container_ip "$API_CONTAINER")"
+turn_ip="$(container_ip "$TURN_CONTAINER")"
 
 [ -n "$tor_ip" ] || fail "could not resolve Tor container $TOR_CONTAINER on $NETWORK"
 [ -n "$api_ip" ] || fail "could not resolve API container $API_CONTAINER on $NETWORK"
+[ -n "$turn_ip" ] || fail "could not resolve TURN container $TURN_CONTAINER on $NETWORK"
+for protocol in tcp udp; do
+    has_rule iptables "$CHAIN" -d "$turn_ip" -p "$protocol" --dport "$TURN_PORT" -j RETURN || fail "TURN signalling is blocked"
+done
+has_rule iptables "$CHAIN" -d "$turn_ip" -p udp --dport "$TURN_RELAY_PORTS" -j RETURN || fail "TURN relay destinations are blocked"
+has_rule iptables "$CHAIN" -s "$turn_ip" ! -d "$api_ip" -p udp --sport "$TURN_RELAY_PORTS" -j RETURN || fail "TURN relay delivery is blocked"
 [ "$(sysctl -n net.bridge.bridge-nf-call-iptables)" = 1 ] || fail "IPv4 bridge filtering is disabled"
 [ "$(sysctl -n net.bridge.bridge-nf-call-ip6tables)" = 1 ] || fail "IPv6 bridge filtering is disabled"
 has_rule iptables FORWARD -j DOCKER-USER || fail "Docker forwarding bypasses DOCKER-USER"

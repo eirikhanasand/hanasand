@@ -6,6 +6,9 @@ CHAIN="${HANASAND_BROWSER_EGRESS_CHAIN:-HANASAND-BROWSER-EGRESS}"
 TOR_CONTAINER="${HANASAND_BROWSER_TOR_CONTAINER:-hanasand_onion_tor}"
 API_CONTAINER="${HANASAND_BROWSER_API_CONTAINER:-hanasand_api}"
 TOR_PORT="${HANASAND_BROWSER_TOR_PORT:-9050}"
+TURN_CONTAINER="${HANASAND_BROWSER_TURN_CONTAINER:-hanasand_browser_turn}"
+TURN_PORT="${HANASAND_BROWSER_TURN_PORT:-3478}"
+TURN_RELAY_PORTS="${HANASAND_BROWSER_TURN_RELAY_PORTS:-49152:49252}"
 
 # Same-bridge container traffic otherwise bypasses Docker's forwarding rules.
 modprobe br_netfilter
@@ -73,6 +76,12 @@ install_ipv4() {
     if [ -n "$tor_ip" ]; then
         ensure_rule iptables "$CHAIN" -d "$tor_ip" -p tcp --dport "$TOR_PORT" -j RETURN
     fi
+    # Public TURN connections are DNATed to this private address by Docker.
+    for protocol in tcp udp; do
+        ensure_rule iptables "$CHAIN" -d "$turn_ip" -p "$protocol" --dport "$TURN_PORT" -j RETURN
+    done
+    ensure_rule iptables "$CHAIN" -d "$turn_ip" -p udp --dport "$TURN_RELAY_PORTS" -j RETURN
+    ensure_rule iptables "$CHAIN" -s "$turn_ip" ! -d "$api_ip" -p udp --sport "$TURN_RELAY_PORTS" -j RETURN
     if [ -n "$api_ip" ]; then
         ensure_rule iptables "$CHAIN" ! -s "$api_ip" -d "$api_ip" -j REJECT
         for port in 8080 8090 9081; do
@@ -104,8 +113,10 @@ install_ipv6() {
 bridge="$(bridge_name)"
 tor_ip="$(container_ip "$TOR_CONTAINER")"
 api_ip="$(container_ip "$API_CONTAINER")"
+turn_ip="$(container_ip "$TURN_CONTAINER")"
 [ -n "$tor_ip" ] || { printf 'FAIL: could not resolve Tor container %s on %s\n' "$TOR_CONTAINER" "$NETWORK" >&2; exit 1; }
 [ -n "$api_ip" ] || { printf 'FAIL: could not resolve API container %s on %s\n' "$API_CONTAINER" "$NETWORK" >&2; exit 1; }
+[ -n "$turn_ip" ] || { printf 'FAIL: could not resolve TURN container %s on %s\n' "$TURN_CONTAINER" "$NETWORK" >&2; exit 1; }
 install_ipv4 "$bridge" "$tor_ip" "$api_ip"
 install_ipv6 "$bridge"
 
