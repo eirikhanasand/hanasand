@@ -115,6 +115,19 @@ def database_status(config):
     return status
 
 
+def track_replica_lag(database, previous, now):
+    # Persist the start across samples/restarts; one write burst is not a backlog.
+    timers = dict(previous.get('lagTimers', {}))
+    for slot in database.get('slots', []):
+        caught_up = (slot.get('active') and slot.get('walStatus') != 'lost'
+                     and slot.get('lagBytes') is not None and 0 <= slot['lagBytes'] <= 1048576)
+        since = timers.get(slot['slot'])
+        slot['lagSince'] = None if caught_up else since if isinstance(since, (int, float)) and 0 <= since <= now else now
+        timers[slot['slot']] = slot['lagSince']
+    # Keep timing through unavailable samples without carrying stale slot observations.
+    database['lagTimers'] = timers
+
+
 def restore_slots(source_database, previous):
     required = set(previous)
     for slot in source_database.get('slots', []):
@@ -183,6 +196,7 @@ def sample(config, previous):
             if instance['id'] in proxy_checks:
                 instance['lastProxyCheck'] = proxy_checks[instance['id']]
     database = database_status(config)
+    track_replica_lag(database, previous.get('database', {}), time.time())
     database_service = next((service for service in services if service['id'] == 'database'), None)
     read_only = bool(database_service and database_service.get('activeInstance') != 'inspur-db-primary')
     disk = shutil.disk_usage(ROOT)

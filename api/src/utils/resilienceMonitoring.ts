@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import type { JsonRule } from './jsonMonitoring.ts'
 
-type Slot = { slot: string, walStatus: string, active: boolean, lagBytes: number | null }
+type Slot = { slot: string, walStatus: string, active: boolean, lagBytes: number | null, lagSince?: number | null }
 type State = {
     sampledAt: number
     database?: { slots?: Slot[] }
@@ -23,9 +23,14 @@ export function resilienceChecks(state: State, now = Date.now()): Record<string,
     ]) {
         const slot = state.database?.slots?.find(item => item.slot === slotName)
         const lost = slot?.walStatus === 'lost' || state.backups?.restoreSlots?.includes(slotName)
-        const healthy = !!slot?.active && slot.lagBytes !== null && slot.lagBytes <= 1048576 && !lost
-        checks[id] = { failed: !healthy, message: lost ? 'WAL replication lost. Restore the replica from a backup.'
-            : healthy ? `${label} replica is up to date.` : `${label} replica is not up to date.` }
+        const lag = slot?.lagBytes
+        const validLag = typeof lag === 'number' && Number.isFinite(lag) && lag >= 0
+        const healthy = !!slot?.active && validLag && lag <= 1048576 && !lost
+        const lagAge = typeof slot?.lagSince === 'number' ? now - slot.lagSince * 1000 : NaN
+        // Fail unavailable/lost replication immediately. Only brief, measured lag gets a grace period.
+        const catchingUp = !!slot?.active && validLag && !lost && lagAge >= 0 && lagAge < 60_000
+        checks[id] = { failed: !healthy && !catchingUp, message: lost ? 'WAL replication lost. Restore the replica from a backup.'
+            : healthy ? `${label} replica is up to date.` : catchingUp ? `${label} replica is catching up.` : `${label} replica is not up to date.` }
     }
     const backupAge = now - Date.parse(state.backupReceipt?.receivedAt || '')
     const overdue = !Number.isFinite(backupAge) || backupAge > 36 * 3600_000 || backupAge < -5000

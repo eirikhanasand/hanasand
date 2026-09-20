@@ -41,3 +41,20 @@ test('recovery monitoring is restricted to administrators', () => {
     expect(needsSystemAutomationAccess({ actionType: 'agent_prompt', targetUrl: 'system:resilience', organizationId: null, modelName: null })).toBe(true)
     expect(automationReadScope('a', '$1', '$2')).toContain("a.target_url IS DISTINCT FROM 'system:resilience'")
 })
+
+
+test('brief replica lag gets one minute, while sustained lag and outages fail', () => {
+    const slot = { slot: 'hanasand_inspur_standby', walStatus: 'reserved', active: true, lagBytes: 8_000_000, lagSince: now / 1000 }
+    const check = (overrides = {}, elapsed = 0) => resilienceChecks({ sampledAt: (now + elapsed) / 1000,
+        database: { slots: [{ ...slot, ...overrides }] } }, now + elapsed).inspur_replica
+    expect(check()).toEqual({ failed: false, message: 'Inspur replica is catching up.' })
+    expect(check({}, 59_999).failed).toBe(false)
+    expect(check({}, 60_000).failed).toBe(true)
+    expect(check({ lagBytes: 1_048_576 }, 60_000)).toEqual({ failed: false, message: 'Inspur replica is up to date.' })
+    for (const overrides of [{ active: false }, { walStatus: 'lost' }, { lagBytes: null }, { lagBytes: NaN },
+        { lagBytes: -1 }, { lagSince: undefined }, { lagSince: NaN }, { lagSince: (now + 1) / 1000 }]) {
+        expect(check(overrides).failed).toBe(true)
+    }
+    expect(resilienceChecks({ sampledAt: now / 1000, database: { slots: [slot] },
+        backups: { restoreSlots: [slot.slot] } }, now).inspur_replica.failed).toBe(true)
+})

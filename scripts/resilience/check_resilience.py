@@ -13,6 +13,27 @@ assert monitor.restore_slots({}, [lost_slot]) == [lost_slot]
 assert monitor.restore_slots({'slots': []}, [lost_slot]) == [lost_slot]
 assert monitor.restore_slots({'slots': [{'slot': lost_slot, 'walStatus': 'reserved', 'active': True, 'lagBytes': 2000000}]}, [lost_slot]) == [lost_slot]
 assert monitor.restore_slots({'slots': [{'slot': lost_slot, 'walStatus': 'reserved', 'active': True, 'lagBytes': 0}]}, [lost_slot]) == []
+# Lag timing survives restarts, clears on catch-up, and never changes eligibility inputs.
+lag_slot = {'slot': 'hanasand_inspur_standby', 'walStatus': 'reserved', 'active': True, 'lagBytes': 2000000}
+lag_state = {'slots': [dict(lag_slot)]}
+monitor.track_replica_lag(lag_state, {}, 100)
+assert lag_state['slots'][0]['lagSince'] == 100
+later = {'slots': [dict(lag_slot)]}
+monitor.track_replica_lag(later, lag_state, 170)
+assert later['slots'][0]['lagSince'] == 100 and later['slots'][0]['lagBytes'] == 2000000
+caught_up = {'slots': [{**lag_slot, 'lagBytes': 1048576}]}
+monitor.track_replica_lag(caught_up, later, 180)
+assert caught_up['slots'][0]['lagSince'] is None
+monitor.track_replica_lag(later, caught_up, 190)
+assert later['slots'][0]['lagSince'] == 190
+# A failed sample must not overwrite a retained lag timer with a new grace period.
+# The source's last timer is retained when no slot observations are available.
+missing = {}
+monitor.track_replica_lag(missing, later, 200)
+assert 'slots' not in missing
+returned = {'slots': [dict(lag_slot)]}
+monitor.track_replica_lag(returned, missing, 260)
+assert returned['slots'][0]['lagSince'] == 190
 service = {'id': 'api', 'name': 'API', 'instances': [
     {'id': 'inspur-api-1', 'site': 'inspur', 'endpoint': 'https://api.hanasand.com'},
     {'id': 'inspur-api-2', 'site': 'inspur', 'endpoint': 'https://api.hanasand.com'},
