@@ -271,6 +271,8 @@ export default function MailWorkspace({ mailboxUser }: Props) {
 
     const checkedVisible = filteredMessages.filter(message => checkedMessages.has(message.id))
 
+    const allVisibleSelected = filteredMessages.length > 0 && checkedVisible.length === filteredMessages.length
+
     async function archiveSelected() {
         if (!overview || archivingRef.current || !checkedVisible.length) return
         const user = overview.mailboxUser
@@ -485,13 +487,13 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                 setSelectionMode(!selectionMode)
                                 setCheckedMessages(new Set())
                             }}>
-                            {selectionMode ? 'Unselect' : 'Select'}
+                            {selectionMode ? 'Hide' : 'Select'}
                         </button>}
                         {selectionMode && <button type='button'
                             className='shrink-0 px-2.5 text-[11px] font-semibold text-ui-primary hover:underline'
                             disabled={loading || archiving || !filteredMessages.length}
-                            onClick={() => setCheckedMessages(new Set(filteredMessages.map(message => message.id)))}>
-                            Select all
+                            onClick={() => setCheckedMessages(allVisibleSelected ? new Set() : new Set(filteredMessages.map(message => message.id)))}>
+                            {allVisibleSelected ? 'Unselect all' : 'Select all'}
                         </button>}
                     </div>
 
