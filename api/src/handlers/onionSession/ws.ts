@@ -2,6 +2,9 @@ import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { lookup, resolveTxt } from 'node:dns/promises'
 import { promisify } from 'node:util'
+import { existsSync, writeFileSync } from 'node:fs'
+import type { FastifyInstance } from 'fastify'
+import { SingleUseBrowser } from '../../utils/ws/singleUseBrowser.ts'
 import WebSocket, { type RawData } from 'ws'
 import { chromium, type Browser, type BrowserContext, type Download, type Frame, type Page, type Request } from 'playwright'
 import { fileReputation, inspectDownload, type FileReputation } from './downloads.ts'
@@ -122,6 +125,50 @@ type SandboxAdmissionRequest = {
 let activeBrowserSessions = 0
 const browserSessionQueue: SandboxAdmissionRequest[] = []
 let warmRegularBrowser: Promise<Browser> | null = null
+const prestartedBrowser = new SingleUseBrowser<Browser>()
+const warmClaimFile = '/tmp/hanasand-browser-claimed'
+
+export function registerPrestartedBrowser(fastify: FastifyInstance) {
+    const token = process.env.BROWSER_SANDBOX_POOL_TOKEN
+    if (!token || process.env.BROWSER_SANDBOX_WORKER_ONLY !== '1') return
+    // Never make a used browser available again after an API process restart.
+    if (existsSync(warmClaimFile)) prestartedBrowser.state = 'retired'
+    else fastify.addHook('onReady', async () => {
+        const deadline = setTimeout(() => { prestartedBrowser.state = 'retired' }, 60_000)
+        deadline.unref()
+        void (async () => {
+            assertProductionBrowserWorker()
+            const browser = await chromium.launch(chromiumLaunchOptions())
+            const probe = await browser.newContext()
+            const blank = await probe.newPage()
+            await blank.screenshot()
+            await probe.close()
+            if (prestartedBrowser.state !== 'starting') { await browser.close(); return }
+            browser.on('disconnected', () => { prestartedBrowser.state = 'retired' })
+            prestartedBrowser.ready(browser)
+        })().catch(error => {
+            prestartedBrowser.state = 'retired'
+            fastify.log.error(error, 'Browser prestart failed')
+        }).finally(() => clearTimeout(deadline))
+    })
+    fastify.route<{ Body: { sessionId?: string; retire?: boolean } }>({
+        method: ['GET', 'POST'], url: '/internal/browser-warm',
+        handler: async (req, reply) => {
+            if (req.headers['x-browser-pool-token'] !== token) return reply.code(403).send({ error: 'Forbidden' })
+            if (req.method === 'POST') {
+                if (req.body?.retire) {
+                    if (!prestartedBrowser.retire()) return reply.code(409).send({ error: 'Already claimed' })
+                } else {
+                    const sessionId = req.body?.sessionId
+                    if (!sessionId || !/^[a-zA-Z0-9_.-]{1,128}$/.test(sessionId)) return reply.code(400).send({ error: 'Invalid session' })
+                    if (prestartedBrowser.state === 'ready') writeFileSync(warmClaimFile, sessionId, { flag: 'wx', mode: 0o600 })
+                    if (!prestartedBrowser.claim(sessionId)) return reply.code(409).send({ error: 'Unavailable' })
+                }
+            }
+            return { state: prestartedBrowser.state, sessionId: prestartedBrowser.sessionId }
+        },
+    })
+}
 
 function allowLocalSandboxTargets() {
     return process.env.NODE_ENV !== 'production' && process.env.BROWSER_SANDBOX_ALLOW_LOCAL_TARGETS === '1'
@@ -283,6 +330,10 @@ function broadcastBrowserQueuePositions() {
 }
 
 export function handleOnionSessionSocket(connection: WebSocket, sessionId: string, defaultNetwork: 'tor' | 'regular' = 'tor') {
+    if (process.env.BROWSER_SANDBOX_POOL_TOKEN && !prestartedBrowser.connect(sessionId)) {
+        connection.close(1008, 'Browser has not been reserved for this session.')
+        return
+    }
     let browser: Browser | null = null
     let context: BrowserContext | null = null
     let page: Page | null = null
@@ -700,7 +751,10 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             const viewport = browserViewportForMessage(message)
             if (process.env.BROWSER_SANDBOX_WORKER_ONLY === '1') await resizeBrowserDisplay(viewport)
             trace('launch_chromium', { target, network, ownsBrowser })
-            browser = ownsBrowser ? await chromium.launch(chromiumLaunchOptions(proxy)) : await regularBrowser()
+            if (process.env.BROWSER_SANDBOX_POOL_TOKEN) {
+                if (proxy || network !== 'regular') throw new Error('Prestarted browser requires regular network mode.')
+                browser = prestartedBrowser.take(sessionId)
+            } else browser = ownsBrowser ? await chromium.launch(chromiumLaunchOptions(proxy)) : await regularBrowser()
             trace('chromium_launched')
             context = await browser.newContext({
                 viewport,

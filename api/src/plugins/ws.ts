@@ -1,6 +1,7 @@
 import fp from 'fastify-plugin'
 import { proxyModelSocket } from '../utils/ws/proxyModelSocket.ts'
 import { connectBrowserWorkerSocket } from '../utils/ws/connectBrowserWorker.ts'
+import { BrowserWarmPool, BROWSER_WARM_MAX_AGE_MS, type WarmWorker, type WarmStatus } from '../utils/ws/browserWarmPool.ts'
 import registerSupportStream from '../handlers/supportStream.ts'
 import registerSystemStream from '../handlers/metrics/systemStream.ts'
 import registerVmConsole from '../handlers/vms/console.ts'
@@ -18,9 +19,9 @@ import { removeClient } from '#utils/ws/removeClient.ts'
 import { countGptViewers, gpt, handleGptMessage, sendGptSnapshot, unregisterGptSocket } from '#utils/ws/handleGptMessage.ts'
 import recordLog from '#utils/logs/recordLog.ts'
 import run from '#db'
-import { currentBrowserAdmissionStatus, handleOnionSessionSocket, requestBrowserAdmission } from '../handlers/onionSession/ws.ts'
+import { currentBrowserAdmissionStatus, handleOnionSessionSocket, registerPrestartedBrowser, requestBrowserAdmission } from '../handlers/onionSession/ws.ts'
 import { browserPaidExtensionAllowed, finishBrowserRun, prepareBrowserRun, updateBrowserRunProviderResult, type BrowserProviderRunResult } from '../handlers/browserSandboxRuns.ts'
-import { createRuntimeContainer, getRuntimeContainer, getRuntimeContainerLogs, removeRuntimeContainer, startRuntimeContainer } from '#utils/docker/engine.ts'
+import { createRuntimeContainer, getRuntimeContainer, getRuntimeContainerLogs, listRuntimeContainers, renameRuntimeContainer, removeRuntimeContainer, startRuntimeContainer } from '#utils/docker/engine.ts'
 
 const browserWorkerSeccompProfile = fs.readFileSync(new URL('../../seccomp-chromium.json', import.meta.url), 'utf8')
 
@@ -69,6 +70,19 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
 
     fastify.get('/api/ws/thesis', { websocket: true }, socket => subscribeThesis(socket))
     registerBrowserStreamRoute(fastify)
+    if (process.env.NODE_ENV === 'production' && process.env.BROWSER_SANDBOX_EGRESS_FIREWALL_READY === '1') {
+        const maintain = () => {
+            void browserWarmPool.replenish()
+            // Reap abandoned claims after the longest possible run and idle wait.
+            void listRuntimeContainers().then(containers => Promise.all(containers
+                .filter(container => container.name.startsWith('hanasand_browser_warm_used_') && Date.now() - Date.parse(container.created_at) > BROWSER_WARM_MAX_AGE_MS)
+                .map(container => removeRuntimeContainer(container.id))))
+                .catch(error => fastify.log.error(error, 'Browser pool cleanup failed'))
+        }
+        let timer: ReturnType<typeof setInterval>
+        fastify.addHook('onReady', async () => { maintain(); timer = setInterval(maintain, 5000); timer.unref() })
+        fastify.addHook('onClose', async () => { clearInterval(timer) })
+    }
 
     // pwned
     fastify.get('/api/ws/pwned/:id', { websocket: true }, (connection, req: FastifyRequest) => {
@@ -218,6 +232,7 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
 })
 
 function registerBrowserSessionRoutes(fastify: FastifyInstance) {
+    registerPrestartedBrowser(fastify)
     fastify.get<{ Params: { id: string } }>('/api/ws/browser/:id', { websocket: true }, (connection: WebSocket, req: FastifyRequest<{ Params: { id: string } }>) => {
         if (proxyBrowserSocket(connection, req.params.id, 'browser')) return
         handleOnionSessionSocket(connection, req.params.id, 'regular')
@@ -402,8 +417,8 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
     let sawTerminalMessage = false
     let streamMetricsTimer: NodeJS.Timeout | null = null
     let releaseAdmission: (() => void) | null = null
-    let resolveStreamResolution: (resolution: string) => void = () => undefined
-    const streamResolution = new Promise<string>(resolve => { resolveStreamResolution = resolve })
+    let resolveStreamResolution: (options: { resolution: string; regular: boolean }) => void = () => undefined
+    const streamResolution = new Promise<{ resolution: string; regular: boolean }>(resolve => { resolveStreamResolution = resolve })
     const streamToken = randomUUID().replaceAll('-', '')
     const admission = requestBrowserAdmission(id, payload => {
         if (connection.readyState === WebSocket.OPEN) connection.send(JSON.stringify(payload))
@@ -436,7 +451,7 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
             if (!allowed) return
             runPrepared = true
         }
-        if (payload?.type === 'start') resolveStreamResolution(browserStreamResolution(payload))
+        if (payload?.type === 'start') resolveStreamResolution({ resolution: browserStreamResolution(payload), regular: payload.network !== 'tor' && route !== 'onion-session' })
         let forwarded: RawData = message
         if (payload?.type === 'extend' && payload.extension === 'paid') {
             const allowed = await browserPaidExtensionAllowed(id).catch(() => false)
@@ -465,7 +480,7 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
         closeBoth()
     })
 
-    void Promise.all([admission.promise, streamResolution]).then(([slot, resolution]) => {
+    void Promise.all([admission.promise, streamResolution]).then(async ([slot, options]) => {
         if (closed) {
             slot.release()
             return null
@@ -477,8 +492,16 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
             capacity: slot.status,
             message: 'Sandbox capacity is available. Starting this browser.',
         }))
+        const warm = options.regular ? await browserWarmPool.take(id).catch(error => {
+            console.error('Browser pool claim failed; starting a fresh worker:', error instanceof Error ? error.message : String(error))
+            return null
+        }) : null
+        if (warm) {
+            sendStatus(connection, 'worker_prestarted', 'Reserved a ready browser.')
+            return warm
+        }
         sendStatus(connection, 'launching_worker', 'Starting isolated browser worker.')
-        return startEphemeralBrowserWorker(id, resolution)
+        return startEphemeralBrowserWorker(id, options.resolution)
     })
         .then(worker => {
             if (!worker) return
@@ -854,13 +877,13 @@ function sendErrorThenClose(connection: WebSocket, message: string) {
     })
 }
 
-function browserTurnCredentials(sessionId: string) {
+function browserTurnCredentials(sessionId: string, lifetimeSeconds = 60 * 60) {
     const secret = process.env.BROWSER_SANDBOX_TURN_SECRET || ''
     const host = process.env.BROWSER_SANDBOX_TURN_HOST || ''
     if (process.env.NODE_ENV === 'production' && (!secret || secret === 'unsafe-dev-turn-secret' || !host)) {
         throw new Error('Production WebRTC browser streams require BROWSER_SANDBOX_TURN_SECRET and BROWSER_SANDBOX_TURN_HOST.')
     }
-    const username = `${Math.floor(Date.now() / 1000) + 60 * 60}:${sessionId}`
+    const username = `${Math.floor(Date.now() / 1000) + lifetimeSeconds}:${sessionId}`
     return {
         host: host || '127.0.0.1',
         username,
@@ -923,13 +946,60 @@ function browserStreamResolution(payload: { width?: unknown; height?: unknown })
     return `${width}x${height}`
 }
 
-async function startEphemeralBrowserWorker(sessionId: string, resolution = '1280x720') {
+const browserWarmPool = new BrowserWarmPool({
+    async inspect(slot) {
+        const inspect = await getRuntimeContainer(`hanasand_browser_warm_${slot}`).catch(error => {
+            if (String(error).includes('No such container')) return null
+            throw error
+        })
+        if (!inspect?.Id) return null
+        const ip = inspect.NetworkSettings?.Networks?.[process.env.BROWSER_SANDBOX_WORKER_NETWORK || 'hanasand_browsernet']?.IPAddress
+        const token = inspect.Config?.Env?.find(value => value.startsWith('BROWSER_SANDBOX_POOL_TOKEN='))?.split('=')[1] || ''
+        return { containerId: inspect.Id, wsUrl: `ws://${ip}:8090/api/ws`, streamIp: ip || '', token, createdAt: Date.parse(inspect.Created || ''), running: inspect.State?.Running }
+    },
+    async create(slot) {
+        try { await startEphemeralBrowserWorker(`warm-${slot}`, '1280x720', slot) }
+        catch (error) {
+            // Another API replica may have filled the same empty slot first.
+            if (!String(error).includes('already in use')) throw error
+        }
+    },
+    async status(worker) {
+        if (!worker.streamIp || !worker.token) return null
+        const response = await warmWorkerRequest(worker).catch(() => null)
+        if (!response?.ok) return null
+        const status = await response.json() as WarmStatus
+        if (status.state === 'ready' && !await fetch(`http://${worker.streamIp}:8080/health`, { signal: AbortSignal.timeout(1000) }).then(r => r.ok).catch(() => false)) return null
+        return status
+    },
+    async claim(worker, sessionId) {
+        const response = await warmWorkerRequest(worker, { sessionId })
+        if (response.status === 409) return false
+        if (!response.ok) throw new Error(`Browser claim failed: ${response.status}`)
+        return true
+    },
+    async detach(worker) { await renameRuntimeContainer(worker.containerId, `hanasand_browser_warm_used_${worker.containerId.slice(0, 24)}`) },
+    async retire(worker) { return (await warmWorkerRequest(worker, { retire: true })).ok },
+    async remove(worker) { await removeRuntimeContainer(worker.containerId).catch(error => { if (!String(error).includes('No such container')) throw error }) },
+    error(error) { console.error('Browser ready pool:', error instanceof Error ? error.message : String(error)) },
+})
+
+function warmWorkerRequest(worker: WarmWorker, body?: { sessionId?: string; retire?: boolean }) {
+    return fetch(`http://${worker.streamIp}:8090/internal/browser-warm`, {
+        method: body ? 'POST' : 'GET',
+        headers: { 'x-browser-pool-token': worker.token, 'content-type': 'application/json' },
+        body: body ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(1500),
+    })
+}
+
+async function startEphemeralBrowserWorker(sessionId: string, resolution = '1280x720', warmSlot?: number) {
     if (process.env.NODE_ENV === 'production' && process.env.BROWSER_SANDBOX_EGRESS_FIREWALL_READY !== '1') {
         throw new Error('Browser sandbox egress firewall is not marked ready. Run ops/browser-worker/install-egress-firewall.sh before enabling production browser sessions.')
     }
-    const containerName = `hanasand_browser_session_${sessionId.replace(/[^a-zA-Z0-9_.-]/g, '-').slice(0, 48)}_${randomUUID().slice(0, 8)}`
+    const containerName = warmSlot === undefined ? `hanasand_browser_session_${sessionId.replace(/[^a-zA-Z0-9_.-]/g, '-').slice(0, 48)}_${randomUUID().slice(0, 8)}` : `hanasand_browser_warm_${warmSlot}`
     const networkName = process.env.BROWSER_SANDBOX_WORKER_NETWORK || 'hanasand_browsernet'
-    const turn = browserTurnCredentials(sessionId)
+    const turn = browserTurnCredentials(sessionId, warmSlot === undefined ? 60 * 60 : 120 * 60)
     const containerId = await createRuntimeContainer(containerName, {
         Image: process.env.BROWSER_SANDBOX_WORKER_IMAGE || 'hanasand_browser_worker',
         User: '1000',
@@ -946,6 +1016,7 @@ async function startEphemeralBrowserWorker(sessionId: string, resolution = '1280
             'BROWSER_SANDBOX_CHROMIUM_SANDBOX=1',
             'BROWSER_SANDBOX_MAX_SESSIONS=1',
             'BROWSER_SANDBOX_PREWARM=0',
+            ...(warmSlot === undefined ? [] : [`BROWSER_SANDBOX_POOL_TOKEN=${randomUUID()}`]),
             'SELKIES_ENABLE_BASIC_AUTH=false',
             'SELKIES_ENABLE_RESIZE=false',
             'SELKIES_ENCODER=vp8enc',
@@ -983,7 +1054,7 @@ async function startEphemeralBrowserWorker(sessionId: string, resolution = '1280
             'com.hanasand.role': 'browser-session-worker',
             'com.hanasand.session': sessionId,
         },
-    })
+    }, warmSlot !== undefined)
 
     try {
         await startRuntimeContainer(containerId)

@@ -60,6 +60,8 @@ type DockerContainerResponse = {
 
 type DockerInspectResponse = {
     Id?: string
+    Created?: string
+    Config?: { Env?: string[] }
     RestartCount?: number
     State?: {
         Running?: boolean
@@ -237,7 +239,7 @@ async function inspectRuntimeContainer(id: string) {
     return JSON.parse(body.toString('utf8')) as DockerInspectResponse
 }
 
-export async function createRuntimeContainer(name: string, body: Record<string, unknown>) {
+export async function createRuntimeContainer(name: string, body: Record<string, unknown>, sharedName = false) {
     let response: Buffer
     try {
         // Image/container filesystem setup can outlast ordinary Docker reads on a busy host.
@@ -245,7 +247,7 @@ export async function createRuntimeContainer(name: string, body: Record<string, 
     } catch (error) {
         // A timed-out create may still have completed in Docker. Do not remove a
         // pre-existing container on other errors (particularly name conflicts).
-        if ((error as NodeJS.ErrnoException).code === 'ETIMEDOUT') await removeRuntimeContainer(name).catch(() => undefined)
+        if (!sharedName && (error as NodeJS.ErrnoException).code === 'ETIMEDOUT') await removeRuntimeContainer(name).catch(() => undefined)
         throw error
     }
     const parsed = JSON.parse(response.toString('utf8')) as { Id?: string }
@@ -255,6 +257,10 @@ export async function createRuntimeContainer(name: string, body: Record<string, 
 
 export async function startRuntimeContainer(id: string) {
     await requestDocker(`/containers/${encodeURIComponent(id)}/start`, { method: 'POST', timeoutMs: 60_000 })
+}
+
+export async function renameRuntimeContainer(id: string, name: string) {
+    await requestDocker(`/containers/${encodeURIComponent(id)}/rename?name=${encodeURIComponent(name)}`, { method: 'POST' })
 }
 
 export async function removeRuntimeContainer(id: string) {
