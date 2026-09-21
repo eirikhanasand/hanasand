@@ -102,7 +102,7 @@ test.describe('public website routes', () => {
 
     test('homepage and FAQ explain threat intelligence basics', async ({ page }) => {
         await page.goto('/')
-        await expect(page.getByRole('heading', { name: 'Clear answers before teams trust a signal.' })).toBeVisible()
+        await expect(page.getByRole('heading', { name: 'FAQ', exact: true })).toBeVisible()
         await expect(page.getByRole('heading', { name: 'What is a threat actor?' })).toBeVisible()
         await expect(page.getByRole('link', { name: 'View all FAQ' })).toHaveAttribute('href', '/faq')
 

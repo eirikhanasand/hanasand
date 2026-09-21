@@ -266,10 +266,7 @@ export default function Page() {
                 <div className='mx-auto grid max-w-7xl gap-8 px-4 py-14 md:px-8'>
                     <div className='grid gap-6'>
                         <div className='flex flex-col gap-3 md:flex-row md:items-end md:justify-between'>
-                            <div className='grid gap-2'>
-                                <p className='text-sm font-semibold uppercase text-ui-primary'>FAQ</p>
-                                <h2 className='text-3xl font-semibold text-ui-text'>Clear answers before teams trust a signal.</h2>
-                            </div>
+                            <h2 className='text-sm font-semibold uppercase text-ui-primary'>FAQ</h2>
                             <Link href='/faq' className='inline-flex w-fit items-center gap-2 rounded-lg border border-ui-border px-4 py-2.5 text-sm font-semibold text-ui-primary transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20'>
                                 View all FAQ
                                 <ArrowRight className='h-4 w-4' />
