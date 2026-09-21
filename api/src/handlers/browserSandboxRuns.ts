@@ -63,7 +63,7 @@ type BrowserReportParams = { id: string }
 type BrowserReportQuery = { clientId?: string; token?: string }
 type BrowserReportBody = { clientId?: string; report?: unknown }
 
-const maxReportBytes = 2_000_000
+export const maxBrowserReportBytes = 32_000_000
 let browserRunStatsCache: { expiresAt: number; value: BrowserRunStats } | null = null
 
 export async function getBrowserRuns(req: FastifyRequest<{ Querystring: { clientId?: string } }>, res: FastifyReply) {
@@ -174,7 +174,7 @@ export async function postBrowserRunReport(req: FastifyRequest<{ Params: Browser
         if (!row) return res.status(404).send({ error: 'Run not found.' })
         const report = req.body?.report
         const encoded = JSON.stringify(report)
-        if (!report || encoded.length > maxReportBytes) return res.status(400).send({ error: 'Report is missing or too large.' })
+        if (!report || Buffer.byteLength(encoded, 'utf8') > maxBrowserReportBytes) return res.status(400).send({ error: 'Report is missing or too large.' })
         const token = row.metadata?.reportToken || randomUUID()
         await run(`
             UPDATE browser_runs

@@ -7,11 +7,16 @@ import tailwind from '@tailwindcss/postcss'
 let bundle = ''
 let streamLoads = 0
 let savedReport = null
+let shareRequests = 0
 const css = (await postcss([tailwind()]).process(await readFile('src/app/globals.css', 'utf8'), { from: 'src/app/globals.css' })).css
 const server = Bun.serve({ port: 0, fetch(request) {
     const url = new URL(request.url)
     if (url.pathname === '/app.js') return new Response(bundle, { headers: { 'content-type': 'text/javascript' } })
     if (url.pathname === '/app.css') return new Response(css, { headers: { 'content-type': 'text/css' } })
+    if (url.pathname.endsWith('/report') && request.method === 'POST') {
+        shareRequests++
+        return shareRequests === 1 ? Response.json({ error: 'Could not save the report. Try again.' }, { status: 503 }) : Response.json({ reportUrl: '/saved' })
+    }
     if (url.pathname.endsWith('/report')) return Response.json(savedReport)
     if (url.pathname.startsWith('/api/')) return Response.json({ runs: [], profiles: [] })
     if (url.pathname === '/stream/index.html') {
@@ -33,6 +38,7 @@ try {
     const errors = []
     page.on('pageerror', error => errors.push(error.message))
     await page.addInitScript(() => {
+        Object.defineProperty(navigator, 'clipboard', { value: { writeText: async () => { throw new Error('Clipboard unavailable') } } })
         window.browserMessages = []
         window.WebSocket = class {
             static OPEN = 1
@@ -133,7 +139,16 @@ try {
         window.deliver({ type: 'tool_capture', id: 'virustotal', name: 'VirusTotal', url: 'https://www.virustotal.com/', toolAnalysis: { toolKind: 'virustotal', vendorFlagged: 0, vendorTotal: 90 } })
         window.deliver({ type: 'tool_capture', id: 'webcrack', name: 'WebCrack', url: 'https://webcrack.netlify.app/', toolAnalysis: { toolKind: 'webcrack', webcrackLoaded: false, webcrackLoadReason: 'no obfuscated code found on target page' } })
     })
-    assert.equal(await page.getByRole('tab', { name: /^WebCrack/ }).isEnabled(), false, 'No-code WebCrack must not open an empty tool')
+    assert.equal(await page.getByRole('tab', { name: /^WebCrack/ }).count(), 0, 'No-code WebCrack must be hidden')
+    const vtTab = page.getByRole('tab', { name: /^VirusTotal/ })
+    assert(await vtTab.locator('img').isVisible(), 'Mobile provider tab shows its logo')
+    assert.equal(await vtTab.getByText('VirusTotal', { exact: true }).isVisible(), false, 'Mobile hides the full provider name')
+    await page.getByRole('button', { name: 'Share', exact: true }).click()
+    await page.getByRole('alert').getByText('Could not save the report. Try again.', { exact: true }).waitFor()
+    await page.getByRole('button', { name: 'Share', exact: true }).click()
+    await page.getByRole('region', { name: 'Share report' }).waitFor()
+    assert.equal(await page.getByLabel('Report link', { exact: true }).inputValue(), new URL('/saved', server.url).toString())
+    assert.equal(await page.getByRole('button', { name: 'Copied', exact: true }).count(), 0, 'Denied clipboard must not claim Copied')
     await page.evaluate(() => window.deliver({ type: 'ended' }))
     const result = page.locator('[data-run-result] > button')
     await result.waitFor()

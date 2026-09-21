@@ -418,6 +418,8 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     const [expandedRun, setExpandedRun] = useState<BrowserRunHistory | null>(null)
     const [currentRunId, setCurrentRunId] = useState('')
     const [shareStatus, setShareStatus] = useState('')
+    const [shareUrl, setShareUrl] = useState('')
+    const [shareError, setShareError] = useState('')
     const socketRef = useRef<BrowserControlSocket | null>(null)
     const replacementRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const recoveryDeadlineRef = useRef(0)
@@ -520,36 +522,49 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     const saveReport = useCallback(async () => {
         if (!currentRunId || !captures.length) return
         setShareStatus('saving')
-        const response = await fetch(`${historyApiPath}/${encodeURIComponent(currentRunId)}/report`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                clientId: getOrCreateBrowserClientId(),
-                report: buildExportReport({
-                    target: normalizedTarget,
-                    activeUrl,
-                    sessionState,
-                    socketState,
-                    profile: selectedProfile,
-                    summary,
-                    captures,
-                    events,
-                    consoleEvents,
-                    providerConsoleEvents,
-                    capacity,
+        setShareError('')
+        setShareUrl('')
+        try {
+            const response = await fetch(`${historyApiPath}/${encodeURIComponent(currentRunId)}/report`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    clientId: getOrCreateBrowserClientId(),
+                    report: buildExportReport({
+                        target: normalizedTarget,
+                        activeUrl,
+                        sessionState,
+                        socketState,
+                        profile: selectedProfile,
+                        summary,
+                        captures,
+                        events,
+                        consoleEvents,
+                        providerConsoleEvents,
+                        capacity,
+                    }),
                 }),
-            }),
-        })
-        if (!response.ok) {
+            })
+            const payload = await response.json() as { reportUrl?: string; error?: string }
+            if (!response.ok) throw new Error(payload.error || 'Could not save the report. Try again.')
+            if (!payload.reportUrl) throw new Error('The report link was not returned. Try again.')
+            const reportUrl = new URL(payload.reportUrl, window.location.origin).toString()
+            setShareUrl(reportUrl)
+            setHistory(current => persistHistory(current.map(run => run.id === currentRunId ? { ...run, reportUrl } : run)))
+            setShareStatus('saved')
+            try {
+                if (navigator.clipboard) {
+                    await navigator.clipboard.writeText(reportUrl)
+                    setShareStatus('copied')
+                }
+            } catch {
+                // The selectable link remains available when mobile clipboard access is denied.
+            }
+        } catch (error) {
             setShareStatus('failed')
-            return
+            setShareError(error instanceof Error ? error.message : 'Could not save the report. Try again.')
         }
-        const payload = await response.json() as { reportUrl?: string }
-        const reportUrl = payload.reportUrl ? new URL(payload.reportUrl, window.location.origin).toString() : ''
-        if (reportUrl) await navigator.clipboard?.writeText(reportUrl).catch(() => undefined)
-        setHistory(current => persistHistory(current.map(run => run.id === currentRunId ? { ...run, reportUrl } : run)))
-        setShareStatus(reportUrl ? 'copied' : 'saved')
     }, [activeUrl, capacity, captures, consoleEvents, providerConsoleEvents, currentRunId, events, normalizedTarget, selectedProfile, sessionState, socketState, summary])
 
     useEffect(() => {
@@ -677,6 +692,8 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
         stoppedEarlyRef.current = false
         setCurrentRunId(id)
         setShareStatus('')
+        setShareUrl('')
+        setShareError('')
         if (!override?.recovery) {
             setCaptures([])
             setConsoleEvents([])
@@ -958,6 +975,12 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
         const socket = socketRef.current
         if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'select_tab', tabId }))
     }, [runIsActive, selectedProfile.tools, toolCaptures, normalizedTarget])
+
+    useEffect(() => {
+        const tool = selectedProfile.tools.find(item => item.id === activeSandboxTab)
+        const capture = tool && selectToolCapture(toolCaptures, tool, normalizedTarget)
+        if (capture && providerTabStatus(capture, capture.toolAnalysis) === 'no obfuscated code') selectSandboxTab('browser')
+    }, [activeSandboxTab, normalizedTarget, selectSandboxTab, selectedProfile.tools, toolCaptures])
 
     const extendRun = useCallback((extension: 'free' | 'paid') => {
         const socket = socketRef.current
@@ -1339,6 +1362,15 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                                     <RotateCcw className='h-4 w-4' />
                                 </button>
                             </div>
+                            {shareUrl ? <div role='region' aria-label='Share report' className='flex w-full min-w-0 flex-wrap items-center gap-2'>
+                                <input aria-label='Report link' readOnly value={shareUrl} onFocus={event => event.currentTarget.select()} className='min-w-0 flex-1 rounded-md border border-ui-border bg-ui-canvas px-2 py-1.5 text-xs text-ui-text' />
+                                <a href={shareUrl} target='_blank' rel='noopener noreferrer' className='text-sm text-ui-primary underline'>Open report</a>
+                                <button type='button' className='rounded-md border border-ui-border px-2 py-1.5 text-sm' onClick={() => {
+                                    const action = navigator.share ? navigator.share({ url: shareUrl }) : navigator.clipboard?.writeText(shareUrl)
+                                    void action?.then(() => { if (!navigator.share) setShareStatus('copied') }).catch(() => setShareError('Select and copy the report link above.'))
+                                }}>{typeof navigator !== 'undefined' && navigator.share ? 'Share link' : 'Copy link'}</button>
+                            </div> : null}
+                            {shareError ? <p role='alert' className='text-sm text-ui-danger'>{shareError}</p> : null}
                             <div data-browser-status className='flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ui-muted sm:justify-end'>
                                 <span aria-label='Browser capacity' title={sessionState === 'queued' ? queueCopy(capacity) : 'Active browser sessions'}>{capacity?.activeSessions ?? 0}/{capacity?.maxSessions ?? 100}</span>
                                 <span>{sessionState === 'ended' ? stoppedRunRef.current ? 'Stopped' : 'Completed' : sessionState === 'failed' ? 'Failed' : compactBrowserEvent(events[0] || sessionStateLabel(sessionState))}{streamStats.fps !== undefined ? ` · ${Math.round(streamStats.fps)} FPS` : ''}{streamStats.latencyMs !== undefined ? ` · ${Math.round(streamStats.latencyMs)}ms` : ''}</span>
@@ -1505,11 +1537,13 @@ function SandboxTabStrip({
                 const capture = selectToolCapture(toolCaptures, tool, target)
                 const status = providerTabStatus(capture, capture?.toolAnalysis)
                 const ended = ['ended', 'failed', 'unreachable'].includes(sessionState)
+                if (status === 'no obfuscated code') return null
                 return (
                     <SandboxTabButton
                         key={tool.id}
                         active={activeTab === tool.id}
                         label={tool.name}
+                        provider={tool.id}
                         status={ended && ['loading', 'waiting'].includes(status) ? 'incomplete' : status}
                         onClick={() => onSelect(tool.id)}
                     />
@@ -1519,7 +1553,7 @@ function SandboxTabStrip({
     )
 }
 
-function SandboxTabButton({ active, label, status, onClick }: { active: boolean; label: string; status: string; onClick: () => void }) {
+function SandboxTabButton({ active, label, status, provider, onClick }: { active: boolean; label: string; status: string; provider?: string; onClick: () => void }) {
     return (
         <button
             type='button'
@@ -1530,7 +1564,8 @@ function SandboxTabButton({ active, label, status, onClick }: { active: boolean;
             tabIndex={active ? 0 : -1}
             className={`flex shrink-0 items-center gap-2 rounded-md border px-2 py-1.5 text-left transition ${active ? 'border-ui-primary bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-raised text-ui-text hover:border-ui-primary/60'}`}
         >
-            <span className='truncate text-[11px] font-semibold sm:text-xs md:text-sm'>{label}</span>
+            {provider && ['virustotal', 'urlquery', 'webcrack'].includes(provider) ? <Image src={`/logos/${provider}.${provider === 'virustotal' ? 'svg' : 'png'}`} alt={label} width={20} height={20} unoptimized className='h-5 w-5 shrink-0 object-contain sm:hidden' /> : null}
+            <span className={`${provider && ['virustotal', 'urlquery', 'webcrack'].includes(provider) ? 'hidden sm:inline' : ''} truncate text-[11px] font-semibold sm:text-xs md:text-sm`}>{label}</span>
             {status ? <span className='truncate text-[11px] text-ui-muted'>{status}</span> : null}
         </button>
     )
@@ -1908,6 +1943,7 @@ function EvidenceWorkspace({
                     {profile.tools.map(tool => {
                         const capture = selectToolCapture(toolCaptures, tool, target)
                         const analysis = capture?.toolAnalysis
+                        if (providerTabStatus(capture, analysis) === 'no obfuscated code') return null
                         return (
                             <EvidencePanel key={tool.id} title={tool.name} status={providerStatus(capture, analysis)}>
                                 {capture ? (
@@ -1920,7 +1956,7 @@ function EvidenceWorkspace({
                     })}
                 </div>
 
-                <EvidencePanel title='WebCrack / decoded code' status={summary.webcrackLoaded ? 'Code loaded' : 'No decoded result'}>
+                {summary.deobfuscationTasks.length > 0 || summary.webcrackLoaded ? <EvidencePanel title='WebCrack / decoded code' status={summary.webcrackLoaded ? 'Code loaded' : 'No decoded result'}>
                     {summary.deobfuscationTasks.length ? (
                         <div className='grid gap-2 text-xs text-ui-muted'>
                             {summary.deobfuscationTasks.slice(0, 4).map(task => (
@@ -1934,7 +1970,7 @@ function EvidenceWorkspace({
                     ) : (
                         <p className='text-xs leading-5 text-ui-muted'>No obfuscated code was found on this page.</p>
                     )}
-                </EvidencePanel>
+                </EvidencePanel> : null}
 
                 <EvidencePanel title='Network / requests' status={latestNetwork ? 'Captured' : 'No network summary'}>
                     {latestNetwork ? (
