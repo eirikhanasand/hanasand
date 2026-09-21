@@ -21,7 +21,9 @@ extension_uris = []
 payloader.connect('add-extension', lambda _, extension: extension_uris.append(extension.get_uri()))
 assert app.rtp_add_extensions(payloader)
 assert not any('playout-delay' in uri for uri in extension_uris), 'Sender must not force zero receiver buffering'
-assert any('transport-wide-cc' in uri for uri in extension_uris), 'Keep adaptive bitrate feedback'
+assert not app.congestion_control, 'Do not use the corrupting GCC/x264 packet path'
+assert not any('transport-wide-cc' in uri for uri in extension_uris)
+assert GSTWebRTCApp(asyncio.new_event_loop(), encoder='vp8enc', congestion_control=True).congestion_control, 'Other encoders retain congestion control'
 assert encoder.get_property('key-int-max') == 60
 assert encoder.get_property('bframes') == 0
 assert encoder.get_property('rc-lookahead') == 0
