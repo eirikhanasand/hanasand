@@ -1,7 +1,7 @@
 'use client'
 
 import { BrowserControlSocket } from './controlSocket'
-import { ArrowUp, Check, ChevronDown, Clipboard, Download, Globe2, Hourglass, LoaderCircle, PackageCheck, Play, Plus, RotateCcw, Share2, ShieldCheck, SlidersHorizontal, Square, Trash2 } from 'lucide-react'
+import { ArrowUp, Check, ChevronDown, Clipboard, Download, Globe2, LoaderCircle, PackageCheck, Play, Plus, RotateCcw, Share2, ShieldCheck, SlidersHorizontal, Square, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -708,7 +708,6 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
             if (socketRef.current !== socket) return
             setSocketState('closed')
             setStreamUrl('')
-            setStreamStats({})
             if (!receivedEnd && !stoppedRunRef.current) {
                 setRunBlocker(current => current || 'The browser connection was lost before the run finished. Try again.')
                 setSessionState(current => current === 'prompt' || current === 'unreachable' ? current : 'failed')
@@ -773,7 +772,6 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                 receivedEnd = true
                 const failed = payload.reason === 'launch_failed' || payload.reason === 'quota_exhausted' || !receivedEvidenceRef.current
                 setStreamUrl('')
-                setStreamStats({})
                 if (failed) setRunBlocker(current => current || stringValue(payload.message) || 'The browser stopped before capturing any evidence. Try again.')
                 setSessionState(current => current === 'failed' || current === 'unreachable' ? current : failed ? 'failed' : 'ended')
                 pushEvent('Sandbox run ended.')
@@ -1254,43 +1252,49 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                             <h1 className='truncate text-lg font-semibold' title={activeViewportUrl}>{historyDomainKey(activeViewportUrl)}</h1>
                             {selectedProfile.tools.length ? <SandboxTabStrip activeTab={activeSandboxTab} sessionState={sessionState} tools={selectedProfile.tools} toolCaptures={toolCaptures} target={normalizedTarget} onSelect={selectSandboxTab} /> : null}
                         </div>
-                        <div className='flex flex-wrap items-center gap-2'>
-                            <StatusPill label='' value={summary.navigationFailed || sessionState === 'unreachable' ? 'unreachable' : sessionStateLabel(sessionState).replace(/^./, letter => letter.toUpperCase())} good={sessionState === 'live'} />
-                            {runIsActive && socketState !== 'open' ? <StatusPill label='Connection' value={socketStateLabel(socketState)} good={false} /> : null}
-                            {sessionState === 'live' && runTiming ? <span role='timer' aria-label={`${formatRunDuration(runRemainingSeconds)} remaining`}><StatusPill label='Time left' value={formatRunDuration(runRemainingSeconds)} good={runRemainingSeconds > 15} /></span> : null}
-                            {sessionState === 'live' && runTiming && !runTiming.paidExtensionUsed ? (
-                                runTiming.freeExtensionUsed && !paidBrowserPlan ? (
-                                    <Link href='/pricing' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
-                                        <Plus className='h-4 w-4' />
-                                        Add 5 min · Paid
-                                    </Link>
-                                ) : (
-                                    <button type='button' onClick={() => extendRun(runTiming.freeExtensionUsed ? 'paid' : 'free')} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
-                                        <Plus className='h-4 w-4' />
-                                        {runTiming.freeExtensionUsed ? 'Add 5 min · Paid' : 'Add 5 min'}
-                                    </button>
-                                )
-                            ) : null}
-                            <button type='button' onClick={exportReport} disabled={!captures.length} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary disabled:cursor-not-allowed disabled:opacity-50'>
-                                <Download className='h-4 w-4' />
-                                Export
-                            </button>
-                            <button type='button' onClick={() => void saveReport()} disabled={!captures.length || !currentRunId || shareStatus === 'saving'} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary disabled:cursor-not-allowed disabled:opacity-50'>
-                                <Share2 className='h-4 w-4' />
-                                {shareStatus === 'saving' ? 'Saving' : shareStatus === 'copied' ? 'Copied' : 'Share'}
-                            </button>
-                            {runIsActive ? (
-                                <button type='button' onClick={stopRun} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-danger/35 bg-ui-danger/10 px-3 text-sm font-semibold text-ui-danger'>
-                                    <Square className='h-4 w-4' />
-                                    Stop
+                        <div className='grid min-w-0 gap-2'>
+                            <div className='flex flex-wrap items-center gap-2'>
+                                <StatusPill label='' value={summary.navigationFailed || sessionState === 'unreachable' ? 'unreachable' : sessionStateLabel(sessionState).replace(/^./, letter => letter.toUpperCase())} good={sessionState === 'live'} />
+                                {runIsActive && socketState !== 'open' ? <StatusPill label='Connection' value={socketStateLabel(socketState)} good={false} /> : null}
+                                {sessionState === 'live' && runTiming ? <span role='timer' aria-label={`${formatRunDuration(runRemainingSeconds)} remaining`}><StatusPill label='Time left' value={formatRunDuration(runRemainingSeconds)} good={runRemainingSeconds > 15} /></span> : null}
+                                {sessionState === 'live' && runTiming && !runTiming.paidExtensionUsed ? (
+                                    runTiming.freeExtensionUsed && !paidBrowserPlan ? (
+                                        <Link href='/pricing' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
+                                            <Plus className='h-4 w-4' />
+                                            Add 5 min · Paid
+                                        </Link>
+                                    ) : (
+                                        <button type='button' onClick={() => extendRun(runTiming.freeExtensionUsed ? 'paid' : 'free')} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
+                                            <Plus className='h-4 w-4' />
+                                            {runTiming.freeExtensionUsed ? 'Add 5 min · Paid' : 'Add 5 min'}
+                                        </button>
+                                    )
+                                ) : null}
+                                <button type='button' onClick={exportReport} disabled={!captures.length} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary disabled:cursor-not-allowed disabled:opacity-50'>
+                                    <Download className='h-4 w-4' />
+                                    Export
                                 </button>
-                            ) : null}
-                            <button type='button' onClick={() => scrollRouteFrameToTop('smooth')} className='grid h-9 w-9 place-items-center rounded-md border border-ui-border text-ui-text transition hover:border-ui-primary sm:hidden' aria-label='Back to top' title='Back to top'>
-                                <ArrowUp className='h-4 w-4' />
-                            </button>
-                            <button type='button' onClick={resetRun} className='grid h-9 w-9 place-items-center rounded-md border border-ui-border text-ui-text transition hover:border-ui-primary' aria-label='New sandbox run'>
-                                <RotateCcw className='h-4 w-4' />
-                            </button>
+                                <button type='button' onClick={() => void saveReport()} disabled={!captures.length || !currentRunId || shareStatus === 'saving'} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary disabled:cursor-not-allowed disabled:opacity-50'>
+                                    <Share2 className='h-4 w-4' />
+                                    {shareStatus === 'saving' ? 'Saving' : shareStatus === 'copied' ? 'Copied' : 'Share'}
+                                </button>
+                                {runIsActive ? (
+                                    <button type='button' onClick={stopRun} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-danger/35 bg-ui-danger/10 px-3 text-sm font-semibold text-ui-danger'>
+                                        <Square className='h-4 w-4' />
+                                        Stop
+                                    </button>
+                                ) : null}
+                                <button type='button' onClick={() => scrollRouteFrameToTop('smooth')} className='grid h-9 w-9 place-items-center rounded-md border border-ui-border text-ui-text transition hover:border-ui-primary sm:hidden' aria-label='Back to top' title='Back to top'>
+                                    <ArrowUp className='h-4 w-4' />
+                                </button>
+                                <button type='button' onClick={resetRun} className='grid h-9 w-9 place-items-center rounded-md border border-ui-border text-ui-text transition hover:border-ui-primary' aria-label='New sandbox run'>
+                                    <RotateCcw className='h-4 w-4' />
+                                </button>
+                            </div>
+                            <div data-browser-status className='flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ui-muted sm:justify-end'>
+                                <span aria-label='Browser capacity' title={sessionState === 'queued' ? queueCopy(capacity) : 'Active browser sessions'}>{capacity?.activeSessions ?? 0}/{capacity?.maxSessions ?? 100}</span>
+                                <span>{sessionState === 'ended' ? stoppedRunRef.current ? 'Stopped' : 'Completed' : sessionState === 'failed' ? 'Failed' : compactBrowserEvent(events[0] || sessionStateLabel(sessionState))}{streamStats.fps !== undefined ? ` · ${Math.round(streamStats.fps)} FPS` : ''}{streamStats.latencyMs !== undefined ? ` · ${Math.round(streamStats.latencyMs)}ms` : ''}</span>
+                            </div>
                         </div>
                     </div>
                 </header>
@@ -1366,15 +1370,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                                 </div>
                             </section>
                             <DownloadsPanel downloads={summary.latestNetwork?.downloads || []} runIsActive={runIsActive} />
-                            <details className='rounded-lg border border-ui-border p-3'><summary className='cursor-pointer text-sm font-semibold'>Connection and provider details</summary><aside className='mt-3 grid gap-4 xl:grid-cols-3'>
-                                <CapacityPanel capacity={capacity} sessionState={sessionState} />
-                                <ProviderStatusPanel tools={selectedProfile.tools} toolCaptures={toolCaptures} target={normalizedTarget} onSelect={selectSandboxTab} />
-                                <div className='rounded-lg border border-ui-border bg-ui-panel p-3 text-xs text-ui-muted'>
-                                    Latest event: {events[0]}
-                                    {streamStats.fps ? <p className='mt-2'>{Math.round(streamStats.fps)} FPS{streamStats.latencyMs ? ` · ${Math.round(streamStats.latencyMs)} ms` : ''}</p> : null}
-                                </div>
-                            </aside>
-                            </details>
+
                         </div>
                         <div className='mt-4 grid min-w-0 gap-4'>
                             <EvidenceWorkspace captures={captures} profile={selectedProfile} target={normalizedTarget} summary={summary} consoleEvents={consoleEvents} providerConsoleEvents={providerConsoleEvents} />
@@ -1698,33 +1694,9 @@ function virusTotalVendorLabel(analysis: Pick<SandboxToolAnalysis, 'vendorFlagge
     return analysis.vendorTotal ? `${flagged}/${analysis.vendorTotal}` : `${flagged} flagged`
 }
 
-function CapacityPanel({ capacity, sessionState }: { capacity: SandboxCapacity | null; sessionState: SessionState }) {
-    const active = capacity?.activeSessions ?? 0
-    const max = capacity?.maxSessions ?? 100
-    const queued = capacity?.queuedSessions ?? 0
-    const position = capacity?.queuePosition
-    const busy = sessionState === 'queued'
-
-    return (
-        <section className={`rounded-lg border p-4 ${busy ? 'border-ui-warning/35 bg-ui-warning/10' : 'border-ui-border bg-ui-panel'}`}>
-            <div className='flex items-start gap-3'>
-                <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-md border ${busy ? 'border-ui-warning/40 bg-ui-warning/10 text-ui-warning' : 'border-ui-primary/30 bg-ui-primary/10 text-ui-primary'}`}>
-                    {busy ? <Hourglass className='h-4 w-4' /> : <ShieldCheck className='h-4 w-4' />}
-                </div>
-                <div className='min-w-0 flex-1'>
-                    <p className='text-sm font-semibold text-ui-text'>{busy ? 'Queued for isolated capacity' : 'Sandbox capacity'}</p>
-                    <p className='mt-1 text-xs leading-5 text-ui-muted'>{busy ? queueCopy(capacity) : `${active}/${max} browser slots are active. Overflow runs queue instead of failing silently.`}</p>
-                </div>
-                <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted'>
-                    {position ? `#${position}` : `${active}/${max}`}
-                </span>
-            </div>
-            <div className='mt-3 h-1.5 overflow-hidden rounded-full bg-ui-raised'>
-                <div className={`h-full ${busy ? 'bg-ui-warning' : 'bg-ui-primary'}`} style={{ width: `${Math.min(100, Math.round((active / Math.max(1, max)) * 100))}%` }} />
-            </div>
-            {queued ? <p className='mt-2 text-xs text-ui-muted'>{queued} queued run{queued === 1 ? '' : 's'} waiting for a browser slot.</p> : null}
-        </section>
-    )
+function compactBrowserEvent(event: string) {
+    const text = event.replace(/^(?:WebRTC browser|Sandbox|Browser)\s+/i, '').replace(/^run\s+/i, '').replace(/\.$/, '')
+    return text.replace(/^./, letter => letter.toUpperCase())
 }
 
 function AnalystSummary({ summary, captures }: { summary: ReturnType<typeof buildAnalystSummary>; captures: Capture[] }) {
@@ -2111,7 +2083,7 @@ function CaptureTimeline({ captures }: { captures: Capture[] }) {
     return (
         <section className='min-h-0 overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
             <div className='border-b border-ui-border px-4 py-3'>
-                <h2 className='text-sm font-semibold uppercase text-ui-primary'>Screenshot timeline</h2>
+                <h2 className='text-sm font-semibold text-ui-primary'>Screenshots</h2>
                 <p className='mt-1 text-xs text-ui-muted'>{captures.length} captures with URL state.</p>
             </div>
             <div className='grid max-h-[34rem] gap-3 overflow-auto p-3'>

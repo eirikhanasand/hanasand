@@ -51,7 +51,7 @@ for (const token of [
     'Analyst summary',
     'URL timeline',
     'Providers',
-    'Screenshot timeline',
+    'Screenshots',
     'Network evidence',
     'DNS / IP / certificate evidence',
     'Script artifacts',
