@@ -143,11 +143,14 @@ export default function SupportChat({ embedded = false }: { embedded?: boolean }
         } finally { statusPending.current = false; setStatusChange(null); setUpdatingStatus(false) }
     }
     async function sendFeedback(rating: number, comment: string) {
-        const ticket = tickets.find(ticket => ticket.id === selectedId)
-        const response = await fetch(`/api/backend/support/tickets/${encodeURIComponent(selectedId)}/feedback`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ rating, comment, resolutionVersion: ticket?.resolution_version }) })
+        const id = selectedId, version = tickets.find(ticket => ticket.id === id)?.resolution_version
+        ticketRevision.current += 1
+        const response = await fetch(`/api/backend/support/tickets/${encodeURIComponent(id)}/feedback`, { method: 'POST', keepalive: true, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ rating, comment, resolutionVersion: version }) })
         const payload = await response.json()
         if (!response.ok) throw new Error(payload.error || 'Could not save feedback.')
-        await Promise.all([loadTickets(), loadMessages(selectedId)])
+        ticketRevision.current += 1
+        setTickets(current => current.map(ticket => ticket.id === id && ticket.resolution_version === version && ticket.status === 'closed'
+            ? { ...ticket, feedback_rating: rating, feedback_comment: comment } : ticket))
     }
 
     if (signedOut) return <PublicSupportPanel />

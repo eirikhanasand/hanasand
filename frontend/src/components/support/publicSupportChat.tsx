@@ -147,10 +147,16 @@ export default function PublicSupportChat({ active = true, onUnreadChange }: { a
     }
     const resolved = conversation.status === 'closed'
     async function sendFeedback(rating: number, comment: string) {
-        const response = await fetch('/api/support/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'feedback', conversationId: selectedId, resolutionVersion: conversation.resolution_version, rating, comment }) })
+        const id = selectedId, version = conversation.resolution_version
+        revision.current += 1
+        const response = await fetch('/api/support/chat', { method: 'POST', keepalive: true, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'feedback', conversationId: id, resolutionVersion: version, rating, comment }) })
         const payload = await response.json()
         if (!response.ok) throw new Error(payload.error || 'Could not save feedback.')
-        await refresh()
+        if (mounted.current && selection.current === id) {
+            revision.current += 1
+            setConversation(current => current.id === id && current.resolution_version === version && current.status === 'closed'
+                ? { ...current, feedback_rating: rating, feedback_comment: comment } : current)
+        }
     }
     const human = conversation.channel === 'human'
     const agentName = conversation.agent_name || conversation.messages.filter(message => message.sender_kind === 'support').at(-1)?.sender_name

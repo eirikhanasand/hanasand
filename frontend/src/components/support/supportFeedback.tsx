@@ -2,6 +2,7 @@
 
 import { Star } from 'lucide-react'
 import { useState } from 'react'
+import { flushSync } from 'react-dom'
 
 export type Feedback = { feedback_rating?: number | null; feedback_comment?: string | null; resolution_version?: number }
 
@@ -14,12 +15,15 @@ export default function SupportFeedback({ feedback, submit }: { feedback: Feedba
     const [comment, setComment] = useState('')
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState('')
-    if (feedback.feedback_rating) return <div className='grid gap-2 text-sm text-ui-muted'><p className='font-medium text-ui-text'>Chat resolved</p><SupportStars rating={feedback.feedback_rating} /><p>Thank you for your feedback.</p>{feedback.feedback_comment ? <p className='whitespace-pre-wrap [overflow-wrap:anywhere]'>{feedback.feedback_comment}</p> : null}</div>
+    const [submitted, setSubmitted] = useState<Feedback | null>(null)
+    const displayed = feedback.feedback_rating ? feedback : submitted
+    if (displayed?.feedback_rating) return <div className='grid gap-2 text-sm text-ui-muted'><p className='font-medium text-ui-text'>Chat resolved</p><SupportStars rating={displayed.feedback_rating} /><p>Thank you for your feedback.</p>{displayed.feedback_comment ? <p className='whitespace-pre-wrap [overflow-wrap:anywhere]'>{displayed.feedback_comment}</p> : null}{saving ? <p role='status' className='text-xs'>Sending feedback…</p> : null}</div>
     return <form className='grid gap-3' onSubmit={async event => {
         event.preventDefault()
         if (!rating || saving) return
-        setSaving(true); setError('')
-        try { await submit(rating, rating <= 3 ? comment.trim() : '') } catch (error) { setError(error instanceof Error ? error.message : 'Could not save feedback. Please try again.') } finally { setSaving(false) }
+        const text = rating <= 3 ? comment.trim() : ''
+        flushSync(() => { setSaving(true); setError(''); setSubmitted({ feedback_rating: rating, feedback_comment: text }) })
+        try { await submit(rating, text) } catch (error) { setSubmitted(null); setError(error instanceof Error ? error.message : 'Could not save feedback. Please try again.') } finally { setSaving(false) }
     }}>
         <div><p className='text-sm font-semibold text-ui-text'>Chat resolved</p><p className='mt-1 text-xs text-ui-muted'>How was your support experience?</p></div>
         <div role='group' aria-label='Rate your support experience' className='flex gap-1'>{[1, 2, 3, 4, 5].map(star => <button key={star} type='button' aria-label={`${star} ${star === 1 ? 'star' : 'stars'}`} aria-pressed={rating === star} disabled={saving} onClick={() => setRating(star)} className='rounded-lg p-2 text-amber-500 hover:bg-ui-raised focus-visible:outline-2 focus-visible:outline-ui-primary disabled:opacity-50'><Star aria-hidden='true' className={`h-6 w-6 ${star <= rating ? 'fill-current' : ''}`} /></button>)}</div>

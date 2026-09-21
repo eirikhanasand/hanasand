@@ -33,7 +33,7 @@ export async function publicSupportChat(req: FastifyRequest<{ Body: ChatBody; Qu
             const quota = await consumeSharedRateLimitBucket({ key: `support-feedback:${hash}`, rule: { windowMs: 60_000, maxRequests: 20 } }, queryOnce)
             if (!quota.allowed) return res.status(429).send({ error: 'Please wait before submitting feedback again.' })
             await saveSupportFeedback(conversationId, { visitor: hash }, rating, comment ?? '', resolutionVersion)
-            return res.send(await readSupportConversation(hash, conversationId))
+            return res.send({ ok: true })
         }
         const { requestId, message, handoff, conversationId } = req.body || {}
         if (typeof requestId !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(requestId)

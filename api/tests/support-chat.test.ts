@@ -323,7 +323,9 @@ test('resolving locks chat, notifies the visitor, stores private feedback and al
     expect((await rate({ ...feedback, rating: 6 })).statusCode).toBe(400)
     expect((await rate({ ...feedback, rating: 2.5 })).statusCode).toBe(400)
     expect((await rate({ ...feedback, comment: 'x'.repeat(2001) })).statusCode).toBe(400)
-    expect((await rate()).statusCode).toBe(200)
+    const feedbackSaved = await rate()
+    expect(feedbackSaved.statusCode).toBe(200)
+    expect(feedbackSaved.json()).toEqual({ ok: true })
     expect((await rate()).statusCode).toBe(200)
     expect((await rate({ ...feedback, rating: 4 })).statusCode).toBe(409)
     const tickets = (await app.inject({ url: '/support/tickets', headers: { 'test-user': 'agent' } })).json().tickets
