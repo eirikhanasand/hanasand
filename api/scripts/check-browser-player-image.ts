@@ -8,14 +8,14 @@ const root = process.env.BROWSER_STREAM_ASSET_DIR || '/opt/gst-web'
 const read = (name: string) => readFileSync(`${root}/${name}`, 'utf8')
 assert.equal(read('reconnect-watchdog.js'), readFileSync(new URL('../browser-worker/reconnect-watchdog.js', import.meta.url), 'utf8'), 'Installed watchdog must match this release')
 const html = read('index.html')
-assert.match(html, /<video muted autoplay id="stream"[^>]+playsinline/)
+assert.match(html, /<video [^>]*muted autoplay id="stream"[^>]+playsinline/)
 assert.match(html, /showAudioStart[^>]+playAudio\(\)/)
 
 const appSource = read('app.js')
 const videoEvents = new Map<string, () => void>()
 const audioEvents = new Map<string, () => void>()
-const app = { showStart: false, showAudioStart: false }
-const webrtc = { element: { addEventListener: (name: string, fn: () => void) => videoEvents.set(name, fn) }, onplaystreamrequired: () => {} }
+const app = { showStart: false, showAudioStart: false, videoPlaying: false }
+const webrtc = { playStream: () => {}, element: { addEventListener: (name: string, fn: () => void) => videoEvents.set(name, fn) }, onplaystreamrequired: () => {} }
 const audio = { element: { addEventListener: (name: string, fn: () => void) => audioEvents.set(name, fn) }, onplaystreamrequired: () => {} }
 const handlers = appSource.match(/webrtc\.onplaystreamrequired = \(\) => \{[\s\S]+?(?=\/\/ Actions to take whenever window changes focus)/)?.[0]
 assert(handlers, 'Playback handlers found')
@@ -29,6 +29,10 @@ webrtc.onplaystreamrequired()
 assert.equal(app.showStart, true, 'Actual video autoplay denial remains recoverable')
 videoEvents.get('playing')?.()
 assert.equal(app.showStart, false)
+assert.equal(app.videoPlaying, true)
+videoEvents.get('pause')?.()
+assert.equal(app.videoPlaying, false, 'Hide native video while playback is paused')
+assert.equal(app.showStart, true)
 
 const method = read('webrtc.js').match(/ {4}playStream\(\) \{[\s\S]+?(?= {4}\/\/ \[END playStream\])/)?.[0]
 assert(method, 'Playback method found')
