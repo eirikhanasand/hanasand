@@ -1,3 +1,4 @@
+import { RAW_LOG_RETENTION_JOB_ID } from './mill/rawLogRetention.ts'
 import { VM_METRICS_JOB_ID } from './vms/collectMetrics.ts'
 import { existsSync } from 'node:fs'
 import { readFile, stat, writeFile, chmod, chown } from 'node:fs/promises'
@@ -212,6 +213,16 @@ const apiBackgroundJobDefinitions: Array<{
         cadenceSeconds: null,
         source: 'api/src/utils/refresh/fp.ts',
         controls: [],
+    },
+    {
+        id: RAW_LOG_RETENTION_JOB_ID,
+        name: 'Raw log retention',
+        description: 'Deletes raw service logs older than seven days after completed Mill ingestion. Keeps Mill events.',
+        category: 'Backup/Database',
+        schedule: 'Every minute',
+        cadenceSeconds: API_CRON_CADENCE_SECONDS,
+        source: 'api/src/utils/mill/rawLogRetention.ts',
+        controls: ['run_now', 'pause', 'resume'],
     },
     {
         id: 'api-auth-token-cleanup',

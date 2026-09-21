@@ -1,3 +1,4 @@
+import { RAW_LOG_RETENTION_JOB_ID, retainRawLogs } from './mill/rawLogRetention.ts'
 import { deliverMillCases, MILL_CASE_DELIVERY_JOB_ID } from './millCases.ts'
 import { maintainDeletedVms } from './vms/deletion.ts'
 import collectVmMetrics, { VM_METRICS_JOB_ID } from './vms/collectMetrics.ts'
@@ -22,6 +23,7 @@ export const HOST_UPDATE_MONITOR_JOB_ID = 'api-host-update-monitor'
 export const WEB_SCAN_JOB_ID = 'api-web-security-scanner'
 
 const apiCronRunners: Record<string, () => Promise<unknown> | unknown> = {
+    [RAW_LOG_RETENTION_JOB_ID]: retainRawLogs,
     'api-auth-token-cleanup': invalidateOldTokens,
     'api-login-attempt-cleanup': invalidateOldAttempts,
     'api-deleted-account-purge': purgeDeletedAccounts,
@@ -104,6 +106,7 @@ export default function cron() {
     schedule('* * * * *', async() => {
         try {
             const jobs = [
+                runDueApiCronJob(RAW_LOG_RETENTION_JOB_ID),
                 runDueApiCronJob('api-auth-token-cleanup'),
                 runDueApiCronJob('api-login-attempt-cleanup'),
                 runDueApiCronJob('api-deleted-account-purge'),
