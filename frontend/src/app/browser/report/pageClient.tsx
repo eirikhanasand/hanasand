@@ -226,9 +226,7 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
                         <ReportPanel title='Console logs'>
                             <pre className='max-h-96 overflow-auto whitespace-pre-wrap break-all font-mono text-xs text-ui-muted'>{report.consoleEvents?.join('\n') || 'No console output saved from the inspected page.'}</pre>
                         </ReportPanel>
-                        {report.providerConsoleEvents?.length ? <ReportPanel title='Provider diagnostics'>
-                            <pre className='max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono text-xs text-ui-muted'>{report.providerConsoleEvents.join('\n')}</pre>
-                        </ReportPanel> : null}
+
                         <ReportPanel title='Script artifacts'>
                             <ReportList items={(analystReport.scriptArtifacts || []).map(script => [
                                 script.assessment || 'script',
@@ -261,11 +259,12 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
                                 item.evidence || '',
                             ].filter(Boolean).join(' · '))} empty='No threat context saved.' />
                         </ReportPanel>
-                        <ReportPanel title='Indicators'>
-                            <pre className='max-h-72 overflow-auto whitespace-pre-wrap break-all rounded-md border border-ui-border bg-ui-canvas p-3 text-xs text-ui-text'>{reportIndicators(report).join('\n') || 'No indicators saved.'}</pre>
-                        </ReportPanel>
+                        {reportIndicators(report).length > 0 ? <ReportPanel title='Indicators'>
+                            <pre className='max-h-72 overflow-auto whitespace-pre-wrap break-all rounded-md border border-ui-border bg-ui-canvas p-3 text-xs text-ui-text'>{reportIndicators(report).join('\n')}</pre>
+                        </ReportPanel> : null}
                     </aside>
                 </section>
+                <details className='mt-4 text-xs text-ui-muted'><summary className='cursor-pointer'>Debug</summary>{reportIndicators(report).length === 0 ? <p className='mt-2'>Indicators 0 · No indicators found.</p> : null}{report.providerConsoleEvents?.length ? <pre className='mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono'>{report.providerConsoleEvents.join('\n')}</pre> : null}</details>
             </section>
         </main>
     )

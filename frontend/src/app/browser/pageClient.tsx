@@ -1453,11 +1453,12 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
 
                         </div>
                         <div className='mt-4 grid min-w-0 gap-4'>
-                            <EvidenceWorkspace captures={captures} profile={selectedProfile} target={normalizedTarget} summary={summary} consoleEvents={consoleEvents} providerConsoleEvents={providerConsoleEvents} />
+                            <EvidenceWorkspace captures={captures} profile={selectedProfile} target={normalizedTarget} summary={summary} consoleEvents={consoleEvents} />
                             <details className='rounded-lg border border-ui-border p-3'><summary className='cursor-pointer text-sm font-semibold'>Analyst notes and captures</summary><div className='mt-3 grid min-w-0 gap-4 xl:grid-cols-2'>
                                 <AnalystSummary summary={summary} captures={captures} />
                                 <CaptureTimeline captures={captures} />
                             </div></details>
+                            <details className='text-xs text-ui-muted'><summary className='cursor-pointer'>Debug</summary>{summary.indicators.length === 0 ? <p className='mt-2'>Indicators 0 · No indicators found.</p> : null}{providerConsoleEvents.length ? <pre className='mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono'>{providerConsoleEvents.join('\n')}</pre> : null}</details>
                         </div>
                     </div>
                 </div>
@@ -1898,19 +1899,19 @@ function EvidenceWorkspace({
     target,
     summary,
     consoleEvents,
-    providerConsoleEvents,
 }: {
     captures: Capture[]
     profile: SandboxProfile
     target: string
     summary: ReturnType<typeof buildAnalystSummary>
     consoleEvents: string[]
-    providerConsoleEvents: string[]
 }) {
     const pageCaptures = captures.filter(capture => capture.kind === 'page')
     const toolCaptures = captures.filter(capture => capture.kind === 'tool')
     const latestPage = pageCaptures[0]
     const latestNetwork = pageCaptures.find(capture => capture.networkSummary)?.networkSummary
+    const confirmedNetworkIndicators = (toolCaptures.find(capture => capture.toolAnalysis?.toolKind === 'virustotal')?.toolAnalysis?.vendorFlagged || 0) >= 10 ? 1 : 0
+    const suspiciousNetworkIndicators = Math.max(0, summary.indicators.length - confirmedNetworkIndicators)
     const sourceUrls = [...new Set(pageCaptures.flatMap(capture => capture.evidence?.sourceUrls || []))]
     const networkRequests = [...new Map([...pageCaptures].reverse().flatMap(capture => capture.networkSummary?.recentRequests || []).map(request => [`${request.at}-${request.method}-${request.url}`, request])).values()]
     const scriptHashCount = new Set(pageCaptures.flatMap(capture => [
@@ -1924,7 +1925,7 @@ function EvidenceWorkspace({
                 <h2 className='text-sm font-semibold text-ui-primary'>Details</h2>
             </div>
             <div className='grid gap-2 p-3'>
-                <EvidencePanel title='Statistics' status={latestPage ? 'Ready for review' : 'Waiting'}>
+                <EvidencePanel title='Statistics'>
                     <div className='grid gap-2 text-xs text-ui-muted sm:grid-cols-2'>
                         <EvidenceFact label='Final URL' value={summary.urlTimeline.at(-1)?.url || latestPage?.url || 'unknown'} mono />
                         <EvidenceFact label='URL states' value={String(summary.urlTimeline.length || pageCaptures.length || 0)} />
@@ -1945,7 +1946,7 @@ function EvidenceWorkspace({
                         const analysis = capture?.toolAnalysis
                         if (providerTabStatus(capture, analysis) === 'no obfuscated code') return null
                         return (
-                            <EvidencePanel key={tool.id} title={tool.name} status={providerStatus(capture, analysis)}>
+                            <EvidencePanel key={tool.id} title={tool.name} status={analysis?.vendorFlagged !== undefined ? <span className={analysis.vendorFlagged >= 10 ? 'text-ui-danger' : analysis.vendorFlagged > 0 ? 'text-ui-warning' : 'text-ui-success'}>{virusTotalVendorLabel(analysis)}</span> : analysis?.alertCount !== undefined ? <span className={analysis.alertCount > 0 ? 'text-ui-warning' : 'text-ui-success'}>{analysis.alertCount}</span> : providerStatus(capture, analysis)}>
                                 {capture ? (
                                     <ProviderReportDetails tool={tool} capture={capture} compact />
                                 ) : (
@@ -1972,7 +1973,7 @@ function EvidenceWorkspace({
                     )}
                 </EvidencePanel> : null}
 
-                <EvidencePanel title='Network / requests' status={latestNetwork ? 'Captured' : 'No network summary'}>
+                <EvidencePanel title='Network / requests' status={<><span>{latestNetwork?.requestCount || 0}</span>{suspiciousNetworkIndicators > 0 ? <span className='text-ui-warning' aria-label={`${suspiciousNetworkIndicators} suspicious indicators`}>{suspiciousNetworkIndicators}</span> : null}{confirmedNetworkIndicators > 0 ? <span className='text-ui-danger' aria-label={`${confirmedNetworkIndicators} indicators with 10 or more VirusTotal detections`}>{confirmedNetworkIndicators}</span> : null}</>}>
                     {latestNetwork ? (
                         <div className='grid gap-2 text-xs text-ui-muted'>
                             <p>{latestNetwork.requestCount || 0} requests · {latestNetwork.responseCount || 0} responses · {latestNetwork.failedCount || 0} blocked/failed</p>
@@ -2020,7 +2021,7 @@ function EvidenceWorkspace({
                     {sourceUrls.length ? <div className='mt-3 grid gap-1 text-xs'><p className='font-semibold'>URLs found in source</p><pre className='max-h-40 overflow-auto whitespace-pre-wrap break-all font-mono text-ui-muted'>{sourceUrls.join('\n')}</pre></div> : null}
                 </EvidencePanel>
 
-                <EvidencePanel title='Page captures' status={`${pageCaptures.length} frame${pageCaptures.length === 1 ? '' : 's'}`}>
+                <EvidencePanel title='Page captures' status={String(pageCaptures.length)}>
                     {pageCaptures.length ? (
                         <div className='grid gap-2 text-xs text-ui-muted'>
                             {pageCaptures.slice(0, 6).map(capture => (
@@ -2036,7 +2037,7 @@ function EvidenceWorkspace({
                     )}
                 </EvidencePanel>
 
-                <EvidencePanel title='Console logs' status={`${consoleEvents.length} log${consoleEvents.length === 1 ? '' : 's'}`}>
+                <EvidencePanel title='Console logs' status={String(consoleEvents.length)}>
                     {consoleEvents.length ? (
                         <div className='grid max-h-96 gap-2 overflow-auto text-xs text-ui-muted'>
                             {consoleEvents.map((event, index) => <p key={index} className='wrap-break-word whitespace-pre-wrap font-mono'>{event}</p>)}
@@ -2046,25 +2047,17 @@ function EvidenceWorkspace({
                     )}
                 </EvidencePanel>
 
-                {providerConsoleEvents.length ? <EvidencePanel title='Provider diagnostics' status={`${providerConsoleEvents.length} logs`}>
-                    <div className='grid max-h-64 gap-2 overflow-auto text-xs text-ui-muted'>
-                        {providerConsoleEvents.map((event, index) => <p key={index} className='wrap-break-word whitespace-pre-wrap font-mono'>{event}</p>)}
-                    </div>
-                </EvidencePanel> : null}
 
-                <EvidencePanel title='Indicators' status={String(summary.indicators.length)}>
-                    {summary.indicators.length ? (
-                        <pre className='max-h-28 overflow-auto whitespace-pre-wrap rounded-md border border-ui-border bg-ui-canvas p-2 text-xs text-ui-text'>{summary.indicators.join('\n')}</pre>
-                    ) : (
-                        <p className='text-xs leading-5 text-ui-muted'>No indicators found.</p>
-                    )}
-                </EvidencePanel>
+
+                {summary.indicators.length > 0 ? <EvidencePanel title='Indicators' status={String(summary.indicators.length)}>
+                    <pre className='max-h-28 overflow-auto whitespace-pre-wrap rounded-md border border-ui-border bg-ui-canvas p-2 text-xs text-ui-text'>{summary.indicators.join('\n')}</pre>
+                </EvidencePanel> : null}
             </div>
         </section>
     )
 }
 
-function EvidencePanel({ title, status, children }: { title: string; status: string; children: ReactNode }) {
+function EvidencePanel({ title, status, children }: { title: string; status?: ReactNode; children: ReactNode }) {
     return (
         <details className='min-w-0 rounded-md border border-ui-border bg-ui-raised'>
             <summary className='flex cursor-pointer list-none items-center justify-between gap-2 p-3 text-sm [&::-webkit-details-marker]:hidden'>
