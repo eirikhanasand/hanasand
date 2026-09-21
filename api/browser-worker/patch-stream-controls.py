@@ -22,6 +22,7 @@ s = s[:a] + '''      <div class="loading" v-if="status !== 'connected' || showSt
       </div>
 ''' + s[b:]
 s = s.replace('</head>', '''<style>
+html, body { overscroll-behavior: none; }
 video::-webkit-media-controls, video::-webkit-media-controls-enclosure,
 video::-webkit-media-controls-start-playback-button { display:none !important; -webkit-appearance:none; }
 .hanasand-loading { color:#3056d3; background:transparent; border:0; padding:12px; cursor:pointer; }

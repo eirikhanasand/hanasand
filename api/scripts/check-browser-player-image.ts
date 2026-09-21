@@ -75,6 +75,7 @@ assert.equal(wheelMessages[4], 'm,100,200,16,1', 'Direction reversals respond im
 assert.equal(prevented, 8)
 assert.equal(stopped, 8)
 assert.match(html, /hanasand-loading/)
+assert.match(html, /html, body \{ overscroll-behavior: none; \}/)
 assert.doesNotMatch(html, /<scale-loader|\{\{ loadingText \}\}/)
 assert.match(html, /video::-webkit-media-controls-start-playback-button/)
 assert.doesNotMatch(appSource, /receiver\.(?:jitterBufferTarget|jitterBufferDelayHint|playoutDelayHint)\s*=/, 'Let the receiver adapt to network jitter')
