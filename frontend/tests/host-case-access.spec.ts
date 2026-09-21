@@ -40,3 +40,33 @@ test('host readers can inspect cases while management controls stay unavailable'
     await expect(page.getByLabel('Severity')).toBeEnabled()
     await expect(page.getByRole('button', { name: 'Reopen case' })).toBeEnabled()
 })
+
+test('case history aligns event metadata and preserves change details in timeline columns', async ({ page }) => {
+    const history = [
+        { id: 'created', action: 'created', actor: 'Health monitoring', at: '2026-09-19T19:51:00Z', note: 'First recorded health-check failure or warning.' },
+        { id: 'recovered', action: 'recovered', actor: 'Health monitoring', at: '2026-09-19T19:52:00Z', note: 'Temperature is normal: 40°C (alert above 50°C).' },
+        { id: 'recurred', action: 'recurred', actor: 'Health monitoring', at: '2026-09-20T02:58:01Z', note: 'Temperature is high: 52°C (alert above 50°C).' },
+        { id: 'status', action: 'status_changed', actor: 'Eirik', at: '2026-09-20T03:00:00Z', fromStatus: 'open', toStatus: 'in_progress', fromSeverity: 'high', toSeverity: 'critical', note: 'Investigating the sensor.\nChecking cooling.' },
+        { id: 'notifications', action: 'notifications_changed', actor: 'Eirik', at: '2026-09-20T03:01:00Z', notificationsEnabled: false },
+    ]
+    await page.route('**/api/cases/HA-15?*', route => route.fulfill({ json: { case: {
+        id: 'HA-15', title: 'HA-15 · Inspur temperature', summary: 'Temperature is high', status: 'open', severity: 'high',
+        canManage: false, occurrences: 2, notificationsEnabled: false, notifications: [], comments: [], history, events: [],
+    } } }))
+    await page.route('**/api/backend/**', route => route.fulfill({ json: { items: [] } }))
+    await page.goto('http://host-case.test/')
+    const timeline = page.getByRole('table', { name: 'Case history' })
+    await expect(timeline.getByRole('columnheader')).toHaveText(['Time', 'Event', 'Actor', 'Details'])
+    await expect(timeline.getByRole('row')).toHaveCount(history.length + 1)
+    for (const [index, event] of history.entries()) {
+        const cells = timeline.locator('tbody tr').nth(index).getByRole('cell')
+        await expect(cells).toHaveCount(4)
+        await expect(cells.nth(0).locator('time')).toHaveAttribute('datetime', event.at)
+        await expect(cells.nth(1)).toHaveText(event.action.replaceAll('_', ' '))
+        await expect(cells.nth(2)).toHaveText(event.actor)
+        if (event.note) await expect(cells.nth(3)).toContainText(event.note)
+    }
+    await expect(timeline).toContainText('open → in progress')
+    await expect(timeline).toContainText('Severity: high → critical')
+    await expect(timeline).toContainText('Notifications disabled')
+})
