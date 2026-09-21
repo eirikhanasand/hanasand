@@ -418,6 +418,9 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     const [currentRunId, setCurrentRunId] = useState('')
     const [shareStatus, setShareStatus] = useState('')
     const socketRef = useRef<BrowserControlSocket | null>(null)
+    const replacementRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const recoveryDeadlineRef = useRef(0)
+    const recoveryAttemptsRef = useRef(0)
     const viewportRef = useRef<HTMLDivElement | null>(null)
     const imageRef = useRef<HTMLImageElement | null>(null)
     const touchFrameRef = useRef<{ clientX: number; clientY: number; lastX: number; lastY: number; moved: boolean } | null>(null)
@@ -456,7 +459,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
         }
     }, [runIsActive])
     const loadingBrowser = runIsActive && !runBlocker && !activeImage && !latestPageImage && !streamHasFrame
-    const fallbackInteractive = runIsActive && !streamUrl && !activeTool && Boolean(activeViewportImage)
+    const fallbackInteractive = sessionState === 'live' && socketState === 'open' && !streamUrl && !activeTool && Boolean(activeViewportImage)
     const waitingForFrame = runIsActive && !activeViewportImage && !streamUrl
     const waitingSeconds = runStartedAt && runIsActive && waitingForFrame ? Math.floor((clockNow - runStartedAt) / 1000) : 0
 
@@ -633,6 +636,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     }, [history.length])
 
     useEffect(() => () => {
+        if (replacementRef.current) clearTimeout(replacementRef.current)
         socketRef.current?.close()
         socketRef.current = null
     }, [])
@@ -648,10 +652,16 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
         setCustomPlatform(next.platform)
     }, [])
 
-    const startRun = useCallback((override?: { target?: string; network?: BrowserNetwork }) => {
+    const startRun = useCallback(function startRun(override?: { target?: string; network?: BrowserNetwork; recovery?: boolean }) {
         const url = normalizeTarget(override?.target ?? target)
         if (!url) return
-        scrollRouteFrameToTop('auto')
+        if (replacementRef.current) clearTimeout(replacementRef.current)
+        replacementRef.current = null
+        if (!override?.recovery) {
+            recoveryAttemptsRef.current = 0
+            recoveryDeadlineRef.current = Date.now() + (quota?.sessionSeconds || 300) * 1000
+            scrollRouteFrameToTop('auto')
+        }
         const id = sessionId()
         const resumeToken = crypto.randomUUID()
         const socket = new BrowserControlSocket(brokerUrlForSession(brokerBaseUrl, id), resumeToken)
@@ -660,17 +670,20 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
         socketRef.current?.close()
         socketRef.current = socket
         let receivedEnd = false
-        receivedEvidenceRef.current = false
+        let lastPageUrl = url
+        if (!override?.recovery) receivedEvidenceRef.current = false
         stoppedRunRef.current = false
         setCurrentRunId(id)
         setShareStatus('')
-        setCaptures([])
+        if (!override?.recovery) {
+            setCaptures([])
+            setConsoleEvents([])
+            setProviderConsoleEvents([])
+            setActiveImage(null)
+        }
         setReportOpen(false)
-        setConsoleEvents([])
-        setProviderConsoleEvents([])
         setStartupStage(0)
         setRunBlocker('')
-        setActiveImage(null)
         setStreamUrl('')
         setStreamHasFrame(false)
         setStreamStats({})
@@ -682,7 +695,30 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
         setCapacity(null)
         setSessionState('connecting')
         setSocketState('connecting')
-        pushEvent(`Launching isolated browser for ${url}.`)
+        pushEvent(override?.recovery ? 'Reconnecting…' : `Launching isolated browser for ${url}.`)
+        let replacing = false
+        const replaceSandbox = () => {
+            if (replacing || stoppedRunRef.current || socketRef.current !== socket) return
+            replacing = true
+            receivedEnd = true
+            socket.close()
+            setStreamUrl('')
+            setSocketState('connecting')
+            setRunBlocker('')
+            setSessionState('connecting')
+            pushEvent('Reconnecting…')
+            const delay = Math.min(1000 * 2 ** recoveryAttemptsRef.current++, 15000)
+            replacementRef.current = setTimeout(() => {
+                replacementRef.current = null
+                if (stoppedRunRef.current || socketRef.current !== socket) return
+                if (Date.now() >= recoveryDeadlineRef.current) {
+                    setSessionState('ended')
+                    setRunBlocker('The session ended while reconnecting.')
+                    return
+                }
+                startRun({ target: lastPageUrl, recovery: true })
+            }, delay)
+        }
 
         socket.onopen = () => {
             setSocketState('open')
@@ -693,7 +729,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                 sessionId: id,
                 network: runNetwork,
                 target: url,
-                durationSeconds: quota?.sessionSeconds || 300,
+                durationSeconds: Math.max(1, Math.ceil((recoveryDeadlineRef.current - Date.now()) / 1000)),
                 profileTools,
                 ...browserMetadata,
                 clientId: getOrCreateBrowserClientId(),
@@ -709,8 +745,8 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
             setSocketState('closed')
             setStreamUrl('')
             if (!receivedEnd && !stoppedRunRef.current) {
-                setRunBlocker(current => current || 'The browser connection was lost before the run finished. Try again.')
-                setSessionState(current => current === 'prompt' || current === 'unreachable' ? current : 'failed')
+                replaceSandbox()
+                return
             }
             pushEvent('Sandbox closed.')
         }
@@ -720,18 +756,12 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
             pushEvent('Sandbox broker errored.')
         }
         socket.onmessage = (message) => {
-            if (socketRef.current !== socket || stoppedRunRef.current) return
+            if (socketRef.current !== socket || stoppedRunRef.current || replacing) return
             if (typeof message.data !== 'string') return
             const payload = parsePayload(message.data)
             if (!payload) return
             if (payload.type === 'reconnected') { setSocketState('open'); return }
-            if (payload.type === 'resume_unavailable') {
-                receivedEnd = true
-                setSessionState('failed')
-                setRunBlocker('The sandbox is no longer available. Start a new run.')
-                setStreamUrl('')
-                return
-            }
+            if (payload.type === 'resume_unavailable') { replaceSandbox(); return }
             if (payload.type === 'stream_ready' && typeof payload.streamUrl === 'string') {
                 setStreamUrl(streamUrlForPath(payload.streamUrl))
                 pushEvent('WebRTC browser stream ready.')
@@ -742,6 +772,8 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                 return
             }
             if (payload.type === 'run_time' && typeof payload.expiresAt === 'string') {
+                const deadline = Date.parse(payload.expiresAt)
+                if (Number.isFinite(deadline) && (!override?.recovery || payload.freeExtensionUsed || payload.paidExtensionUsed || payload.suspiciousExtended)) recoveryDeadlineRef.current = deadline
                 setRunTiming({
                     expiresAt: payload.expiresAt,
                     suspiciousExtended: payload.suspiciousExtended === true,
@@ -769,6 +801,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                 return
             }
             if (payload.type === 'ended') {
+                if (payload.reason === 'launch_failed') { replaceSandbox(); return }
                 receivedEnd = true
                 const failed = payload.reason === 'launch_failed' || payload.reason === 'quota_exhausted' || !receivedEvidenceRef.current
                 setStreamUrl('')
@@ -796,6 +829,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                     setActiveImage(image)
                 }
                 const urlValue = String(payload.url || url)
+                if (!isBrowserErrorUrl(urlValue)) lastPageUrl = urlValue
                 const frameWidth = finiteNumber(payload.width) || 1280
                 const frameHeight = finiteNumber(payload.height) || 720
                 setActiveUrl(urlValue)
@@ -873,12 +907,15 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                     setSessionState('queued')
                 } else if (statusState === 'capacity_admitted' || statusState === 'launching') {
                     setSessionState('connecting')
-                } else if (['quota_exhausted', 'concurrency_limit', 'identity_required', 'run_exists'].includes(statusState)) {
+                } else if (['quota_exhausted', 'concurrency_limit', 'identity_required', 'run_exists', 'unsafe_target_blocked'].includes(statusState)) {
                     setSessionState('failed')
+                    if (override?.recovery && statusState === 'concurrency_limit') { replaceSandbox(); return }
+                    receivedEnd = true
+                    socket.close()
                     setRunBlocker(String(payload.message || 'Browser run limit reached.'))
                 } else if (statusState === 'failed') {
-                    setSessionState('failed')
-                    setRunBlocker(String(payload.message || 'Sandbox launch failed.'))
+                    replaceSandbox()
+                    return
                 }
                 if (payload.url && statusState !== 'tab_selected' && statusState !== 'tab_navigated') setActiveUrl(String(payload.url))
                 pushEvent(String(payload.message || payload.state || 'Browser status updated.'))
@@ -894,12 +931,16 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                 return
             }
             if (payload.type === 'navigation_error' || payload.type === 'error') {
+                if (payload.type === 'error' && /worker|connection|browser startup|browser session tracking/i.test(stringValue(payload.message)) && !/not allowed|unsafe|private (?:address|network)|quota|permission/i.test(stringValue(payload.message))) { replaceSandbox(); return }
                 if (payload.type === 'navigation_error' && isDegradedNavigationError(stringValue(payload.message))) {
+                    receivedEnd = true
                     setSessionState('unreachable')
                     setRunBlocker(String(payload.message || 'Target navigation did not complete; showing captured browser/provider evidence.'))
                     pushEvent(String(payload.message || 'Target navigation did not complete; showing captured browser/provider evidence.'))
                     return
                 }
+                receivedEnd = true
+                socket.close()
                 setSessionState('failed')
                 setRunBlocker(String(payload.message || 'Sandbox navigation failed.'))
                 pushEvent(String(payload.message || 'Sandbox navigation failed.'))
@@ -925,6 +966,8 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     const stopRun = useCallback(() => {
         const socket = socketRef.current
         stoppedRunRef.current = true
+        if (replacementRef.current) clearTimeout(replacementRef.current)
+        replacementRef.current = null
         setStreamUrl('')
         setStreamHasFrame(false)
         socket?.send(JSON.stringify({ type: 'end' }))
@@ -933,6 +976,8 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     }, [pushEvent])
 
     const resetRun = useCallback(() => {
+        if (replacementRef.current) clearTimeout(replacementRef.current)
+        replacementRef.current = null
         socketRef.current?.close()
         socketRef.current = null
         setSessionState('prompt')
@@ -2086,7 +2131,7 @@ function CaptureTimeline({ captures }: { captures: Capture[] }) {
                 <h2 className='text-sm font-semibold text-ui-primary'>Screenshots</h2>
                 <p className='mt-1 text-xs text-ui-muted'>{captures.length} captures with URL state.</p>
             </div>
-            <div className='grid max-h-[34rem] gap-3 overflow-auto p-3'>
+            <div className='grid gap-3 p-3' data-screenshot-list>
                 {captures.length ? captures.map(capture => (
                     <article key={capture.id} className='grid gap-2 rounded-md border border-ui-border bg-ui-raised p-3'>
                         <div className='flex items-start justify-between gap-3'>
