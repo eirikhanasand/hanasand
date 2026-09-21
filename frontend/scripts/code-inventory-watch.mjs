@@ -9,7 +9,7 @@ const run = promisify(execFile)
 const [repository, output] = process.argv.slice(2)
 if (!repository || !output) throw new Error('Usage: code-inventory-watch.mjs <bare repository> <published directory>')
 await fs.mkdir(output, { recursive: true, mode: 0o750 })
-const git = (...args) => run('git', ['--git-dir=' + repository, ...args], { timeout: 30000, maxBuffer: 1024 * 1024, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_SSH_COMMAND: 'ssh -o BatchMode=yes -o ConnectTimeout=10' } })
+const git = (...args) => run('git', ['--git-dir=' + repository, ...args], { timeout: 30000, maxBuffer: 64 * 1024 * 1024, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_SSH_COMMAND: 'ssh -o BatchMode=yes -o ConnectTimeout=10' } })
 async function write(name, value) {
     const temporary = path.join(output, name + '.tmp')
     await fs.writeFile(temporary, JSON.stringify(value), { mode: 0o640 })
@@ -17,6 +17,7 @@ async function write(name, value) {
 }
 const analyzerHash = sha256(await fs.readFile(new URL('./code-inventory.mjs', import.meta.url)))
 let current = ''
+let commitsRevision = ''
 try { const previous = JSON.parse(await fs.readFile(path.join(output, 'current.json'), 'utf8')); current = previous.analyzerHash === analyzerHash ? previous.revision || '' : '' } catch { /* The first scan creates the inventory. */ }
 async function latest() {
     const revisions = [], failed = []
@@ -39,6 +40,21 @@ async function latest() {
 }
 async function scan() {
     const { revision, warning } = await latest()
+    if (revision !== commitsRevision) {
+        const fields = (await git('log', '-z', '--format=%H%x00%an%x00%cI%x00%s', revision)).stdout.split('\0')
+        const commits = []
+        for (let index = 0; index + 3 < fields.length; index += 4) {
+            commits.push({ external_id: fields[index], author: fields[index + 1], updated_at: fields[index + 2], title: fields[index + 3] })
+        }
+        const repositories = []
+        for (const remote of ['origin', 'github']) {
+            const raw = (await git('remote', 'get-url', remote)).stdout.trim().replace(/^git@([^:]+):/, 'https://$1/')
+            const url = new URL(raw)
+            repositories.push(`https://${url.hostname}${url.pathname.replace(/\.git$/, '').replace(/\/$/, '')}`)
+        }
+        await write('commits.json', { revision, repositories, commits })
+        commitsRevision = revision
+    }
     if (revision !== current) {
         await write('status.json', { phase: 'indexing', revision, checkedAt: new Date().toISOString(), warning })
         const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'code-review-source-'))

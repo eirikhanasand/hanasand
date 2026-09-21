@@ -4,7 +4,7 @@ import { getDockerStorage, clearDockerStorage } from './handlers/dockerStorage.t
 import { searchLogs } from './handlers/logs/search.ts'
 import { getManagementOrganizations } from './handlers/managementOrganizations.ts'
 import assignVmOrganization from './handlers/vms/organization.ts'
-import { caseRepositoryWebhooks, getCaseDevelopment, getCaseRepositories, postCaseRepository, deleteCaseRepository } from './handlers/caseDevelopment.ts'
+import { caseRepositoryWebhooks, getCaseDevelopment, getCaseRepositories, postCaseRepository, deleteCaseRepository, getCaseCommits, postCaseCommit } from './handlers/caseDevelopment.ts'
 import { getServiceAccounts, postServiceAccount, patchServiceAccount, deleteServiceAccount, serviceAccountSelf } from './handlers/serviceAccounts.ts'
 import authRoutes from './authRoutes.ts'
 import { getMonitoringCases, updateMonitoringCase } from './handlers/monitoringCases.ts'
@@ -245,6 +245,8 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     await fastify.register(authRoutes)
     await fastify.register(caseRepositoryWebhooks)
     fastify.get('/cases/development', getCaseDevelopment)
+    fastify.get('/cases/development/commits', getCaseCommits)
+    fastify.post('/cases/development/commits', postCaseCommit)
     fastify.get('/cases/repositories', getCaseRepositories)
     fastify.post('/cases/repositories', postCaseRepository)
     fastify.delete('/cases/repositories/:id', deleteCaseRepository)

@@ -15,4 +15,7 @@ export default async function ensureCaseDevelopmentSchema() {
         case_references TEXT[] NOT NULL, PRIMARY KEY (repository_id, kind, external_id)
     )`)
     await run('CREATE INDEX IF NOT EXISTS case_development_references ON case_development USING GIN (case_references)')
+    await run('ALTER TABLE case_development ADD COLUMN IF NOT EXISTS manual_case_references TEXT[] NOT NULL DEFAULT \'{}\'')
+    await run('CREATE INDEX IF NOT EXISTS case_development_manual_references ON case_development USING GIN (manual_case_references)')
+    await run('CREATE INDEX IF NOT EXISTS case_development_commits ON case_development (repository_id, updated_at DESC, external_id DESC) WHERE kind = \'commit\'')
 }

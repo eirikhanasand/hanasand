@@ -83,3 +83,69 @@ test('case history aligns event metadata and preserves change details in timelin
     await page.keyboard.press('End')
     await page.screenshot({ path: '/tmp/case-history-mobile.png' })
 })
+
+test('empty Development opens five commits, scrolls from its buffer and persists a selected link', async ({ page }) => {
+    const repository = { id: '11111111-1111-4111-8111-111111111111', provider: 'forgejo', repository_url: 'https://git.example.com/team/app', can_manage: true }
+    const commits = Array.from({ length: 205 }, (_, index) => ({ external_id: index.toString(16).padStart(40, '0'), title: `Change ${index}`, author: 'Engineer', updated_at: '2026-09-21T00:00:00Z' }))
+    let linked: Record<string, unknown>[] = []
+    const cursors: string[] = []
+    await page.route('**/api/cases/HA-15?*', route => route.fulfill({ json: { case: { id: 'HA-15', title: 'Temperature', status: 'open', severity: 'high', occurrences: 2, comments: [], history: [], notifications: [] } } }))
+    await page.route('**/api/backend/cases/**', async route => {
+        const url = new URL(route.request().url())
+        if (url.pathname.endsWith('/repositories')) return route.fulfill({ json: { items: [repository] } })
+        if (url.pathname.endsWith('/development')) return route.fulfill({ json: { items: linked, hasMore: false } })
+        if (route.request().method() === 'POST') {
+            const body = route.request().postDataJSON()
+            expect(body.caseId).toBe('HA-15')
+            expect(body.repositoryId).toBe(repository.id)
+            const selected = commits.find(commit => commit.external_id === body.commit)!
+            linked = [{ ...selected, repository_id: repository.id, provider: repository.provider, repository_url: repository.repository_url, kind: 'commit', state: 'committed', url: `${repository.repository_url}/commit/${selected.external_id}` }]
+            return route.fulfill({ json: { ok: true } })
+        }
+        const cursor = url.searchParams.get('cursor') || ''
+        cursors.push(cursor)
+        const start = cursor ? commits.findIndex(commit => commit.external_id === cursor) + 1 : 0
+        if (cursor) await new Promise(resolve => setTimeout(resolve, 150))
+        return route.fulfill({ json: { items: commits.slice(start, start + 100), nextCursor: start + 100 < commits.length ? commits[start + 99].external_id : null } })
+    })
+    await page.goto('http://host-case.test/')
+    const development = page.getByRole('region', { name: 'Development', exact: true })
+    await expect(development.getByRole('button', { name: 'Refresh development links' })).toBeEnabled()
+    await expect(development.getByRole('list')).toHaveCount(0)
+    await expect(development.getByText('Repository connections (1)')).toBeHidden()
+    await page.getByRole('button', { name: 'Link a commit', exact: true }).click()
+    const list = page.getByRole('list', { name: 'Recent commits' })
+    await expect(list.getByRole('listitem')).toHaveCount(5)
+    const durations: number[] = []
+    for (let step = 0; step < 16; step++) {
+        durations.push(await list.evaluate(element => new Promise<number>(resolve => {
+            element.addEventListener('scroll', () => {
+                const start = performance.now()
+                const observer = new MutationObserver(() => { observer.disconnect(); resolve(performance.now() - start) })
+                observer.observe(element, { childList: true, subtree: true })
+            }, { once: true, capture: true })
+            element.scrollTop = element.scrollHeight
+        })))
+        await expect(list.getByRole('listitem')).toHaveCount(10 + step * 5)
+    }
+    console.log(`Buffered commit scroll maximum: ${Math.max(...durations).toFixed(3)} ms`)
+    expect(Math.max(...durations)).toBeLessThan(20)
+    await expect.poll(() => cursors.length).toBe(2)
+    expect(cursors[1]).toBe(commits[99].external_id)
+    for (let count = 90; count <= 205; count += 5) {
+        await list.evaluate(element => { element.scrollTop = element.scrollHeight })
+        await expect(list.getByRole('listitem')).toHaveCount(count)
+    }
+    expect(cursors[2]).toBe(commits[199].external_id)
+    await expect(list.getByRole('button', { name: `Link commit ${commits[204].external_id.slice(0, 8)}: Change 204`, exact: true })).toBeVisible()
+    await list.getByRole('button', { name: `Link commit ${commits[80].external_id.slice(0, 8)}: Change 80`, exact: true }).click()
+    await expect(list).toBeHidden()
+    await expect(development.getByRole('link', { name: /Change 80/ })).toBeVisible()
+    await page.reload()
+    await expect(development.getByRole('link', { name: /Change 80/ })).toBeVisible()
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.getByRole('button', { name: 'Link a commit', exact: true }).click()
+    await expect(list.getByRole('listitem')).toHaveCount(5)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await development.screenshot({ path: '/tmp/case-development-picker-mobile.png' })
+})

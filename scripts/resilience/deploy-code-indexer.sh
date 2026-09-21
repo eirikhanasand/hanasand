@@ -1,7 +1,8 @@
 #!/bin/sh
 set -eu
 cd /home/hanasand/hanasand
-release=$(git rev-parse HEAD)
+release=${HANASAND_RELEASE_COMMIT:-$(git rev-parse HEAD)}
+test "$(git rev-parse --verify "$release^{commit}")" = "$release"
 root=/home/hanasand/code-review
 mkdir -p "$root/published"
 chmod 750 "$root" "$root/published"
