@@ -58,6 +58,10 @@ test('durable signed events, idempotency, stale updates, ownership and organizat
     await send({ ...push, commits: [unrelated] })
     const commitsUrl = `/cases/development/commits?repositoryId=${connection.id}`
     expect((await app.inject(commitsUrl)).json().items).toHaveLength(2)
+    expect((await app.inject(`${commitsUrl}&search=UNRELATED`)).json().items.map((item: any) => item.external_id)).toEqual([unrelated.id])
+    expect((await app.inject(`${commitsUrl}&search=Engineer`)).json().items).toHaveLength(2)
+    expect((await app.inject(`${commitsUrl}&search=${unrelated.id}`)).json().items).toHaveLength(1)
+    expect((await app.inject(`${commitsUrl}&search=%25_`)).json().items).toHaveLength(0)
     expect((await app.inject({ url: commitsUrl, headers: { 'x-test-user': 'other' } })).statusCode).toBe(404)
     const link = (user = 'owner', hash = unrelated.id, suffix = '') => app.inject({ method: 'POST', url: `/cases/development/commits${suffix}`, headers: { 'x-test-user': user }, payload: { repositoryId: connection.id, commit: hash, caseId: 'HA-1' } })
     expect((await link('other')).statusCode).toBe(403)
@@ -94,6 +98,8 @@ test('indexed history pagination, repository isolation and persistent manual lin
         const url = `/cases/development/commits?repositoryId=${connection.id}`
         const first = (await app.inject(url)).json()
         expect(first.items).toHaveLength(100)
+        expect((await app.inject(`${url}&search=INDEXED%20204`)).json().items).toEqual([commits[204]])
+        expect((await app.inject(`${url}&search=${'x'.repeat(201)}`)).statusCode).toBe(400)
         const second = (await app.inject(`${url}&cursor=${first.nextCursor}`)).json()
         expect(second.items[0]).toEqual(commits[100])
         const last = (await app.inject(`${url}&cursor=${second.nextCursor}`)).json()

@@ -24,7 +24,9 @@ export async function repositoryCommitSnapshot(repository: string): Promise<Snap
     return snapshot?.repositories.includes(repository) ? snapshot : null
 }
 
-export function commitPage(commits: IndexedCommit[], cursor?: string) {
+export function commitPage(commits: IndexedCommit[], cursor?: string, search = '') {
+    const term = search.trim().toLowerCase()
+    if (term) commits = commits.filter(commit => [commit.title, commit.author, commit.external_id].some(value => value.toLowerCase().includes(term)))
     const index = cursor ? commits.findIndex(commit => commit.external_id === cursor) : -1
     if (cursor && index < 0) return null
     const items = commits.slice(index + 1, index + 101)

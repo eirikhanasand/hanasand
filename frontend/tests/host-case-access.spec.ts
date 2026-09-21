@@ -104,9 +104,11 @@ test('empty Development opens five commits, scrolls from its buffer and persists
         }
         const cursor = url.searchParams.get('cursor') || ''
         cursors.push(cursor)
-        const start = cursor ? commits.findIndex(commit => commit.external_id === cursor) + 1 : 0
+        const term = (url.searchParams.get('search') || '').toLowerCase()
+        const matches = commits.filter(commit => [commit.title, commit.author, commit.external_id].some(value => value.toLowerCase().includes(term)))
+        const start = cursor ? matches.findIndex(commit => commit.external_id === cursor) + 1 : 0
         if (cursor) await new Promise(resolve => setTimeout(resolve, 150))
-        return route.fulfill({ json: { items: commits.slice(start, start + 100), nextCursor: start + 100 < commits.length ? commits[start + 99].external_id : null } })
+        return route.fulfill({ json: { items: matches.slice(start, start + 100), nextCursor: start + 100 < matches.length ? matches[start + 99].external_id : null } })
     })
     await page.goto('http://host-case.test/')
     const development = page.getByRole('region', { name: 'Development', exact: true })
@@ -147,5 +149,13 @@ test('empty Development opens five commits, scrolls from its buffer and persists
     await page.getByRole('button', { name: 'Link a commit', exact: true }).click()
     await expect(list.getByRole('listitem')).toHaveCount(5)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    const search = page.getByRole('searchbox', { name: 'Search commits' })
+    await search.fill('Change 204')
+    await expect(list.getByRole('listitem')).toHaveCount(1)
+    await expect(list.getByText('Change 204', { exact: true })).toBeVisible()
+    await search.fill('missing change')
+    await expect(page.getByText('No matching commits.', { exact: true })).toBeVisible()
+    await search.fill('')
+    await expect(list.getByRole('listitem')).toHaveCount(5)
     await development.screenshot({ path: '/tmp/case-development-picker-mobile.png' })
 })

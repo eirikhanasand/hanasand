@@ -11,6 +11,7 @@ export function CaseCommitPicker({ caseId, query, repositories, open, revision, 
     caseId: string, query: string, repositories: CaseRepository[], open: boolean, revision: number, onLinked: () => void,
 }) {
     const [repositoryId, setRepositoryId] = useState('')
+    const [search, setSearch] = useState('')
     const selected = repositories.find(repository => repository.id === repositoryId) || repositories[0]
     const [commits, setCommits] = useState<Commit[]>([])
     const [visible, setVisible] = useState(5)
@@ -25,7 +26,7 @@ export function CaseCommitPicker({ caseId, query, repositories, open, revision, 
     const controller = useRef<AbortController | null>(null)
     const list = useRef<HTMLUListElement>(null)
     const repository = selected?.id
-    const endpoint = `/api/backend/cases/development/commits?${query}&repositoryId=${encodeURIComponent(repository || '')}`
+    const endpoint = `/api/backend/cases/development/commits?${query}&repositoryId=${encodeURIComponent(repository || '')}&search=${encodeURIComponent(search.trim())}`
 
     async function load(cursor: string | null, version: number, signal: AbortSignal) {
         if (inFlight.current) return
@@ -83,6 +84,7 @@ export function CaseCommitPicker({ caseId, query, repositories, open, revision, 
                 <label className='grid gap-1 text-sm'>Repository<select className={`${control} w-full min-w-0`} value={selected?.id || ''} onChange={event => setRepositoryId(event.target.value)}>
                     {repositories.map(repository => <option key={repository.id} value={repository.id}>{repository.repository_url.replace(/^https:\/\//, '')}{repository.organization_id ? '' : ' (personal)'}</option>)}
                 </select></label>
+                <label className='grid gap-1 text-sm'>Search commits<input type='search' maxLength={200} className={control} placeholder='Message, author, or commit hash' value={search} onChange={event => setSearch(event.target.value)} /></label>
                 {selected?.can_manage === false && <p className='text-sm text-ui-muted'>Repository administrators can link commits.</p>}
                 <ul ref={list} aria-label='Recent commits' tabIndex={0} className='max-h-72 overflow-y-auto rounded-lg border border-ui-border divide-y divide-ui-border' onScroll={event => {
                     const element = event.currentTarget
@@ -100,7 +102,7 @@ export function CaseCommitPicker({ caseId, query, repositories, open, revision, 
                     </li>)}
                 </ul>
                 {loading && !commits.length && <p role='status' className='text-sm text-ui-muted'>Loading commits…</p>}
-                {!loading && !error && !commits.length && <p className='text-sm text-ui-muted'>No commits available for this repository.</p>}
+                {!loading && !error && !commits.length && <p role='status' className='text-sm text-ui-muted'>{search.trim() ? 'No matching commits.' : 'No commits available for this repository.'}</p>}
                 {loading && visible >= commits.length && commits.length > 0 && <p role='status' className='text-sm text-ui-muted'>Loading more commits…</p>}
                 {error && <p role='alert' className='text-sm text-ui-danger'>{error} <button className='underline' onClick={() => setRetry(value => value + 1)}>Retry</button></p>}
             </> : <p className='text-sm text-ui-muted'>Connect a repository to browse its commits.</p>}

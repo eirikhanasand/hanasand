@@ -12,4 +12,9 @@ test('commit cursors retain order and do not repeat commits when new commits arr
     expect(last.nextCursor).toBeNull()
     expect(commitPage(commits, 'removed-commit')).toBeNull()
     expect(commitPage([])).toEqual({ items: [], nextCursor: null })
+    expect(commitPage(commits, undefined, ' COMMIT 224 ')!.items).toEqual([commits[224]])
+    expect(commitPage(commits, undefined, commits[224].external_id)!.items).toEqual([commits[224]])
+    const searchFirst = commitPage(commits, undefined, 'engineer')!
+    expect(commitPage(commits, searchFirst.nextCursor!, 'engineer')!.items).toEqual(commits.slice(100, 200))
+    expect(commitPage(commits, undefined, '%_')!.items).toHaveLength(0)
 })

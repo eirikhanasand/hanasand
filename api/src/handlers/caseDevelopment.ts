@@ -6,7 +6,7 @@ import { encryptRepoSecret, decryptRepoSecret } from '#utils/ai/repoCredentials.
 import { developmentEntries, repositoryUrl, validGitSignature } from '#utils/caseDevelopment.ts'
 import { commitPage, repositoryCommitSnapshot } from '#utils/caseCommits.ts'
 
-type Query = { organizationId?: string, caseId?: string, offset?: string, repositoryId?: string, cursor?: string }
+type Query = { organizationId?: string, caseId?: string, offset?: string, repositoryId?: string, cursor?: string, search?: string }
 const scope = `(r.organization_id IS NOT DISTINCT FROM $2::text AND
     ((r.organization_id IS NULL AND r.owner_id = $1) OR EXISTS (
         SELECT 1 FROM organizations o JOIN organization_members m ON m.organization_id = o.id
@@ -55,20 +55,23 @@ export async function getCaseCommits(req: FastifyRequest<{ Querystring: Query }>
     const start = performance.now()
     const auth = await access(req, res)
     if (!auth) return
-    const { repositoryId, cursor } = req.query
+    const { repositoryId, cursor, search = '' } = req.query
+    if (typeof search !== 'string' || search.length > 200) return res.status(400).send({ error: 'Search must be 200 characters or fewer.' })
     if (!repositoryId || !/^[a-f0-9-]{36}$/.test(repositoryId) || cursor && !/^[a-f0-9]{40,64}$/i.test(cursor)) return res.status(400).send({ error: 'Invalid repository or cursor.' })
     const repository = (await run(`SELECT r.* FROM case_repositories r WHERE ${readScope} AND r.id=$3`, [auth.owner, auth.organizationId, repositoryId])).rows[0]
     if (!repository) return res.status(404).send({ error: 'Repository not found.' })
     const snapshot = await repositoryCommitSnapshot(repository.repository_url)
     let page
     if (snapshot) {
-        page = commitPage(snapshot.commits, cursor)
+        page = commitPage(snapshot.commits, cursor, search)
         if (!page) return res.status(409).send({ error: 'Repository history changed. Refresh the commit list.' })
     } else {
         const result = await run(`SELECT d.external_id,d.title,d.author,d.updated_at FROM case_development d
-            WHERE d.repository_id=$1 AND d.kind='commit' AND ($2::text IS NULL OR (d.updated_at,d.external_id)<(
+            WHERE d.repository_id=$1 AND d.kind='commit'
+            AND ($3='' OR strpos(lower(d.title),$3)>0 OR strpos(lower(d.author),$3)>0 OR strpos(lower(d.external_id),$3)>0)
+            AND ($2::text IS NULL OR (d.updated_at,d.external_id)<(
                 SELECT updated_at,external_id FROM case_development WHERE repository_id=$1 AND kind='commit' AND external_id=$2))
-            ORDER BY d.updated_at DESC,d.external_id DESC LIMIT 101`, [repositoryId, cursor || null])
+            ORDER BY d.updated_at DESC,d.external_id DESC LIMIT 101`, [repositoryId, cursor || null, search.trim().toLowerCase()])
         page = { items: result.rows.slice(0, 100), nextCursor: result.rows.length > 100 ? result.rows[99].external_id : null }
     }
     return res.header('Cache-Control', 'private, no-store').header('Server-Timing', `commits;dur=${(performance.now() - start).toFixed(3)}`).send(page)
