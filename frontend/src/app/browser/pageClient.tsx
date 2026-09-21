@@ -1704,7 +1704,7 @@ function AnalystSummary({ summary, captures }: { summary: ReturnType<typeof buil
         <section className='min-w-0 overflow-hidden rounded-lg border border-ui-border bg-ui-panel p-4'>
             <div className='flex items-start justify-between gap-3'>
                 <div className='min-w-0'>
-                    <h2 className='text-sm font-semibold uppercase text-ui-primary'>SOC analyst summary</h2>
+                    <h2 className='text-sm font-semibold text-ui-primary'>Summary</h2>
                     <p className='mt-2 wrap-break-word text-sm leading-6 text-ui-text'>{summary.narrative}</p>
                 </div>
                 <button
@@ -2539,20 +2539,21 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
         deobfuscationTasks,
         navigationFailed,
     })
+    const screenshotCount = pageCaptures.filter(capture => capture.image).length
+    const suspicious = suspiciousCaptures.length > 0 || providerDetected || suspiciousDeobfuscationTasks.length > 0
+        || Boolean(latestNetwork?.downloads?.some(file => file.virusTotal?.flagged))
+    const reasons = suspiciousCaptures.flatMap(capture => capture.evidence?.reasons || []).slice(0, 3)
+    const findings = suspicious
+        ? `Suspicious activity requires review${reasons.length ? `: ${reasons.join('; ')}` : ''}.`
+        : 'No signs of suspicious activity was observed.'
     const threatNarrative = threatAssociations.length
-        ? `Observed threat context in captured evidence: ${threatAssociations.slice(0, 4).map(item => `${item.name} (${item.category || 'context'}, ${item.confidence || 'low'})`).join('; ')}.`
-        : 'No named actor, malware family, or tool label was extracted from the captured evidence yet.'
-    const parsedToolAnalyses = toolAnalyses.filter(hasParsedProviderResult)
-    const providerNarrative = parsedToolAnalyses.length
-        ? `Parsed provider evidence is available from ${parsedToolAnalyses.map(item => item.toolKind || 'profile tool').join(', ')}.`
-        : toolCaptures.length
-            ? 'Profile tools produced captures, but no parsed provider verdict was returned.'
-            : 'No external provider result has been parsed yet; provider panels show configured tools and blockers.'
+        ? `Threat associations: ${threatAssociations.slice(0, 4).map(item => `${item.name} (${item.category || 'context'}, ${item.confidence || 'low'})`).join('; ')}.`
+        : ''
     const narrative = pageCaptures.length
         ? navigationFailed
-            ? `The isolated browser could not load ${target || 'the submitted URL'} and captured a browser error page instead of site evidence. Do not record this as a clean verdict.`
-            : `The sandbox loaded ${target || 'the submitted URL'} and captured ${pageCaptures.length} browser state${pageCaptures.length === 1 ? '' : 's'}${redirected ? ' across at least one URL change' : ''}. ${providerNarrative} ${suspiciousCaptures.length ? `Rendered evidence requires review: ${suspiciousCaptures.flatMap(capture => capture.evidence?.reasons || []).slice(0, 3).join('; ')}.` : 'No signs of suspicious activity were found in the captured browser evidence.'} ${threatNarrative} ${comments.length ? `Source comments observed: ${comments.join(' ')}` : 'No community comments were extracted from provider or page evidence.'}`
-        : `The sandbox is preparing ${target || 'the submitted URL'}. No success verdict is shown until a browser frame, provider result, or explicit blocker is captured for profile "${profile.name}".`
+            ? `Could not load ${target || 'the submitted URL'}. Captured a browser error page.`
+            : [`Loaded ${target || 'the submitted URL'} and captured ${screenshotCount} screenshot${screenshotCount === 1 ? '' : 's'}.`, findings, threatNarrative].filter(Boolean).join(' ')
+        : `Preparing ${target || 'the submitted URL'}.`
     const brief = buildAnalystBrief({
         target,
         navigationFailed,

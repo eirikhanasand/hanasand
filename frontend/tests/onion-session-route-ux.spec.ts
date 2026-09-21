@@ -26,7 +26,7 @@ test('legacy onion and regular sandbox routes redirect to the unified browser wo
     assert(browserClientSource.includes('BrowserFingerprint'))
     assert(browserClientSource.includes('SlidersHorizontal'))
     assert(browserClientSource.includes('id=\'sandbox-url\''))
-    assert(browserClientSource.includes('SOC analyst summary'))
+    assert(browserClientSource.includes('>Summary</h2>'))
     assert(browserClientSource.includes('HistoryPanel'))
     assert(!browserClientSource.includes('This page is not available'))
 })

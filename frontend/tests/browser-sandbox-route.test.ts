@@ -38,7 +38,7 @@ test('regular browser sandbox route and broker contract are wired', () => {
     assert(clientSource.includes('urlquery'), 'default profile should include urlquery.')
     assert(clientSource.includes('WebCrack'), 'default profile should include WebCrack.')
     assert(clientSource.includes('Screenshot timeline'), 'client should expose screenshot timeline output.')
-    assert(clientSource.includes('SOC analyst summary'), 'client should expose analyst summary output.')
+    assert(clientSource.includes('>Summary</h2>'), 'client should expose analyst summary output.')
     assert(clientSource.includes('window.localStorage.setItem'), 'client should persist saved profiles locally.')
     assert(clientSource.includes('/api/backend/browser/profiles'), 'client should sync saved profiles through the authenticated backend proxy.')
     assert(clientSource.includes('ProfileToolEditor'), 'client should expose editable custom profile tool lists.')
@@ -139,7 +139,7 @@ test('regular browser sandbox route and broker contract are wired', () => {
 
     assert(wsSource.includes('/api/ws/browser/:id'), 'API websocket plugin should register the unified browser route.')
     assert(wsSource.includes('/api/ws/browser-sandbox/:id'), 'API websocket plugin should register the regular sandbox route.')
-    assert(wsSource.includes('handleOnionSessionSocket(connection, req.params.id, \'regular\')'), 'regular sandbox route should force regular network mode.')
+    assert(wsSource.includes('handleOnionSessionSocket(worker, req.params.id, \'regular\')'), 'regular sandbox route should force regular network mode.')
     assert(wsSource.includes('requestBrowserAdmission(id') && wsSource.includes('releaseAdmission?.()'), 'the API broker should enforce and release fleet-wide isolated-browser capacity.')
     assert(wsSource.includes('if (payload?.type !== \'start\') return'), 'the isolated worker must not launch or bypass run preparation before a valid start message.')
     assert(wsSource.includes('Promise.all([admission.promise, streamResolution])') && wsSource.includes('BROWSER_STREAM_RESOLUTION=${resolution}'), 'the worker display resolution should be fixed before WebRTC starts.')
