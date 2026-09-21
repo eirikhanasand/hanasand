@@ -79,12 +79,14 @@ COPY browser-worker/patch-stream-framerate.py /tmp/patch-stream-framerate.py
 COPY browser-worker/patch-stream-h264.py /tmp/patch-stream-h264.py
 COPY browser-worker/patch-stream-receiver.py /tmp/patch-stream-receiver.py
 COPY browser-worker/patch-stream-packets.py /tmp/patch-stream-packets.py
+COPY browser-worker/patch-stream-signalling.py /tmp/patch-stream-signalling.py
 RUN python3 /tmp/patch-stream-input.py \
     && python3 /tmp/patch-stream-playback.py \
     && python3 /tmp/patch-stream-framerate.py \
     && python3 /tmp/patch-stream-h264.py \
     && python3 /tmp/patch-stream-receiver.py \
     && python3 /tmp/patch-stream-packets.py \
+    && python3 /tmp/patch-stream-signalling.py \
     && chmod +x /usr/local/bin/hanasand-browser-worker \
     && sed -i 's/selkies-gstreamer-resize 1920x1080/selkies-gstreamer-resize "${BROWSER_STREAM_RESOLUTION:-1280x720}"/' /etc/entrypoint.sh \
     && sed -i '/\.scale {/,/}/s/height: 100%;/height: 100%;\n      object-fit: contain;/' /opt/gst-web/index.html \

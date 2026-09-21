@@ -95,3 +95,25 @@ assert any(damaged.get(pts) != digest for pts, digest in complete.items() if enc
 assert all(damaged.get(pts) == digest for pts, digest in complete.items() if pts >= recovery_pts), 'Next IDR must fully restore the decoded picture'
 print(f'H.264: 1080p60 constrained-baseline level 4.2; IDRs {keys}; '
       f'recovered exactly after reference loss; encoder {180 / elapsed:.1f} FPS')
+
+
+async def check_signalling_loop():
+    loop = asyncio.get_running_loop()
+    sender = GSTWebRTCApp(loop, encoder='x264enc')
+    received = []
+    complete = asyncio.Event()
+
+    async def on_ice(index, candidate):
+        assert asyncio.get_running_loop() is loop
+        received.append((index, candidate))
+        if len(received) == 32:
+            complete.set()
+
+    sender.on_ice = on_ice
+    await asyncio.gather(*(asyncio.to_thread(sender._GSTWebRTCApp__send_ice, None, i, 'test') for i in range(32)))
+    await asyncio.wait_for(complete.wait(), 5)
+    assert sorted(received) == [(i, 'test') for i in range(32)]
+
+
+asyncio.run(check_signalling_loop())
+print('Concurrent signalling callbacks execute on the socket event loop')
