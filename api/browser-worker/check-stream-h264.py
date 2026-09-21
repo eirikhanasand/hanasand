@@ -4,6 +4,7 @@ Run with the image's gst-env loaded; no display, browser or network is used.
 """
 import asyncio
 import hashlib
+import re
 import time
 
 from selkies_gstreamer.gstwebrtc_app import GSTWebRTCApp, Gst
@@ -64,6 +65,9 @@ started = time.monotonic()
 encoded = collect(pipeline, sink)
 elapsed = time.monotonic() - started
 assert len(encoded) == 180, len(encoded)
+for buffer, _ in encoded:
+    nals = re.split(b'\x00\x00\x00?\x01', buffer.extract_dup(0, buffer.get_size()))
+    assert sum(bool(nal) and (nal[0] & 31) in (1, 5) for nal in nals) == 1, 'One video slice per picture avoids partial-slice rendering'
 keys = [i for i, (buffer, _) in enumerate(encoded) if not buffer.has_flags(Gst.BufferFlags.DELTA_UNIT)]
 assert keys == [0, 60, 120], keys
 assert encoded[0][1].get_structure(0).get_string('profile') == 'constrained-baseline'
