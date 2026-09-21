@@ -74,3 +74,18 @@ test('shows progress and fresh totals when cleanup completes', async ({ page }) 
     await expect(page.getByRole('button', { name: 'Clear unused storage' })).toBeEnabled()
     await expect(page.getByText('0 GB reclaimable', { exact: true })).toBeVisible()
 })
+
+test('updates the reclaimed amount during cleanup and removes progress on completion', async ({ page }) => {
+    let current = { ...state, running: true, phase: 'build_cache', freedBytes: 1.2e9, progressAt: new Date().toISOString() }
+    await page.route('**/api/backend/system/storage', route => route.fulfill({ json: current }))
+    await page.goto('http://docker-storage.test/')
+    await expect(page.getByRole('status')).toHaveText('1.2 GB freed so far (estimated)')
+    current = { ...current, phase: 'refresh', freedBytes: 8.7e9, progressAt: new Date().toISOString() }
+    await expect(page.getByRole('status')).toHaveText('8.7 GB freed so far (estimated)')
+    await expect(page.getByRole('button', { name: 'Updating totals…' })).toBeDisabled()
+    current = { ...current, progressAt: '2020-01-01T00:00:00Z' }
+    await expect(page.getByRole('status')).toContainText('Waiting for an updated measurement…')
+    current = { ...current, running: false, reclaimableCacheBytes: 0 }
+    await expect(page.getByRole('status')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Clear unused storage' })).toBeEnabled()
+})

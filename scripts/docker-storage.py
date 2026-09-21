@@ -10,6 +10,7 @@ from pathlib import Path
 import socket
 import subprocess
 import tempfile
+import threading
 import time
 
 STATE_DIR = Path(os.environ.get('DOCKER_STORAGE_STATE_DIR', '/var/lib/hanasand/docker-storage'))
@@ -111,7 +112,32 @@ def perform(clear=False):
         request = read(request_path) if clear else {}
         previous = read(state_path)
         state = {**previous, 'running': clear, 'error': None if clear else previous.get('error')}
+        state_lock = threading.Lock()
+        stopped = threading.Event()
+        reporter = None
+
+        def publish(**changes):
+            with state_lock:
+                state.update(changes)
+                save(state_path, state)
+
+        def report_space(before):
+            while not stopped.wait(1):
+                try:
+                    current = os.statvfs('/')
+                    publish(freedBytes=max(0, current.f_bavail * current.f_frsize - before.f_bavail * before.f_frsize), progressAt=now())
+                except OSError:
+                    # Retain the last measurement; the UI can identify stale progress.
+                    pass
+
+        def stop_reporting():
+            stopped.set()
+            if reporter:
+                reporter.join()
+
         if clear:
+            state['freedBytes'] = 0
+            state['progressAt'] = now()
             state['phase'] = 'build_cache'
             state['startedAt'] = now()
             state['lastAttemptAt'] = state['startedAt']
@@ -119,13 +145,14 @@ def perform(clear=False):
         try:
             before = os.statvfs('/')
             if clear:
+                reporter = threading.Thread(target=report_space, args=(before,), daemon=True)
+                reporter.start()
                 # Explicit reclaim removes all unused cache; the nightly job keeps its budget.
                 args = ['builder', 'prune', '--all', '--force']
                 if not request:
                     args += ['--keep-storage', str(CACHE_BUDGET)]
                 command(args)
-                state['phase'] = 'images'
-                save(state_path, state)
+                publish(phase='images')
                 inventory = image_inventory(docker('/images/json?all=1'), docker('/containers/json?all=1'))
                 for image in inventory:
                     if not image['eligible']:
@@ -137,9 +164,10 @@ def perform(clear=False):
                     references = inspect.get('RepoTags') or [image['id']]
                     command(['image', 'rm', *references])
             if clear:
-                state['phase'] = 'refresh'
-                save(state_path, state)
-            state.update(snapshot())
+                publish(phase='refresh')
+            measurement = snapshot()
+            stop_reporting()
+            state.update(measurement)
             # A recovered metrics scan must not conceal a failed cleanup.
             recovered_scan = state.get('errorStage') == 'refresh' or (
                 state.get('lastAttemptAt') and state.get('lastSuccessAt') and
@@ -150,13 +178,16 @@ def perform(clear=False):
             state['phase'] = None
             if clear:
                 after = os.statvfs('/')
-                state.update(lastSuccessAt=now(), lastFreedBytes=max(0, after.f_bavail * after.f_frsize - before.f_bavail * before.f_frsize))
+                freed = max(0, after.f_bavail * after.f_frsize - before.f_bavail * before.f_frsize)
+                state.update(lastSuccessAt=now(), lastFreedBytes=freed, freedBytes=freed, progressAt=now())
             save(state_path, state)
         except Exception as error:
+            stop_reporting()
             state.update(running=False, phase=None, error=str(error), errorStage='cleanup' if clear else 'refresh', failedAt=now())
             save(state_path, state)
             raise
         finally:
+            stop_reporting()
             if clear and request and read(request_path) == request:
                 request_path.unlink(missing_ok=True)
 

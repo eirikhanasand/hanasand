@@ -8,6 +8,7 @@ type Storage = {
     cacheBytes: number; reclaimableCacheBytes: number; cacheBudgetBytes: number
     unusedImages: { id: string; names: string[]; sizeBytes: number; eligible: boolean; retainedReason: string | null }[]
     checkedAt: string; lastSuccessAt?: string; lastFreedBytes?: number; running: boolean; queued: boolean; stale: boolean; error?: string
+    freedBytes?: number; progressAt?: string
     schedule: string; timezone: string; phase?: 'build_cache' | 'images' | 'refresh' | null
 }
 const bytes = (value: number) => `${(value / 1e9).toLocaleString(undefined, { maximumFractionDigits: 1 })} GB`
@@ -60,6 +61,7 @@ export default function DockerStoragePanel() {
         </div>
         {error && <p role='alert' className='text-sm text-ui-danger'>{error} <button className='underline' onClick={() => void load()}>Retry</button></p>}
         {!state ? !error && <p className='text-sm text-ui-muted'>Loading storage…</p> : <>
+            {state.running && <p role='status' className='text-sm tabular-nums text-ui-muted'>{typeof state.freedBytes === 'number' ? `${bytes(state.freedBytes)} freed so far (estimated)` : 'Measuring reclaimed space…'}{state.progressAt && Date.now() - Date.parse(state.progressAt) > 5000 ? ' · Waiting for an updated measurement…' : ''}</p>}
             <div className='grid gap-3 sm:grid-cols-3'>
                 <div className='rounded-lg border border-ui-border bg-ui-raised/50 p-3'><p className='text-xs text-ui-muted'>Build cache</p><p className='mt-1 text-xl font-semibold tabular-nums'>{bytes(state.cacheBytes)}</p><p className='text-xs text-ui-muted'>{bytes(state.reclaimableCacheBytes)} reclaimable</p></div>
                 <div className='rounded-lg border border-ui-border bg-ui-raised/50 p-3'><p className='text-xs text-ui-muted'>Nightly cleanup</p><p className='mt-1 font-semibold'>{state.schedule} · {state.timezone}</p><p className='text-xs text-ui-muted'>Keeps up to {bytes(state.cacheBudgetBytes)} of unused build cache</p></div>

@@ -2,6 +2,8 @@ import importlib.util
 from pathlib import Path
 import unittest
 import tempfile
+import threading
+from types import SimpleNamespace
 from unittest.mock import patch
 spec = importlib.util.spec_from_file_location('storage', Path(__file__).with_name('docker-storage.py'))
 storage = importlib.util.module_from_spec(spec)
@@ -84,6 +86,38 @@ class CleanupStateTest(unittest.TestCase):
             with patch.object(storage, 'command', side_effect=prune), patch.object(storage, 'docker', return_value=[]), patch.object(storage, 'snapshot', return_value={}):
                 storage.perform(clear=True)
             self.assertTrue((root / 'request.json').exists())
+
+    def test_reports_freed_space_before_cleanup_finishes_and_stops_on_error(self):
+        for fails in (False, True):
+            with self.subTest(fails=fails), tempfile.TemporaryDirectory() as directory, patch.object(storage, 'STATE_DIR', Path(directory)):
+                root = Path(directory)
+                measured = threading.Event()
+                available = [100]
+                original_save = storage.save
+                reports = []
+                def save(path, value):
+                    original_save(path, value)
+                    reports.append(dict(value))
+                    if value.get('running') and value.get('freedBytes', 0) > 0:
+                        measured.set()
+                def prune(args):
+                    available[0] = 140
+                    self.assertTrue(measured.wait(3), 'No progress while Docker is still deleting')
+                    current = storage.read(root / 'status.json')
+                    self.assertTrue(current['running'])
+                    self.assertEqual(current['freedBytes'], 4000)
+                    if fails:
+                        raise RuntimeError('prune failed')
+                with patch.object(storage, 'save', side_effect=save), patch.object(storage.os, 'statvfs', side_effect=lambda _: SimpleNamespace(f_bavail=available[0], f_frsize=100)), patch.object(storage, 'command', side_effect=prune), patch.object(storage, 'docker', return_value=[]), patch.object(storage, 'snapshot', return_value={}):
+                    if fails:
+                        with self.assertRaisesRegex(RuntimeError, 'prune failed'):
+                            storage.perform(clear=True)
+                    else:
+                        storage.perform(clear=True)
+                self.assertEqual(reports[0]['freedBytes'], 0)
+                self.assertFalse(reports[-1]['running'])
+                self.assertEqual(reports[-1]['freedBytes'], 4000)
+                self.assertEqual(reports[-1].get('error'), 'prune failed' if fails else None)
 
     def test_failure_does_not_replace_last_success(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(storage, 'STATE_DIR', Path(directory)):
