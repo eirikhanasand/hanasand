@@ -1366,9 +1366,9 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                                 <input aria-label='Report link' readOnly value={shareUrl} onFocus={event => event.currentTarget.select()} className='min-w-0 flex-1 rounded-md border border-ui-border bg-ui-canvas px-2 py-1.5 text-xs text-ui-text' />
                                 <a href={shareUrl} target='_blank' rel='noopener noreferrer' className='text-sm text-ui-primary underline'>Open report</a>
                                 <button type='button' className='rounded-md border border-ui-border px-2 py-1.5 text-sm' onClick={() => {
-                                    const action = navigator.share ? navigator.share({ url: shareUrl }) : navigator.clipboard?.writeText(shareUrl)
-                                    void action?.then(() => { if (!navigator.share) setShareStatus('copied') }).catch(() => setShareError('Select and copy the report link above.'))
-                                }}>{typeof navigator !== 'undefined' && navigator.share ? 'Share link' : 'Copy link'}</button>
+                                    const action = typeof navigator.share === 'function' ? navigator.share({ url: shareUrl }) : navigator.clipboard?.writeText(shareUrl)
+                                    void action?.then(() => { if (typeof navigator.share !== 'function') setShareStatus('copied') }).catch(() => setShareError('Select and copy the report link above.'))
+                                }}>{typeof navigator !== 'undefined' && typeof navigator.share === 'function' ? 'Share link' : 'Copy link'}</button>
                             </div> : null}
                             {shareError ? <p role='alert' className='text-sm text-ui-danger'>{shareError}</p> : null}
                             <div data-browser-status className='flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ui-muted sm:justify-end'>
