@@ -54,7 +54,7 @@ test('regular browser sandbox route and broker contract are wired', () => {
     assert(clientSource.includes('SandboxWebCrackLoad'), 'client should model WebCrack script injection results.')
     assert(clientSource.includes('WebCrack loaded'), 'client should summarize WebCrack script injection.')
     assert(clientSource.includes('SandboxToolAnalysis'), 'client should model parsed external-tool evidence.')
-    assert(clientSource.includes('Evidence workspace'), 'client should expose an inspectable evidence workspace.')
+    assert(clientSource.includes('>Details</h2>'), 'client should expose an inspectable evidence workspace.')
     assert(clientSource.includes('>Tabs</h2>'), 'client should expose tabs for every configured profile tool.')
     assert(clientSource.includes('No obfuscated code was found on this page.'), 'client should describe an unnecessary WebCrack run without generic sample wording.')
     assert(clientSource.includes('pushEvent(\'Sandbox closed.\')'), 'client should keep broker implementation details out of visible activity copy.')

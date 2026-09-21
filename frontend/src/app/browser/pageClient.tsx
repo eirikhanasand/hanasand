@@ -427,6 +427,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     }), [customLocale, customPlatform, customTimezoneId, customUserAgent, customViewportHeight, customViewportWidth, selectedFingerprint])
     const summary = useMemo(() => buildAnalystSummary(normalizedTarget, captures, selectedProfile), [captures, normalizedTarget, selectedProfile])
     const toolCaptures = useMemo(() => captures.filter(capture => capture.kind === 'tool'), [captures])
+    const checksWithoutVerdict = selectedProfile.tools.filter(tool => !hasParsedProviderResult(selectToolCapture(toolCaptures, tool, normalizedTarget)?.toolAnalysis)).length
     const latestPageImage = useMemo(() => captures.find(capture => capture.kind === 'page' && capture.image && !capture.frameQuality?.looksBlank)?.image || null, [captures])
     const activeTool = useMemo(() => selectedProfile.tools.find(tool => tool.id === activeSandboxTab), [activeSandboxTab, selectedProfile.tools])
     const activeToolCapture = activeTool ? selectToolCapture(toolCaptures, activeTool, normalizedTarget) : undefined
@@ -1275,7 +1276,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                                 <span>{summary.latestNetwork?.requestCount || 0} requests</span>
                                 <span>{summary.latestNetwork?.uniqueDomainCount || 0} domains</span>
                                 <span>{summary.latestNetwork?.downloads?.length || 0} file{summary.latestNetwork?.downloads?.length === 1 ? '' : 's'}</span>
-                                <span>{selectedProfile.tools.filter(tool => !hasParsedProviderResult(selectToolCapture(toolCaptures, tool, normalizedTarget)?.toolAnalysis)).length} checks without a verdict</span>
+                                {checksWithoutVerdict > 0 ? <span>{checksWithoutVerdict} checks without a verdict</span> : null}
                             </span>
                         </button>
                     ) : null}
@@ -1323,7 +1324,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                                             </div>
                                         </div>
                                     )}
-                                    {!runIsActive && !streamUrl && activeViewportImage && !activeTool ? <p className='pointer-events-none absolute bottom-2 left-2 rounded-md bg-ui-panel px-2 py-1 text-xs text-ui-muted'>Saved capture · Start a new run to interact</p> : null}
+                                    {!runIsActive && !streamUrl && activeViewportImage && !activeTool ? <p className='pointer-events-none absolute bottom-2 left-2 rounded-md bg-ui-panel px-2 py-1 text-xs text-ui-muted'>Start a new run to interact</p> : null}
                                 </div>
                             </section>
                             <DownloadsPanel downloads={summary.latestNetwork?.downloads || []} runIsActive={runIsActive} />
@@ -1826,7 +1827,7 @@ function EvidenceWorkspace({
     return (
         <section className='min-h-0 min-w-0 overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
             <div className='border-b border-ui-border px-4 py-3'>
-                <h2 className='text-sm font-semibold uppercase text-ui-primary'>Evidence workspace</h2>
+                <h2 className='text-sm font-semibold text-ui-primary'>Details</h2>
             </div>
             <div className='grid gap-2 p-3'>
                 <EvidencePanel title='Statistics' status={latestPage ? 'Ready for review' : 'Waiting'}>
@@ -2705,7 +2706,7 @@ function buildAnalystBrief(input: {
         impact = 'The run contains obfuscation or meaningful threat-context signals that need analyst review.'
         recommendedAction = 'Review the suspicious evidence, contacted domains, and WebCrack output before allowing user access.'
     } else if (input.pageCaptureCount) {
-        verdict = input.incompleteChecks ? 'Checks incomplete — no clean verdict' : 'No detections in captured evidence'
+        verdict = input.incompleteChecks ? 'Checks incomplete — no clean verdict' : 'No signs of suspicious activity.'
         impact = input.incompleteChecks ? 'Some provider or file checks did not return a verdict.' : 'No detections were observed. This does not guarantee the website or its files are safe.'
         recommendedAction = input.incompleteChecks ? 'Review unavailable checks before making a decision.' : 'Review the captured evidence before allowing access.'
     }
