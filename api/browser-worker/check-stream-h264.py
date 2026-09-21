@@ -9,12 +9,18 @@ import time
 from selkies_gstreamer.gstwebrtc_app import GSTWebRTCApp, Gst
 
 app = GSTWebRTCApp(asyncio.new_event_loop(), encoder='x264enc', framerate=60,
-                   keyframe_distance=1, video_bitrate=4000)
+                   keyframe_distance=1, video_bitrate=4000, congestion_control=True)
 app.pipeline = Gst.Pipeline.new('installed-settings')
 app.build_webrtcbin_pipeline()
 app.build_video_pipeline()
 encoder = app.pipeline.get_by_name('x264enc')
 capsfilter = encoder.get_static_pad('src').get_peer().get_parent_element()
+payloader = Gst.ElementFactory.make('rtph264pay')
+extension_uris = []
+payloader.connect('add-extension', lambda _, extension: extension_uris.append(extension.get_uri()))
+assert app.rtp_add_extensions(payloader)
+assert not any('playout-delay' in uri for uri in extension_uris), 'Sender must not force zero receiver buffering'
+assert any('transport-wide-cc' in uri for uri in extension_uris), 'Keep adaptive bitrate feedback'
 assert encoder.get_property('key-int-max') == 60
 assert encoder.get_property('bframes') == 0
 assert encoder.get_property('rc-lookahead') == 0

@@ -10,7 +10,7 @@ test('stale loading text, hidden tabs, and autoplay prompts never reload a healt
     let tick = () => {}
     let reloads = 0
     const store = new Map<string, string>()
-    const video = { readyState: 0, videoWidth: 0 }
+    const video = { readyState: 0, videoWidth: 0, videoHeight: 0 }
     const app = { loadingText: 'Waiting for stream.', status: 'connected', showStart: false }
     const document = { visibilityState: 'visible', querySelector: () => video }
     const states: string[] = []
@@ -31,9 +31,31 @@ test('stale loading text, hidden tabs, and autoplay prompts never reload a healt
     app.showStart = false
     video.readyState = 2
     video.videoWidth = 1280
+    video.videoHeight = 720
     advance()
     expect(reloads).toBe(0)
     expect(states).toContain('ready')
+})
+
+test('report decoded dimensions again when the stream changes size without reconnecting', () => {
+    let tick = () => {}
+    const messages: { width: number; height: number }[] = []
+    const video = { readyState: 2, videoWidth: 1920, videoHeight: 1080 }
+    runInNewContext(source, {
+        document: { visibilityState: 'visible', querySelector: () => video },
+        setInterval: (fn: () => void) => { tick = fn }, location: { pathname: '/stream' },
+        parent: { postMessage: (message: { width: number; height: number }) => messages.push(message) },
+        sessionStorage: { getItem: () => null },
+    })
+    tick()
+    tick()
+    expect(messages.length).toBe(1)
+    expect(messages[0].width / messages[0].height).toBe(1920 / 1080)
+    video.videoWidth = 390
+    video.videoHeight = 844
+    tick()
+    expect(messages.length).toBe(2)
+    expect(messages[1].width / messages[1].height).toBe(390 / 844)
 })
 
 test('genuine startup failures retry at most twice across page reloads', () => {

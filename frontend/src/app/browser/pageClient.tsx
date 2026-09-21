@@ -357,15 +357,19 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     const [activeImage, setActiveImage] = useState<string | null>(null)
     const [streamUrl, setStreamUrl] = useState('')
     const [streamHasFrame, setStreamHasFrame] = useState(false)
+    const [streamFrame, setStreamFrame] = useState<{ width: number; height: number } | null>(null)
     const receivedEvidenceRef = useRef(false)
     const stoppedRunRef = useRef(false)
     const streamRef = useRef<HTMLIFrameElement | null>(null)
     useEffect(() => {
         setStreamHasFrame(false)
+        setStreamFrame(null)
         if (!streamUrl) return
         const origin = new URL(streamUrl).origin
         const receive = (event: MessageEvent) => {
             if (event.source !== streamRef.current?.contentWindow || event.origin !== origin || event.data?.type !== 'hanasand-browser-stream') return
+            const { width, height } = event.data
+            if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0 && width <= 8192 && height <= 8192) setStreamFrame({ width, height })
             if (event.data.state === 'ready' || event.data.state === 'gesture') {
                 receivedEvidenceRef.current = true
                 setStreamHasFrame(true)
@@ -428,6 +432,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     const activeToolCapture = activeTool ? selectToolCapture(toolCaptures, activeTool, normalizedTarget) : undefined
     const activeViewportImage = activeTool ? activeToolCapture?.image : activeImage || latestPageImage
     const activeViewportUrl = activeTool ? remoteTabUrls[activeTool.id] || activeToolCapture?.url || resolveToolUrl(activeTool.url, activeUrl || normalizedTarget) : remoteTabUrls.browser || activeUrl || normalizedTarget
+    const viewportFrame = streamUrl ? streamFrame || browserMetadata : activeToolCapture?.frameWidth && activeToolCapture?.frameHeight ? { width: activeToolCapture.frameWidth, height: activeToolCapture.frameHeight } : activeFrame
     const runRemainingSeconds = runTiming ? Math.max(0, Math.ceil((new Date(runTiming.expiresAt).getTime() - clockNow) / 1000)) : 0
     const paidBrowserPlan = Boolean(quota?.paid)
     const runIsActive = sessionState === 'queued' || sessionState === 'connecting' || sessionState === 'live'
@@ -1212,11 +1217,11 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                 <header className='sticky top-0 z-40 border-b border-ui-border bg-ui-panel px-4 py-3'>
                     <div className='mx-auto flex max-w-[96rem] flex-wrap items-start justify-between gap-3'>
                         <div className='min-w-0 flex-1 basis-72'>
-                            <SandboxTabStrip activeTab={activeSandboxTab} sessionState={sessionState} tools={selectedProfile.tools} toolCaptures={toolCaptures} target={normalizedTarget} browserCaptured={Boolean(activeImage || latestPageImage)} onSelect={selectSandboxTab} />
-                            <h1 className='mt-1 max-h-12 overflow-y-auto break-all font-mono text-xs leading-5 text-ui-muted' title={activeViewportUrl}>{activeViewportUrl}</h1>
+                            <h1 className='truncate text-lg font-semibold' title={activeViewportUrl}>{historyDomainKey(activeViewportUrl)}</h1>
+                            {selectedProfile.tools.length ? <SandboxTabStrip activeTab={activeSandboxTab} sessionState={sessionState} tools={selectedProfile.tools} toolCaptures={toolCaptures} target={normalizedTarget} onSelect={selectSandboxTab} /> : null}
                         </div>
                         <div className='flex flex-wrap items-center gap-2'>
-                            <StatusPill label='Run' value={summary.navigationFailed || sessionState === 'unreachable' ? 'unreachable' : sessionStateLabel(sessionState)} good={sessionState === 'live'} />
+                            <StatusPill label='' value={summary.navigationFailed || sessionState === 'unreachable' ? 'unreachable' : sessionStateLabel(sessionState).replace(/^./, letter => letter.toUpperCase())} good={sessionState === 'live'} />
                             {runIsActive && socketState !== 'open' ? <StatusPill label='Connection' value={socketStateLabel(socketState)} good={false} /> : null}
                             {sessionState === 'live' && runTiming ? <span role='timer' aria-label={`${formatRunDuration(runRemainingSeconds)} remaining`}><StatusPill label='Time left' value={formatRunDuration(runRemainingSeconds)} good={runRemainingSeconds > 15} /></span> : null}
                             {sessionState === 'live' && runTiming && !runTiming.paidExtensionUsed ? (
@@ -1280,7 +1285,8 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                             <section className={`grid min-w-0 w-full overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm ${streamUrl || activeViewportImage ? '' : 'max-w-xl justify-self-center'}`}>
                                 <div
                                     ref={viewportRef}
-                                    className={`relative w-full overflow-hidden overscroll-contain bg-ui-canvas outline-none focus:ring-2 focus:ring-ui-primary/30 ${streamUrl || activeViewportImage ? runIsActive ? 'h-[min(68vh,52rem)] min-h-64' : 'h-[min(44vh,32rem)] min-h-64' : 'min-h-40'} ${fallbackInteractive ? 'touch-none' : ''}`}
+                                    className={`relative w-full overflow-hidden overscroll-contain bg-ui-canvas outline-none focus:ring-2 focus:ring-ui-primary/30 ${streamUrl || activeViewportImage ? '' : 'min-h-40'} ${fallbackInteractive ? 'touch-none' : ''}`}
+                                    style={streamUrl || activeViewportImage ? { aspectRatio: `${viewportFrame.width} / ${viewportFrame.height}` } : undefined}
                                     data-browser-viewport
                                     tabIndex={fallbackInteractive ? 0 : -1}
                                     role='application'
@@ -1320,7 +1326,6 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                                     {!runIsActive && !streamUrl && activeViewportImage && !activeTool ? <p className='pointer-events-none absolute bottom-2 left-2 rounded-md bg-ui-panel px-2 py-1 text-xs text-ui-muted'>Saved capture · Start a new run to interact</p> : null}
                                 </div>
                             </section>
-                            {runIsActive ? <p role='status' className='text-xs text-ui-muted'>{streamUrl && !streamHasFrame ? 'Connecting live view · ' : ''}Automatic checks running · Files downloaded in the sandbox are hashed and checked against VirusTotal.</p> : null}
                             <DownloadsPanel downloads={summary.latestNetwork?.downloads || []} runIsActive={runIsActive} />
                             <details className='rounded-lg border border-ui-border p-3'><summary className='cursor-pointer text-sm font-semibold'>Connection and provider details</summary><aside className='mt-3 grid gap-4 xl:grid-cols-3'>
                                 <CapacityPanel capacity={capacity} sessionState={sessionState} />
@@ -1333,7 +1338,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                             </details>
                         </div>
                         <div className='mt-4 grid min-w-0 gap-4'>
-                            <EvidenceWorkspace captures={captures} profile={selectedProfile} target={normalizedTarget} summary={summary} events={events} consoleEvents={consoleEvents} providerConsoleEvents={providerConsoleEvents} />
+                            <EvidenceWorkspace captures={captures} profile={selectedProfile} target={normalizedTarget} summary={summary} consoleEvents={consoleEvents} providerConsoleEvents={providerConsoleEvents} />
                             <details className='rounded-lg border border-ui-border p-3'><summary className='cursor-pointer text-sm font-semibold'>Analyst notes and captures</summary><div className='mt-3 grid min-w-0 gap-4 xl:grid-cols-2'>
                                 <AnalystSummary summary={summary} captures={captures} />
                                 <CaptureTimeline captures={captures} />
@@ -1387,7 +1392,6 @@ function SandboxTabStrip({
     tools,
     toolCaptures,
     target,
-    browserCaptured,
     onSelect,
 }: {
     activeTab: string
@@ -1395,7 +1399,6 @@ function SandboxTabStrip({
     tools: SandboxTool[]
     toolCaptures: Capture[]
     target: string
-    browserCaptured: boolean
     onSelect: (tab: string) => void
 }) {
     return (
@@ -1411,8 +1414,8 @@ function SandboxTabStrip({
         }}>
             <SandboxTabButton
                 active={activeTab === 'browser'}
-                label='Browser'
-                status={sessionState === 'live' ? 'live' : sessionState === 'ended' ? (browserCaptured ? '' : 'no frame') : sessionState === 'unreachable' || (sessionState === 'failed' && browserCaptured) ? 'unreachable' : sessionStateLabel(sessionState)}
+                label={historyDomainKey(target)}
+                status=''
                 onClick={() => onSelect('browser')}
             />
             {tools.map(tool => {
@@ -1799,7 +1802,6 @@ function EvidenceWorkspace({
     profile,
     target,
     summary,
-    events,
     consoleEvents,
     providerConsoleEvents,
 }: {
@@ -1807,7 +1809,6 @@ function EvidenceWorkspace({
     profile: SandboxProfile
     target: string
     summary: ReturnType<typeof buildAnalystSummary>
-    events: string[]
     consoleEvents: string[]
     providerConsoleEvents: string[]
 }) {
@@ -1815,6 +1816,8 @@ function EvidenceWorkspace({
     const toolCaptures = captures.filter(capture => capture.kind === 'tool')
     const latestPage = pageCaptures[0]
     const latestNetwork = pageCaptures.find(capture => capture.networkSummary)?.networkSummary
+    const sourceUrls = [...new Set(pageCaptures.flatMap(capture => capture.evidence?.sourceUrls || []))]
+    const networkRequests = [...new Map([...pageCaptures].reverse().flatMap(capture => capture.networkSummary?.recentRequests || []).map(request => [`${request.at}-${request.method}-${request.url}`, request])).values()]
     const scriptHashCount = new Set(pageCaptures.flatMap(capture => [
         ...(capture.evidence?.scripts || []).map(script => script.sha256),
         ...(capture.evidence?.deobfuscationTasks || []).map(task => task.sha256),
@@ -1826,19 +1829,7 @@ function EvidenceWorkspace({
                 <h2 className='text-sm font-semibold uppercase text-ui-primary'>Evidence workspace</h2>
             </div>
             <div className='grid gap-2 p-3'>
-                <EvidencePanel title='Browser capture' status={latestPage ? 'Captured' : 'Awaiting frame'}>
-                    {latestPage ? (
-                        <div className='grid gap-2 text-xs text-ui-muted'>
-                            <p className='break-all font-mono text-ui-text'>{latestPage.url}</p>
-                            <p>{latestPage.capturedAt}{latestPage.reason ? ` · ${latestPage.reason}` : ''}{latestPage.title ? ` · ${latestPage.title}` : ''}</p>
-                            {cleanEvidenceExcerpt(latestPage.evidence?.textExcerpt) ? <p className='leading-5'>{cleanEvidenceExcerpt(latestPage.evidence?.textExcerpt)}</p> : null}
-                        </div>
-                    ) : (
-                        <p className='text-xs leading-5 text-ui-muted'>No browser screenshot has arrived. The run is not treated as successful until a frame, provider result, or explicit failure is visible here.</p>
-                    )}
-                </EvidencePanel>
-
-                <EvidencePanel title='Run evidence summary' status={latestPage ? 'Ready for review' : 'Waiting'}>
+                <EvidencePanel title='Statistics' status={latestPage ? 'Ready for review' : 'Waiting'}>
                     <div className='grid gap-2 text-xs text-ui-muted sm:grid-cols-2'>
                         <EvidenceFact label='Final URL' value={summary.urlTimeline.at(-1)?.url || latestPage?.url || 'unknown'} mono />
                         <EvidenceFact label='URL states' value={String(summary.urlTimeline.length || pageCaptures.length || 0)} />
@@ -1851,26 +1842,6 @@ function EvidenceWorkspace({
                         <EvidenceFact label='Provider captures' value={`${toolCaptures.length}/${profile.tools.length}`} />
                         <EvidenceFact label='Copyable indicators' value={String(summary.indicators.length)} />
                     </div>
-                </EvidencePanel>
-
-                <EvidencePanel title='Analyst review list' status={`${summary.reviewQueue.length} item${summary.reviewQueue.length === 1 ? '' : 's'}`}>
-                    {summary.reviewQueue.length ? (
-                        <div className='grid gap-2 text-xs text-ui-muted'>
-                            {summary.reviewQueue.map(item => (
-                                <div key={`${item.source}-${item.title}-${item.evidence || item.detail}`} className='grid gap-1 rounded-md border border-ui-border bg-ui-panel p-2'>
-                                    <div className='flex flex-wrap items-center gap-2'>
-                                        <span className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase ${item.severity === 'high' ? 'border-ui-danger/40 text-ui-danger' : item.severity === 'medium' ? 'border-ui-warning/40 text-ui-warning' : 'border-ui-border text-ui-muted'}`}>{item.severity}</span>
-                                        <span className='font-semibold text-ui-text'>{item.title}</span>
-                                        <span className='text-ui-muted'>{item.source}</span>
-                                    </div>
-                                    <p className='leading-5'>{item.detail}</p>
-                                    {item.evidence ? <p className='truncate font-mono text-[11px] text-ui-text'>{item.evidence}</p> : null}
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <p className='text-xs leading-5 text-ui-muted'>No priority review items from the captured evidence.</p>
-                    )}
                 </EvidencePanel>
 
                 <div className='grid gap-3 md:grid-cols-3'>
@@ -1912,7 +1883,7 @@ function EvidenceWorkspace({
                             {latestNetwork.domains?.length ? <p className='break-all font-mono text-ui-text'>{latestNetwork.domains.slice(0, 8).join('\n')}</p> : null}
                             {latestNetwork.redirectChain?.length ? <pre className='max-h-20 overflow-auto whitespace-pre-wrap rounded-md border border-ui-border bg-ui-panel p-2 font-mono text-[11px] text-ui-text'>Redirects:{'\n'}{latestNetwork.redirectChain.join('\n')}</pre> : null}
                             {latestNetwork.downloads?.length ? <pre className='max-h-28 overflow-auto whitespace-pre-wrap rounded-md border border-ui-border bg-ui-panel p-2 font-mono text-[11px] text-ui-text'>Downloads:{'\n'}{latestNetwork.downloads.map(downloadEvidenceLine).filter(Boolean).join('\n\n')}</pre> : null}
-                            {latestNetwork.recentRequests?.length ? (
+                            {networkRequests.length ? (
                                 <div className='max-h-56 overflow-auto rounded-md border border-ui-border'>
                                     <table className='w-full min-w-[48rem] border-collapse text-left text-[11px]'>
                                         <thead className='sticky top-0 bg-ui-raised text-ui-muted'>
@@ -1929,10 +1900,10 @@ function EvidenceWorkspace({
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {latestNetwork.recentRequests.slice(-30).map((request, index) => (
+                                            {networkRequests.map((request, index) => (
                                                 <tr key={`${request.at}-${request.url}-${index}`}>
                                                     <td className='border-b border-ui-border/60 px-2 py-1'>{request.method || 'GET'}{request.resourceType ? ` · ${request.resourceType}` : ''}</td>
-                                                    <td className='border-b border-ui-border/60 px-2 py-1'>{request.status || request.failure || ''}</td>
+                                                    <td className='border-b border-ui-border/60 px-2 py-1'>{request.failure ? 'Blocked/failed' : request.status || ''}</td>
                                                     <td className='max-w-36 truncate border-b border-ui-border/60 px-2 py-1 font-mono text-ui-muted'>{request.host || ''}</td>
                                                     <td className='max-w-36 truncate border-b border-ui-border/60 px-2 py-1'>{request.mimeType || ''}</td>
                                                     <td className='border-b border-ui-border/60 px-2 py-1'>{request.durationMs !== undefined ? `${request.durationMs}ms` : ''}</td>
@@ -1950,6 +1921,7 @@ function EvidenceWorkspace({
                     ) : (
                         <p className='text-xs leading-5 text-ui-muted'>No request summary has been emitted by the browser broker yet.</p>
                     )}
+                    {sourceUrls.length ? <div className='mt-3 grid gap-1 text-xs'><p className='font-semibold'>URLs found in source</p><pre className='max-h-40 overflow-auto whitespace-pre-wrap break-all font-mono text-ui-muted'>{sourceUrls.join('\n')}</pre></div> : null}
                 </EvidencePanel>
 
                 <EvidencePanel title='Page captures' status={`${pageCaptures.length} frame${pageCaptures.length === 1 ? '' : 's'}`}>
@@ -1966,12 +1938,6 @@ function EvidenceWorkspace({
                     ) : (
                         <p className='text-xs leading-5 text-ui-muted'>No page capture available yet.</p>
                     )}
-                </EvidencePanel>
-
-                <EvidencePanel title='Activity' status={`${events.length} event${events.length === 1 ? '' : 's'}`}>
-                    <div className='grid gap-1 text-xs text-ui-muted'>
-                        {events.slice(0, 6).map(event => <p key={event} className='wrap-break-word'>{event}</p>)}
-                    </div>
                 </EvidencePanel>
 
                 <EvidencePanel title='Console logs' status={`${consoleEvents.length} log${consoleEvents.length === 1 ? '' : 's'}`}>
@@ -1994,7 +1960,7 @@ function EvidenceWorkspace({
                     {summary.indicators.length ? (
                         <pre className='max-h-28 overflow-auto whitespace-pre-wrap rounded-md border border-ui-border bg-ui-canvas p-2 text-xs text-ui-text'>{summary.indicators.join('\n')}</pre>
                     ) : (
-                        <p className='text-xs leading-5 text-ui-muted'>No domains, IPs, or URLs beyond the submitted target have been extracted.</p>
+                        <p className='text-xs leading-5 text-ui-muted'>No indicators found.</p>
                     )}
                 </EvidencePanel>
             </div>
@@ -2050,24 +2016,11 @@ function EvidenceFact({ label, value, mono = false }: { label: string; value: st
 }
 
 function SourceCodeDisclosure({ evidence }: { evidence?: SandboxEvidence }) {
-    if (!evidence?.sourceCode && !evidence?.sourceUrls?.length) return null
+    if (!evidence?.sourceCode) return null
     return (
         <details className='rounded-md border border-ui-border bg-ui-canvas'>
-            <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-2 py-1.5 text-xs font-semibold text-ui-primary [&::-webkit-details-marker]:hidden'>
-                <span>Source code</span>
-                <span className='text-[10px] text-ui-muted'>{evidence.sourceUrls?.length || 0} source URL{evidence.sourceUrls?.length === 1 ? '' : 's'}</span>
-            </summary>
-            <div className='grid gap-2 border-t border-ui-border p-2'>
-                {evidence.sourceUrls?.length ? (
-                    <div className='grid gap-1'>
-                        <p className='text-[11px] font-semibold uppercase text-ui-muted'>URLs</p>
-                        <pre className='max-h-24 overflow-auto whitespace-pre-wrap break-all rounded border border-ui-border bg-ui-panel p-2 text-[11px] text-ui-text'>{evidence.sourceUrls.join('\n')}</pre>
-                    </div>
-                ) : null}
-                {evidence.sourceCode ? (
-                    <pre className='max-h-56 overflow-auto whitespace-pre-wrap break-all rounded border border-ui-border bg-ui-panel p-2 font-mono text-[11px] leading-5 text-ui-muted'>{evidence.sourceCode}</pre>
-                ) : null}
-            </div>
+            <summary className='cursor-pointer px-2 py-1.5 text-xs font-semibold text-ui-primary'>Source code</summary>
+            <pre className='max-h-56 overflow-auto whitespace-pre-wrap break-all border-t border-ui-border p-2 font-mono text-[11px] leading-5 text-ui-muted'>{evidence.sourceCode}</pre>
         </details>
     )
 }
@@ -2164,7 +2117,7 @@ function CaptureTimeline({ captures }: { captures: Capture[] }) {
 }
 
 function StatusPill({ label, value, good }: { label: string; value: string; good: boolean }) {
-    return <span className={`inline-flex h-8 items-center gap-2 rounded-full border px-3 text-xs font-semibold ${good ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : 'border-ui-border bg-ui-panel text-ui-text'}`}><span className='text-ui-muted'>{label}</span>{value}</span>
+    return <span className={`inline-flex h-8 items-center gap-2 rounded-full border px-3 text-xs font-semibold ${good ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : 'border-ui-border bg-ui-panel text-ui-text'}`}>{label ? <span className='text-ui-muted'>{label}</span> : null}{value}</span>
 }
 
 function ProviderViewportEvidence({ tool, capture }: { tool: SandboxTool; capture: Capture }) {

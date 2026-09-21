@@ -54,7 +54,21 @@ const touchMethod = inputSource.slice(inputSource.indexOf('    _touch(event) {')
 assert.equal(touchMethod, readFileSync(new URL('../browser-worker/touch-input.js', import.meta.url), 'utf8').trim(), 'Installed touch handler must match this release')
 assert.match(inputSource, /addListener\(this.element, 'touchstart'/)
 assert.match(inputSource, /addListener\(this.element, 'touchcancel'/)
-assert.match(inputSource, /name.startsWith\('touch'\) \? \{ passive: false \}/)
+assert.match(inputSource, /name.startsWith\('touch'\) \|\| name === 'wheel'\) \? \{ passive: false \}/)
+const wheelMethod = inputSource.match(/ {4}_mouseWheelWrapper\(event\) \{[\s\S]+?(?=\n {4}\/\*\*)/)?.[0]
+assert(wheelMethod)
+let prevented = 0
+let stopped = 0
+let forwarded = 0
+const wheel = runInNewContext(`({${wheelMethod}})`, { setTimeout: () => {} })
+Object.assign(wheel, { _queue: { size: () => 4 }, _dropThreshold: () => false,
+    _allowTrackpadScrolling: true, _mouseWheel: () => { forwarded++ } })
+for (let i = 0; i < 5; i++) wheel._mouseWheelWrapper({ deltaY: 10,
+    preventDefault: () => { prevented++ }, stopPropagation: () => { stopped++ } })
+assert.equal(forwarded, 1, 'Exercise throttled trackpad events')
+assert.equal(prevented, 5, 'Even throttled wheel events must not scroll the outer page')
+assert.equal(stopped, 5)
+assert.doesNotMatch(appSource, /receiver\.(?:jitterBufferTarget|jitterBufferDelayHint|playoutDelayHint)\s*=/, 'Let the receiver adapt to network jitter')
 const messages: number[][] = []
 const input = runInNewContext(`({${touchMethod}})`)
 Object.assign(input, { buttonMask: 0, _windowMath: () => {}, _clientToServerX: (x: number) => x,
