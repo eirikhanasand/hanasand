@@ -16,6 +16,7 @@ test('disconnect retains the worker, rejects hijacking, then replays evidence on
     let disposed = 0, closed = 0
     const session = new BrowserReconnect(first as unknown as WebSocket, () => disposed++)
     session.on('close', () => closed++)
+    expect(session.readyState).toBe(session.OPEN)
     first.message(null)
     first.message({ type: 'start', resumeToken: token })
     session.send(JSON.stringify({ type: 'stream_ready', streamUrl: '/stream' }))

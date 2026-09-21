@@ -3,6 +3,7 @@ import WebSocket, { type RawData } from 'ws'
 
 // The worker owns the run; a transient viewer disconnect must not destroy it.
 export class BrowserReconnect extends EventEmitter {
+    readonly OPEN = WebSocket.OPEN
     private socket: WebSocket
     private token = ''
     private ended = false
