@@ -362,6 +362,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     const [streamFrame, setStreamFrame] = useState<{ width: number; height: number } | null>(null)
     const receivedEvidenceRef = useRef(false)
     const stoppedRunRef = useRef(false)
+    const stoppedEarlyRef = useRef(false)
     const streamRef = useRef<HTMLIFrameElement | null>(null)
     useEffect(() => {
         setStreamHasFrame(false)
@@ -673,6 +674,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
         let lastPageUrl = url
         if (!override?.recovery) receivedEvidenceRef.current = false
         stoppedRunRef.current = false
+        stoppedEarlyRef.current = false
         setCurrentRunId(id)
         setShareStatus('')
         if (!override?.recovery) {
@@ -688,7 +690,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
         setStreamHasFrame(false)
         setStreamStats({})
         setRunTiming(null)
-        setRunStartedAt(Date.now())
+        if (!override?.recovery) setRunStartedAt(Date.now())
         setActiveUrl(url)
         setRemoteTabUrls({ browser: url })
         setActiveSandboxTab('browser')
@@ -966,6 +968,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     const stopRun = useCallback(() => {
         const socket = socketRef.current
         stoppedRunRef.current = true
+        stoppedEarlyRef.current = runStartedAt === null || Date.now() - runStartedAt < 30_000
         if (replacementRef.current) clearTimeout(replacementRef.current)
         replacementRef.current = null
         setStreamUrl('')
@@ -973,7 +976,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
         socket?.send(JSON.stringify({ type: 'end' }))
         setSessionState('ended')
         pushEvent('Sandbox stopped.')
-    }, [pushEvent])
+    }, [pushEvent, runStartedAt])
 
     const resetRun = useCallback(() => {
         if (replacementRef.current) clearTimeout(replacementRef.current)
@@ -1349,7 +1352,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                             <button type='button' aria-expanded={reportOpen} aria-controls='browser-run-evidence' onClick={() => setReportOpen(open => !open)} className='flex w-full flex-wrap items-center gap-4 text-left focus-visible:outline-2 focus-visible:outline-ui-primary'>
                                 <PackageCheck className='h-10 w-10 shrink-0 text-ui-primary' />
                                 <span className='min-w-40 flex-1'>
-                                    <span role='status' className='block text-2xl font-semibold'>{sessionState === 'failed' ? 'Run failed' : sessionState === 'unreachable' || summary.navigationFailed ? 'Target unreachable' : 'Run complete'}</span>
+                                    <span role='status' className='block text-2xl font-semibold'>{sessionState === 'failed' ? 'Run failed' : sessionState === 'unreachable' || summary.navigationFailed ? 'Target unreachable' : stoppedRunRef.current ? stoppedEarlyRef.current ? 'Run cancelled' : 'Run done' : 'Run complete'}</span>
                                     <span className='mt-1 block text-sm text-ui-muted'>{runBlocker || summary.brief.verdict}</span>
                                 </span>
                                 <span className='ml-auto flex shrink-0 items-center gap-2 text-sm font-semibold text-ui-primary'>{reportOpen ? 'Close report' : 'Open report'}<ChevronDown className={`h-5 w-5 transition-transform ${reportOpen ? 'rotate-180' : ''}`} /></span>
