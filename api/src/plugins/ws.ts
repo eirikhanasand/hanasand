@@ -1,8 +1,8 @@
+import { connectResumableWorker } from '../utils/ws/resumableWorker.ts'
 import { resumableBrowserSocket } from '../utils/ws/browserReconnect.ts'
 import { browserLeaseHeartbeat } from '../utils/ws/browserLease.ts'
 import fp from 'fastify-plugin'
 import { proxyModelSocket } from '../utils/ws/proxyModelSocket.ts'
-import { connectBrowserWorkerSocket } from '../utils/ws/connectBrowserWorker.ts'
 import { browserStartOptions } from '../utils/ws/browserAccess.ts'
 import { BrowserWarmPool, BROWSER_WARM_MAX_AGE_MS, type WarmWorker, type WarmStatus } from '../utils/ws/browserWarmPool.ts'
 import registerSupportStream from '../handlers/supportStream.ts'
@@ -189,17 +189,23 @@ function registerBrowserSessionRoutes(fastify: FastifyInstance) {
     registerPrestartedBrowser(fastify)
     fastify.get<{ Params: { id: string } }>('/api/ws/browser/:id', { websocket: true }, (connection: WebSocket, req: FastifyRequest<{ Params: { id: string } }>) => {
         if (proxyBrowserSocket(connection, req.params.id, 'browser')) return
-        handleOnionSessionSocket(connection, req.params.id, 'regular')
+        const worker = process.env.BROWSER_SANDBOX_WORKER_ONLY === '1' ? resumableBrowserSocket(connection, req.params.id) : connection
+        if (!worker) return
+        handleOnionSessionSocket(worker, req.params.id, 'regular')
     })
 
     fastify.get<{ Params: { id: string } }>('/api/ws/onion-session/:id', { websocket: true }, (connection: WebSocket, req: FastifyRequest<{ Params: { id: string } }>) => {
         if (proxyBrowserSocket(connection, req.params.id, 'onion-session')) return
-        handleOnionSessionSocket(connection, req.params.id)
+        const worker = process.env.BROWSER_SANDBOX_WORKER_ONLY === '1' ? resumableBrowserSocket(connection, req.params.id) : connection
+        if (!worker) return
+        handleOnionSessionSocket(worker, req.params.id)
     })
 
     fastify.get<{ Params: { id: string } }>('/api/ws/browser-sandbox/:id', { websocket: true }, (connection: WebSocket, req: FastifyRequest<{ Params: { id: string } }>) => {
         if (proxyBrowserSocket(connection, req.params.id, 'browser-sandbox')) return
-        handleOnionSessionSocket(connection, req.params.id, 'regular')
+        const worker = process.env.BROWSER_SANDBOX_WORKER_ONLY === '1' ? resumableBrowserSocket(connection, req.params.id) : connection
+        if (!worker) return
+        handleOnionSessionSocket(worker, req.params.id, 'regular')
     })
 }
 
@@ -376,6 +382,7 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
     let releaseAdmission: (() => void) | null = null
     let resolveStreamResolution: (options: { resolution: string; regular: boolean }) => void = () => undefined
     const streamResolution = new Promise<{ resolution: string; regular: boolean }>(resolve => { resolveStreamResolution = resolve })
+    const workerResumeToken = randomUUID()
     const streamToken = randomUUID().replaceAll('-', '')
     const admission = requestBrowserAdmission(id, payload => {
         if (connection.readyState === WebSocket.OPEN) connection.send(JSON.stringify(payload))
@@ -416,7 +423,7 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
             resolveStreamResolution({ resolution: browserStreamResolution(payload), regular: payload.network !== 'tor' && route !== 'onion-session' })
         } else if (payload.type === 'start') return
         // Authorization flags are supplied by this authenticated broker only.
-        payload = { ...payload, paidAuthorized: false }
+        payload = { ...payload, paidAuthorized: false, ...(payload.type === 'start' ? { resumeToken: workerResumeToken } : {}) }
         if (payload.type === 'extend' && payload.extension === 'paid') {
             const allowed = await browserPaidExtensionAllowed(id)
             if (!allowed) {
@@ -488,7 +495,7 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
                 if (closed && timer) clearInterval(timer)
                 else streamMetricsTimer = timer
             })
-            return connectBrowserWorkerSocket(`${wsUrl.replace(/\/$/, '')}/${route}/${encodeURIComponent(id)}`, startup.signal)
+            return connectResumableWorker(`${wsUrl.replace(/\/$/, '')}/${route}/${encodeURIComponent(id)}`, startup.signal, workerResumeToken)
         })
         .then(nextUpstream => {
             if (!nextUpstream) return

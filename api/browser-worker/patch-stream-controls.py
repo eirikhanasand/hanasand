@@ -11,9 +11,10 @@ s = s[:a] + Path(__file__).with_name('touch-input.js').read_text().rstrip() + '\
 p.write_text(s)
 p = root / 'index.html'
 s = p.read_text()
+s = s.replace('<video muted autoplay id="stream"', '<video :style="{visibility: videoPlaying &amp;&amp; !showStart ? \'visible\' : \'hidden\'}" muted autoplay id="stream"')
 a = s.index('      <div class="loading">')
 b = s.index('    </v-app>', a)
-s = s[:a] + '''      <div class="loading" v-if="status !== 'connected' || showStart">
+s = s[:a] + '''      <div class="loading" v-if="status !== 'connected' || !videoPlaying || showStart">
         <button class="hanasand-loading" v-on:click="playStream()" aria-label="Resume browser stream">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
             <path d="M12 2a10 10 0 1 0 10 10" />
@@ -23,7 +24,12 @@ s = s[:a] + '''      <div class="loading" v-if="status !== 'connected' || showSt
 ''' + s[b:]
 s = s.replace('</head>', '''<style>
 html, body { overscroll-behavior: none; }
-video::-webkit-media-controls, video::-webkit-media-controls-enclosure,
+video.video { visibility:hidden; }
+video::-webkit-media-controls { display:none !important; }
+video::-webkit-media-controls-enclosure { display:none !important; }
+video::-webkit-media-controls-panel { display:none !important; }
+video::-webkit-media-controls-play-button { display:none !important; }
+video::-webkit-media-controls-overlay-play-button { display:none !important; }
 video::-webkit-media-controls-start-playback-button { display:none !important; -webkit-appearance:none; }
 .hanasand-loading { color:#3056d3; background:transparent; border:0; padding:12px; cursor:pointer; }
 .hanasand-loading svg { width:40px; height:40px; animation:hanasand-spin 1s linear infinite; }
@@ -35,5 +41,6 @@ p = root / 'app.js'
 s = p.read_text()
 needle = "webrtc.element.addEventListener('playing', () => { app.showStart = false; });"
 assert s.count(needle) == 1
-s = s.replace(needle, needle + "\nwebrtc.element.addEventListener('pause', () => { app.showStart = true; webrtc.playStream(); });")
+s = s.replace('            showStart: false,', '            showStart: false,\n            videoPlaying: false,')
+s = s.replace(needle, "webrtc.element.addEventListener('playing', () => { app.videoPlaying = true; app.showStart = false; });" + "\nwebrtc.element.addEventListener('pause', () => { app.videoPlaying = false; app.showStart = true; webrtc.playStream(); });")
 p.write_text(s)
