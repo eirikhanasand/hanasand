@@ -1,7 +1,9 @@
+import { mongoCommandFromLog } from './analyzeMongo.ts'
 export type LogInput = { id: string | number, service: string, host?: string, level: string, message: string, created_at: string | Date, metadata?: Record<string, unknown> }
 export const severityOrder = ['low', 'medium', 'high', 'critical'] as const
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 export function normalizeLogEvent(log: LogInput) {
+    const mongo = mongoCommandFromLog(log)
     const metadata = object(log.metadata)
     const structured = object(metadata.structured)
     const request = object(structured.req || metadata.request)
@@ -18,13 +20,14 @@ export function normalizeLogEvent(log: LogInput) {
     const source = object(metadata.source || structured.source)
     return {
         schema_version: 'logs.v1', timestamp: new Date(log.created_at).toISOString(),
-        event_type: process ? 'process' : authentication ? 'authentication' : String(metadata.event_type || structured.event_type || 'application'),
-        action: process ? 'exec' : String(metadata.action || structured.action || (signin ? 'login' : 'log')),
-        outcome: String(metadata.outcome || structured.outcome || (signin ? log.message.includes('Accepted ') ? 'success' : 'failure' : ['error', 'fatal'].includes(log.level) ? 'failure' : 'unknown')),
+        event_type: mongo ? 'database' : process ? 'process' : authentication ? 'authentication' : String(metadata.event_type || structured.event_type || 'application'),
+        action: mongo ? mongo.name : process ? 'exec' : String(metadata.action || structured.action || (signin ? 'login' : 'log')),
+        outcome: mongo ? mongo.success ? 'success' : 'failure' : String(metadata.outcome || structured.outcome || (signin ? log.message.includes('Accepted ') ? 'success' : 'failure' : ['error', 'fatal'].includes(log.level) ? 'failure' : 'unknown')),
         log_type: type, level: log.level, service: log.service, host: log.host || '', message: log.message,
+        mongo: mongo ? { command: mongo.name, database: mongo.database, arguments: mongo.command, connection: mongo.connection, clientIp: mongo.ip } : undefined,
         process, http: path ? { path, method: metadata.method || request.method || access.method, status_code: statusCode } : undefined,
         user: signin ? { ...user, id: `${log.host || 'unknown'}:${signin[1]}`, name: signin[1] } : user,
-        source: { ...source, ip: signin?.[2] || source.ip || request.remoteAddress || metadata.source_ip || access.ip },
+        source: { ...source, ip: mongo?.ip || signin?.[2] || source.ip || request.remoteAddress || metadata.source_ip || access.ip },
         device: metadata.device || structured.device, metadata,
         severity: log.level === 'fatal' ? 'critical' : log.level === 'error' ? 'high' : log.level === 'warn' ? 'medium' : 'low',
     }

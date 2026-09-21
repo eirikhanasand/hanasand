@@ -1,0 +1,6 @@
+# Install as docker-compose.override.yml alongside Cashflow's compose file.
+# MongoDB's command verbosity 1 emits completed command metadata, including
+# successful fast operations; errors remain logged. Data volumes are unchanged.
+services:
+  mongodb:
+    command: ["mongod", "--setParameter", 'logComponentVerbosity={"command":{"verbosity":1}}']

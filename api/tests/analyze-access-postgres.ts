@@ -75,10 +75,14 @@ try {
     await query("INSERT INTO mill_events(id,ingestion_id,organization_id,event_timestamp,log_key) VALUES('protected','logs','platform',NOW(),$1)", [`service:${logs[1].id}`])
     await query("INSERT INTO mill_findings(id,organization_id,finding_key,rule_id,summary,event_ids) VALUES('protected-finding','platform','protected-finding','existing','Existing finding','{protected}')")
     const removed = await pruneAccessLogs(logs, 'platform')
-    assert.deepEqual([...removed], [logs[0].id])
-    assert.equal((await query('SELECT count(*) FROM traffic_events')).rows[0].count, '1')
+    assert.deepEqual([...removed], [], 'Missing boundary inspection must retain old records')
+    assert.equal((await query('SELECT count(*) FROM traffic_events')).rows[0].count, '2')
     assert.equal((await query('SELECT count(*) FROM mill_findings')).rows[0].count, '3', 'Historical cleanup creates no new alert and preserves old findings')
     await pruneAccessLogs(logs, 'platform')
+    assert.equal((await query("SELECT sum(amount) AS count FROM log_access_counts WHERE ip='192.0.2.2'")).rows[0].count, null)
+    logs[0].metadata = { ...logs[0].metadata, structured: { access: { inspection: inspectAccess({ url: '/public', headers: {} }) } } }
+    assert.deepEqual([...await pruneAccessLogs(logs, 'platform')], [logs[0].id], 'Inspected historical records can still be counted and dropped')
+    assert.equal((await query('SELECT count(*) FROM traffic_events')).rows[0].count, '1')
     assert.equal((await query("SELECT sum(amount) AS count FROM log_access_counts WHERE ip='192.0.2.2'")).rows[0].count, '1')
     console.log('PASS: Analyze-first storage, concurrent rolling threshold, retry deduplication, Keep/Disable, restart persistence, tenant isolation, rollback, historical pruning and finding preservation.')
 } finally { await pool.end() }

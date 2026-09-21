@@ -11,21 +11,20 @@ export function historicalAccess(log: LogInput): AccessEvent | null {
     const event = normalizeLogEvent(log)
     if (event.process || Object.keys(event.user).length || event.event_type === 'authentication' || !event.http) return null
     const request = (log.metadata?.request || (log.metadata?.structured as Record<string, unknown>)?.req || {}) as Record<string, unknown>
-    const headers = (request.headers || log.metadata?.headers) as Record<string, string | string[] | undefined> | undefined
     const structuredAccess = (log.metadata?.structured as Record<string, unknown>)?.access as AccessEvent | undefined
     const agent = String(log.metadata?.user_agent || '')
     return { key: `stored:${log.id}`, ip: String(event.source.ip || ''), timestamp: event.timestamp,
         path: String(event.http.path || ''), method: String(event.http.method || ''), status: Number(event.http.status_code),
-        inspection: structuredAccess?.inspection || (headers ? inspectAccess({ url: String(event.http.path), headers, body: request.body ?? log.metadata?.body }) : undefined),
+        inspection: structuredAccess?.inspection,
         protected: Boolean(log.metadata?.signature || log.metadata?.detections || log.metadata?.body || log.metadata?.request_body || request.body)
             || !inspectAccess({ url: String(event.http.path), headers: { 'user-agent': agent } }).headersSafe,
     }
 }
 
 // Also used before detection by the catch-up worker. Only records predating the
-// installation are eligible without header/body inspection (explicit approval).
+// installation are eligible, and complete boundary inspection is still required.
 export async function pruneAccessLogs(logs: LogInput[], organizationId: string, query?: typeof run): Promise<Set<string>> {
-    const candidates = logs.map(log => ({ log, access: historicalAccess(log) })).filter(item => item.access && eligibleAccess(item.access, true))
+    const candidates = logs.map(log => ({ log, access: historicalAccess(log) })).filter(item => item.access && eligibleAccess(item.access))
     if (!candidates.length) return new Set()
     if (!query) return withTransaction(tx => pruneAccessLogs(logs, organizationId, tx))
     const rule = await platformAccessRule(query)

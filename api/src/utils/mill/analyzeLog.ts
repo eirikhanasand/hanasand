@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import ipaddr from 'ipaddr.js'
-import { eligibleMongoConnection, mongoRuleId, type MongoLog } from './analyzeMongo.ts'
+import { eligibleMongoPing, mongoRuleId, type MongoLog } from './analyzeMongo.ts'
 import run, { withTransaction } from '#db'
 import { sessionNetwork } from '#utils/auth/sessionNetwork.ts'
 import { accessDefinition, accessRuleId, eligibleAccess, type AccessEvent } from './analyzeAccess.ts'
@@ -16,7 +16,7 @@ export async function platformAccessRule(query: typeof run = run) {
 // The caller's ingestion transaction covers counting, alert creation and the
 // drop decision. Failure rolls everything back and the collector retries.
 export async function analyzeAccess(event: AccessEvent, query?: typeof run, historical = false): Promise<boolean> {
-    if (!eligibleAccess(event, historical)) return false
+    if (!eligibleAccess(event)) return false
     if (!query) return withTransaction(tx => analyzeAccess(event, tx, historical))
     const rule = await platformAccessRule(query)
     if (!rule?.enabled || rule.definition?.stage !== 'analyze' || rule.definition.action !== 'drop') return false
@@ -60,9 +60,10 @@ export async function analyzeAccess(event: AccessEvent, query?: typeof run, hist
 }
 
 // Use the ingestion transaction so failed receipts are retried with the batch.
-export async function analyzeMongoConnection(log: MongoLog, query?: typeof run): Promise<boolean> {
-    if (!eligibleMongoConnection(log)) return false
-    if (!query) return withTransaction(tx => analyzeMongoConnection(log, tx))
+export async function analyzeMongoPing(log: MongoLog, query?: typeof run): Promise<boolean> {
+    const inspected = eligibleMongoPing(log)
+    if (!inspected) return false
+    if (!query) return withTransaction(tx => analyzeMongoPing(log, tx))
     const result = await query(`SELECT r.organization_id, r.version FROM mill_rules r
         JOIN organizations o ON o.id=r.organization_id
         WHERE o.status='active' AND (o.id=$1 OR ($1::text IS NULL AND lower(o.name)='hanasand'))
@@ -71,7 +72,12 @@ export async function analyzeMongoConnection(log: MongoLog, query?: typeof run):
     const rule = result.rows[0]
     if (!rule) return false
     const key = createHash('sha256').update(`${mongoRuleId}:${log.sourceEventId}`).digest('hex')
-    await query(`INSERT INTO log_analyze_receipts(key,organization_id,rule_id,rule_version)
-        VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`, [key, rule.organization_id, mongoRuleId, rule.version])
+    const receipt = await query(`INSERT INTO log_analyze_receipts(key,organization_id,rule_id,rule_version)
+        VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING key`, [key, rule.organization_id, mongoRuleId, rule.version])
+    if (receipt.rowCount) await query(`INSERT INTO log_mongo_ping_counts(organization_id,host,service,client_ip,database_name,day,amount,last_seen)
+        VALUES($1,$2,$3,$4::inet,$5,($6::timestamptz AT TIME ZONE 'UTC')::date,1,$6::timestamptz)
+        ON CONFLICT(organization_id,host,service,client_ip,database_name,day) DO UPDATE
+        SET amount=log_mongo_ping_counts.amount+1,last_seen=GREATEST(log_mongo_ping_counts.last_seen,EXCLUDED.last_seen)`,
+    [rule.organization_id, log.host!, log.service, inspected.ip, inspected.database, inspected.timestamp])
     return true
 }

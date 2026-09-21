@@ -1,7 +1,7 @@
 import run from '#db'
 import { redactLogText, redactLogValue } from './redact.ts'
 import { accessFromLog } from '../mill/analyzeAccess.ts'
-import { analyzeAccess, analyzeMongoConnection } from '../mill/analyzeLog.ts'
+import { analyzeAccess, analyzeMongoPing } from '../mill/analyzeLog.ts'
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'fatal'
 
@@ -40,7 +40,7 @@ export default async function recordLog({
     timestamp?: string
 }, query: typeof run = run) {
     if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) metadata = {}
-    if (await analyzeMongoConnection({ service, host, level, message, metadata, sourceEventId }, query === run ? undefined : query)) return
+    if (await analyzeMongoPing({ service, host, level, message, metadata, sourceEventId }, query === run ? undefined : query)) return
     const access = accessFromLog({ service, level, metadata, sourceEventId, timestamp })
     if (access && await analyzeAccess(access, query === run ? undefined : query)) return
     message = redactLogText(message)

@@ -8,9 +8,9 @@ describe('Analyze access safety', () => {
         expect(eligibleAccess(event)).toBe(true)
         for (const change of [{ method: 'POST' }, { status: 201 }, { status: 401 }, { inspection: undefined }, { ip: '' }, { protected: true }, { timestamp: 'unknown' }]) expect(eligibleAccess({ ...event, ...change })).toBe(false)
     })
-    test('historical unknown inspection is explicitly allowed, known unsafe is not', () => {
-        expect(eligibleAccess({ ...event, inspection: undefined }, true)).toBe(true)
-        expect(eligibleAccess({ ...event, inspection: { bodyEmpty: false } }, true)).toBe(false)
+    test('unknown and incomplete inspection always retain, including historical events', () => {
+        expect(eligibleAccess({ ...event, inspection: undefined })).toBe(false)
+        expect(eligibleAccess({ ...event, inspection: { bodyEmpty: false } })).toBe(false)
     })
     test('retains bodies, authorization and unknown or suspicious headers', () => {
         for (const headers of [{ 'content-length': '2' }, { 'transfer-encoding': 'chunked' }, { authorization: 'redacted' }, { cookie: 'redacted' }, { 'x-unrecognized': 'x' }, { 'user-agent': '${jndi:ldap://x}' }]) {
@@ -19,7 +19,7 @@ describe('Analyze access safety', () => {
         expect(eligibleAccess({ ...event, inspection: inspectAccess({ url: event.path, headers: {}, body: {} }) })).toBe(false)
     })
     test('retains protected routes and suspicious URLs, including encoded variants', () => {
-        for (const path of ['/api/auth/session', '/api/admin/users', '/api/organizations/1', '/billing', '/public?x=<script>', '/%252e%252e/etc/passwd', '/.env', '/invalid%zz']) expect(eligibleAccess({ ...event, path }, true)).toBe(false)
+        for (const path of ['/api/auth/session', '/api/admin/users', '/api/organizations/1', '/billing', '/public?x=<script>', '/%252e%252e/etc/passwd', '/.env', '/invalid%zz']) expect(eligibleAccess({ ...event, path })).toBe(false)
     })
     test('only collector service access envelopes can drop; customer JSON cannot', () => {
         const log = { service: 'cdn', level: 'info', metadata: { structured: { msg: 'http_access', access: event } } }

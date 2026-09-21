@@ -31,12 +31,12 @@ export function inspectAccess(req: { url: string, headers: Record<string, string
 
 export type AccessEvent = { key: string, ip: string, timestamp: string, path: string, method: string, status: number,
     inspection?: { version?: number, bodyEmpty?: boolean, headersSafe?: boolean, pathSafe?: boolean }, protected?: boolean }
-export function eligibleAccess(event: AccessEvent, historical = false) {
+export function eligibleAccess(event: AccessEvent) {
     if (event.protected || event.method !== 'GET' || event.status !== 200 || typeof event.ip !== 'string' || typeof event.timestamp !== 'string' || !event.key || !ordinaryAccessPath(event.path)
         || !Number.isFinite(Date.parse(event.timestamp)) || !ipaddr.isValid(event.ip)) return false
     const check = event.inspection
     if (check && (check.bodyEmpty === false || check.headersSafe === false || check.pathSafe === false)) return false
-    return historical || (check?.version === 1 && check.bodyEmpty === true && check.headersSafe === true && check.pathSafe === true)
+    return (check?.version === 1 && check.bodyEmpty === true && check.headersSafe === true && check.pathSafe === true)
 }
 
 export function accessFromLog(log: { service: string, level: string, metadata?: Record<string, unknown>, sourceEventId?: string, timestamp?: string }): AccessEvent | null {
