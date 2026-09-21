@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { eligibleMongoConnection } from '../src/utils/mill/analyzeMongo.ts'
 
 const log = { host: 'inspur/cashflow', service: 'mongodb', level: 'info', sourceEventId: 'mongo:123' }
-const event = { s: 'I', c: 'NETWORK', id: 22943, msg: 'Connection accepted', attr: { remote: '127.0.0.1:55250', connectionId: 123, connectionCount: 7 } }
+const event = { s: 'I', c: 'NETWORK', id: 22943, msg: 'Connection accepted', attr: { remote: '127.0.0.1:55250', isLoadBalanced: false, connectionId: 123, connectionCount: 7 } }
 const match = (change = {}, envelope = {}) => eligibleMongoConnection({ ...log, message: JSON.stringify({ ...event, ...change }), ...envelope })
 
 test('drops only the known informational local connection messages', () => {

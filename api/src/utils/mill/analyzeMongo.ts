@@ -25,9 +25,8 @@ export function eligibleMongoConnection(log: MongoLog): boolean {
         if (!event || event.s !== 'I' || event.c !== 'NETWORK' || !event.attr || Array.isArray(event.attr)) return false
         // Unknown attributes are retained, including error/status fields even if
         // a collector or MongoDB version labels a failed event informational.
-        const allowed = event.id === 22943 ? ['remote', 'isLoadBalanced', 'uuid', 'connectionId', 'connectionCount']
-            : event.id === 22944 ? ['remote', 'uuid', 'connectionId', 'connectionCount']
-                : event.id === 51800 ? ['remote', 'client', 'negotiatedCompressors', 'doc'] : []
+        const allowed = event.id === 22943 || event.id === 22944 ? ['remote', 'isLoadBalanced', 'uuid', 'connectionId', 'connectionCount']
+            : event.id === 51800 ? ['remote', 'client', 'negotiatedCompressors', 'doc'] : []
         if (!allowed.length || Object.keys(event.attr).some(key => !allowed.includes(key))
             || Object.keys(event).some(key => !['t', 's', 'c', 'id', 'ctx', 'msg', 'attr'].includes(key))) return false
         if (typeof event.attr.remote !== 'string' || !/^(?:127\.0\.0\.1|\[::1\]):[0-9]{1,5}$/.test(event.attr.remote)) return false
