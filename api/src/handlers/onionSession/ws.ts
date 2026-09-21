@@ -972,6 +972,15 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             const toolUrl = tool.url!.replaceAll('{url}', encodeURIComponent(target)).replaceAll('{rawUrl}', target)
             const webcrackTool = isWebCrackTool(tool, toolUrl)
             const toolId = cleanRemoteTabId(tool.id || safeToolId(tool.name || toolUrl))
+            const webcrackTasks = webcrackTool ? await webCrackTasks(deobfuscationTasks) : []
+            if (webcrackTool && !webcrackTasks.some(task => task.sample || task.decodedPreview)) {
+                const evidence = providerPendingEvidence(toolUrl, tool.name || toolUrl, target)
+                const webcrackLoad = { loaded: false, reason: 'no obfuscated code found on target page' }
+                send({ type: 'tool_capture', sessionId, id: toolId, name: tool.name || toolUrl,
+                    url: toolUrl, capturedAt: startedAt, evidence, target, webcrackLoad,
+                    toolAnalysis: analyzeToolEvidence(tool.name || toolUrl, evidence, webcrackLoad) })
+                return
+            }
             const toolPage = await newBackgroundPage(context).catch(() => null)
             if (!toolPage) return
             toolPages.set(toolId, toolPage)
@@ -1079,8 +1088,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 }
                 let webcrackLoad: WebCrackLoadResult | undefined
                 if (webcrackTool) {
-                    const tasks = await webCrackTasks(deobfuscationTasks)
-                    webcrackLoad = await withTimeout(loadWebCrackSample(toolPage, tasks), 2500, { loaded: false, reason: 'WebCrack did not accept a sample within the provider budget.' })
+                    webcrackLoad = await withTimeout(loadWebCrackSample(toolPage, webcrackTasks), 2500, { loaded: false, reason: 'WebCrack did not accept a sample within the provider budget.' })
                 }
                 await toolPage.waitForTimeout(webcrackLoad?.loaded ? 150 : 1200).catch(() => undefined)
                 if (webcrackTool) {

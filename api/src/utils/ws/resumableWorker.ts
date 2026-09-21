@@ -29,7 +29,9 @@ class WorkerConnection extends EventEmitter {
             if (!this.connected || this.closed) return
             if (!alive) { this.socket.terminate(); return }
             alive = false
-            this.socket.ping()
+            // Exercise the application path as well as the transport, even when
+            // the page is idle and no new evidence is being sent.
+            this.socket.send(JSON.stringify({ type: 'ping' }))
         }, 20_000)
         this.heartbeat.unref()
         this.on('pong', () => { alive = true })
@@ -65,6 +67,8 @@ class WorkerConnection extends EventEmitter {
             if (this.closed || socket !== this.socket) return
             let type: string | undefined
             try { type = JSON.parse(data.toString())?.type } catch { /* Forward original payload. */ }
+            this.emit('pong')
+            if (type === 'pong') return
             if (type === 'resume_unavailable') { this.fail('The isolated browser worker is no longer available.'); return }
             if (type === 'reconnected') {
                 this.connected = true

@@ -51,13 +51,13 @@ test('report decoded dimensions again when the stream changes size without recon
     })
     tick()
     tick()
-    expect(messages.length).toBe(1)
+    expect(messages.length).toBe(2)
     expect(messages[0].width / messages[0].height).toBe(1920 / 1080)
     video.videoWidth = 390
     video.videoHeight = 844
     tick()
-    expect(messages.length).toBe(2)
-    expect(messages[1].width / messages[1].height).toBe(390 / 844)
+    expect(messages.length).toBe(3)
+    expect(messages[2].width / messages[2].height).toBe(390 / 844)
 })
 
 test('stream failures keep retrying with capped backoff across page reloads', () => {

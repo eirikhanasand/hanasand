@@ -358,6 +358,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     const [activeImage, setActiveImage] = useState<string | null>(null)
     const [streamUrl, setStreamUrl] = useState('')
     const [streamHasFrame, setStreamHasFrame] = useState(false)
+    const [streamAttempt, setStreamAttempt] = useState(0)
     const [streamFrame, setStreamFrame] = useState<{ width: number; height: number } | null>(null)
     const receivedEvidenceRef = useRef(false)
     const stoppedRunRef = useRef(false)
@@ -367,8 +368,11 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
         setStreamFrame(null)
         if (!streamUrl) return
         const origin = new URL(streamUrl).origin
+        let lastSignal = Date.now()
         const receive = (event: MessageEvent) => {
             if (event.source !== streamRef.current?.contentWindow || event.origin !== origin || event.data?.type !== 'hanasand-browser-stream') return
+            lastSignal = Date.now()
+            setStreamHasFrame(event.data.state === 'ready' || event.data.state === 'gesture')
             const { width, height } = event.data
             if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0 && width <= 8192 && height <= 8192) setStreamFrame({ width, height })
             if (event.data.state === 'ready' || event.data.state === 'gesture') {
@@ -377,7 +381,15 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
             }
         }
         window.addEventListener('message', receive)
-        return () => window.removeEventListener('message', receive)
+        const monitor = window.setInterval(() => {
+            if (document.visibilityState !== 'visible') { lastSignal = Date.now(); return }
+            if (Date.now() - lastSignal > 5000) setStreamHasFrame(false)
+            if (Date.now() - lastSignal > 15000) {
+                lastSignal = Date.now()
+                setStreamAttempt(attempt => attempt + 1)
+            }
+        }, 1000)
+        return () => { window.removeEventListener('message', receive); window.clearInterval(monitor) }
     }, [streamUrl])
     const [streamStats, setStreamStats] = useState<StreamStats>({})
     const [runTiming, setRunTiming] = useState<RunTiming | null>(null)
@@ -426,7 +438,8 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     }), [customLocale, customPlatform, customTimezoneId, customUserAgent, customViewportHeight, customViewportWidth, selectedFingerprint])
     const summary = useMemo(() => buildAnalystSummary(normalizedTarget, captures, selectedProfile), [captures, normalizedTarget, selectedProfile])
     const toolCaptures = useMemo(() => captures.filter(capture => capture.kind === 'tool'), [captures])
-    const checksWithoutVerdict = selectedProfile.tools.filter(tool => !hasParsedProviderResult(selectToolCapture(toolCaptures, tool, normalizedTarget)?.toolAnalysis)).length
+    const checksWithoutVerdict = selectedProfile.tools.filter(tool => !hasParsedProviderResult(selectToolCapture(toolCaptures, tool, normalizedTarget)?.toolAnalysis))
+    const [reviewChecksOpen, setReviewChecksOpen] = useState(false)
     const latestPageImage = useMemo(() => captures.find(capture => capture.kind === 'page' && capture.image && !capture.frameQuality?.looksBlank)?.image || null, [captures])
     const activeTool = useMemo(() => selectedProfile.tools.find(tool => tool.id === activeSandboxTab), [activeSandboxTab, selectedProfile.tools])
     const activeToolCapture = activeTool ? selectToolCapture(toolCaptures, activeTool, normalizedTarget) : undefined
@@ -436,6 +449,12 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     const runRemainingSeconds = runTiming ? Math.max(0, Math.ceil((new Date(runTiming.expiresAt).getTime() - clockNow) / 1000)) : 0
     const paidBrowserPlan = Boolean(quota?.paid)
     const runIsActive = sessionState === 'queued' || sessionState === 'connecting' || sessionState === 'live'
+    useEffect(() => {
+        if (!runIsActive) {
+            setStreamUrl('')
+            setStreamHasFrame(false)
+        }
+    }, [runIsActive])
     const loadingBrowser = runIsActive && !runBlocker && !activeImage && !latestPageImage && !streamHasFrame
     const fallbackInteractive = runIsActive && !streamUrl && !activeTool && Boolean(activeViewportImage)
     const waitingForFrame = runIsActive && !activeViewportImage && !streamUrl
@@ -891,11 +910,13 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     }, [browserMetadata, pushConsoleEvent, pushEvent, selectedProfile.tools, quota?.advancedAnalysis, quota?.sessionSeconds, target])
 
     const selectSandboxTab = useCallback((tabId: string) => {
+        const tool = selectedProfile.tools.find(item => item.id === tabId)
+        if (tool && providerTabStatus(selectToolCapture(toolCaptures, tool, normalizedTarget), selectToolCapture(toolCaptures, tool, normalizedTarget)?.toolAnalysis) === 'no obfuscated code') return
         setActiveSandboxTab(tabId)
         if (!runIsActive) setReportOpen(true)
         const socket = socketRef.current
         if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'select_tab', tabId }))
-    }, [runIsActive])
+    }, [runIsActive, selectedProfile.tools, toolCaptures, normalizedTarget])
 
     const extendRun = useCallback((extension: 'free' | 'paid') => {
         const socket = socketRef.current
@@ -906,6 +927,8 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     const stopRun = useCallback(() => {
         const socket = socketRef.current
         stoppedRunRef.current = true
+        setStreamUrl('')
+        setStreamHasFrame(false)
         socket?.send(JSON.stringify({ type: 'end' }))
         setSessionState('ended')
         pushEvent('Sandbox stopped.')
@@ -1273,22 +1296,23 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                 </header>
                 <div className='mx-auto grid min-w-0 w-full max-w-[96rem] content-start gap-4 px-4 py-4'>
                     {!runIsActive ? (
-                        <button type='button' data-run-result aria-expanded={reportOpen} aria-controls='browser-run-evidence' onClick={() => setReportOpen(open => !open)} className='group w-full rounded-xl border-2 border-ui-primary/60 bg-ui-primary/10 p-5 text-left transition hover:border-ui-primary focus-visible:outline-2 focus-visible:outline-ui-primary'>
-                            <span className='flex flex-wrap items-center gap-4'>
+                        <div data-run-result className='w-full rounded-xl border-2 border-ui-primary/60 bg-ui-primary/10 p-5'>
+                            <button type='button' aria-expanded={reportOpen} aria-controls='browser-run-evidence' onClick={() => setReportOpen(open => !open)} className='flex w-full flex-wrap items-center gap-4 text-left focus-visible:outline-2 focus-visible:outline-ui-primary'>
                                 <PackageCheck className='h-10 w-10 shrink-0 text-ui-primary' />
                                 <span className='min-w-40 flex-1'>
                                     <span role='status' className='block text-2xl font-semibold'>{sessionState === 'failed' ? 'Run failed' : sessionState === 'unreachable' || summary.navigationFailed ? 'Target unreachable' : 'Run complete'}</span>
                                     <span className='mt-1 block text-sm text-ui-muted'>{runBlocker || summary.brief.verdict}</span>
                                 </span>
                                 <span className='ml-auto flex shrink-0 items-center gap-2 text-sm font-semibold text-ui-primary'>{reportOpen ? 'Close report' : 'Open report'}<ChevronDown className={`h-5 w-5 transition-transform ${reportOpen ? 'rotate-180' : ''}`} /></span>
-                            </span>
+                            </button>
                             <span className='mt-4 flex flex-wrap gap-x-5 gap-y-2 border-t border-ui-primary/20 pt-3 text-xs text-ui-muted'>
                                 <span>{summary.latestNetwork?.requestCount || 0} requests</span>
                                 <span>{summary.latestNetwork?.uniqueDomainCount || 0} domains</span>
                                 <span>{summary.latestNetwork?.downloads?.length || 0} file{summary.latestNetwork?.downloads?.length === 1 ? '' : 's'}</span>
-                                {checksWithoutVerdict > 0 ? <span>{checksWithoutVerdict} checks without a verdict</span> : null}
+                                {checksWithoutVerdict.length > 0 ? <button type='button' aria-expanded={reviewChecksOpen} aria-controls='checks-without-verdict' onClick={() => setReviewChecksOpen(open => !open)} className='text-ui-primary underline underline-offset-2'>{checksWithoutVerdict.length} {checksWithoutVerdict.length === 1 ? 'check' : 'checks'} without a verdict</button> : null}
                             </span>
-                        </button>
+                            {reviewChecksOpen && checksWithoutVerdict.length > 0 ? <div id='checks-without-verdict' className='mt-3'><ProviderStatusPanel tools={checksWithoutVerdict} toolCaptures={toolCaptures} target={normalizedTarget} onSelect={selectSandboxTab} /></div> : null}
+                        </div>
                     ) : null}
                     {sessionState === 'failed' ? <button type='button' onClick={() => startRun({ target: normalizedTarget })} className='justify-self-start rounded-md border border-ui-primary bg-ui-primary/10 px-4 py-2 text-sm font-semibold text-ui-primary'>Try again</button> : null}
                     <div id='browser-run-evidence' hidden={!runIsActive && !reportOpen}>
@@ -1304,10 +1328,14 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                                     aria-label='Interactive isolated browser viewport'
                                     onKeyDown={keyBrowserFrame}
                                 >
-                                    {streamUrl ? (
+                                    {runIsActive && streamUrl && !streamHasFrame ? <div role='status' aria-label='Reconnecting browser stream' className='absolute inset-0 grid place-items-center'><LoaderCircle className='size-8 animate-spin text-ui-primary' /></div> : null}
+                                    {runIsActive && streamUrl ? (
                                         <iframe
+                                            key={streamAttempt}
                                             ref={streamRef}
                                             src={streamUrl}
+                                            style={{ visibility: streamHasFrame ? 'visible' : 'hidden' }}
+                                            tabIndex={streamHasFrame ? 0 : -1}
                                             title='Live WebRTC browser sandbox'
                                             className='absolute inset-0 h-full w-full border-0 bg-black'
                                             allow='autoplay; clipboard-read; clipboard-write; fullscreen'
@@ -1453,6 +1481,7 @@ function SandboxTabButton({ active, label, status, onClick }: { active: boolean;
             type='button'
             onClick={onClick}
             role='tab'
+            disabled={status === 'no obfuscated code'}
             aria-selected={active}
             tabIndex={active ? 0 : -1}
             className={`flex shrink-0 items-center gap-2 rounded-md border px-2 py-1.5 text-left transition ${active ? 'border-ui-primary bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-raised text-ui-text hover:border-ui-primary/60'}`}
@@ -1967,7 +1996,7 @@ function EvidenceWorkspace({
                     </div>
                 </EvidencePanel> : null}
 
-                <EvidencePanel title='Indicators' status={`${summary.indicators.length} copied-ready`}>
+                <EvidencePanel title='Indicators' status={String(summary.indicators.length)}>
                     {summary.indicators.length ? (
                         <pre className='max-h-28 overflow-auto whitespace-pre-wrap rounded-md border border-ui-border bg-ui-canvas p-2 text-xs text-ui-text'>{summary.indicators.join('\n')}</pre>
                     ) : (

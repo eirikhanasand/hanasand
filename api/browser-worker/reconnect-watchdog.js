@@ -1,8 +1,6 @@
 (() => {
     let waitingSince = 0
-    let lastState = ''
     let healthySince = 0
-    let lastDimensions = ''
     const retryKey = `hanasand-stream-retries:${location.pathname}`
     let retries = 0
     try { retries = Number(sessionStorage.getItem(retryKey)) || 0 } catch { /* Storage is optional. */ }
@@ -10,17 +8,12 @@
     setInterval(() => {
         const player = globalThis.app
         const video = document.querySelector('video')
-        const hasFrame = Boolean(video && video.readyState >= 2 && video.videoWidth > 0)
+        const hasFrame = Boolean(video && !video.paused && video.readyState >= 2 && video.videoWidth > 0)
         const state = hasFrame ? 'ready' : player?.showStart ? 'gesture' : 'waiting'
         const width = video?.videoWidth || 0
         const height = video?.videoHeight || 0
-        const dimensions = `${width}x${height}`
-        if (state !== lastState || dimensions !== lastDimensions) {
-            // The parent verifies this window and origin before using the readiness signal.
-            parent.postMessage({ type: 'hanasand-browser-stream', state, width, height }, '*')
-            lastState = state
-            lastDimensions = dimensions
-        }
+        // The parent can release input and retry if an HTTP error replaces this document.
+        parent.postMessage({ type: 'hanasand-browser-stream', state, width, height }, '*')
         // loadingText is retained by Selkies after connection; it is not a connection signal.
         if (document.visibilityState !== 'visible' || (hasFrame && (!player || player.status === 'connected')) || player?.showStart) {
             waitingSince = 0
