@@ -19,7 +19,7 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const coreTasks: TestTask[] = [
     scriptTask('runtime-imports', 'API runtime import resolution', 'check-runtime-imports.ts'),
     { id: 'monitoring-disk-diagnostics', title: 'Disk incident evidence validation', command: [bun, 'test', 'tests/monitoring-disk-diagnostics.test.ts'] },
-    { id: 'browser-access', title: 'Browser paid feature and session policy', command: [bun, 'test', 'tests/browser-access.test.ts'] },
+    { id: 'browser-access', title: 'Browser paid feature and session policy', command: [bun, 'test', 'tests/browser-access.test.ts', 'tests/browser-reconnect.test.ts'] },
     { id: 'browser-run-access', title: 'Browser admission and entitlement lifecycle', command: [bun, 'test', 'tests/browser-run-access.test.ts'] },
     { id: 'stripe-webhook', title: 'Stripe webhook retries and deleted accounts', command: [bun, 'test', 'tests/stripe-webhook.test.ts'] },
     { id: 'shared-mail-access', title: 'Shared mailbox access', command: [bun, 'test', 'tests/shared-mail-access.test.ts'] },

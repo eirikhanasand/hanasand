@@ -59,15 +59,24 @@ const wheelMethod = inputSource.match(/ {4}_mouseWheelWrapper\(event\) \{[\s\S]+
 assert(wheelMethod)
 let prevented = 0
 let stopped = 0
-let forwarded = 0
-const wheel = runInNewContext(`({${wheelMethod}})`, { setTimeout: () => {} })
-Object.assign(wheel, { _queue: { size: () => 4 }, _dropThreshold: () => false,
-    _allowTrackpadScrolling: true, _mouseWheel: () => { forwarded++ } })
-for (let i = 0; i < 5; i++) wheel._mouseWheelWrapper({ deltaY: 10,
+const wheelMessages: string[] = []
+const wheel = runInNewContext(`({${wheelMethod}})`, { document: { pointerLockElement: null } })
+Object.assign(wheel, { x: 100, y: 200, buttonMask: 0, send: (message: string) => wheelMessages.push(message) })
+const wheelEvent = (deltaY: number, deltaMode = 0) => wheel._mouseWheelWrapper({ deltaY, deltaMode,
     preventDefault: () => { prevented++ }, stopPropagation: () => { stopped++ } })
-assert.equal(forwarded, 1, 'Exercise throttled trackpad events')
-assert.equal(prevented, 5, 'Even throttled wheel events must not scroll the outer page')
-assert.equal(stopped, 5)
+for (let i = 0; i < 5; i++) wheelEvent(10)
+assert.equal(wheelMessages.length, 0, 'Small trackpad movements accumulate without acceleration')
+wheelEvent(50)
+assert.equal(wheelMessages[0], 'm,100,200,8,1')
+wheelEvent(10000)
+assert.equal(wheelMessages[2], 'm,100,200,8,3', 'Large wheel events are capped')
+wheelEvent(-100)
+assert.equal(wheelMessages[4], 'm,100,200,16,1', 'Direction reversals respond immediately')
+assert.equal(prevented, 8)
+assert.equal(stopped, 8)
+assert.match(html, /hanasand-loading/)
+assert.doesNotMatch(html, /<scale-loader|\{\{ loadingText \}\}/)
+assert.match(html, /video::-webkit-media-controls-start-playback-button/)
 assert.doesNotMatch(appSource, /receiver\.(?:jitterBufferTarget|jitterBufferDelayHint|playoutDelayHint)\s*=/, 'Let the receiver adapt to network jitter')
 const messages: number[][] = []
 const input = runInNewContext(`({${touchMethod}})`)
@@ -78,7 +87,7 @@ const touch = (type: string, y: number, count = 1) => input._touch({ type, cance
 touch('touchstart', 200)
 assert.equal(messages.length, 0, 'Touch down must not hold the mouse button')
 touch('touchmove', 176)
-assert.deepEqual(messages, [[100, 176, 8, 2], [100, 176, 0, 0]], 'First swipe movement sends scroll immediately, without timers')
+assert.deepEqual(messages, [[100, 176, 8, 1], [100, 176, 0, 0]], 'First swipe movement sends scroll immediately, without timers')
 touch('touchend', 176)
 assert.equal(messages.length, 2, 'Swipes must not click or select text on release')
 messages.length = 0

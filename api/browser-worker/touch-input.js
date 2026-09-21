@@ -25,11 +25,11 @@
             gesture.remainder += gesture.lastY - touch.clientY;
             gesture.lastY = touch.clientY;
             // X11 wheel notches: retain small movements without queuing events.
-            const steps = Math.trunc(gesture.remainder / 12);
+            const steps = Math.trunc(gesture.remainder / 24);
             if (steps) {
-                gesture.remainder -= steps * 12;
+                gesture.remainder -= steps * 24;
                 const mask = steps > 0 ? 8 : 16;
-                this.send(['m', this.x, this.y, this.buttonMask | mask, Math.min(Math.abs(steps), 10)].join(','));
+                this.send(['m', this.x, this.y, this.buttonMask | mask, Math.min(Math.abs(steps), 3)].join(','));
                 this.send(['m', this.x, this.y, this.buttonMask, 0].join(','));
             }
         }

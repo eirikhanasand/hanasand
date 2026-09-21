@@ -1,5 +1,6 @@
 'use client'
 
+import { BrowserControlSocket } from './controlSocket'
 import { ArrowUp, Check, ChevronDown, Clipboard, Download, Globe2, Hourglass, LoaderCircle, PackageCheck, Play, Plus, RotateCcw, Share2, ShieldCheck, SlidersHorizontal, Square, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -404,15 +405,13 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     const [expandedRun, setExpandedRun] = useState<BrowserRunHistory | null>(null)
     const [currentRunId, setCurrentRunId] = useState('')
     const [shareStatus, setShareStatus] = useState('')
-    const socketRef = useRef<WebSocket | null>(null)
+    const socketRef = useRef<BrowserControlSocket | null>(null)
     const viewportRef = useRef<HTMLDivElement | null>(null)
     const imageRef = useRef<HTMLImageElement | null>(null)
     const touchFrameRef = useRef<{ clientX: number; clientY: number; lastX: number; lastY: number; moved: boolean } | null>(null)
 
     const normalizedTarget = useMemo(() => normalizeTarget(target), [target])
-    const selectedProfile = useMemo(() => quota?.advancedAnalysis
-        ? profiles.find(profile => profile.id === selectedProfileId) || profiles[0]
-        : defaultProfiles.find(profile => profile.id === 'browser-only')!, [profiles, selectedProfileId, quota?.advancedAnalysis])
+    const selectedProfile = useMemo(() => (quota?.advancedAnalysis ? profiles : defaultProfiles).find(profile => profile.id === selectedProfileId) || defaultProfiles[0], [profiles, selectedProfileId, quota?.advancedAnalysis])
     const selectedFingerprint = useMemo(() => browserFingerprints.find(item => item.id === fingerprintId) || browserFingerprints[0], [fingerprintId])
     const activeUserAgentLabel = useMemo(() => userAgentLabel(customUserAgent, selectedFingerprint.label), [customUserAgent, selectedFingerprint.label])
     const browserMetadata = useMemo(() => ({
@@ -536,7 +535,6 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
             const stored = sanitizeProfiles(JSON.parse(window.localStorage.getItem(storageKey) || '[]'))
             if (Array.isArray(stored) && stored.length) {
                 setProfiles(mergeProfiles(stored))
-                setSelectedProfileId(stored[0]?.id || defaultProfiles[0].id)
             }
         } catch {
             setProfiles(defaultProfiles)
@@ -557,7 +555,6 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                 const serverProfiles = sanitizeProfiles(payload.profiles)
                 if (serverProfiles.length) {
                     setProfiles(mergeProfiles(serverProfiles))
-                    setSelectedProfileId(serverProfiles[0]?.id || defaultProfiles[0].id)
                 }
                 setProfileSyncEnabled(true)
                 setProfileSyncState('synced')
@@ -637,7 +634,8 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
         if (!url) return
         scrollRouteFrameToTop('auto')
         const id = sessionId()
-        const socket = new WebSocket(brokerUrlForSession(brokerBaseUrl, id))
+        const resumeToken = crypto.randomUUID()
+        const socket = new BrowserControlSocket(brokerUrlForSession(brokerBaseUrl, id), resumeToken)
         const runNetwork = inferNetwork(url)
         if (override?.target) setTarget(override.target)
         socketRef.current?.close()
@@ -669,9 +667,10 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
 
         socket.onopen = () => {
             setSocketState('open')
-            const profileTools = quota?.advancedAnalysis ? selectedProfile.tools : []
+            const profileTools = selectedProfile.tools
             socket.send(JSON.stringify({
                 type: 'start',
+                resumeToken,
                 sessionId: id,
                 network: runNetwork,
                 target: url,
@@ -682,6 +681,9 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                 userId: getCookie('id') || undefined,
                 sessionToken: getCookie('access_token') || undefined,
             }))
+        }
+        socket.onreconnecting = () => {
+            if (socketRef.current === socket && !stoppedRunRef.current) setSocketState('connecting')
         }
         socket.onclose = () => {
             if (socketRef.current !== socket) return
@@ -704,6 +706,14 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
             if (typeof message.data !== 'string') return
             const payload = parsePayload(message.data)
             if (!payload) return
+            if (payload.type === 'reconnected') { setSocketState('open'); return }
+            if (payload.type === 'resume_unavailable') {
+                receivedEnd = true
+                setSessionState('failed')
+                setRunBlocker('The sandbox is no longer available. Start a new run.')
+                setStreamUrl('')
+                return
+            }
             if (payload.type === 'stream_ready' && typeof payload.streamUrl === 'string') {
                 setStreamUrl(streamUrlForPath(payload.streamUrl))
                 pushEvent('WebRTC browser stream ready.')
@@ -1542,7 +1552,7 @@ function ProfilePicker({ paid, profiles, selectedProfileId, onSelect, onDelete }
             {profiles.map(profile => {
                 const selected = selectedProfileId === profile.id
                 const locked = defaultProfiles.some(item => item.id === profile.id)
-                if (!paid && profile.tools.length) return <Link key={profile.id} href='/pricing#browser' className='inline-flex min-h-9 shrink-0 items-center gap-2 rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-primary'>{profile.name} · Upgrade</Link>
+                if (!paid && !defaultProfiles.some(item => item.id === profile.id)) return <Link key={profile.id} href='/pricing#browser' className='inline-flex min-h-9 shrink-0 items-center gap-2 rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-primary'>{profile.name} · Upgrade</Link>
                 return (
                     <span key={profile.id} className={`inline-flex min-h-9 shrink-0 items-center overflow-hidden rounded-md border transition ${selected ? 'border-ui-primary bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-panel text-ui-text'}`}>
                         <button
@@ -1641,10 +1651,10 @@ function ProviderRunBadges({ run }: { run: BrowserRunHistory }) {
 }
 
 function ProviderRunBadge({ provider, result }: { provider: 'virustotal' | 'urlquery'; result?: ProviderRunResult }) {
-    const clean = result?.status === 'clean'
     const name = provider === 'virustotal' ? 'VirusTotal' : 'urlquery'
-    const text = (result?.label || '').replace(/\b(?:virustotal|VT|urlquery)\b:?/gi, '').replace(/\s*alerts?$/i, '').trim()
-        || (provider === 'urlquery' && result?.status === 'clean' ? '0' : '—')
+    const rawText = (result?.label || '').replace(/\b(?:virustotal|VT|urlquery)\b:?/gi, '').replace(/\s*alerts?$/i, '').trim()
+    const text = !rawText || rawText === '—' ? '0' : rawText
+    const clean = !result || result.status === 'clean' || text === '0'
     const description = `${name}: ${text}${provider === 'urlquery' && /^\d+$/.test(text) ? ' alerts' : ''}`
     return (
         <span role='img' title={description} aria-label={description} className={`inline-flex h-6 items-center gap-1 rounded-md border px-1.5 text-[11px] font-semibold ${clean ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-warning/40 bg-ui-warning/10 text-ui-warning'}`}>
@@ -2118,7 +2128,7 @@ function CaptureTimeline({ captures }: { captures: Capture[] }) {
 }
 
 function StatusPill({ label, value, good }: { label: string; value: string; good: boolean }) {
-    return <span className={`inline-flex h-8 items-center gap-2 rounded-full border px-3 text-xs font-semibold ${good ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : 'border-ui-border bg-ui-panel text-ui-text'}`}>{label ? <span className='text-ui-muted'>{label}</span> : null}{value}</span>
+    return <span className={`inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${good ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : 'border-ui-border bg-ui-panel text-ui-text'}`}>{label ? <span className='text-ui-muted'>{label}</span> : null}{value}</span>
 }
 
 function ProviderViewportEvidence({ tool, capture }: { tool: SandboxTool; capture: Capture }) {

@@ -1,3 +1,4 @@
+import { resumableBrowserSocket } from '../utils/ws/browserReconnect.ts'
 import { browserLeaseHeartbeat } from '../utils/ws/browserLease.ts'
 import fp from 'fastify-plugin'
 import { proxyModelSocket } from '../utils/ws/proxyModelSocket.ts'
@@ -310,7 +311,8 @@ function proxyBrowserSocket(connection: WebSocket, id: string, route: 'browser' 
             message: `Starting isolated browser worker for ${route} session ${id}`,
             metadata: { category: 'browser_sandbox_worker', route, sessionId: id },
         }).catch(() => {})
-        proxyEphemeralBrowserSocket(connection, id, route)
+        const resumed = resumableBrowserSocket(connection, `${route}:${id}`)
+        if (resumed) proxyEphemeralBrowserSocket(resumed, id, route)
         return true
     }
     const base = process.env.BROWSER_SANDBOX_WORKER_WS

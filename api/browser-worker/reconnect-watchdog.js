@@ -1,6 +1,7 @@
 (() => {
     let waitingSince = 0
     let lastState = ''
+    let healthySince = 0
     let lastDimensions = ''
     const retryKey = `hanasand-stream-retries:${location.pathname}`
     let retries = 0
@@ -21,19 +22,21 @@
             lastDimensions = dimensions
         }
         // loadingText is retained by Selkies after connection; it is not a connection signal.
-        if (document.visibilityState !== 'visible' || hasFrame || player?.status === 'connected' || player?.showStart) {
+        if (document.visibilityState !== 'visible' || (hasFrame && (!player || player.status === 'connected')) || player?.showStart) {
             waitingSince = 0
-            if (hasFrame && retries) {
+            if (hasFrame) healthySince ||= Date.now()
+            if (hasFrame && retries && Date.now() - healthySince > 10_000) {
                 retries = 0
                 try { sessionStorage.removeItem(retryKey) } catch { /* Storage is optional. */ }
             }
             return
         }
-        if (player?.loadingText !== 'Waiting for stream.') { waitingSince = 0; return }
+        healthySince = 0
         if (!waitingSince) waitingSince = Date.now()
-        if (Date.now() - waitingSince >= 30_000 && retries < 2) {
+        if (Date.now() - waitingSince >= Math.min(30_000, 5_000 * 2 ** Math.min(retries, 3))) {
             retries++
             try { sessionStorage.setItem(retryKey, String(retries)) } catch { return }
+            waitingSince = Date.now()
             location.reload()
         }
     }, 1_000)

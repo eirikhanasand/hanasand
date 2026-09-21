@@ -74,6 +74,8 @@ COPY browser-worker/start.sh /usr/local/bin/hanasand-browser-worker
 COPY browser-worker/reconnect-watchdog.js /opt/gst-web/reconnect-watchdog.js
 COPY browser-worker/patch-stream-input.py /tmp/patch-stream-input.py
 COPY browser-worker/touch-input.js /tmp/touch-input.js
+COPY browser-worker/wheel-input.js /tmp/wheel-input.js
+COPY browser-worker/patch-stream-controls.py /tmp/patch-stream-controls.py
 COPY browser-worker/patch-stream-playback.py /tmp/patch-stream-playback.py
 COPY browser-worker/patch-stream-framerate.py /tmp/patch-stream-framerate.py
 COPY browser-worker/patch-stream-h264.py /tmp/patch-stream-h264.py
@@ -87,6 +89,7 @@ RUN python3 /tmp/patch-stream-input.py \
     && python3 /tmp/patch-stream-receiver.py \
     && python3 /tmp/patch-stream-packets.py \
     && python3 /tmp/patch-stream-signalling.py \
+    && python3 /tmp/patch-stream-controls.py \
     && chmod +x /usr/local/bin/hanasand-browser-worker \
     && sed -i 's/selkies-gstreamer-resize 1920x1080/selkies-gstreamer-resize "${BROWSER_STREAM_RESOLUTION:-1280x720}"/' /etc/entrypoint.sh \
     && sed -i '/\.scale {/,/}/s/height: 100%;/height: 100%;\n      object-fit: contain;/' /opt/gst-web/index.html \

@@ -10,7 +10,7 @@ test('stale loading text, hidden tabs, and autoplay prompts never reload a healt
     let tick = () => {}
     let reloads = 0
     const store = new Map<string, string>()
-    const video = { readyState: 0, videoWidth: 0, videoHeight: 0 }
+    const video = { readyState: 2, videoWidth: 1280, videoHeight: 720 }
     const app = { loadingText: 'Waiting for stream.', status: 'connected', showStart: false }
     const document = { visibilityState: 'visible', querySelector: () => video }
     const states: string[] = []
@@ -19,6 +19,7 @@ test('stale loading text, hidden tabs, and autoplay prompts never reload a healt
     runInNewContext(source, context)
     advance()
     expect(reloads).toBe(0)
+    video.readyState = 0
     app.status = 'connecting'
     document.visibilityState = 'hidden'
     advance()
@@ -29,6 +30,7 @@ test('stale loading text, hidden tabs, and autoplay prompts never reload a healt
     expect(reloads).toBe(0)
     expect(states).toContain('gesture')
     app.showStart = false
+    app.status = 'connected'
     video.readyState = 2
     video.videoWidth = 1280
     video.videoHeight = 720
@@ -58,7 +60,7 @@ test('report decoded dimensions again when the stream changes size without recon
     expect(messages[1].width / messages[1].height).toBe(390 / 844)
 })
 
-test('genuine startup failures retry at most twice across page reloads', () => {
+test('stream failures keep retrying with capped backoff across page reloads', () => {
     let now = 1000
     let tick = () => {}
     let reloads = 0
@@ -70,5 +72,5 @@ test('genuine startup failures retry at most twice across page reloads', () => {
         now += 31000
         tick()
     }
-    expect(reloads).toBe(2)
+    expect(reloads).toBe(4)
 })

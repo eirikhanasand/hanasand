@@ -70,3 +70,12 @@ test('a hung renewal cannot keep a session alive beyond its safe deadline', asyn
     await beat()
     expect(lost).toBe(1)
 })
+
+test('free SOC triage includes built-in providers but not arbitrary paid tools', () => {
+    const tools = [
+        { id: 'virustotal', url: 'https://www.virustotal.com/gui/search/{url}' },
+        { id: 'urlquery', url: 'https://urlquery.net/search?q={url}' },
+        { id: 'webcrack', url: 'https://webcrack.netlify.app/' },
+    ]
+    expect(browserStartOptions({ profileTools: [...tools, { id: 'virustotal', url: 'https://other.example/' }] }, browserAccess('free')).profileTools).toEqual(tools)
+})
