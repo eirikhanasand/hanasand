@@ -86,7 +86,7 @@ export default function Footer() {
     const statusCopy = footerStatusCopy(publicStatus)
 
     return (
-        <footer className={`${isShare ? 'hidden' : ''} w-full border-t border-ui-border bg-ui-canvas px-4 pb-8 pt-12 text-sm text-ui-muted md:px-8`}>
+        <footer className={`site-chrome ${isShare ? 'hidden' : ''} w-full border-t border-ui-border bg-ui-canvas px-4 pb-8 pt-12 text-sm text-ui-muted md:px-8`}>
             <section className='mx-auto grid w-full max-w-7xl gap-8 lg:grid-cols-[1.05fr_2fr]'>
                 <div className='min-w-0'>
                     <BrandLogo />

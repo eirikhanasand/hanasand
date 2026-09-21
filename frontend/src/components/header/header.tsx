@@ -130,7 +130,7 @@ export default function Header({ token, path: serverPath, initialMode = 'normal'
     const pricingHref = token ? '/subscription' : '/pricing'
 
     return (
-        <header data-site-header className='fixed left-0 top-0 z-1000 w-full border-b border-ui-border bg-ui-panel px-3 sm:px-5 md:px-10 lg:px-16'>
+        <header data-site-header className='site-chrome fixed left-0 top-0 z-1000 w-full border-b border-ui-border bg-ui-panel text-ui-text px-3 sm:px-5 md:px-10 lg:px-16'>
             <div className='mx-auto flex h-18 w-full max-w-7xl items-center justify-between gap-2 sm:gap-5'>
                 <BrandLogo />
 

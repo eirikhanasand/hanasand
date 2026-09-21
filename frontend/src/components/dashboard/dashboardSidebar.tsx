@@ -153,7 +153,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
     const matches = search ? links.filter(item => [...item.ancestors, item.label].join(' ').toLocaleLowerCase().includes(search)) : []
 
     return (
-        <aside aria-label='Dashboard sidebar' className={`dashboard-sidebar-sticky noscroll min-h-0 w-full overflow-auto rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm shadow-ui-canvas/10 dark:shadow-ui-canvas/20 ${compact ? 'lg:w-16' : 'lg:w-58'}`}>
+        <aside aria-label='Dashboard sidebar' className={`site-chrome dashboard-sidebar-sticky noscroll min-h-0 w-full overflow-auto rounded-lg border border-ui-border bg-ui-panel text-ui-text p-2 shadow-sm shadow-ui-canvas/10 dark:shadow-ui-canvas/20 ${compact ? 'lg:w-16' : 'lg:w-58'}`}>
             <div className={`mb-2 flex items-center ${compact ? 'justify-center' : 'justify-between px-2'}`}>
                 {!compact && <h2 className='text-sm font-semibold text-ui-text'>Workspace</h2>}
                 <div className='flex shrink-0 items-center'>

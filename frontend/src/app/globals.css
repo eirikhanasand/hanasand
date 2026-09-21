@@ -35,7 +35,8 @@
   }
 }
 
-.dark {
+.dark,
+.site-chrome {
   --ui-canvas: #07101d;
   --ui-panel: #101927;
   --ui-raised: #162238;
@@ -113,6 +114,20 @@
   --automation-cloud: #b9dbf5;
   --automation-cloud-detail: #a8cdeb;
   --automation-cloud-ink: #17304a;
+}
+
+/* Resolve utility colors within navigation instead of inheriting the page's palette. */
+.site-chrome {
+  --color-ui-canvas: var(--ui-canvas);
+  --color-ui-panel: var(--ui-panel);
+  --color-ui-raised: var(--ui-raised);
+  --color-ui-border: var(--ui-border);
+  --color-ui-text: var(--ui-text);
+  --color-ui-muted: var(--ui-muted);
+  --color-ui-primary: var(--ui-primary);
+  --color-ui-success: var(--ui-success);
+  --color-ui-warning: var(--ui-warning);
+  --color-ui-danger: var(--ui-danger);
 }
 
 body {
