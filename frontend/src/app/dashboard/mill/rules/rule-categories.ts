@@ -6,7 +6,7 @@ export const ruleCategories = {
 
 export type RuleCategory = keyof typeof ruleCategories
 
-const analysisRules = new Set(['http.routine_access.v1', 'auth.impossible_travel.v1', 'auth.new_country.v1', 'auth.new_device.v1'])
+const analysisRules = new Set(['mongodb.cashflow_connections.v1', 'http.routine_access.v1', 'auth.impossible_travel.v1', 'auth.new_country.v1', 'auth.new_device.v1'])
 const matchRules = new Set(['network.signature_alert.v1', 'vulnerability.cve_asset_context.v1'])
 
 export function getRuleCategory(rule: { id: string, source?: string }): RuleCategory {

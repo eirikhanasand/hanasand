@@ -4,6 +4,7 @@ import { getRuleCategory } from '../src/app/dashboard/mill/rules/rule-categories
 
 describe('rule categories', () => {
     test.each([
+        ['mongodb.cashflow_connections.v1', 'analysis'],
         ['auth.brute_force_success.v1', 'detection'],
         ['auth.password_spray.v1', 'detection'],
         ['auth.impossible_travel.v1', 'analysis'],

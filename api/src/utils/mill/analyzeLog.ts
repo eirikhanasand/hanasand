@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import ipaddr from 'ipaddr.js'
+import { eligibleMongoConnection, mongoRuleId, type MongoLog } from './analyzeMongo.ts'
 import run, { withTransaction } from '#db'
 import { sessionNetwork } from '#utils/auth/sessionNetwork.ts'
 import { accessDefinition, accessRuleId, eligibleAccess, type AccessEvent } from './analyzeAccess.ts'
@@ -55,5 +56,22 @@ export async function analyzeAccess(event: AccessEvent, query?: typeof run, hist
         await query(`INSERT INTO mill_findings(id,organization_id,finding_key,rule_id,severity,summary,evidence,event_ids)
             VALUES($1,$2,$1,$3,$7,$4,$5::jsonb,$6::text[])`, [findingId, rule.organization_id, accessRuleId, summary, JSON.stringify(evidence), [id], severity])
     }
+    return true
+}
+
+// Use the ingestion transaction so failed receipts are retried with the batch.
+export async function analyzeMongoConnection(log: MongoLog, query?: typeof run): Promise<boolean> {
+    if (!eligibleMongoConnection(log)) return false
+    if (!query) return withTransaction(tx => analyzeMongoConnection(log, tx))
+    const result = await query(`SELECT r.organization_id, r.version FROM mill_rules r
+        JOIN organizations o ON o.id=r.organization_id
+        WHERE o.status='active' AND (o.id=$1 OR ($1::text IS NULL AND lower(o.name)='hanasand'))
+          AND r.rule_id=$2 AND r.enabled AND r.definition->>'stage'='analyze' AND r.definition->>'action'='drop'
+        ORDER BY o.created_at LIMIT 1`, [process.env.PLATFORM_LOG_ORGANIZATION_ID || null, mongoRuleId])
+    const rule = result.rows[0]
+    if (!rule) return false
+    const key = createHash('sha256').update(`${mongoRuleId}:${log.sourceEventId}`).digest('hex')
+    await query(`INSERT INTO log_analyze_receipts(key,organization_id,rule_id,rule_version)
+        VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`, [key, rule.organization_id, mongoRuleId, rule.version])
     return true
 }

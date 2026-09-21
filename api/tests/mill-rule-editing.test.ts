@@ -48,9 +48,8 @@ const edit = { version: '1', name: 'Custom network alert', explanation: 'An impo
 const network = { source: {}, events: [{ timestamp: '2026-09-14T12:00:00Z', event_type: 'network', action: 'alert', signature: 'Test signature' }] }
 beforeEach(() => { rows = []; audits = []; findings = []; role = 'owner'; valid = true; auditFailure = false; events = []; systemAdmin = false })
 
-test('only system administrators can change platform Analyze retention; changes are versioned and audited', async () => {
-    const id = 'http.routine_access.v1'
-    const definition = { match: 'all', stage: 'analyze', action: 'drop', conditions: [], parameters: { windowMinutes: 1, requestThreshold: 50 } }
+test.each(['http.routine_access.v1', 'mongodb.cashflow_connections.v1'])('only system administrators can change %s retention; changes are versioned and audited', async (id) => {
+    const definition = { match: 'all', stage: 'analyze', action: 'drop', conditions: [], parameters: id.startsWith('http.') ? { windowMinutes: 1, requestThreshold: 50 } : {} }
     rows = [{ id: 'platform-rule', organization_id: 'org-a', rule_id: id, version: '1', name: 'Routine successful requests', family: 'HTTP', severity: 'high', explanation: 'Count and drop routine successful HTTP requests.', source: 'hanasand', enabled: true, definition }]
     expect((await getMillRule(request(id), reply() as any)).canEdit).toBe(false)
     const denied = reply()
