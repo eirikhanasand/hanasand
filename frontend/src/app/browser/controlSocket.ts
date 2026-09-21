@@ -7,6 +7,7 @@ export class BrowserControlSocket {
     onreconnecting: (() => void) | null = null
     private socket!: WebSocket
     private stopped = false
+    private pendingEnd = false
     private opened = false
     private disconnectedAt = 0
     private attempt = 0
@@ -15,8 +16,12 @@ export class BrowserControlSocket {
     private lastPong = Date.now()
     constructor(private readonly url: string, private readonly token: string) { this.connect() }
     get readyState() { return this.socket.readyState }
-    send(data: string) { if (this.socket.readyState === WebSocket.OPEN) this.socket.send(data) }
-    close() {
+    send(data: string) {
+        if (this.socket.readyState === WebSocket.OPEN) this.socket.send(data)
+        else if (JSON.parse(data).type === 'end') this.pendingEnd = true
+    }
+    close(notifyServer = true) {
+        if (notifyServer && !this.stopped && this.opened && this.socket.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify({ type: 'end' }))
         this.stopped = true
         clearTimeout(this.retry)
         clearInterval(this.heartbeat)
@@ -29,7 +34,7 @@ export class BrowserControlSocket {
             if (this.stopped || socket !== this.socket || this.retry) return
             clearInterval(this.heartbeat)
             this.disconnectedAt ||= Date.now()
-            if (Date.now() - this.disconnectedAt >= 120_000) { this.close(); this.onclose?.(); return }
+            if (Date.now() - this.disconnectedAt >= 120_000) { this.close(false); this.onclose?.(); return }
             this.onreconnecting?.()
             this.retry = setTimeout(() => { this.retry = undefined; this.connect() }, Math.min(500 * 2 ** this.attempt++, 5000))
         }
@@ -49,10 +54,12 @@ export class BrowserControlSocket {
             if (socket !== this.socket || this.stopped) return
             let payload: { type?: string }
             try { payload = JSON.parse(event.data) } catch { return }
+            if (!payload || typeof payload !== 'object') return
             this.lastPong = Date.now()
             if (payload.type === 'pong') return
             if (payload.type === 'reconnected' || payload.type === 'ready') { this.disconnectedAt = 0; this.attempt = 0 }
-            if (payload.type === 'ended' || payload.type === 'resume_unavailable') this.close()
+            if (payload.type === 'reconnected' && this.pendingEnd) { this.pendingEnd = false; this.send(JSON.stringify({ type: 'end' })) }
+            if (payload.type === 'ended' || payload.type === 'resume_unavailable') this.close(false)
             this.onmessage?.(event)
         }
         socket.onerror = () => { /* onclose or heartbeat drives reconnection. */ }

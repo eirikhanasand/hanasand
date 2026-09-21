@@ -33,6 +33,7 @@ test('control reconnect resumes once, retains messages and stops retrying after 
     client.onmessage = (event: { data: string }) => received.push(JSON.parse(event.data).type)
     sockets[0].open()
     sockets[0].close()
+    client.send(JSON.stringify({ type: 'end' }))
     expect(reconnecting).toBe(1)
     const retry = timers.values().next().value!
     timers.clear(); retry()
@@ -40,6 +41,7 @@ test('control reconnect resumes once, retains messages and stops retrying after 
     expect(starts).toBe(1)
     expect(JSON.parse(sockets[1].sent[0])).toEqual({ type: 'resume', resumeToken: 'token' })
     sockets[1].message({ type: 'reconnected' })
+    expect(JSON.parse(sockets[1].sent[1])).toEqual({ type: 'end' })
     sockets[1].message({ type: 'frame' })
     sockets[1].message({ type: 'ended' })
     expect(received).toEqual(['reconnected', 'frame', 'ended'])
