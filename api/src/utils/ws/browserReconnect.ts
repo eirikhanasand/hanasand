@@ -22,6 +22,7 @@ export class BrowserReconnect extends EventEmitter {
             if (socket !== this.socket || this.ended) return
             let payload: Record<string, unknown>
             try { payload = JSON.parse(data.toString()) } catch { return }
+            if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return
             if (payload.type === 'resume' && !this.token) { this.send(JSON.stringify({ type: 'resume_unavailable' })); this.close(); return }
             if (payload.type === 'ping') { socket.send(JSON.stringify({ type: 'pong' })); return }
             if (payload.type === 'start') clearTimeout(this.expiry)
@@ -37,6 +38,7 @@ export class BrowserReconnect extends EventEmitter {
         })
     }
     attach(socket: WebSocket) {
+        socket.once('error', () => socket.terminate())
         const deadline = setTimeout(() => socket.close(1008, 'Resume authentication required'), 10_000)
         deadline.unref()
         socket.once('close', () => clearTimeout(deadline))
@@ -44,7 +46,7 @@ export class BrowserReconnect extends EventEmitter {
             clearTimeout(deadline)
             let payload: Record<string, unknown>
             try { payload = JSON.parse(data.toString()) } catch { socket.close(1008); return }
-            if (this.ended || !this.token || payload.type !== 'resume' || payload.resumeToken !== this.token) { socket.close(1008, 'Invalid resume token'); return }
+            if (!payload || this.ended || !this.token || payload.type !== 'resume' || payload.resumeToken !== this.token) { socket.close(1008, 'Invalid resume token'); return }
             clearTimeout(this.expiry)
             const previous = this.socket
             this.socket = socket
