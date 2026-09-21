@@ -225,8 +225,8 @@ export async function getLegacyTrafficRecords(req: FastifyRequest, res: FastifyR
 
 function loadTrafficRecordTotal(domain: string | null) {
     return safeQuery(`
-        SELECT COALESCE(SUM(hits), 0)::bigint AS total
-        FROM traffic_aggregate_events
+        SELECT COUNT(*)::bigint AS total
+        FROM traffic_events
         WHERE ($1::text IS NULL OR domain = $1)
     `, [domain])
 }

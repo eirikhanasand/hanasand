@@ -217,7 +217,7 @@ const apiBackgroundJobDefinitions: Array<{
     {
         id: RAW_LOG_RETENTION_JOB_ID,
         name: 'Raw log retention',
-        description: 'Deletes raw service logs older than seven days after completed Mill ingestion. Keeps Mill events.',
+        description: 'Deletes raw service and traffic logs older than seven days after completed Mill ingestion. Keeps Mill events and traffic aggregates.',
         category: 'Backup/Database',
         schedule: 'Every minute',
         cadenceSeconds: API_CRON_CADENCE_SECONDS,
