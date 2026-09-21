@@ -188,8 +188,6 @@ export default function Page() {
 
                     </div>
 
-                    <HomeOperatorStrip />
-
                     <div className='landing-surface-border grid overflow-hidden rounded-xl border border-ui-border bg-ui-panel shadow-sm' id='sample-alert' data-home-workflow-panel='true'>
                         <div className='landing-surface-divider grid gap-3 border-b p-5 md:grid-cols-[0.8fr_1.2fr] md:items-end' data-home-workflow-panel-header='true'>
                             <div>
@@ -312,37 +310,6 @@ export default function Page() {
                 </div>
             </section>
         </main>
-    )
-}
-
-function HomeOperatorStrip() {
-    return (
-        <div
-            className='landing-surface-border grid w-full max-w-none gap-3 rounded-xl border border-ui-border bg-ui-panel/90 p-3 text-left shadow-sm backdrop-blur sm:grid-cols-2 lg:grid-cols-[1.2fr_1.05fr_0.8fr_0.95fr_1.25fr_auto]'
-            data-home-product-status='true'
-        >
-            <HomeOperatorFact label='Product' value='Company exposure alerts' />
-            <HomeOperatorFact label='Coverage' value='Companies, vendors, domains' />
-            <HomeOperatorFact label='Alert' value='Evidence, severity, action' />
-            <HomeOperatorFact label='Delivery' value='Webhook, case, console' />
-            <HomeOperatorFact label='Setup' value='Add watchlists, route alerts' />
-            <Link
-                href='/dashboard'
-                className='inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-ui-border px-3 py-2 text-sm font-semibold text-ui-primary transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20'
-            >
-                Open console
-                <ArrowRight className='h-4 w-4' />
-            </Link>
-        </div>
-    )
-}
-
-function HomeOperatorFact({ label, value }: { label: string, value: string }) {
-    return (
-        <div className='landing-surface-border min-w-0 rounded-lg border border-ui-border bg-ui-raised px-3 py-2' data-home-status-fact='true'>
-            <p className='text-[11px] font-semibold uppercase text-ui-muted'>{label}</p>
-            <Marquee text={value} className='mt-1' innerClassName='text-sm font-semibold leading-5 text-ui-text' />
-        </div>
     )
 }
 
