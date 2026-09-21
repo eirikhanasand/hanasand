@@ -108,18 +108,26 @@ def perform(clear=False):
         fcntl.flock(lock, fcntl.LOCK_EX)
         state_path = STATE_DIR / 'status.json'
         request_path = STATE_DIR / 'request.json'
+        request = read(request_path) if clear else {}
         previous = read(state_path)
         state = {**previous, 'running': clear, 'error': None if clear else previous.get('error')}
         if clear:
+            state['phase'] = 'build_cache'
             state['startedAt'] = now()
             state['lastAttemptAt'] = state['startedAt']
             save(state_path, state)
         try:
             before = os.statvfs('/')
             if clear:
-                command(['builder', 'prune', '--all', '--force', '--keep-storage', str(CACHE_BUDGET)])
-                inventory = snapshot()
-                for image in inventory['unusedImages']:
+                # Explicit reclaim removes all unused cache; the nightly job keeps its budget.
+                args = ['builder', 'prune', '--all', '--force']
+                if not request:
+                    args += ['--keep-storage', str(CACHE_BUDGET)]
+                command(args)
+                state['phase'] = 'images'
+                save(state_path, state)
+                inventory = image_inventory(docker('/images/json?all=1'), docker('/containers/json?all=1'))
+                for image in inventory:
                     if not image['eligible']:
                         continue
                     # Check again immediately before removal; never force deletion.
@@ -128,6 +136,9 @@ def perform(clear=False):
                     inspect = docker('/images/' + image['id'] + '/json')
                     references = inspect.get('RepoTags') or [image['id']]
                     command(['image', 'rm', *references])
+            if clear:
+                state['phase'] = 'refresh'
+                save(state_path, state)
             state.update(snapshot())
             # A recovered metrics scan must not conceal a failed cleanup.
             recovered_scan = state.get('errorStage') == 'refresh' or (
@@ -136,16 +147,17 @@ def perform(clear=False):
             if clear or recovered_scan:
                 state.update(error=None, errorStage=None)
             state['running'] = False
+            state['phase'] = None
             if clear:
                 after = os.statvfs('/')
                 state.update(lastSuccessAt=now(), lastFreedBytes=max(0, after.f_bavail * after.f_frsize - before.f_bavail * before.f_frsize))
             save(state_path, state)
         except Exception as error:
-            state.update(running=False, error=str(error), errorStage='cleanup' if clear else 'refresh', failedAt=now())
+            state.update(running=False, phase=None, error=str(error), errorStage='cleanup' if clear else 'refresh', failedAt=now())
             save(state_path, state)
             raise
         finally:
-            if clear:
+            if clear and request and read(request_path) == request:
                 request_path.unlink(missing_ok=True)
 
 

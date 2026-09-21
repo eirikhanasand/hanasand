@@ -8,7 +8,7 @@ type Storage = {
     cacheBytes: number; reclaimableCacheBytes: number; cacheBudgetBytes: number
     unusedImages: { id: string; names: string[]; sizeBytes: number; eligible: boolean; retainedReason: string | null }[]
     checkedAt: string; lastSuccessAt?: string; lastFreedBytes?: number; running: boolean; queued: boolean; stale: boolean; error?: string
-    schedule: string; timezone: string
+    schedule: string; timezone: string; phase?: 'build_cache' | 'images' | 'refresh' | null
 }
 const bytes = (value: number) => `${(value / 1e9).toLocaleString(undefined, { maximumFractionDigits: 1 })} GB`
 const date = (value: string) => new Date(value).toLocaleString()
@@ -23,15 +23,22 @@ export default function DockerStoragePanel() {
                 headers: { Authorization: `Bearer ${getCookie('access_token') || ''}`, id: getCookie('id') || '' } })
             const body = await response.json()
             if (!response.ok) throw new Error(body.error || 'Unable to load storage.')
-            setState(body); setError('')
+            if (!signal?.aborted) { setState(body); setError('') }
         } catch (cause) { if (!signal?.aborted) setError(cause instanceof Error ? cause.message : 'Unable to load storage.') }
     }, [])
+    const busy = Boolean(submitting || state?.running || state?.queued)
     useEffect(() => {
+        if (submitting) return
         const controller = new AbortController()
-        void load(controller.signal)
-        const timer = setInterval(() => { void load(controller.signal) }, 10000)
-        return () => { controller.abort(); clearInterval(timer) }
-    }, [load])
+        let timer: ReturnType<typeof setTimeout>
+        const poll = async () => {
+            await load(controller.signal)
+            if (!controller.signal.aborted) timer = setTimeout(poll, busy ? 1000 : 10000)
+        }
+        // Allow a queued request to reach the worker before the first status check.
+        timer = setTimeout(poll, busy ? 1000 : 0)
+        return () => { controller.abort(); clearTimeout(timer) }
+    }, [load, busy, submitting])
     const clear = async () => {
         setSubmitting(true); setError('')
         try {
@@ -43,12 +50,12 @@ export default function DockerStoragePanel() {
         } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to start cleanup.') }
         finally { setSubmitting(false) }
     }
-    const busy = submitting || state?.running || state?.queued
+    const progress = state?.phase === 'refresh' ? 'Updating totals…' : state?.phase === 'images' ? 'Removing unused images…' : 'Clearing build cache…'
     return <section aria-label='Docker storage' className='min-w-0 space-y-3 rounded-xl border border-ui-border bg-ui-panel p-4 text-ui-text shadow-sm sm:p-5'>
         <div className='flex flex-wrap items-center justify-between gap-3'>
             <h2 className='flex items-center gap-2 text-lg font-semibold'><HardDrive className='h-5 w-5 text-ui-primary' aria-hidden />Docker storage <span className='text-xs font-normal text-ui-muted'>Inspur</span></h2>
             <button type='button' onClick={() => void clear()} disabled={Boolean(busy) || !state || state.stale || Boolean(error)} className='inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm font-semibold hover:border-ui-primary disabled:opacity-50'>
-                {busy ? <RefreshCcw className='h-4 w-4 animate-spin' aria-hidden /> : <Trash2 className='h-4 w-4' aria-hidden />}{state?.running ? 'Clearing…' : busy ? 'Queued…' : 'Clear unused storage'}
+                {busy ? <RefreshCcw className='h-4 w-4 animate-spin' aria-hidden /> : <Trash2 className='h-4 w-4' aria-hidden />}{submitting ? 'Starting cleanup…' : state?.running ? progress : busy ? 'Queued…' : 'Clear unused storage'}
             </button>
         </div>
         {error && <p role='alert' className='text-sm text-ui-danger'>{error} <button className='underline' onClick={() => void load()}>Retry</button></p>}

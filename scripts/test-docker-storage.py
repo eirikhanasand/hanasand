@@ -52,6 +52,39 @@ class CleanupStateTest(unittest.TestCase):
             self.assertTrue((root / 'request.json').exists())
             self.assertEqual(storage.read(root / 'status.json')['lastSuccessAt'], 'previous-success')
 
+    def test_manual_reclaims_all_cache_and_nightly_retains_budget(self):
+        for manual in (True, False):
+            with self.subTest(manual=manual), tempfile.TemporaryDirectory() as directory, patch.object(storage, 'STATE_DIR', Path(directory)):
+                root = Path(directory)
+                if manual:
+                    storage.save(root / 'request.json', {'requestedAt': 'now'})
+                phases = []
+                def inspect(path):
+                    phases.append(storage.read(root / 'status.json')['phase'])
+                    return []
+                with patch.object(storage, 'docker', side_effect=inspect), patch.object(storage, 'command') as command, patch.object(storage, 'snapshot', return_value={'reclaimableCacheBytes': 0}) as snapshot:
+                    storage.perform(clear=True)
+                expected = ['builder', 'prune', '--all', '--force']
+                if not manual:
+                    expected += ['--keep-storage', str(storage.CACHE_BUDGET)]
+                command.assert_called_once_with(expected)
+                snapshot.assert_called_once()
+                self.assertEqual(phases, ['images', 'images'])
+                status = storage.read(root / 'status.json')
+                self.assertFalse(status['running'])
+                self.assertIsNone(status['phase'])
+                self.assertEqual(status['reclaimableCacheBytes'], 0)
+                self.assertFalse((root / 'request.json').exists())
+
+    def test_nightly_cleanup_preserves_new_manual_request(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(storage, 'STATE_DIR', Path(directory)):
+            root = Path(directory)
+            def prune(args):
+                storage.save(root / 'request.json', {'requestedAt': 'during-nightly'})
+            with patch.object(storage, 'command', side_effect=prune), patch.object(storage, 'docker', return_value=[]), patch.object(storage, 'snapshot', return_value={}):
+                storage.perform(clear=True)
+            self.assertTrue((root / 'request.json').exists())
+
     def test_failure_does_not_replace_last_success(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(storage, 'STATE_DIR', Path(directory)):
             root = Path(directory)

@@ -52,3 +52,25 @@ test('API rejection is visible and does not claim cleanup was queued', async ({ 
     await expect(page.getByRole('alert')).toContainText('System administrator access is required.')
     await expect(page.getByText('Not cleared yet')).toBeVisible()
 })
+
+test('shows progress and fresh totals when cleanup completes', async ({ page }) => {
+    let current = { ...state, phase: null as string | null }
+    await page.route('**/api/backend/system/storage', route => route.fulfill({ json: current }))
+    let release: () => void = () => {}
+    const gate = new Promise<void>(resolve => { release = resolve })
+    await page.route('**/api/backend/system/storage/clear', async route => {
+        await gate
+        current = { ...current, running: true, phase: 'build_cache' }
+        await route.fulfill({ status: 202, json: { queued: true } })
+    })
+    await page.goto('http://docker-storage.test/')
+    await page.getByRole('button', { name: 'Clear unused storage' }).click()
+    await expect(page.getByRole('button', { name: 'Starting cleanup…' })).toBeDisabled()
+    release()
+    await expect(page.getByRole('button', { name: 'Clearing build cache…' })).toBeDisabled()
+    current = { ...current, phase: 'refresh' }
+    await expect(page.getByRole('button', { name: 'Updating totals…' })).toBeDisabled()
+    current = { ...current, running: false, phase: null, cacheBytes: 20e9, reclaimableCacheBytes: 0 }
+    await expect(page.getByRole('button', { name: 'Clear unused storage' })).toBeEnabled()
+    await expect(page.getByText('0 GB reclaimable', { exact: true })).toBeVisible()
+})
