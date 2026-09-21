@@ -3,19 +3,23 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import postcss from 'postcss'
+import tailwind from '@tailwindcss/postcss'
 
 let output: string
 let bundle: string
-test.beforeAll(() => {
+let css: string
+test.beforeAll(async () => {
     output = mkdtempSync(path.join(tmpdir(), 'host-case-test-'))
-    execFileSync('bun', ['build', 'tests/fixtures/host-case.tsx', '--target=browser', '--define', 'process.env={"NODE_ENV":"production"}', '--outfile', path.join(output, 'fixture.js')])
-    bundle = readFileSync(path.join(output, 'fixture.js'), 'utf8')
+    execFileSync('bun', ['build', 'tests/fixtures/host-case.tsx', '--target=browser', '--define', 'process.env={"NODE_ENV":"production"}', '--outdir', output])
+    bundle = readFileSync(path.join(output, 'host-case.js'), 'utf8')
+    css = (await postcss([tailwind()]).process(readFileSync('src/app/globals.css', 'utf8'), { from: path.resolve('src/app/globals.css') })).css
 })
 test.afterAll(() => rmSync(output, { recursive: true, force: true }))
 test.beforeEach(async ({ page }) => {
     await page.clock.install()
     await page.route('http://host-case.test/fixture.js', route => route.fulfill({ contentType: 'application/javascript', body: bundle }))
-    await page.route('http://host-case.test/', route => route.fulfill({ contentType: 'text/html; charset=utf-8', body: '<div id="root"></div><script type="module" src="/fixture.js"></script>' }))
+    await page.route('http://host-case.test/', route => route.fulfill({ contentType: 'text/html; charset=utf-8', body: `<html class="dark"><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>${css}</style></head><body><div id="root"></div><script type="module" src="/fixture.js"></script></body></html>` }))
 })
 test('host readers can inspect cases while management controls stay unavailable', async ({ page }) => {
     let canManage = false
@@ -69,4 +73,13 @@ test('case history aligns event metadata and preserves change details in timelin
     await expect(timeline).toContainText('open → in progress')
     await expect(timeline).toContainText('Severity: high → critical')
     await expect(timeline).toContainText('Notifications disabled')
+    await timeline.screenshot({ path: '/tmp/case-history-desktop.png' })
+    await page.setViewportSize({ width: 390, height: 844 })
+    const region = page.getByRole('region', { name: 'History timeline' })
+    await region.scrollIntoViewIfNeeded()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    expect(await region.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true)
+    await region.focus()
+    await page.keyboard.press('End')
+    await page.screenshot({ path: '/tmp/case-history-mobile.png' })
 })

@@ -181,7 +181,7 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
                 <CaseDevelopment caseId={caseId} organizationId={item.organizationId || organizationId} />
                 <section aria-labelledby='case-history' className='grid gap-4 border-b border-ui-border p-5 sm:p-6'>
                     <h2 id='case-history' className='text-lg font-semibold'>Case history</h2>
-                    <div className='overflow-x-auto rounded-lg border border-ui-border' role='region' aria-labelledby='case-history' tabIndex={0}>
+                    <div className='overflow-x-auto rounded-lg border border-ui-border' role='region' aria-label='History timeline' tabIndex={0}>
                         <table aria-labelledby='case-history' className='w-full min-w-[720px] text-left text-sm'>
                             <thead className='border-b border-ui-border bg-ui-canvas text-ui-muted'><tr>
                                 {['Time', 'Event', 'Actor', 'Details'].map(label => <th key={label} scope='col' className='px-4 py-3 font-medium'>{label}</th>)}
@@ -189,7 +189,7 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
                             <tbody className='divide-y divide-ui-border'>{item.history?.map(event => <tr key={event.id} className='align-top'>
                                 <td className='whitespace-nowrap px-4 py-3 tabular-nums'><time dateTime={event.at}>{date(event.at)}</time></td>
                                 <td className='whitespace-nowrap px-4 py-3 font-medium capitalize'>{event.action.replaceAll('_', ' ')}</td>
-                                <td className='px-4 py-3 [overflow-wrap:anywhere]'>{event.actor}</td>
+                                <td className='min-w-40 px-4 py-3 [overflow-wrap:anywhere]'>{event.actor}</td>
                                 <td className='w-full min-w-64 space-y-1 px-4 py-3 [overflow-wrap:anywhere]'>
                                     {event.fromStatus !== event.toStatus && <p>{event.fromStatus?.replaceAll('_', ' ')} → {event.toStatus?.replaceAll('_', ' ')}</p>}
                                     {event.fromSeverity !== event.toSeverity && <p>Severity: {event.fromSeverity} → {event.toSeverity}</p>}
