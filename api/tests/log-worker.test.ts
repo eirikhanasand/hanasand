@@ -372,3 +372,12 @@ test('live processing completes while a catch-up read is blocked and leaves its 
         expect(statements.some(sql => sql.includes('mill:log-batch'))).toBe(true)
     } finally { historyGate = undefined; historyEntered = undefined; release(); await historical }
 })
+
+
+test('a live burst is committed together while historical pages still yield', async () => {
+    priority = Array.from({ length: 200 }, (_, i) => ({ ...makeLog(String(2001 + i)), created_at: new Date().toISOString() }))
+    expect(await processLiveLogs()).toBe(true)
+    expect(checked).toHaveLength(200)
+    expect(statements.filter(sql => sql.includes('INSERT INTO mill_events'))).toHaveLength(1)
+    expect(statements.filter(sql => sql.includes('mill:log-batch'))).toHaveLength(1)
+})

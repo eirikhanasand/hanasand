@@ -130,10 +130,11 @@ function scopedProcessor(platformId: string, onWork: () => void, afterBatch?: ()
             const active = await run('SELECT id FROM organizations WHERE id = $1 AND status = \'active\'', [scope])
             const target = active.rows.length ? scope : platformId
             if (!configured.has(target)) configured.set(target, await loadConfiguredMillRules(target))
-            // Yield between durable pages so historical work cannot hold
-            // fresh events behind a thousand-row write or recovery pass.
-            for (let offset = 0; offset < batch.length; offset += 50) {
-                await withLogBatch(() => processLogBatch(batch.slice(offset, offset + 50), target, configured.get(target)!))
+            // Keep live bursts together to amortize index writes. Historical
+            // pages stay small so they yield promptly to incoming events.
+            const pageSize = priority ? 200 : 50
+            for (let offset = 0; offset < batch.length; offset += pageSize) {
+                await withLogBatch(() => processLogBatch(batch.slice(offset, offset + pageSize), target, configured.get(target)!))
                 if (!priority) await afterBatch?.()
             }
         }
