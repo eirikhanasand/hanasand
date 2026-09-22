@@ -5,10 +5,14 @@
     let retries = 0
     try { retries = Number(sessionStorage.getItem(retryKey)) || 0 } catch { /* Storage is optional. */ }
 
-    setInterval(() => {
+    const update = () => {
         const player = globalThis.app
         const video = document.querySelector('video')
         const hasFrame = Boolean(video && !video.paused && video.readyState >= 2 && video.videoWidth > 0)
+        if (player) {
+            player.videoPlaying = hasFrame
+            if (hasFrame) player.showStart = false
+        }
         const state = hasFrame ? 'ready' : player?.showStart ? 'gesture' : 'waiting'
         const width = video?.videoWidth || 0
         const height = video?.videoHeight || 0
@@ -32,5 +36,9 @@
             waitingSince = Date.now()
             location.reload()
         }
-    }, 1_000)
+    }
+    const video = document.querySelector('video')
+    for (const event of ['loadeddata', 'playing', 'pause', 'emptied', 'error', 'resize']) video?.addEventListener?.(event, update)
+    video?.requestVideoFrameCallback?.(update)
+    setInterval(update, 1_000)
 })()

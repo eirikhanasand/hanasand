@@ -358,6 +358,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     const [activeImage, setActiveImage] = useState<string | null>(null)
     const [streamUrl, setStreamUrl] = useState('')
     const [streamHasFrame, setStreamHasFrame] = useState(false)
+    const [streamNeedsGesture, setStreamNeedsGesture] = useState(false)
     const [streamAttempt, setStreamAttempt] = useState(0)
     const [streamFrame, setStreamFrame] = useState<{ width: number; height: number } | null>(null)
     const receivedEvidenceRef = useRef(false)
@@ -367,16 +368,18 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     useEffect(() => {
         setStreamHasFrame(false)
         setStreamFrame(null)
+        setStreamNeedsGesture(false)
         if (!streamUrl) return
         const origin = new URL(streamUrl).origin
         let lastSignal = Date.now()
         const receive = (event: MessageEvent) => {
             if (event.source !== streamRef.current?.contentWindow || event.origin !== origin || event.data?.type !== 'hanasand-browser-stream') return
             lastSignal = Date.now()
-            setStreamHasFrame(event.data.state === 'ready' || event.data.state === 'gesture')
+            setStreamHasFrame(event.data.state === 'ready')
+            setStreamNeedsGesture(event.data.state === 'gesture')
             const { width, height } = event.data
             if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0 && width <= 8192 && height <= 8192) setStreamFrame({ width, height })
-            if (event.data.state === 'ready' || event.data.state === 'gesture') {
+            if (event.data.state === 'ready') {
                 receivedEvidenceRef.current = true
                 setStreamHasFrame(true)
             }
@@ -461,7 +464,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
             setStreamHasFrame(false)
         }
     }, [runIsActive])
-    const loadingBrowser = runIsActive && !runBlocker && !activeImage && !latestPageImage && !streamHasFrame
+    const loadingBrowser = runIsActive && !runBlocker && !activeImage && !latestPageImage && !streamHasFrame && !streamNeedsGesture
     const fallbackInteractive = sessionState === 'live' && socketState === 'open' && !streamUrl && !activeTool && Boolean(activeViewportImage)
     const waitingForFrame = runIsActive && !activeViewportImage && !streamUrl
     const waitingSeconds = runStartedAt && runIsActive && waitingForFrame ? Math.floor((clockNow - runStartedAt) / 1000) : 0
@@ -1412,19 +1415,27 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                                     aria-label='Interactive isolated browser viewport'
                                     onKeyDown={keyBrowserFrame}
                                 >
-                                    {runIsActive && streamUrl && !streamHasFrame ? <div role='status' aria-label='Reconnecting browser stream' className='absolute inset-0 grid place-items-center'><LoaderCircle className='size-8 animate-spin text-ui-primary' /></div> : null}
                                     {runIsActive && streamUrl ? (
-                                        <iframe
-                                            key={streamAttempt}
-                                            ref={streamRef}
-                                            src={streamUrl}
-                                            style={{ visibility: streamHasFrame ? 'visible' : 'hidden' }}
-                                            tabIndex={streamHasFrame ? 0 : -1}
-                                            title='Live WebRTC browser sandbox'
-                                            className='absolute inset-0 h-full w-full border-0 bg-black'
-                                            allow='autoplay; clipboard-read; clipboard-write; fullscreen'
-                                            sandbox='allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-popups allow-downloads'
-                                        />
+                                        <>
+                                            <iframe
+                                                key={streamAttempt}
+                                                ref={streamRef}
+                                                src={streamUrl}
+                                                style={{ pointerEvents: streamHasFrame || streamNeedsGesture ? 'auto' : 'none' }}
+                                                tabIndex={streamHasFrame || streamNeedsGesture ? 0 : -1}
+                                                title='Live WebRTC browser sandbox'
+                                                className='absolute inset-0 h-full w-full border-0 bg-black'
+                                                allow='autoplay; clipboard-read; clipboard-write; fullscreen'
+                                                sandbox='allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-popups allow-downloads'
+                                            />
+                                            {!streamHasFrame ? <div className='pointer-events-none absolute inset-0 bg-ui-canvas'>
+                                                {activeViewportImage ? <img src={activeViewportImage} alt='Live browser sandbox frame' className='absolute inset-0 h-full w-full object-contain' /> : null}
+                                                <div role='status' aria-label={streamNeedsGesture ? 'Tap to resume browser stream' : 'Connecting browser stream'} className='absolute inset-0 grid place-content-center justify-items-center gap-2'>
+                                                    <LoaderCircle className='size-8 animate-spin text-ui-primary' />
+                                                    {streamNeedsGesture ? <span className='rounded bg-ui-panel px-2 py-1 text-sm text-ui-text'>Tap to resume</span> : null}
+                                                </div>
+                                            </div> : null}
+                                        </>
                                     ) : activeTool && activeToolCapture ? (
                                         <ProviderViewportEvidence tool={activeTool} capture={activeToolCapture} />
                                     ) : activeViewportImage ? (

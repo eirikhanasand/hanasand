@@ -11,10 +11,9 @@ s = s[:a] + Path(__file__).with_name('touch-input.js').read_text().rstrip() + '\
 p.write_text(s)
 p = root / 'index.html'
 s = p.read_text()
-s = s.replace('<video muted autoplay id="stream"', '<video :style="{visibility: videoPlaying &amp;&amp; !showStart ? \'visible\' : \'hidden\'}" muted autoplay id="stream"')
 a = s.index('      <div class="loading">')
 b = s.index('    </v-app>', a)
-s = s[:a] + '''      <div class="loading" v-if="status !== 'connected' || !videoPlaying || showStart">
+s = s[:a] + '''      <div class="loading" v-if="!videoPlaying">
         <button class="hanasand-loading" v-on:click="playStream()" aria-label="Resume browser stream">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
             <path d="M12 2a10 10 0 1 0 10 10" />
@@ -24,7 +23,8 @@ s = s[:a] + '''      <div class="loading" v-if="status !== 'connected' || !video
 ''' + s[b:]
 s = s.replace('</head>', '''<style>
 html, body { overscroll-behavior: none; }
-video.video { visibility:hidden; }
+/* Keep the autoplay video visible; cover startup controls with our own loader. */
+.loading { inset:0; top:0; display:grid; place-items:center; background:#000; z-index:2; }
 video::-webkit-media-controls { display:none !important; }
 video::-webkit-media-controls-enclosure { display:none !important; }
 video::-webkit-media-controls-panel { display:none !important; }

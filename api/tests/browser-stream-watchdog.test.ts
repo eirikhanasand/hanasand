@@ -74,3 +74,26 @@ test('stream failures keep retrying with capped backoff across page reloads', ()
     }
     expect(reloads).toBe(4)
 })
+
+
+test('playback immediately reports the frame and clears stale loading state', () => {
+    const listeners: Record<string, () => void> = {}
+    const video = { paused: true, readyState: 4, videoWidth: 1920, videoHeight: 1080, addEventListener: (event: string, listener: () => void) => { listeners[event] = listener } }
+    const app = { videoPlaying: false, showStart: true, status: 'connected' }
+    const messages: { state: string }[] = []
+    runInNewContext(source, {
+        app, document: { visibilityState: 'visible', querySelector: () => video },
+        setInterval: () => {}, location: { pathname: '/stream' },
+        parent: { postMessage: (message: { state: string }) => messages.push(message) },
+        sessionStorage: { getItem: () => null },
+    })
+    video.paused = false
+    listeners.playing()
+    expect(messages.at(-1)?.state).toBe('ready')
+    expect(app.videoPlaying).toBe(true)
+    expect(app.showStart).toBe(false)
+    video.paused = true
+    listeners.pause()
+    expect(messages.at(-1)?.state).not.toBe('ready')
+    expect(app.videoPlaying).toBe(false)
+})
