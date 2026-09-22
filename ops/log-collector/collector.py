@@ -241,6 +241,9 @@ def queued_batch(lane):
 
 
 def queued_batches(lane):
+    # Yield the receiver's limited ingestion slots to fresh logs before starting
+    # another history request. An already-running request has its own connection.
+    if lane == 'history' and queued_batch('live') is not None: return []
     root = STATE/'queue'/lane
     if not root.exists(): return []
     with os.scandir(root) as entries:

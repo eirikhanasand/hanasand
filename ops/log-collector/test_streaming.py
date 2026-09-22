@@ -78,6 +78,16 @@ class StreamingTests(unittest.TestCase):
             self.assertEqual(len(connections), 1)
         self.assertIsNone(c.queued_batch('live'))
 
+    def test_history_waits_for_live_queue_before_starting_another_request(self):
+        c.send(self.config, [self.event('old', '2026-01-01T00:00:00Z'), self.event('new')])
+        self.assertEqual(c.queued_batches('history'), [])
+        self.assertEqual(len(c.queued_batches('live')), 1)
+        with self.server(lambda rows: (201, {'ok': True, 'accepted': len(rows)})):
+            delivery = c.Delivery(self.config)
+            try: delivery.deliver_many(c.queued_batches('live'))
+            finally: delivery.close()
+        self.assertEqual(len(c.queued_batches('history')), 1)
+
     def test_small_queue_files_share_one_request_without_deleting_unacknowledged_files(self):
         for index in range(105): c.send(self.config, [self.event(str(index))])
         paths = c.queued_batches('live')
