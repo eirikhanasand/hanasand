@@ -19,6 +19,7 @@ GROUPS = {
     'intelligence': ['-R', '127.0.0.1:28097:127.0.0.1:18097', '-L', '127.0.0.1:29097:127.0.0.1:19097'],
     'web': ['-L', '127.0.0.1:29300:127.0.0.1:19300', '-L', '127.0.0.1:29080:127.0.0.1:19080', '-L', '127.0.0.1:29090:127.0.0.1:19090'],
     'support': ['-L', '127.0.0.1:29181:127.0.0.1:19181'],
+    'pwned': ['-R', '127.0.0.1:28099:127.0.0.1:8099'],
     'monitor': ['-R', '127.0.0.1:29911:127.0.0.1:19901', '-L', '127.0.0.1:29911:127.0.0.1:19901'],
 }
 
@@ -52,7 +53,7 @@ def authorize():
     index = matching[0]
     if not all(option in lines[index] for option in ('restrict,', 'port-forwarding,', 'command="false"')):
         raise RuntimeError('Existing tunnel key restrictions do not match the expected policy')
-    for port in (28503, 28502, 28097, 29911):
+    for port in (28503, 28502, 28097, 29911, 28099):
         permission = f'permitlisten="127.0.0.1:{port}"'
         if permission not in lines[index]:
             lines[index] = permission + ',' + lines[index]
@@ -71,9 +72,10 @@ def authorize():
     temporary.replace(path)
 
 
-def start(image):
+def start(image, group=None):
+    groups = GROUPS if group is None else {group: GROUPS[group]}
     subprocess.run(["docker", "image", "inspect", image], check=True, stdout=subprocess.DEVNULL)
-    for group, forwards in GROUPS.items():
+    for group, forwards in groups.items():
         name = 'hanasand-tunnel-' + group
         existing = subprocess.run(['docker', 'inspect', '-f', '{{.State.Running}}', name], capture_output=True, text=True)
         if existing.returncode == 0:
@@ -162,6 +164,7 @@ if __name__ == '__main__':
     parser.add_argument('action', choices=['authorize', 'start', 'configure', 'split-replication'])
     parser.add_argument('--root', type=pathlib.Path)
     parser.add_argument('--image')
+    parser.add_argument('--group', choices=GROUPS, help='Start only this private tunnel')
     args = parser.parse_args()
     if args.action == 'authorize':
         authorize()
@@ -170,7 +173,7 @@ if __name__ == '__main__':
     elif args.action == 'start':
         if not args.image:
             parser.error('--image must identify the built tunnel image')
-        start(args.image)
+        start(args.image, args.group)
     else:
         if not args.root:
             parser.error('--root is required for configure')
