@@ -852,7 +852,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     response.securityDetails().catch(() => null),
                 ])
                 const request = response.request()
-                if (server?.ipAddress && request.isNavigationRequest() && request.frame() === page?.mainFrame() && response.status() < 300) sitePeer = { url: response.url(), ip: server.ipAddress }
+                if (network === 'regular' && server?.ipAddress && request.isNavigationRequest() && request.frame() === page?.mainFrame() && response.status() < 300) sitePeer = { url: response.url(), ip: server.ipAddress }
                 const asn = await lookupAsn(server?.ipAddress)
                 const capturedAt = new Date().toISOString()
                 const startedAt = [...networkEvents].reverse().find(event => event.kind === 'request' && event.url === response.url() && event.method === request.method())?.at
