@@ -237,7 +237,7 @@ try {
     // Upgrade fixture: pre-existing process events were never admitted to the
     // new queue. A fixed recovery snapshot must reach an aged command even as
     // newer commands continue arriving through the trigger.
-    const { processQueuedLogs, recoverProcessLogs, readPendingProcessLogs } = await import('../src/utils/mill/processQueue.ts')
+    const { acknowledgeProcessedLogs, processQueuedLogs, recoverProcessLogs, readPendingProcessLogs } = await import('../src/utils/mill/processQueue.ts')
     await query('DROP TRIGGER log_process_queue_insert ON service_logs')
     const oldCommand = (await query(`INSERT INTO service_logs (service, host, level, message, metadata, created_at)
         VALUES ('audit', 'old-vm', 'info', 'whoami', $1, NOW() - INTERVAL '2 hours') RETURNING id::text`, [commandMetadata])).rows[0].id
@@ -262,6 +262,19 @@ try {
     assert.equal((await query('SELECT 1 FROM log_process_queue WHERE log_id=$1', [rolledBack])).rowCount, 0, 'Admission rolls back with its source insertion')
     const pendingBefore = await readPendingProcessLogs()
     assert.equal(pendingBefore.count, 1103)
+    await query('SAVEPOINT queue_limit_fixture')
+    await query('DELETE FROM log_process_queue')
+    const cappedRows = (await query(`INSERT INTO service_logs(service,host,level,message,metadata,created_at)
+        SELECT 'audit','cap-fixture','info','true',$1,NOW()-INTERVAL '1 day' FROM generate_series(1,20) RETURNING *`, [benignProcess])).rows
+    const cappedPages: number[] = []
+    await processQueuedLogs(async logs => { cappedPages.push(logs.length); await processLogBatch(logs, 'fixture', rules) }, true, 2)
+    assert.deepEqual(cappedPages, [2,2,2,2])
+    assert.equal((await readPendingProcessLogs()).count, 12)
+    await processLogBatch([cappedRows[19]], 'fixture', rules)
+    await acknowledgeProcessedLogs([String(cappedRows[18].id), String(cappedRows[19].id)])
+    assert.equal((await readPendingProcessLogs()).count, 11, 'Live ACK removes only the completed event while the older pending event remains queued')
+    assert.equal((await query('SELECT count(*)::int AS count FROM log_process_queue WHERE log_id=$1', [cappedRows[18].id])).rows[0].count, 1)
+    await query('ROLLBACK TO SAVEPOINT queue_limit_fixture')
     const startedQueue = performance.now()
     let queuePages = 0
     await processQueuedLogs(async logs => {

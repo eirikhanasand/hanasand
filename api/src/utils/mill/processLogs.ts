@@ -7,7 +7,7 @@ import { collectMillEventFindings, persistMillEventFindings, createMillFindings,
 import { normalizeLogEvent, severityOrder, type LogInput } from './logEvent.ts'
 import { processAdditionalLogSources } from './storedSources.ts'
 import { stableLogWatermark } from './logWatermark.ts'
-import { processQueuedLogs, recoverProcessLogs } from './processQueue.ts'
+import { acknowledgeProcessedLogs, processQueuedLogs, recoverProcessLogs } from './processQueue.ts'
 import { backfillLogDimensions } from '../logs/dimensions.ts'
 import { pruneAccessLogs } from './pruneAccessLogs.ts'
 import { accessRuleId } from './analyzeAccess.ts'
@@ -175,6 +175,7 @@ export async function processLiveLogs() {
             const platform = await run('SELECT id FROM organizations WHERE status = \'active\' AND (id = $1 OR ($1::text IS NULL AND lower(name) = \'hanasand\')) ORDER BY created_at LIMIT 1', [process.env.PLATFORM_LOG_ORGANIZATION_ID || null])
             if (!platform.rows[0]) throw new Error('Configure an active platform log organization.')
             await scopedProcessor(platform.rows[0].id, () => {}).processScopes(logs, true)
+            await acknowledgeProcessedLogs(logs.map(log => String(log.id)))
             return true
         })
     } finally { liveRunning = false }
@@ -226,12 +227,14 @@ export async function processStoredLogs() {
                 // reserve this lane for events that can still meet the deadline.
                 // Oldest first prevents newer bursts from repeatedly displacing
                 // the unprocessed remainder of the preceding batch.
-                await processScopes(await freshLogs(), true)
+                const logs = await freshLogs()
+                await processScopes(logs, true)
+                await acknowledgeProcessedLogs(logs.map(log => String(log.id)))
             }
             await processFresh()
             const { rows: [queue] } = await run(`SELECT COALESCE((SELECT queued_at < clock_timestamp() - INTERVAL '60 seconds'
                 FROM log_process_queue ORDER BY queued_at, log_id LIMIT 1), FALSE) AS delayed`)
-            await processQueuedLogs(processScopes, queue.delayed)
+            await processQueuedLogs(processScopes, queue.delayed, configuredLimit)
             await processFresh()
             await recoverProcessLogs(processScopes, configuredLimit)
             await processFresh()
@@ -241,7 +244,7 @@ export async function processStoredLogs() {
             // A fixed snapshot restores ordinary limits on the next clear tick.
             const catchupLimit = Math.min(queue.delayed ? 100 : 1000, configuredLimit)
             const historyLimit = Math.min(queue.delayed ? 100 : 10000, settings.historyLimit)
-            const beforeHistory = historyLimit > catchupLimit ? () => processQueuedLogs(processScopes) : undefined
+            const beforeHistory = historyLimit > catchupLimit ? () => processQueuedLogs(processScopes, false, configuredLimit) : undefined
             const processPage = async (after: string, until: string, pageLimit = catchupLimit) => {
                 const candidates = await run('SELECT id FROM service_logs WHERE id > $1 AND id <= $2 ORDER BY id LIMIT 10000', [after, until])
                 const batch = candidates.rows.length ? await run(`SELECT * FROM service_logs s WHERE id > $1 AND id <= $2 AND id = ANY($4::bigint[])

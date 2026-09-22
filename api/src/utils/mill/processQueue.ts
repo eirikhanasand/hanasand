@@ -4,7 +4,8 @@ import type { LogInput } from './logEvent.ts'
 
 type Process = (logs: LogInput[]) => Promise<void>
 
-export async function processQueuedLogs(process: Process, delayed = false) {
+export async function processQueuedLogs(process: Process, delayed = false, limit = 1000) {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 1000) throw new Error('Invalid command recovery batch limit')
     // Rows are removed individually, so a lower ID committed later cannot be
     // skipped. An unrelated long source writer must not delay admitted work.
     const watermark = (await run('SELECT COALESCE(MAX(log_id), 0)::text AS id FROM log_process_queue')).rows[0].id
@@ -15,14 +16,21 @@ export async function processQueuedLogs(process: Process, delayed = false) {
     // pages; the soft time budget can overrun by one durable page. No work expires.
     for (let page = 0; page < 4; page++) {
         const batch = await run(`SELECT s.* FROM log_process_queue q JOIN service_logs s ON s.id = q.log_id
-            WHERE q.log_id <= $1 ORDER BY q.log_id LIMIT 1000`, [watermark])
+            WHERE q.log_id <= $1 ORDER BY q.log_id LIMIT $2`, [watermark, limit])
         if (!batch.rows.length) break
         await process(batch.rows)
-        await run(`DELETE FROM log_process_queue q USING mill_events e
-            WHERE q.log_id = ANY($1::bigint[]) AND e.log_key = 'service:' || q.log_id::text
-              AND e.processing_status IN ('processed', 'skipped')`, [batch.rows.map(row => row.id)])
-        if (batch.rows.length < 1000 || performance.now() - started >= budgetMs) break
+        await acknowledgeProcessedLogs(batch.rows.map(row => String(row.id)))
+        if (batch.rows.length < limit || performance.now() - started >= budgetMs) break
     }
+}
+
+// Live completion can release its receipt without waiting for historical FIFO.
+// The durable event status remains the authority, including after a retry.
+export async function acknowledgeProcessedLogs(ids: string[]) {
+    if (!ids.length) return
+    await run(`DELETE FROM log_process_queue q USING mill_events e
+        WHERE q.log_id = ANY($1::bigint[]) AND e.log_key = 'service:' || q.log_id::text
+          AND e.processing_status IN ('processed', 'skipped')`, [ids])
 }
 
 export async function recoverProcessLogs(process: Process, limit = 1000) {

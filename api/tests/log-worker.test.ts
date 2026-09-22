@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, expect, mock, spyOn, test } from 'bun:test'
 let locked = true, fail = false, watermark: string | null = '200', additionalRuns = 0, queueRuns = 0, recoveryRuns = 0
 let delayed = false, historyLimits: number[], recentLimits: number[], queueModes: boolean[], recoveryLimits: number[], reads: Array<{ sql: string, params: any[] }>
+let queueLimits: number[] = [], acknowledged: string[][] = []
 let historyScans: any[][] = []
 let historyGate: Promise<void> | undefined, historyEntered: (() => void) | undefined
 let cursor: any, statements: string[], checked: string[], stored: Record<string, any>, pending: any[]
@@ -75,7 +76,7 @@ mock.module('#db', () => ({ default: query, withTransaction: async (work: any) =
     }
 } }))
 mock.module('../src/utils/logs/dimensions.ts', () => ({ backfillLogDimensions: async () => ({ processed: 0, ready: true }) }))
-mock.module('../src/utils/mill/processQueue.ts', () => ({ processQueuedLogs: async (_process: unknown, delayed: boolean) => { queueRuns++; queueModes.push(delayed) }, recoverProcessLogs: async (_process: unknown, limit: number) => { recoveryRuns++; recoveryLimits.push(limit) } }))
+mock.module('../src/utils/mill/processQueue.ts', () => ({ acknowledgeProcessedLogs: async (ids: string[]) => { acknowledged.push(ids) }, processQueuedLogs: async (_process: unknown, delayed: boolean, limit: number) => { queueRuns++; queueModes.push(delayed); queueLimits.push(limit) }, recoverProcessLogs: async (_process: unknown, limit: number) => { recoveryRuns++; recoveryLimits.push(limit) } }))
 mock.module('../src/utils/mill/storedSources.ts', () => ({ processAdditionalLogSources: async (_process: unknown, historyLimit: number, recentLimit: number, cursorQuery: unknown) => { additionalRuns++; historyLimits.push(historyLimit); recentLimits.push(recentLimit); additionalCursorQuery = cursorQuery } }))
 mock.module('../src/utils/mill/logWatermark.ts', () => ({ stableLogWatermark: async () => watermark }))
 mock.module('../src/handlers/mill.ts', () => ({
@@ -90,7 +91,7 @@ const originalLimit = process.env.LOG_CATCHUP_BATCH_LIMIT
 const originalHistoryLimit = process.env.LOG_CATCHUP_HISTORY_LIMIT
 afterEach(() => { if (originalHistoryLimit === undefined) delete process.env.LOG_CATCHUP_HISTORY_LIMIT; else process.env.LOG_CATCHUP_HISTORY_LIMIT = originalHistoryLimit })
 beforeEach(() => { delete process.env.LOG_CATCHUP_HISTORY_LIMIT })
-beforeEach(() => { transactions = []; transactionQueries = []; transactionStatements = []; failHistory = false; additionalCursorQuery = undefined })
+beforeEach(() => { queueLimits = []; acknowledged = []; transactions = []; transactionQueries = []; transactionStatements = []; failHistory = false; additionalCursorQuery = undefined })
 afterEach(() => { if (originalLimit === undefined) delete process.env.LOG_CATCHUP_BATCH_LIMIT; else process.env.LOG_CATCHUP_BATCH_LIMIT = originalLimit })
 beforeEach(() => { delete process.env.LOG_CATCHUP_BATCH_LIMIT; historyScans = []; inactiveScopes = new Set(['inactive']); watermark = '200'; additionalRuns = 0; queueRuns = 0; recoveryRuns = 0; locked = true; fail = false; delayed = false; historyLimits = []; recentLimits = []; queueModes = []; recoveryLimits = []; reads = []; cursor = { last_id: '0', recent_id: '100' }; statements = []; checked = []; stored = {}; pending = []; priority = []; fresh = [makeLog('101')]; backlog = [makeLog('1')] })
 test('a replica that does not hold the shared lock performs no work', async () => {
@@ -226,7 +227,7 @@ for (const value of ['1', '100', '1000']) test(`operator catch-up limit ${value}
     await processStoredLogs()
     expect(reads.map(read => read.params[2])).toEqual([Number(value), Number(value)])
     expect(historyLimits).toEqual([Number(value)]); expect(recentLimits).toEqual([Number(value)])
-    expect(recoveryLimits).toEqual([Number(value)]); expect(queueModes).toEqual([false])
+    expect(recoveryLimits).toEqual([Number(value)]); expect(queueModes).toEqual([false]); expect(queueLimits).toEqual([Number(value)])
     delete process.env.LOG_CATCHUP_BATCH_LIMIT
     await processStoredLogs()
     expect(recoveryLimits).toEqual([Number(value), 1000])
@@ -379,6 +380,7 @@ test('live processing completes while a catch-up read is blocked and leaves its 
     try {
         expect(await processLiveLogs()).toBe(true)
         expect(checked).toContain('2001')
+        expect(acknowledged.flat()).toContain('2001')
         expect(cursor).toEqual(before)
         expect(statements.some(sql => sql.includes('mill:live-service-logs'))).toBe(true)
         expect(statements.some(sql => sql.includes('mill:log-batch'))).toBe(true)

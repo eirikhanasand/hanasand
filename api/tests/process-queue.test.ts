@@ -3,7 +3,7 @@ let queue: { id: string }[], recovered: { id: string }[], calls: string[], recov
 const query = async (sql: string, args: any[] = []) => {
     calls.push(sql)
     if (sql.startsWith('SELECT COALESCE(MAX(log_id)')) return { rows: [{ id: queue.reduce((max, row) => BigInt(row.id) > BigInt(max) ? row.id : max, '0') }] }
-    if (sql.includes('FROM log_process_queue q JOIN')) return { rows: queue.filter(row => BigInt(row.id) <= BigInt(args[0])).slice(0, 1000) }
+    if (sql.includes('FROM log_process_queue q JOIN')) return { rows: queue.filter(row => BigInt(row.id) <= BigInt(args[0])).slice(0, args[1]) }
     if (sql.startsWith('DELETE FROM log_process_queue')) { queue = queue.filter(row => !args[0].includes(row.id) || !complete.has(row.id)); return { rows: [] } }
     if (sql.startsWith('SELECT recent_id')) return { rows: [{ recent_id: recoveryId }] }
     if (sql.startsWith('SELECT id FROM service_logs')) return { rows: recovered.filter(row => BigInt(row.id) <= BigInt(args[0])).sort((a, b) => Number(b.id) - Number(a.id)).slice(0, 10000) }
@@ -13,7 +13,7 @@ const query = async (sql: string, args: any[] = []) => {
     throw new Error(sql)
 }
 mock.module('#db', () => ({ default: query, withTransaction: async (work: any) => work(query) }))
-const { processQueuedLogs, recoverProcessLogs, readPendingProcessLogs } = await import('../src/utils/mill/processQueue.ts')
+const { acknowledgeProcessedLogs, processQueuedLogs, recoverProcessLogs, readPendingProcessLogs } = await import('../src/utils/mill/processQueue.ts')
 beforeEach(() => { queue = []; recovered = []; calls = []; recoveryId = '0'; complete = new Set() })
 const process = async (rows: any[]) => { for (const row of rows) complete.add(row.id) }
 test('continuous newer arrivals cannot displace an admitted older command; work is capped', async () => {
@@ -108,4 +108,19 @@ test('operator recovery cap advances only the processed prefix and restores the 
     expect(complete.size).toBe(200); expect(recoveryId).toBe('51')
     await recoverProcessLogs(process)
     expect(complete.size).toBe(251); expect(recoveryId).toBe('0')
+})
+
+
+test('command recovery obeys the configured page cap and leaves unfinished work queued', async () => {
+    queue = Array.from({ length: 200 }, (_, i) => ({ id: String(i + 1) }))
+    await processQueuedLogs(process, true, 5)
+    expect(complete.size).toBe(20)
+    expect(queue).toHaveLength(180)
+    expect(queue[0].id).toBe('21')
+})
+
+test('live acknowledgement removes only durable completions without displacing older work', async () => {
+    queue = [{ id: '1' }, { id: '2' }, { id: '3' }]; complete.add('3')
+    await acknowledgeProcessedLogs(['2', '3'])
+    expect(queue).toEqual([{ id: '1' }, { id: '2' }])
 })
