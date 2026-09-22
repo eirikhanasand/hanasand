@@ -11,9 +11,10 @@ assert.match(client, /checkedPrefix: prefix/, 'Pwned client should expose the ch
 assert.doesNotMatch(client, /body: JSON\.stringify\(\{ password \}\)/, 'Pwned client should never send the raw password')
 assert.match(client, /normalizeSha1Hash/, 'Pwned client should require a caller-provided SHA-1 hash')
 assert.doesNotMatch(client, /window\.crypto\.subtle\.digest/, 'Pwned client should not collect and hash raw secrets in the browser')
-assert.match(route, /HIBP_PWNED_RANGE_API/, 'Same-origin route should proxy to the configured HIBP range API')
+assert.match(route, /COMPACT_PWNED_RANGE_API/, 'Same-origin route should use the verified compact index')
+assert.doesNotMatch(route, /HIBP_PWNED_RANGE_API|api\.pwnedpasswords\.com/, 'Inventory results must not silently come from a different dataset')
 assert.match(route, /\^\[A-F0-9\]\{5\}\$/, 'Same-origin route should validate the five-character SHA-1 prefix')
-assert.match(route, /Add-Padding/, 'Same-origin route should request padded range responses')
+assert.match(route, /application\/vnd\.hanasand\.pwned-prefix/, 'Proxy must return compressed prefix blocks without full-hash matching')
 assert.match(route, /Unable to check the Bloom exposure dataset right now\./, 'Same-origin route should preserve an actionable unavailable state')
 
 console.log('Pwned proxy route checks passed.')

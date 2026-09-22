@@ -12,6 +12,7 @@ export default function PwnedPageClient() {
     const [didSearch, setDidSearch] = useState(false)
     const [breached, setBreached] = useState(false)
     const [breachCount, setBreachCount] = useState<number | null>(null)
+    const [files, setFiles] = useState<BreachFile[]>([])
     const [busy, setBusy] = useState(false)
     const { condition: error, setCondition: setError } = useClearStateAfter()
 
@@ -28,6 +29,7 @@ export default function PwnedPageClient() {
             const result = await postBloomHashLookup(hashInput)
             setBreached(!result.ok)
             setBreachCount(result.count)
+            setFiles(result.files || [])
             setDidSearch(true)
             setHashInput('')
         } catch (error) {
@@ -42,6 +44,7 @@ export default function PwnedPageClient() {
         setBreached(false)
         setDidSearch(false)
         setBreachCount(null)
+        setFiles([])
         setError(null)
     }
 
@@ -68,7 +71,7 @@ export default function PwnedPageClient() {
                 </div>
 
                 {didSearch ? (
-                    <PwnedSearch breached={breached} breachCount={breachCount} />
+                    <PwnedSearch breached={breached} breachCount={breachCount} files={files} />
                 ) : (
                     <form onSubmit={handleSubmit} className='grid gap-3'>
                         <ErrorNotice compact message={error} />

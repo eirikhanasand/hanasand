@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 const PWNED_PROXY_TIMEOUT_MS = Number(process.env.PWNED_PROXY_TIMEOUT_MS || 12_000)
-const PWNED_RANGE_API = process.env.HIBP_PWNED_RANGE_API || 'https://api.pwnedpasswords.com/range'
+const PWNED_RANGE_API = process.env.COMPACT_PWNED_RANGE_API || 'http://pwned-index:8099/range'
 
 export async function POST(request: NextRequest) {
     let body: unknown
@@ -19,10 +19,6 @@ export async function POST(request: NextRequest) {
     let response: Response
     try {
         response = await fetch(`${PWNED_RANGE_API}/${prefix}`, {
-            headers: {
-                'Add-Padding': 'true',
-                'User-Agent': 'hanasand-bloom-hash-lookup',
-            },
             cache: 'no-store',
             signal: AbortSignal.timeout(PWNED_PROXY_TIMEOUT_MS),
         })
@@ -30,17 +26,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Unable to check the Bloom exposure dataset right now.' }, { status: 503 })
     }
 
-    if (!response.ok) {
-        return NextResponse.json({ error: 'Unable to check the Bloom exposure dataset right now.' }, { status: response.status })
+    if (!response.ok || response.headers.get('content-type') !== 'application/vnd.hanasand.pwned-prefix') {
+        return NextResponse.json({ error: 'Unable to check the Bloom exposure dataset right now.' }, { status: 503 })
     }
 
-    const range = await response.text().catch(() => '')
-    return NextResponse.json({
-        schemaVersion: 'bloom_hash.range_proxy.v1',
-        prefix,
-        range,
-        privacy: 'Only the first five SHA-1 characters were sent to the range service. The full hash and underlying secret were not sent to Hanasand.',
-    }, {
-        headers: { 'cache-control': 'no-store' },
+    return new NextResponse(response.body, {
+        headers: { 'cache-control': 'no-store', 'content-type': 'application/vnd.hanasand.pwned-prefix', 'x-content-type-options': 'nosniff' },
     })
 }

@@ -1,12 +1,8 @@
-type BloomHashRangeResponse = {
-    range?: string
-    error?: string
-}
+import { parseCompactRange } from './compactRange'
 
 export default async function postBloomHashLookup(hashInput: string): Promise<Breach> {
     const hash = normalizeSha1Hash(hashInput)
     const prefix = hash.slice(0, 5)
-    const suffix = hash.slice(5)
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 30000)
 
@@ -17,19 +13,19 @@ export default async function postBloomHashLookup(hashInput: string): Promise<Br
             body: JSON.stringify({ prefix }),
             signal: controller.signal
         })
-        const data = await response.json().catch(() => ({})) as BloomHashRangeResponse
-        if (!response.ok || data.error) {
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({})) as { error?: string }
             throw new Error(data.error || 'Unable to check the Bloom exposure dataset right now.')
         }
-
-        const count = parsePwnedRangeCount(data.range || '', suffix)
+        const { count, files } = await parseCompactRange(await response.arrayBuffer(), hash)
         return {
             ok: count === 0,
             count,
             message: count === 0
                 ? 'No exact match was found in the checked Bloom range.'
                 : `This exact hash appears ${count} ${count === 1 ? 'time' : 'times'} in the Bloom exposure index.`,
-            source: 'hibp-range',
+            files,
+            source: 'compact-inventory',
             checkedPrefix: prefix,
         }
     } finally {

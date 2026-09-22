@@ -122,6 +122,11 @@ const tasks: TestTask[] = [
         command: [bun, 'scripts/check-pwned-proxy-route.ts'],
     },
     {
+        id: 'compact-range',
+        title: 'Compact index browser decoding',
+        command: [bun, 'scripts/check-compact-range.ts'],
+    },
+    {
         id: 'pwned-result-presentation',
         title: 'Pwned result presentation contract',
         command: [bun, 'scripts/check-pwned-result-presentation.ts'],

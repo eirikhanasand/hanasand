@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { compactRangeFixture } from './fixtures/compact-range'
 
 for (const signedIn of [false, true]) {
     test(`hash lookup uses the shared navigation when ${signedIn ? 'signed in' : 'signed out'}`, async ({ page, baseURL }) => {
@@ -35,12 +36,8 @@ test('Bloom hash lookup checks exposure without collecting a raw password', asyn
 
         await route.fulfill({
             status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify({
-                schemaVersion: 'bloom_hash.range_proxy.v1',
-                prefix: '5BAA6',
-                range: `1E4C9B93F3F0682250B6CF8331B7EE68FD8:${count}`,
-            }),
+            contentType: 'application/vnd.hanasand.pwned-prefix',
+            body: compactRangeFixture(count),
         })
     })
 
@@ -68,6 +65,10 @@ test('Bloom hash lookup checks exposure without collecting a raw password', asyn
     await expect(page.getByText('Result', { exact: true })).toBeVisible()
     await expect(page.getByText('Hash matched leaked password.')).toBeVisible()
     await expect(page.getByText('This password has been breached 23 times.')).toBeVisible()
+    await expect(page.getByText('Found in 2 files')).toBeVisible()
+    await expect(page.getByText('one.txt', { exact: true })).toBeVisible()
+    await expect(page.getByText('two.txt', { exact: true })).toBeVisible()
+    await expect(page.getByText(/12,010,103,436/)).toBeVisible()
     await expect(page.getByText(/Privacy check:|Next action:|Rotate the underlying secret/)).toHaveCount(0)
     await expect(command).toBeVisible()
 

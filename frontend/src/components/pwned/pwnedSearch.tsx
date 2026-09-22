@@ -3,9 +3,10 @@ import { CheckCircle2, ShieldAlert } from 'lucide-react'
 type PwnedSearchProps = {
     breached: boolean
     breachCount: number | null
+    files?: BreachFile[]
 }
 
-export default function PwnedSearch({ breached, breachCount }: PwnedSearchProps) {
+export default function PwnedSearch({ breached, breachCount, files = [] }: PwnedSearchProps) {
     const count = breachCount || 0
 
     return (
@@ -21,6 +22,22 @@ export default function PwnedSearch({ breached, breachCount }: PwnedSearchProps)
                             </p>
                         </div>
                     </div>
+                    {files.length > 0 ? (
+                        <div className='grid gap-2 border-t border-ui-danger/30 pt-3'>
+                            <p className='font-semibold'>Found in {files.length.toLocaleString()} {files.length === 1 ? 'file' : 'files'}</p>
+                            <ul className='grid gap-2'>
+                                {files.map(({ file, count: occurrences, lineRanges }) => (
+                                    <li key={file} className='rounded-md bg-ui-panel p-3 text-ui-text'>
+                                        <p className='break-all font-mono text-xs'>{file}</p>
+                                        <p className='mt-1 text-xs text-ui-muted'>
+                                            {occurrences.toLocaleString()} {occurrences === 1 ? 'match' : 'matches'} · {occurrences === 1 ? 'Line' : 'Lines'}{' '}
+                                            {lineRanges.map(([first, last]) => first === last ? first.toLocaleString() : `${first.toLocaleString()}–${last.toLocaleString()}`).join(', ')}
+                                        </p>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    ) : null}
                 </div>
             ) : (
                 <div className='flex items-start gap-3 rounded-lg border border-ui-success bg-ui-success/10 p-3 text-sm text-ui-success'>

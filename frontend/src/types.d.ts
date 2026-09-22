@@ -146,11 +146,13 @@ type Breach = {
     message: string
     source?: string
     checkedPrefix?: string
+    files?: BreachFile[]
 }
 
 type BreachFile = {
     file: string
-    line: number
+    count: number
+    lineRanges: [number, number][]
 }
 
 type Articles = {

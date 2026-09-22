@@ -21,6 +21,20 @@ const pluralMarkup = renderToStaticMarkup(React.createElement(PwnedSearch, {
 }))
 assert.match(pluralMarkup, /This password has been breached 23 times\./)
 
+const provenance = renderToStaticMarkup(React.createElement(PwnedSearch, {
+    breached: true,
+    breachCount: 3,
+    files: [
+        { file: 'one.txt', count: 2, lineRanges: [[12, 13]] },
+        { file: 'two.txt', count: 1, lineRanges: [[12010103436, 12010103436]] },
+    ],
+}))
+assert.match(provenance, /Found in 2 files/)
+assert.match(provenance, /one\.txt/)
+assert.match(provenance, /two\.txt/)
+assert.match(provenance, /12–13/)
+assert.match(provenance, /12,010,103,436/)
+
 const noMatchMarkup = renderToStaticMarkup(React.createElement(PwnedSearch, {
     breached: false,
     breachCount: 0,
