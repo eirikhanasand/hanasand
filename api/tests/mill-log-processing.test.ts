@@ -1,5 +1,5 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
-let stored: Record<string, any> = {}, findings: any[] = [], fail = false, findingWrites = 0
+let stored: Record<string, any> = {}, findings: any[] = [], fail = false, findingWrites = 0, eventUpdates = 0
 const query = async (sql: string, p: any[] = []): Promise<any> => {
     if (sql.includes('SELECT log_key FROM mill_events')) return { rows: Object.values(stored)
         .filter(row => p[0].includes(row.log_key) && row.processing_status === 'processed').map(row => ({ log_key: row.log_key })) }
@@ -12,7 +12,7 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
         return { rows: [] }
     }
     if (sql.includes('SELECT rule_id, severity')) return { rows: findings }
-    if (sql.includes('UPDATE mill_events')) { for (const item of JSON.parse(p[0])) { stored[item.id].normalized = {...stored[item.id].normalized,...item.result};stored[item.id].processing_status='processed' }return { rows: [] } }
+    if (sql.includes('UPDATE mill_events')) { eventUpdates++; for (const item of JSON.parse(p[0])) { stored[item.id].normalized = {...stored[item.id].normalized,...item.result};stored[item.id].processing_status='processed' }return { rows: [] } }
     throw new Error('Unexpected SQL '+sql)
 }
 mock.module('#db',()=>({ default:query, withTransaction: async(work:any)=>{ const before=structuredClone({stored,findings});try{return await work(query)}catch(error){stored=before.stored;findings=before.findings;throw error} } }))
@@ -21,7 +21,7 @@ const { MILL_RULES, millDefaultDefinition } = await import('../src/handlers/mill
 const { securityRules } = await import('../src/utils/mill/securityRules.ts')
 const rules = () => MILL_RULES.map(rule => ({...rule,enabled:true,source:'hanasand' as const,definition:millDefaultDefinition(rule.id)}))
 const log = (executable='/usr/bin/whoami',command='whoami') => ({id:'real-log',service:'audit',host:'inspur',level:'info',message:command,created_at:'2026-09-19T10:00:00Z',metadata:{process:{executable,command_line:command}}})
-beforeEach(()=>{stored={};findings=[];fail=false;findingWrites=0})
+beforeEach(()=>{stored={};findings=[];fail=false;findingWrites=0;eventUpdates=0})
 test('an info-level whoami executes Mill and persists high severity plus evidence',async()=>{
     await processLog(log(),'org-a',rules())
     const row:any=Object.values(stored)[0]
@@ -86,3 +86,14 @@ for (const [program, command] of [['uname', 'uname -o'], ['uname', 'uname -r'], 
         expect(Object.values(stored)[0].normalized.severity).toBe('low')
     })
 }
+
+
+test('non-login authentication messages finish atomically with their configured findings', async () => {
+    const configured = [...rules(), { id: 'owned.auth-health', name: 'Auth health', version: '1', severity: 'low', enabled: true, source: 'owned' as const,
+        definition: { conditions: [{ path: 'service', operator: 'equals', value: 'hanasand-auth' }] } }] as any
+    await processLogBatch(Array.from({ length: 50 }, (_, i) => ({ id: `auth-health-${i}`, service: 'hanasand-auth', host: 'inspur', level: 'info', message: 'Service ready', created_at: new Date().toISOString() })), 'org-a', configured)
+    expect(Object.values(stored).every(row => row.processing_status === 'processed')).toBe(true)
+    expect(findings).toHaveLength(50)
+    expect(findingWrites).toBe(1)
+    expect(eventUpdates).toBe(0)
+})

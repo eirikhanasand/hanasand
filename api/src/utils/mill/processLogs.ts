@@ -35,11 +35,12 @@ export async function processLogBatch(logs: LogInput[], organizationId: string, 
         const key = `service:${log.id}`
         const event = normalizeMillEvent(normalizeLogEvent(log), { vendor: 'Hanasand', product: 'Logs' })
         const id = createHash('sha256').update(key).digest('hex')
-        // Stateless rules can finish before persistence. Authentication still needs
+        // Stateless rules can finish before persistence. Login correlation still needs
         // the durable event-time history and retains the retryable pending path.
-        const findings = event.eventType === 'authentication' ? []
+        const correlates = event.eventType === 'authentication' && event.action === 'login'
+        const findings = correlates ? []
             : collectMillEventFindings(organizationId, id, event, rules).findings
-        const complete = event.eventType !== 'authentication'
+        const complete = !correlates
         if (complete) Object.assign(event.normalized, { detections: [], evaluated_at: new Date().toISOString(),
             rules_checked: rules.filter(rule => rule.enabled !== false).length })
         return { id, key, event, complete, findings, logId: String(log.id) }

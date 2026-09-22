@@ -178,6 +178,7 @@ export const collectionError = (error: unknown) => error instanceof CollectionEr
 export class Delivery {
   url: URL; agent: http.Agent | https.Agent;
   eventAgeSeconds = 0;
+  private acknowledged = new Map<string, number>();
   constructor(public config: Config, private persistence?: Persistence) {
     this.url = new URL(config.url || '');
     if (!['http:', 'https:'].includes(this.url.protocol) || this.url.username || this.url.password) throw new Error('Invalid ingestion URL');
@@ -186,10 +187,17 @@ export class Delivery {
   }
   close() { this.agent.destroy(); }
   async deliver(paths: string[]): Promise<number> {
-    const events = paths.flatMap(path => (JSON.parse(readBounded(path, 512000).toString()) as { events: LogEvent[] }).events);
+    const queued = paths.flatMap(path => (JSON.parse(readBounded(path, 512000).toString()) as { events: LogEvent[] }).events);
+    if (queued.some(item => typeof item.sourceEventId !== 'string' || !item.sourceEventId)) throw new DeliveryError('Missing stable event identity');
+    // Live and recovery cursors overlap. Only skip IDs for which this process
+    // already received an exact durable ACK; restart/expiry safely replays them.
+    const now = Date.now();
+    for (const [id, at] of this.acknowledged) { if (at > now - 120000) break; this.acknowledged.delete(id); }
+    const seen = new Set<string>();
+    const events = queued.filter(item => { if (this.acknowledged.has(item.sourceEventId) || seen.has(item.sourceEventId)) return false; seen.add(item.sourceEventId); return true; });
     const payload = JSON.stringify({ events });
     if (Buffer.byteLength(payload) > 512000 || events.length > BATCH_COUNT) throw new Error('Delivery batch exceeds ingestion limit');
-    try {
+    if (events.length) try {
       await new Promise<void>((resolve, reject) => {
         const transport = this.url.protocol === 'https:' ? https : http;
         const request = transport.request(this.url, { method: 'POST', agent: this.agent, headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload), Authorization: 'Bearer ' + this.config.token } }, response => {
@@ -207,10 +215,12 @@ export class Delivery {
         request.on('close', () => clearTimeout(timer)); request.on('error', reject); request.end(payload);
       });
     } catch (error) { this.close(); throw error; }
+    for (const item of events) this.acknowledged.set(item.sourceEventId, Date.now());
+    while (this.acknowledged.size > 10000) this.acknowledged.delete(this.acknowledged.keys().next().value!);
     for (const path of paths) fs.unlinkSync(path);
     if (paths.length) { if (this.persistence) this.persistence.dirty(); else syncDirectory(dirname(paths[0])); }
     this.eventAgeSeconds = Math.max(0, ...events.map(item => Number.isFinite(Date.parse(item.timestamp)) ? (Date.now() - Date.parse(item.timestamp)) / 1000 : 0));
-    return events.length;
+    return queued.length;
   }
 }
 export async function* recordLines(input: AsyncIterable<Buffer | string>): AsyncGenerator<string> {

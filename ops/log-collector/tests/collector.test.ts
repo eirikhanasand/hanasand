@@ -1,4 +1,4 @@
-import { test, expect, beforeEach, afterEach } from 'bun:test';
+import { test, expect, beforeEach, afterEach, spyOn } from 'bun:test';
 import * as os from 'node:os';
 import * as http from 'node:http';
 import { once } from 'node:events';
@@ -283,4 +283,50 @@ test('activation requires fresh source checks and a real ACK while preserving ba
   health.source_status.delivery_live.lastAcknowledgedAt = fresh;
   health.source_status.audit_live.ok = false;
   expect(releaseReady(health, 'revision', now)).toBe(false);
+});
+
+
+test('overlapping live/recovery batches remove acknowledged duplicates without another request', async () => {
+  const item = event(config, 'overlap', 'fixture', 'ready', iso());
+  await server(events => [201, { ok: true, accepted: events.length }], async (cfg, requests) => {
+    const delivery = new Delivery(cfg);
+    try {
+      await store.send([item, item]); await delivery.deliver(store.queuedBatches('live'));
+      expect(requests[0]).toHaveLength(1);
+      await store.send([item]); expect(await delivery.deliver(store.queuedBatches('live'))).toBe(1);
+      expect(requests).toHaveLength(1); expect(store.queuedNames('live', 1)).toEqual([]);
+      await store.send([item, event(config, 'new-overlap', 'fixture', 'new', iso())]);
+      await delivery.deliver(store.queuedBatches('live'));
+      expect(requests).toHaveLength(2); expect(requests[1]).toHaveLength(1);
+      expect(requests[1][0].message).toBe('new');
+    } finally { delivery.close(); }
+  });
+});
+
+test('a failed acknowledgement cannot enter the delivery deduplication cache', async () => {
+  let fail = true;
+  await store.send([event(config, 'failed-overlap', 'fixture', 'ready', iso())]);
+  await server(events => [201, { ok: true, accepted: fail ? 0 : events.length }], async (cfg, requests) => {
+    const delivery = new Delivery(cfg);
+    try {
+      await expect(delivery.deliver(store.queuedBatches('live'))).rejects.toThrow('acknowledgement');
+      fail = false; await delivery.deliver(store.queuedBatches('live'));
+      expect(requests).toHaveLength(2); expect(store.queuedNames('live', 1)).toEqual([]);
+    } finally { delivery.close(); }
+  });
+
+});
+
+
+test('expired acknowledgements replay safely through the receiver', async () => {
+  const item = event(config, 'expired-overlap', 'fixture', 'ready', iso());
+  await server(events => [201, { ok: true, accepted: events.length }], async (cfg, requests) => {
+    const delivery = new Delivery(cfg);
+    try {
+      await store.send([item]); await delivery.deliver(store.queuedBatches('live'));
+      await store.send([item]); const now = Date.now(), clock = spyOn(Date, 'now').mockReturnValue(now + 120001);
+      try { await delivery.deliver(store.queuedBatches('live')); } finally { clock.mockRestore(); }
+      expect(requests).toHaveLength(2); expect(requests[1][0].sourceEventId).toBe(item.sourceEventId);
+    } finally { delivery.close(); }
+  });
 });
