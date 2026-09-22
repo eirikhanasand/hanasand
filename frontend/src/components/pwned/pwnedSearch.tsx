@@ -25,7 +25,8 @@ export default function PwnedSearch({ breached, breachCount, files = [] }: Pwned
                     {files.length > 0 ? (
                         <div className='grid gap-2 border-t border-ui-danger/30 pt-3'>
                             <p className='font-semibold'>Found in {files.length.toLocaleString()} {files.length === 1 ? 'file' : 'files'}</p>
-                            <ul className='grid gap-2'>
+                            {/* Eight full 3.75rem rows, eight gaps, and half of the next row. */}
+                            <ul aria-label='Matching files' tabIndex={0} className='grid max-h-[min(35.875rem,40dvh)] auto-rows-max gap-2 overflow-y-auto overscroll-contain rounded-md focus-visible:outline-2 focus-visible:outline-ui-danger'>
                                 {files.map(({ file, count: occurrences, lineRanges }) => (
                                     <li key={file} className='rounded-md bg-ui-panel p-3 text-ui-text'>
                                         <p className='break-all font-mono text-xs'>{file}</p>
