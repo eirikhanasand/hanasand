@@ -12,6 +12,18 @@ afterAll(async() => {
     await rm(stateDir, { recursive: true, force: true })
 })
 
+async function contendForScanLock() {
+    let release!: () => void, entered = 0
+    const held = new Promise<void>(resolve => { release = resolve })
+    const attempt = () => withWebScanLock(async() => {
+        // Hold the winner until its competitor is rejected. If both enter,
+        // release both so the assertions report the exclusivity failure.
+        if (++entered > 1) release()
+        await held
+    }).catch(error => { release(); throw error })
+    return Promise.allSettled([attempt(), attempt()])
+}
+
 describe('Hanasand safe web scanner', () => {
     test('reports missing security controls without sending a request', () => {
         const checks = headerChecks({ server: 'example' }, true)
@@ -56,13 +68,7 @@ describe('Hanasand safe web scanner', () => {
     })
 
     test('allows only one writer to own the scan lock', async() => {
-        const outcomes = await Promise.allSettled([
-            withWebScanLock(async() => {
-                await new Promise(resolve => setTimeout(resolve, 20))
-                return 'held'
-            }),
-            withWebScanLock(async() => 'second'),
-        ])
+        const outcomes = await contendForScanLock()
         expect(outcomes.filter(outcome => outcome.status === 'fulfilled')).toHaveLength(1)
         expect(outcomes.filter(outcome => outcome.status === 'rejected')).toHaveLength(1)
         expect((outcomes.find(outcome => outcome.status === 'rejected') as PromiseRejectedResult).reason.message).toContain('already running')
@@ -73,13 +79,7 @@ describe('Hanasand safe web scanner', () => {
         await mkdir(lockPath)
         const stale = new Date(Date.now() - 11 * 60 * 1000)
         await utimes(lockPath, stale, stale)
-        const outcomes = await Promise.allSettled([
-            withWebScanLock(async() => {
-                await new Promise(resolve => setTimeout(resolve, 20))
-                return 'recovered'
-            }),
-            withWebScanLock(async() => 'contender'),
-        ])
+        const outcomes = await contendForScanLock()
         expect(outcomes.filter(outcome => outcome.status === 'fulfilled')).toHaveLength(1)
         expect(outcomes.filter(outcome => outcome.status === 'rejected')).toHaveLength(1)
         expect((outcomes.find(outcome => outcome.status === 'rejected') as PromiseRejectedResult).reason.message).toContain('already running')
