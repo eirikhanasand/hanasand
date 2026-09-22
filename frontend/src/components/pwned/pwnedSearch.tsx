@@ -10,7 +10,7 @@ export default function PwnedSearch({ breached, breachCount, files = [] }: Pwned
     const count = breachCount || 0
 
     return (
-        <div className='grid gap-3 rounded-lg border border-ui-border bg-ui-raised p-3'>
+        <>
             {breached ? (
                 <div className='grid gap-3 rounded-lg border border-ui-danger bg-ui-danger/10 p-3 text-sm text-ui-danger'>
                     <div className='flex items-start gap-3'>
@@ -48,6 +48,6 @@ export default function PwnedSearch({ breached, breachCount, files = [] }: Pwned
                     </div>
                 </div>
             )}
-        </div>
+        </>
     )
 }
