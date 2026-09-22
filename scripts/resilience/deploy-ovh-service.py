@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deploy an already-built frontend on OVH, retaining runtime settings and rollback."""
+"""Deploy an already-built OVH service, retaining runtime settings and rollback."""
 import json
 import os
 import re
@@ -10,25 +10,29 @@ import time
 import urllib.request
 import fcntl
 
-release = sys.argv[1]
+kind, release = sys.argv[1:]
+ports = {'frontend': 19300, 'api': 19080, 'auth': 19090}
+if kind not in ports:
+    raise SystemExit('Choose frontend, api or auth.')
+serving_port = ports[kind]
 if not re.fullmatch(r'[0-9a-f]{40}', release):
-    raise SystemExit('Pass the full frontend image release commit.')
+    raise SystemExit('Pass the full image release commit.')
 lock = open('/tmp/hanasand-frontend-deploy.lock', 'a')
 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-name = 'hanasand-frontend'
+name = 'hanasand-' + kind
 old = json.loads(subprocess.check_output(['docker', 'inspect', name]))[0]
 settings = dict(value.split('=', 1) for value in old['Config']['Env'])
-if (old['HostConfig']['NetworkMode'] != 'host' or settings.get('PORT') != '19300'
+if (old['HostConfig']['NetworkMode'] != 'host' or settings.get('PORT') != str(serving_port)
         or not old['State']['Running']):
-    raise SystemExit('Expected the running OVH host-network frontend on port19300.')
-image = 'hanasand-resilience-frontend:' + release
+    raise SystemExit(f'Expected the running OVH {kind} on host-network port{serving_port}.')
+image = 'hanasand-resilience-' + kind + ':' + release
 subprocess.run(['docker', 'image', 'inspect', image], check=True, stdout=subprocess.DEVNULL)
 candidate, previous = name + '-candidate', name + '-before-' + release[:12]
 for target in (candidate, previous):
     if subprocess.run(['docker', 'inspect', target], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
         raise SystemExit(f'{target} already exists; inspect before retrying.')
 with socket.socket() as listener:
-    listener.bind(('127.0.0.1', 19301))
+    listener.bind(('127.0.0.1', serving_port + 1))
 settings.pop('COMPACT_PWNED_RANGE_API', None)
 settings.update(PWNED_LOOKUP_API='https://api.hanasand.com/api/pwned',
                 HANASAND_RELEASE_COMMIT=release, HOSTNAME='127.0.0.1')
@@ -48,33 +52,44 @@ def launch(target, port):
         command += ['--add-host', alias]
     for key in env:
         command += ['-e', key]
-    subprocess.run([*command, '--entrypoint', 'bun', image, 'server.js'],
+    entry = {'frontend': 'server.js', 'api': 'src/index.ts', 'auth': 'src/authServer.ts'}[kind]
+    subprocess.run([*command, '--entrypoint', 'bun', image, entry],
                    env={**os.environ, **env}, check=True)
 
-def check(port):
+def check(port, target):
     base = f'http://127.0.0.1:{port}'
     for attempt in range(20):
         try:
-            with urllib.request.urlopen(base + '/api/resilience/ready', timeout=5) as response:
-                if response.status == 200:
+            path = '/api/resilience/ready' if kind == 'frontend' else '/ready'
+            with urllib.request.urlopen(base + path, timeout=5) as response:
+                status = json.load(response)
+                if response.status == 200 and status.get('ok') and status.get('release') == release:
                     break
         except OSError:
             pass
         time.sleep(1)
     else:
-        raise RuntimeError('Frontend readiness check failed.')
+        raise RuntimeError('Service readiness check failed.')
+    if kind != 'frontend':
+        # Exercise the same validation path used by signup/password changes;
+        # no accounts are created and only a prefix is sent over HTTPS.
+        result = json.loads(subprocess.check_output(['docker', 'exec', target, 'bun', '-e',
+            'import check from "./src/utils/pwned/checkPwned.ts"; console.log(JSON.stringify(await check("superman123")))']))
+        if result != {'ok': False, 'count': 44, 'source': 'compact-index'}:
+            raise RuntimeError('Compact password validation failed.')
+        return
     request = urllib.request.Request(base + '/api/pwned', data=b'{"prefix":"B79CF"}',
                                      headers={'Content-Type': 'application/json'})
     with urllib.request.urlopen(request, timeout=20) as response:
         header = response.read(12)
         if (response.headers.get('Content-Type') != 'application/vnd.hanasand.pwned-prefix'
                 or header[:8] != b'PWNPRF02' or int.from_bytes(header[8:], 'little') != 3):
-            raise RuntimeError('Expected all three compact indexes from the private lookup.')
+            raise RuntimeError('Expected all three compact indexes through the HTTPS API.')
 
-# Test new runtime and private lookup without changing the serving instance.
+# Test new runtime and HTTPS lookup without changing the serving instance.
 try:
-    launch(candidate, 19301)
-    check(19301)
+    launch(candidate, serving_port + 1)
+    check(serving_port + 1, candidate)
 finally:
     subprocess.run(['docker', 'rm', '-f', candidate], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 subprocess.run(['docker', 'stop', name], check=True)
@@ -84,11 +99,11 @@ except Exception:
     subprocess.run(['docker', 'start', name], check=True)
     raise
 try:
-    launch(name, 19300)
-    check(19300)
+    launch(name, serving_port)
+    check(serving_port, name)
 except Exception:
     subprocess.run(['docker', 'rm', '-f', name], check=False)
     subprocess.run(['docker', 'rename', previous, name], check=True)
     subprocess.run(['docker', 'start', name], check=True)
     raise
-print('OVH frontend deployed and private three-index lookup verified: ' + release)
+print('OVH ' + kind + ' deployed and compact lookup verified: ' + release)
