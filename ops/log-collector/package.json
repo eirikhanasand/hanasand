@@ -1,0 +1,16 @@
+{
+  "name": "hanasand-log-collector",
+  "private": true,
+  "scripts": {
+    "build": "bun build collector.ts --target=node --format=cjs --outfile=dist/collector.cjs",
+    "test": "bun test tests",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:node": "bun run build && node --test tests/node-service.mjs",
+    "test:memory": "bun build tests/backlog.ts --target=node --format=cjs --outfile=dist/backlog.cjs && node dist/backlog.cjs"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.2",
+    "@types/node": "26.6.2",
+    "typescript": "7.0.2"
+  }
+}

@@ -13,11 +13,24 @@ if ! command -v auditctl >/dev/null 2>&1; then
     fi
 fi
 install -d -m 0700 /etc/hanasand /var/lib/hanasand-log-collector
-install -m 0755 "$(dirname "$0")/collector.py" /usr/local/sbin/hanasand-log-collector
+# The release is built from TypeScript into dependency-free Node CommonJS.
+# Node 18.15+ provides the filesystem APIs used for retention and durability.
+if ! node -e 'const [major,minor]=process.versions.node.split(".").map(Number);process.exit(major>18||(major===18&&minor>=15)?0:1)' >/dev/null 2>&1; then
+    timeout 60 apt-get -o Acquire::Retries=0 -o Acquire::http::Timeout=15 update -qq
+    timeout 120 env DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 install -y nodejs
+fi
+node -e 'const [major,minor]=process.versions.node.split(".").map(Number);process.exit(major>18||(major===18&&minor>=15)?0:1)'
+install -d -m 0755 /usr/local/lib/hanasand-log-collector
+artifact="$(dirname "$0")/collector.cjs"
+if [ ! -f "$artifact" ]; then artifact="$(dirname "$0")/dist/collector.cjs"; fi
+node --check "$artifact"
+install -m 0644 "$artifact" /usr/local/lib/hanasand-log-collector/collector.cjs.pending
+mv /usr/local/lib/hanasand-log-collector/collector.cjs.pending /usr/local/lib/hanasand-log-collector/collector.cjs
+install -m 0755 "$(dirname "$0")/launcher.sh" /usr/local/sbin/hanasand-log-collector
+install -m 0755 "$(dirname "$0")/launcher.sh" /usr/local/lib/hanasand-log-collector/launcher.sh
 if [ "$mode" != --guest ]; then
     install -d -m 0755 /usr/local/lib/hanasand-log-collector
     install -m 0755 "$0" /usr/local/lib/hanasand-log-collector/install.sh
-    install -m 0755 "$(dirname "$0")/retention.py" /usr/local/lib/hanasand-log-collector/retention.py
     install -m 0644 "$(dirname "$0")/ovh-memory.conf" /usr/local/lib/hanasand-log-collector/ovh-memory.conf
 fi
 # Persistent exec auditing includes all users, services and noninteractive executions.
@@ -28,7 +41,7 @@ case "$(uname -m)" in
     x86_64) printf '%s\n' '-a always,exit -F arch=b32 -S execve,execveat -k hanasand_exec' >> /etc/audit/rules.d/hanasand-exec.rules;;
 esac
 systemctl enable --now auditd
-python3 "$(dirname "$0")/retention.py"
+/usr/local/sbin/hanasand-log-collector --retention
 augenrules --load
 # Guests expose telemetry only over the host management channel. No ingest token is copied.
 if [ "$mode" = --guest ]; then exit 0; fi

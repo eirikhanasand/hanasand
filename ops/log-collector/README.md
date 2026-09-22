@@ -2,14 +2,16 @@
 
 The Linux collector sends audit executions, system journal entries and Docker stdout/stderr to `https://api.hanasand.com/api/logs/ingest`. Original levels are retained; Mill assigns the separate detection severity. Every execve/execveat from every user and service is audited. Shell built-ins do not create execve events; a shell invocation retains its command arguments. Audit collection requires root and kernel audit support.
 
-Run `install.sh <host-id>` as root on Debian/Ubuntu (Python 3.9+, systemd). It installs persistent audit rules, the collector and an enabled service, but does not start delivery. Configure its protected credential, then start it only after the ingestion API is ready:
+The collector is maintained here in TypeScript: `core.ts` owns redaction, durable queues and HTTP delivery; `sources.ts` reads host logs; `guests.ts` handles LXD exports; `collector.ts` runs independent Node worker threads. `configuration.ts` manages protected configuration and audit retention. There is no Python runtime dependency.
+
+Build with `bun install --frozen-lockfile && bun run build` in this directory. The resulting `dist/collector.cjs` has no runtime npm dependencies. Node 18.15+ and systemd are required on Debian/Ubuntu; the installer checks the runtime and installs the distribution Node package when needed. Run `install.sh <host-id>` as root. It installs persistent audit rules, the collector and an enabled service, but does not start delivery. Configure its protected credential, then start it only after the ingestion API is ready:
 
 ```sh
-python3 configure.py inspur /path/to/protected/log-ingest.json
+/usr/local/sbin/hanasand-log-collector --configure inspur /path/to/protected/log-ingest.json
 systemctl start hanasand-log-collector
 ```
 
-The credential source is a root-restricted JSON object containing `LOG_INGEST_TOKEN`, generated outside source control. `configure.py` preserves existing collection start time, writes mode 0600 and prints no credential. Use the dedicated ingestion credential, never a human session or a broad VM API token. A remote credential may be supplied on standard input with `-`. Do not put it in command arguments, logs or shell history.
+The credential source is a root-restricted JSON object containing `LOG_INGEST_TOKEN`, generated outside source control. `--configure` preserves existing collection start time, writes mode 0600 and prints no credential. Use the dedicated ingestion credential, never a human session or a broad VM API token. A remote credential may be supplied on standard input with `-`. Do not put it in command arguments, logs or shell history.
 
 State and the outgoing queue are stored on disk under `/var/lib/hanasand-log-collector`. Each bounded JSON batch is flushed to disk before its source cursor advances. The sender reuses an authenticated HTTPS connection to the existing ingestion API; HTTP 201 with `ok: true` and the exact accepted count acknowledges the database transaction. Only then is that batch file deleted. A lost response or restart replays the same stable event IDs, which the receiver deduplicates. No new SSH listener or WebSocket endpoint is needed.
 
@@ -29,4 +31,8 @@ The installer raises small rotating audit stores to 100 MB per file and 20 files
 
 Structured secret fields, common password/token flags, HTTP credentials, cookies and authorization values are redacted before delivery. Redaction is best effort: positional or unusually named secrets may remain in command arguments, so log access must remain restricted. Source output is not modified. The Linux collector does not cover macOS, unreachable hosts or machines lacking administrative access; report those gaps explicitly.
 
-Run regression checks with `python3 -m unittest discover -s ops/log-collector -v`. Verify a real harmless `whoami` execution reaches Mill as `ProcessLogs` on each enrolled host and guest; dangerous patterns belong only in synthetic fixtures.
+Run `bun run typecheck`, `bun run test`, `bun run test:node`, and `bun run test:memory`. The Node integration test executes the actual bundled service with worker threads and a legacy queued batch. The memory check streams 100,000 audit events (over 200 MB) with a 250 MB peak-memory limit.
+
+For existing hosts, stage `dist/collector.cjs` as `collector.cjs` alongside `deploy.sh`, `install.sh`, `launcher.sh`, and `ovh-memory.conf`, then run `sh deploy.sh <full-commit>`. This uses root or the existing sudo installation/service-management permissions, retains configuration, queues and cursors, and backs up the previous executable under `/var/lib/hanasand-log-collector/rollback/<commit>`. A release passes only when the new service reports its revision, fresh live source checks, and an HTTP ingestion acknowledgement. Failed activation restores the previous executable. Existing Python-format queues, source cursors, and guest exports remain readable; event IDs stay stable across replay. Running guests receive the Node artifact through the existing LXD enrollment flow; stopped guests update when next running.
+
+ Verify a real harmless `whoami` execution reaches Mill as `ProcessLogs` on each enrolled host and guest; dangerous patterns belong only in synthetic fixtures.
