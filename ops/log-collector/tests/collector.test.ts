@@ -257,3 +257,14 @@ test('failed discontinuity notice retains the original checkpoint for retry', as
   const log = logFixture(); fs.writeFileSync(log.path, logLine('original-' + 'x'.repeat(100))); await source.dockerFileBatch(config, 'id', log); const cursor = store.load<any>('docker-file-history-id.json', {});
   fs.writeFileSync(log.path, logLine('short')); store.send = async () => { throw new Error('disk full'); }; await expect(source.dockerFileBatch(config, 'id', log)).rejects.toThrow(); expect(store.load<any>('docker-file-history-id.json', {})).toEqual(cursor);
 });
+
+test('live audit allows initial retained-log scan before returning to short checkpoint reads', async () => {
+  const timeouts: (number | undefined)[] = [];
+  source.commands.stream = async function* (_args, options = {}) {
+    timeouts.push(options.timeout);
+    fs.writeFileSync(store.path('audit-live.pending'), 'output=- ' + Date.now() / 1000 + ':123 0x514\n');
+    yield audit();
+  };
+  await source.audit(config, true); await source.audit(config, true);
+  expect(timeouts).toEqual([60, 5]);
+});

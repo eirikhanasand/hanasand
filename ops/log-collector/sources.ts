@@ -147,7 +147,9 @@ export class Sources {
       end = Math.min(Math.floor(Date.now() / 1000) - 1, Math.floor(beginning) + 60); if (end <= beginning) return;
       args.push('--end', ...localAuditDate(end)); if (!fs.existsSync(stable)) args.push('--start', ...localAuditDate(beginning));
     }
-    const read = (command: string[]) => this.store.send(auditEvents(this.commands.stream(command, { accepted: [0, 1], timeout: live ? 5 : 60 }), config));
+    // A first live pass may scan large retained files before it can checkpoint.
+    // Later passes keep the short timeout and resume that fresh checkpoint.
+    const read = (command: string[]) => this.store.send(auditEvents(this.commands.stream(command, { accepted: [0, 1], timeout: live && reuse ? 5 : 60 }), config));
     try { await read(args); }
     catch (error) { if (!(error instanceof CommandError) || ![10, 11, 12].includes(error.code ?? -1) || !fs.existsSync(pending)) throw error; await read([...args, '--start', 'checkpoint']); }
     if (fs.existsSync(pending)) { const fd = fs.openSync(pending, 'r'); try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); } fs.renameSync(pending, stable); syncDirectory(this.store.root); }
