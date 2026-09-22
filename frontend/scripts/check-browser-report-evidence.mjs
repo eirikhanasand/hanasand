@@ -39,7 +39,7 @@ assertIncludes(liveClient, 'Script hashes', 'live browser workspace must expose 
 assertIncludes(liveClient, 'Copyable indicators', 'live browser workspace must expose IOC count')
 assertIncludes(liveClient, 'relative w-full overflow-hidden', 'live browser viewport must remain full-width and contain its content')
 assertIncludes(liveClient, 'aspectRatio: `${viewportFrame.width} / ${viewportFrame.height}`', 'browser viewport must follow decoded dimensions without letterboxing')
-assertIncludes(liveClient, 'No obfuscated code', 'WebCrack empty runs must explain that no obfuscated code was found')
+assertIncludes(liveClient, 'deobfuscatedCode: capture.deobfuscatedCode', 'browser export must preserve deobfuscated code')
 assertIncludes(liveClient, 'consoleEvents', 'page console output must be separated from broker activity')
 assert.ok(!liveClient.includes('title=\'Activity\''), 'broker activity must not clutter the evidence panels')
 assertIncludes(liveClient, 'virusTotalVendorLabel', 'VirusTotal labels must avoid broken 0/? totals')
@@ -48,7 +48,7 @@ assertIncludes(liveClient, '.replace(/<[^>]+>/g, \' \')', 'analyst evidence exce
 
 for (const token of [
     'Browser sandbox report',
-    'Analyst summary',
+    'Summary',
     'URL timeline',
     'Providers',
     'Screenshots',
