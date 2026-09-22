@@ -10,7 +10,7 @@ import ViewModeToggle from './viewModeToggle'
 import isSharePath from '@/utils/routes/isSharePath'
 import isPublicProductPath from '@/utils/routes/isPublicProductPath'
 import BrandLogo from '@/components/brand/brandLogo'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import SiteSearch from './siteSearch'
 import { OrganizationSwitcher } from '@/components/organizations/workspaceProvider'
 import SupportAssistant from '@/components/support/supportAssistant'
@@ -41,7 +41,32 @@ const resourceItems = [
     { title: 'About Hanasand', detail: 'Product notes, ownership, and current Hanasand direction.', href: '/about', icon: BookOpen },
 ]
 
-function PublicDropdown({ label, items }: { label: string, items: Array<{ title: string, detail: string, href: string, icon: typeof Radar }> }) {
+const navigationGroups = [
+    { label: 'Product', items: productItems },
+    { label: 'Developers', items: developerItems },
+    { label: 'Resources', items: resourceItems },
+]
+
+type NavigationItem = typeof productItems[number]
+
+function NavigationLinks({ items, onNavigate }: { items: NavigationItem[], onNavigate?: () => void }) {
+    return items.map((item) => {
+        const Icon = item.icon
+        return (
+            <Link key={item.title} href={item.href} onClick={onNavigate} className='grid grid-cols-[2.5rem_1fr] gap-3 rounded-lg p-3 transition hover:bg-ui-raised'>
+                <span className='grid h-10 w-10 place-items-center rounded-lg border border-ui-border bg-ui-raised text-ui-primary'>
+                    <Icon className='h-4.5 w-4.5' />
+                </span>
+                <span className='grid min-w-0 gap-0.5'>
+                    <span className='text-sm font-semibold text-ui-text'>{item.title}</span>
+                    <span className='text-xs leading-5 text-ui-muted'>{item.detail}</span>
+                </span>
+            </Link>
+        )
+    })
+}
+
+function PublicDropdown({ label, items }: { label: string, items: NavigationItem[] }) {
     return (
         <div className='group relative'>
             <button className='inline-flex h-10 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text group-hover:bg-ui-raised' aria-haspopup='true'>
@@ -50,67 +75,55 @@ function PublicDropdown({ label, items }: { label: string, items: Array<{ title:
             </button>
             <div className='invisible pointer-events-none absolute left-0 top-10 z-10 h-3 w-[23rem] group-hover:visible group-hover:pointer-events-auto group-focus-within:visible group-focus-within:pointer-events-auto' aria-hidden='true' />
             <div className='invisible pointer-events-none absolute left-0 top-12 z-20 max-h-[calc(100dvh-6rem)] w-[23rem] overflow-y-auto translate-y-1 rounded-lg border border-ui-border bg-ui-panel p-2 opacity-0 shadow-[0_22px_70px_rgba(25,34,52,0.15)] transition group-hover:visible group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100 dark:shadow-[0_22px_70px_rgba(0,0,0,0.42)]'>
-                {items.map((item) => {
-                    const Icon = item.icon
-                    return (
-                        <Link key={item.title} href={item.href} className='grid grid-cols-[2.5rem_1fr] gap-3 rounded-lg p-3 transition hover:bg-ui-raised'>
-                            <span className='grid h-10 w-10 place-items-center rounded-lg border border-ui-border bg-ui-raised text-ui-primary'>
-                                <Icon className='h-4.5 w-4.5' />
-                            </span>
-                            <span className='grid gap-0.5'>
-                                <span className='text-sm font-semibold text-ui-text'>{item.title}</span>
-                                <span className='text-xs leading-5 text-ui-muted'>{item.detail}</span>
-                            </span>
-                        </Link>
-                    )
-                })}
+                <NavigationLinks items={items} />
             </div>
         </div>
     )
 }
 
-const mobilePublicLinks = [
-    ...[...productItems, ...developerItems, ...resourceItems].map(item => ({ label: item.title, href: item.href })),
-    { label: 'Pricing', href: '/pricing' },
-    { label: 'Support', href: '/support' },
-]
-
 function PublicMobileMenu({ token }: { token: boolean }) {
     const [open, setOpen] = useState(false)
+    const menuId = useId()
     const mobile = useMobileNavigation()
-    const links = token
-        ? mobilePublicLinks.map(item => {
-            if (item.href === '/dwm') return { ...item, href: '/dwm' }
-            if (item.href === '/pricing') return { ...item, href: '/subscription' }
-            return item
-        })
-        : mobilePublicLinks
 
     return (
-        <div className='relative xl:hidden'>
+        <div className='relative xl:hidden' onKeyDown={event => {
+            if (event.key === 'Escape' && open) {
+                setOpen(false)
+                event.currentTarget.querySelector('button')?.focus()
+            }
+        }}>
             <button
                 type='button'
                 onClick={() => setOpen((next) => !next)}
                 className='grid h-11 w-11 place-items-center rounded-lg border border-ui-border text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'
                 aria-label={mobile.enabled ? (open ? 'Close site navigation' : 'Open site navigation') : (open ? 'Close navigation' : 'Open navigation')}
                 aria-expanded={open}
+                aria-controls={menuId}
             >
                 {open ? <X className='h-5 w-5' /> : <MenuIcon className='h-5 w-5' />}
             </button>
             {open && (
-                <div className='absolute right-0 top-13 z-30 max-h-[calc(100dvh-6rem)] w-[min(20rem,calc(100vw-1.5rem))] overflow-y-auto rounded-lg border border-ui-border bg-ui-panel p-2 shadow-[0_22px_70px_rgba(25,34,52,0.16)] dark:shadow-[0_22px_70px_rgba(0,0,0,0.42)]'>
-                    {links.map((item) => (
-                        <Link
-                            key={item.href}
-                            href={item.href}
-                            onClick={() => setOpen(false)}
-                            className='flex h-11 items-center justify-between rounded-lg px-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised'
-                        >
+                <nav id={menuId} aria-label='Mobile main navigation' className='fixed inset-x-3 top-20 z-30 max-h-[calc(100dvh-6rem)] overflow-y-auto rounded-lg border border-ui-border bg-ui-panel p-2 shadow-[0_22px_70px_rgba(25,34,52,0.16)] dark:shadow-[0_22px_70px_rgba(0,0,0,0.42)]'>
+                    {navigationGroups.map(({ label, items }) => (
+                        <details key={label} name={menuId} className='group'>
+                            <summary className='flex min-h-11 cursor-pointer list-none items-center justify-between rounded-lg px-3 text-sm font-semibold text-ui-text hover:bg-ui-raised [&::-webkit-details-marker]:hidden'>
+                                {label}
+                                <ChevronDown className='h-4 w-4 text-ui-muted transition group-open:rotate-180' />
+                            </summary>
+                            <NavigationLinks items={items} onNavigate={() => setOpen(false)} />
+                        </details>
+                    ))}
+                    {[
+                        { label: 'Pricing', href: token ? '/subscription' : '/pricing' },
+                        { label: 'Support', href: '/support' },
+                        { label: 'Go to Dashboard', href: token ? '/dashboard' : '/login' },
+                    ].map(item => (
+                        <Link key={item.href} href={item.href} onClick={() => setOpen(false)} className='flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised'>
                             {item.label}
-                            <ChevronDown className='h-4 w-4 -rotate-90 text-ui-muted' />
                         </Link>
                     ))}
-                </div>
+                </nav>
             )}
         </div>
     )
@@ -135,9 +148,7 @@ export default function Header({ token, path: serverPath, initialMode = 'normal'
                 <BrandLogo />
 
                 <nav aria-label='Main navigation' className='mr-auto hidden items-center gap-3 xl:flex'>
-                    <PublicDropdown label='Product' items={token ? productItems.map(item => item.href === '/dwm' ? { ...item, href: '/dwm' } : item) : productItems} />
-                    <PublicDropdown label='Developers' items={developerItems} />
-                    <PublicDropdown label='Resources' items={resourceItems} />
+                    {navigationGroups.map(group => <PublicDropdown key={group.label} {...group} />)}
                     <Link href={pricingHref} className='inline-flex h-10 min-w-20 items-center justify-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Pricing</Link>
                 </nav>
 
