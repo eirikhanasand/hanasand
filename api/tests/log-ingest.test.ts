@@ -16,7 +16,7 @@ mock.module('#db', () => ({ withTransaction: async (work: (query: typeof transac
 } }))
 const previousToken = process.env.LOG_INGEST_TOKEN
 mock.module('#utils/auth/internalToken.ts', () => ({ default: (req: any) => req.headers.authorization === 'Bearer existing-internal-token' }))
-mock.module('#utils/logs/recordLog.ts', () => ({ default: async (event: unknown, query: unknown) => { expect(query).toBe(transactionQuery); if (fail) throw new Error('Database unavailable'); stored.push(event) } }))
+mock.module('#utils/logs/recordLog.ts', () => ({ recordLogBatch: async (events: unknown[], query: unknown) => { expect(query).toBe(transactionQuery); if (fail) throw new Error('Database unavailable'); stored.push(...events) } }))
 const { default: ingestLog, hasLogIngestToken, logIngestCapacity } = await import('../src/handlers/logs/ingest.ts')
 const app = Fastify()
 app.post('/logs/ingest', ingestLog)

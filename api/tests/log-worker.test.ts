@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, mock, test } from 'bun:test'
+import { afterEach, beforeEach, expect, mock, spyOn, test } from 'bun:test'
 let locked = true, fail = false, watermark: string | null = '200', additionalRuns = 0, queueRuns = 0, recoveryRuns = 0
 let delayed = false, historyLimits: number[], recentLimits: number[], queueModes: boolean[], recoveryLimits: number[], reads: Array<{ sql: string, params: any[] }>
 let historyScans: any[][] = []
@@ -22,7 +22,7 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
         return { rows: [] }
     }
     if (sql.includes('SELECT s.* FROM service_logs s')) return { rows: priority
-        .filter(row => BigInt(row.id) <= BigInt(p[0]) && Date.parse(row.created_at) >= Date.now() - 300_000
+        .filter(row => (p[0] === undefined || BigInt(row.id) <= BigInt(p[0])) && Date.parse(row.created_at) >= Date.now() - 300_000
             && !Object.values(stored).some(event => event.key === `service:${row.id}` && ['processed', 'skipped'].includes(event.processing_status)))
         .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || Number(b.id) - Number(a.id))
         .slice(0, 1000) }
@@ -167,20 +167,20 @@ test('recent event times are checked before replayed FIFO events without jumping
         { ...makeLog('201'), created_at: new Date().toISOString() },
         { ...makeLog('180'), created_at: new Date(Date.now() - 600_000).toISOString() }]
     await processStoredLogs()
-    expect(checked).toEqual(['190', '101', '1'])
+    expect(checked).toEqual(['201', '190', '101', '1'])
     expect(cursor).toMatchObject({ last_id: '1', recent_id: '101' })
     const sql = statements.find(value => value.includes('SELECT s.* FROM service_logs s'))!
-    expect(sql).toContain('s.created_at >= NOW() - INTERVAL \'5 minutes\'')
-    expect(sql).toContain('s.id <= $1')
+    expect(sql).toContain('s.created_at >= statement_timestamp() - INTERVAL \'5 minutes\'')
+    expect(sql).not.toContain('s.id <= $1')
     expect(sql).toContain('e.log_key = \'service:\' || s.id::text')
     expect(sql).toContain('e.processing_status IN (\'processed\', \'skipped\')')
-    expect(sql).toContain('ORDER BY s.created_at DESC, s.id DESC LIMIT 1000')
+    expect(sql).toContain('ORDER BY s.created_at DESC, s.id DESC LIMIT 200')
     // When FIFO catches up it advances normally, without reevaluating the same log.
     fresh = [priority[0]]; backlog = []
     await processStoredLogs()
-    expect(checked).toEqual(['190', '101', '1'])
+    expect(checked).toEqual(['201', '190', '101', '1'])
     expect(cursor.recent_id).toBe('190')
-    expect(Object.values(stored)).toHaveLength(3)
+    expect(Object.values(stored)).toHaveLength(4)
 })
 
 test('a failed priority check remains pending and retries before the FIFO advances', async () => {
@@ -297,4 +297,33 @@ test('forward catch-up skips durable acknowledgements without skipping pending h
     await processStoredLogs()
     expect(cursor.recent_id).toBe('10100'); expect(checked).toEqual(['4000', '8000'])
     expect(await processStoredLogs()).toBe(false)
+})
+
+
+test('fresh committed events are processed even when a writer prevents a stable cursor watermark', async () => {
+    watermark = null
+    priority = [{ ...makeLog('201'), created_at: new Date().toISOString() }]
+    await processStoredLogs()
+    expect(checked[0]).toBe('201')
+    expect(cursor.recent_id).toBe('100')
+})
+
+
+test('fresh arrivals are serviced between durable historical pages', async () => {
+    let clock = 0
+    const timer = spyOn(performance, 'now').mockImplementation(() => { clock += 300; return clock })
+    backlog = Array.from({ length: 250 }, (_, n) => makeLog(String(n + 1)))
+    cursor.history_end_id = '250'; watermark = '1000'; fresh = []
+    const findings = await import('../src/handlers/mill.ts')
+    const original = findings.persistMillEventFindings
+    const hook = spyOn(findings, 'persistMillEventFindings').mockImplementation(async rows => {
+        await original(rows)
+        if (checked.length === 100) priority.push({ ...makeLog('1001'), created_at: new Date().toISOString() })
+    })
+    try {
+        await processStoredLogs()
+        expect(checked.indexOf('1001')).toBe(100)
+        expect(checked).toHaveLength(251)
+        expect(cursor.last_id).toBe('250')
+    } finally { hook.mockRestore(); timer.mockRestore() }
 })

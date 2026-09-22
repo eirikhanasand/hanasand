@@ -22,7 +22,7 @@ function isOrganizationRequest(metadata: Record<string, unknown>) {
     })
 }
 
-export default async function recordLog({
+async function prepareLog({
     service = process.env.SERVICE_NAME || 'hanasand-api',
     host = process.env.HOSTNAME || 'local',
     level,
@@ -58,6 +58,12 @@ export default async function recordLog({
         metadata = { category: 'organization_request_error', surface: 'organizations' }
     }
 
+    return [service, host, level, message, JSON.stringify(metadata), scopeId, sourceEventId || null, timestamp || null]
+}
+
+export default async function recordLog(entry: Parameters<typeof prepareLog>[0], query: typeof run = run) {
+    const values = await prepareLog(entry, query)
+    if (!values) return
     await query(`
         WITH organization_privacy AS MATERIALIZED (
             SELECT status, audit_safe_metadata
@@ -86,5 +92,39 @@ export default async function recordLog({
                 (SELECT audit_safe_metadata->>'privacyDeletionRunId' FROM organization_privacy) privacy_deletion_run_id
         ) private
         ON CONFLICT (source_event_id) DO NOTHING
-    `, [service, host, level, message, JSON.stringify(metadata), scopeId, sourceEventId || null, timestamp || null])
+    `, values)
+}
+
+
+// Keep analyzer decisions and the insert in the caller's transaction, while
+// ordinary collector rows share one insert instead of 100 sequential round trips.
+export async function recordLogBatch(entries: Parameters<typeof prepareLog>[0][], query: typeof run) {
+    const rows = []
+    for (const entry of entries) {
+        const values = await prepareLog(entry, query)
+        if (values) rows.push(values)
+    }
+    if (!rows.length) return
+    await query(`WITH input AS MATERIALIZED (
+        SELECT v->>0 service, v->>1 host, v->>2 level, v->>3 message, (v->>4)::jsonb metadata,
+            v->>5 scope_id, v->>6 source_event_id, (v->>7)::timestamptz created_at
+        FROM jsonb_array_elements($1::jsonb) v
+    ), organization_privacy AS MATERIALIZED (
+        SELECT id, status, audit_safe_metadata FROM organizations
+        WHERE id IN (SELECT scope_id FROM input WHERE scope_id IS NOT NULL)
+        ORDER BY id FOR KEY SHARE
+    )
+    INSERT INTO service_logs(service, host, level, message, metadata, source_event_id, created_at)
+    SELECT CASE WHEN private.deleted THEN 'hanasand-api' ELSE i.service END,
+        CASE WHEN private.deleted THEN '' ELSE i.host END,
+        CASE WHEN private.deleted THEN 'info' ELSE i.level END,
+        CASE WHEN private.deleted THEN 'organization_event' ELSE i.message END,
+        CASE WHEN private.deleted THEN jsonb_strip_nulls(jsonb_build_object(
+            'category','organization_privacy','action','post_delete_event',
+            'organizationId',i.scope_id,'tenantId',i.scope_id,'outcome','recorded',
+            'privacyDeletionRunId',o.audit_safe_metadata->>'privacyDeletionRunId')) ELSE i.metadata END,
+        i.source_event_id, COALESCE(i.created_at, NOW())
+    FROM input i LEFT JOIN organization_privacy o ON o.id=i.scope_id
+    CROSS JOIN LATERAL (SELECT COALESCE(o.status='deleted' OR o.audit_safe_metadata ? 'privacyDeletedAt', FALSE) AS deleted) private
+    ON CONFLICT (source_event_id) DO NOTHING`, [JSON.stringify(rows)])
 }

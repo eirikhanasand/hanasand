@@ -143,7 +143,7 @@ export async function processStoredLogs() {
             await query('UPDATE log_processing_cursors SET history_end_id = recent_id WHERE name = \'service_logs\' AND history_end_id IS NULL')
             const cursor = (await query('SELECT last_id, recent_id, history_end_id FROM log_processing_cursors WHERE name = \'service_logs\'')).rows[0]
             const configured = new Map<string, Awaited<ReturnType<typeof loadConfiguredMillRules>>>()
-            const processScopes = async (logs: LogInput[]) => {
+            const processScopes = async (logs: LogInput[], priority = false) => {
                 if (logs.length) advanced = true
                 const scopes = new Map<string, LogInput[]>()
                 for (const row of logs) {
@@ -155,14 +155,36 @@ export async function processStoredLogs() {
                     const active = await run('SELECT id FROM organizations WHERE id = $1 AND status = \'active\'', [scope])
                     const target = active.rows.length ? scope : platform.rows[0].id
                     if (!configured.has(target)) configured.set(target, await loadConfiguredMillRules(target))
-                    await processLogBatch(batch, target, configured.get(target)!)
+                    // Yield between durable pages so historical work cannot hold
+                    // fresh events behind a thousand-row write or recovery pass.
+                    for (let offset = 0; offset < batch.length; offset += 100) {
+                        await processLogBatch(batch.slice(offset, offset + 100), target, configured.get(target)!)
+                        if (!priority) await processFresh()
+                    }
                 }
             }
+            let lastFresh = -Infinity
+            const processFresh = async () => {
+                if (performance.now() - lastFresh < 250) return
+                lastFresh = performance.now()
+                // No cursor advances here: visible committed rows are safe to
+                // process even while another writer prevents a stable watermark.
+                const priority = await run(`SELECT s.* FROM service_logs s
+                    WHERE s.created_at >= statement_timestamp() - INTERVAL '5 minutes'
+                      AND NOT EXISTS (SELECT 1 FROM mill_events e WHERE e.log_key = 'service:' || s.id::text
+                        AND e.processing_status IN ('processed', 'skipped'))
+                    ORDER BY s.created_at DESC, s.id DESC LIMIT 200`)
+                await processScopes(priority.rows, true)
+            }
+            await processFresh()
             const { rows: [queue] } = await run(`SELECT COALESCE((SELECT queued_at < clock_timestamp() - INTERVAL '60 seconds'
                 FROM log_process_queue ORDER BY queued_at, log_id LIMIT 1), FALSE) AS delayed`)
             await processQueuedLogs(processScopes, queue.delayed)
+            await processFresh()
             await recoverProcessLogs(processScopes, configuredLimit)
+            await processFresh()
             await recoverUnassignedLogs(processScopes)
+            await processFresh()
             // Keep every cursor moving while delayed commands get more capacity.
             // A fixed snapshot restores ordinary limits on the next clear tick.
             const catchupLimit = Math.min(queue.delayed ? 100 : 1000, configuredLimit)
@@ -179,20 +201,13 @@ export async function processStoredLogs() {
                 if (checked) advanced = true
                 return { lastId, checked }
             }
-            // Bulk collector replay may put live commands far behind the ingestion
-            // cursor. Check recent event times first without advancing either cursor;
-            // the FIFO passes still guarantee every older event is eventually checked.
             if (watermark !== null) {
-                const priority = await run(`SELECT s.* FROM service_logs s
-                    WHERE s.created_at >= NOW() - INTERVAL '5 minutes' AND s.id <= $1
-                      AND NOT EXISTS (SELECT 1 FROM mill_events e WHERE e.log_key = 'service:' || s.id::text
-                        AND e.processing_status IN ('processed', 'skipped'))
-                    ORDER BY s.created_at DESC, s.id DESC LIMIT 1000`, [watermark])
-                await processScopes(priority.rows)
                 const recent = await processPage(cursor.recent_id, watermark)
                 await query('UPDATE log_processing_cursors SET recent_id = $1, checked_count = checked_count + $2, updated_at = clock_timestamp(), last_error = NULL WHERE name = \'service_logs\'', [recent.lastId, recent.checked])
             }
+            await processFresh()
             await processAdditionalLogSources(processScopes, historyLimit, catchupLimit, query, beforeHistory)
+            await processFresh()
             // Direct Mill ingestion is also pending until findings are durable.
             // Recover requests that stopped after persistence or during evaluation.
             const pending = await run(`SELECT e.* FROM mill_events e JOIN organizations o ON o.id = e.organization_id
@@ -217,7 +232,7 @@ export async function processStoredLogs() {
         // its historical reads outside the lock used by live event processing.
         // Progress scans run independently so fresh detection never waits on a historical count.
         if (didWork) void refreshLogCatchupProgress()
-        await backfillLogDimensions().catch(() => {})
+        void backfillLogDimensions().catch(() => {})
         return advanced
     } catch (error) {
         await run('UPDATE log_processing_cursors SET last_error = $1 WHERE name = \'service_logs\'', [error instanceof Error ? error.message : 'Log processing failed']).catch(() => {})

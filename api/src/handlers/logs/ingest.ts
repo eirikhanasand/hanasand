@@ -3,7 +3,7 @@ import { withTransaction } from '#db'
 import { hasLogIngestToken } from '#utils/auth/logIngestToken.ts'
 export { hasLogIngestToken } from '#utils/auth/logIngestToken.ts'
 import hasInternalToken from '#utils/auth/internalToken.ts'
-import recordLog from '#utils/logs/recordLog.ts'
+import { recordLogBatch } from '#utils/logs/recordLog.ts'
 import config from '#constants'
 
 // Each batch holds a connection through up to 200 writes. Leave capacity for
@@ -36,7 +36,7 @@ export default async function ingestLog(req: FastifyRequest, res: FastifyReply) 
     activeBatches++
     try {
         await withTransaction(async query => {
-            for (const entry of entries) await recordLog({ ...entry, level: entry.level || 'info' }, query)
+            await recordLogBatch(entries.map(entry => ({ ...entry, level: entry.level || 'info' })), query)
         })
     } finally {
         activeBatches--
