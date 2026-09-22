@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import type { MessagePort } from 'node:worker_threads';
 
-export const COMMIT_INTERVAL_MS = 2000;
+export const COMMIT_INTERVAL_MS = 1250;
 export type PersistenceRequest =
   | { persistence: 'checkpoint'; path: string; data: string }
   | { persistence: 'queue'; path: string }

@@ -1,4 +1,4 @@
-import { GroupCommit, WorkerPersistence } from './persistence';
+import { COMMIT_INTERVAL_MS, GroupCommit, WorkerPersistence } from './persistence';
 import { Worker, isMainThread, workerData, parentPort } from 'node:worker_threads';
 import { fs, Store, Config, Metadata, Delivery, iso, sleep, event, collectionError } from './core';
 import { Sources } from './sources';
@@ -74,7 +74,7 @@ async function main() {
     const coverage = store.load<{ checkedAt: string; failures: string[]; instances: { status: string }[] } | null>('guest-coverage.json', null);
     if (coverage?.failures.length && !failures.some(item => item.startsWith('guests:'))) failures.push('guests: ' + coverage.failures.join(', '));
     const health: Record<string, boolean | null> = Object.fromEntries(sources.map(name => [name, snapshot[name]?.ok ?? null]));
-    const metadata: Metadata = { collector_health: health, source_status: JSON.parse(JSON.stringify(snapshot)), persistence: { intervalMs: 2000, flushes: persistence.flushes, lastFlushMs: persistence.lastFlushMs, lastFlushAt: persistence.lastFlushAt ?? null } };
+    const metadata: Metadata = { collector_health: health, source_status: JSON.parse(JSON.stringify(snapshot)), persistence: { intervalMs: COMMIT_INTERVAL_MS, flushes: persistence.flushes, lastFlushMs: persistence.lastFlushMs, lastFlushAt: persistence.lastFlushAt ?? null } };
     store.save('health.json', { checkedAt: iso(), release: process.env.HANASAND_COLLECTOR_RELEASE || 'development', runtime: 'typescript', ...metadata });
     if (coverage) metadata.guest_coverage = { checkedAt: coverage.checkedAt, running: coverage.instances.filter(g => g.status === 'Running').length, stopped: coverage.instances.filter(g => g.status !== 'Running').length, failures: coverage.failures, enrollment: 'Stopped guests are enrolled when next running.' };
     const message = failures.length ? 'Collection failed: ' + failures.join(', ') : Object.values(health).includes(null) ? 'Collection starting' : 'Collection healthy';

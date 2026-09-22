@@ -25,7 +25,7 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
         .filter(row => (p[0] === undefined || BigInt(row.id) <= BigInt(p[0])) && Date.parse(row.created_at) >= Date.now() - 300_000
             && !Object.values(stored).some(event => event.key === `service:${row.id}` && ['processed', 'skipped'].includes(event.processing_status)))
         .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || Number(b.id) - Number(a.id))
-        .slice(0, 1000) }
+        .slice(0, 50) }
     if (sql.startsWith('SELECT id FROM service_logs')) { historyScans.push(p); return { rows: (p[1] === watermark ? fresh : backlog).filter(row => BigInt(row.id) > BigInt(p[0]) && BigInt(row.id) <= BigInt(p[1])).slice(0, 10000).map(row => ({ id: row.id })) } }
     if (sql.includes('SELECT * FROM service_logs')) {
         if (failHistory && p[1] !== watermark) throw new Error('History read failed')
@@ -174,7 +174,7 @@ test('recent event times are checked before replayed FIFO events without jumping
     expect(sql).not.toContain('s.id <= $1')
     expect(sql).toContain('e.log_key = \'service:\' || s.id::text')
     expect(sql).toContain('e.processing_status IN (\'processed\', \'skipped\')')
-    expect(sql).toContain('ORDER BY s.created_at DESC, s.id DESC LIMIT 200')
+    expect(sql).toContain('ORDER BY s.created_at DESC, s.id DESC LIMIT 50')
     // When FIFO catches up it advances normally, without reevaluating the same log.
     fresh = [priority[0]]; backlog = []
     await processStoredLogs()
@@ -318,11 +318,11 @@ test('fresh arrivals are serviced between durable historical pages', async () =>
     const original = findings.persistMillEventFindings
     const hook = spyOn(findings, 'persistMillEventFindings').mockImplementation(async rows => {
         await original(rows)
-        if (checked.length === 100) priority.push({ ...makeLog('1001'), created_at: new Date().toISOString() })
+        if (checked.length === 50) priority.push({ ...makeLog('1001'), created_at: new Date().toISOString() })
     })
     try {
         await processStoredLogs()
-        expect(checked.indexOf('1001')).toBe(100)
+        expect(checked.indexOf('1001')).toBe(50)
         expect(checked).toHaveLength(251)
         expect(cursor.last_id).toBe('250')
     } finally { hook.mockRestore(); timer.mockRestore() }

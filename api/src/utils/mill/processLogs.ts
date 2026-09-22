@@ -157,8 +157,8 @@ export async function processStoredLogs() {
                     if (!configured.has(target)) configured.set(target, await loadConfiguredMillRules(target))
                     // Yield between durable pages so historical work cannot hold
                     // fresh events behind a thousand-row write or recovery pass.
-                    for (let offset = 0; offset < batch.length; offset += 100) {
-                        await processLogBatch(batch.slice(offset, offset + 100), target, configured.get(target)!)
+                    for (let offset = 0; offset < batch.length; offset += 50) {
+                        await processLogBatch(batch.slice(offset, offset + 50), target, configured.get(target)!)
                         if (!priority) await processFresh()
                     }
                 }
@@ -173,7 +173,7 @@ export async function processStoredLogs() {
                     WHERE s.created_at >= statement_timestamp() - INTERVAL '5 minutes'
                       AND NOT EXISTS (SELECT 1 FROM mill_events e WHERE e.log_key = 'service:' || s.id::text
                         AND e.processing_status IN ('processed', 'skipped'))
-                    ORDER BY s.created_at DESC, s.id DESC LIMIT 200`)
+                    ORDER BY s.created_at DESC, s.id DESC LIMIT 50`)
                 await processScopes(priority.rows, true)
             }
             await processFresh()
