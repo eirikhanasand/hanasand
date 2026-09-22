@@ -46,3 +46,12 @@ test('processing and configuration failures are reported and back off', async ()
         await stop()
     }
 })
+
+
+test('the live processor polls promptly after idle periods and still backs off on failures', async () => {
+    let fail = false
+    const stop = startLogProcessor(async () => { if (fail) throw new Error('failed'); return false }, () => {}, () => 100, () => 0, 100)
+    callback(); await settle(); expect(delay).toBe(100)
+    fail = true; callback(); await settle(); expect(delay).toBe(5000)
+    await stop()
+})

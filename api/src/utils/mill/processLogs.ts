@@ -11,6 +11,7 @@ import { processQueuedLogs, recoverProcessLogs } from './processQueue.ts'
 import { backfillLogDimensions } from '../logs/dimensions.ts'
 import { pruneAccessLogs } from './pruneAccessLogs.ts'
 import { accessRuleId } from './analyzeAccess.ts'
+import { withLogBatch } from './logBatch.ts'
 
 let running = false
 // Persist a pending event before evaluating it. A failure is retried with the same
@@ -115,6 +116,57 @@ export async function processLogBatch(logs: LogInput[], organizationId: string, 
         AND (e.processing_status IS DISTINCT FROM 'processed' OR e.normalized IS DISTINCT FROM e.normalized || item.result)`, [JSON.stringify(updates)])
 }
 
+function scopedProcessor(platformId: string, onWork: () => void, afterBatch?: () => Promise<void>) {
+    const configured = new Map<string, Awaited<ReturnType<typeof loadConfiguredMillRules>>>()
+    const processScopes = async (logs: LogInput[], priority = false) => {
+        if (logs.length) onWork()
+        const scopes = new Map<string, LogInput[]>()
+        for (const row of logs) {
+            const scope = String(row.metadata?.organizationId || row.metadata?.tenantId || platformId)
+            if (!scopes.has(scope)) scopes.set(scope, [])
+            scopes.get(scope)!.push(row)
+        }
+        for (const [scope, batch] of scopes) {
+            const active = await run('SELECT id FROM organizations WHERE id = $1 AND status = \'active\'', [scope])
+            const target = active.rows.length ? scope : platformId
+            if (!configured.has(target)) configured.set(target, await loadConfiguredMillRules(target))
+            // Yield between durable pages so historical work cannot hold
+            // fresh events behind a thousand-row write or recovery pass.
+            for (let offset = 0; offset < batch.length; offset += 50) {
+                await withLogBatch(() => processLogBatch(batch.slice(offset, offset + 50), target, configured.get(target)!))
+                if (!priority) await afterBatch?.()
+            }
+        }
+    }
+    return { configured, processScopes }
+}
+
+let liveRunning = false
+export async function processLiveLogs() {
+    if (liveRunning) return false
+    liveRunning = true
+    try {
+        return await withTransaction(async query => {
+            const lock = await query('SELECT pg_try_advisory_xact_lock(hashtextextended(\'mill:live-service-logs\', 0)) AS locked')
+            if (!lock.rows[0].locked) return false
+            const logs = await freshLogs()
+            if (!logs.length) return false
+            const platform = await run('SELECT id FROM organizations WHERE status = \'active\' AND (id = $1 OR ($1::text IS NULL AND lower(name) = \'hanasand\')) ORDER BY created_at LIMIT 1', [process.env.PLATFORM_LOG_ORGANIZATION_ID || null])
+            if (!platform.rows[0]) throw new Error('Configure an active platform log organization.')
+            await scopedProcessor(platform.rows[0].id, () => {}).processScopes(logs, true)
+            return true
+        })
+    } finally { liveRunning = false }
+}
+
+async function freshLogs(): Promise<LogInput[]> {
+    return (await run(`SELECT s.* FROM service_logs s
+        WHERE s.created_at >= statement_timestamp() - INTERVAL '10 seconds'
+          AND NOT EXISTS (SELECT 1 FROM mill_events e WHERE e.log_key = 'service:' || s.id::text
+            AND e.processing_status IN ('processed', 'skipped'))
+        ORDER BY s.created_at ASC, s.id ASC LIMIT 200`)).rows
+}
+
 export async function processStoredLogs() {
     if (running) return
     running = true
@@ -142,27 +194,7 @@ export async function processStoredLogs() {
             // already checked rows to the tail of the backfill.
             await query('UPDATE log_processing_cursors SET history_end_id = recent_id WHERE name = \'service_logs\' AND history_end_id IS NULL')
             const cursor = (await query('SELECT last_id, recent_id, history_end_id FROM log_processing_cursors WHERE name = \'service_logs\'')).rows[0]
-            const configured = new Map<string, Awaited<ReturnType<typeof loadConfiguredMillRules>>>()
-            const processScopes = async (logs: LogInput[], priority = false) => {
-                if (logs.length) advanced = true
-                const scopes = new Map<string, LogInput[]>()
-                for (const row of logs) {
-                    const scope = String(row.metadata?.organizationId || row.metadata?.tenantId || platform.rows[0].id)
-                    if (!scopes.has(scope)) scopes.set(scope, [])
-                    scopes.get(scope)!.push(row)
-                }
-                for (const [scope, batch] of scopes) {
-                    const active = await run('SELECT id FROM organizations WHERE id = $1 AND status = \'active\'', [scope])
-                    const target = active.rows.length ? scope : platform.rows[0].id
-                    if (!configured.has(target)) configured.set(target, await loadConfiguredMillRules(target))
-                    // Yield between durable pages so historical work cannot hold
-                    // fresh events behind a thousand-row write or recovery pass.
-                    for (let offset = 0; offset < batch.length; offset += 50) {
-                        await processLogBatch(batch.slice(offset, offset + 50), target, configured.get(target)!)
-                        if (!priority) await processFresh()
-                    }
-                }
-            }
+            const { configured, processScopes } = scopedProcessor(platform.rows[0].id, () => { advanced = true }, () => processFresh())
             let lastFresh = -Infinity
             const processFresh = async () => {
                 if (performance.now() - lastFresh < 250) return
@@ -173,12 +205,7 @@ export async function processStoredLogs() {
                 // reserve this lane for events that can still meet the deadline.
                 // Oldest first prevents newer bursts from repeatedly displacing
                 // the unprocessed remainder of the preceding batch.
-                const priority = await run(`SELECT s.* FROM service_logs s
-                    WHERE s.created_at >= statement_timestamp() - INTERVAL '10 seconds'
-                      AND NOT EXISTS (SELECT 1 FROM mill_events e WHERE e.log_key = 'service:' || s.id::text
-                        AND e.processing_status IN ('processed', 'skipped'))
-                    ORDER BY s.created_at ASC, s.id ASC LIMIT 200`)
-                await processScopes(priority.rows, true)
+                await processScopes(await freshLogs(), true)
             }
             await processFresh()
             const { rows: [queue] } = await run(`SELECT COALESCE((SELECT queued_at < clock_timestamp() - INTERVAL '60 seconds'

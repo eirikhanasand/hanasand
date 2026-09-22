@@ -2,12 +2,14 @@ import { afterEach, beforeEach, expect, mock, spyOn, test } from 'bun:test'
 let locked = true, fail = false, watermark: string | null = '200', additionalRuns = 0, queueRuns = 0, recoveryRuns = 0
 let delayed = false, historyLimits: number[], recentLimits: number[], queueModes: boolean[], recoveryLimits: number[], reads: Array<{ sql: string, params: any[] }>
 let historyScans: any[][] = []
+let historyGate: Promise<void> | undefined, historyEntered: (() => void) | undefined
 let cursor: any, statements: string[], checked: string[], stored: Record<string, any>, pending: any[]
 let transactionStatements: string[], failHistory = false, additionalCursorQuery: unknown
 const makeLog = (id: string, metadata: any = {}) => ({ id, service: 'audit', host: 'inspur', level: 'info', message: id, created_at: '2026-09-19T00:00:00Z', metadata })
 let priority: any[], fresh: any[], backlog: any[], inactiveScopes: Set<string>
 const query = async (sql: string, p: any[] = []): Promise<any> => {
     statements.push(sql)
+    if (sql.includes('SELECT pg_advisory_xact_lock')) return { rows: [] }
     if (sql.includes('pg_try_advisory_xact_lock')) return { rows: [{ locked }] }
     if (sql.includes('AS delayed')) return { rows: [{ delayed }] }
     if (sql.startsWith('SELECT id FROM organizations')) return { rows: (p[0] === 'missing' || inactiveScopes.has(p[0]) && sql.includes("status = 'active'")) ? [] : [{ id: 'platform' }] }
@@ -26,7 +28,7 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
             && !Object.values(stored).some(event => event.key === `service:${row.id}` && ['processed', 'skipped'].includes(event.processing_status)))
         .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at) || Number(a.id) - Number(b.id))
         .slice(0, 200) }
-    if (sql.startsWith('SELECT id FROM service_logs')) { historyScans.push(p); return { rows: (p[1] === watermark ? fresh : backlog).filter(row => BigInt(row.id) > BigInt(p[0]) && BigInt(row.id) <= BigInt(p[1])).slice(0, 10000).map(row => ({ id: row.id })) } }
+    if (sql.startsWith('SELECT id FROM service_logs')) { historyEntered?.(); await historyGate; historyScans.push(p); return { rows: (p[1] === watermark ? fresh : backlog).filter(row => BigInt(row.id) > BigInt(p[0]) && BigInt(row.id) <= BigInt(p[1])).slice(0, 10000).map(row => ({ id: row.id })) } }
     if (sql.includes('SELECT * FROM service_logs')) {
         if (failHistory && p[1] !== watermark) throw new Error('History read failed')
         reads.push({ sql, params: p })
@@ -70,7 +72,7 @@ mock.module('../src/handlers/mill.ts', () => ({
     normalizeMillEvent: (event: any) => ({ timestamp: event.timestamp, eventType: event.event_type, action: event.action, outcome: event.outcome, normalized: event }),
     createMillFindings: async (_scope: string, _id: string, event: any) => { if (fail) throw new Error('Finding storage unavailable'); checked.push(event.normalized.message) },
 }))
-const { processStoredLogs } = await import('../src/utils/mill/processLogs.ts')
+const { processStoredLogs, processLiveLogs } = await import('../src/utils/mill/processLogs.ts')
 const originalLimit = process.env.LOG_CATCHUP_BATCH_LIMIT
 const originalHistoryLimit = process.env.LOG_CATCHUP_HISTORY_LIMIT
 afterEach(() => { if (originalHistoryLimit === undefined) delete process.env.LOG_CATCHUP_HISTORY_LIMIT; else process.env.LOG_CATCHUP_HISTORY_LIMIT = originalHistoryLimit })
@@ -125,7 +127,7 @@ test('failed findings retain pending event and cursors for successful retry', as
 test('cursor updates share the lock transaction while event writes remain independently durable', async () => {
     await processStoredLogs()
     expect(additionalCursorQuery).toBe(transactionQuery)
-    expect(transactionStatements).toEqual(statements.filter(sql => sql.includes('log_processing_cursors') || sql.includes('pg_try_advisory_xact_lock')))
+    expect(transactionStatements).toEqual(statements.filter(sql => sql.includes('log_processing_cursors') || sql.includes('pg_try_advisory_xact_lock') || sql.includes('SELECT pg_advisory_xact_lock')))
     expect(transactionStatements.some(sql => sql.includes('mill_events') || sql.includes('SELECT * FROM service_logs'))).toBe(false)
 })
 test('later failure rolls back cursor positions but retry reuses already durable findings', async () => {
@@ -350,4 +352,23 @@ test('overdue replay cannot occupy the live deadline lane and is still processed
     await processStoredLogs()
     expect(checked).toEqual(['201', '101', '1'])
     expect(cursor.recent_id).toBe('101')
+})
+
+
+test('live processing completes while a catch-up read is blocked and leaves its cursors alone', async () => {
+    let release!: () => void, entered!: () => void
+    historyGate = new Promise<void>(ok => { release = ok })
+    const ready = new Promise<void>(ok => { entered = ok })
+    historyEntered = entered
+    const historical = processStoredLogs()
+    await ready
+    const before = { ...cursor }
+    priority = [{ ...makeLog('2001'), created_at: new Date().toISOString() }]
+    try {
+        expect(await processLiveLogs()).toBe(true)
+        expect(checked).toContain('2001')
+        expect(cursor).toEqual(before)
+        expect(statements.some(sql => sql.includes('mill:live-service-logs'))).toBe(true)
+        expect(statements.some(sql => sql.includes('mill:log-batch'))).toBe(true)
+    } finally { historyGate = undefined; historyEntered = undefined; release(); await historical }
 })
