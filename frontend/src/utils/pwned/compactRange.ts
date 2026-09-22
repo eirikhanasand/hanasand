@@ -1,17 +1,60 @@
 const MAX_BLOCK = 64 * 1024 * 1024
+const MAX_BUNDLE = 32 * 1024 * 1024
+const invalid = () => new Error('The password index returned an invalid response.')
 
 // The server returns only the requested prefix bucket. Full-hash matching and
 // provenance decoding stay in the browser, including on an unmatched lookup.
 export async function parseCompactRange(buffer: ArrayBuffer, hash: string): Promise<{ count: number; files: BreachFile[] }> {
+    if (!/^[A-F0-9]{40}$/i.test(hash)) throw invalid()
+    const view = new DataView(buffer)
+    const magic = new TextDecoder().decode(new Uint8Array(buffer, 0, Math.min(8, buffer.byteLength)))
+    if (magic !== 'PWNPRF02') return parseSingleRange(buffer, hash, new Set())
+    if (buffer.byteLength < 16 || buffer.byteLength > MAX_BUNDLE || view.getUint32(12, true) !== parseInt(hash.slice(0, 5), 16)) throw invalid()
+    const frames = view.getUint32(8, true)
+    if (frames < 2 || frames > 16) throw invalid()
+    const parts: ArrayBuffer[] = []
+    let position = 16
+    let expanded = 0
+    for (let frame = 0; frame < frames; frame++) {
+        if (position + 4 > buffer.byteLength) throw invalid()
+        const length = view.getUint32(position, true)
+        position += 4
+        if (length < 16 || position + length > buffer.byteLength) throw invalid()
+        const catalogLength = view.getUint32(position + 8, true)
+        const blockStart = position + 16 + catalogLength
+        if (blockStart > position + length) throw invalid()
+        if (blockStart < position + length) {
+            if (position + length - blockStart < 5) throw invalid()
+            expanded += view.getUint32(blockStart, true)
+            if (expanded > MAX_BLOCK) throw invalid()
+        }
+        parts.push(buffer.slice(position, position + length))
+        position += length
+    }
+    if (position !== buffer.byteLength) throw invalid()
+    const result: { count: number; files: BreachFile[] } = { count: 0, files: [] }
+    const seenFiles = new Set<string>()
+    for (const part of parts) {
+        const match = await parseSingleRange(part, hash, seenFiles)
+        result.count += match.count
+        if (!Number.isSafeInteger(result.count)) throw invalid()
+        result.files.push(...match.files)
+    }
+    return result
+}
+
+async function parseSingleRange(buffer: ArrayBuffer, hash: string, seenFiles: Set<string>): Promise<{ count: number; files: BreachFile[] }> {
     const bytes = new Uint8Array(buffer)
     const view = new DataView(buffer)
-    const invalid = () => new Error('The password index returned an invalid response.')
-    if (!/^[A-F0-9]{40}$/i.test(hash)) throw invalid()
     if (bytes.length < 16 || new TextDecoder().decode(bytes.subarray(0, 8)) !== 'PWNPRF01') throw invalid()
     const catalogLength = view.getUint32(8, true)
     if (view.getUint32(12, true) !== parseInt(hash.slice(0, 5), 16) || catalogLength > MAX_BLOCK || 16 + catalogLength > bytes.length) throw invalid()
     const catalog: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(16, 16 + catalogLength)))
     if (!Array.isArray(catalog) || !catalog.every(file => typeof file === 'string')) throw invalid()
+    for (const file of catalog) {
+        if (seenFiles.has(file)) throw invalid()
+        seenFiles.add(file)
+    }
     const blockStart = 16 + catalogLength
     if (blockStart === bytes.length) return { count: 0, files: [] }
     if (bytes.length - blockStart < 5 || bytes.length - blockStart > MAX_BLOCK + 65536) throw invalid()

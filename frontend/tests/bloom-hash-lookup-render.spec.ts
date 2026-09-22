@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { compactRangeFixture } from './fixtures/compact-range'
+import { compactBundleFixture, compactRangeFixture } from './fixtures/compact-range'
 
 for (const signedIn of [false, true]) {
     test(`hash lookup uses the shared navigation when ${signedIn ? 'signed in' : 'signed out'}`, async ({ page, baseURL }) => {
@@ -101,4 +101,23 @@ test('local hash command is distinct and copyable on mobile', async ({ page }) =
     }))
     expect(colors.code).not.toBe(colors.panel)
     expect(colors.fits).toBe(true)
+})
+
+test('hash lookup combines master and overlay provenance locally', async ({ page }) => {
+    let requests = 0
+    await page.route('**/api/pwned', async route => {
+        expect(route.request().postDataJSON()).toEqual({ prefix: '5BAA6' })
+        requests++
+        await route.fulfill({ contentType: 'application/vnd.hanasand.pwned-prefix', body: compactBundleFixture() })
+    })
+    await page.goto('/pwned')
+    await page.getByLabel('SHA-1 hash').filter({ visible: true }).fill('5baa61e4c9b93f3f0682250b6cf8331b7ee68fd8')
+    await page.getByRole('button', { name: 'Run Bloom lookup' }).click()
+    await expect(page.getByText('This password has been breached 6 times.')).toBeVisible()
+    await expect(page.getByText('Found in 4 files')).toBeVisible()
+    for (const file of ['one.txt', 'two.txt', 'three.txt', 'four.txt']) {
+        await expect(page.getByText(file, { exact: true })).toBeVisible()
+    }
+    await expect(page.getByText(/12,010,103,436/)).toHaveCount(2)
+    expect(requests).toBe(1)
 })

@@ -1,7 +1,7 @@
 import { deflateSync } from 'node:zlib'
 
-export function compactRangeFixture(count = 3) {
-    const catalog = Buffer.from(JSON.stringify(['one.txt', 'two.txt']))
+export function compactRangeFixture(count = 3, files = ['one.txt', 'two.txt']) {
+    const catalog = Buffer.from(JSON.stringify(files))
     const header = Buffer.alloc(16)
     header.write('PWNPRF01')
     header.writeUInt32LE(catalog.length, 8)
@@ -23,4 +23,16 @@ export function compactRangeFixture(count = 3) {
     const raw = Buffer.concat([n, Buffer.from('61E4C9B93F3F0682250B6CF8331B7EE68FD8', 'hex'), offsets, postings])
     const size = Buffer.alloc(4); size.writeUInt32LE(raw.length)
     return Buffer.concat([header, catalog, size, deflateSync(raw)])
+}
+
+export function compactBundleFixture(frames = [compactRangeFixture(), compactRangeFixture(3, ['three.txt', 'four.txt'])]) {
+    const header = Buffer.alloc(16)
+    header.write('PWNPRF02')
+    header.writeUInt32LE(frames.length, 8)
+    header.writeUInt32LE(0x5baa6, 12)
+    return Buffer.concat([header, ...frames.flatMap(frame => {
+        const length = Buffer.alloc(4)
+        length.writeUInt32LE(frame.length)
+        return [length, frame]
+    })])
 }
