@@ -169,11 +169,13 @@ export async function processStoredLogs() {
                 lastFresh = performance.now()
                 // No cursor advances here: visible committed rows are safe to
                 // process even while another writer prevents a stable watermark.
+                // Oldest first prevents newer bursts from repeatedly displacing
+                // the unprocessed remainder of the preceding batch.
                 const priority = await run(`SELECT s.* FROM service_logs s
                     WHERE s.created_at >= statement_timestamp() - INTERVAL '5 minutes'
                       AND NOT EXISTS (SELECT 1 FROM mill_events e WHERE e.log_key = 'service:' || s.id::text
                         AND e.processing_status IN ('processed', 'skipped'))
-                    ORDER BY s.created_at DESC, s.id DESC LIMIT 50`)
+                    ORDER BY s.created_at ASC, s.id ASC LIMIT 200`)
                 await processScopes(priority.rows, true)
             }
             await processFresh()

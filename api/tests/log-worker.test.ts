@@ -24,8 +24,8 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
     if (sql.includes('SELECT s.* FROM service_logs s')) return { rows: priority
         .filter(row => (p[0] === undefined || BigInt(row.id) <= BigInt(p[0])) && Date.parse(row.created_at) >= Date.now() - 300_000
             && !Object.values(stored).some(event => event.key === `service:${row.id}` && ['processed', 'skipped'].includes(event.processing_status)))
-        .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || Number(b.id) - Number(a.id))
-        .slice(0, 50) }
+        .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at) || Number(a.id) - Number(b.id))
+        .slice(0, 200) }
     if (sql.startsWith('SELECT id FROM service_logs')) { historyScans.push(p); return { rows: (p[1] === watermark ? fresh : backlog).filter(row => BigInt(row.id) > BigInt(p[0]) && BigInt(row.id) <= BigInt(p[1])).slice(0, 10000).map(row => ({ id: row.id })) } }
     if (sql.includes('SELECT * FROM service_logs')) {
         if (failHistory && p[1] !== watermark) throw new Error('History read failed')
@@ -167,18 +167,18 @@ test('recent event times are checked before replayed FIFO events without jumping
         { ...makeLog('201'), created_at: new Date().toISOString() },
         { ...makeLog('180'), created_at: new Date(Date.now() - 600_000).toISOString() }]
     await processStoredLogs()
-    expect(checked).toEqual(['201', '190', '101', '1'])
+    expect(checked).toEqual(['190', '201', '101', '1'])
     expect(cursor).toMatchObject({ last_id: '1', recent_id: '101' })
     const sql = statements.find(value => value.includes('SELECT s.* FROM service_logs s'))!
     expect(sql).toContain('s.created_at >= statement_timestamp() - INTERVAL \'5 minutes\'')
     expect(sql).not.toContain('s.id <= $1')
     expect(sql).toContain('e.log_key = \'service:\' || s.id::text')
     expect(sql).toContain('e.processing_status IN (\'processed\', \'skipped\')')
-    expect(sql).toContain('ORDER BY s.created_at DESC, s.id DESC LIMIT 50')
+    expect(sql).toContain('ORDER BY s.created_at ASC, s.id ASC LIMIT 200')
     // When FIFO catches up it advances normally, without reevaluating the same log.
     fresh = [priority[0]]; backlog = []
     await processStoredLogs()
-    expect(checked).toEqual(['201', '190', '101', '1'])
+    expect(checked).toEqual(['190', '201', '101', '1'])
     expect(cursor.recent_id).toBe('190')
     expect(Object.values(stored)).toHaveLength(4)
 })
@@ -326,4 +326,18 @@ test('fresh arrivals are serviced between durable historical pages', async () =>
         expect(checked).toHaveLength(251)
         expect(cursor.last_id).toBe('250')
     } finally { hook.mockRestore(); timer.mockRestore() }
+})
+
+
+test('fresh bursts retain their earlier events when newer batches keep arriving', async () => {
+    backlog = []; fresh = []
+    const time = Date.now() - 2000
+    priority = Array.from({ length: 450 }, (_, i) => ({ ...makeLog(String(1001 + i)), created_at: new Date(time + i).toISOString() }))
+    await processStoredLogs()
+    expect(checked.slice(0, 200)).toEqual(Array.from({ length: 200 }, (_, i) => String(1001 + i)))
+    priority.push(...Array.from({ length: 200 }, (_, i) => ({ ...makeLog(String(2001 + i)), created_at: new Date().toISOString() })))
+    await processStoredLogs()
+    expect(checked.slice(200, 400)).toEqual(Array.from({ length: 200 }, (_, i) => String(1201 + i)))
+    await processStoredLogs()
+    expect(checked.slice(400, 450)).toEqual(Array.from({ length: 50 }, (_, i) => String(1401 + i)))
 })

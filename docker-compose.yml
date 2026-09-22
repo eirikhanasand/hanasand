@@ -450,8 +450,8 @@ services:
       - synchronous_commit=on
     # Parallel queries share memory here; Docker's 64 MiB default exhausts it.
     shm_size: "2gb"
-    mem_limit: 96g
-    memswap_limit: 96g
+    mem_limit: 256g
+    memswap_limit: 256g
     cpus: "16.0"
     restart: always
     environment:
