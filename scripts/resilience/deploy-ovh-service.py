@@ -15,6 +15,8 @@ ports = {'frontend': 19300, 'api': 19080, 'auth': 19090}
 if kind not in ports:
     raise SystemExit('Choose frontend, api or auth.')
 serving_port = ports[kind]
+# OVH already uses19081 for another listener; do not disturb it while staging.
+candidate_port = serving_port + (2 if kind == 'api' else 1)
 if not re.fullmatch(r'[0-9a-f]{40}', release):
     raise SystemExit('Pass the full image release commit.')
 lock = open('/tmp/hanasand-frontend-deploy.lock', 'a')
@@ -32,7 +34,7 @@ for target in (candidate, previous):
     if subprocess.run(['docker', 'inspect', target], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
         raise SystemExit(f'{target} already exists; inspect before retrying.')
 with socket.socket() as listener:
-    listener.bind(('127.0.0.1', serving_port + 1))
+    listener.bind(('127.0.0.1', candidate_port))
 settings.pop('COMPACT_PWNED_RANGE_API', None)
 settings.update(PWNED_LOOKUP_API='https://api.hanasand.com/api/pwned',
                 HANASAND_RELEASE_COMMIT=release, HOSTNAME='127.0.0.1')
@@ -88,8 +90,8 @@ def check(port, target):
 
 # Test new runtime and HTTPS lookup without changing the serving instance.
 try:
-    launch(candidate, serving_port + 1)
-    check(serving_port + 1, candidate)
+    launch(candidate, candidate_port)
+    check(candidate_port, candidate)
 finally:
     subprocess.run(['docker', 'rm', '-f', candidate], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 subprocess.run(['docker', 'stop', name], check=True)
