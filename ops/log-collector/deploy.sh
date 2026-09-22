@@ -49,15 +49,7 @@ attempt=0
 while [ "$attempt" -lt 45 ]; do
     sleep 2
     root install -m 0644 /var/lib/hanasand-log-collector/health.json "$scratch/health.json" 2>/dev/null || true
-    if node - "$scratch/health.json" "$release" <<'NODE'
-const fs = require('node:fs');
-try {
-  const health = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-  const statuses = health.source_status || {};
-  const healthy = ['audit_live', 'journal_live', 'delivery_live'].every(name => statuses[name]?.ok === true && Date.now()-Date.parse(statuses[name].checkedAt) < 45000);
-  process.exit(health.runtime === 'typescript' && health.release === process.argv[3] && Date.now()-Date.parse(health.checkedAt) < 45000 && healthy ? 0 : 1);
-} catch { process.exit(1); }
-NODE
+    if node "$base/collector.cjs" --verify-health "$scratch/health.json" "$release" 2>/dev/null
     then
         root systemctl is-active --quiet hanasand-log-collector || rollback
         /usr/local/sbin/hanasand-log-collector --version

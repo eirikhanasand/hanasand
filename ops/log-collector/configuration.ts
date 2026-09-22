@@ -25,3 +25,17 @@ export function retention(path = '/etc/audit/auditd.conf', available?: number) {
   fs.renameSync(temporary, path); return { changed: true, max_log_file: size, num_logs: count };
 }
 export async function applyRetention() { const result = retention(); if (result.changed) await new Commands(new Store()).run(['auditctl', '--signal', 'reload']); console.log(JSON.stringify(result)); }
+
+interface ReleaseHealth {
+  runtime?: string; release?: string; checkedAt?: string;
+  source_status?: Record<string, { ok?: boolean; checkedAt?: string; lastAcknowledgedAt?: string }>;
+}
+export function releaseReady(health: ReleaseHealth, revision: string, now = Date.now()): boolean {
+  const fresh = (value?: string) => !!value && Number.isFinite(Date.parse(value)) && now - Date.parse(value) >= 0 && now - Date.parse(value) < 45000;
+  const statuses = health.source_status || {};
+  // A retryable busy response or old backlog must remain visible in health, but
+  // does not undo a release that is collecting and committing fresh requests.
+  return health.runtime === 'typescript' && health.release === revision && fresh(health.checkedAt)
+    && ['audit_live', 'journal_live'].every(name => statuses[name]?.ok === true && fresh(statuses[name].checkedAt))
+    && fresh(statuses.delivery_live?.lastAcknowledgedAt);
+}

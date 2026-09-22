@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { fs, join, Store, Delivery, DeliveryError, Commands, CommandError, CollectionError, Config, LogEvent, iso, sha, scrub, scrubArguments, scrubMetadata, boundedMetadata, event, recordLines, MAX_RECORD_BYTES, seconds } from '../core';
 import { Sources, parseAudit, dockerEvent, dockerCliStream, localAuditDate, auditEvents } from '../sources';
 import { guestExport, guestAck, jsonEvents } from '../guests';
-import { configure, retention } from '../configuration';
+import { configure, retention, releaseReady } from '../configuration';
 let root: string, store: Store, source: Sources;
 const config: Config = { host: 'fixture', start: '2026-09-19T00:00:00Z', token: 'synthetic-test-token' };
 beforeEach(() => { root = fs.mkdtempSync(join(os.tmpdir(), 'collector-test-')); store = new Store(join(root, 'state')); source = new Sources(store); });
@@ -267,4 +267,20 @@ test('live audit allows initial retained-log scan before returning to short chec
   };
   await source.audit(config, true); await source.audit(config, true);
   expect(timeouts).toEqual([60, 5]);
+});
+
+test('activation requires fresh source checks and a real ACK while preserving backpressure health', () => {
+  const now = Date.now(), fresh = iso(now / 1000), stale = iso(now / 1000 - 60);
+  const health = { runtime: 'typescript', release: 'revision', checkedAt: fresh, source_status: {
+    audit_live: { ok: true, checkedAt: fresh }, journal_live: { ok: true, checkedAt: fresh },
+    delivery_live: { ok: false, checkedAt: fresh, lastAcknowledgedAt: fresh, error: 'Ingestion HTTP 503' },
+  } };
+  expect(releaseReady(health, 'revision', now)).toBe(true);
+  expect(health.source_status.delivery_live.ok).toBe(false);
+  expect(releaseReady(health, 'different', now)).toBe(false);
+  health.source_status.delivery_live.lastAcknowledgedAt = stale;
+  expect(releaseReady(health, 'revision', now)).toBe(false);
+  health.source_status.delivery_live.lastAcknowledgedAt = fresh;
+  health.source_status.audit_live.ok = false;
+  expect(releaseReady(health, 'revision', now)).toBe(false);
 });

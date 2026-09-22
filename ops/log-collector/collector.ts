@@ -2,7 +2,7 @@ import { Worker, isMainThread, workerData, parentPort } from 'node:worker_thread
 import { fs, Store, Config, Metadata, Delivery, iso, sleep, event, collectionError } from './core';
 import { Sources } from './sources';
 import { guests, guestExport, guestAck, printRecent } from './guests';
-import { configure, applyRetention } from './configuration';
+import { configure, applyRetention, releaseReady } from './configuration';
 
 const sources = ['audit', 'journal', 'docker', 'docker_file_history', 'docker_file_live', 'guests'] as const;
 interface Status { ok: boolean; checkedAt: string; error?: string; [key: string]: string | number | boolean | undefined }
@@ -11,13 +11,15 @@ async function worker(name: string) {
   const store = new Store(), config: Config = JSON.parse(fs.readFileSync(configPath, 'utf8')), source = new Sources(store);
   if (name.startsWith('delivery_')) {
     const lane = name.slice('delivery_'.length), delivery = new Delivery(config);
+    let lastAcknowledgedAt: string | undefined;
     while (true) {
       try {
         const paths = store.queuedBatches(lane); if (!paths.length) { await sleep(250); continue; }
         const count = await delivery.deliver(paths), age = Math.max(0, Date.now() / 1000 - Number(paths[0].split('/').pop()!.split('-')[0]) / 1e9);
-        const status: Status = { ok: lane !== 'live' || age < 10, checkedAt: iso(), accepted: count, queueAgeSeconds: age };
+        lastAcknowledgedAt = iso();
+        const status: Status = { ok: lane !== 'live' || age < 10, checkedAt: lastAcknowledgedAt, lastAcknowledgedAt, accepted: count, queueAgeSeconds: age };
         if (!status.ok) status.error = 'Live log delivery exceeded 10 seconds'; parentPort!.postMessage(status);
-      } catch (error) { parentPort!.postMessage({ ok: false, checkedAt: iso(), error: collectionError(error) }); await sleep(1000); }
+      } catch (error) { parentPort!.postMessage({ ok: false, checkedAt: iso(), lastAcknowledgedAt, error: collectionError(error) }); await sleep(1000); }
     }
   }
   const work: Record<string, [() => Promise<unknown>, number]> = {
@@ -34,6 +36,7 @@ async function worker(name: string) {
 }
 async function main() {
   const args = process.argv.slice(2);
+  if (args[0] === '--verify-health') { process.exit(releaseReady(JSON.parse(fs.readFileSync(args[1], 'utf8')), args[2]) ? 0 : 1); }
   if (args[0] === '--configure') { configure(args[1], args[2], args[3]); return; }
   if (args[0] === '--retention') { await applyRetention(); return; }
   if (args[0] === '--version') { console.log('hanasand-log-collector typescript ' + (process.env.HANASAND_COLLECTOR_RELEASE || 'development')); return; }
