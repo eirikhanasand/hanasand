@@ -65,6 +65,7 @@ type Capture = {
     toolAnalysis?: SandboxToolAnalysis
     networkSummary?: SandboxNetworkSummary
     webcrackLoad?: SandboxWebCrackLoad
+    deobfuscatedCode?: string
 }
 type FrameQuality = {
     looksBlank?: boolean
@@ -83,7 +84,9 @@ type SandboxWebCrackLoad = {
     action?: string
     reason?: string
 }
+type SiteNetwork = { url: string; ip: string; provider?: string | null; city?: string | null; country?: string | null }
 type SandboxNetworkSummary = {
+    site?: SiteNetwork
     requestCount?: number
     responseCount?: number
     failedCount?: number
@@ -447,13 +450,16 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     }), [customLocale, customPlatform, customTimezoneId, customUserAgent, customViewportHeight, customViewportWidth, selectedFingerprint])
     const summary = useMemo(() => buildAnalystSummary(normalizedTarget, captures, selectedProfile), [captures, normalizedTarget, selectedProfile])
     const toolCaptures = useMemo(() => captures.filter(capture => capture.kind === 'tool'), [captures])
-    const checksWithoutVerdict = selectedProfile.tools.filter(tool => !hasParsedProviderResult(selectToolCapture(toolCaptures, tool, normalizedTarget)?.toolAnalysis))
+    const checksWithoutVerdict = selectedProfile.tools.filter(tool => {
+        const capture = selectToolCapture(toolCaptures, tool, normalizedTarget)
+        return tool.id === 'webcrack' ? Boolean(capture?.webcrackLoad?.sampleBytes && capture.error) : !hasParsedProviderResult(capture?.toolAnalysis)
+    })
     const [reviewChecksOpen, setReviewChecksOpen] = useState(false)
     const latestPageImage = useMemo(() => captures.find(capture => capture.kind === 'page' && capture.image && !capture.frameQuality?.looksBlank)?.image || null, [captures])
     const activeTool = useMemo(() => selectedProfile.tools.find(tool => tool.id === activeSandboxTab), [activeSandboxTab, selectedProfile.tools])
     const activeToolCapture = activeTool ? selectToolCapture(toolCaptures, activeTool, normalizedTarget) : undefined
     const activeViewportImage = activeTool ? activeToolCapture?.image : activeImage || latestPageImage
-    const activeViewportUrl = activeTool ? remoteTabUrls[activeTool.id] || activeToolCapture?.url || resolveToolUrl(activeTool.url, activeUrl || normalizedTarget) : remoteTabUrls.browser || activeUrl || normalizedTarget
+    const siteNetwork = captures.find(capture => capture.networkSummary?.site && historyDomainKey(capture.networkSummary.site.url) === historyDomainKey(activeUrl || normalizedTarget))?.networkSummary?.site
     const viewportFrame = streamUrl ? streamFrame || browserMetadata : activeToolCapture?.frameWidth && activeToolCapture?.frameHeight ? { width: activeToolCapture.frameWidth, height: activeToolCapture.frameHeight } : activeFrame
     const runRemainingSeconds = runTiming ? Math.max(0, Math.ceil((new Date(runTiming.expiresAt).getTime() - clockNow) / 1000)) : 0
     const paidBrowserPlan = Boolean(quota?.paid)
@@ -789,6 +795,12 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                 pushEvent('WebRTC browser stream ready.')
                 return
             }
+            if (payload.type === 'site_network' && payload.site && typeof payload.site === 'object') {
+                const site = payload.site as SiteNetwork
+                setCaptures(current => current.map(capture => capture.kind === 'page' && (capture.url === site.url || (capture.networkSummary?.site?.url === site.url && capture.networkSummary.site.ip === site.ip))
+                    ? { ...capture, networkSummary: { ...capture.networkSummary, site } } : capture))
+                return
+            }
             if (payload.type === 'stream_metrics') {
                 setStreamStats({ fps: finiteNumber(payload.fps) || undefined, latencyMs: finiteNumber(payload.latencyMs) || undefined })
                 return
@@ -899,6 +911,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                     evidence: evidenceValue(payload.evidence),
                     toolAnalysis,
                     webcrackLoad: webcrackLoadValue(payload.webcrackLoad),
+                    deobfuscatedCode: stringValue(payload.deobfuscatedCode),
                 }))
                 if (providerResult) {
                     setHistory(current => persistHistory(current.map(run => run.id === id
@@ -976,7 +989,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
         setActiveSandboxTab(tabId)
         if (!runIsActive) setReportOpen(true)
         const socket = socketRef.current
-        if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'select_tab', tabId }))
+        if (socket?.readyState === WebSocket.OPEN && tool?.id !== 'webcrack') socket.send(JSON.stringify({ type: 'select_tab', tabId }))
     }, [runIsActive, selectedProfile.tools, toolCaptures, normalizedTarget])
 
     useEffect(() => {
@@ -1323,8 +1336,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                 <header className='sticky top-0 z-40 border-b border-ui-border bg-ui-panel px-4 py-3'>
                     <div className='mx-auto flex max-w-[96rem] flex-wrap items-start justify-between gap-3'>
                         <div className='min-w-0 flex-1 basis-72'>
-                            <h1 className='truncate text-lg font-semibold' title={activeViewportUrl}>{historyDomainKey(activeViewportUrl)}</h1>
-                            {selectedProfile.tools.length ? <SandboxTabStrip activeTab={activeSandboxTab} sessionState={sessionState} tools={selectedProfile.tools} toolCaptures={toolCaptures} target={normalizedTarget} onSelect={selectSandboxTab} /> : null}
+                            <SandboxTabStrip activeTab={activeSandboxTab} sessionState={sessionState} tools={selectedProfile.tools} toolCaptures={toolCaptures} target={normalizedTarget} domainUrl={remoteTabUrls.browser || activeUrl || normalizedTarget} siteNetwork={siteNetwork} onSelect={selectSandboxTab} />
                         </div>
                         <div className='grid min-w-0 gap-2'>
                             <div className='flex flex-wrap items-center gap-2'>
@@ -1376,7 +1388,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                             {shareError ? <p role='alert' className='text-sm text-ui-danger'>{shareError}</p> : null}
                             <div data-browser-status className='flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ui-muted sm:justify-end'>
                                 <span aria-label='Browser capacity' title={sessionState === 'queued' ? queueCopy(capacity) : 'Active browser sessions'}>{capacity?.activeSessions ?? 0}/{capacity?.maxSessions ?? 100}</span>
-                                <span>{sessionState === 'ended' ? stoppedRunRef.current ? 'Stopped' : 'Completed' : sessionState === 'failed' ? 'Failed' : compactBrowserEvent(events[0] || sessionStateLabel(sessionState))}{streamStats.fps !== undefined ? ` · ${Math.round(streamStats.fps)} FPS` : ''}{streamStats.latencyMs !== undefined ? ` · ${Math.round(streamStats.latencyMs)}ms` : ''}</span>
+                                <span>{sessionState === 'ended' ? stoppedRunRef.current ? 'Stopped' : 'Completed' : sessionState === 'failed' ? 'Failed' : compactBrowserEvent(events[0] || sessionStateLabel(sessionState))}{streamStats.fps !== undefined ? ` · ${Math.round(streamStats.fps)} FPS` : ''}{streamStats.latencyMs !== undefined ? <> · <span title='Ping' aria-label={`Ping: ${Math.round(streamStats.latencyMs)} milliseconds`}>{Math.round(streamStats.latencyMs)}ms</span></> : null}</span>
                             </div>
                         </div>
                     </div>
@@ -1422,12 +1434,13 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                                                 ref={streamRef}
                                                 src={streamUrl}
                                                 style={{ pointerEvents: streamHasFrame || streamNeedsGesture ? 'auto' : 'none' }}
-                                                tabIndex={streamHasFrame || streamNeedsGesture ? 0 : -1}
+                                                tabIndex={(streamHasFrame || streamNeedsGesture) && activeTool?.id !== 'webcrack' ? 0 : -1}
                                                 title='Live WebRTC browser sandbox'
                                                 className='absolute inset-0 h-full w-full border-0 bg-black'
                                                 allow='autoplay; clipboard-read; clipboard-write; fullscreen'
                                                 sandbox='allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-popups allow-downloads'
                                             />
+                                            {activeTool?.id === 'webcrack' && activeToolCapture ? <div className='absolute inset-0 z-10 overflow-auto bg-ui-canvas p-4'><ProviderReportDetails tool={activeTool} capture={activeToolCapture} /></div> : null}
                                             {!streamHasFrame ? <div className='pointer-events-none absolute inset-0 bg-ui-canvas'>
                                                 {activeViewportImage ? <img src={activeViewportImage} alt='Live browser sandbox frame' className='absolute inset-0 h-full w-full object-contain' /> : null}
                                                 <div role='status' aria-label={streamNeedsGesture ? 'Tap to resume browser stream' : 'Connecting browser stream'} className='absolute inset-0 grid place-content-center justify-items-center gap-2'>
@@ -1514,6 +1527,8 @@ function BrowserLoading({ stage, elapsed, target, queuePosition, onCancel }: { s
 }
 
 function SandboxTabStrip({
+    domainUrl,
+    siteNetwork,
     activeTab,
     sessionState,
     tools,
@@ -1521,6 +1536,8 @@ function SandboxTabStrip({
     target,
     onSelect,
 }: {
+    domainUrl: string
+    siteNetwork?: SiteNetwork
     activeTab: string
     sessionState: SessionState
     tools: SandboxTool[]
@@ -1529,7 +1546,7 @@ function SandboxTabStrip({
     onSelect: (tab: string) => void
 }) {
     return (
-        <div role='tablist' aria-label='Browser and analysis tools' className='flex max-w-full gap-1 overflow-x-auto' onKeyDown={event => {
+        <div role='tablist' aria-label='Browser and analysis tools' className='flex max-w-full flex-wrap items-center gap-2' onKeyDown={event => {
             if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
             const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role=tab]'))
             const current = tabs.indexOf(event.target as HTMLButtonElement)
@@ -1539,24 +1556,25 @@ function SandboxTabStrip({
             tabs[next]?.focus()
             tabs[next]?.click()
         }}>
-            <SandboxTabButton
+            <h1 className='text-lg font-semibold'><SandboxTabButton
                 active={activeTab === 'browser'}
-                label={historyDomainKey(target)}
+                label={historyDomainKey(domainUrl)}
                 status=''
                 onClick={() => onSelect('browser')}
-            />
+            /></h1>
+            {[siteNetwork?.ip, siteNetwork?.provider, [siteNetwork?.city, siteNetwork?.country].filter(Boolean).join(', ')].filter(Boolean).map(value => <span key={value} className='text-xs text-ui-muted'>· {value}</span>)}
             {tools.map(tool => {
                 const capture = selectToolCapture(toolCaptures, tool, target)
                 const status = providerTabStatus(capture, capture?.toolAnalysis)
                 const ended = ['ended', 'failed', 'unreachable'].includes(sessionState)
-                if (status === 'no obfuscated code') return null
+                if (tool.id === 'webcrack' && !capture?.deobfuscatedCode && !capture?.webcrackLoad?.loaded && !capture?.webcrackLoad?.sampleBytes) return null
                 return (
                     <SandboxTabButton
                         key={tool.id}
                         active={activeTab === tool.id}
                         label={tool.name}
                         provider={tool.id}
-                        status={ended && ['loading', 'waiting'].includes(status) ? 'incomplete' : status}
+                        status={ended && ['loading', 'waiting'].includes(status) ? 'incomplete' : status.replace(/ vendors$| alerts$/, '')}
                         onClick={() => onSelect(tool.id)}
                     />
                 )
@@ -1574,10 +1592,13 @@ function SandboxTabButton({ active, label, status, provider, onClick }: { active
             disabled={status === 'no obfuscated code'}
             aria-selected={active}
             tabIndex={active ? 0 : -1}
-            className={`flex shrink-0 items-center gap-2 rounded-md border px-2 py-1.5 text-left transition ${active ? 'border-ui-primary bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-raised text-ui-text hover:border-ui-primary/60'}`}
+            aria-label={`${label}${status ? ` ${status}` : ''}`}
+            title={label}
+            className={`flex shrink-0 items-center gap-1 text-left text-xs transition ${active ? 'text-ui-primary' : 'text-ui-text hover:text-ui-primary'}`}
         >
-            {provider && ['virustotal', 'urlquery', 'webcrack'].includes(provider) ? <Image src={`/logos/${provider}.${provider === 'virustotal' ? 'svg' : 'png'}`} alt={label} width={20} height={20} unoptimized className='h-5 w-5 shrink-0 object-contain sm:hidden' /> : null}
-            <span className={`${provider && ['virustotal', 'urlquery', 'webcrack'].includes(provider) ? 'hidden sm:inline' : ''} truncate text-[11px] font-semibold sm:text-xs md:text-sm`}>{label}</span>
+            {provider ? <span aria-hidden='true' className='text-ui-muted'>·</span> : null}
+            {provider && ['virustotal', 'urlquery', 'webcrack'].includes(provider) ? <Image src={`/logos/${provider}.${provider === 'virustotal' ? 'svg' : 'png'}`} alt={label} width={20} height={20} unoptimized className='h-4 w-4 shrink-0 object-contain' /> : null}
+            <span className={`${provider && ['virustotal', 'urlquery', 'webcrack'].includes(provider) ? 'sr-only' : ''} truncate text-[11px] font-semibold sm:text-xs md:text-sm`}>{label}</span>
             {status ? <span className='truncate text-[11px] text-ui-muted'>{status}</span> : null}
         </button>
     )
@@ -1815,10 +1836,8 @@ function AnalystSummary({ summary, captures }: { summary: ReturnType<typeof buil
             <div className='mt-3 rounded-md border border-ui-border bg-ui-raised p-3'>
                 <div className='flex flex-wrap items-start justify-between gap-3'>
                     <div>
-                        <p className='text-xs font-semibold uppercase text-ui-primary'>Analyst brief</p>
                         <h3 className='mt-1 text-base font-semibold text-ui-text'>{summary.brief.verdict}</h3>
                     </div>
-                    <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-muted'>{summary.brief.confidence}</span>
                 </div>
                 <div className='mt-3 grid gap-2 md:grid-cols-2'>
                     <div className='rounded-md border border-ui-border bg-ui-panel p-2'>
@@ -1828,10 +1847,6 @@ function AnalystSummary({ summary, captures }: { summary: ReturnType<typeof buil
                     <div className='rounded-md border border-ui-border bg-ui-panel p-2'>
                         <p className='text-[11px] font-semibold uppercase text-ui-muted'>Recommended action</p>
                         <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-text'>{summary.brief.recommendedAction}</p>
-                    </div>
-                    <div className='rounded-md border border-ui-border bg-ui-panel p-2'>
-                        <p className='text-[11px] font-semibold uppercase text-ui-muted'>Freshness</p>
-                        <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-text'>{summary.brief.freshness}</p>
                     </div>
                     <div className='rounded-md border border-ui-border bg-ui-panel p-2'>
                         <p className='text-[11px] font-semibold uppercase text-ui-muted'>Next steps</p>
@@ -1919,6 +1934,7 @@ function EvidenceWorkspace({
 }) {
     const pageCaptures = captures.filter(capture => capture.kind === 'page')
     const toolCaptures = captures.filter(capture => capture.kind === 'tool')
+    const screenshots = pageCaptures.filter(capture => capture.image)
     const latestPage = pageCaptures[0]
     const latestNetwork = pageCaptures.find(capture => capture.networkSummary)?.networkSummary
     const confirmedNetworkIndicators = (toolCaptures.find(capture => capture.toolAnalysis?.toolKind === 'virustotal')?.toolAnalysis?.vendorFlagged || 0) >= 10 ? 1 : 0
@@ -1955,7 +1971,7 @@ function EvidenceWorkspace({
                     {profile.tools.map(tool => {
                         const capture = selectToolCapture(toolCaptures, tool, target)
                         const analysis = capture?.toolAnalysis
-                        if (providerTabStatus(capture, analysis) === 'no obfuscated code') return null
+                        if (tool.id === 'webcrack' && !capture?.deobfuscatedCode && !capture?.webcrackLoad?.loaded && !capture?.webcrackLoad?.sampleBytes) return null
                         return (
                             <EvidencePanel key={tool.id} title={tool.name} status={analysis?.vendorFlagged !== undefined ? <span className={analysis.vendorFlagged >= 10 ? 'text-ui-danger' : analysis.vendorFlagged > 0 ? 'text-ui-warning' : 'text-ui-success'}>{virusTotalVendorLabel(analysis)}</span> : analysis?.alertCount !== undefined ? <span className={analysis.alertCount > 0 ? 'text-ui-warning' : 'text-ui-success'}>{analysis.alertCount}</span> : providerStatus(capture, analysis)}>
                                 {capture ? (
@@ -2032,10 +2048,10 @@ function EvidenceWorkspace({
                     {sourceUrls.length ? <div className='mt-3 grid gap-1 text-xs'><p className='font-semibold'>URLs found in source</p><pre className='max-h-40 overflow-auto whitespace-pre-wrap break-all font-mono text-ui-muted'>{sourceUrls.join('\n')}</pre></div> : null}
                 </EvidencePanel>
 
-                <EvidencePanel title='Page captures' status={String(pageCaptures.length)}>
+                <EvidencePanel title='Screenshots' status={String(screenshots.length)}>
                     {pageCaptures.length ? (
                         <div className='grid gap-2 text-xs text-ui-muted'>
-                            {pageCaptures.slice(0, 6).map(capture => (
+                            {screenshots.map(capture => (
                                 <div key={capture.id} className='grid gap-2 rounded-md border border-ui-border bg-ui-panel p-2'>
                                     <p>{capture.capturedAt}{capture.reason ? ` · ${capture.reason}` : ''}</p>
                                     <p className='truncate font-mono text-ui-text'>{capture.url}</p>
@@ -2085,7 +2101,6 @@ function DownloadsPanel({ downloads, runIsActive }: { downloads: NonNullable<San
         <details className='rounded-lg border border-ui-border bg-ui-panel' open={downloads.length > 0 || undefined}>
             <summary className='cursor-pointer p-3 text-sm font-semibold'>Files <span className='ml-2 text-ui-muted'>{downloads.length}</span></summary>
             <div className='grid gap-3 border-t border-ui-border p-3'>
-                <p className='text-xs text-ui-muted'>Download files inside the browser. SHA-256 lookup only — files are never uploaded to VirusTotal or opened, and temporary copies are deleted.</p>
                 {!downloads.length ? <p className='text-sm text-ui-muted'>No files captured.</p> : downloads.map((file, index) => (
                     <div key={file.id || `${file.at}-${index}`} className='grid min-w-0 gap-2 rounded-md border border-ui-border p-3'>
                         <div className='flex flex-wrap items-center justify-between gap-2'>
@@ -2135,7 +2150,7 @@ function metadataRows(summary: ReturnType<typeof buildAnalystSummary>, captures:
         const isZeroValue = Number.isFinite(numericValue) && numericValue === 0
         const isNoValue = /^(no|false)$/i.test(row.value)
         if ((isZeroValue || isNoValue) && !lower.includes('blocked') && !lower.includes('profile tools')) return []
-        const related = lower.includes('page') || lower.includes('network') || lower.includes('domain') || lower.includes('failed') || lower.includes('url states')
+        const related = lower.includes('screenshots') || lower.includes('network') || lower.includes('domain') || lower.includes('failed') || lower.includes('url states')
             ? pageCaptures
             : lower.includes('virustotal')
                 ? toolCaptures.filter(capture => capture.toolAnalysis?.toolKind === 'virustotal')
@@ -2160,26 +2175,30 @@ function metadataDetails(label: string, value: string, captures: Capture[]) {
         `${label}: ${value}`,
         ...captures.flatMap(capture => [
             capture.toolAnalysis?.extractedSignals?.join(' · ') || '',
-            capture.networkSummary ? `${capture.networkSummary.requestCount || 0} requests, ${capture.networkSummary.uniqueDomainCount || 0} domains, ${capture.networkSummary.failedCount || 0} blocked/failed.` : '',
-            capture.evidence?.reasons?.join(' · ') || '',
+            meaningfulReasons(capture.evidence?.reasons).join(' · '),
         ]),
     ].map(line => line.trim()).filter(Boolean)
     return Array.from(new Set(lines)).slice(0, 6)
 }
 
-function CaptureTimeline({ captures }: { captures: Capture[] }) {
+function meaningfulReasons(reasons?: string[]) {
+    return (reasons || []).filter(reason => !/^No high-signal malicious pattern was extracted/i.test(reason))
+}
+
+function CaptureTimeline({ captures: allCaptures }: { captures: Capture[] }) {
+    const captures = allCaptures.filter(capture => capture.kind === 'page' && capture.image)
     return (
         <section className='min-h-0 overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
-            <div className='border-b border-ui-border px-4 py-3'>
+            <div className='flex items-center justify-between border-b border-ui-border px-4 py-3'>
                 <h2 className='text-sm font-semibold text-ui-primary'>Screenshots</h2>
-                <p className='mt-1 text-xs text-ui-muted'>{captures.length} captures with URL state.</p>
+                <span className='text-xs text-ui-muted'>{captures.length}</span>
             </div>
             <div className='grid gap-3 p-3' data-screenshot-list>
                 {captures.length ? captures.map(capture => (
                     <article key={capture.id} className='grid gap-2 rounded-md border border-ui-border bg-ui-raised p-3'>
                         <div className='flex items-start justify-between gap-3'>
                             <div className='min-w-0'>
-                                <p className='text-sm font-semibold text-ui-text'>{capture.label}</p>
+                                <p className='text-sm font-semibold text-ui-text'>{capture.reason === 'domcontentloaded' ? 'Screenshot' : capture.label}</p>
                                 <p className='mt-1 truncate font-mono text-xs text-ui-muted'>{capture.url || providerErrorText(capture.error)}</p>
                             </div>
                             <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-muted'>{capture.kind}</span>
@@ -2188,22 +2207,9 @@ function CaptureTimeline({ captures }: { captures: Capture[] }) {
                         {capture.frameQuality ? <p className={`text-[11px] font-semibold ${capture.frameQuality.looksBlank ? 'text-ui-danger' : 'text-ui-success'}`}>{capture.frameQuality.looksBlank ? 'Blank-looking frame' : 'Rendered frame'} · {capture.frameQuality.visibleTextLength || 0} chars · {capture.frameQuality.elementCount || 0} elements</p> : null}
                         <SourceCodeDisclosure evidence={capture.evidence} />
                         {cleanEvidenceExcerpt(capture.evidence?.textExcerpt) ? <p className='line-clamp-3 text-xs leading-5 text-ui-muted'>{cleanEvidenceExcerpt(capture.evidence?.textExcerpt)}</p> : null}
-                        {capture.networkSummary ? (
-                            <div className='grid gap-1 rounded-md border border-ui-border bg-ui-panel p-2 text-[11px] text-ui-muted'>
-                                <p>{capture.networkSummary.requestCount || 0} requests · {capture.networkSummary.uniqueDomainCount || 0} domains · {capture.networkSummary.failedCount || 0} blocked/failed</p>
-                                {capture.networkSummary.domains?.length ? <p className='truncate font-mono'>{capture.networkSummary.domains.slice(0, 4).join('  ')}</p> : null}
-                            </div>
-                        ) : null}
-                        {capture.webcrackLoad ? (
-                            <div className='grid gap-1 rounded-md border border-ui-warning/30 bg-ui-warning/10 p-2 text-[11px] text-ui-muted'>
-                                <p>{capture.webcrackLoad.loaded ? 'WebCrack sample loaded' : 'WebCrack sample not loaded'}{capture.webcrackLoad.scriptId ? ` · ${capture.webcrackLoad.scriptId}` : ''}</p>
-                                {capture.webcrackLoad.sampleBytes ? <p>{capture.webcrackLoad.sampleBytes} bytes inserted for deobfuscation.</p> : null}
-                                {capture.webcrackLoad.reason ? <p>{capture.webcrackLoad.reason}</p> : null}
-                            </div>
-                        ) : null}
-                        {capture.evidence?.reasons?.length ? (
+                        {meaningfulReasons(capture.evidence?.reasons).length ? (
                             <div className='flex flex-wrap gap-1'>
-                                {capture.evidence.reasons.slice(0, 4).map(reason => <span key={reason} className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-muted'>{reason}</span>)}
+                                {meaningfulReasons(capture.evidence?.reasons).slice(0, 4).map(reason => <span key={reason} className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-muted'>{reason}</span>)}
                             </div>
                         ) : null}
                         <p className='text-xs text-ui-muted'>{capture.capturedAt}{capture.title ? ` · ${capture.title}` : ''}</p>
@@ -2221,7 +2227,7 @@ function StatusPill({ label, value, good }: { label: string; value: string; good
 }
 
 function ProviderViewportEvidence({ tool, capture }: { tool: SandboxTool; capture: Capture }) {
-    if (capture.image) {
+    if (capture.image && !capture.deobfuscatedCode) {
         return (
             <div className='h-full w-full min-w-0 overflow-auto bg-ui-canvas'>
                 <img src={capture.image} alt={`${tool.name} provider screenshot`} className='block w-full min-w-0 bg-white' />
@@ -2240,6 +2246,7 @@ function ProviderViewportEvidence({ tool, capture }: { tool: SandboxTool; captur
 
 function ProviderReportDetails({ tool, capture, compact = false }: { tool: SandboxTool; capture: Capture; compact?: boolean }) {
     const analysis = capture.toolAnalysis
+    if (tool.id === 'webcrack') return capture.deobfuscatedCode ? <pre className='max-h-[40rem] overflow-auto whitespace-pre-wrap break-all rounded-md border border-ui-border bg-ui-canvas p-3 font-mono text-xs text-ui-text'>{capture.deobfuscatedCode}</pre> : capture.error ? <p className='text-xs text-ui-danger'>{capture.error}</p> : null
     const commentCount = analysis?.communityCommentCount
     const communityComments = analysis?.communityComments || capture.evidence?.communityComments || []
     const facts = [
@@ -2339,7 +2346,7 @@ function cleanConsoleEvent(value: string) {
 
 function captureLabel(reason: string) {
     if (reason === 'navigation') return 'Navigation capture'
-    if (reason === 'domcontentloaded') return 'DOM-ready capture'
+    if (reason === 'domcontentloaded') return 'Screenshot'
     if (reason === 'load') return 'Loaded-page capture'
     if (reason === 'initial_target') return 'Initial target capture'
     if (reason === 'interval') return 'Interval capture'
@@ -2418,6 +2425,7 @@ function buildExportReport(input: {
             networkSummary: capture.networkSummary,
             toolAnalysis: capture.toolAnalysis,
             webcrackLoad: capture.webcrackLoad,
+            deobfuscatedCode: capture.deobfuscatedCode,
         })),
         activityEvents: input.events,
         consoleEvents: input.consoleEvents,
@@ -2430,7 +2438,10 @@ function buildShareableAnalystReport(input: Parameters<typeof buildExportReport>
     const pageCaptures = input.captures.filter(capture => capture.kind === 'page')
     const toolCaptures = input.captures.filter(capture => capture.kind === 'tool')
     const latestNetwork = pageCaptures.find(capture => capture.networkSummary)?.networkSummary
-    const providerReports = input.profile.tools.map(tool => {
+    const providerReports = input.profile.tools.filter(tool => {
+        const capture = selectToolCapture(toolCaptures, tool, input.target)
+        return tool.id !== 'webcrack' || Boolean(capture?.deobfuscatedCode || capture?.webcrackLoad?.sampleBytes)
+    }).map(tool => {
         const capture = selectToolCapture(toolCaptures, tool, input.target)
         const analysis = capture?.toolAnalysis
         return {
@@ -2445,6 +2456,7 @@ function buildShareableAnalystReport(input: Parameters<typeof buildExportReport>
             communityComments: analysis?.communityComments,
             communitySummary: analysis?.communitySummary,
             screenshotCaptured: Boolean(capture?.image),
+            deobfuscatedCode: capture?.deobfuscatedCode,
             signals: analysis?.extractedSignals || [],
             threatAssociations: analysis?.threatAssociations || [],
             error: providerErrorText(capture?.error),
@@ -2591,7 +2603,7 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
     ]).map(cleanEvidenceComment).filter(Boolean))).slice(0, 4) as string[]
     const confidence = Math.max(0, ...captures.map(capture => capture.evidence?.confidence || 0))
     const latestNetwork = captures.find(capture => capture.kind === 'page' && capture.networkSummary)?.networkSummary
-    const failedRequests = captures.reduce((count, capture) => count + (capture.networkSummary?.failedCount || 0), 0)
+    const failedRequests = latestNetwork?.failedCount || 0
     const decodedIndicators = suspiciousDeobfuscationTasks.flatMap(task => [
         ...(task.indicators?.domains || []),
         ...(task.indicators?.ips || []),
@@ -2675,7 +2687,7 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
         deobfuscationSummary,
         webcrackLoaded,
         rows: [
-            { label: 'Page captures', value: String(pageCaptures.length) },
+            { label: 'Screenshots', value: String(pageCaptures.filter(capture => capture.image).length) },
             { label: 'Navigation status', value: navigationFailed ? 'target unreachable' : 'loaded' },
             { label: 'Profile tools', value: `${capturedToolCount}/${profile.tools.length}` },
             { label: 'VirusTotal vendors', value: virusTotal?.vendorFlagged !== undefined ? virusTotalVendorLabel(virusTotal) : 'unknown' },
@@ -2898,6 +2910,7 @@ function safeToolKey(value: string) {
 function providerStatus(capture?: Capture, analysis?: SandboxToolAnalysis) {
     if (!capture) return 'Unavailable'
     if (capture.error === 'provider_navigation_pending') return 'Loading'
+    if (analysis?.toolKind === 'webcrack' && capture.error) return 'Provider error'
     if (analysis?.toolKind === 'webcrack' && analysis.webcrackLoaded === false && /no obfuscated (?:script sample|code)/i.test(analysis.webcrackLoadReason || '')) return 'No obfuscated code'
     if (hasParsedProviderResult(analysis)) return 'Results'
     if (capture.error) return 'Provider error'

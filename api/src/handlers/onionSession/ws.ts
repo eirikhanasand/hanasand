@@ -1,3 +1,4 @@
+import { watchWebCrackOutput, readWebCrackOutput, submitWebCrackSample } from './webcrack.ts'
 import { browserStartOptions } from '../../utils/ws/browserAccess.ts'
 import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
@@ -369,6 +370,9 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
     let editableSelectAllArmed = false
     let messageQueue = Promise.resolve()
     let networkEvents: SandboxNetworkEvent[] = []
+    let sitePeer: { url: string; ip: string } | undefined
+    let networkTotals = { requestCount: 0, responseCount: 0, failedCount: 0 }
+    const contactedDomains = new Set<string>()
     const downloads: SandboxNetworkEvent[] = []
     const fileLookups = new Map<string, Promise<FileReputation>>()
     let fileLookupQueue = Promise.resolve()
@@ -693,6 +697,9 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         closed = false
         remoteClipboard = ''
         networkEvents = []
+        sitePeer = undefined
+        networkTotals = { requestCount: 0, responseCount: 0, failedCount: 0 }
+        contactedDomains.clear()
         cachedDeobfuscationTasks = []
         cachedThreatAssociations = []
         cachedIndicators = null
@@ -844,8 +851,9 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     response.serverAddr().catch(() => null),
                     response.securityDetails().catch(() => null),
                 ])
-                const asn = await lookupAsn(server?.ipAddress)
                 const request = response.request()
+                if (server?.ipAddress && request.isNavigationRequest() && request.frame() === page?.mainFrame() && response.status() < 300) sitePeer = { url: response.url(), ip: server.ipAddress }
+                const asn = await lookupAsn(server?.ipAddress)
                 const capturedAt = new Date().toISOString()
                 const startedAt = [...networkEvents].reverse().find(event => event.kind === 'request' && event.url === response.url() && event.method === request.method())?.at
                 trackNetwork({
@@ -983,6 +991,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             }
             const toolPage = await newBackgroundPage(context).catch(() => null)
             if (!toolPage) return
+            if (webcrackTool) await watchWebCrackOutput(toolPage)
             toolPages.set(toolId, toolPage)
             toolPage.on('close', () => toolPages.delete(toolId))
             watchConsole(toolPage, toolId, tool.name || toolId)
@@ -1027,7 +1036,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 const actionError = await interactWithProvider(toolPage, tool, target)
                 navigationError ||= actionError
                 const openedScreenshotTimeout = providerScreenshotTimeoutMs(tool, 800)
-                const openedImage = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 56, animations: 'disabled', timeout: openedScreenshotTimeout }), openedScreenshotTimeout, null)
+                const openedImage = webcrackTool ? null : await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 56, animations: 'disabled', timeout: openedScreenshotTimeout }), openedScreenshotTimeout, null)
                 const openedEvidence = providerPendingEvidence(toolPage.url() || preparedUrl, tool.name || toolUrl, target)
                 send({
                     type: 'tool_capture',
@@ -1088,14 +1097,14 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 }
                 let webcrackLoad: WebCrackLoadResult | undefined
                 if (webcrackTool) {
-                    webcrackLoad = await withTimeout(loadWebCrackSample(toolPage, webcrackTasks), 2500, { loaded: false, reason: 'WebCrack did not accept a sample within the provider budget.' })
+                    webcrackLoad = await withTimeout(loadWebCrackSample(toolPage, webcrackTasks), 5000, { loaded: false, reason: 'WebCrack did not accept a sample within the provider budget.' })
                 }
                 await toolPage.waitForTimeout(webcrackLoad?.loaded ? 150 : 1200).catch(() => undefined)
                 if (webcrackTool) {
                     const evidence = enrichProviderEvidence(await withTimeout(collectPageEvidence(toolPage), 400, providerPendingEvidence(toolPage.url() || toolUrl, tool.name || toolUrl, target)), providerBodies.text(), tool.name || toolUrl, providerBodies.comments())
                     const toolAnalysis = analyzeToolEvidence(tool.name || toolUrl, evidence, webcrackLoad)
                     maybeExtendSuspiciousRun(evidence, toolAnalysis)
-                    const image = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 2500 }), 2500, null)
+                    const output = webcrackLoad?.loaded ? await readWebCrackOutput(toolPage) : undefined
                     send({
                         type: 'tool_capture',
                         sessionId,
@@ -1104,12 +1113,12 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                         url: toolPage.url(),
                         title: await toolPage.title().catch(() => ''),
                         capturedAt: startedAt,
-                        image: image ? image.toString('base64') : null,
+                        deobfuscatedCode: output?.code,
                         evidence,
                         toolAnalysis,
                         webcrackLoad,
                         target,
-                        error: navigationError || undefined,
+                        error: output?.error || (webcrackLoad?.loaded ? navigationError : webcrackLoad?.reason) || undefined,
                     })
                     return
                 }
@@ -1117,9 +1126,9 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 const initialImage = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 2500 }), 2500, null)
                 const initialAnalysis = analyzeToolEvidence(tool.name || toolUrl, initialEvidence)
                 maybeExtendSuspiciousRun(initialEvidence, initialAnalysis)
-                let image = initialImage
-                let evidence = initialEvidence
-                let toolAnalysis = navigationError
+                const image = initialImage
+                const evidence = initialEvidence
+                const toolAnalysis = navigationError
                     ? {
                         ...initialAnalysis,
                         extractedSignals: [
@@ -1128,12 +1137,6 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                         ],
                     }
                     : initialAnalysis
-                if (webcrackTool) {
-                    image = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 500 }), 500, image)
-                    evidence = enrichProviderEvidence(await withTimeout(collectPageEvidence(toolPage), 500, evidence), providerBodies.text(), tool.name || toolUrl, providerBodies.comments())
-                    toolAnalysis = analyzeToolEvidence(tool.name || toolUrl, evidence, webcrackLoad)
-                    maybeExtendSuspiciousRun(evidence, toolAnalysis)
-                }
                 send({
                     type: 'tool_capture',
                     sessionId,
@@ -1194,12 +1197,17 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
     }
 
     function trackNetwork(event: SandboxNetworkEvent) {
+        if (event.kind === 'request') networkTotals.requestCount++
+        if (event.kind === 'response') networkTotals.responseCount++
+        if (event.kind === 'failed') networkTotals.failedCount++
+        const domain = domainFromUrl(event.url)
+        if (domain) contactedDomains.add(domain)
         networkEvents.push(event)
         if (networkEvents.length > 600) networkEvents = networkEvents.slice(-600)
     }
 
     function networkSummary() {
-        return summarizeNetworkEvents([...networkEvents, ...downloads])
+        return { ...summarizeNetworkEvents([...networkEvents, ...downloads]), ...networkTotals, uniqueDomainCount: contactedDomains.size, site: sitePeer }
     }
 
     function publishDownloads() {
@@ -2396,65 +2404,8 @@ async function loadWebCrackSample(page: Page, tasks: SandboxDeobfuscationTask[])
         return { loaded: false, reason: 'no obfuscated code found on target page' }
     }
 
-    const textArea = page.locator('textarea').first()
-    if (await textArea.count().catch(() => 0)) {
-        await textArea.fill(sample, { timeout: 2500 })
-        await triggerWebCrackRun(page)
-        return {
-            loaded: true,
-            scriptId: task.scriptId,
-            source: task.source,
-            sampleBytes: Buffer.byteLength(sample),
-            action: 'filled_textarea',
-        }
-    }
-
-    const editable = page.locator('[contenteditable="true"]').first()
-    if (await editable.count().catch(() => 0)) {
-        await editable.evaluate((element, value) => {
-            element.textContent = value
-            element.dispatchEvent(new InputEvent('input', { bubbles: true, data: value, inputType: 'insertText' }))
-        }, sample)
-        await triggerWebCrackRun(page)
-        return {
-            loaded: true,
-            scriptId: task.scriptId,
-            source: task.source,
-            sampleBytes: Buffer.byteLength(sample),
-            action: 'filled_contenteditable',
-        }
-    }
-
-    const monaco = page.locator('.monaco-editor textarea, .cm-content, [role="textbox"]').first()
-    if (await monaco.count().catch(() => 0)) {
-        await monaco.click({ timeout: 2500 }).catch(() => undefined)
-        await page.keyboard.insertText(sample).catch(() => undefined)
-        await triggerWebCrackRun(page)
-        return {
-            loaded: true,
-            scriptId: task.scriptId,
-            source: task.source,
-            sampleBytes: Buffer.byteLength(sample),
-            action: 'inserted_editor_text',
-        }
-    }
-
-    return {
-        loaded: false,
-        scriptId: task.scriptId,
-        source: task.source,
-        sampleBytes: Buffer.byteLength(sample),
-        reason: 'WebCrack input editor was not found',
-    }
-}
-
-async function triggerWebCrackRun(page: Page) {
-    const runButton = page.getByRole('button', { name: /deobfuscate|unpack|analy[sz]e|run|crack/i }).first()
-    if (await runButton.count().catch(() => 0)) {
-        await runButton.click({ timeout: 2500 }).catch(() => undefined)
-        return
-    }
-    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Enter' : 'Control+Enter').catch(() => undefined)
+    const action = await submitWebCrackSample(page, sample)
+    return { loaded: Boolean(action), scriptId: task.scriptId, source: task.source, sampleBytes: Buffer.byteLength(sample), action, reason: action ? undefined : 'WebCrack input editor was not found' }
 }
 
 async function collectRenderedText(page: Page) {
@@ -2580,7 +2531,7 @@ async function collectPageEvidence(page: Page) {
         obfuscatedScripts,
         verdict: suspiciousReasons.length >= 2 || suspiciousDeobfuscationTasks.length >= 1 ? 'suspicious' : 'unknown',
         confidence: Math.min(95, 35 + suspiciousReasons.length * 15 + suspiciousDeobfuscationTasks.length * 10),
-        reasons: suspiciousReasons.length ? suspiciousReasons : ['No high-signal malicious pattern was extracted from the rendered page yet.'],
+        reasons: suspiciousReasons,
         threatAssociations: extractThreatAssociations(joined, 'rendered_page'),
         deobfuscationTasks,
     }

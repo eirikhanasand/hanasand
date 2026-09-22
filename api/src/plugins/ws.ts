@@ -1,3 +1,4 @@
+import { sessionNetwork } from '../utils/auth/sessionNetwork.ts'
 import { connectResumableWorker } from '../utils/ws/resumableWorker.ts'
 import { resumableBrowserSocket } from '../utils/ws/browserReconnect.ts'
 import { browserLeaseHeartbeat } from '../utils/ws/browserLease.ts'
@@ -513,6 +514,12 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
                 const payload = parseSocketMessage(message)
                 if (payload?.type === 'ready') sawReady = true
                 if (payload?.type === 'frame') deliveredFrame = true
+                const site = payload?.networkSummary?.site
+                if (site?.ip && site?.url && payload.type === 'frame') {
+                    void sessionNetwork(site.ip).then(location => {
+                        if (connection.readyState === WebSocket.OPEN) connection.send(JSON.stringify({ type: 'site_network', site: { url: site.url, ip: site.ip, ...location.network } }))
+                    }).catch(() => undefined)
+                }
                 if (payload?.type === 'ended') {
                     sawTerminalMessage = true
                     if (leaseTimer) clearInterval(leaseTimer)

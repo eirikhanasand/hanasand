@@ -32,7 +32,7 @@ type BrowserReport = {
     analystReport?: {
         verdict?: string
         evidenceChecklist?: Record<string, number>
-        providerReports?: Array<{ tool?: string; status?: string; verdict?: string; url?: string; vendorFlagged?: number; vendorTotal?: number; alertCount?: number; communityCommentCount?: number; communityComments?: string[]; communitySummary?: string; screenshotCaptured?: boolean; signals?: string[]; threatAssociations?: Array<{ name?: string; confidence?: string; source?: string }>; error?: string }>
+        providerReports?: Array<{ tool?: string; status?: string; verdict?: string; url?: string; vendorFlagged?: number; vendorTotal?: number; alertCount?: number; communityCommentCount?: number; communityComments?: string[]; communitySummary?: string; screenshotCaptured?: boolean; deobfuscatedCode?: string; signals?: string[]; threatAssociations?: Array<{ name?: string; confidence?: string; source?: string }>; error?: string }>
         networkEvidence?: {
             requests?: number
             responses?: number
@@ -104,7 +104,7 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
 
                 <section className='grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]'>
                     <div className='grid gap-4'>
-                        <ReportPanel title='Analyst summary'>
+                        <ReportPanel title='Summary'>
                             <p className='text-sm leading-6 text-ui-muted'>{summary.narrative || 'No analyst summary was saved with this report.'}</p>
                         </ReportPanel>
                         <ReportPanel title='Review list'>
@@ -120,7 +120,9 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
                         </ReportPanel>
                         <ReportPanel title='Providers'>
                             <div className='grid gap-2'>
-                                {(analystReport.providerReports || []).map(provider => (
+                                {(analystReport.providerReports || []).filter(provider => !/webcrack/i.test(provider.tool || '') || provider.deobfuscatedCode || provider.status === 'Provider error').map(provider => provider.deobfuscatedCode ? (
+                                    <div key={`${provider.tool}-${provider.url}`}><h2 className='mb-2 text-sm font-semibold'>{provider.tool}</h2><pre className='max-h-96 overflow-auto whitespace-pre-wrap break-all rounded-md border border-ui-border bg-ui-canvas p-3 font-mono text-xs'>{provider.deobfuscatedCode}</pre></div>
+                                ) : (
                                     <div key={`${provider.tool}-${provider.url}`} className='rounded-md border border-ui-border bg-ui-raised p-3 text-sm'>
                                         <p className='font-semibold'>{provider.tool || 'Provider'} · {provider.status || 'unknown'}</p>
                                         <p className='mt-1 text-xs text-ui-muted'>{provider.verdict || 'No parsed verdict'}{provider.vendorFlagged !== undefined ? ` · ${providerVendorLabel(provider)} vendors` : ''}{provider.alertCount !== undefined ? ` · ${provider.alertCount} alerts` : ''}{provider.screenshotCaptured ? ' · screenshot captured' : ''}</p>
@@ -139,7 +141,7 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
                                 {(report.captures || []).filter(capture => capture.image).map(capture => (
                                     <article key={`${capture.kind}-${capture.capturedAt}-${capture.url}`} className='grid gap-2 rounded-md border border-ui-border bg-ui-raised p-3'>
                                         <div className='min-w-0'>
-                                            <p className='text-sm font-semibold'>{capture.label || capture.kind || 'Capture'}</p>
+                                            <p className='text-sm font-semibold'>{capture.reason === 'domcontentloaded' ? 'Screenshot' : capture.label || capture.kind || 'Screenshot'}</p>
                                             <p className='truncate font-mono text-xs text-ui-muted'>{capture.url || capture.title || ''}</p>
                                         </div>
                                         {capture.image ? <img src={capture.image} alt={`${capture.label || 'Browser'} screenshot`} className='max-h-64 w-full rounded border border-ui-border object-contain' /> : null}
