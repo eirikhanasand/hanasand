@@ -11,7 +11,17 @@ from unittest.mock import patch
 spec=importlib.util.spec_from_file_location('collector',Path(__file__).with_name('collector.py'))
 c=importlib.util.module_from_spec(spec);spec.loader.exec_module(c)
 
+def disk_result(result):
+    def run(*args, **kwargs):
+        value = result.pop(0) if isinstance(result, list) else result
+        if isinstance(value, Exception): raise value
+        kwargs['stdout'].write(value.stdout.encode())
+        return value
+    return run
+
 class CollectorTests(unittest.TestCase):
+    def setUp(self): self.delivered=[]
+    def capture(self, _config, events): self.delivered.extend(events)
     def test_recent_audit_date_uses_ausearch_c_locale_two_digit_year(self):
         with patch.object(c.time,'time',return_value=1789822896):
             date,clock=c.recent_audit_start()
@@ -120,17 +130,17 @@ type=EXECVE msg=audit(1789817000.123:456): argc=5 a0="curl" a1="--password" a2="
             (c.STATE/'audit.checkpoint').write_text('original')
             def ausearch(*args,**kwargs):
                 (c.STATE/'audit.pending').write_text('next')
-                return ''
-            with patch.object(c,'command',side_effect=ausearch), patch.object(c,'send',side_effect=RuntimeError('offline')):
+                return io.StringIO('')
+            with patch.object(c,'command_file',side_effect=ausearch), patch.object(c,'send',side_effect=RuntimeError('offline')):
                 with self.assertRaises(RuntimeError): c.audit({'host':'inspur'})
             self.assertEqual((c.STATE/'audit.checkpoint').read_text(),'original')
     def test_audit_rotated_checkpoint_uses_timestamp_recovery(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(c,'STATE',Path(tmp)):
             (c.STATE/'audit.checkpoint').write_text('original')
-            with patch.object(c,'command',side_effect=[c.CommandError('ausearch',12),'']) as query, patch.object(c,'send'):
+            with patch.object(c,'command_file',side_effect=[c.CommandError('ausearch',12),io.StringIO('')]) as query, patch.object(c,'send'):
                 c.audit({'host':'inspur'})
             self.assertEqual(query.call_args.args[0][-2:],['--start','checkpoint'])
-    def test_live_audit_uses_separate_checkpoint_and_prioritizes_newest(self):
+    def test_live_audit_uses_separate_checkpoint_and_keeps_live_events_separate(self):
         raw='''type=SYSCALL msg=audit(1789817000.123:456): success=yes exe="/usr/bin/whoami"
 type=EXECVE msg=audit(1789817000.123:456): argc=1 a0="whoami"
 type=SYSCALL msg=audit(1789817001.123:457): success=yes exe="/usr/bin/id"
@@ -142,11 +152,11 @@ type=EXECVE msg=audit(1789817001.123:457): argc=1 a0="id"
                 self.assertIn('--start',args)
                 self.assertEqual(args[-3:],['--start',*c.recent_audit_start()])
                 (c.STATE/'audit-live.pending').write_text('live')
-                return raw
+                return io.StringIO(raw)
             delivered=[]
-            with patch.object(c,'command',side_effect=query), patch.object(c,'send',side_effect=lambda _cfg,events:delivered.extend(events)):
+            with patch.object(c,'command_file',side_effect=query), patch.object(c,'send',side_effect=lambda _cfg,events:delivered.extend(events)):
                 c.audit({'host':'inspur'},live=True)
-            self.assertEqual([row['message'] for row in delivered],['id','whoami'])
+            self.assertEqual([row['message'] for row in delivered],['whoami','id'])
             self.assertEqual((c.STATE/'audit.checkpoint').read_text(),'historical')
             self.assertEqual((c.STATE/'audit-live.checkpoint').read_text(),'live')
     def test_live_audit_reactivates_for_stale_historical_checkpoint(self):
@@ -158,7 +168,7 @@ type=EXECVE msg=audit(1789817001.123:457): argc=1 a0="id"
             checkpoint.write_text('dev=0x903\ninode=1\noutput=- 900.123:123 0x514\n')
             self.assertTrue(c.audit_behind())
             (c.STATE/'audit-live.checkpoint').write_text('output=- 939.123:10 0x514\n')
-            with patch.object(c,'command',return_value='') as query, patch.object(c,'send'):
+            with patch.object(c,'command_file',return_value=io.StringIO('')) as query, patch.object(c,'send'):
                 c.audit({'host':'inspur'},live=True)
             self.assertEqual(query.call_args.args[0][-3:],['--start',*c.recent_audit_start()])
             self.assertIn('900.123',checkpoint.read_text())
@@ -166,19 +176,19 @@ type=EXECVE msg=audit(1789817001.123:457): argc=1 a0="id"
         with tempfile.TemporaryDirectory() as tmp, patch.object(c,'STATE',Path(tmp)):
             c.save('journal.json',{'cursor':'expired','since':'2026-09-19T00:00:00Z'})
             row={'__CURSOR':'next','__REALTIME_TIMESTAMP':'1789817000000000','MESSAGE':'ready'}
-            with patch.object(c,'command',side_effect=[c.CommandError('journalctl',1),json.dumps(row)]) as query, patch.object(c,'send') as sent:
+            with patch.object(c,'command_file',side_effect=[c.CommandError('journalctl',1),io.StringIO(json.dumps(row))]) as query, patch.object(c,'send',side_effect=lambda _cfg,events: list(events)) as sent:
                 c.journal({'host':'inspur','start':'2026-01-01T00:00:00Z'})
             self.assertEqual(query.call_args.args[0][-2:],['--since','2026-09-19T00:00:00Z'])
             self.assertEqual(c.load('journal.json',{})['cursor'],'next')
-            self.assertEqual(sent.call_args.args[1][0]['message'],'ready')
+            self.assertEqual(c.load('journal.json',{})['since'],'2026-09-19T11:23:20+00:00')
     def test_docker_failure_does_not_skip_other_containers(self):
         class Result:
             def __init__(self,code,output): self.returncode=code; self.stdout=output
         with tempfile.TemporaryDirectory() as tmp, patch.object(c,'STATE',Path(tmp)):
-            with patch.object(c.shutil,'which',return_value='/usr/bin/docker'), patch.object(c,'command',return_value='bad broken\ngood healthy'), patch.object(c.subprocess,'run',side_effect=[Result(1,''),Result(0,'2026-09-19T12:00:00Z ready')]), patch.object(c,'send') as sent:
+            with patch.object(c.shutil,'which',return_value='/usr/bin/docker'), patch.object(c,'command',return_value='bad broken\ngood healthy'), patch.object(c.subprocess,'run',side_effect=disk_result([Result(1,''),Result(0,'2026-09-19T12:00:00Z ready')])), patch.object(c,'send',side_effect=self.capture) as sent:
                 with self.assertRaisesRegex(c.DockerCollectionError,r'broken \(log read exited 1\)'): c.docker({'host':'inspur','start':'2026-09-19T00:00:00Z'})
             self.assertEqual(sent.call_count,1)
-            self.assertEqual(sent.call_args[0][1][0]['service'],'healthy')
+            self.assertEqual(self.delivered[0]['service'],'healthy')
             self.assertIn('good',c.load('docker.json',{}))
             self.assertNotIn('bad',c.load('docker.json',{}))
     def test_docker_backfill_advances_only_one_minute_after_ack(self):
@@ -186,7 +196,7 @@ type=EXECVE msg=audit(1789817001.123:457): argc=1 a0="id"
             returncode=0
             stdout='2026-09-19T00:00:30Z ready'
         with tempfile.TemporaryDirectory() as tmp, patch.object(c,'STATE',Path(tmp)):
-            with patch.object(c.shutil,'which',return_value='/usr/bin/docker'), patch.object(c,'command',return_value='one service'), patch.object(c.subprocess,'run',return_value=Result()) as query, patch.object(c,'send'):
+            with patch.object(c.shutil,'which',return_value='/usr/bin/docker'), patch.object(c,'command',return_value='one service'), patch.object(c.subprocess,'run',side_effect=disk_result(Result())) as query, patch.object(c,'send'):
                 c.docker({'host':'inspur','start':'2026-09-19T00:00:00Z'})
             args=query.call_args.args[0]
             self.assertEqual(args[args.index('--until')+1],'2026-09-19T00:01:00+00:00')
@@ -197,9 +207,9 @@ type=EXECVE msg=audit(1789817001.123:457): argc=1 a0="id"
             stdout='2026-09-19T00:00:30Z ready'
         with tempfile.TemporaryDirectory() as tmp, patch.object(c,'STATE',Path(tmp)):
             c.save('docker.json',{'slow':'2026-09-19T00:00:00Z'})
-            with patch.object(c.shutil,'which',return_value='/usr/bin/docker'), patch.object(c,'command',return_value='slow slow-service\ngood healthy-service'), patch.object(c.subprocess,'run',side_effect=[subprocess.TimeoutExpired('docker',60),Result()]), patch.object(c,'send') as sent:
+            with patch.object(c.shutil,'which',return_value='/usr/bin/docker'), patch.object(c,'command',return_value='slow slow-service\ngood healthy-service'), patch.object(c.subprocess,'run',side_effect=disk_result([subprocess.TimeoutExpired('docker',60),Result()])), patch.object(c,'send',side_effect=self.capture) as sent:
                 with self.assertRaisesRegex(c.DockerCollectionError,r'slow-service \(log read timed out after 60s\)'): c.docker({'host':'inspur','start':'2026-09-19T00:00:00Z'})
-            self.assertEqual(sent.call_args.args[1][0]['service'],'healthy-service')
+            self.assertEqual(self.delivered[0]['service'],'healthy-service')
             self.assertEqual(c.load('docker.json',{})['slow'],'2026-09-19T00:00:00Z')
             self.assertEqual(c.load('docker.json',{})['good'],'2026-09-19T00:01:00+00:00')
     def test_docker_delivery_failure_has_actionable_safe_health_context(self):
@@ -209,10 +219,10 @@ type=EXECVE msg=audit(1789817001.123:457): argc=1 a0="id"
         error=c.HTTPError('https://example.invalid/private-test-value',400,'private-test-value',{},None)
         self.addCleanup(error.close)
         with tempfile.TemporaryDirectory() as tmp, patch.object(c,'STATE',Path(tmp)):
-            with patch.object(c.shutil,'which',return_value='/usr/bin/docker'), patch.object(c,'command',return_value='one service'), patch.object(c.subprocess,'run',return_value=Result()), patch.object(c,'send',side_effect=error):
+            with patch.object(c.shutil,'which',return_value='/usr/bin/docker'), patch.object(c,'command',return_value='one service'), patch.object(c.subprocess,'run',side_effect=disk_result(Result())), patch.object(c,'send',side_effect=error):
                 with self.assertRaises(c.DockerCollectionError) as raised:c.docker({'host':'inspur','start':'2026-09-19T00:00:00Z'})
             detail=c.collection_error(raised.exception)
-            self.assertIn('service (delivery HTTP 400)',detail)
+            self.assertIn('service (collection HTTP 400)',detail)
             self.assertNotIn('private-test-value',detail)
             self.assertNotIn('one',c.load('docker.json',{}))
             self.assertEqual(c.collection_error(RuntimeError('private-test-value')),'RuntimeError')
@@ -222,7 +232,7 @@ type=EXECVE msg=audit(1789817001.123:457): argc=1 a0="id"
             def __init__(self,message):self.stdout=message
         with tempfile.TemporaryDirectory() as tmp, patch.object(c,'STATE',Path(tmp)):
             for message,reason in [('No such container: synthetic-private-value','removed during collection'),('configured logging driver does not support reading synthetic-private-value','logging driver does not support reading')]:
-                with patch.object(c.shutil,'which',return_value='/usr/bin/docker'), patch.object(c,'command',return_value='one service'), patch.object(c.subprocess,'run',return_value=Result(message)):
+                with patch.object(c.shutil,'which',return_value='/usr/bin/docker'), patch.object(c,'command',return_value='one service'), patch.object(c.subprocess,'run',side_effect=disk_result(Result(message))):
                     with self.assertRaises(c.DockerCollectionError) as raised:c.docker({'host':'inspur','start':'2026-09-19T00:00:00Z'})
                 self.assertIn(reason,str(raised.exception))
                 self.assertNotIn('synthetic-private-value',str(raised.exception))

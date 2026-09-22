@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Checkpointed host journal, Docker and audit delivery. Advance only after HTTP acknowledgement."""
 import datetime
+import contextlib
+import http.client
+import io
 import hashlib
 import json
 import os
@@ -10,9 +13,10 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
-import urllib.request
+import urllib.parse
 from urllib.error import HTTPError
 import uuid
 
@@ -23,6 +27,13 @@ def iso(seconds=None):
     return datetime.datetime.fromtimestamp(seconds or time.time(), datetime.timezone.utc).isoformat()
 
 def scrub(text):
+    # Most records contain no credential syntax; avoid the expensive replacement
+    # expressions for ordinary application messages and command arguments.
+    if text.isascii():
+        lower = text.lower()
+        if not any(marker in lower for marker in ('bearer','basic','password','passwd','token','secret','cookie',
+                   'authorization','api','http://','https://','curl','sshpass','mysql','mariadb','redis-cli')):
+            return text
     # Authorization schemes can appear without a literal Authorization header.
     text = re.sub(r'(?i)\b(Bearer|Basic)\s+[A-Za-z0-9+/_.=-]+', r'\1 [REDACTED]', text)
     text = re.sub(r'''(?i)(["'](?:set-cookie|cookie|authorization)\s*:\s*)([^"'\r\n]*)(["'])''', r'\1[REDACTED]\3', text)
@@ -108,31 +119,150 @@ def event(config, source_id, service, message, timestamp, metadata=None, level='
                 host=config['host'], message=scrub(message)[:65536] or '(empty)', timestamp=timestamp,
                 level=level, metadata=bounded_metadata(metadata or {}))
 
+QUEUE_READY = threading.Event()
+QUEUE_DIRECTORY_LOCK = threading.Lock()
+BATCH_BYTES = 256 * 1024
+BATCH_COUNT = 100
+MAX_RECORD_BYTES = 8 * 1024 * 1024
+
+
+def sync_directory(path):
+    descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    try: os.fsync(descriptor)
+    finally: os.close(descriptor)
+
+
+def queue_batch(batch, lane):
+    """A source may advance only after its JSON batch is durable on disk."""
+    root = STATE/'queue'/lane
+    with QUEUE_DIRECTORY_LOCK:
+        if not root.exists():
+            root.mkdir(mode=0o700, parents=True, exist_ok=True)
+            sync_directory(root.parent); sync_directory(STATE)
+    identity = str(time.time_ns()).zfill(20)+'-'+uuid.uuid4().hex
+    pending = root/(identity+'.pending')
+    destination = root/(identity+'.json')
+    try:
+        with pending.open('x', encoding='utf8') as handle:
+            os.chmod(pending, 0o600)
+            json.dump({'events':batch}, handle, ensure_ascii=False, separators=(',', ':'))
+            handle.flush(); os.fsync(handle.fileno())
+        pending.replace(destination)
+        sync_directory(root)
+        QUEUE_READY.set()
+    finally:
+        if pending.exists(): pending.unlink()
+
+
 def send(config, events):
-    def deliver(batch):
-        payload = json.dumps({'events': batch},ensure_ascii=False).encode()
-        request = urllib.request.Request(config['url'], data=payload, headers={'Content-Type':'application/json','Authorization':'Bearer '+config['token']})
-        with urllib.request.urlopen(request, timeout=30) as response:
-            result = json.load(response)
-            if not result.get('ok'): raise RuntimeError('Ingestion did not acknowledge the batch')
-    batch = []; size = 0
+    # Never retain a backlog in Python. The two small buffers let recent events
+    # bypass historical replay without a failed connection stopping collection.
+    batches = {'live':[], 'history':[]}
+    sizes = {'live':0, 'history':0}
+    flushed = time.monotonic()
     for item in events:
-        length = json_size(item)
-        if batch and (len(batch) >= 100 or size + length > 512000): deliver(batch); batch = []; size = 0
-        batch.append(item); size += length
-    if batch: deliver(batch)
+        try: recent = datetime.datetime.fromisoformat(item['timestamp'].replace('Z','+00:00')).timestamp() >= time.time()-60
+        except (KeyError, ValueError, TypeError): recent = True
+        lane = 'live' if recent else 'history'
+        size = json_size(item)
+        if batches[lane] and (sizes[lane]+size > BATCH_BYTES or len(batches[lane]) >= BATCH_COUNT):
+            queue_batch(batches[lane], lane); batches[lane] = []; sizes[lane] = 0
+        batches[lane].append(item); sizes[lane] += size
+        if time.monotonic()-flushed >= 0.1:
+            for name, batch in batches.items():
+                if batch: queue_batch(batch, name); batches[name] = []; sizes[name] = 0
+            flushed = time.monotonic()
+    for lane, batch in batches.items():
+        if batch: queue_batch(batch, lane)
+
+
+class DeliveryError(RuntimeError):
+    pass
+
+
+class Delivery:
+    """One authenticated keep-alive connection per lane; ACK means DB commit."""
+    def __init__(self, config):
+        self.config = config
+        self.connection = None
+        self.url = urllib.parse.urlsplit(config['url'])
+        if self.url.scheme not in ('http', 'https') or self.url.username or self.url.password:
+            raise ValueError('Invalid ingestion URL')
+        if self.url.scheme == 'http' and self.url.hostname not in ('127.0.0.1', 'localhost', '::1'):
+            raise ValueError('Remote ingestion requires HTTPS')
+
+    def close(self):
+        if self.connection: self.connection.close()
+        self.connection = None
+
+    def deliver(self, path):
+        # Queue files are individual bounded batches, never the entire backlog.
+        with path.open('rb') as handle: payload = handle.read(512000+1)
+        if len(payload) > 512000: raise RuntimeError('Queued batch exceeds ingestion limit')
+        count = len(json.loads(payload)['events'])
+        if self.connection is None:
+            constructor = http.client.HTTPSConnection if self.url.scheme == 'https' else http.client.HTTPConnection
+            self.connection = constructor(self.url.hostname, self.url.port, timeout=8)
+        try:
+            self.connection.request('POST', urllib.parse.urlunsplit(('', '', self.url.path or '/', self.url.query, '')),
+                body=payload, headers={'Content-Type':'application/json', 'Authorization':'Bearer '+self.config['token']})
+            response = self.connection.getresponse()
+            raw = response.read(4097)
+            if response.status != 201 or len(raw) > 4096:
+                raise DeliveryError('Ingestion HTTP '+str(response.status))
+            acknowledgement = json.loads(raw)
+            if acknowledgement.get('ok') is not True or acknowledgement.get('accepted') != count:
+                raise DeliveryError('Ingestion acknowledgement mismatch')
+        except Exception:
+            self.close()
+            raise
+        path.unlink()
+        sync_directory(path.parent)
+        return count
+
+
+def queued_batch(lane):
+    root = STATE/'queue'/lane
+    if not root.exists(): return None
+    # min over an iterator keeps memory constant even with millions of batches.
+    with os.scandir(root) as entries:
+        name = min((entry.name for entry in entries if entry.name.endswith('.json')), default=None)
+    return root/name if name else None
+
+
+def deliver_queue(config, lane, statuses, lock):
+    delivery = Delivery(config)
+    while True:
+        path = queued_batch(lane)
+        if path is None:
+            QUEUE_READY.wait(0.25); QUEUE_READY.clear()
+            continue
+        try:
+            count = delivery.deliver(path)
+            age = max(0, time.time()-int(path.name.split('-')[0])/1e9)
+            status = {'ok':lane != 'live' or age < 10, 'checkedAt':iso(), 'accepted':count, 'queueAgeSeconds':age}
+            if not status['ok']: status['error'] = 'Live log delivery exceeded 10 seconds'
+        except Exception as error:
+            status = {'ok':False, 'checkedAt':iso(), 'error':collection_error(error)}
+            # Keep the exact file for replay, including a lost response after commit.
+            time.sleep(1)
+        with lock: statuses['delivery_'+lane] = status
 
 def save(name, value):
     path = STATE/name
     temporary = path.with_suffix('.tmp')
-    temporary.write_text(json.dumps(value)); temporary.chmod(0o600); temporary.replace(path)
+    with temporary.open('w') as handle:
+        os.chmod(temporary, 0o600)
+        json.dump(value, handle); handle.flush(); os.fsync(handle.fileno())
+    temporary.replace(path); sync_directory(path.parent)
 
 def load(name, default):
     path = STATE/name
     return json.loads(path.read_text()) if path.exists() else default
 
 class CommandError(RuntimeError):
-    def __init__(self, name, code):
+    def __init__(self, name, code, reason=None):
+        self.reason = reason
         self.code = code
         super().__init__(f'{name} collection failed ({code})')
 
@@ -142,30 +272,78 @@ def command(args, accepted=(0,), timeout=60):
         raise CommandError(args[0], result.returncode)
     return result.stdout
 
-def journal(config):
-    checkpoint = load('journal.json', None)
+@contextlib.contextmanager
+def command_file(args, accepted=(0,), timeout=60, merged=False):
+    # /tmp can be tmpfs (it is on OVH). Capture on the persistent state volume.
+    root = STATE/'capture'
+    root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with tempfile.TemporaryFile(dir=root, mode='w+b') as output, tempfile.TemporaryFile(dir=root, mode='w+b') as errors:
+        result = subprocess.run(args, stdout=output, stderr=subprocess.STDOUT if merged else errors,
+                                timeout=timeout, env={**os.environ, 'LC_ALL':'C'})
+        errors.seek(0)
+        detail = errors.read(4096).decode('utf8', errors='replace').strip()
+        if result.returncode not in accepted or (result.returncode == 1 and detail not in ('', '<no matches>')):
+            if merged:
+                output.seek(0); detail = output.read(4096).decode('utf8', errors='replace')
+            reason = next((label for fragment,label in (('No such container','removed during collection'),
+                ('does not support reading','logging driver does not support reading'), ('invalid character','invalid log data')) if fragment in detail), None)
+            raise CommandError(args[0], result.returncode, reason)
+        output.seek(0)
+        yield output
+
+
+def record_lines(handle):
+    while True:
+        line = handle.readline(MAX_RECORD_BYTES+1)
+        if not line: break
+        if len(line) > MAX_RECORD_BYTES:
+            raise RuntimeError('Source record exceeds 8MB; cursor retained')
+        yield line.decode('utf8', errors='replace') if isinstance(line, bytes) else line
+
+
+def audit_events(lines, config):
+    # ausearch emits complete, grouped events. Keep only one event at a time.
+    identity = None; rows = []; size = 0
+    for line in lines:
+        if not line.startswith(('type=SYSCALL ', 'type=EXECVE ')): continue
+        match = re.search(r'msg=audit\((\d+(?:\.\d+)?):(\d+)\)', line)
+        if not match: continue
+        current = match.group(0)
+        if identity is not None and current != identity:
+            yield from parse_audit(''.join(rows), config)
+            rows = []; size = 0
+        identity = current; size += len(line)
+        if size > MAX_RECORD_BYTES: raise RuntimeError('Audit event exceeds 8MB; cursor retained')
+        rows.append(line)
+    if rows: yield from parse_audit(''.join(rows), config)
+
+
+def journal(config, live=False):
+    state_name = 'journal-live.json' if live else 'journal.json'
+    checkpoint = load(state_name, None)
     cursor = checkpoint.get('cursor') if isinstance(checkpoint, dict) else checkpoint
-    since = checkpoint.get('since', config['start']) if isinstance(checkpoint, dict) else config['start']
+    since = checkpoint.get('since', config['start']) if isinstance(checkpoint, dict) else (iso(time.time()-60) if live else config['start'])
     args = ['journalctl','--no-pager','-o','json','--show-cursor','--lines=+1000']
-    try: output = command(args + (['--after-cursor', cursor] if cursor else ['--since', since]))
-    except RuntimeError:
+    def consume(output):
+        nonlocal cursor, since
+        for line in record_lines(output):
+            if not line.startswith('{'): continue
+            row = json.loads(line); cursor = row['__CURSOR']; since = iso(int(row['__REALTIME_TIMESTAMP'])/1e6)
+            priority = int(row.get('PRIORITY', 6))
+            level = 'fatal' if priority <= 2 else 'error' if priority == 3 else 'warn' if priority == 4 else 'debug' if priority == 7 else 'info'
+            service = str(row.get('SYSLOG_IDENTIFIER') or row.get('_SYSTEMD_UNIT') or 'system').removesuffix('.service')
+            if service == 'hanasand-log-collector': continue
+            yield event(config, 'journal:'+cursor, service, str(row.get('MESSAGE','')), since,
+                        {'collector':'journal','pid':row.get('_PID'),'user':{'id':row.get('_UID')},'unit':row.get('_SYSTEMD_UNIT')}, level)
+    try:
+        with command_file(args + (['--after-cursor', cursor] if cursor else ['--since', since]), timeout=5 if live else 60) as output:
+            send(config, consume(output))
+    except CommandError:
         if not cursor: raise
-        # A rotated journal can invalidate its opaque cursor. Resume by timestamp;
-        # source IDs make the inclusive boundary safe to replay.
-        output = command(args + ['--since', since])
-    events = []; last = cursor
-    for line in output.splitlines():
-        if not line.startswith('{'): continue
-        row = json.loads(line); last = row['__CURSOR']; since = iso(int(row['__REALTIME_TIMESTAMP'])/1e6)
-        priority = int(row.get('PRIORITY', 6))
-        level = 'fatal' if priority <= 2 else 'error' if priority == 3 else 'warn' if priority == 4 else 'debug' if priority == 7 else 'info'
-        service = str(row.get('SYSLOG_IDENTIFIER') or row.get('_SYSTEMD_UNIT') or 'system').removesuffix('.service')
-        # The collector's own status is sent separately and must not recurse on errors.
-        if service == 'hanasand-log-collector': continue
-        events.append(event(config, 'journal:'+last, service, str(row.get('MESSAGE','')), iso(int(row['__REALTIME_TIMESTAMP'])/1e6),
-                            {'collector':'journal','pid':row.get('_PID'),'user':{'id':row.get('_UID')},'unit':row.get('_SYSTEMD_UNIT')}, level))
-    send(config, events)
-    if last: save('journal.json', {'cursor':last, 'since':since})
+        with command_file(args + ['--since', since], timeout=5 if live else 60) as output:
+            send(config, consume(output))
+    if cursor: save(state_name, {'cursor':cursor, 'since':since})
+
 
 def audit_arg(value):
     if value.startswith('"'): return value[1:-1]
@@ -230,19 +408,20 @@ def audit(config, live=False):
     elif pending.exists(): pending.unlink()
     args = ['ausearch','--input-logs','--checkpoint',str(pending),'-k','hanasand_exec','--raw']
     if live and not reuse: args += ['--start',*recent_audit_start()]
-    try: output = command(args, accepted=(0,1))
+    try:
+        with command_file(args, accepted=(0,1), timeout=5 if live else 60) as output:
+            send(config, audit_events(record_lines(output), config))
     except CommandError as error:
         if error.code not in (10,11,12) or not pending.exists(): raise
-        output = command(args+['--start','checkpoint'], accepted=(0,1))
-    events = parse_audit(output, config)
-    send(config, reversed(events) if live else events)
-    if pending.exists(): pending.replace(stable)
+        with command_file(args+['--start','checkpoint'], accepted=(0,1), timeout=5 if live else 60) as output:
+            send(config, audit_events(record_lines(output), config))
+    if pending.exists(): pending.replace(stable); sync_directory(STATE)
 
 class DockerCollectionError(RuntimeError):
     """Contains only source names and controlled status descriptions, never logs."""
 
 def collection_error(error):
-    return str(error) if isinstance(error,DockerCollectionError) else type(error).__name__
+    return str(error) if isinstance(error,(DockerCollectionError,DeliveryError)) else type(error).__name__
 
 def docker_event(config, container_id, name, timestamp, message, stream=None):
     metadata = {'collector':'docker','container_id':container_id}
@@ -262,17 +441,20 @@ def docker_event(config, container_id, name, timestamp, message, stream=None):
     return event(config,'docker:'+container_id+':'+timestamp+':'+message,name,message,timestamp,metadata,level)
 
 def docker_cli_events(config, container_id, name, output):
-    events=[]; timestamp=None; parts=[]
-    for line in output.splitlines(keepends=True):
+    return list(docker_cli_stream(config, container_id, name, output.splitlines(keepends=True)))
+
+def docker_cli_stream(config, container_id, name, lines):
+    timestamp=None; parts=[]; size=0
+    for line in lines:
         match=re.match(r'^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})) ',line)
         if match:
             if timestamp is not None:
-                events.append(docker_event(config,container_id,name,timestamp,''.join(parts).removesuffix('\n').removesuffix('\r')))
-            timestamp=match.group(1);parts=[line[match.end():]]
-        elif timestamp is not None:parts.append(line)
+                yield docker_event(config,container_id,name,timestamp,''.join(parts).removesuffix('\n').removesuffix('\r'))
+            timestamp=match.group(1);parts=[line[match.end():]];size=len(parts[0])
+        elif timestamp is not None:parts.append(line);size+=len(line)
+        if size>MAX_RECORD_BYTES: raise RuntimeError('Docker event exceeds 8MB; cursor retained')
     if timestamp is not None:
-        events.append(docker_event(config,container_id,name,timestamp,''.join(parts).removesuffix('\n').removesuffix('\r')))
-    return events
+        yield docker_event(config,container_id,name,timestamp,''.join(parts).removesuffix('\n').removesuffix('\r'))
 
 def docker_json_files(source):
     path=Path(source['path'])
@@ -382,9 +564,9 @@ def docker_file_batch(config, container_id, source, live=False):
             docker_file_notice(config,container_id,source,cursor,'source file rewritten or truncated; replaying available contents')
             offset=0; anchor_bytes=b''
         handle.seek(offset)
-        started=time.monotonic(); scanned=0; events=[]; complete=offset; eof=False
+        started=time.monotonic(); scanned=0; events=[]; event_bytes=0; complete=offset; eof=False
         cutoff=datetime.datetime.fromisoformat(source['since'].replace('Z','+00:00')).timestamp()
-        while scanned<64*1024*1024 and len(events)<500 and time.monotonic()-started<1:
+        while scanned<8*1024*1024 and len(events)<100 and event_bytes<BATCH_BYTES and time.monotonic()-started<0.1:
             line=handle.readline(8*1024*1024+1)
             if not line: eof=True; break
             if not line.endswith(b'\n'):
@@ -407,7 +589,9 @@ def docker_file_batch(config, container_id, source, live=False):
                 timestamp=match.group(1)+'.'+(match.group(2) or '').ljust(9,'0')+match.group(3)
             except (ValueError,KeyError,TypeError,AttributeError):
                 raise DockerCollectionError(source['name']+' (invalid JSON log record at byte '+str(complete)+')') from None
-            if seconds>=cutoff: events.append(docker_event(config,container_id,source['name'],timestamp,message,record['stream']))
+            if seconds>=cutoff:
+                item=docker_event(config,container_id,source['name'],timestamp,message,record['stream'])
+                events.append(item); event_bytes+=json_size(item)
             scanned+=len(line); complete=handle.tell(); anchor_bytes=(anchor_bytes+line)[-128:]
     send(config,events)
     next_cursor={'device':stat.st_dev,'inode':stat.st_ino,'offset':complete,'anchor':hashlib.sha256(anchor_bytes).hexdigest()}
@@ -416,7 +600,7 @@ def docker_file_batch(config, container_id, source, live=False):
     if eof and index+1<len(files):
         next_stat=files[index+1][2]
         next_cursor={'device':next_stat.st_dev,'inode':next_stat.st_ino,'offset':0}
-    save(state_name,next_cursor)
+    if next_cursor != cursor: save(state_name,next_cursor)
     remaining=max(0,stat.st_size-complete)+sum(item[2].st_size for item in files[index+1:])
     return remaining
 
@@ -425,7 +609,7 @@ def docker_file_source(config, live=False):
     for container_id,source in sources.items():
         try: remaining+=docker_file_batch(config,container_id,source,live)
         except Exception as error:
-            if isinstance(error,DockerCollectionError): failures.append(str(error))
+            if isinstance(error,(DockerCollectionError,DeliveryError)): failures.append(str(error))
             else:
                 detail='delivery HTTP '+str(error.code) if isinstance(error,HTTPError) else type(error).__name__
                 failures.append(source['name']+' ('+detail+')')
@@ -442,7 +626,6 @@ def docker(config):
     failures = []
     file_sources=load('docker-file-sources.json',{})
     # Only a successful complete inventory can prove a registered container gone.
-    file_names={source['name'] for source in file_sources.values()} | {entry['source']['name'] for entry in load('docker-file-retired.json',{}).values()}
     current_ids={container_id for container_id,_name in containers}
     for container_id,source in list(file_sources.items()):
         if container_id not in current_ids and not docker_json_files(source):
@@ -457,7 +640,7 @@ def docker(config):
         since = checkpoints.get(container_id, config['start'])
         # A replacement retains the same file-collection behavior and original
         # cutoff, while its predecessor's acknowledged cursors remain archived.
-        if name in file_names and register_docker_file(config,container_id,name,since): continue
+        if register_docker_file(config,container_id,name,since): continue
         created=docker_created_at(container_id)
         if created and datetime.datetime.fromisoformat(created.replace('Z','+00:00')) > datetime.datetime.fromisoformat(since.replace('Z','+00:00')):
             since=created  # No Docker records can predate this container's creation.
@@ -466,28 +649,16 @@ def docker(config):
         since_time = datetime.datetime.fromisoformat(since.replace('Z','+00:00')).timestamp()
         until = iso(min(time.time()-1, since_time+60))
         try:
-            result = subprocess.run(['docker','logs','--timestamps','--since',since,'--until',until,container_id],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=60)
+            with command_file(['docker','logs','--timestamps','--since',since,'--until',until,container_id], merged=True) as output:
+                send(config, docker_cli_stream(config,container_id,name,record_lines(output)))
+            checkpoints[container_id] = until; save('docker.json', checkpoints)
         except subprocess.TimeoutExpired:
-            if register_docker_file(config,container_id,name,since): continue
             failures.append(name+' (log read timed out after 60s)')
-            continue
-        except OSError as error:
-            failures.append(name+' (log read '+type(error).__name__+')')
-            continue
-        if result.returncode:
-            reason = next((label for fragment,label in (
-                ('No such container','removed during collection'),
-                ('does not support reading','logging driver does not support reading'),
-                ('invalid character','invalid log data'),
-            ) if fragment in result.stdout),'log read exited '+str(result.returncode))
-            failures.append(name+' ('+reason+')')
-            continue
-        events=docker_cli_events(config,container_id,name,result.stdout)
-        try:
-            send(config, events); checkpoints[container_id] = until; save('docker.json', checkpoints)
+        except CommandError as error:
+            failures.append(name+' ('+(error.reason or 'log read exited '+str(error.code))+')')
         except Exception as error:
-            reason = 'HTTP '+str(error.code) if isinstance(error,HTTPError) else type(error).__name__
-            failures.append(name+' (delivery '+reason+')')
+            reason = 'HTTP '+str(error.code) if isinstance(error,HTTPError) else collection_error(error)
+            failures.append(name+' (collection '+reason+')')
     if failures: raise DockerCollectionError('Docker log collection failed for '+', '.join(failures))
 
 def collect(config):
@@ -500,8 +671,59 @@ def collect(config):
 def checkpoint_files(root):
     return ['audit.checkpoint','journal.json','docker.json','docker-created.json',*(path.name for path in root.glob('docker-file-*.json'))]
 
+def json_events(handle, metadata, array=False):
+    """Read one event from a JSON export at a time, including legacy spools."""
+    decoder = json.JSONDecoder(); buffer = ''; eof = False
+    def fill():
+        nonlocal buffer, eof
+        chunk = handle.read(65536)
+        if not chunk: eof = True
+        buffer += chunk
+        if len(buffer) > MAX_RECORD_BYTES: raise RuntimeError('Export record exceeds 8MB')
+    def whitespace():
+        nonlocal buffer
+        buffer = buffer.lstrip()
+        while not buffer and not eof: fill(); buffer = buffer.lstrip()
+    def token(expected):
+        nonlocal buffer
+        whitespace()
+        if not buffer.startswith(expected): raise ValueError('Invalid export JSON')
+        buffer = buffer[len(expected):]
+    def value():
+        nonlocal buffer
+        whitespace()
+        while True:
+            try:
+                result, end = decoder.raw_decode(buffer)
+                buffer = buffer[end:]
+                return result
+            except json.JSONDecodeError:
+                if eof: raise
+                fill()
+    def events():
+        token('['); whitespace()
+        if buffer.startswith(']'): token(']'); return
+        while True:
+            yield value(); whitespace()
+            if buffer.startswith(']'): token(']'); return
+            token(',')
+    if array:
+        yield from events()
+    else:
+        token('{')
+        while True:
+            key = value(); token(':')
+            if key == 'events': yield from events()
+            else: metadata[key] = value()
+            whitespace()
+            if buffer.startswith('}'): token('}'); break
+            token(',')
+    whitespace()
+    if buffer: raise ValueError('Trailing export data')
+
+
 def guest_export(config):
-    """Keep a replayable guest batch; only the host's acknowledgement commits cursors."""
+    """A disk-only export retains its source cursors until the host ACKs."""
     global STATE, send
     root = STATE
     root.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -512,33 +734,58 @@ def guest_export(config):
         pending.mkdir(mode=0o700)
         for name in checkpoint_files(root):
             if (root/name).exists(): shutil.copyfile(root/name, pending/name)
-        events = []
-        STATE = pending
-        sender = send
-        send = lambda _config, batch: events.extend(batch)
-        try: failures = collect(config)
-        finally: STATE = root; send = sender
-        payload = {'id':uuid.uuid4().hex, 'events':events, 'failures':failures}
-        save('export.json', payload)
-    payload = json.loads(spool.read_text())
-    # Replay old spools through current redaction before they leave the guest.
-    for item in payload['events']:
-        item['message'] = scrub(item['message'])
-        item['metadata'] = bounded_metadata(item.get('metadata', {}))
-    print(json.dumps(payload))
+        staging = root/'export.pending'
+        with staging.open('w') as handle:
+            os.chmod(staging, 0o600)
+            handle.write('{"id":'+json.dumps(uuid.uuid4().hex)+',"events":[')
+            first = True
+            def append(_config, batch):
+                nonlocal first
+                for item in batch:
+                    if not first: handle.write(',')
+                    json.dump(item, handle); first = False
+            STATE = pending; sender = send; send = append
+            try: failures = collect(config)
+            finally: STATE = root; send = sender
+            handle.write('],"failures":'+json.dumps(failures)+'}')
+            handle.flush(); os.fsync(handle.fileno())
+        staging.replace(spool); sync_directory(root)
+    # Also stream legacy exports, which may already contain a large backlog.
+    metadata = {}; first = True
+    sys.stdout.write('{"events":[')
+    with spool.open() as handle:
+        for item in json_events(handle, metadata):
+            item['message'] = scrub(item['message'])
+            item['metadata'] = bounded_metadata(item.get('metadata', {}))
+            if not first: sys.stdout.write(',')
+            json.dump(item, sys.stdout); first = False
+    sys.stdout.write('],"id":'+json.dumps(metadata['id'])+',"failures":'+json.dumps(metadata['failures'])+'}\n')
+
 
 def guest_ack(identity):
-    payload = load('export.json', {})
-    if payload.get('id') != identity: raise RuntimeError('Guest export acknowledgement mismatch')
+    # IDs are first in old and new on-disk exports; never load their event array.
+    with (STATE/'export.json').open() as handle: header = handle.read(256)
+    match = re.match(r'\s*\{\s*"id"\s*:\s*("[^"\\]*")', header)
+    if not match or json.loads(match.group(1)) != identity: raise RuntimeError('Guest export acknowledgement mismatch')
     pending = STATE/'pending'
     for name in checkpoint_files(pending):
         if (pending/name).exists(): (pending/name).replace(STATE/name)
-    (STATE/'export.json').unlink()
+    sync_directory(STATE)
+    (STATE/'export.json').unlink(); sync_directory(STATE)
     shutil.rmtree(pending)
 
+
 def recent_audit(config):
-    output = command(['ausearch','--input-logs','-k','hanasand_exec','--raw','--start',*recent_audit_start()],accepted=(0,1))
-    return list(reversed(parse_audit(output,config)))
+    with command_file(['ausearch','--input-logs','-k','hanasand_exec','--raw','--start',*recent_audit_start()],accepted=(0,1)) as output:
+        yield from audit_events(record_lines(output),config)
+
+
+def print_recent(config):
+    sys.stdout.write('['); first = True
+    for item in recent_audit(config):
+        if not first: sys.stdout.write(',')
+        json.dump(item, sys.stdout); first = False
+    sys.stdout.write(']\n')
 
 def guests(config):
     """Read guest telemetry over the existing management channel, never guest credentials."""
@@ -566,19 +813,19 @@ def guests(config):
                 command([lxc, 'exec', name, '--', 'sh', staging+'/install.sh', config['host']+'/'+name, '--guest'], timeout=360)
                 installed[name] = identity
                 save('guests.json', installed)
-            response = json.loads(command([lxc, 'exec', name, '--', '/usr/local/sbin/hanasand-log-collector', '--export', config['host']+'/'+name, config['start']], timeout=120))
-            catching_up = any(datetime.datetime.fromisoformat(item['timestamp'].replace('Z','+00:00')).timestamp() < time.time()-120 for item in response['events'])
-            if enrolling or catching_up:
-                # Prioritize recent commands on every historical export, including
-                # retries after an outage; the main cursor still covers all history.
-                recent = json.loads(command([lxc, 'exec', name, '--', '/usr/local/sbin/hanasand-log-collector', '--recent', config['host']+'/'+name]))
-                for item in recent: item['metadata'].update({'physical_host':config['host'], 'vm':{'name':name,'type':guest.get('type')}})
-                send(config,recent)
-            for item in response['events']:
-                item['metadata'].update({'physical_host':config['host'], 'vm':{'name':name, 'type':guest.get('type')}})
-            send(config, response['events'])
-            command([lxc, 'exec', name, '--', '/usr/local/sbin/hanasand-log-collector', '--ack', response['id']])
-            if response['failures']: failures.append(name+': '+', '.join(response['failures']))
+            def forward(output, metadata, array=False):
+                with io.TextIOWrapper(output, encoding='utf8') as handle:
+                    for item in json_events(handle, metadata, array):
+                        item['metadata'].update({'physical_host':config['host'], 'vm':{'name':name,'type':guest.get('type')}})
+                        yield item
+            # Recent executions get their own bounded pass before disk replay.
+            with command_file([lxc, 'exec', name, '--', '/usr/local/sbin/hanasand-log-collector', '--recent', config['host']+'/'+name]) as output:
+                send(config, forward(output, {}, array=True))
+            metadata = {}
+            with command_file([lxc, 'exec', name, '--', '/usr/local/sbin/hanasand-log-collector', '--export', config['host']+'/'+name, config['start']], timeout=120) as output:
+                send(config, forward(output, metadata))
+            command([lxc, 'exec', name, '--', '/usr/local/sbin/hanasand-log-collector', '--ack', metadata['id']])
+            if metadata['failures']: failures.append(name+': '+', '.join(metadata['failures']))
         except Exception as error: failures.append(name+': '+type(error).__name__)
     save('guest-coverage.json', {'checkedAt':iso(), 'instances':[{'name':g['name'], 'status':g.get('status'), 'type':g.get('type')} for g in inventory], 'failures':failures})
     if failures: raise RuntimeError('Guest collection failed: '+', '.join(failures))
@@ -588,7 +835,7 @@ def main():
     if len(sys.argv) > 1:
         if sys.argv[1] == '--export': return guest_export({'host':sys.argv[2], 'start':sys.argv[3]})
         if sys.argv[1] == '--ack': return guest_ack(sys.argv[2])
-        if sys.argv[1] == '--recent': return print(json.dumps(recent_audit({'host':sys.argv[2]})))
+        if sys.argv[1] == '--recent': return print_recent({'host':sys.argv[2]})
     config = json.loads(CONFIG.read_text())
     statuses = {}
     status_lock = threading.Lock()
@@ -608,9 +855,12 @@ def main():
             time.sleep(interval)
     # Sources have independent cursors and workers. A historical journal/Docker
     # sweep must never prevent host command checks or VM collection from running.
-    for source, interval in ((audit,5),(journal,1),(docker,5),(docker_file_history,1),(docker_file_live,1),(guests,30)):
+    for lane in ('live', 'history'):
+        threading.Thread(target=deliver_queue,args=(config,lane,statuses,status_lock),daemon=True).start()
+    for source, interval in ((audit,5),(journal,1),(docker,5),(docker_file_history,0.25),(docker_file_live,0.1),(guests,30)):
         threading.Thread(target=worker,args=(source.__name__,source,interval),daemon=True).start()
-    threading.Thread(target=worker,args=('audit_live',lambda cfg:audit(cfg,live=True),5,True),daemon=True).start()
+    threading.Thread(target=worker,args=('audit_live',lambda cfg:audit(cfg,live=True),0.5),daemon=True).start()
+    threading.Thread(target=worker,args=('journal_live',lambda cfg:journal(cfg,live=True),0.5),daemon=True).start()
     while True:
         with status_lock: snapshot = dict(statuses)
         failures = [name+': '+status['error'] for name,status in snapshot.items() if not status['ok']]
@@ -619,6 +869,7 @@ def main():
             failures.append('guests: '+', '.join(coverage['failures']))
         health = {source:snapshot.get(source,{}).get('ok') for source in ('audit','journal','docker','docker_file_history','docker_file_live','guests')}
         metadata = {'collector_health':health,'source_status':snapshot}
+        save('health.json', {'checkedAt':iso(), **metadata})
         if coverage:
             metadata['guest_coverage'] = {'checkedAt':coverage['checkedAt'], 'running':sum(guest['status']=='Running' for guest in coverage['instances']),
                 'stopped':sum(guest['status']!='Running' for guest in coverage['instances']), 'failures':coverage['failures'], 'enrollment':'Stopped guests are enrolled when next running.'}

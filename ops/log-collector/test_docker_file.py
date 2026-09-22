@@ -177,9 +177,9 @@ class DockerFileTests(unittest.TestCase):
         for raw,expected in [('ERROR','error'),(' ERROR ','error'),('WARN','warn'),('WARNING','warn'),('CRITICAL','fatal'),('Fatal','fatal'),('INFO','info'),(50,'error'),(30,'info')]:
             event=c.docker_event(self.config,'container','cdn','2026-09-19T00:00:01.100000000Z',json.dumps({'level':raw,'message':'benign text mentions an error'}))
             self.assertEqual(event['level'],expected)
-    def test_timeout_enrolls_readable_file_without_advancing_cli_cursor(self):
+    def test_readable_file_enrolls_before_cli_without_advancing_cursor(self):
         self.log.write_bytes(line('first'));c.save('docker.json',{'container':self.source['since']})
-        with patch.object(c.shutil,'which',return_value='/usr/bin/docker'),patch.object(c,'command',side_effect=['container cdn','2026-09-18T00:00:00Z',json.dumps({'path':str(self.log),'driver':'json-file'})]),patch.object(c.subprocess,'run',side_effect=subprocess.TimeoutExpired('docker',60)):
+        with patch.object(c.shutil,'which',return_value='/usr/bin/docker'),patch.object(c,'command',side_effect=['container cdn',json.dumps({'path':str(self.log),'driver':'json-file'})]),patch.object(c.subprocess,'run',side_effect=subprocess.TimeoutExpired('docker',60)):
             c.docker({'host':'inspur','start':'2026-09-01T00:00:00Z'})
         self.assertEqual(c.load('docker-file-sources.json',{})['container']['since'],self.source['since'])
         self.assertEqual(c.load('docker.json',{})['container'],self.source['since'])
@@ -262,12 +262,12 @@ class DockerFileTests(unittest.TestCase):
             c.docker({'host':'inspur','start':self.source['since']})
             self.assertEqual(cli.call_args.args[0][4],created)
             c.docker({'host':'inspur','start':self.source['since']})
-        self.assertEqual(sum(args[1]=='inspect' for args in calls),1)
+        self.assertEqual(sum(args[1]=='inspect' and args[3]=='{{.Created}}' for args in calls),1)
         self.assertEqual(c.load('docker-created.json',{})['new'],created)
     def test_failed_delivery_after_creation_clamp_keeps_original_cli_checkpoint(self):
         c.save('docker.json',{'new':self.source['since']})
         self.sender.side_effect=RuntimeError('offline')
-        with patch.object(c.shutil,'which',return_value='/usr/bin/docker'),patch.object(c,'command',side_effect=['new api','2026-09-19T00:00:05Z']),patch.object(c.subprocess,'run',return_value=subprocess.CompletedProcess([],0,'2026-09-19T00:00:10.000000000Z new\n')):
+        with patch.object(c.shutil,'which',return_value='/usr/bin/docker'),patch.object(c,'command',side_effect=['new api','{}','2026-09-19T00:00:05Z']),patch.object(c.subprocess,'run',return_value=subprocess.CompletedProcess([],0,'2026-09-19T00:00:10.000000000Z new\n')):
             with self.assertRaises(c.DockerCollectionError):c.docker({'host':'inspur','start':self.source['since']})
         self.assertEqual(c.load('docker.json',{})['new'],self.source['since'])
     def test_inventory_failure_cannot_retire_registered_history(self):
