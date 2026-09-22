@@ -5,6 +5,7 @@ import contextlib
 import http.client
 import io
 import hashlib
+import heapq
 import json
 import os
 from pathlib import Path
@@ -196,10 +197,19 @@ class Delivery:
         self.connection = None
 
     def deliver(self, path):
+        return self.deliver_many([path])
+
+    def deliver_many(self, paths):
         # Queue files are individual bounded batches, never the entire backlog.
-        with path.open('rb') as handle: payload = handle.read(512000+1)
-        if len(payload) > 512000: raise RuntimeError('Queued batch exceeds ingestion limit')
-        count = len(json.loads(payload)['events'])
+        events = []
+        for path in paths:
+            with path.open('rb') as handle: raw = handle.read(512000+1)
+            if len(raw) > 512000: raise RuntimeError('Queued batch exceeds ingestion limit')
+            events.extend(json.loads(raw)['events'])
+        payload = json.dumps({'events':events}, ensure_ascii=False, separators=(',', ':')).encode()
+        count = len(events)
+        if len(payload) > 512000 or count > BATCH_COUNT:
+            raise RuntimeError('Delivery batch exceeds ingestion limit')
         if self.connection is None:
             constructor = http.client.HTTPSConnection if self.url.scheme == 'https' else http.client.HTTPConnection
             self.connection = constructor(self.url.hostname, self.url.port, timeout=8)
@@ -216,8 +226,8 @@ class Delivery:
         except Exception:
             self.close()
             raise
-        path.unlink()
-        sync_directory(path.parent)
+        for path in paths: path.unlink()
+        sync_directory(paths[0].parent)
         return count
 
 
@@ -230,16 +240,32 @@ def queued_batch(lane):
     return root/name if name else None
 
 
+def queued_batches(lane):
+    root = STATE/'queue'/lane
+    if not root.exists(): return []
+    with os.scandir(root) as entries:
+        names = heapq.nsmallest(BATCH_COUNT, (entry.name for entry in entries if entry.name.endswith('.json')))
+    paths = []; size = 0; count = 0
+    for name in names:
+        path = root/name
+        with path.open('rb') as handle: raw = handle.read(512001)
+        if len(raw) > 512000: raise RuntimeError('Queued batch exceeds ingestion limit')
+        entries = len(json.loads(raw)['events'])
+        if paths and (size+len(raw) > BATCH_BYTES or count+entries > BATCH_COUNT): break
+        paths.append(path); size += len(raw); count += entries
+    return paths
+
+
 def deliver_queue(config, lane, statuses, lock):
     delivery = Delivery(config)
     while True:
-        path = queued_batch(lane)
-        if path is None:
+        paths = queued_batches(lane)
+        if not paths:
             QUEUE_READY.wait(0.25); QUEUE_READY.clear()
             continue
         try:
-            count = delivery.deliver(path)
-            age = max(0, time.time()-int(path.name.split('-')[0])/1e9)
+            count = delivery.deliver_many(paths)
+            age = max(0, time.time()-int(paths[0].name.split('-')[0])/1e9)
             status = {'ok':lane != 'live' or age < 10, 'checkedAt':iso(), 'accepted':count, 'queueAgeSeconds':age}
             if not status['ok']: status['error'] = 'Live log delivery exceeded 10 seconds'
         except Exception as error:
@@ -292,6 +318,32 @@ def command_file(args, accepted=(0,), timeout=60, merged=False):
         yield output
 
 
+@contextlib.contextmanager
+def command_stream(args, accepted=(0,), timeout=60):
+    # A bounded OS pipe avoids copying a large source log to a scratch file.
+    # The JSON events themselves are durably queued before any cursor advances.
+    root = STATE/'capture'; root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with tempfile.TemporaryFile(dir=root, mode='w+b') as errors:
+        process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=errors, env={**os.environ, 'LC_ALL':'C'})
+        expired = threading.Event()
+        def expire():
+            expired.set()
+            try: process.kill()
+            except ProcessLookupError: pass
+        timer = threading.Timer(timeout, expire); timer.daemon = True; timer.start()
+        try:
+            yield process.stdout
+            code = process.wait()
+            errors.seek(0); detail = errors.read(4096).decode('utf8', errors='replace').strip()
+            if expired.is_set(): raise subprocess.TimeoutExpired(args[0], timeout)
+            if code not in accepted or (code == 1 and detail not in ('', '<no matches>')):
+                raise CommandError(args[0], code)
+        finally:
+            timer.cancel()
+            if process.poll() is None: process.kill()
+            process.wait(); process.stdout.close()
+
+
 def record_lines(handle):
     while True:
         line = handle.readline(MAX_RECORD_BYTES+1)
@@ -336,11 +388,11 @@ def journal(config, live=False):
             yield event(config, 'journal:'+cursor, service, str(row.get('MESSAGE','')), since,
                         {'collector':'journal','pid':row.get('_PID'),'user':{'id':row.get('_UID')},'unit':row.get('_SYSTEMD_UNIT')}, level)
     try:
-        with command_file(args + (['--after-cursor', cursor] if cursor else ['--since', since]), timeout=5 if live else 60) as output:
+        with command_stream(args + (['--after-cursor', cursor] if cursor else ['--since', since]), timeout=5 if live else 60) as output:
             send(config, consume(output))
     except CommandError:
         if not cursor: raise
-        with command_file(args + ['--since', since], timeout=5 if live else 60) as output:
+        with command_stream(args + ['--since', since], timeout=5 if live else 60) as output:
             send(config, consume(output))
     if cursor: save(state_name, {'cursor':cursor, 'since':since})
 
@@ -408,14 +460,26 @@ def audit(config, live=False):
     elif pending.exists(): pending.unlink()
     args = ['ausearch','--input-logs','--checkpoint',str(pending),'-k','hanasand_exec','--raw']
     if live and not reuse: args += ['--start',*recent_audit_start()]
+    end = None
+    if not live:
+        # Walk history in bounded time windows instead of replaying days in one
+        # command. An empty window still advances its timestamp checkpoint.
+        window = load('audit-window.json', None)
+        beginning = max(value for value in (checkpoint_time(stable), window,
+            datetime.datetime.fromisoformat(config.get('start', iso(time.time()-60)).replace('Z','+00:00')).timestamp()) if value is not None)
+        end = min(int(time.time())-1, int(beginning)+60)
+        if end <= beginning: return
+        args += ['--end', *datetime.datetime.fromtimestamp(end).strftime('%m/%d/%y %H:%M:%S').split()]
+        if not stable.exists(): args += ['--start', *datetime.datetime.fromtimestamp(beginning).strftime('%m/%d/%y %H:%M:%S').split()]
     try:
-        with command_file(args, accepted=(0,1), timeout=5 if live else 60) as output:
+        with command_stream(args, accepted=(0,1), timeout=5 if live else 60) as output:
             send(config, audit_events(record_lines(output), config))
     except CommandError as error:
         if error.code not in (10,11,12) or not pending.exists(): raise
-        with command_file(args+['--start','checkpoint'], accepted=(0,1), timeout=5 if live else 60) as output:
+        with command_stream(args+['--start','checkpoint'], accepted=(0,1), timeout=5 if live else 60) as output:
             send(config, audit_events(record_lines(output), config))
     if pending.exists(): pending.replace(stable); sync_directory(STATE)
+    if end is not None: save('audit-window.json', end)
 
 class DockerCollectionError(RuntimeError):
     """Contains only source names and controlled status descriptions, never logs."""
@@ -669,7 +733,7 @@ def collect(config):
     return failures
 
 def checkpoint_files(root):
-    return ['audit.checkpoint','journal.json','docker.json','docker-created.json',*(path.name for path in root.glob('docker-file-*.json'))]
+    return ['audit.checkpoint','audit-window.json','journal.json','docker.json','docker-created.json',*(path.name for path in root.glob('docker-file-*.json'))]
 
 def json_events(handle, metadata, array=False):
     """Read one event from a JSON export at a time, including legacy spools."""
@@ -776,7 +840,7 @@ def guest_ack(identity):
 
 
 def recent_audit(config):
-    with command_file(['ausearch','--input-logs','-k','hanasand_exec','--raw','--start',*recent_audit_start()],accepted=(0,1)) as output:
+    with command_stream(['ausearch','--input-logs','-k','hanasand_exec','--raw','--start',*recent_audit_start()],accepted=(0,1)) as output:
         yield from audit_events(record_lines(output),config)
 
 
@@ -859,8 +923,8 @@ def main():
         threading.Thread(target=deliver_queue,args=(config,lane,statuses,status_lock),daemon=True).start()
     for source, interval in ((audit,5),(journal,1),(docker,5),(docker_file_history,0.25),(docker_file_live,0.1),(guests,30)):
         threading.Thread(target=worker,args=(source.__name__,source,interval),daemon=True).start()
-    threading.Thread(target=worker,args=('audit_live',lambda cfg:audit(cfg,live=True),0.5),daemon=True).start()
-    threading.Thread(target=worker,args=('journal_live',lambda cfg:journal(cfg,live=True),0.5),daemon=True).start()
+    threading.Thread(target=worker,args=('audit_live',lambda cfg:audit(cfg,live=True),1),daemon=True).start()
+    threading.Thread(target=worker,args=('journal_live',lambda cfg:journal(cfg,live=True),1),daemon=True).start()
     while True:
         with status_lock: snapshot = dict(statuses)
         failures = [name+': '+status['error'] for name,status in snapshot.items() if not status['ok']]

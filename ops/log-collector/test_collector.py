@@ -131,13 +131,13 @@ type=EXECVE msg=audit(1789817000.123:456): argc=5 a0="curl" a1="--password" a2="
             def ausearch(*args,**kwargs):
                 (c.STATE/'audit.pending').write_text('next')
                 return io.StringIO('')
-            with patch.object(c,'command_file',side_effect=ausearch), patch.object(c,'send',side_effect=RuntimeError('offline')):
+            with patch.object(c,'command_stream',side_effect=ausearch), patch.object(c,'send',side_effect=RuntimeError('offline')):
                 with self.assertRaises(RuntimeError): c.audit({'host':'inspur'})
             self.assertEqual((c.STATE/'audit.checkpoint').read_text(),'original')
     def test_audit_rotated_checkpoint_uses_timestamp_recovery(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(c,'STATE',Path(tmp)):
             (c.STATE/'audit.checkpoint').write_text('original')
-            with patch.object(c,'command_file',side_effect=[c.CommandError('ausearch',12),io.StringIO('')]) as query, patch.object(c,'send'):
+            with patch.object(c,'command_stream',side_effect=[c.CommandError('ausearch',12),io.StringIO('')]) as query, patch.object(c,'send'):
                 c.audit({'host':'inspur'})
             self.assertEqual(query.call_args.args[0][-2:],['--start','checkpoint'])
     def test_live_audit_uses_separate_checkpoint_and_keeps_live_events_separate(self):
@@ -154,7 +154,7 @@ type=EXECVE msg=audit(1789817001.123:457): argc=1 a0="id"
                 (c.STATE/'audit-live.pending').write_text('live')
                 return io.StringIO(raw)
             delivered=[]
-            with patch.object(c,'command_file',side_effect=query), patch.object(c,'send',side_effect=lambda _cfg,events:delivered.extend(events)):
+            with patch.object(c,'command_stream',side_effect=query), patch.object(c,'send',side_effect=lambda _cfg,events:delivered.extend(events)):
                 c.audit({'host':'inspur'},live=True)
             self.assertEqual([row['message'] for row in delivered],['whoami','id'])
             self.assertEqual((c.STATE/'audit.checkpoint').read_text(),'historical')
@@ -168,7 +168,7 @@ type=EXECVE msg=audit(1789817001.123:457): argc=1 a0="id"
             checkpoint.write_text('dev=0x903\ninode=1\noutput=- 900.123:123 0x514\n')
             self.assertTrue(c.audit_behind())
             (c.STATE/'audit-live.checkpoint').write_text('output=- 939.123:10 0x514\n')
-            with patch.object(c,'command_file',return_value=io.StringIO('')) as query, patch.object(c,'send'):
+            with patch.object(c,'command_stream',return_value=io.StringIO('')) as query, patch.object(c,'send'):
                 c.audit({'host':'inspur'},live=True)
             self.assertEqual(query.call_args.args[0][-3:],['--start',*c.recent_audit_start()])
             self.assertIn('900.123',checkpoint.read_text())
@@ -176,7 +176,7 @@ type=EXECVE msg=audit(1789817001.123:457): argc=1 a0="id"
         with tempfile.TemporaryDirectory() as tmp, patch.object(c,'STATE',Path(tmp)):
             c.save('journal.json',{'cursor':'expired','since':'2026-09-19T00:00:00Z'})
             row={'__CURSOR':'next','__REALTIME_TIMESTAMP':'1789817000000000','MESSAGE':'ready'}
-            with patch.object(c,'command_file',side_effect=[c.CommandError('journalctl',1),io.StringIO(json.dumps(row))]) as query, patch.object(c,'send',side_effect=lambda _cfg,events: list(events)) as sent:
+            with patch.object(c,'command_stream',side_effect=[c.CommandError('journalctl',1),io.StringIO(json.dumps(row))]) as query, patch.object(c,'send',side_effect=lambda _cfg,events: list(events)) as sent:
                 c.journal({'host':'inspur','start':'2026-01-01T00:00:00Z'})
             self.assertEqual(query.call_args.args[0][-2:],['--since','2026-09-19T00:00:00Z'])
             self.assertEqual(c.load('journal.json',{})['cursor'],'next')

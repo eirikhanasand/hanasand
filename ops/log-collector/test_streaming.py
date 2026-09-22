@@ -78,6 +78,17 @@ class StreamingTests(unittest.TestCase):
             self.assertEqual(len(connections), 1)
         self.assertIsNone(c.queued_batch('live'))
 
+    def test_small_queue_files_share_one_request_without_deleting_unacknowledged_files(self):
+        for index in range(105): c.send(self.config, [self.event(str(index))])
+        paths = c.queued_batches('live')
+        self.assertEqual(len(paths), 100)
+        with self.server(lambda rows: (201, {'ok': True, 'accepted': len(rows)})) as (requests, _):
+            delivery = c.Delivery(self.config)
+            try: self.assertEqual(delivery.deliver_many(paths), 100)
+            finally: delivery.close()
+            self.assertEqual(len(requests), 1)
+        self.assertEqual(len(c.queued_batches('live')), 5)
+
     def test_failed_response_and_lost_ack_replay_same_event_id(self):
         c.send(self.config, [self.event()])
         path = c.queued_batch('live')
@@ -149,16 +160,20 @@ class StreamingTests(unittest.TestCase):
         self.assertEqual(list(c.json_events(io.StringIO(raw), metadata)), rows)
         self.assertEqual(metadata, {'id': 'retained', 'failures': []})
 
-    def test_large_backlog_is_captured_on_disk_and_memory_stays_under_250mb(self):
+    def test_large_backlog_streams_with_memory_under_250mb(self):
         # The old read-all/group-all path needed several simultaneous full copies.
         script = '''
 import importlib.util, json, pathlib, resource, sys
 spec=importlib.util.spec_from_file_location('c',sys.argv[1]);c=importlib.util.module_from_spec(spec);spec.loader.exec_module(c)
 c.STATE=pathlib.Path(sys.argv[2]);count=0
 producer="import sys\\nfor i in range(100000):\\n sys.stdout.write('type=SYSCALL msg=audit(1790000000.123:'+str(i)+'): success=yes exe=\\\"/usr/bin/echo\\\"\\\\n'+'type=EXECVE msg=audit(1790000000.123:'+str(i)+'): argc=2 a0=\\\"echo\\\" a1=\\\"'+'x'*2048+'\\\"\\\\n')"
-with c.command_file([sys.executable,'-c',producer],timeout=120) as output:
- size=output.seek(0,2);output.seek(0)
- for event in c.audit_events(c.record_lines(output),{'host':'fixture'}):count+=1
+size=0
+def lines(output):
+ global size
+ for line in c.record_lines(output):
+  size+=len(line.encode());yield line
+with c.command_stream([sys.executable,'-c',producer],timeout=120) as output:
+ for event in c.audit_events(lines(output),{'host':'fixture'}):count+=1
 rss=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
 if sys.platform!='darwin':rss*=1024
 print(json.dumps({'events':count,'captureBytes':size,'peakRssBytes':rss}))
