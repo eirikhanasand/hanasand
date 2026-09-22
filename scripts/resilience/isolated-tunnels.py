@@ -19,7 +19,6 @@ GROUPS = {
     'intelligence': ['-R', '127.0.0.1:28097:127.0.0.1:18097', '-L', '127.0.0.1:29097:127.0.0.1:19097'],
     'web': ['-L', '127.0.0.1:29300:127.0.0.1:19300', '-L', '127.0.0.1:29080:127.0.0.1:19080', '-L', '127.0.0.1:29090:127.0.0.1:19090'],
     'support': ['-L', '127.0.0.1:29181:127.0.0.1:19181'],
-    'pwned': ['-R', '127.0.0.1:28099:127.0.0.1:8099'],
     'monitor': ['-R', '127.0.0.1:29911:127.0.0.1:19901', '-L', '127.0.0.1:29911:127.0.0.1:19901'],
 }
 
@@ -53,7 +52,7 @@ def authorize():
     index = matching[0]
     if not all(option in lines[index] for option in ('restrict,', 'port-forwarding,', 'command="false"')):
         raise RuntimeError('Existing tunnel key restrictions do not match the expected policy')
-    for port in (28503, 28502, 28097, 29911, 28099):
+    for port in (28503, 28502, 28097, 29911):
         permission = f'permitlisten="127.0.0.1:{port}"'
         if permission not in lines[index]:
             lines[index] = permission + ',' + lines[index]

@@ -1,4 +1,4 @@
-import { fetchPwnedRange, normalizeSha1Prefix } from '#utils/pwned/checkPwned.ts'
+import { fetchPwnedRange, normalizeSha1Prefix, PWNED_CONTENT_TYPE } from '#utils/pwned/checkPwned.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
 export default async function postPwned(req: FastifyRequest, res: FastifyReply) {
@@ -14,14 +14,9 @@ export default async function postPwned(req: FastifyRequest, res: FastifyReply) 
     try {
         const range = await fetchPwnedRange(normalizedPrefix, fetch)
         return res
-            .headers({ 'cache-control': 'no-store' })
+            .headers({ 'cache-control': 'no-store', 'content-type': PWNED_CONTENT_TYPE, 'x-content-type-options': 'nosniff' })
             .status(200)
-            .send({
-                schemaVersion: 'bloom_hash.range_proxy.v1',
-                prefix: normalizedPrefix,
-                range,
-                privacy: 'Only the first five SHA-1 characters were sent to the range service. The full hash and underlying secret were not sent to Hanasand.',
-            })
+            .send(Buffer.from(range))
     } catch (error) {
         req.log.warn({ error }, 'Unable to check Bloom hash exposure range')
         return res.status(503).send({ error: 'Unable to check the Bloom exposure dataset right now.' })

@@ -23,7 +23,7 @@ for failure in (None, 'candidate', 'serving', 'rename'):
         if command[:2] == ['docker', 'run']:
             assert kwargs['env']['PRIVATE_VALUE'] == 'fixture'
             assert 'PRIVATE_VALUE=fixture' not in command
-            assert kwargs['env']['COMPACT_PWNED_RANGE_API'] == 'http://127.0.0.1:28099/range'
+            assert kwargs['env']['PWNED_LOOKUP_API'] == 'https://api.hanasand.com/api/pwned'
             assert '/fixture:/resilience:ro' in command and 'kept:127.0.0.2' in command
         return SimpleNamespace(returncode=1 if command[:2] == ['docker', 'inspect'] else 0)
     class Response(io.BytesIO):

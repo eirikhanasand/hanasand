@@ -29,7 +29,8 @@ for target in (candidate, previous):
         raise SystemExit(f'{target} already exists; inspect before retrying.')
 with socket.socket() as listener:
     listener.bind(('127.0.0.1', 19301))
-settings.update(COMPACT_PWNED_RANGE_API='http://127.0.0.1:28099/range',
+settings.pop('COMPACT_PWNED_RANGE_API', None)
+settings.update(PWNED_LOOKUP_API='https://api.hanasand.com/api/pwned',
                 HANASAND_RELEASE_COMMIT=release, HOSTNAME='127.0.0.1')
 
 def launch(target, port):

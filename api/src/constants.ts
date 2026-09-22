@@ -39,7 +39,6 @@ const config = {
     lxd_socket_path: process.env.LXD_SOCKET_PATH || '/var/snap/lxd/common/lxd/unix.socket',
     lxd_image_alias: process.env.LXD_IMAGE_ALIAS || '24.04',
     lxd_image_server: process.env.LXD_IMAGE_SERVER || 'https://cloud-images.ubuntu.com/releases',
-    hibp_pwned_range_api: process.env.HIBP_PWNED_RANGE_API || 'https://api.pwnedpasswords.com/range',
     github_articles_ssh: process.env.ARTICLES_REPO_URL || 'git@github.com:eirikhanasand/hanasand.git',
     self_url: 'https://api.hanasand.com/api/auth/token',
     internal_api: process.env.INTERNAL_API || 'https://internal.hanasand.com/api',

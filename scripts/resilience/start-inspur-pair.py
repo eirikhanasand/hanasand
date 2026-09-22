@@ -14,6 +14,8 @@ assert kind in ('api', 'auth', 'frontend') and len(ports) == 2
 assert all(port.isdecimal() and 1024 < int(port) < 65535 for port in ports)
 original = json.loads(subprocess.check_output(['docker', 'inspect', source]))[0]
 settings = dict(item.split('=', 1) for item in original['Config']['Env'])
+if kind in ('api', 'auth'):
+    settings['COMPACT_PWNED_RANGE_API'] = 'http://127.0.0.1:8099/range'
 if kind == 'api': settings.update(support_settings())
 # Collectors receive a credential that authenticates only log ingestion.
 log_ingest_file = Path('/home/hanasand/resilience/log-ingest.json')

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 const PWNED_PROXY_TIMEOUT_MS = Number(process.env.PWNED_PROXY_TIMEOUT_MS || 12_000)
-const PWNED_RANGE_API = process.env.COMPACT_PWNED_RANGE_API || 'http://pwned-index:8099/range'
+const PWNED_RANGE_API = process.env.PWNED_LOOKUP_API || 'https://api.hanasand.com/api/pwned'
 
 export async function POST(request: NextRequest) {
     let body: unknown
@@ -18,7 +18,10 @@ export async function POST(request: NextRequest) {
 
     let response: Response
     try {
-        response = await fetch(`${PWNED_RANGE_API}/${prefix}`, {
+        response = await fetch(PWNED_RANGE_API, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ prefix }),
             cache: 'no-store',
             signal: AbortSignal.timeout(PWNED_PROXY_TIMEOUT_MS),
         })
