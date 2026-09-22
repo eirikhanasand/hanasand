@@ -2702,7 +2702,6 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
             { label: 'URL states', value: String(urlTimeline.length) },
             { label: 'Obfuscated scripts', value: String(obfuscatedScripts.length) },
             { label: 'WebCrack loaded', value: String(webcrackLoaded) },
-            { label: 'Highest confidence', value: formatConfidencePercent(confidence) || 'unknown' },
             { label: 'Copyable indicators', value: String(allIndicators.length) },
         ],
     }
