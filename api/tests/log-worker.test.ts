@@ -22,7 +22,7 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
         return { rows: [] }
     }
     if (sql.includes('SELECT s.* FROM service_logs s')) return { rows: priority
-        .filter(row => (p[0] === undefined || BigInt(row.id) <= BigInt(p[0])) && Date.parse(row.created_at) >= Date.now() - 300_000
+        .filter(row => (p[0] === undefined || BigInt(row.id) <= BigInt(p[0])) && Date.parse(row.created_at) >= Date.now() - 10_000
             && !Object.values(stored).some(event => event.key === `service:${row.id}` && ['processed', 'skipped'].includes(event.processing_status)))
         .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at) || Number(a.id) - Number(b.id))
         .slice(0, 200) }
@@ -170,7 +170,7 @@ test('recent event times are checked before replayed FIFO events without jumping
     expect(checked).toEqual(['190', '201', '101', '1'])
     expect(cursor).toMatchObject({ last_id: '1', recent_id: '101' })
     const sql = statements.find(value => value.includes('SELECT s.* FROM service_logs s'))!
-    expect(sql).toContain('s.created_at >= statement_timestamp() - INTERVAL \'5 minutes\'')
+    expect(sql).toContain('s.created_at >= statement_timestamp() - INTERVAL \'10 seconds\'')
     expect(sql).not.toContain('s.id <= $1')
     expect(sql).toContain('e.log_key = \'service:\' || s.id::text')
     expect(sql).toContain('e.processing_status IN (\'processed\', \'skipped\')')
@@ -340,4 +340,14 @@ test('fresh bursts retain their earlier events when newer batches keep arriving'
     expect(checked.slice(200, 400)).toEqual(Array.from({ length: 200 }, (_, i) => String(1201 + i)))
     await processStoredLogs()
     expect(checked.slice(400, 450)).toEqual(Array.from({ length: 50 }, (_, i) => String(1401 + i)))
+})
+
+
+test('overdue replay cannot occupy the live deadline lane and is still processed by FIFO', async () => {
+    const overdue = { ...makeLog('101'), created_at: new Date(Date.now() - 20_000).toISOString() }
+    priority = [overdue, { ...makeLog('201'), created_at: new Date().toISOString() }]
+    fresh = [overdue]
+    await processStoredLogs()
+    expect(checked).toEqual(['201', '101', '1'])
+    expect(cursor.recent_id).toBe('101')
 })
