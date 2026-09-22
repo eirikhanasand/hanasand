@@ -1,9 +1,11 @@
+import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, expect, mock, spyOn, test } from 'bun:test'
 let locked = true, fail = false, watermark: string | null = '200', additionalRuns = 0, queueRuns = 0, recoveryRuns = 0
 let delayed = false, historyLimits: number[], recentLimits: number[], queueModes: boolean[], recoveryLimits: number[], reads: Array<{ sql: string, params: any[] }>
 let historyScans: any[][] = []
 let historyGate: Promise<void> | undefined, historyEntered: (() => void) | undefined
 let cursor: any, statements: string[], checked: string[], stored: Record<string, any>, pending: any[]
+let transactions: string[][] = [], transactionQueries: any[] = []
 let transactionStatements: string[], failHistory = false, additionalCursorQuery: unknown
 const makeLog = (id: string, metadata: any = {}) => ({ id, service: 'audit', host: 'inspur', level: 'info', message: id, created_at: '2026-09-19T00:00:00Z', metadata })
 let priority: any[], fresh: any[], backlog: any[], inactiveScopes: Set<string>
@@ -40,9 +42,9 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
     if (sql.includes('INSERT INTO mill_events')) {
         for (const item of JSON.parse(p[0])) {
             if (!stored[item.id] || stored[item.id].processing_status === 'pending' || stored[item.id].processing_status === 'skipped' && stored[item.id].normalized.processing_reason === 'Organization is missing or inactive')
-                stored[item.id] = { ...item, organization_id: p[1], processing_status: 'pending' }
+                stored[item.id] = { ...item, organization_id: p[1] }
         }
-        return { rows: [] }
+        return { rows: JSON.parse(p[0]).map((item: any) => ({ id: item.id })) }
     }
     if (sql.includes('SELECT id FROM mill_events')) return { rows: Object.values(stored).filter(row => p[0].includes(row.id) && row.processing_status !== 'processed') }
     if (sql.includes('SELECT rule_id, severity')) return { rows: [] }
@@ -59,7 +61,18 @@ mock.module('../src/utils/mill/recoverUnassignedLogs.ts', () => ({ recoverUnassi
 const transactionQuery = async (sql: string, p: any[] = []) => { transactionStatements.push(sql); return query(sql, p) }
 mock.module('#db', () => ({ default: query, withTransaction: async (work: any) => {
     const before = { ...cursor }
-    try { return await work(transactionQuery) } catch (error) { cursor = before; throw error }
+    const eventsBefore = new Map<string, any>(), statements: string[] = []
+    const scopedQuery = async (sql: string, p: any[] = []) => {
+        statements.push(sql)
+        if (sql.includes('INSERT INTO mill_events')) for (const item of JSON.parse(p[0])) if (!eventsBefore.has(item.id)) eventsBefore.set(item.id, structuredClone(stored[item.id]))
+        return transactionQuery(sql, p)
+    }
+    transactions.push(statements); transactionQueries.push(scopedQuery)
+    try { return await work(scopedQuery) } catch (error) {
+        cursor = before
+        for (const [id, value] of eventsBefore) { if (value === undefined) delete stored[id]; else stored[id] = value }
+        throw error
+    }
 } }))
 mock.module('../src/utils/logs/dimensions.ts', () => ({ backfillLogDimensions: async () => ({ processed: 0, ready: true }) }))
 mock.module('../src/utils/mill/processQueue.ts', () => ({ processQueuedLogs: async (_process: unknown, delayed: boolean) => { queueRuns++; queueModes.push(delayed) }, recoverProcessLogs: async (_process: unknown, limit: number) => { recoveryRuns++; recoveryLimits.push(limit) } }))
@@ -67,8 +80,8 @@ mock.module('../src/utils/mill/storedSources.ts', () => ({ processAdditionalLogS
 mock.module('../src/utils/mill/logWatermark.ts', () => ({ stableLogWatermark: async () => watermark }))
 mock.module('../src/handlers/mill.ts', () => ({
     loadConfiguredMillRules: async () => [],
-    collectMillEventFindings: (_scope: string, _id: string, event: any) => ({ findings: [event.normalized.message] }),
-    persistMillEventFindings: async (findings: string[]) => { if (fail) throw new Error('Finding storage unavailable'); checked.push(...findings) },
+    collectMillEventFindings: (scope: string, id: string, event: any) => ({ findings: [[scope, 'test.rule', 'low', event.normalized.message, [id], {}]] }),
+    persistMillEventFindings: async (findings: any[]) => { if (fail) throw new Error('Finding storage unavailable'); checked.push(...findings.map(finding => finding[3])) },
     normalizeMillEvent: (event: any) => ({ timestamp: event.timestamp, eventType: event.event_type, action: event.action, outcome: event.outcome, normalized: event }),
     createMillFindings: async (_scope: string, _id: string, event: any) => { if (fail) throw new Error('Finding storage unavailable'); checked.push(event.normalized.message) },
 }))
@@ -77,7 +90,7 @@ const originalLimit = process.env.LOG_CATCHUP_BATCH_LIMIT
 const originalHistoryLimit = process.env.LOG_CATCHUP_HISTORY_LIMIT
 afterEach(() => { if (originalHistoryLimit === undefined) delete process.env.LOG_CATCHUP_HISTORY_LIMIT; else process.env.LOG_CATCHUP_HISTORY_LIMIT = originalHistoryLimit })
 beforeEach(() => { delete process.env.LOG_CATCHUP_HISTORY_LIMIT })
-beforeEach(() => { transactionStatements = []; failHistory = false; additionalCursorQuery = undefined })
+beforeEach(() => { transactions = []; transactionQueries = []; transactionStatements = []; failHistory = false; additionalCursorQuery = undefined })
 afterEach(() => { if (originalLimit === undefined) delete process.env.LOG_CATCHUP_BATCH_LIMIT; else process.env.LOG_CATCHUP_BATCH_LIMIT = originalLimit })
 beforeEach(() => { delete process.env.LOG_CATCHUP_BATCH_LIMIT; historyScans = []; inactiveScopes = new Set(['inactive']); watermark = '200'; additionalRuns = 0; queueRuns = 0; recoveryRuns = 0; locked = true; fail = false; delayed = false; historyLimits = []; recentLimits = []; queueModes = []; recoveryLimits = []; reads = []; cursor = { last_id: '0', recent_id: '100' }; statements = []; checked = []; stored = {}; pending = []; priority = []; fresh = [makeLog('101')]; backlog = [makeLog('1')] })
 test('a replica that does not hold the shared lock performs no work', async () => {
@@ -115,20 +128,21 @@ test('delayed commands get more time while every catch-up cursor advances bounde
     expect(Object.values(stored).every(row => row.processing_status === 'processed')).toBe(true)
     expect(queueRuns).toBe(2); expect(recoveryRuns).toBe(2)
 })
-test('failed findings retain pending event and cursors for successful retry', async () => {
+test('failed findings roll back the event and preserve cursors for successful retry', async () => {
     fail = true
     await expect(processStoredLogs()).rejects.toThrow('Finding storage unavailable')
     expect(cursor).toMatchObject({ last_id: '0', recent_id: '100', last_error: 'Finding storage unavailable' })
-    expect(Object.values(stored)[0].processing_status).toBe('pending')
+    expect(Object.values(stored)).toHaveLength(0)
     fail = false; await processStoredLogs()
     expect(checked).toEqual(['101', '1'])
     expect(Object.values(stored)).toHaveLength(2)
 })
 test('cursor updates share the lock transaction while event writes remain independently durable', async () => {
     await processStoredLogs()
-    expect(additionalCursorQuery).toBe(transactionQuery)
-    expect(transactionStatements).toEqual(statements.filter(sql => sql.includes('log_processing_cursors') || sql.includes('pg_try_advisory_xact_lock') || sql.includes('SELECT pg_advisory_xact_lock')))
-    expect(transactionStatements.some(sql => sql.includes('mill_events') || sql.includes('SELECT * FROM service_logs'))).toBe(false)
+    expect(additionalCursorQuery).toBe(transactionQueries[0])
+    expect(transactions[0]).toEqual(statements.filter(sql => sql.includes('log_processing_cursors') || sql.includes('pg_try_advisory_xact_lock')))
+    expect(transactions[0].some(sql => sql.includes('mill_events') || sql.includes('SELECT * FROM service_logs'))).toBe(false)
+    expect(transactions.slice(1).some(sqls => sqls.some(sql => sql.includes('INSERT INTO mill_events')))).toBe(true)
 })
 test('later failure rolls back cursor positions but retry reuses already durable findings', async () => {
     failHistory = true
@@ -185,13 +199,12 @@ test('recent event times are checked before replayed FIFO events without jumping
     expect(Object.values(stored)).toHaveLength(4)
 })
 
-test('a failed priority check remains pending and retries before the FIFO advances', async () => {
+test('a failed priority check remains retryable and finishes before the FIFO advances', async () => {
     priority = [{ ...makeLog('190'), created_at: new Date().toISOString() }]
     fail = true
     await expect(processStoredLogs()).rejects.toThrow('Finding storage unavailable')
     expect(cursor).toMatchObject({ last_id: '0', recent_id: '100' })
-    expect(Object.values(stored)).toHaveLength(1)
-    expect(Object.values(stored)[0].processing_status).toBe('pending')
+    expect(Object.values(stored)).toHaveLength(0)
     fail = false
     await processStoredLogs()
     expect(checked).toEqual(['190', '101', '1'])
@@ -200,9 +213,8 @@ test('a failed priority check remains pending and retries before the FIFO advanc
 
 test('a pending collected event is checked in Hanasand if its organization is inactive on retry', async () => {
     fresh = [makeLog('101', { organizationId: 'archive-later', process: { command_line: 'private command' } })]
-    fail = true
-    await expect(processStoredLogs()).rejects.toThrow('Finding storage unavailable')
-    expect(Object.values(stored)[0].processing_status).toBe('pending')
+    const id = createHash('sha256').update('service:101').digest('hex')
+    stored[id] = { id, key: 'service:101', organization_id: 'archive-later', processing_status: 'pending', normalized: {} }
     inactiveScopes.add('archive-later'); fail = false; backlog = []
     await processStoredLogs()
     expect(Object.values(stored)[0]).toMatchObject({ organization_id: 'platform', processing_status: 'processed' })

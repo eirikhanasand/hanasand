@@ -523,14 +523,14 @@ async function persistFinding(organizationId: string, ruleId: string, severity: 
 
 // Preserve the same finding identity and restricted-log flag while committing
 // bounded groups together, rather than fsyncing once for every matched rule.
-export async function persistMillEventFindings(findings: Parameters<typeof persistFinding>[]) {
+export async function persistMillEventFindings(findings: Parameters<typeof persistFinding>[], query = run) {
     for (let offset = 0; offset < findings.length; offset += 1000) {
         const rows = findings.slice(offset, offset + 1000).map(([organizationId, ruleId, severity, summary, eventIds, evidence]) => ({
             id: randomUUID(), organization_id: organizationId,
             finding_key: `${organizationId}:${ruleId}:${eventIds.slice().sort().join(',')}`,
             rule_id: ruleId, severity, summary, event_ids: eventIds, evidence,
         }))
-        await run(`INSERT INTO mill_findings (id, organization_id, finding_key, rule_id, severity, status, summary, evidence, event_ids, first_observed, last_observed)
+        await query(`INSERT INTO mill_findings (id, organization_id, finding_key, rule_id, severity, status, summary, evidence, event_ids, first_observed, last_observed)
             SELECT item.id, item.organization_id, item.finding_key, item.rule_id, item.severity, 'new', item.summary,
                 item.evidence || jsonb_build_object('restrictedLog', EXISTS (
                     SELECT 1 FROM mill_events e WHERE e.organization_id = item.organization_id

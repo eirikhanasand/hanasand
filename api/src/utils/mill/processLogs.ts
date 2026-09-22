@@ -14,8 +14,8 @@ import { accessRuleId } from './analyzeAccess.ts'
 import { withLogBatch } from './logBatch.ts'
 
 let running = false
-// Persist a pending event before evaluating it. A failure is retried with the same
-// identity; finding_key deduplication makes retries safe across worker restarts.
+// Stateless results commit atomically with their findings; authentication keeps
+// durable pending history for correlation. Stable identities make retries safe.
 export async function processLog(log: LogInput, organizationId: string, rules: Awaited<ReturnType<typeof loadConfiguredMillRules>>) {
     return processLogBatch([log], organizationId, rules)
 }
@@ -36,16 +36,32 @@ export async function processLogBatch(logs: LogInput[], organizationId: string, 
         const event = normalizeMillEvent(normalizeLogEvent(log), { vendor: 'Hanasand', product: 'Logs' })
         const id = createHash('sha256').update(key).digest('hex')
         // Stateless rules can finish before persistence. Authentication still needs
-        // the durable event-time history; matches retain the retryable pending path.
+        // the durable event-time history and retains the retryable pending path.
         const findings = event.eventType === 'authentication' ? []
             : collectMillEventFindings(organizationId, id, event, rules).findings
-        const complete = event.eventType !== 'authentication' && findings.length === 0
+        const complete = event.eventType !== 'authentication'
         if (complete) Object.assign(event.normalized, { detections: [], evaluated_at: new Date().toISOString(),
             rules_checked: rules.filter(rule => rule.enabled !== false).length })
         return { id, key, event, complete, findings, logId: String(log.id) }
     })
     if (!prepared.length) return
-    await run(`INSERT INTO mill_events (id, ingestion_id, organization_id, source_vendor, source_product, event_timestamp,
+    await withTransaction(async query => {
+        const stateless = prepared.filter(item => item.complete)
+        if (stateless.length) {
+            // Preserve findings from a previously interrupted attempt. New stateless
+            // results and their event become visible together at commit.
+            const existing = await query('SELECT rule_id, severity, summary, evidence, event_ids FROM mill_findings WHERE organization_id = $1 AND event_ids && $2::text[]', [organizationId, stateless.map(item => item.id)])
+            for (const item of stateless) {
+                const detections = new Map(item.findings.map(([, rule_id, severity, summary, event_ids, evidence]) =>
+                    [`${rule_id}:${event_ids.slice().sort().join(',')}`, { rule_id, severity, summary, event_ids, evidence: { ...evidence, restrictedLog: true } }]))
+                for (const finding of existing.rows.filter(row => row.event_ids.includes(item.id)))
+                    detections.set(`${finding.rule_id}:${[...finding.event_ids].sort().join(',')}`, finding)
+                let severity = String(item.event.normalized.severity)
+                for (const finding of detections.values()) if (severityOrder.indexOf(finding.severity as typeof severityOrder[number]) > severityOrder.indexOf(severity as typeof severityOrder[number])) severity = finding.severity
+                Object.assign(item.event.normalized, { detections: [...detections.values()], severity })
+            }
+        }
+        const written = await query(`INSERT INTO mill_events (id, ingestion_id, organization_id, source_vendor, source_product, event_timestamp,
         event_type, action, outcome, user_id, user_email, source_ip, source_country, source_city, device_id, parser_version, normalized, original, processing_status, log_key)
         SELECT item.id, 'logs', $2, 'Hanasand', 'Logs', item.timestamp::timestamptz, item.event_type,
             item.action, item.outcome, item.user_id, item.user_email, item.source_ip, item.source_country, item.source_city, item.device_id, item.parser_version, item.normalized, jsonb_build_object('service_log_id', item.log_id), item.processing_status, item.key
@@ -55,9 +71,12 @@ export async function processLogBatch(logs: LogInput[], organizationId: string, 
             event_timestamp=EXCLUDED.event_timestamp, event_type=EXCLUDED.event_type, action=EXCLUDED.action, outcome=EXCLUDED.outcome,
             user_id=EXCLUDED.user_id, user_email=EXCLUDED.user_email, source_ip=EXCLUDED.source_ip, source_country=EXCLUDED.source_country,
             source_city=EXCLUDED.source_city, device_id=EXCLUDED.device_id, parser_version=EXCLUDED.parser_version,
-            normalized=EXCLUDED.normalized, original=EXCLUDED.original, processing_status='pending'
+            normalized=EXCLUDED.normalized, original=EXCLUDED.original, processing_status=EXCLUDED.processing_status
         WHERE mill_events.ingestion_id='logs' AND (mill_events.processing_status='pending'
-          OR (mill_events.processing_status='skipped' AND mill_events.normalized->>'processing_reason'='Organization is missing or inactive')) `, [JSON.stringify(prepared.map(({ id, key, event, logId, complete }) => ({ id, key, processing_status: complete ? 'processed' : 'pending', timestamp: event.timestamp, event_type: event.eventType, action: event.action, outcome: event.outcome, user_id: event.userId, user_email: event.userEmail, source_ip: event.sourceIp, source_country: event.sourceCountry, source_city: event.sourceCity, device_id: event.deviceId, parser_version: event.parserVersion, normalized: event.normalized, log_id: logId }))), organizationId])
+          OR (mill_events.processing_status='skipped' AND mill_events.normalized->>'processing_reason'='Organization is missing or inactive')) RETURNING id `, [JSON.stringify(prepared.map(({ id, key, event, logId, complete }) => ({ id, key, processing_status: complete ? 'processed' : 'pending', timestamp: event.timestamp, event_type: event.eventType, action: event.action, outcome: event.outcome, user_id: event.userId, user_email: event.userEmail, source_ip: event.sourceIp, source_country: event.sourceCountry, source_city: event.sourceCity, device_id: event.deviceId, parser_version: event.parserVersion, normalized: event.normalized, log_id: logId }))), organizationId])
+        const writtenIds = new Set(written.rows.map(row => row.id))
+        await persistMillEventFindings(stateless.filter(item => writtenIds.has(item.id)).flatMap(item => item.findings), query)
+    })
     const pending = await run('SELECT id FROM mill_events WHERE id = ANY($1::text[]) AND organization_id = $2 AND processing_status <> \'processed\'', [prepared.map(item => item.id), organizationId])
     const pendingIds = new Set(pending.rows.map(row => row.id))
     const work = prepared.filter(item => pendingIds.has(item.id))

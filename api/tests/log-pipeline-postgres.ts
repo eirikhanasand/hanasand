@@ -2,6 +2,7 @@
 // LOG_PIPELINE_TEST_DATABASE=1 DB_* bun tests/log-pipeline-postgres.ts
 // Keep the repository layout; containers mounting api at /app also need scripts at /scripts:ro.
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { mock } from 'bun:test'
 import pg from 'pg'
@@ -16,7 +17,13 @@ const query = async (sql: string, values: unknown[] = []) => {
     await queryObserver?.(sql, values)
     return client.query(sql, values)
 }
-mock.module('#db', () => ({ default: query, queryOnce: query, withTransaction: async (work: (run: typeof query) => Promise<unknown>) => work(query),
+let transactionId = 0, atomicTransactions = false
+mock.module('#db', () => ({ default: query, queryOnce: query, withTransaction: async (work: (run: typeof query) => Promise<unknown>) => {
+    if (!atomicTransactions) return work(query)
+    const name = `batch_${++transactionId}`; await client.query(`SAVEPOINT ${name}`)
+    try { const result = await work(query); await client.query(`RELEASE SAVEPOINT ${name}`); return result }
+    catch (error) { await client.query(`ROLLBACK TO SAVEPOINT ${name}`); await client.query(`RELEASE SAVEPOINT ${name}`); throw error }
+},
     withDatabaseAdvisoryLock: async (_key: string, work: () => Promise<unknown>) => work() }))
 try {
     await query('CREATE TEMP TABLE organizations (id text PRIMARY KEY, status text, audit_safe_metadata jsonb DEFAULT \'{}\', name text, created_at timestamptz DEFAULT NOW())')
@@ -58,10 +65,7 @@ try {
     }
     await processLogBatch(rows, 'fixture', rules)
     queryObserver = undefined
-    const detectionUpdate = detectionUpdates.at(-1)
-    assert.ok(detectionUpdate)
-    assert.equal((await query(detectionUpdate.sql, detectionUpdate.values)).rowCount, 0,
-        'Identical detection updates must not rewrite events or any of their indexes')
+    assert.equal(detectionUpdates.length, 0, 'Stateless detections must finish without a second event/index write')
     const restricted = await query("SELECT COUNT(*)::int AS count FROM mill_findings WHERE evidence->>'restrictedLog' IS DISTINCT FROM 'true'")
     assert.equal(restricted.rows[0].count, 0, 'Every collected-log finding must carry the durable administrator-only flag')
     for (const rule of securityRules) {
@@ -87,6 +91,26 @@ try {
     assert.equal((await query("SELECT xmax::text FROM mill_log_dimensions WHERE event_id=(SELECT id FROM mill_events WHERE log_key='service:single-write-http')")).rows[0].xmax,
         projectionLock, 'An evidence-only update must not lock or rewrite the unchanged reporting projection')
 
+    // Enable real rollback for this failure fixture. The broader cursor suite
+    // shares one outer transaction and deliberately interleaves background work.
+    atomicTransactions = true
+    const atomicLog = { ...rows[0], id: 'atomic-stateless-failure' }
+    const atomicId = createHash('sha256').update(`service:${atomicLog.id}`).digest('hex')
+    await query(`CREATE FUNCTION pg_temp.reject_atomic_finding() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+        IF NEW.event_ids @> ARRAY['${atomicId}'] THEN RAISE EXCEPTION 'injected finding failure'; END IF; RETURN NEW; END $$`)
+    await query('CREATE TRIGGER reject_atomic_finding BEFORE INSERT ON mill_findings FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_atomic_finding()')
+    await assert.rejects(processLogBatch([atomicLog], 'fixture', rules), /injected finding failure/)
+    assert.equal((await query('SELECT count(*)::int AS count FROM mill_events WHERE id=$1', [atomicId])).rows[0].count, 0,
+        'A failed finding write must not publish a processed event')
+    assert.equal((await query('SELECT count(*)::int AS count FROM mill_findings WHERE event_ids @> ARRAY[$1]', [atomicId])).rows[0].count, 0)
+    await query('DROP TRIGGER reject_atomic_finding ON mill_findings')
+    await processLogBatch([atomicLog], 'fixture', rules)
+    const retriedAtomic = (await query('SELECT processing_status,normalized FROM mill_events WHERE id=$1', [atomicId])).rows[0]
+    assert.equal(retriedAtomic.processing_status, 'processed')
+    assert.ok(retriedAtomic.normalized.detections.length)
+    assert.ok(retriedAtomic.normalized.detections.every((finding: any) => finding.evidence.restrictedLog === true))
+
+    atomicTransactions = false
     const before = Number((await query('SELECT count(*) AS count FROM mill_findings')).rows[0].count)
     await processLogBatch(rows, 'fixture', rules)
     assert.equal(Number((await query('SELECT count(*) AS count FROM mill_findings')).rows[0].count), before, 'Retry must not duplicate findings')
@@ -94,9 +118,15 @@ try {
     const auth = (id: string, user: string, outcome: string, second: number) => ({ id, service: 'sshd', host: 'fixture-host', level: 'info',
         message: `${outcome === 'success' ? 'Accepted' : 'Failed'} password for ${user} from 192.0.2.10 port 22 ssh2`,
         created_at: new Date(time + second * 1000).toISOString(), metadata: {} })
+    queryObserver = async (sql, values) => { if (sql.startsWith('UPDATE mill_events e SET normalized')) detectionUpdates.push({ sql, values }) }
     await processLogBatch([auth('failed-a', 'alice', 'failure', 1), auth('failed-b', 'alice', 'failure', 2),
         auth('failed-c', 'alice', 'failure', 3), auth('success-a', 'alice', 'success', 4),
         auth('spray-b', 'bob', 'failure', 5), auth('spray-c', 'charlie', 'failure', 6)], 'fixture', rules)
+    queryObserver = undefined
+    const detectionUpdate = detectionUpdates.at(-1)
+    assert.ok(detectionUpdate)
+    assert.equal((await query(detectionUpdate.sql, detectionUpdate.values)).rowCount, 0,
+        'Identical authentication detection updates must not rewrite events or their indexes')
     for (const id of ['auth.brute_force_success.v1', 'auth.password_spray.v1']) {
         assert.ok((await query('SELECT 1 FROM mill_findings WHERE rule_id = $1', [id])).rowCount, `${id} real SQL correlation`)
     }

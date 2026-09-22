@@ -3,7 +3,7 @@ let stored: Record<string, any> = {}, findings: any[] = [], fail = false, findin
 const query = async (sql: string, p: any[] = []): Promise<any> => {
     if (sql.includes('SELECT log_key FROM mill_events')) return { rows: Object.values(stored)
         .filter(row => p[0].includes(row.log_key) && row.processing_status === 'processed').map(row => ({ log_key: row.log_key })) }
-    if (sql.includes('INSERT INTO mill_events')) { for (const item of JSON.parse(p[0])) stored[item.id] ||= { id: item.id, log_key: item.key, processing_status: item.processing_status, normalized: item.normalized }; return { rows: [] } }
+    if (sql.includes('INSERT INTO mill_events')) { for (const item of JSON.parse(p[0])) stored[item.id] ||= { id: item.id, log_key: item.key, processing_status: item.processing_status, normalized: item.normalized }; return { rows: JSON.parse(p[0]).map((item: any) => ({ id: item.id })) } }
     if (sql.includes('SELECT id FROM mill_events')) return { rows: Object.values(stored).filter(row => row.processing_status !== 'processed') }
     if (sql.includes('INSERT INTO mill_findings')) {
         findingWrites++
@@ -15,7 +15,7 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
     if (sql.includes('UPDATE mill_events')) { for (const item of JSON.parse(p[0])) { stored[item.id].normalized = {...stored[item.id].normalized,...item.result};stored[item.id].processing_status='processed' }return { rows: [] } }
     throw new Error('Unexpected SQL '+sql)
 }
-mock.module('#db',()=>({ default:query, withTransaction: async(work:any)=>work(query) }))
+mock.module('#db',()=>({ default:query, withTransaction: async(work:any)=>{ const before=structuredClone({stored,findings});try{return await work(query)}catch(error){stored=before.stored;findings=before.findings;throw error} } }))
 const { processLog, processLogBatch } = await import('../src/utils/mill/processLogs.ts')
 const { MILL_RULES, millDefaultDefinition } = await import('../src/handlers/mill.ts')
 const { securityRules } = await import('../src/utils/mill/securityRules.ts')
@@ -31,7 +31,7 @@ test('an info-level whoami executes Mill and persists high severity plus evidenc
 })
 test('retry after a failed finding insert, then deduplicate repeated delivery',async()=>{
     fail=true;await expect(processLog(log(),'org-a',rules())).rejects.toThrow()
-    expect(Object.values(stored)[0].processing_status).toBe('pending')
+    expect(Object.values(stored)).toHaveLength(0);expect(findings).toHaveLength(0)
     fail=false;await processLog(log(),'org-a',rules());await processLog(log(),'org-a',rules())
     expect(findings).toHaveLength(1)
 })
