@@ -166,7 +166,7 @@ try {
     let afterWatermarkId = '', observedPriorityBeforeFifo = false
     queryObserver = async (sql, values) => {
         if (sql.includes('SELECT s.* FROM service_logs s') && !afterWatermarkId) {
-            assert.equal(String(values[0]), liveId, 'Priority selection uses the stable source watermark')
+            assert.equal(values.length, 0, 'Priority reads visible rows without advancing a sequence cursor')
             afterWatermarkId = (await client.query(insertCommand, [commandMetadata])).rows[0].id
         }
         if (sql.includes('SELECT * FROM service_logs') && String(values[0]) === '0' && String(values[1]) === liveId) {
@@ -185,8 +185,8 @@ try {
         const firstCursor = (await query("SELECT last_id, recent_id FROM log_processing_cursors WHERE name = 'service_logs'")).rows[0]
         assert.equal(String(firstCursor.recent_id), '1000', 'Priority cannot jump the FIFO checkpoint')
         assert.equal(String(firstCursor.last_id), '0')
-        assert.equal((await query('SELECT 1 FROM mill_events WHERE log_key = $1', [`service:${afterWatermarkId}`])).rowCount, 0,
-            'An insertion after the watermark is excluded from this entire service tick')
+        assert.equal((await query('SELECT processing_status FROM mill_events WHERE log_key = $1', [`service:${afterWatermarkId}`])).rows[0]?.processing_status, 'processed',
+            'A visible insertion after the watermark is processed without moving the FIFO cursor past that watermark')
         await processStoredLogs()
         const findingCount = (await query('SELECT count(*)::int AS count FROM mill_findings')).rows[0].count
         await processStoredLogs()
