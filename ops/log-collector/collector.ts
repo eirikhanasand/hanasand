@@ -1,3 +1,4 @@
+import { GroupCommit, WorkerPersistence } from './persistence';
 import { Worker, isMainThread, workerData, parentPort } from 'node:worker_threads';
 import { fs, Store, Config, Metadata, Delivery, iso, sleep, event, collectionError } from './core';
 import { Sources } from './sources';
@@ -8,17 +9,18 @@ const sources = ['audit', 'journal', 'docker', 'docker_file_history', 'docker_fi
 interface Status { ok: boolean; checkedAt: string; error?: string; [key: string]: string | number | boolean | undefined }
 const configPath = process.env.HANASAND_LOG_CONFIG || '/etc/hanasand/log-collector.json';
 async function worker(name: string) {
-  const store = new Store(), config: Config = JSON.parse(fs.readFileSync(configPath, 'utf8')), source = new Sources(store);
+  const persistence = new WorkerPersistence(parentPort!);
+  const store = new Store(undefined, persistence), config: Config = JSON.parse(fs.readFileSync(configPath, 'utf8')), source = new Sources(store);
   if (name.startsWith('delivery_')) {
-    const lane = name.slice('delivery_'.length), delivery = new Delivery(config);
+    const lane = name.slice('delivery_'.length), delivery = new Delivery(config, persistence);
     let lastAcknowledgedAt: string | undefined;
     while (true) {
       try {
         const paths = store.queuedBatches(lane); if (!paths.length) { await sleep(250); continue; }
         const count = await delivery.deliver(paths), age = Math.max(0, Date.now() / 1000 - Number(paths[0].split('/').pop()!.split('-')[0]) / 1e9);
         lastAcknowledgedAt = iso();
-        const status: Status = { ok: lane !== 'live' || age < 10, checkedAt: lastAcknowledgedAt, lastAcknowledgedAt, accepted: count, queueAgeSeconds: age };
-        if (!status.ok) status.error = 'Live log delivery exceeded 10 seconds'; parentPort!.postMessage(status);
+        const status: Status = { ok: lane !== 'live' || (age < 10 && delivery.eventAgeSeconds < 10), checkedAt: lastAcknowledgedAt, lastAcknowledgedAt, accepted: count, queueAgeSeconds: age, eventAgeSeconds: delivery.eventAgeSeconds };
+        if (!status.ok) status.error = 'Event occurrence to committed ingestion and local removal exceeded 10 seconds'; parentPort!.postMessage(status);
       } catch (error) { parentPort!.postMessage({ ok: false, checkedAt: iso(), lastAcknowledgedAt, error: collectionError(error) }); await sleep(1000); }
     }
   }
@@ -48,22 +50,31 @@ async function main() {
   const config: Config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
   // Fail before starting source workers if configuration cannot deliver their queue.
   new Delivery(config).close();
+  const persistence = new GroupCommit(store.root); store.persistence = persistence; persistence.recover();
+  persistence.start(error => { console.error(collectionError(error)); process.exit(1); });
+  let stopping = false;
   const statuses: Record<string, Status> = {}, workers: Worker[] = [];
   for (const name of ['delivery_live', 'delivery_history', ...sources, 'audit_live', 'journal_live']) {
     const thread = new Worker(process.argv[1], { workerData: { name } }); workers.push(thread);
-    thread.on('message', status => { statuses[name] = status; });
+    thread.on('message', message => {
+      if (message?.persistence) persistence.accept(message, value => thread.postMessage(value));
+      else statuses[name] = message;
+    });
     thread.on('error', error => { statuses[name] = { ok: false, checkedAt: iso(), error: collectionError(error) }; });
     // A dead worker must not leave a permanently green status. systemd restarts
     // the whole collector; durable queues and cursors make that replay safe.
-    thread.on('exit', () => { process.stderr.write(name + ' worker exited\n'); process.exit(1); });
+    thread.on('exit', () => { if (!stopping) { process.stderr.write(name + ' worker exited\n'); process.exit(1); } });
   }
-  const shutdown = () => process.exit(0); process.on('SIGTERM', shutdown); process.on('SIGINT', shutdown);
-  while (true) {
+  const shutdown = () => {
+    if (stopping) return; stopping = true;
+    void Promise.all(workers.map(thread => thread.terminate())).then(() => persistence.close()).then(() => process.exit(0)).catch(() => process.exit(1));
+  }; process.on('SIGTERM', shutdown); process.on('SIGINT', shutdown);
+  while (!stopping) {
     const snapshot = { ...statuses }, failures = Object.entries(snapshot).filter(([, status]) => !status.ok).map(([name, status]) => name + ': ' + status.error);
     const coverage = store.load<{ checkedAt: string; failures: string[]; instances: { status: string }[] } | null>('guest-coverage.json', null);
     if (coverage?.failures.length && !failures.some(item => item.startsWith('guests:'))) failures.push('guests: ' + coverage.failures.join(', '));
     const health: Record<string, boolean | null> = Object.fromEntries(sources.map(name => [name, snapshot[name]?.ok ?? null]));
-    const metadata: Metadata = { collector_health: health, source_status: JSON.parse(JSON.stringify(snapshot)) };
+    const metadata: Metadata = { collector_health: health, source_status: JSON.parse(JSON.stringify(snapshot)), persistence: { intervalMs: 2000, flushes: persistence.flushes, lastFlushMs: persistence.lastFlushMs, lastFlushAt: persistence.lastFlushAt ?? null } };
     store.save('health.json', { checkedAt: iso(), release: process.env.HANASAND_COLLECTOR_RELEASE || 'development', runtime: 'typescript', ...metadata });
     if (coverage) metadata.guest_coverage = { checkedAt: coverage.checkedAt, running: coverage.instances.filter(g => g.status === 'Running').length, stopped: coverage.instances.filter(g => g.status !== 'Running').length, failures: coverage.failures, enrollment: 'Stopped guests are enrolled when next running.' };
     const message = failures.length ? 'Collection failed: ' + failures.join(', ') : Object.values(health).includes(null) ? 'Collection starting' : 'Collection healthy';

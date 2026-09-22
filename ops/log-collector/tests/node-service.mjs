@@ -8,7 +8,7 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-test('bundled Node service delivers legacy queue plus live journal/audit/Docker across worker threads', { timeout: 20000 }, async () => {
+test('bundled Node service delivers legacy queue plus live journal/audit/Docker across worker threads', { timeout: 30000 }, async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'collector-service-')), state = path.join(root, 'state'), bin = path.join(root, 'bin'), cfg = path.join(root, 'config.json');
   fs.mkdirSync(state); fs.mkdirSync(bin); const received = [];
   const server = http.createServer(async (req, res) => { const buffers = []; for await (const chunk of req) buffers.push(chunk); const events = JSON.parse(Buffer.concat(buffers)).events; received.push(...events); res.writeHead(201, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: true, accepted: events.length })); });
@@ -16,6 +16,7 @@ test('bundled Node service delivers legacy queue plus live journal/audit/Docker 
   const now = new Date().toISOString(), log = path.join(root, 'docker.log'); fs.writeFileSync(log, JSON.stringify({ log: 'bundled-docker\n', time: now, stream: 'stdout' }) + '\n');
   fs.writeFileSync(cfg, JSON.stringify({ host: 'bundled-fixture', start: new Date(Date.now() - 60000).toISOString(), token: 'synthetic-fixture-token', url: `http://127.0.0.1:${server.address().port}/ingest` }));
   function executable(name, output) { const file = path.join(bin, name); fs.writeFileSync(file, '#!/bin/sh\n' + output); fs.chmodSync(file, 0o755); }
+  if (process.platform !== 'linux') executable('sync', 'exit 0\n');
   executable('journalctl', `printf '%s\\n' '${JSON.stringify({ __CURSOR: 'fixture-next', __REALTIME_TIMESTAMP: String(Date.now() * 1000), MESSAGE: 'bundled-journal' })}'\n`);
   executable('ausearch', `printf '%s\\n' 'type=SYSCALL msg=audit(${Date.now() / 1000}:123): success=yes exe="/usr/bin/whoami"' 'type=EXECVE msg=audit(${Date.now() / 1000}:123): argc=1 a0="whoami"'\n`);
   executable('docker', `case "$1" in ps) echo 'fixture app';; inspect) printf '%s\\n' '${JSON.stringify({ path: log, driver: 'json-file' })}';; esac\n`);
@@ -32,5 +33,29 @@ test('bundled Node service delivers legacy queue plus live journal/audit/Docker 
     assert.equal(JSON.parse(fs.readFileSync(path.join(state, 'journal.json'))).cursor, 'fixture-next');
     assert.equal(JSON.parse(fs.readFileSync(path.join(state, 'health.json'))).runtime, 'typescript');
     assert.equal(fs.existsSync(path.join(state, 'queue/live/01789999999999999999-legacy.json')), false);
+    // Occurrence -> acknowledged ingestion AND disappearance from both staging
+    // and delivery queues, while the actual service uses grouped persistence.
+    const markers = new Map();
+    for (let n = 0; n < 12; n++) {
+      const message = 'bundled-latency-' + n, occurred = Date.now(); markers.set(message, occurred);
+      fs.appendFileSync(log, JSON.stringify({ log: message + '\n', time: new Date(occurred).toISOString(), stream: 'stdout' }) + '\n');
+      await sleep(100);
+    }
+    const finished = new Map(), deadline2 = Date.now() + 9000;
+    while (Date.now() < deadline2 && finished.size < markers.size) {
+      const pending = new Set();
+      for (const lane of ['live', 'history']) {
+        const folder = path.join(state, 'queue', lane); if (!fs.existsSync(folder)) continue;
+        for (const name of fs.readdirSync(folder)) if (/\.(json|pending)$/.test(name)) {
+          try { for (const item of JSON.parse(fs.readFileSync(path.join(folder, name))).events) pending.add(item.message); } catch { /* concurrent publish or unlink */ }
+        }
+      }
+      for (const [message, occurred] of markers) if (!finished.has(message) && received.some(item => item.message === message) && !pending.has(message)) finished.set(message, Date.now() - occurred);
+      await sleep(50);
+    }
+    assert.equal(finished.size, markers.size, output);
+    for (const [message, elapsed] of finished) assert.ok(elapsed < 10000, message + ': ' + elapsed + 'ms');
+    console.log('grouped worker-thread event latency max_ms=' + Math.max(...finished.values()));
+
   } finally { child.kill('SIGTERM'); await done; server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); fs.rmSync(root, { recursive: true, force: true }); }
 });

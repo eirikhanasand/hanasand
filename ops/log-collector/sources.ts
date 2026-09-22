@@ -1,4 +1,4 @@
-import { fs, join, dirname, basename, Store, Commands, Config, LogEvent, Metadata, event, scrub, scrubArguments, iso, seconds, sha, syncDirectory, MAX_RECORD_BYTES, BATCH_BYTES, CollectionError, CommandError, TimeoutError, collectionError } from './core';
+import { fs, join, dirname, basename, Store, Commands, Config, LogEvent, Metadata, event, scrub, scrubArguments, iso, seconds, sha, MAX_RECORD_BYTES, BATCH_BYTES, CollectionError, CommandError, TimeoutError, collectionError } from './core';
 
 const trimEnding = (text: string) => text.replace(/\n$/, '').replace(/\r$/, '');
 export const shellQuote = (value: string) => value === '' ? "''" : /^[\w@%+=:,./-]+$/.test(value) ? value : "'" + value.replaceAll("'", "'\"'\"'") + "'";
@@ -136,23 +136,25 @@ export class Sources {
     if (cursor) this.store.save(stateName, { cursor, since });
   }
   async audit(config: Config, live = false) {
-    const prefix = live ? 'audit-live' : 'audit', stable = this.store.path(prefix + '.checkpoint'), pending = this.store.path(prefix + '.pending');
-    const timestamp = checkpointTime(stable), reuse = fs.existsSync(stable) && (!live || timestamp !== null && timestamp >= Date.now() / 1000 - 60);
-    if (reuse) fs.copyFileSync(stable, pending); else fs.rmSync(pending, { force: true });
+    const prefix = live ? 'audit-live' : 'audit', pending = this.store.path(prefix + '.pending');
+    const checkpoint = this.store.readRaw(prefix + '.checkpoint');
+    const match = checkpoint?.match(/^output=.*?\s(\d+(?:\.\d+)?):\d+/m);
+    const timestamp = match ? Number(match[1]) : null, reuse = checkpoint !== null && (!live || timestamp !== null && timestamp >= Date.now() / 1000 - 60);
+    if (reuse) fs.writeFileSync(pending, checkpoint!); else fs.rmSync(pending, { force: true });
     const args = ['ausearch', '--input-logs', '--checkpoint', pending, '-k', 'hanasand_exec', '--raw'];
     if (live && !reuse) args.push('--start', ...localAuditDate(Date.now() / 1000 - 60));
     let end: number | undefined;
     if (!live) {
-      const beginning = Math.max(checkpointTime(stable) ?? 0, this.store.load<number>('audit-window.json', 0), seconds(config.start || iso(Date.now() / 1000 - 60)));
+      const beginning = Math.max(timestamp ?? 0, this.store.load<number>('audit-window.json', 0), seconds(config.start || iso(Date.now() / 1000 - 60)));
       end = Math.min(Math.floor(Date.now() / 1000) - 1, Math.floor(beginning) + 60); if (end <= beginning) return;
-      args.push('--end', ...localAuditDate(end)); if (!fs.existsSync(stable)) args.push('--start', ...localAuditDate(beginning));
+      args.push('--end', ...localAuditDate(end)); if (checkpoint === null) args.push('--start', ...localAuditDate(beginning));
     }
     // A first live pass may scan large retained files before it can checkpoint.
     // Later passes keep the short timeout and resume that fresh checkpoint.
     const read = (command: string[]) => this.store.send(auditEvents(this.commands.stream(command, { accepted: [0, 1], timeout: live && reuse ? 5 : 60 }), config));
     try { await read(args); }
     catch (error) { if (!(error instanceof CommandError) || ![10, 11, 12].includes(error.code ?? -1) || !fs.existsSync(pending)) throw error; await read([...args, '--start', 'checkpoint']); }
-    if (fs.existsSync(pending)) { const fd = fs.openSync(pending, 'r'); try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); } fs.renameSync(pending, stable); syncDirectory(this.store.root); }
+    if (fs.existsSync(pending)) { this.store.saveRaw(prefix + '.checkpoint', fs.readFileSync(pending, 'utf8')); fs.unlinkSync(pending); }
     if (end !== undefined) this.store.save('audit-window.json', end);
   }
   async registerDockerFile(id: string, name: string, since: string) {

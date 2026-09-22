@@ -1,3 +1,4 @@
+import type { Persistence } from './persistence';
 import * as fs from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -97,29 +98,41 @@ export function event(config: Config, sourceId: string, service: string, message
 }
 export function syncDirectory(path: string) { const fd = fs.openSync(path, 'r'); try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); } }
 export class Store {
-  constructor(public root = process.env.HANASAND_LOG_STATE || '/var/lib/hanasand-log-collector') { fs.mkdirSync(root, { recursive: true, mode: 0o700 }); }
+  private staged = new Map<string, string>();
+  private pendingBatches = 0;
+  constructor(public root = process.env.HANASAND_LOG_STATE || '/var/lib/hanasand-log-collector', public persistence?: Persistence) { fs.mkdirSync(root, { recursive: true, mode: 0o700 }); }
   path(name: string) { return join(this.root, name); }
-  load<T>(name: string, fallback: T): T { return fs.existsSync(this.path(name)) ? JSON.parse(fs.readFileSync(this.path(name), 'utf8')) as T : fallback; }
-  save(name: string, value: unknown) {
-    const path = this.path(name), pending = path + '.' + randomUUID() + '.tmp';
-    const fd = fs.openSync(pending, 'wx', 0o600);
-    try { fs.writeFileSync(fd, JSON.stringify(value)); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+  readRaw(name: string): string | null { return this.staged.get(name) ?? (fs.existsSync(this.path(name)) ? fs.readFileSync(this.path(name), 'utf8') : null); }
+  load<T>(name: string, fallback: T): T { const raw = this.readRaw(name); return raw === null ? fallback : JSON.parse(raw) as T; }
+  save(name: string, value: unknown) { this.saveRaw(name, JSON.stringify(value)); }
+  saveRaw(name: string, data: string) {
+    const path = this.path(name);
+    if (this.persistence) {
+      if (this.readRaw(name) === data) return;
+      this.persistence.checkpoint(path, data); this.staged.set(name, data); return;
+    }
+    const pending = path + '.' + randomUUID() + '.tmp', fd = fs.openSync(pending, 'wx', 0o600);
+    try { fs.writeFileSync(fd, data); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
     fs.renameSync(pending, path); syncDirectory(dirname(path));
   }
+  async durable() { if (this.persistence) { await this.persistence.barrier(); this.pendingBatches = 0; } }
   queueBatch(batch: LogEvent[], lane: string) {
     const root = this.path('queue/' + lane);
-    fs.mkdirSync(root, { recursive: true, mode: 0o700 }); syncDirectory(dirname(root)); syncDirectory(this.root);
+    fs.mkdirSync(root, { recursive: true, mode: 0o700 });
+    if (!this.persistence) { syncDirectory(dirname(root)); syncDirectory(this.root); }
     const identity = (BigInt(Date.now()) * 1000000n).toString().padStart(20, '0') + '-' + randomUUID().replaceAll('-', '');
     const pending = join(root, identity + '.pending'), path = join(root, identity + '.json');
     const fd = fs.openSync(pending, 'wx', 0o600);
-    try { fs.writeFileSync(fd, JSON.stringify({ events: batch })); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
-    fs.renameSync(pending, path); syncDirectory(root);
+    try { fs.writeFileSync(fd, JSON.stringify({ events: batch })); if (!this.persistence) fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+    if (this.persistence) { this.persistence.queue(pending); this.pendingBatches++; }
+    else { fs.renameSync(pending, path); syncDirectory(root); }
   }
   async send(events: Events) {
     const batches: Record<string, LogEvent[]> = { live: [], history: [] }, sizes = { live: 0, history: 0 };
     let flushed = performance.now();
     const flush = () => { for (const lane of ['live', 'history'] as const) if (batches[lane].length) { this.queueBatch(batches[lane], lane); batches[lane] = []; sizes[lane] = 0; } };
     for await (const item of events) {
+      if (this.pendingBatches >= 128) await this.durable();
       const timestamp = Date.parse(item.timestamp);
       const lane = !Number.isFinite(timestamp) || timestamp >= Date.now() - 60000 ? 'live' : 'history', size = jsonSize(item);
       if (batches[lane].length && (sizes[lane] + size > BATCH_BYTES || batches[lane].length >= BATCH_COUNT)) { this.queueBatch(batches[lane], lane); batches[lane] = []; sizes[lane] = 0; }
@@ -164,7 +177,8 @@ export class TimeoutError extends Error { override name = 'TimeoutError'; }
 export const collectionError = (error: unknown) => error instanceof CollectionError || error instanceof DeliveryError ? error.message : error instanceof Error ? error.name : 'Error';
 export class Delivery {
   url: URL; agent: http.Agent | https.Agent;
-  constructor(public config: Config) {
+  eventAgeSeconds = 0;
+  constructor(public config: Config, private persistence?: Persistence) {
     this.url = new URL(config.url || '');
     if (!['http:', 'https:'].includes(this.url.protocol) || this.url.username || this.url.password) throw new Error('Invalid ingestion URL');
     if (this.url.protocol === 'http:' && !['127.0.0.1', 'localhost', '[::1]'].includes(this.url.hostname)) throw new Error('Remote ingestion requires HTTPS');
@@ -194,7 +208,8 @@ export class Delivery {
       });
     } catch (error) { this.close(); throw error; }
     for (const path of paths) fs.unlinkSync(path);
-    if (paths.length) syncDirectory(dirname(paths[0]));
+    if (paths.length) { if (this.persistence) this.persistence.dirty(); else syncDirectory(dirname(paths[0])); }
+    this.eventAgeSeconds = Math.max(0, ...events.map(item => Number.isFinite(Date.parse(item.timestamp)) ? (Date.now() - Date.parse(item.timestamp)) / 1000 : 0));
     return events.length;
   }
 }

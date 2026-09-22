@@ -111,6 +111,7 @@ export async function guests(store: Store, config: Config) {
       const metadata: Record<string, unknown> = {};
       await store.send(forward(commands.stream([lxc, 'exec', name, '--', '/usr/local/sbin/hanasand-log-collector', '--export', config.host + '/' + name, config.start!], { disk: true, raw: true, timeout: 120 }), metadata));
       if (typeof metadata.id !== 'string' || !Array.isArray(metadata.failures)) throw new Error('Invalid guest export');
+      await store.durable(); // The guest may discard its spool only after the host queue is durable.
       await commands.run([lxc, 'exec', name, '--', '/usr/local/sbin/hanasand-log-collector', '--ack', metadata.id]);
       if (metadata.failures.length) failures.push(name + ': ' + metadata.failures.join(', '));
     } catch (error) { failures.push(name + ': ' + collectionError(error)); }
