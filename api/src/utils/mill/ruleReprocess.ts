@@ -1,7 +1,7 @@
 import run, { withTransaction } from '#db'
 import { normalizeLogEvent, type LogInput } from './logEvent.ts'
 import { storedSourceLog } from './storedSources.ts'
-import { loadLogRetentionRules } from './customRetention.ts'
+import { loadLogRetentionRules, retentionStoreMatches } from './customRetention.ts'
 import { eligibleCustomDrop } from './dropEligibility.ts'
 import { matchSecurityRules } from './securityRules.ts'
 import { matchRulePage } from './rulePreview.ts'
@@ -81,10 +81,11 @@ export async function processRuleReprocessJob() {
             }
             // All selectors, including regex, use the same bounded evaluator as preview.
             const matches = (await matchRulePage(items.map(item => item.event), rule.definition.conditions)).map(index => items[index])
-            const keeps = (await loadLogRetentionRules(job.organization_id, query)).filter(r => r.definition?.action === 'keep')
+            const storageRules = await loadLogRetentionRules(job.organization_id, query)
+            const keeps = storageRules.filter(r => r.definition?.action === 'keep' && !r.definition.protection && r.definition.conditions?.length)
             const kept = new Set<number>()
             for (const keep of keeps) for (const index of await matchRulePage(matches.map(item => item.event), keep.definition!.conditions!)) kept.add(index)
-            let safe = matches.filter((item, index) => !kept.has(index) && !protectedEvent({ ...item.event, retained_original: item.original })
+            let safe = matches.filter((item, index) => !kept.has(index) && !retentionStoreMatches({ ...item.event, retained_original: item.original }, storageRules) && !protectedEvent({ ...item.event, retained_original: item.original })
                 && !/^service:(?:login_events|system_events):/.test(item.key || ''))
             const keys = safe.flatMap(item => item.key ? [item.key] : [])
             const evidence = (await query(`SELECT id,log_key,organization_id,normalized,original FROM mill_events
@@ -92,7 +93,7 @@ export async function processRuleReprocessJob() {
             const findingIds = new Set((await query('SELECT event_ids FROM mill_findings WHERE event_ids && $1::text[]', [evidence.map(row => row.id)])).rows.flatMap(row => row.event_ids))
             for (const keep of keeps) for (const index of await matchRulePage(evidence.map(row => row.normalized), keep.definition!.conditions!)) findingIds.add(evidence[index].id)
             safe = safe.filter(item => !evidence.some(row => (row.id === item.id || (item.key && row.log_key === item.key))
-                && (row.organization_id !== job.organization_id || findingIds.has(row.id) || protectedEvent({ ...row.normalized, original: row.original }))))
+                && (row.organization_id !== job.organization_id || findingIds.has(row.id) || retentionStoreMatches({ ...row.normalized, original: row.original }, storageRules) || protectedEvent({ ...row.normalized, original: row.original }))))
             // Check the still-retained original as well as the indexed projection.
             // Old normalization versions may have omitted fields now recognized as unsafe.
             const rawIds = safe.flatMap(item => /^service:\d+$/.test(item.key || '') ? [item.key!.split(':')[1]] : [])
@@ -102,7 +103,7 @@ export async function processRuleReprocessJob() {
                 originals.push({ key: `service:${row.id}`, event: normalizeLogEvent(row) })
             if (trafficIdsToCheck.length) for (const row of (await query('SELECT * FROM traffic_events WHERE id=ANY($1::bigint[]) FOR UPDATE', [trafficIdsToCheck])).rows)
                 originals.push({ key: `service:traffic_events:${row.id}`, event: normalizeLogEvent(storedSourceLog('traffic_events', row)) })
-            const retainedKeys = new Set(originals.filter(item => protectedEvent(item.event)).map(item => item.key))
+            const retainedKeys = new Set(originals.filter(item => retentionStoreMatches(item.event, storageRules) || protectedEvent(item.event)).map(item => item.key))
             for (const keep of keeps) for (const index of await matchRulePage(originals.map(item => item.event), keep.definition!.conditions!)) retainedKeys.add(originals[index].key)
             safe = safe.filter(item => !item.key || !retainedKeys.has(item.key))
             const ids = evidence.filter(row => safe.some(item => item.id === row.id || (item.key && item.key === row.log_key))).map(row => row.id)

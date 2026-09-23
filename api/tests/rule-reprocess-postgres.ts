@@ -35,6 +35,8 @@ try {
     const { processRuleReprocessJob } = await import('../src/utils/mill/ruleReprocess.ts')
     const { postMillRuleReprocess, getMillRuleReprocess } = await import('../src/handlers/millRuleReprocess.ts')
     const { normalizeLogEvent } = await import('../src/utils/mill/logEvent.ts')
+    const { eventProtectionDefinition, eventProtectionRuleId } = await import('../src/utils/mill/eventProtection.ts')
+    await query(`INSERT INTO mill_rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled) VALUES('protection','platform',$1,'1','Store evidence','Security','low','Store evidence',$2,'hanasand',true)`, [eventProtectionRuleId, JSON.stringify(eventProtectionDefinition)])
     const definition = { stage: 'analyze', action: 'drop', match: 'all', conditions: [{ path: 'message', operator: 'regex', value: '^routine' }] }
     await query(`INSERT INTO mill_rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
         VALUES('rule','platform','custom.test.v1','1','Routine','Custom','low','Routine test events',$1,'owned',true),

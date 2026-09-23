@@ -14,6 +14,7 @@ mock.module('#db', () => ({ default: query, withTransaction: async (work: any) =
 mock.module('../src/utils/mill/analyzeLog.ts', () => ({ analyzeMongoPing: async () => false, analyzeAccess: async () => false }))
 const { default: recordLog, recordLogBatch } = await import('../src/utils/logs/recordLog.ts')
 const { customRetentionAction } = await import('../src/utils/mill/customRetention.ts')
+const { eventProtectionDefinition } = await import('../src/utils/mill/eventProtection.ts')
 const drop = { source: 'owned', enabled: true, organizationId: 'org-a', definition: { stage: 'analyze', action: 'drop', conditions: [{ path: 'event_type', operator: 'equals', value: 'application' }] } }
 const entry = { service: 'example', level: 'info' as const, message: 'heartbeat', metadata: { organizationId: 'org-a' } }
 beforeEach(() => { reads = 0; writes = []; failed = false; rules = [structuredClone(drop)] })
@@ -46,4 +47,15 @@ test('a failed lookup fails ingestion without acknowledging a lost log', async (
 test('only explicitly Low events can be dropped, including older broad rules', () => {
     for (const severity of ['medium', 'high', 'critical', 'unknown', undefined, null]) expect(customRetentionAction({ event_type: 'application', severity }, [drop])).toBeUndefined()
     expect(customRetentionAction({ event_type: 'application', severity: 'low' }, [drop])).toBe('drop')
+})
+
+test('persisted protection Store rules can be disabled or edited and win over Drop rules', () => {
+    const event = { event_type: 'application', severity: 'low', error: 'failure' }
+    const protection = { source: 'hanasand', enabled: true, definition: structuredClone(eventProtectionDefinition) }
+    expect(customRetentionAction(event, [drop, protection])).toBe('keep')
+    expect(customRetentionAction(event, [drop, { ...protection, enabled: false }])).toBe('drop')
+    protection.definition.protection.checks = []
+    expect(customRetentionAction(event, [drop, protection])).toBe('drop')
+    protection.definition.protection = { checks: [{}] } as any
+    expect(customRetentionAction(event, [drop, protection])).toBe('keep')
 })
