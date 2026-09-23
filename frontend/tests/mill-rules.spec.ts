@@ -6,11 +6,19 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import postcss from 'postcss'
 import tailwind from '@tailwindcss/postcss'
-let output: string, bundle: string, css: string
+let output: string, bundle: string, css: string, serverHtml: string
 const rule = { id: 'http.routine_access.v1', version: '1', name: 'Routine requests', hitCount: 12345, family: 'HTTP', severity: 'high', explanation: 'Count routine requests.', evidence: [], enabled: true, definition: { stage: 'analyze', action: 'drop' } }
 test.beforeAll(async () => {
     output = mkdtempSync(path.join(tmpdir(), 'mill-rules-'))
     execFileSync('bun', ['-e', `const result = await Bun.build({entrypoints:['tests/fixtures/mill-rules.tsx'], outdir:${JSON.stringify(output)}, target:'browser', define:{'process.env':JSON.stringify({NODE_ENV:'production'})}, plugins:[{name:'workspace',setup(build){build.onLoad({filter:/workspaceProvider\\.tsx$/},()=>({contents:'export const useWorkspace = () => ({organizationId:"org-a", organizations:[{id:"org-a",role:"owner"}]})',loader:'tsx'}))}}]}); if(!result.success) throw new Error(result.logs.join('\\n'))`])
+    serverHtml = execFileSync('bun', ['-e', `
+        import { mock } from 'bun:test';
+        mock.module('./src/components/organizations/workspaceProvider', () => ({useWorkspace: () => ({organizationId:'org-a', organizations:[{id:'org-a',role:'owner'}]})}));
+        const {createElement} = await import('react');
+        const {renderToString} = await import('react-dom/server');
+        const {default: DetectionRules} = await import('./src/app/dashboard/mill/rules/detection-rules');
+        console.log(renderToString(createElement(DetectionRules, {category:'analysis',initial:{organizationId:'org-a',category:'analysis',rules:[${JSON.stringify(rule)}],canManageRetention:true}})));
+    `], { encoding: 'utf8' }).trim()
     css = (await postcss([tailwind()]).process(readFileSync('src/app/globals.css', 'utf8'), { from: path.resolve('src/app/globals.css') })).css
     bundle = readFileSync(path.join(output, 'mill-rules.js'), 'utf8')
 })
@@ -157,4 +165,52 @@ test('Drop locks Low; broad previews require confirmation and buffered scrolling
     await expect(table.locator('[data-event-id]').first()).toBeVisible()
     await page.screenshot({ path: '/tmp/mill-preview-mobile.png' })
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})
+
+test('server rows hydrate without fetching again and still refresh after edits', async ({ page }) => {
+    expect(serverHtml).toContain('Routine requests')
+    expect(serverHtml).not.toContain('Loading rules')
+    let reads = 0
+    await page.route('**/api/backend/mill/rules?*', route => {
+        reads++
+        return route.fulfill({ json: { canManageRetention: true, rules: [{ ...rule, enabled: false }] } })
+    })
+    await page.route('**/api/backend/mill/rules/*/actions?*', route => route.fulfill({ json: {} }))
+    const initial = { organizationId: 'org-a', category: 'analysis', rules: [rule], canManageRetention: true }
+    await page.route('http://mill.test/mill/rules/analysis', route => route.fulfill({ contentType: 'text/html', body: `<html><body><div id="root">${serverHtml}</div><script>window.initialRules=${JSON.stringify(initial)}</script><script type="module" src="/fixture.js"></script></body></html>` }))
+    await page.goto('http://mill.test/mill/rules/analysis')
+    await page.getByPlaceholder('Filter by title').fill('Routine')
+    expect(reads).toBe(0)
+    await page.getByRole('button', { name: 'Disable Routine requests', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Enable Routine requests', exact: true })).toBeVisible()
+    expect(reads).toBe(1)
+})
+
+test('server loader forwards scoped authentication, requests only list data and handles failures', () => {
+    execFileSync('bun', ['-e', `
+        import {mock} from 'bun:test';
+        import assert from 'node:assert/strict';
+        mock.module('next/headers', () => ({cookies: async () => ({get: name => ({value: {access_token:'test-token', id:'test-user', impersonation_token:'test-impersonation'}[name]})})}));
+        mock.module('./src/utils/organizations/serverWorkspace', () => ({activeOrganizationId: async () => 'org-a'}));
+        const {default: ServerRules} = await import('./src/app/dashboard/mill/rules/server-rules');
+        globalThis.fetch = async (url, options) => {
+            assert.equal(new URL(url).searchParams.get('organizationId'), 'org-a');
+            assert.equal(new URL(url).searchParams.get('view'), 'list');
+            assert.equal(new URL(url).searchParams.get('category'), 'analysis');
+            assert.equal(options.cache, 'no-store');
+            assert.equal(options.headers.get('Authorization'), 'Bearer test-token');
+            assert.equal(options.headers.get('id'), 'test-user');
+            assert.equal(options.headers.get('x-impersonation-token'), 'test-impersonation');
+            return Response.json({rules:[${JSON.stringify(rule)}],canManageRetention:true});
+        };
+        let result = await ServerRules({category:'analysis'});
+        assert.equal(result.props.initial.rules.length, 1);
+        assert.equal(result.props.initial.canManageRetention, true);
+        assert.ok(!JSON.stringify(result.props).includes('test-token'));
+        globalThis.fetch = async () => new Response('', {status:403});
+        result = await ServerRules({category:'analysis'});
+        assert.deepEqual(result.props.initial.rules, []);
+        assert.equal(result.props.initial.canManageRetention, false);
+        assert.match(result.props.initial.error, /Unable to load/);
+    `])
 })

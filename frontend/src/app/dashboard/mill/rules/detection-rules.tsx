@@ -10,17 +10,20 @@ import { DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 
 export type MillRule = { id: string, hitCount?: number | null, detectionLogic?: string, recordId?: string, rule_id?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'owned' | 'open_source', sourceReference?: string, definition?: { stage?: 'analyze' | 'match' | 'detect', action?: 'drop' | 'keep', match?: 'all', parameters?: Record<string, number>, failureConditions?: Array<{ path: string, operator: string, value: string }>, conditions?: Array<{ path: string, operator: string, value: string }> } }
 
-export default function DetectionRules({ category }: { category: RuleCategory }) {
-    const latestOrganization = useRef('')
+export type InitialRules = { organizationId: string, category: RuleCategory, rules: MillRule[], canManageRetention: boolean, error?: string }
+
+export default function DetectionRules({ category, initial }: { category: RuleCategory, initial?: InitialRules }) {
+    const latestOrganization = useRef(initial?.organizationId || '')
     const loadRequest = useRef(0)
     const [loading, setLoading] = useState(false)
     const { organizationId, organizations } = useWorkspace()
-    const [rules, setRules] = useState<MillRule[]>([])
+    const matchingInitial = initial?.organizationId === organizationId && initial.category === category ? initial : undefined
+    const [rules, setRules] = useState<MillRule[]>(matchingInitial?.rules || [])
     const [sort, setSort] = useState<{ column: RuleSortColumn, direction: RuleSortDirection }>({ column: 'Hits', direction: 'descending' })
     function sortBy(column: RuleSortColumn) {
         setSort(current => ({ column, direction: current.column === column ? current.direction === 'descending' ? 'ascending' : 'descending' : defaultRuleSortDirection(column) }))
     }
-    const [canManageRetention, setCanManageRetention] = useState(false)
+    const [canManageRetention, setCanManageRetention] = useState(matchingInitial?.canManageRetention === true)
     const [titleFilter, setTitleFilter] = useState('')
     const [textFilter, setTextFilter] = useState('')
     const [enabledFilter, setEnabledFilter] = useState('all')
@@ -36,13 +39,22 @@ export default function DetectionRules({ category }: { category: RuleCategory })
     const [sigmaPackReference, setSigmaPackReference] = useState('')
     const [sigmaYaml, setSigmaYaml] = useState('title: Suspicious authentication event\nstatus: experimental\nlogsource:\n  product: identity\ndetection:\n  selection:\n    event_type: authentication\n    outcome: failure\n  condition: selection\nlevel: high\n')
     const [status, setStatus] = useState('')
-    const [error, setError] = useState('')
+    const [error, setError] = useState(matchingInitial?.error || '')
 
     useEffect(() => {
-        setRules([])
-        if (organizationId) void loadMill(organizationId)
+        latestOrganization.current = organizationId
+        if (initial?.organizationId === organizationId && initial.category === category) {
+            setRules(initial.rules)
+            setCanManageRetention(initial.canManageRetention)
+            setError(initial.error || '')
+            setLoading(false)
+        } else {
+            setRules([])
+            setCanManageRetention(false)
+            if (organizationId) void loadMill(organizationId)
+        }
         return () => { loadRequest.current++ }
-    }, [organizationId, category])
+    }, [organizationId, category, initial])
 
     async function loadMill(id: string) {
         latestOrganization.current = id
