@@ -6,7 +6,7 @@ import { completedPostgresSessions, postgresReceipt, postgresRuleId, postgresSes
 
 // The authenticated collector's outer transaction commits the canonical evidence,
 // retry receipts, rate state and remaining raw logs together. Never call standalone.
-export async function analyzePostgresBatch<T extends PostgresLog>(entries: T[], query: typeof run): Promise<T[]> {
+export async function analyzePostgresBatch<T extends PostgresLog>(entries: T[], query: typeof run, options: { historicalReplay?: boolean } = {}): Promise<T[]> {
     const sessions = completedPostgresSessions(entries)
     if (!sessions.length) return entries
     const result = await query(`SELECT r.organization_id,r.version,r.definition FROM mill_rules r JOIN organizations o ON o.id=r.organization_id
@@ -58,7 +58,7 @@ export async function analyzePostgresBatch<T extends PostgresLog>(entries: T[], 
             continue
         }
         const existing = await query('SELECT source_event_id FROM service_logs WHERE source_event_id=ANY($1::text[])', [session.logs.map(log => log.sourceEventId!)])
-        if (existing.rows.length) continue
+        if (existing.rows.length && !options.historicalReplay) continue
         const summary = await query(`INSERT INTO service_logs(service,host,level,message,metadata,source_event_id,created_at)
             VALUES('postgres-session-analyzer',$4,'info','Completed local PostgreSQL readiness session',$1::jsonb,$2,$3::timestamptz)
             ON CONFLICT(source_event_id) DO NOTHING RETURNING id`,
