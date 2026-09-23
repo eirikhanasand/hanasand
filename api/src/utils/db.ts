@@ -83,26 +83,41 @@ export async function queryOnce(query: string, params?: SQLParamType, name?: str
         throw error
     })
     let failure: Error | undefined
+    let expired = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const onlineIndex = /^\s*CREATE\s+(?:UNIQUE\s+)?INDEX\s+CONCURRENTLY\b/i.test(query)
     try {
         if (schemaWork.getStore()) {
             await client.query('SET lock_timeout = \'1s\'; SET statement_timeout = \'5s\'')
             // Cancelling an online index build leaves an invalid index behind.
             // It allows normal reads/writes, so retain only its lock-wait limit.
-            if (/^\s*CREATE\s+(?:UNIQUE\s+)?INDEX\s+CONCURRENTLY\b/i.test(query)) {
+            if (onlineIndex) {
                 await client.query('SET statement_timeout = 0')
             }
         }
-        return name
-            ? await client.query({ name, text: query, values: params ?? [] })
-            : await client.query(query, params ?? [])
+        const pending = name
+            ? client.query({ name, text: query, values: params ?? [] })
+            : client.query(query, params ?? [])
+        if (!schemaWork.getStore() || onlineIndex) return await pending
+        // A simple-protocol SQL batch is one implicit transaction. PostgreSQL's
+        // statement_timeout applies separately to each statement in that batch.
+        return await Promise.race([pending, new Promise<never>((_resolve, reject) => {
+            timer = setTimeout(() => {
+                expired = true
+                const error = Object.assign(new Error('Schema SQL batch exceeded 8 seconds'), { code: '57014' })
+                client.release(error)
+                reject(error)
+            }, 8000)
+        })])
     } catch (error) {
         failure = error as Error
         throw error
     } finally {
+        clearTimeout(timer)
         if (schemaWork.getStore() && !failure) {
             await client.query('RESET lock_timeout; RESET statement_timeout').catch(error => { failure = error })
         }
-        client.release(failure)
+        if (!expired) client.release(failure)
     }
 }
 

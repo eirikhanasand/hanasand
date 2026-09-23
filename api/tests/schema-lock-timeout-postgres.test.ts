@@ -65,3 +65,12 @@ test('schema transactions cannot retain locks through multiple short statements'
     expect(Date.now() - started).toBeLessThan(9500)
     expect((await queryOnce("SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='transaction_rollback'")).rowCount).toBe(0)
 }, 12000)
+
+test('multi-statement schema batches also roll back within eight seconds', async () => {
+    const started = Date.now()
+    const failure = await withSchemaLockTimeout(() => queryOnce('ALTER TABLE users ADD COLUMN batch_rollback TEXT; SELECT pg_sleep(3); SELECT pg_sleep(3); SELECT pg_sleep(3)'))
+        .then(() => null, error => error)
+    expect(failure?.code).toBe('57014')
+    expect(Date.now() - started).toBeLessThan(9500)
+    expect((await queryOnce("SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='batch_rollback'")).rowCount).toBe(0)
+}, 12000)
