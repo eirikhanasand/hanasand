@@ -61,6 +61,10 @@ const wrapperCommand = ['/bin/sh', '-c', readinessWrapperScript, 'hanasand-readi
 const healthCommand = ['CMD-SHELL', 'pg_isready -U hanasand -d hanasand']
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
+export function hasExpectedReadinessSource(container: any, name = 'hanasand_database'): boolean {
+    return container.Name === `/${name}` && same(container.Config?.Healthcheck?.Test, healthCommand) && container.State?.Running === true
+}
+
 export async function readNativeObservation(execution: any, context: { containerId: string; execId: string; bootId: string; startedAt: number },
     readIdentity = processIdentity,
     readChildren = async (pid: number) => (await readFile(`/proc/${pid}/task/${pid}/children`, 'utf8')).trim().split(/\s+/).filter(Boolean).map(Number),
@@ -128,8 +132,7 @@ export async function runReadinessObserver(options: { stateDir: string; socketPa
     for (;;) {
         try {
             const container = await dockerJson(socket, `/containers/${name}/json`)
-            if (container.Name !== `/${name}` || !same(container.Config?.Healthcheck?.Test, healthCommand)
-                || container.Config.Healthcheck.Interval !== 5_000_000_000 || !container.State?.Running) throw new Error('Unexpected health configuration')
+            if (!hasExpectedReadinessSource(container, name)) throw new Error('Unexpected health configuration')
             if (containerId !== container.Id) { containerId = container.Id; previousStartedAt = 0; observations = []; seen.clear() }
             for (const health of (container.State.Health?.Log ?? []) as NativeHealth[]) {
                 if (seen.has(health.Start)) continue

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { matchReadinessHealth, readNativeObservation, readinessWrapperScript, type ObservedReadinessExec, type NativeHealth } from '../readinessObserver.ts'
+import { hasExpectedReadinessSource, matchReadinessHealth, readNativeObservation, readinessWrapperScript, type ObservedReadinessExec, type NativeHealth } from '../readinessObserver.ts'
 
 const start = Date.parse('2026-09-24T12:00:00.000Z'), container = 'a'.repeat(64)
 const observation: ObservedReadinessExec = { containerId: container, execId: 'b'.repeat(64), bootId: '12345678-1234-4234-8234-123456789abc',
@@ -7,6 +7,15 @@ const observation: ObservedReadinessExec = { containerId: container, execId: 'b'
     parentPid: 40000, parentStartTicks: '987654', namespacePid: 321, nonce: '12345678-1234-4234-8234-123456789abc', startedAt: start + 10, observedAt: start + 40, stableIdentity: true }
 const health: NativeHealth = { Start: new Date(start).toISOString(), End: new Date(start + 150).toISOString(), ExitCode: 0,
     Output: 'hanasand-pg-ready-v1 nonce=12345678-1234-4234-8234-123456789abc pid=321\n/var/run/postgresql:5432 - accepting connections\n' }
+test('native source identity does not impose configured cadence policy', () => {
+    const source = { Name: '/hanasand_database', Config: { Healthcheck: { Test: ['CMD-SHELL', 'pg_isready -U hanasand -d hanasand'], Interval: 5_000_000_000 } }, State: { Running: true } }
+    for (const interval of [0, 1_000_000_000, 5_000_000_000, 30_000_000_000]) {
+        expect(hasExpectedReadinessSource({ ...source, Config: { Healthcheck: { ...source.Config.Healthcheck, Interval: interval } } })).toBe(true)
+    }
+    expect(hasExpectedReadinessSource({ ...source, Name: '/other' })).toBe(false)
+    expect(hasExpectedReadinessSource({ ...source, State: { Running: false } })).toBe(false)
+    expect(hasExpectedReadinessSource({ ...source, Config: { Healthcheck: { Test: ['CMD-SHELL', 'pg_isready -U hanasand -d hanasand; id'] } } })).toBe(false)
+})
 test('native scheduled successful healthcheck joins exactly one observed process', () => {
     expect(matchReadinessHealth([observation], health, container, start - 5000)).toEqual({ version: 2, host: 'inspur', containerId: container,
         execPid: 39999, execParentPid: 39998, execStartTicks: '987650',
