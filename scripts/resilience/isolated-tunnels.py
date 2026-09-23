@@ -14,6 +14,7 @@ import subprocess
 import time
 
 GROUPS = {
+    'ai': ['-R', '127.0.0.1:28080:127.0.0.1:8080'],
     'replication': ['-R', '127.0.0.1:18503:127.0.0.1:8503'],
     'database': ['-R', '127.0.0.1:28503:127.0.0.1:8503', '-R', '127.0.0.1:28502:127.0.0.1:18502', '-L', '127.0.0.1:28506:127.0.0.1:18506'],
     'intelligence': ['-R', '127.0.0.1:28097:127.0.0.1:18097', '-L', '127.0.0.1:29097:127.0.0.1:19097'],
@@ -52,7 +53,7 @@ def authorize():
     index = matching[0]
     if not all(option in lines[index] for option in ('restrict,', 'port-forwarding,', 'command="false"')):
         raise RuntimeError('Existing tunnel key restrictions do not match the expected policy')
-    for port in (28503, 28502, 28097, 29911):
+    for port in (28503, 28502, 28097, 29911, 28080):
         permission = f'permitlisten="127.0.0.1:{port}"'
         if permission not in lines[index]:
             lines[index] = permission + ',' + lines[index]

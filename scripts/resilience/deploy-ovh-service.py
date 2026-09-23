@@ -38,6 +38,8 @@ with socket.socket() as listener:
 settings.pop('COMPACT_PWNED_RANGE_API', None)
 settings.update(PWNED_LOOKUP_API='https://api.hanasand.com/api/pwned',
                 HANASAND_RELEASE_COMMIT=release, HOSTNAME='127.0.0.1')
+if kind == 'api':
+    settings.update(AI_HEALTH_WORKER_BASE='http://127.0.0.1:28080', API_HTTP_ONLY='1')
 
 def launch(target, port):
     env = {**settings, 'PORT': str(port)}
