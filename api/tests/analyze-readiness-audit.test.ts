@@ -1,60 +1,60 @@
-import { createHash } from 'node:crypto'
+import { createHash, generateKeyPairSync, sign } from 'node:crypto'
 import { expect, test } from 'bun:test'
-import { eligibleReadinessAudit, readinessAuditRule, type ReadinessExecutionProof } from '../src/utils/mill/analyzeReadinessAudit.ts'
+import { eligibleReadinessAudit, matchesReadinessFact, readinessArguments, readinessCanonical, readinessDigest, readinessAuditRule, type ReadinessExecutionProof } from '../src/utils/mill/analyzeReadinessAudit.ts'
 import type { CollectorLog } from '../src/utils/mill/analyzeCollector.ts'
 
-const now = Date.parse('2026-09-24T00:00:01.000Z')
-const args = ['/usr/lib/postgresql/15/bin/pg_isready', '-U', 'hanasand', '-d', 'hanasand']
-function fixture(): { log: CollectorLog, proof: ReadinessExecutionProof } {
-    const time = now - 900
-    const sourceEventId = createHash('sha256').update(`inspur:audit:msg=audit(${(time / 1000).toFixed(3)}:42)`).digest('hex')
-    return { log: { service: 'audit', host: 'inspur', level: 'info', message: args.join(' '), timestamp: new Date(time).toISOString(), sourceEventId,
+export const keys = generateKeyPairSync('ed25519')
+export function fixture(): { log: CollectorLog, fact: ReadinessExecutionProof } {
+    const time = Date.parse('2026-09-24T00:00:00.100Z'), nonce = '3e735e7b-4d7f-444d-9806-231fa26cfcec'
+    const args = readinessArguments(nonce), command = args.slice(0,4).join(' ') + " '" + args[4] + "'"
+    const fact: ReadinessExecutionProof = { version: 1, host: 'inspur', containerId: 'a'.repeat(64), execId: 'b'.repeat(64), bootId: nonce,
+        parentPid: 12000, parentStartTicks: '123456', namespacePid: 12, nonce, startedAt: time - 10, finishedAt: time + 100, previousStartedAt: time - 5010 }
+    const log: CollectorLog = { service: 'audit', host: 'inspur', level: 'info', message: command, timestamp: new Date(time).toISOString(),
+        sourceEventId: createHash('sha256').update(`inspur:audit:msg=audit(${(time / 1000).toFixed(3)}:42)`).digest('hex'),
         metadata: { collector: 'auditd', event_type: 'process', action: 'exec', outcome: 'success', audit_id: '42',
-            process: { executable: args[0], command_line: args.join(' '), arguments: [...args], pid: '12345', parent_pid: '12000' }, user: { id: '0', login_id: '4294967295' } } },
-    proof: { host: 'inspur', containerName: 'hanasand_database', containerId: 'a'.repeat(64), bootId: '3e735e7b-4d7f-444d-9806-231fa26cfcec', execId: 'b'.repeat(64),
-        hostPid: '12345', hostParentPid: '12000', auditEventId: sourceEventId, command: [...args], startedAt: time - 10, finishedAt: time + 100,
-        previousStartedAt: time - 5010, completedInLastMinute: 12, exitCode: 0, stdout: '/var/run/postgresql:5432 - accepting connections\n', stderr: '' } }
+            process: { executable: args[0], command_line: command, arguments: args, pid: '12345', parent_pid: '12000' }, user: { id: '0', login_id: '4294967295' } } }
+    return { log, fact }
 }
+export function signed(log: CollectorLog, fact: ReadinessExecutionProof) {
+    const payload = { fact, eventDigest: readinessDigest(log) }
+    return { ...log, metadata: { ...log.metadata, readiness_execution: { ...payload, signature: sign(null, Buffer.from(readinessCanonical(payload)), keys.privateKey).toString('base64') } } }
+}
+export function configure() { process.env.READINESS_AUDIT_PROOF_PUBLIC_KEY = keys.publicKey.export({ format: 'der', type: 'spki' }).subarray(-32).toString('hex') }
 
-test('disabled until trusted process-bound completion evidence exists', () => {
-    const { log, proof } = fixture()
-    expect(readinessAuditRule.enabled).toBe(false)
-    expect(eligibleReadinessAudit(log, undefined, now)).toBe(false)
-    log.metadata!.healthcheck_execution = proof
-    expect(eligibleReadinessAudit(log, undefined, now)).toBe(false)
-    expect(eligibleReadinessAudit(log, proof, now)).toBe(false)
-    delete log.metadata!.healthcheck_execution
-    expect(eligibleReadinessAudit(log, proof, now)).toBe(true)
-    expect(eligibleReadinessAudit({ ...log, unexpected: 'payload' } as CollectorLog, proof, now)).toBe(false)
-    expect(eligibleReadinessAudit(log, { ...proof, unexpected: 'payload' } as ReadinessExecutionProof, now)).toBe(false)
+test('requires pinned signed producer proof; delayed queued originals remain eligible', () => {
+    const old = process.env.READINESS_AUDIT_PROOF_PUBLIC_KEY
+    try {
+        configure(); const {log,fact} = fixture()
+        expect(readinessAuditRule.enabled).toBe(false)
+        expect(eligibleReadinessAudit(log)).toBe(false)
+        expect(eligibleReadinessAudit(signed(log, fact))).toBe(true)
+        // Fixture intentionally independent of delivery clock: signature binds original event time.
+        delete process.env.READINESS_AUDIT_PROOF_PUBLIC_KEY
+        expect(eligibleReadinessAudit(signed(log, fact))).toBe(false)
+    } finally { if (old === undefined) delete process.env.READINESS_AUDIT_PROOF_PUBLIC_KEY; else process.env.READINESS_AUDIT_PROOF_PUBLIC_KEY = old }
 })
-
-test('retains failures, mismatched processes, unusual cadence and malformed completion evidence', () => {
-    const { log, proof } = fixture()
-    const changes: Partial<ReadinessExecutionProof>[] = [
-        { exitCode: 1 }, { stderr: 'warning' }, { stdout: proof.stdout + 'injected' }, { host: 'ovhcloud' },
-        { containerName: 'attacker' }, { containerId: 'bad' }, { bootId: 'bad' }, { execId: 'bad' },
-        { hostPid: '12346' }, { hostParentPid: '999' }, { auditEventId: 'c'.repeat(64) }, { command: [...args, '-h', '203.0.113.1'] },
-        { startedAt: now }, { finishedAt: proof.startedAt - 1 }, { finishedAt: now + 1 },
-        { startedAt: proof.startedAt - 2000 }, { previousStartedAt: proof.startedAt - 100 },
-        { previousStartedAt: proof.startedAt - 60_000 }, { completedInLastMinute: 99 }, { completedInLastMinute: 0 },
-        { startedAt: NaN }, { finishedAt: Infinity }, { completedInLastMinute: 1.5 },
-    ]
-    for (const change of changes) expect(eligibleReadinessAudit(log, { ...proof, ...change }, now)).toBe(false)
+test('signed but mismatched native identity and unusual timing retain the event', () => {
+    configure(); const {log,fact} = fixture()
+    for (const change of [{parentPid:999}, {nonce:'bad'}, {host:'ovhcloud'}, {containerId:'bad'}, {execId:'bad'}, {bootId:'bad'},
+        {previousStartedAt: fact.startedAt-100}, {previousStartedAt:fact.startedAt-16000}, {finishedAt:fact.startedAt-1},
+        {finishedAt:fact.startedAt+1001}, {startedAt: fact.finishedAt}, {namespacePid:0}, {parentStartTicks:'0'}]) {
+        expect(eligibleReadinessAudit(signed(log, {...fact,...change}))).toBe(false)
+    }
 })
-
-test('retains changed commands, suspicious metadata, identities and historic unproven events', () => {
-    const { log, proof } = fixture()
-    for (const changes of [{ level: 'error' }, { host: 'customer' }, { service: 'other' }, { timestamp: 'bad' },
-        { sourceEventId: 'c'.repeat(64) }, { message: log.message + '; whoami' }]) expect(eligibleReadinessAudit({ ...log, ...changes }, proof, now)).toBe(false)
-    for (const key of ['detections', 'organizationId', 'tenantId', 'body', 'unexpected']) {
-        expect(eligibleReadinessAudit({ ...log, metadata: { ...log.metadata, [key]: 'suspicious' } }, proof, now)).toBe(false)
+test('tampering, manual lookalikes, extra arguments and suspicious fields always retain', () => {
+    configure(); const {log,fact}=fixture(), good=signed(log,fact)
+    for (const change of [{level:'error'}, {host:'customer'}, {service:'other'}, {message:log.message+'; whoami'}, {sourceEventId:'c'.repeat(64)}, {timestamp:'bad'}]) {
+        expect(eligibleReadinessAudit({...good,...change})).toBe(false)
     }
-    for (const [field, change] of [['process', { executable: '/tmp/pg_isready' }], ['process', { arguments: [...args, 'payload'] }],
-        ['process', { unexpected: 'payload' }], ['user', { id: '1000' }], ['user', { login_id: '1000' }]] as const) {
-        const changed = structuredClone(log)
-        Object.assign(changed.metadata![field] as object, change)
-        expect(eligibleReadinessAudit(changed, proof, now)).toBe(false)
+    for (const key of ['detections','organizationId','tenantId','body','unexpected']) expect(eligibleReadinessAudit({...good,metadata:{...good.metadata,[key]:'suspicious'}})).toBe(false)
+    for (const [field, change] of [['process',{executable:'/tmp/pg_isready'}],['process',{arguments:[...readinessArguments(fact.nonce),'-h','203.0.113.1']}],
+        ['process',{parent_pid:'999'}],['process',{unexpected:'payload'}],['user',{id:'1000'}],['user',{login_id:'1000'}]] as const) {
+        const changed=structuredClone(log); Object.assign(changed.metadata![field] as object,change)
+        expect(eligibleReadinessAudit(signed(changed,fact))).toBe(false)
     }
-    expect(eligibleReadinessAudit(log, proof, now + 120_000)).toBe(false)
+    expect(matchesReadinessFact({...log,unexpected:'payload'} as CollectorLog,fact)).toBe(false)
+    const forged=structuredClone(good); forged.metadata.readiness_execution.signature='A'.repeat(86)+'=='
+    expect(eligibleReadinessAudit(forged)).toBe(false)
+    const changedFact=structuredClone(good); changedFact.metadata.readiness_execution.fact.execId='c'.repeat(64)
+    expect(eligibleReadinessAudit(changedFact)).toBe(false)
 })
