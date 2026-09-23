@@ -38,3 +38,36 @@ test('explicit completions use model output, retain policy checks and never subs
         expect((await app.inject({ method: 'POST', url: '/ai', payload })).statusCode).toBe(403)
     } finally { await app.close() }
 })
+
+test('HTTP replicas forward inference and identity to the model worker and preserve failures', async () => {
+    const original = process.env.AI_HEALTH_WORKER_BASE
+    let status = 200
+    let calls = 0
+    const worker = Bun.serve({ port: 0, async fetch(request) {
+        calls++
+        expect(new URL(request.url).pathname).toBe('/api/tools/ai')
+        expect(request.headers.get('authorization')).toBe('Bearer test-token')
+        expect(request.headers.get('id')).toBe('test-user')
+        expect(request.headers.get('x-ai-tool-forwarded')).toBe('1')
+        expect(await request.json()).toEqual({ prompt: 'Explain TLS.' })
+        return Response.json({ message: 'model response' }, { status })
+    } })
+    process.env.AI_HEALTH_WORKER_BASE = worker.url.toString()
+    const app = Fastify()
+    app.post('/ai', ai)
+    const input = { method: 'POST' as const, url: '/ai', headers: { authorization: 'Bearer test-token', id: 'test-user' }, payload: { prompt: 'Explain TLS.' } }
+    try {
+        expect((await app.inject(input)).json().message).toBe('model response')
+        status = 403
+        expect((await app.inject(input)).statusCode).toBe(403)
+        expect((await app.inject({ ...input, headers: { ...input.headers, 'x-ai-tool-forwarded': '1' } })).statusCode).toBe(503)
+        expect(calls).toBe(2)
+        worker.stop(true)
+        expect((await app.inject(input)).statusCode).toBe(503)
+    } finally {
+        worker.stop(true)
+        if (original === undefined) delete process.env.AI_HEALTH_WORKER_BASE
+        else process.env.AI_HEALTH_WORKER_BASE = original
+        await app.close()
+    }
+})

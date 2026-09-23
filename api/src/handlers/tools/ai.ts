@@ -47,6 +47,26 @@ export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
     res.header('Cache-Control', 'no-store, no-cache, max-age=0, must-revalidate')
     res.header('Vary', 'Authorization, Cookie')
 
+    // Only the scheduled worker owns model connections. Keep authentication,
+    // policy decisions and inference together when called through an HTTP replica.
+    const workerBase = process.env.AI_HEALTH_WORKER_BASE?.trim()
+    if (workerBase) {
+        if (req.headers['x-ai-tool-forwarded']) return res.status(503).send({ error: 'Model worker forwarding loop.' })
+        try {
+            const headers: Record<string, string> = { 'content-type': 'application/json', 'x-ai-tool-forwarded': '1' }
+            for (const name of ['authorization', 'id', 'cookie']) {
+                const value = headerString(req.headers[name])
+                if (value) headers[name] = value
+            }
+            const response = await fetch(`${workerBase.replace(/\/$/, '')}/api/tools/ai`, {
+                method: 'POST', headers, body: JSON.stringify(req.body), redirect: 'error', signal: AbortSignal.timeout(240_000),
+            })
+            return res.status(response.status).send(await response.json())
+        } catch {
+            return res.status(503).send({ status: 'retryable', error: 'The model worker is temporarily unavailable.' })
+        }
+    }
+
     const body = req.body as {
         action?: string
         prompt?: string
