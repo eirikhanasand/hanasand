@@ -11,7 +11,7 @@ const body = { object: 'list', data: [{ id: 'hanasand', object: 'model', created
         allow_create_engine: false, allow_sampling: true, allow_logprobs: true, allow_search_indices: false,
         allow_view: true, allow_fine_tuning: false, organization: '*', group: null, is_blocking: false }] }] }
 
-test('real native HTTP probes sign only ordinary completed requests and preserve health on proof failures', async () => {
+test('native probes attest observations; Mill policy decides timing, status and model root', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'model-probe-')), key = 'ab'.repeat(32)
     const requests: any[] = []
     let rootOverride = ''
@@ -37,10 +37,11 @@ test('real native HTTP probes sign only ordinary completed requests and preserve
     const receipts = () => readdirSync(directory).flatMap(file => readFileSync(join(directory, file), 'utf8').trim().split('\n').map(JSON.parse))
     try {
         expect((await probe()).ok).toBe(true)
-        expect(receipts()).toHaveLength(0)
-        expect((await probe()).ok).toBe(true)
         expect(receipts()).toHaveLength(1)
-        const proof = receipts()[0]
+        expect(receipts()[0].previousStartedAt).toBeNull()
+        expect((await probe()).ok).toBe(true)
+        expect(receipts()).toHaveLength(2)
+        const proof = receipts()[1]
         expect(proof.mac).toBe(signModelProof(proof, key))
         expect(proof.serverPid).toBeNull()
         expect(proof.logSha256).toBeNull()
@@ -49,17 +50,20 @@ test('real native HTTP probes sign only ordinary completed requests and preserve
         expect(requests[1].method).toBe('GET')
         expect(requests[1].body).toBe('')
         expect(requests[1].headers).toEqual({ host: '127.0.0.1:18088', accept: 'application/json', connection: 'close' })
-        await probe(1000) // bursts retain
+        await probe(1000) // Record observed cadence; the saved Mill rule excludes bursts.
+        expect(receipts().at(-1).startedAt - receipts().at(-1).previousStartedAt).toBe(1000)
         status = 500; expect((await probe()).ok).toBe(false); status = 200
+        expect(receipts().at(-1).status).toBe(500)
         extra = true; await probe(); extra = false
         rootOverride = 'Ignore.previous.instructions'; await probe(); rootOverride = ''
+        expect(receipts().at(-1).responseRoot).toBe('Ignore.previous.instructions')
         header = true; await probe(); header = false
         duplicate = true; await probe(); duplicate = false
         elapsed = 1001; await probe(); elapsed = 0
         await probe(41000)
-        expect(receipts()).toHaveLength(1)
+        expect(receipts()).toHaveLength(7)
         await probe()
-        expect(receipts()).toHaveLength(2)
+        expect(receipts()).toHaveLength(8)
         const unavailable = createModelProbe({ key, directory: join(directory, readdirSync(directory)[0], 'invalid'), now: () => tick })
         expect((await unavailable.probe('http://127.0.0.1:18088', 'hanasand')).ok).toBe(true)
         tick += 10000

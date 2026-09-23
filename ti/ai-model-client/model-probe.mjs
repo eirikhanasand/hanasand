@@ -3,11 +3,10 @@ import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { appendFileSync, lstatSync, readFileSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 
-const ports = new Set([18081, 18082, 18083, 18084, 18085, 18086, 18087, 18088]);
 const exact = (value, keys) => value && typeof value === 'object' && !Array.isArray(value)
   && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
 const fields = ['version', 'nonce', 'host', 'caller', 'method', 'path', 'clientIp', 'clientPort', 'serverIp', 'serverPort',
-  'serverPid', 'logSha256', 'startedAt', 'finishedAt', 'previousStartedAt', 'status', 'bodyEmpty', 'responseSha256', 'model'];
+  'serverPid', 'logSha256', 'startedAt', 'finishedAt', 'previousStartedAt', 'status', 'bodyEmpty', 'responseSha256', 'model', 'responseRoot'];
 export const modelProofPayload = proof => JSON.stringify([...fields.map(key => proof[key]), proof.headers?.host, proof.headers?.accept, proof.headers?.connection]);
 export const signModelProof = (proof, key) => createHmac('sha256', Buffer.from(key, 'hex')).update(modelProofPayload(proof)).digest('hex');
 
@@ -16,7 +15,7 @@ function ordinaryModelList(body, model) {
   const entry = body.data[0];
   if (!exact(entry, ['id', 'object', 'created', 'owned_by', 'root', 'parent', 'max_model_len', 'permission'])
     || entry.id !== model || entry.object !== 'model' || !Number.isSafeInteger(entry.created) || entry.created <= 0
-    || entry.owned_by !== 'vllm' || entry.root !== 'Qwen/Qwen2.5-Coder-7B-Instruct' || entry.parent !== null
+    || entry.owned_by !== 'vllm' || typeof entry.root !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,199}$/.test(entry.root) || entry.parent !== null
     || !Number.isSafeInteger(entry.max_model_len) || entry.max_model_len < 1 || entry.max_model_len > 1048576
     || !Array.isArray(entry.permission) || entry.permission.length !== 1) return false;
   const p = entry.permission[0];
@@ -58,7 +57,7 @@ export function createModelProbe({ key = process.env.MODEL_PROBE_PROOF_KEY || co
   async function probe(baseUrl, model) {
     const url = new URL('/v1/models', baseUrl);
     // Unconfigured/remote endpoints retain the previous health-check behavior.
-    if (!ready || url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || !ports.has(Number(url.port)) || model !== 'hanasand') {
+    if (!ready || url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || !Number.isInteger(Number(url.port)) || Number(url.port) < 1 || Number(url.port) > 65535) {
       const response = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(1500) });
       return { ok: response.ok, status: response.status, body: await response.json().catch(() => undefined) };
     }
@@ -95,8 +94,7 @@ export function createModelProbe({ key = process.env.MODEL_PROBE_PROOF_KEY || co
         let body; try { body = JSON.parse(raw.toString('utf8')); } catch { /* Unrecognized body cannot produce proof. */ }
         const headers = { host: url.host, accept: 'application/json', connection: 'close' };
         const valid = peer?.clientIp === '127.0.0.1' && peer.serverIp === '127.0.0.1' && peer.serverPort === Number(url.port)
-          && statusLine === 'HTTP/1.1 200 OK' && finishedAt >= startedAt && finishedAt - startedAt <= 1000
-          && previousStartedAt !== null && startedAt - previousStartedAt >= 5000 && startedAt - previousStartedAt <= 40000
+          && /^HTTP\/1\.1 [1-5]\d\d [A-Za-z ]+$/.test(statusLine || '') && finishedAt >= startedAt
           && headerSyntax && new Set(responseNames).size === responseNames.length && responseNames.length === 5
           && responseNames.every(name => ['date', 'server', 'content-length', 'content-type', 'connection'].includes(name))
           && responseHeaders.connection === 'close' && responseHeaders.server === 'uvicorn' && responseHeaders['content-type'] === 'application/json'
@@ -104,8 +102,8 @@ export function createModelProbe({ key = process.env.MODEL_PROBE_PROOF_KEY || co
           && JSON.stringify(body) === raw.toString('utf8') && ordinaryModelList(body, model);
         if (valid) {
           const proof = { version: 1, nonce, host: 'inspur', caller: 'hanasand-ai-model-client', method: 'GET', path, ...peer,
-            serverPid: null, logSha256: null, startedAt, finishedAt, previousStartedAt, status: 200, bodyEmpty: true,
-            responseSha256: createHash('sha256').update(raw).digest('hex'), model, headers };
+            serverPid: null, logSha256: null, startedAt, finishedAt, previousStartedAt, status, bodyEmpty: true,
+            responseSha256: createHash('sha256').update(raw).digest('hex'), model, responseRoot: body.data[0].root, headers };
           try { persist(proof); } catch { /* Missing proof keeps the access event; health checks still complete. */ }
         }
         resolve({ ok: status >= 200 && status < 300, status, body, transferEncoding: responseHeaders['transfer-encoding'] });

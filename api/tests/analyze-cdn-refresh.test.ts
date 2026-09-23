@@ -1,6 +1,11 @@
 import { expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
-import { eligibleCdnRefresh } from '../src/utils/mill/analyzeCdnRefresh.ts'
+import { eligibleCdnRefresh as timingEligible, cdnRefreshDefinition } from '../src/utils/mill/analyzeCdnRefresh.ts'
+
+import { matchesMillRule } from '../src/utils/mill/conditions.ts'
+import { normalizeLogEvent } from '../src/utils/mill/logEvent.ts'
+const eligibleCdnRefresh = (log: Parameters<typeof timingEligible>[0]) => timingEligible(log, cdnRefreshDefinition.parameters)
+    && matchesMillRule(normalizeLogEvent({ ...log, id: log.sourceEventId!, created_at: log.timestamp! }), cdnRefreshDefinition.conditions)
 
 function fixture() {
     const timestamp = '2026-09-24T00:00:00.001000001Z'
@@ -57,3 +62,12 @@ test('unknown producers, levels, timestamps and missing identity are kept', () =
     }
 })
 export { fixture }
+
+test('CDN cadence and duration follow saved numeric policy with no hidden fallback', () => {
+    const log = fixture()
+    expect(timingEligible(log, undefined)).toBe(false)
+    expect(timingEligible(log, {})).toBe(false)
+    expect(timingEligible(log, { ...cdnRefreshDefinition.parameters, maxDurationMs: 0 })).toBe(false)
+    expect(timingEligible(log, { ...cdnRefreshDefinition.parameters, minIntervalMs: 6000 })).toBe(false)
+    expect(timingEligible(log, cdnRefreshDefinition.parameters)).toBe(true)
+})

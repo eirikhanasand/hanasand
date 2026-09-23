@@ -1,6 +1,11 @@
 import { expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
-import { eligibleModelDiscovery, modelDiscoveryConfigured, modelLogDigest, modelProofMac, type ModelProbeLog } from '../src/utils/mill/analyzeModelDiscovery.ts'
+import { eligibleModelDiscovery as timingEligible, modelDiscoveryDefinition, validModelDiscoveryParameters, modelDiscoveryConfigured, modelLogDigest, modelProofMac, type ModelProbeLog } from '../src/utils/mill/analyzeModelDiscovery.ts'
+
+import { matchesMillRule } from '../src/utils/mill/conditions.ts'
+import { normalizeLogEvent } from '../src/utils/mill/logEvent.ts'
+const eligibleModelDiscovery = (log: ModelProbeLog, key: string) => timingEligible(log, modelDiscoveryDefinition.parameters, key)
+    && matchesMillRule(normalizeLogEvent({ ...log, id: log.sourceEventId!, created_at: log.timestamp! }), modelDiscoveryDefinition.conditions)
 
 export const testKey = 'ab'.repeat(32)
 export function modelFixture(index = 1): ModelProbeLog {
@@ -17,7 +22,7 @@ export function modelFixture(index = 1): ModelProbeLog {
     const proof = { version: 1, nonce, host: 'inspur', caller: 'hanasand-ai-model-client', method: 'GET', path,
         clientIp: '127.0.0.1', clientPort: 34764, serverIp: '127.0.0.1', serverPort: 18081, serverPid: '1143552',
         logSha256: modelLogDigest(log, cursor), startedAt: start, finishedAt: start + 20, previousStartedAt: start - 10000,
-        status: 200, bodyEmpty: true, responseSha256: 'c'.repeat(64), model: 'hanasand',
+        status: 200, bodyEmpty: true, responseSha256: 'c'.repeat(64), model: 'hanasand', responseRoot: 'Qwen/Qwen2.5-Coder-7B-Instruct',
         headers: { host: '127.0.0.1:18081', accept: 'application/json', connection: 'close' } }
     log.metadata!.model_probe = { ...proof, mac: modelProofMac(proof, testKey) }
     return log
@@ -77,4 +82,14 @@ test('suspicious lookalikes, unknown evidence and unbound caller proof always ke
         log.metadata!.model_probe = proof
         expect(eligibleModelDiscovery(log, testKey)).toBe(false)
     }
+})
+
+ test('persisted timing values are required and changes alter matching', () => {
+    const log = modelFixture()
+    expect(timingEligible(log, undefined, testKey)).toBe(false)
+    expect(validModelDiscoveryParameters({})).toBe(false)
+    expect(timingEligible(log, { ...modelDiscoveryDefinition.parameters, maxDurationMs: 0 }, testKey)).toBe(false)
+    expect(timingEligible(log, { ...modelDiscoveryDefinition.parameters, minIntervalMs: 11000 }, testKey)).toBe(false)
+    expect(timingEligible(log, { ...modelDiscoveryDefinition.parameters, maxIntervalMs: 9000 }, testKey)).toBe(false)
+    expect(timingEligible(log, modelDiscoveryDefinition.parameters, testKey)).toBe(true)
 })

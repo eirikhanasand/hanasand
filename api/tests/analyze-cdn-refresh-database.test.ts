@@ -65,6 +65,15 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real CDN ingestion keeps su
         await ingest(bad)
         expect((await query('SELECT message FROM service_logs WHERE source_event_id=$1', [bad.sourceEventId])).rows[0].message).toContain('attacker.invalid')
         expect(await count('log_analyze_receipts')).toBe(2)
+        // Saved policy edits apply to fresh input and already acknowledged originals.
+        for (const policy of [{ ...cdnRefreshDefinition, conditions: [{ path: 'host', operator: 'equals', value: 'another-host' }] },
+            { ...cdnRefreshDefinition, parameters: { ...cdnRefreshDefinition.parameters, maxDurationMs: 1 } }]) {
+            await query('UPDATE mill_rules SET definition=$2::jsonb WHERE rule_id=$1', [cdnRefreshRuleId, JSON.stringify(policy)])
+            const retained = entry(); await ingest(retained); await ingest(good)
+            for (const log of [retained, good]) expect(Number((await query('SELECT count(*) n FROM service_logs WHERE source_event_id=$1', [log.sourceEventId])).rows[0].n)).toBe(1)
+            expect(await count('log_analyze_receipts')).toBe(2)
+        }
+        await query('UPDATE mill_rules SET definition=$2::jsonb WHERE rule_id=$1', [cdnRefreshRuleId, JSON.stringify(cdnRefreshDefinition)])
         for (const mode of ['disable', 'keep', 'custom-keep']) {
             if (mode === 'disable') await query('UPDATE mill_rules SET enabled=false WHERE rule_id=$1', [cdnRefreshRuleId])
             if (mode === 'keep') await query("UPDATE mill_rules SET enabled=true,definition=jsonb_set(definition,'{action}','\"keep\"') WHERE rule_id=$1", [cdnRefreshRuleId])
@@ -86,8 +95,8 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real CDN ingestion keeps su
         [JSON.stringify({ match: 'all', stage: 'detect', action: 'keep', conditions: [{ path: 'service', operator: 'equals', value: 'cdn' }] })])
         const detected = entry()
         await ingest(detected)
-        await ingest(good)
-        for (const log of [detected, good]) expect(Number((await query('SELECT count(*) n FROM service_logs WHERE source_event_id=$1', [log.sourceEventId])).rows[0].n)).toBe(1)
+        await ingest(aborted)
+        for (const log of [detected, aborted]) expect(Number((await query('SELECT count(*) n FROM service_logs WHERE source_event_id=$1', [log.sourceEventId])).rows[0].n)).toBe(1)
         expect(await count('log_analyze_receipts')).toBe(2)
     } finally {
         await query(`DROP SCHEMA IF EXISTS ${namespace} CASCADE`)
