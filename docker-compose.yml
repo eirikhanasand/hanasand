@@ -115,6 +115,7 @@ services:
       BROWSER_SANDBOX_EGRESS_FIREWALL_READY: ${BROWSER_SANDBOX_EGRESS_FIREWALL_READY:-0}
       BROWSER_SANDBOX_PREWARM: "0"
       VULNERABILITY_SCAN_STATE_PATH: ${VULNERABILITY_SCAN_STATE_PATH:-/var/lib/hanasand/vulnerability-scan.json}
+      DB_BACKUP_WORKER_SOCKET: /var/lib/hanasand/backups/database/.worker.sock
       DB_BACKUP_DIR: ${DB_BACKUP_DIR:-/var/lib/hanasand/backups/database}
       DB_BACKUP_STATE_PATH: ${DB_BACKUP_STATE_PATH:-/var/lib/hanasand/backups/database/.backup-state.json}
       DB_BACKUP_SCHEDULE: ${DB_BACKUP_SCHEDULE:-23 2 * * *}
@@ -138,6 +139,33 @@ services:
         condition: service_started
       onion-tor:
         condition: service_started
+
+  database-backup:
+    container_name: hanasand_database_backup
+    image: hanasand_api
+    restart: unless-stopped
+    command: ["bun", "src/backupWorker.ts"]
+    cpus: "0.5"
+    mem_limit: 512m
+    blkio_config:
+      weight: 100
+    env_file: .env
+    environment:
+      DB_BACKUP_WORKER: "1"
+      DB_BACKUP_WORKER_SOCKET: /var/lib/hanasand/backups/database/.worker.sock
+      DB_BACKUP_DIR: ${DB_BACKUP_DIR:-/var/lib/hanasand/backups/database}
+      DB_BACKUP_STATE_PATH: ${DB_BACKUP_STATE_PATH:-/var/lib/hanasand/backups/database/.backup-state.json}
+      DB_BACKUP_SCHEDULE: ${DB_BACKUP_SCHEDULE:-23 2 * * *}
+      DB_BACKUP_RETENTION_DAYS: ${DB_BACKUP_RETENTION_DAYS:-14}
+      DB_BACKUP_ENABLED: ${DB_BACKUP_ENABLED:-true}
+      HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
+    volumes:
+      - api_state:/var/lib/hanasand
+    networks:
+      - hanasandnet
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   browser-worker:
     container_name: hanasand_browser_worker

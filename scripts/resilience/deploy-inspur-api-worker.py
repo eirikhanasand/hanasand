@@ -24,6 +24,7 @@ if index_builds != '0':
 original=json.loads(subprocess.check_output(['docker','inspect','hanasand_api']))[0]
 settings=dict(value.split('=',1) for value in original['Config']['Env'])
 settings.update(support_settings(worker=True))
+settings['DB_BACKUP_WORKER_SOCKET']='/var/lib/hanasand/backups/database/.worker.sock'
 # Collectors receive a credential that authenticates only log ingestion.
 log_ingest_file = Path('/home/hanasand/resilience/log-ingest.json')
 if log_ingest_file.exists():

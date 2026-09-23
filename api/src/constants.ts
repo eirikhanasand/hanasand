@@ -5,7 +5,7 @@ dotenv.config({ path: '../.env' })
 const requiredEnvironmentVariables = [
     'DB_PASSWORD',
     'DB_HOST',
-    'VM_API_TOKEN',
+    ...(process.env.DB_BACKUP_WORKER === '1' ? [] : ['VM_API_TOKEN']),
 ]
 
 const missingVariables = process.env.BROWSER_SANDBOX_WORKER_ONLY === '1'

@@ -49,7 +49,7 @@ export async function postDatabaseBackup(req: FastifyRequest, res: FastifyReply)
         })
     } catch (error) {
         req.log.error(error)
-        const statusCode = error instanceof BackupOperationError ? error.statusCode : 503
+        const statusCode = error instanceof BackupOperationError ? error.statusCode : (error as { statusCode?: number })?.statusCode || 503
         return res.status(statusCode).send({ message: sanitizeBackupError(error) })
     }
 }
@@ -77,7 +77,7 @@ export async function postDatabaseBackupVerify(req: FastifyRequest<{ Body: Verif
         return res.send({ message: `Backup verified: ${operation.file}.`, operation })
     } catch (error) {
         req.log.error(error)
-        const statusCode = error instanceof BackupOperationError ? error.statusCode : 503
+        const statusCode = error instanceof BackupOperationError ? error.statusCode : (error as { statusCode?: number })?.statusCode || 503
         return res.status(statusCode).send({ message: sanitizeBackupError(error) })
     }
 }
@@ -103,7 +103,7 @@ export async function postDatabaseBackupRestore(req: FastifyRequest<{ Body: Rest
         })
     } catch (error) {
         req.log.error(error)
-        const statusCode = error instanceof BackupOperationError ? error.statusCode : 503
+        const statusCode = error instanceof BackupOperationError ? error.statusCode : (error as { statusCode?: number })?.statusCode || 503
         return res.status(statusCode).send({ message: sanitizeBackupError(error) })
     }
 }

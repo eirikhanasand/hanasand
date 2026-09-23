@@ -10,7 +10,7 @@ import ensureLogProcessQueueSchema from './logProcessQueueSchema.ts'
 import ensureSharedMailSchema from './sharedMailSchema.ts'
 import ensureVmOrganizationSchema from './vmOrganizationSchema.ts'
 import ensureCaseDevelopmentSchema from './caseDevelopmentSchema.ts'
-import run, { withSchemaLockTimeout } from '#db'
+import run, { queryOnce, withSchemaLockTimeout } from '#db'
 import { ensureTrafficHistorySchema } from '../traffic/history.ts'
 import ensureServiceAccountsSchema from './serviceAccountsSchema.ts'
 import ensureAccountIdentitySchema from './accountIdentitySchema.ts'
@@ -20,7 +20,31 @@ import ensureThesisSchema from './thesisSchema.ts'
 import { reservedUsernames } from '#utils/auth/reservedUsernames.ts'
 
 export default async function ensureSchema() {
-    return withSchemaLockTimeout(applySchema)
+    const release = process.env.HANASAND_RELEASE_COMMIT
+    const tracked = Boolean(release && /^[a-f0-9]{40}$/.test(release))
+    if (tracked) {
+        try {
+            const result = await queryOnce('SELECT 1 FROM app_schema_releases WHERE release = $1', [release!])
+            if (result.rowCount) return
+        } catch (error) {
+            if ((error as { code?: string })?.code !== '42P01') throw error
+        }
+    }
+    for (;;) {
+        try {
+            await withSchemaLockTimeout(applySchema)
+            if (tracked) await withSchemaLockTimeout(async () => {
+                await queryOnce('CREATE TABLE IF NOT EXISTS app_schema_releases (release TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())')
+                await queryOnce('INSERT INTO app_schema_releases (release) VALUES ($1) ON CONFLICT DO NOTHING', [release!])
+            })
+            return
+        } catch (error) {
+            const code = (error as { code?: string })?.code
+            if (code !== '55P03' && code !== '57014') throw error
+            console.warn('Schema update deferred because it exceeded its lock or execution limit; retrying in 30 seconds.')
+            await new Promise(resolve => setTimeout(resolve, 30_000))
+        }
+    }
 }
 
 async function applySchema() {

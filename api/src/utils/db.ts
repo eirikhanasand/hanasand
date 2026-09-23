@@ -84,7 +84,14 @@ export async function queryOnce(query: string, params?: SQLParamType, name?: str
     })
     let failure: Error | undefined
     try {
-        if (schemaWork.getStore()) await client.query('SET lock_timeout = \'1s\'')
+        if (schemaWork.getStore()) {
+            await client.query('SET lock_timeout = \'1s\'; SET statement_timeout = \'5s\'')
+            // Cancelling an online index build leaves an invalid index behind.
+            // It allows normal reads/writes, so retain only its lock-wait limit.
+            if (/^\s*CREATE\s+(?:UNIQUE\s+)?INDEX\s+CONCURRENTLY\b/i.test(query)) {
+                await client.query('SET statement_timeout = 0')
+            }
+        }
         return name
             ? await client.query({ name, text: query, values: params ?? [] })
             : await client.query(query, params ?? [])
@@ -93,7 +100,7 @@ export async function queryOnce(query: string, params?: SQLParamType, name?: str
         throw error
     } finally {
         if (schemaWork.getStore() && !failure) {
-            await client.query('RESET lock_timeout').catch(error => { failure = error })
+            await client.query('RESET lock_timeout; RESET statement_timeout').catch(error => { failure = error })
         }
         client.release(failure)
     }
@@ -112,20 +119,41 @@ export async function withDatabaseAdvisoryLock<T>(key: string, work: () => Promi
 
 export async function withTransaction<T>(work: (query: typeof queryOnce) => Promise<T>) {
     const client = await pool.connect()
-    const query = ((sql: string, params?: SQLParamType, name?: string) => name
-        ? client.query({ name, text: sql, values: params ?? [] })
-        : client.query(sql, params ?? [])) as typeof queryOnce
-    try {
+    const schema = schemaWork.getStore()
+    let expired = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timeoutError = Object.assign(new Error('Schema transaction exceeded 8 seconds'), { code: '57014' })
+    const query = ((sql: string, params?: SQLParamType, name?: string) => {
+        if (expired) return Promise.reject(timeoutError)
+        return name
+            ? client.query({ name, text: sql, values: params ?? [] })
+            : client.query(sql, params ?? [])
+    }) as typeof queryOnce
+    const execute = async () => {
         await client.query('BEGIN')
-        if (schemaWork.getStore()) await client.query('SET LOCAL lock_timeout = \'1s\'')
+        if (schema) await client.query('SET LOCAL lock_timeout = \'1s\'; SET LOCAL statement_timeout = \'5s\'; SET LOCAL idle_in_transaction_session_timeout = \'5s\'')
         const result = await work(query)
+        if (expired) throw timeoutError
         await client.query('COMMIT')
         return result
+    }
+    try {
+        if (!schema) return await execute()
+        return await Promise.race([execute(), new Promise<never>((_resolve, reject) => {
+            timer = setTimeout(() => {
+                expired = true
+                // Closing the connection rolls back the whole transaction and
+                // releases its locks, even if application code is awaiting I/O.
+                client.release(timeoutError)
+                reject(timeoutError)
+            }, 8000)
+        })])
     } catch (error) {
-        await client.query('ROLLBACK')
+        if (!expired) await client.query('ROLLBACK')
         throw error
     } finally {
-        client.release()
+        clearTimeout(timer)
+        if (!expired) client.release()
     }
 }
 

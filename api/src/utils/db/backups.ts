@@ -1,3 +1,4 @@
+import { backupWorkerCall, usesBackupWorker } from './backupWorkerClient.ts'
 import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { createReadStream } from 'node:fs'
@@ -150,6 +151,7 @@ const activeOperationIds = new Set<string>()
 let initialization: Promise<void> | null = null
 
 export async function collectDatabaseBackupServices(): Promise<BackupServiceStatus[]> {
+    if (usesBackupWorker()) return backupWorkerCall<BackupServiceStatus[]>('status', [])
     await ensureInitialized()
     const database = databaseName()
     const state = await readState()
@@ -200,6 +202,7 @@ export async function collectDatabaseBackupServices(): Promise<BackupServiceStat
 }
 
 export async function listDatabaseBackupFiles(service?: string, date?: string): Promise<BackupFileEntry[]> {
+    if (usesBackupWorker()) return backupWorkerCall<BackupFileEntry[]>('files', [service, date])
     await ensureInitialized()
     const files = await listBackupCandidates()
     const normalizedService = service ? slug(service.replace(/_database$/, '')) : ''
@@ -223,6 +226,7 @@ export async function listDatabaseBackupFiles(service?: string, date?: string): 
 }
 
 export async function createDatabaseBackup(options: { actorId?: string, trigger?: 'manual' | 'schedule' } = {}) {
+    if (usesBackupWorker()) return backupWorkerCall<BackupOperation>('create', [options])
     return runOperation('backup', options, async(operation, updateStage) => {
         const dir = backupDirectory()
         const database = databaseName()
@@ -235,6 +239,7 @@ export async function createDatabaseBackup(options: { actorId?: string, trigger?
             await updateStage('dumping')
             await runBackupCommand('pg_dump', [
                 '--format=custom',
+                '--lock-wait-timeout=1s',
                 '--no-owner',
                 '--no-privileges',
                 ...connectionArgs(),
@@ -287,6 +292,7 @@ export async function createDatabaseBackup(options: { actorId?: string, trigger?
 }
 
 export async function verifyDatabaseBackupFile(file: string, actorId = 'system_admin') {
+    if (usesBackupWorker()) return backupWorkerCall<BackupOperation>('verify', [file, actorId])
     return runOperation('verify', { actorId, trigger: 'manual' }, async(_operation, updateStage) => {
         const backup = await resolveBackupFile(file)
         await updateStage('verifying_archive')
@@ -330,6 +336,7 @@ export async function restoreDatabaseBackupFile(input: {
     confirmation: string
     actorId?: string
 }) {
+    if (usesBackupWorker()) return backupWorkerCall<BackupOperation>('restore', [input])
     const targetDatabase = normalizeRestoreTarget(input.targetDatabase)
     if (input.confirmation !== `RESTORE ${targetDatabase}`) {
         throw new BackupOperationError(`Confirmation must exactly match RESTORE ${targetDatabase}.`, 400)
@@ -431,6 +438,7 @@ export async function restoreDatabaseBackupFile(input: {
 }
 
 export async function runDueDatabaseBackup(now = new Date()) {
+    if (usesBackupWorker()) return backupWorkerCall<BackupOperation | null>('due', [now.toISOString()])
     await ensureInitialized()
     const state = await readState()
     const nextRunAt = state.configuration.nextRunAt ? Date.parse(state.configuration.nextRunAt) : Number.NaN
@@ -444,24 +452,25 @@ export async function runDueDatabaseBackup(now = new Date()) {
         throw error
     } finally {
         if (advanceSchedule) {
-            const latest = await readState()
-            latest.configuration.nextRunAt = computeNextBackupRun(latest.configuration.schedule, now).toISOString()
-            latest.configuration.updatedAt = new Date().toISOString()
-            await writeState(latest)
+            await changeState(latest => {
+                latest.configuration.nextRunAt = computeNextBackupRun(latest.configuration.schedule, now).toISOString()
+                latest.configuration.updatedAt = new Date().toISOString()
+            })
         }
     }
 }
 
 export async function setDatabaseBackupSchedulePaused(paused: boolean) {
+    if (usesBackupWorker()) return backupWorkerCall<void>('pause', [paused])
     await ensureInitialized()
-    const state = await readState()
-    state.configuration.paused = paused
-    state.configuration.enabled = scheduleEnabled() && !paused && !state.configuration.scheduleError
-    if (state.configuration.enabled && (!state.configuration.nextRunAt || Date.parse(state.configuration.nextRunAt) <= Date.now())) {
-        state.configuration.nextRunAt = computeNextBackupRun(state.configuration.schedule).toISOString()
-    }
-    state.configuration.updatedAt = new Date().toISOString()
-    await writeState(state)
+    await changeState(state => {
+        state.configuration.paused = paused
+        state.configuration.enabled = scheduleEnabled() && !paused && !state.configuration.scheduleError
+        if (state.configuration.enabled && (!state.configuration.nextRunAt || Date.parse(state.configuration.nextRunAt) <= Date.now())) {
+            state.configuration.nextRunAt = computeNextBackupRun(state.configuration.schedule).toISOString()
+        }
+        state.configuration.updatedAt = new Date().toISOString()
+    })
 }
 
 export function computeNextBackupRun(schedule: string, after = new Date()) {
@@ -542,10 +551,10 @@ async function runOperation(
     }
     const releaseLock = await acquireOperationLock(operation)
     try {
-        const state = await readState()
-        state.operations.push(operation)
-        state.operations = state.operations.slice(-MAX_OPERATION_HISTORY)
-        await writeState(state)
+        await changeState(state => {
+            state.operations.push(operation)
+            state.operations = state.operations.slice(-MAX_OPERATION_HISTORY)
+        })
         const patch = await work(operation, async(stage) => {
             await patchOperation(operation.id, { stage })
         })
@@ -574,13 +583,25 @@ async function runOperation(
     }
 }
 
+let stateChange: Promise<unknown> = Promise.resolve()
+async function changeState<T>(change: (state: BackupState) => T): Promise<T> {
+    const next = stateChange.then(async () => {
+        const state = await readState()
+        const result = change(state)
+        await writeState(state)
+        return result
+    })
+    stateChange = next.catch(() => undefined)
+    return next
+}
+
 async function patchOperation(id: string, patch: Partial<BackupOperation>) {
-    const state = await readState()
-    const index = state.operations.findIndex(operation => operation.id === id)
-    if (index < 0) throw new BackupOperationError('Backup operation audit record was not found.', 500)
-    state.operations[index] = { ...state.operations[index], ...patch }
-    await writeState(state)
-    return state.operations[index]
+    return changeState(state => {
+        const index = state.operations.findIndex(operation => operation.id === id)
+        if (index < 0) throw new BackupOperationError('Backup operation audit record was not found.', 500)
+        state.operations[index] = { ...state.operations[index], ...patch }
+        return state.operations[index]
+    })
 }
 
 async function acquireOperationLock(operation: BackupOperation) {
@@ -625,7 +646,7 @@ async function initializeState() {
             operation.stage = 'interrupted'
             operation.finishedAt = now
             operation.durationMs = Math.max(0, Date.parse(now) - Date.parse(operation.startedAt))
-            operation.error = 'The API restarted before this operation reached a terminal state.'
+            operation.error = 'The backup worker restarted before this operation reached a terminal state.'
         }
     }
     await unlink(lockPath()).catch(error => {

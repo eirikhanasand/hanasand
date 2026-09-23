@@ -42,3 +42,26 @@ test('startup schema locks fail promptly behind a backup without stranding login
     }))
     expect((await queryOnce('SHOW lock_timeout')).rows[0].lock_timeout).toBe('0')
 }, 10000)
+
+test('schema statements cancel execution and roll back their changes', async () => {
+    const started = Date.now()
+    const failure = await withSchemaLockTimeout(() => withTransaction(async query => {
+        await query('ALTER TABLE users ADD COLUMN should_rollback TEXT')
+        await query('SELECT pg_sleep(20)')
+    })).then(() => null, error => error)
+    expect(failure?.code).toBe('57014')
+    expect(Date.now() - started).toBeLessThan(7000)
+    expect((await queryOnce("SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='should_rollback'")).rowCount).toBe(0)
+    expect((await queryOnce('SHOW statement_timeout')).rows[0].statement_timeout).toBe('0')
+}, 10000)
+
+test('schema transactions cannot retain locks through multiple short statements', async () => {
+    const started = Date.now()
+    const failure = await withSchemaLockTimeout(() => withTransaction(async query => {
+        await query('ALTER TABLE users ADD COLUMN transaction_rollback TEXT')
+        for (let i = 0; i < 10; i++) await query('SELECT pg_sleep(2)')
+    })).then(() => null, error => error)
+    expect(failure?.code).toBe('57014')
+    expect(Date.now() - started).toBeLessThan(9500)
+    expect((await queryOnce("SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='transaction_rollback'")).rowCount).toBe(0)
+}, 12000)
