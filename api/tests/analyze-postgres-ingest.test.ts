@@ -6,13 +6,13 @@ const { postgresReceipt, postgresRuleId, postgresDefinition } = await import('..
 const { normalizeBuiltinDefinition } = await import('../src/handlers/mill.ts')
 import { fixture } from './analyze-postgres.test.ts'
 
-function database(options: { enabled?: boolean, existing?: boolean, fail?: string, customKeep?: boolean } = {}) {
+function database(options: { enabled?: boolean, existing?: boolean, fail?: string, customKeep?: boolean, detector?: boolean } = {}) {
     const receipts = new Set<string>(), summaries: any[] = []
     let recent: any[] = [], dropped = 0
     const query: any = async (sql: string, params: any[] = []) => {
         if (options.fail && sql.includes(options.fail)) throw new Error('write failed')
-        if (sql.includes("r.source='owned'")) return { rows: options.customKeep ? [{ source: 'owned', enabled: true,
-            definition: { stage: 'analyze', action: 'keep', conditions: [{ path: 'service', operator: 'equals', value: 'hanasand_database' }] } }] : [] }
+        if (sql.includes('FROM mill_rules') && !sql.includes('JOIN organizations')) return { rows: options.customKeep || options.detector ? [{ rule_id: 'fixture-protection', source: 'owned', enabled: true,
+            definition: { stage: options.detector ? 'detect' : 'analyze', action: 'keep', conditions: [{ path: 'service', operator: 'equals', value: 'hanasand_database' }] } }] : [] }
         if (sql.includes('FROM mill_rules')) return { rows: options.enabled === false ? [] : [{ organization_id: 'platform', version: '1' }] }
         if (sql.startsWith('SELECT key')) return { rows: params[2].filter((key: string) => receipts.has(key)).map((key: string) => ({ key })) }
         if (sql.startsWith('SELECT recent')) return { rows: [{ recent }] }
@@ -46,6 +46,17 @@ test('a newly added Store exception also wins over existing retry receipts', asy
     const options = { customKeep: false }, db = database(options), rows = fixture()
     expect(await analyzePostgresBatch(rows, db.query)).toEqual([])
     options.customKeep = true
+    expect(await analyzePostgresBatch(rows, db.query)).toEqual(rows)
+    expect(db.dropped).toBe(3)
+})
+
+test('current original-field detections retain whole sessions and also protect replays', async () => {
+    const options = { detector: true }, db = database(options), rows = fixture()
+    expect(await analyzePostgresBatch(rows, db.query)).toEqual(rows)
+    expect(db.receipts.size).toBe(0)
+    options.detector = false
+    expect(await analyzePostgresBatch(rows, db.query)).toEqual([])
+    options.detector = true
     expect(await analyzePostgresBatch(rows, db.query)).toEqual(rows)
     expect(db.dropped).toBe(3)
 })

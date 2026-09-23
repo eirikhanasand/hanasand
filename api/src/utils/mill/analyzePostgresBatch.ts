@@ -1,5 +1,5 @@
 import type run from '#db'
-import { customRetentionAction, loadLogRetentionRules } from './customRetention.ts'
+import { customRetentionAction } from './customRetention.ts'
 import { normalizeLogEvent } from './logEvent.ts'
 import { completedPostgresSessions, postgresReceipt, postgresRuleId, postgresSessionEvidence, type PostgresLog } from './analyzePostgres.ts'
 
@@ -14,11 +14,20 @@ export async function analyzePostgresBatch<T extends PostgresLog>(entries: T[], 
         ORDER BY o.created_at LIMIT 1 FOR SHARE OF r,o`, [process.env.PLATFORM_LOG_ORGANIZATION_ID || null, postgresRuleId])
     const rule = result.rows[0]
     if (!rule) return entries
-    const retention = await loadLogRetentionRules(null, query)
-    const protectedKeys = new Set(postgres.filter(log => customRetentionAction(normalizeLogEvent({ ...log, service: log.service!,
-        id: log.sourceEventId || '', created_at: log.timestamp && Number.isFinite(Date.parse(log.timestamp)) ? log.timestamp : new Date() }), retention) === 'keep').map(postgresReceipt))
     const receipts = await query('SELECT key FROM log_analyze_receipts WHERE organization_id=$1 AND rule_id=$2 AND key=ANY($3::text[])',
         [rule.organization_id, postgresRuleId, postgres.map(postgresReceipt)])
+    if (!receipts.rows.length && !completedPostgresSessions(entries).length) return entries
+    const { loadConfiguredMillRules, collectMillEventFindings, normalizeMillEvent } = await import('../../handlers/mill.ts')
+    const rules = await loadConfiguredMillRules(rule.organization_id, query)
+    // Existing detectors and Store exceptions both protect originals, including
+    // a replay after an analyst adds a new rule. Future detectors can inspect the
+    // canonical evidence through the shared retained-original evaluation path.
+    const protectedKeys = new Set(postgres.filter(log => {
+        const normalized = normalizeLogEvent({ ...log, service: log.service!, id: log.sourceEventId || '',
+            created_at: log.timestamp && Number.isFinite(Date.parse(log.timestamp)) ? log.timestamp : new Date() })
+        return customRetentionAction(normalized, rules) === 'keep'
+            || collectMillEventFindings(rule.organization_id, log.sourceEventId || '', normalizeMillEvent(normalized, { vendor: 'Hanasand', product: 'Logs' }), rules).findings.length > 0
+    }).map(postgresReceipt))
     const dropped = new Set<string>(receipts.rows.map(row => row.key).filter(key => !protectedKeys.has(key)))
     const fresh = entries.filter(log => !dropped.has(postgresReceipt(log)))
     const sessions = completedPostgresSessions(fresh)
