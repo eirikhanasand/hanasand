@@ -17,11 +17,22 @@ with tempfile.TemporaryDirectory() as directory:
     (backup / 'backup_manifest').write_text(json.dumps({'Files':[{'Size':80*1024**3}]}))
     log = root / 'commands.jsonl'
     mock = f'''#!{sys.executable}
-import json, os, pathlib, subprocess, sys
+import hashlib, json, os, pathlib, shutil, subprocess, sys
 command, args = pathlib.Path(sys.argv[0]).name, sys.argv[1:]
 with open(os.environ['MOCK_LOG'], 'a') as output: output.write(json.dumps([command, *args]) + '\\n')
 if command == 'awk': print(os.environ.get('MOCK_MEMORY_KIB', '900000000'))
 elif command == 'docker' and args[0] == 'run':
+    backup = pathlib.Path(os.environ['MOCK_BACKUP'])
+    if args[-2:] == ['cat', '/backup/backup_manifest']:
+        print((backup / 'backup_manifest').read_text()); sys.exit(0)
+    if 'sha256sum base.tar.gz' in args[-1]:
+        for name in ('base.tar.gz', 'pg_wal.tar.gz', 'backup_manifest'):
+            print(hashlib.sha256((backup / name).read_bytes()).hexdigest(), name)
+        sys.exit(0)
+    if args[-1] == '/backup/verification.json':
+        if os.environ.get('MOCK_FAIL_STAGE') == 'publish': sys.exit(47)
+        proof = next(value.split(':')[0] for value in args if value.endswith(':/proof:ro'))
+        shutil.copyfile(proof, backup / 'verification.json'); sys.exit(0)
     env = dict(os.environ)
     for i, arg in enumerate(args):
         if arg == '-e':
@@ -39,7 +50,7 @@ elif command == 'pg_ctl' and args[-1] == 'start':
         path = binaries / command
         path.write_text(mock)
         path.chmod(0o755)
-    env = {**os.environ, 'PATH': f'{binaries}:{os.environ["PATH"]}', 'MOCK_LOG': str(log), 'MOCK_VERIFY': str(verify)}
+    env = {**os.environ, 'PATH': f'{binaries}:{os.environ["PATH"]}', 'MOCK_LOG': str(log), 'MOCK_VERIFY': str(verify), 'MOCK_BACKUP': str(backup), 'TMPDIR': str(root)}
 
     def run(extra=None):
         log.write_text('')
@@ -49,7 +60,7 @@ elif command == 'pg_ctl' and args[-1] == 'start':
 
     result, calls = run({'MOCK_RECOVERY_SECONDS': '480'})
     assert result.returncode == 0, result.stderr
-    restores = [args for command, *args in calls if command == 'docker' and args[0] == 'run']
+    restores = [args for command, *args in calls if command == 'docker' and '--tmpfs' in args]
     assert len(restores) == 1
     args = restores[0]
     assert args[args.index('--memory') + 1] == args[args.index('--memory-swap') + 1] == '128g'
@@ -64,14 +75,14 @@ elif command == 'pg_ctl' and args[-1] == 'start':
     (backup / 'backup_manifest').write_text(json.dumps({'Files':[{'Size':200*1024**3}]}))
     result, calls = run()
     assert result.returncode == 0, result.stderr
-    args = next(args for command, *args in calls if command == 'docker' and args[0] == 'run')
+    args = next(args for command, *args in calls if command == 'docker' and '--tmpfs' in args)
     assert args[args.index('--memory') + 1] == '272g'
     assert args[args.index('--tmpfs') + 1].endswith('size=240g')
     result, calls = run({'MOCK_MEMORY_KIB':str(300*1048576)})
     assert result.returncode != 0
-    assert not any(call[0] == 'docker' for call in calls)
+    assert not any('--tmpfs' in call for call in calls)
 
-    for scenario in [*({'MOCK_FAIL_STAGE': stage} for stage in ('tar', 'pg_verifybackup', 'pg_ctl', 'psql')),
+    for scenario in [*({'MOCK_FAIL_STAGE': stage} for stage in ('tar', 'pg_verifybackup', 'pg_ctl', 'psql', 'publish')),
                      {'MOCK_RECOVERY_SECONDS': '480', 'BACKUP_VERIFY_RECOVERY_TIMEOUT_SECONDS': '300'}]:
         result, calls = run(scenario)
         assert result.returncode != 0
@@ -81,6 +92,6 @@ elif command == 'pg_ctl' and args[-1] == 'start':
                      {'MOCK_MEMORY_KIB': '1000000'}]:
         result, calls = run(scenario)
         assert result.returncode != 0
-        assert not any(call[0] == 'docker' for call in calls)
+        assert not any('--tmpfs' in call for call in calls)
 
 print('RAM-backed restore bounds, full verification order, slow recovery, timeout and failure handling passed.')

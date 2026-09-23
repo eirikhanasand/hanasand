@@ -21,7 +21,7 @@ try:
         for member in archive:
             if member.name not in allowed or member.name in seen or not member.isfile(): raise ValueError('Unexpected backup member')
             total += member.size
-            if total > 32 * 1024**3: raise ValueError('Backup exceeds receiver capacity limit')
+            if total > 64 * 1024**3: raise ValueError('Backup exceeds receiver capacity limit')
             seen.add(member.name)
             digest = hashlib.sha256()
             with archive.extractfile(member) as source, (staging/member.name).open('xb') as target:
