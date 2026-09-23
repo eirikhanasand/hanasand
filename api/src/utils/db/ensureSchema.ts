@@ -10,7 +10,7 @@ import ensureLogProcessQueueSchema from './logProcessQueueSchema.ts'
 import ensureSharedMailSchema from './sharedMailSchema.ts'
 import ensureVmOrganizationSchema from './vmOrganizationSchema.ts'
 import ensureCaseDevelopmentSchema from './caseDevelopmentSchema.ts'
-import run from '#db'
+import run, { withSchemaLockTimeout } from '#db'
 import { ensureTrafficHistorySchema } from '../traffic/history.ts'
 import ensureServiceAccountsSchema from './serviceAccountsSchema.ts'
 import ensureAccountIdentitySchema from './accountIdentitySchema.ts'
@@ -20,6 +20,10 @@ import ensureThesisSchema from './thesisSchema.ts'
 import { reservedUsernames } from '#utils/auth/reservedUsernames.ts'
 
 export default async function ensureSchema() {
+    return withSchemaLockTimeout(applySchema)
+}
+
+async function applySchema() {
     await run('CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_vm_metrics_name_created ON vm_metrics(name, created_at DESC)')
     await ensureRoleSchema()
     await ensureAccountIdentitySchema()

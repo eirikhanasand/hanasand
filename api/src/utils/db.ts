@@ -1,4 +1,5 @@
 import pg from 'pg'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import config from '#constants'
 
 type SQLParamType = (string | number | null | boolean | string[] | Date)[]
@@ -17,6 +18,14 @@ const {
     DB_TIMEOUT_MS
 } = config
 const { Pool } = pg
+const schemaWork = new AsyncLocalStorage<boolean>()
+
+// A queued schema lock also blocks later reads, including authentication.
+// Keep this policy scoped to migrations; ordinary queries retain their settings.
+export function withSchemaLockTimeout<T>(work: () => Promise<T>): Promise<T> {
+    return schemaWork.run(true, work)
+}
+
 const pool = new Pool({
     user: DB_USER || 'hanasand',
     host: DB_HOST,
@@ -75,6 +84,7 @@ export async function queryOnce(query: string, params?: SQLParamType, name?: str
     })
     let failure: Error | undefined
     try {
+        if (schemaWork.getStore()) await client.query('SET lock_timeout = \'1s\'')
         return name
             ? await client.query({ name, text: query, values: params ?? [] })
             : await client.query(query, params ?? [])
@@ -82,6 +92,9 @@ export async function queryOnce(query: string, params?: SQLParamType, name?: str
         failure = error as Error
         throw error
     } finally {
+        if (schemaWork.getStore() && !failure) {
+            await client.query('RESET lock_timeout').catch(error => { failure = error })
+        }
         client.release(failure)
     }
 }
@@ -104,6 +117,7 @@ export async function withTransaction<T>(work: (query: typeof queryOnce) => Prom
         : client.query(sql, params ?? [])) as typeof queryOnce
     try {
         await client.query('BEGIN')
+        if (schemaWork.getStore()) await client.query('SET LOCAL lock_timeout = \'1s\'')
         const result = await work(query)
         await client.query('COMMIT')
         return result
