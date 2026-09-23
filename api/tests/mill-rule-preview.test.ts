@@ -1,13 +1,17 @@
 import { expect, mock, test } from 'bun:test'
+import { eventProtectionDefinition } from '../src/utils/mill/eventProtection.ts'
 mock.module('#db', () => ({ default: async () => ({ rows: [] }) }))
-const { scanRulePreview, validPreviewWindow } = await import('../src/utils/mill/rulePreview.ts')
+const { scanRulePreview: scan, validPreviewWindow } = await import('../src/utils/mill/rulePreview.ts')
+const scanRulePreview: typeof scan = (org, canReadLogs, input, query) => scan(org, canReadLogs, input,
+    (async (sql: string, params: any) => sql.includes('FROM mill_rules')
+        ? { rows: [{ enabled: true, definition: eventProtectionDefinition }] } : query!(sql, params)) as any)
 const input = { from: '2026-09-01T00:00:00Z', until: '2026-09-02T00:00:00Z', action: 'drop' as const, conditions: [{ path: 'http.status_code', operator: 'equals' as const, value: '200' }] }
 const row = (id: number, severity = 'low', status = 200) => ({ id: String(id), timestamp: '2026-09-01 12:00:00.123456+00', normalized: { severity, http: { status_code: status }, service: `service-${id % 7}`, message: 'x'.repeat(1000) } })
 test('preview uses runtime selectors and excludes higher and unknown severities for Drop', async () => {
     const query = async (sql: string, params: unknown[]) => {
         expect(sql).toContain("organization_id=$1 AND ($2::boolean OR ingestion_id <> 'logs')")
         expect(sql).toContain('received_at <= $3::timestamptz')
-        expect(params).toEqual(['org-a', false, input.until, input.from, null, ''])
+        expect(params.slice(0, 6)).toEqual(['org-a', false, input.until, input.from, null, ''])
         return { rows: [row(1), row(2, 'high'), row(3, 'unknown'), row(4, 'low', 404)] }
     }
     const page = await scanRulePreview('org-a', false, input, query as any)
@@ -25,7 +29,7 @@ test('complete count is independent of bounded random sample; cursors preserve m
     expect(page.cursor).toEqual({ time: '2026-09-01 12:00:00.123456+00', id: '1999' })
     let params: unknown[] = []
     await scanRulePreview('org-a', true, { ...input, cursor: page.cursor }, (async (_sql: string, p: unknown[]) => { params = p; return { rows: [] } }) as any)
-    expect(params.slice(-2)).toEqual([page.cursor?.time, '1999'])
+    expect(params.slice(4, 6)).toEqual([page.cursor?.time, '1999'])
 })
 test('preview preserves JavaScript regex and contains semantics and Store can match high events', async () => {
     const query = async () => ({ rows: [row(1, 'high'), row(2, 'medium', 404)] })
