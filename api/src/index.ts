@@ -1,4 +1,5 @@
 import { processLiveLogs, processStoredLogs } from '#utils/mill/processLogs.ts'
+import { processRuleReprocessJob } from '#utils/mill/ruleReprocess.ts'
 import { startLogProcessor } from '#utils/mill/processor.ts'
 import { startBackgroundAnalytics } from './utils/backgroundAnalytics.ts'
 import { recoveryRequestAllowed, recoveryState, recoveryReadOnly } from './utils/resilience.ts'
@@ -180,7 +181,8 @@ async function start() {
         if (!browserWorkerOnly && !httpWorkerOnly && process.env.AUTH_SERVICE_ONLY !== '1') {
             const stopProcessing = startLogProcessor(processStoredLogs, error => fastify.log.error({ error }, 'Mill log processing failed; will retry'))
             const stopLiveProcessing = startLogProcessor(processLiveLogs, error => fastify.log.error({ error }, 'Mill live processing failed; will retry'), () => 100, undefined, 100)
-            fastify.addHook('onClose', async () => { await Promise.all([stopProcessing(), stopLiveProcessing()]) })
+            const stopReprocessing = startLogProcessor(processRuleReprocessJob, error => fastify.log.error({ error }, 'Rule reprocessing failed'), () => 1000)
+            fastify.addHook('onClose', async () => { await Promise.all([stopProcessing(), stopLiveProcessing(), stopReprocessing()]) })
         }
         if (!browserWorkerOnly) {
             const stopAnalytics = await startBackgroundAnalytics(fastify.log)

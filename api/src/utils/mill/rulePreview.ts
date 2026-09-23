@@ -53,3 +53,10 @@ function matchRegexPage(events: PreviewEvent[], conditions: MillCondition[]): Pr
         worker.once('exit', code => { clearTimeout(timer); if (code !== 0) reject(new Error('Expression preview stopped. Try again.')) })
     })
 }
+
+export async function matchRulePage(events: Record<string, unknown>[], conditions: MillCondition[]): Promise<number[]> {
+    if (!conditions.length) return []
+    if (conditions.some(condition => condition.operator === 'regex'))
+        return matchRegexPage(events.map((normalized, index) => ({ id: String(index), timestamp: '', normalized, rank: 0 })), conditions)
+    return events.flatMap((event, index) => matchesMillRule(event, conditions) ? [index] : [])
+}

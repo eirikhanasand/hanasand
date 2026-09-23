@@ -217,6 +217,7 @@ import { getOrganizationPrivacy, postOrganizationPrivacy } from './handlers/orga
 import { deleteSavedSearch, getSavedSearches, postSavedSearch } from './handlers/ti/savedSearches.ts'
 import { getAptUpdates } from './handlers/aptUpdates.ts'
 import { postMillRulePreview, getMillEvents, getMillRule, putMillRule, getMillRules, ingestMill, postMillEventAction, postMillRule, postMillRuleAction, postMillRulePack, postMillSigmaPack } from './handlers/mill.ts'
+import { getMillRuleReprocess, postMillRuleReprocess } from './handlers/millRuleReprocess.ts'
 import { createBillingPortal, getBillingSubscription, receiveStripeWebhook } from './handlers/billing.ts'
 
 /**
@@ -618,4 +619,6 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/mill/rules/packs', postMillRulePack)
     fastify.post('/mill/rules/sigma', postMillSigmaPack)
     fastify.post('/mill/rules/:id/actions', postMillRuleAction)
+    fastify.get('/mill/rules/:id/reprocess', getMillRuleReprocess)
+    fastify.post('/mill/rules/:id/reprocess', postMillRuleReprocess)
 }

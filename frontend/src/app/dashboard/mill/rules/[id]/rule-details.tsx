@@ -6,6 +6,7 @@ import { DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import { requestJson, type MillRule } from '../detection-rules'
 import { ArrowLeft, Activity, History, SlidersHorizontal } from 'lucide-react'
 import SignatureEditor from './signature-editor'
+import ReprocessRule from '../reprocess-rule'
 import { getRuleCategory, ruleCategories } from '../rule-categories'
 
 type Audit = { id: string, event_type: string, actor_id: string | null, created_at: string, context: { before?: Record<string, unknown> | null, after?: Record<string, unknown>, action?: string } }
@@ -102,6 +103,8 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
                     </DashboardPanel>
                 </div>
             </form>
+            {data.canEdit && !data.isHistorical && data.rule.source === 'owned' && data.rule.definition?.stage === 'analyze' &&
+                <ReprocessRule key={organizationId + data.rule.id} rule={data.rule} organizationId={organizationId} disabled={busy || JSON.stringify(draft) !== JSON.stringify(data.rule)} />}
             <DashboardPanel className='grid gap-4 p-5 sm:p-6'>
                 <div className='flex items-center gap-2'><History size={18} className='text-ui-muted' aria-hidden='true' /><h2 className='text-sm font-semibold'>Audit log</h2></div>
                 {!data.audit.length && <p className='text-sm text-ui-muted'>No recorded changes for this rule in this organization.</p>}
