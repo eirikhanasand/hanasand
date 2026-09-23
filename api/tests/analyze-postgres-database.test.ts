@@ -87,5 +87,10 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real transactions preserve 
         await transaction(tx => recordLogBatch(protectedLogs, tx as any))
         expect((await query('SELECT count(*) FROM service_logs WHERE source_event_id=ANY($1::text[])', [protectedLogs.map(log => log.sourceEventId)])).rows[0].count).toBe('3')
         expect((await query('SELECT count(*) FROM log_analyze_receipts')).rows[0].count).toBe('3')
+        await query("DELETE FROM service_logs WHERE service='postgres-session-analyzer'")
+        const retainedEvent = (await query('SELECT * FROM mill_events WHERE id=$1', [event.id])).rows[0]
+        expect(retainedEvent.normalized.metadata.lifecycle_records).toEqual(logs)
+        await createMillFindings('platform', event.id, normalizeMillEvent(retainedEvent.normalized, {}), [{ ...detector, id: 'fixture.after-raw-retention' }])
+        expect((await query("SELECT count(*) FROM mill_findings WHERE rule_id='fixture.after-raw-retention'")).rows[0].count).toBe('1')
     } finally { await query(`DROP SCHEMA IF EXISTS ${namespace} CASCADE`); await pool.end() }
 }, 15000)
