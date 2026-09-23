@@ -17,6 +17,7 @@ export default function DetectionRules({ category }: { category: RuleCategory })
     const [enabledFilter, setEnabledFilter] = useState('all')
     const [severityFilter, setSeverityFilter] = useState('all')
     const [showImports, setShowImports] = useState(false)
+    const [showCreate, setShowCreate] = useState(false)
     const [ruleName, setRuleName] = useState('')
     const [ruleExplanation, setRuleExplanation] = useState('')
     const [ruleSeverity, setRuleSeverity] = useState('medium')
@@ -109,22 +110,23 @@ export default function DetectionRules({ category }: { category: RuleCategory })
                 <div><p className='text-sm text-ui-muted'>Security tools</p><h1 className='mt-1 text-2xl font-semibold'>{ruleCategories[category].label}</h1></div>
                 <div className='flex max-w-full flex-wrap items-center gap-3'>
 
-                    <button type='button' aria-expanded={showImports} aria-controls='mill-rule-imports' onClick={() => setShowImports(open => !open)} className='rounded-lg bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary'>Import</button>
+                    <button type='button' aria-expanded={showCreate} aria-controls='mill-rule-create' onClick={() => { setShowCreate(open => !open); setShowImports(false) }} className='rounded-lg border border-ui-border px-4 py-2 text-sm font-semibold text-ui-primary hover:bg-ui-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary'>Create</button>
+                    <button type='button' aria-expanded={showImports} aria-controls='mill-rule-imports' onClick={() => { setShowImports(open => !open); setShowCreate(false) }} className='rounded-lg bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary'>Import</button>
                     <Link href='/cases' className='rounded-lg border border-ui-border px-4 py-2 text-sm font-semibold text-ui-primary hover:bg-ui-raised'>Cases</Link>
                 </div>
             </div>
             {error && <div role='alert' className='rounded-lg border border-red-400/40 bg-red-500/10 p-3 text-sm text-red-200'>{error}</div>}
             {status && <div role='status' className='rounded-lg border border-ui-primary/40 bg-ui-primary/10 p-3 text-sm text-ui-text'>{status}{category !== 'match' && <Link href='/mill/rules/match' className='ml-2 underline'>View custom and imported rules in Match filter</Link>}</div>}
+            {showCreate && <DashboardPanel className='grid min-w-0 gap-4 p-4 sm:p-6' id='mill-rule-create'>
+                <h2 className='font-semibold'>Create rule</h2>
+                <form className='grid min-w-0 gap-4 border-t border-ui-border p-4 sm:p-5' onSubmit={event => { event.preventDefault(); void createRule() }}>
+                    <div className='grid gap-2 md:grid-cols-3'><input value={ruleName} onChange={event => setRuleName(event.target.value)} placeholder='Rule name' aria-label='Rule name' className='min-w-0 h-10 rounded-md border border-ui-border bg-ui-canvas px-2 text-sm text-ui-text' /><select value={ruleSeverity} onChange={event => setRuleSeverity(event.target.value)} aria-label='Rule severity' className='min-w-0 h-10 rounded-md border border-ui-border bg-ui-panel px-2 text-sm text-ui-text'><option value='low'>Low</option><option value='medium'>Medium</option><option value='high'>High</option><option value='critical'>Critical</option></select><input value={ruleExplanation} onChange={event => setRuleExplanation(event.target.value)} placeholder='Why this matters (10-500 chars)' aria-label='Rule explanation' className='min-w-0 h-10 rounded-md border border-ui-border bg-ui-canvas px-2 text-sm text-ui-text' /></div>
+                    <div className='grid gap-2 md:grid-cols-[1fr_auto_1fr_auto]'><input value={rulePath} onChange={event => setRulePath(event.target.value)} placeholder='event_type' aria-label='Rule field path' className='min-w-0 h-10 rounded-md border border-ui-border bg-ui-canvas px-2 text-sm text-ui-text' /><select value={ruleOperator} onChange={event => setRuleOperator(event.target.value)} aria-label='Rule operator' className='min-w-0 h-10 rounded-md border border-ui-border bg-ui-panel px-2 text-sm text-ui-text'><option value='equals'>equals</option><option value='contains'>contains</option><option value='regex'>regex</option></select><input value={ruleValue} onChange={event => setRuleValue(event.target.value)} placeholder='authentication' aria-label='Rule value' className='min-w-0 h-10 rounded-md border border-ui-border bg-ui-canvas px-2 text-sm text-ui-text' /><button type='submit' className='min-w-0 h-10 rounded-md bg-ui-text px-3 text-xs font-semibold text-ui-canvas disabled:opacity-50' disabled={!canManageRules || !ruleName.trim() || !ruleExplanation.trim() || !rulePath.trim() || !ruleValue.trim()}>Create rule</button></div>
+                    {!canManageRules && <p className='text-xs text-ui-muted'>Owner or admin access is required to change organization rules.</p>}
+                </form>
+            </DashboardPanel>}
             {showImports && <DashboardPanel className='grid min-w-0 gap-4 p-4 sm:p-6' id='mill-rule-imports'>
-                <h2 className='font-semibold'>Import or create rules</h2>
-                <details className='min-w-0 rounded-lg border border-ui-border'>
-                    <summary className='cursor-pointer rounded-lg p-4 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-ui-primary sm:p-5'>Create custom rule</summary>
-                    <form className='grid min-w-0 gap-4 border-t border-ui-border p-4 sm:p-5' onSubmit={event => { event.preventDefault(); void createRule() }}>
-                        <div className='grid gap-2 md:grid-cols-3'><input value={ruleName} onChange={event => setRuleName(event.target.value)} placeholder='Rule name' aria-label='Rule name' className='min-w-0 h-10 rounded-md border border-ui-border bg-ui-canvas px-2 text-sm text-ui-text' /><select value={ruleSeverity} onChange={event => setRuleSeverity(event.target.value)} aria-label='Rule severity' className='min-w-0 h-10 rounded-md border border-ui-border bg-ui-panel px-2 text-sm text-ui-text'><option value='low'>Low</option><option value='medium'>Medium</option><option value='high'>High</option><option value='critical'>Critical</option></select><input value={ruleExplanation} onChange={event => setRuleExplanation(event.target.value)} placeholder='Why this matters (10-500 chars)' aria-label='Rule explanation' className='min-w-0 h-10 rounded-md border border-ui-border bg-ui-canvas px-2 text-sm text-ui-text' /></div>
-                        <div className='grid gap-2 md:grid-cols-[1fr_auto_1fr_auto]'><input value={rulePath} onChange={event => setRulePath(event.target.value)} placeholder='event_type' aria-label='Rule field path' className='min-w-0 h-10 rounded-md border border-ui-border bg-ui-canvas px-2 text-sm text-ui-text' /><select value={ruleOperator} onChange={event => setRuleOperator(event.target.value)} aria-label='Rule operator' className='min-w-0 h-10 rounded-md border border-ui-border bg-ui-panel px-2 text-sm text-ui-text'><option value='equals'>equals</option><option value='contains'>contains</option><option value='regex'>regex</option></select><input value={ruleValue} onChange={event => setRuleValue(event.target.value)} placeholder='authentication' aria-label='Rule value' className='min-w-0 h-10 rounded-md border border-ui-border bg-ui-canvas px-2 text-sm text-ui-text' /><button type='submit' className='min-w-0 h-10 rounded-md bg-ui-text px-3 text-xs font-semibold text-ui-canvas disabled:opacity-50' disabled={!canManageRules || !ruleName.trim() || !ruleExplanation.trim() || !rulePath.trim() || !ruleValue.trim()}>Create rule</button></div>
-                        {!canManageRules && <p className='text-xs text-ui-muted'>Owner or admin access is required to change organization rules.</p>}
-                    </form>
-                </details>
+                <h2 className='font-semibold'>Import rules</h2>
                 <details className='min-w-0 rounded-lg border border-ui-border'>
                     <summary className='cursor-pointer rounded-lg p-4 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-ui-primary sm:p-5'>Import JSON pack</summary>
                     <form className='grid min-w-0 gap-4 border-t border-ui-border p-4 sm:p-5' onSubmit={event => { event.preventDefault(); void importRulePack() }}>
@@ -156,8 +158,8 @@ export default function DetectionRules({ category }: { category: RuleCategory })
                 <p role='status' className='text-xs text-ui-muted'>{filteredRules.length} of {categoryRules.length} rules</p>
                 <div role='region' aria-label={`${ruleCategories[category].label} rules`} tabIndex={0} className='min-w-0 overflow-x-auto rounded-md border border-ui-border focus-visible:outline-2 focus-visible:outline-ui-primary'>
                     <table className='w-full min-w-[900px] table-fixed text-left text-sm' aria-label={`${ruleCategories[category].label} rules`}>
-                        <colgroup><col className='w-[24%]' /><col className='w-[29%]' /><col className='w-[12%]' /><col className='w-[8%]' /><col className='w-[8%]' /><col className='w-[10%]' /><col className='w-[9%]' /></colgroup>
-                        <thead className='bg-ui-raised text-xs text-ui-muted'><tr>{['Title', 'Description', 'Family', 'Severity', 'Status', 'Source', 'Action'].map(column => <th key={column} scope='col' className='px-3 py-2 font-medium'>{column}</th>)}</tr></thead>
+                        <colgroup><col className='w-[24%]' /><col className={category === 'analysis' ? 'w-[21%]' : 'w-[29%]'} /><col className='w-[12%]' /><col className='w-[8%]' /><col className='w-[8%]' /><col className='w-[10%]' />{category === 'analysis' && <col className='w-[8%]' />}<col className='w-[9%]' /></colgroup>
+                        <thead className='bg-ui-raised text-xs text-ui-muted'><tr>{['Title', 'Description', 'Family', 'Severity', 'Status', 'Source', ...(category === 'analysis' ? ['Action', 'Controls'] : ['Action'])].map(column => <th key={column} scope='col' className='px-3 py-2 font-medium'>{column}</th>)}</tr></thead>
                         <tbody className='divide-y divide-ui-border'>
                             {filteredRules.map(rule => <tr key={rule.id} className='h-16 hover:bg-ui-raised'>
                                 <th scope='row' className='px-3 py-2 font-normal'>
@@ -171,9 +173,10 @@ export default function DetectionRules({ category }: { category: RuleCategory })
                                 <td className='px-3 py-2 text-xs capitalize'>{rule.severity}</td>
                                 <td className='px-3 py-2 text-xs'>{rule.enabled === false ? 'Disabled' : 'Enabled'}</td>
                                 <td className='px-3 py-2 text-xs text-ui-muted'>{rule.source === 'open_source' ? 'Imported rule' : rule.source === 'owned' ? 'Custom rule' : 'Hanasand rule'}</td>
+                                {category === 'analysis' && <td className='px-2 py-2'><Link href={`/mill/rules/${category}/${encodeURIComponent(rule.id.replace(/\.v\d+$/, ''))}?organizationId=${encodeURIComponent(organizationId)}`} aria-label={`${rule.definition?.action === 'drop' ? 'Drop' : 'Store'} · ${rule.name}`} className='inline-block rounded-md border border-ui-border px-2 py-2 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-ui-primary'>{rule.definition?.action === 'drop' ? 'Drop' : 'Store'}</Link></td>}
                                 <td className='px-2 py-2'><button type='button' aria-label={`${rule.enabled === false ? 'Enable' : 'Disable'} ${rule.name}`} className='rounded-md border border-ui-border px-2 py-2 text-xs font-semibold disabled:opacity-50' disabled={!canManageRules} onClick={() => void toggleRule(rule)}>{rule.enabled === false ? 'Enable' : 'Disable'}</button></td>
                             </tr>)}
-                            {!filteredRules.length && <tr><td colSpan={7} className='px-3 py-6 text-center text-sm text-ui-muted'>{hasFilters ? 'No rules in this category match these filters.' : 'No rules in this category.'}</td></tr>}
+                            {!filteredRules.length && <tr><td colSpan={category === 'analysis' ? 8 : 7} className='px-3 py-6 text-center text-sm text-ui-muted'>{hasFilters ? 'No rules in this category match these filters.' : 'No rules in this category.'}</td></tr>}
                         </tbody>
                     </table>
                 </div>
