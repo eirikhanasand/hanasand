@@ -24,8 +24,16 @@ test('explicit completions use model output, retain policy checks and never subs
         expect(result.message).toBe('{"facts":[]}')
         expect(request.messages[0].content).toContain('output format exactly')
         expect(request.messages[1].content).toBe(payload.prompt)
+        for (const prompt of ['Explain this threat report about a Dockerfile and website.', 'Help me plan my day.', 'Build a small website.']) {
+            const general = (await app.inject({ method: 'POST', url: '/ai', payload: { prompt } })).json()
+            expect(general.model).toBe('test')
+            expect(request.messages[0].content).toContain('general questions, threat intelligence, and coding')
+            expect(request.messages[0].content).not.toContain('include complete runnable files')
+        }
+        expect((await app.inject({ method: 'POST', url: '/ai', payload: { action: 'scaffold', prompt: 'Build a website with a Dockerfile' } })).json().model).toBe('share-builder')
         connected = false
         expect((await app.inject({ method: 'POST', url: '/ai', payload })).json().status).toBe('connecting')
+        expect((await app.inject({ method: 'POST', url: '/ai', payload: { prompt: payload.prompt } })).json().status).toBe('connecting')
         blocked = true
         expect((await app.inject({ method: 'POST', url: '/ai', payload })).statusCode).toBe(403)
     } finally { await app.close() }
