@@ -42,7 +42,7 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
         if (!draft || !data?.canEdit) return
         setBusy(true); setError(''); setStatus('')
         try {
-            const result = await requestJson<{ rule: MillRule }>(`/api/backend/mill/rules/${encodeURIComponent(draft.id.replace(/\.v\d+$/, ''))}?organizationId=${encodeURIComponent(organizationId)}`, { method: 'PUT', body: JSON.stringify({ name: draft.name, explanation: draft.explanation, severity: draft.severity, enabled: draft.enabled !== false, version: draft.version, ...(draft.source !== 'hanasand' ? { conditions: draft.definition?.conditions || [], action: draft.definition?.action } : { definition: draft.definition }) }) })
+            const result = await requestJson<{ rule: MillRule }>(`/api/backend/mill/rules/${encodeURIComponent(draft.id.replace(/\.v\d+$/, ''))}?organizationId=${encodeURIComponent(organizationId)}`, { method: 'PUT', body: JSON.stringify({ name: draft.name, explanation: draft.explanation, severity: draft.definition?.action === 'drop' ? 'low' : draft.severity, enabled: draft.enabled !== false, version: draft.version, ...(draft.source !== 'hanasand' ? { conditions: draft.definition?.conditions || [], action: draft.definition?.action } : { definition: draft.definition }) }) })
             setDraft(result.rule)
             setData(previous => previous ? { ...previous, rule: result.rule } : previous)
             setStatus('Rule saved. New events use this version.')
@@ -85,7 +85,7 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
             </DashboardPanel>
             {data.isHistorical && <p role='status' className='rounded-lg border border-amber-500/40 p-4 text-sm'>You are viewing a historical signature. <Link className='underline' href={`/mill/rules/${draft.id.replace(/\.v\d+$/, '')}`}>Open current rule</Link></p>}
             <form onSubmit={event => { event.preventDefault(); void save() }} className='grid min-w-0 gap-4'>
-                <SignatureEditor rule={draft} disabled={!data.canEdit || busy} onChange={definition => setDraft({ ...draft, definition })} />
+                <SignatureEditor rule={draft} disabled={!data.canEdit || busy} onChange={definition => setDraft({ ...draft, definition, severity: definition.action === 'drop' ? 'low' : draft.severity })} />
                 <div className='grid min-w-0 items-start gap-4'>
                     <DashboardPanel className='p-4 sm:p-6'>
                         <div className='grid gap-5'>
@@ -93,7 +93,7 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
                             {!data.canEdit && !data.isHistorical && <p className='text-sm text-ui-muted'>You can view this rule and its history. An organization owner or admin can edit it.</p>}
                             <fieldset disabled={!data.canEdit || busy} className='grid min-w-0 gap-4 sm:grid-cols-2'>
                                 <label className='text-sm font-medium'>Name<input required minLength={2} maxLength={120} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} className={fieldClass} /></label>
-                                <label className='text-sm font-medium'>Severity<select value={draft.severity} onChange={event => setDraft({ ...draft, severity: event.target.value })} className={fieldClass}>{['low', 'medium', 'high', 'critical'].map(value => <option key={value} value={value}>{value}</option>)}</select></label>
+                                <label className='text-sm font-medium'>Severity<select disabled={draft.definition?.action === 'drop'} value={draft.definition?.action === 'drop' ? 'low' : draft.severity} onChange={event => setDraft({ ...draft, severity: event.target.value })} className={fieldClass}>{['low', 'medium', 'high', 'critical'].map(value => <option key={value} value={value}>{value}</option>)}</select></label>
                                 <label className='text-sm font-medium sm:col-span-2'>Description<textarea required minLength={10} maxLength={500} value={draft.explanation} onChange={event => setDraft({ ...draft, explanation: event.target.value })} rows={3} className={fieldClass} /></label>
                                 <label className='flex items-center gap-2 text-sm font-medium sm:col-span-2'><input type='checkbox' checked={draft.enabled !== false} onChange={event => setDraft({ ...draft, enabled: event.target.checked })} />Enabled</label>
                                 {data.canEdit && <button type='submit' className='justify-self-start rounded-lg bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas disabled:opacity-50 sm:col-span-2'>{busy ? 'Saving…' : 'Save changes'}</button>}

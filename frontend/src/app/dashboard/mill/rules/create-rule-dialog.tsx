@@ -1,7 +1,8 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { requestJson, type MillRule } from './detection-rules'
 import { ruleCategories, type RuleCategory } from './rule-categories'
+import RulePreview from './rule-preview'
 import ConditionBuilder, { conditionError, fieldValues, ruleInput, type Condition } from './condition-builder'
 
 export default function CreateRuleDialog({ category, organizationId, canManage, canManageRetention, rules, onClose, onCreated }: { category: RuleCategory, organizationId: string, canManage: boolean, canManageRetention: boolean, rules: MillRule[], onClose: () => void, onCreated: (rule: MillRule) => void }) {
@@ -12,6 +13,10 @@ export default function CreateRuleDialog({ category, organizationId, canManage, 
     const [action, setAction] = useState('keep'), [conditions, setConditions] = useState<Condition[]>([{ path: 'event_type', operator: 'equals', value: '' }])
     const [busy, setBusy] = useState(false), [error, setError] = useState(''), [options, setOptions] = useState(fieldValues)
     const [editingJson, setEditingJson] = useState(false)
+    const [range, setRange] = useState('24')
+    const [readyPreview, setReadyPreview] = useState('')
+    const previewKey = JSON.stringify({ organizationId, conditions, action, stage, range, editingJson })
+    const previewReady = useCallback((ready: boolean) => setReadyPreview(ready ? previewKey : ''), [previewKey])
     const [suggestionError, setSuggestionError] = useState('')
     useEffect(() => {
         active.current = true
@@ -37,11 +42,11 @@ export default function CreateRuleDialog({ category, organizationId, canManage, 
         }).catch(() => { if (!controller.signal.aborted) setSuggestionError('Recent event suggestions could not be loaded.') })
         return () => controller.abort()
     }, [organizationId, rules])
-    const signature = { name, explanation, severity, stage, action, match: 'all', conditions }
+    const signature = { name, explanation, severity: action === 'drop' ? 'low' : severity, stage, action, match: 'all', conditions }
     const permitted = canManage && (stage !== 'analyze' || canManageRetention)
     const invalid = conditionError(conditions)
     async function submit() {
-        if (busy || !permitted || editingJson || invalid) return
+        if (busy || !permitted || editingJson || invalid || readyPreview !== previewKey) return
         setBusy(true); setError('')
         try {
             const result = await requestJson<{ rule: MillRule }>(`/api/backend/mill/rules?organizationId=${encodeURIComponent(organizationId)}`, { method: 'POST', body: JSON.stringify(signature) })
@@ -59,7 +64,7 @@ export default function CreateRuleDialog({ category, organizationId, canManage, 
                     <div className='grid gap-3 sm:grid-cols-3'>
                         <label className='grid gap-1 text-xs'>Filter<select aria-label='Rule filter' value={stage} onChange={event => { setStage(event.target.value); if (event.target.value !== 'analyze') setAction('keep') }} className={ruleInput}>{Object.entries(ruleCategories).map(([key, item]) => <option key={key} value={key === 'analysis' ? 'analyze' : key === 'detection' ? 'detect' : key}>{item.label}</option>)}</select></label>
                         <label className='grid gap-1 text-xs'>Action<select aria-label='Rule action' value={action} onChange={event => setAction(event.target.value)} className={ruleInput}><option value='keep'>Store</option>{stage === 'analyze' && <option value='drop'>Drop</option>}</select></label>
-                        <label className='grid gap-1 text-xs'>Severity<select aria-label='Rule severity' value={severity} onChange={event => setSeverity(event.target.value)} className={ruleInput}>{['low', 'medium', 'high', 'critical'].map(value => <option key={value}>{value}</option>)}</select></label>
+                        <label className='grid gap-1 text-xs'>Severity<select aria-label='Rule severity' disabled={action === 'drop'} value={action === 'drop' ? 'low' : severity} onChange={event => setSeverity(event.target.value)} className={ruleInput}>{['low', 'medium', 'high', 'critical'].map(value => <option key={value}>{value}</option>)}</select></label>
                     </div>
                     <div className='flex justify-between text-sm font-semibold'><h3>Conditions</h3><span className='font-mono text-xs text-ui-muted'>ALL</span></div>
                     {suggestionError && <p role='status' className='text-xs text-ui-muted'>{suggestionError}</p>}
@@ -67,9 +72,11 @@ export default function CreateRuleDialog({ category, organizationId, canManage, 
                 </div>
                 <aside className='min-w-0 rounded-lg border border-ui-border bg-ui-raised p-4 lg:sticky lg:top-0 lg:self-start'><h3 className='mb-3 text-sm font-semibold'>Rule JSON</h3><pre aria-label='Rule JSON preview' className='max-h-[65vh] overflow-auto whitespace-pre-wrap wrap-break-word font-mono text-xs leading-6'>{JSON.stringify(signature, null, 2)}</pre></aside>
             </fieldset>
+            <label className='flex items-center gap-3 text-sm'>Preview range<select aria-label='Preview range' className={ruleInput + ' max-w-48'} value={range} onChange={event => setRange(event.target.value)}><option value='1'>Last hour</option><option value='24'>Last 24 hours</option><option value='168'>Last 7 days</option><option value='all'>All stored events</option></select></label>
+            {!invalid && !editingJson && <RulePreview key={previewKey} organizationId={organizationId} conditions={conditions} action={action} range={range} onReady={previewReady} />}
             <footer className='flex flex-wrap items-center justify-between gap-3 border-t border-ui-border pt-4'>
-                <p className='text-xs text-ui-muted'>{!permitted ? stage === 'analyze' ? 'System administrator access is required for retention rules.' : 'Owner or admin access is required.' : action === 'drop' ? 'Matching new events will not be stored.' : ''}</p>
-                <button type='submit' disabled={busy || !permitted || editingJson || Boolean(invalid) || name.trim().length < 2 || explanation.trim().length < 10} className='rounded-md bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas disabled:opacity-50'>{busy ? 'Creating…' : 'Create rule'}</button>
+                <p className='text-xs text-ui-muted'>{!permitted ? stage === 'analyze' ? 'System administrator access is required for retention rules.' : 'Owner or admin access is required.' : action === 'drop' ? 'Matching Low events will not be stored.' : ''}</p>
+                <button type='submit' disabled={busy || !permitted || editingJson || readyPreview !== previewKey || Boolean(invalid) || name.trim().length < 2 || explanation.trim().length < 10} className='rounded-md bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas disabled:opacity-50'>{busy ? 'Creating…' : 'Create rule'}</button>
             </footer>
             {conditions.some(condition => condition.operator === 'regex' && condition.value) && invalid && <p role='alert' className='text-sm text-red-400'>{invalid}</p>}
         </form>

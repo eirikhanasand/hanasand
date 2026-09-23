@@ -42,3 +42,8 @@ test('a failed lookup fails ingestion without acknowledging a lost log', async (
     await expect(recordLog(entry)).rejects.toThrow('Rule lookup unavailable')
     expect(writes).toHaveLength(0)
 })
+
+test('only explicitly Low events can be dropped, including older broad rules', () => {
+    for (const severity of ['medium', 'high', 'critical', 'unknown', undefined, null]) expect(customRetentionAction({ event_type: 'application', severity }, [drop])).toBeUndefined()
+    expect(customRetentionAction({ event_type: 'application', severity: 'low' }, [drop])).toBe('drop')
+})

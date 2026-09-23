@@ -9,6 +9,10 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
     if (sql.includes('FROM mill_rules')) return { rows: [] }
     if (sql.includes('FROM mill_events')) {
         if (sql.includes('WHERE id = $1')) return { rows: events.filter(row => row.id === p[0] && row.organization_id === p[1]) }
+        if (sql.includes('event_timestamp::text AS timestamp')) {
+            expect(sql).toContain("($2::boolean OR ingestion_id <> 'logs')")
+            return { rows: events.filter(row => row.organization_id === p[0] && (p[1] || row.ingestion_id !== 'logs')).map(row => ({ ...row, timestamp: row.event_timestamp })) }
+        }
         expect(sql).toContain("($3::boolean OR ingestion_id <> 'logs')")
         return { rows: events.filter(row => row.organization_id === p[0] && (p[2] || row.ingestion_id !== 'logs')) }
     }
@@ -18,7 +22,7 @@ mock.module('#db', () => ({ default: query, withTransaction: async (work: any) =
 mock.module('#utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: true, id: 'member' }) }))
 mock.module('#utils/auth/hasRole.ts', () => ({ default: async (_req: any, _res: any, role: string) => { expect(role).toBe('system_admin'); return { valid: systemAdmin } } }))
 mock.module('#utils/systemEvent.ts', () => ({ recordSystemEvent: async (_req: any, event: any) => { audited.push(event) } }))
-const { getMillEvents, postMillEventAction } = await import('../src/handlers/mill.ts')
+const { postMillRulePreview, getMillEvents, postMillEventAction } = await import('../src/handlers/mill.ts')
 const request = (id = 'collected') => ({ query: { organizationId: 'org-a' }, params: { id }, headers: { id: 'member' }, body: { action: 'replay' } }) as any
 const response = () => ({ statusCode: 200, status(code: number) { this.statusCode = code; return this }, send(body: any) { return body } })
 beforeEach(() => { systemAdmin = false; member = true; audited = [] })
@@ -43,5 +47,20 @@ test('system administrators still require organization membership for the organi
     systemAdmin = true; member = false
     const denied = response()
     await getMillEvents(request(), denied as any)
+    expect(denied.statusCode).toBe(403)
+})
+
+
+test('preview counts and samples preserve the same organization and collected-log permissions', async () => {
+    const req = { ...request(), body: { from: null, until: '2026-09-20T00:00:00Z', action: 'keep', sample: true, conditions: [{ path: 'message', operator: 'contains', value: ' ' }] } }
+    const result = await postMillRulePreview(req, response() as any)
+    expect(result.count).toBe(1)
+    expect(result.events.map((row: any) => row.id)).toEqual(['imported'])
+    expect(JSON.stringify(result)).not.toContain('private host command')
+    systemAdmin = true
+    expect((await postMillRulePreview(req, response() as any)).count).toBe(2)
+    member = false
+    const denied = response()
+    await postMillRulePreview(req, denied as any)
     expect(denied.statusCode).toBe(403)
 })

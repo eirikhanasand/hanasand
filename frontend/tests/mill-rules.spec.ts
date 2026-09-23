@@ -16,6 +16,7 @@ test.beforeAll(async () => {
 })
 test.afterAll(() => rmSync(output, { recursive: true, force: true }))
 test.beforeEach(async ({ page }) => {
+    await page.route('**/api/backend/mill/rules/preview?*', route => route.fulfill({ json: { count: 0, scanned: 0, events: [], cursor: null } }))
     await page.route('**/api/backend/mill/events?*', route => route.fulfill({ json: { events: [{ event_type: 'custom_health', normalized: { action: 'heartbeat' } }] } }))
     await page.route('http://mill.test/fixture.js', route => route.fulfill({ contentType: 'application/javascript', body: bundle }))
     await page.route('http://mill.test/mill/rules/*', route => route.fulfill({ contentType: 'text/html', body: `<html class="dark"><head><style>${css}</style></head><body><div id="root"></div><script type="module" src="/fixture.js"></script></body></html>` }))
@@ -67,7 +68,7 @@ test('searchable event types, JSON and Drop creation preserve drafts on failure'
             attempts++
             if (attempts === 1) return route.fulfill({ status: 403, json: { error: 'System administrator access is required.' } })
             const body = route.request().postDataJSON()
-            expect(body).toMatchObject({ stage: 'analyze', action: 'drop', conditions: [{ path: 'event_type', operator: 'equals', value: 'custom_health' }] })
+            expect(body).toMatchObject({ severity: 'low', stage: 'analyze', action: 'drop', conditions: [{ path: 'event_type', operator: 'equals', value: 'custom_health' }] })
             saved = { ...rule, ...body, id: 'custom.health.v1', source: 'owned', definition: { stage: body.stage, action: body.action, conditions: body.conditions } }
             return route.fulfill({ json: { rule: saved } })
         }
@@ -103,4 +104,51 @@ test('searchable event types, JSON and Drop creation preserve drafts on failure'
     await expect(page.getByRole('cell', { name: 'Drop', exact: true })).toBeVisible()
     await page.reload()
     await expect(page.getByRole('cell', { name: 'Drop', exact: true })).toBeVisible()
+})
+
+test('Drop locks Low; broad previews require confirmation and buffered scrolling stays below 20ms', async ({ page }) => {
+    await page.route('**/api/backend/mill/rules?*', route => route.fulfill({ json: { canManageRetention: true, rules: [] } }))
+    const events = Array.from({ length: 250 }, (_, index) => ({ id: String(index), timestamp: '2026-09-23T12:00:00Z', rank: ((index * 137) % 251) / 251, normalized: { severity: 'low', service: `service-${index % 5}`, event_type: 'network', http: { status_code: 200, path: `/path-${index % 9}` }, source: { ip: `192.0.2.${index % 250}` } } }))
+    await page.route('**/api/backend/mill/rules/preview?*', route => {
+        const body = route.request().postDataJSON()
+        expect(body.action).toBe('drop')
+        return route.fulfill({ json: { count: 10001, scanned: 20000, events: body.sample ? events.slice(0, 100) : events, cursor: null } })
+    })
+    await page.goto('http://mill.test/mill/rules/analysis')
+    await page.getByRole('button', { name: 'Create', exact: true }).click()
+    await page.getByLabel('Rule name', { exact: true }).fill('Drop successful traffic')
+    await page.getByLabel('Rule explanation').fill('Drop low severity successful HTTP traffic.')
+    await page.getByLabel('Rule severity').selectOption('critical')
+    await page.getByLabel('Rule action').selectOption('drop')
+    await expect(page.getByLabel('Rule severity')).toBeDisabled()
+    await expect(page.getByLabel('Rule severity')).toHaveValue('low')
+    await page.getByLabel('Condition 1 field', { exact: true }).fill('http.status_code')
+    await page.getByLabel('Condition 1 value', { exact: true }).fill('200')
+    await page.getByLabel('Rule name', { exact: true }).click()
+    await expect(page.getByText('Very many events match this rule. Is this intended?')).toBeVisible()
+    const create = page.getByRole('button', { name: 'Create rule', exact: true })
+    await expect(create).toBeDisabled()
+    await page.getByRole('checkbox', { name: 'Yes, I intend to match this many events.' }).check()
+    await expect(create).toBeEnabled()
+    const table = page.getByRole('region', { name: 'Matching event rows' })
+    await expect(table.locator('[data-event-id]')).toHaveCount(8)
+    const first = await table.locator('[data-event-id]').evaluateAll(rows => rows.slice(0, 5).map(row => row.getAttribute('data-event-id')))
+    expect(first).not.toEqual(['0', '1', '2', '3', '4'])
+    const durations: number[] = []
+    for (const top of [320, 640, 960, 1280, 1600]) {
+        await table.evaluate((element, value) => { element.scrollTop = value; element.dispatchEvent(new Event('scroll', { bubbles: true })) }, top)
+        durations.push(Number(await table.getAttribute('data-render-ms')))
+    }
+    expect(Math.max(...durations)).toBeLessThan(20)
+    console.log('Buffered row update milliseconds:', durations)
+    expect(await table.locator('[data-event-id]').count()).toBeLessThanOrEqual(8)
+    await page.screenshot({ path: '/tmp/mill-preview-desktop.png' })
+    await page.getByLabel('Preview range').selectOption('1')
+    await expect(page.getByRole('checkbox', { name: 'Yes, I intend to match this many events.' })).not.toBeChecked()
+    await expect(create).toBeDisabled()
+    await page.setViewportSize({ width: 390, height: 844 })
+    await table.scrollIntoViewIfNeeded()
+    await expect(table.locator('[data-event-id]').first()).toBeVisible()
+    await page.screenshot({ path: '/tmp/mill-preview-mobile.png' })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })

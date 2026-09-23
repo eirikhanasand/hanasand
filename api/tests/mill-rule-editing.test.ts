@@ -17,8 +17,10 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
         audits.push({ id: String(audits.length), event_type: p[0], actor_id: p[4], object_type: p[5], object_id: p[6], organization_id: p[7], context: JSON.parse(p[12]), created_at: '2026-09-14T12:00:00Z' })
         return { rows: [] }
     }
+    if (sql.includes('AS hits FROM log_analyze_receipts')) { expect(p[0]).toBe('org-a'); return { rows: Array.isArray(p[1]) ? [] : [{ hits: '0' }] } }
     if (sql.includes('AS hits FROM mill_findings')) {
-        expect(p).toEqual(['org-a', 'http.routine_access.v1', 'mongodb.cashflow_connections.v1'])
+        expect(p[0]).toBe('org-a')
+        expect(p.slice(1)).toEqual(expect.arrayContaining(['http.routine_access.v1', 'mongodb.cashflow_connections.v1']))
         const totals = new Map<string, number>()
         for (const finding of findings.filter(row => row.organizationId === p[0] && !p.slice(1).includes(row.ruleId))) totals.set(finding.ruleId, (totals.get(finding.ruleId) || 0) + 1)
         return { rows: [...totals].map(([rule_id, hits]) => ({ rule_id, hits: String(hits) })).concat([{ rule_id: p[1], hits: '12345' }, { rule_id: p[2], hits: '42' }]) }
@@ -46,7 +48,7 @@ mock.module('#db', () => ({ default: query, withTransaction: async (work: any) =
 mock.module('#utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid, id: 'editor' }) }))
 mock.module('#utils/auth/hasRole.ts', () => ({ default: async () => ({ valid: systemAdmin }) }))
 mock.module('#utils/auth/apiKeys.ts', () => ({ validateApiKey: async () => ({ organizationId: 'org-a', apiKey: { scopes: [] } }), matchApiKeyScope: () => true }))
-const { getMillRules, getMillRule, putMillRule, postMillRuleAction, postMillRule, postMillRulePack, ingestMill } = await import('../src/handlers/mill.ts')
+const { postMillRulePreview, getMillRules, getMillRule, putMillRule, postMillRuleAction, postMillRule, postMillRulePack, ingestMill } = await import('../src/handlers/mill.ts')
 const builtin = 'network.signature_alert.v1'
 const reply = () => ({ statusCode: 200, status(code: number) { this.statusCode = code; return this }, send(body: any) { return body } })
 const request = (id = builtin.replace(/\.v\d+$/, ''), body: any = {}, organizationId = 'org-a') => ({ params: { id }, query: { organizationId }, body, ip: '127.0.0.1', headers: { authorization: 'Bearer test-key' }, id: 'request-test' }) as any
@@ -261,23 +263,24 @@ test('built-in network event selector gates findings and survives enable/disable
 })
 
 test('custom Analyze rules drop before storage and retain audited Store exceptions', async () => {
-    const body = { name: 'Drop network noise', explanation: 'Discard matching routine network events.', severity: 'low', stage: 'analyze', action: 'drop', conditions: [{ path: 'event_type', operator: 'equals', value: 'network' }] }
+    const body = { name: 'Drop network noise', explanation: 'Discard matching routine network events.', severity: 'critical', stage: 'analyze', action: 'drop', conditions: [{ path: 'event_type', operator: 'equals', value: 'network' }] }
     const denied = reply()
     await postMillRule(request('', body), denied as any)
     expect(denied.statusCode).toBe(403)
     systemAdmin = true
     const created = await postMillRule(request('', body), reply() as any)
+    expect(created.rule.severity).toBe('low')
     expect(created.rule.definition).toMatchObject({ stage: 'analyze', action: 'drop' })
-    expect(await ingestMill(request('', network), reply() as any)).toMatchObject({ accepted_events: 1, stored_events: 0, dropped_events: 1 })
+    expect(await ingestMill(request('', { ...network, events: network.events.map(event => ({ ...event, severity: 'low' })) }), reply() as any)).toMatchObject({ accepted_events: 1, stored_events: 0, dropped_events: 1 })
     expect(events).toHaveLength(0)
     expect(findings).toHaveLength(0)
     await putMillRule(request(created.rule.id, { ...body, enabled: true, version: '1', action: 'keep' }), reply() as any)
     expect(rows[0].definition).toMatchObject({ stage: 'analyze', action: 'keep' })
     expect(audits.at(-1).context.after.definition.action).toBe('keep')
-    expect(await ingestMill(request('', network), reply() as any)).toMatchObject({ stored_events: 1, dropped_events: 0 })
+    expect(await ingestMill(request('', { ...network, events: network.events.map(event => ({ ...event, severity: 'low' })) }), reply() as any)).toMatchObject({ stored_events: 1, dropped_events: 0 })
     expect(findings.some(finding => finding.ruleId === created.rule.id)).toBe(false)
     await postMillRule(request('', body), reply() as any)
-    expect((await ingestMill(request('', network), reply() as any)).dropped_events).toBe(0)
+    expect((await ingestMill(request('', { ...network, events: network.events.map(event => ({ ...event, severity: 'low' })) }), reply() as any)).dropped_events).toBe(0)
     const outside = reply()
     await postMillRule(request('', body, 'org-b'), outside as any)
     expect(outside.statusCode).toBe(403)
@@ -311,4 +314,26 @@ test('rule library exposes collector totals and organization-scoped detection hi
     const denied = reply()
     await getMillRules(request('', {}, 'other-org'), denied as any)
     expect(denied.statusCode).toBe(403)
+})
+
+
+test('preview requires organization membership and validates the submitted selector before reading events', async () => {
+    const denied = reply()
+    await postMillRulePreview(request('', {}, 'other-org'), denied as any)
+    expect(denied.statusCode).toBe(403)
+    const invalid = reply()
+    await postMillRulePreview(request('', { conditions: [{ path: 'message', operator: 'regex', value: '[' }] }), invalid as any)
+    expect(invalid.statusCode).toBe(400)
+})
+
+test('Drop remains Low on edit and high or unclassified events are retained', async () => {
+    systemAdmin = true
+    const body = { name: 'Drop low network events', explanation: 'Drop only routine low severity network events.', severity: 'critical', stage: 'analyze', action: 'drop', conditions: [{ path: 'event_type', operator: 'equals', value: 'network' }] }
+    const created = await postMillRule(request('', body), reply() as any)
+    const saved = await putMillRule(request(created.rule.id, { ...body, severity: 'high', version: created.rule.version, enabled: true }), reply() as any)
+    expect(saved.rule.severity).toBe('low')
+    for (const severity of ['medium', 'high', 'critical', undefined]) {
+        const result = await ingestMill(request('', { ...network, events: network.events.map(event => ({ ...event, severity })) }), reply() as any)
+        expect(result).toMatchObject({ stored_events: 1, dropped_events: 0 })
+    }
 })

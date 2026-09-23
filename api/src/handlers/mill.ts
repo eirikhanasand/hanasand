@@ -1,3 +1,4 @@
+import { scanRulePreview, validPreviewWindow, PreviewRegexTimeout } from '#utils/mill/rulePreview.ts'
 import { proxyRule, proxyRuleId, proxyDefinition } from '#utils/mill/analyzeProxy.ts'
 import { roleCanEditOrganization } from '#utils/organizationRoles.ts'
 import { redactLogValue } from '#utils/logs/redact.ts'
@@ -157,6 +158,20 @@ export async function getMillEvents(req: FastifyRequest, res: FastifyReply) {
         LIMIT $2
     `, [access.organizationId, limit, canReadLogs])
     return res.send({ organizationId: access.organizationId, events: result.rows })
+}
+
+export async function postMillRulePreview(req: FastifyRequest, res: FastifyReply) {
+    const access = await organizationAccess(req, res)
+    if (!access) return
+    const body = (req.body || {}) as Record<string, unknown>
+    const normalized = normalizeMillConditions(body.conditions)
+    if (normalized.error || !normalized.conditions.length || !validPreviewWindow(body)) return res.status(400).send({ error: normalized.error || 'Choose a valid preview range and rule.' })
+    const canReadLogs = (await hasRole(req, res, 'system_admin')).valid
+    try { return res.send(await scanRulePreview(access.organizationId, canReadLogs, { ...body, conditions: normalized.conditions })) }
+    catch (error) {
+        if (error instanceof PreviewRegexTimeout) return res.status(400).send({ error: error.message })
+        throw error
+    }
 }
 
 export async function postMillEventAction(req: FastifyRequest<{ Params: { id: string }, Querystring: { organizationId?: string }, Body: { action?: unknown } }>, res: FastifyReply) {
@@ -370,6 +385,7 @@ export async function putMillRule(req: FastifyRequest<{ Params: { id: string } }
 class RuleConflict extends Error { constructor() { super('This rule changed since you opened it. Reload the rule before saving again.') } }
 
 async function saveMillRule(req: FastifyRequest, access: { organizationId: string, userId: string }, rule: MillRule, action: string, expectedVersion?: string, preserveEnabled = false) {
+    if (rule.definition?.action === 'drop') rule = { ...rule, severity: 'low' }
     return withTransaction(async query => {
         // Serialize edits even when a built-in rule has no organization override yet.
         await query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`mill-rule:${access.organizationId}:${rule.id}`])

@@ -8,7 +8,7 @@ export function customRetentionAction(event: Record<string, unknown>, rules: Ret
         && rule.definition.conditions?.length && matchesMillRule(event, rule.definition.conditions))
     // Explicit storage exceptions take precedence over broader drop selectors.
     if (matches.some(rule => rule.definition?.action === 'keep')) return 'keep'
-    if (matches.some(rule => rule.definition?.action === 'drop')) return 'drop'
+    if (event.severity === 'low' && matches.some(rule => rule.definition?.action === 'drop')) return 'drop'
 }
 
 export async function loadLogRetentionRules(organizationId: string | null, query: typeof run = run): Promise<RetentionRule[]> {
