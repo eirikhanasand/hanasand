@@ -1,4 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
+import { STATUS_CODES } from 'node:http'
 
 export const modelDiscoveryRuleId = 'model.verified_discovery_probes.v1'
 export const modelDiscoveryAvailable = false
@@ -12,14 +13,16 @@ export const modelDiscoveryRule = {
 const equals = (path: string, value: string) => ({ path, operator: 'equals' as const, value, caseSensitive: true })
 export const modelDiscoveryDefinition = {
     match: 'all' as const, stage: 'analyze' as const, action: 'drop' as 'drop' | 'keep',
-    conditions: [equals('host', 'inspur'), equals('service', 'run_model_inspur_vllm_gpu.sh'), equals('level', 'info'),
-        equals('metadata.unit', 'hanasand-model.service'), equals('metadata.user.id', '1000'),
-        equals('metadata.model_probe.caller', 'hanasand-ai-model-client'), equals('metadata.model_probe.clientIp', '127.0.0.1'),
-        equals('metadata.model_probe.serverIp', '127.0.0.1'), equals('metadata.model_probe.method', 'GET'),
-        equals('metadata.model_probe.status', '200'), equals('metadata.model_probe.model', 'hanasand'),
-        equals('metadata.model_probe.responseRoot', 'Qwen/Qwen2.5-Coder-7B-Instruct'),
-        { path: 'metadata.model_probe.serverPort', operator: 'regex' as const, caseSensitive: true, value: '^1808[1-8]$' },
-        { path: 'metadata.model_probe.path', operator: 'regex' as const, caseSensitive: true, value: '^/v1/models\\?hanasand_probe=[a-f0-9-]{36}$' }],
+    conditions: [{ path: 'message', operator: 'regex' as const, caseSensitive: true,
+        value: '^\\(APIServer pid=[1-9]\\d*\\) INFO: +[^ ]+ - "GET /v1/models\\?hanasand_probe=[a-f0-9-]{36} HTTP/1\\.1" 200 OK$' },
+    equals('host', 'inspur'), equals('service', 'run_model_inspur_vllm_gpu.sh'), equals('level', 'info'),
+    equals('metadata.unit', 'hanasand-model.service'), equals('metadata.user.id', '1000'),
+    equals('metadata.model_probe.caller', 'hanasand-ai-model-client'), equals('metadata.model_probe.clientIp', '127.0.0.1'),
+    equals('metadata.model_probe.serverIp', '127.0.0.1'), equals('metadata.model_probe.method', 'GET'),
+    equals('metadata.model_probe.status', '200'), equals('metadata.model_probe.model', 'hanasand'),
+    equals('metadata.model_probe.responseRoot', 'Qwen/Qwen2.5-Coder-7B-Instruct'),
+    { path: 'metadata.model_probe.serverPort', operator: 'regex' as const, caseSensitive: true, value: '^1808[1-8]$' },
+    { path: 'metadata.model_probe.path', operator: 'regex' as const, caseSensitive: true, value: '^/v1/models\\?hanasand_probe=[a-f0-9-]{36}$' }],
     parameters: { maxDurationMs: 1000, minIntervalMs: 5000, maxIntervalMs: 40000 },
 }
 type Row = Record<string, unknown>
@@ -56,8 +59,8 @@ export function verifyModelDiscoveryEvidence(log: ModelProbeLog, key = process.e
     const proof = meta.model_probe
     if (!exactModelFields(proof, [...modelProofFields, 'headers', 'mac']) || !exactModelFields(proof.headers, ['host', 'accept', 'connection'])
         || !validModelProofMac(proof, key)) return false
-    const match = /^\(APIServer pid=([1-9]\d*)\) INFO: +([0-9.]+):([1-9]\d*) - "([A-Z]+) (\S+) HTTP\/1\.1" ([1-5]\d\d) [A-Za-z ]+$/.exec(log.message)
-    if (!match || meta.pid !== match[1] || proof.serverPid !== match[1] || Number(match[3]) > 65535
+    const match = /^\(APIServer pid=([1-9]\d*)\) INFO: +([0-9.]+):([1-9]\d*) - "([A-Z]+) (\S+) HTTP\/1\.1" ([1-5]\d\d) ([A-Za-z ]+)$/.exec(log.message)
+    if (!match || match[7] !== STATUS_CODES[Number(match[6])] || meta.pid !== match[1] || proof.serverPid !== match[1] || Number(match[3]) > 65535
         || proof.version !== 1 || typeof proof.nonce !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(proof.nonce)
         || proof.path !== match[5] || proof.clientPort !== Number(match[3]) || proof.clientIp !== match[2] || proof.host !== log.host
         || proof.method !== match[4] || proof.status !== Number(match[6])
