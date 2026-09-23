@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'bun:test'
 import { createHash } from 'node:crypto'
-import { eligibleCollectorExecution } from '../src/utils/mill/analyzeCollector.ts'
+import { eligibleCollectorExecution, collectorDefinition } from '../src/utils/mill/analyzeCollector.ts'
 
 mock.module('#constants', () => ({ default: {} }))
 mock.module('#db', () => ({ default: async () => { throw new Error('Unexpected database access') },
@@ -25,13 +25,13 @@ test('successful readiness exec is not command-completion proof', () => {
     const log = audit()
     expect(log.metadata.outcome).toBe('success')
     expect(log.metadata.collector_execution).toBeUndefined()
-    expect(eligibleCollectorExecution(log)).toBe(false)
+    expect(eligibleCollectorExecution(log, collectorDefinition.parameters)).toBe(false)
     // Even a collector-shaped receipt must not expand its command allowlist.
     log.metadata.collector_execution = { unit: 'hanasand-log-collector.service',
         boot_id: '3e735e7b-4d7f-444d-9806-231fa26cfcec', pid: '12345', parent_pid: '12000',
         started_at: 1790193600000, finished_at: 1790193600100, executable: argv[0],
         arguments: argv, exit_code: 0, stderr_empty: true }
-    expect(eligibleCollectorExecution(log)).toBe(false)
+    expect(eligibleCollectorExecution(log, collectorDefinition.parameters)).toBe(false)
 })
 
 test('ingestion retains readiness audit evidence and suspicious variants with builtins enabled', async () => {

@@ -29,6 +29,16 @@ try {
     assert.equal(await analyzeCollectorExecution(event, query as any), true)
     assert.equal(await analyzeCollectorExecution(event, query as any), true)
     assert.equal((await query('SELECT count(*)::int AS n FROM log_analyze_receipts')).rows[0].n, 1)
+    // Current persisted policy must protect even an earlier acknowledged replay.
+    for (const definition of [
+        { ...collectorDefinition, conditions: [{ path: 'host', operator: 'equals', value: 'other', caseSensitive: true }] },
+        { ...collectorDefinition, parameters: { maxDurationMs: 1 } },
+        { ...collectorDefinition, parameters: {} },
+    ]) {
+        await query('UPDATE mill_rules SET definition=$1::jsonb', [JSON.stringify(definition)])
+        assert.equal(await analyzeCollectorExecution(event, query as any), false)
+    }
+    await query('UPDATE mill_rules SET definition=$1::jsonb', [JSON.stringify(collectorDefinition)])
     await query(`INSERT INTO mill_rules(organization_id,rule_id,version,enabled,definition,source,severity) VALUES('platform','custom.collector','1',true,$1,'owned','high')`,
         [JSON.stringify({ match: 'all', stage: 'detect', conditions: [{ path: 'process.executable', operator: 'equals', value: '/usr/sbin/ausearch' }] })])
     // A newly configured detector protects even a replay that previously dropped.
