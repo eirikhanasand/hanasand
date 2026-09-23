@@ -10,6 +10,7 @@ import config from '#constants'
 // interactive requests; collectors retain unacknowledged batches for retry.
 export const logIngestCapacity = Math.max(1, Math.min(2, Math.floor((Number(config.DB_MAX_CONN) || 20) / 4)))
 let activeBatches = 0
+const eventFields = new Set(['service', 'host', 'level', 'message', 'metadata', 'sourceEventId', 'timestamp'])
 
 export default async function ingestLog(req: FastifyRequest, res: FastifyReply) {
     if (!hasLogIngestToken(req) && !hasInternalToken(req)) {
@@ -20,7 +21,7 @@ export default async function ingestLog(req: FastifyRequest, res: FastifyReply) 
     const entries = Array.isArray(body?.events) ? body.events : [body]
     if (!entries.length || entries.length > 200) return res.status(400).send({ error: 'Send 1–200 events.' })
     for (const entry of entries) {
-        if (!entry || typeof entry !== 'object' || typeof entry.service !== 'string' || typeof entry.message !== 'string'
+        if (!entry || typeof entry !== 'object' || Object.keys(entry).some(key => !eventFields.has(key)) || typeof entry.service !== 'string' || typeof entry.message !== 'string'
             || !entry.service || entry.service.length > 256 || !entry.message || entry.message.length > 65536
             || (entry.host !== undefined && (typeof entry.host !== 'string' || entry.host.length > 256))
             || (entry.metadata !== undefined && (!entry.metadata || typeof entry.metadata !== 'object' || Array.isArray(entry.metadata)))

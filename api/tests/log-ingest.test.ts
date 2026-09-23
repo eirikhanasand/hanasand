@@ -82,3 +82,19 @@ test('busy ingestion leaves pool capacity available and retries only unacknowled
         expect((await send('Bearer dedicated-log-token')).statusCode).toBe(201)
     } finally { release(); hold = undefined; await Promise.allSettled(active) }
 })
+
+
+test('unexpected outer event fields reject the entire batch before analysis or acknowledgment', async () => {
+    for (const field of ['error', 'detections', 'unexpected']) {
+        const event = { ...payload, [field]: 'suspicious content' }
+        for (const body of [event, { events: [payload, event] }]) {
+            const response = await send('Bearer dedicated-log-token', body)
+            expect(response.statusCode).toBe(400)
+            expect(response.json()).toEqual({ error: 'Invalid log event.' })
+            expect(stored).toEqual([])
+            expect(operations).toEqual([])
+        }
+    }
+    expect((await send('Bearer dedicated-log-token', { ...payload, level: 'info', sourceEventId: 'known', timestamp: '2026-09-24T00:00:00Z' })).statusCode).toBe(201)
+    expect(stored).toHaveLength(1)
+})
