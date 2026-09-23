@@ -189,7 +189,14 @@ export async function getMillRules(req: FastifyRequest, res: FastifyReply) {
     if (!access) return
     const query = req.query as { organizationId?: string }
     if (query.organizationId !== access.organizationId) return res.status(403).send({ error: 'Organization access denied.' })
-    return res.send({ organizationId: access.organizationId, rules: await loadConfiguredMillRules(access.organizationId), canManageRetention: canManageMillRules(access.role) && (await hasRole(req, res, 'system_admin')).valid })
+    const rules = await loadConfiguredMillRules(access.organizationId)
+    const counts = await run(`SELECT rule_id, count(*)::text AS hits FROM mill_findings WHERE organization_id=$1 AND rule_id NOT IN ($2,$3) GROUP BY rule_id
+        UNION ALL SELECT $2, COALESCE(sum(amount),0)::text FROM log_access_counts WHERE organization_id=$1
+        UNION ALL SELECT $3, COALESCE(sum(amount),0)::text FROM log_mongo_ping_counts WHERE organization_id=$1`, [access.organizationId, accessRuleId, mongoRuleId])
+    const hits = new Map(counts.rows.map(row => [row.rule_id, Number(row.hits)]))
+    return res.send({ organizationId: access.organizationId, rules: rules.map(rule => ({ ...rule,
+        hitCount: rule.source === 'owned' && rule.definition?.stage === 'analyze' ? null : hits.get(rule.id) ?? 0,
+    })), canManageRetention: canManageMillRules(access.role) && (await hasRole(req, res, 'system_admin')).valid })
 }
 
 export async function postMillRule(req: FastifyRequest, res: FastifyReply) {

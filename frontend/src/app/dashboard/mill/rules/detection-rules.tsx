@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react'
 import { getRuleCategory, ruleCategories, type RuleCategory } from './rule-categories'
 import { DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 
-export type MillRule = { id: string, detectionLogic?: string, recordId?: string, rule_id?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'owned' | 'open_source', sourceReference?: string, definition?: { stage?: 'analyze' | 'match' | 'detect', action?: 'drop' | 'keep', match?: 'all', parameters?: Record<string, number>, failureConditions?: Array<{ path: string, operator: string, value: string }>, conditions?: Array<{ path: string, operator: string, value: string }> } }
+export type MillRule = { id: string, hitCount?: number | null, detectionLogic?: string, recordId?: string, rule_id?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'owned' | 'open_source', sourceReference?: string, definition?: { stage?: 'analyze' | 'match' | 'detect', action?: 'drop' | 'keep', match?: 'all', parameters?: Record<string, number>, failureConditions?: Array<{ path: string, operator: string, value: string }>, conditions?: Array<{ path: string, operator: string, value: string }> } }
 
 export default function DetectionRules({ category }: { category: RuleCategory }) {
     const latestOrganization = useRef('')
@@ -138,9 +138,9 @@ export default function DetectionRules({ category }: { category: RuleCategory })
                 </div>
                 <p role='status' className='text-xs text-ui-muted'>{filteredRules.length} of {categoryRules.length} rules</p>
                 <div role='region' aria-label={`${ruleCategories[category].label} rules`} tabIndex={0} className='min-w-0 overflow-x-auto rounded-md border border-ui-border focus-visible:outline-2 focus-visible:outline-ui-primary'>
-                    <table className='w-full min-w-[900px] table-fixed text-left text-sm' aria-label={`${ruleCategories[category].label} rules`}>
-                        <colgroup><col className='w-[24%]' /><col className={category === 'analysis' ? 'w-[21%]' : 'w-[29%]'} /><col className='w-[12%]' /><col className='w-[8%]' /><col className='w-[8%]' /><col className='w-[10%]' />{category === 'analysis' && <col className='w-[8%]' />}<col className='w-[9%]' /></colgroup>
-                        <thead className='bg-ui-raised text-xs text-ui-muted'><tr>{['Title', 'Description', 'Family', 'Severity', 'Status', 'Source', ...(category === 'analysis' ? ['Action', 'Controls'] : ['Action'])].map(column => <th key={column} scope='col' className='px-3 py-2 font-medium'>{column}</th>)}</tr></thead>
+                    <table className='w-full min-w-[1000px] table-fixed text-left text-sm' aria-label={`${ruleCategories[category].label} rules`}>
+                        <colgroup><col className='w-[22%]' /><col className={category === 'analysis' ? 'w-[15%]' : 'w-[23%]'} /><col className='w-[10%]' /><col className='w-[8%]' /><col className='w-[8%]' /><col className='w-[10%]' /><col className='w-[10%]' />{category === 'analysis' && <col className='w-[8%]' />}<col className='w-[9%]' /></colgroup>
+                        <thead className='bg-ui-raised text-xs text-ui-muted'><tr>{['Title', 'Description', 'Family', 'Severity', 'Status', 'Source', 'Hits', ...(category === 'analysis' ? ['Action', 'Controls'] : ['Action'])].map(column => <th key={column} scope='col' className='px-3 py-2 font-medium'>{column}</th>)}</tr></thead>
                         <tbody className='divide-y divide-ui-border'>
                             {filteredRules.map(rule => <tr key={rule.id} className='h-16 hover:bg-ui-raised'>
                                 <th scope='row' className='px-3 py-2 font-normal'>
@@ -154,10 +154,11 @@ export default function DetectionRules({ category }: { category: RuleCategory })
                                 <td className='px-3 py-2 text-xs capitalize'>{rule.severity}</td>
                                 <td className='px-3 py-2 text-xs'>{rule.enabled === false ? 'Disabled' : 'Enabled'}</td>
                                 <td className='px-3 py-2 text-xs text-ui-muted'>{rule.source === 'open_source' ? 'Imported rule' : rule.source === 'owned' ? 'Custom rule' : 'Hanasand rule'}</td>
+                                <td className='px-3 py-2 text-xs tabular-nums'>{rule.hitCount?.toLocaleString('en-US') ?? '—'}</td>
                                 {category === 'analysis' && <td className='px-3 py-2 text-xs'>{rule.definition?.action === 'drop' ? 'Drop' : 'Store'}</td>}
                                 <td className='px-2 py-2'><button type='button' aria-label={`${rule.enabled === false ? 'Enable' : 'Disable'} ${rule.name}`} className='rounded-md border border-ui-border px-2 py-2 text-xs font-semibold disabled:opacity-50' disabled={!canManageRules} onClick={() => void toggleRule(rule)}>{rule.enabled === false ? 'Enable' : 'Disable'}</button></td>
                             </tr>)}
-                            {!filteredRules.length && <tr><td colSpan={category === 'analysis' ? 8 : 7} className='px-3 py-6 text-center text-sm text-ui-muted'>{hasFilters ? 'No rules in this category match these filters.' : 'No rules in this category.'}</td></tr>}
+                            {!filteredRules.length && <tr><td colSpan={category === 'analysis' ? 9 : 8} className='px-3 py-6 text-center text-sm text-ui-muted'>{hasFilters ? 'No rules in this category match these filters.' : 'No rules in this category.'}</td></tr>}
                         </tbody>
                     </table>
                 </div>

@@ -7,7 +7,7 @@ import path from 'node:path'
 import postcss from 'postcss'
 import tailwind from '@tailwindcss/postcss'
 let output: string, bundle: string, css: string
-const rule = { id: 'http.routine_access.v1', version: '1', name: 'Routine requests', family: 'HTTP', severity: 'high', explanation: 'Count routine requests.', evidence: [], enabled: true, definition: { stage: 'analyze', action: 'drop' } }
+const rule = { id: 'http.routine_access.v1', version: '1', name: 'Routine requests', hitCount: 12345, family: 'HTTP', severity: 'high', explanation: 'Count routine requests.', evidence: [], enabled: true, definition: { stage: 'analyze', action: 'drop' } }
 test.beforeAll(async () => {
     output = mkdtempSync(path.join(tmpdir(), 'mill-rules-'))
     execFileSync('bun', ['-e', `const result = await Bun.build({entrypoints:['tests/fixtures/mill-rules.tsx'], outdir:${JSON.stringify(output)}, target:'browser', define:{'process.env':JSON.stringify({NODE_ENV:'production'})}, plugins:[{name:'workspace',setup(build){build.onLoad({filter:/workspaceProvider\\.tsx$/},()=>({contents:'export const useWorkspace = () => ({organizationId:"org-a", organizations:[{id:"org-a",role:"owner"}]})',loader:'tsx'}))}}]}); if(!result.success) throw new Error(result.logs.join('\\n'))`])
@@ -48,6 +48,8 @@ test('analysis separates configured retention from enabled state', async ({ page
     await page.goto('http://mill.test/mill/rules/analysis')
     await expect(page.getByRole('columnheader', { name: 'Action', exact: true })).toBeVisible()
     await expect(page.getByRole('columnheader', { name: 'Controls', exact: true })).toBeVisible()
+    await expect(page.getByRole('columnheader', { name: 'Hits', exact: true })).toBeVisible()
+    await expect(page.getByRole('row').filter({ has: page.getByRole('link', { name: /Routine requests/ }) }).getByRole('cell', { name: '12,345', exact: true })).toBeVisible()
     await expect(page.getByRole('cell', { name: 'Drop', exact: true })).toBeVisible()
     await expect(page.getByRole('cell', { name: 'Drop', exact: true }).locator('a, button, [tabindex]')).toHaveCount(0)
     await expect(page.getByRole('link', { name: /Routine requests/ })).toHaveAttribute('href', '/mill/rules/analysis/http.routine_access')

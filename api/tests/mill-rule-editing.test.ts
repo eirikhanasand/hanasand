@@ -17,6 +17,12 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
         audits.push({ id: String(audits.length), event_type: p[0], actor_id: p[4], object_type: p[5], object_id: p[6], organization_id: p[7], context: JSON.parse(p[12]), created_at: '2026-09-14T12:00:00Z' })
         return { rows: [] }
     }
+    if (sql.includes('AS hits FROM mill_findings')) {
+        expect(p).toEqual(['org-a', 'http.routine_access.v1', 'mongodb.cashflow_connections.v1'])
+        const totals = new Map<string, number>()
+        for (const finding of findings.filter(row => row.organizationId === p[0] && !p.slice(1).includes(row.ruleId))) totals.set(finding.ruleId, (totals.get(finding.ruleId) || 0) + 1)
+        return { rows: [...totals].map(([rule_id, hits]) => ({ rule_id, hits: String(hits) })).concat([{ rule_id: p[1], hits: '12345' }, { rule_id: p[2], hits: '42' }]) }
+    }
     if (sql.includes('SELECT count(*)::text AS count FROM mill_findings')) return { rows: [{ count: String(findings.filter(row => row.organizationId === p[0] && row.ruleId === p[1]).length) }] }
     if (sql.includes("context->'after'->>'version'")) return { rows: audits.filter(row => row.organization_id === p[0] && row.object_id === p[1] && (row.context.after?.version === p[3] || row.context.before?.version === p[3])).slice(-1) }
     if (sql.includes('FROM system_events')) return { rows: audits.filter(row => row.organization_id === p[0] && (row.object_id === p[1] || row.object_id === p[2])).slice(p[3], p[3] + 51) }
@@ -40,7 +46,7 @@ mock.module('#db', () => ({ default: query, withTransaction: async (work: any) =
 mock.module('#utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid, id: 'editor' }) }))
 mock.module('#utils/auth/hasRole.ts', () => ({ default: async () => ({ valid: systemAdmin }) }))
 mock.module('#utils/auth/apiKeys.ts', () => ({ validateApiKey: async () => ({ organizationId: 'org-a', apiKey: { scopes: [] } }), matchApiKeyScope: () => true }))
-const { getMillRule, putMillRule, postMillRuleAction, postMillRule, postMillRulePack, ingestMill } = await import('../src/handlers/mill.ts')
+const { getMillRules, getMillRule, putMillRule, postMillRuleAction, postMillRule, postMillRulePack, ingestMill } = await import('../src/handlers/mill.ts')
 const builtin = 'network.signature_alert.v1'
 const reply = () => ({ statusCode: 200, status(code: number) { this.statusCode = code; return this }, send(body: any) { return body } })
 const request = (id = builtin.replace(/\.v\d+$/, ''), body: any = {}, organizationId = 'org-a') => ({ params: { id }, query: { organizationId }, body, ip: '127.0.0.1', headers: { authorization: 'Bearer test-key' }, id: 'request-test' }) as any
@@ -288,4 +294,21 @@ test('custom action validation and disabling restores storage', async () => {
     const created = await postMillRule(request('', body), reply() as any)
     await postMillRuleAction(request(created.rule.id, { action: 'disable' }), reply() as any)
     expect((await ingestMill(request('', network), reply() as any)).dropped_events).toBe(0)
+})
+
+
+test('rule library exposes collector totals and organization-scoped detection hits', async () => {
+    findings.push({ organizationId: 'org-a', ruleId: builtin, status: 'resolved' }, { organizationId: 'other-org', ruleId: builtin })
+    rows.push(...['http.routine_access.v1', 'mongodb.cashflow_connections.v1'].map(rule_id => ({ id: rule_id, rule_id, organization_id: 'org-a', source: 'hanasand', definition: { stage: 'analyze', action: 'drop' } })))
+    rows.push({ id: 'custom-retention', organization_id: 'org-a', rule_id: 'custom.retention.v1', source: 'owned', definition: { stage: 'analyze', action: 'drop' } })
+    const result = await getMillRules(request(), reply() as any)
+    const hits = (id: string) => result.rules.find((rule: any) => rule.id === id)?.hitCount
+    expect(hits('http.routine_access.v1')).toBe(12345)
+    expect(hits('mongodb.cashflow_connections.v1')).toBe(42)
+    expect(hits(builtin)).toBe(1)
+    expect(hits('auth.impossible_travel.v1')).toBe(0)
+    expect(hits('custom.retention.v1')).toBeNull()
+    const denied = reply()
+    await getMillRules(request('', {}, 'other-org'), denied as any)
+    expect(denied.statusCode).toBe(403)
 })
