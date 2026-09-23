@@ -13,11 +13,17 @@ test('accepts new quoted facts and rejects repeats, invented quotes, and other a
   expect(groundedAdditions({ ...actor, canonicalName: 'OtherActor' }, capture, [fact])).toHaveLength(0);
 });
 test('persists GPU facts and reports zero productivity for a repeated response', async () => {
-  let profile: any = actor;
+  let profile: any = { ...actor, characterization: { victims: [{ value: 'Profile-only historical company' }] } };
   const runs: any[] = [], deltas: any[] = [];
   const store = { saveActorEnrichmentRun: (run: any) => runs.push(run), listSources: () => [], getActorProfile: () => profile,
     queryActorEnrichmentCaptures: async () => [capture], saveActorProfile: (p: any) => { profile = p; }, saveEvidenceDelta: (d: any) => deltas.push(d) };
-  const options = { store, fetch: async () => Response.json({ message: JSON.stringify({ facts: [fact] }) }) };
+  const options = { store, fetch: async (_input: any, init: any) => {
+    const prompt = JSON.parse(init.body).prompt;
+    expect(prompt).not.toContain('Profile-only historical company');
+    expect(prompt).not.toContain('existingFacts');
+    expect(prompt).toContain(quote);
+    return Response.json({ message: JSON.stringify({ facts: [fact] }) });
+  } };
   await enrichActor(options, actor);
   expect(runs.at(-1)).toMatchObject({ status: 'completed', newFacts: 1, changedActorIds: [actor.id] });
   expect(deltas[0].captureIds).toEqual([capture.id]);
