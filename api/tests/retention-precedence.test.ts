@@ -1,4 +1,5 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
+import { eventProtectionDefinition } from '../src/utils/mill/eventProtection.ts'
 
 let rules: any[] = [], calls: string[] = [], writes: string[] = [], eligible = '', failLookup = false
 const query: any = async (sql: string) => {
@@ -64,7 +65,8 @@ test('failed exception lookup retains direct traffic and leaves collector ingest
 
 
 test('broad custom HTTP 200 drop cannot discard failed boundary inspections', async () => {
-    rules = [{ ...keep('http-traffic'), definition: { ...keep('http-traffic').definition, action: 'drop' } }]
+    rules = [{ ...keep('http-traffic'), definition: { ...keep('http-traffic').definition, action: 'drop' } },
+        { source: 'hanasand', enabled: true, definition: structuredClone(eventProtectionDefinition) }]
     await recordTraffic(request(), response)
     expect(writes).toHaveLength(0)
     for (const change of [{ headers: { host: 'hanasand.com', authorization: 'Bearer test' } }, { body: 'suspicious payload' }, { url: '/api/admin/users' }]) {
