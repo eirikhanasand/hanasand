@@ -2,7 +2,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify'
 import { createHash } from 'node:crypto'
 import { withTransaction } from '#db'
 import recordLog from '#utils/logs/recordLog.ts'
-import { inspectAccess } from '#utils/mill/analyzeAccess.ts'
+import { inspectAccess, ordinaryAccessPath } from '#utils/mill/analyzeAccess.ts'
 import { proxyConnection, proxyHeader } from '#utils/mill/analyzeProxy.ts'
 import { verifiedClientIp } from '#utils/http/publicBoundary.ts'
 import { redactLogText, redactLogValue } from '#utils/logs/redact.ts'
@@ -12,7 +12,9 @@ import { redactLogText, redactLogValue } from '#utils/logs/redact.ts'
 export async function recordProxyRequest(req: FastifyRequest, res: FastifyReply): Promise<boolean> {
     if (!['127.0.0.1', '::ffff:127.0.0.1', '::1'].includes(req.raw.socket.remoteAddress || '')) return false
     const connection = proxyConnection(req.headers[proxyHeader])
-    if (!connection) return false
+    // Protected requests keep their established logging/privacy path. They can
+    // never justify filtering a connection notice.
+    if (!connection || !ordinaryAccessPath(req.url)) return false
     const headers = Object.fromEntries(Object.entries(req.headers).filter(([key]) => key !== proxyHeader))
     const access = { key: `http-api:${req.id}`, ip: verifiedClientIp(req), timestamp: new Date().toISOString(),
         path: req.url, method: req.method, status: res.statusCode, inspection: inspectAccess({ url: req.url, headers, body: req.body }) }

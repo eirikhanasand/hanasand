@@ -51,7 +51,9 @@ try {
     assert.deepEqual((await query('SELECT original FROM log_proxy_receipts')).rows[0].original, safe.log)
     // Repeated requests on the same connection remain distinct and do not replace first evidence.
     const first = (await query('SELECT service_log_id FROM log_proxy_requests')).rows[0].service_log_id
-    await recordProxyRequest({ ...safe.req, id: randomUUID(), url: '/admin', headers: { ...safe.req.headers, authorization: 'Bearer secret-value' } }, { statusCode: 200 } as any)
+    await recordProxyRequest({ ...safe.req, id: randomUUID(), url: '/ready', headers: { ...safe.req.headers, authorization: 'Bearer secret-value' } }, { statusCode: 200 } as any)
+    assert.equal(await count('service_logs'), 2)
+    assert.equal(await recordProxyRequest({ ...safe.req, id: randomUUID(), url: '/api/organizations' }, { statusCode: 200 } as any), false, 'Protected requests use the existing logging path')
     assert.equal(await count('service_logs'), 2)
     assert.equal((await query('SELECT service_log_id FROM log_proxy_requests')).rows[0].service_log_id, first)
     assert.ok(!JSON.stringify((await query('SELECT metadata FROM service_logs')).rows).includes('secret-value'))
