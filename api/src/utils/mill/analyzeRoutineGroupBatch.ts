@@ -5,10 +5,13 @@ import { normalizeLogEvent } from './logEvent.ts'
 import { matchesAnalysisPolicy } from './analysisPolicy.ts'
 import { completedSshWindows, completedTelemetryCycles, routineEvidence, routineReceipt, routineGroupParameters, telemetryRuleId, type RoutineLog } from './analyzeRoutineGroups.ts'
 
-// Called only inside the collector ingestion transaction. Unknown/unmatched rows
-// are never held pending, so detection is not delayed by grouping.
-export async function analyzeRoutineGroupBatch<T extends RoutineLog>(entries: T[], query: typeof run): Promise<T[]> {
-    const groups = [...completedTelemetryCycles(entries), ...completedSshWindows(entries)].sort((a, b) => `${a.ruleId}:${a.scope}`.localeCompare(`${b.ruleId}:${b.scope}`) || a.started - b.started)
+// The caller owns the transaction. Historical replay additionally owns evidence
+// protection and removal of originals after the canonical record is durable.
+export async function analyzeRoutineGroupBatch<T extends RoutineLog>(entries: T[], query: typeof run, options?: { historicalReplay?: { ruleId: string } }): Promise<T[]> {
+    const selected = options?.historicalReplay?.ruleId
+    const groups = [...completedTelemetryCycles(entries), ...completedSshWindows(entries)]
+        .filter(group => !options?.historicalReplay || group.ruleId === selected)
+        .sort((a, b) => `${a.ruleId}:${a.scope}`.localeCompare(`${b.ruleId}:${b.scope}`) || a.started - b.started)
     if (!groups.length) return entries
     const retention = await loadLogRetentionRules(null, query)
     const dropped = new Set<T>()
@@ -34,8 +37,10 @@ export async function analyzeRoutineGroupBatch<T extends RoutineLog>(entries: T[
         await query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [`routine:${rule.organization_id}:${group.ruleId}:${group.scope}`])
         const receipts = group.logs.map(log => routineReceipt(group.ruleId, log))
         const replay = await query('SELECT key FROM log_analyze_receipts WHERE organization_id=$1 AND rule_id=$2 AND key=ANY($3::text[])', [rule.organization_id, group.ruleId, receipts])
-        const stored = await query('SELECT source_event_id FROM service_logs WHERE source_event_id=ANY($1::text[])', [group.logs.map(log => log.sourceEventId)])
-        if (stored.rows.length) continue
+        if (!options?.historicalReplay) {
+            const stored = await query('SELECT source_event_id FROM service_logs WHERE source_event_id=ANY($1::text[])', [group.logs.map(log => log.sourceEventId)])
+            if (stored.rows.length) continue
+        }
         await query('INSERT INTO log_routine_group_state(organization_id,rule_id,scope) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [rule.organization_id, group.ruleId, group.scope])
         const state = await query('SELECT recent FROM log_routine_group_state WHERE organization_id=$1 AND rule_id=$2 AND scope=$3 FOR UPDATE', [rule.organization_id, group.ruleId, group.scope])
         const now = Date.now(), previous = (state.rows[0].recent as number[]).map(Number).filter(t => t >= now - 60_000)
