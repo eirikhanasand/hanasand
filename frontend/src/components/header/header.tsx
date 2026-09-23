@@ -145,7 +145,7 @@ export default function Header({ token, path: serverPath, initialMode = 'normal'
     return (
         <header data-site-header className='site-chrome fixed left-0 top-0 z-1000 w-full border-b border-ui-border bg-ui-panel text-ui-text px-3 sm:px-5 md:px-10 lg:px-16'>
             <div className='mx-auto flex h-18 w-full max-w-7xl items-center justify-between gap-2 sm:gap-5'>
-                <BrandLogo />
+                <BrandLogo compact={token} className='shrink-0' />
 
                 <nav aria-label='Main navigation' className='mr-auto hidden items-center gap-3 xl:flex'>
                     {navigationGroups.map(group => <PublicDropdown key={group.label} {...group} />)}
@@ -153,11 +153,12 @@ export default function Header({ token, path: serverPath, initialMode = 'normal'
                 </nav>
 
                 <div className='flex shrink-0 items-center justify-end gap-1 sm:gap-2'>
+                    {token && <OrganizationSwitcher />}
                     <SiteSearch token={token} />
                     <span className='[&_button]:w-10'><ThemeSwitch /></span>
-                    <Link href='/support' className='hidden h-10 min-w-20 items-center justify-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text md:inline-flex'>Support</Link>
+                    <Link href='/support' className='hidden h-10 min-w-20 items-center justify-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text lg:inline-flex'>Support</Link>
                     <Link href={token ? '/dashboard' : '/login'} className={`${token ? 'hidden sm:inline-flex' : 'inline-flex'} h-11 items-center gap-2 rounded-lg bg-ui-text px-3 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90 sm:px-4`}>
-                        <span className='sm:hidden'>Dashboard</span><span className='hidden sm:inline'>Go to Dashboard</span>
+                        <span className='sm:hidden'>Dashboard</span><span className='hidden sm:inline'>{token ? 'Dashboard' : 'Go to Dashboard'}</span>
                     </Link>
                     {token && <details key={`account:${pathname}`} className='relative' onKeyDown={event => {
                         if (event.key === 'Escape') {
@@ -169,7 +170,6 @@ export default function Header({ token, path: serverPath, initialMode = 'normal'
                             <UserRound className='h-5 w-5' />
                         </summary>
                         <div className='fixed inset-x-3 top-18 z-30 grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-3 text-sm text-ui-text shadow-xl sm:absolute sm:left-auto sm:right-0 sm:top-13 sm:w-60'>
-                            {hasAppSidebar(pathname) && <OrganizationSwitcher />}
                             {isDashboard && <ViewModeToggle initialMode={initialMode} />}
                             <Link href='/dashboard' className='rounded-lg p-2 hover:bg-ui-raised'>Dashboard</Link>
                             <Link href='/profile' className='rounded-lg p-2 hover:bg-ui-raised'>Profile</Link>

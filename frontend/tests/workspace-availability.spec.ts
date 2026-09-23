@@ -79,3 +79,38 @@ test('expired sessions do not retry automatically or enable organization access'
     await page.clock.runFor(10000)
     expect(requests).toBe(1)
 })
+
+for (const width of [320, 375, 430, 768, 1024, 1280, 1536]) test(`organization switch stays visible and usable on all signed-in surfaces at ${width}px`, async ({page,context,baseURL}) => {
+    await page.setViewportSize({width,height:900})
+    await page.route('**/api/organizations',route=>route.fulfill({json:{organizations}}))
+    let current = 'org-one'
+    await page.route('**/api/workspace-organization',async route=>{
+        if(route.request().method()==='POST'){
+            current=route.request().postDataJSON().org
+            await context.addCookies([{name:'hanasand_workspace',value:JSON.stringify({userId:'dashboard-render-proof-user',organizationId:current,name:current?'First organization':'Personal workspace'}),httpOnly:true,url:baseURL!}])
+        }
+        await route.fulfill({json:{workspace:{userId:'dashboard-render-proof-user',organizationId:current,name:current?'First organization':'Personal workspace'}}})
+    })
+    for(const path of ['/','/docs','/management/service-accounts']){
+        await page.goto(path)
+        const select=page.getByRole('combobox',{name:'Org',exact:true})
+        await expect(select).toBeVisible(); await expect(select).toBeEnabled()
+        await expect(page.locator('details[open]')).toHaveCount(0)
+        const box=await select.boundingBox(); expect(box!.x).toBeGreaterThanOrEqual(0);expect(box!.x+box!.width).toBeLessThanOrEqual(width)
+        const logo=await page.locator('[data-site-header] a[href="/"] img').boundingBox(); expect(logo!.width).toBeGreaterThanOrEqual(35); expect(logo!.x+logo!.width).toBeLessThanOrEqual(box!.x)
+        const header=page.locator('[data-site-header]')
+        expect(await header.evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true)
+        await select.selectOption(''); await expect(select).toBeEnabled(); await expect(select).toHaveValue('')
+        await select.selectOption('org-one'); await expect(select).toBeEnabled(); await expect(select).toHaveValue('org-one')
+        await page.reload(); await expect(page.getByRole('combobox',{name:'Org',exact:true})).toHaveValue('org-one')
+    }
+})
+
+test('signed-out pages do not show or load organizations',async({page,context})=>{
+    await context.clearCookies()
+    let requests=0
+    await page.route('**/api/organizations',route=>{requests++;return route.fulfill({json:{organizations}})})
+    await page.goto('/')
+    await expect(page.getByRole('combobox',{name:'Org',exact:true})).toHaveCount(0)
+    expect(requests).toBe(0)
+})

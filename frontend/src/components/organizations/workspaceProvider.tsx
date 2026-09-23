@@ -2,7 +2,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, Fragment, type ReactNode } from 'react'
 import BrandLogo from '@/components/brand/brandLogo'
 import { Building2, LoaderCircle, TriangleAlert } from 'lucide-react'
-import { hasAppSidebar } from '@/utils/routes/appRoutes'
 import { usePathname, useSearchParams, useRouter } from 'next/navigation'
 import { cleanWorkspaceUrl, organizationFromParams, type Workspace } from '@/utils/organizations/workspace'
 import WorkspaceSwitchNotice, { type WorkspaceSwitchNoticeState } from './workspaceSwitchNotice'
@@ -15,7 +14,7 @@ export default function WorkspaceProvider({ initial, enabled: authenticated, chi
     const params = useSearchParams()
     const pathname = usePathname()
     const router = useRouter()
-    const enabled = authenticated && hasAppSidebar(pathname || '')
+    const enabled = authenticated
     const requested = organizationFromParams(params)
     const [organizations, setOrganizations] = useState<Organization[]>([])
     const [loading, setLoading] = useState(true)
