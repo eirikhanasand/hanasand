@@ -1,4 +1,5 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
+import { eventProtectionRule, eventProtectionDefinition } from '../src/utils/mill/eventProtection.ts'
 
 let role = 'owner', valid = true, auditFailure = false
 let systemAdmin = false
@@ -49,7 +50,7 @@ mock.module('#db', () => ({ default: query, withTransaction: async (work: any) =
 mock.module('#utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid, id: 'editor' }) }))
 mock.module('#utils/auth/hasRole.ts', () => ({ default: async () => ({ valid: systemAdmin }) }))
 mock.module('#utils/auth/apiKeys.ts', () => ({ validateApiKey: async () => ({ organizationId: 'org-a', apiKey: { scopes: [] } }), matchApiKeyScope: () => true }))
-const { normalizeBuiltinDefinition, postMillRulePreview, getMillRules, getMillRule, putMillRule, postMillRuleAction, postMillRule, postMillRulePack, ingestMill } = await import('../src/handlers/mill.ts')
+const { millDefaultDefinition, normalizeBuiltinDefinition, postMillRulePreview, getMillRules, getMillRule, putMillRule, postMillRuleAction, postMillRule, postMillRulePack, ingestMill } = await import('../src/handlers/mill.ts')
 const builtin = 'network.signature_alert.v1'
 const reply = () => ({ statusCode: 200, status(code: number) { this.statusCode = code; return this }, send(body: any) { return body } })
 const request = (id = builtin.replace(/\.v\d+$/, ''), body: any = {}, organizationId = 'org-a') => ({ params: { id }, query: { organizationId }, body, ip: '127.0.0.1', headers: { authorization: 'Bearer test-key' }, id: 'request-test' }) as any
@@ -273,6 +274,7 @@ test('custom Analyze rules drop before storage and retain audited Store exceptio
     const created = await postMillRule(request('', body), reply() as any)
     expect(created.rule.severity).toBe('low')
     expect(created.rule.definition).toMatchObject({ stage: 'analyze', action: 'drop' })
+    rows.push({ ...eventProtectionRule, rule_id: eventProtectionRule.id, organization_id: 'org-a', source: 'hanasand', definition: structuredClone(eventProtectionDefinition) })
     expect(await ingestMill(request('', benign), reply() as any)).toMatchObject({ accepted_events: 1, stored_events: 0, dropped_events: 1 })
     expect(events).toHaveLength(0)
     expect(findings).toHaveLength(0)
@@ -362,13 +364,13 @@ test.each(['postgresql.readiness_audit.v1', 'model.verified_discovery_probes.v1'
     expect(audits).toEqual([])
 })
 
-test.each(['postgresql.readiness_audit.v1', 'model.verified_discovery_probes.v1'])('configured %s can be enabled with immutable safety checks and an audit revision', async id => {
+test.each(['postgresql.readiness_audit.v1', 'model.verified_discovery_probes.v1'])('configured %s can be enabled with saved policy and an audit revision', async id => {
     const key = id.startsWith('model.') ? 'MODEL_PROBE_PROOF_KEY' : 'READINESS_AUDIT_PROOF_PUBLIC_KEY'
     const previous = process.env[key]
     process.env[key] = '1'.repeat(64)
     try {
         systemAdmin = true
-        const definition = { match: 'all', stage: 'analyze', action: 'drop', conditions: [], parameters: {} }
+        const definition = millDefaultDefinition(id)
         rows.push({ id: 'verified-rule', organization_id: 'org-a', rule_id: id, version: '1', name: 'Verified probe', explanation: 'Verified native probe identity and successful completion.', source: 'hanasand', severity: 'low', enabled: false, definition })
         expect(normalizeBuiltinDefinition(id, definition).error).toBeUndefined()
         const response = reply()
@@ -376,7 +378,7 @@ test.each(['postgresql.readiness_audit.v1', 'model.verified_discovery_probes.v1'
         expect(response.statusCode).toBe(200)
         expect(rows[0]).toMatchObject({ enabled: true, version: '2' })
         expect(audits[0].context).toMatchObject({ before: { enabled: false }, after: { enabled: true, version: '2' } })
-        expect(normalizeBuiltinDefinition(id, { ...definition, conditions: [{ path: 'service', operator: 'equals', value: 'anything' }] }).error).toBeTruthy()
+        expect(normalizeBuiltinDefinition(id, { ...definition, conditions: [{ path: 'service', operator: 'equals', value: 'anything', caseSensitive: true }] }).definition?.conditions).toEqual([{ path: 'service', operator: 'equals', value: 'anything', caseSensitive: true }])
         expect(normalizeBuiltinDefinition(id, { ...definition, parameters: { skipProof: 1 } }).error).toBeTruthy()
     } finally {
         if (previous === undefined) delete process.env[key]
