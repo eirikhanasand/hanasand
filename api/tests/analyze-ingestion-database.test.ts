@@ -38,7 +38,7 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('ingestion copies retain ful
         const { normalizeBuiltinDefinition } = await import('../src/handlers/mill.ts')
         await install()
         expect(normalizeBuiltinDefinition(ingestionRuleId, ingestionDefinition).definition).toEqual(ingestionDefinition)
-        expect(normalizeBuiltinDefinition(ingestionRuleId, { ...ingestionDefinition, conditions: [{ path: 'service', operator: 'equals', value: 'anything' }] }).error).toBeTruthy()
+        expect(normalizeBuiltinDefinition(ingestionRuleId, { ...ingestionDefinition, conditions: [{ path: 'service', operator: 'equals', value: 'anything' }] }).error).toBeUndefined()
         const ingest = (logs: ReturnType<typeof fixture>[]) => transaction(tx => recordLogBatch(logs, tx as any))
         const count = async (table: string) => Number((await query(`SELECT count(*) n FROM ${table}`)).rows[0].n)
         const first = fixture(), copy = { ...fixture(), sourceEventId: 'c'.repeat(64), service: 'hanasand-api-2' }
@@ -72,11 +72,12 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('ingestion copies retain ful
         await query('DELETE FROM service_logs WHERE source_event_id=$1', [first.sourceEventId])
         await ingest([copy]); expect(await count('log_ingestion_copies')).toBe(2)
         expect((await query('SELECT original FROM log_ingestion_canonical WHERE source_event_id=$1', [first.sourceEventId])).rows[0].original).toEqual(canonical)
-        for (const [index, mode] of ['disable', 'keep', 'custom-keep', 'detect'].entries()) {
+        for (const [index, mode] of ['disable', 'keep', 'custom-keep', 'condition', 'detect'].entries()) {
             await query('DELETE FROM mill_rules WHERE id IN (\'keep\',\'detect\')')
             await query('UPDATE mill_rules SET enabled=true,definition=$2::jsonb WHERE rule_id=$1', [ingestionRuleId, JSON.stringify(ingestionDefinition)])
             if (mode === 'disable') await query('UPDATE mill_rules SET enabled=false WHERE rule_id=$1', [ingestionRuleId])
             if (mode === 'keep') await query("UPDATE mill_rules SET definition=jsonb_set(definition,'{action}','\"keep\"') WHERE rule_id=$1", [ingestionRuleId])
+            if (mode === 'condition') await query("UPDATE mill_rules SET definition=jsonb_set(definition,'{conditions}',$2::jsonb) WHERE rule_id=$1", [ingestionRuleId, JSON.stringify([{ path: 'service', operator: 'equals', value: 'other' }])])
             if (mode === 'custom-keep' || mode === 'detect') await query(`INSERT INTO mill_rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
                 VALUES($1,'platform',$1,'1','Protect copies','Custom','high','Protect copies',$2::jsonb,'owned',true)`,
             [mode === 'detect' ? 'detect' : 'keep', JSON.stringify({ match: 'all', stage: mode === 'detect' ? 'detect' : 'analyze', action: 'keep', conditions: [{ path: 'service', operator: 'equals', value: 'hanasand-api-2' }] })])

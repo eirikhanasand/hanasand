@@ -3,6 +3,8 @@ import { isDeepStrictEqual } from 'node:util'
 import run, { withTransaction } from '#db'
 import { normalizeLogEvent } from './logEvent.ts'
 import { customRetentionAction } from './customRetention.ts'
+import { matchesAnalysisPolicy } from './analysisPolicy.ts'
+import type { MillCondition } from './conditions.ts'
 import type { ProxyLog } from './analyzeProxy.ts'
 
 export const ingestionRuleId = 'http.duplicate_ingestion_records.v1'
@@ -11,7 +13,14 @@ export const ingestionRule = {
     explanation: 'Keep the first complete ingestion request record. Compact only identical correlated copies, preserving their provenance. Keep different bodies, additional evidence, warnings, failures and detected activity.',
     evidence: ['request ID', 'complete original record', 'identical request content', 'copy provenance'],
 }
-export const ingestionDefinition = { match: 'all' as const, conditions: [], stage: 'analyze' as const, action: 'drop' as 'drop' | 'keep', parameters: {} }
+export const ingestionDefinition = { match: 'all' as const, conditions: [
+    { path: 'host', operator: 'regex', value: '^(inspur|ovhcloud)$' },
+    { path: 'service', operator: 'regex', value: '^hanasand-api-[1-4]$' },
+    { path: 'level', operator: 'equals', value: 'info' },
+    { path: 'http.method', operator: 'equals', value: 'POST' },
+    { path: 'http.path', operator: 'equals', value: '/api/logs/ingest' },
+    { path: 'http.status_code', operator: 'equals', value: '201' },
+].map(condition => ({ ...condition, caseSensitive: true })) as MillCondition[], stage: 'analyze' as const, action: 'drop' as 'drop' | 'keep', parameters: {} }
 const fields = (value: unknown, allowed: string[]): value is Record<string, any> => Boolean(value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).every(key => allowed.includes(key)))
 const hash = (value: string) => createHash('sha256').update(value).digest('hex')
 
@@ -19,7 +28,7 @@ const hash = (value: string) => createHash('sha256').update(value).digest('hex')
 // producer, request ID and every byte of its complete structured record instead.
 export function ingestionCopy(log: ProxyLog) {
     const meta = log.metadata
-    if (!fields(log, ['service', 'host', 'level', 'message', 'metadata', 'sourceEventId', 'timestamp']) || log.level !== 'info' || !['inspur', 'ovhcloud'].includes(log.host || '') || !/^hanasand-api-[1-4]$/.test(log.service)
+    if (!fields(log, ['service', 'host', 'level', 'message', 'metadata', 'sourceEventId', 'timestamp']) || log.level !== 'info'
         || !/^[a-f0-9]{64}$/.test(log.sourceEventId || '') || !log.timestamp || !Number.isFinite(Date.parse(log.timestamp))
         || !fields(meta, ['collector', 'container_id', 'stream', 'structured']) || meta.collector !== 'docker' || meta.stream !== 'stdout'
         || !/^[a-f0-9]{12,64}$/.test(meta.container_id || '')) return null
@@ -27,9 +36,9 @@ export function ingestionCopy(log: ProxyLog) {
     if (!fields(row, ['level', 'time', 'pid', 'hostname', 'reqId', 'access', 'req', 'msg']) || row.level !== 30 || row.msg !== 'http_access'
         || !Number.isSafeInteger(row.pid) || row.pid < 1 || !Number.isSafeInteger(row.time)
         || typeof row.hostname !== 'string' || !/^[a-zA-Z0-9._-]{1,253}$/.test(row.hostname) || !/^[a-f0-9-]{36}$/i.test(row.reqId || '')
-        || !fields(row.req, ['method', 'url', 'remoteAddress', 'headers', 'body']) || row.req.method !== 'POST' || row.req.url !== '/api/logs/ingest'
+        || !fields(row.req, ['method', 'url', 'remoteAddress', 'headers', 'body']) || typeof row.req.method !== 'string' || typeof row.req.url !== 'string'
         || !fields(row.access, ['key', 'ip', 'timestamp', 'path', 'method', 'status', 'inspection'])
-        || row.access.key !== `http-api:${row.reqId}` || row.access.path !== row.req.url || row.access.method !== 'POST' || row.access.status !== 201
+        || row.access.key !== `http-api:${row.reqId}` || row.access.path !== row.req.url || row.access.method !== row.req.method || !Number.isInteger(row.access.status)
         || typeof row.access.ip !== 'string' || !Number.isFinite(Date.parse(row.access.timestamp))) return null
     try {
         const parsed = JSON.parse(log.message)
@@ -46,14 +55,15 @@ export async function analyzeIngestion(log: ProxyLog, query?: typeof run): Promi
     const copy = ingestionCopy(log)
     if (!copy) return false
     if (!query) return withTransaction(tx => analyzeIngestion(log, tx))
-    const rule = (await query(`SELECT r.organization_id FROM mill_rules r JOIN organizations o ON o.id=r.organization_id
+    const rule = (await query(`SELECT r.organization_id,r.definition,r.version FROM mill_rules r JOIN organizations o ON o.id=r.organization_id
         WHERE o.status='active' AND (o.id=$1 OR ($1::text IS NULL AND lower(o.name)='hanasand'))
         AND r.rule_id=$2 AND r.enabled AND r.definition->>'stage'='analyze' AND r.definition->>'action'='drop'
         ORDER BY o.created_at LIMIT 1 FOR SHARE OF r,o`, [process.env.PLATFORM_LOG_ORGANIZATION_ID || null, ingestionRuleId])).rows[0]
-    if (!rule) return false
+    if (!rule?.definition?.conditions?.length) return false
     const { loadConfiguredMillRules, collectMillEventFindings, normalizeMillEvent } = await import('../../handlers/mill.ts')
     const rules = await loadConfiguredMillRules(rule.organization_id, query)
     const event = normalizeLogEvent({ ...log, id: log.sourceEventId!, created_at: log.timestamp! })
+    if (!await matchesAnalysisPolicy([event], rule.definition)) return false
     if (customRetentionAction(event, rules) === 'keep'
         || collectMillEventFindings(rule.organization_id, log.sourceEventId!, normalizeMillEvent(event, { vendor: 'Hanasand', product: 'Logs' }), rules).findings.length) return false
     // Only a small pointer is created for a first observation; it stays in normal
@@ -77,6 +87,6 @@ export async function analyzeIngestion(log: ProxyLog, query?: typeof run): Promi
     await query('INSERT INTO log_ingestion_copies(key,canonical_key,envelope) VALUES($1,$2,$3::jsonb) ON CONFLICT DO NOTHING', [receiptKey, copy.key, JSON.stringify(envelope)])
     const receipt = (await query('SELECT canonical_key,envelope FROM log_ingestion_copies WHERE key=$1', [receiptKey])).rows[0]
     if (!receipt || receipt.canonical_key !== copy.key || !isDeepStrictEqual(receipt.envelope, envelope)) return false
-    await query('INSERT INTO log_analyze_receipts(key,organization_id,rule_id,rule_version) VALUES($1,$2,$3,\'1\') ON CONFLICT DO NOTHING', [receiptKey, rule.organization_id, ingestionRuleId])
+    await query('INSERT INTO log_analyze_receipts(key,organization_id,rule_id,rule_version) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING', [receiptKey, rule.organization_id, ingestionRuleId, rule.version])
     return true
 }

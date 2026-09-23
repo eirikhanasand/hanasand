@@ -1,5 +1,7 @@
 import { expect, test } from 'bun:test'
-import { ingestionCopy } from '../src/utils/mill/analyzeIngestion.ts'
+import { ingestionCopy, ingestionDefinition } from '../src/utils/mill/analyzeIngestion.ts'
+import { matchesAnalysisPolicy } from '../src/utils/mill/analysisPolicy.ts'
+import { normalizeLogEvent } from '../src/utils/mill/logEvent.ts'
 
 export function fixture() {
     const reqId = '67d04ac9-630e-4d75-a2b5-33ba95b81842'
@@ -25,9 +27,12 @@ test('only identical complete records share a correlation key; bodies and proven
     expect(ingestionCopy(copy)?.key).not.toBe(ingestionCopy(first)?.key)
 })
 
-test('status or path alone never authorizes a drop; unknown evidence, warnings and failures stay', () => {
+test('status or path alone never authorizes a drop; unknown evidence, warnings and failures stay', async () => {
+    const eligible = async (log: ReturnType<typeof fixture>) => Boolean(ingestionCopy(log))
+        && await matchesAnalysisPolicy([normalizeLogEvent({ ...log, id: log.sourceEventId, created_at: log.timestamp })], ingestionDefinition)
+    expect(await eligible(fixture())).toBe(true)
     for (const change of [{ level: 'warn' }, { level: 'error' }, { service: 'untrusted' }, { host: 'unknown' }, { sourceEventId: '' }, { extra: 'keep' }]) {
-        expect(ingestionCopy({ ...fixture(), ...change } as any)).toBeNull()
+        expect(await eligible({ ...fixture(), ...change } as any)).toBe(false)
     }
     for (const mutate of [
         (x: any) => { x.metadata.extra = 'keep' },
@@ -39,7 +44,7 @@ test('status or path alone never authorizes a drop; unknown evidence, warnings a
         (x: any) => { delete x.metadata.structured.access },
     ]) {
         const log = fixture(); mutate(log); log.message = JSON.stringify(log.metadata.structured)
-        expect(ingestionCopy(log)).toBeNull()
+        expect(await eligible(log)).toBe(false)
     }
     const duplicateKey = fixture()
     duplicateKey.message = duplicateKey.message.replace('"level":30', '"level":50,"level":30')

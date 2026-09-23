@@ -1,3 +1,4 @@
+import { eventProtectionRule, eventProtectionRuleId, eventProtectionDefinition, normalizeEventProtection, type EventProtectionPolicy } from '#utils/mill/eventProtection.ts'
 import { ingestionRule, ingestionRuleId, ingestionDefinition } from '#utils/mill/analyzeIngestion.ts'
 import { listRule, ruleCategory, loadRuleHits } from '#utils/mill/ruleList.ts'
 import { cdnRefreshRule, cdnRefreshRuleId, cdnRefreshDefinition } from '#utils/mill/analyzeCdnRefresh.ts'
@@ -5,7 +6,7 @@ import { modelDiscoveryRule, modelDiscoveryRuleId, modelDiscoveryDefinition, mod
 import { readinessAuditRule, readinessAuditRuleId, readinessAuditDefinition, readinessAuditConfigured, readinessAuditUnavailable } from '#utils/mill/analyzeReadinessAudit.ts'
 import { retainedOriginals } from '#utils/mill/retainedOriginals.ts'
 import { normalizeLogEvent } from '#utils/mill/logEvent.ts'
-import { telemetryRule, telemetryRuleId, sshWindowRule, sshWindowRuleId, routineGroupDefinition } from '#utils/mill/analyzeRoutineGroups.ts'
+import { telemetryRule, telemetryRuleId, sshWindowRule, sshWindowRuleId, telemetryDefinition, sshWindowDefinition, validateRoutineGroupParameters } from '#utils/mill/analyzeRoutineGroups.ts'
 import { scanRulePreview, validPreviewWindow, PreviewRegexTimeout } from '#utils/mill/rulePreview.ts'
 import { collectorRule, collectorRuleId, collectorDefinition } from '#utils/mill/analyzeCollector.ts'
 import { proxyRule, proxyRuleId, proxyDefinition } from '#utils/mill/analyzeProxy.ts'
@@ -30,10 +31,11 @@ export { matchesMillRule } from '#utils/mill/conditions.ts'
 
 type MillEvent = Record<string, unknown>
 type MillBody = { source?: Record<string, unknown>, events?: unknown }
-type MillDefinition = { match: 'all', conditions: MillCondition[], failureConditions?: MillCondition[], parameters?: Record<string, number>, stage?: 'analyze' | 'match' | 'detect', action?: 'drop' | 'keep' }
+type MillDefinition = { match: 'all', conditions: MillCondition[], protection?: EventProtectionPolicy, failureConditions?: MillCondition[], parameters?: Record<string, number>, stage?: 'analyze' | 'match' | 'detect', action?: 'drop' | 'keep' }
 type MillRule = { id: string, detectionLogic?: string, recordId?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'owned' | 'open_source', sourceReference?: string, definition?: MillDefinition }
 
 export const MILL_RULES: MillRule[] = [
+    eventProtectionRule,
     cdnRefreshRule,
     modelDiscoveryRule,
     readinessAuditRule,
@@ -61,7 +63,9 @@ export function millDefaultDefinition(id: string): MillDefinition {
     if (id === cdnRefreshRuleId) return structuredClone(cdnRefreshDefinition)
     if (id === modelDiscoveryRuleId) return structuredClone(modelDiscoveryDefinition)
     if (id === readinessAuditRuleId) return structuredClone(readinessAuditDefinition)
-    if ([telemetryRuleId, sshWindowRuleId].includes(id)) return structuredClone(routineGroupDefinition)
+    if (id === telemetryRuleId) return structuredClone(telemetryDefinition)
+    if (id === sshWindowRuleId) return structuredClone(sshWindowDefinition)
+    if (id === eventProtectionRuleId) return { ...structuredClone(eventProtectionDefinition), parameters: {} }
     if (id === collectorRuleId) return structuredClone(collectorDefinition)
     if (id === postgresRuleId) return structuredClone(postgresDefinition)
     if (id === ingestionRuleId) return structuredClone(ingestionDefinition)
@@ -89,26 +93,41 @@ export function normalizeBuiltinDefinition(id: string, value: unknown): { defini
     const input = object(value), defaults = millDefaultDefinition(id)
     if (unavailableAnalysisRule(id) && input.action === 'drop') return { error: unavailableAnalysisRule(id)! }
     if (!value || typeof value !== 'object' || Array.isArray(value) || input.match !== 'all') return { error: 'Detection must use match: all.' }
-    if (Object.keys(input).some(key => !['match', 'conditions', 'parameters', ...(defaults.stage ? ['stage', 'action'] : []), ...(defaults.failureConditions ? ['failureConditions'] : [])].includes(key))) return { error: 'Unsupported detection setting.' }
+    if (Object.keys(input).some(key => !['match', 'conditions', 'parameters', ...(defaults.stage ? ['stage', 'action'] : []), ...(defaults.protection ? ['protection'] : []), ...(defaults.failureConditions ? ['failureConditions'] : [])].includes(key))) return { error: 'Unsupported detection setting.' }
     const definition: MillDefinition = { ...defaults, parameters: { ...defaults.parameters } }
+    if (defaults.protection) {
+        const result = normalizeEventProtection(input.protection)
+        if (result.error) return { error: result.error }
+        if (input.action !== 'keep') return { error: 'A protection rule must use Store. Disable it to stop retaining its matches.' }
+        definition.protection = result.protection
+    }
     if (defaults.stage) {
-        if (input.stage !== 'analyze' || !['drop', 'keep'].includes(String(input.action)) || !Array.isArray(input.conditions) || input.conditions.length) return { error: 'Choose Keep or Count and drop. The required safety checks cannot be removed.' }
+        const configuredPolicy = [modelDiscoveryRuleId, readinessAuditRuleId, proxyRuleId, ingestionRuleId, telemetryRuleId, sshWindowRuleId, collectorRuleId, cdnRefreshRuleId].includes(id)
+        if (input.stage !== 'analyze' || !['drop', 'keep'].includes(String(input.action)) || !Array.isArray(input.conditions) || (!configuredPolicy && input.conditions.length)) return { error: 'Choose Keep or Count and drop. The required safety checks cannot be removed.' }
         definition.action = input.action as 'drop' | 'keep'
     }
     for (const key of ['conditions', ...(defaults.failureConditions ? ['failureConditions'] : [])] as Array<'conditions' | 'failureConditions'>) {
         if (!Array.isArray(input[key])) return { error: `${key} must be an array.` }
-        const result = input[key].length ? normalizeMillConditions(input[key]) : { conditions: [] }
+        const result = input[key].length ? normalizeMillConditions(input[key], defaults.stage ? 32 : 8) : { conditions: [] }
         if (result.error) return { error: result.error }
         definition[key] = result.conditions
     }
     const parameters = object(input.parameters)
     if (!input.parameters || typeof input.parameters !== 'object' || Array.isArray(input.parameters) || Object.keys(parameters).some(key => !(key in defaults.parameters!))) return { error: 'Unsupported engine parameter.' }
-    const limits: Record<string, [number, number]> = { windowMinutes: [1, defaults.stage ? 5 : 10080], requestThreshold: [1, 1000], minimumCount: [1, 1000], distanceKm: [1, 20040], historyLimit: [1, 1000] }
+    if ([telemetryRuleId, sshWindowRuleId].includes(id)) {
+        const error = validateRoutineGroupParameters(id, parameters)
+        if (error) return { error }
+        definition.parameters = parameters as Record<string, number>
+        return { definition }
+    }
+    const limits: Record<string, [number, number]> = { windowMinutes: [1, defaults.stage ? 5 : 10080], requestThreshold: [1, 1000], minimumCount: [1, 1000], distanceKm: [1, 20040], historyLimit: [1, 1000], maxDurationMs: [1, 60000], minIntervalMs: [1, 3600000], maxIntervalMs: [1, 3600000] }
     for (const key of Object.keys(defaults.parameters!)) {
+        if (!limits[key]) return { error: `Unsupported engine parameter: ${key}.` }
         const value = parameters[key], [min, max] = limits[key]
         if (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max) return { error: `${key} must be a whole number from ${min} to ${max}.` }
         definition.parameters![key] = value
     }
+    if (definition.parameters!.minIntervalMs > definition.parameters!.maxIntervalMs) return { error: 'Maximum interval must be at least the minimum interval.' }
     return { definition }
 }
 
@@ -710,8 +729,8 @@ function object(value: unknown): MillEvent { return value && typeof value === 'o
 function stringValue(value: unknown): string | null { return typeof value === 'string' && value.trim() ? value.trim() : null }
 function canManageMillRules(role: string) { return roleCanEditOrganization(role) }
 function deviceIdFor(event: MillEvent) { return stringValue(object(event.device).id || event.device_id) }
-export function normalizeMillConditions(value: unknown): { conditions: MillCondition[], error?: string } {
-    if (!Array.isArray(value) || value.length < 1 || value.length > 8) return { conditions: [], error: 'Conditions must contain 1-8 items.' }
+export function normalizeMillConditions(value: unknown, limit = 8): { conditions: MillCondition[], error?: string } {
+    if (!Array.isArray(value) || value.length < 1 || value.length > limit) return { conditions: [], error: `Conditions must contain 1-${limit} items.` }
     const conditions: MillCondition[] = []
     for (const item of value) {
         if (!item || typeof item !== 'object' || Array.isArray(item)) return { conditions: [], error: 'Each condition must be an object.' }
@@ -719,13 +738,14 @@ export function normalizeMillConditions(value: unknown): { conditions: MillCondi
         const path = typeof condition.path === 'string' ? condition.path.trim() : ''
         const operator = condition.operator
         const conditionValue = typeof condition.value === 'string' ? condition.value : ''
+        if (condition.caseSensitive !== undefined && typeof condition.caseSensitive !== 'boolean') return { conditions: [], error: 'Match case must be true or false.' }
         if (!/^[a-zA-Z0-9_.-]{1,80}$/.test(path)) return { conditions: [], error: 'Condition paths may contain only letters, numbers, dots, hyphens, and underscores.' }
         if (operator !== 'equals' && operator !== 'contains' && operator !== 'regex') return { conditions: [], error: 'Condition operators must be equals, contains, or regex.' }
         if (!conditionValue || conditionValue.length > 200) return { conditions: [], error: 'Condition values must contain 1-200 characters.' }
         if (operator === 'regex') {
             try { new RegExp(conditionValue) } catch { return { conditions: [], error: 'Regex condition is invalid.' } }
         }
-        conditions.push({ path, operator, value: conditionValue })
+        conditions.push({ path, operator, value: conditionValue, ...(condition.caseSensitive !== undefined ? { caseSensitive: condition.caseSensitive } : {}) })
     }
     return { conditions }
 }

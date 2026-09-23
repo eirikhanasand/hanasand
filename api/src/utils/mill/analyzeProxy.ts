@@ -2,6 +2,8 @@ import { isDeepStrictEqual } from 'node:util'
 import { createHash } from 'node:crypto'
 import run, { withTransaction } from '#db'
 import { normalizeLogEvent } from './logEvent.ts'
+import { matchesAnalysisPolicy } from './analysisPolicy.ts'
+import type { MillCondition } from './conditions.ts'
 import { eligibleAccess, type AccessEvent } from './analyzeAccess.ts'
 
 export const proxyRuleId = 'proxy.redundant_connections.v1'
@@ -10,7 +12,11 @@ export const proxyRule = {
     explanation: 'Filter an exact internal API connection notice only after retaining its correlated, inspected GET/200 request. Keep unmatched connections, unexpected content, other routes and warnings. Preserve the original notice in the filter receipt.',
     evidence: ['connection ID', 'source and destination', 'retained request', 'original notice'],
 }
-export const proxyDefinition = { match: 'all' as const, conditions: [], stage: 'analyze' as const, action: 'drop' as 'drop' | 'keep', parameters: {} }
+export const proxyDefinition = { match: 'all' as const, conditions: [
+    { path: 'host', operator: 'equals', value: 'inspur' },
+    { path: 'service', operator: 'regex', value: '^hanasand-proxy-[12]$' },
+    { path: 'level', operator: 'equals', value: 'info' },
+].map(condition => ({ ...condition, caseSensitive: true })) as MillCondition[], stage: 'analyze' as const, action: 'drop' as 'drop' | 'keep', parameters: {} }
 export const proxyHeader = 'x-hanasand-proxy-connection'
 export type ProxyConnection = { id: string, proxy: string, sourceIp: string, sourcePort: number, destinationIp: string, destinationPort: number, route: string }
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
@@ -25,7 +31,7 @@ export function proxyConnection(value: unknown): ProxyConnection | null {
 export type ProxyLog = { service: string, host?: string, level: string, message: string, metadata?: Record<string, unknown>, sourceEventId?: string, timestamp?: string }
 export function proxyNotice(log: ProxyLog) {
     const meta = log.metadata
-    if (log.host !== 'inspur' || !/^hanasand-proxy-[12]$/.test(log.service) || log.level !== 'info'
+    if (!/^hanasand-proxy-[12]$/.test(log.service) || log.level !== 'info'
         || !/^[a-f0-9]{64}$/.test(log.sourceEventId || '') || !log.timestamp || !Number.isFinite(Date.parse(log.timestamp))
         || !meta || Object.keys(meta).some(key => !['collector', 'container_id', 'stream'].includes(key))
         || meta.collector !== 'docker' || meta.stream !== 'stdout' || typeof meta.container_id !== 'string' || !/^[a-f0-9]{12,64}$/.test(meta.container_id)) return null
@@ -43,14 +49,15 @@ export async function analyzeProxy(log: ProxyLog, query?: typeof run): Promise<b
     const connection = proxyNotice(log)
     if (!connection) return false
     if (!query) return withTransaction(tx => analyzeProxy(log, tx))
-    const rule = (await query(`SELECT r.organization_id FROM mill_rules r JOIN organizations o ON o.id=r.organization_id
+    const rule = (await query(`SELECT r.organization_id,r.definition FROM mill_rules r JOIN organizations o ON o.id=r.organization_id
         WHERE o.status='active' AND (o.id=$1 OR ($1::text IS NULL AND lower(o.name)='hanasand'))
         AND r.rule_id=$2 AND r.enabled AND r.definition->>'stage'='analyze' AND r.definition->>'action'='drop'
         ORDER BY o.created_at LIMIT 1 FOR SHARE OF r,o`, [process.env.PLATFORM_LOG_ORGANIZATION_ID || null, proxyRuleId])).rows[0]
-    if (!rule) return false
+    if (!rule?.definition?.conditions?.length) return false
     const { loadConfiguredMillRules, collectMillEventFindings, normalizeMillEvent } = await import('../../handlers/mill.ts')
     const rules = await loadConfiguredMillRules(rule.organization_id, query)
     const original = normalizeLogEvent({ ...log, id: log.sourceEventId!, created_at: log.timestamp! })
+    if (!await matchesAnalysisPolicy([original], rule.definition)) return false
     if (collectMillEventFindings(rule.organization_id, log.sourceEventId!, normalizeMillEvent(original, { vendor: 'Hanasand', product: 'Logs' }), rules).findings.length) return false
     const key = createHash('sha256').update(`${proxyRuleId}:${log.sourceEventId}`).digest('hex')
     // An exact replay may arrive after raw retention removed the proof row.

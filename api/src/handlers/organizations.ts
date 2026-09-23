@@ -1,3 +1,4 @@
+import { ensureEventProtectionRule } from '#utils/db/analysisPolicySchema.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { randomUUID } from 'crypto'
 import run, { withTransaction } from '#db'
@@ -190,7 +191,8 @@ export async function postOrganization(req: FastifyRequest<{ Body: OrganizationI
 
     const organizationId = randomUUID()
     const slug = await uniqueOrganizationSlug(input.slug)
-    const organization = await run(`
+    const organization = await withTransaction(async query => {
+        const created = await query(`
         WITH new_organization AS (
             INSERT INTO organizations (id, name, slug, created_by)
             VALUES ($1, $2, $3, $4)
@@ -208,6 +210,9 @@ export async function postOrganization(req: FastifyRequest<{ Body: OrganizationI
         FROM new_organization
         JOIN owner_membership ON owner_membership.organization_id = new_organization.id
     `, [organizationId, input.name, slug, userId])
+        await ensureEventProtectionRule(query, organizationId)
+        return created
+    })
     logOrganizationEvent(req, 'organization_created', organizationId, userId, {
         name: input.name,
         slug,

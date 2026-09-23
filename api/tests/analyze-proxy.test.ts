@@ -1,5 +1,7 @@
 import { expect, test } from 'bun:test'
 import { analyzeProxy, proxyConnection, proxyNotice, safeProxyRequest, proxyRuleId, proxyDefinition } from '../src/utils/mill/analyzeProxy.ts'
+import { matchesAnalysisPolicy } from '../src/utils/mill/analysisPolicy.ts'
+import { normalizeLogEvent } from '../src/utils/mill/logEvent.ts'
 import { normalizeBuiltinDefinition } from '../src/handlers/mill.ts'
 const id = 'bde2f19d-cecd-4d7f-8b97-738850a6c412'
 const header = `${id}|hanasand-proxy-1|127.0.0.1|41000|127.0.0.1|18080|api`
@@ -12,14 +14,17 @@ function proof(): any {
     const connection = proxyConnection(header)
     return structuredClone({ connection, access, service_log_id: '42', level: 'info', message: 'proxy_request_completed', metadata: { proxy: connection, access } })
 }
-test('old, malformed, warning, cross-tenant and unexpected proxy notices remain', () => {
+test('old, malformed, warning, cross-tenant and unexpected proxy notices remain', async () => {
     expect(proxyNotice(log)).toEqual(proxyConnection(header))
     for (const change of [{ host: 'ovhcloud' }, { service: 'hanasand-proxy-3' }, { level: 'warn' }, { timestamp: 'bad' }, { sourceEventId: '' },
         { message: log.message + '\nWARNING backend down' }, { message: log.message.replace('api/HTTP', 'database/TCP') },
         { message: log.message.replace('41000', '65536') }, { message: log.message.replace('18080', '13000') },
         { message: log.message.replace('127.0.0.1', '192.0.2.1') }, { message: log.message.split(' correlation=')[0] },
         { metadata: { ...log.metadata, error: 'unexpected' } }, { metadata: { ...log.metadata, organizationId: 'customer' } },
-        { metadata: { ...log.metadata, stream: 'stderr' } }, { metadata: { ...log.metadata, collector: 'syslog' } }]) expect(proxyNotice({ ...log, ...change })).toBeNull()
+        { metadata: { ...log.metadata, stream: 'stderr' } }, { metadata: { ...log.metadata, collector: 'syslog' } }]) {
+        const candidate = { ...log, ...change }
+        expect(Boolean(proxyNotice(candidate)) && await matchesAnalysisPolicy([normalizeLogEvent({ ...candidate, id: candidate.sourceEventId, created_at: candidate.timestamp === 'bad' ? log.timestamp : candidate.timestamp })], proxyDefinition)).toBe(false)
+    }
     expect(proxyConnection(header + '|extra')).toBeNull()
 })
 test('200 cannot override suspicious paths, methods, bodies, headers or incomplete inspection', () => {
@@ -36,7 +41,7 @@ test('only committed matching safe evidence permits a receipt and count', async 
         if (mode === 'tampered') evidence.metadata.proxy = null
         const query: any = async (sql: string, args: any[]) => {
             statements.push(sql)
-            if (sql.includes('FROM mill_rules')) return { rows: mode === 'disabled' ? [] : [{ organization_id: 'platform' }] }
+            if (sql.includes('FROM mill_rules')) return { rows: mode === 'disabled' ? [] : [{ organization_id: 'platform', definition: proxyDefinition }] }
             if (sql.startsWith('SELECT original')) return { rows: [] }
             if (sql.includes('FROM log_proxy_requests')) return { rows: mode === 'missing' ? [] : [evidence] }
             if (sql.includes('INSERT INTO log_proxy_receipts')) {
@@ -54,26 +59,26 @@ test('retry does not inflate counts or hide modified content under an existing I
     const queries: string[] = []
     const query: any = async (sql: string) => {
         queries.push(sql)
-        return { rows: sql.includes('FROM mill_rules') ? [{ organization_id: 'platform' }] : [{ original: log }] }
+        return { rows: sql.includes('FROM mill_rules') ? [{ organization_id: 'platform', definition: proxyDefinition }] : [{ original: log }] }
     }
     expect(await analyzeProxy(log, query)).toBe(true)
     expect(await analyzeProxy({ ...log, timestamp: '2026-09-24T00:00:01Z' }, query)).toBe(false)
     expect(queries.some(q => q.startsWith('INSERT'))).toBe(false)
 })
-test('storage failure prevents acknowledgment; Keep is supported without editable safety selectors', async () => {
+test('storage failure prevents acknowledgment; Keep and configured selectors are supported', async () => {
     const query: any = async (sql: string) => {
-        if (sql.includes('FROM mill_rules')) return { rows: [{ organization_id: 'platform' }] }
+        if (sql.includes('FROM mill_rules')) return { rows: [{ organization_id: 'platform', definition: proxyDefinition }] }
         throw new Error('database unavailable')
     }
     await expect(analyzeProxy(log, query)).rejects.toThrow('database unavailable')
     expect(normalizeBuiltinDefinition(proxyRuleId, proxyDefinition).definition).toEqual(proxyDefinition)
     expect(normalizeBuiltinDefinition(proxyRuleId, { ...proxyDefinition, action: 'keep' }).definition?.action).toBe('keep')
-    expect(normalizeBuiltinDefinition(proxyRuleId, { ...proxyDefinition, conditions: [{ path: 'host', operator: 'equals', value: 'inspur' }] }).error).toBeTruthy()
+    expect(normalizeBuiltinDefinition(proxyRuleId, { ...proxyDefinition, conditions: [{ path: 'host', operator: 'equals', value: 'inspur' }] }).error).toBeUndefined()
 })
 
 test('an existing detector protects originals even on receipt replay', async () => {
     const query: any = async (sql: string) => {
-        if (sql.includes("r.definition->>'stage'")) return { rows: [{ organization_id: 'platform' }] }
+        if (sql.includes("r.definition->>'stage'")) return { rows: [{ organization_id: 'platform', definition: proxyDefinition }] }
         if (sql.includes('FROM mill_rules')) return { rows: [{ rule_id: 'custom.proxy-port', version: '1', source: 'owned', enabled: true, severity: 'high', name: 'Review proxy source', definition: { match: 'all', conditions: [{ path: 'service', operator: 'equals', value: 'hanasand-proxy-1' }] } }] }
         throw new Error('A matching detector must prevent any receipt lookup or write')
     }
