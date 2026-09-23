@@ -31,13 +31,15 @@ export default function RulePreview({ organizationId, conditions, action, range,
     const [events, setEvents] = useState<Event[]>([]), [error, setError] = useState(''), [acknowledged, setAcknowledged] = useState(false)
     const [attempt, setAttempt] = useState(0)
     const [offset, setOffset] = useState(0), [more, setMore] = useState(true), [loading, setLoading] = useState(false)
+    const browsing = useRef(false)
     const rows = useRef<Event[]>([]), cursor = useRef<Cursor>(null), seen = useRef(new Set<string>()), busy = useRef(false)
     const window = useRef({ until: new Date().toISOString(), from: range === 'all' ? null : new Date(Date.now() - Number(range) * 3600_000).toISOString() })
     const controller = useRef(new AbortController())
     const endpoint = `/api/backend/mill/rules/preview?organizationId=${encodeURIComponent(organizationId)}`
     const read = (next: Cursor, sample: boolean) => requestJson<Page>(endpoint, { method: 'POST', signal: controller.current.signal, body: JSON.stringify({ ...window.current, conditions, action, cursor: next, sample }) })
     useEffect(() => {
-        setError(''); setCount(0); setScanned(0); setComplete(false); setAcknowledged(false)
+        setError(''); setCount(0); setScanned(0); setComplete(false); setAcknowledged(false); setMore(true); setOffset(0); setEvents([])
+        browsing.current = false; rows.current = []; cursor.current = null; seen.current = new Set(); busy.current = false
         const abort = new AbortController()
         controller.current = abort
         const timer = setTimeout(async () => {
@@ -49,8 +51,12 @@ export default function RulePreview({ organizationId, conditions, action, range,
                     total += page.count; inspected += page.scanned; next = page.cursor
                     pool = [...pool, ...page.events].sort((a, b) => a.rank - b.rank).slice(0, 100)
                     const sample = diverseEvents(pool)
-                    rows.current = next ? sample : [...sample, ...pool.filter(event => !sample.some(selected => selected.id === event.id))]
-                    setEvents(rows.current); setCount(total); setScanned(inspected)
+                    if (!browsing.current) {
+                        rows.current = [...sample, ...pool.filter(event => !sample.some(selected => selected.id === event.id))]
+                        seen.current = new Set(rows.current.map(event => event.id))
+                        setEvents(rows.current)
+                    }
+                    setCount(total); setScanned(inspected)
                 } while (next)
                 seen.current = new Set(rows.current.map(event => event.id))
                 setComplete(true)
@@ -59,14 +65,16 @@ export default function RulePreview({ organizationId, conditions, action, range,
         return () => { clearTimeout(timer); abort.abort() }
         // The parent remounts this snapshot when the organization, rule or range changes.
     }, [attempt])
-    useEffect(() => { onReady(complete && (count <= 10_000 || acknowledged)) }, [complete, count, acknowledged, onReady])
+    useEffect(() => { onReady(!error && (complete && count <= 10_000 || count > 10_000 && acknowledged)) }, [complete, count, acknowledged, error, onReady])
     async function prefetch() {
-        if (busy.current || !more || !complete || controller.current.signal.aborted) return
-        busy.current = true; setLoading(true); setError('')
+        if (busy.current || !more || !rows.current.length || controller.current.signal.aborted) return
+        const abort = controller.current
+        browsing.current = true
+        busy.current = true; setLoading(true); if (complete) setError('')
         try {
             do {
                 const page = await read(cursor.current, false)
-                if (controller.current.signal.aborted) return
+                if (abort.signal.aborted) return
                 cursor.current = page.cursor
                 const fresh = page.events.filter(event => !seen.current.has(event.id)).sort((a, b) => a.rank - b.rank)
                 fresh.forEach(event => seen.current.add(event.id))
@@ -74,8 +82,8 @@ export default function RulePreview({ organizationId, conditions, action, range,
                 setEvents(rows.current)
                 if (!page.cursor) { setMore(false); break }
             } while (rows.current.length - offset < 100)
-        } catch (cause) { if (!controller.current.signal.aborted) setError(cause instanceof Error ? cause.message : 'More events could not be loaded.') }
-        finally { busy.current = false; if (!controller.current.signal.aborted) setLoading(false) }
+        } catch (cause) { if (!abort.signal.aborted) setError(cause instanceof Error ? cause.message : 'More events could not be loaded.') }
+        finally { if (controller.current === abort) { busy.current = false; if (!abort.signal.aborted) setLoading(false) } }
     }
     useEffect(() => { if (complete) void prefetch() }, [complete])
     const start = Math.max(0, offset - 1), visible = events.slice(start, start + 8)
@@ -83,7 +91,8 @@ export default function RulePreview({ organizationId, conditions, action, range,
     return <section className='grid min-w-0 gap-3' aria-label='Matching events preview'>
         <div className='flex flex-wrap items-center justify-between gap-2'><h3 className='font-semibold' aria-live='polite'>{complete ? '' : 'At least '}{new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(count)} matching events</h3><span className='text-xs text-ui-muted'>{complete ? `${count.toLocaleString()} matches · ${scanned.toLocaleString()} events checked` : `Checking events… ${scanned.toLocaleString()} checked`}</span></div>
         {count > 10_000 && <div role='alert' className='grid gap-2 rounded-lg border border-amber-500/50 p-3 text-sm'><p>Very many events match this rule. Is this intended?</p><label className='flex items-center gap-2'><input type='checkbox' checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)} />Yes, I intend to match this many events.</label></div>}
-        {!!events.length && <div role='region' aria-label='Matching event rows' tabIndex={0} className='h-[360px] overflow-auto rounded-lg border border-ui-border' onScroll={event => {
+        {!!events.length && <div role='region' aria-label='Matching event rows' tabIndex={0} style={{ overflowAnchor: 'none' }} className='h-[360px] overflow-auto rounded-lg border border-ui-border' onScroll={event => {
+            browsing.current = true
             const began = performance.now(), element = event.currentTarget
             const next = Math.floor(element.scrollTop / 64)
             flushSync(() => setOffset(next))

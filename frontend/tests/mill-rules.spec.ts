@@ -109,10 +109,13 @@ test('searchable event types, JSON and Drop creation preserve drafts on failure'
 test('Drop locks Low; broad previews require confirmation and buffered scrolling stays below 20ms', async ({ page }) => {
     await page.route('**/api/backend/mill/rules?*', route => route.fulfill({ json: { canManageRetention: true, rules: [] } }))
     const events = Array.from({ length: 250 }, (_, index) => ({ id: String(index), timestamp: '2026-09-23T12:00:00Z', rank: ((index * 137) % 251) / 251, normalized: { severity: 'low', service: `service-${index % 5}`, event_type: 'network', http: { status_code: 200, path: `/path-${index % 9}` }, source: { ip: `192.0.2.${index % 250}` } } }))
-    await page.route('**/api/backend/mill/rules/preview?*', route => {
+    let finishCount = () => {}
+    const pendingCount = new Promise<void>(resolve => { finishCount = resolve })
+    await page.route('**/api/backend/mill/rules/preview?*', async route => {
         const body = route.request().postDataJSON()
         expect(body.action).toBe('drop')
-        return route.fulfill({ json: { count: 10001, scanned: 20000, events: body.sample ? events.slice(0, 100) : events, cursor: null } })
+        if (body.sample && body.cursor) { await pendingCount; return route.fulfill({ json: { count: 0, scanned: 0, events: [], cursor: null } }) }
+        return route.fulfill({ json: { count: 10001, scanned: 20000, events: body.sample ? events.slice(0, 100) : events, cursor: body.sample ? { time: '2026-09-23T12:00:00Z', id: '250' } : null } })
     })
     await page.goto('http://mill.test/mill/rules/analysis')
     await page.getByRole('button', { name: 'Create', exact: true }).click()
@@ -140,6 +143,9 @@ test('Drop locks Low; broad previews require confirmation and buffered scrolling
         durations.push(Number(await table.getAttribute('data-render-ms')))
     }
     expect(Math.max(...durations)).toBeLessThan(20)
+    await expect(page.getByText(/Checking events…/)).toBeVisible()
+    finishCount()
+    await expect(page.getByText(/Checking events…/)).toHaveCount(0)
     console.log('Buffered row update milliseconds:', durations)
     expect(await table.locator('[data-event-id]').count()).toBeLessThanOrEqual(8)
     await page.screenshot({ path: '/tmp/mill-preview-desktop.png' })
