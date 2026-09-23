@@ -1,6 +1,6 @@
 import { createHash, generateKeyPairSync, sign } from 'node:crypto'
 import { expect, test } from 'bun:test'
-import { eligibleReadinessAudit, eligibleReadinessChain, completeReadinessChains, matchesReadinessFact, readinessArguments, readinessWrapperArguments, readinessCanonical, readinessChainPayload, readinessAuditRule, readinessRole, readinessRoles, type ReadinessExecutionProof } from '../src/utils/mill/analyzeReadinessAudit.ts'
+import { readinessAuditDefinition, readinessTimingAllowed, validReadinessAuditParameters, eligibleReadinessAudit, eligibleReadinessChain, completeReadinessChains, matchesReadinessFact, readinessArguments, readinessWrapperArguments, readinessCanonical, readinessChainPayload, readinessAuditRule, readinessRole, readinessRoles, type ReadinessExecutionProof } from '../src/utils/mill/analyzeReadinessAudit.ts'
 import type { CollectorLog } from '../src/utils/mill/analyzeCollector.ts'
 
 export const keys = generateKeyPairSync('ed25519')
@@ -61,10 +61,10 @@ test('each missing, duplicate, temporally reordered or additionally signed membe
     wrongSerial[1].sourceEventId=createHash('sha256').update(`inspur:audit:msg=audit(${(Date.parse(wrongSerial[1].timestamp!) / 1000).toFixed(3)}:1)`).digest('hex')
     expect(readinessChainPayload(wrongSerial,fact)).toBeUndefined()
 })
-test('signed but mismatched native process identity, cadence and completion retain all events', () => {
+test('mismatched native process identity and invalid completion retain all events', () => {
     configure(); const {logs,fact}=fixture()
     for (const change of [{version:1}, {parentPid:999}, {execPid:999}, {execParentPid:999}, {execStartTicks:'0'}, {nonce:'bad'}, {host:'ovhcloud'}, {containerId:'bad'}, {execId:'bad'}, {bootId:'bad'},
-        {previousStartedAt:fact.startedAt-100}, {previousStartedAt:fact.startedAt-16000}, {finishedAt:fact.startedAt-1}, {finishedAt:fact.startedAt+1001}, {startedAt:fact.finishedAt}, {namespacePid:0}, {parentStartTicks:'0'}]) {
+        {previousStartedAt:fact.startedAt}, {finishedAt:fact.startedAt-1}, {startedAt:fact.finishedAt}, {namespacePid:0}, {parentStartTicks:'0'}]) {
         expect(readinessChainPayload(logs,{...fact,...change} as ReadinessExecutionProof)).toBeUndefined()
     }
 })
@@ -115,4 +115,27 @@ test('batch groups isolate unrelated logs and reject overlapping or ambiguous ex
     second.fact.execId=first.fact.execId
     const collision=signed(second.logs,second.fact)
     expect(completeReadinessChains([...one,...collision])).toHaveLength(0)
+})
+
+test('authenticated timing is evaluated against persisted Mill parameters', () => {
+    configure(); const {logs,fact}=fixture(), parameters=readinessAuditDefinition.parameters
+    expect(validReadinessAuditParameters(parameters)).toBe(true)
+    expect(readinessTimingAllowed(fact,parameters)).toBe(true)
+    for(const change of [{previousStartedAt:fact.startedAt-100}, {previousStartedAt:fact.startedAt-16000}, {finishedAt:fact.startedAt+1001}]) {
+        const changed={...fact,...change}
+        expect(readinessChainPayload(logs,changed)).toBeDefined()
+        expect(eligibleReadinessChain(signed(logs,changed))).toBe(true)
+        expect(readinessTimingAllowed(changed,parameters)).toBe(false)
+        expect(readinessTimingAllowed(changed,{maxDurationMs:2000,minIntervalMs:1,maxIntervalMs:20000})).toBe(true)
+    }
+    for(const invalid of [undefined,null,{}, {...parameters,extra:1}, {...parameters,maxDurationMs:0}, {...parameters,minIntervalMs:0}, {...parameters,maxIntervalMs:3999}, {...parameters,maxDurationMs:1.5}]) {
+        expect(validReadinessAuditParameters(invalid)).toBe(false)
+        expect(readinessTimingAllowed(fact,invalid)).toBe(false)
+    }
+    const otherHost=structuredClone(logs), otherFact={...fact,host:'other-native-host'}
+    for(const log of otherHost) {
+        log.host=otherFact.host
+        log.sourceEventId=createHash('sha256').update(`${log.host}:audit:msg=audit(${(Date.parse(log.timestamp!) / 1000).toFixed(3)}:${log.metadata!.audit_id})`).digest('hex')
+    }
+    expect(eligibleReadinessChain(signed(otherHost,otherFact))).toBe(true)
 })

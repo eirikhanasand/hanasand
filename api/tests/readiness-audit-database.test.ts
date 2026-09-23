@@ -114,6 +114,31 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real readiness ingestion ke
         await ingest(clean)
         expect(await count('log_analyze_receipts')).toBe(0)
         expect(await count('log_readiness_audit_receipts')).toBe(3)
+        const policies = [
+            { ...readinessAuditDefinition, conditions: [{path:'host',operator:'equals',value:'other-host'}] },
+            { ...readinessAuditDefinition, conditions: [{path:'process.executable',operator:'equals',value:'/usr/lib/postgresql/15/bin/pg_isready'}] },
+            { ...readinessAuditDefinition, parameters: {...readinessAuditDefinition.parameters,maxDurationMs:1} },
+            { ...readinessAuditDefinition, parameters: {...readinessAuditDefinition.parameters,minIntervalMs:6000} },
+            { ...readinessAuditDefinition, parameters: {...readinessAuditDefinition.parameters,maxIntervalMs:4500} },
+            { ...readinessAuditDefinition, parameters:{} },
+            { ...readinessAuditDefinition, parameters:undefined },
+        ]
+        for(const policy of policies) {
+            await query('UPDATE mill_rules SET definition=$2::jsonb WHERE rule_id=$1',[readinessAuditRuleId,JSON.stringify(policy)])
+            const newlyProtected=entry()
+            await ingest(newlyProtected); await retained(newlyProtected)
+            // Delete only this disposable test's indexed replay, so every policy must independently retain it again.
+            await query('DELETE FROM service_logs WHERE source_event_id=ANY($1::text[])',[clean.map(log=>log.sourceEventId)])
+            await ingest(clean); await retained(clean)
+            expect(await count('log_readiness_audit_receipts')).toBe(3)
+            expect(await count('log_analyze_receipts')).toBe(0)
+        }
+        await query('UPDATE mill_rules SET definition=$2::jsonb WHERE rule_id=$1',[readinessAuditRuleId,JSON.stringify(readinessAuditDefinition)])
+        const allowedAgain=entry()
+        await ingest(allowedAgain)
+        expect(await count('log_readiness_audit_receipts')).toBe(4)
+        expect(Number((await query('SELECT count(*) n FROM service_logs WHERE source_event_id=ANY($1::text[])',[allowedAgain.map(log=>log.sourceEventId)])).rows[0].n)).toBe(0)
+
     } finally {
         await query(`DROP SCHEMA IF EXISTS ${namespace} CASCADE`)
         await pool.end()
