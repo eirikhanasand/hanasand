@@ -329,12 +329,15 @@ services:
     env_file:
       .env
     environment:
+      MODEL_PROBE_PROOF_DIR: /model-probe-receipts
       HANASAND_AI_CLIENT_API_WS: ${HANASAND_AI_CLIENT_API_WS:-ws://127.0.0.1:8080/api/client/ws/gpt}
       HANASAND_AI_OPENAI_BASE: ${HANASAND_AI_OPENAI_BASE:-http://127.0.0.1:18081}
       HANASAND_AI_MODEL: ${HANASAND_AI_MODEL:-hanasand}
       HANASAND_AI_CLIENT_NAME: ${HANASAND_AI_CLIENT_NAME:-hanasand-inspur}
       HANASAND_AI_CLIENT_HEALTH_PORT: ${HANASAND_AI_CLIENT_HEALTH_PORT:-18182}
     volumes:
+      - /var/lib/hanasand/model-probe-receipts:/model-probe-receipts
+      - /var/lib/hanasand/model-probe-config:/model-probe-config:ro
       - /var/lib/hanasand/metrics:/host-metrics:ro
       - /var/lib/hanasand/ai-power:/power-state
     healthcheck:

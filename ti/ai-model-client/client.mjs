@@ -1,5 +1,6 @@
 import { readPower } from './power.mjs';
 import { createLanePool, modelEndpoints } from './lanes.mjs';
+import { createModelProbe } from './model-probe.mjs';
 
 const API_WS = process.env.HANASAND_AI_CLIENT_API_WS ?? "ws://127.0.0.1:8080/api/client/ws/gpt";
 const OPENAI_BASE = process.env.HANASAND_AI_OPENAI_BASE ?? "http://127.0.0.1:18081";
@@ -13,6 +14,7 @@ const MODEL_LANE_PORTS = (process.env.HANASAND_AI_MODEL_LANE_PORTS ?? "18081,180
 const MAX_REQUESTS = Math.max(1, Number(process.env.HANASAND_AI_MODEL_MAX_REQUESTS ?? "4"));
 const CONTEXT_MAX_TOKENS = Math.max(0, Number(process.env.HANASAND_AI_MODEL_CONTEXT_MAX_TOKENS ?? "32768"));
 const lanePool = createLanePool(MAX_REQUESTS);
+const modelProbe = createModelProbe();
 
 let socket;
 let connected = false;
@@ -44,9 +46,11 @@ Bun.serve({
       model: MODEL,
       clientName: CLIENT_NAME,
       connected,
+      activeRequests: lanePool.activeRequests,
       lastPromptAt,
       lastCompletionAt,
       lastError,
+      modelProbeProof: modelProbe.state(),
       modelHealth
     }, url.pathname === "/health" ? 200 : ready ? 200 : 503);
   }
@@ -217,11 +221,8 @@ async function checkModel() {
     const endpoints = modelEndpoints(OPENAI_BASE, MODEL_LANE_PORTS);
     const results = await Promise.all(endpoints.map(async (baseUrl, index) => {
       try {
-        const response = await fetch(new URL("/v1/models", baseUrl), {
-          cache: "no-store",
-          signal: AbortSignal.timeout(1500)
-        });
-        const body = await response.json().catch(() => undefined);
+        const response = await modelProbe.probe(baseUrl, MODEL);
+        const body = response.body;
         const models = Array.isArray(body?.data) ? body.data.map((item) => item.id).filter(Boolean) : [];
         return { baseUrl, index, ok: response.ok, models };
       } catch {
