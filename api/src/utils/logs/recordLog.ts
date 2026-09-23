@@ -1,4 +1,6 @@
 import run from '#db'
+import { customRetentionAction, loadLogRetentionRules } from '../mill/customRetention.ts'
+import { normalizeLogEvent } from '../mill/logEvent.ts'
 import { redactLogText, redactLogValue } from './redact.ts'
 import { accessFromLog } from '../mill/analyzeAccess.ts'
 import { analyzeAccess, analyzeMongoPing } from '../mill/analyzeLog.ts'
@@ -38,7 +40,7 @@ async function prepareLog({
     metadata?: Record<string, unknown>
     sourceEventId?: string
     timestamp?: string
-}, query: typeof run = run) {
+}, query: typeof run = run, retention = new Map<string, Awaited<ReturnType<typeof loadLogRetentionRules>>>()) {
     if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) metadata = {}
     if (await analyzeMongoPing({ service, host, level, message, metadata, sourceEventId }, query === run ? undefined : query)) return
     const access = accessFromLog({ service, host, level, message, metadata, sourceEventId, timestamp })
@@ -50,6 +52,8 @@ async function prepareLog({
         : typeof metadata.tenantId === 'string' && metadata.tenantId
             ? metadata.tenantId
             : null
+    if (!retention.has(scopeId || '')) retention.set(scopeId || '', await loadLogRetentionRules(scopeId, query))
+    if (customRetentionAction(normalizeLogEvent({ id: sourceEventId || '', service, host, level, message, metadata, created_at: timestamp || new Date() }), retention.get(scopeId || '')!) === 'drop') return
     if (!scopeId && isOrganizationRequest(metadata)) {
         service = 'hanasand-api'
         host = ''
@@ -100,8 +104,9 @@ export default async function recordLog(entry: Parameters<typeof prepareLog>[0],
 // ordinary collector rows share one insert instead of 100 sequential round trips.
 export async function recordLogBatch(entries: Parameters<typeof prepareLog>[0][], query: typeof run) {
     const rows = []
+    const retention = new Map<string, Awaited<ReturnType<typeof loadLogRetentionRules>>>()
     for (const entry of entries) {
-        const values = await prepareLog(entry, query)
+        const values = await prepareLog(entry, query, retention)
         if (values) rows.push(values)
     }
     if (!rows.length) return

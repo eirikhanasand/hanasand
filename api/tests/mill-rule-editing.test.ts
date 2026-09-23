@@ -253,3 +253,39 @@ test('built-in network event selector gates findings and survives enable/disable
     await ingestMill(request('', network), reply() as any)
     expect(findings).toHaveLength(0)
 })
+
+test('custom Analyze rules drop before storage and retain audited Store exceptions', async () => {
+    const body = { name: 'Drop network noise', explanation: 'Discard matching routine network events.', severity: 'low', stage: 'analyze', action: 'drop', conditions: [{ path: 'event_type', operator: 'equals', value: 'network' }] }
+    const denied = reply()
+    await postMillRule(request('', body), denied as any)
+    expect(denied.statusCode).toBe(403)
+    systemAdmin = true
+    const created = await postMillRule(request('', body), reply() as any)
+    expect(created.rule.definition).toMatchObject({ stage: 'analyze', action: 'drop' })
+    expect(await ingestMill(request('', network), reply() as any)).toMatchObject({ accepted_events: 1, stored_events: 0, dropped_events: 1 })
+    expect(events).toHaveLength(0)
+    expect(findings).toHaveLength(0)
+    await putMillRule(request(created.rule.id, { ...body, enabled: true, version: '1', action: 'keep' }), reply() as any)
+    expect(rows[0].definition).toMatchObject({ stage: 'analyze', action: 'keep' })
+    expect(audits.at(-1).context.after.definition.action).toBe('keep')
+    expect(await ingestMill(request('', network), reply() as any)).toMatchObject({ stored_events: 1, dropped_events: 0 })
+    expect(findings.some(finding => finding.ruleId === created.rule.id)).toBe(false)
+    await postMillRule(request('', body), reply() as any)
+    expect((await ingestMill(request('', network), reply() as any)).dropped_events).toBe(0)
+    const outside = reply()
+    await postMillRule(request('', body, 'org-b'), outside as any)
+    expect(outside.statusCode).toBe(403)
+})
+
+test('custom action validation and disabling restores storage', async () => {
+    systemAdmin = true
+    const body = { name: 'Drop network', explanation: 'Discard network events matching this selector.', severity: 'low', stage: 'analyze', action: 'drop', conditions: [{ path: 'event_type', operator: 'equals', value: 'network' }] }
+    for (const change of [{ stage: 'match' }, { stage: 'invalid' }, { action: 'invalid' }, { conditions: [] }]) {
+        const result = reply()
+        await postMillRule(request('', { ...body, ...change }), result as any)
+        expect(result.statusCode).toBe(400)
+    }
+    const created = await postMillRule(request('', body), reply() as any)
+    await postMillRuleAction(request(created.rule.id, { action: 'disable' }), reply() as any)
+    expect((await ingestMill(request('', network), reply() as any)).dropped_events).toBe(0)
+})

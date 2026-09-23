@@ -42,7 +42,7 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
         if (!draft || !data?.canEdit) return
         setBusy(true); setError(''); setStatus('')
         try {
-            const result = await requestJson<{ rule: MillRule }>(`/api/backend/mill/rules/${encodeURIComponent(draft.id.replace(/\.v\d+$/, ''))}?organizationId=${encodeURIComponent(organizationId)}`, { method: 'PUT', body: JSON.stringify({ name: draft.name, explanation: draft.explanation, severity: draft.severity, enabled: draft.enabled !== false, version: draft.version, ...(draft.source !== 'hanasand' ? { conditions: draft.definition?.conditions || [] } : { definition: draft.definition }) }) })
+            const result = await requestJson<{ rule: MillRule }>(`/api/backend/mill/rules/${encodeURIComponent(draft.id.replace(/\.v\d+$/, ''))}?organizationId=${encodeURIComponent(organizationId)}`, { method: 'PUT', body: JSON.stringify({ name: draft.name, explanation: draft.explanation, severity: draft.severity, enabled: draft.enabled !== false, version: draft.version, ...(draft.source !== 'hanasand' ? { conditions: draft.definition?.conditions || [], action: draft.definition?.action } : { definition: draft.definition }) }) })
             setDraft(result.rule)
             setData(previous => previous ? { ...previous, rule: result.rule } : previous)
             setStatus('Rule saved. New events use this version.')

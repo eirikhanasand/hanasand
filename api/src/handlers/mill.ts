@@ -12,10 +12,13 @@ import { parse as parseYaml } from 'yaml'
 import { mongoRule, mongoRuleId, mongoDefinition } from '#utils/mill/analyzeMongo.ts'
 import { accessRule, accessRuleId, accessDefinition } from '#utils/mill/analyzeAccess.ts'
 
+import { matchesMillRule, type MillCondition } from '#utils/mill/conditions.ts'
+import { customRetentionAction } from '#utils/mill/customRetention.ts'
+export { matchesMillRule } from '#utils/mill/conditions.ts'
+
 type MillEvent = Record<string, unknown>
 type MillBody = { source?: Record<string, unknown>, events?: unknown }
-type MillCondition = { path: string, operator: 'equals' | 'contains' | 'regex', value: string }
-type MillDefinition = { match: 'all', conditions: MillCondition[], failureConditions?: MillCondition[], parameters?: Record<string, number>, stage?: 'analyze', action?: 'drop' | 'keep' }
+type MillDefinition = { match: 'all', conditions: MillCondition[], failureConditions?: MillCondition[], parameters?: Record<string, number>, stage?: 'analyze' | 'match' | 'detect', action?: 'drop' | 'keep' }
 type MillRule = { id: string, detectionLogic?: string, recordId?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'owned' | 'open_source', sourceReference?: string, definition?: MillDefinition }
 
 export const MILL_RULES: MillRule[] = [
@@ -97,13 +100,16 @@ export async function ingestMill(req: FastifyRequest, res: FastifyReply) {
     const ingestionId = `mill_${randomUUID()}`
     const configuredRules = await loadConfiguredMillRules(key.organizationId)
     const accepted: string[] = []
-    const normalizedEvents = (events as MillEvent[]).map(event => ({ normalized: normalizeMillEvent(event, source), eventId: randomUUID() }))
+    let normalizedEvents = (events as MillEvent[]).map(event => ({ normalized: normalizeMillEvent(event, source), eventId: randomUUID() }))
     const missingTimestamps = normalizedEvents.flatMap(({ normalized }, index) => normalized.timestamp
         ? []
         : [{ field: `events[${index}].timestamp`, message: 'timestamp is required and must be provided by the event.' }])
     if (missingTimestamps.length) {
         return res.status(400).send({ error: { code: 'invalid_mill_event_fields', message: 'Correct the invalid event fields and try again.', fields: missingTimestamps } })
     }
+    const receivedCount = normalizedEvents.length
+    normalizedEvents = normalizedEvents.filter(({ normalized }) => customRetentionAction(normalized.normalized, configuredRules) !== 'drop')
+    const droppedCount = receivedCount - normalizedEvents.length
     for (let offset = 0; offset < normalizedEvents.length; offset += 50) {
         await Promise.all(normalizedEvents.slice(offset, offset + 50).map(async ({ normalized, eventId }) => {
             await run(`
@@ -128,7 +134,7 @@ export async function ingestMill(req: FastifyRequest, res: FastifyReply) {
         await run('UPDATE mill_events SET processing_status = \'processed\' WHERE id = $1 AND organization_id = $2', [eventId, key.organizationId])
     }
 
-    return res.status(202).send({ accepted: true, ingestion_id: ingestionId, accepted_events: accepted.length, rejected_events: 0 })
+    return res.status(202).send({ accepted: true, ingestion_id: ingestionId, accepted_events: receivedCount, stored_events: accepted.length, dropped_events: droppedCount, rejected_events: 0 })
 }
 
 export async function getMillEvents(req: FastifyRequest, res: FastifyReply) {
@@ -183,14 +189,14 @@ export async function getMillRules(req: FastifyRequest, res: FastifyReply) {
     if (!access) return
     const query = req.query as { organizationId?: string }
     if (query.organizationId !== access.organizationId) return res.status(403).send({ error: 'Organization access denied.' })
-    return res.send({ organizationId: access.organizationId, rules: await loadConfiguredMillRules(access.organizationId) })
+    return res.send({ organizationId: access.organizationId, rules: await loadConfiguredMillRules(access.organizationId), canManageRetention: canManageMillRules(access.role) && (await hasRole(req, res, 'system_admin')).valid })
 }
 
 export async function postMillRule(req: FastifyRequest, res: FastifyReply) {
     const access = await organizationAccess(req, res)
     if (!access) return
     if (!canManageMillRules(access.role)) return res.status(403).send({ error: 'Editor access is required to manage Mill rules.' })
-    const body = req.body as { name?: unknown, explanation?: unknown, severity?: unknown, conditions?: unknown } | undefined
+    const body = req.body as { name?: unknown, explanation?: unknown, severity?: unknown, conditions?: unknown, stage?: unknown, action?: unknown } | undefined
     const name = typeof body?.name === 'string' ? body.name.trim() : ''
     const explanation = typeof body?.explanation === 'string' ? body.explanation.trim() : ''
     const severity = typeof body?.severity === 'string' && ['low', 'medium', 'high', 'critical'].includes(body.severity) ? body.severity : 'medium'
@@ -198,8 +204,12 @@ export async function postMillRule(req: FastifyRequest, res: FastifyReply) {
     if (name.length < 2 || name.length > 120) return res.status(400).send({ error: 'Rule name must contain 2-120 characters.' })
     if (explanation.length < 10 || explanation.length > 500) return res.status(400).send({ error: 'Rule explanation must contain 10-500 characters.' })
     if (!conditionResult.conditions.length || conditionResult.error) return res.status(400).send({ error: conditionResult.error || 'Add at least one valid rule condition.' })
+    const stage = body?.stage ?? 'match'
+    const action = body?.action ?? 'keep'
+    if (!['match', 'analyze', 'detect'].includes(String(stage)) || !['drop', 'keep'].includes(String(action)) || (stage !== 'analyze' && action !== 'keep')) return res.status(400).send({ error: 'Drop requires an Analyze rule.' })
+    if (stage === 'analyze' && !(await hasRole(req, res, 'system_admin')).valid) return res.status(403).send({ error: 'System administrator access is required to change log retention.' })
     const ruleId = `custom.${randomUUID().replaceAll('-', '').slice(0, 20)}.v1`
-    const rule = await saveMillRule(req, access, { id: ruleId, version: '1', name, family: 'Custom', severity, explanation, evidence: [], definition: { match: 'all', conditions: conditionResult.conditions }, source: 'owned', enabled: true }, 'mill.rule.created')
+    const rule = await saveMillRule(req, access, { id: ruleId, version: '1', name, family: 'Custom', severity, explanation, evidence: [], definition: { match: 'all', conditions: conditionResult.conditions, stage: stage as MillDefinition['stage'], action: action as MillDefinition['action'] }, source: 'owned', enabled: true }, 'mill.rule.created')
     return res.status(201).send({ rule })
 }
 
@@ -271,7 +281,7 @@ export async function postMillRuleAction(req: FastifyRequest<{ Params: { id: str
     if (!action) return res.status(400).send({ error: 'Action must be enable or disable.' })
     const rule = (await loadConfiguredMillRules(access.organizationId)).find(rule => millRuleSlug(rule.id) === millRuleSlug(req.params.id) || rule.recordId === req.params.id)
     if (!rule) return res.status(404).send({ error: 'Rule not found.' })
-    if ([accessRuleId, mongoRuleId].includes(rule.id) && !(await hasRole(req, res, 'system_admin')).valid) return res.status(403).send({ error: 'System administrator access is required to change platform log retention.' })
+    if (([accessRuleId, mongoRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') && !(await hasRole(req, res, 'system_admin')).valid) return res.status(403).send({ error: 'System administrator access is required to change platform log retention.' })
     try {
         const saved = await saveMillRule(req, access, { ...rule, enabled: action === 'enable' }, 'mill.rule.updated', rule.version)
         return res.send({ rule: saved })
@@ -306,7 +316,7 @@ export async function getMillRule(req: FastifyRequest<{ Params: { id: string }, 
         ORDER BY created_at DESC, id DESC LIMIT 51 OFFSET $4`, [access.organizationId, rule.id, rule.recordId || rule.id, offset])
     const triggers = await run(`SELECT count(*)::text AS count FROM mill_findings
         WHERE organization_id = $1 AND rule_id = $2`, [access.organizationId, rule.id])
-    const canEdit = !isHistorical && canManageMillRules(access.role) && (![accessRuleId, mongoRuleId].includes(rule.id) || (await hasRole(req, res, 'system_admin')).valid)
+    const canEdit = !isHistorical && canManageMillRules(access.role) && (!([accessRuleId, mongoRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') || (await hasRole(req, res, 'system_admin')).valid)
     return res.send({ organizationId: access.organizationId, canEdit, isHistorical, currentVersion: rule.version, rule: displayedRule, triggerCount: Number(triggers.rows[0].count), audit: audit.rows.slice(0, 50), nextOffset: audit.rows.length > 50 ? offset + 50 : null })
 }
 
@@ -316,7 +326,7 @@ export async function putMillRule(req: FastifyRequest<{ Params: { id: string } }
     if (!canManageMillRules(access.role)) return res.status(403).send({ error: 'Editor access is required to manage rules.' })
     const rule = (await loadConfiguredMillRules(access.organizationId)).find(rule => millRuleSlug(rule.id) === millRuleSlug(req.params.id))
     if (!rule) return res.status(404).send({ error: 'Rule not found.' })
-    if ([accessRuleId, mongoRuleId].includes(rule.id) && !(await hasRole(req, res, 'system_admin')).valid) return res.status(403).send({ error: 'System administrator access is required to change platform log retention.' })
+    if (([accessRuleId, mongoRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') && !(await hasRole(req, res, 'system_admin')).valid) return res.status(403).send({ error: 'System administrator access is required to change platform log retention.' })
     const body = (req.body || {}) as Record<string, unknown>
     const name = typeof body.name === 'string' ? body.name.trim() : ''
     const explanation = typeof body.explanation === 'string' ? body.explanation.trim() : ''
@@ -326,7 +336,9 @@ export async function putMillRule(req: FastifyRequest<{ Params: { id: string } }
     if (rule.source !== 'hanasand') {
         const normalized = normalizeMillConditions(body.conditions)
         if (normalized.error || !normalized.conditions.length) return res.status(400).send({ error: normalized.error || 'Add at least one condition.' })
-        definition = { match: 'all', conditions: normalized.conditions }
+        const action = body.action ?? rule.definition?.action ?? 'keep'
+        if (!['keep', 'drop'].includes(String(action)) || (rule.definition?.stage !== 'analyze' && action !== 'keep')) return res.status(400).send({ error: 'Drop requires an Analyze rule.' })
+        definition = { ...rule.definition, match: 'all', conditions: normalized.conditions, action: action as 'drop' | 'keep' }
     } else {
         if (body.conditions !== undefined) return res.status(400).send({ error: 'Use the detection definition to edit built-in selectors.' })
         if (body.definition !== undefined) {
@@ -422,7 +434,7 @@ export function collectMillEventFindings(organizationId: string, eventId: string
     for (const rule of matchSecurityRules(event.normalized).filter(rule => enabled.has(rule.id))) {
         insertFinding(organizationId, rule.id, rule.severity, rule.name, [eventId], { process: event.normalized.process, host: event.normalized.host, user: event.normalized.user, eventId })
     }
-    for (const rule of rules.filter(rule => (rule.source === 'owned' || rule.source === 'open_source') && rule.enabled !== false)) {
+    for (const rule of rules.filter(rule => (rule.source === 'owned' || rule.source === 'open_source') && rule.enabled !== false && rule.definition?.stage !== 'analyze')) {
         if (rule.definition && matchesMillRule(event.normalized, rule.definition.conditions)) {
             insertFinding(organizationId, rule.id, rule.severity, rule.name, [eventId], { ruleId: rule.id, matchedConditions: rule.definition.conditions, eventId })
         }
@@ -701,19 +713,6 @@ function escapeRegex(value: string) { return value.replace(/[.*+?^${}()|[\]\\]/g
 function millConditionEvidence(value: unknown) {
     const conditions = (value as { conditions?: unknown })?.conditions
     return Array.isArray(conditions) ? conditions.map(condition => typeof condition === 'object' && condition && 'path' in condition ? String(condition.path) : 'condition') : []
-}
-export function matchesMillRule(event: MillEvent, conditions: MillCondition[]) {
-    return conditions.every(condition => {
-        const value = getMillPath(event, condition.path)
-        if (value === undefined || value === null || typeof value === 'object') return false
-        const actual = String(value)
-        if (condition.operator === 'equals') return actual.toLowerCase() === condition.value.toLowerCase()
-        if (condition.operator === 'contains') return actual.toLowerCase().includes(condition.value.toLowerCase())
-        try { return new RegExp(condition.value, 'i').test(actual) } catch { return false }
-    })
-}
-function getMillPath(value: MillEvent, path: string): unknown {
-    return path.split('.').reduce<unknown>((current, part) => current && typeof current === 'object' && !Array.isArray(current) ? (current as MillEvent)[part] : undefined, value)
 }
 function bearer(req: FastifyRequest) {
     const apiKey = req.headers['x-api-key']

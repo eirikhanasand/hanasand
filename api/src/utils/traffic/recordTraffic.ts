@@ -2,6 +2,8 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import { verifiedClientIp } from '#utils/http/publicBoundary.ts'
 import { inspectAccess } from '#utils/mill/analyzeAccess.ts'
+import { customRetentionAction, loadLogRetentionRules } from '#utils/mill/customRetention.ts'
+import { normalizeLogEvent } from '#utils/mill/logEvent.ts'
 import { analyzeAccess } from '#utils/mill/analyzeLog.ts'
 import { redactLogText, redactLogValue } from '#utils/logs/redact.ts'
 
@@ -17,6 +19,10 @@ export default async function recordTraffic(req: FastifyRequest, res: FastifyRep
         path, method: req.method, status: res.statusCode, inspection: inspectAccess(req) }
     try {
         if (persist && await analyzeAccess(access)) return
+        if (persist && customRetentionAction(normalizeLogEvent({ id: access.key, created_at: access.timestamp,
+            service: 'http-traffic', host: req.hostname, level: res.statusCode >= 400 ? 'error' : 'info', message: `${req.method} ${path} → ${res.statusCode}`,
+            metadata: { category: 'http', action: 'request', outcome: res.statusCode >= 400 ? 'failure' : 'success', path, method: req.method, status_code: res.statusCode, source: { ip: access.ip } },
+        }), await loadLogRetentionRules(null)) === 'drop') return
     } catch (error) {
         // If analysis fails, retain the request; never silently lose evidence.
         req.log.warn({ error }, 'Access analysis failed; retaining request')

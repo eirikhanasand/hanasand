@@ -1,29 +1,25 @@
 'use client'
 
+import CreateRuleDialog from './create-rule-dialog'
 import Link from '@/components/organizations/workspaceLink'
 import { useWorkspace } from '@/components/organizations/workspaceProvider'
 import { useEffect, useRef, useState } from 'react'
 import { getRuleCategory, ruleCategories, type RuleCategory } from './rule-categories'
 import { DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 
-export type MillRule = { id: string, detectionLogic?: string, recordId?: string, rule_id?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'owned' | 'open_source', sourceReference?: string, definition?: { stage?: 'analyze', action?: 'drop' | 'keep', match?: 'all', parameters?: Record<string, number>, failureConditions?: Array<{ path: string, operator: string, value: string }>, conditions?: Array<{ path: string, operator: string, value: string }> } }
+export type MillRule = { id: string, detectionLogic?: string, recordId?: string, rule_id?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'owned' | 'open_source', sourceReference?: string, definition?: { stage?: 'analyze' | 'match' | 'detect', action?: 'drop' | 'keep', match?: 'all', parameters?: Record<string, number>, failureConditions?: Array<{ path: string, operator: string, value: string }>, conditions?: Array<{ path: string, operator: string, value: string }> } }
 
 export default function DetectionRules({ category }: { category: RuleCategory }) {
     const latestOrganization = useRef('')
     const { organizationId, organizations } = useWorkspace()
     const [rules, setRules] = useState<MillRule[]>([])
+    const [canManageRetention, setCanManageRetention] = useState(false)
     const [titleFilter, setTitleFilter] = useState('')
     const [textFilter, setTextFilter] = useState('')
     const [enabledFilter, setEnabledFilter] = useState('all')
     const [severityFilter, setSeverityFilter] = useState('all')
     const [showImports, setShowImports] = useState(false)
     const [showCreate, setShowCreate] = useState(false)
-    const [ruleName, setRuleName] = useState('')
-    const [ruleExplanation, setRuleExplanation] = useState('')
-    const [ruleSeverity, setRuleSeverity] = useState('medium')
-    const [rulePath, setRulePath] = useState('event_type')
-    const [ruleOperator, setRuleOperator] = useState('equals')
-    const [ruleValue, setRuleValue] = useState('')
     const [packName, setPackName] = useState('')
     const [packVersion, setPackVersion] = useState('')
     const [packReference, setPackReference] = useState('')
@@ -41,19 +37,9 @@ export default function DetectionRules({ category }: { category: RuleCategory })
         latestOrganization.current = id
         try {
             setError('')
-            const payload = await requestJson<{ rules?: MillRule[] }>(`/api/backend/mill/rules?organizationId=${encodeURIComponent(id)}`)
-            if (latestOrganization.current === id) setRules(payload.rules || [])
+            const payload = await requestJson<{ rules?: MillRule[], canManageRetention?: boolean }>(`/api/backend/mill/rules?organizationId=${encodeURIComponent(id)}`)
+            if (latestOrganization.current === id) { setRules(payload.rules || []); setCanManageRetention(payload.canManageRetention === true) }
         } catch (cause) { if (latestOrganization.current === id) { setError(errorMessage(cause)); setRules([]) } }
-    }
-
-    async function createRule() {
-        if (!organizationId) return
-        try {
-            await requestJson(`/api/backend/mill/rules?organizationId=${encodeURIComponent(organizationId)}`, { method: 'POST', body: JSON.stringify({ name: ruleName, explanation: ruleExplanation, severity: ruleSeverity, conditions: [{ path: rulePath, operator: ruleOperator, value: ruleValue }] }) })
-            setStatus('Custom rule created and enabled for new events.')
-            setRuleName(''); setRuleExplanation(''); setRuleValue('')
-            if (latestOrganization.current === organizationId) await loadMill(organizationId)
-        } catch (cause) { setError(errorMessage(cause)) }
     }
 
     async function toggleRule(rule: MillRule) {
@@ -116,15 +102,10 @@ export default function DetectionRules({ category }: { category: RuleCategory })
                 </div>
             </div>
             {error && <div role='alert' className='rounded-lg border border-red-400/40 bg-red-500/10 p-3 text-sm text-red-200'>{error}</div>}
-            {status && <div role='status' className='rounded-lg border border-ui-primary/40 bg-ui-primary/10 p-3 text-sm text-ui-text'>{status}{category !== 'match' && <Link href='/mill/rules/match' className='ml-2 underline'>View custom and imported rules in Match filter</Link>}</div>}
-            {showCreate && <DashboardPanel className='grid min-w-0 gap-4 p-4 sm:p-6' id='mill-rule-create'>
-                <h2 className='font-semibold'>Create rule</h2>
-                <form className='grid min-w-0 gap-4 border-t border-ui-border p-4 sm:p-5' onSubmit={event => { event.preventDefault(); void createRule() }}>
-                    <div className='grid gap-2 md:grid-cols-3'><input value={ruleName} onChange={event => setRuleName(event.target.value)} placeholder='Rule name' aria-label='Rule name' className='min-w-0 h-10 rounded-md border border-ui-border bg-ui-canvas px-2 text-sm text-ui-text' /><select value={ruleSeverity} onChange={event => setRuleSeverity(event.target.value)} aria-label='Rule severity' className='min-w-0 h-10 rounded-md border border-ui-border bg-ui-panel px-2 text-sm text-ui-text'><option value='low'>Low</option><option value='medium'>Medium</option><option value='high'>High</option><option value='critical'>Critical</option></select><input value={ruleExplanation} onChange={event => setRuleExplanation(event.target.value)} placeholder='Why this matters (10-500 chars)' aria-label='Rule explanation' className='min-w-0 h-10 rounded-md border border-ui-border bg-ui-canvas px-2 text-sm text-ui-text' /></div>
-                    <div className='grid gap-2 md:grid-cols-[1fr_auto_1fr_auto]'><input value={rulePath} onChange={event => setRulePath(event.target.value)} placeholder='event_type' aria-label='Rule field path' className='min-w-0 h-10 rounded-md border border-ui-border bg-ui-canvas px-2 text-sm text-ui-text' /><select value={ruleOperator} onChange={event => setRuleOperator(event.target.value)} aria-label='Rule operator' className='min-w-0 h-10 rounded-md border border-ui-border bg-ui-panel px-2 text-sm text-ui-text'><option value='equals'>equals</option><option value='contains'>contains</option><option value='regex'>regex</option></select><input value={ruleValue} onChange={event => setRuleValue(event.target.value)} placeholder='authentication' aria-label='Rule value' className='min-w-0 h-10 rounded-md border border-ui-border bg-ui-canvas px-2 text-sm text-ui-text' /><button type='submit' className='min-w-0 h-10 rounded-md bg-ui-text px-3 text-xs font-semibold text-ui-canvas disabled:opacity-50' disabled={!canManageRules || !ruleName.trim() || !ruleExplanation.trim() || !rulePath.trim() || !ruleValue.trim()}>Create rule</button></div>
-                    {!canManageRules && <p className='text-xs text-ui-muted'>Owner or admin access is required to change organization rules.</p>}
-                </form>
-            </DashboardPanel>}
+            {status && <div role='status' className='rounded-lg border border-ui-primary/40 bg-ui-primary/10 p-3 text-sm text-ui-text'>{status}</div>}
+            {showCreate && <CreateRuleDialog key={organizationId} category={category} organizationId={organizationId} canManage={canManageRules} canManageRetention={canManageRetention} rules={rules} onClose={() => setShowCreate(false)} onCreated={rule => {
+                setShowCreate(false); setStatus(`${rule.name} created.`); void loadMill(organizationId)
+            }} />}
             {showImports && <DashboardPanel className='grid min-w-0 gap-4 p-4 sm:p-6' id='mill-rule-imports'>
                 <h2 className='font-semibold'>Import rules</h2>
                 <details className='min-w-0 rounded-lg border border-ui-border'>
