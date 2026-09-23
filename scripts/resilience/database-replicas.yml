@@ -27,7 +27,8 @@ services:
     container_name: hanasand-db
     mem_limit: 26g
     memswap_limit: 26g
-    volumes: [ovh-data:/var/lib/postgresql/data]
+    # Keep the retained WAL available while the verified replacement catches up.
+    volumes: [ovh-data:/var/lib/postgresql/data, ovh-recovery-wal:/recovery-wal:ro]
     command: [postgres, -p, "18506", -c, listen_addresses=127.0.0.1, -c, shared_buffers=16GB, -c, max_wal_size=32GB, -c, checkpoint_timeout=15min, -c, fsync=on, -c, full_page_writes=on, -c, synchronous_commit=on]
 
 volumes:
@@ -36,4 +37,7 @@ volumes:
     name: ${INSPUR_STANDBY_VOLUME:-hanasand_resilience_pg_local}
   ovh-data:
     external: true
-    name: ${OVH_STANDBY_VOLUME:-hanasand_resilience_pg_case_20260920}
+    name: ${OVH_STANDBY_VOLUME:-hanasand_resilience_pg_case_20260923b}
+  ovh-recovery-wal:
+    external: true
+    name: ${OVH_RECOVERY_WAL_VOLUME:-hanasand_resilience_wal_case_20260923}
