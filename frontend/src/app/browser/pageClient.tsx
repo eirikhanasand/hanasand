@@ -428,6 +428,7 @@ export default function BrowserPageClient({ initialData, resultId }: { initialDa
     const [resultClientId, setResultClientId] = useState('')
     useEffect(() => { setResultClientId(getOrCreateBrowserClientId()) }, [])
     const [currentRunId, setCurrentRunId] = useState('')
+    const [quickRun, setQuickRun] = useState(false)
     const [shareStatus, setShareStatus] = useState('')
     const [shareUrl, setShareUrl] = useState('')
     const [shareError, setShareError] = useState('')
@@ -703,13 +704,15 @@ export default function BrowserPageClient({ initialData, resultId }: { initialDa
         setCustomPlatform(next.platform)
     }, [])
 
-    const startRun = useCallback(function startRun(override?: { target?: string; network?: BrowserNetwork; recovery?: boolean }) {
+    const startRun = useCallback(function startRun(override?: { target?: string; network?: BrowserNetwork; recovery?: boolean; quick?: boolean }) {
         const url = normalizeTarget(override?.target ?? target)
         if (!url) return
         setShowStoredResult(false)
         if (replacementRef.current) clearTimeout(replacementRef.current)
         replacementRef.current = null
         if (!override?.recovery) {
+            setQuickRun(Boolean(override?.quick))
+            if (override?.quick) setSelectedProfileId('triage-default')
             recoveryAttemptsRef.current = 0
             recoveryDeadlineRef.current = Date.now() + (quota?.sessionSeconds || 300) * 1000
             scrollRouteFrameToTop('auto')
@@ -771,13 +774,13 @@ export default function BrowserPageClient({ initialData, resultId }: { initialDa
                     setRunBlocker('The session ended while reconnecting.')
                     return
                 }
-                startRun({ target: lastPageUrl, recovery: true })
+                startRun({ target: lastPageUrl, recovery: true, quick: override?.quick })
             }, delay)
         }
 
         socket.onopen = () => {
             setSocketState('open')
-            const profileTools = selectedProfile.tools
+            const profileTools = override?.quick ? defaultTools : selectedProfile.tools
             socket.send(JSON.stringify({
                 type: 'start',
                 resumeToken,
@@ -1054,6 +1057,16 @@ export default function BrowserPageClient({ initialData, resultId }: { initialDa
         pushEvent('Sandbox stopped.')
     }, [pushEvent, runStartedAt])
 
+    useEffect(() => {
+        if (!quickRun || !runIsActive || stoppedRunRef.current) return
+        const ready = ['virustotal', 'urlquery'].every(kind => toolCaptures.some(capture =>
+            capture.toolAnalysis?.toolKind === kind && !capture.error && hasParsedProviderResult(capture.toolAnalysis)))
+        if (!ready) return
+        stopRun()
+        // Successful quick runs are complete even when they take less than 30 seconds.
+        stoppedEarlyRef.current = false
+    }, [quickRun, runIsActive, stopRun, toolCaptures])
+
     const resetRun = useCallback(() => {
         if (replacementRef.current) clearTimeout(replacementRef.current)
         replacementRef.current = null
@@ -1245,7 +1258,7 @@ export default function BrowserPageClient({ initialData, resultId }: { initialDa
             : profile))
     }, [selectedProfile.id])
 
-    if (showStoredResult && resultId) return <BrowserReportPageClient resultId={resultId} clientId={resultClientId} onRerun={url => startRun({ target: url })} />
+    if (showStoredResult && resultId) return <BrowserReportPageClient resultId={resultId} clientId={resultClientId} onRerun={(url, quick) => startRun({ target: url, quick })} />
 
     if (sessionState === 'prompt') {
         return (
