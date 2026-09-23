@@ -1,4 +1,5 @@
 import ipaddr from 'ipaddr.js'
+import { isDeepStrictEqual } from 'node:util'
 
 export const accessRuleId = 'http.routine_access.v1'
 export const accessRule = {
@@ -39,10 +40,38 @@ export function eligibleAccess(event: AccessEvent) {
     return (check?.version === 1 && check.bodyEmpty === true && check.headersSafe === true && check.pathSafe === true)
 }
 
-export function accessFromLog(log: { service: string, level: string, metadata?: Record<string, unknown>, sourceEventId?: string, timestamp?: string }): AccessEvent | null {
+type AccessLog = { service: string, level: string, host?: string, message?: string, metadata?: Record<string, unknown>, sourceEventId?: string, timestamp?: string }
+const fields = (value: unknown, allowed: string[]): value is Record<string, unknown> => Boolean(value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).every(key => allowed.includes(key)))
+
+// Replica records must match the producer's complete envelope. Unknown fields or
+// disagreement with the original message retain the record, even with status 200.
+function standardReplicaAccess(log: AccessLog): boolean {
+    const metadata = log.metadata
+    if (!fields(metadata, ['collector', 'container_id', 'stream', 'structured']) || metadata.collector !== 'docker' || metadata.stream !== 'stdout'
+        || !['inspur', 'ovhcloud'].includes(log.host || '') || !/^[a-f0-9]{12,64}$/.test(String(metadata.container_id))
+        || !/^[a-f0-9]{64}$/.test(log.sourceEventId || '') || typeof log.message !== 'string') return false
+    const row = metadata.structured
+    if (!fields(row, ['level', 'time', 'pid', 'hostname', 'reqId', 'access', 'req', 'msg']) || row.level !== 30 || row.msg !== 'http_access'
+        || !Number.isSafeInteger(row.pid) || Number(row.pid) < 1 || !Number.isSafeInteger(row.time)
+        || typeof row.hostname !== 'string' || !/^[a-zA-Z0-9._-]{1,253}$/.test(row.hostname)
+        || typeof row.reqId !== 'string' || !/^[a-f0-9-]{36}$/i.test(row.reqId)) return false
+    const access = row.access, req = row.req
+    if (!fields(access, ['key', 'ip', 'timestamp', 'path', 'method', 'status', 'inspection'])
+        || !fields(access.inspection, ['version', 'bodyEmpty', 'headersSafe', 'pathSafe'])
+        || !fields(req, ['method', 'url', 'remoteAddress']) || req.method !== 'GET' || req.url !== access.path
+        || typeof req.url !== 'string' || !/^\/[a-zA-Z0-9/_~.-]*$/.test(req.url)
+        || access.key !== `http-api:${row.reqId}` || typeof access.timestamp !== 'string' || Date.parse(access.timestamp) !== row.time
+        || (req.remoteAddress !== undefined && (typeof req.remoteAddress !== 'string' || !ipaddr.isValid(req.remoteAddress)))) return false
+    if (!eligibleAccess(access as AccessEvent)) return false
+    try { return isDeepStrictEqual(JSON.parse(log.message), row) } catch { return false }
+}
+
+export function accessFromLog(log: AccessLog): AccessEvent | null {
     const metadata = log.metadata || {}
+    const replica = /^hanasand-api-[1-4]$/.test(log.service)
     // Only collector-authenticated access records, not arbitrary application JSON.
-    if (metadata.organizationId || metadata.tenantId || log.level !== 'info' || !/^(?:cdn|hanasand[-_]api|api)$/.test(log.service)) return null
+    if (metadata.organizationId || metadata.tenantId || log.level !== 'info' || (!replica && !/^(?:cdn|hanasand[-_]api|api)$/.test(log.service))) return null
+    if (replica && !standardReplicaAccess(log)) return null
     const structured = metadata.structured as Record<string, unknown> | undefined
     const access = structured?.access as AccessEvent | undefined
     if (!access || structured?.msg !== 'http_access' || typeof access.key !== 'string') return null

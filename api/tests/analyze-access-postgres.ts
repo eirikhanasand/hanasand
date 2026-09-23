@@ -67,6 +67,17 @@ try {
     assert.equal((await query('SELECT count(*) FROM service_logs')).rows[0].count, '0', 'Drop happens before raw storage')
     await recordLog({ service: 'cdn', level: 'info', message: 'http_access', metadata: { ...metadata, organizationId: 'customer' } })
     assert.equal((await query('SELECT count(*) FROM service_logs')).rows[0].count, '1', 'Platform rule never drops customer logs')
+    const reqId = 'dd304419-ab13-451e-a2ac-3f27a94506af'
+    const structured = { level: 30, time: Date.parse(sample.timestamp), pid: 1, hostname: 'hanasand', reqId,
+        access: { ...sample, key: `http-api:${reqId}` }, req: { method: 'GET', url: '/public' }, msg: 'http_access' }
+    const replica = { service: 'hanasand-api-1', host: 'inspur', level: 'info' as const, sourceEventId: 'a'.repeat(64),
+        message: JSON.stringify(structured), metadata: { collector: 'docker', container_id: '123456abcdef', stream: 'stdout', structured } }
+    await recordLog(replica)
+    assert.equal((await query('SELECT count(*) FROM service_logs')).rows[0].count, '1', 'Standard replica access drops before storage')
+    const unexpected = { ...structured, error: 'Unexpected content despite status 200' }
+    await recordLog({ ...replica, sourceEventId: 'b'.repeat(64), message: JSON.stringify(unexpected), metadata: { ...replica.metadata, structured: unexpected } })
+    assert.equal((await query("SELECT metadata#>>'{structured,error}' AS error FROM service_logs WHERE source_event_id=$1", ['b'.repeat(64)])).rows[0].error,
+        unexpected.error, 'Suspicious replica content must be retained intact')
     const beforeRollback = (await query('SELECT count(*) FROM log_analyze_receipts')).rows[0].count
     await assert.rejects(transaction(async tx => { await analyzeAccess({ ...sample, key: 'rolled-back' }, tx); throw new Error('rollback') }))
     assert.equal((await query('SELECT count(*) FROM log_analyze_receipts')).rows[0].count, beforeRollback)

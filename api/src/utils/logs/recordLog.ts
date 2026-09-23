@@ -41,7 +41,7 @@ async function prepareLog({
 }, query: typeof run = run) {
     if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) metadata = {}
     if (await analyzeMongoPing({ service, host, level, message, metadata, sourceEventId }, query === run ? undefined : query)) return
-    const access = accessFromLog({ service, level, metadata, sourceEventId, timestamp })
+    const access = accessFromLog({ service, host, level, message, metadata, sourceEventId, timestamp })
     if (access && await analyzeAccess(access, query === run ? undefined : query)) return
     message = redactLogText(message)
     metadata = redactLogValue(metadata) as Record<string, unknown>
