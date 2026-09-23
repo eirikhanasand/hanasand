@@ -4,7 +4,8 @@ import { mkdir, readFile, readdir, stat, unlink, writeFile } from 'node:fs/promi
 const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
 const marker = new RegExp(`^hanasand-pg-ready-v1 nonce=(${uuid}) pid=([1-9][0-9]*)\\n/var/run/postgresql:5432 - accepting connections\\n(?![\\s\\S])`)
 export type ReadinessFact = {
-    version: 1; host: 'inspur'; containerId: string; execId: string; bootId: string;
+    version: 2; host: 'inspur'; containerId: string; execId: string; bootId: string;
+    execPid: number; execParentPid: number; execStartTicks: string;
     parentPid: number; parentStartTicks: string; namespacePid: number; nonce: string;
     startedAt: number; finishedAt: number; previousStartedAt: number;
 }
@@ -25,8 +26,12 @@ export function matchReadinessHealth(observations: ObservedReadinessExec[], heal
     const o = matches[0]!
     if (!/^[0-9a-f]{64}$/.test(o.execId) || !/^[0-9a-f]{64}$/.test(containerId)
         || !new RegExp(`^${uuid}$`).test(o.bootId) || !/^[1-9][0-9]*$/.test(o.parentStartTicks)
-        || !Number.isSafeInteger(o.parentPid) || o.parentPid < 1) return
-    return { version: 1, host: 'inspur', containerId, execId: o.execId, bootId: o.bootId,
+        || !Number.isSafeInteger(o.parentPid) || o.parentPid < 1
+        || !Number.isSafeInteger(o.execPid) || o.execPid < 1 || o.execPid === o.parentPid
+        || !Number.isSafeInteger(o.execParentPid) || o.execParentPid < 1
+        || !/^[1-9][0-9]*$/.test(o.execStartTicks)) return
+    return { version: 2, host: 'inspur', containerId, execId: o.execId, bootId: o.bootId,
+        execPid: o.execPid, execParentPid: o.execParentPid, execStartTicks: o.execStartTicks,
         parentPid: o.parentPid, parentStartTicks: o.parentStartTicks, namespacePid: o.namespacePid,
         nonce: output[1]!, startedAt, finishedAt, previousStartedAt }
 }
@@ -64,16 +69,18 @@ export async function readNativeObservation(execution: any, context: { container
         || !same(execution.ProcessConfig?.arguments, ['-c', healthCommand[1]])) return
     const pid = execution.Pid
     if (!Number.isInteger(pid) || pid < 1) return
-    const initial = await readIdentity(pid, context.containerId), candidates = [initial]
+    const initial = await readIdentity(pid, context.containerId), candidates = []
+    if (initial.pid !== pid || !same(initial.command, ['/bin/sh', '-c', healthCommand[1]])) return
     for (const child of await readChildren(pid)) {
-        try { const identity = await readIdentity(child, context.containerId); if (identity.parentPid === pid) candidates.push(identity) } catch {}
+        try { const identity = await readIdentity(child, context.containerId); if (identity.pid === child && child !== pid && identity.parentPid === pid) candidates.push(identity) } catch {}
     }
     const wrappers = candidates.filter(candidate => candidate.command.length === 5 && same(candidate.command.slice(0, 4), wrapperCommand)
         && new RegExp(`^${uuid}$`).test(candidate.command[4]!))
     if (wrappers.length !== 1) return
     const wrapper = wrappers[0]!, again = await readIdentity(wrapper.pid, context.containerId)
     if (!same(wrapper, again) || !same(initial, await readIdentity(pid, context.containerId))) return
-    return { ...context, nonce: wrapper.command[4]!, parentPid: wrapper.pid, parentStartTicks: wrapper.startTicks,
+    return { ...context, execPid: initial.pid, execParentPid: initial.parentPid, execStartTicks: initial.startTicks,
+        nonce: wrapper.command[4]!, parentPid: wrapper.pid, parentStartTicks: wrapper.startTicks,
         namespacePid: wrapper.namespacePid, observedAt: Date.now(), stableIdentity: true }
 }
 

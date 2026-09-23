@@ -3,11 +3,13 @@ import { matchReadinessHealth, readNativeObservation, readinessWrapperScript, ty
 
 const start = Date.parse('2026-09-24T12:00:00.000Z'), container = 'a'.repeat(64)
 const observation: ObservedReadinessExec = { containerId: container, execId: 'b'.repeat(64), bootId: '12345678-1234-4234-8234-123456789abc',
+    execPid: 39999, execParentPid: 39998, execStartTicks: '987650',
     parentPid: 40000, parentStartTicks: '987654', namespacePid: 321, nonce: '12345678-1234-4234-8234-123456789abc', startedAt: start + 10, observedAt: start + 40, stableIdentity: true }
 const health: NativeHealth = { Start: new Date(start).toISOString(), End: new Date(start + 150).toISOString(), ExitCode: 0,
     Output: 'hanasand-pg-ready-v1 nonce=12345678-1234-4234-8234-123456789abc pid=321\n/var/run/postgresql:5432 - accepting connections\n' }
 test('native scheduled successful healthcheck joins exactly one observed process', () => {
-    expect(matchReadinessHealth([observation], health, container, start - 5000)).toEqual({ version: 1, host: 'inspur', containerId: container,
+    expect(matchReadinessHealth([observation], health, container, start - 5000)).toEqual({ version: 2, host: 'inspur', containerId: container,
+        execPid: 39999, execParentPid: 39998, execStartTicks: '987650',
         execId: observation.execId, bootId: observation.bootId, parentPid: 40000, parentStartTicks: '987654', namespacePid: 321,
         nonce: '12345678-1234-4234-8234-123456789abc', startedAt: start, finishedAt: start + 150, previousStartedAt: start - 5000 })
 })
@@ -18,7 +20,8 @@ test('manual execution without corresponding native health record does not quali
 })
 test('wrong or reused process identity, wrong container and ambiguous observations retain', () => {
     for (const change of [{ namespacePid: 322 }, { nonce: '12345678-1234-4234-8234-123456789abd' }, { containerId: 'c'.repeat(64) }, { stableIdentity: false }, { parentStartTicks: '0' },
-        { startedAt: start - 30 }, { observedAt: start + 151 }, { bootId: 'bad' }, { execId: 'bad' }]) {
+        { startedAt: start - 30 }, { observedAt: start + 151 }, { bootId: 'bad' }, { execId: 'bad' },
+        { execPid: 40000 }, { execPid: 0 }, { execParentPid: 0 }, { execStartTicks: '0' }]) {
         expect(matchReadinessHealth([{ ...observation, ...change }], health, container, start - 5000)).toBeUndefined()
     }
     expect(matchReadinessHealth([observation, { ...observation, execId: 'c'.repeat(64) }], health, container, start - 5000)).toBeUndefined()
@@ -40,6 +43,9 @@ test('native snapshot binds a direct wrapper child and rejects PID reuse during 
     const good = await readNativeObservation(execution, context, read, async () => [101])
     expect(good?.parentPid).toBe(101)
     expect(good?.namespacePid).toBe(51)
+    expect(good?.execPid).toBe(100)
+    expect(good?.execParentPid).toBe(90)
+    expect(good?.execStartTicks).toBe('1000')
     let reads = 0
     expect(await readNativeObservation(execution, context, async pid => {
         if (pid === 100) return shell
@@ -48,4 +54,8 @@ test('native snapshot binds a direct wrapper child and rejects PID reuse during 
     expect(await readNativeObservation(execution, context, async pid => pid === 100 ? shell : { ...wrapper, parentPid: 999 }, async () => [101])).toBeUndefined()
     expect(await readNativeObservation({ ...execution, ContainerID: 'c'.repeat(64) }, context, read, async () => [101])).toBeUndefined()
     expect(await readNativeObservation({ ...execution, ProcessConfig: { entrypoint: '/bin/sh', arguments: ['-c', 'pg_isready -U hanasand -d hanasand; id'] } }, context, read, async () => [101])).toBeUndefined()
+    expect(await readNativeObservation(execution, context, async pid => pid === 100 ? { ...shell, command: ['/bin/sh', '-c', 'id'] } : wrapper, async () => [101])).toBeUndefined()
+    expect(await readNativeObservation(execution, context, async () => ({ ...wrapper, pid: 100 }), async () => [])).toBeUndefined()
+    let rootReads = 0
+    expect(await readNativeObservation(execution, context, async pid => pid === 100 ? { ...shell, startTicks: ++rootReads > 1 ? '9999' : shell.startTicks } : wrapper, async () => [101])).toBeUndefined()
 })
