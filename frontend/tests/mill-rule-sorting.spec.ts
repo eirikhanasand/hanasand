@@ -21,7 +21,7 @@ test.beforeEach(async ({ page }) => {
     await page.route('http://mill.test/mill/rules/*', route => route.fulfill({ contentType: 'text/html', body: `<html class="dark"><head><style>${css}</style></head><body><div id="root"></div><script type="module" src="/fixture.js"></script></body></html>` }))
 })
 
-for (const category of ['match', 'analysis', 'detection']) test(`${category} sorts hits numerically, text alphabetically, and renders one triangle per heading`, async ({ page }) => {
+for (const category of ['match', 'analysis', 'detection']) test(`${category} sorts columns and reveals inactive arrows only on hover or focus`, async ({ page }) => {
     const definition = { stage: category === 'analysis' ? 'analyze' : category === 'detection' ? 'detect' : 'match', action: 'drop' }
     const rows = [
         { ...rule, id: 'custom.zulu', name: 'Zulu', hitCount: 9, definition, source: 'owned' },
@@ -40,7 +40,16 @@ for (const category of ['match', 'analysis', 'detection']) test(`${category} sor
         await expect(heading.getByRole('button')).toHaveCount(1)
         await expect(heading.locator('svg')).toHaveCount(1)
         await expect(heading.locator('svg path')).toHaveCount(1)
+        await expect(heading.locator('svg')).toHaveCSS('opacity', await heading.getAttribute('aria-sort') === 'none' ? '0' : '1')
     }
+    const inactive = page.getByRole('columnheader', { name: category === 'analysis' ? 'Action' : 'Title', exact: true })
+    await inactive.hover()
+    await expect(inactive.locator('svg')).toHaveCSS('opacity', '0.4')
+    await expect(hits.locator('svg')).toHaveCSS('opacity', '1')
+    await page.mouse.move(0, 0)
+    await expect(inactive.locator('svg')).toHaveCSS('opacity', '0')
+    await inactive.getByRole('button').focus()
+    await expect(inactive.locator('svg')).toHaveCSS('opacity', '0.4')
     await hits.getByRole('button').click()
     await expect(titles).toHaveText(['Beta', 'Zulu', 'Alpha', 'Unknown'])
     await expect(hits).toHaveAttribute('aria-sort', 'ascending')
@@ -49,6 +58,8 @@ for (const category of ['match', 'analysis', 'detection']) test(`${category} sor
     await expect(titles).toHaveText(['Alpha', 'Beta', 'Unknown', 'Zulu'])
     await expect(title).toHaveAttribute('aria-sort', 'ascending')
     await expect(hits).toHaveAttribute('aria-sort', 'none')
+    await expect(hits.locator('svg')).toHaveCSS('opacity', '0')
+    await expect(title.locator('svg')).toHaveCSS('opacity', '1')
     await title.getByRole('button').press('Enter')
     await expect(titles).toHaveText(['Zulu', 'Unknown', 'Beta', 'Alpha'])
     await hits.getByRole('button').click()
