@@ -2,7 +2,7 @@ import { request } from 'node:http'
 import { mkdir, readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises'
 
 const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
-const marker = new RegExp(`^hanasand-pg-ready-v1 nonce=(${uuid}) pid=([1-9][0-9]*)\\n/var/run/postgresql:5432 - accepting connections\\n$`)
+const marker = new RegExp(`^hanasand-pg-ready-v1 nonce=(${uuid}) pid=([1-9][0-9]*)\\n/var/run/postgresql:5432 - accepting connections\\n(?![\\s\\S])`)
 export type ReadinessFact = {
     version: 1; host: 'inspur'; containerId: string; execId: string; bootId: string;
     parentPid: number; parentStartTicks: string; namespacePid: number; nonce: string;

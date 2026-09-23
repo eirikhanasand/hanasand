@@ -24,7 +24,7 @@ test('wrong or reused process identity, wrong container and ambiguous observatio
     expect(matchReadinessHealth([observation, { ...observation, execId: 'c'.repeat(64) }], health, container, start - 5000)).toBeUndefined()
 })
 test('errors, extra output, slow checks and burst or missing cadence retain', () => {
-    for (const change of [{ ExitCode: 1 }, { Output: health.Output + 'warning\n' }, { Output: health.Output.replace('accepting', 'rejecting') },
+    for (const change of [{ ExitCode: 1 }, { Output: health.Output + 'warning\n' }, { Output: health.Output + '\n' }, { Output: health.Output.replace('accepting', 'rejecting') },
         { End: new Date(start + 1001).toISOString() }, { Start: 'bad' }, { End: new Date(start - 1).toISOString() }]) {
         expect(matchReadinessHealth([observation], { ...health, ...change }, container, start - 5000)).toBeUndefined()
     }
