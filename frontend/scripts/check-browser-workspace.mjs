@@ -63,6 +63,7 @@ try {
     const loading = page.locator('[data-browser-loading]')
     const workspace = page.locator('[data-browser-workspace]')
     await loading.waitFor()
+    assert.equal(await page.getByRole('button', { name: 'History', exact: true }).count(), 0, 'History is hidden during a run')
     assert.equal(await loading.locator('[aria-current="step"]').innerText(), 'Connect')
     await page.evaluate(() => window.deliver({ type: 'status', state: 'launching_worker' }))
     await loading.getByText('Starting browser…', { exact: true }).waitFor()
@@ -373,6 +374,7 @@ try {
     await historyDialog.locator('a[href$="run=older-run"]').click()
     await page.getByRole('heading', { name: 'https://example.com', exact: true }).waitFor()
     assert.equal(await page.getByLabel('Saved run', { exact: true }).inputValue(), 'older-run')
+    assert.equal(await page.getByRole('button', { name: 'History', exact: true }).evaluate(element => getComputedStyle(element).position), 'static', 'Saved-result history is in the header, not floating')
     assert.deepEqual(errors, [])
     console.log('Browser workspace passed: loading until first frame, stream readiness, cancellation, launch errors, live input, stable stream, downloads, completion box and mobile width.')
 } finally { await browser.close(); server.stop(true) }

@@ -1251,7 +1251,7 @@ export default function BrowserPageClient({ initialData, resultId, resultRunId }
             : profile))
     }, [selectedProfile.id])
 
-    if (showStoredResult && resultId) return <><BrowserHistory clientId={resultClientId} /><BrowserReportPageClient initialRun={resultRunId} resultId={resultId} clientId={resultClientId} onRerun={(url, quick) => startRun({ target: url, quick })} /></>
+    if (showStoredResult && resultId) return <BrowserReportPageClient initialRun={resultRunId} resultId={resultId} clientId={resultClientId} onRerun={(url, quick) => startRun({ target: url, quick })} />
 
     if (sessionState === 'prompt') {
         return (
@@ -1375,7 +1375,6 @@ export default function BrowserPageClient({ initialData, resultId, resultRunId }
 
     return (
         <main className='relative min-h-[calc(100vh-4.5rem)] overflow-x-hidden bg-ui-canvas text-ui-text'>
-            <BrowserHistory clientId={resultClientId} />
             {loadingBrowser ? <BrowserLoading stage={startupStage} elapsed={runStartedAt ? Math.max(0, Math.floor((clockNow - runStartedAt) / 1000)) : 0} target={normalizedTarget} queuePosition={capacity?.queuePosition} onCancel={stopRun} /> : null}
             {/* Keep the stream mounted and sized so it can deliver its first frame. */}
             <section data-browser-workspace inert={loadingBrowser} aria-hidden={loadingBrowser || undefined} className={`grid min-w-0 min-h-[calc(100vh-4.5rem)] grid-cols-1 grid-rows-[auto_minmax(0,1fr)] ${loadingBrowser ? 'pointer-events-none absolute inset-x-0 top-0 opacity-0' : ''}`}>
