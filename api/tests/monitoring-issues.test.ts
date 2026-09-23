@@ -8,8 +8,19 @@ test('issue identity ignores durations and retries but preserves targets, HTTP c
     expect(key('HTTP 503')).not.toBe(key('HTTP 401'))
     expect(key('HTTP 503')).not.toBe(monitoringIssueFingerprint({ ...monitor, target_url: 'https://other.test' }, 'failure', 'HTTP 503'))
     expect(key('Slow')).not.toBe(monitoringIssueFingerprint(monitor, 'warning', 'Slow'))
-    expect(key('TLS certificate validation failed.')).not.toBe(key('Connection refused.'))
+    expect(key('TLS certificate validation failed.')).toBe(key('Connection refused.'))
     expect(key('Activity is stale (317 minutes).')).toBe(key('Activity is stale (318 minutes).'))
+})
+
+test('transport identity follows the endpoint through TLS errors, refusals, DNS changes and timeouts', () => {
+    const monitor = { target_url: 'pengeflyt.com:443', monitoring_type: 'tcp' as const }
+    const key = (message: string) => monitoringIssueFingerprint(monitor, 'failure', message)
+    const original = key('TLS certificate validation failed for pengeflyt.com.')
+    for (const message of ['Certificate check failed: connect ECONNREFUSED 192.0.2.1:443 Failed after 5 attempts.',
+        'Certificate check failed: connect ECONNREFUSED 192.0.2.2:443 Failed after 1 attempt.',
+        'Connection failed: Connection timed out after 5 seconds.', 'Unable to connect. Is the computer able to access the url?']) expect(key(message)).toBe(original)
+    expect(monitoringIssueFingerprint({ ...monitor, target_url: 'other.example:443' }, 'failure', 'Connection refused.')).not.toBe(original)
+    expect(monitoringIssueFingerprint({ ...monitor, target_url: 'pengeflyt.com:8443' }, 'failure', 'Connection refused.')).not.toBe(original)
 })
 
 test('service check identity survives changing ages and source details', () => {

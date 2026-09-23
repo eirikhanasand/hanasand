@@ -19,7 +19,8 @@ test('merges scoped socket failures, retains evidence and aliases, serializes no
  for(const item of [a,b]) await q('INSERT INTO agent_automations VALUES($1,$2,$3,$4,$5,$6,$7,NULL)',[item.id,item.owner_id,item.organization_id,item.target_url,item.monitoring_type,item.action_type,item.notification_destinations])
  const ids:string[]=[]
  for(const item of [a,b]) {
-  const id=(await q('INSERT INTO monitoring_issues(automation_id,fingerprint,kind,summary,comments) VALUES($1,$2,\'failure\',$3,$4::jsonb) RETURNING id',[item.id,fingerprint(item,'failure',message),message,JSON.stringify([{id:item.id,body:'original '+item.id}])])).rows[0].id
+  const reason=item.id==='b'?'TLS certificate validation failed for git.example.com.':message
+  const id=(await q('INSERT INTO monitoring_issues(automation_id,fingerprint,kind,summary,comments) VALUES($1,$2,\'failure\',$3,$4::jsonb) RETURNING id',[item.id,fingerprint(item,'failure',reason),reason,JSON.stringify([{id:item.id,body:'original '+item.id}])])).rows[0].id
   ids.push(id)
   await q('INSERT INTO agent_automation_runs(id,automation_id,status,issue_id) VALUES($1,$2,\'failed\',$3)',['legacy-'+item.id,item.id,id])
   await q('INSERT INTO monitoring_issue_messages(issue_id,message_id,delivered_at,message) VALUES($1,$2,NOW(),$3::jsonb)',[id,'legacy-'+item.id,JSON.stringify({content:item.id})])
@@ -35,7 +36,7 @@ test('merges scoped socket failures, retains evidence and aliases, serializes no
   await q('INSERT INTO agent_automation_runs(id,automation_id,status) VALUES($1,$2,$3)',[id,item.id,kind?'failed':'completed'])
   await record(item,id,kind,text)
  }
- await Promise.all([event('new-a',a),event('new-b',b)])
+ await Promise.all([event('new-a',a),event('new-b',b,'failure','Monitoring request timed out after 5 seconds.')])
  expect((await load('b'))[0].occurrences).toBe(4)
  expect(sent).toBe(1)
  await record(b,'new-b','failure',message)

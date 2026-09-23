@@ -48,7 +48,8 @@ with tempfile.NamedTemporaryFile(mode='w',suffix='.json',prefix='monitoring-work
 os.chmod(override,0o600)
 def apply(target,env):
     Path(override).write_text(json.dumps({'services':{'api':{'image':target,'command':original['Config']['Cmd'],'environment':env,'stop_grace_period':'65s',
-        'volumes':['/home/hanasand/resilience/status:/resilience:ro']}}}))
+        'volumes':['/home/hanasand/resilience/status:/resilience:ro'],
+        'networks':{'hanasandnet':{'gw_priority':1},'pwnednet':{},'browsernet':{}}}}))
     subprocess.run(['docker','compose','-f','docker-compose.yml','-f',override,'up','-d','--no-deps','--no-build','api'],cwd=root,check=True)
 def ready(expected):
     for _ in range(90):

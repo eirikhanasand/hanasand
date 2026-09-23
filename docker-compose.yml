@@ -127,9 +127,11 @@ services:
       interval: 5s
       retries: 5
     networks:
-      - hanasandnet
-      - pwnednet
-      - browsernet
+      hanasandnet:
+        # Public monitoring must not leave through the isolated browser bridge.
+        gw_priority: 1
+      pwnednet: {}
+      browsernet: {}
     depends_on:
       deploy-path-guard:
         condition: service_healthy

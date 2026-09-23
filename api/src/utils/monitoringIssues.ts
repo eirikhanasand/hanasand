@@ -1,6 +1,6 @@
 import { attachDiskDiagnostics } from './monitoringDiskDiagnostics.ts'
 import { monitoringAlertReady } from './monitoringAlertPolicy.ts'
-import { correlationKey, isIntelHealthCheck, monitoringScope } from './monitoringCorrelation.ts'
+import { correlationKey, isIntelHealthCheck, monitoringScope, monitoringTransportTarget } from './monitoringCorrelation.ts'
 import { monitoringCaseDiscordAlert } from './alerts/monitoringCase.ts'
 import { isHostThresholdMessage } from './hostCheckMessage.ts'
 import { createHash } from 'node:crypto'
@@ -8,7 +8,7 @@ import run, { withTransaction } from '#db'
 import type { AutomationRow } from './automations.ts'
 import { deliverDiscordWebhookFile, redactSecretBearingText } from './alerts/discordWebhookFile.ts'
 
-export const isServiceStatusCheck = (automation: Pick<AutomationRow, 'target_url'>) => automation.target_url?.startsWith('https://hanasand.com/api/status?service=') === true
+export const isServiceStatusCheck = (automation: Pick<AutomationRow, 'target_url'>) => /^https:\/\/(?:api\.)?hanasand\.com\/api\/status\?/.test(automation.target_url || '')
 
 export function monitoringIssueFingerprint(automation: Pick<AutomationRow, 'target_url' | 'monitoring_type' | 'json_rule'>, kind: string, message: string) {
     // A job keeps its case when the blocker changes, including after recovery.
@@ -16,6 +16,8 @@ export function monitoringIssueFingerprint(automation: Pick<AutomationRow, 'targ
     // Synthetic service checks report changing ages, counts and affected sources.
     // Those details update the case; they do not identify a new incident.
     if (isServiceStatusCheck(automation)) return createHash('sha256').update(JSON.stringify([automation.monitoring_type, automation.target_url, kind])).digest('hex')
+    const endpoint = monitoringTransportTarget(automation, message)
+    if (endpoint) return createHash('sha256').update(JSON.stringify(['transport', endpoint, kind])).digest('hex')
     // Group changing durations and retry counts, but retain HTTP codes and error details.
     // TI health and connection failures describe the same check. Keep its rule
     // in the identity so separate checks of the same source remain separate.
