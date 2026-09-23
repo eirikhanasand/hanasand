@@ -1,3 +1,4 @@
+import { listRule, ruleCategory, loadRuleHits } from '#utils/mill/ruleList.ts'
 import { cdnRefreshRule, cdnRefreshRuleId, cdnRefreshDefinition } from '#utils/mill/analyzeCdnRefresh.ts'
 import { modelDiscoveryRule, modelDiscoveryRuleId, modelDiscoveryDefinition, modelDiscoveryUnavailableReason } from '#utils/mill/analyzeModelDiscovery.ts'
 import { readinessAuditRule, readinessAuditRuleId, readinessAuditDefinition, readinessAuditUnavailable } from '#utils/mill/analyzeReadinessAudit.ts'
@@ -231,20 +232,19 @@ export async function postMillEventAction(req: FastifyRequest<{ Params: { id: st
 export async function getMillRules(req: FastifyRequest, res: FastifyReply) {
     const access = await organizationAccess(req, res)
     if (!access) return
-    const query = req.query as { organizationId?: string }
+    const query = req.query as { organizationId?: string, view?: string, category?: string }
     if (query.organizationId !== access.organizationId) return res.status(403).send({ error: 'Organization access denied.' })
-    const rules = await loadConfiguredMillRules(access.organizationId)
-    const counts = await run(`SELECT rule_id, count(*)::text AS hits FROM mill_findings WHERE organization_id=$1 AND rule_id NOT IN ($2,$3,$4,$5) GROUP BY rule_id
-        UNION ALL SELECT $2, COALESCE(sum(amount),0)::text FROM log_access_counts WHERE organization_id=$1
-        UNION ALL SELECT $3, COALESCE(sum(amount),0)::text FROM log_mongo_ping_counts WHERE organization_id=$1
-        UNION ALL SELECT $4, COALESCE(sum(dropped_records),0)::text FROM log_postgres_session_state WHERE organization_id=$1
-        UNION ALL SELECT $5, COALESCE(sum(amount),0)::text FROM log_proxy_counts WHERE organization_id=$1`, [access.organizationId, accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId])
-    const receiptCounts = await run('SELECT rule_id,count(*)::text AS hits FROM log_analyze_receipts WHERE organization_id=$1 AND rule_id=ANY($2::text[]) GROUP BY rule_id', [access.organizationId, [collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId]])
-    counts.rows.push(...receiptCounts.rows)
-    const hits = new Map(counts.rows.map(row => [row.rule_id, Number(row.hits)]))
-    return res.send({ organizationId: access.organizationId, rules: rules.map(rule => ({ ...rule,
+    if (query.category && !['analysis', 'match', 'detection'].includes(query.category)) return res.status(400).send({ error: 'Unknown rule category.' })
+    const compact = query.view === 'list'
+    const [configured, retentionRole] = await Promise.all([
+        loadConfiguredMillRules(access.organizationId, run, compact),
+        canManageMillRules(access.role) ? hasRole(req, res, 'system_admin') : Promise.resolve({ valid: false }),
+    ])
+    const rules = configured.filter(rule => !query.category || ruleCategory(rule) === query.category)
+    const hits = query.view === 'definitions' ? new Map<string, number>() : await loadRuleHits(access.organizationId, rules, run)
+    return res.send({ organizationId: access.organizationId, rules: rules.map(rule => ({ ...(compact ? listRule(rule) : rule),
         hitCount: rule.source === 'owned' && rule.definition?.stage === 'analyze' ? null : hits.get(rule.id) ?? 0,
-    })), canManageRetention: canManageMillRules(access.role) && (await hasRole(req, res, 'system_admin')).valid })
+    })), canManageRetention: retentionRole.valid })
 }
 
 export async function postMillRule(req: FastifyRequest, res: FastifyReply) {
@@ -462,9 +462,10 @@ export async function organizationAccess(req: FastifyRequest, res: FastifyReply)
     return { organizationId, userId, role: result.rows[0].role as string }
 }
 
-export async function loadConfiguredMillRules(organizationId: string, query: typeof run = run): Promise<MillRule[]> {
+export async function loadConfiguredMillRules(organizationId: string, query: typeof run = run, summary = false): Promise<MillRule[]> {
     const result = await query(`
-        SELECT id, rule_id, version, name, family, severity, explanation, definition, source, source_reference, enabled
+        SELECT id, rule_id, version, name, family, severity, explanation,
+            ${summary ? 'jsonb_build_object(\'stage\', definition->\'stage\', \'action\', definition->\'action\') AS definition, NULL AS source_reference' : 'definition, source_reference'}, source, enabled
         FROM mill_rules
         WHERE organization_id = $1
         ORDER BY created_at ASC

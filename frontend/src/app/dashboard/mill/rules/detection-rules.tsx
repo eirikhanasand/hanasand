@@ -12,6 +12,8 @@ export type MillRule = { id: string, hitCount?: number | null, detectionLogic?: 
 
 export default function DetectionRules({ category }: { category: RuleCategory }) {
     const latestOrganization = useRef('')
+    const loadRequest = useRef(0)
+    const [loading, setLoading] = useState(false)
     const { organizationId, organizations } = useWorkspace()
     const [rules, setRules] = useState<MillRule[]>([])
     const [sort, setSort] = useState<{ column: RuleSortColumn, direction: RuleSortDirection }>({ column: 'Hits', direction: 'descending' })
@@ -36,15 +38,22 @@ export default function DetectionRules({ category }: { category: RuleCategory })
     const [status, setStatus] = useState('')
     const [error, setError] = useState('')
 
-    useEffect(() => { if (organizationId) void loadMill(organizationId) }, [organizationId])
+    useEffect(() => {
+        setRules([])
+        if (organizationId) void loadMill(organizationId)
+        return () => { loadRequest.current++ }
+    }, [organizationId, category])
 
     async function loadMill(id: string) {
         latestOrganization.current = id
+        const request = ++loadRequest.current
+        setLoading(true)
         try {
             setError('')
-            const payload = await requestJson<{ rules?: MillRule[], canManageRetention?: boolean }>(`/api/backend/mill/rules?organizationId=${encodeURIComponent(id)}`)
-            if (latestOrganization.current === id) { setRules(payload.rules || []); setCanManageRetention(payload.canManageRetention === true) }
-        } catch (cause) { if (latestOrganization.current === id) { setError(errorMessage(cause)); setRules([]) } }
+            const payload = await requestJson<{ rules?: MillRule[], canManageRetention?: boolean }>(`/api/backend/mill/rules?organizationId=${encodeURIComponent(id)}&view=list&category=${category}`)
+            if (loadRequest.current === request) { setRules(payload.rules || []); setCanManageRetention(payload.canManageRetention === true) }
+        } catch (cause) { if (loadRequest.current === request) { setError(errorMessage(cause)); setRules([]) } }
+        finally { if (loadRequest.current === request) setLoading(false) }
     }
 
     async function toggleRule(rule: MillRule) {
@@ -87,7 +96,7 @@ export default function DetectionRules({ category }: { category: RuleCategory })
     const categoryRules = rules.filter(rule => getRuleCategory(rule) === category)
     const filteredRules = categoryRules.filter(rule =>
         rule.name.toLowerCase().includes(titleQuery)
-        && (!textQuery || [rule.name, rule.id, rule.rule_id, rule.explanation, rule.family, rule.severity, rule.sourceReference, rule.detectionLogic, ...(rule.evidence || []), ...(rule.definition?.conditions || []).flatMap(condition => [condition.path, condition.operator, condition.value])].join(' ').toLowerCase().includes(textQuery))
+        && (!textQuery || [rule.name, rule.id, rule.rule_id, rule.explanation, rule.family, rule.severity, rule.source].join(' ').toLowerCase().includes(textQuery))
         && (enabledFilter === 'all' || (rule.enabled !== false) === (enabledFilter === 'enabled'))
         && (severityFilter === 'all' || rule.severity.toLowerCase() === severityFilter)
     )
@@ -140,7 +149,7 @@ export default function DetectionRules({ category }: { category: RuleCategory })
                 <h2 className='font-semibold'>Rule library</h2>
                 <div role='search' aria-label='Filter rules' className='grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_1.5fr_auto_auto_auto]'>
                     <label className='grid min-w-0 gap-1 text-xs text-ui-muted'>Title<input type='search' value={titleFilter} onChange={event => setTitleFilter(event.target.value)} placeholder='Filter by title' className='h-9 min-w-0 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text' /></label>
-                    <label className='grid min-w-0 gap-1 text-xs text-ui-muted'>Search text<input type='search' value={textFilter} onChange={event => setTextFilter(event.target.value)} placeholder='Search descriptions, IDs, evidence…' className='h-9 min-w-0 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text' /></label>
+                    <label className='grid min-w-0 gap-1 text-xs text-ui-muted'>Search text<input type='search' value={textFilter} onChange={event => setTextFilter(event.target.value)} placeholder='Search descriptions, IDs, families…' className='h-9 min-w-0 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text' /></label>
                     <label className='grid min-w-0 gap-1 text-xs text-ui-muted'>Status<select value={enabledFilter} onChange={event => setEnabledFilter(event.target.value)} className='h-9 min-w-0 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text'><option value='all'>All statuses</option><option value='enabled'>Enabled</option><option value='disabled'>Disabled</option></select></label>
                     <label className='grid min-w-0 gap-1 text-xs text-ui-muted'>Severity<select value={severityFilter} onChange={event => setSeverityFilter(event.target.value)} className='h-9 min-w-0 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text'><option value='all'>All severities</option>{severities.map(severity => <option key={severity} value={severity}>{severity.charAt(0).toUpperCase() + severity.slice(1)}</option>)}</select></label>
                     <button type='button' onClick={clearFilters} disabled={!hasFilters} className='h-9 self-end rounded-md border border-ui-border px-3 text-xs font-semibold disabled:opacity-50'>Clear filters</button>
@@ -161,7 +170,7 @@ export default function DetectionRules({ category }: { category: RuleCategory })
                         <tbody className='divide-y divide-ui-border'>
                             {sortedRules.map(rule => <tr key={rule.id} className='h-16 hover:bg-ui-raised'>
                                 <th scope='row' className='px-3 py-2 font-normal'>
-                                    <Link href={`/mill/rules/${category}/${encodeURIComponent(rule.id.replace(/\.v\d+$/, ''))}?organizationId=${encodeURIComponent(organizationId)}`} className='block rounded-sm focus-visible:outline-2 focus-visible:outline-ui-primary'>
+                                    <Link prefetch={false} href={`/mill/rules/${category}/${encodeURIComponent(rule.id.replace(/\.v\d+$/, ''))}?organizationId=${encodeURIComponent(organizationId)}`} className='block rounded-sm focus-visible:outline-2 focus-visible:outline-ui-primary'>
                                         <span className='block truncate font-semibold text-ui-primary' title={rule.name}>{rule.name}</span>
                                         <span className='mt-1 block truncate text-xs text-ui-muted' title={rule.id.replace(/\.v\d+$/, '')}>{rule.id.replace(/\.v\d+$/, '')}</span>
                                     </Link>
@@ -175,7 +184,7 @@ export default function DetectionRules({ category }: { category: RuleCategory })
                                 {category === 'analysis' && <td className='px-3 py-2 text-xs'>{rule.definition?.action === 'drop' ? 'Drop' : 'Store'}</td>}
                                 <td className='px-2 py-2'><button type='button' aria-label={`${rule.enabled === false ? 'Enable' : 'Disable'} ${rule.name}`} className='rounded-md border border-ui-border px-2 py-2 text-xs font-semibold disabled:opacity-50' disabled={!canManageRules} onClick={() => void toggleRule(rule)}>{rule.enabled === false ? 'Enable' : 'Disable'}</button></td>
                             </tr>)}
-                            {!filteredRules.length && <tr><td colSpan={category === 'analysis' ? 9 : 8} className='px-3 py-6 text-center text-sm text-ui-muted'>{hasFilters ? 'No rules in this category match these filters.' : 'No rules in this category.'}</td></tr>}
+                            {!filteredRules.length && <tr><td colSpan={category === 'analysis' ? 9 : 8} className='px-3 py-6 text-center text-sm text-ui-muted'>{loading ? 'Loading rules…' : hasFilters ? 'No rules in this category match these filters.' : 'No rules in this category.'}</td></tr>}
                         </tbody>
                     </table>
                 </div>

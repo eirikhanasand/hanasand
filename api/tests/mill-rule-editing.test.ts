@@ -17,13 +17,14 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
         audits.push({ id: String(audits.length), event_type: p[0], actor_id: p[4], object_type: p[5], object_id: p[6], organization_id: p[7], context: JSON.parse(p[12]), created_at: '2026-09-14T12:00:00Z' })
         return { rows: [] }
     }
-    if (sql.includes('AS hits FROM log_analyze_receipts')) { expect(p[0]).toBe('org-a'); return { rows: Array.isArray(p[1]) ? [] : [{ hits: '0' }] } }
     if (sql.includes('AS hits FROM mill_findings')) {
         expect(p[0]).toBe('org-a')
-        expect(p.slice(1)).toEqual(expect.arrayContaining(['http.routine_access.v1', 'mongodb.cashflow_connections.v1']))
         const totals = new Map<string, number>()
-        for (const finding of findings.filter(row => row.organizationId === p[0] && !p.slice(1).includes(row.ruleId))) totals.set(finding.ruleId, (totals.get(finding.ruleId) || 0) + 1)
-        return { rows: [...totals].map(([rule_id, hits]) => ({ rule_id, hits: String(hits) })).concat([{ rule_id: p[1], hits: '12345' }, { rule_id: p[2], hits: '42' }]) }
+        for (const finding of findings.filter(row => row.organizationId === p[0] && p[1].includes(row.ruleId))) totals.set(finding.ruleId, (totals.get(finding.ruleId) || 0) + 1)
+        const result = [...totals].map(([rule_id, hits]) => ({ rule_id, hits: String(hits) }))
+        if (p.includes('http.routine_access.v1')) result.push({ rule_id: 'http.routine_access.v1', hits: '12345' })
+        if (p.includes('mongodb.cashflow_connections.v1')) result.push({ rule_id: 'mongodb.cashflow_connections.v1', hits: '42' })
+        return { rows: result }
     }
     if (sql.includes('SELECT count(*)::text AS count FROM mill_findings')) return { rows: [{ count: String(findings.filter(row => row.organizationId === p[0] && row.ruleId === p[1]).length) }] }
     if (sql.includes("context->'after'->>'version'")) return { rows: audits.filter(row => row.organization_id === p[0] && row.object_id === p[1] && (row.context.after?.version === p[3] || row.context.before?.version === p[3])).slice(-1) }
@@ -369,4 +370,25 @@ test('existing Drop rules expose Low while Store rules retain their configured s
     expect((await getMillRule(request(created.rule.id), reply() as any)).rule.severity).toBe('low')
     rows[0].definition.action = 'keep'
     expect((await getMillRule(request(created.rule.id), reply() as any)).rule.severity).toBe('critical')
+})
+
+
+test('compact list returns only selected category and displayed data, keeps details available', async () => {
+    rows.push({ id: 'custom-retention', organization_id: 'org-a', rule_id: 'custom.retention.v1', version: '1', name: 'Quiet local probe', explanation: 'Store less routine chatter', family: 'Custom', severity: 'low', enabled: true, source: 'owned', definition: { stage: 'analyze', action: 'drop', conditions: [{ path: 'message', operator: 'equals', value: 'not-for-list' }] } })
+    const req = request()
+    req.query = { organizationId: 'org-a', view: 'list', category: 'analysis' }
+    const result = await getMillRules(req, reply() as any)
+    expect(result.rules.some((rule: any) => rule.id === builtin)).toBe(false)
+    const rule = result.rules.find((rule: any) => rule.id === 'custom.retention.v1')
+    expect(rule.definition).toEqual({ stage: 'analyze', action: 'drop' })
+    expect(rule).not.toHaveProperty('evidence')
+    expect(rule).not.toHaveProperty('detectionLogic')
+    expect(rule).not.toHaveProperty('sourceReference')
+    expect(rule.hitCount).toBeNull()
+    const detailed = await getMillRule(request(rule.id), reply() as any)
+    expect(detailed.rule.definition.conditions[0].value).toBe('not-for-list')
+    const invalid = reply()
+    req.query.category = 'unknown'
+    await getMillRules(req, invalid as any)
+    expect(invalid.statusCode).toBe(400)
 })

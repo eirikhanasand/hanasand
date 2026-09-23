@@ -1546,6 +1546,8 @@ async function applySchema() {
     await run('ALTER TABLE mill_findings ADD COLUMN IF NOT EXISTS case_delivery_attempted_at TIMESTAMPTZ')
     await run('CREATE INDEX IF NOT EXISTS idx_mill_pending_cases ON mill_findings(case_delivery_attempted_at, created_at) WHERE case_id IS NULL')
     await run('CREATE INDEX IF NOT EXISTS idx_mill_findings_org_status ON mill_findings(organization_id, status, last_observed DESC)')
+    await run('CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_mill_findings_org_rule ON mill_findings(organization_id, rule_id)')
+    await run('CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_log_analyze_receipts_org_rule ON log_analyze_receipts(organization_id, rule_id)')
     await run('CREATE INDEX IF NOT EXISTS idx_mill_findings_event_ids ON mill_findings USING GIN(event_ids)')
     await run('CREATE INDEX IF NOT EXISTS idx_mill_logs_severity_time ON mill_events ((normalized->>\'severity\'), event_timestamp DESC) WHERE ingestion_id = \'logs\'')
     await run('CREATE INDEX IF NOT EXISTS idx_mill_logs_type_time ON mill_events ((normalized->>\'log_type\'), event_timestamp DESC) WHERE ingestion_id = \'logs\'')

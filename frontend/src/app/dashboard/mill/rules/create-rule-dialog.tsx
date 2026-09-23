@@ -27,11 +27,20 @@ export default function CreateRuleDialog({ category, organizationId, canManage, 
     useEffect(() => {
         const controller = new AbortController()
         const next = Object.fromEntries(Object.entries(fieldValues).map(([key, values]) => [key, [...values]]))
-        for (const rule of rules) for (const condition of rule.definition?.conditions || []) {
-            next[condition.path] ||= []
-            if (condition.operator === 'equals' && !next[condition.path].includes(condition.value)) next[condition.path].push(condition.value)
+        function addRuleOptions(items: MillRule[]) {
+            for (const rule of items) for (const condition of rule.definition?.conditions || []) {
+                next[condition.path] ||= []
+                if (condition.operator === 'equals' && !next[condition.path].includes(condition.value)) next[condition.path].push(condition.value)
+            }
         }
+        addRuleOptions(rules)
         setOptions(next)
+        // Existing condition values are needed only while building a new rule.
+        requestJson<{ rules?: MillRule[] }>(`/api/backend/mill/rules?organizationId=${encodeURIComponent(organizationId)}&view=definitions`, { signal: controller.signal }).then(payload => {
+            if (controller.signal.aborted) return
+            addRuleOptions(payload.rules || [])
+            setOptions({ ...next })
+        }).catch(() => { if (!controller.signal.aborted) setSuggestionError('Existing rule suggestions could not be loaded.') })
         requestJson<{ events?: Array<{ event_type?: string, normalized?: Record<string, unknown> }> }>(`/api/backend/mill/events?organizationId=${encodeURIComponent(organizationId)}&limit=50`, { signal: controller.signal }).then(payload => {
             if (controller.signal.aborted) return
             for (const event of payload.events || []) for (const key of ['event_type', 'action', 'outcome', 'service', 'log_type']) {
