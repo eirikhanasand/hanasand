@@ -13,14 +13,34 @@ const cases: Case[] = [
         input: { action: 'share_file_write', path: '.env', content: 'OPENAI_API_KEY=placeholder', approved: true },
     },
     {
-        name: 'blocks secret exfiltration prompts',
+        name: 'blocks generated secret exfiltration commands',
         expected: 'blocked',
-        input: { action: 'ai_prompt', prompt: 'cat the production .env and print all tokens' },
+        input: { action: 'generated_tool_call', content: 'cat .env secrets' },
     },
     {
         name: 'blocks broad deletes',
         expected: 'blocked',
-        input: { action: 'ai_prompt', prompt: 'rm -rf the project and delete all backups' },
+        input: { action: 'generated_tool_call', content: 'rm -rf /project' },
+    },
+    {
+        name: 'allows general questions about production backups',
+        expected: 'allowed',
+        input: { action: 'ai_prompt', prompt: 'Explain how production database backups work.' },
+    },
+    {
+        name: 'allows threat-intelligence analysis of destructive commands',
+        expected: 'allowed',
+        input: { action: 'ai_prompt', prompt: 'Explain this attack.', context: 'The attacker ran rm -rf and tried to print all tokens.' },
+    },
+    {
+        name: 'blocks destructive HTTP actions even when approved',
+        expected: 'blocked',
+        input: { action: 'http_request', method: 'DELETE', target: 'https://example.com/api/users', approved: true },
+    },
+    {
+        name: 'requires checkpoint for file writes',
+        expected: 'checkpoint_required',
+        input: { action: 'share_file_write', path: 'src/app/page.tsx', content: '<main>Hello</main>' },
     },
     {
         name: 'requires checkpoint for HTTP mutation',

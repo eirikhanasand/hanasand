@@ -44,6 +44,13 @@ const DESTRUCTIVE_METHODS = new Set(['DELETE', 'PATCH', 'PUT', 'POST'])
 let ensuredAuditTable = false
 
 export async function evaluateAgentActionPolicy(input: AgentPolicyInput): Promise<AgentPolicyDecision> {
+    // Discussing an operation or extracting evidence does not execute it.
+    // Check generated tool calls and actual writes at their action boundaries.
+    if (input.action === 'ai_prompt') return {
+        status: 'allowed', risk: 'low', hardBlock: false,
+        reason: 'Conversation prompts do not execute tools.',
+        safeAlternative: 'Evaluate proposed actions separately before execution.',
+    }
     const intentHaystack = [
         input.target,
         input.method,
