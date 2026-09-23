@@ -18,8 +18,8 @@ export default function BrowserDebug({ indicatorCount, logs = [], className = ''
                 <tbody>{logs.map((log, index) => {
                     const fields = /^\[([^\]\r\n]+)\]\s+\[([^\]\r\n]+)\] ?([\s\S]*)$/.exec(log)
                     return <tr key={index} className='border-t border-ui-border align-top'>
-                        <td className='break-words p-2'>{fields?.[1]}</td>
-                        <td className='break-words p-2'>{fields?.[2]}</td>
+                        <td className='wrap-break-word p-2'>{fields?.[1]}</td>
+                        <td className='wrap-break-word p-2'>{fields?.[2]}</td>
                         <td className='whitespace-pre-wrap break-all p-2 font-mono'>{fields ? fields[3] : log}</td>
                     </tr>
                 })}</tbody>
