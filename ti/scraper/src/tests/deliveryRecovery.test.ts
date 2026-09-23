@@ -83,6 +83,41 @@ test('worker persists failures and does not overlap cycles',async()=>{
   expect(claims).toBe(1);expect(finished[0][1]).toMatchObject({status:'failed',attempts:1});
 });
 
+test.each(['source', 'model'] as const)('worker aborts a stalled %s attempt and continues the batch', async stage => {
+  const finished: any[] = [];
+  let stalledSignal: AbortSignal | undefined;
+  let release: (response: Response) => void = () => {};
+  const stalled = new Promise<Response>(resolve => { release = resolve; });
+  const next = { ...item, timeline: { ...item.timeline, id: 'next' }, capture: { url: 'https://example.net/incident' } };
+  const html = '<meta property="article:published_time" content="2026-08-01T10:00:00Z">';
+  const worker = startDeliveryReportRecovery({
+    attemptTimeoutMs: 20,
+    store: {
+      claimDeliveryRecovery: async () => [item, next].map(value => ({ ...value, job: { attempts: 1 } })),
+      finishDeliveryRecovery: async (...args: any[]) => { finished.push(args); },
+    },
+    fetchPublic: async (url: string, init: RequestInit) => {
+      if (url === next.capture.url) return new Response(html);
+      if (stage === 'model') return new Response('No publication metadata');
+      stalledSignal = init.signal!;
+      return stalled;
+    },
+    fetchModel: async (_url: string, init: RequestInit) => { stalledSignal = init.signal!; return stalled; },
+  });
+  try {
+    await worker.run();
+    expect(stalledSignal?.aborted).toBe(true);
+    expect(finished.map(([id, result]) => [id, result.status])).toEqual([['i', 'failed'], ['next', 'resolved']]);
+    expect(finished[0][1].reason).toBe('Delivery report recovery timed out.');
+    // A late response must not overwrite the failed attempt or persist twice.
+    release(stage === 'source' ? new Response(html) : Response.json({ message: '{"timestamp":null}' }));
+    await Bun.sleep(0);
+    expect(finished).toHaveLength(2);
+  } finally {
+    await worker.stop();
+  }
+});
+
 
 test('internal workbench reads require a valid service token; writes still require an analyst session', async () => {
   const { InMemoryScraperStore } = await import('../storage/memoryStore.ts');
