@@ -36,5 +36,5 @@ test('requires exact envelope, host, command and completion context', () => {
 test('only checkpointed live audit and cursor-based journal commands qualify', () => {
     const journal = ['journalctl', '--no-pager', '-o', 'json', '--show-cursor', '--lines=+1000', '--after-cursor', `s=${'a'.repeat(32)};i=12;b=${'b'.repeat(32)};m=123;t=abc;x=123`]
     expect(routineCollectorArguments(args)).toBe(true); expect(routineCollectorArguments(journal)).toBe(true)
-    for (const command of [[...args, '--start', 'checkpoint'], args.map(v => v.replace('audit-live.pending', 'audit.pending')), [...args, '--format', 'text'], journal.map(v => v === '--after-cursor' ? '--since' : v), [...journal, '--file', '/tmp/other'], journal.map(v => v.startsWith('s=') ? 's=unexpected' : v)]) expect(routineCollectorArguments(command)).toBe(false)
+    for (const command of [[...args, '--start', 'checkpoint'], args.map(v => v.replace('audit-live.pending', 'audit.pending')), [...args, '--format', 'text'], journal.map(v => v === '--after-cursor' ? '--since' : v), [...journal, '--file', '/tmp/other'], journal.map(v => v.startsWith('s=') ? 's=unexpected' : v), journal.map(v => v.replace('i=12;', 'i=' + 'a'.repeat(17) + ';'))]) expect(routineCollectorArguments(command)).toBe(false)
 })

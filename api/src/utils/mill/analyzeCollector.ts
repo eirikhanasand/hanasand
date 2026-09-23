@@ -15,7 +15,7 @@ const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/
 export function routineCollectorArguments(args: string[]) {
     if (args[0] === 'journalctl') return args.length === 8
         && JSON.stringify(args.slice(0, 6)) === JSON.stringify(['journalctl', '--no-pager', '-o', 'json', '--show-cursor', '--lines=+1000'])
-        && args[6] === '--after-cursor' && /^s=[0-9a-f]{32};i=[0-9a-f]+;b=[0-9a-f]{32};m=[0-9a-f]+;t=[0-9a-f]+;x=[0-9a-f]+$/.test(args[7])
+        && args[6] === '--after-cursor' && /^s=[0-9a-f]{32};i=[0-9a-f]{1,16};b=[0-9a-f]{32};m=[0-9a-f]{1,16};t=[0-9a-f]{1,16};x=[0-9a-f]{1,16}$/.test(args[7])
     // Only the checkpointed live pass is routine. Recovery/backfill commands
     // carrying --start/--end remain visible even when successfully completed.
     return JSON.stringify(args) === JSON.stringify(['ausearch', '--input-logs', '--checkpoint', '/var/lib/hanasand-log-collector/audit-live.pending', '-k', 'hanasand_exec', '--raw'])
