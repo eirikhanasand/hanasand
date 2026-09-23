@@ -15,8 +15,9 @@ const server = Bun.serve({ port: 0, fetch(request) {
     if (url.pathname === '/app.css') return new Response(css, { headers: { 'content-type': 'text/css' } })
     if (url.pathname.endsWith('/report') && request.method === 'POST') {
         shareRequests++
-        return shareRequests === 1 ? Response.json({ error: 'Could not save the report. Try again.' }, { status: 503 }) : Response.json({ reportUrl: '/saved' })
+        return shareRequests === 1 ? Response.json({ error: 'Could not save the report. Try again.' }, { status: 503 }) : Response.json({ reportUrl: '/saved', resultId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' })
     }
+    if (url.pathname.includes('/browser/results/')) return Response.json({ ...savedReport, runId: url.searchParams.get('run') || 'recent-run', runs: [{ id: 'recent-run', startedAt: new Date().toISOString(), status: 'ended' }, { id: 'older-run', startedAt: '2026-01-01T00:00:00Z', status: 'ended' }] })
     if (url.pathname.endsWith('/report')) return Response.json(savedReport)
     if (url.pathname.startsWith('/api/')) return Response.json({ runs: [], profiles: [] })
     if (url.pathname === '/stream/index.html') {
@@ -27,7 +28,7 @@ const server = Bun.serve({ port: 0, fetch(request) {
 } })
 const build = await Bun.build({ entrypoints: ['browser-test-entry'], target: 'browser', define: { 'process.env': JSON.stringify({ NEXT_PUBLIC_API: `${server.url}api` }) }, plugins: [{ name: 'browser-fixture', setup(builder) {
     builder.onResolve({ filter: /^(browser-test-entry|next\/(link|image))$/ }, args => ({ path: args.path, namespace: 'fixture' }))
-    builder.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ loader: 'tsx', resolveDir: process.cwd(), contents: args.path === 'next/link' ? 'export default function Link(props){return <a {...props}/>}' : args.path === 'next/image' ? 'export default function Image({unoptimized,...props}){return <img {...props}/>}' : 'import {createRoot} from \'react-dom/client\'; import Browser from \'./src/app/browser/pageClient\'; import Report from \'./src/app/browser/report/pageClient\'; createRoot(document.getElementById(\'root\')).render(location.pathname === \'/saved\' ? <Report runId="fixture" token="fixture"/> : <Browser initialData={{history:[],quota:null,stats:{runs24h:0,darkwebRuns24h:0}}}/>);' }))
+    builder.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ loader: 'tsx', resolveDir: process.cwd(), contents: args.path === 'next/link' ? 'export default function Link(props){return <a {...props}/>}' : args.path === 'next/image' ? 'export default function Image({unoptimized,...props}){return <img {...props}/>}' : 'import {createRoot} from \'react-dom/client\'; import Browser from \'./src/app/browser/pageClient\'; import Report from \'./src/app/browser/report/pageClient\'; createRoot(document.getElementById(\'root\')).render(location.pathname === \'/saved\' ? <Report runId="fixture" token="fixture"/> : <Browser resultId={location.pathname.startsWith(\'/browser/\') ? location.pathname.split(\'/\')[2] : undefined} initialData={{history:[],quota:null,stats:{runs24h:0,darkwebRuns24h:0}}}/>);' }))
 } }] })
 assert(build.success, build.logs.join('\n'))
 bundle = await build.outputs[0].text()
@@ -312,31 +313,25 @@ try {
     const screenshotList = page.locator('[data-screenshot-list]')
     assert.equal(await screenshotList.evaluate(el => getComputedStyle(el).maxHeight), 'none', 'Screenshots expand down the page without a nested scroll cap')
     assert.equal(await screenshotList.evaluate(el => el.scrollHeight <= el.clientHeight + 1), true, 'Every screenshot fits in the expanded list')
-    // Opening recent history must not allocate a sandbox. Only the summary action does.
-    const recentRun = { id: 'recent-run', target: 'https://example.com', network: 'regular', status: 'completed', startedAt: new Date().toISOString(), reportUrl: '/browser/report?run=recent-run&token=fixture' }
-    await page.evaluate(run => localStorage.setItem('hanasand:browser:history:v1', JSON.stringify([run])), recentRun)
+    const storedRun = { id: 'recent-run', resultId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', target: 'https://example.com', network: 'regular', status: 'completed', startedAt: '2026-01-01T00:00:00Z' }
+    await page.evaluate(run => localStorage.setItem('hanasand:browser:history:v1', JSON.stringify([run])), storedRun)
+    await page.goto(server.url.toString())
+    assert.equal(await page.getByRole('button', { name: 'Run again', exact: true }).count(), 0, 'History has no rerun button')
+    const historyRow = page.getByRole('link', { name: /https:\/\/example.com/ })
+    assert.equal(await historyRow.getAttribute('href'), `/browser/${storedRun.resultId}`)
+    await historyRow.click()
+    await page.getByRole('heading', { name: 'https://example.com', exact: true }).waitFor()
+    assert.equal(await page.getByRole('dialog').count(), 0, 'Stored evidence is a page, not a popup')
+    assert.equal(await page.evaluate(() => window.browserMessages.length), 0, 'Opening archived results never starts a worker')
+    await page.getByLabel('Saved run', { exact: true }).selectOption('older-run')
+    await page.getByRole('heading', { name: 'https://example.com', exact: true }).waitFor()
+    assert.equal(await page.getByLabel('Saved run', { exact: true }).inputValue(), 'older-run')
     await page.reload()
-    await page.getByRole('button', { name: 'https://example.com', exact: true }).click()
-    const savedDialog = page.getByRole('dialog', { name: 'Saved browser run' })
-    await savedDialog.getByRole('heading', { name: 'https://example.com', exact: true }).waitFor()
-    assert.equal(await page.evaluate(() => window.browserMessages.length), 0, 'Opening a recent entry does not connect to a worker')
-    await savedDialog.getByRole('button', { name: 'Close', exact: true }).click()
+    await page.getByRole('heading', { name: 'https://example.com', exact: true }).waitFor()
+    assert.equal(await page.evaluate(() => window.browserMessages.length), 0)
     await page.getByRole('button', { name: 'Run again', exact: true }).click()
-    await savedDialog.waitFor()
-    assert.equal(await page.evaluate(() => window.browserMessages.length), 0, 'List Run again reuses recent evidence')
-    await savedDialog.getByRole('button', { name: 'Run again', exact: true }).click()
     await loading.waitFor()
     await page.waitForFunction(() => window.browserMessages.some(message => message.type === 'start'))
-    assert.equal(await savedDialog.count(), 0, 'Explicit rerun closes the saved summary')
-    // An expired result starts a fresh run; failed results must not become cache hits.
-    for (const run of [ { ...recentRun, startedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() }, { ...recentRun, status: 'failed' } ]) {
-        await page.evaluate(run => localStorage.setItem('hanasand:browser:history:v1', JSON.stringify([run])), run)
-        await page.reload()
-        await page.getByRole('button', { name: 'Run again', exact: true }).click()
-        await loading.waitFor()
-        await page.waitForFunction(() => window.browserMessages.some(message => message.type === 'start'))
-        assert.equal(await savedDialog.count(), 0)
-    }
     assert.deepEqual(errors, [])
     console.log('Browser workspace passed: loading until first frame, stream readiness, cancellation, launch errors, live input, stable stream, downloads, completion box and mobile width.')
 } finally { await browser.close(); server.stop(true) }

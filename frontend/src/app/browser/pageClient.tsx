@@ -125,6 +125,7 @@ type SandboxThreatAssociation = {
     source?: 'rendered_page' | 'tool_context' | 'decoded_script'
 }
 type BrowserRunHistory = {
+    resultId?: string
     id: string
     target: string
     network: BrowserNetwork
@@ -344,7 +345,7 @@ function resolveToolUrl(template: string, target: string) {
     return template.replaceAll('{url}', encodeURIComponent(target)).replaceAll('{rawUrl}', target)
 }
 
-export default function BrowserPageClient({ initialData }: { initialData: BrowserInitialData }) {
+export default function BrowserPageClient({ initialData, resultId }: { initialData: BrowserInitialData; resultId?: string }) {
     const [formReady, setFormReady] = useState(false)
     const [target, setTarget] = useState('')
     const [sessionState, setSessionState] = useState<SessionState>('prompt')
@@ -423,7 +424,9 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     const [history, setHistory] = useState<BrowserRunHistory[]>(() => sanitizeHistory(initialData.history))
     const [quota, setQuota] = useState<BrowserQuota | null>(() => quotaValue(initialData.quota))
     const [runStats] = useState<BrowserRunStats>(() => initialData.stats)
-    const [expandedRun, setExpandedRun] = useState<BrowserRunHistory | null>(null)
+    const [showStoredResult, setShowStoredResult] = useState(Boolean(resultId))
+    const [resultClientId, setResultClientId] = useState('')
+    useEffect(() => { setResultClientId(getOrCreateBrowserClientId()) }, [])
     const [currentRunId, setCurrentRunId] = useState('')
     const [shareStatus, setShareStatus] = useState('')
     const [shareUrl, setShareUrl] = useState('')
@@ -560,12 +563,12 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                     }),
                 }),
             })
-            const payload = await response.json() as { reportUrl?: string; error?: string }
+            const payload = await response.json() as { reportUrl?: string; resultId?: string; error?: string }
             if (!response.ok) throw new Error(payload.error || 'Could not save the report. Try again.')
             if (!payload.reportUrl) throw new Error('The report link was not returned. Try again.')
             const reportUrl = new URL(payload.reportUrl, window.location.origin).toString()
             if (!automatic) setShareUrl(reportUrl)
-            setHistory(current => persistHistory(current.map(run => run.id === currentRunId ? { ...run, reportUrl, status: savedStatus } : run)))
+            setHistory(current => persistHistory(current.map(run => run.id === currentRunId ? { ...run, reportUrl, resultId: payload.resultId || run.resultId, status: savedStatus } : run)))
             if (automatic) return
             setShareStatus('saved')
             try {
@@ -664,6 +667,16 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     }, [activeSandboxTab, selectedProfile.tools])
 
     useEffect(() => {
+        const clientId = getOrCreateBrowserClientId()
+        const controller = new AbortController()
+        void fetch(`${historyApiPath}?clientId=${encodeURIComponent(clientId)}`, { credentials: 'include', signal: controller.signal })
+            .then(response => response.ok ? response.json() : null)
+            .then(payload => { if (payload?.runs?.length) setHistory(persistHistory(payload.runs)) })
+            .catch(() => undefined)
+        return () => controller.abort()
+    }, [])
+
+    useEffect(() => {
         getOrCreateBrowserClientId()
         try {
             const stored = JSON.parse(window.localStorage.getItem(historyStorageKey) || '[]')
@@ -693,7 +706,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     const startRun = useCallback(function startRun(override?: { target?: string; network?: BrowserNetwork; recovery?: boolean }) {
         const url = normalizeTarget(override?.target ?? target)
         if (!url) return
-        setExpandedRun(null)
+        setShowStoredResult(false)
         if (replacementRef.current) clearTimeout(replacementRef.current)
         replacementRef.current = null
         if (!override?.recovery) {
@@ -842,6 +855,16 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                     title: '',
                 }
                 setHistory(current => persistHistory([runRecord, ...current]))
+                void fetch(`${historyApiPath}?clientId=${encodeURIComponent(getOrCreateBrowserClientId())}`, { credentials: 'include' })
+                    .then(response => response.ok ? response.json() : null)
+                    .then(payload => {
+                        const runs = sanitizeHistory(payload?.runs)
+                        const stored = runs.find(run => run.id === id)
+                        if (stored?.resultId && socketRef.current === socket) {
+                            setHistory(persistHistory(runs))
+                            window.history.replaceState(null, '', `/browser/${stored.resultId}`)
+                        }
+                    }).catch(() => undefined)
                 const nextQuota = quotaValue(payload.quota)
                 if (nextQuota) setQuota(nextQuota)
                 setSessionState('live')
@@ -1222,11 +1245,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
             : profile))
     }, [selectedProfile.id])
 
-    const openHistoryRun = (run: BrowserRunHistory) => {
-        const recent = history.find(item => normalizeTarget(item.target) === normalizeTarget(run.target) && isRecentBrowserRun(item))
-        if (recent) setExpandedRun(recent)
-        else startRun({ target: run.target })
-    }
+    if (showStoredResult && resultId) return <BrowserReportPageClient resultId={resultId} clientId={resultClientId} onRerun={url => startRun({ target: url })} />
 
     if (sessionState === 'prompt') {
         return (
@@ -1339,11 +1358,10 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                                     />
                                 </div>
                             </details>
-                            <HistoryPanel history={history} quota={quota} onRerun={openHistoryRun} onExpand={openHistoryRun} embedded />
+                            <HistoryPanel history={history} quota={quota} embedded />
                         </form>
                     </div>
                 </section>
-                {expandedRun ? <RunDetailModal run={expandedRun} onClose={() => setExpandedRun(null)} onRerun={(run) => startRun({ target: run.target })} /> : null}
             </main>
         )
     }
@@ -1742,7 +1760,7 @@ function ProfilePicker({ paid, profiles, selectedProfileId, onSelect, onDelete }
     )
 }
 
-function HistoryPanel({ history, quota, onRerun, onExpand, embedded = false }: { history: BrowserRunHistory[]; quota: BrowserQuota | null; onRerun: (run: BrowserRunHistory) => void; onExpand: (run: BrowserRunHistory) => void; embedded?: boolean }) {
+function HistoryPanel({ history, quota, embedded = false }: { history: BrowserRunHistory[]; quota: BrowserQuota | null; embedded?: boolean }) {
     return (
         <section className={embedded ? 'grid gap-3 border-t border-ui-border pt-3' : 'grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-4'}>
             <div className='flex flex-wrap items-start justify-between gap-3'>
@@ -1753,50 +1771,16 @@ function HistoryPanel({ history, quota, onRerun, onExpand, embedded = false }: {
                 </div>
             </div>
             <div className='grid max-h-[10.75rem] gap-2 overflow-y-auto pr-1'>
-                {history.map(run => (
-                    <div key={run.id} className='grid gap-2 rounded-md border border-ui-border bg-ui-raised p-2 text-xs md:grid-cols-[minmax(0,1fr)_auto_auto_auto] md:items-center'>
-                        <button type='button' onClick={() => onExpand(run)} className='min-w-0 truncate text-left font-mono text-ui-text'>
-                            {run.target}
-                            {run.checkCount && run.checkCount > 1 ? <span className='ml-2 font-sans font-semibold text-ui-muted'>({run.checkCount} checks)</span> : null}
-                        </button>
+                {history.filter(run => run.resultId).map(run => (
+                    <Link key={run.id} href={`/browser/${run.resultId}`} className='grid gap-2 rounded-md border border-ui-border bg-ui-raised p-2 text-xs transition hover:border-ui-primary focus-visible:outline-2 focus-visible:outline-ui-primary md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center'>
+                        <span className='min-w-0 truncate text-left font-mono text-ui-text'>{run.target}</span>
                         <ProviderRunBadges run={run} />
                         <span className='whitespace-nowrap text-ui-muted'>{new Date(run.startedAt).toLocaleString()}</span>
-                        <button
-                            type='button'
-                            onClick={() => onRerun(run)}
-                            className='inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-ui-border bg-ui-panel px-2 text-xs font-semibold text-ui-text transition hover:border-ui-primary hover:text-ui-primary'
-                        >
-                            <RotateCcw className='h-3.5 w-3.5' />
-                            Run again
-                        </button>
-                    </div>
+                    </Link>
                 ))}
                 {!history.length ? <div className='rounded-md border border-dashed border-ui-border p-3 text-xs text-ui-muted'>No browser runs recorded yet.</div> : null}
             </div>
         </section>
-    )
-}
-
-function RunDetailModal({ run, onClose, onRerun }: { run: BrowserRunHistory; onClose: () => void; onRerun: (run: BrowserRunHistory) => void }) {
-    return (
-        <div className='fixed inset-0 z-50 grid place-items-center bg-black/55 p-4'>
-            <section role='dialog' aria-label='Saved browser run' aria-modal='true' className='max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-lg border border-ui-border bg-ui-panel p-4 shadow-xl'>
-                <div className='flex items-start justify-between gap-3'>
-                    <div className='min-w-0'>
-                        <h2 className='text-base font-semibold text-ui-text'>Browser run</h2>
-                        <p className='mt-1 break-all font-mono text-xs text-ui-muted'>{run.target}</p>
-                    </div>
-                    <div className='flex shrink-0 gap-2'>
-                        <button type='button' onClick={() => onRerun(run)} className='inline-flex items-center gap-2 rounded-md border border-ui-border px-3 py-2 text-sm font-semibold text-ui-text hover:border-ui-primary'><RotateCcw className='h-4 w-4' />Run again</button>
-                        <button type='button' onClick={onClose} className='rounded-md border border-ui-border px-2 py-1 text-xs font-semibold text-ui-text'>Close</button>
-                    </div>
-                </div>
-                {run.reportUrl ? <BrowserReportPageClient runId={run.id} token={new URL(run.reportUrl, 'https://hanasand.com').searchParams.get('token') || ''} /> : <div className='mt-3 grid gap-2 text-sm'>
-                    <div className='flex justify-between gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2'><span className='text-ui-muted'>Started</span><span className='text-ui-text'>{new Date(run.startedAt).toLocaleString()}</span></div>
-                    <div className='flex justify-between gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2'><span className='text-ui-muted'>Providers</span><ProviderRunBadges run={run} /></div>
-                </div>}
-            </section>
-        </div>
     )
 }
 
@@ -3106,6 +3090,7 @@ function runHistoryValue(value: unknown): BrowserRunHistory | null {
     if (!id || !target) return null
     return {
         id,
+        resultId: stringValue(record.resultId),
         target,
         network: runNetwork,
         status: stringValue(record.status) || 'running',
@@ -3134,7 +3119,7 @@ export function sanitizeHistory(value: unknown): BrowserRunHistory[] {
     return (value.map(runHistoryValue).filter(Boolean) as BrowserRunHistory[])
         .sort((left, right) => Date.parse(right.startedAt) - Date.parse(left.startedAt))
         .filter(run => {
-            const key = historyDomainKey(run.target)
+            const key = run.resultId || normalizeTarget(run.target)
             if (seen.has(key)) return false
             seen.add(key)
             return true
@@ -3259,9 +3244,4 @@ function profileSyncLabel(state: 'local' | 'loading' | 'synced' | 'saving' | 'er
     if (state === 'synced') return 'Profiles synced to account.'
     if (state === 'error') return 'Account profile sync failed; local copy is preserved.'
     return 'Profiles saved locally on this browser.'
-}
-
-function isRecentBrowserRun(run: BrowserRunHistory, now = Date.now()) {
-    const age = now - Date.parse(run.startedAt)
-    return age >= 0 && age < 24 * 60 * 60 * 1000 && !['failed', 'cancelled', 'unreachable'].includes(run.status)
 }

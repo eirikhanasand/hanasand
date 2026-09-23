@@ -89,7 +89,7 @@ if (existsSync(composeUrl)) {
     assert.match(serviceBlock('browser-worker'), /profiles:\s*\n\s*-\s*unsafe-dev-only/, 'shared browser worker should be opt-in dev-only')
     assert.match(serviceBlock('browser-worker'), /image:\s*hanasand_browser_worker/, 'shared dev worker should use the browser-worker image')
     assert.match(serviceBlock('browser-worker'), /target:\s*browser-runtime/, 'browser-worker image should build the Chromium-enabled Docker target')
-    assert.match(serviceBlock('browser-worker'), /networks:[\s\S]*?- browsernet/, 'shared dev browser worker should still use the dedicated browser network')
+    assert.match(serviceBlock('browser-worker'), /networks:[\s\S]*?(?:- browsernet\b|browsernet:)/, 'shared dev browser worker should still use the dedicated browser network')
     assert.doesNotMatch(serviceBlock('browser-worker'), /networks:[\s\S]*?- hanasandnet/, 'shared dev browser worker should not join the app network')
     assert.match(compose, /BROWSER_SANDBOX_PREWARM:\s*"0"/, 'compose should not prewarm Chromium in the privileged API container')
     assert.match(serviceBlock('browser-worker'), /BROWSER_SANDBOX_MAX_SESSIONS:\s*"1"/, 'shared browser worker config should also cap browser sessions to one')
@@ -100,7 +100,7 @@ if (existsSync(composeUrl)) {
     assert.match(serviceBlock('browser-worker'), /ipc:\s*private/, 'shared browser worker should use a private IPC namespace')
     assert.match(serviceBlock('browser-worker'), /cap_add:\s*\[\]/, 'shared browser worker should not add Linux capabilities')
     assert.match(serviceBlock('browser-worker'), /security_opt:[\s\S]*?apparmor=docker-default[\s\S]*?no-new-privileges/, 'shared browser worker should keep AppArmor and no-new-privileges')
-    assert.match(serviceBlock('api'), /networks:[\s\S]*?- browsernet/, 'API should join the browser network only for the worker websocket control path')
+    assert.match(serviceBlock('api'), /networks:[\s\S]*?(?:- browsernet\b|browsernet:)/, 'API should join the browser network only for the worker websocket control path')
     assert.doesNotMatch(serviceBlock('postgres'), /- browsernet/, 'database should not join the browser worker network')
     assert.doesNotMatch(serviceBlock('stalwart'), /- browsernet/, 'mail service should not join the browser worker network')
 }

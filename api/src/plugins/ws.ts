@@ -24,7 +24,7 @@ import { countGptViewers, gpt, handleGptMessage, sendGptSnapshot, unregisterGptS
 import recordLog from '#utils/logs/recordLog.ts'
 import run from '#db'
 import { currentBrowserAdmissionStatus, handleOnionSessionSocket, registerPrestartedBrowser, requestBrowserAdmission } from '../handlers/onionSession/ws.ts'
-import { browserPaidExtensionAllowed, finishBrowserRun, prepareBrowserRun, refreshBrowserRunLease, updateBrowserRunProviderResult, type BrowserProviderRunResult } from '../handlers/browserSandboxRuns.ts'
+import { persistBrowserRunEvidence, browserPaidExtensionAllowed, finishBrowserRun, prepareBrowserRun, refreshBrowserRunLease, updateBrowserRunProviderResult, type BrowserProviderRunResult } from '../handlers/browserSandboxRuns.ts'
 import { createRuntimeContainer, getRuntimeContainer, getRuntimeContainerLogs, listRuntimeContainers, renameRuntimeContainer, removeRuntimeContainer, startRuntimeContainer } from '#utils/docker/engine.ts'
 
 const browserWorkerSeccompProfile = fs.readFileSync(new URL('../../seccomp-chromium.json', import.meta.url), 'utf8')
@@ -376,6 +376,7 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
     let runPrepared = false
     let leaseTimer: NodeJS.Timeout | null = null
     let messages = Promise.resolve()
+    let evidenceWrites = Promise.resolve()
     let sawReady = false
     let deliveredFrame = false
     let sawTerminalMessage = false
@@ -524,8 +525,9 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
                     sawTerminalMessage = true
                     if (leaseTimer) clearInterval(leaseTimer)
                 }
+                evidenceWrites = evidenceWrites.then(() => persistBrowserRunEvidence(id, payload)).catch(error => recordWebsocketFailure('browser-evidence-save', id, error))
                 void persistBrowserProviderResult(id, message)
-                void finishProxiedBrowserRun(id, message)
+                void evidenceWrites.then(() => finishProxiedBrowserRun(id, message)).catch(error => recordWebsocketFailure('browser-run-finish', id, error))
                 if (connection.readyState === WebSocket.OPEN) connection.send(payload?.capacity
                     ? JSON.stringify({ ...payload, capacity: currentBrowserAdmissionStatus() })
                     : socketMessageText(message))

@@ -47,7 +47,7 @@ assertIncludes(liveClient, 'ANALYSIS_TOOL_DOMAINS', 'copyable indicators must ex
 assertIncludes(liveClient, '.replace(/<[^>]+>/g, \' \')', 'analyst evidence excerpts must strip leaked HTML tags')
 
 for (const token of [
-    'Browser sandbox report',
+    'Saved run',
     'Summary',
     'URL timeline',
     'Providers',
@@ -63,6 +63,9 @@ for (const token of [
     assertIncludes(reportClient, token, `saved browser report must render ${token}`)
 }
 
+assert.ok(!liveClient.includes('RunDetailModal'), 'history must not retain its removed popup')
+assertIncludes(liveClient, 'href={`/browser/${run.resultId}`}', 'history rows must link to stable result pages')
+assertIncludes(backendProxy, 'pathSegments[1] === \'results\'', 'anonymous results still pass through to API ownership checks')
 assertIncludes(reportClient, 'networkPeer(request)', 'network table must expose peer/certificate details')
 assertIncludes(reportClient, 'download.sha256', 'saved browser report must expose download hashes')
 assertIncludes(backendProxy, 'anonymousAllowed', 'browser run reports must be saveable without console auth')

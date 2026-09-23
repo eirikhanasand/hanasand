@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import run, { withTransaction } from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { validateSession } from '#utils/auth/session.ts'
+import { browserResultId } from '../utils/ws/browserResultIdentity.ts'
 import { BrowserLeaseExpiredError } from '../utils/ws/browserLease.ts'
 import { browserAccess, type BrowserAccess } from '../utils/ws/browserAccess.ts'
 
@@ -33,6 +34,7 @@ export type BrowserRunRecord = {
     title?: string
     providerResults?: Record<string, BrowserProviderRunResult>
     reportUrl?: string
+    resultId: string
 }
 export type BrowserProviderRunResult = {
     status: 'clean' | 'suspicious' | 'blocked' | 'loading'
@@ -97,25 +99,25 @@ export async function getBrowserRuns(req: FastifyRequest<{ Querystring: { client
         const result = await run(identity.ownerId ? `
             SELECT *
             FROM (
-                SELECT DISTINCT ON (target)
-                    id, target, network, status, title, created_at, metadata,
-                    COUNT(*) OVER (PARTITION BY target)::int AS check_count
+                SELECT DISTINCT ON (result_id)
+                    id, target, network, status, title, created_at, metadata - 'report' AS metadata,
+                    COUNT(*) OVER (PARTITION BY result_id)::int AS check_count
                 FROM browser_runs
                 WHERE owner_id = $1
                    OR ($2::text IS NOT NULL AND client_id_hash = $2)
-                ORDER BY target, created_at DESC
+                ORDER BY result_id, created_at DESC
             ) latest_runs
             ORDER BY created_at DESC
             LIMIT 12
         ` : `
             SELECT *
             FROM (
-                SELECT DISTINCT ON (target)
-                    id, target, network, status, title, created_at, metadata,
-                    COUNT(*) OVER (PARTITION BY target)::int AS check_count
+                SELECT DISTINCT ON (result_id)
+                    id, target, network, status, title, created_at, metadata - 'report' AS metadata,
+                    COUNT(*) OVER (PARTITION BY result_id)::int AS check_count
                 FROM browser_runs
                 WHERE client_id_hash = $1
-                ORDER BY target, created_at DESC
+                ORDER BY result_id, created_at DESC
             ) latest_runs
             ORDER BY created_at DESC
             LIMIT 12
@@ -188,6 +190,7 @@ export async function postBrowserRunReport(req: FastifyRequest<{ Params: Browser
         })])
         return res.send({
             ok: true,
+            resultId: browserResultId(String(row.target)),
             reportUrl: browserReportViewerUrl(req.params.id, token),
         })
     } catch (error) {
@@ -207,12 +210,12 @@ export async function prepareBrowserRun(input: PrepareBrowserRunInput): Promise<
         const quota = await loadBrowserQuota(identity, query)
         if (quota.active >= quota.concurrentLimit) return { allowed: false as const, quota, reason: 'concurrency_limit' as const }
         const result = await query(`
-            INSERT INTO browser_runs (id, owner_id, quota_identity, quota_plan, client_id_hash, target, network, status, metadata)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, 'running', $8::jsonb)
+            INSERT INTO browser_runs (id, owner_id, quota_identity, quota_plan, client_id_hash, target, network, status, metadata, result_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, 'running', $8::jsonb, $9::uuid)
             ON CONFLICT (id) DO NOTHING
             RETURNING id, target, network, status, title, created_at
         `, [input.id, identity.ownerId, identity.quotaIdentity, identity.quotaPlan, identity.clientIdHash, input.target, input.network,
-            JSON.stringify({ identityKind: identity.identityKind, leaseExpiresAt: new Date(Date.now() + 120_000).toISOString() })])
+            JSON.stringify({ identityKind: identity.identityKind, leaseExpiresAt: new Date(Date.now() + 120_000).toISOString() }), browserResultId(input.target)])
         if (!result.rows.length) return { allowed: false as const, quota, reason: 'run_exists' as const }
         return { allowed: true as const, run: rowToRunRecord(result.rows[0]), quota: { ...quota, active: quota.active + 1, used: quota.used + 1 } }
     })
@@ -319,6 +322,7 @@ function rowToRunRecord(row: Record<string, any>): BrowserRunRecord {
     const reportToken = row.metadata?.reportToken
     return {
         id: String(row.id || ''),
+        resultId: browserResultId(String(row.target || '')),
         target: String(row.target || ''),
         network: row.network === 'tor' ? 'tor' : 'regular',
         status: String(row.status || 'running'),
@@ -370,4 +374,72 @@ function hashValue(value: string) {
 
 function browserReportViewerUrl(id: string, token: string) {
     return `/browser/report?run=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}`
+}
+
+export async function persistBrowserRunEvidence(id: string, payload: Record<string, any>) {
+    if (!['frame', 'tool_capture', 'console', 'pageerror', 'downloads', 'status', 'navigation_error', 'error', 'ended'].includes(payload?.type)) return
+    await run('INSERT INTO browser_run_evidence (run_id, payload) VALUES ($1, $2::jsonb)', [id, JSON.stringify(payload)])
+}
+
+export async function getBrowserResult(req: FastifyRequest<{ Params: { id: string }; Querystring: { clientId?: string; run?: string } }>, res: FastifyReply) {
+    try {
+        if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(req.params.id)) return res.status(404).send({ error: 'Result not found.' })
+        const user = await tokenWrapper(req, res)
+        const clientId = cleanClientId(req.query?.clientId)
+        const rows = await run(`SELECT id, target, network, status, created_at, title FROM browser_runs
+            WHERE result_id = $1::uuid AND (owner_id = $2 OR client_id_hash = $3)
+            ORDER BY created_at DESC, id DESC`, [req.params.id, user.valid ? user.id : null, clientId ? hashValue(clientId) : null])
+        const selected = req.query?.run ? rows.rows.find(row => row.id === req.query.run) : rows.rows[0]
+        if (!selected) return res.status(404).send({ error: 'Result not found or unavailable to this account.' })
+        const stored = await run('SELECT metadata FROM browser_runs WHERE id = $1', [selected.id])
+        const evidence = await run('SELECT payload FROM browser_run_evidence WHERE run_id = $1 ORDER BY id', [selected.id])
+        return res.header('cache-control', 'private, no-store').send(buildStoredBrowserReport(selected, stored.rows[0]?.metadata?.report, evidence.rows.map(row => row.payload), rows.rows))
+    } catch (error) {
+        req.log.error(error)
+        return res.status(500).send({ error: 'Could not load the saved browser result.' })
+    }
+}
+
+export function buildStoredBrowserReport(selected: Record<string, any>, saved: any, events: Record<string, any>[], versions: Record<string, any>[]) {
+    const captures = events.filter(event => event.type === 'frame' || event.type === 'tool_capture').map(event => ({
+        ...event,
+        kind: event.type === 'frame' ? 'page' : 'tool',
+        label: event.type === 'frame' ? 'Screenshot' : event.name || 'Provider',
+        image: event.image ? `data:image/jpeg;base64,${event.image}` : undefined,
+    }))
+    const logs = (provider: boolean) => events.filter(event => ['console', 'pageerror'].includes(event.type) && (event.source === 'provider') === provider)
+        .map(event => `${event.name ? `[${event.name}] ` : ''}[${event.level || (event.type === 'pageerror' ? 'error' : 'log')}] ${event.text || event.message || ''}${event.url ? ` (${event.url}${event.line ? `:${event.line}` : ''})` : ''}`)
+    const latest = [...events].reverse().find(event => event.networkSummary)?.networkSummary
+    const pageCaptures = captures.filter(capture => capture.kind === 'page')
+    const providerCaptures = new Map<string, Record<string, any>>()
+    for (const event of events.filter(event => event.type === 'tool_capture')) providerCaptures.set(event.id || event.name, event)
+    const providerReports = [...providerCaptures.values()].filter(event => event.id !== 'webcrack' || event.deobfuscatedCode).map(event => ({
+        tool: event.name || event.id,
+        url: event.url,
+        status: event.error ? 'Unavailable' : 'Results',
+        ...event.toolAnalysis,
+        deobfuscatedCode: event.deobfuscatedCode,
+        signals: event.toolAnalysis?.extractedSignals || [],
+        error: event.error,
+    }))
+    return {
+        ...saved,
+        analystSummary: saved?.analystSummary || { narrative: `Loaded ${selected.target} and captured ${pageCaptures.length} screenshots.` },
+        target: selected.target,
+        finalUrl: captures.filter(capture => capture.kind === 'page').at(-1)?.url || saved?.finalUrl || selected.target,
+        status: { ...saved?.status, run: selected.status },
+        exportedAt: saved?.exportedAt || selected.created_at,
+        captures: captures.length ? captures : saved?.captures || [],
+        consoleEvents: events.length ? logs(false) : saved?.consoleEvents || [],
+        providerConsoleEvents: events.length ? logs(true) : saved?.providerConsoleEvents || [],
+        analystReport: { ...saved?.analystReport, ...(providerReports.length ? { providerReports } : {}), ...(latest ? { networkEvidence: {
+            ...saved?.analystReport?.networkEvidence,
+            requests: latest.requestCount, responses: latest.responseCount, domains: latest.uniqueDomainCount,
+            blockedOrFailed: latest.blockedOrFailed, contactedDomains: latest.contactedDomains,
+            downloads: latest.downloads, recentRequests: latest.recentRequests,
+        } } : {}) },
+        evidenceEvents: events.filter(event => !['frame', 'tool_capture', 'console', 'pageerror'].includes(event.type)),
+        runId: selected.id,
+        runs: versions.map(row => ({ id: row.id, startedAt: row.created_at, status: row.status })),
+    }
 }

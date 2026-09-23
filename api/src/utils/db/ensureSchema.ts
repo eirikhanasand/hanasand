@@ -1,3 +1,4 @@
+import { browserResultId } from '../ws/browserResultIdentity.ts'
 import ensureAuditAcknowledgmentsSchema from './auditAcknowledgmentsSchema.ts'
 import ensureLogAnalyzeSchema from './logAnalyzeSchema.ts'
 import ensureLogCatchupSchema from './logCatchupSchema.ts'
@@ -192,6 +193,19 @@ async function applySchema() {
             metadata JSONB NOT NULL DEFAULT '{}'::jsonb
         )
     `)
+    await run('ALTER TABLE browser_runs ADD COLUMN IF NOT EXISTS result_id UUID')
+    const browserTargets = await run('SELECT DISTINCT target FROM browser_runs WHERE result_id IS NULL')
+    for (const { target } of browserTargets.rows) {
+        await run('UPDATE browser_runs SET result_id = $1 WHERE target = $2 AND result_id IS NULL', [browserResultId(target), target])
+    }
+    await run('CREATE INDEX IF NOT EXISTS idx_browser_runs_result_created ON browser_runs(result_id, created_at DESC)')
+    await run(`CREATE TABLE IF NOT EXISTS browser_run_evidence (
+        id BIGSERIAL PRIMARY KEY,
+        run_id TEXT NOT NULL REFERENCES browser_runs(id),
+        payload JSONB NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`)
+    await run('CREATE INDEX IF NOT EXISTS idx_browser_run_evidence_run ON browser_run_evidence(run_id, id)')
     await run('CREATE INDEX IF NOT EXISTS idx_browser_runs_owner_created ON browser_runs(owner_id, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_browser_runs_quota_created ON browser_runs(quota_identity, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_browser_runs_client_created ON browser_runs(client_id_hash, created_at DESC)')
