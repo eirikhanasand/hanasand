@@ -1,4 +1,5 @@
 import { readPower } from './power.mjs';
+import { createLanePool, modelEndpoints } from './lanes.mjs';
 
 const API_WS = process.env.HANASAND_AI_CLIENT_API_WS ?? "ws://127.0.0.1:8080/api/client/ws/gpt";
 const OPENAI_BASE = process.env.HANASAND_AI_OPENAI_BASE ?? "http://127.0.0.1:18081";
@@ -11,6 +12,7 @@ const MODEL_LANE_PORTS = (process.env.HANASAND_AI_MODEL_LANE_PORTS ?? "18081,180
   .filter((value) => Number.isInteger(value) && value > 0);
 const MAX_REQUESTS = Math.max(1, Number(process.env.HANASAND_AI_MODEL_MAX_REQUESTS ?? "4"));
 const CONTEXT_MAX_TOKENS = Math.max(0, Number(process.env.HANASAND_AI_MODEL_CONTEXT_MAX_TOKENS ?? "32768"));
+const lanePool = createLanePool(MAX_REQUESTS);
 
 let socket;
 let connected = false;
@@ -106,7 +108,6 @@ async function handlePromptRequest(request) {
   const conversationId = request.conversationId || `tools-${crypto.randomUUID()}`;
   const started = Date.now();
   lastPromptAt = new Date().toISOString();
-  sendClientUpdate("generating", { conversationId });
   send({
     type: "prompt_started",
     conversationId,
@@ -114,8 +115,12 @@ async function handlePromptRequest(request) {
     timestamp: new Date().toISOString()
   });
 
+  let lane;
+  let failure = null;
   try {
-    const response = await fetch(new URL("/v1/chat/completions", OPENAI_BASE), {
+    lane = lanePool.acquire(modelLanes.map(item => item.url));
+    sendClientUpdate("generating", { conversationId });
+    const response = await fetch(new URL("/v1/chat/completions", lane.url), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -156,9 +161,8 @@ async function handlePromptRequest(request) {
       },
       timestamp: new Date().toISOString()
     });
-    sendClientUpdate("idle");
   } catch (error) {
-    lastError = messageOf(error);
+    lastError = failure = messageOf(error);
     send({
       type: "prompt_error",
       conversationId,
@@ -166,7 +170,9 @@ async function handlePromptRequest(request) {
       error: lastError,
       timestamp: new Date().toISOString()
     });
-    sendClientUpdate("error", { lastError });
+  } finally {
+    lane?.release();
+    sendClientUpdate(lanePool.activeRequests ? "generating" : failure ? "error" : "idle", { lastError: failure });
   }
 }
 
@@ -181,11 +187,11 @@ function sendClientUpdate(status, overrides = {}) {
       ram: [],
       cpu: [],
       gpu: [],
-      lanes: modelLanes,
+      lanes: modelLanes.map(lane => ({ ...lane, ...lanePool.stats(lane.url) })),
       power: readPower(),
       model: {
         conversationId: overrides.conversationId ?? null,
-        status,
+        status: lanePool.activeRequests ? "generating" : status,
         currentTokens: 0,
         maxTokens: 32768,
         promptTokens: 0,
@@ -208,9 +214,7 @@ function send(payload) {
 
 async function checkModel() {
   try {
-    const endpoints = MODEL_LANE_PORTS.length
-      ? MODEL_LANE_PORTS.map((port) => `http://127.0.0.1:${port}`)
-      : [OPENAI_BASE];
+    const endpoints = modelEndpoints(OPENAI_BASE, MODEL_LANE_PORTS);
     const results = await Promise.all(endpoints.map(async (baseUrl, index) => {
       try {
         const response = await fetch(new URL("/v1/models", baseUrl), {
