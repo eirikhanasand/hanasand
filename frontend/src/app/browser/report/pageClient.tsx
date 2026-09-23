@@ -1,5 +1,6 @@
 'use client'
 
+import BrowserDebug from '../BrowserDebug'
 import { useEffect, useMemo, useState } from 'react'
 
 type NetworkRequestRow = { url?: string; method?: string; status?: number; failure?: string; host?: string; mimeType?: string; durationMs?: number; initiator?: string; ip?: string; asn?: string; port?: number; protocol?: string; tlsSubject?: string; tlsIssuer?: string; tlsValidFrom?: number; tlsValidTo?: number }
@@ -266,7 +267,7 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
                         </ReportPanel> : null}
                     </aside>
                 </section>
-                <details className='mt-4 text-xs text-ui-muted'><summary className='cursor-pointer'>Debug</summary>{reportIndicators(report).length === 0 ? <p className='mt-2'>Indicators 0 · No indicators found.</p> : null}{report.providerConsoleEvents?.length ? <pre className='mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono'>{report.providerConsoleEvents.join('\n')}</pre> : null}</details>
+                <BrowserDebug className='mt-4' indicatorCount={reportIndicators(report).length} logs={report.providerConsoleEvents} />
             </section>
         </main>
     )

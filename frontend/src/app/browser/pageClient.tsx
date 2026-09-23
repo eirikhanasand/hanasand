@@ -1,5 +1,6 @@
 'use client'
 
+import BrowserDebug from './BrowserDebug'
 import { BrowserControlSocket } from './controlSocket'
 import { ArrowUp, Check, ChevronDown, Clipboard, Download, Globe2, LoaderCircle, PackageCheck, Play, Plus, RotateCcw, Share2, ShieldCheck, SlidersHorizontal, Square, Trash2 } from 'lucide-react'
 import Link from 'next/link'
@@ -1482,7 +1483,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                                 <AnalystSummary summary={summary} captures={captures} />
                                 <CaptureTimeline captures={captures} />
                             </div></details>
-                            <details className='text-xs text-ui-muted'><summary className='cursor-pointer'>Debug</summary>{summary.indicators.length === 0 ? <p className='mt-2'>Indicators 0 · No indicators found.</p> : null}{providerConsoleEvents.length ? <pre className='mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono'>{providerConsoleEvents.join('\n')}</pre> : null}</details>
+                            <BrowserDebug indicatorCount={summary.indicators.length} logs={providerConsoleEvents} />
                         </div>
                     </div>
                 </div>
