@@ -1259,9 +1259,8 @@ export default function BrowserPageClient({ initialData, resultId, resultRunId }
 
     if (sessionState === 'prompt') {
         return (
-            <main className='min-h-[calc(100vh-4.5rem)] bg-ui-canvas text-ui-text'>
-                <BrowserHistory clientId={resultClientId} />
-                <section className='mx-auto grid min-h-[calc(100vh-4.5rem)] w-full max-w-7xl items-center gap-8 overflow-x-hidden px-4 py-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(32rem,1.1fr)]'>
+            <main data-browser-landing className='flex h-full min-h-0 flex-col overflow-hidden bg-ui-canvas text-ui-text'>
+                <section className='mx-auto grid min-h-0 w-full max-w-7xl flex-1 grid-rows-[auto_minmax(0,1fr)] gap-4 px-4 py-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(32rem,1.1fr)] lg:grid-rows-1 lg:items-center lg:gap-8'>
                     <div className='grid gap-4'>
                         <p className='text-xs font-semibold uppercase text-ui-primary'>Browser sandbox</p>
                         <h1 className='max-w-xl text-4xl font-semibold tracking-normal text-ui-text md:text-6xl'>Browser</h1>
@@ -1274,7 +1273,7 @@ export default function BrowserPageClient({ initialData, resultId, resultRunId }
                             <span className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2'>{runStats?.darkwebRuns24h ?? 0} darkweb runs today</span>
                         </div>
                     </div>
-                    <div className='grid min-w-0 gap-3'>
+                    <div className='grid max-h-full min-h-0 min-w-0 gap-3 overflow-y-auto'>
                         <form
                             className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm'
                             onSubmit={(event) => {
@@ -1373,6 +1372,7 @@ export default function BrowserPageClient({ initialData, resultId, resultRunId }
                         </form>
                     </div>
                 </section>
+                <div className='mx-auto flex w-full max-w-7xl shrink-0 justify-end px-4 pb-4'><BrowserHistory clientId={resultClientId} /></div>
             </main>
         )
     }

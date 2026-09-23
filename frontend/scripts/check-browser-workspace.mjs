@@ -30,7 +30,7 @@ const server = Bun.serve({ port: 0, fetch(request) {
         streamLoads++
         return new Response('<html><body style="margin:0;background:white;color:black"><button onclick="window.remoteClicks=(window.remoteClicks||0)+1">Remote click</button><div style="height:2000px">Remote page</div></body></html>', { headers: { 'content-type': 'text/html' } })
     }
-    return new Response('<html class="dark"><head><link rel="stylesheet" href="/app.css"></head><body><div id="root"></div><script type="module" src="/app.js"></script></body></html>', { headers: { 'content-type': 'text/html' } })
+    return new Response('<html class="dark"><head><link rel="stylesheet" href="/app.css"><style>html,body,#root{height:100%;margin:0}</style></head><body><div id="root"></div><script type="module" src="/app.js"></script></body></html>', { headers: { 'content-type': 'text/html' } })
 } })
 const build = await Bun.build({ entrypoints: ['browser-test-entry'], target: 'browser', define: { 'process.env': JSON.stringify({ NEXT_PUBLIC_API: `${server.url}api` }) }, plugins: [{ name: 'browser-fixture', setup(builder) {
     builder.onResolve({ filter: /^(browser-test-entry|next\/(link|image))$/ }, args => ({ path: args.path, namespace: 'fixture' }))
@@ -57,6 +57,14 @@ try {
         window.deliver = payload => window.testSocket.onmessage({ data: JSON.stringify(payload) })
     })
     await page.goto(server.url.toString())
+    for (const viewportSize of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+        await page.setViewportSize(viewportSize)
+        assert(await page.locator('[data-browser-landing]').evaluate(element => element.scrollHeight <= element.clientHeight), 'Landing fits without page scrolling')
+        const history = page.getByRole('button', { name: 'History', exact: true })
+        assert.equal(await history.evaluate(element => getComputedStyle(element).position), 'static')
+        assert(await history.evaluate(element => element.getBoundingClientRect().bottom <= innerHeight), 'History remains inside viewport')
+    }
+    await page.setViewportSize({ width: 1440, height: 900 })
     await page.getByPlaceholder('URL to investigate').fill('https://example.com')
     await page.getByRole('button', { name: 'Start', exact: true }).click()
     const viewport = page.locator('[data-browser-viewport]')
