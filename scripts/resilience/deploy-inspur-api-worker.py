@@ -1,6 +1,7 @@
 import fcntl,json,os,re,subprocess,sys,tempfile,time,urllib.request
 from pathlib import Path
 from support_config import support_settings
+from probe_verification_config import probe_verification_settings
 release=sys.argv[1]
 if not re.fullmatch(r'[0-9a-f]{40}', release):
     raise SystemExit('Pass the full built release commit.')
@@ -33,6 +34,7 @@ if database_value("SELECT count(*) FROM pg_stat_activity WHERE application_name=
 original=json.loads(subprocess.check_output(['docker','inspect','hanasand_api']))[0]
 settings=dict(value.split('=',1) for value in original['Config']['Env'])
 settings.update(support_settings(worker=True))
+settings.update(probe_verification_settings())
 settings['DB_BACKUP_WORKER_SOCKET']='/var/lib/hanasand/backups/database/.worker.sock'
 # Collectors receive a credential that authenticates only log ingestion.
 log_ingest_file = Path('/home/hanasand/resilience/log-ingest.json')

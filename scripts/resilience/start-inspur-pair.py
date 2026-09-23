@@ -8,6 +8,7 @@ import socket
 import sys
 from container_names import pair_name
 from support_config import support_settings
+from probe_verification_config import probe_verification_settings
 
 kind, image, source, *ports = sys.argv[1:]
 assert kind in ('api', 'auth', 'frontend') and len(ports) == 2
@@ -18,6 +19,7 @@ if kind in ('api', 'auth'):
     settings['COMPACT_PWNED_RANGE_API'] = 'http://127.0.0.1:8099/range'
 if kind == 'api':
     settings.update(support_settings())
+    settings.update(probe_verification_settings())
     settings['DB_BACKUP_WORKER_SOCKET']='/var/lib/hanasand/backups/database/.worker.sock'
 # Collectors receive a credential that authenticates only log ingestion.
 log_ingest_file = Path('/home/hanasand/resilience/log-ingest.json')
