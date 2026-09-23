@@ -47,7 +47,8 @@ export async function analyzeAccess(event: AccessEvent, query?: typeof run, hist
         const id = randomUUID(), findingId = randomUUID()
         const evidence = { ip, countAtLeast: recent.length, windowSeconds: windowMs / 1000, location, ruleVersion: rule.version, restrictedLog: true }
         const summary = 'Possible DDoS activity'
-        const severity = rule.severity || 'high'
+        // Retention is Low-only; the separate DDoS finding must remain High or Critical.
+        const severity = rule.severity === 'critical' ? 'critical' : 'high'
         const normalized = { schema_version: 'logs.v1', event_type: 'network', action: 'alert', log_type: 'HttpLogs', severity,
             service: 'access-analyzer', message: summary, source: { ip }, evidence,
             detections: [{ rule_id: accessRuleId, severity, summary, event_ids: [id], evidence }] }

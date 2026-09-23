@@ -3,7 +3,7 @@ import { isDeepStrictEqual } from 'node:util'
 
 export const accessRuleId = 'http.routine_access.v1'
 export const accessRule = {
-    id: accessRuleId, version: '1', name: 'Routine successful requests', family: 'HTTP', severity: 'high', enabled: false,
+    id: accessRuleId, version: '1', name: 'Routine successful requests', family: 'HTTP', severity: 'low', enabled: false,
     explanation: 'Count ordinary GET/200 requests by IP and drop the individual logs. Keep bodies, suspicious requests and security activity. Alert above 50 requests in a rolling minute.',
     evidence: ['source IP', 'request count', 'rolling time window'],
 }

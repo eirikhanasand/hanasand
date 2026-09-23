@@ -448,7 +448,7 @@ export async function loadConfiguredMillRules(organizationId: string): Promise<M
         .map(row => ({
             id: String(row.rule_id), recordId: String(row.id), version: String(row.version), name: String(row.name), family: String(row.family), severity: String(row.severity), explanation: String(row.explanation), evidence: millConditionEvidence(row.definition), enabled: Boolean(row.enabled), source: (row.source === 'open_source' ? 'open_source' : 'owned') as 'open_source' | 'owned', sourceReference: typeof row.source_reference === 'string' ? row.source_reference : undefined, definition: row.definition as MillRule['definition'],
         }))
-    return [...builtIns, ...custom]
+    return [...builtIns, ...custom].map(rule => rule.definition?.action === 'drop' ? { ...rule, severity: 'low' } : rule)
 }
 
 export function collectMillEventFindings(organizationId: string, eventId: string, event: NormalizedEvent, rules: MillRule[]) {
