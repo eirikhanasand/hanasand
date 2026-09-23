@@ -1,6 +1,7 @@
 'use client'
 
 import CreateRuleDialog from './create-rule-dialog'
+import { compareRules, defaultRuleSortDirection, type RuleSortColumn, type RuleSortDirection } from './rule-sort'
 import Link from '@/components/organizations/workspaceLink'
 import { useWorkspace } from '@/components/organizations/workspaceProvider'
 import { useEffect, useRef, useState } from 'react'
@@ -13,6 +14,10 @@ export default function DetectionRules({ category }: { category: RuleCategory })
     const latestOrganization = useRef('')
     const { organizationId, organizations } = useWorkspace()
     const [rules, setRules] = useState<MillRule[]>([])
+    const [sort, setSort] = useState<{ column: RuleSortColumn, direction: RuleSortDirection }>({ column: 'Hits', direction: 'descending' })
+    function sortBy(column: RuleSortColumn) {
+        setSort(current => ({ column, direction: current.column === column ? current.direction === 'descending' ? 'ascending' : 'descending' : defaultRuleSortDirection(column) }))
+    }
     const [canManageRetention, setCanManageRetention] = useState(false)
     const [titleFilter, setTitleFilter] = useState('')
     const [textFilter, setTextFilter] = useState('')
@@ -86,6 +91,10 @@ export default function DetectionRules({ category }: { category: RuleCategory })
         && (enabledFilter === 'all' || (rule.enabled !== false) === (enabledFilter === 'enabled'))
         && (severityFilter === 'all' || rule.severity.toLowerCase() === severityFilter)
     )
+    const sortedRules = [...filteredRules].sort((a, b) => compareRules(a, b, sort.column, sort.direction))
+    const columns: Array<{ label: string, key: RuleSortColumn }> = (['Title', 'Description', 'Family', 'Severity', 'Status', 'Source', 'Hits'] as RuleSortColumn[]).map(key => ({ label: key, key }))
+    if (category === 'analysis') columns.push({ label: 'Action', key: 'Action' })
+    columns.push({ label: category === 'analysis' ? 'Controls' : 'Action', key: 'Controls' })
     const severities = Array.from(new Set(['informational', 'low', 'medium', 'high', 'critical', ...categoryRules.map(rule => rule.severity.toLowerCase())]))
     const hasFilters = Boolean(titleFilter || textFilter || enabledFilter !== 'all' || severityFilter !== 'all')
     function clearFilters() { setTitleFilter(''); setTextFilter(''); setEnabledFilter('all'); setSeverityFilter('all') }
@@ -140,9 +149,17 @@ export default function DetectionRules({ category }: { category: RuleCategory })
                 <div role='region' aria-label={`${ruleCategories[category].label} rules`} tabIndex={0} className='min-w-0 overflow-x-auto rounded-md border border-ui-border focus-visible:outline-2 focus-visible:outline-ui-primary'>
                     <table className='w-full min-w-[1000px] table-fixed text-left text-sm' aria-label={`${ruleCategories[category].label} rules`}>
                         <colgroup><col className='w-[22%]' /><col className={category === 'analysis' ? 'w-[15%]' : 'w-[23%]'} /><col className='w-[10%]' /><col className='w-[8%]' /><col className='w-[8%]' /><col className='w-[10%]' /><col className='w-[10%]' />{category === 'analysis' && <col className='w-[8%]' />}<col className='w-[9%]' /></colgroup>
-                        <thead className='bg-ui-raised text-xs text-ui-muted'><tr>{['Title', 'Description', 'Family', 'Severity', 'Status', 'Source', 'Hits', ...(category === 'analysis' ? ['Action', 'Controls'] : ['Action'])].map(column => <th key={column} scope='col' className='px-3 py-2 font-medium'>{column}</th>)}</tr></thead>
+                        <thead className='bg-ui-raised text-xs text-ui-muted'><tr>{columns.map(column => {
+                            const active = sort.column === column.key
+                            const direction = active ? sort.direction : defaultRuleSortDirection(column.key)
+                            return <th key={column.key} scope='col' aria-sort={active ? direction : 'none'} className='px-3 py-2 font-medium'>
+                                <button type='button' onClick={() => sortBy(column.key)} className='inline-flex items-center gap-1.5 rounded-sm text-left hover:text-ui-primary focus-visible:outline-2 focus-visible:outline-ui-primary'>
+                                    {column.label}<svg aria-hidden='true' viewBox='0 0 10 6' className={`h-1.5 w-2.5 shrink-0 transition-transform ${direction === 'ascending' ? 'rotate-180' : ''} ${active ? 'text-ui-primary' : 'opacity-40'}`}><path d='M0 0h10L5 6z' fill='currentColor' /></svg>
+                                </button>
+                            </th>
+                        })}</tr></thead>
                         <tbody className='divide-y divide-ui-border'>
-                            {filteredRules.map(rule => <tr key={rule.id} className='h-16 hover:bg-ui-raised'>
+                            {sortedRules.map(rule => <tr key={rule.id} className='h-16 hover:bg-ui-raised'>
                                 <th scope='row' className='px-3 py-2 font-normal'>
                                     <Link href={`/mill/rules/${category}/${encodeURIComponent(rule.id.replace(/\.v\d+$/, ''))}?organizationId=${encodeURIComponent(organizationId)}`} className='block rounded-sm focus-visible:outline-2 focus-visible:outline-ui-primary'>
                                         <span className='block truncate font-semibold text-ui-primary' title={rule.name}>{rule.name}</span>
