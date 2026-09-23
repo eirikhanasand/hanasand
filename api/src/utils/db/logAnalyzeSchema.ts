@@ -1,3 +1,5 @@
+import { proxyRule, proxyDefinition } from '../mill/analyzeProxy.ts'
+import ensureProxyAnalyzeSchema from './proxyAnalyzeSchema.ts'
 import run from '#db'
 import { mongoDefinition, mongoRule, mongoReconRule, mongoReconDefinition } from '../mill/analyzeMongo.ts'
 import { accessDefinition, accessRule } from '../mill/analyzeAccess.ts'
@@ -21,9 +23,10 @@ export default async function ensureLogAnalyzeSchema() {
         host TEXT NOT NULL, service TEXT NOT NULL, client_ip INET NOT NULL, database_name TEXT NOT NULL,
         day DATE NOT NULL, amount BIGINT NOT NULL DEFAULT 0, last_seen TIMESTAMPTZ NOT NULL,
         PRIMARY KEY(organization_id,host,service,client_ip,database_name,day))`)
+    await ensureProxyAnalyzeSchema()
     // Seed once for the platform organization only. Restarts must never undo a
     // user's later Keep/Disable choice. The first version is included in history.
-    for (const [rule, definition] of [[accessRule, accessDefinition], [mongoRule, mongoDefinition], [mongoReconRule, mongoReconDefinition]] as const) await run(`WITH installed AS (
+    for (const [rule, definition] of [[proxyRule, proxyDefinition], [accessRule, accessDefinition], [mongoRule, mongoDefinition], [mongoReconRule, mongoReconDefinition]] as const) await run(`WITH installed AS (
         INSERT INTO mill_rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
         SELECT gen_random_uuid()::text,o.id,$2,'1',$3,$6,$7,$4,$5::jsonb,$8,TRUE
         FROM organizations o WHERE o.status='active' AND (o.id=$1 OR ($1::text IS NULL AND lower(o.name)='hanasand'))

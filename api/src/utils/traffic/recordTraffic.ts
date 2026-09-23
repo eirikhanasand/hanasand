@@ -1,3 +1,4 @@
+import { recordProxyRequest } from './proxyRequest.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import { verifiedClientIp } from '#utils/http/publicBoundary.ts'
@@ -17,9 +18,11 @@ export default async function recordTraffic(req: FastifyRequest, res: FastifyRep
     const path = normalizePath(req.url)
     const access = { key: `http-api:${req.id}`, ip: verifiedClientIp(req), timestamp: new Date().toISOString(),
         path, method: req.method, status: res.statusCode, inspection: inspectAccess(req) }
+    let proxyRecorded = false
     try {
-        if (persist && await analyzeAccess(access)) return
-        if (persist && customRetentionAction(normalizeLogEvent({ id: access.key, created_at: access.timestamp,
+        if (persist) proxyRecorded = await recordProxyRequest(req, res)
+        if (!proxyRecorded && persist && await analyzeAccess(access)) return
+        if (!proxyRecorded && persist && customRetentionAction(normalizeLogEvent({ id: access.key, created_at: access.timestamp,
             service: 'http-traffic', host: req.hostname, level: res.statusCode >= 400 ? 'error' : 'info', message: `${req.method} ${path} → ${res.statusCode}`,
             metadata: { category: 'http', action: 'request', outcome: res.statusCode >= 400 ? 'failure' : 'success', path, method: req.method, status_code: res.statusCode, source: { ip: access.ip } },
         }), await loadLogRetentionRules(null)) === 'drop') return
@@ -27,7 +30,7 @@ export default async function recordTraffic(req: FastifyRequest, res: FastifyRep
         // If analysis fails, retain the request; never silently lose evidence.
         req.log.warn({ error }, 'Access analysis failed; retaining request')
     }
-    req.log.info({ access, req: { method: req.method, url: redactLogText(req.url), remoteAddress: req.ip,
+    if (!proxyRecorded) req.log.info({ access, req: { method: req.method, url: redactLogText(req.url), remoteAddress: req.ip,
         ...(!access.inspection.headersSafe ? { headers: redactLogValue(req.headers) } : {}) } }, 'http_access')
     if (!persist || ignoredPathPrefixes.some(prefix => path.startsWith(prefix))) {
         return

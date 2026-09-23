@@ -18,6 +18,12 @@ def render(config):
             continue
         tcp = service['id'] == 'database'
         lines += [f"listen {service['id']}", f"    bind 127.0.0.1:{service['listenPort']}"]
+        if service['id'] == 'api':
+            proxy = f"hanasand-proxy-{config.get('proxyIndex', 0) + 1}"
+            lines += ['    tcp-request connection set-var(sess.correlation) uuid()',
+                      '    log-steps accept',
+                      f'    log-format "Connect from %ci:%cp to %fi:%fp (api/HTTP) correlation=%[var(sess.correlation)] proxy={proxy}"',
+                      f'    http-request set-header x-hanasand-proxy-connection "%[var(sess.correlation)]|{proxy}|%ci|%cp|%fi|%fp|api"']
         if tcp:
             lines += ['    mode tcp', '    option pgsql-check user hanasand_replica', '    timeout client 1h', '    timeout server 1h']
         else:

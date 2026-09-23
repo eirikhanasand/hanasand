@@ -1,3 +1,4 @@
+import { analyzeProxy } from '../mill/analyzeProxy.ts'
 import run from '#db'
 import { customRetentionAction, loadLogRetentionRules } from '../mill/customRetention.ts'
 import { normalizeLogEvent } from '../mill/logEvent.ts'
@@ -53,7 +54,9 @@ async function prepareLog({
             ? metadata.tenantId
             : null
     if (!retention.has(scopeId || '')) retention.set(scopeId || '', await loadLogRetentionRules(scopeId, query))
-    if (customRetentionAction(normalizeLogEvent({ id: sourceEventId || '', service, host, level, message, metadata, created_at: timestamp || new Date() }), retention.get(scopeId || '')!) === 'drop') return
+    const retentionAction = customRetentionAction(normalizeLogEvent({ id: sourceEventId || '', service, host, level, message, metadata, created_at: timestamp || new Date() }), retention.get(scopeId || '')!)
+    if (retentionAction === 'drop') return
+    if (retentionAction !== 'keep' && await analyzeProxy({ service, host, level, message, metadata, sourceEventId, timestamp }, query === run ? undefined : query)) return
     if (!scopeId && isOrganizationRequest(metadata)) {
         service = 'hanasand-api'
         host = ''
@@ -68,7 +71,7 @@ async function prepareLog({
 export default async function recordLog(entry: Parameters<typeof prepareLog>[0], query: typeof run = run) {
     const values = await prepareLog(entry, query)
     if (!values) return
-    await query(`
+    const inserted = await query(`
         WITH organization_privacy AS MATERIALIZED (
             SELECT status, audit_safe_metadata
               FROM organizations
@@ -95,8 +98,9 @@ export default async function recordLog(entry: Parameters<typeof prepareLog>[0],
                 COALESCE((SELECT status = 'deleted' OR (audit_safe_metadata ? 'privacyDeletedAt') FROM organization_privacy), FALSE) deleted,
                 (SELECT audit_safe_metadata->>'privacyDeletionRunId' FROM organization_privacy) privacy_deletion_run_id
         ) private
-        ON CONFLICT (source_event_id) DO NOTHING
+        ON CONFLICT (source_event_id) DO NOTHING RETURNING id
     `, values)
+    return inserted.rows[0]?.id as string | undefined
 }
 
 
