@@ -10,6 +10,9 @@ const parameterLabels: Record<string, { label: string, unit: string, max: number
     distanceKm: { label: 'Minimum distance', unit: 'km', max: 20040 },
     historyLimit: { label: 'History depth', unit: 'prior logins', max: 1000 },
     requestThreshold: { label: 'Alert above', unit: 'requests per IP', max: 1000 },
+    maxDurationMs: { label: 'Maximum duration', unit: 'ms', max: 60000 },
+    minIntervalMs: { label: 'Minimum interval', unit: 'ms', max: 3600000 },
+    maxIntervalMs: { label: 'Maximum interval', unit: 'ms', max: 3600000 },
 }
 
 export default function SignatureEditor({ rule, disabled, onChange }: { rule: MillRule, disabled: boolean, onChange: (definition: Definition) => void }) {
@@ -18,6 +21,7 @@ export default function SignatureEditor({ rule, disabled, onChange }: { rule: Mi
     const brute = rule.id.startsWith('auth.brute_force_success.')
     const spray = rule.id.startsWith('auth.password_spray.')
     const builtIn = rule.source === 'hanasand'
+    const configurableAnalysis = ['model.verified_discovery_probes', 'postgresql.readiness_audit', 'http.duplicate_ingestion_records', 'proxy.redundant_connections'].includes(rule.id.replace(/\.v\d+$/, ''))
     const conditions = definition.conditions || []
     function selectors(key: 'conditions' | 'failureConditions', title: string, required: string) {
         const items = definition[key] || []
@@ -31,7 +35,7 @@ export default function SignatureEditor({ rule, disabled, onChange }: { rule: Mi
                 <button type='button' aria-label={`Remove ${title.toLowerCase()} condition ${index + 1}`} disabled={!builtIn && items.length <= 1} className='self-end rounded-md border border-ui-border px-3 py-2 text-sm disabled:opacity-40' onClick={() => onChange({ ...definition, [key]: items.filter((_, i) => i !== index) })}>Remove</button>
             </div>)}
             {!items.length && <p className='text-xs text-ui-muted'>No additional restrictions.</p>}
-            <button type='button' disabled={items.length >= 8} onClick={() => onChange({ ...definition, [key]: [...items, { path: '', operator: 'equals', value: '' }] })} className='justify-self-start rounded-md border border-ui-border px-3 py-2 text-xs font-medium disabled:opacity-40'>Add {title.toLowerCase()} condition</button>
+            <button type='button' disabled={items.length >= (configurableAnalysis ? 32 : 8)} onClick={() => onChange({ ...definition, [key]: [...items, { path: '', operator: 'equals', value: '' }] })} className='justify-self-start rounded-md border border-ui-border px-3 py-2 text-xs font-medium disabled:opacity-40'>Add {title.toLowerCase()} condition</button>
         </section>
         function update(index: number, keyName: keyof Condition, value: string) {
             onChange({ ...definition, [key]: items.map((condition, i) => i === index ? { ...condition, [keyName]: value } : condition) })
@@ -52,7 +56,7 @@ export default function SignatureEditor({ rule, disabled, onChange }: { rule: Mi
                     return <label key={key} className='grid gap-1.5 text-xs font-medium'>{key === 'minimumCount' ? (spray ? 'Minimum distinct users' : 'Minimum failed logins') : meta?.label || key}<div className='flex items-center gap-2'><input required type='number' min={1} max={meta?.max} step={1} value={Number.isFinite(value) ? value : ''} onChange={event => onChange({ ...definition, parameters: { ...definition.parameters, [key]: event.target.value === '' ? NaN : Number(event.target.value) } })} className={inputClass} /><span className='shrink-0 text-ui-muted'>{key === 'minimumCount' && spray ? 'users' : meta?.unit}</span></div></label>
                 })}</div>}
                 {brute && <><p className='font-mono text-xs text-ui-muted'>GROUP BY user.id · failure → success</p>{selectors('failureConditions', 'Failure selector', 'event_type = authentication AND action = login AND outcome = failure')}</>}
-                {(!analyze || !builtIn) && selectors('conditions', brute ? 'Success selector' : 'Event selector', builtIn ? brute ? 'event_type = authentication AND action = login AND outcome = success' : rule.id.startsWith('auth.') ? `event_type = authentication AND action = login AND outcome = ${spray ? 'failure' : 'success'}` : rule.detectionLogic || '' : '')}
+                {(!analyze || !builtIn || configurableAnalysis) && selectors('conditions', brute ? 'Success selector' : 'Event selector', builtIn ? brute ? 'event_type = authentication AND action = login AND outcome = success' : rule.id.startsWith('auth.') ? `event_type = authentication AND action = login AND outcome = ${spray ? 'failure' : 'success'}` : rule.detectionLogic || '' : '')}
                 {!analyze && <p className='text-xs leading-5 text-ui-muted'>Fields use paths in the normalized event, such as EventID, event.code, signature_id, or source.ip. Field names are case-sensitive; values are case-insensitive. Use regex <code className='font-mono'>^(4625|4771)$</code> to select multiple event IDs. Empty built-in selectors accept every event matching the required fields.</p>}
             </fieldset>
             <aside className='min-w-0 border-t border-ui-border bg-ui-raised p-5 xl:border-t-0 xl:border-l'><h3 className='mb-3 text-xs font-semibold uppercase tracking-wide text-ui-muted'>Signature preview</h3><pre aria-label='Signature preview' className='max-h-[38rem] overflow-auto whitespace-pre-wrap wrap-break-word font-mono text-xs leading-6 text-ui-text'>{JSON.stringify(signature, null, 2)}</pre></aside>

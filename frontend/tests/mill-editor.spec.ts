@@ -101,3 +101,24 @@ test('historical Drop rules display their recorded severity', async ({ page }) =
     await expect(page.getByRole('combobox', { name: /^Severity/ })).toHaveValue('high')
     await expect(page.getByRole('combobox', { name: /^Severity/ })).toBeDisabled()
 })
+
+test('verified probe policy is editable and persists with its Mill rule', async ({ page }) => {
+    let saved = { ...initial, id: 'model.verified_discovery_probes.v1', name: 'Verified model discovery probes',
+        definition: { match: 'all', stage: 'analyze', action: 'drop', conditions: [{ path: 'host', operator: 'equals', value: 'inspur' }],
+            parameters: { maxDurationMs: 1000, minIntervalMs: 5000, maxIntervalMs: 40000 } } }
+    await page.route('**/api/backend/mill/rules/*?*', async route => {
+        if (route.request().method() === 'PUT') saved = { ...saved, ...route.request().postDataJSON(), version: '2' }
+        return route.fulfill({ json: { rule: saved, canEdit: true, currentVersion: saved.version, triggerCount: 0, audit: [], nextOffset: null } })
+    })
+    await page.goto('http://mill-editor.test/mill/rules/model.verified_discovery_probes')
+    await page.getByLabel('Maximum duration').fill('500')
+    await page.getByLabel('Event selector 1 value').fill('other-host')
+    await page.getByRole('button', { name: 'Save changes' }).click()
+    await expect(page.getByText('Rule saved. New events use this version.')).toBeVisible()
+    await page.reload()
+    await expect(page.getByLabel('Maximum duration')).toHaveValue('500')
+    await expect(page.getByLabel('Event selector 1 value')).toHaveValue('other-host')
+    await expect(page.getByLabel('Signature preview')).toContainText('"maxDurationMs": 500')
+    await page.setViewportSize({ width: 390, height: 844 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})

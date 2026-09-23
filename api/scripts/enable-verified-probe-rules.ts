@@ -1,6 +1,7 @@
 import { closeDatabase, withTransaction } from '#db'
 import { modelDiscoveryRule, modelDiscoveryDefinition, modelDiscoveryConfigured } from '../src/utils/mill/analyzeModelDiscovery.ts'
 import { readinessAuditRule, readinessAuditDefinition, readinessAuditConfigured } from '../src/utils/mill/analyzeReadinessAudit.ts'
+import { isDeepStrictEqual } from 'node:util'
 
 // Explicit deployment action, never a startup migration: later user Disable or
 // Store choices must survive every restart. Run after native proof verification.
@@ -29,7 +30,7 @@ const enabled = await withTransaction(async query => {
         const before = { name: row.name, explanation: row.explanation, severity: row.severity, enabled: row.enabled, definition: row.definition, version: String(row.version) }
         const after = { name: rule.name, explanation: rule.explanation, severity: 'low', enabled: true,
             definition: { ...definition, action: 'drop' }, version: String(Number(row.version) + 1) }
-        if (before.enabled && before.definition.action === 'drop' && before.explanation === after.explanation) {
+        if (before.enabled && isDeepStrictEqual(before.definition, after.definition) && before.explanation === after.explanation) {
             result.push({ ruleId: rule.id, version: before.version })
             continue
         }
