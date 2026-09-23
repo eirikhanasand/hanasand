@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import BrowserDebug from '../BrowserDebug'
+import { hasSuspiciousFindings, reportMarkdown } from './presentation'
 import { useEffect, useMemo, useState } from 'react'
 
 type NetworkRequestRow = { url?: string; method?: string; status?: number; failure?: string; host?: string; mimeType?: string; durationMs?: number; initiator?: string; ip?: string; asn?: string; port?: number; protocol?: string; tlsSubject?: string; tlsIssuer?: string; tlsValidFrom?: number; tlsValidTo?: number }
@@ -24,13 +25,12 @@ type BrowserReport = {
         reason?: string
         image?: string | null
         frameQuality?: { looksBlank?: boolean; visibleTextLength?: number; elementCount?: number }
-        evidence?: { sourceUrls?: string[]; textExcerpt?: string; sourceCode?: string }
+        evidence?: { verdict?: string; sourceUrls?: string[]; textExcerpt?: string; sourceCode?: string }
     }>
     analystSummary?: {
         narrative?: string
         indicators?: string[]
         threatAssociations?: Array<{ name?: string; category?: string; confidence?: string; evidence?: string; source?: string }>
-        reviewQueue?: Array<{ severity?: string; source?: string; title?: string; detail?: string; evidence?: string }>
         urlTimeline?: Array<{ url?: string; capturedAt?: string; reason?: string; title?: string }>
     }
     analystReport?: {
@@ -52,7 +52,6 @@ type BrowserReport = {
         scriptArtifacts?: Array<{ scriptId?: string; source?: string; sha256?: string; assessment?: string; summary?: string; indicators?: { domains?: string[]; ips?: string[]; urls?: string[] } }>
         resourceUrls?: string[]
         urlTimeline?: Array<{ url?: string; capturedAt?: string; reason?: string; title?: string }>
-        reviewQueue?: Array<{ severity?: string; source?: string; title?: string; detail?: string; evidence?: string }>
         indicators?: string[]
         threatAssociations?: Array<{ name?: string; category?: string; confidence?: string; evidence?: string; source?: string }>
         recommendedActions?: string[]
@@ -97,6 +96,8 @@ export default function BrowserReportPageClient({ runId = '', token = '', result
 
     const analystReport = report.analystReport || {}
     const summary = report.analystSummary || {}
+    const suspicious = hasSuspiciousFindings(report)
+    const actions = suspicious ? analystReport.recommendedActions || [] : []
 
     return (
         <main className='min-h-[calc(100vh-4.5rem)] bg-ui-canvas px-4 py-6 text-ui-text'>
@@ -110,7 +111,7 @@ export default function BrowserReportPageClient({ runId = '', token = '', result
                     <h1 className='mt-2 break-all text-2xl font-semibold'>{report.target || 'Saved browser run'}</h1>
                     <p className='mt-2 break-all font-mono text-xs text-ui-muted'>Final URL: {report.finalUrl || report.target || 'unknown'}</p>
                     <div className='mt-3 flex flex-wrap gap-2 text-xs'>
-                        <span className='rounded border border-ui-border bg-ui-raised px-2 py-1'>{analystReport.verdict || 'Verdict unavailable'}</span>
+                        <span className='rounded border border-ui-border bg-ui-raised px-2 py-1'>{/^Review required/i.test(analystReport.verdict || '') ? suspicious ? 'Suspicious activity observed' : 'No signs of suspicious activity.' : analystReport.verdict || 'Verdict unavailable'}</span>
                         {report.status?.run ? <span className='rounded border border-ui-border bg-ui-raised px-2 py-1'>Run {report.status.run}</span> : null}
                         {report.status?.connection ? <span className='rounded border border-ui-border bg-ui-raised px-2 py-1'>Connection {report.status.connection}</span> : null}
                         {report.status?.capacity ? <span className='rounded border border-ui-border bg-ui-raised px-2 py-1'>Capacity {report.status.capacity.activeSessions || 0}/{report.status.capacity.maxSessions || '?'}{report.status.capacity.queuePosition ? ` · queue #${report.status.capacity.queuePosition}` : ''}</span> : null}
@@ -122,9 +123,6 @@ export default function BrowserReportPageClient({ runId = '', token = '', result
                     <div className='grid gap-4'>
                         <ReportPanel title='Summary'>
                             <p className='text-sm leading-6 text-ui-muted'>{summary.narrative || 'No analyst summary was saved with this report.'}</p>
-                        </ReportPanel>
-                        <ReportPanel title='Review list'>
-                            <ReportList items={reportReviewQueue(report).map(item => `${item.severity || 'review'} · ${item.title || 'Evidence item'} · ${item.detail || item.evidence || item.source || ''}`)} empty='No priority review items saved.' />
                         </ReportPanel>
                         <ReportPanel title='URL timeline'>
                             <ReportList items={reportUrlTimeline(report).map(item => [
@@ -256,20 +254,20 @@ export default function BrowserReportPageClient({ runId = '', token = '', result
                                 ...scriptIndicatorList(script).slice(0, 6),
                             ].filter(Boolean).join(' · '))} empty='No script artifacts saved.' />
                         </ReportPanel>
-                        <ReportPanel title='Resource URLs'>
-                            <ReportList items={reportResourceUrls(report).slice(0, 80)} empty='No resource URLs saved.' />
+                        <ReportPanel title='URLs'>
+                            <ReportList items={reportResourceUrls(report).slice(0, 80)} empty='No URLs saved.' />
                         </ReportPanel>
                         <ReportPanel title='Markdown export'>
-                            <pre className='max-h-96 overflow-auto whitespace-pre-wrap break-all rounded-md border border-ui-border bg-ui-canvas p-3 text-xs text-ui-text'>{analystReport.markdown || 'No markdown export saved.'}</pre>
+                            <pre className='max-h-96 overflow-auto whitespace-pre-wrap break-all rounded-md border border-ui-border bg-ui-canvas p-3 text-xs text-ui-text'>{reportMarkdown(analystReport.markdown || '', suspicious) || 'No markdown export saved.'}</pre>
                         </ReportPanel>
                     </div>
                     <aside className='grid content-start gap-4'>
                         <ReportPanel title='Evidence checklist'>
                             <ReportList items={Object.entries(analystReport.evidenceChecklist || {}).map(([key, value]) => `${key}: ${value}`)} empty='No checklist saved.' />
                         </ReportPanel>
-                        <ReportPanel title='Actions'>
-                            <ReportList items={analystReport.recommendedActions || []} empty='No recommended actions saved.' />
-                        </ReportPanel>
+                        {actions.length ? <ReportPanel title='Actions'>
+                            <ReportList items={actions} empty='' />
+                        </ReportPanel> : null}
                         <ReportPanel title='Threat context'>
                             <ReportList items={reportThreatAssociations(report).map(item => [
                                 item.name || 'Threat association',
@@ -326,9 +324,7 @@ function reportThreatAssociations(report: BrowserReport) {
     return report.analystReport?.threatAssociations?.length ? report.analystReport.threatAssociations : report.analystSummary?.threatAssociations || []
 }
 
-function reportReviewQueue(report: BrowserReport) {
-    return report.analystReport?.reviewQueue?.length ? report.analystReport.reviewQueue : report.analystSummary?.reviewQueue || []
-}
+
 
 function scriptIndicatorList(script: NonNullable<NonNullable<BrowserReport['analystReport']>['scriptArtifacts']>[number]) {
     return [...(script.indicators?.domains || []), ...(script.indicators?.ips || []), ...(script.indicators?.urls || [])]

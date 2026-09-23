@@ -177,6 +177,11 @@ const tasks: TestTask[] = [
         command: [bun, 'test', 'tests/organization-customer-boundaries.test.mjs'],
     },
     {
+        id: 'browser-report-presentation',
+        title: 'Browser report classification and actions',
+        command: [bun, 'test', 'tests/browser-report-presentation.test.ts'],
+    },
+    {
         id: 'browser-report-evidence',
         title: 'Browser report evidence contract',
         command: [bun, 'scripts/check-browser-report-evidence.mjs'],

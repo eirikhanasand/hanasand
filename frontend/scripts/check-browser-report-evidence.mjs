@@ -55,7 +55,7 @@ for (const token of [
     'Network evidence',
     'DNS / IP / certificate evidence',
     'Script artifacts',
-    'Resource URLs',
+    'URLs',
     'Markdown export',
     'Threat context',
     'Indicators',

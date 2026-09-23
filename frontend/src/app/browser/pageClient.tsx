@@ -196,14 +196,6 @@ type SandboxEvidence = {
         summary?: string
     }>
 }
-type ReviewQueueItem = {
-    severity: 'high' | 'medium' | 'low'
-    source: string
-    title: string
-    detail: string
-    evidence?: string
-}
-
 const storageKey = 'hanasand:browser:profiles:v1'
 const historyStorageKey = 'hanasand:browser:history:v1'
 const clientIdStorageKey = 'hanasand:browser:client-id:v1'
@@ -1862,16 +1854,16 @@ function AnalystSummary({ summary, captures }: { summary: ReturnType<typeof buil
                         <p className='text-[11px] font-semibold uppercase text-ui-muted'>Impact</p>
                         <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-text'>{summary.brief.impact}</p>
                     </div>
-                    <div className='rounded-md border border-ui-border bg-ui-panel p-2'>
+                    {summary.brief.recommendedAction ? <div className='rounded-md border border-ui-border bg-ui-panel p-2'>
                         <p className='text-[11px] font-semibold uppercase text-ui-muted'>Recommended action</p>
                         <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-text'>{summary.brief.recommendedAction}</p>
-                    </div>
-                    <div className='rounded-md border border-ui-border bg-ui-panel p-2'>
+                    </div> : null}
+                    {summary.brief.nextSteps.length ? <div className='rounded-md border border-ui-border bg-ui-panel p-2'>
                         <p className='text-[11px] font-semibold uppercase text-ui-muted'>Next steps</p>
                         <ul className='mt-1 grid gap-1 wrap-break-word text-xs leading-5 text-ui-text'>
                             {summary.brief.nextSteps.map(step => <li key={step}>{step}</li>)}
                         </ul>
-                    </div>
+                    </div> : null}
                 </div>
             </div>
             <div className='mt-3 grid gap-2 text-sm'>
@@ -2426,7 +2418,6 @@ function buildExportReport(input: {
             indicators: input.summary.indicators,
             threatAssociations: input.summary.threatAssociations,
             urlTimeline: input.summary.urlTimeline,
-            reviewQueue: input.summary.reviewQueue,
         },
         analystReport: buildShareableAnalystReport(input),
         captures: input.captures.map(capture => ({
@@ -2536,7 +2527,6 @@ function buildShareableAnalystReport(input: Parameters<typeof buildExportReport>
         scriptArtifacts,
         resourceUrls,
         urlTimeline: input.summary.urlTimeline,
-        reviewQueue: input.summary.reviewQueue,
         indicators: input.summary.indicators,
         threatAssociations: input.summary.threatAssociations,
         recommendedActions: input.summary.brief.nextSteps,
@@ -2566,14 +2556,11 @@ function buildShareableAnalystReport(input: Parameters<typeof buildExportReport>
             ...((latestNetwork?.redirectChain || []).slice(0, 10).map(url => `- redirect: ${url}`)),
             ...((latestNetwork?.downloads || []).slice(0, 10).map(download => `- download: ${downloadEvidenceLine(download).replaceAll('\n', ', ')}`)),
             '',
-            '## Resource URLs',
+            '## URLs',
             ...resourceUrls.slice(0, 40).map(url => `- ${url}`),
             '',
             '## Script artifacts',
             ...scriptArtifacts.slice(0, 12).map(script => `- ${script.assessment || 'script'}: ${script.scriptId || script.source || 'sample'}${script.sha256 ? `, sha256 ${script.sha256}` : ''}`),
-            '',
-            '## Analyst review',
-            ...report.reviewQueue.slice(0, 12).map(item => `- ${item.severity || 'review'}: ${item.title || 'Evidence item'}${item.detail ? `, ${item.detail}` : ''}${item.evidence ? `, ${item.evidence}` : ''}`),
             '',
             '## Threat context',
             ...report.threatAssociations.slice(0, 12).map(item => `- ${item.name || 'Threat association'}${item.category ? `, ${item.category}` : ''}${item.confidence ? `, ${item.confidence} confidence` : ''}${item.evidence ? `, ${item.evidence}` : ''}`),
@@ -2581,8 +2568,7 @@ function buildShareableAnalystReport(input: Parameters<typeof buildExportReport>
             '## Indicators',
             ...report.indicators.slice(0, 80).map(indicator => `- ${indicator}`),
             '',
-            '## Recommended actions',
-            ...report.recommendedActions.map(action => `- ${action}`),
+            ...(report.recommendedActions.length ? ['## Recommended actions', ...report.recommendedActions.map(action => `- ${action}`)] : []),
         ].join('\n'),
     }
 }
@@ -2649,21 +2635,12 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
         }))
         .filter(item => item.url)
         .reverse()
-    const reviewQueue = buildReviewQueue({
-        pageCaptures,
-        toolCaptures,
-        latestNetwork,
-        urlTimeline,
-        threatAssociations,
-        deobfuscationTasks,
-        navigationFailed,
-    })
     const screenshotCount = pageCaptures.filter(capture => capture.image).length
     const suspicious = suspiciousCaptures.length > 0 || providerDetected || suspiciousDeobfuscationTasks.length > 0
         || Boolean(latestNetwork?.downloads?.some(file => file.virusTotal?.flagged))
     const reasons = suspiciousCaptures.flatMap(capture => capture.evidence?.reasons || []).slice(0, 3)
     const findings = suspicious
-        ? `Suspicious activity requires review${reasons.length ? `: ${reasons.join('; ')}` : ''}.`
+        ? `Suspicious activity was observed${reasons.length ? `: ${reasons.join('; ')}` : ''}.`
         : 'No signs of suspicious activity was observed.'
     const threatNarrative = threatAssociations.length
         ? `Threat associations: ${threatAssociations.slice(0, 4).map(item => `${item.name} (${item.category || 'context'}, ${item.confidence || 'low'})`).join('; ')}.`
@@ -2700,7 +2677,6 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
         latestNetwork,
         navigationFailed,
         urlTimeline,
-        reviewQueue,
         deobfuscationTasks,
         deobfuscationSummary,
         webcrackLoaded,
@@ -2725,76 +2701,6 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
     }
 }
 
-function buildReviewQueue(input: {
-    pageCaptures: Capture[]
-    toolCaptures: Capture[]
-    latestNetwork?: SandboxNetworkSummary
-    urlTimeline: Array<{ url: string; capturedAt: string; reason: string; title: string }>
-    threatAssociations: SandboxThreatAssociation[]
-    deobfuscationTasks: NonNullable<SandboxEvidence['deobfuscationTasks']>
-    navigationFailed: boolean
-}): ReviewQueueItem[] {
-    const items: ReviewQueueItem[] = []
-    if (input.navigationFailed) items.push({
-        severity: 'medium',
-        source: 'browser',
-        title: 'Target did not load',
-        detail: 'The isolated browser showed a browser error page instead of the submitted website.',
-        evidence: input.urlTimeline.at(-1)?.url,
-    })
-    const hasRenderedFrame = input.pageCaptures.some(capture => capture.image && !capture.frameQuality?.looksBlank)
-    const blankFrame = hasRenderedFrame ? undefined : input.pageCaptures.find(capture => capture.frameQuality?.looksBlank)
-    if (blankFrame) items.push({
-        severity: 'high',
-        source: 'browser',
-        title: 'Blank-looking rendered frame',
-        detail: `${blankFrame.frameQuality?.visibleTextLength || 0} visible chars and ${blankFrame.frameQuality?.elementCount || 0} elements were observed.`,
-        evidence: blankFrame.url,
-    })
-    input.toolCaptures.filter(capture => capture.error && capture.error !== 'provider_navigation_pending').slice(0, 2).forEach(capture => items.push({
-        severity: 'medium',
-        source: capture.label,
-        title: 'Provider failed or blocked',
-        detail: providerErrorText(capture.error) || 'Provider returned no usable evidence.',
-        evidence: capture.url,
-    }))
-    if ((input.latestNetwork?.failedCount || 0) > 0) items.push({
-        severity: 'medium',
-        source: 'network',
-        title: 'Blocked or failed requests',
-        detail: `${input.latestNetwork?.failedCount || 0} blocked/failed request${input.latestNetwork?.failedCount === 1 ? '' : 's'} recorded.`,
-        evidence: input.latestNetwork?.recentFailures?.[0]?.url || input.latestNetwork?.recentRequests?.find(request => request.failure)?.url,
-    })
-    if ((input.latestNetwork?.redirectChain?.length || input.urlTimeline.length) > 1) items.push({
-        severity: 'medium',
-        source: 'navigation',
-        title: 'Redirect or URL change',
-        detail: `${input.latestNetwork?.redirectChain?.length || input.urlTimeline.length} URL state${(input.latestNetwork?.redirectChain?.length || input.urlTimeline.length) === 1 ? '' : 's'} captured.`,
-        evidence: input.latestNetwork?.redirectChain?.at(-1) || input.urlTimeline.at(-1)?.url,
-    })
-    input.latestNetwork?.downloads?.slice(0, 2).forEach(download => items.push({
-        severity: download.virusTotal?.flagged || !download.sha256 ? 'high' : download.virusTotal?.status === 'known' ? 'low' : 'medium',
-        source: 'download',
-        title: download.virusTotal?.flagged ? 'Downloaded file detected by VirusTotal' : download.sha256 ? 'Downloaded file hashed' : 'Downloaded file missing hash',
-        detail: [download.fileName || 'download', download.bytes !== undefined ? `${download.bytes} bytes` : '', download.virusTotal?.total ? `VirusTotal ${download.virusTotal.flagged || 0}/${download.virusTotal.total}` : download.virusTotal?.detail || download.hashStatus || ''].filter(Boolean).join(' · '),
-        evidence: download.sha256 || download.url,
-    }))
-    input.deobfuscationTasks.filter(task => task.assessment === 'suspicious' || task.sha256).slice(0, 3).forEach(task => items.push({
-        severity: task.assessment === 'suspicious' ? 'high' : 'medium',
-        source: 'script',
-        title: task.assessment === 'suspicious' ? 'Suspicious decoded script' : 'Script sample hashed',
-        detail: task.summary || task.decodedPreview || task.source || 'Script evidence requires review.',
-        evidence: task.sha256 || task.source,
-    }))
-    input.threatAssociations.filter(item => item.confidence !== 'low').slice(0, 2).forEach(item => items.push({
-        severity: item.confidence === 'high' ? 'high' : 'medium',
-        source: item.source?.replace(/_/g, ' ') || 'threat context',
-        title: item.name || 'Threat association',
-        detail: item.evidence || `${item.category || 'context'} association from captured evidence.`,
-    }))
-    return items.slice(0, 8)
-}
-
 function buildAnalystBrief(input: {
     target: string
     navigationFailed: boolean
@@ -2816,28 +2722,20 @@ function buildAnalystBrief(input: {
     const vtFlagged = input.virusTotal?.vendorFlagged || 0
     const urlqueryAlerts = input.urlquery?.alertCount || 0
     const highSignal = Boolean(vtFlagged || urlqueryAlerts || input.suspiciousCaptureCount || input.suspiciousDeobfuscationCount)
-    const meaningfulThreatContext = input.threatAssociations.some(item => item.confidence !== 'low')
-    const mediumSignal = Boolean(input.obfuscatedScriptCount || meaningfulThreatContext)
     let verdict = 'Insufficient external evidence'
     let impact = 'No browser evidence has been captured yet.'
-    let recommendedAction = 'Wait for the first page frame, provider result, or explicit blocker.'
+    let recommendedAction = ''
 
     if (input.navigationFailed) {
         verdict = 'Target unreachable'
         impact = 'The isolated browser captured an error page, so no clean verdict can be made for the submitted target.'
-        recommendedAction = 'Retry later or inspect DNS, TLS, and network reachability before treating the URL as benign.'
     } else if (highSignal) {
-        verdict = 'Review required - detection source present'
+        verdict = 'Suspicious activity observed'
         impact = `External detections, suspicious rendered evidence, or decoded script indicators were observed for ${input.target || 'the submitted URL'}.`
         recommendedAction = 'Open the evidence workspace, copy indicators, and create or update the alert with the observed route and sourced evidence.'
-    } else if (mediumSignal) {
-        verdict = 'Review required'
-        impact = 'The run contains obfuscation or meaningful threat-context signals that need analyst review.'
-        recommendedAction = 'Review the suspicious evidence, contacted domains, and WebCrack output before allowing user access.'
     } else if (input.pageCaptureCount) {
         verdict = input.incompleteChecks ? 'Checks incomplete — no clean verdict' : 'No signs of suspicious activity.'
         impact = input.incompleteChecks ? 'Some provider or file checks did not return a verdict.' : 'No detections were observed. This does not guarantee the website or its files are safe.'
-        recommendedAction = input.incompleteChecks ? 'Review unavailable checks before making a decision.' : 'Review the captured evidence before allowing access.'
     }
     const confidence = input.confidence
         ? `${formatConfidencePercent(input.confidence)} evidence confidence`
@@ -2847,11 +2745,11 @@ function buildAnalystBrief(input: {
     const freshness = input.latestCapturedAt
         ? `Latest capture ${input.latestCapturedAt}`
         : 'No capture timestamp yet'
-    const nextSteps = [
-        input.indicatorCount ? `Copy ${input.indicatorCount} indicator${input.indicatorCount === 1 ? '' : 's'} into the alert workflow.` : 'Keep the indicator list open until domains, IPs, or URLs appear.',
-        input.webcrackLoaded ? 'Review WebCrack decoded output for second-stage URLs and payload logic.' : 'Use WebCrack if obfuscated code appears.',
-        input.threatAssociations.length ? `Check threat context: ${input.threatAssociations.slice(0, 2).map(item => item.name).join(', ')}.` : 'Confirm actor or malware context from external sources if needed.',
-    ]
+    const nextSteps = highSignal ? [
+        ...(input.indicatorCount ? [`Copy ${input.indicatorCount} indicator${input.indicatorCount === 1 ? '' : 's'} into the alert workflow.`] : []),
+        ...(input.suspiciousDeobfuscationCount ? ['Inspect the suspicious decoded script and its URLs.'] : []),
+        ...(input.threatAssociations.length ? [`Check threat context: ${input.threatAssociations.slice(0, 2).map(item => item.name).join(', ')}.`] : []),
+    ] : []
     return { verdict, impact, recommendedAction, confidence, freshness, nextSteps }
 }
 
