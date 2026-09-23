@@ -534,7 +534,12 @@ case "$action" in
 
     receipt_phase=database_reconcile
     restored_inventory="$receipt_stage/RESTORE-INVENTORY.tsv"
-    docker exec -i "$drill_container" sh -s -- inventory < "$postgres_helper" > "$restored_inventory"
+    inventory_digest=$(head -n 1 "$database_inventory" | cut -f 4)
+    case "$inventory_digest" in
+      content_md5|content_md5_chunked_v2) ;;
+      *) echo "unsupported database inventory digest: $inventory_digest" >&2; exit 1 ;;
+    esac
+    docker exec -i -e "TI_INVENTORY_DIGEST=$inventory_digest" "$drill_container" sh -s -- inventory < "$postgres_helper" > "$restored_inventory"
     if ! cmp -s "$database_inventory" "$restored_inventory"; then
       echo "isolated restore differs from the backup snapshot" >&2
       exit 1

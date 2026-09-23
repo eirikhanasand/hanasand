@@ -17,16 +17,27 @@ inventory_sql() {
 \pset tuples_only on
 \pset format unaligned
 \pset fieldsep '\t'
-SELECT 'schema', 'table', 'rows', 'content_md5';
+SELECT 'schema', 'table', 'rows', :'inventory_digest';
 SELECT format(
-  $query$
+  CASE WHEN :'inventory_digest' = 'content_md5' THEN $query$
   SELECT %L, %L, count(*)::text,
          md5(COALESCE(string_agg(row_md5, '' ORDER BY row_md5), ''))
   FROM (
     SELECT md5(row_to_json(source_row)::text) AS row_md5
     FROM %I.%I AS source_row
   ) AS table_rows
-  $query$,
+  $query$ ELSE $query$
+  SELECT %L, %L, COALESCE(sum(rows), 0)::text,
+         md5(COALESCE(string_agg(chunk_md5, '' ORDER BY chunk), ''))
+  FROM (
+    SELECT chunk, count(*) AS rows, md5(string_agg(row_md5, '' ORDER BY row_md5)) AS chunk_md5
+    FROM (
+      SELECT row_md5, (row_number() OVER (ORDER BY row_md5) - 1) / 10000 AS chunk
+      FROM (SELECT md5(row_to_json(source_row)::text) AS row_md5 FROM %I.%I AS source_row) AS hashes
+    ) AS numbered
+    GROUP BY chunk
+  ) AS chunks
+  $query$ END,
   namespace.nspname,
   relation.relname,
   namespace.nspname,
@@ -74,7 +85,7 @@ SQL
 
 case "$action" in
   inventory)
-    inventory_sql | psql -X -q -U "$user" -d "$database" -v ON_ERROR_STOP=1
+    inventory_sql | psql -X -q -U "$user" -d "$database" -v ON_ERROR_STOP=1 -v inventory_digest="${TI_INVENTORY_DIGEST:-content_md5_chunked_v2}"
     ;;
   backup)
     work=$(mktemp -d /tmp/hanasand-ti-backup.XXXXXX)
@@ -125,7 +136,9 @@ case "$action" in
       --no-privileges \
       --snapshot="$snapshot" \
       --file="$work/database.dump"
-    inventory_sql "$snapshot" | psql -X -q -U "$user" -d "$database" -v ON_ERROR_STOP=1 > "$work/DATABASE-INVENTORY.tsv"
+    # Hash bounded groups rather than allocating one string for every row in a
+    # table. The header lets restore drills retain the legacy verification mode.
+    inventory_sql "$snapshot" | psql -X -q -U "$user" -d "$database" -v ON_ERROR_STOP=1 -v inventory_digest=content_md5_chunked_v2 > "$work/DATABASE-INVENTORY.tsv"
     object_references_sql "$snapshot" | psql -X -q -U "$user" -d "$database" -v ON_ERROR_STOP=1 > "$work/OBJECT-REFERENCES.tsv"
     printf '%s\n' "$database" > "$work/SOURCE-DATABASE"
 

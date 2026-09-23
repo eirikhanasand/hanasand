@@ -286,10 +286,16 @@ describe("backup and restore scripts", () => {
     }
   });
 
-  test.each([false, true])("pins verifier provenance and reconciles a preserved drill=%s", (reuse) => {
+  test.each([[false, 'content_md5'], [true, 'content_md5_chunked_v2']] as const)("pins verifier provenance and reconciles a preserved drill=%s with digest=%s", (reuse, digest) => {
     const root = mkdtempSync(join(tmpdir(), "ti-restore-retag-"));
     try {
       const { archive } = makeArchive(root);
+      if (digest !== 'content_md5') {
+        const inventory = join(archive, 'DATABASE-INVENTORY.tsv');
+        writeFileSync(inventory, readFileSync(inventory, 'utf8').replace('content_md5', digest));
+        const sums = join(archive, 'SHA256SUMS');
+        writeFileSync(sums, readFileSync(sums, 'utf8').replace(/^[a-f0-9]+  DATABASE-INVENTORY.tsv$/m, `${sha256(inventory)}  DATABASE-INVENTORY.tsv`));
+      }
       const { bin, failMarker, log } = makeFakeDocker(root, archive);
       const retagMarker = join(root, "scraper-retagged");
       const postgresRetagMarker = join(root, "postgres-retagged");
@@ -317,6 +323,7 @@ describe("backup and restore scripts", () => {
       expect(report).toContain("postgres_image_id=sha256:fake-postgres-image\n");
 
       const dockerRuns = readFileSync(log, "utf8").trim().split("\n");
+      expect(dockerRuns.some(line => line.includes(`TI_INVENTORY_DIGEST=${digest}`))).toBe(true);
       expect(dockerRuns.filter((line) => line.startsWith("image inspect hanasand_ti_scraper "))).toHaveLength(1);
       expect(dockerRuns.filter((line) => line.startsWith("image inspect postgres:15 "))).toHaveLength(1);
       expect(dockerRuns.filter((line) => line.startsWith("run ") && (line.includes("hanasand_ti_scraper") || line.includes("postgres:15")))).toHaveLength(0);
