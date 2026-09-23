@@ -52,10 +52,18 @@ test('only explicitly Low events can be dropped, including older broad rules', (
 test('persisted protection Store rules can be disabled or edited and win over Drop rules', () => {
     const event = { event_type: 'application', severity: 'low', error: 'failure' }
     const protection = { source: 'hanasand', enabled: true, definition: structuredClone(eventProtectionDefinition) }
-    expect(customRetentionAction(event, [drop, protection])).toBe('keep')
+    expect(customRetentionAction(event, [drop, protection])).toBeUndefined()
     expect(customRetentionAction(event, [drop, { ...protection, enabled: false }])).toBe('drop')
     protection.definition.protection.checks = []
     expect(customRetentionAction(event, [drop, protection])).toBe('drop')
     protection.definition.protection = { checks: [{}] } as any
     expect(customRetentionAction(event, [drop, protection])).toBe('keep')
+})
+
+test('persisted scope preserves lossless compaction while all-scope Store takes priority', () => {
+    const event = { event_type: 'application', severity: 'low', http: {}, body: 'canonical body retained' }
+    const protection = { source: 'hanasand', enabled: true, definition: structuredClone(eventProtectionDefinition) }
+    expect(customRetentionAction(event, [drop, protection])).toBeUndefined()
+    const all = { ...protection, definition: { ...protection.definition, protection: { ...protection.definition.protection, appliesTo: 'all' as const } } }
+    expect(customRetentionAction(event, [drop, all])).toBe('keep')
 })

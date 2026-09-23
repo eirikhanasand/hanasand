@@ -1,12 +1,12 @@
 type Scalar = string | number | boolean | null
 type Context = { path: string, operator: 'signal' | 'equals' | 'truthy', value?: Scalar }
 type Check = { keys: string[], operator: 'signal' | 'in' | 'numberAtLeast' | 'equals' | 'objectMismatch', values?: Scalar[], value?: Scalar, expected?: Record<string, Scalar>, whenAny?: Context[] }
-export type EventProtectionPolicy = { checks: Check[] }
+export type EventProtectionPolicy = { appliesTo: 'custom_drop' | 'all', checks: Check[] }
 export const eventProtectionRuleId = 'security.event_evidence.v1'
-export const eventProtectionRule = { id: eventProtectionRuleId, version: '1', name: 'Store security and failure evidence', family: 'Security', severity: 'low', enabled: true,
-    explanation: 'Store events with security findings, failure evidence, elevated severity or unsafe HTTP content. These storage exceptions take precedence over Drop rules.', evidence: ['matched evidence fields'] }
+export const eventProtectionRule = { id: eventProtectionRuleId, version: '1', name: 'Protect evidence from custom Drop rules', family: 'Security', severity: 'low', enabled: true,
+    explanation: 'Protect security findings, failure evidence and unsafe HTTP content from custom Drop rules. Verified lossless compaction keeps its complete canonical evidence.', evidence: ['matched evidence fields'] }
 const http: Context[] = [{ path: 'http', operator: 'truthy' }, { path: 'log_type', operator: 'equals', value: 'HttpLogs' }, { path: 'event_type', operator: 'equals', value: 'http' }]
-export const eventProtectionDefinition = { match: 'all' as const, stage: 'analyze' as const, action: 'keep' as const, conditions: [], protection: { checks: [
+export const eventProtectionDefinition = { match: 'all' as const, stage: 'analyze' as const, action: 'keep' as const, conditions: [], protection: { appliesTo: 'custom_drop', checks: [
     { keys: ['detections', 'signature', 'signature_id', 'error', 'errors', 'exception', 'failure', 'failed', 'err', 'errmsg', 'errCode', 'errName', 'errorCode', 'protected', 'suspicious'], operator: 'signal' },
     { keys: ['severity', 'level'], operator: 'in', values: ['medium', 'high', 'critical', 'warn', 'warning', 'error', 'fatal'] },
     { keys: ['level'], operator: 'numberAtLeast', value: 40 },
@@ -25,7 +25,7 @@ const equal = (left: unknown, right: unknown) => typeof left === 'string' && typ
 
 export function normalizeEventProtection(value: unknown): { protection?: EventProtectionPolicy, error?: string } {
     const error = 'Protection must contain valid checks with field keys and matching operators.'
-    if (!record(value) || Object.keys(value).some(key => key !== 'checks') || !Array.isArray(value.checks) || value.checks.length > 32) return { error }
+    if (!record(value) || Object.keys(value).some(key => !['appliesTo', 'checks'].includes(key)) || !['custom_drop', 'all'].includes(String(value.appliesTo)) || !Array.isArray(value.checks) || value.checks.length > 32) return { error }
     for (const check of value.checks) {
         if (!record(check) || Object.keys(check).some(key => !['keys', 'operator', 'values', 'value', 'expected', 'whenAny'].includes(key))
             || !Array.isArray(check.keys) || !check.keys.length || check.keys.length > 128 || check.keys.some(key => typeof key !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(key))) return { error }

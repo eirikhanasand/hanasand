@@ -6,19 +6,19 @@ import { matchesMillRule, type MillCondition } from './conditions.ts'
 export type RetentionRule = { source?: string, enabled?: boolean, definition?: { stage?: string, action?: string, conditions?: MillCondition[], protection?: EventProtectionPolicy } }
 
 export function customRetentionAction(event: Record<string, unknown>, rules: RetentionRule[]): 'drop' | 'keep' | undefined {
-    if (retentionStoreMatches(event, rules)) return 'keep'
-    if (eligibleCustomDrop(event) && rules.some(rule => rule.source === 'owned' && rule.enabled !== false && rule.definition?.stage === 'analyze'
+    if (retentionStoreMatches(event, rules, 'all')) return 'keep'
+    if (eligibleCustomDrop(event) && !retentionStoreMatches(event, rules) && rules.some(rule => rule.source === 'owned' && rule.enabled !== false && rule.definition?.stage === 'analyze'
         && rule.definition.action === 'drop' && rule.definition.conditions?.length && matchesMillRule(event, rule.definition.conditions))) return 'drop'
 }
 
 // Persisted storage exceptions take precedence over broader Drop selectors.
-export function retentionStoreMatches(event: Record<string, unknown>, rules: RetentionRule[]): boolean {
+export function retentionStoreMatches(event: Record<string, unknown>, rules: RetentionRule[], scope: 'custom_drop' | 'all' = 'custom_drop'): boolean {
     return rules.some(rule => {
         if (rule.enabled === false || rule.definition?.stage !== 'analyze' || rule.definition.action !== 'keep') return false
         if (rule.definition.protection) {
             const { protection } = normalizeEventProtection(rule.definition.protection)
             // An unreadable active protection rule cannot authorize dropping evidence.
-            return !protection || matchesEventProtection(event, protection)
+            return !protection || (scope === 'custom_drop' || protection.appliesTo === 'all') && matchesEventProtection(event, protection)
         }
         return rule.source === 'owned' && Boolean(rule.definition.conditions?.length) && matchesMillRule(event, rule.definition.conditions!)
     })
