@@ -68,7 +68,7 @@ type BrowserReportBody = { clientId?: string; report?: unknown }
 export const maxBrowserReportBytes = 32_000_000
 let browserRunStatsCache: { expiresAt: number; value: BrowserRunStats } | null = null
 
-export async function getBrowserRuns(req: FastifyRequest<{ Querystring: { clientId?: string } }>, res: FastifyReply) {
+export async function getBrowserRuns(req: FastifyRequest<{ Querystring: { clientId?: string; history?: string; offset?: string } }>, res: FastifyReply) {
     try {
         const user = await tokenWrapper(req, res)
         const clientId = cleanClientId(req.query?.clientId)
@@ -96,6 +96,21 @@ export async function getBrowserRuns(req: FastifyRequest<{ Querystring: { client
         const params = identity.ownerId
             ? [identity.ownerId, identity.clientIdHash]
             : [identity.clientIdHash]
+        if (req.query.history === 'all') {
+            const offset = Number(req.query.offset || 0)
+            if (!Number.isSafeInteger(offset) || offset < 0) return res.status(400).send({ error: 'Invalid history offset.' })
+            const scope = identity.ownerId ? '(owner_id = $1 OR ($2::text IS NOT NULL AND client_id_hash = $2))' : 'client_id_hash = $1'
+            const result = await run(`
+                SELECT id, target, network, status, title, created_at, metadata - 'report' AS metadata
+                FROM browser_runs WHERE ${scope}
+                ORDER BY created_at DESC, id DESC
+                LIMIT 51 OFFSET $${params.length + 1}
+            `, [...params, offset])
+            return res.header('cache-control', 'private, no-store').send({
+                runs: result.rows.slice(0, 50).map(rowToRunRecord),
+                nextOffset: result.rows.length > 50 ? offset + 50 : null,
+            })
+        }
         const result = await run(identity.ownerId ? `
             SELECT *
             FROM (

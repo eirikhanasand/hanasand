@@ -7,7 +7,13 @@ const records = [
     { id: 'old', target: 'https://vg.no', owner_id: 'owner', created_at: '2026-01-01T12:00:00Z', status: 'ended' },
 ]
 let inserted: unknown[] = []
+let historyQuery: { sql: string; params: any[] } | null = null
 mock.module('#db', () => ({ default: async (sql: string, params: any[]) => {
+    if (sql.includes('quota_identity = $1')) return { rows: [{ used: 0, active: 0 }] }
+    if (sql.includes('LIMIT 51 OFFSET')) {
+        historyQuery = { sql, params }
+        return { rows: Array.from({ length: params.at(-1) === 0 ? 51 : 2 }, (_, index) => ({ ...records[0], id: String(index + params.at(-1)) })) }
+    }
     if (sql.includes('INSERT INTO browser_run_evidence')) { inserted = params; return { rows: [] } }
     if (sql.includes('WHERE result_id')) {
         expect(sql).toContain('owner_id = $2 OR client_id_hash = $3')
@@ -18,7 +24,7 @@ mock.module('#db', () => ({ default: async (sql: string, params: any[]) => {
     throw new Error(sql)
 }, withTransaction: async () => {} }))
 mock.module('#utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: Boolean(userId), id: userId }) }))
-const { getBrowserResult, buildStoredBrowserReport, persistBrowserRunEvidence } = await import('../src/handlers/browserSandboxRuns.ts')
+const { getBrowserRuns, getBrowserResult, buildStoredBrowserReport, persistBrowserRunEvidence } = await import('../src/handlers/browserSandboxRuns.ts')
 const response = () => ({ code: 200, body: null as any, status(code: number) { this.code = code; return this }, header() { return this }, send(body: any) { this.body = body; return this } })
 beforeEach(() => { userId = 'owner'; inserted = [] })
 
@@ -61,4 +67,22 @@ test('archive retains all screenshots and untruncated text independently of clie
     inserted = []
     await persistBrowserRunEvidence('new', { type: 'stream_ready', streamUrl: 'private capability' })
     expect(inserted).toHaveLength(0)
+})
+
+
+test('full history includes repeated URLs, paginates and keeps client ownership filtering', async () => {
+    userId = ''
+    for (const offset of ['0', '50']) {
+        const res = response()
+        await getBrowserRuns({ query: { clientId: 'history-test-client', history: 'all', offset }, log: { error: console.error } } as any, res as any)
+        expect(res.code).toBe(200)
+        expect(res.body.runs).toHaveLength(offset === '0' ? 50 : 2)
+        expect(res.body.nextOffset).toBe(offset === '0' ? 50 : null)
+        expect(historyQuery!.sql).toContain('WHERE client_id_hash = $1')
+        expect(historyQuery!.sql).not.toContain('DISTINCT')
+        expect(historyQuery!.params[0]).not.toBe('history-test-client')
+    }
+    const invalid = response()
+    await getBrowserRuns({ query: { clientId: 'history-test-client', history: 'all', offset: '-1' }, log: { error: console.error } } as any, invalid as any)
+    expect(invalid.code).toBe(400)
 })

@@ -60,10 +60,10 @@ type BrowserReport = {
     }
 }
 
-export default function BrowserReportPageClient({ runId = '', token = '', resultId, clientId, onRerun }: { runId?: string; token?: string; resultId?: string; clientId?: string; onRerun?: (target: string, quick?: boolean) => void }) {
+export default function BrowserReportPageClient({ runId = '', token = '', resultId, clientId, onRerun, initialRun = '' }: { initialRun?: string; runId?: string; token?: string; resultId?: string; clientId?: string; onRerun?: (target: string, quick?: boolean) => void }) {
     const [report, setReport] = useState<BrowserReport | null>(null)
     const [error, setError] = useState('')
-    const [selectedRun, setSelectedRun] = useState('')
+    const [selectedRun, setSelectedRun] = useState(initialRun)
     const endpoint = useMemo(() => resultId
         ? clientId ? `/api/backend/browser/results/${encodeURIComponent(resultId)}?clientId=${encodeURIComponent(clientId)}${selectedRun ? `&run=${encodeURIComponent(selectedRun)}` : ''}` : ''
         : runId && token ? `/api/backend/browser/runs/${encodeURIComponent(runId)}/report?token=${encodeURIComponent(token)}` : '', [runId, token, resultId, clientId, selectedRun])

@@ -8,6 +8,7 @@ let bundle = ''
 let streamLoads = 0
 let savedReport = null
 let shareRequests = 0
+let historyRequests = 0
 const css = (await postcss([tailwind()]).process(await readFile('src/app/globals.css', 'utf8'), { from: 'src/app/globals.css' })).css
 const server = Bun.serve({ port: 0, fetch(request) {
     const url = new URL(request.url)
@@ -19,6 +20,11 @@ const server = Bun.serve({ port: 0, fetch(request) {
     }
     if (url.pathname.includes('/browser/results/')) return Response.json({ ...savedReport, runId: url.searchParams.get('run') || 'recent-run', runs: [{ id: 'recent-run', startedAt: new Date().toISOString(), status: 'ended' }, { id: 'older-run', startedAt: '2026-01-01T00:00:00Z', status: 'ended' }] })
     if (url.pathname.endsWith('/report')) return Response.json(savedReport)
+    if (url.searchParams.get('history') === 'all') {
+        historyRequests++
+        const offset = Number(url.searchParams.get('offset'))
+        return Response.json({ runs: Array.from({ length: offset ? 1 : 50 }, (_, i) => ({ id: offset ? 'older-run' : `history-${i}`, resultId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', target: 'https://example.com', startedAt: '2026-01-01T00:00:00Z', status: 'ended' })), nextOffset: offset ? null : 50 })
+    }
     if (url.pathname.startsWith('/api/')) return Response.json({ runs: [], profiles: [] })
     if (url.pathname === '/stream/index.html') {
         streamLoads++
@@ -28,7 +34,7 @@ const server = Bun.serve({ port: 0, fetch(request) {
 } })
 const build = await Bun.build({ entrypoints: ['browser-test-entry'], target: 'browser', define: { 'process.env': JSON.stringify({ NEXT_PUBLIC_API: `${server.url}api` }) }, plugins: [{ name: 'browser-fixture', setup(builder) {
     builder.onResolve({ filter: /^(browser-test-entry|next\/(link|image))$/ }, args => ({ path: args.path, namespace: 'fixture' }))
-    builder.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ loader: 'tsx', resolveDir: process.cwd(), contents: args.path === 'next/link' ? 'export default function Link(props){return <a {...props}/>}' : args.path === 'next/image' ? 'export default function Image({unoptimized,...props}){return <img {...props}/>}' : 'import {createRoot} from \'react-dom/client\'; import Browser from \'./src/app/browser/pageClient\'; import Report from \'./src/app/browser/report/pageClient\'; createRoot(document.getElementById(\'root\')).render(location.pathname === \'/saved\' ? <Report runId="fixture" token="fixture"/> : <Browser resultId={location.pathname.startsWith(\'/browser/\') ? location.pathname.split(\'/\')[2] : undefined} initialData={{history:[],quota:null,stats:{runs24h:0,darkwebRuns24h:0}}}/>);' }))
+    builder.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ loader: 'tsx', resolveDir: process.cwd(), contents: args.path === 'next/link' ? 'export default function Link(props){return <a {...props}/>}' : args.path === 'next/image' ? 'export default function Image({unoptimized,...props}){return <img {...props}/>}' : 'import {createRoot} from \'react-dom/client\'; import Browser from \'./src/app/browser/pageClient\'; import Report from \'./src/app/browser/report/pageClient\'; createRoot(document.getElementById(\'root\')).render(location.pathname === \'/saved\' ? <Report runId="fixture" token="fixture"/> : <Browser resultRunId={new URLSearchParams(location.search).get(\'run\') || undefined} resultId={location.pathname.startsWith(\'/browser/\') ? location.pathname.split(\'/\')[2] : undefined} initialData={{history:[],quota:null,stats:{runs24h:0,darkwebRuns24h:0}}}/>);' }))
 } }] })
 assert(build.success, build.logs.join('\n'))
 bundle = await build.outputs[0].text()
@@ -344,6 +350,23 @@ try {
     await page.waitForFunction(() => window.browserMessages.some(message => message.type === 'end'))
     assert.equal(await page.evaluate(() => window.browserMessages.filter(message => message.type === 'end').length), 1)
     assert.equal(await page.getByText('Run cancelled', { exact: true }).count(), 0)
+    await page.goto(server.url.toString())
+    assert.equal(historyRequests, 0, 'Full history loads only on demand')
+    await page.getByRole('button', { name: 'History', exact: true }).click()
+    const historyDialog = page.getByRole('dialog', { name: 'History', exact: true })
+    await historyDialog.getByRole('button', { name: 'Load more', exact: true }).waitFor()
+    assert.equal(await historyDialog.getByRole('link').count(), 50)
+    await page.setViewportSize({ width: 390, height: 844 })
+    assert(await historyDialog.evaluate(element => element.getBoundingClientRect().right <= innerWidth), 'History fits mobile')
+    await historyDialog.getByRole('button', { name: 'Load more', exact: true }).click()
+    await page.waitForFunction(() => document.querySelectorAll('dialog a').length === 51)
+    await page.keyboard.press('Escape')
+    assert.equal(await historyDialog.isVisible(), false)
+    await page.getByRole('button', { name: 'History', exact: true }).click()
+    await historyDialog.getByRole('button', { name: 'Load more', exact: true }).click()
+    await historyDialog.locator('a[href$="run=older-run"]').click()
+    await page.getByRole('heading', { name: 'https://example.com', exact: true }).waitFor()
+    assert.equal(await page.getByLabel('Saved run', { exact: true }).inputValue(), 'older-run')
     assert.deepEqual(errors, [])
     console.log('Browser workspace passed: loading until first frame, stream readiness, cancellation, launch errors, live input, stable stream, downloads, completion box and mobile width.')
 } finally { await browser.close(); server.stop(true) }
