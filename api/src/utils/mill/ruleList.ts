@@ -1,3 +1,4 @@
+import { ingestionRuleId } from './analyzeIngestion.ts'
 import type run from '#db'
 import { accessRuleId } from './analyzeAccess.ts'
 import { mongoRuleId } from './analyzeMongo.ts'
@@ -26,7 +27,7 @@ const aggregateTables = new Map([
     [accessRuleId, ['log_access_counts', 'amount']], [mongoRuleId, ['log_mongo_ping_counts', 'amount']],
     [postgresRuleId, ['log_postgres_session_state', 'dropped_records']], [proxyRuleId, ['log_proxy_counts', 'amount']],
 ])
-const receiptRules = new Set([collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId])
+const receiptRules = new Set([ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId])
 export async function loadRuleHits(organizationId: string, rules: Pick<Rule, 'id'>[], query: typeof run) {
     const ids = rules.map(rule => rule.id)
     if (!ids.length) return new Map<string, number>()

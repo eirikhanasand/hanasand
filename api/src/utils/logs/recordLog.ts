@@ -1,3 +1,4 @@
+import { analyzeIngestion } from '../mill/analyzeIngestion.ts'
 import { analyzeCdnRefresh } from '../mill/analyzeCdnRefreshLog.ts'
 import { analyzeRoutineGroupBatch } from '../mill/analyzeRoutineGroupBatch.ts'
 import { analyzeCollectorExecution } from '../mill/analyzeCollectorLog.ts'
@@ -79,6 +80,7 @@ async function prepareLog({
     message = redactedMessage
     metadata = redactedMetadata
     if (retentionAction === 'drop') return
+    if (retentionAction !== 'keep' && await analyzeIngestion({ service, host, level, message, metadata, sourceEventId, timestamp }, query === run ? undefined : query)) return
     if (retentionAction !== 'keep' && await analyzeProxy({ service, host, level, message, metadata, sourceEventId, timestamp }, query === run ? undefined : query)) return
     if (!scopeId && isOrganizationRequest(metadata)) {
         service = 'hanasand-api'

@@ -1,3 +1,4 @@
+import { ingestionRule, ingestionRuleId, ingestionDefinition } from '#utils/mill/analyzeIngestion.ts'
 import { listRule, ruleCategory, loadRuleHits } from '#utils/mill/ruleList.ts'
 import { cdnRefreshRule, cdnRefreshRuleId, cdnRefreshDefinition } from '#utils/mill/analyzeCdnRefresh.ts'
 import { modelDiscoveryRule, modelDiscoveryRuleId, modelDiscoveryDefinition, modelDiscoveryUnavailableReason } from '#utils/mill/analyzeModelDiscovery.ts'
@@ -42,6 +43,7 @@ export const MILL_RULES: MillRule[] = [
     postgresRule,
     accessRule,
     proxyRule,
+    ingestionRule,
     mongoRule,
     ...securityRules.map(({ id, name, family, severity, explanation }) => ({ id, name, family, severity, explanation, version: '1', evidence: ['process executable', 'command line', 'host', 'user'] })),
     { id: 'auth.brute_force_success.v1', version: '1', name: 'Brute-force success', family: 'Authentication', severity: 'high', explanation: 'Multiple failed logins followed by a successful login for the same user.', evidence: ['failed event IDs', 'successful event ID', 'time window'] },
@@ -62,6 +64,7 @@ export function millDefaultDefinition(id: string): MillDefinition {
     if ([telemetryRuleId, sshWindowRuleId].includes(id)) return structuredClone(routineGroupDefinition)
     if (id === collectorRuleId) return structuredClone(collectorDefinition)
     if (id === postgresRuleId) return structuredClone(postgresDefinition)
+    if (id === ingestionRuleId) return structuredClone(ingestionDefinition)
     if (id === proxyRuleId) return structuredClone(proxyDefinition)
     if (id === mongoRuleId) return structuredClone(mongoDefinition)
     if (id === accessRuleId) return structuredClone(accessDefinition)
@@ -336,7 +339,7 @@ export async function postMillRuleAction(req: FastifyRequest<{ Params: { id: str
     if (!action) return res.status(400).send({ error: 'Action must be enable or disable.' })
     const rule = (await loadConfiguredMillRules(access.organizationId)).find(rule => millRuleSlug(rule.id) === millRuleSlug(req.params.id) || rule.recordId === req.params.id)
     if (!rule) return res.status(404).send({ error: 'Rule not found.' })
-    if (([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') && !(await hasRole(req, res, 'system_admin')).valid) return res.status(403).send({ error: 'System administrator access is required to change platform log retention.' })
+    if (([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') && !(await hasRole(req, res, 'system_admin')).valid) return res.status(403).send({ error: 'System administrator access is required to change platform log retention.' })
     if (action === 'enable' && unavailableAnalysisRule(rule.id)) return res.status(409).send({ error: unavailableAnalysisRule(rule.id) })
     try {
         const saved = await saveMillRule(req, access, { ...rule, enabled: action === 'enable' }, 'mill.rule.updated', rule.version)
@@ -372,7 +375,7 @@ export async function getMillRule(req: FastifyRequest<{ Params: { id: string }, 
         ORDER BY created_at DESC, id DESC LIMIT 51 OFFSET $4`, [access.organizationId, rule.id, rule.recordId || rule.id, offset])
     const triggers = await run(`SELECT count(*)::text AS count FROM mill_findings
         WHERE organization_id = $1 AND rule_id = $2`, [access.organizationId, rule.id])
-    const canEdit = !isHistorical && canManageMillRules(access.role) && (!([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') || (await hasRole(req, res, 'system_admin')).valid)
+    const canEdit = !isHistorical && canManageMillRules(access.role) && (!([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') || (await hasRole(req, res, 'system_admin')).valid)
     return res.send({ organizationId: access.organizationId, canEdit, isHistorical, currentVersion: rule.version, rule: displayedRule, triggerCount: Number(triggers.rows[0].count), audit: audit.rows.slice(0, 50), nextOffset: audit.rows.length > 50 ? offset + 50 : null })
 }
 
@@ -382,7 +385,7 @@ export async function putMillRule(req: FastifyRequest<{ Params: { id: string } }
     if (!canManageMillRules(access.role)) return res.status(403).send({ error: 'Editor access is required to manage rules.' })
     const rule = (await loadConfiguredMillRules(access.organizationId)).find(rule => millRuleSlug(rule.id) === millRuleSlug(req.params.id))
     if (!rule) return res.status(404).send({ error: 'Rule not found.' })
-    if (([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') && !(await hasRole(req, res, 'system_admin')).valid) return res.status(403).send({ error: 'System administrator access is required to change platform log retention.' })
+    if (([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') && !(await hasRole(req, res, 'system_admin')).valid) return res.status(403).send({ error: 'System administrator access is required to change platform log retention.' })
     const body = (req.body || {}) as Record<string, unknown>
     if (body.enabled === true && unavailableAnalysisRule(rule.id)) return res.status(409).send({ error: unavailableAnalysisRule(rule.id) })
     const name = typeof body.name === 'string' ? body.name.trim() : ''
@@ -471,7 +474,7 @@ export async function loadConfiguredMillRules(organizationId: string, query: typ
         ORDER BY created_at ASC
     `, [organizationId])
     const overrides = new Map((result.rows as Array<Record<string, unknown>>).map(row => [String(row.rule_id), row]))
-    const builtIns = MILL_RULES.filter(rule => ![accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || overrides.has(rule.id)).map(rule => {
+    const builtIns = MILL_RULES.filter(rule => ![accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || overrides.has(rule.id)).map(rule => {
         const override = overrides.get(rule.id)
         return { ...rule, definition: builtinDefinition(rule, override?.definition), detectionLogic: rule.explanation, ...(override ? { recordId: String(override.id), version: String(override.version), name: String(override.name), explanation: String(override.explanation), severity: String(override.severity) } : {}), enabled: override ? Boolean(override.enabled) : rule.enabled !== false, source: 'hanasand' as const }
     })

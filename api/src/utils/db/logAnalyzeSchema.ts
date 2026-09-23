@@ -1,3 +1,5 @@
+import { ingestionRule, ingestionDefinition } from '../mill/analyzeIngestion.ts'
+import ensureIngestionAnalyzeSchema from './ingestionAnalyzeSchema.ts'
 import { cdnRefreshRule, cdnRefreshDefinition } from '../mill/analyzeCdnRefresh.ts'
 import { modelDiscoveryRule, modelDiscoveryRuleId, modelDiscoveryDefinition } from '../mill/analyzeModelDiscovery.ts'
 import { readinessAuditRule, readinessAuditRuleId, readinessAuditDefinition } from '../mill/analyzeReadinessAudit.ts'
@@ -36,9 +38,10 @@ export default async function ensureLogAnalyzeSchema() {
         organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, rule_id TEXT NOT NULL, scope TEXT NOT NULL,
         recent JSONB NOT NULL DEFAULT '[]', PRIMARY KEY(organization_id,rule_id,scope))`)
     await ensureProxyAnalyzeSchema()
+    await ensureIngestionAnalyzeSchema()
     // Seed once for the platform organization only. Restarts must never undo a
     // user's later Keep/Disable choice. The first version is included in history.
-    for (const [rule, definition] of [[cdnRefreshRule, cdnRefreshDefinition], [modelDiscoveryRule, modelDiscoveryDefinition], [readinessAuditRule, readinessAuditDefinition], [telemetryRule, routineGroupDefinition], [sshWindowRule, routineGroupDefinition], [collectorRule, collectorDefinition], [proxyRule, proxyDefinition], [postgresRule, postgresDefinition], [accessRule, accessDefinition], [mongoRule, mongoDefinition], [mongoReconRule, mongoReconDefinition]] as const) await run(`WITH installed AS (
+    for (const [rule, definition] of [[ingestionRule, ingestionDefinition], [cdnRefreshRule, cdnRefreshDefinition], [modelDiscoveryRule, modelDiscoveryDefinition], [readinessAuditRule, readinessAuditDefinition], [telemetryRule, routineGroupDefinition], [sshWindowRule, routineGroupDefinition], [collectorRule, collectorDefinition], [proxyRule, proxyDefinition], [postgresRule, postgresDefinition], [accessRule, accessDefinition], [mongoRule, mongoDefinition], [mongoReconRule, mongoReconDefinition]] as const) await run(`WITH installed AS (
         INSERT INTO mill_rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
         SELECT gen_random_uuid()::text,o.id,$2,'1',$3,$6,$7,$4,$5::jsonb,$8,$9
         FROM organizations o WHERE o.status='active' AND (o.id=$1 OR ($1::text IS NULL AND lower(o.name)='hanasand'))
