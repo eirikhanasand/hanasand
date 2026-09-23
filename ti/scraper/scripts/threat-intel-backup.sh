@@ -340,13 +340,26 @@ case "$action" in
       verifier_image=$source_scraper_image
     fi
 
-    database_bundle="$archive/.database-bundle.$$"
-    if ! docker exec -i "$source_postgres_container" sh -s -- backup < "$postgres_helper" > "$database_bundle"; then
-      rm -f -- "$database_bundle"
-      exit 1
-    fi
-    tar -C "$archive" -xf "$database_bundle"
-    rm -f -- "$database_bundle"
+    # Avoid storing a second full copy of the dump while unpacking the bundle.
+    # Wait for both commands: a valid tar stream alone does not prove that the
+    # snapshot helper completed successfully.
+    (
+      database_bundle="$archive/.database-bundle.$$"
+      producer=
+      cleanup_bundle() {
+        [ -z "$producer" ] || { kill "$producer" 2>/dev/null || true; wait "$producer" 2>/dev/null || true; }
+        rm -f -- "$database_bundle"
+      }
+      trap cleanup_bundle EXIT
+      trap 'exit 130' INT
+      trap 'exit 143' TERM
+      mkfifo "$database_bundle"
+      docker exec -i "$source_postgres_container" sh -s -- backup < "$postgres_helper" > "$database_bundle" &
+      producer=$!
+      tar -C "$archive" -xf "$database_bundle"
+      wait "$producer"
+      producer=
+    )
 
     capture_source_evidence
     inspect_evidence_archive "$objects" "$evidence_inventory" "$object_ledger"

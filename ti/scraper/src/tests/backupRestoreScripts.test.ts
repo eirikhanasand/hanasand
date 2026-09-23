@@ -165,7 +165,7 @@ case " $* " in
   *" container inspect replacement-source-scraper-container --format {{.State.Running}} "*) printf '%s\\n' true ;;
   *" container inspect replacement-source-scraper-container --format {{.Image}} "*) printf '%s\\n' 'sha256:replacement-scraper-image' ;;
   *" exec replacement-source-scraper-container tar -C /var/lib/ti-scraper/evidence -czf - . "*) cat "$FAKE_EVIDENCE_ARCHIVE" ;;
-  *" exec -i fake-source-postgres-container sh -s -- backup "*) cat "$FAKE_DATABASE_BUNDLE" ;;
+  *" exec -i fake-source-postgres-container sh -s -- backup "*) cat "$FAKE_DATABASE_BUNDLE"; exit "\${FAKE_BUNDLE_EXIT:-0}" ;;
   *" exec fake-source-scraper-container tar -C /var/lib/ti-scraper/evidence -czf - . "*)
     if [ -n "\${FAKE_EVIDENCE_EXEC_FAIL:-}" ] && [ ! -e "$FAKE_EVIDENCE_EXEC_FAIL" ]; then
       : > "$FAKE_EVIDENCE_EXEC_FAIL"
@@ -351,7 +351,7 @@ describe("backup and restore scripts", () => {
     }
   });
 
-  test.each([false, true])("backup pins source containers with Compose scraper absent=%s", (noComposeScraper) => {
+  test.each([[false, 0], [true, 0], [false, 23]] as const)("backup pins source containers with Compose scraper absent=%s and producer exit=%s", (noComposeScraper, producerExit) => {
     const root = mkdtempSync(join(tmpdir(), "ti-backup-source-pin-"));
     try {
       const archive = join(root, "archive");
@@ -361,6 +361,7 @@ describe("backup and restore scripts", () => {
         ...process.env,
         PATH: `${bin}:${process.env.PATH}`,
         FAKE_NO_COMPOSE_SCRAPER: String(noComposeScraper),
+        FAKE_BUNDLE_EXIT: String(producerExit),
         FAKE_DATABASE_BUNDLE: databaseBundle,
         FAKE_DATABASE_INVENTORY: join(root, "backup-source", "DATABASE-INVENTORY.tsv"),
         FAKE_OBJECT_LEDGER: join(root, "empty-object-ledger.tsv"),
@@ -376,6 +377,11 @@ describe("backup and restore scripts", () => {
       unlinkSync(failMarker);
 
       const backup = Bun.spawnSync({ cmd: ["sh", backupScript, "backup", archive], env });
+      if (producerExit) {
+        expect(backup.exitCode).not.toBe(0);
+        expect(existsSync(join(archive, 'BACKUP-MANIFEST'))).toBe(false);
+        return;
+      }
       if (backup.exitCode !== 0) throw new Error(backup.stderr.toString());
       const manifest = readFileSync(join(archive, "BACKUP-MANIFEST"), "utf8");
       expect(manifest).toContain("source_scraper_container_id=fake-source-scraper-container\n");
