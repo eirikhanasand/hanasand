@@ -63,7 +63,12 @@ function standardReplicaAccess(log: AccessLog): boolean {
         || access.key !== `http-api:${row.reqId}` || typeof access.timestamp !== 'string' || Date.parse(access.timestamp) !== row.time
         || (req.remoteAddress !== undefined && (typeof req.remoteAddress !== 'string' || !ipaddr.isValid(req.remoteAddress)))) return false
     if (!eligibleAccess(access as AccessEvent)) return false
-    try { return isDeepStrictEqual(JSON.parse(log.message), row) } catch { return false }
+    try {
+        const original = JSON.parse(log.message)
+        // The logger emits compact JSON. Reject duplicate keys and alternative
+        // encodings that parsing could otherwise erase from the retained evidence.
+        return JSON.stringify(original) === log.message && isDeepStrictEqual(original, row)
+    } catch { return false }
 }
 
 export function accessFromLog(log: AccessLog): AccessEvent | null {

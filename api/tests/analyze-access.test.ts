@@ -29,6 +29,9 @@ describe('Analyze access safety', () => {
         const log = replicaLog()
         log.message = JSON.stringify({ ...log.metadata.structured, error: 'hidden in original message' })
         expect(accessFromLog(log)).toBeNull()
+        const duplicate = replicaLog()
+        duplicate.message = duplicate.message.replace('"msg":"http_access"', '"msg":"unexpected content","msg":"http_access"')
+        expect(accessFromLog(duplicate)).toBeNull()
     })
     test('retains inconsistent, encoded, query-bearing, protected and failed requests', () => {
         for (const path of ['/api/auth/session', '/api/admin/users', '/.env', '/../etc/passwd', '/file?x=hello', '/%252e%252e/etc/passwd']) {
