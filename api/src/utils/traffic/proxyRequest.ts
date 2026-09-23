@@ -1,6 +1,7 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
 import { createHash } from 'node:crypto'
 import { withTransaction } from '#db'
+import { analyzeAccess } from '#utils/mill/analyzeLog.ts'
 import recordLog from '#utils/logs/recordLog.ts'
 import { inspectAccess, ordinaryAccessPath } from '#utils/mill/analyzeAccess.ts'
 import { proxyConnection, proxyHeader } from '#utils/mill/analyzeProxy.ts'
@@ -28,6 +29,9 @@ export async function recordProxyRequest(req: FastifyRequest, res: FastifyReply)
                 status_code: res.statusCode, source: { ip: access.ip }, request: { method: req.method, url: redactLogText(req.url),
                     ...(!access.inspection.headersSafe ? { headers: redactLogValue(headers) } : {}) } } }, query)
         if (!id) return false
+        // Preserve existing per-IP rate counts and alerts, but keep this canonical
+        // record even when the HTTP analyzer would otherwise drop it.
+        await analyzeAccess(access, query)
         // First completed request wins. A suspicious first request cannot be replaced
         // by a later benign request to make a connection eligible for filtering.
         await query(`INSERT INTO log_proxy_requests(connection_id,service_log_id,connection,access)
