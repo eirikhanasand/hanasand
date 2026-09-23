@@ -31,11 +31,18 @@ export function signReadinessEvent(event: LogEvent, fact: unknown, key: ReturnTy
 export async function* attestReadinessAudit(events: AsyncIterable<LogEvent>, root: string, host: string): AsyncGenerator<LogEvent> {
     const pending: LogEvent[] = []
     let overflow = false
-    for await (const event of events) {
-        const args = (event.metadata?.process as any)?.arguments
-        if (host === 'inspur' && Array.isArray(args) && args[0] === '/usr/lib/postgresql/15/bin/pg_isready' && pending.length < 1000) pending.push(event)
-        else { if (host === 'inspur' && Array.isArray(args) && args[0] === '/usr/lib/postgresql/15/bin/pg_isready') overflow = true; yield event }
+    try {
+        for await (const event of events) {
+            const args = (event.metadata?.process as any)?.arguments
+            if (host === 'inspur' && Array.isArray(args) && args[0] === '/usr/lib/postgresql/15/bin/pg_isready' && pending.length < 1000) pending.push(event)
+            else { if (host === 'inspur' && Array.isArray(args) && args[0] === '/usr/lib/postgresql/15/bin/pg_isready') overflow = true; yield event }
+        }
+    } catch (error) {
+        // Flush originals before surfacing source failure; never strand buffered evidence.
+        for (const event of pending) yield event
+        throw error
     }
+
     let key: ReturnType<typeof createPrivateKey> | undefined
     try {
         const path = `${root}/readiness-private.pem`, info = await lstat(path)

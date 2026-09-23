@@ -57,3 +57,11 @@ test('real audit parser preserves provenance only for unambiguous service execut
         expect(signReadinessEvent(log,fact,keys.privateKey)).toBeUndefined()
     }
 })
+test('source failure flushes buffered originals then propagates error',async()=>{
+    const {event}=fixture()
+    async function* events(){yield event;throw new Error('audit read failed')}
+    const output=[]
+    try { for await(const row of attestReadinessAudit(events(),'/nonexistent-readiness-test','inspur'))output.push(row);throw new Error('Expected source failure') }
+    catch(error){expect((error as Error).message).toBe('audit read failed')}
+    expect(output).toEqual([event])
+})
