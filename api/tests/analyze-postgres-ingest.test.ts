@@ -6,14 +6,14 @@ const { postgresReceipt, postgresRuleId, postgresDefinition } = await import('..
 const { normalizeBuiltinDefinition } = await import('../src/handlers/mill.ts')
 import { fixture } from './analyze-postgres.test.ts'
 
-function database(options: { enabled?: boolean, existing?: boolean, fail?: string, customKeep?: boolean, detector?: boolean } = {}) {
+function database(options: { enabled?: boolean, existing?: boolean, fail?: string, customKeep?: boolean, detector?: boolean, definition?: any } = {}) {
     const receipts = new Set<string>(), summaries: any[] = []
     let recent: any[] = [], dropped = 0
     const query: any = async (sql: string, params: any[] = []) => {
         if (options.fail && sql.includes(options.fail)) throw new Error('write failed')
         if (sql.includes('FROM mill_rules') && !sql.includes('JOIN organizations')) return { rows: options.customKeep || options.detector ? [{ rule_id: 'fixture-protection', source: 'owned', enabled: true,
             definition: { stage: options.detector ? 'detect' : 'analyze', action: 'keep', conditions: [{ path: 'service', operator: 'equals', value: 'hanasand_database' }] } }] : [] }
-        if (sql.includes('FROM mill_rules')) return { rows: options.enabled === false ? [] : [{ organization_id: 'platform', version: '1' }] }
+        if (sql.includes('FROM mill_rules')) return { rows: options.enabled === false ? [] : [{ organization_id: 'platform', version: '1', definition: options.definition || postgresDefinition }] }
         if (sql.startsWith('SELECT key')) return { rows: params[2].filter((key: string) => receipts.has(key)).map((key: string) => ({ key })) }
         if (sql.startsWith('SELECT recent')) return { rows: [{ recent }] }
         if (sql.startsWith('UPDATE log_postgres_session_state SET recent')) recent = JSON.parse(params[1])
@@ -35,7 +35,7 @@ test('transactional batch stores full evidence, records hits once and handles sp
     expect(db.summaries[0].lifecycle_records).toEqual(rows)
     expect(db.dropped).toBe(3)
     expect(await analyzePostgresBatch(rows, db.query)).toEqual([])
-    expect(await analyzePostgresBatch(rows.slice(0, 1), db.query)).toEqual([])
+    expect(await analyzePostgresBatch(rows.slice(0, 1), db.query)).toEqual(rows.slice(0, 1))
     expect(await analyzePostgresBatch(rows.map(row => ({ ...row, metadata: Object.fromEntries(Object.entries(row.metadata!).reverse()) })), db.query)).toEqual([])
     expect(db.summaries).toHaveLength(1)
     expect(db.dropped).toBe(3)
@@ -92,8 +92,49 @@ test('summary and receipt failure must abort collector transaction', async () =>
     }
 })
 
-test('safety checks cannot be edited away and Keep remains available', () => {
+test('persisted selectors can be edited and Keep remains available', () => {
     expect(normalizeBuiltinDefinition(postgresRuleId, postgresDefinition).definition).toEqual(postgresDefinition)
     expect(normalizeBuiltinDefinition(postgresRuleId, { ...postgresDefinition, action: 'keep' }).definition?.action).toBe('keep')
-    expect(normalizeBuiltinDefinition(postgresRuleId, { ...postgresDefinition, conditions: [{ path: 'host', operator: 'contains', value: '*' }] }).error).toBeTruthy()
+    expect(normalizeBuiltinDefinition(postgresRuleId, { ...postgresDefinition, conditions: [{ path: 'host', operator: 'equals', value: 'other' }] }).definition?.conditions).toEqual([{ path: 'host', operator: 'equals', value: 'other' }])
+})
+
+test('saved selectors and timing policy govern fresh sessions and complete replays', async () => {
+    const policies = [
+        {...postgresDefinition,conditions:[{path:'host',operator:'equals',value:'other'}]},
+        {...postgresDefinition,conditions:[{path:'postgres_session.application',operator:'equals',value:'psql'}]},
+        {...postgresDefinition,parameters:{...postgresDefinition.parameters,maxDurationMs:1}},
+        {...postgresDefinition,parameters:{...postgresDefinition.parameters,maxAgeMs:1}},
+        {...postgresDefinition,parameters:{}},
+    ]
+    for(const definition of policies) {
+        const options={definition:postgresDefinition as any}, db=database(options), rows=fixture()
+        expect(await analyzePostgresBatch(rows,db.query)).toEqual([])
+        options.definition=definition
+        expect(await analyzePostgresBatch(rows,db.query)).toEqual(rows)
+        const fresh=fixture().map(row=>({...row,sourceEventId:postgresReceipt(row),message:row.message.replace('[123]','[456]')}))
+        expect(await analyzePostgresBatch(fresh,db.query)).toEqual(fresh)
+        expect(db.dropped).toBe(3)
+    }
+})
+
+test('host and application changes are policy decisions, with full original evidence retained', async () => {
+    const rows=fixture().map(row=>({...row,host:'other',message:row.message.replace('pg_isready','custom_probe')}))
+    expect(await analyzePostgresBatch(rows,database().query)).toEqual(rows)
+    const definition={...postgresDefinition,conditions:postgresDefinition.conditions.map(condition=>({...condition,value:condition.path==='host'?'other':condition.path==='postgres_session.application'?'custom_probe':condition.value}))}
+    const db=database({definition})
+    expect(await analyzePostgresBatch(rows,db.query)).toEqual([])
+    expect(db.summaries[0].application).toBe('custom_probe')
+    expect(db.summaries[0].lifecycle_records).toEqual(rows)
+})
+
+
+test('historical bursts obey saved cadence within and across batches', async () => {
+    const definition={...postgresDefinition,parameters:{...postgresDefinition.parameters,maxAgeMs:31536000000}}
+    const db=database({definition}), start=Date.now()-86400000
+    const first=fixture(start), second=fixture(start+500).map(row=>({...row,sourceEventId:postgresReceipt(row),message:row.message.replace('[123]','[456]')}))
+    expect(await analyzePostgresBatch([...first,...second],database({definition}).query)).toEqual([...first,...second])
+    expect(await analyzePostgresBatch(first,db.query)).toEqual([])
+    expect(await analyzePostgresBatch(second,db.query)).toEqual(second)
+    expect(await analyzePostgresBatch(first,db.query)).toEqual(first)
+    expect(db.dropped).toBe(3)
 })

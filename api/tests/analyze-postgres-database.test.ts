@@ -2,7 +2,7 @@ import { expect, mock, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import pg from 'pg'
 import { fixture } from './analyze-postgres.test.ts'
-import { postgresRuleId } from '../src/utils/mill/analyzePostgres.ts'
+import { postgresRuleId, postgresDefinition } from '../src/utils/mill/analyzePostgres.ts'
 
 // Opt-in disposable local cluster; this test never accepts a remote host/database.
 test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real transactions preserve evidence, retries, rollback and Keep', async () => {
@@ -64,7 +64,8 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real transactions preserve 
         expect((await query("SELECT count(*) FROM mill_findings WHERE rule_id='fixture.postgres-replay'")).rows[0].count).toBe('1')
         expect((await query('SELECT dropped_records,retained_sessions FROM log_postgres_session_state')).rows[0]).toEqual({ dropped_records: '3', retained_sessions: '1' })
         await transaction(tx => recordLogBatch(logs.slice(0, 1), tx as any))
-        expect((await query('SELECT count(*) FROM service_logs')).rows[0].count).toBe('1')
+        expect((await query('SELECT count(*) FROM service_logs')).rows[0].count).toBe('2')
+        await query('DELETE FROM service_logs WHERE source_event_id=$1', [logs[0].sourceEventId])
         await query('UPDATE log_postgres_session_state SET recent=\'[]\'')
         const next = fixture().map(row => ({ ...row, level: 'info' as const, sourceEventId: row.sourceEventId!.replace(/1/g, 'a').replace(/2/g, 'b').replace(/3/g, 'c'), message: row.message.replace('[123]', '[456]') }))
         await expect(transaction(async tx => { await recordLogBatch(next, tx as any); throw new Error('abort') })).rejects.toThrow('abort')
@@ -87,6 +88,20 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real transactions preserve 
         await transaction(tx => recordLogBatch(protectedLogs, tx as any))
         expect((await query('SELECT count(*) FROM service_logs WHERE source_event_id=ANY($1::text[])', [protectedLogs.map(log => log.sourceEventId)])).rows[0].count).toBe('3')
         expect((await query('SELECT count(*) FROM log_analyze_receipts')).rows[0].count).toBe('3')
+        await query("DELETE FROM mill_rules WHERE id='protect-pg'")
+        for (const definition of [
+            {...postgresDefinition,conditions:[{path:'host',operator:'equals',value:'other'}]},
+            {...postgresDefinition,conditions:[{path:'postgres_session.application',operator:'equals',value:'psql'}]},
+            {...postgresDefinition,parameters:{...postgresDefinition.parameters,maxDurationMs:1}},
+            {...postgresDefinition,parameters:{...postgresDefinition.parameters,maxAgeMs:1}},
+            {...postgresDefinition,parameters:{}},
+        ]) {
+            await query('UPDATE mill_rules SET definition=$2::jsonb WHERE rule_id=$1',[postgresRuleId,JSON.stringify(definition)])
+            await query('DELETE FROM service_logs WHERE source_event_id=ANY($1::text[])',[logs.map(log=>log.sourceEventId)])
+            await transaction(tx=>recordLogBatch(logs,tx as any))
+            expect((await query('SELECT count(*) FROM service_logs WHERE source_event_id=ANY($1::text[])',[logs.map(log=>log.sourceEventId)])).rows[0].count).toBe('3')
+            expect((await query('SELECT count(*) FROM log_analyze_receipts')).rows[0].count).toBe('3')
+        }
         await query("DELETE FROM service_logs WHERE service='postgres-session-analyzer'")
         const retainedEvent = (await query('SELECT * FROM mill_events WHERE id=$1', [event.id])).rows[0]
         expect(retainedEvent.normalized.metadata.lifecycle_records).toEqual(logs)

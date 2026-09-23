@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { completedPostgresSessions, postgresSessionEvidence, postgresReceipt, type PostgresLog } from '../src/utils/mill/analyzePostgres.ts'
+import { completedPostgresSessions, postgresSessionEvidence, postgresReceipt, postgresTimingAllowed, postgresDefinition, type PostgresLog } from '../src/utils/mill/analyzePostgres.ts'
 
 export function fixture(now = Date.now() - 1000): PostgresLog[] {
     return ['connection received: host=[local]', 'connection authorized: user=hanasand database=hanasand application_name=pg_isready',
@@ -29,7 +29,6 @@ test('fail closed for suspicious or unfamiliar fields at every level', () => {
         r => { r[0].metadata!.container_id = 'different' }, r => { r[0].timestamp = 'bad' },
         r => { r[0].message += '\nFATAL: suspicious' }, r => { r[0].message += ' extra' },
         r => { r[0].message = r[0].message.replace('[local]', '127.0.0.1 port=1000') },
-        r => { r[1].message = r[1].message.replace('pg_isready', 'psql') },
         r => { r[1].message = r[1].message.replace('database=hanasand', 'database=postgres') },
         r => { r[1].message = r[1].message.replace('user=hanasand', 'user=attacker') },
         r => { r[2].message = r[2].message.replace('00.005', '00.900') },
@@ -43,8 +42,8 @@ test('fail closed for suspicious or unfamiliar fields at every level', () => {
 test('retain incomplete batches, historic unverified traffic and PID reuse', () => {
     const rows = fixture()
     for (const part of [rows.slice(0, 1), rows.slice(1), [...rows, ...rows]]) expect(completedPostgresSessions(part)).toEqual([])
-    expect(completedPostgresSessions(fixture(Date.now() - 120_000))).toEqual([])
-    expect(completedPostgresSessions(fixture(Date.now() + 60_000))).toEqual([])
+    expect(postgresTimingAllowed(completedPostgresSessions(fixture(Date.now() - 120_000))[0], postgresDefinition.parameters)).toBe(false)
+    expect(postgresTimingAllowed(completedPostgresSessions(fixture(Date.now() + 60_000))[0], postgresDefinition.parameters)).toBe(false)
 })
 
 test('retry identity includes evidence, not just a claimed source ID', () => {
@@ -52,4 +51,15 @@ test('retry identity includes evidence, not just a claimed source ID', () => {
     expect(postgresReceipt(log)).toBe(postgresReceipt({ ...log, metadata: Object.fromEntries(Object.entries(log.metadata!).reverse()) }))
     expect(postgresReceipt(log)).not.toBe(postgresReceipt({ ...log, message: log.message + ' suspicious' }))
     expect(postgresReceipt(log)).not.toBe(postgresReceipt({ ...log, metadata: { ...log.metadata, detections: ['attack'] } }))
+})
+
+test('generic correlation isolates source identity and extracts evidence without retention selectors', () => {
+    const local=fixture(), other=fixture().map(row=>({...row,host:'other',service:'other-db',sourceEventId:postgresReceipt(row),message:row.message.replace('pg_isready','custom_probe')}))
+    const sessions=completedPostgresSessions([...local,...other])
+    expect(sessions).toHaveLength(2)
+    expect(new Set(sessions.map(session=>session.key)).size).toBe(2)
+    expect(sessions.find(session=>session.host==='other')?.application).toBe('custom_probe')
+    expect(completedPostgresSessions([local[0],other[1],local[2]])).toEqual([])
+    const network=fixture().map(row=>({...row,message:row.message.replace('[local]','192.0.2.1 port=12345')}))
+    expect(completedPostgresSessions(network)[0].client).toBe('192.0.2.1 port=12345')
 })
