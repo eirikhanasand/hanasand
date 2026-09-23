@@ -1,9 +1,10 @@
 import type { CollectorLog } from './analyzeCollector.ts'
 import { createHash } from 'node:crypto'
+import { deflateRawSync } from 'node:zlib'
 import run, { withTransaction } from '#db'
 import { normalizeLogEvent } from './logEvent.ts'
 import { customRetentionAction } from './customRetention.ts'
-import { readinessAuditRuleId, eligibleReadinessAudit } from './analyzeReadinessAudit.ts'
+import { readinessAuditRuleId, eligibleReadinessAudit, readinessRole } from './analyzeReadinessAudit.ts'
 
 export async function analyzeReadinessAudit(log: CollectorLog, query?: typeof run): Promise<boolean> {
     if (!eligibleReadinessAudit(log)) return false
@@ -20,12 +21,13 @@ export async function analyzeReadinessAudit(log: CollectorLog, query?: typeof ru
     if (customRetentionAction(original, rules) === 'keep'
         || collectMillEventFindings(rule.organization_id, log.sourceEventId!, normalizeMillEvent(original, { vendor: 'Hanasand', product: 'Logs' }), rules).findings.length) return false
     const proof = log.metadata!.readiness_execution as { fact: { execId: string }, eventDigest: string }
-    const saved = await query(`INSERT INTO log_readiness_audit_receipts(exec_id,source_event_id,event_digest,original)
-        VALUES($1,$2,$3,$4::jsonb) ON CONFLICT DO NOTHING RETURNING exec_id`,
-    [proof.fact.execId, log.sourceEventId, proof.eventDigest, JSON.stringify(log)])
+    const role = readinessRole(log)
+    const saved = await query(`INSERT INTO log_readiness_audit_receipts(exec_id,source_event_id,event_digest,original,role)
+        VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING RETURNING exec_id`,
+    [proof.fact.execId, log.sourceEventId, proof.eventDigest, deflateRawSync(JSON.stringify(log)), role])
     if (!saved.rows.length) {
-        const existing = await query('SELECT event_digest FROM log_readiness_audit_receipts WHERE exec_id=$1 AND source_event_id=$2',
-            [proof.fact.execId, log.sourceEventId])
+        const existing = await query('SELECT event_digest FROM log_readiness_audit_receipts WHERE exec_id=$1 AND source_event_id=$2 AND role=$3',
+            [proof.fact.execId, log.sourceEventId, role])
         if (existing.rows[0]?.event_digest !== proof.eventDigest) return false
     }
     // The compact receipt both counts the drop and deduplicates collector retries.

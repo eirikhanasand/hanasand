@@ -1,6 +1,6 @@
 import { createHash, generateKeyPairSync, sign } from 'node:crypto'
 import { expect, test } from 'bun:test'
-import { eligibleReadinessAudit, matchesReadinessFact, readinessArguments, readinessCanonical, readinessDigest, readinessAuditRule, type ReadinessExecutionProof } from '../src/utils/mill/analyzeReadinessAudit.ts'
+import { eligibleReadinessAudit, matchesReadinessFact, readinessArguments, readinessWrapperArguments, readinessCanonical, readinessDigest, readinessAuditRule, type ReadinessExecutionProof } from '../src/utils/mill/analyzeReadinessAudit.ts'
 import type { CollectorLog } from '../src/utils/mill/analyzeCollector.ts'
 
 export const keys = generateKeyPairSync('ed25519')
@@ -57,4 +57,17 @@ test('tampering, manual lookalikes, extra arguments and suspicious fields always
     expect(eligibleReadinessAudit(forged)).toBe(false)
     const changedFact=structuredClone(good); changedFact.metadata.readiness_execution.fact.execId='c'.repeat(64)
     expect(eligibleReadinessAudit(changedFact)).toBe(false)
+})
+
+test('exact nonce wrapper binds its own host PID; modified scripts and manual parents remain', () => {
+    configure(); const {log,fact}=fixture()
+    const args=readinessWrapperArguments(fact.nonce)
+    const command=args.map(value=>/^[\w@%+=:,./-]+$/.test(value)?value:"'"+value.replaceAll("'","'\"'\"'")+"'").join(' ')
+    log.message=command
+    log.metadata!.process={executable:'/usr/bin/dash',command_line:command,arguments:args,pid:String(fact.parentPid),parent_pid:'11000'}
+    expect(eligibleReadinessAudit(signed(log,fact))).toBe(true)
+    for(const changes of [{pid:'999'},{executable:'/tmp/dash'},{arguments:[...args,'payload']},{arguments:[args[0],args[1],args[2]+'; whoami',...args.slice(3)]}]) {
+        const changed=structuredClone(log);Object.assign(changed.metadata!.process as object,changes)
+        expect(eligibleReadinessAudit(signed(changed,fact))).toBe(false)
+    }
 })

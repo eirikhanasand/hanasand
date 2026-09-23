@@ -26,6 +26,9 @@ export const readinessDigest = (log: CollectorLog) => {
 }
 export function readinessAuditConfigured() { return /^[a-f0-9]{64}$/.test(process.env.READINESS_AUDIT_PROOF_PUBLIC_KEY || '') }
 export function readinessArguments(nonce: string) { return ['/usr/lib/postgresql/15/bin/pg_isready', '-U', 'hanasand', '-d', `dbname=hanasand application_name=pg_isready fallback_application_name=hanasand_probe_${nonce}`] }
+export const readinessWrapperScript = 'printf "hanasand-pg-ready-v1 nonce=%s pid=%s\\n" "$1" "$$"; /usr/lib/postgresql/15/bin/pg_isready -U hanasand -d "dbname=hanasand application_name=pg_isready fallback_application_name=hanasand_probe_$1"; exit $?'
+export function readinessWrapperArguments(nonce: string) { return ['/bin/sh', '-c', readinessWrapperScript, 'hanasand-readiness-v1', nonce] }
+export function readinessRole(log: CollectorLog): 'wrapper' | 'probe' { return object(log.metadata?.process).executable === '/usr/bin/dash' ? 'wrapper' : 'probe' }
 const quote = (value: string) => /^[\w@%+=:,./-]+$/.test(value) ? value : '\'' + value.replaceAll('\'', '\'"\'"\'') + '\''
 export function matchesReadinessFact(log: CollectorLog, fact: ReadinessExecutionProof): boolean {
     if (!exact(object(fact), ['version', 'host', 'containerId', 'execId', 'bootId', 'parentPid', 'parentStartTicks', 'namespacePid', 'nonce', 'startedAt', 'finishedAt', 'previousStartedAt'])
@@ -36,13 +39,14 @@ export function matchesReadinessFact(log: CollectorLog, fact: ReadinessExecution
     const meta = object(log.metadata), proc = object(meta.process), user = object(meta.user)
     const keys = ['collector', 'event_type', 'action', 'outcome', 'process', 'user', 'audit_id']
     if (Object.hasOwn(meta, 'readiness_execution')) keys.push('readiness_execution')
-    const args = readinessArguments(fact.nonce), command = args.map(quote).join(' ')
+    const role = readinessRole(log), args = role === 'probe' ? readinessArguments(fact.nonce) : readinessWrapperArguments(fact.nonce), command = args.map(quote).join(' ')
     if (!exact(meta, keys) || !exact(proc, ['executable', 'command_line', 'arguments', 'pid', 'parent_pid']) || !exact(user, ['id', 'login_id'])
         || meta.collector !== 'auditd' || meta.event_type !== 'process' || meta.action !== 'exec' || meta.outcome !== 'success'
         || user.id !== '0' || user.login_id !== '4294967295' || !/^[1-9]\d*$/.test(meta.audit_id)
-        || proc.executable !== args[0] || proc.command_line !== command || log.message !== command
+        || proc.executable !== (role === 'probe' ? args[0] : '/usr/bin/dash') || proc.command_line !== command || log.message !== command
         || JSON.stringify(proc.arguments) !== JSON.stringify(args) || typeof proc.pid !== 'string' || !/^[1-9]\d*$/.test(proc.pid)
-        || proc.parent_pid !== String(fact.parentPid)) return false
+        || typeof proc.parent_pid !== 'string' || !/^[1-9]\d*$/.test(proc.parent_pid)
+        || (role === 'probe' ? proc.parent_pid : proc.pid) !== String(fact.parentPid)) return false
     const time = Date.parse(log.timestamp || '')
     return Number.isFinite(time) && [fact.startedAt, fact.finishedAt, fact.previousStartedAt].every(Number.isSafeInteger)
         && fact.finishedAt >= fact.startedAt && fact.finishedAt - fact.startedAt <= 1000

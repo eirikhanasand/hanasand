@@ -1,7 +1,7 @@
 import { readFile, lstat } from 'node:fs/promises'
 import { createPrivateKey, sign } from 'node:crypto'
 import type { LogEvent } from './core'
-import { matchesReadinessFact, readinessCanonical, readinessDigest } from '../../api/src/utils/mill/analyzeReadinessAudit'
+import { matchesReadinessFact, readinessCanonical, readinessDigest, readinessRole } from '../../api/src/utils/mill/analyzeReadinessAudit'
 
 const trustedContext = new WeakSet<object>()
 export function markReadinessContext(event: LogEvent, attrs: Record<string, string>, rows: string[]) {
@@ -31,11 +31,14 @@ export function signReadinessEvent(event: LogEvent, fact: unknown, key: ReturnTy
 export async function* attestReadinessAudit(events: AsyncIterable<LogEvent>, root: string, host: string): AsyncGenerator<LogEvent> {
     const pending: LogEvent[] = []
     let overflow = false
+    const candidate = (event: LogEvent) => {
+        const args = (event.metadata?.process as any)?.arguments
+        return host === 'inspur' && Array.isArray(args) && (args[0] === '/usr/lib/postgresql/15/bin/pg_isready' || args[0] === '/bin/sh' && args[3] === 'hanasand-readiness-v1')
+    }
     try {
         for await (const event of events) {
-            const args = (event.metadata?.process as any)?.arguments
-            if (host === 'inspur' && Array.isArray(args) && args[0] === '/usr/lib/postgresql/15/bin/pg_isready' && pending.length < 1000) pending.push(event)
-            else { if (host === 'inspur' && Array.isArray(args) && args[0] === '/usr/lib/postgresql/15/bin/pg_isready') overflow = true; yield event }
+            if (candidate(event) && pending.length < 1000) pending.push(event)
+            else { if (candidate(event)) overflow = true; yield event }
         }
     } catch (error) {
         // Flush originals before surfacing source failure; never strand buffered evidence.
@@ -50,12 +53,12 @@ export async function* attestReadinessAudit(events: AsyncIterable<LogEvent>, roo
         if (key?.asymmetricKeyType !== 'ed25519') key = undefined
     } catch {}
     const counts = new Map<string, number>()
-    const nonceOf = (event: LogEvent) => String((event.metadata?.process as any)?.arguments?.[4] || '').match(/^dbname=hanasand application_name=pg_isready fallback_application_name=hanasand_probe_([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})$/)?.[1]
-    for (const event of pending) { const nonce = nonceOf(event); if (nonce) counts.set(nonce, (counts.get(nonce) || 0) + 1) }
+    const nonceOf = (event: LogEvent) => String((event.metadata?.process as any)?.arguments?.[4] || '').match(/^(?:dbname=hanasand application_name=pg_isready fallback_application_name=hanasand_probe_)?([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})$/)?.[1]
+    for (const event of pending) { const nonce = nonceOf(event); if (nonce) { const key = nonce + ':' + readinessRole(event); counts.set(key, (counts.get(key) || 0) + 1) } }
     for (const event of pending) {
         try {
             const nonce = nonceOf(event)
-            if (!overflow && trustedContext.has(event) && key && nonce && counts.get(nonce) === 1 && !event.metadata?.readiness_execution) {
+            if (!overflow && trustedContext.has(event) && key && nonce && (counts.get(nonce + ':probe') || 0) <= 1 && (counts.get(nonce + ':wrapper') || 0) <= 1 && !event.metadata?.readiness_execution) {
                 const directory = `${root}/readiness-facts`, dir = await lstat(directory), path = `${directory}/${nonce}.json`, info = await lstat(path)
                 if (dir.isDirectory() && dir.uid === 0 && !(dir.mode & 0o077) && info.isFile() && info.uid === 0 && !(info.mode & 0o077) && info.size < 4096) {
                     const fact = JSON.parse(await readFile(path, 'utf8'))

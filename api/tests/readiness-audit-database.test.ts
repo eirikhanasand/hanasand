@@ -2,8 +2,9 @@ import { expect, mock, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import pg from 'pg'
 import { fixture, signed, configure } from './analyze-readiness-audit.test.ts'
-import { readinessAuditRuleId, readinessAuditDefinition } from '../src/utils/mill/analyzeReadinessAudit.ts'
+import { readinessAuditRuleId, readinessAuditDefinition, readinessWrapperArguments } from '../src/utils/mill/analyzeReadinessAudit.ts'
 import { createHash } from 'node:crypto'
+import { inflateRawSync } from 'node:zlib'
 
 test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real readiness ingestion keeps suspicious evidence and respects Keep, Disable, replay and rollback', async () => {
     const port = Number(process.env.POSTGRES_FILTER_TEST_PORT)
@@ -56,6 +57,9 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real readiness ingestion ke
         expect(await count('service_logs')).toBe(0)
         expect(await count('log_analyze_receipts')).toBe(1)
         expect(await count('log_readiness_audit_receipts')).toBe(1)
+        const storedOriginal = (await query('SELECT original,original_encoding FROM log_readiness_audit_receipts')).rows[0]
+        expect(storedOriginal.original_encoding).toBe('deflate-json-v1')
+        expect(JSON.parse(inflateRawSync(storedOriginal.original).toString())).toEqual(good)
         const collision = entry()
         const proof = collision.metadata.readiness_execution
         proof.fact.execId = good.metadata.readiness_execution.fact.execId
@@ -97,6 +101,20 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real readiness ingestion ke
         await ingest(good)
         for (const log of [detected, good]) expect(Number((await query('SELECT count(*) n FROM service_logs WHERE source_event_id=$1', [log.sourceEventId])).rows[0].n)).toBe(1)
         expect(await count('log_analyze_receipts')).toBe(2)
+        await query("DELETE FROM mill_rules WHERE id='detect'")
+        const wrapper = structuredClone(good)
+        const fact = wrapper.metadata.readiness_execution.fact
+        const args = readinessWrapperArguments(fact.nonce)
+        const command = args.map(value => /^[\w@%+=:,./-]+$/.test(value) ? value : "'" + value.replaceAll("'", "'\"'\"'") + "'").join(' ')
+        wrapper.message = command
+        wrapper.metadata.audit_id = '999'
+        wrapper.metadata.process = { executable: '/usr/bin/dash', command_line: command, arguments: args, pid: String(fact.parentPid), parent_pid: '11000' }
+        wrapper.sourceEventId = createHash('sha256').update(`inspur:audit:msg=audit(${(Date.parse(wrapper.timestamp!) / 1000).toFixed(3)}:999)`).digest('hex')
+        const verifiedWrapper = signed(wrapper, fact) as typeof good
+        await Promise.all([ingest(verifiedWrapper), ingest(verifiedWrapper)])
+        expect(await count('log_readiness_audit_receipts')).toBe(3)
+        expect(await count('log_analyze_receipts')).toBe(3)
+        expect((await query('SELECT role FROM log_readiness_audit_receipts WHERE exec_id=$1 ORDER BY role', [fact.execId])).rows.map(row => row.role)).toEqual(['probe','wrapper'])
     } finally {
         await query(`DROP SCHEMA IF EXISTS ${namespace} CASCADE`)
         await pool.end()
