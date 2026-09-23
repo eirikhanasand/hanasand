@@ -12,6 +12,10 @@ test('ingestion drops with a receipt only when the platform rule is active', asy
         const statements: string[] = []
         const query: any = async (sql: string, params: unknown[]) => {
             statements.push(sql)
+            if (sql.includes("r.source='owned'")) {
+                expect(params[0]).toBeNull()
+                return { rows: [] }
+            }
             if (sql.includes('FROM mill_rules')) {
                 expect(params[1]).toBe(mongoRuleId)
                 expect(sql).toContain("r.enabled AND r.definition->>'stage'='analyze' AND r.definition->>'action'='drop'")
