@@ -6,15 +6,25 @@ case "$recovery_timeout" in ''|*[!0-9]*) printf 'Backup recovery timeout must be
 test "$recovery_timeout" -gt 0
 image=postgres@sha256:29342cb52157b098821961d2c14eec3c019071f56a5d559e990cf07cf541ea9b
 name=hanasand-resilience-restore-check-$(date -u +%Y%m%d%H%M%S)
-# This runs on Inspur. Leave 64 GiB beyond the check's maximum memory allowance.
+# Size the isolated restore from the manifest; the database has outgrown the
+# former fixed 96 GiB filesystem. Leave room for WAL replay and 64 GiB for the host.
+restore_gib=$(python3 - "$backup/backup_manifest" <<'SIZE'
+import json,math,sys
+with open(sys.argv[1]) as file: manifest=json.load(file)
+sizes=[int(entry['Size']) for entry in manifest['Files']]
+assert sizes and all(size>=0 for size in sizes)
+print(max(96,math.ceil(sum(sizes)*1.2/(1024**3))))
+SIZE
+)
+memory_gib=$((restore_gib + 32))
 available_kib=$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo)
-test "${available_kib:-0}" -ge 201326592 || { printf 'Backup verification needs 192 GiB of available memory.\n' >&2; exit 1; }
+test "${available_kib:-0}" -ge "$(((memory_gib + 64) * 1048576))" || { printf 'Backup verification needs %s GiB of available memory.\n' "$((memory_gib + 64))" >&2; exit 1; }
 cleanup() { docker rm -f "$name" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 # One container keeps the same temporary filesystem through extraction and replay.
 # Disk throttles on the shared filesystem can also delay live database writes.
-docker run --rm --name "$name" --network none --cpus 2 --memory 128g --memory-swap 128g \
- --tmpfs /verify:rw,noexec,nosuid,mode=0700,size=96g \
+docker run --rm --name "$name" --network none --cpus 2 --memory "${memory_gib}g" --memory-swap "${memory_gib}g" \
+ --tmpfs "/verify:rw,noexec,nosuid,mode=0700,size=${restore_gib}g" \
  -e BACKUP_VERIFY_RECOVERY_TIMEOUT_SECONDS="$recovery_timeout" \
  -v "$backup:/backup:ro" "$image" sh -ec '
  tar -xzf /backup/base.tar.gz -C /verify

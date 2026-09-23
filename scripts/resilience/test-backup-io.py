@@ -14,6 +14,7 @@ with tempfile.TemporaryDirectory() as directory:
         path.mkdir()
     for name in ('base.tar.gz', 'pg_wal.tar.gz', 'backup_manifest'):
         (backup / name).write_bytes(name.encode())
+    (backup / 'backup_manifest').write_text(json.dumps({'Files':[{'Size':80*1024**3}]}))
     log = root / 'commands.jsonl'
     mock = f'''#!{sys.executable}
 import json, os, pathlib, subprocess, sys
@@ -59,6 +60,16 @@ elif command == 'pg_ctl' and args[-1] == 'start':
     assert stages.index('pg_verifybackup') < stages.index('pg_ctl') < stages.index('psql')
     assert [call for call in calls if call[0] == 'pg_ctl'][-1][-1] == 'stop'
     assert json.loads((backup / 'verification.json').read_text())['restoreVerified'] is True
+
+    (backup / 'backup_manifest').write_text(json.dumps({'Files':[{'Size':200*1024**3}]}))
+    result, calls = run()
+    assert result.returncode == 0, result.stderr
+    args = next(args for command, *args in calls if command == 'docker' and args[0] == 'run')
+    assert args[args.index('--memory') + 1] == '272g'
+    assert args[args.index('--tmpfs') + 1].endswith('size=240g')
+    result, calls = run({'MOCK_MEMORY_KIB':str(300*1048576)})
+    assert result.returncode != 0
+    assert not any(call[0] == 'docker' for call in calls)
 
     for scenario in [*({'MOCK_FAIL_STAGE': stage} for stage in ('tar', 'pg_verifybackup', 'pg_ctl', 'psql')),
                      {'MOCK_RECOVERY_SECONDS': '480', 'BACKUP_VERIFY_RECOVERY_TIMEOUT_SECONDS': '300'}]:
