@@ -9,9 +9,9 @@ export const readinessAuditRule = {
     evidence: ['host audit process', 'Docker healthcheck execution', 'successful completion', 'normal probe cadence'],
 }
 export const readinessAuditDefinition = { match: 'all' as const, conditions: [
-    { path: 'host', operator: 'equals' as const, value: 'inspur' },
-    { path: 'service', operator: 'equals' as const, value: 'audit' },
-    { path: 'process.executable', operator: 'regex' as const, value: '^(?:/usr/bin/dash|/usr/lib/postgresql/15/bin/pg_isready)$' },
+    { path: 'host', operator: 'equals' as const, value: 'inspur', caseSensitive: true },
+    { path: 'service', operator: 'equals' as const, value: 'audit', caseSensitive: true },
+    { path: 'process.executable', operator: 'regex' as const, value: '^(?:/usr/bin/dash|/usr/lib/postgresql/15/bin/pg_isready)$', caseSensitive: true },
 ], stage: 'analyze' as const, action: 'drop' as 'drop' | 'keep', parameters: { maxDurationMs: 1000, minIntervalMs: 4000, maxIntervalMs: 15000 } }
 export function validReadinessAuditParameters(value: unknown): value is { maxDurationMs: number, minIntervalMs: number, maxIntervalMs: number } {
     const params = object(value)
