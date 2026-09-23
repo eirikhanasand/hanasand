@@ -36,6 +36,7 @@ test('transactional batch stores full evidence, records hits once and handles sp
     expect(db.dropped).toBe(3)
     expect(await analyzePostgresBatch(rows, db.query)).toEqual([])
     expect(await analyzePostgresBatch(rows.slice(0, 1), db.query)).toEqual([])
+    expect(await analyzePostgresBatch(rows.map(row => ({ ...row, metadata: Object.fromEntries(Object.entries(row.metadata!).reverse()) })), db.query)).toEqual([])
     expect(db.summaries).toHaveLength(1)
     expect(db.dropped).toBe(3)
     const changed = { ...rows[0], message: rows[0].message + ' suspicious' }

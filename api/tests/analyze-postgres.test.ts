@@ -49,6 +49,7 @@ test('retain incomplete batches, historic unverified traffic and PID reuse', () 
 
 test('retry identity includes evidence, not just a claimed source ID', () => {
     const log = fixture()[0]
+    expect(postgresReceipt(log)).toBe(postgresReceipt({ ...log, metadata: Object.fromEntries(Object.entries(log.metadata!).reverse()) }))
     expect(postgresReceipt(log)).not.toBe(postgresReceipt({ ...log, message: log.message + ' suspicious' }))
     expect(postgresReceipt(log)).not.toBe(postgresReceipt({ ...log, metadata: { ...log.metadata, detections: ['attack'] } }))
 })

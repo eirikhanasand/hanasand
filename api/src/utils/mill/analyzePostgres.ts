@@ -58,7 +58,8 @@ export function completedPostgresSessions(logs: PostgresLog[], now = Date.now())
 }
 
 export function postgresReceipt(log: PostgresLog) { return digest(JSON.stringify([postgresRuleId, log.sourceEventId,
-    log.service, log.host, log.level, log.message, log.timestamp, log.metadata])) }
+    log.service, log.host, log.level, log.message, log.timestamp,
+    log.metadata && Object.fromEntries(Object.entries(log.metadata).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0))])) }
 
 // A client can spoof application_name. Keeping the complete original records in
 // the canonical session is therefore mandatory, even for this narrow allowlist.
