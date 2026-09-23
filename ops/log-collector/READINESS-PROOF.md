@@ -1,25 +1,26 @@
-# PostgreSQL readiness audit candidate — keep disabled
+# PostgreSQL readiness audit: complete-chain proof
 
-The native observer and signed verifier are implemented, but this candidate does **not** meet the storage-reduction requirement. Do not enable the rule or install the wrapper as a storage optimization in its current form.
+One rule hit represents one complete scheduled healthcheck cycle: four original audit executions retained losslessly in one compressed signed receipt. No separate generic hit receipt is written. Incomplete, duplicate, altered, ambiguous, manual or failed chains remain indexed, as does any chain whose member matches a current detection or Keep rule.
 
-The observer joins a live Docker exec process, namespace PID, process start ticks and nonce to Docker's own successful health history. A root-only Ed25519 key signs the complete audit event and native fact. The API pins the public key, validates exact commands and event identity, and checks current detection and Keep rules before omitting an indexed log. Full signed originals remain in compressed receipts. Missing, failed, changed, ambiguous and manual executions stay visible. Delivery delay does not invalidate an otherwise valid event-relative proof.
+The native observer joins Docker's exact live root process, its parent and start ticks, a distinct direct wrapper child, namespace PID and nonce to Docker's own successful health history. A root-only Ed25519 key authenticates the native fact and all four original event digests. One signature is attached only to the root event, limiting overhead when a transport batch splits the group. Old version-1 facts cannot authorize a chain. Delayed delivery is checked against event time rather than current time.
 
-A live test on 2026-09-24 Oslo time confirmed a scheduled healthcheck produced a fact; an identical manual command produced none. Four of five sampled scheduled checks were observed successfully; the missed check remained unproven. This small sample is not a capture-rate guarantee.
+The four exact roles are the Docker command shell, wrapper entry, nonce-bearing wrapper shell and native PostgreSQL probe. Commands, host process relationships, root service context, successful completion, exact output, event identity and normal cadence are mandatory. Any failure keeps the evidence. The API checks every member before receipt deduplication, including replay under a newly configured detection.
 
-The old healthcheck produced three audit executions: its shell, Perl launcher and native PostgreSQL binary. The temporary wrapper produced four: the initial shell, wrapper entry, nonce-bearing shell and native binary. Only the last two satisfy the signed candidate. Initial shell/wrapper entries remain indexed.
+## Storage evidence
 
-## Measured storage rejection
+The initial two-event candidate was rejected: separate signed receipts increased service-log-only storage by approximately 98%. The final design stores the whole chain once and counts that dedicated receipt directly.
 
-A disposable PostgreSQL test replicated the real before/after parsed event shapes over 1,000 cycles, with unique source IDs, the repository's service-log indexes, unique proof receipts and generic match receipts. It included compressed originals using `deflate-json-v1` (raw DEFLATE JSON).
+Read-only production inspection confirmed the three baseline audit events have both service-log rows and processed Mill copies: 1,867 bytes plus 4,443 bytes per observed cycle, before indexes. The processing code persists these normalized copies; raw service rows expire only after seven days and completed processing.
 
-| Component | Bytes |
-| --- | ---: |
-| Baseline: 3 indexed logs/cycle | 2,686,976 |
-| Candidate: 2 indexed logs/cycle | 1,753,088 |
-| Candidate: 2 compressed proof receipts/cycle | 2,940,928 |
-| Candidate: 2 match receipts/cycle | 630,784 |
-| Candidate total | 5,324,800 |
+A disposable PostgreSQL benchmark replicated the real event shapes over 1,000 cycles with unique source IDs, compressed signed chain receipts, service-log indexes, normalized Mill copies and common Mill indexes. Search GIN and dimension overhead were excluded. All figures include retained missed captures and split batches.
 
-Total storage increased approximately **98%**, even assuming every cycle was proven. This is a local shape-based experiment, not a production disk measurement. Raw audit text savings or fewer indexed rows alone would be misleading. Historical logs without native proof do not qualify; their reingestion savings are zero.
+| Scenario | Total bytes | Reduction from baseline |
+| --- | ---: | ---: |
+| Baseline: three executions per cycle and processed copies | 9,207,808 | — |
+| Complete capture: one four-original receipt per cycle | 2,154,496 | 76.6% |
+| 80% captured; missed cycles remain fully indexed | 4,308,992 | 53.2% |
+| 76.8% complete; 20% missed and 3.2% split cycles retained | 4,800,512 | 47.9% |
 
-A future design would need a substantially smaller representation, likely one complete-chain receipt, and fresh native identity, retention, concurrency, replay and storage tests. The current rule remains disabled and the automatic Compose wrapper mount was removed.
+These are shape-based estimates, not reclaimed production disk space or a guaranteed capture rate. Historical logs without native proof do not qualify; their reingestion savings are zero. A complete signed group can be reingested safely with one receipt, while current detectors and Keep rules still take precedence. No historical deletion is part of this rollout.
+
+Originals use raw DEFLATE JSON with `original_encoding='deflate-json-v1'`; decompression returns the exact four-event array, including its root proof.
