@@ -1,6 +1,7 @@
 import { isDeepStrictEqual } from 'node:util'
 import { createHash } from 'node:crypto'
 import run, { withTransaction } from '#db'
+import { normalizeLogEvent } from './logEvent.ts'
 import { eligibleAccess, type AccessEvent } from './analyzeAccess.ts'
 
 export const proxyRuleId = 'proxy.redundant_connections.v1'
@@ -45,8 +46,12 @@ export async function analyzeProxy(log: ProxyLog, query?: typeof run): Promise<b
     const rule = (await query(`SELECT r.organization_id FROM mill_rules r JOIN organizations o ON o.id=r.organization_id
         WHERE o.status='active' AND (o.id=$1 OR ($1::text IS NULL AND lower(o.name)='hanasand'))
         AND r.rule_id=$2 AND r.enabled AND r.definition->>'stage'='analyze' AND r.definition->>'action'='drop'
-        ORDER BY o.created_at LIMIT 1`, [process.env.PLATFORM_LOG_ORGANIZATION_ID || null, proxyRuleId])).rows[0]
+        ORDER BY o.created_at LIMIT 1 FOR SHARE OF r,o`, [process.env.PLATFORM_LOG_ORGANIZATION_ID || null, proxyRuleId])).rows[0]
     if (!rule) return false
+    const { loadConfiguredMillRules, collectMillEventFindings, normalizeMillEvent } = await import('../../handlers/mill.ts')
+    const rules = await loadConfiguredMillRules(rule.organization_id, query)
+    const original = normalizeLogEvent({ ...log, id: log.sourceEventId!, created_at: log.timestamp! })
+    if (collectMillEventFindings(rule.organization_id, log.sourceEventId!, normalizeMillEvent(original, { vendor: 'Hanasand', product: 'Logs' }), rules).findings.length) return false
     const key = createHash('sha256').update(`${proxyRuleId}:${log.sourceEventId}`).digest('hex')
     // An exact replay may arrive after raw retention removed the proof row.
     const replay = (await query('SELECT original FROM log_proxy_receipts WHERE key=$1 AND organization_id=$2', [key, rule.organization_id])).rows[0]
