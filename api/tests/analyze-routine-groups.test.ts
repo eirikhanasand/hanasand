@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { completedTelemetryCycles, completedSshWindows, routineEvidence, routineReceipt, telemetryRuleId, type RoutineLog } from '../src/utils/mill/analyzeRoutineGroups.ts'
+import { completedTelemetryCycles, completedSshWindows, routineEvidence, routineReceipt, telemetryRuleId, sshWindowRuleId, telemetryDefinition, sshWindowDefinition, validateRoutineGroupParameters, type RoutineLog } from '../src/utils/mill/analyzeRoutineGroups.ts'
 
 export function telemetryFixture(now = Date.now()): RoutineLog[] {
     return ['Starting hanasand-host-metrics.service - Collect Hanasand host telemetry...', 'hanasand-host-metrics.service: Deactivated successfully.', 'Finished hanasand-host-metrics.service - Collect Hanasand host telemetry.'].map((message, i) => ({
@@ -63,4 +63,11 @@ test('receipts bind full evidence, not only source identity', () => {
     const log = telemetryFixture()[0]
     expect(routineReceipt(telemetryRuleId, log)).toBe(routineReceipt(telemetryRuleId, { ...log, metadata: Object.fromEntries(Object.entries(log.metadata!).reverse()) }))
     expect(routineReceipt(telemetryRuleId, log)).not.toBe(routineReceipt(telemetryRuleId, { ...log, message: log.message + ' injected' }))
+})
+test('saved timing controls cannot exceed safe validation bounds', () => {
+    expect(validateRoutineGroupParameters(telemetryRuleId, telemetryDefinition.parameters)).toBeNull()
+    expect(validateRoutineGroupParameters(sshWindowRuleId, sshWindowDefinition.parameters)).toBeNull()
+    for (const parameters of [{ maxDurationMs: 5001 }, { minimumGapMs: 899 }, { maxAgeMs: 60001 }, { maxPerMinute: 66 }, { maxPerMinute: '1' }, { ignoreFailures: true }]) {
+        expect(validateRoutineGroupParameters(telemetryRuleId, parameters)).toBeTruthy()
+    }
 })

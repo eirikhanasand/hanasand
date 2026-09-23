@@ -1,9 +1,34 @@
 import { createHash } from 'node:crypto'
 import ipaddr from 'ipaddr.js'
+import type { MillCondition } from './conditions.ts'
 
 export const telemetryRuleId = 'system.completed_telemetry_cycles.v1'
 export const sshWindowRuleId = 'ssh.completed_session_windows.v1'
 export const routineGroupDefinition = { match: 'all' as const, conditions: [], stage: 'analyze' as const, action: 'drop' as 'drop' | 'keep', parameters: {} }
+export const telemetryDefinition = { ...routineGroupDefinition, conditions: [
+    { path: 'host', operator: 'regex', value: '^(inspur|ovhcloud)$' },
+    { path: 'service', operator: 'equals', value: 'systemd' },
+    { path: 'metadata.unit', operator: 'equals', value: 'init.scope' },
+    { path: 'message', operator: 'regex', value: '^(?:(?:Starting|Finished) )?hanasand-(?:ovh-)?host-metrics\\.service(?: - |:)' },
+] as MillCondition[], parameters: { maxDurationMs: 5000, maxAgeMs: 60000, minimumGapMs: 900, maxPerMinute: 65 } }
+export const sshWindowDefinition = { ...routineGroupDefinition, conditions: [
+    { path: 'host', operator: 'regex', value: '^(inspur|ovhcloud)$' },
+    { path: 'service', operator: 'equals', value: 'sshd' },
+    { path: 'metadata.unit', operator: 'regex', value: '^(ssh|sshd)\\.service$' },
+] as MillCondition[], parameters: { maxDurationMs: 30000, maxAgeMs: 60000, minimumGapMs: 30000, maxPerMinute: 2 } }
+export function validateRoutineGroupParameters(ruleId: string, parameters: unknown): string | null {
+    if (![telemetryRuleId, sshWindowRuleId].includes(ruleId) || !parameters || typeof parameters !== 'object' || Array.isArray(parameters)) return 'Invalid routine group parameters.'
+    const telemetry = ruleId === telemetryRuleId
+    const bounds: Record<string, [number, number]> = { maxDurationMs: [1, telemetry ? 5000 : 30000], maxAgeMs: [1, 60000], minimumGapMs: [telemetry ? 900 : 30000, 60000], maxPerMinute: [1, telemetry ? 65 : 2] }
+    for (const [name, value] of Object.entries(parameters)) {
+        if (!bounds[name] || !Number.isSafeInteger(value) || value < bounds[name][0] || value > bounds[name][1]) return `Invalid ${name}.`
+    }
+    return null
+}
+export function routineGroupParameters(ruleId: string, parameters: unknown) {
+    if (validateRoutineGroupParameters(ruleId, parameters)) return null
+    return { ...(ruleId === telemetryRuleId ? telemetryDefinition : sshWindowDefinition).parameters, ...parameters as Partial<typeof telemetryDefinition.parameters> }
+}
 export const telemetryRule = {
     id: telemetryRuleId, version: '1', name: 'Completed host telemetry cycles', family: 'System', severity: 'low', enabled: false,
     explanation: 'Consolidate complete, short, normal-rate host telemetry cycles into one record containing every original event. Keep failures, unknown content, incomplete cycles and abnormal timing. No telemetry values are discarded.',
@@ -25,18 +50,19 @@ const keys = (v: Record<string, unknown>, allowed: string[]) => Object.keys(v).l
 function envelope(log: RoutineLog, service: string, now: number) {
     const m = object(log.metadata), u = object(m.user), time = Date.parse(log.timestamp || '')
     return Object.keys(log).every(k => ['service', 'host', 'level', 'message', 'metadata', 'sourceEventId', 'timestamp'].includes(k))
-        && ['inspur', 'ovhcloud'].includes(log.host || '') && log.service === service && /^[a-f0-9]{64}$/.test(log.sourceEventId || '')
+        && typeof log.host === 'string' && /^[a-zA-Z0-9._-]{1,253}$/.test(log.host) && log.service === service && /^[a-f0-9]{64}$/.test(log.sourceEventId || '')
         && keys(m, ['collector', 'pid', 'user', 'unit']) && m.collector === 'journal' && keys(u, ['id']) && u.id === '0'
         && typeof m.pid === 'string' && /^[1-9]\d*$/.test(m.pid)
         && Number.isFinite(time) && time >= now - 60_000 && time <= now + 5000
 }
-const descriptions: Record<string, string> = {
-    'hanasand-host-metrics.service': 'Collect Hanasand host telemetry',
-    'hanasand-ovh-host-metrics.service': 'Read OVH host telemetry through the existing private tunnel',
-}
 export function completedTelemetryCycles(entries: RoutineLog[], now = Date.now()): RoutineGroup[] {
     const groups: RoutineGroup[] = []
-    for (const host of ['inspur', 'ovhcloud']) for (const [unit, description] of Object.entries(descriptions)) {
+    const starts = new Map<string, { host: string, unit: string, description: string }>()
+    for (const log of entries) {
+        const match = /^Starting ([a-zA-Z0-9@_.-]{1,200}\.service) - ([^\r\n]{1,500})\.\.\.$/.exec(log.message)
+        if (log.host && match) starts.set(`${log.host}:${match[1]}:${match[2]}`, { host: log.host, unit: match[1], description: match[2] })
+    }
+    for (const { host, unit, description } of starts.values()) {
         // Unexpected records naming the unit invalidate its entire batch. Never
         // buffer unmatched starts outside the ordinary log/detection pipeline.
         const rows = entries.filter(l => l.host === host && l.message.includes(unit)).sort((a, b) => Date.parse(a.timestamp || '') - Date.parse(b.timestamp || ''))
@@ -66,7 +92,7 @@ export function completedSshWindows(entries: RoutineLog[], now = Date.now()): Ro
     const groups: RoutineGroup[] = []
     for (const [scope, input] of grouped) {
         const rows = [...input].sort((a, b) => Date.parse(a.timestamp || '') - Date.parse(b.timestamp || ''))
-        if (rows.length < 4 || rows.some(l => !envelope(l, 'sshd', now) || !['ssh.service', 'sshd.service'].includes(String(l.metadata!.unit)))
+        if (rows.length < 4 || rows.some(l => !envelope(l, 'sshd', now) || !/^[a-zA-Z0-9@_.-]{1,200}\.service$/.test(String(l.metadata!.unit)))
             || new Set(rows.map(l => l.sourceEventId)).size !== rows.length || new Set(rows.map(l => l.metadata!.unit)).size !== 1) continue
         const first = rows[0], last = rows.at(-1)!
         const accepted = /^Accepted publickey for ([a-z_][a-z0-9_-]{0,31}) from ([0-9a-fA-F:.]+) port (\d{1,5}) ssh2: (?:ED25519|RSA|ECDSA) SHA256:[A-Za-z0-9+/]{43}$/.exec(first.message)
