@@ -21,6 +21,15 @@ index_builds=subprocess.check_output(['docker','exec','hanasand_database','psql'
     '-c',"SELECT count(*) FROM pg_stat_progress_create_index WHERE datname=current_database()"],text=True).strip()
 if index_builds != '0':
     raise SystemExit('Wait for the database index build to finish before restarting the scheduled worker. The existing worker has been left running.')
+# A dump holds read locks for its full snapshot. Do not stop a healthy worker
+# only to leave its replacement waiting for schema locks until the dump ends.
+def database_value(sql):
+    return subprocess.check_output(['docker','exec','hanasand_database','psql','-X','-At','-v','ON_ERROR_STOP=1','-U','hanasand','-d','hanasand','-c',sql],text=True).strip()
+if database_value("SELECT count(*) FROM pg_stat_activity WHERE application_name='pg_dump' AND xact_start IS NOT NULL") != '0':
+    tracked = database_value("SELECT to_regclass('public.app_schema_releases') IS NOT NULL") == 't'
+    applied = tracked and database_value("SELECT EXISTS(SELECT 1 FROM app_schema_releases WHERE release='"+release+"')") == 't'
+    if not applied:
+        raise SystemExit('Wait for the database backup to finish before applying a new schema release. The existing worker has been left running.')
 original=json.loads(subprocess.check_output(['docker','inspect','hanasand_api']))[0]
 settings=dict(value.split('=',1) for value in original['Config']['Env'])
 settings.update(support_settings(worker=True))
