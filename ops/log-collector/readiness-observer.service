@@ -1,0 +1,20 @@
+[Unit]
+Description=Hanasand native PostgreSQL readiness identity observer
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/node /usr/local/lib/hanasand-log-collector/pg-readiness-observer.cjs
+Restart=always
+RestartSec=5
+User=root
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/hanasand-log-collector/readiness
+SyslogIdentifier=hanasand-readiness-observer
+
+[Install]
+WantedBy=multi-user.target
