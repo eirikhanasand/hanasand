@@ -63,6 +63,7 @@ const coreTasks: TestTask[] = [
     scriptTask('pwned-check', 'Pwned password dataset contract', 'smoke-pwned-check.ts'),
     scriptTask('db-overview', 'Database overview contract', 'smoke-db-overview.ts'),
     scriptTask('db-backups', 'Database backup and isolated restore contract', 'smoke-db-backups.ts'),
+    { ...scriptTask('backup-worker', 'Independent backup ownership and client restart', 'smoke-backup-worker.ts'), requires: 'database' },
     scriptTask('traffic-stream-scope', 'Traffic stream domain and cursor', 'check-traffic-stream-scope.ts'),
     scriptTask('traffic-query-cache', 'Traffic bounded cached queries', 'check-traffic-query-cache.ts'),
     scriptTask('traffic-live', 'Traffic live stream contract', 'smoke-traffic-live.ts'),
