@@ -236,6 +236,7 @@ try {
     savedReport = { ...report, providerConsoleEvents: [...report.providerConsoleEvents, multilineLog, unstructuredLog] }
     const savedPage = await browser.newPage()
     await savedPage.goto(new URL('/saved', server.url).toString())
+    assert.equal(await savedPage.getByRole('link', { name: 'Back to browser', exact: true }).getAttribute('href'), '/browser')
     await savedPage.locator('summary').filter({ hasText: /^Providers$/ }).click()
     await savedPage.getByText('console.log("saved decoded");', { exact: true }).waitFor()
     assert.equal(report.captures.find(capture => capture.deobfuscatedCode)?.deobfuscatedCode, 'console.log("saved decoded");')
@@ -263,7 +264,9 @@ try {
         await page.setViewportSize({ width: 390, height: 844 })
     }
     if (process.env.BROWSER_WORKSPACE_SCREENSHOT) await page.screenshot({ path: process.env.BROWSER_WORKSPACE_SCREENSHOT, fullPage: true })
-    await page.getByRole('button', { name: 'New sandbox run' }).click()
+    await page.getByRole('button', { name: 'Run another' }).click()
+    assert.equal(new URL(page.url()).pathname, '/browser')
+    assert(await page.getByRole('button', { name: 'History', exact: true }).isVisible(), 'Return shows the landing page')
     await page.getByRole('button', { name: 'Start', exact: true }).click()
     await loading.waitFor()
     const freshNavigation = page.waitForEvent('framenavigated', { predicate: frame => frame.url().includes('/stream/index.html') })
@@ -284,7 +287,7 @@ try {
     assert((await statusRow.innerText()).includes('Stopped · 60 FPS · 22ms'))
     assert.equal(await page.getByText('Connection and provider details', { exact: true }).count(), 0)
     assert.equal(await iframe.count(), 0, 'Stop removes the stream immediately without waiting for the server')
-    await page.getByRole('button', { name: 'New sandbox run' }).click()
+    await page.getByRole('button', { name: 'Run another' }).click()
     await page.getByRole('button', { name: 'Start', exact: true }).click()
     await loading.waitFor()
     await page.getByRole('button', { name: 'Cancel', exact: true }).click()
@@ -294,7 +297,7 @@ try {
     await page.evaluate(() => window.deliver({ type: 'ready' }))
     assert.equal(await loading.count(), 0, 'Late worker messages must not restart a cancelled run')
     assert(await page.evaluate(() => window.browserMessages.some(message => message.type === 'end')), 'Cancel must request worker teardown')
-    await page.getByRole('button', { name: 'New sandbox run' }).click()
+    await page.getByRole('button', { name: 'Run another' }).click()
     await page.getByRole('button', { name: 'Start', exact: true }).click()
     // Policy failures remain terminal; a lost worker is replaced automatically.
     await page.evaluate(() => window.deliver({ type: 'status', state: 'quota_exhausted', message: 'Browser run limit reached.' }))

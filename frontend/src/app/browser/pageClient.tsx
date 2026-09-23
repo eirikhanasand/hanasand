@@ -4,7 +4,7 @@ import BrowserDebug from './BrowserDebug'
 import BrowserHistory from './BrowserHistory'
 import BrowserReportPageClient from './report/pageClient'
 import { BrowserControlSocket } from './controlSocket'
-import { ArrowUp, Check, ChevronDown, Clipboard, Download, Globe2, LoaderCircle, PackageCheck, Play, Plus, RotateCcw, Share2, ShieldCheck, SlidersHorizontal, Square, Trash2 } from 'lucide-react'
+import { ArrowLeft, ArrowUp, Check, ChevronDown, Clipboard, Download, Globe2, LoaderCircle, PackageCheck, Play, Plus, Share2, ShieldCheck, SlidersHorizontal, Square, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -1061,6 +1061,10 @@ export default function BrowserPageClient({ initialData, resultId, resultRunId }
     }, [quickRun, runIsActive, stopRun, toolCaptures])
 
     const resetRun = useCallback(() => {
+        stoppedRunRef.current = true
+        if (runIsActive) socketRef.current?.send(JSON.stringify({ type: 'end' }))
+        window.history.replaceState(null, '', '/browser')
+        setShowStoredResult(false)
         if (replacementRef.current) clearTimeout(replacementRef.current)
         replacementRef.current = null
         socketRef.current?.close()
@@ -1077,7 +1081,7 @@ export default function BrowserPageClient({ initialData, resultId, resultRunId }
         setActiveUrl('')
         setCapacity(null)
         pushEvent('Sandbox reset.')
-    }, [pushEvent])
+    }, [pushEvent, runIsActive])
 
     const sendBrowserInput = useCallback((payload: Record<string, unknown>) => {
         const socket = socketRef.current
@@ -1418,8 +1422,9 @@ export default function BrowserPageClient({ initialData, resultId, resultRunId }
                                 <button type='button' onClick={() => scrollRouteFrameToTop('smooth')} className='grid h-9 w-9 place-items-center rounded-md border border-ui-border text-ui-text transition hover:border-ui-primary sm:hidden' aria-label='Back to top' title='Back to top'>
                                     <ArrowUp className='h-4 w-4' />
                                 </button>
-                                <button type='button' onClick={resetRun} className='grid h-9 w-9 place-items-center rounded-md border border-ui-border text-ui-text transition hover:border-ui-primary' aria-label='New sandbox run'>
-                                    <RotateCcw className='h-4 w-4' />
+                                <button type='button' onClick={resetRun} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
+                                    <ArrowLeft className='h-4 w-4' />
+                                    Run another
                                 </button>
                             </div>
                             {shareUrl ? <div role='region' aria-label='Share report' className='flex w-full min-w-0 flex-wrap items-center gap-2'>

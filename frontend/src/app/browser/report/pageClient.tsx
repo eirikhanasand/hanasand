@@ -105,7 +105,7 @@ export default function BrowserReportPageClient({ runId = '', token = '', result
             <section className='mx-auto grid max-w-6xl gap-4'>
                 <header className='rounded-lg border border-ui-border bg-ui-panel p-4'>
                     <div className='flex flex-wrap items-center justify-between gap-3'>
-                        <Link href='/browser' className='text-sm text-ui-primary'>Browser</Link>
+                        <Link href='/browser' className='rounded-md border border-ui-border px-3 py-2 text-sm font-semibold text-ui-text hover:border-ui-primary'>Back to browser</Link>
                         {onRerun && report.target ? <div className='flex flex-wrap gap-2'>{clientId ? <BrowserHistory clientId={clientId} inline /> : null}<button type='button' onClick={() => onRerun(report.target!, true)} className='rounded-md border border-ui-border px-3 py-2 text-sm font-semibold hover:border-ui-primary'>Quick run</button><button type='button' onClick={() => onRerun(report.target!)} className='rounded-md border border-ui-border px-3 py-2 text-sm font-semibold hover:border-ui-primary'>Run again</button></div> : null}
                     </div>
                     {report.runs && report.runs.length > 1 ? <label className='mt-3 flex flex-wrap items-center gap-2 text-sm'>Run<select aria-label='Saved run' className='rounded-md border border-ui-border bg-ui-canvas p-2' value={report.runId} onChange={event => setSelectedRun(event.target.value)}>{report.runs.map(run => <option key={run.id} value={run.id}>{new Date(run.startedAt).toLocaleString()} · {run.status}</option>)}</select></label> : null}
