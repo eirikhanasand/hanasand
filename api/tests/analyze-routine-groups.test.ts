@@ -61,5 +61,6 @@ test('telemetry failures, untrusted context, slow or unmatched cycles remain vis
 })
 test('receipts bind full evidence, not only source identity', () => {
     const log = telemetryFixture()[0]
+    expect(routineReceipt(telemetryRuleId, log)).toBe(routineReceipt(telemetryRuleId, { ...log, metadata: Object.fromEntries(Object.entries(log.metadata!).reverse()) }))
     expect(routineReceipt(telemetryRuleId, log)).not.toBe(routineReceipt(telemetryRuleId, { ...log, message: log.message + ' injected' }))
 })

@@ -17,6 +17,9 @@ export const sshWindowRule = {
 export type RoutineLog = { service?: string, host?: string, level: string, message: string, metadata?: Record<string, unknown>, sourceEventId?: string, timestamp?: string }
 export type RoutineGroup = { ruleId: string, key: string, scope: string, started: number, ended: number, logs: RoutineLog[], context: RoutineLog[] }
 const hash = (v: string) => createHash('sha256').update(v).digest('hex')
+const ordered = (value: unknown): unknown => Array.isArray(value) ? value.map(ordered) : value && typeof value === 'object'
+    ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, ordered(item)])) : value
+const fingerprint = (value: unknown) => hash(JSON.stringify(ordered(value)))
 const object = (v: unknown): Record<string, unknown> => v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {}
 const keys = (v: Record<string, unknown>, allowed: string[]) => Object.keys(v).length === allowed.length && allowed.every(k => Object.hasOwn(v, k))
 function envelope(log: RoutineLog, service: string, now: number) {
@@ -46,7 +49,7 @@ export function completedTelemetryCycles(entries: RoutineLog[], now = Date.now()
             if (cycle.some((l, n) => l.message !== messages[n])) continue
             const started = Date.parse(cycle[0].timestamp!), ended = Date.parse(cycle[2].timestamp!)
             if (ended - started < 0 || ended - started > 5000) continue
-            groups.push({ ruleId: telemetryRuleId, key: hash(JSON.stringify(cycle)), scope: `${host}:${unit}`, started, ended, logs: cycle, context: cycle })
+            groups.push({ ruleId: telemetryRuleId, key: fingerprint(cycle), scope: `${host}:${unit}`, started, ended, logs: cycle, context: cycle })
             i += 2
         }
     }
@@ -76,11 +79,11 @@ export function completedSshWindows(entries: RoutineLog[], now = Date.now()): Ro
             || [...l.message.matchAll(/\d+/g)].some(m => Number(m[0]) > 4294967295))) continue
         const started = Date.parse(first.timestamp!), ended = Date.parse(last.timestamp!)
         if (ended - started < 0 || ended - started > 30_000) continue
-        groups.push({ ruleId: sshWindowRuleId, key: hash(JSON.stringify(rows)), scope, started, ended, logs: windows, context: rows })
+        groups.push({ ruleId: sshWindowRuleId, key: fingerprint(rows), scope, started, ended, logs: windows, context: rows })
     }
     return groups
 }
-export function routineReceipt(ruleId: string, log: RoutineLog) { return hash(JSON.stringify([ruleId, log])) }
+export function routineReceipt(ruleId: string, log: RoutineLog) { return fingerprint([ruleId, log]) }
 export function routineEvidence(group: RoutineGroup) {
     return { collector: 'routine-group-analyzer', rule_id: group.ruleId, scope: group.scope,
         started_at: new Date(group.started).toISOString(), ended_at: new Date(group.ended).toISOString(),
