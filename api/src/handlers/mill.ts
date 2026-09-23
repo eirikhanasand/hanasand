@@ -10,7 +10,7 @@ import { telemetryRule, telemetryRuleId, sshWindowRule, sshWindowRuleId, telemet
 import { scanRulePreview, validPreviewWindow, PreviewRegexTimeout } from '#utils/mill/rulePreview.ts'
 import { collectorRule, collectorRuleId, collectorDefinition } from '#utils/mill/analyzeCollector.ts'
 import { proxyRule, proxyRuleId, proxyDefinition } from '#utils/mill/analyzeProxy.ts'
-import { postgresRule, postgresRuleId, postgresDefinition } from '#utils/mill/analyzePostgres.ts'
+import { postgresRule, postgresRuleId, postgresDefinition, validPostgresParameters } from '#utils/mill/analyzePostgres.ts'
 import { roleCanEditOrganization } from '#utils/organizationRoles.ts'
 import { redactLogValue } from '#utils/logs/redact.ts'
 import { securityRules, matchSecurityRules } from '#utils/mill/securityRules.ts'
@@ -102,7 +102,7 @@ export function normalizeBuiltinDefinition(id: string, value: unknown): { defini
         definition.protection = result.protection
     }
     if (defaults.stage) {
-        const configuredPolicy = [modelDiscoveryRuleId, readinessAuditRuleId, proxyRuleId, ingestionRuleId, telemetryRuleId, sshWindowRuleId, collectorRuleId, cdnRefreshRuleId].includes(id)
+        const configuredPolicy = [modelDiscoveryRuleId, readinessAuditRuleId, proxyRuleId, ingestionRuleId, telemetryRuleId, sshWindowRuleId, collectorRuleId, cdnRefreshRuleId, postgresRuleId].includes(id)
         if (input.stage !== 'analyze' || !['drop', 'keep'].includes(String(input.action)) || !Array.isArray(input.conditions) || (!configuredPolicy && input.conditions.length)) return { error: 'Choose Keep or Count and drop. The required safety checks cannot be removed.' }
         definition.action = input.action as 'drop' | 'keep'
     }
@@ -114,6 +114,11 @@ export function normalizeBuiltinDefinition(id: string, value: unknown): { defini
     }
     const parameters = object(input.parameters)
     if (!input.parameters || typeof input.parameters !== 'object' || Array.isArray(input.parameters) || Object.keys(parameters).some(key => !(key in defaults.parameters!))) return { error: 'Unsupported engine parameter.' }
+    if (id === postgresRuleId) {
+        if (!validPostgresParameters(parameters)) return { error: 'Invalid PostgreSQL session timing parameters.' }
+        definition.parameters = parameters
+        return { definition }
+    }
     if ([telemetryRuleId, sshWindowRuleId].includes(id)) {
         const error = validateRoutineGroupParameters(id, parameters)
         if (error) return { error }
