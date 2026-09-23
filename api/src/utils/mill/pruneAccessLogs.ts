@@ -7,7 +7,7 @@ import { platformAccessRule } from './analyzeLog.ts'
 import { customRetentionAction, loadLogRetentionRules } from './customRetention.ts'
 
 export function historicalAccess(log: LogInput): AccessEvent | null {
-    if (!['http-traffic', 'cdn', 'hanasand-api', 'api'].includes(log.service) || log.level !== 'info'
+    if (log.level !== 'info'
         || log.metadata?.organizationId || log.metadata?.tenantId) return null
     const event = normalizeLogEvent(log)
     if (event.process || Object.keys(event.user).length || event.event_type === 'authentication' || !event.http) return null
@@ -15,6 +15,7 @@ export function historicalAccess(log: LogInput): AccessEvent | null {
     const structuredAccess = (log.metadata?.structured as Record<string, unknown>)?.access as AccessEvent | undefined
     const agent = String(log.metadata?.user_agent || '')
     return { key: `stored:${log.id}`, ip: String(event.source.ip || ''), timestamp: event.timestamp,
+        service: log.service, originHost: /^hanasand-api-[1-4]$/.test(log.service) ? log.host || '' : 'native',
         path: String(event.http.path || ''), method: String(event.http.method || ''), status: Number(event.http.status_code),
         inspection: structuredAccess?.inspection,
         protected: Boolean(log.metadata?.signature || log.metadata?.detections || log.metadata?.body || log.metadata?.request_body || request.body)
@@ -25,13 +26,13 @@ export function historicalAccess(log: LogInput): AccessEvent | null {
 // Also used before detection by the catch-up worker. Only records predating the
 // installation are eligible, and complete boundary inspection is still required.
 export async function pruneAccessLogs(logs: LogInput[], organizationId: string, query?: typeof run): Promise<Set<string>> {
-    const candidates = logs.map(log => ({ log, access: historicalAccess(log) })).filter(item => item.access && eligibleAccess(item.access))
+    const candidates = logs.map(log => ({ log, access: historicalAccess(log) })).filter(item => item.access && eligibleAccess(item.access, { conditions: [] }))
     if (!candidates.length) return new Set()
     if (!query) return withTransaction(tx => pruneAccessLogs(logs, organizationId, tx))
     const rule = await platformAccessRule(query)
-    if (!rule?.enabled || rule.organization_id !== organizationId || rule.definition?.action !== 'drop' || rule.definition.stage !== 'analyze') return new Set()
+    if (!rule?.enabled || rule.organization_id !== organizationId || rule.definition?.action !== 'drop' || rule.definition.stage !== 'analyze' || !Array.isArray(rule.definition.conditions)) return new Set()
     const retention = await loadLogRetentionRules(organizationId, query)
-    const entries = candidates.filter(({ log, access }) => Date.parse(access!.timestamp) < new Date(rule.created_at || 0).getTime()
+    const entries = candidates.filter(({ log, access }) => eligibleAccess(access!, rule.definition!) && Date.parse(access!.timestamp) < new Date(rule.created_at || 0).getTime()
         && customRetentionAction(normalizeLogEvent(log), retention) !== 'keep')
         .map(({ log, access }) => ({ id: String(log.id), key: `service:${log.id}`, receipt: createHash('sha256').update(access!.key).digest('hex'),
             ip: ipaddr.process(access!.ip).toString(), timestamp: access!.timestamp }))

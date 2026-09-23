@@ -16,12 +16,10 @@ export async function platformAccessRule(query: typeof run = run) {
 // The caller's ingestion transaction covers counting, alert creation and the
 // drop decision. Failure rolls everything back and the collector retries.
 export async function analyzeAccess(event: AccessEvent, query?: typeof run, historical = false): Promise<boolean> {
-    if (!eligibleAccess(event)) return false
+    if (!eligibleAccess(event, { conditions: [] })) return false
     if (!query) return withTransaction(tx => analyzeAccess(event, tx, historical))
     const rule = await platformAccessRule(query)
-    if (!rule?.enabled || rule.definition?.stage !== 'analyze' || rule.definition.action !== 'drop') return false
-    // Additional selectors are intentionally unsupported for this conservative
-    // built-in: all safety checks above must always remain in force.
+    if (!rule?.enabled || rule.definition?.stage !== 'analyze' || rule.definition.action !== 'drop' || !Array.isArray(rule.definition.conditions) || !eligibleAccess(event, rule.definition)) return false
     const ip = ipaddr.process(event.ip).toString()
     const key = createHash('sha256').update(event.key).digest('hex')
     const receipt = await query(`INSERT INTO log_analyze_receipts(key,organization_id,rule_id,rule_version)
@@ -62,16 +60,16 @@ export async function analyzeAccess(event: AccessEvent, query?: typeof run, hist
 
 // Use the ingestion transaction so failed receipts are retried with the batch.
 export async function analyzeMongoPing(log: MongoLog, query?: typeof run): Promise<boolean> {
-    const inspected = eligibleMongoPing(log)
+    const inspected = eligibleMongoPing(log, { conditions: [] })
     if (!inspected) return false
     if (!query) return withTransaction(tx => analyzeMongoPing(log, tx))
-    const result = await query(`SELECT r.organization_id, r.version FROM mill_rules r
+    const result = await query(`SELECT r.organization_id, r.version, r.definition FROM mill_rules r
         JOIN organizations o ON o.id=r.organization_id
         WHERE o.status='active' AND (o.id=$1 OR ($1::text IS NULL AND lower(o.name)='hanasand'))
           AND r.rule_id=$2 AND r.enabled AND r.definition->>'stage'='analyze' AND r.definition->>'action'='drop'
         ORDER BY o.created_at LIMIT 1`, [process.env.PLATFORM_LOG_ORGANIZATION_ID || null, mongoRuleId])
     const rule = result.rows[0]
-    if (!rule) return false
+    if (!rule || !Array.isArray(rule.definition?.conditions) || !eligibleMongoPing(log, rule.definition)) return false
     const key = createHash('sha256').update(`${mongoRuleId}:${log.sourceEventId}`).digest('hex')
     const receipt = await query(`INSERT INTO log_analyze_receipts(key,organization_id,rule_id,rule_version)
         VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING key`, [key, rule.organization_id, mongoRuleId, rule.version])

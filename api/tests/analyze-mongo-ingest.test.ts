@@ -19,7 +19,7 @@ test('ingestion drops with a receipt only when the platform rule is active', asy
             if (sql.includes('FROM mill_rules')) {
                 expect(params[1]).toBe(mongoRuleId)
                 expect(sql).toContain("r.enabled AND r.definition->>'stage'='analyze' AND r.definition->>'action'='drop'")
-                return { rows: active ? [{ organization_id: 'platform', version: '1' }] : [] }
+                return { rows: active ? [{ organization_id: 'platform', version: '1', definition: mongoDefinition }] : [] }
             }
             return { rows: [], rowCount: 1 }
         }
@@ -31,15 +31,15 @@ test('ingestion drops with a receipt only when the platform rule is active', asy
 })
 test('receipt failures propagate so the collector cannot acknowledge a lost event', async () => {
     const query: any = async (sql: string) => {
-        if (sql.includes('FROM mill_rules')) return { rows: [{ organization_id: 'platform', version: '1' }] }
+        if (sql.includes('FROM mill_rules')) return { rows: [{ organization_id: 'platform', version: '1', definition: mongoDefinition }] }
         throw new Error('receipt unavailable')
     }
     await expect(recordLog(log, query)).rejects.toThrow('receipt unavailable')
 })
-test('rule supports Keep without editable safety selectors', () => {
+test('rule supports Keep and editable stored selectors', () => {
     expect(normalizeBuiltinDefinition(mongoRuleId, mongoDefinition).definition).toEqual(mongoDefinition)
     expect(normalizeBuiltinDefinition(mongoRuleId, { ...mongoDefinition, action: 'keep' }).definition?.action).toBe('keep')
-    expect(normalizeBuiltinDefinition(mongoRuleId, { ...mongoDefinition, conditions: [{ path: 'host', operator: 'contains', value: '*' }] }).error).toBeTruthy()
+    expect(normalizeBuiltinDefinition(mongoRuleId, { ...mongoDefinition, conditions: [{ path: 'host', operator: 'equals', value: 'other-host' }] }).definition?.conditions).toEqual([{ path: 'host', operator: 'equals', value: 'other-host' }])
 })
 
 test('retained enumeration reaches the real detection engine, unlike a ping', async () => {
@@ -57,7 +57,7 @@ test('replayed ping receipts do not inflate retained metadata counts', async () 
     const statements: string[] = []
     const query: any = async (sql: string) => {
         statements.push(sql)
-        return sql.includes('FROM mill_rules') ? { rows: [{ organization_id: 'platform', version: '1' }] } : { rows: [], rowCount: 0 }
+        return sql.includes('FROM mill_rules') ? { rows: [{ organization_id: 'platform', version: '1', definition: mongoDefinition }] } : { rows: [], rowCount: 0 }
     }
     await recordLog(log, query)
     expect(statements.some(sql => sql.includes('INSERT INTO log_mongo_ping_counts'))).toBe(false)

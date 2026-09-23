@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { eligibleMongoPing, mongoCommandFromLog, mongoReconDefinition } from '../src/utils/mill/analyzeMongo.ts'
+import { mongoDefinition, eligibleMongoPing, mongoCommandFromLog, mongoReconDefinition } from '../src/utils/mill/analyzeMongo.ts'
 import { normalizeLogEvent } from '../src/utils/mill/logEvent.ts'
 
 const log = { host: 'inspur/cashflow', service: 'mongodb', level: 'info', sourceEventId: 'mongo:123' }
@@ -38,4 +38,16 @@ test('ping metadata is narrowly validated and enumeration is normalized for rule
     expect(normalized.outcome).toBe('success')
     expect(normalized.mongo).toMatchObject({ database: 'admin', connection: 'conn123', clientIp: '127.0.0.1' })
     expect(new RegExp(mongoReconDefinition.conditions[1].value).test(normalized.action)).toBe(true)
+})
+
+test('stored Mongo selectors control host and command scope', () => {
+    const definition = structuredClone(mongoDefinition)
+    definition.conditions.find(condition => condition.path === 'host')!.value = 'other-host'
+    expect(eligibleMongoPing(make(), definition)).toBeNull()
+    expect(eligibleMongoPing(make({}, { host: 'other-host' }), definition)).not.toBeNull()
+    definition.conditions.find(condition => condition.path === 'command')!.value = 'hello'
+    definition.conditions.find(condition => condition.path === 'commandKeys')!.value = '^(?:hello|\\$db)(?:,(?:hello|\\$db))*$'
+    const other = make({ attr: { ...event.attr, command: { hello: 1, $db: 'admin' } } }, { host: 'other-host' })
+    expect(eligibleMongoPing(other, definition)).not.toBeNull()
+    expect(eligibleMongoPing({ ...other, level: 'error' }, definition)).toBeNull()
 })

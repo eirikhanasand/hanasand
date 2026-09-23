@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { eligibleAccess, inspectAccess, accessFromLog, type AccessEvent } from '../src/utils/mill/analyzeAccess.ts'
+import { accessDefinition, eligibleAccess, inspectAccess, accessFromLog, verifiedAccessFromLog, type AccessEvent } from '../src/utils/mill/analyzeAccess.ts'
 
 const event: AccessEvent = { key: 'http-api:test', ip: '192.0.2.1', path: '/public/file', method: 'GET', status: 200,
     timestamp: new Date().toISOString(), inspection: inspectAccess({ url: '/public/file', headers: { host: 'hanasand.com' } }) }
@@ -74,4 +74,17 @@ describe('Analyze access safety', () => {
         expect(accessFromLog({ ...log, metadata: { ...log.metadata, organizationId: 'customer' } })).toBeNull()
         expect(accessFromLog({ ...log, level: 'warn' })).toBeNull()
     })
+})
+
+test('stored HTTP criteria can select a different successful status or service', () => {
+    const definition = structuredClone(accessDefinition)
+    definition.conditions.find(condition => condition.path === 'status')!.value = '201'
+    expect(eligibleAccess(event, definition)).toBe(false)
+    expect(eligibleAccess({ ...event, status: 201 }, definition)).toBe(true)
+    const log = { service: 'custom-api', level: 'info', metadata: { structured: { msg: 'http_access', access: { ...event, status: 201 } } } }
+    expect(accessFromLog(log, definition)).toBeNull()
+    expect(verifiedAccessFromLog(log)).not.toBeNull()
+    definition.conditions.find(condition => condition.path === 'service')!.value = '^custom-api$'
+    expect(accessFromLog(log, definition)?.status).toBe(201)
+    expect(eligibleAccess({ ...event, status: 500 }, { conditions: [] })).toBe(false)
 })
