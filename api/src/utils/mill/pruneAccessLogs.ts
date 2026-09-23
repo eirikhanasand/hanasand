@@ -4,6 +4,7 @@ import run, { withTransaction } from '#db'
 import { normalizeLogEvent, type LogInput } from './logEvent.ts'
 import { eligibleAccess, inspectAccess, accessRuleId, type AccessEvent } from './analyzeAccess.ts'
 import { platformAccessRule } from './analyzeLog.ts'
+import { customRetentionAction, loadLogRetentionRules } from './customRetention.ts'
 
 export function historicalAccess(log: LogInput): AccessEvent | null {
     if (!['http-traffic', 'cdn', 'hanasand-api', 'api'].includes(log.service) || log.level !== 'info'
@@ -29,7 +30,9 @@ export async function pruneAccessLogs(logs: LogInput[], organizationId: string, 
     if (!query) return withTransaction(tx => pruneAccessLogs(logs, organizationId, tx))
     const rule = await platformAccessRule(query)
     if (!rule?.enabled || rule.organization_id !== organizationId || rule.definition?.action !== 'drop' || rule.definition.stage !== 'analyze') return new Set()
-    const entries = candidates.filter(({ access }) => Date.parse(access!.timestamp) < new Date(rule.created_at || 0).getTime())
+    const retention = await loadLogRetentionRules(organizationId, query)
+    const entries = candidates.filter(({ log, access }) => Date.parse(access!.timestamp) < new Date(rule.created_at || 0).getTime()
+        && customRetentionAction(normalizeLogEvent(log), retention) !== 'keep')
         .map(({ log, access }) => ({ id: String(log.id), key: `service:${log.id}`, receipt: createHash('sha256').update(access!.key).digest('hex'),
             ip: ipaddr.process(access!.ip).toString(), timestamp: access!.timestamp }))
     if (!entries.length) return new Set()
