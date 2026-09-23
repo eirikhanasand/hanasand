@@ -14,13 +14,15 @@ export async function analyzePostgresBatch<T extends PostgresLog>(entries: T[], 
         ORDER BY o.created_at LIMIT 1 FOR SHARE OF r,o`, [process.env.PLATFORM_LOG_ORGANIZATION_ID || null, postgresRuleId])
     const rule = result.rows[0]
     if (!rule) return entries
+    const retention = await loadLogRetentionRules(null, query)
+    const protectedKeys = new Set(postgres.filter(log => customRetentionAction(normalizeLogEvent({ ...log, service: log.service!,
+        id: log.sourceEventId || '', created_at: log.timestamp && Number.isFinite(Date.parse(log.timestamp)) ? log.timestamp : new Date() }), retention) === 'keep').map(postgresReceipt))
     const receipts = await query('SELECT key FROM log_analyze_receipts WHERE organization_id=$1 AND rule_id=$2 AND key=ANY($3::text[])',
         [rule.organization_id, postgresRuleId, postgres.map(postgresReceipt)])
-    const dropped = new Set<string>(receipts.rows.map(row => row.key))
+    const dropped = new Set<string>(receipts.rows.map(row => row.key).filter(key => !protectedKeys.has(key)))
     const fresh = entries.filter(log => !dropped.has(postgresReceipt(log)))
     const sessions = completedPostgresSessions(fresh)
     if (!sessions.length) return fresh
-    const retention = await loadLogRetentionRules(null, query)
     // Serialize only this small analyzer state, not general log ingestion.
     await query('INSERT INTO log_postgres_session_state(organization_id) VALUES($1) ON CONFLICT DO NOTHING', [rule.organization_id])
     const state = await query('SELECT recent FROM log_postgres_session_state WHERE organization_id=$1 FOR UPDATE', [rule.organization_id])
@@ -36,8 +38,7 @@ export async function analyzePostgresBatch<T extends PostgresLog>(entries: T[], 
         [rule.organization_id, JSON.stringify(window.slice(-64))])
     if (!normalRate) return fresh
     for (const session of sessions) {
-        if (session.logs.some(log => customRetentionAction(normalizeLogEvent({ ...log, service: log.service!,
-            id: log.sourceEventId!, created_at: log.timestamp! }), retention) === 'keep')) continue
+        if (session.logs.some(log => protectedKeys.has(postgresReceipt(log)))) continue
         // Another batch may have won while this transaction waited on the state.
         // Count only the receipts this transaction actually inserts.
         const keys = session.logs.map(postgresReceipt)

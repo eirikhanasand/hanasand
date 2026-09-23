@@ -42,6 +42,14 @@ test('transactional batch stores full evidence, records hits once and handles sp
     expect(await analyzePostgresBatch([changed], db.query)).toEqual([changed])
 })
 
+test('a newly added Store exception also wins over existing retry receipts', async () => {
+    const options = { customKeep: false }, db = database(options), rows = fixture()
+    expect(await analyzePostgresBatch(rows, db.query)).toEqual([])
+    options.customKeep = true
+    expect(await analyzePostgresBatch(rows, db.query)).toEqual(rows)
+    expect(db.dropped).toBe(3)
+})
+
 test('disabled, incomplete, previously retained and failed sessions are not removed', async () => {
     const rows = fixture()
     expect(await analyzePostgresBatch(rows, database({ enabled: false }).query)).toEqual(rows)
