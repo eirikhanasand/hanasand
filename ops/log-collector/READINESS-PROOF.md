@@ -21,6 +21,10 @@ A disposable PostgreSQL benchmark replicated the real event shapes over 1,000 cy
 | 80% captured; missed cycles remain fully indexed | 4,308,992 | 53.2% |
 | 76.8% complete; 20% missed and 3.2% split cycles retained | 4,800,512 | 47.9% |
 
+A subsequent twenty-check live sample under disk pressure captured 9 native facts (45%). Repeating the benchmark with the fresh v2 event/fact sample produced 8,175,616 bytes at 45% complete capture (11.2% lower than baseline), and 8,372,224 bytes at 43.2% after a 4% split allowance (9.1% lower). These conservative figures supersede the higher capture scenarios for planning until sustained live receipt rates are measured. Unproven checks are retained; capture rate is never improved by weakening proof.
+
+Host/service/executable selectors and duration/cadence limits are persisted in the visible Mill Analysis Rule definition. The native collector only authenticates evidence and never drops it. The API checks the saved conditions and parameters for the entire chain before every new receipt or replay; Disable and Keep remain authoritative.
+
 These are shape-based estimates, not reclaimed production disk space or a guaranteed capture rate. Historical logs without native proof do not qualify; their reingestion savings are zero. A complete signed group can be reingested safely with one receipt, while current detectors and Keep rules still take precedence. No historical deletion is part of this rollout.
 
 Originals use raw DEFLATE JSON with `original_encoding='deflate-json-v1'`; decompression returns the exact four-event array, including its root proof.

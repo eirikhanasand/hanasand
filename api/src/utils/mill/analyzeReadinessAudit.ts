@@ -8,7 +8,22 @@ export const readinessAuditRule = {
     explanation: 'Count one complete scheduled PostgreSQL healthcheck cycle and retain its four original audit events in one compressed signed receipt. Require native Docker success, exact live process identities and normal cadence; keep incomplete, manual, failed, changed or ambiguous chains and every detection or Keep match.',
     evidence: ['host audit process', 'Docker healthcheck execution', 'successful completion', 'normal probe cadence'],
 }
-export const readinessAuditDefinition = { match: 'all' as const, conditions: [], stage: 'analyze' as const, action: 'drop' as 'drop' | 'keep', parameters: {} }
+export const readinessAuditDefinition = { match: 'all' as const, conditions: [
+    { path: 'host', operator: 'equals' as const, value: 'inspur' },
+    { path: 'service', operator: 'equals' as const, value: 'audit' },
+    { path: 'process.executable', operator: 'regex' as const, value: '^(?:/usr/bin/dash|/usr/lib/postgresql/15/bin/pg_isready)$' },
+], stage: 'analyze' as const, action: 'drop' as 'drop' | 'keep', parameters: { maxDurationMs: 1000, minIntervalMs: 4000, maxIntervalMs: 15000 } }
+export function validReadinessAuditParameters(value: unknown): value is { maxDurationMs: number, minIntervalMs: number, maxIntervalMs: number } {
+    const params = object(value)
+    return exact(params, ['maxDurationMs', 'minIntervalMs', 'maxIntervalMs'])
+        && Number.isSafeInteger(params.maxDurationMs) && params.maxDurationMs >= 1 && params.maxDurationMs <= 60000
+        && Number.isSafeInteger(params.minIntervalMs) && params.minIntervalMs >= 1
+        && Number.isSafeInteger(params.maxIntervalMs) && params.maxIntervalMs >= params.minIntervalMs && params.maxIntervalMs <= 3600000
+}
+export function readinessTimingAllowed(fact: ReadinessExecutionProof, parameters: unknown) {
+    return validReadinessAuditParameters(parameters) && fact.finishedAt - fact.startedAt <= parameters.maxDurationMs
+        && fact.startedAt - fact.previousStartedAt >= parameters.minIntervalMs && fact.startedAt - fact.previousStartedAt <= parameters.maxIntervalMs
+}
 
 export type ReadinessExecutionProof = {
     version: 2, host: string, containerId: string, execId: string, bootId: string,
@@ -50,7 +65,7 @@ const quote = (value: string) => /^[\w@%+=:,./-]+$/.test(value) ? value : '\'' +
 export function matchesReadinessFact(log: CollectorLog, fact: ReadinessExecutionProof): boolean {
     if (!exact(object(fact), ['version', 'execPid', 'execParentPid', 'execStartTicks', 'host', 'containerId', 'execId', 'bootId', 'parentPid', 'parentStartTicks', 'namespacePid', 'nonce', 'startedAt', 'finishedAt', 'previousStartedAt'])
         || !exact(object(log), ['service', 'host', 'level', 'message', 'metadata', 'sourceEventId', 'timestamp'])
-        || fact.version !== 2 || fact.host !== 'inspur' || log.host !== fact.host || log.service !== 'audit' || log.level !== 'info'
+        || fact.version !== 2 || typeof fact.host !== 'string' || !fact.host || log.host !== fact.host || log.service !== 'audit' || log.level !== 'info'
         || !uuid.test(fact.nonce) || !uuid.test(fact.bootId) || !/^[a-f0-9]{64}$/.test(fact.containerId) || !/^[a-f0-9]{64}$/.test(fact.execId)
         || !/^[1-9]\d*$/.test(fact.parentStartTicks) || !/^[1-9]\d*$/.test(fact.execStartTicks)
         || fact.execPid === fact.parentPid || ![fact.parentPid, fact.namespacePid, fact.execPid, fact.execParentPid].every(n => Number.isSafeInteger(n) && n > 0)) return false
@@ -71,9 +86,8 @@ export function matchesReadinessFact(log: CollectorLog, fact: ReadinessExecution
                 : proc.pid !== String(fact.parentPid) || proc.parent_pid !== String(fact.execPid))) return false
     const time = Date.parse(log.timestamp || '')
     return Number.isFinite(time) && [fact.startedAt, fact.finishedAt, fact.previousStartedAt].every(Number.isSafeInteger)
-        && fact.finishedAt >= fact.startedAt && fact.finishedAt - fact.startedAt <= 1000
-        && time >= fact.startedAt && time <= fact.finishedAt && fact.startedAt - fact.previousStartedAt >= 4000
-        && fact.startedAt - fact.previousStartedAt <= 15000
+        && fact.finishedAt >= fact.startedAt
+        && time >= fact.startedAt && time <= fact.finishedAt && fact.previousStartedAt > 0 && fact.previousStartedAt < fact.startedAt
         && log.sourceEventId === createHash('sha256').update(`${log.host}:audit:msg=audit(${(time / 1000).toFixed(3)}:${meta.audit_id})`).digest('hex')
 }
 export type ReadinessChainPayload = { fact: ReadinessExecutionProof, members: { role: ReadinessRole, sourceEventId: string, eventDigest: string }[] }
