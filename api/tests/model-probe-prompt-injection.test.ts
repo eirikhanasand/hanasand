@@ -19,6 +19,7 @@ function resign(log: ModelProbeLog) {
 test('prompt content in discovery logs, metadata, queries or headers is never eligible for dropping', async () => {
     const mutations: Array<(log: ModelProbeLog) => void> = [
         log => { log.message += `\n${injection}` },
+        log => { log.message += ` ${injection}` },
         log => { log.metadata!.prompt = injection },
         log => { log.metadata!.request = { body: { messages: [{ role: 'system', content: injection }] } } },
         log => { log.metadata!.response = { body: { instructions: injection } } },
