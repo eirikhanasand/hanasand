@@ -21,7 +21,8 @@ export async function recordProxyRequest(req: FastifyRequest, res: FastifyReply)
     return withTransaction(async query => {
         const id = await recordLog({ service: 'hanasand-api', host: 'inspur', level: res.statusCode >= 400 ? 'error' : 'info',
             message: 'proxy_request_completed', sourceEventId: createHash('sha256').update(`proxy-request:${connection.id}:${req.id}`).digest('hex'), timestamp: access.timestamp,
-            metadata: { category: 'proxy_request', proxy: connection, access, path: redactLogText(req.url), method: req.method,
+            metadata: { category: 'proxy_request', proxy: connection, access,
+                producer: { hostname: process.env.HOSTNAME || 'unknown', pid: process.pid, release: process.env.HANASAND_RELEASE_COMMIT || 'unknown' }, path: redactLogText(req.url), method: req.method,
                 status_code: res.statusCode, source: { ip: access.ip }, request: { method: req.method, url: redactLogText(req.url),
                     ...(!access.inspection.headersSafe ? { headers: redactLogValue(headers) } : {}) } } }, query)
         if (!id) return false
