@@ -143,6 +143,7 @@ test('Drop locks Low; broad previews require confirmation and buffered scrolling
     await expect(create).toBeEnabled()
     const table = page.getByRole('region', { name: 'Matching event rows' })
     await expect(table.locator('[data-event-id]')).toHaveCount(8)
+    expect(await page.getByRole('checkbox', { name: 'Yes, I intend to match this many events.' }).evaluate(input => Boolean(document.querySelector('[aria-label="Matching event rows"]')!.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true)
     const first = await table.locator('[data-event-id]').evaluateAll(rows => rows.slice(0, 5).map(row => row.getAttribute('data-event-id')))
     expect(first).not.toEqual(['0', '1', '2', '3', '4'])
     const durations: number[] = []
@@ -156,6 +157,7 @@ test('Drop locks Low; broad previews require confirmation and buffered scrolling
     await expect(page.getByText(/Checking events…/)).toHaveCount(0)
     console.log('Buffered row update milliseconds:', durations)
     expect(await table.locator('[data-event-id]').count()).toBeLessThanOrEqual(8)
+    await page.getByRole('checkbox', { name: 'Yes, I intend to match this many events.' }).scrollIntoViewIfNeeded()
     await page.screenshot({ path: '/tmp/mill-preview-desktop.png' })
     await page.getByLabel('Preview range').selectOption('1')
     await expect(page.getByRole('checkbox', { name: 'Yes, I intend to match this many events.' })).not.toBeChecked()
@@ -163,6 +165,7 @@ test('Drop locks Low; broad previews require confirmation and buffered scrolling
     await page.setViewportSize({ width: 390, height: 844 })
     await table.scrollIntoViewIfNeeded()
     await expect(table.locator('[data-event-id]').first()).toBeVisible()
+    await page.getByRole('checkbox', { name: 'Yes, I intend to match this many events.' }).scrollIntoViewIfNeeded()
     await page.screenshot({ path: '/tmp/mill-preview-mobile.png' })
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })

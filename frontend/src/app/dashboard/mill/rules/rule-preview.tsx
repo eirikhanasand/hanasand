@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
+import { Check, CircleAlert } from 'lucide-react'
 import { requestJson } from './detection-rules'
 import type { Condition } from './condition-builder'
 
@@ -90,7 +91,6 @@ export default function RulePreview({ organizationId, conditions, action, range,
     const paths = [...new Set(conditions.map(condition => condition.path))]
     return <section className='grid min-w-0 gap-3' aria-label='Matching events preview'>
         <div className='flex flex-wrap items-center justify-between gap-2'><h3 className='font-semibold' aria-live='polite'>{complete ? '' : 'At least '}{new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(count)} matching events</h3><span className='text-xs text-ui-muted'>{complete ? `${count.toLocaleString()} matches · ${scanned.toLocaleString()} events checked` : `Checking events… ${scanned.toLocaleString()} checked`}</span></div>
-        {count > 10_000 && <div role='alert' className='grid gap-2 rounded-lg border border-amber-500/50 p-3 text-sm'><p>Very many events match this rule. Is this intended?</p><label className='flex items-center gap-2'><input type='checkbox' checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)} />Yes, I intend to match this many events.</label></div>}
         {!!events.length && <div role='region' aria-label='Matching event rows' tabIndex={0} style={{ overflowAnchor: 'none' }} className='h-[360px] overflow-auto rounded-lg border border-ui-border' onScroll={event => {
             browsing.current = true
             const began = performance.now(), element = event.currentTarget
@@ -108,5 +108,16 @@ export default function RulePreview({ organizationId, conditions, action, range,
         {loading && <p role='status' className='text-xs text-ui-muted'>Loading more matches…</p>}
         {complete && !events.length && <p className='text-sm text-ui-muted'>No matching events in this range.</p>}
         {error && <p role='alert' className='text-sm text-red-400'>{error}<button type='button' onClick={() => complete ? void prefetch() : setAttempt(attempt + 1)} className='ml-2 underline'>Retry</button></p>}
+        {count > 10_000 && <div className='mt-2 overflow-hidden rounded-xl border border-ui-border bg-ui-raised'>
+            <div className='flex items-start gap-3 p-4 sm:p-5'>
+                <span className='flex size-9 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-amber-500'><CircleAlert size={20} aria-hidden='true' /></span>
+                <div className='grid gap-1'><p className='text-sm font-semibold'>This rule matches {complete ? '' : 'at least '}{count.toLocaleString()} events</p><p className='text-sm text-ui-muted'>Very many events match this rule. Is this intended?</p></div>
+            </div>
+            <label className={`relative flex cursor-pointer items-center gap-3 border-t border-ui-border px-4 py-4 transition-colors sm:px-5 ${acknowledged ? 'bg-ui-primary/10' : 'hover:bg-ui-primary/5'}`}>
+                <input type='checkbox' className='peer absolute z-10 size-5 cursor-pointer opacity-0' checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)} />
+                <span aria-hidden='true' className={`flex size-5 shrink-0 items-center justify-center rounded-md border transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-ui-primary peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-ui-raised ${acknowledged ? 'border-ui-primary bg-ui-primary text-ui-canvas' : 'border-ui-muted bg-ui-canvas'}`}><Check size={14} strokeWidth={3} className={acknowledged ? 'opacity-100' : 'opacity-0'} /></span>
+                <span className='text-sm font-medium'>Yes, I intend to match this many events.</span>
+            </label>
+        </div>}
     </section>
 }
