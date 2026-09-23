@@ -31,6 +31,10 @@ export async function processRuleReprocessJob() {
             await query('SET LOCAL lock_timeout=\'1s\'')
             const lock = await query('SELECT pg_try_advisory_xact_lock(hashtextextended(\'mill:service-logs\',0)) AS locked')
             if (!lock.rows[0].locked) return false
+            // Live processing also reads raw rows before writing their projection.
+            // Hold both worker locks so a fresh batch cannot recreate deleted rows.
+            const liveLock = await query('SELECT pg_try_advisory_xact_lock(hashtextextended(\'mill:live-service-logs\',0)) AS locked')
+            if (!liveLock.rows[0].locked) return false
             const job = (await query(`SELECT * FROM mill_rule_reprocess_jobs WHERE status IN ('queued','running')
                 ORDER BY updated_at,id LIMIT 1 FOR UPDATE SKIP LOCKED`)).rows[0] as ReprocessJob | undefined
             if (!job) return false

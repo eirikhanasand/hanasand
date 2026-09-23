@@ -60,6 +60,13 @@ try {
     const first = await postMillRuleReprocess(request(body), reply() as any)
     const duplicate = await postMillRuleReprocess(request(body), reply() as any)
     assert.equal(first.job.id, duplicate.job.id, 'double click returns the same active run')
+    const liveWorker = await pool.connect()
+    try {
+        await liveWorker.query('BEGIN')
+        await liveWorker.query("SELECT pg_advisory_xact_lock(hashtextextended('mill:live-service-logs',0))")
+        assert.equal(await processRuleReprocessJob(), false, 'yield to live processing instead of racing its pending writes')
+        assert.equal((await query('SELECT status FROM mill_rule_reprocess_jobs WHERE id=$1', [first.job.id])).rows[0].status, 'queued')
+    } finally { await liveWorker.query('ROLLBACK'); liveWorker.release() }
     for (let i = 0; i < 10 && await processRuleReprocessJob(); i++) { /* bounded pages */ }
     const done = (await getMillRuleReprocess(request(), reply() as any)).jobs[0]
     assert.equal(done.status, 'completed'); assert.equal(done.removed_events, '2'); assert.equal(done.removed_sources, '2')
