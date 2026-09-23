@@ -1,0 +1,92 @@
+"""Check backup staging, publication order and cleanup without production mounts."""
+import json
+import os
+import pathlib
+import shlex
+import subprocess
+import sys
+import tempfile
+
+source = pathlib.Path(__file__).with_name('backup.sh').read_text()
+with tempfile.TemporaryDirectory() as directory:
+    base = pathlib.Path(directory)
+    binaries = base / 'bin'
+    binaries.mkdir()
+    mock = f'''#!{sys.executable}
+import json, os, pathlib, shutil, sys
+command, args = pathlib.Path(sys.argv[0]).name, sys.argv[1:]
+with open(os.environ['MOCK_LOG'], 'a') as log: log.write(json.dumps([command, *args]) + '\\n')
+failure = os.environ.get('MOCK_FAIL')
+if command == 'date': print('20260923T090000Z')
+elif command == 'df': print('Filesystem 1024-blocks Used Available Capacity Mounted\\nfixture 999999999 0 ' + os.environ.get('MOCK_DISK_KIB', '1000000') + ' 1% /')
+elif command == 'awk':
+    if args[-1] == '/proc/meminfo': print(os.environ.get('MOCK_MEMORY_KIB', '900000000'))
+    else: print(sys.stdin.read().splitlines()[1].split()[3])
+elif command == 'docker' and args[0] == 'run':
+    if '--entrypoint' in args and args[args.index('--entrypoint') + 1] == 'nsenter':
+        operation = args[args.index('--') + 1]
+        if failure == operation: sys.exit(47)
+        if operation == 'umount':
+            stage = pathlib.Path(args[-1])
+            shutil.rmtree(stage)
+            stage.mkdir()
+    elif 'pg_basebackup' in args:
+        stage = pathlib.Path(args[args.index('-v') + 1].split(':')[0]) / 'data'
+        stage.mkdir()
+        for name in ('base.tar.gz', 'pg_wal.tar.gz', 'backup_manifest'): (stage / name).write_text(name)
+        if failure == 'dump': sys.exit(47)
+    elif 'tar -cf -' in args[-1]:
+        if failure == 'upload': sys.exit(47)
+'''
+    for name in ('docker', 'flock', 'df', 'awk', 'date'):
+        command = binaries / name
+        command.write_text(mock)
+        command.chmod(0o755)
+
+    def check(name, extra=None):
+        root = base / name
+        root.mkdir()
+        backups = root / 'backups with spaces'
+        old = backups / '20260901T000000Z' / 'data'
+        old.mkdir(parents=True)
+        (old / 'verification.json').write_text('{}')
+        script = root / 'backup.sh'
+        script.write_text(source.replace('root=/home/hanasand/resilience', 'root=' + shlex.quote(str(root)), 1))
+        (root / 'verify-backup.sh').write_text('''#!/bin/sh
+printf '["verify"]\\n' >> "$MOCK_LOG"
+[ "${MOCK_FAIL:-}" != verify ] || exit 47
+printf '{}' > "$1/verification.json"
+''')
+        log = root / 'commands.jsonl'
+        environment = {**os.environ, 'PATH': str(binaries) + ':' + os.environ['PATH'],
+                       'HANASAND_BACKUP_DIR': str(backups), 'MOCK_LOG': str(log), **(extra or {})}
+        result = subprocess.run(['sh', str(script)], env=environment, capture_output=True, text=True)
+        calls = [json.loads(line) for line in log.read_text().splitlines()]
+        status = json.loads((root / 'backup-job-status.json').read_text())
+        return result, calls, status, old, backups / '20260923T090000Z'
+
+    result, calls, status, old, stage = check('memory')
+    assert result.returncode == 0, result.stderr
+    assert status['status'] == 'verified' and old.exists() and not stage.exists()
+    mount = next(call for call in calls if 'mount' in call)
+    assert 'size=128G,nosuid,nodev,noexec,mode=0700' in mount[mount.index('-o') + 1]
+    assert next(i for i, call in enumerate(calls) if 'pg_basebackup' in call) < calls.index(['verify'])
+    upload = next(i for i, call in enumerate(calls) if 'tar -cf -' in call[-1])
+    unmount = next(i for i, call in enumerate(calls) if 'umount' in call)
+    assert calls.index(['verify']) < upload < unmount
+
+    result, calls, status, old, stage = check('disk', {'MOCK_DISK_KIB': '200000000'})
+    assert result.returncode == 0 and status['status'] == 'verified'
+    assert not any('mount' in call for call in calls)
+    assert not old.exists() and (stage / 'data/verification.json').exists()
+
+    for failure in ('mount', 'dump', 'verify', 'upload', 'umount'):
+        result, calls, status, old, stage = check(failure, {'MOCK_FAIL': failure})
+        assert result.returncode != 0 and status['status'] == 'failed' and old.exists(), failure
+        if failure != 'mount': assert any('umount' in call for call in calls), failure
+        if failure in ('dump', 'verify'): assert not any('tar -cf -' in call[-1] for call in calls)
+    result, calls, status, old, stage = check('low-memory', {'MOCK_MEMORY_KIB': '200000000'})
+    assert result.returncode != 0 and status['status'] == 'failed' and old.exists()
+    assert not any(call[0] == 'docker' for call in calls)
+
+print('Bounded RAM staging, disk retention, publication order and failure cleanup passed.')
