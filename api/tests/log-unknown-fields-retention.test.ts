@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { expect, mock, test } from 'bun:test'
+import { collectorDefinition } from '../src/utils/mill/analyzeCollector.ts'
 
 mock.module('#constants', () => ({ default: {} }))
 mock.module('#db', () => ({ default: async () => { throw new Error('Unexpected database access') },
@@ -22,7 +23,7 @@ function database(customDrop = false) {
     const query: any = async (sql: string, params: any[] = []) => {
         if (sql.includes("r.source='owned'")) return { rows: customDrop ? [{ source: 'owned', enabled: true,
             definition: { stage: 'analyze', action: 'drop', conditions: [{ path: 'service', operator: 'equals', value: 'audit' }] } }] : [] }
-        if (sql.includes('FROM mill_rules')) return { rows: [{ organization_id: 'platform', version: '1', enabled: true }] }
+        if (sql.includes('FROM mill_rules')) return { rows: [{ organization_id: 'platform', version: '1', enabled: true, definition: collectorDefinition }] }
         if (sql.includes('INSERT INTO log_analyze_receipts')) { receipts++; return { rows: [], rowCount: 1 } }
         if (sql.includes('INSERT INTO service_logs')) { stored = sql.includes('WITH input AS') ? JSON.parse(params[0]) : [params]; return { rows: [], rowCount: stored.length } }
         throw new Error(`Unexpected query: ${sql}`)
