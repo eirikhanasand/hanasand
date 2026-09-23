@@ -1,6 +1,7 @@
 'use client'
 
 import BrowserDebug from './BrowserDebug'
+import BrowserReportPageClient from './report/pageClient'
 import { BrowserControlSocket } from './controlSocket'
 import { ArrowUp, Check, ChevronDown, Clipboard, Download, Globe2, LoaderCircle, PackageCheck, Play, Plus, RotateCcw, Share2, ShieldCheck, SlidersHorizontal, Square, Trash2 } from 'lucide-react'
 import Link from 'next/link'
@@ -529,11 +530,14 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
         URL.revokeObjectURL(url)
     }, [activeUrl, capacity, captures, consoleEvents, providerConsoleEvents, events, normalizedTarget, selectedProfile, sessionState, socketState, summary])
 
-    const saveReport = useCallback(async () => {
+    const saveReport = useCallback(async (automatic = false) => {
         if (!currentRunId || !captures.length) return
-        setShareStatus('saving')
-        setShareError('')
-        setShareUrl('')
+        const savedStatus = sessionState === 'ended' ? stoppedEarlyRef.current ? 'cancelled' : 'completed' : sessionState
+        if (!automatic) {
+            setShareStatus('saving')
+            setShareError('')
+            setShareUrl('')
+        }
         try {
             const response = await fetch(`${historyApiPath}/${encodeURIComponent(currentRunId)}/report`, {
                 method: 'POST',
@@ -560,8 +564,9 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
             if (!response.ok) throw new Error(payload.error || 'Could not save the report. Try again.')
             if (!payload.reportUrl) throw new Error('The report link was not returned. Try again.')
             const reportUrl = new URL(payload.reportUrl, window.location.origin).toString()
-            setShareUrl(reportUrl)
-            setHistory(current => persistHistory(current.map(run => run.id === currentRunId ? { ...run, reportUrl } : run)))
+            if (!automatic) setShareUrl(reportUrl)
+            setHistory(current => persistHistory(current.map(run => run.id === currentRunId ? { ...run, reportUrl, status: savedStatus } : run)))
+            if (automatic) return
             setShareStatus('saved')
             try {
                 if (navigator.clipboard) {
@@ -572,10 +577,17 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                 // The selectable link remains available when mobile clipboard access is denied.
             }
         } catch (error) {
+            if (automatic) return
             setShareStatus('failed')
             setShareError(error instanceof Error ? error.message : 'Could not save the report. Try again.')
         }
     }, [activeUrl, capacity, captures, consoleEvents, providerConsoleEvents, currentRunId, events, normalizedTarget, selectedProfile, sessionState, socketState, summary])
+
+    useEffect(() => {
+        if (sessionState !== 'ended' || !currentRunId || !captures.length) return
+        const timer = window.setTimeout(() => { void saveReport(true) }, 250)
+        return () => window.clearTimeout(timer)
+    }, [sessionState, currentRunId, captures.length, saveReport])
 
     useEffect(() => {
         let cancelled = false
@@ -681,6 +693,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
     const startRun = useCallback(function startRun(override?: { target?: string; network?: BrowserNetwork; recovery?: boolean }) {
         const url = normalizeTarget(override?.target ?? target)
         if (!url) return
+        setExpandedRun(null)
         if (replacementRef.current) clearTimeout(replacementRef.current)
         replacementRef.current = null
         if (!override?.recovery) {
@@ -1209,6 +1222,12 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
             : profile))
     }, [selectedProfile.id])
 
+    const openHistoryRun = (run: BrowserRunHistory) => {
+        const recent = history.find(item => normalizeTarget(item.target) === normalizeTarget(run.target) && isRecentBrowserRun(item))
+        if (recent) setExpandedRun(recent)
+        else startRun({ target: run.target })
+    }
+
     if (sessionState === 'prompt') {
         return (
             <main className='min-h-[calc(100vh-4.5rem)] bg-ui-canvas text-ui-text'>
@@ -1320,7 +1339,7 @@ export default function BrowserPageClient({ initialData }: { initialData: Browse
                                     />
                                 </div>
                             </details>
-                            <HistoryPanel history={history} quota={quota} onRerun={(run) => startRun({ target: run.target })} onExpand={setExpandedRun} embedded />
+                            <HistoryPanel history={history} quota={quota} onRerun={openHistoryRun} onExpand={openHistoryRun} embedded />
                         </form>
                     </div>
                 </section>
@@ -1761,23 +1780,21 @@ function HistoryPanel({ history, quota, onRerun, onExpand, embedded = false }: {
 function RunDetailModal({ run, onClose, onRerun }: { run: BrowserRunHistory; onClose: () => void; onRerun: (run: BrowserRunHistory) => void }) {
     return (
         <div className='fixed inset-0 z-50 grid place-items-center bg-black/55 p-4'>
-            <section className='w-full max-w-xl rounded-lg border border-ui-border bg-ui-panel p-4 shadow-xl'>
+            <section role='dialog' aria-label='Saved browser run' aria-modal='true' className='max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-lg border border-ui-border bg-ui-panel p-4 shadow-xl'>
                 <div className='flex items-start justify-between gap-3'>
                     <div className='min-w-0'>
                         <h2 className='text-base font-semibold text-ui-text'>Browser run</h2>
                         <p className='mt-1 break-all font-mono text-xs text-ui-muted'>{run.target}</p>
                     </div>
-                    <button type='button' onClick={onClose} className='rounded-md border border-ui-border px-2 py-1 text-xs font-semibold text-ui-text'>Close</button>
+                    <div className='flex shrink-0 gap-2'>
+                        <button type='button' onClick={() => onRerun(run)} className='inline-flex items-center gap-2 rounded-md border border-ui-border px-3 py-2 text-sm font-semibold text-ui-text hover:border-ui-primary'><RotateCcw className='h-4 w-4' />Run again</button>
+                        <button type='button' onClick={onClose} className='rounded-md border border-ui-border px-2 py-1 text-xs font-semibold text-ui-text'>Close</button>
+                    </div>
                 </div>
-                <div className='mt-3 grid gap-2 text-sm'>
+                {run.reportUrl ? <BrowserReportPageClient runId={run.id} token={new URL(run.reportUrl, 'https://hanasand.com').searchParams.get('token') || ''} /> : <div className='mt-3 grid gap-2 text-sm'>
                     <div className='flex justify-between gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2'><span className='text-ui-muted'>Started</span><span className='text-ui-text'>{new Date(run.startedAt).toLocaleString()}</span></div>
                     <div className='flex justify-between gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2'><span className='text-ui-muted'>Providers</span><ProviderRunBadges run={run} /></div>
-                    {run.reportUrl ? <a href={run.reportUrl} className='rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-ui-primary hover:border-ui-primary'>Open saved report</a> : null}
-                </div>
-                <button type='button' onClick={() => onRerun(run)} className='mt-4 inline-flex h-9 items-center gap-2 rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text hover:border-ui-primary'>
-                    <RotateCcw className='h-4 w-4' />
-                    Run again
-                </button>
+                </div>}
             </section>
         </div>
     )
@@ -3242,4 +3259,9 @@ function profileSyncLabel(state: 'local' | 'loading' | 'synced' | 'saving' | 'er
     if (state === 'synced') return 'Profiles synced to account.'
     if (state === 'error') return 'Account profile sync failed; local copy is preserved.'
     return 'Profiles saved locally on this browser.'
+}
+
+function isRecentBrowserRun(run: BrowserRunHistory, now = Date.now()) {
+    const age = now - Date.parse(run.startedAt)
+    return age >= 0 && age < 24 * 60 * 60 * 1000 && !['failed', 'cancelled', 'unreachable'].includes(run.status)
 }

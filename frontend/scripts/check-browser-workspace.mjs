@@ -266,6 +266,7 @@ try {
     await page.clock.setFixedTime(new Date(Date.now() + 30_000))
     await page.getByRole('button', { name: 'Stop', exact: true }).click()
     await page.getByText('Run done', { exact: true }).waitFor()
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('hanasand:browser:history:v1') || '[]').some(run => run.status === 'completed' && run.reportUrl), null, { timeout: 5000 })
     assert((await statusRow.innerText()).includes('Stopped · 60 FPS · 22ms'))
     assert.equal(await page.getByText('Connection and provider details', { exact: true }).count(), 0)
     assert.equal(await iframe.count(), 0, 'Stop removes the stream immediately without waiting for the server')
@@ -311,6 +312,31 @@ try {
     const screenshotList = page.locator('[data-screenshot-list]')
     assert.equal(await screenshotList.evaluate(el => getComputedStyle(el).maxHeight), 'none', 'Screenshots expand down the page without a nested scroll cap')
     assert.equal(await screenshotList.evaluate(el => el.scrollHeight <= el.clientHeight + 1), true, 'Every screenshot fits in the expanded list')
+    // Opening recent history must not allocate a sandbox. Only the summary action does.
+    const recentRun = { id: 'recent-run', target: 'https://example.com', network: 'regular', status: 'completed', startedAt: new Date().toISOString(), reportUrl: '/browser/report?run=recent-run&token=fixture' }
+    await page.evaluate(run => localStorage.setItem('hanasand:browser:history:v1', JSON.stringify([run])), recentRun)
+    await page.reload()
+    await page.getByRole('button', { name: 'https://example.com', exact: true }).click()
+    const savedDialog = page.getByRole('dialog', { name: 'Saved browser run' })
+    await savedDialog.getByRole('heading', { name: 'https://example.com', exact: true }).waitFor()
+    assert.equal(await page.evaluate(() => window.browserMessages.length), 0, 'Opening a recent entry does not connect to a worker')
+    await savedDialog.getByRole('button', { name: 'Close', exact: true }).click()
+    await page.getByRole('button', { name: 'Run again', exact: true }).click()
+    await savedDialog.waitFor()
+    assert.equal(await page.evaluate(() => window.browserMessages.length), 0, 'List Run again reuses recent evidence')
+    await savedDialog.getByRole('button', { name: 'Run again', exact: true }).click()
+    await loading.waitFor()
+    await page.waitForFunction(() => window.browserMessages.some(message => message.type === 'start'))
+    assert.equal(await savedDialog.count(), 0, 'Explicit rerun closes the saved summary')
+    // An expired result starts a fresh run; failed results must not become cache hits.
+    for (const run of [ { ...recentRun, startedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() }, { ...recentRun, status: 'failed' } ]) {
+        await page.evaluate(run => localStorage.setItem('hanasand:browser:history:v1', JSON.stringify([run])), run)
+        await page.reload()
+        await page.getByRole('button', { name: 'Run again', exact: true }).click()
+        await loading.waitFor()
+        await page.waitForFunction(() => window.browserMessages.some(message => message.type === 'start'))
+        assert.equal(await savedDialog.count(), 0)
+    }
     assert.deepEqual(errors, [])
     console.log('Browser workspace passed: loading until first frame, stream readiness, cancellation, launch errors, live input, stable stream, downloads, completion box and mobile width.')
 } finally { await browser.close(); server.stop(true) }
