@@ -116,8 +116,9 @@ def main():
         docker_api('POST', '/containers/' + name + '/rename?name=' + backup); renamed = True
         docker_api('POST', '/containers/create?name=' + name, config); created = True
         docker_api('POST', '/containers/' + name + '/start')
-        for _ in range(45):
-            time.sleep(2)
+        for _ in range(20):
+            # /health refreshes probes; faster polling would defeat the cadence guard.
+            time.sleep(6)
             try:
                 state = health()
                 if state.get('connected') and state.get('modelHealth', {}).get('ready') and state.get('modelProbeProof', {}).get('lastProofAt'):
