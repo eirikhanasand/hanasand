@@ -1,5 +1,5 @@
 import { mongoCommandFromLog } from './analyzeMongo.ts'
-export type LogInput = { id: string | number, service: string, host?: string, level: string, message: string, created_at: string | Date, metadata?: Record<string, unknown> }
+export type LogInput = { id: string | number, service: string, host?: string, level: string, message: string, created_at: string | Date, metadata?: Record<string, unknown>, source_event_id?: string }
 export const severityOrder = ['low', 'medium', 'high', 'critical'] as const
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 export function normalizeLogEvent(log: LogInput) {
@@ -19,6 +19,7 @@ export function normalizeLogEvent(log: LogInput) {
     const user = object(metadata.user || structured.user)
     const source = object(metadata.source || structured.source)
     return {
+        ...(['routine-group-analyzer', 'postgres-session-analyzer'].includes(log.service) && log.source_event_id ? { source_event_id: log.source_event_id } : {}),
         schema_version: 'logs.v1', timestamp: new Date(log.created_at).toISOString(),
         event_type: mongo ? 'database' : process ? 'process' : authentication ? 'authentication' : String(metadata.event_type || structured.event_type || 'application'),
         action: mongo ? mongo.name : process ? 'exec' : String(metadata.action || structured.action || (signin ? 'login' : 'log')),

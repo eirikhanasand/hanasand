@@ -10,7 +10,7 @@ const query = async (sql: string, params: any[] = []): Promise<any> => {
     if (sql.includes('INSERT INTO service_logs')) { writes.push(params); return { rows: [] } }
     throw new Error('Unexpected query')
 }
-mock.module('#db', () => ({ default: query }))
+mock.module('#db', () => ({ default: query, withTransaction: async (work: any) => work(query) }))
 mock.module('../src/utils/mill/analyzeLog.ts', () => ({ analyzeMongoPing: async () => false, analyzeAccess: async () => false }))
 const { default: recordLog, recordLogBatch } = await import('../src/utils/logs/recordLog.ts')
 const { customRetentionAction } = await import('../src/utils/mill/customRetention.ts')

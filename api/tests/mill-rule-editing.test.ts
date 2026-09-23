@@ -370,12 +370,3 @@ test('existing Drop rules expose Low while Store rules retain their configured s
     rows[0].definition.action = 'keep'
     expect((await getMillRule(request(created.rule.id), reply() as any)).rule.severity).toBe('critical')
 })
-
-test('existing Drop rules expose Low while Store rules retain their configured severity', async () => {
-    systemAdmin = true
-    const created = await postMillRule(request('', { name: 'Old drop rule', explanation: 'An older rule that dropped matching network events.', severity: 'high', stage: 'analyze', action: 'drop', conditions: [{ path: 'event_type', operator: 'equals', value: 'network' }] }), reply() as any)
-    rows[0].severity = 'critical'
-    expect((await getMillRule(request(created.rule.id), reply() as any)).rule.severity).toBe('low')
-    rows[0].definition.action = 'keep'
-    expect((await getMillRule(request(created.rule.id), reply() as any)).rule.severity).toBe('critical')
-})

@@ -1,5 +1,13 @@
+import { cdnRefreshRule, cdnRefreshRuleId, cdnRefreshDefinition } from '#utils/mill/analyzeCdnRefresh.ts'
+import { modelDiscoveryRule, modelDiscoveryRuleId, modelDiscoveryDefinition, modelDiscoveryUnavailableReason } from '#utils/mill/analyzeModelDiscovery.ts'
+import { readinessAuditRule, readinessAuditRuleId, readinessAuditDefinition, readinessAuditUnavailable } from '#utils/mill/analyzeReadinessAudit.ts'
+import { retainedOriginals } from '#utils/mill/retainedOriginals.ts'
+import { normalizeLogEvent } from '#utils/mill/logEvent.ts'
+import { telemetryRule, telemetryRuleId, sshWindowRule, sshWindowRuleId, routineGroupDefinition } from '#utils/mill/analyzeRoutineGroups.ts'
 import { scanRulePreview, validPreviewWindow, PreviewRegexTimeout } from '#utils/mill/rulePreview.ts'
+import { collectorRule, collectorRuleId, collectorDefinition } from '#utils/mill/analyzeCollector.ts'
 import { proxyRule, proxyRuleId, proxyDefinition } from '#utils/mill/analyzeProxy.ts'
+import { postgresRule, postgresRuleId, postgresDefinition } from '#utils/mill/analyzePostgres.ts'
 import { roleCanEditOrganization } from '#utils/organizationRoles.ts'
 import { redactLogValue } from '#utils/logs/redact.ts'
 import { securityRules, matchSecurityRules } from '#utils/mill/securityRules.ts'
@@ -24,6 +32,13 @@ type MillDefinition = { match: 'all', conditions: MillCondition[], failureCondit
 type MillRule = { id: string, detectionLogic?: string, recordId?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'owned' | 'open_source', sourceReference?: string, definition?: MillDefinition }
 
 export const MILL_RULES: MillRule[] = [
+    cdnRefreshRule,
+    modelDiscoveryRule,
+    readinessAuditRule,
+    telemetryRule,
+    sshWindowRule,
+    collectorRule,
+    postgresRule,
     accessRule,
     proxyRule,
     mongoRule,
@@ -40,6 +55,12 @@ export const MILL_RULES: MillRule[] = [
 // Stored IDs remain unchanged so existing findings and organization overrides retain their lineage.
 export function millRuleSlug(id: string) { return id.replace(/\.v\d+$/, '') }
 export function millDefaultDefinition(id: string): MillDefinition {
+    if (id === cdnRefreshRuleId) return structuredClone(cdnRefreshDefinition)
+    if (id === modelDiscoveryRuleId) return structuredClone(modelDiscoveryDefinition)
+    if (id === readinessAuditRuleId) return structuredClone(readinessAuditDefinition)
+    if ([telemetryRuleId, sshWindowRuleId].includes(id)) return structuredClone(routineGroupDefinition)
+    if (id === collectorRuleId) return structuredClone(collectorDefinition)
+    if (id === postgresRuleId) return structuredClone(postgresDefinition)
     if (id === proxyRuleId) return structuredClone(proxyDefinition)
     if (id === mongoRuleId) return structuredClone(mongoDefinition)
     if (id === accessRuleId) return structuredClone(accessDefinition)
@@ -54,8 +75,13 @@ function builtinDefinition(rule: MillRule, value?: unknown): MillDefinition {
     const stored = object(value)
     return { ...defaults, ...stored, parameters: { ...defaults.parameters, ...object(stored.parameters) } } as MillDefinition
 }
+export function unavailableAnalysisRule(id: string) {
+    return id === readinessAuditRuleId ? readinessAuditUnavailable : id === modelDiscoveryRuleId ? modelDiscoveryUnavailableReason : null
+}
+
 export function normalizeBuiltinDefinition(id: string, value: unknown): { definition?: MillDefinition, error?: string } {
     const input = object(value), defaults = millDefaultDefinition(id)
+    if (unavailableAnalysisRule(id) && input.action === 'drop') return { error: unavailableAnalysisRule(id)! }
     if (!value || typeof value !== 'object' || Array.isArray(value) || input.match !== 'all') return { error: 'Detection must use match: all.' }
     if (Object.keys(input).some(key => !['match', 'conditions', 'parameters', ...(defaults.stage ? ['stage', 'action'] : []), ...(defaults.failureConditions ? ['failureConditions'] : [])].includes(key))) return { error: 'Unsupported detection setting.' }
     const definition: MillDefinition = { ...defaults, parameters: { ...defaults.parameters } }
@@ -208,10 +234,13 @@ export async function getMillRules(req: FastifyRequest, res: FastifyReply) {
     const query = req.query as { organizationId?: string }
     if (query.organizationId !== access.organizationId) return res.status(403).send({ error: 'Organization access denied.' })
     const rules = await loadConfiguredMillRules(access.organizationId)
-    const counts = await run(`SELECT rule_id, count(*)::text AS hits FROM mill_findings WHERE organization_id=$1 AND rule_id NOT IN ($2,$3,$4) GROUP BY rule_id
+    const counts = await run(`SELECT rule_id, count(*)::text AS hits FROM mill_findings WHERE organization_id=$1 AND rule_id NOT IN ($2,$3,$4,$5) GROUP BY rule_id
         UNION ALL SELECT $2, COALESCE(sum(amount),0)::text FROM log_access_counts WHERE organization_id=$1
         UNION ALL SELECT $3, COALESCE(sum(amount),0)::text FROM log_mongo_ping_counts WHERE organization_id=$1
-        UNION ALL SELECT $4, COALESCE(sum(amount),0)::text FROM log_proxy_counts WHERE organization_id=$1`, [access.organizationId, accessRuleId, mongoRuleId, proxyRuleId])
+        UNION ALL SELECT $4, COALESCE(sum(dropped_records),0)::text FROM log_postgres_session_state WHERE organization_id=$1
+        UNION ALL SELECT $5, COALESCE(sum(amount),0)::text FROM log_proxy_counts WHERE organization_id=$1`, [access.organizationId, accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId])
+    const receiptCounts = await run('SELECT rule_id,count(*)::text AS hits FROM log_analyze_receipts WHERE organization_id=$1 AND rule_id=ANY($2::text[]) GROUP BY rule_id', [access.organizationId, [collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId]])
+    counts.rows.push(...receiptCounts.rows)
     const hits = new Map(counts.rows.map(row => [row.rule_id, Number(row.hits)]))
     return res.send({ organizationId: access.organizationId, rules: rules.map(rule => ({ ...rule,
         hitCount: rule.source === 'owned' && rule.definition?.stage === 'analyze' ? null : hits.get(rule.id) ?? 0,
@@ -307,7 +336,8 @@ export async function postMillRuleAction(req: FastifyRequest<{ Params: { id: str
     if (!action) return res.status(400).send({ error: 'Action must be enable or disable.' })
     const rule = (await loadConfiguredMillRules(access.organizationId)).find(rule => millRuleSlug(rule.id) === millRuleSlug(req.params.id) || rule.recordId === req.params.id)
     if (!rule) return res.status(404).send({ error: 'Rule not found.' })
-    if (([accessRuleId, mongoRuleId, proxyRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') && !(await hasRole(req, res, 'system_admin')).valid) return res.status(403).send({ error: 'System administrator access is required to change platform log retention.' })
+    if (([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') && !(await hasRole(req, res, 'system_admin')).valid) return res.status(403).send({ error: 'System administrator access is required to change platform log retention.' })
+    if (action === 'enable' && unavailableAnalysisRule(rule.id)) return res.status(409).send({ error: unavailableAnalysisRule(rule.id) })
     try {
         const saved = await saveMillRule(req, access, { ...rule, enabled: action === 'enable' }, 'mill.rule.updated', rule.version)
         return res.send({ rule: saved })
@@ -342,7 +372,7 @@ export async function getMillRule(req: FastifyRequest<{ Params: { id: string }, 
         ORDER BY created_at DESC, id DESC LIMIT 51 OFFSET $4`, [access.organizationId, rule.id, rule.recordId || rule.id, offset])
     const triggers = await run(`SELECT count(*)::text AS count FROM mill_findings
         WHERE organization_id = $1 AND rule_id = $2`, [access.organizationId, rule.id])
-    const canEdit = !isHistorical && canManageMillRules(access.role) && (!([accessRuleId, mongoRuleId, proxyRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') || (await hasRole(req, res, 'system_admin')).valid)
+    const canEdit = !isHistorical && canManageMillRules(access.role) && (!([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') || (await hasRole(req, res, 'system_admin')).valid)
     return res.send({ organizationId: access.organizationId, canEdit, isHistorical, currentVersion: rule.version, rule: displayedRule, triggerCount: Number(triggers.rows[0].count), audit: audit.rows.slice(0, 50), nextOffset: audit.rows.length > 50 ? offset + 50 : null })
 }
 
@@ -352,8 +382,9 @@ export async function putMillRule(req: FastifyRequest<{ Params: { id: string } }
     if (!canManageMillRules(access.role)) return res.status(403).send({ error: 'Editor access is required to manage rules.' })
     const rule = (await loadConfiguredMillRules(access.organizationId)).find(rule => millRuleSlug(rule.id) === millRuleSlug(req.params.id))
     if (!rule) return res.status(404).send({ error: 'Rule not found.' })
-    if (([accessRuleId, mongoRuleId, proxyRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') && !(await hasRole(req, res, 'system_admin')).valid) return res.status(403).send({ error: 'System administrator access is required to change platform log retention.' })
+    if (([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') && !(await hasRole(req, res, 'system_admin')).valid) return res.status(403).send({ error: 'System administrator access is required to change platform log retention.' })
     const body = (req.body || {}) as Record<string, unknown>
+    if (body.enabled === true && unavailableAnalysisRule(rule.id)) return res.status(409).send({ error: unavailableAnalysisRule(rule.id) })
     const name = typeof body.name === 'string' ? body.name.trim() : ''
     const explanation = typeof body.explanation === 'string' ? body.explanation.trim() : ''
     if (name.length < 2 || name.length > 120 || explanation.length < 10 || explanation.length > 500) return res.status(400).send({ error: 'Name must contain 2–120 characters and description 10–500 characters.' })
@@ -406,7 +437,7 @@ async function saveMillRule(req: FastifyRequest, access: { organizationId: strin
     })
 }
 
-async function organizationAccess(req: FastifyRequest, res: FastifyReply) {
+export async function organizationAccess(req: FastifyRequest, res: FastifyReply) {
     const { valid, id: userId } = await tokenWrapper(req, res)
     if (!valid || !userId) {
         res.status(401).send({ error: 'Unauthorized.' })
@@ -431,15 +462,15 @@ async function organizationAccess(req: FastifyRequest, res: FastifyReply) {
     return { organizationId, userId, role: result.rows[0].role as string }
 }
 
-export async function loadConfiguredMillRules(organizationId: string): Promise<MillRule[]> {
-    const result = await run(`
+export async function loadConfiguredMillRules(organizationId: string, query: typeof run = run): Promise<MillRule[]> {
+    const result = await query(`
         SELECT id, rule_id, version, name, family, severity, explanation, definition, source, source_reference, enabled
         FROM mill_rules
         WHERE organization_id = $1
         ORDER BY created_at ASC
     `, [organizationId])
     const overrides = new Map((result.rows as Array<Record<string, unknown>>).map(row => [String(row.rule_id), row]))
-    const builtIns = MILL_RULES.filter(rule => ![accessRuleId, mongoRuleId, proxyRuleId].includes(rule.id) || overrides.has(rule.id)).map(rule => {
+    const builtIns = MILL_RULES.filter(rule => ![accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || overrides.has(rule.id)).map(rule => {
         const override = overrides.get(rule.id)
         return { ...rule, definition: builtinDefinition(rule, override?.definition), detectionLogic: rule.explanation, ...(override ? { recordId: String(override.id), version: String(override.version), name: String(override.name), explanation: String(override.explanation), severity: String(override.severity) } : {}), enabled: override ? Boolean(override.enabled) : rule.enabled !== false, source: 'hanasand' as const }
     })
@@ -451,7 +482,7 @@ export async function loadConfiguredMillRules(organizationId: string): Promise<M
     return [...builtIns, ...custom].map(rule => rule.definition?.action === 'drop' ? { ...rule, severity: 'low' } : rule)
 }
 
-export function collectMillEventFindings(organizationId: string, eventId: string, event: NormalizedEvent, rules: MillRule[]) {
+export function collectMillEventFindings(organizationId: string, eventId: string, event: NormalizedEvent, rules: MillRule[], includeRetained = true) {
     const findings: Parameters<typeof persistFinding>[] = []
     const insertFinding = (org: string, id: string, severity: string, summary: string, eventIds: string[], evidence: MillEvent) => {
         const configured = rules.find(rule => rule.id === id)
@@ -476,6 +507,18 @@ export function collectMillEventFindings(organizationId: string, eventId: string
     const assetVersion = stringValue(asset.version || asset.software_version || event.normalized.asset_version || event.normalized.version)
     if (enabled.has('vulnerability.cve_asset_context.v1') && event.eventType === 'vulnerability' && cve && /^CVE-\d{4}-\d{4,}$/i.test(cve) && assetId && assetVersion) {
         insertFinding(organizationId, 'vulnerability.cve_asset_context.v1', 'high', `${cve} reported on ${assetId}`, [eventId], { cve, assetId, assetVersion, eventId })
+    }
+    // Both initial processing and manual replay must inspect original fields,
+    // not only the generic canonical summary. Expansion is one level only.
+    if (includeRetained) for (const original of retainedOriginals({ id: eventId, service: String(event.normalized.service || ''),
+        host: String(event.normalized.host || ''), level: String(event.normalized.level || ''), message: String(event.normalized.message || ''),
+        created_at: event.timestamp, metadata: object(event.normalized.metadata), source_event_id: String(event.normalized.source_event_id || '') })) {
+        const originalEvent = normalizeMillEvent(normalizeLogEvent(original), { vendor: 'Hanasand', product: 'Logs' })
+        for (const finding of collectMillEventFindings(organizationId, eventId, originalEvent, rules, false).findings) {
+            const existing = findings.find(item => item[1] === finding[1])
+            if (existing) existing[5].retainedOriginals = [...(existing[5].retainedOriginals as unknown[] || []), originalEvent.normalized]
+            else { finding[5].retainedOriginals = [originalEvent.normalized]; findings.push(finding) }
+        }
     }
     return { enabled, findings }
 }

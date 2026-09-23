@@ -1,5 +1,9 @@
+import { analyzeCdnRefresh } from '../mill/analyzeCdnRefreshLog.ts'
+import { analyzeRoutineGroupBatch } from '../mill/analyzeRoutineGroupBatch.ts'
+import { analyzeCollectorExecution } from '../mill/analyzeCollectorLog.ts'
 import { analyzeProxy } from '../mill/analyzeProxy.ts'
 import run from '#db'
+import { analyzePostgresBatch } from '../mill/analyzePostgresBatch.ts'
 import { customRetentionAction, loadLogRetentionRules } from '../mill/customRetention.ts'
 import { normalizeLogEvent } from '../mill/logEvent.ts'
 import { redactLogText, redactLogValue } from './redact.ts'
@@ -7,6 +11,17 @@ import { accessFromLog } from '../mill/analyzeAccess.ts'
 import { analyzeAccess, analyzeMongoPing } from '../mill/analyzeLog.ts'
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'fatal'
+
+function preserveUnrecognizedFields(entry: Parameters<typeof prepareLog>[0]) {
+    const fields = Object.fromEntries(Object.entries(entry).filter(([key]) => !['service', 'host', 'level', 'message', 'metadata', 'sourceEventId', 'timestamp'].includes(key)))
+    if (!Object.keys(fields).length) return entry
+    const metadata = entry.metadata && typeof entry.metadata === 'object' && !Array.isArray(entry.metadata) ? entry.metadata : {}
+    // Preserve extras before destructuring or batch correlation can erase them.
+    // Keep the original marker too if a caller already supplied one.
+    return { ...entry, metadata: { ...metadata, unrecognized_ingest_fields: {
+        fields, ...(Object.hasOwn(metadata, 'unrecognized_ingest_fields') ? { previous: metadata.unrecognized_ingest_fields } : {}),
+    } } }
+}
 
 function isOrganizationRequest(metadata: Record<string, unknown>) {
     if (metadata.surface === 'organizations') return true
@@ -43,18 +58,26 @@ async function prepareLog({
     timestamp?: string
 }, query: typeof run = run, retention = new Map<string, Awaited<ReturnType<typeof loadLogRetentionRules>>>()) {
     if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) metadata = {}
-    if (await analyzeMongoPing({ service, host, level, message, metadata, sourceEventId }, query === run ? undefined : query)) return
-    const access = accessFromLog({ service, host, level, message, metadata, sourceEventId, timestamp })
-    if (access && await analyzeAccess(access, query === run ? undefined : query)) return
-    message = redactLogText(message)
-    metadata = redactLogValue(metadata) as Record<string, unknown>
     const scopeId = typeof metadata.organizationId === 'string' && metadata.organizationId
         ? metadata.organizationId
         : typeof metadata.tenantId === 'string' && metadata.tenantId
             ? metadata.tenantId
             : null
     if (!retention.has(scopeId || '')) retention.set(scopeId || '', await loadLogRetentionRules(scopeId, query))
-    const retentionAction = customRetentionAction(normalizeLogEvent({ id: sourceEventId || '', service, host, level, message, metadata, created_at: timestamp || new Date() }), retention.get(scopeId || '')!)
+    const redactedMessage = redactLogText(message)
+    const redactedMetadata = redactLogValue(metadata) as Record<string, unknown>
+    const retentionAction = Object.hasOwn(metadata, 'unrecognized_ingest_fields') ? 'keep' : customRetentionAction(normalizeLogEvent({ id: sourceEventId || '', service, host, level,
+        message: redactedMessage, metadata: redactedMetadata, created_at: timestamp || new Date() }), retention.get(scopeId || '')!)
+    // Explicit Store exceptions must win before any built-in analyzer can drop.
+    if (retentionAction !== 'keep') {
+        if (await analyzeCdnRefresh({ service, host, level, message, metadata, sourceEventId, timestamp }, query === run ? undefined : query)) return
+        if (await analyzeCollectorExecution({ service, host, level, message, metadata, sourceEventId, timestamp }, query === run ? undefined : query)) return
+        if (await analyzeMongoPing({ service, host, level, message, metadata, sourceEventId }, query === run ? undefined : query)) return
+        const access = accessFromLog({ service, host, level, message, metadata, sourceEventId, timestamp })
+        if (access && await analyzeAccess(access, query === run ? undefined : query)) return
+    }
+    message = redactedMessage
+    metadata = redactedMetadata
     if (retentionAction === 'drop') return
     if (retentionAction !== 'keep' && await analyzeProxy({ service, host, level, message, metadata, sourceEventId, timestamp }, query === run ? undefined : query)) return
     if (!scopeId && isOrganizationRequest(metadata)) {
@@ -69,7 +92,7 @@ async function prepareLog({
 }
 
 export default async function recordLog(entry: Parameters<typeof prepareLog>[0], query: typeof run = run) {
-    const values = await prepareLog(entry, query)
+    const values = await prepareLog(preserveUnrecognizedFields(entry), query)
     if (!values) return
     const inserted = await query(`
         WITH organization_privacy AS MATERIALIZED (
@@ -109,7 +132,7 @@ export default async function recordLog(entry: Parameters<typeof prepareLog>[0],
 export async function recordLogBatch(entries: Parameters<typeof prepareLog>[0][], query: typeof run) {
     const rows = []
     const retention = new Map<string, Awaited<ReturnType<typeof loadLogRetentionRules>>>()
-    for (const entry of entries) {
+    for (const entry of await analyzeRoutineGroupBatch(await analyzePostgresBatch(entries.map(preserveUnrecognizedFields), query), query)) {
         const values = await prepareLog(entry, query, retention)
         if (values) rows.push(values)
     }
