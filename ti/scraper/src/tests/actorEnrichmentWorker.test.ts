@@ -96,6 +96,25 @@ test('retries malformed model output before recording a review', async () => {
   expect(runs.at(-1)).toMatchObject({ status: 'completed', newFacts: 0, reviewedCaptureIds: [capture.id] });
 });
 
+test('bare fact arrays mark empty evidence reviewed and allow the next grounded capture', async () => {
+  const runs: any[] = [], deltas: any[] = []; let calls = 0;
+  const second = { ...capture, id: 'capture-two' };
+  const store = { saveActorEnrichmentRun: (run: any) => runs.push(structuredClone(run)), listSources: () => [], getActorProfile: () => actor,
+    queryActorEnrichmentCaptures: async () => [capture, second], saveActorProfile() {}, saveEvidenceDelta: (delta: any) => deltas.push(delta) };
+  await enrichActor({ store, fetch: async () => Response.json({ message: ++calls === 1 ? '```json\n[]\n```' : JSON.stringify([fact]) }) }, actor);
+  expect(calls).toBe(2);
+  expect(runs.at(-1)).toMatchObject({ status: 'completed', newFacts: 1, reviewedCaptureIds: [capture.id, second.id] });
+  expect(deltas[0].captureIds).toEqual([second.id]);
+});
+
+test.each([null, { ...fact, quote: undefined }, { ...fact, value: 7 }])('bare arrays still reject malformed facts: %j', async invalid => {
+  const runs: any[] = [];
+  const store = { saveActorEnrichmentRun: (run: any) => runs.push(structuredClone(run)), listSources: () => [], getActorProfile: () => actor,
+    queryActorEnrichmentCaptures: async () => [capture], saveActorProfile() { throw Error('Invalid facts must not be saved'); } };
+  await enrichActor({ store, fetch: async () => Response.json({ message: JSON.stringify([invalid]) }) }, actor);
+  expect(runs.at(-1)).toMatchObject({ status: 'failed', reviewedCaptureIds: [], error: 'Hanasand AI returned an invalid facts response' });
+});
+
 test('retries a temporary HTTP model failure without losing pending evidence', async () => {
   const runs: any[] = []; let calls = 0;
   const store = { saveActorEnrichmentRun: (run: any) => runs.push(structuredClone(run)), listSources: () => [], getActorProfile: () => actor,

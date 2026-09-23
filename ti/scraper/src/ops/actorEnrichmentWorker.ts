@@ -107,7 +107,10 @@ export async function enrichActor(options: any, actor: any) {
           continue;
         }
         const content = body.message ?? body.choices?.[0]?.message?.content ?? '';
-        try { parsed = JSON.parse(String(content).replace(/^```(?:json)?\s*|\s*```$/g, '').trim()); } catch { parsed = undefined; }
+        try {
+          const answer = JSON.parse(String(content).replace(/^```(?:json)?\s*|\s*```$/g, '').trim());
+          parsed = Array.isArray(answer) ? { facts: answer } : answer;
+        } catch { parsed = undefined; }
         if (Array.isArray(parsed?.facts) && parsed.facts.every((fact: any) => fact && typeof fact.kind === 'string' && typeof fact.value === 'string' && typeof fact.quote === 'string')) break;
         if (attempt === 1) throw new Error('Hanasand AI returned an invalid facts response');
       }
