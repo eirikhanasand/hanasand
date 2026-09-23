@@ -13,7 +13,7 @@ UMask=0077
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/hanasand-log-collector/readiness
+ReadWritePaths=/var/lib/hanasand-log-collector/readiness-facts
 SyslogIdentifier=hanasand-readiness-observer
 
 [Install]
