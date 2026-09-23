@@ -43,3 +43,17 @@ test('missing native fact/key preserves candidate original unchanged',async()=>{
     const output=[];for await(const row of attestReadinessAudit(events(),'/nonexistent-readiness-test','inspur'))output.push(row)
     expect(output).toEqual([event])
 })
+test('real audit parser preserves provenance only for unambiguous service execution',async()=>{
+    const {parseAudit}=await import('../sources')
+    const {fact}=fixture(), args=readinessArguments(fact.nonce)
+    const identity='msg=audit(1790208000.100:42)'
+    const syscall=`type=SYSCALL ${identity} ${Object.entries(attrs).map(([k,v])=>`${k}=${v}`).join(' ')} pid=12345 ppid=12000 exe="${args[0]}"`
+    const exec=`type=EXECVE ${identity} argc=5 ${args.map((arg,i)=>`a${i}=${Buffer.from(arg).toString('hex')}`).join(' ')}`
+    const good=parseAudit(syscall+'\n'+exec,{host:'inspur'})[0]!
+    expect(signReadinessEvent(good,fact,keys.privateKey)).toBeDefined()
+    for(const text of [syscall.replace('euid=0','euid=1000')+'\n'+exec,syscall+'\n'+exec+'\n'+exec,
+        syscall+'\n'+exec.replace('argc=5','argc=6'),syscall.replace('tty=(none)','tty=pts1')+'\n'+exec]) {
+        const log=parseAudit(text,{host:'inspur'})[0]!
+        expect(signReadinessEvent(log,fact,keys.privateKey)).toBeUndefined()
+    }
+})

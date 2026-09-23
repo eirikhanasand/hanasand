@@ -5,7 +5,7 @@ export const readinessAuditRuleId = 'postgresql.readiness_audit.v1'
 export const readinessAuditUnavailable = 'A pinned host signing key and native Docker process-bound completion proof are required.'
 export const readinessAuditRule = {
     id: readinessAuditRuleId, version: '1', name: 'Verified PostgreSQL readiness executions', family: 'System', severity: 'low', enabled: false,
-    explanation: `Disabled: ${readinessAuditUnavailable}`,
+    explanation: 'Retain a signed original receipt and omit the indexed log only for a successful scheduled PostgreSQL readiness execution bound to native Docker history, a live host process and normal cadence. Keep manual, failed, altered, ambiguous or unproven executions and any current detection or Keep match.',
     evidence: ['host audit process', 'Docker healthcheck execution', 'successful completion', 'normal probe cadence'],
 }
 export const readinessAuditDefinition = { match: 'all' as const, conditions: [], stage: 'analyze' as const, action: 'drop' as 'drop' | 'keep', parameters: {} }
