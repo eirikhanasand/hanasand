@@ -1,4 +1,5 @@
 import { fs, join, dirname, basename, Store, Commands, Config, LogEvent, Metadata, event, scrub, scrubArguments, iso, seconds, sha, MAX_RECORD_BYTES, BATCH_BYTES, CollectionError, CommandError, TimeoutError, collectionError } from './core';
+import { executionReceipts, matchingExecution, type ExecutionLookup } from './executions';
 
 const trimEnding = (text: string) => text.replace(/\n$/, '').replace(/\r$/, '');
 export const shellQuote = (value: string) => value === '' ? "''" : /^[\w@%+=:,./-]+$/.test(value) ? value : "'" + value.replaceAll("'", "'\"'\"'") + "'";
@@ -6,7 +7,7 @@ export function auditArg(value: string): string {
   if (value.startsWith('"')) return value.slice(1, -1);
   return /^(?:[0-9a-f]{2})+$/i.test(value) ? Buffer.from(value, 'hex').toString('utf8') : value;
 }
-export function parseAudit(text: string, config: Config): LogEvent[] {
+export function parseAudit(text: string, config: Config, receipts: ExecutionLookup = []): LogEvent[] {
   const groups = new Map<string, string[]>(), events: LogEvent[] = [];
   for (const line of text.split(/\r?\n/)) {
     const row = line.split('\x1d', 1)[0]; if (!/^type=(SYSCALL|EXECVE) /.test(row)) continue;
@@ -27,23 +28,25 @@ export function parseAudit(text: string, config: Config): LogEvent[] {
     let argv = [...args].sort((a, b) => a[0] - b[0]).map(pair => pair[1]);
     const executable = auditArg(attrs.exe || '"' + argv[0] + '"'); argv = scrubArguments(argv);
     const command = scrub(argv.map(shellQuote).join(' ')), match = identity.match(/\((\d+(?:\.\d+)?):(\d+)\)/)!;
+    const execution = matchingExecution(attrs, argv, Number(match[1]) * 1000, receipts);
     events.push(event(config, 'audit:' + identity, 'audit', command, iso(Number(match[1])), {
       collector: 'auditd', event_type: 'process', action: 'exec', outcome: attrs.success === 'yes' ? 'success' : 'failure',
       process: { executable, command_line: command, arguments: argv, pid: attrs.pid ?? null, parent_pid: attrs.ppid ?? null },
       user: { id: attrs.uid ?? null, login_id: attrs.auid ?? null }, audit_id: match[2],
+      ...(execution ? { collector_execution: { ...execution } } : {}),
     }));
   }
   return events;
 }
-export async function* auditEvents(lines: AsyncIterable<string>, config: Config) {
+export async function* auditEvents(lines: AsyncIterable<string>, config: Config, receipts: ExecutionLookup = []) {
   let identity: string | undefined, rows: string[] = [], size = 0;
   for await (const line of lines) {
     if (!/^type=(SYSCALL|EXECVE) /.test(line)) continue;
     const current = line.match(/msg=audit\((\d+(?:\.\d+)?):(\d+)\)/)?.[0]; if (!current) continue;
-    if (identity && current !== identity) { yield* parseAudit(rows.join(''), config); rows = []; size = 0; }
+    if (identity && current !== identity) { yield* parseAudit(rows.join(''), config, receipts); rows = []; size = 0; }
     identity = current; size += Buffer.byteLength(line); if (size > MAX_RECORD_BYTES) throw new Error('Audit event exceeds 8MB; cursor retained'); rows.push(line);
   }
-  if (rows.length) yield* parseAudit(rows.join(''), config);
+  if (rows.length) yield* parseAudit(rows.join(''), config, receipts);
 }
 export function localAuditDate(timestamp: number): string[] {
   const d = new Date(timestamp * 1000), pad = (n: number) => String(n).padStart(2, '0');
@@ -131,7 +134,7 @@ export class Sources {
         yield event(config, 'journal:' + cursor, service, String(row.MESSAGE ?? ''), since, { collector: 'journal', pid: row._PID ?? null, user: { id: row._UID ?? null }, unit: row._SYSTEMD_UNIT ?? null }, level);
       }
     }
-    try { await this.store.send(consume(this.commands.stream([...args, ...(cursor ? ['--after-cursor', cursor] : ['--since', since])], { timeout: live ? 5 : 60 }))); }
+    try { await this.store.send(consume(this.commands.stream([...args, ...(cursor ? ['--after-cursor', cursor] : ['--since', since])], { timeout: live ? 5 : 60, attestExecution: true }))); }
     catch (error) { if (!(error instanceof CommandError) || !cursor) throw error; await this.store.send(consume(this.commands.stream([...args, '--since', since], { timeout: live ? 5 : 60 }))); }
     if (cursor) this.store.save(stateName, { cursor, since });
   }
@@ -151,7 +154,7 @@ export class Sources {
     }
     // A first live pass may scan large retained files before it can checkpoint.
     // Later passes keep the short timeout and resume that fresh checkpoint.
-    const read = (command: string[]) => this.store.send(auditEvents(this.commands.stream(command, { accepted: [0, 1], timeout: live && reuse ? 5 : 60 }), config));
+    const read = (command: string[]) => this.store.send(auditEvents(this.commands.stream(command, { accepted: [0, 1], timeout: live && reuse ? 5 : 60, disk: true, attestExecution: true }), config, (pid, timestamp) => executionReceipts(this.store.root, pid, timestamp)));
     try { await read(args); }
     catch (error) { if (!(error instanceof CommandError) || ![10, 11, 12].includes(error.code ?? -1) || !fs.existsSync(pending)) throw error; await read([...args, '--start', 'checkpoint']); }
     if (fs.existsSync(pending)) { this.store.saveRaw(prefix + '.checkpoint', fs.readFileSync(pending, 'utf8')); fs.unlinkSync(pending); }

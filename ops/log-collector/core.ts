@@ -5,6 +5,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import * as http from 'node:http';
 import * as https from 'node:https';
 import { spawn } from 'node:child_process';
+import { recordExecution } from './executions';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
@@ -238,7 +239,7 @@ export async function* recordLines(input: AsyncIterable<Buffer | string>): Async
   }
   if (size) yield Buffer.concat(chunks, size).toString('utf8');
 }
-export interface CommandOptions { accepted?: number[]; timeout?: number; merged?: boolean; disk?: boolean; raw?: boolean }
+export interface CommandOptions { accepted?: number[]; timeout?: number; merged?: boolean; disk?: boolean; raw?: boolean; attestExecution?: boolean }
 export class Commands {
   constructor(public store: Store) {}
   async *stream(args: string[], options: CommandOptions = {}): AsyncGenerator<string> {
@@ -246,6 +247,7 @@ export class Commands {
     const base = join(root, randomUUID()), errorPath = base + '.err', outputPath = base + '.out';
     const errorFd = fs.openSync(errorPath, 'wx', 0o600);
     const outputFd = options.disk ? fs.openSync(outputPath, 'wx', 0o600) : undefined;
+    const started = Date.now();
     const child = spawn(args[0], args.slice(1), { env: { ...process.env, LC_ALL: 'C' }, stdio: ['ignore', outputFd ?? 'pipe', options.merged && outputFd !== undefined ? outputFd : errorFd] });
     let expired = false;
     const timer = setTimeout(() => { expired = true; child.kill('SIGKILL'); }, (options.timeout ?? 60) * 1000);
@@ -261,6 +263,7 @@ export class Commands {
         const reason = [['No such container', 'removed during collection'], ['does not support reading', 'logging driver does not support reading'], ['invalid character', 'invalid log data']].find(([fragment]) => detail.includes(fragment))?.[1];
         throw new CommandError(code, reason);
       }
+      if (options.attestExecution && code === 0 && fs.statSync(errorPath).size === 0 && child.pid) recordExecution(this.store.root, child.pid, args, started);
       if (options.disk) {
         if (options.raw) { for await (const chunk of fs.createReadStream(outputPath, { encoding: 'utf8' })) yield chunk as string; }
         else yield* recordLines(fs.createReadStream(outputPath));
