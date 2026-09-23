@@ -84,6 +84,16 @@ try {
     assert.equal((await query("SELECT count(*) FROM mill_events WHERE id='selector-only'")).rows[0].count, '1', 'selectors match the same normalized fields as preview')
     await query("DELETE FROM mill_events WHERE id='selector-only'")
     await query('UPDATE mill_rules SET definition=$1 WHERE id=\'rule\'', [JSON.stringify(definition)])
+    await query("INSERT INTO service_logs(service,level,message,created_at) SELECT 'test','info','routine archived',NOW()-interval '7 days' FROM generate_series(1,500)")
+    await query("INSERT INTO service_logs(service,level,message,created_at) SELECT 'test','info','routine recent',NOW()-interval '1 minute' FROM generate_series(1,401)")
+    const ranged = await postMillRuleReprocess(request({ ...body, from: new Date(Date.now() - 3600_000).toISOString() }), reply() as any)
+    for (let i = 0; i < 10 && await processRuleReprocessJob(); i++) { /* tied timestamps span multiple pages */ }
+    const rangedJob = (await query('SELECT * FROM mill_rule_reprocess_jobs WHERE id=$1', [ranged.job.id])).rows[0]
+    assert.equal(rangedJob.status, 'completed')
+    assert.equal(rangedJob.removed_sources, '401', 'time-keyed pages do not skip equal timestamps')
+    assert.ok(Number(rangedJob.scanned) < 500, 'a short range does not walk older raw logs')
+    assert.equal((await query("SELECT count(*) FROM service_logs WHERE message='routine archived'")).rows[0].count, '500')
+    await query("DELETE FROM service_logs WHERE message='routine archived'")
     // A changed or disabled rule stops at the next batch, including after a worker restart.
     const changed = await postMillRuleReprocess(request(body), reply() as any)
     await query("UPDATE mill_rules SET enabled=false WHERE id='rule'")

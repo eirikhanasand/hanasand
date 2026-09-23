@@ -7,7 +7,7 @@ import { matchSecurityRules } from './securityRules.ts'
 import { matchRulePage } from './rulePreview.ts'
 import type { MillCondition } from './conditions.ts'
 
-type Cursor = { phase: number, time?: string, id?: string, last?: string, serviceEnd: string, trafficEnd: string }
+type Cursor = { phase: number, time?: string, id?: string, serviceEnd: string, trafficEnd: string }
 export type ReprocessJob = { id: string, organization_id: string, rule_id: string, rule_version: string, status: string,
     from_time: string | null, until_time: string, cursor: Cursor, scanned: string, matched: string, protected: string,
     removed_events: string, removed_sources: string, error: string | null }
@@ -59,8 +59,13 @@ export async function processRuleReprocessJob() {
                 if (rows.length) Object.assign(cursor, { time: rows.at(-1).time, id: rows.at(-1).id })
             } else {
                 const source = cursor.phase === 1 ? 'service_logs' : 'traffic_events'
-                const rows = (await query(`SELECT * FROM ${source} WHERE id>$1::bigint AND id<=$2::bigint
-                    ORDER BY id LIMIT $3 FOR UPDATE`, [cursor.last || '0', cursor.phase === 1 ? cursor.serviceEnd : cursor.trafficEnd, size])).rows
+                // Use the existing time index: a short selected window must not walk the entire raw archive.
+                const rows = (await query(`SELECT *,created_at::text AS cursor_time FROM ${source}
+                    WHERE id<=$1::bigint AND created_at<=$2::timestamptz
+                    AND ($3::timestamptz IS NULL OR created_at>=$3::timestamptz)
+                    AND ($4::timestamptz IS NULL OR (created_at,id)<($4::timestamptz,$5::bigint))
+                    ORDER BY created_at DESC,id DESC LIMIT $6 FOR UPDATE`,
+                [cursor.phase === 1 ? cursor.serviceEnd : cursor.trafficEnd, job.until_time, job.from_time, cursor.time || null, cursor.id || '0', size])).rows
                 scanned = rows.length
                 const platform = (await query(`SELECT id FROM organizations WHERE status='active' AND
                     (id=$1 OR ($1::text IS NULL AND lower(name)='hanasand')) ORDER BY created_at LIMIT 1`, [process.env.PLATFORM_LOG_ORGANIZATION_ID || null])).rows[0]?.id
@@ -72,7 +77,7 @@ export async function processRuleReprocessJob() {
                         || (job.from_time && time < new Date(job.from_time).getTime())) return []
                     return [{ id: '', key: `service:${log.id}`, event: normalizeLogEvent(log) }]
                 })
-                if (rows.length) cursor.last = String(rows.at(-1).id)
+                if (rows.length) Object.assign(cursor, { time: rows.at(-1).cursor_time, id: String(rows.at(-1).id) })
             }
             // All selectors, including regex, use the same bounded evaluator as preview.
             const matches = (await matchRulePage(items.map(item => item.event), rule.definition.conditions)).map(index => items[index])
@@ -111,7 +116,7 @@ export async function processRuleReprocessJob() {
             let sources = 0
             if (serviceIds.size) sources += (await query('DELETE FROM service_logs WHERE id=ANY($1::bigint[]) RETURNING id', [[...serviceIds]])).rowCount || 0
             if (trafficIds.size) sources += (await query('DELETE FROM traffic_events WHERE id=ANY($1::bigint[]) RETURNING id', [[...trafficIds]])).rowCount || 0
-            if (scanned < size) { cursor.phase++; delete cursor.time; delete cursor.id; cursor.last = '0' }
+            if (scanned < size) { cursor.phase++; delete cursor.time; delete cursor.id }
             const done = cursor.phase > 2
             await query(`UPDATE mill_rule_reprocess_jobs SET status=$2,cursor=$3::jsonb,scanned=scanned+$4,
                 matched=matched+$5,protected=protected+$6,removed_events=removed_events+$7,removed_sources=removed_sources+$8,
