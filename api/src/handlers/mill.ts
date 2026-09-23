@@ -1,8 +1,8 @@
 import { ingestionRule, ingestionRuleId, ingestionDefinition } from '#utils/mill/analyzeIngestion.ts'
 import { listRule, ruleCategory, loadRuleHits } from '#utils/mill/ruleList.ts'
 import { cdnRefreshRule, cdnRefreshRuleId, cdnRefreshDefinition } from '#utils/mill/analyzeCdnRefresh.ts'
-import { modelDiscoveryRule, modelDiscoveryRuleId, modelDiscoveryDefinition, modelDiscoveryUnavailableReason } from '#utils/mill/analyzeModelDiscovery.ts'
-import { readinessAuditRule, readinessAuditRuleId, readinessAuditDefinition, readinessAuditUnavailable } from '#utils/mill/analyzeReadinessAudit.ts'
+import { modelDiscoveryRule, modelDiscoveryRuleId, modelDiscoveryDefinition, modelDiscoveryConfigured, modelDiscoveryUnavailableReason } from '#utils/mill/analyzeModelDiscovery.ts'
+import { readinessAuditRule, readinessAuditRuleId, readinessAuditDefinition, readinessAuditConfigured, readinessAuditUnavailable } from '#utils/mill/analyzeReadinessAudit.ts'
 import { retainedOriginals } from '#utils/mill/retainedOriginals.ts'
 import { normalizeLogEvent } from '#utils/mill/logEvent.ts'
 import { telemetryRule, telemetryRuleId, sshWindowRule, sshWindowRuleId, routineGroupDefinition } from '#utils/mill/analyzeRoutineGroups.ts'
@@ -80,7 +80,9 @@ function builtinDefinition(rule: MillRule, value?: unknown): MillDefinition {
     return { ...defaults, ...stored, parameters: { ...defaults.parameters, ...object(stored.parameters) } } as MillDefinition
 }
 export function unavailableAnalysisRule(id: string) {
-    return id === readinessAuditRuleId ? readinessAuditUnavailable : id === modelDiscoveryRuleId ? modelDiscoveryUnavailableReason : null
+    if (id === readinessAuditRuleId && !readinessAuditConfigured()) return readinessAuditUnavailable
+    if (id === modelDiscoveryRuleId && !modelDiscoveryConfigured()) return modelDiscoveryUnavailableReason
+    return null
 }
 
 export function normalizeBuiltinDefinition(id: string, value: unknown): { definition?: MillDefinition, error?: string } {

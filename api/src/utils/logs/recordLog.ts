@@ -1,4 +1,6 @@
 import { analyzeIngestion } from '../mill/analyzeIngestion.ts'
+import { analyzeModelDiscovery } from '../mill/analyzeModelDiscoveryLog.ts'
+import { analyzeReadinessAuditBatch } from '../mill/analyzeReadinessAuditLog.ts'
 import { analyzeCdnRefresh } from '../mill/analyzeCdnRefreshLog.ts'
 import { analyzeRoutineGroupBatch } from '../mill/analyzeRoutineGroupBatch.ts'
 import { analyzeCollectorExecution } from '../mill/analyzeCollectorLog.ts'
@@ -71,6 +73,7 @@ async function prepareLog({
         message: redactedMessage, metadata: redactedMetadata, created_at: timestamp || new Date() }), retention.get(scopeId || '')!)
     // Explicit Store exceptions must win before any built-in analyzer can drop.
     if (retentionAction !== 'keep') {
+        if (await analyzeModelDiscovery({ service, host, level, message, metadata, sourceEventId, timestamp }, query === run ? undefined : query)) return
         if (await analyzeCdnRefresh({ service, host, level, message, metadata, sourceEventId, timestamp }, query === run ? undefined : query)) return
         if (await analyzeCollectorExecution({ service, host, level, message, metadata, sourceEventId, timestamp }, query === run ? undefined : query)) return
         if (await analyzeMongoPing({ service, host, level, message, metadata, sourceEventId }, query === run ? undefined : query)) return
@@ -134,7 +137,7 @@ export default async function recordLog(entry: Parameters<typeof prepareLog>[0],
 export async function recordLogBatch(entries: Parameters<typeof prepareLog>[0][], query: typeof run) {
     const rows = []
     const retention = new Map<string, Awaited<ReturnType<typeof loadLogRetentionRules>>>()
-    for (const entry of await analyzeRoutineGroupBatch(await analyzePostgresBatch(entries.map(preserveUnrecognizedFields), query), query)) {
+    for (const entry of await analyzeRoutineGroupBatch(await analyzePostgresBatch(await analyzeReadinessAuditBatch(entries.map(preserveUnrecognizedFields), query), query), query)) {
         const values = await prepareLog(entry, query, retention)
         if (values) rows.push(values)
     }

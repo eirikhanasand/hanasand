@@ -9,4 +9,5 @@ export async function ensureModelProbeSchema(query: typeof run = run): Promise<v
         original_encoding text NOT NULL DEFAULT 'deflate-json-v1',
         created_at timestamptz NOT NULL DEFAULT NOW()
     )`)
+    await query('CREATE INDEX IF NOT EXISTS idx_model_probe_receipts_org ON log_model_probe_receipts(organization_id)')
 }

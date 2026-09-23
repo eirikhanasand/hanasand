@@ -48,7 +48,7 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real ingestion preserves su
         const good = entry()
         await Promise.all([ingest(good), ingest(good)])
         expect(await count('service_logs')).toBe(0)
-        expect(await count('log_analyze_receipts')).toBe(1)
+        expect(await count('log_analyze_receipts')).toBe(0)
         expect(await count('log_model_probe_receipts')).toBe(1)
         const original = (await query('SELECT original FROM log_model_probe_receipts')).rows[0].original
         expect(JSON.parse(inflateRawSync(original).toString())).toEqual(good)

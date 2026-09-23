@@ -7,6 +7,8 @@ import { proxyRuleId } from './analyzeProxy.ts'
 import { collectorRuleId } from './analyzeCollector.ts'
 import { telemetryRuleId, sshWindowRuleId } from './analyzeRoutineGroups.ts'
 import { cdnRefreshRuleId } from './analyzeCdnRefresh.ts'
+import { modelDiscoveryRuleId } from './analyzeModelDiscovery.ts'
+import { readinessAuditRuleId } from './analyzeReadinessAudit.ts'
 
 type Rule = { id: string, recordId?: string, name: string, explanation: string, family: string, severity: string, source?: string, enabled?: boolean, definition?: { stage?: string, action?: string } }
 const analysis = new Set(['mongodb.cashflow_connections', 'http.routine_access', 'auth.impossible_travel', 'auth.new_country', 'auth.new_device'])
@@ -24,8 +26,9 @@ export function listRule(rule: Rule) {
         definition: { stage: rule.definition?.stage, action: rule.definition?.action } }
 }
 const aggregateTables = new Map([
-    [accessRuleId, ['log_access_counts', 'amount']], [mongoRuleId, ['log_mongo_ping_counts', 'amount']],
-    [postgresRuleId, ['log_postgres_session_state', 'dropped_records']], [proxyRuleId, ['log_proxy_counts', 'amount']],
+    [accessRuleId, ['log_access_counts', 'sum(amount)']], [mongoRuleId, ['log_mongo_ping_counts', 'sum(amount)']],
+    [postgresRuleId, ['log_postgres_session_state', 'sum(dropped_records)']], [proxyRuleId, ['log_proxy_counts', 'sum(amount)']],
+    [modelDiscoveryRuleId, ['log_model_probe_receipts', 'count(*)']], [readinessAuditRuleId, ['log_readiness_audit_receipts', 'count(*)']],
 ])
 const receiptRules = new Set([ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId])
 export async function loadRuleHits(organizationId: string, rules: Pick<Rule, 'id'>[], query: typeof run) {
@@ -42,7 +45,7 @@ export async function loadRuleHits(organizationId: string, rules: Pick<Rule, 'id
         const aggregate = aggregateTables.get(id)
         if (!aggregate) continue
         parameters.push(id)
-        statements.push(`SELECT $${parameters.length}::text, COALESCE(sum(${aggregate[1]}),0)::text FROM ${aggregate[0]} WHERE organization_id=$1`)
+        statements.push(`SELECT $${parameters.length}::text, COALESCE(${aggregate[1]},0)::text FROM ${aggregate[0]} WHERE organization_id=$1`)
     }
     const result = await query(statements.join(' UNION ALL '), parameters)
     return new Map<string, number>(result.rows.map(row => [row.rule_id, Number(row.hits)]))

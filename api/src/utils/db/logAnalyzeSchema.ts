@@ -1,5 +1,7 @@
 import { ingestionRule, ingestionDefinition } from '../mill/analyzeIngestion.ts'
 import ensureIngestionAnalyzeSchema from './ingestionAnalyzeSchema.ts'
+import { ensureModelProbeSchema } from './modelProbeSchema.ts'
+import { ensureReadinessAuditSchema } from './readinessAuditSchema.ts'
 import { cdnRefreshRule, cdnRefreshDefinition } from '../mill/analyzeCdnRefresh.ts'
 import { modelDiscoveryRule, modelDiscoveryRuleId, modelDiscoveryDefinition } from '../mill/analyzeModelDiscovery.ts'
 import { readinessAuditRule, readinessAuditRuleId, readinessAuditDefinition } from '../mill/analyzeReadinessAudit.ts'
@@ -39,6 +41,8 @@ export default async function ensureLogAnalyzeSchema() {
         recent JSONB NOT NULL DEFAULT '[]', PRIMARY KEY(organization_id,rule_id,scope))`)
     await ensureProxyAnalyzeSchema()
     await ensureIngestionAnalyzeSchema()
+    await ensureModelProbeSchema(run)
+    await ensureReadinessAuditSchema(run)
     // Seed once for the platform organization only. Restarts must never undo a
     // user's later Keep/Disable choice. The first version is included in history.
     for (const [rule, definition] of [[ingestionRule, ingestionDefinition], [cdnRefreshRule, cdnRefreshDefinition], [modelDiscoveryRule, modelDiscoveryDefinition], [readinessAuditRule, readinessAuditDefinition], [telemetryRule, routineGroupDefinition], [sshWindowRule, routineGroupDefinition], [collectorRule, collectorDefinition], [proxyRule, proxyDefinition], [postgresRule, postgresDefinition], [accessRule, accessDefinition], [mongoRule, mongoDefinition], [mongoReconRule, mongoReconDefinition]] as const) await run(`WITH installed AS (

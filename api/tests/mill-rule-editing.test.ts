@@ -362,6 +362,28 @@ test.each(['postgresql.readiness_audit.v1', 'model.verified_discovery_probes.v1'
     expect(audits).toEqual([])
 })
 
+test.each(['postgresql.readiness_audit.v1', 'model.verified_discovery_probes.v1'])('configured %s can be enabled with immutable safety checks and an audit revision', async id => {
+    const key = id.startsWith('model.') ? 'MODEL_PROBE_PROOF_KEY' : 'READINESS_AUDIT_PROOF_PUBLIC_KEY'
+    const previous = process.env[key]
+    process.env[key] = '1'.repeat(64)
+    try {
+        systemAdmin = true
+        const definition = { match: 'all', stage: 'analyze', action: 'drop', conditions: [], parameters: {} }
+        rows.push({ id: 'verified-rule', organization_id: 'org-a', rule_id: id, version: '1', name: 'Verified probe', explanation: 'Verified native probe identity and successful completion.', source: 'hanasand', severity: 'low', enabled: false, definition })
+        expect(normalizeBuiltinDefinition(id, definition).error).toBeUndefined()
+        const response = reply()
+        await postMillRuleAction(request(id, { action: 'enable' }), response as any)
+        expect(response.statusCode).toBe(200)
+        expect(rows[0]).toMatchObject({ enabled: true, version: '2' })
+        expect(audits[0].context).toMatchObject({ before: { enabled: false }, after: { enabled: true, version: '2' } })
+        expect(normalizeBuiltinDefinition(id, { ...definition, conditions: [{ path: 'service', operator: 'equals', value: 'anything' }] }).error).toBeTruthy()
+        expect(normalizeBuiltinDefinition(id, { ...definition, parameters: { skipProof: 1 } }).error).toBeTruthy()
+    } finally {
+        if (previous === undefined) delete process.env[key]
+        else process.env[key] = previous
+    }
+})
+
 
 test('existing Drop rules expose Low while Store rules retain their configured severity', async () => {
     systemAdmin = true

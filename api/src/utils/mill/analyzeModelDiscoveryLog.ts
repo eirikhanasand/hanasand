@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import { deflateRawSync } from 'node:zlib'
 import run, { withTransaction } from '#db'
 import { modelDiscoveryRuleId, eligibleModelDiscovery, type ModelProbeLog } from './analyzeModelDiscovery.ts'
@@ -28,8 +27,5 @@ export async function analyzeModelDiscovery(log: ModelProbeLog, query?: typeof r
     const retained = await query(`SELECT 1 FROM log_model_probe_receipts WHERE nonce=$1 AND source_event_id=$2
         AND organization_id=$3 AND original=$4 AND original_encoding='deflate-json-v1'`, [proof.nonce, log.sourceEventId, rule.organization_id, original])
     if (!retained.rows.length) return false
-    const key = createHash('sha256').update(`${modelDiscoveryRuleId}:${log.sourceEventId}`).digest('hex')
-    await query(`INSERT INTO log_analyze_receipts(key,organization_id,rule_id,rule_version)
-        VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`, [key, rule.organization_id, modelDiscoveryRuleId, rule.version])
     return true
 }

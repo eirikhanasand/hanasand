@@ -2,6 +2,8 @@ import { expect, test } from 'bun:test'
 import { listRule, ruleCategory, loadRuleHits } from '../src/utils/mill/ruleList.ts'
 import { collectorRuleId } from '../src/utils/mill/analyzeCollector.ts'
 import { postgresRuleId } from '../src/utils/mill/analyzePostgres.ts'
+import { modelDiscoveryRuleId } from '../src/utils/mill/analyzeModelDiscovery.ts'
+import { readinessAuditRuleId } from '../src/utils/mill/analyzeReadinessAudit.ts'
 
 test('list projection excludes definitions and evidence, preserves displayed fields', () => {
     const rule = { id: 'custom.test.v1', recordId: 'record', name: 'Test', explanation: 'Description', family: 'Custom', severity: 'low', source: 'owned', enabled: false,
@@ -23,11 +25,13 @@ test('hits count only requested rules and never read event metadata', async () =
         calls.push({ sql, values })
         return { rows: [{ rule_id: collectorRuleId, hits: '7' }, { rule_id: postgresRuleId, hits: '12' }] }
     }
-    const result = await loadRuleHits('org-a', [{ id: 'auth.new_country.v1' }, { id: collectorRuleId }, { id: postgresRuleId }], query as any)
+    const result = await loadRuleHits('org-a', ['auth.new_country.v1', collectorRuleId, postgresRuleId, modelDiscoveryRuleId, readinessAuditRuleId].map(id => ({ id })), query as any)
     expect(result.get(collectorRuleId)).toBe(7)
     expect(result.get(postgresRuleId)).toBe(12)
     expect(calls).toHaveLength(1)
-    expect(calls[0].values).toEqual(['org-a', ['auth.new_country.v1'], [collectorRuleId], postgresRuleId])
+    expect(calls[0].values).toEqual(['org-a', ['auth.new_country.v1'], [collectorRuleId], postgresRuleId, modelDiscoveryRuleId, readinessAuditRuleId])
+    expect(calls[0].sql).toContain('FROM log_model_probe_receipts WHERE organization_id=$1')
+    expect(calls[0].sql).toContain('FROM log_readiness_audit_receipts WHERE organization_id=$1')
     expect(calls[0].sql).toContain('rule_id=ANY($2::text[])')
     expect(calls[0].sql).toContain('rule_id=ANY($3::text[])')
     expect(calls[0].sql).toContain('sum(dropped_records)')

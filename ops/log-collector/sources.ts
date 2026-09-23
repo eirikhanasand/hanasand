@@ -1,5 +1,7 @@
 import { fs, join, dirname, basename, Store, Commands, Config, LogEvent, Metadata, event, scrub, scrubArguments, iso, seconds, sha, MAX_RECORD_BYTES, BATCH_BYTES, CollectionError, CommandError, TimeoutError, collectionError } from './core';
 import { executionReceipts, matchingExecution, type ExecutionLookup } from './executions';
+import { enrichModelProbe } from './model-probes';
+import { attestReadinessAudit, markReadinessContext } from './readinessAttestation';
 
 const trimEnding = (text: string) => text.replace(/\n$/, '').replace(/\r$/, '');
 export const shellQuote = (value: string) => value === '' ? "''" : /^[\w@%+=:,./-]+$/.test(value) ? value : "'" + value.replaceAll("'", "'\"'\"'") + "'";
@@ -29,12 +31,14 @@ export function parseAudit(text: string, config: Config, receipts: ExecutionLook
     const executable = auditArg(attrs.exe || '"' + argv[0] + '"'); argv = scrubArguments(argv);
     const command = scrub(argv.map(shellQuote).join(' ')), match = identity.match(/\((\d+(?:\.\d+)?):(\d+)\)/)!;
     const execution = matchingExecution(attrs, argv, Number(match[1]) * 1000, receipts);
-    events.push(event(config, 'audit:' + identity, 'audit', command, iso(Number(match[1])), {
+    const log = event(config, 'audit:' + identity, 'audit', command, iso(Number(match[1])), {
       collector: 'auditd', event_type: 'process', action: 'exec', outcome: attrs.success === 'yes' ? 'success' : 'failure',
       process: { executable, command_line: command, arguments: argv, pid: attrs.pid ?? null, parent_pid: attrs.ppid ?? null },
       user: { id: attrs.uid ?? null, login_id: attrs.auid ?? null }, audit_id: match[2],
       ...(execution ? { collector_execution: { ...execution } } : {}),
-    }));
+    });
+    markReadinessContext(log, attrs, rows);
+    events.push(log);
   }
   return events;
 }
@@ -131,7 +135,8 @@ export class Sources {
         const priority = Number(row.PRIORITY ?? 6), level = priority <= 2 ? 'fatal' : priority === 3 ? 'error' : priority === 4 ? 'warn' : priority === 7 ? 'debug' : 'info';
         const service = String(row.SYSLOG_IDENTIFIER || row._SYSTEMD_UNIT || 'system').replace(/\.service$/, '');
         if (service === 'hanasand-log-collector') continue;
-        yield event(config, 'journal:' + cursor, service, String(row.MESSAGE ?? ''), since, { collector: 'journal', pid: row._PID ?? null, user: { id: row._UID ?? null }, unit: row._SYSTEMD_UNIT ?? null }, level);
+        const log = event(config, 'journal:' + cursor, service, String(row.MESSAGE ?? ''), since, { collector: 'journal', pid: row._PID ?? null, user: { id: row._UID ?? null }, unit: row._SYSTEMD_UNIT ?? null }, level);
+        yield typeof cursor === 'string' ? enrichModelProbe(log, cursor) : log;
       }
     }
     try { await this.store.send(consume(this.commands.stream([...args, ...(cursor ? ['--after-cursor', cursor] : ['--since', since])], { timeout: live ? 5 : 60, attestExecution: true }))); }
@@ -154,7 +159,7 @@ export class Sources {
     }
     // A first live pass may scan large retained files before it can checkpoint.
     // Later passes keep the short timeout and resume that fresh checkpoint.
-    const read = (command: string[]) => this.store.send(auditEvents(this.commands.stream(command, { accepted: [0, 1], timeout: live && reuse ? 5 : 60, disk: true, attestExecution: true }), config, (pid, timestamp) => executionReceipts(this.store.root, pid, timestamp)));
+    const read = (command: string[]) => this.store.send(attestReadinessAudit(auditEvents(this.commands.stream(command, { accepted: [0, 1], timeout: live && reuse ? 5 : 60, disk: true, attestExecution: true }), config, (pid, timestamp) => executionReceipts(this.store.root, pid, timestamp)), this.store.root, config.host));
     try { await read(args); }
     catch (error) { if (!(error instanceof CommandError) || ![10, 11, 12].includes(error.code ?? -1) || !fs.existsSync(pending)) throw error; await read([...args, '--start', 'checkpoint']); }
     if (fs.existsSync(pending)) { this.store.saveRaw(prefix + '.checkpoint', fs.readFileSync(pending, 'utf8')); fs.unlinkSync(pending); }
