@@ -12,7 +12,7 @@ export type ReprocessJob = { id: string, organization_id: string, rule_id: strin
     from_time: string | null, until_time: string, cursor: Cursor, scanned: string, matched: string, protected: string,
     removed_events: string, removed_sources: string, error: string | null }
 type Rule = { rule_id: string, version: string, source: string, enabled: boolean, definition: { stage: string, action: string, conditions: MillCondition[] } }
-type Item = { id: string, key: string | null, event: Record<string, unknown>, source?: 'service_logs' | 'traffic_events', sourceId?: string }
+type Item = { id: string, key: string | null, event: Record<string, unknown>, original?: Record<string, unknown> }
 const size = 200
 const protectedEvent = (event: Record<string, unknown>) => !eligibleCustomDrop(event) || matchSecurityRules(event).length > 0
     || event.event_type === 'authentication' || event.event_type === 'audit'
@@ -55,7 +55,7 @@ export async function processRuleReprocessJob() {
                     ORDER BY event_timestamp DESC,id DESC LIMIT $6 FOR UPDATE`,
                 [job.organization_id, job.until_time, job.from_time, cursor.time || null, cursor.id || '', size])).rows
                 scanned = rows.length
-                items = rows.map(row => ({ id: row.id, key: row.log_key, event: { ...row.normalized, original: row.original } }))
+                items = rows.map(row => ({ id: row.id, key: row.log_key, event: row.normalized, original: row.original }))
                 if (rows.length) Object.assign(cursor, { time: rows.at(-1).time, id: rows.at(-1).id })
             } else {
                 const source = cursor.phase === 1 ? 'service_logs' : 'traffic_events'
@@ -70,7 +70,7 @@ export async function processRuleReprocessJob() {
                     const time = new Date(log.created_at).getTime()
                     if (scope !== job.organization_id || time > new Date(job.until_time).getTime()
                         || (job.from_time && time < new Date(job.from_time).getTime())) return []
-                    return [{ id: '', key: `service:${log.id}`, event: normalizeLogEvent(log), source, sourceId: String(row.id) }]
+                    return [{ id: '', key: `service:${log.id}`, event: normalizeLogEvent(log) }]
                 })
                 if (rows.length) cursor.last = String(rows.at(-1).id)
             }
@@ -79,7 +79,7 @@ export async function processRuleReprocessJob() {
             const keeps = (await loadLogRetentionRules(job.organization_id, query)).filter(r => r.definition?.action === 'keep')
             const kept = new Set<number>()
             for (const keep of keeps) for (const index of await matchRulePage(matches.map(item => item.event), keep.definition!.conditions!)) kept.add(index)
-            let safe = matches.filter((item, index) => !kept.has(index) && !protectedEvent(item.event)
+            let safe = matches.filter((item, index) => !kept.has(index) && !protectedEvent({ ...item.event, retained_original: item.original })
                 && !/^service:(?:login_events|system_events):/.test(item.key || ''))
             const keys = safe.flatMap(item => item.key ? [item.key] : [])
             const evidence = (await query(`SELECT id,log_key,organization_id,normalized,original FROM mill_events

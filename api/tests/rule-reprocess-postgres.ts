@@ -75,6 +75,15 @@ try {
     assert.equal((await query('SELECT count(*) FROM mill_log_dimensions')).rows[0].count, '6')
     assert.equal((await query('SELECT sum(event_count)::text AS total FROM mill_log_counts WHERE bucket_seconds=60')).rows[0].total, '6', 'search counters follow actual deletion')
     assert.equal((await query("SELECT count(*) FROM system_events WHERE event_type='mill.rule.reprocessed'")).rows[0].count, '1')
+    // Original evidence is checked for safety, not injected into preview's selector input.
+    await query("INSERT INTO mill_events(id,ingestion_id,organization_id,event_timestamp,normalized,original) VALUES('selector-only','mill-test','platform',NOW()-interval '1 minute',$1,$2)",
+        [JSON.stringify({ severity: 'low', message: 'ordinary' }), JSON.stringify({ message: 'routine selector' })])
+    await query('UPDATE mill_rules SET definition=$1 WHERE id=\'rule\'', [JSON.stringify({ ...definition, conditions: [{ path: 'original.message', operator: 'contains', value: 'routine selector' }] })])
+    await postMillRuleReprocess(request(body), reply() as any)
+    for (let i = 0; i < 10 && await processRuleReprocessJob(); i++) { /* bounded pages */ }
+    assert.equal((await query("SELECT count(*) FROM mill_events WHERE id='selector-only'")).rows[0].count, '1', 'selectors match the same normalized fields as preview')
+    await query("DELETE FROM mill_events WHERE id='selector-only'")
+    await query('UPDATE mill_rules SET definition=$1 WHERE id=\'rule\'', [JSON.stringify(definition)])
     // A changed or disabled rule stops at the next batch, including after a worker restart.
     const changed = await postMillRuleReprocess(request(body), reply() as any)
     await query("UPDATE mill_rules SET enabled=false WHERE id='rule'")
