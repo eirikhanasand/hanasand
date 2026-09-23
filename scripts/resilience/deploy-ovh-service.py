@@ -79,7 +79,10 @@ def check(port, target):
         # no accounts are created and only a prefix is sent over HTTPS.
         result = json.loads(subprocess.check_output(['docker', 'exec', target, 'bun', '-e',
             'import check from "./src/utils/pwned/checkPwned.ts"; console.log(JSON.stringify(await check("superman123")))']))
-        if result != {'ok': False, 'count': 44, 'source': 'compact-index'}:
+        # Importing or deduplicating source data changes occurrence counts.
+        # The invariant is that this known breached password is rejected.
+        if (result.get('ok') is not False or result.get('source') != 'compact-index'
+                or not isinstance(result.get('count'), int) or result['count'] <= 0):
             raise RuntimeError('Compact password validation failed.')
         return
     request = urllib.request.Request(base + '/api/pwned', data=b'{"prefix":"B79CF"}',
