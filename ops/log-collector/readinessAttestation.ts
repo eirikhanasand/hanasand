@@ -35,7 +35,7 @@ export async function* attestReadinessAudit(events: AsyncIterable<LogEvent>, roo
     let overflow = false
     try {
         for await (const event of events) {
-            if (host === 'inspur' && event.host === host && event.service === 'audit') {
+            if (event.host === host && event.service === 'audit') {
                 if (pending.length < 1000) pending.push(event)
                 else { overflow = true; yield event }
             } else yield event
