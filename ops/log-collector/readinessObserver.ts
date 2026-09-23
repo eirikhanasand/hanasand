@@ -17,8 +17,8 @@ export function matchReadinessHealth(observations: ObservedReadinessExec[], heal
     const startedAt = Date.parse(health.Start), finishedAt = Date.parse(health.End)
     const output = marker.exec(health.Output)
     if (!output || health.ExitCode !== 0 || !Number.isFinite(startedAt) || !Number.isFinite(finishedAt)
-        || finishedAt < startedAt || finishedAt - startedAt > 1000
-        || startedAt - previousStartedAt < 4000 || startedAt - previousStartedAt > 15000) return
+        || finishedAt < startedAt || !Number.isFinite(previousStartedAt)
+        || previousStartedAt <= 0 || previousStartedAt >= startedAt) return
     const matches = observations.filter(o => o.containerId === containerId && o.namespacePid === Number(output[2]) && o.nonce === output[1]
         && o.stableIdentity && o.startedAt >= startedAt - 20 && o.startedAt <= finishedAt
         && o.observedAt >= startedAt && o.observedAt <= finishedAt)
@@ -136,8 +136,9 @@ export async function runReadinessObserver(options: { stateDir: string; socketPa
                 seen.add(health.Start)
                 const fact = matchReadinessHealth(observations, health, containerId, previousStartedAt)
                 // A failure or unobserved/manual record breaks the successful cadence chain.
+                const healthStart = Date.parse(health.Start), healthEnd = Date.parse(health.End)
                 const eligibleSuccess = marker.test(health.Output) && health.ExitCode === 0
-                    && Date.parse(health.End) - Date.parse(health.Start) <= 1000
+                    && Number.isFinite(healthStart) && Number.isFinite(healthEnd) && healthEnd >= healthStart
                 previousStartedAt = eligibleSuccess ? Date.parse(health.Start) : 0
                 if (fact) await writeFile(`${options.stateDir}/${fact.nonce}.json`, JSON.stringify(fact) + '\n', { mode: 0o600, flag: 'wx' })
             }

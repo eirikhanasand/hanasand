@@ -26,12 +26,18 @@ test('wrong or reused process identity, wrong container and ambiguous observatio
     }
     expect(matchReadinessHealth([observation, { ...observation, execId: 'c'.repeat(64) }], health, container, start - 5000)).toBeUndefined()
 })
-test('errors, extra output, slow checks and burst or missing cadence retain', () => {
+test('errors, extra output and missing or invalid prior success cannot be attested', () => {
     for (const change of [{ ExitCode: 1 }, { Output: health.Output + 'warning\n' }, { Output: health.Output + '\n' }, { Output: health.Output.replace('accepting', 'rejecting') },
-        { End: new Date(start + 1001).toISOString() }, { Start: 'bad' }, { End: new Date(start - 1).toISOString() }]) {
+        { Start: 'bad' }, { End: new Date(start - 1).toISOString() }]) {
         expect(matchReadinessHealth([observation], { ...health, ...change }, container, start - 5000)).toBeUndefined()
     }
-    for (const previous of [0, start - 3999, start - 15001, start + 1]) expect(matchReadinessHealth([observation], health, container, previous)).toBeUndefined()
+    for (const previous of [0, -1, NaN, Infinity, start, start + 1]) expect(matchReadinessHealth([observation], health, container, previous)).toBeUndefined()
+})
+test('native evidence leaves duration and cadence retention policy to Mill rules', () => {
+    expect(matchReadinessHealth([observation], { ...health, End: new Date(start + 1001).toISOString() }, container, start - 5000)).toBeDefined()
+    for (const previous of [start - 1, start - 3999, start - 15001, start - 3600000]) {
+        expect(matchReadinessHealth([observation], health, container, previous)).toBeDefined()
+    }
 })
 
 test('native snapshot binds a direct wrapper child and rejects PID reuse during capture', async () => {
