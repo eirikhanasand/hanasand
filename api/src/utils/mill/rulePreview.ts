@@ -1,4 +1,5 @@
 import run from '#db'
+import { eligibleCustomDrop } from './dropEligibility.ts'
 import { Worker } from 'node:worker_threads'
 import { matchesMillRule, type MillCondition } from './conditions.ts'
 
@@ -15,7 +16,7 @@ export async function scanRulePreview(organizationId: string, canReadLogs: boole
         AND ($4::timestamptz IS NULL OR event_timestamp >= $4::timestamptz)
         AND ($5::timestamptz IS NULL OR (event_timestamp,id) < ($5::timestamptz,$6::text))
         ORDER BY event_timestamp DESC, id DESC LIMIT 2000`, [organizationId, canReadLogs, input.until, input.from, input.cursor?.time || null, input.cursor?.id || ''])
-    const eligible = result.rows.filter(row => input.action !== 'drop' || row.normalized?.severity === 'low') as PreviewEvent[]
+    const eligible = result.rows.filter(row => input.action !== 'drop' || eligibleCustomDrop(row.normalized || {})) as PreviewEvent[]
     const matches = input.conditions.some(condition => condition.operator === 'regex')
         ? (await matchRegexPage(eligible, input.conditions)).map(index => eligible[index])
         : eligible.filter(row => matchesMillRule(row.normalized, input.conditions))

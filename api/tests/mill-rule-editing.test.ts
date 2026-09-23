@@ -48,7 +48,7 @@ mock.module('#db', () => ({ default: query, withTransaction: async (work: any) =
 mock.module('#utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid, id: 'editor' }) }))
 mock.module('#utils/auth/hasRole.ts', () => ({ default: async () => ({ valid: systemAdmin }) }))
 mock.module('#utils/auth/apiKeys.ts', () => ({ validateApiKey: async () => ({ organizationId: 'org-a', apiKey: { scopes: [] } }), matchApiKeyScope: () => true }))
-const { postMillRulePreview, getMillRules, getMillRule, putMillRule, postMillRuleAction, postMillRule, postMillRulePack, ingestMill } = await import('../src/handlers/mill.ts')
+const { normalizeBuiltinDefinition, postMillRulePreview, getMillRules, getMillRule, putMillRule, postMillRuleAction, postMillRule, postMillRulePack, ingestMill } = await import('../src/handlers/mill.ts')
 const builtin = 'network.signature_alert.v1'
 const reply = () => ({ statusCode: 200, status(code: number) { this.statusCode = code; return this }, send(body: any) { return body } })
 const request = (id = builtin.replace(/\.v\d+$/, ''), body: any = {}, organizationId = 'org-a') => ({ params: { id }, query: { organizationId }, body, ip: '127.0.0.1', headers: { authorization: 'Bearer test-key' }, id: 'request-test' }) as any
@@ -263,6 +263,7 @@ test('built-in network event selector gates findings and survives enable/disable
 })
 
 test('custom Analyze rules drop before storage and retain audited Store exceptions', async () => {
+    const benign = { source: {}, events: [{ timestamp: '2026-09-14T12:00:00Z', event_type: 'network', action: 'heartbeat', severity: 'low' }] }
     const body = { name: 'Drop network noise', explanation: 'Discard matching routine network events.', severity: 'critical', stage: 'analyze', action: 'drop', conditions: [{ path: 'event_type', operator: 'equals', value: 'network' }] }
     const denied = reply()
     await postMillRule(request('', body), denied as any)
@@ -271,16 +272,18 @@ test('custom Analyze rules drop before storage and retain audited Store exceptio
     const created = await postMillRule(request('', body), reply() as any)
     expect(created.rule.severity).toBe('low')
     expect(created.rule.definition).toMatchObject({ stage: 'analyze', action: 'drop' })
-    expect(await ingestMill(request('', { ...network, events: network.events.map(event => ({ ...event, severity: 'low' })) }), reply() as any)).toMatchObject({ accepted_events: 1, stored_events: 0, dropped_events: 1 })
+    expect(await ingestMill(request('', benign), reply() as any)).toMatchObject({ accepted_events: 1, stored_events: 0, dropped_events: 1 })
     expect(events).toHaveLength(0)
     expect(findings).toHaveLength(0)
+    expect(await ingestMill(request('', { ...network, events: network.events.map(event => ({ ...event, severity: 'low' })) }), reply() as any)).toMatchObject({ stored_events: 1, dropped_events: 0 })
+    expect(findings.some(finding => finding.ruleId === builtin)).toBe(true)
     await putMillRule(request(created.rule.id, { ...body, enabled: true, version: '1', action: 'keep' }), reply() as any)
     expect(rows[0].definition).toMatchObject({ stage: 'analyze', action: 'keep' })
     expect(audits.at(-1).context.after.definition.action).toBe('keep')
-    expect(await ingestMill(request('', { ...network, events: network.events.map(event => ({ ...event, severity: 'low' })) }), reply() as any)).toMatchObject({ stored_events: 1, dropped_events: 0 })
+    expect(await ingestMill(request('', benign), reply() as any)).toMatchObject({ stored_events: 1, dropped_events: 0 })
     expect(findings.some(finding => finding.ruleId === created.rule.id)).toBe(false)
     await postMillRule(request('', body), reply() as any)
-    expect((await ingestMill(request('', { ...network, events: network.events.map(event => ({ ...event, severity: 'low' })) }), reply() as any)).dropped_events).toBe(0)
+    expect((await ingestMill(request('', benign), reply() as any)).dropped_events).toBe(0)
     const outside = reply()
     await postMillRule(request('', body, 'org-b'), outside as any)
     expect(outside.statusCode).toBe(403)
@@ -336,4 +339,34 @@ test('Drop remains Low on edit and high or unclassified events are retained', as
         const result = await ingestMill(request('', { ...network, events: network.events.map(event => ({ ...event, severity })) }), reply() as any)
         expect(result).toMatchObject({ stored_events: 1, dropped_events: 0 })
     }
+})
+
+
+test.each(['postgresql.readiness_audit.v1', 'model.verified_discovery_probes.v1'])('unverified %s cannot be enabled or configured to drop', async id => {
+    systemAdmin = true
+    const definition = { match: 'all', stage: 'analyze', action: 'keep', conditions: [], parameters: {} }
+    rows.push({ id: 'unavailable-rule', organization_id: 'org-a', rule_id: id, version: '1', name: 'Unverified probe', explanation: 'Await independent verification before enabling.', source: 'hanasand', severity: 'low', enabled: false, definition })
+    const enabled = reply()
+    await postMillRuleAction(request(id, { action: 'enable' }), enabled as any)
+    expect(enabled.statusCode).toBe(409)
+    const edited = reply()
+    await putMillRule(request(id, { ...edit, enabled: true, definition }), edited as any)
+    expect(edited.statusCode).toBe(409)
+    expect(normalizeBuiltinDefinition(id, { ...definition, action: 'drop' }).error).toBeTruthy()
+    const dropEdit = reply()
+    await putMillRule(request(id, { ...edit, enabled: false, definition: { ...definition, action: 'drop' } }), dropEdit as any)
+    expect(dropEdit.statusCode).toBe(400)
+    expect(rows[0].enabled).toBe(false)
+    expect(rows[0].definition.action).toBe('keep')
+    expect(audits).toEqual([])
+})
+
+
+test('existing Drop rules expose Low while Store rules retain their configured severity', async () => {
+    systemAdmin = true
+    const created = await postMillRule(request('', { name: 'Old drop rule', explanation: 'An older rule that dropped matching network events.', severity: 'high', stage: 'analyze', action: 'drop', conditions: [{ path: 'event_type', operator: 'equals', value: 'network' }] }), reply() as any)
+    rows[0].severity = 'critical'
+    expect((await getMillRule(request(created.rule.id), reply() as any)).rule.severity).toBe('low')
+    rows[0].definition.action = 'keep'
+    expect((await getMillRule(request(created.rule.id), reply() as any)).rule.severity).toBe('critical')
 })

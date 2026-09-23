@@ -46,3 +46,19 @@ test('pathological regex is terminated without blocking the API event loop', asy
     clearTimeout(timer)
     expect(responsive).toBe(true)
 })
+
+
+test('Drop preview excludes explicit suspicious evidence even on Low HTTP 200 events', async () => {
+    const base = row(1)
+    const suspicious = [
+        { detections: [{ rule_id: 'attack' }] }, { signature: 'attack' }, { outcome: 'failure' },
+        { metadata: { error: 'permission denied' } },
+        { metadata: { structured: { access: { inspection: { bodyEmpty: true, headersSafe: false, pathSafe: true } } } } },
+        { metadata: { request: { body: 'payload' } } },
+    ].map((patch, index) => ({ ...row(index + 2), normalized: { ...base.normalized, ...patch } }))
+    const query = async () => ({ rows: [base, ...suspicious] })
+    const drop = await scanRulePreview('org-a', true, input, query as any)
+    expect(drop.count).toBe(1)
+    expect(drop.events.map(event => event.id)).toEqual(['1'])
+    expect((await scanRulePreview('org-a', true, { ...input, action: 'keep' }, query as any)).count).toBe(7)
+})

@@ -1,4 +1,5 @@
 import run from '#db'
+import { eligibleCustomDrop } from './dropEligibility.ts'
 import { matchesMillRule, type MillCondition } from './conditions.ts'
 
 type RetentionRule = { source?: string, enabled?: boolean, definition?: { stage?: string, action?: string, conditions?: MillCondition[] } }
@@ -8,7 +9,7 @@ export function customRetentionAction(event: Record<string, unknown>, rules: Ret
         && rule.definition.conditions?.length && matchesMillRule(event, rule.definition.conditions))
     // Explicit storage exceptions take precedence over broader drop selectors.
     if (matches.some(rule => rule.definition?.action === 'keep')) return 'keep'
-    if (event.severity === 'low' && matches.some(rule => rule.definition?.action === 'drop')) return 'drop'
+    if (eligibleCustomDrop(event) && matches.some(rule => rule.definition?.action === 'drop')) return 'drop'
 }
 
 export async function loadLogRetentionRules(organizationId: string | null, query: typeof run = run): Promise<RetentionRule[]> {
