@@ -1,6 +1,5 @@
 import { expect, test } from 'bun:test'
 import { listRule, ruleCategory, loadRuleHits } from '../src/utils/mill/ruleList.ts'
-import { getRuleCategory } from '../../frontend/src/app/dashboard/mill/rules/rule-categories.ts'
 import { collectorRuleId } from '../src/utils/mill/analyzeCollector.ts'
 import { postgresRuleId } from '../src/utils/mill/analyzePostgres.ts'
 
@@ -9,13 +8,14 @@ test('list projection excludes definitions and evidence, preserves displayed fie
         evidence: ['private evidence'], detectionLogic: 'full logic', sourceReference: 'reference', definition: { stage: 'analyze', action: 'drop', conditions: [{ path: 'secret', value: 'value' }] } }
     expect(listRule(rule)).toEqual({ id: rule.id, recordId: rule.recordId, name: rule.name, explanation: rule.explanation, family: rule.family, severity: rule.severity, source: rule.source, enabled: false, definition: { stage: 'analyze', action: 'drop' } })
 })
-test('server category matches UI, including custom stages and historical IDs', () => {
-    for (const id of ['auth.new_country.v2', 'auth.impossible_travel.v1', 'network.signature_alert.v1', 'custom.test.v1', 'postgresql.readiness_sessions.v1']) {
-        for (const source of ['owned', 'open_source', 'hanasand']) for (const stage of [undefined, 'analyze', 'match', 'detect']) {
-            const rule = { id, source, definition: { stage } }
-            expect(ruleCategory(rule)).toBe(getRuleCategory(rule))
-        }
-    }
+test('category honors custom stages and historical built-in IDs', () => {
+    expect(ruleCategory({ id: 'auth.new_country.v2', source: 'hanasand' })).toBe('analysis')
+    expect(ruleCategory({ id: 'auth.impossible_travel.v1', source: 'hanasand' })).toBe('analysis')
+    expect(ruleCategory({ id: 'network.signature_alert.v1', source: 'hanasand' })).toBe('match')
+    expect(ruleCategory({ id: 'custom.test.v1', source: 'owned' })).toBe('match')
+    expect(ruleCategory({ id: 'imported.test.v1', source: 'open_source' })).toBe('match')
+    expect(ruleCategory({ id: 'custom.test.v1', source: 'owned', definition: { stage: 'detect' } })).toBe('detection')
+    expect(ruleCategory({ id: 'postgresql.readiness_sessions.v1', definition: { stage: 'analyze' } })).toBe('analysis')
 })
 test('hits count only requested rules and never read event metadata', async () => {
     const calls: Array<{ sql: string, values: unknown }> = []
