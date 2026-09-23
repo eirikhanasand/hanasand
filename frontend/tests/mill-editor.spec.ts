@@ -93,3 +93,11 @@ test('Analyze rule exposes reversible retention and persists its action', async 
     await expect(page.getByRole('button', { name: 'Add event selector condition' })).toHaveCount(0)
     await page.screenshot({ path: '/tmp/hanasand-analyze-rule.png', fullPage: true })
 })
+
+
+test('historical Drop rules display their recorded severity', async ({ page }) => {
+    await page.route('**/api/backend/mill/rules/*?*', route => route.fulfill({ json: { rule: { ...initial, definition: { ...definition, stage: 'analyze', action: 'drop' } }, isHistorical: true, currentVersion: '2', canEdit: false, triggerCount: 0, audit: [], nextOffset: null } }))
+    await page.goto('http://mill-editor.test/mill/rules/auth.brute_force_success.v1')
+    await expect(page.getByRole('combobox', { name: /^Severity/ })).toHaveValue('high')
+    await expect(page.getByRole('combobox', { name: /^Severity/ })).toBeDisabled()
+})
