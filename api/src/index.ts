@@ -3,7 +3,7 @@ import { processRuleReprocessJob } from '#utils/mill/ruleReprocess.ts'
 import { startLogProcessor } from '#utils/mill/processor.ts'
 import { startBackgroundAnalytics } from './utils/backgroundAnalytics.ts'
 import { recoveryRequestAllowed, recoveryState, recoveryReadOnly } from './utils/resilience.ts'
-import { queryOnce, closeDatabase } from './utils/db.ts'
+import { queryOnce, closeDatabase, withMillDatabase } from './utils/db.ts'
 import Fastify from 'fastify'
 import apiRoutes from './routes.ts'
 import cors from '@fastify/cors'
@@ -179,8 +179,8 @@ async function start() {
             })
         }
         if (!browserWorkerOnly && !httpWorkerOnly && process.env.AUTH_SERVICE_ONLY !== '1') {
-            const stopProcessing = startLogProcessor(processStoredLogs, error => fastify.log.error({ error }, 'Mill log processing failed; will retry'))
-            const stopLiveProcessing = startLogProcessor(processLiveLogs, error => fastify.log.error({ error }, 'Mill live processing failed; will retry'), () => 100, undefined, 100)
+            const stopProcessing = startLogProcessor(() => withMillDatabase(processStoredLogs), error => fastify.log.error({ error }, 'Mill log processing failed; will retry'))
+            const stopLiveProcessing = startLogProcessor(() => withMillDatabase(processLiveLogs), error => fastify.log.error({ error }, 'Mill live processing failed; will retry'), () => 100, undefined, 100)
             const stopReprocessing = startLogProcessor(processRuleReprocessJob, error => fastify.log.error({ error }, 'Rule reprocessing failed'), () => 1000)
             fastify.addHook('onClose', async () => { await Promise.all([stopProcessing(), stopLiveProcessing(), stopReprocessing()]) })
         }

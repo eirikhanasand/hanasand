@@ -234,7 +234,8 @@ export async function processStoredLogs() {
             await processFresh()
             const { rows: [queue] } = await run(`SELECT COALESCE((SELECT queued_at < clock_timestamp() - INTERVAL '60 seconds'
                 FROM log_process_queue ORDER BY queued_at, log_id LIMIT 1), FALSE) AS delayed`)
-            await processQueuedLogs(processScopes, queue.delayed, configuredLimit)
+            // Command checks must not inherit the historical replication throttle.
+            await processQueuedLogs(processScopes, queue.delayed)
             await processFresh()
             await recoverProcessLogs(processScopes, configuredLimit)
             await processFresh()
@@ -244,7 +245,7 @@ export async function processStoredLogs() {
             // A fixed snapshot restores ordinary limits on the next clear tick.
             const catchupLimit = Math.min(queue.delayed ? 100 : 1000, configuredLimit)
             const historyLimit = Math.min(queue.delayed ? 100 : 10000, settings.historyLimit)
-            const beforeHistory = historyLimit > catchupLimit ? () => processQueuedLogs(processScopes, false, configuredLimit) : undefined
+            const beforeHistory = historyLimit > catchupLimit ? () => processQueuedLogs(processScopes, false) : undefined
             const processPage = async (after: string, until: string, pageLimit = catchupLimit) => {
                 const candidates = await run('SELECT id FROM service_logs WHERE id > $1 AND id <= $2 ORDER BY id LIMIT 10000', [after, until])
                 const batch = candidates.rows.length ? await run(`SELECT * FROM service_logs s WHERE id > $1 AND id <= $2 AND id = ANY($4::bigint[])

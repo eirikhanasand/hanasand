@@ -1,9 +1,9 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
 let ready = false, locked = false, fail = false, complete = false
-let queries: string[], cursor: string
+let queries: string[], cursor: string, lastError: string | null
 const query = async (sql: string, params: any[] = []): Promise<any> => {
     queries.push(sql)
-    if (sql.startsWith('SELECT last_event_id')) return { rows: locked ? [] : [{ ready, last_event_id: cursor }] }
+    if (sql.startsWith('SELECT last_event_id')) return { rows: locked ? [] : [{ ready, last_event_id: cursor, last_error: lastError }] }
     if (sql.includes('FROM mill_events WHERE id >')) return { rows: complete ? [] : [{ id: 'b', ingestion_id: 'logs', processing_status: 'processed' }] }
     if (sql.startsWith('INSERT INTO mill_log_dimensions') && fail) throw new Error('Projection write failed')
     if (sql.startsWith('UPDATE mill_log_dimensions_state SET last_event_id')) { cursor = params[0]; ready = params[1] }
@@ -11,7 +11,7 @@ const query = async (sql: string, params: any[] = []): Promise<any> => {
 }
 mock.module('#db', () => ({ withTransaction: async (work: any) => work(query) }))
 const { backfillLogDimensions, dimensionLogWhere, foldLogCounts } = await import('../src/utils/logs/dimensions.ts')
-beforeEach(() => { ready = locked = fail = complete = false; queries = []; cursor = '' })
+beforeEach(() => { ready = locked = fail = complete = false; queries = []; cursor = ''; lastError = null })
 test('projection backfill is bounded, source-locked, and ready only after the final batch', async () => {
     expect(await backfillLogDimensions(1)).toEqual({ processed: 1, ready: false })
     expect(cursor).toBe('b')
@@ -60,4 +60,11 @@ test('every KQL field is either represented exactly or falls back to source even
         const query = compileLogQuery(`Logs | where ${name} == ${name === 'TimeGenerated' ? 'ago(1h)' : '"fixture"'}`)
         expect(dimensionLogWhere(query.where) !== null).toBe(supported.includes(name))
     }
+})
+
+test('a successful ready check clears a stale connection failure without rebuilding counters', async () => {
+    ready = true; lastError = 'timeout exceeded when trying to connect'
+    expect(await backfillLogDimensions()).toEqual({ processed: 0, ready: true })
+    expect(queries).toHaveLength(2)
+    expect(queries[1]).toBe('UPDATE mill_log_dimensions_state SET last_error = NULL WHERE id = TRUE')
 })

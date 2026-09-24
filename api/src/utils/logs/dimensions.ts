@@ -5,8 +5,12 @@ import { withTransaction } from '#db'
 export async function backfillLogDimensions(limit = 5000) {
     if (!Number.isInteger(limit) || limit < 1 || limit > 10000) throw new Error('Projection batch must contain 1–10000 events.')
     try { return await withTransaction(async query => {
-        const state = (await query('SELECT last_event_id, ready FROM mill_log_dimensions_state WHERE id = TRUE FOR UPDATE SKIP LOCKED')).rows[0]
-        if (!state || state.ready) return { processed: 0, ready: Boolean(state?.ready) }
+        const state = (await query('SELECT last_event_id, ready, last_error FROM mill_log_dimensions_state WHERE id = TRUE FOR UPDATE SKIP LOCKED')).rows[0]
+        if (!state) return { processed: 0, ready: false }
+        if (state.ready) {
+            if (state.last_error) await query('UPDATE mill_log_dimensions_state SET last_error = NULL WHERE id = TRUE')
+            return { processed: 0, ready: true }
+        }
         const batch = await query(`SELECT id, organization_id, event_timestamp::text AS event_timestamp, ingestion_id, processing_status,
             normalized->>'severity' AS severity, normalized->>'service' AS service, normalized->>'log_type' AS log_type
             FROM mill_events WHERE id > $1 ORDER BY id LIMIT $2 FOR SHARE`, [state.last_event_id, limit])

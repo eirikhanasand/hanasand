@@ -76,7 +76,7 @@ mock.module('#db', () => ({ default: query, withTransaction: async (work: any) =
     }
 } }))
 mock.module('../src/utils/logs/dimensions.ts', () => ({ backfillLogDimensions: async () => ({ processed: 0, ready: true }) }))
-mock.module('../src/utils/mill/processQueue.ts', () => ({ acknowledgeProcessedLogs: async (ids: string[]) => { acknowledged.push(ids) }, processQueuedLogs: async (_process: unknown, delayed: boolean, limit: number) => { queueRuns++; queueModes.push(delayed); queueLimits.push(limit) }, recoverProcessLogs: async (_process: unknown, limit: number) => { recoveryRuns++; recoveryLimits.push(limit) } }))
+mock.module('../src/utils/mill/processQueue.ts', () => ({ acknowledgeProcessedLogs: async (ids: string[]) => { acknowledged.push(ids) }, processQueuedLogs: async (_process: unknown, delayed: boolean, limit = 1000) => { queueRuns++; queueModes.push(delayed); queueLimits.push(limit) }, recoverProcessLogs: async (_process: unknown, limit: number) => { recoveryRuns++; recoveryLimits.push(limit) } }))
 mock.module('../src/utils/mill/storedSources.ts', () => ({ processAdditionalLogSources: async (_process: unknown, historyLimit: number, recentLimit: number, cursorQuery: unknown) => { additionalRuns++; historyLimits.push(historyLimit); recentLimits.push(recentLimit); additionalCursorQuery = cursorQuery } }))
 mock.module('../src/utils/mill/logWatermark.ts', () => ({ stableLogWatermark: async () => watermark }))
 mock.module('../src/handlers/mill.ts', () => ({
@@ -227,7 +227,7 @@ for (const value of ['1', '100', '1000']) test(`operator catch-up limit ${value}
     await processStoredLogs()
     expect(reads.map(read => read.params[2])).toEqual([Number(value), Number(value)])
     expect(historyLimits).toEqual([Number(value)]); expect(recentLimits).toEqual([Number(value)])
-    expect(recoveryLimits).toEqual([Number(value)]); expect(queueModes).toEqual([false]); expect(queueLimits).toEqual([Number(value)])
+    expect(recoveryLimits).toEqual([Number(value)]); expect(queueModes).toEqual([false]); expect(queueLimits).toEqual([1000])
     delete process.env.LOG_CATCHUP_BATCH_LIMIT
     await processStoredLogs()
     expect(recoveryLimits).toEqual([Number(value), 1000])
@@ -245,7 +245,7 @@ test('operator cap and delayed-command cap use the smaller limit without reducin
     await processStoredLogs()
     expect(checked).toEqual(['190', '101', '1'])
     expect(reads.map(read => read.params[2])).toEqual([1, 1])
-    expect(recoveryLimits).toEqual([1]); expect(queueModes).toEqual([true])
+    expect(recoveryLimits).toEqual([1]); expect(queueModes).toEqual([true]); expect(queueLimits).toEqual([1000])
 })
 
 test('unknown organization logs fall back to the active platform organization', async () => {

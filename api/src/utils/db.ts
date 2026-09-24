@@ -26,13 +26,19 @@ export function withSchemaLockTimeout<T>(work: () => Promise<T>): Promise<T> {
     return schemaWork.run(true, work)
 }
 
-const pool = new Pool({
+const millWork = new AsyncLocalStorage<boolean>()
+const maxConnections = Number(DB_MAX_CONN) || 20
+// Reserve worker capacity without increasing its total connection budget.
+// Mill holds cursor and batch locks while committing evidence on another client.
+const millConnections = process.env.API_HTTP_ONLY !== '1' && process.env.AUTH_SERVICE_ONLY !== '1'
+    && maxConnections >= 12 ? 8 : 0
+const poolOptions = {
     user: DB_USER || 'hanasand',
     host: DB_HOST,
     database: DB || 'hanasand',
     password: DB_PASSWORD,
     port: Number(DB_PORT) || 5432,
-    max: Number(DB_MAX_CONN) || 20,
+    max: maxConnections - millConnections,
     // Keep one API connection between ten-second polls; burst connections still
     // expire normally and authentication/worker pools retain their own policy.
     min: process.env.API_HTTP_ONLY === '1' && process.env.AUTH_SERVICE_ONLY !== '1' ? 1 : 0,
@@ -44,14 +50,24 @@ const pool = new Pool({
     connectionTimeoutMillis: Number(DB_TIMEOUT_MS) || 3000,
     statement_timeout: (process.env.AUTH_SERVICE_ONLY === '1' || process.env.API_HTTP_ONLY === '1') ? 5000 : undefined,
     keepAlive: true
-})
+}
+const pool = new Pool(poolOptions)
+const millPool = millConnections ? new Pool({ ...poolOptions, max: millConnections }) : pool
+
+export function withMillDatabase<T>(work: () => Promise<T>): Promise<T> {
+    return millWork.run(true, work)
+}
+
+function activePool() { return millWork.getStore() ? millPool : pool }
 
 // Checked-out clients can emit transport errors between queries, outside the pool's idle handler.
-pool.on('connect', client => client.on('error', error => console.error('Database connection failed:', error.message)))
-pool.on('error', error => console.error('Idle database connection failed:', error.message))
+for (const connectionPool of new Set([pool, millPool])) {
+    connectionPool.on('connect', client => client.on('error', error => console.error('Database connection failed:', error.message)))
+    connectionPool.on('error', error => console.error('Idle database connection failed:', error.message))
+}
 
 export async function closeDatabase() {
-    await pool.end()
+    await Promise.all([...new Set([pool, millPool])].map(connectionPool => connectionPool.end()))
 }
 
 export default async function run(query: string, params?: SQLParamType, name?: string) {
@@ -73,12 +89,12 @@ export default async function run(query: string, params?: SQLParamType, name?: s
 }
 
 export async function queryOnce(query: string, params?: SQLParamType, name?: string) {
-    const client = await pool.connect().catch(error => {
+    const client = await activePool().connect().catch(error => {
         // No query has been submitted yet: one retry can survive a brief pool
         // shortage without replaying writes or extending authentication retries.
         if (process.env.API_HTTP_ONLY === '1' && process.env.AUTH_SERVICE_ONLY !== '1'
             && (isTransientDatabaseError(error) || error?.message === 'timeout exceeded when trying to connect')) {
-            return pool.connect()
+            return activePool().connect()
         }
         throw error
     })
@@ -122,7 +138,7 @@ export async function queryOnce(query: string, params?: SQLParamType, name?: str
 }
 
 export async function withDatabaseAdvisoryLock<T>(key: string, work: () => Promise<T>): Promise<T> {
-    const client = await pool.connect()
+    const client = await activePool().connect()
     try {
         await client.query('SELECT pg_advisory_lock(hashtextextended($1, 0))', [key])
         return await work()
@@ -133,7 +149,7 @@ export async function withDatabaseAdvisoryLock<T>(key: string, work: () => Promi
 }
 
 export async function withTransaction<T>(work: (query: typeof queryOnce) => Promise<T>) {
-    const client = await pool.connect()
+    const client = await activePool().connect()
     const schema = schemaWork.getStore()
     let expired = false
     let timer: ReturnType<typeof setTimeout> | undefined
