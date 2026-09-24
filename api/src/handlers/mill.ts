@@ -399,10 +399,10 @@ export async function getMillRule(req: FastifyRequest<{ Params: { id: string }, 
         FROM system_events WHERE organization_id = $1 AND object_type = 'mill_rule'
         AND (object_id = $2 OR object_id = $3 OR context->>'ruleId' = $2)
         ORDER BY created_at DESC, id DESC LIMIT 51 OFFSET $4`, [access.organizationId, rule.id, rule.recordId || rule.id, offset])
-    const triggers = await run(`SELECT count(*)::text AS count FROM mill_findings
-        WHERE organization_id = $1 AND rule_id = $2`, [access.organizationId, rule.id])
+    const hits = await loadRuleHits(access.organizationId, [rule], run)
+    const hitCount = rule.source === 'owned' && rule.definition?.stage === 'analyze' ? null : hits.get(rule.id) ?? 0
     const canEdit = !isHistorical && canManageMillRules(access.role) && (!([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') || (await hasRole(req, res, 'system_admin')).valid)
-    return res.send({ organizationId: access.organizationId, canEdit, isHistorical, currentVersion: rule.version, rule: displayedRule, triggerCount: Number(triggers.rows[0].count), audit: audit.rows.slice(0, 50), nextOffset: audit.rows.length > 50 ? offset + 50 : null })
+    return res.send({ organizationId: access.organizationId, canEdit, isHistorical, currentVersion: rule.version, rule: displayedRule, triggerCount: hitCount, audit: audit.rows.slice(0, 50), nextOffset: audit.rows.length > 50 ? offset + 50 : null })
 }
 
 export async function putMillRule(req: FastifyRequest<{ Params: { id: string } }>, res: FastifyReply) {

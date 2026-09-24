@@ -10,7 +10,7 @@ import ReprocessRule from '../reprocess-rule'
 import { getRuleCategory, ruleCategories } from '../rule-categories'
 
 type Audit = { id: string, event_type: string, actor_id: string | null, created_at: string, context: { before?: Record<string, unknown> | null, after?: Record<string, unknown>, action?: string } }
-type Payload = { isHistorical?: boolean, currentVersion?: string, triggerCount: number, rule: MillRule, canEdit: boolean, audit: Audit[], nextOffset: number | null }
+type Payload = { isHistorical?: boolean, currentVersion?: string, triggerCount: number | null, rule: MillRule, canEdit: boolean, audit: Audit[], nextOffset: number | null }
 const fieldClass = 'mt-1.5 w-full min-w-0 rounded-lg border border-ui-border bg-ui-canvas px-3 py-2 text-sm font-normal text-ui-text outline-none focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/15 disabled:opacity-70'
 
 export default function RuleDetails({ id, organizationId }: { id: string, organizationId: string }) {
@@ -80,7 +80,7 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
                     </div>
                     <dl className='flex items-center gap-2 border-t border-ui-border pt-2 sm:min-w-32 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-4'>
                         <Activity size={20} className='text-ui-primary' aria-hidden='true' />
-                        <div><dt className='text-xs font-medium text-ui-muted'>Trigger count</dt><dd className='mt-1 text-xl font-semibold leading-none tabular-nums text-ui-text' title='Recorded detections for this organization across all versions, including resolved detections.'>{data.triggerCount?.toLocaleString() ?? 'Unavailable'}</dd></div>
+                        <div><dt className='text-xs font-medium text-ui-muted'>Hits</dt><dd className='mt-1 text-xl font-semibold leading-none tabular-nums text-ui-text' title='Recorded rule hits for this organization, using the same total as the rule list.'>{data.triggerCount?.toLocaleString('en-US') ?? 'Unavailable'}</dd></div>
                     </dl>
                 </header>
             </DashboardPanel>

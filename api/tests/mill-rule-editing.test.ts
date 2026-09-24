@@ -317,6 +317,10 @@ test('rule library exposes collector totals and organization-scoped detection hi
     expect(hits(builtin)).toBe(1)
     expect(hits('auth.impossible_travel.v1')).toBe(0)
     expect(hits('custom.retention.v1')).toBeNull()
+    for (const id of ['http.routine_access.v1', 'mongodb.cashflow_connections.v1', builtin, 'auth.impossible_travel.v1', 'custom.retention.v1']) {
+        const detail = await getMillRule(request(id.replace(/\.v\d+$/, '')), reply() as any)
+        expect(detail.triggerCount).toBe(hits(id))
+    }
     const denied = reply()
     await getMillRules(request('', {}, 'other-org'), denied as any)
     expect(denied.statusCode).toBe(403)
