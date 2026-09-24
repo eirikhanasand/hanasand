@@ -1,4 +1,5 @@
 import { browserResultId } from '../ws/browserResultIdentity.ts'
+import { ensureColumn, ensureIndex, ensureMillSourceConstraint } from './existingSchema.ts'
 import ensureAuditAcknowledgmentsSchema from './auditAcknowledgmentsSchema.ts'
 import ensureLogAnalyzeSchema from './logAnalyzeSchema.ts'
 import ensureRuleReprocessSchema from './ruleReprocessSchema.ts'
@@ -491,10 +492,10 @@ async function applySchema() {
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
     `)
-    await run('CREATE INDEX IF NOT EXISTS idx_service_logs_created_at ON service_logs(created_at DESC)')
-    await run('ALTER TABLE service_logs ADD COLUMN IF NOT EXISTS source_event_id TEXT')
-    await run('CREATE UNIQUE INDEX IF NOT EXISTS idx_service_logs_source_event_id ON service_logs(source_event_id)')
-    await run('CREATE INDEX IF NOT EXISTS idx_service_logs_service_level ON service_logs(service, level, created_at DESC)')
+    await ensureIndex(run, 'idx_service_logs_created_at', 'CREATE INDEX IF NOT EXISTS idx_service_logs_created_at ON service_logs(created_at DESC)')
+    await ensureColumn(run, 'service_logs', 'source_event_id', 'ALTER TABLE service_logs ADD COLUMN IF NOT EXISTS source_event_id TEXT')
+    await ensureIndex(run, 'idx_service_logs_source_event_id', 'CREATE UNIQUE INDEX IF NOT EXISTS idx_service_logs_source_event_id ON service_logs(source_event_id)')
+    await ensureIndex(run, 'idx_service_logs_service_level', 'CREATE INDEX IF NOT EXISTS idx_service_logs_service_level ON service_logs(service, level, created_at DESC)')
     await run(`
         CREATE TABLE IF NOT EXISTS host_update_snapshots (
             host TEXT PRIMARY KEY,
@@ -519,7 +520,7 @@ async function applySchema() {
         )
     `)
     await run('CREATE INDEX IF NOT EXISTS idx_host_update_events_host_occurred ON host_update_events(host, occurred_at DESC)')
-    await run('CREATE INDEX IF NOT EXISTS idx_service_logs_http_errors ON service_logs((metadata->>\'category\'), created_at DESC)')
+    await ensureIndex(run, 'idx_service_logs_http_errors', 'CREATE INDEX IF NOT EXISTS idx_service_logs_http_errors ON service_logs((metadata->>\'category\'), created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_service_logs_http_error_code ON service_logs((metadata->>\'error_code\'), created_at DESC) WHERE metadata->>\'category\' = \'http_response_error\'')
     await run(`
         CREATE TABLE IF NOT EXISTS scheduled_job_controls (
@@ -1516,10 +1517,9 @@ async function applySchema() {
             CHECK (severity IN ('low', 'medium', 'high', 'critical'))
         )
     `)
-    await run('ALTER TABLE mill_rules ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT \'owned\'')
-    await run('ALTER TABLE mill_rules ADD COLUMN IF NOT EXISTS source_reference TEXT')
-    await run('ALTER TABLE mill_rules DROP CONSTRAINT IF EXISTS mill_rules_source_check')
-    await run('ALTER TABLE mill_rules ADD CONSTRAINT mill_rules_source_check CHECK (source IN (\'owned\', \'open_source\', \'hanasand\'))')
+    await ensureColumn(run, 'mill_rules', 'source', 'ALTER TABLE mill_rules ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT \'owned\'')
+    await ensureColumn(run, 'mill_rules', 'source_reference', 'ALTER TABLE mill_rules ADD COLUMN IF NOT EXISTS source_reference TEXT')
+    await ensureMillSourceConstraint(run)
     await run('CREATE INDEX IF NOT EXISTS idx_mill_rules_org_enabled ON mill_rules(organization_id, enabled, updated_at DESC)')
     await ensureLogAnalyzeSchema()
     await ensureRuleReprocessSchema()
