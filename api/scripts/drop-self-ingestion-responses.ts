@@ -4,6 +4,7 @@ import run, { withTransaction } from '#db'
 import { eventProtectionRuleId, eventProtectionRule, eventProtectionDefinition, normalizeEventProtection } from '#utils/mill/eventProtection.ts'
 import { normalizeLogEvent } from '#utils/mill/logEvent.ts'
 import { storedSourceLog } from '#utils/mill/storedSources.ts'
+import { matchesMillRule } from '#utils/mill/conditions.ts'
 import { reprocessRuleItems } from '#utils/mill/ruleReprocess.ts'
 
 const organizationId = process.argv[2]
@@ -23,7 +24,7 @@ await withTransaction(async query => {
         return {...check,unlessAll:conditions}
     })}
     const after = {...before,protection}
-    if (JSON.stringify(after)!==JSON.stringify(before)) {
+    if (!isDeepStrictEqual(after,before)) {
         await query(`INSERT INTO mill_rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
             VALUES($1,$2,$3,'2',$4,'Security','low',$5,$6::jsonb,'hanasand',true)
             ON CONFLICT(organization_id,rule_id) DO UPDATE SET definition=EXCLUDED.definition,version=(mill_rules.version::int+1)::text,updated_at=NOW()`,
@@ -55,8 +56,8 @@ const candidates = [...events.map(row=>({id:row.id,key:row.key})),...sources.map
 const unique = [...new Map(candidates.map(row=>[row.key || row.id,row])).values()]
 const totals = {matched:0,protected:0,removedEvents:0,removedSources:0}
 console.log(JSON.stringify({candidates:unique.length}))
-for (let offset=0;offset<unique.length;offset+=200) {
-    const batch=unique.slice(offset,offset+200)
+for (let offset=0;offset<unique.length;offset+=1000) {
+    const batch=unique.slice(offset,offset+1000)
     const result=await withTransaction(async query=>{
         await query('SET LOCAL lock_timeout=\'10s\'')
         for (const lock of ['mill:service-logs','mill:live-service-logs']) await query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[lock])
@@ -74,10 +75,25 @@ for (let offset=0;offset<unique.length;offset+=200) {
             items.push({id:'',key:`service:${row.id}`,event:normalizeLogEvent(row)})
         }
         if (trafficIds.length) for (const row of (await query('SELECT * FROM traffic_events WHERE id=ANY($1::bigint[]) FOR UPDATE',[trafficIds])).rows) items.push({id:'',key:`service:traffic_events:${row.id}`,event:normalizeLogEvent(storedSourceLog('traffic_events',row))})
-        return reprocessRuleItems(items,{organization_id:organizationId},currentRule,query)
+        // POST/201 responses cannot prove the GET/200 proxy-compaction rule.
+        // Release only unused proof rows for exact matches, then restore any whose
+        // source survives the normal evidence checks, all in the same transaction.
+        const eligibleIds=items.filter(item=>matchesMillRule(item.event,currentRule.definition.conditions) && /^service:\d+$/.test(item.key || ''))
+            .map(item=>item.key!.slice(8))
+        const unused=(await query(`DELETE FROM log_proxy_requests p WHERE p.service_log_id=ANY($1::bigint[])
+            AND p.access->>'method'='POST' AND p.access->>'status'='201' AND p.access->>'path'='/api/logs/ingest'
+            AND p.access->>'ip'='128.39.142.218'
+            AND NOT EXISTS(SELECT 1 FROM log_proxy_receipts r WHERE r.connection_id=p.connection_id)
+            RETURNING p.*`,[eligibleIds])).rows
+        const result=await reprocessRuleItems(items,{organization_id:organizationId},currentRule,query)
+        if(unused.length) await query(`INSERT INTO log_proxy_requests(connection_id,service_log_id,connection,access)
+            SELECT p.connection_id,p.service_log_id,p.connection,p.access
+            FROM jsonb_to_recordset($1::jsonb) AS p(connection_id uuid,service_log_id bigint,connection jsonb,access jsonb)
+            JOIN service_logs s ON s.id=p.service_log_id`,[JSON.stringify(unused)])
+        return result
     })
     for (const key of Object.keys(totals) as (keyof typeof totals)[]) totals[key]+=result[key]
-    console.log(JSON.stringify({processed:Math.min(offset+200,unique.length),...totals}))
+    console.log(JSON.stringify({processed:Math.min(offset+1000,unique.length),...totals}))
 }
 await run(`INSERT INTO system_events(event_type,source,object_type,object_id,organization_id,context)
     VALUES('mill.rule.reprocessed','maintenance','mill_rule',$1,$2,$3::jsonb)`,[ruleId,organizationId,JSON.stringify({ruleId,version:rule.version,...totals})])
