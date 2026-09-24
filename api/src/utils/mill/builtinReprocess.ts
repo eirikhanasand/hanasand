@@ -1,3 +1,5 @@
+import { analyzeCdnDelivery } from './analyzeCdnDeliveryLog.ts'
+import { cdnDeliveryRuleId } from './analyzeCdnDelivery.ts'
 import type run from '#db'
 import { normalizeLogEvent, type LogInput } from './logEvent.ts'
 import { analyzeIngestion, ingestionRuleId } from './analyzeIngestion.ts'
@@ -27,6 +29,7 @@ const analyzers = {
     [proxyRuleId]: analyzeProxy,
     [collectorRuleId]: analyzeCollectorExecution,
     [cdnRefreshRuleId]: analyzeCdnRefresh,
+    [cdnDeliveryRuleId]: analyzeCdnDelivery,
     [modelDiscoveryRuleId]: analyzeModelDiscovery,
     [mongoRuleId]: analyzeMongoPing,
     [accessRuleId]: async (log: Parameters<typeof analyzeProxy>[0], query: typeof run) => {

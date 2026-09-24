@@ -1,3 +1,4 @@
+import { analyzeCdnDelivery } from '../mill/analyzeCdnDeliveryLog.ts'
 import { analyzeIngestion } from '../mill/analyzeIngestion.ts'
 import { analyzeModelDiscovery } from '../mill/analyzeModelDiscoveryLog.ts'
 import { analyzeReadinessAuditBatch } from '../mill/analyzeReadinessAuditLog.ts'
@@ -74,6 +75,7 @@ async function prepareLog({
     // Explicit Store exceptions must win before any built-in analyzer can drop.
     if (retentionAction !== 'keep') {
         if (await analyzeModelDiscovery({ service, host, level, message, metadata, sourceEventId, timestamp }, query === run ? undefined : query)) return
+        if (await analyzeCdnDelivery({ service, host, level, message, metadata, sourceEventId, timestamp }, query === run ? undefined : query)) return
         if (await analyzeCdnRefresh({ service, host, level, message, metadata, sourceEventId, timestamp }, query === run ? undefined : query)) return
         if (await analyzeCollectorExecution({ service, host, level, message, metadata, sourceEventId, timestamp }, query === run ? undefined : query)) return
         if (await analyzeMongoPing({ service, host, level, message, metadata, sourceEventId }, query === run ? undefined : query)) return
