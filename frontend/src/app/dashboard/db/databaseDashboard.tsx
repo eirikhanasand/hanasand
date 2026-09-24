@@ -1,7 +1,7 @@
 import { AlertTriangle, ArchiveRestore, CheckCircle2, ChevronDown, Clock3, DatabaseBackup, HardDrive, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
+import { DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import type { DatabaseOverview, DatabaseQueryActivity } from '@/utils/db/internal'
 import DatabaseWorkbench from './databaseWorkbench'
 import DatabaseRefresh from './databaseRefresh'
@@ -22,7 +22,6 @@ export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) 
 
     return <DashboardPage>
         <DatabaseRefresh />
-        <DashboardHeader title='Database' actions={<DatabaseActions />} />
         <section className='grid gap-3 sm:grid-cols-2 xl:grid-cols-4' aria-label='Storage health' data-db-monitor-metrics data-clusters={overview.clusterCount} data-databases={overview.databaseCount} data-storage-bytes={overview.totalSizeBytes}>
             <MetricCard icon={<HardDrive />} label='Disk free' value={disk ? formatBytes(disk.availableBytes) : 'Unavailable'} detail={disk ? `${formatBytes(disk.totalBytes)} total · ${storage?.host}` : 'Storage measurements unavailable'} />
             <MetricCard icon={<TrendingUp />} label='Growth / day' value={daily == null ? 'Measuring' : `${daily < 0 ? '−' : '+'}${formatBytes(Math.abs(daily))}`} detail={disk ? `Net disk change · ${Math.min(24, disk.sampleSeconds / 3600).toFixed(1)}h sampled` : 'No recent measurement'} />
@@ -33,7 +32,7 @@ export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) 
         <DashboardPanel className='min-w-0 overflow-hidden' id='storage-inventory'>
             <div className='flex flex-wrap items-center justify-between gap-2 border-b border-ui-border px-5 py-4'>
                 <h2 className='text-base font-semibold'>Storage and databases</h2>
-                <span className='text-xs text-ui-muted'>{storage?.stale ? 'Last known sizes · status stale' : storage ? storage.host : 'Hanasand cluster only · host inventory unavailable'}</span>
+                <div className='flex flex-wrap items-center gap-3'><span className='text-xs text-ui-muted'>{storage?.stale ? 'Last known sizes · status stale' : storage ? storage.host : 'Hanasand cluster only · host inventory unavailable'}</span><DatabaseActions /></div>
             </div>
             <div className='overflow-x-auto'><table className='w-full text-left text-sm'>
                 <thead className='bg-ui-raised text-xs text-ui-muted'><tr>

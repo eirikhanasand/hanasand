@@ -2,8 +2,12 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { DatabaseDashboard } from '../src/app/dashboard/db/databaseDashboard.tsx'
+// @ts-expect-error Bun supplies this module for focused checks.
+import { mock } from 'bun:test'
 import type { DatabaseOverview } from '../src/utils/db/internal'
+
+mock.module('next/navigation', () => ({ useRouter: () => ({ refresh() {} }) }))
+const { DatabaseDashboard } = await import('../src/app/dashboard/db/databaseDashboard.tsx')
 
 const frontendApi = await readFile(new URL('../src/utils/db/internal.ts', import.meta.url), 'utf8')
 const apiRoutes = await readFile(new URL('../../api/src/routes.ts', import.meta.url), 'utf8')
@@ -55,17 +59,18 @@ const healthyOverview: DatabaseOverview = {
 }
 
 const healthyMarkup = renderToStaticMarkup(React.createElement(DatabaseDashboard, { overview: healthyOverview }))
-assert.match(healthyMarkup, /Active and long-running queries/)
-assert.match(healthyMarkup, /No long-running queries right now/)
+assert.match(healthyMarkup, /<details id="active-queries"/)
+assert.match(healthyMarkup, />Queries</)
+assert.match(healthyMarkup, /Longest running query/)
 assert.match(healthyMarkup, /data-db-monitor-metrics/)
 assert.match(healthyMarkup, /hanasand/)
 assert.match(healthyMarkup, /42/)
 assert.match(healthyMarkup, /Backups/)
 assert.match(healthyMarkup, /Restore/)
 assert.match(healthyMarkup, /Database workbench/)
-assert.match(healthyMarkup, /Execute SQL/)
+assert.match(healthyMarkup, /SQL editor/)
 assert.match(healthyMarkup, /Inspect rows/)
-assert.match(healthyMarkup, /Check live/)
+assert.match(healthyMarkup, /Check connection/)
 assert.match(healthyMarkup, /public\.users/)
 assert.doesNotMatch(healthyMarkup, /Clusters<\/span><\/div><p[^>]*>0</)
 
@@ -90,10 +95,25 @@ const unavailableMarkup = renderToStaticMarkup(React.createElement(DatabaseDashb
     } satisfies DatabaseOverview,
 }))
 
-assert.match(unavailableMarkup, /Restore telemetry/)
-assert.match(unavailableMarkup, /Offline/)
-assert.match(unavailableMarkup, /Query telemetry unavailable/)
+assert.match(unavailableMarkup, /Database metrics unavailable/)
+assert.match(unavailableMarkup, /Not verified/)
+assert.match(unavailableMarkup, /Query activity unavailable/)
 assert.doesNotMatch(unavailableMarkup, /password authentication failed/i)
+
+const storage: NonNullable<DatabaseOverview['storage']> = {
+    sampledAt: healthyOverview.generatedAt, host: 'Inspur',
+    disk: { availableBytes: 100e9, totalBytes: 2e12, dailyGrowthBytes: 50e9, daysUntilFull: 2, sampleSeconds: 86400 },
+    instances: [
+        { id: 'cdn_database', engine: 'PostgreSQL', status: 'healthy', databases: [{ name: 'cdn', sizeBytes: 16e9, connections: 3 }] },
+        { id: 'replica', engine: 'PostgreSQL', status: 'unhealthy', databases: [{ name: 'hanasand', sizeBytes: 250e9, connections: 0, replica: true }] },
+    ],
+}
+const storageMarkup = renderToStaticMarkup(React.createElement(DatabaseDashboard, { overview: { ...healthyOverview, storage } }))
+for (const label of ['cdn_database', '16.00 GB', 'Replica', '1 need attention', '2 days', '+50.00 GB']) assert(storageMarkup.includes(label), label)
+assert(storageMarkup.indexOf('Storage and databases') < storageMarkup.indexOf('Database workbench'))
+const staleMarkup = renderToStaticMarkup(React.createElement(DatabaseDashboard, { overview: { ...healthyOverview, storage: { ...storage, stale: true } } }))
+assert(staleMarkup.includes('Not verified'))
+assert(!staleMarkup.includes('2 days'))
 
 assert.match(frontendApi, /requestService<DatabaseHealth>\('internal', 'db\/health'\)/, 'frontend should call the Hanasand liveness endpoint')
 assert.match(frontendApi, /requestService<DatabaseQueryResult>\('internal', 'db\/query'/, 'frontend should call the Hanasand SQL endpoint')
