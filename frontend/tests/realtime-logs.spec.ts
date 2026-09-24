@@ -41,7 +41,6 @@ test('paused realtime allows manual search and retry while suppressing periodic 
 
     const beforeResume = requests.length
     await page.getByRole('button', { name: 'Resume', exact: true }).click()
-    await page.getByRole('button', { name: 'Filter logs', exact: true }).click()
     await search.focus()
     await page.clock.runFor(300)
     await expect.poll(() => requests.length).toBe(beforeResume + 1)

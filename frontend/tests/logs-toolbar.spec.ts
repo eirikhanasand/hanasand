@@ -11,7 +11,7 @@ test('compact filters open with icon or shortcut and retain search on desktop an
     await openLogs(page, '/logs/search')
     await page.addStyleTag({ content: stylesheet.css })
     await page.evaluate(() => { document.body.classList.add('dark') })
-    const panel = page.getByRole('dialog', { name: 'Log filters' })
+    const panel = page.getByRole('region', { name: 'Log filters' })
     const button = page.getByRole('button', { name: 'Filter logs', exact: true })
     await expect(panel).toBeHidden()
     for (const width of [1440, 390]) {
@@ -21,6 +21,8 @@ test('compact filters open with icon or shortcut and retain search on desktop an
         await expect(panel.getByText('⌘J')).toBeVisible()
         await expect(panel.getByRole('combobox', { name: 'Service', exact: true }).locator('option')).toHaveCount(4)
         const bounds = await panel.boundingBox()
+        const content = await page.getByRole('region', { name: 'Log events', exact: true }).boundingBox()
+        expect(content!.y).toBeGreaterThanOrEqual(bounds!.y + bounds!.height)
         expect(bounds!.x).toBeGreaterThanOrEqual(0)
         expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width)
         const filters = await panel.getByRole('combobox').evaluateAll(elements => elements.map(element => { const r = element.getBoundingClientRect(); return { y: r.y, height: r.height, right: r.right } }))
@@ -43,6 +45,8 @@ test('compact filters open with icon or shortcut and retain search on desktop an
         await expect(page.getByRole('textbox', { name: 'HQL query' })).toBeFocused()
         await panel.getByRole('checkbox', { name: 'HQL' }).uncheck()
         await page.getByRole('heading', { name: 'Search logs', exact: true }).click()
+        await expect(panel).toBeVisible()
+        await panel.getByRole('button', { name: 'Close log filters' }).click()
         await expect(panel).toBeHidden()
     }
 })
