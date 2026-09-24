@@ -1,12 +1,27 @@
 'use client'
 
 import { Fragment, useEffect, useRef, useState } from 'react'
+import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import type { DatabaseOverview } from '@/utils/db/internal'
 
 type Instance = NonNullable<DatabaseOverview['storage']>['instances'][number]
 type Database = Instance['databases'][number]
 type Item = { schema: string, name: string, sizeBytes: number | null, columns?: string[], lastWriteObservedAt?: string | null, type?: string }
 type Page = { rows?: Record<string, unknown>[], fields?: string[], items?: Item[], nextCursor: string | null, elapsedMs?: number, totalRows?: number | null }
+type Sort<K extends string> = { key: K, descending: boolean }
+type DatabaseSort = 'name' | 'instance' | 'health' | 'count' | 'connections' | 'size'
+type ItemSort = 'name' | 'write' | 'size'
+
+function compare(a: string | number | null | undefined, b: string | number | null | undefined, descending: boolean) {
+    if (a == null) return b == null ? 0 : 1
+    if (b == null) return -1
+    return (typeof a === 'number' && typeof b === 'number' ? a - b : String(a).localeCompare(String(b), undefined, { numeric: true })) * (descending ? -1 : 1)
+}
+
+function SortButton({ label, active, descending, onClick }: { label: string, active: boolean, descending: boolean, onClick: () => void }) {
+    const Icon = active ? descending ? ArrowDown : ArrowUp : ArrowUpDown
+    return <button type='button' onClick={onClick} aria-label={`Sort by ${label.toLowerCase()} ${active && !descending ? 'descending' : 'ascending'}`} className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded py-1 text-xs focus-visible:outline-ui-primary ${active ? 'text-ui-primary' : 'text-ui-muted hover:text-ui-text'}`}>{label}<Icon aria-hidden className='h-3 w-3' /></button>
+}
 
 async function fetchPage(params: URLSearchParams, signal?: AbortSignal): Promise<Page> {
     const response = await fetch(`/api/db/browse?${params}`, { cache: 'no-store', signal })
@@ -17,14 +32,33 @@ async function fetchPage(params: URLSearchParams, signal?: AbortSignal): Promise
 
 export default function DatabaseInventory({ instances, stale }: { instances: Instance[], stale: boolean }) {
     const [expanded, setExpanded] = useState<string | null>(null)
-    return <div className='overflow-x-auto'><table className='w-full text-left text-sm'>
-        <thead className='bg-ui-raised text-xs text-ui-muted'><tr>{['Database', 'Instance', 'Health', 'Tables / keys', 'Connections', 'Size'].map(label => <th key={label} className='px-5 py-3 font-medium'>{label}</th>)}</tr></thead>
+    const [sort, setSort] = useState<Sort<DatabaseSort>>({ key: 'health', descending: false })
+    const viewport = useRef<HTMLDivElement>(null)
+    const [height, setHeight] = useState<number>()
+    const rows = instances.flatMap(instance => instance.databases.map(database => ({ instance, database })))
+    const health = (instance: Instance) => stale ? 0 : instance.status === 'healthy' ? 2 : instance.status === 'unhealthy' ? 1 : 0
+    const value = ({ instance, database }: typeof rows[number]) => ({ name: database.name, instance: instance.id, health: health(instance), count: database.tableCount, connections: database.connections, size: database.sizeBytes })[sort.key]
+    rows.sort((a, b) => compare(value(a), value(b), sort.descending) || compare(a.database.sizeBytes, b.database.sizeBytes, true) || a.database.name.localeCompare(b.database.name) || a.instance.id.localeCompare(b.instance.id))
+    useEffect(() => {
+        if (rows.length <= 5 || !viewport.current) return
+        const headers = viewport.current.querySelector('thead')
+        const entries = Array.from(viewport.current.querySelectorAll<HTMLElement>('[data-database-row]')).slice(0, 5)
+        const measure = () => setHeight(entries.reduce((total, row) => total + row.getBoundingClientRect().height, headers?.getBoundingClientRect().height || 0) + 1)
+        const observer = new ResizeObserver(measure)
+        if (headers) observer.observe(headers)
+        entries.forEach(row => observer.observe(row))
+        measure()
+        return () => observer.disconnect()
+    }, [instances, rows.length, sort])
+    const columns: [DatabaseSort, string][] = [['name', 'Database'], ['instance', 'Instance'], ['health', 'Health'], ['count', 'Tables / keys'], ['connections', 'Connections'], ['size', 'Size']]
+    return <div ref={viewport} className='overflow-auto' style={{ maxHeight: rows.length > 5 ? height : undefined }} tabIndex={0} aria-label='Databases'><table className='w-full text-left text-sm'>
+        <thead className='sticky top-0 z-10 bg-ui-raised text-xs text-ui-muted'><tr>{columns.map(([key, label]) => <th key={key} aria-sort={sort.key === key ? sort.descending ? 'descending' : 'ascending' : 'none'} className='px-5 py-2 font-medium'><SortButton label={label} active={sort.key === key} descending={sort.descending} onClick={() => setSort({ key, descending: sort.key === key ? !sort.descending : false })} /></th>)}</tr></thead>
         <tbody>
-            {instances.flatMap(instance => instance.databases.map(database => {
+            {rows.map(({ instance, database }) => {
                 const key = `${instance.id}/${database.name}`, open = expanded === key
                 const toggle = () => setExpanded(open ? null : key)
                 return <Fragment key={key}>
-                    <tr onClick={toggle} className={`cursor-pointer border-t transition hover:bg-ui-primary/10 ${open ? 'border-ui-primary bg-ui-primary/10' : 'border-ui-border'}`}>
+                    <tr data-database-row onClick={toggle} className={`cursor-pointer border-t transition hover:bg-ui-primary/10 ${open ? 'border-ui-primary bg-ui-primary/10' : 'border-ui-border'}`}>
                         <td className='px-5 py-3 font-medium'><button type='button' aria-expanded={open} onClick={event => { event.stopPropagation(); toggle() }} className='cursor-pointer text-left focus-visible:outline-ui-primary'>{database.name}</button>{database.replica && <span className='ml-2 text-xs text-ui-muted'>Replica</span>}</td>
                         <td className='px-5 py-3 text-xs text-ui-muted'>{instance.id}<span className='block'>{instance.engine}</span></td>
                         <td className={`px-5 py-3 ${!stale && instance.status === 'healthy' ? 'text-ui-success' : 'text-ui-warning'}`}>{stale ? 'Unknown' : instance.status === 'healthy' ? 'Healthy' : instance.status === 'unhealthy' ? 'Unhealthy' : 'Unavailable'}</td>
@@ -34,7 +68,7 @@ export default function DatabaseInventory({ instances, stale }: { instances: Ins
                     </tr>
                     {open && <tr className='border-b-2 border-ui-primary bg-ui-primary/5'><td colSpan={6} className='p-4'><DatabaseContents instance={instance} database={database} /></td></tr>}
                 </Fragment>
-            }))}
+            })}
         </tbody>
     </table></div>
 }
@@ -44,6 +78,7 @@ function DatabaseContents({ instance, database }: { instance: Instance, database
     const [cursor, setCursor] = useState<string | null>(null)
     const [selected, setSelected] = useState<string | null>(null)
     const [search, setSearch] = useState('')
+    const [sort, setSort] = useState<Sort<ItemSort>>({ key: 'size', descending: true })
     const searchInput = useRef<HTMLInputElement>(null)
     const list = useRef<HTMLDivElement>(null)
     const [listHeight, setListHeight] = useState<number>()
@@ -69,8 +104,9 @@ function DatabaseContents({ instance, database }: { instance: Instance, database
         buttons.forEach(button => observer.observe(button))
         measure()
         return () => observer.disconnect()
-    }, [manyTables, items, search])
-    const visibleItems = items.filter(item => `${item.schema}.${item.name}`.toLowerCase().includes(search.toLowerCase()))
+    }, [manyTables, items, search, sort])
+    const itemValue = (item: Item) => ({ name: `${item.schema}.${item.name}`, write: item.lastWriteObservedAt ? Date.parse(item.lastWriteObservedAt) : null, size: item.sizeBytes })[sort.key]
+    const visibleItems = items.filter(item => `${item.schema}.${item.name}`.toLowerCase().includes(search.toLowerCase())).sort((a, b) => compare(itemValue(a), itemValue(b), sort.descending) || `${a.schema}.${a.name}`.localeCompare(`${b.schema}.${b.name}`))
     const [error, setError] = useState('')
     const [pending, setPending] = useState(!database.tables)
     const params = () => new URLSearchParams({ instance: instance.id, database: database.name, mode: 'contents' })
@@ -91,6 +127,10 @@ function DatabaseContents({ instance, database }: { instance: Instance, database
     }
     return <div className='min-w-0 space-y-3 [contain:inline-size]'>
         {manyTables && <input ref={searchInput} type='search' value={search} onChange={event => setSearch(event.target.value)} placeholder='Search tables…' aria-label='Search tables' aria-keyshortcuts='Meta+X' className='w-full max-w-xs rounded border border-ui-border bg-ui-canvas px-3 py-1.5 text-sm' />}
+        <div className='flex flex-wrap gap-4 px-3 sm:grid sm:grid-cols-[minmax(0,1fr)_12rem_7rem] sm:gap-2' aria-label='Sort database contents'>
+            {([['name', 'Name'], ['write', 'Last write'], ['size', 'Size']] as const).map(([key, label]) => <SortButton key={key} label={label} active={sort.key === key} descending={sort.descending} onClick={() => setSort({ key, descending: sort.key === key ? !sort.descending : false })} />)}
+        </div>
+        {cursor && <p className='text-xs text-ui-muted'>Sorting loaded keys</p>}
         <div ref={list} className='min-w-0 space-y-3 overflow-y-auto' style={{ maxHeight: manyTables ? listHeight : undefined }}>
             {visibleItems.map(item => {
                 const key = `${item.schema}.${item.name}`, open = selected === key
