@@ -21,7 +21,7 @@ export default async function recordTraffic(req: FastifyRequest, res: FastifyRep
     let proxyRecorded = false
     try {
         if (persist) proxyRecorded = await recordProxyRequest(req, res)
-        const retentionAction = !proxyRecorded && persist ? customRetentionAction(normalizeLogEvent({ id: access.key, created_at: access.timestamp,
+        const retentionAction = persist ? customRetentionAction(normalizeLogEvent({ id: access.key, created_at: access.timestamp,
             service: 'http-traffic', host: req.hostname, level: res.statusCode >= 400 ? 'error' : 'info', message: `${req.method} ${path} → ${res.statusCode}`,
             metadata: { access, category: 'http', action: 'request', outcome: res.statusCode >= 400 ? 'failure' : 'success', path, method: req.method, status_code: res.statusCode, source: { ip: access.ip } },
         }), await loadLogRetentionRules(null)) : undefined

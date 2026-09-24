@@ -210,10 +210,10 @@ export async function getRealtimeLogs({ token, id, service }: { token?: string, 
     }
 }
 
-export async function getLogDashboard({ token, id, params, impersonationToken }: { token: string, id: string, params: Record<string, string | string[] | undefined>, impersonationToken?: string }): Promise<{ data: LogSearchResult | null, error: string }> {
+export async function getLogDashboard({ token, id, params, impersonationToken, view = 'dashboard' }: { view?: 'dashboard' | 'realtime' | 'search' | 'errors', token: string, id: string, params: Record<string, string | string[] | undefined>, impersonationToken?: string }): Promise<{ data: LogSearchResult | null, error: string }> {
     const value = (key: string) => { const input = params[key]; return (Array.isArray(input) ? input[0] : input) || '' }
     const appliedHql = value('hql') || value('kql')
-    const query = logSearchParams({ view: 'dashboard', hours: value('hours') || '24', advanced: !!appliedHql,
+    const query = logSearchParams({ view, hours: value('hours') || '24', advanced: !!appliedHql,
         appliedHql, table: logTables.includes(value('table')) ? value('table') : 'Logs', search: value('search'),
         service: value('service') || 'all', severity: value('severity') || 'all' })
     try {

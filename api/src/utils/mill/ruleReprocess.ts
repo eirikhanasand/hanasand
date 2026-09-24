@@ -83,56 +83,12 @@ export async function processRuleReprocessJob() {
                 })
                 if (rows.length) Object.assign(cursor, { time: rows.at(-1).cursor_time, id: String(rows.at(-1).id) })
             }
-            // All selectors, including regex, use the same bounded evaluator as preview.
-            const matches = (await matchRulePage(items.map(item => item.event), rule.definition.conditions)).map(index => items[index])
-            const storageRules = await loadLogRetentionRules(job.organization_id, query)
-            const detectors = await loadConfiguredMillRules(job.organization_id, query)
-            const protectedEvent = (event: Record<string, unknown>) => !eligibleCustomDrop(event)
-                || Boolean((event.metadata as Record<string, unknown>)?.unrecognized_ingest_fields)
-                || collectMillEventFindings(job.organization_id, '', normalizeMillEvent(event, {}), detectors).findings.length > 0
-            const keeps = storageRules.filter(r => r.definition?.action === 'keep' && !r.definition.protection && r.definition.conditions?.length)
-            const kept = new Set<number>()
-            for (const keep of keeps) for (const index of await matchRulePage(matches.map(item => item.event), keep.definition!.conditions!)) kept.add(index)
-            // Unsupported source tables cannot be reconciled atomically by this worker.
-            // Keep their projections, along with unknown envelopes and existing finding evidence.
-            let safe = matches.filter((item, index) => !kept.has(index) && !retentionStoreMatches({ ...item.event, retained_original: item.original }, storageRules) && !protectedEvent({ ...item.event, retained_original: item.original })
-                && !/^service:(?:login_events|system_events):/.test(item.key || ''))
-            const keys = safe.flatMap(item => item.key ? [item.key] : [])
-            const evidence = (await query(`SELECT id,log_key,organization_id,normalized,original FROM mill_events
-                WHERE id=ANY($1::text[]) OR log_key=ANY($2::text[]) FOR UPDATE`, [safe.map(item => item.id), keys])).rows
-            const findingIds = new Set((await query('SELECT event_ids FROM mill_findings WHERE event_ids && $1::text[]', [evidence.map(row => row.id)])).rows.flatMap(row => row.event_ids))
-            for (const keep of keeps) for (const index of await matchRulePage(evidence.map(row => row.normalized), keep.definition!.conditions!)) findingIds.add(evidence[index].id)
-            safe = safe.filter(item => !evidence.some(row => (row.id === item.id || (item.key && row.log_key === item.key))
-                && (row.organization_id !== job.organization_id || findingIds.has(row.id) || retentionStoreMatches({ ...row.normalized, original: row.original }, storageRules) || protectedEvent({ ...row.normalized, original: row.original }))))
-            // Check the still-retained original as well as the indexed projection.
-            // Old normalization versions may have omitted fields now recognized as unsafe.
-            const rawIds = safe.flatMap(item => /^service:\d+$/.test(item.key || '') ? [item.key!.split(':')[1]] : [])
-            const trafficIdsToCheck = safe.flatMap(item => /^service:traffic_events:\d+$/.test(item.key || '') ? [item.key!.split(':')[2]] : [])
-            const originals: Array<{ key: string, event: Record<string, unknown> }> = []
-            if (rawIds.length) for (const row of (await query('SELECT * FROM service_logs WHERE id=ANY($1::bigint[]) FOR UPDATE', [rawIds])).rows)
-                originals.push({ key: `service:${row.id}`, event: normalizeLogEvent(row) })
-            if (trafficIdsToCheck.length) for (const row of (await query('SELECT * FROM traffic_events WHERE id=ANY($1::bigint[]) FOR UPDATE', [trafficIdsToCheck])).rows)
-                originals.push({ key: `service:traffic_events:${row.id}`, event: normalizeLogEvent(storedSourceLog('traffic_events', row)) })
-            const retainedKeys = new Set(originals.filter(item => retentionStoreMatches(item.event, storageRules) || protectedEvent(item.event)).map(item => item.key))
-            for (const keep of keeps) for (const index of await matchRulePage(originals.map(item => item.event), keep.definition!.conditions!)) retainedKeys.add(originals[index].key)
-            const canonical = await canonicalReplayKeys(safe.flatMap(item => item.key ? [item.key] : []), query)
-            safe = safe.filter(item => !item.key || !retainedKeys.has(item.key) && !canonical.has(item.key))
-            const ids = evidence.filter(row => safe.some(item => item.id === row.id || (item.key && item.key === row.log_key))).map(row => row.id)
-            const serviceIds = new Set<string>(), trafficIds = new Set<string>()
-            for (const item of safe) {
-                if (/^service:\d+$/.test(item.key || '')) serviceIds.add(item.key!.split(':')[1])
-                if (/^service:traffic_events:\d+$/.test(item.key || '')) trafficIds.add(item.key!.split(':')[2])
-            }
-            // Deleting both copies in one transaction prevents catch-up from resurrecting a dropped event.
-            const removed = await query('DELETE FROM mill_events WHERE organization_id=$1 AND id=ANY($2::text[]) RETURNING id', [job.organization_id, ids])
-            let sources = 0
-            if (serviceIds.size) sources += (await query('DELETE FROM service_logs WHERE id=ANY($1::bigint[]) RETURNING id', [[...serviceIds]])).rowCount || 0
-            if (trafficIds.size) sources += (await query('DELETE FROM traffic_events WHERE id=ANY($1::bigint[]) RETURNING id', [[...trafficIds]])).rowCount || 0
+            const result = await reprocessRuleItems(items, job, rule, query)
             if (scanned < size) { cursor.phase++; delete cursor.time; delete cursor.id }
             const done = cursor.phase > 2
             await query(`UPDATE mill_rule_reprocess_jobs SET status=$2,cursor=$3::jsonb,scanned=scanned+$4,
                 matched=matched+$5,protected=protected+$6,removed_events=removed_events+$7,removed_sources=removed_sources+$8,
-                error=NULL,updated_at=NOW() WHERE id=$1`, [job.id, done ? 'completed' : 'running', JSON.stringify(cursor), scanned, matches.length, matches.length - safe.length, removed.rowCount || 0, sources])
+                error=NULL,updated_at=NOW() WHERE id=$1`, [job.id, done ? 'completed' : 'running', JSON.stringify(cursor), scanned, result.matched, result.protected, result.removedEvents, result.removedSources])
             if (done) await query(`INSERT INTO system_events(event_type,source,object_type,object_id,organization_id,context)
                 SELECT 'mill.rule.reprocessed','mill','mill_rule',rule_id,organization_id,
                     jsonb_build_object('jobId',id,'version',rule_version,'scanned',scanned,'matched',matched,'protected',protected,'removedEvents',removed_events,'removedSources',removed_sources)
@@ -149,4 +105,53 @@ export async function processRuleReprocessJob() {
             [jobId, error instanceof Error ? error.message.slice(0, 500) : 'Reprocessing failed.'])
         return false
     }
+}
+
+export async function reprocessRuleItems(items: Item[], job: Pick<ReprocessJob, 'organization_id'>, rule: Rule, query: typeof run) {
+    // All selectors, including regex, use the same bounded evaluator as preview.
+    const matches = (await matchRulePage(items.map(item => item.event), rule.definition.conditions)).map(index => items[index])
+    const storageRules = await loadLogRetentionRules(job.organization_id, query)
+    const detectors = await loadConfiguredMillRules(job.organization_id, query)
+    const protectedEvent = (event: Record<string, unknown>) => !eligibleCustomDrop(event)
+        || Boolean((event.metadata as Record<string, unknown>)?.unrecognized_ingest_fields)
+        || collectMillEventFindings(job.organization_id, '', normalizeMillEvent(event, {}), detectors).findings.length > 0
+    const keeps = storageRules.filter(r => r.definition?.action === 'keep' && !r.definition.protection && r.definition.conditions?.length)
+    const kept = new Set<number>()
+    for (const keep of keeps) for (const index of await matchRulePage(matches.map(item => item.event), keep.definition!.conditions!)) kept.add(index)
+    // Unsupported source tables cannot be reconciled atomically by this worker.
+    // Keep their projections, along with unknown envelopes and existing finding evidence.
+    let safe = matches.filter((item, index) => !kept.has(index) && !retentionStoreMatches({ ...item.event, retained_original: item.original }, storageRules) && !protectedEvent({ ...item.event, retained_original: item.original })
+        && !/^service:(?:login_events|system_events):/.test(item.key || ''))
+    const keys = safe.flatMap(item => item.key ? [item.key] : [])
+    const evidence = (await query(`SELECT id,log_key,organization_id,normalized,original FROM mill_events
+        WHERE id=ANY($1::text[]) OR log_key=ANY($2::text[]) FOR UPDATE`, [safe.map(item => item.id), keys])).rows
+    const findingIds = new Set((await query('SELECT event_ids FROM mill_findings WHERE event_ids && $1::text[]', [evidence.map(row => row.id)])).rows.flatMap(row => row.event_ids))
+    for (const keep of keeps) for (const index of await matchRulePage(evidence.map(row => row.normalized), keep.definition!.conditions!)) findingIds.add(evidence[index].id)
+    safe = safe.filter(item => !evidence.some(row => (row.id === item.id || (item.key && row.log_key === item.key))
+        && (row.organization_id !== job.organization_id || findingIds.has(row.id) || retentionStoreMatches({ ...row.normalized, original: row.original }, storageRules) || protectedEvent({ ...row.normalized, original: row.original }))))
+    // Check the still-retained original as well as the indexed projection.
+    // Old normalization versions may have omitted fields now recognized as unsafe.
+    const rawIds = safe.flatMap(item => /^service:\d+$/.test(item.key || '') ? [item.key!.split(':')[1]] : [])
+    const trafficIdsToCheck = safe.flatMap(item => /^service:traffic_events:\d+$/.test(item.key || '') ? [item.key!.split(':')[2]] : [])
+    const originals: Array<{ key: string, event: Record<string, unknown> }> = []
+    if (rawIds.length) for (const row of (await query('SELECT * FROM service_logs WHERE id=ANY($1::bigint[]) FOR UPDATE', [rawIds])).rows)
+        originals.push({ key: `service:${row.id}`, event: normalizeLogEvent(row) })
+    if (trafficIdsToCheck.length) for (const row of (await query('SELECT * FROM traffic_events WHERE id=ANY($1::bigint[]) FOR UPDATE', [trafficIdsToCheck])).rows)
+        originals.push({ key: `service:traffic_events:${row.id}`, event: normalizeLogEvent(storedSourceLog('traffic_events', row)) })
+    const retainedKeys = new Set(originals.filter(item => retentionStoreMatches(item.event, storageRules) || protectedEvent(item.event)).map(item => item.key))
+    for (const keep of keeps) for (const index of await matchRulePage(originals.map(item => item.event), keep.definition!.conditions!)) retainedKeys.add(originals[index].key)
+    const canonical = await canonicalReplayKeys(safe.flatMap(item => item.key ? [item.key] : []), query)
+    safe = safe.filter(item => !item.key || !retainedKeys.has(item.key) && !canonical.has(item.key))
+    const ids = evidence.filter(row => safe.some(item => item.id === row.id || (item.key && item.key === row.log_key))).map(row => row.id)
+    const serviceIds = new Set<string>(), trafficIds = new Set<string>()
+    for (const item of safe) {
+        if (/^service:\d+$/.test(item.key || '')) serviceIds.add(item.key!.split(':')[1])
+        if (/^service:traffic_events:\d+$/.test(item.key || '')) trafficIds.add(item.key!.split(':')[2])
+    }
+    // Deleting both copies in one transaction prevents catch-up from resurrecting a dropped event.
+    const removed = await query('DELETE FROM mill_events WHERE organization_id=$1 AND id=ANY($2::text[]) RETURNING id', [job.organization_id, ids])
+    let sources = 0
+    if (serviceIds.size) sources += (await query('DELETE FROM service_logs WHERE id=ANY($1::bigint[]) RETURNING id', [[...serviceIds]])).rowCount || 0
+    if (trafficIds.size) sources += (await query('DELETE FROM traffic_events WHERE id=ANY($1::bigint[]) RETURNING id', [[...trafficIds]])).rowCount || 0
+    return { matched: matches.length, protected: matches.length - safe.length, removedEvents: removed.rowCount || 0, removedSources: sources }
 }

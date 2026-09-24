@@ -1,6 +1,7 @@
+import { matchesMillRule, type MillCondition } from './conditions.ts'
 type Scalar = string | number | boolean | null
 type Context = { path: string, operator: 'signal' | 'equals' | 'truthy', value?: Scalar }
-type Check = { keys: string[], operator: 'signal' | 'in' | 'numberAtLeast' | 'equals' | 'objectMismatch', values?: Scalar[], value?: Scalar, expected?: Record<string, Scalar>, whenAny?: Context[] }
+type Check = { keys: string[], operator: 'signal' | 'in' | 'numberAtLeast' | 'equals' | 'objectMismatch', values?: Scalar[], value?: Scalar, expected?: Record<string, Scalar>, whenAny?: Context[], unlessAll?: MillCondition[] }
 export type EventProtectionPolicy = { appliesTo: 'custom_drop' | 'all', checks: Check[] }
 export const eventProtectionRuleId = 'security.event_evidence.v1'
 export const eventProtectionRule = { id: eventProtectionRuleId, version: '1', name: 'Protect evidence from custom Drop rules', family: 'Security', severity: 'low', enabled: true,
@@ -27,13 +28,17 @@ export function normalizeEventProtection(value: unknown): { protection?: EventPr
     const error = 'Protection must contain valid checks with field keys and matching operators.'
     if (!record(value) || Object.keys(value).some(key => !['appliesTo', 'checks'].includes(key)) || !['custom_drop', 'all'].includes(String(value.appliesTo)) || !Array.isArray(value.checks) || value.checks.length > 32) return { error }
     for (const check of value.checks) {
-        if (!record(check) || Object.keys(check).some(key => !['keys', 'operator', 'values', 'value', 'expected', 'whenAny'].includes(key))
+        if (!record(check) || Object.keys(check).some(key => !['keys', 'operator', 'values', 'value', 'expected', 'whenAny', 'unlessAll'].includes(key))
             || !Array.isArray(check.keys) || !check.keys.length || check.keys.length > 128 || check.keys.some(key => typeof key !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(key))) return { error }
         if (!['signal', 'in', 'numberAtLeast', 'equals', 'objectMismatch'].includes(String(check.operator))) return { error }
         if (check.operator === 'in' && (!Array.isArray(check.values) || check.values.length > 128 || !check.values.every(scalar))) return { error }
         if (check.operator === 'equals' && !scalar(check.value)) return { error }
         if (check.operator === 'numberAtLeast' && (typeof check.value !== 'number' || !Number.isFinite(check.value))) return { error }
         if (check.operator === 'objectMismatch' && (!record(check.expected) || !Object.keys(check.expected).length || Object.keys(check.expected).length > 32 || !Object.values(check.expected).every(scalar))) return { error }
+        if (check.unlessAll !== undefined && (!Array.isArray(check.unlessAll) || !check.unlessAll.length || check.unlessAll.length > 16
+            || check.unlessAll.some(condition => !record(condition) || Object.keys(condition).some(key => !['path', 'operator', 'value', 'caseSensitive'].includes(key))
+                || typeof condition.path !== 'string' || !/^[a-zA-Z0-9_.-]{1,200}$/.test(condition.path) || condition.operator !== 'equals'
+                || typeof condition.value !== 'string' || condition.value.length > 500 || condition.caseSensitive !== undefined && typeof condition.caseSensitive !== 'boolean'))) return { error }
         if (check.whenAny !== undefined && (!Array.isArray(check.whenAny) || !check.whenAny.length || check.whenAny.length > 16 || check.whenAny.some(context => !record(context)
             || Object.keys(context).some(key => !['path', 'operator', 'value'].includes(key)) || typeof context.path !== 'string' || !/^[a-zA-Z0-9_.-]{1,200}$/.test(context.path)
             || !['signal', 'equals', 'truthy'].includes(String(context.operator)) || context.operator === 'equals' && !scalar(context.value)))) return { error }
@@ -44,10 +49,10 @@ export function normalizeEventProtection(value: unknown): { protection?: EventPr
 // The policy determines what to retain. Bounds only fail closed when complete
 // evaluation is impossible; they never establish that an event may be dropped.
 export function matchesEventProtection(event: Record<string, unknown>, policy: EventProtectionPolicy): boolean {
-    const checks = policy.checks.filter(check => !check.whenAny || check.whenAny.some(context => {
+    const checks = policy.checks.filter(check => !(check.unlessAll?.length && matchesMillRule(event, check.unlessAll)) && (!check.whenAny || check.whenAny.some(context => {
         const value = context.path.split('.').reduce<unknown>((row, key) => record(row) ? row[key] : undefined, event)
         return context.operator === 'signal' ? signal(value) : context.operator === 'truthy' ? Boolean(value) : equal(value, context.value)
-    }))
+    })))
     const pending: unknown[] = [event], seen = new Set<object>()
     while (pending.length) {
         const row = pending.pop()

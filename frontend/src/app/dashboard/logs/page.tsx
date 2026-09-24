@@ -6,11 +6,11 @@ import LogsPageClient from './pageClient'
 
 export const dynamic = 'force-dynamic'
 
-type LogsPageProps = {
+export type LogsPageProps = {
     searchParams?: Promise<Record<string, string | string[] | undefined>>
 }
 
-export default async function LogsPage({ searchParams }: LogsPageProps) {
+export default async function LogsPage({ searchParams, view = 'dashboard' }: LogsPageProps & { view?: 'dashboard' | 'realtime' | 'search' | 'errors' }) {
     const Cookies = await cookies()
     const params = await searchParams
     const serviceParam = Array.isArray(params?.service) ? params?.service[0] : params?.service
@@ -23,7 +23,7 @@ export default async function LogsPage({ searchParams }: LogsPageProps) {
     const [services, errors, dashboard] = await Promise.all([
         getLogServices({ token, id }),
         getErrorEvents({ token, id }),
-        getLogDashboard({ token, id, params: params || {}, impersonationToken: Cookies.get('impersonation_token')?.value }),
+        getLogDashboard({ token, id, view, params: params || {}, impersonationToken: Cookies.get('impersonation_token')?.value }),
     ])
 
     return (

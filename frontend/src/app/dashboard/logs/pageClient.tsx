@@ -5,7 +5,7 @@ import { usePathname, useSearchParams } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { Copy, ChevronDown, Search, ListFilter, X } from 'lucide-react'
 import { logSearchParams, logTables, type LogEvent as Event, type LogSearchResult as Result, type ProcessingSource } from '@/utils/logs/search'
-import { retainEvents } from '@/utils/logs/retainEvents'
+import { retainEvents, realtimeEvents } from '@/utils/logs/retainEvents'
 import EventFeed from './eventFeed'
 import LogCatchupProgress from './catchupProgress'
 import ErrorsPanel from './errorsPanel'
@@ -37,7 +37,7 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
     const [appliedHql, setAppliedHql] = useState(initialHql)
     const [hours, setHours] = useState(params.get('hours') || '24')
     const [severity, setSeverity] = useState(params.get('severity') || 'all')
-    const [data, setData] = useState<Result | null>(initialData)
+    const [data, setData] = useState<Result | null>(initialData && view === 'realtime' ? { ...initialData, rows: realtimeEvents(initialData.rows) } : initialData)
     const [error, setError] = useState(initialError)
     const [busy, setBusy] = useState(false)
     const [paused, setPaused] = useState(false)
@@ -118,7 +118,7 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
                         }
                         // Keep the pages being read in place while progress keeps refreshing.
                         if (browsingPages && previous) return { ...previous, processing: body.processing, generated_at: body.generated_at }
-                        return view === 'realtime' && previous && !body.summarize ? { ...body, rows: retainEvents(previous.rows, body.rows) } : body
+                        return view === 'realtime' && previous && !body.summarize ? { ...body, rows: realtimeEvents(retainEvents(previous.rows, body.rows)) } : view === 'realtime' && !body.summarize ? { ...body, rows: realtimeEvents(body.rows) } : body
                     })
                     if (cursor) { browsingPages = true; setPaged(true) }
                     setError('')
