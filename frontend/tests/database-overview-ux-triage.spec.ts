@@ -11,7 +11,7 @@ test('database page prioritizes storage and uses full-width disclosures', async 
     expect(dashboard).toContain('title=\'Longest running query\'')
     expect(dashboard).toContain('<details')
     expect(dashboard).not.toContain('Active and long-running queries')
-    expect(dashboard.indexOf('id=\'storage-inventory\'')).toBeLessThan(dashboard.indexOf('<DatabaseWorkbench'))
+    expect(dashboard.indexOf('<DatabaseWorkbench')).toBeLessThan(dashboard.indexOf('id=\'storage-inventory\''))
     expect(dashboard).toContain('storage?.instances')
     expect(dashboard).toContain('data-db-monitor-metrics')
     expect(dashboard).toContain('href=\'/db/backups\'')

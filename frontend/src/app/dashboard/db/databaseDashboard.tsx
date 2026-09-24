@@ -5,10 +5,10 @@ import { DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import type { DatabaseOverview } from '@/utils/db/internal'
 import DatabaseWorkbench from './databaseWorkbench'
 import DatabaseRefresh from './databaseRefresh'
+import DatabaseInventory from './databaseInventory'
+import DatabaseConnection from './databaseConnection'
 import QueryCard from './queryCard'
 
-type StorageInstance = NonNullable<DatabaseOverview['storage']>['instances'][number]
-type StorageRow = { instance: StorageInstance, database: Omit<StorageInstance['databases'][number], 'sizeBytes'> & { sizeBytes: number | null } }
 
 export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) {
     const storage = overview.storage
@@ -17,47 +17,28 @@ export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) 
     const issues = storage?.instances.filter(instance => instance.status !== 'healthy') || []
     const daily = disk?.dailyGrowthBytes
     const days = disk?.daysUntilFull
-    const rows = storage?.instances.flatMap<StorageRow>(instance => instance.databases.length
-        ? instance.databases.map(database => ({ instance, database }))
-        : [{ instance, database: { name: 'Unavailable', sizeBytes: null, connections: null, replica: false, memory: false } }])
+
 
     return <DashboardPage>
         <DatabaseRefresh />
-        <section className='grid gap-3 sm:grid-cols-2 xl:grid-cols-4' aria-label='Storage health' data-db-monitor-metrics data-clusters={overview.clusterCount} data-databases={overview.databaseCount} data-storage-bytes={overview.totalSizeBytes}>
+        <section className='grid gap-3 sm:grid-cols-2 xl:grid-cols-5' aria-label='Storage health' data-db-monitor-metrics data-clusters={overview.clusterCount} data-databases={overview.databaseCount} data-storage-bytes={overview.totalSizeBytes}>
             <MetricCard icon={<HardDrive />} label='Disk free' value={disk ? formatBytes(disk.availableBytes) : 'Unavailable'} detail={disk ? `${formatBytes(disk.totalBytes)} total · ${storage?.host}` : 'Storage measurements unavailable'} />
             <MetricCard icon={<TrendingUp />} label='Growth / day' value={daily == null ? 'Measuring' : `${daily < 0 ? '−' : '+'}${formatBytes(Math.abs(daily))}`} detail={disk ? `Net disk change · ${Math.min(24, disk.sampleSeconds / 3600).toFixed(1)}h sampled` : 'No recent measurement'} />
             <MetricCard icon={<Clock3 />} label='Disk full in' value={!disk || daily == null ? 'Not enough history' : days == null ? 'Not growing' : days < 1 ? `${Math.max(1, Math.round(days * 24))} hours` : `${Math.round(days)} days`} detail='Estimated at the measured rate' />
             <MetricCard icon={fresh && !issues.length ? <CheckCircle2 /> : <AlertTriangle />} label='Database health' value={!fresh ? 'Not verified' : issues.length ? `${issues.length} need attention` : 'Healthy'} detail={storage ? `Checked ${formatDateTime(storage.sampledAt)}` : 'Inventory unavailable'} />
+            <DatabaseConnection />
         </section>
+        {overview.status !== 'unavailable' ? <DatabaseWorkbench overview={overview} /> : <p role='alert' className='text-sm text-ui-warning'>{overview.health.message}</p>}
 
         <DashboardPanel className='min-w-0 overflow-hidden' id='storage-inventory'>
             <div className='flex flex-wrap items-center justify-between gap-2 border-b border-ui-border px-5 py-4'>
                 <h2 className='text-base font-semibold'>Storage and databases</h2>
                 <div className='flex flex-wrap items-center gap-3'><span className='text-xs text-ui-muted'>{storage?.stale ? 'Last known sizes · status stale' : storage ? storage.host : 'Hanasand cluster only · host inventory unavailable'}</span><DatabaseActions /></div>
             </div>
-            <div className='overflow-x-auto'><table className='w-full text-left text-sm'>
-                <thead className='bg-ui-raised text-xs text-ui-muted'><tr>
-                    {['Database', 'Instance', 'Health', 'Tables', 'Connections', 'Size'].map(label => <th key={label} className={`px-5 py-3 font-medium ${label === 'Size' ? 'text-right' : ''}`}>{label}</th>)}
-                </tr></thead>
-                <tbody className='divide-y divide-ui-border'>
-                    {rows ? rows.map(({ instance, database }) => <tr key={`${instance.id}/${database.name}`}>
-                        <td className='px-5 py-3 font-medium'>{database.name}{database.replica && <span className='ml-2 rounded bg-ui-raised px-2 py-1 text-xs text-ui-muted'>Replica</span>}</td>
-                        <td className='px-5 py-3 text-xs text-ui-muted'>{instance.id}<span className='block'>{instance.engine}</span></td>
-                        <td className='px-5 py-3'><span className={`inline-flex items-center gap-1.5 ${fresh && instance.status === 'healthy' ? 'text-ui-success' : 'text-ui-warning'}`}>
-                            {fresh && instance.status === 'healthy' ? <CheckCircle2 className='h-4 w-4' aria-hidden /> : <AlertTriangle className='h-4 w-4' aria-hidden />}
-                            {!fresh ? 'Unknown' : instance.status === 'healthy' ? 'Healthy' : instance.status === 'unhealthy' ? 'Unhealthy' : 'Unavailable'}
-                        </span></td>
-                        <td className='px-5 py-3 tabular-nums'>{instance.id === 'hanasand_database' ? overview.clusters.flatMap(c => c.databases).find(d => d.name === database.name)?.tableCount ?? '—' : '—'}</td>
-                        <td className='px-5 py-3 tabular-nums'>{database.connections ?? '—'}</td>
-                        <td className='whitespace-nowrap px-5 py-3 text-right font-medium tabular-nums'>{formatBytes(database.sizeBytes)}{database.memory && <span className='ml-1 text-xs font-normal text-ui-muted'>RAM</span>}</td>
-                    </tr>) : overview.clusters.flatMap(cluster => cluster.databases.map(database => <tr key={`${cluster.id}/${database.name}`}>
-                        <td className='px-5 py-3'>{database.name}</td><td className='px-5 py-3'>{cluster.name}</td><td className='px-5 py-3'>Unknown</td><td className='px-5 py-3'>{database.tableCount ?? '—'}</td><td className='px-5 py-3'>{database.activeConnections ?? '—'}</td><td className='px-5 py-3 text-right'>{formatBytes(database.sizeBytes)}</td>
-                    </tr>))}
-                </tbody>
-            </table></div>
+            {storage ? <DatabaseInventory instances={storage.instances} stale={!fresh} /> : <p className='p-5 text-sm text-ui-muted'>Database inventory unavailable.</p>}
         </DashboardPanel>
 
-        {overview.status !== 'unavailable' ? <DatabaseWorkbench overview={overview} /> : <p role='alert' className='text-sm text-ui-warning'>{overview.health.message}</p>}
+
         <Disclosure title='Queries' id='active-queries' detail={`${overview.queries.length} shown · ${overview.queries.filter(q => q.isLongRunning).length} long-running · Long-running after ${formatTime(overview.longRunningThresholdSeconds)} · Checked ${formatDateTime(overview.generatedAt)}`}>
             {overview.queries.length ? <div className='space-y-5 divide-y divide-ui-border [&>div+div]:pt-5'>{overview.queries.map((query, index) => <QueryCard key={`${query.database}-${query.user}-${query.query}-${index}`} query={query} duration={formatTime(query.durationSeconds)} />)}</div> : <p className='text-sm text-ui-muted'>{overview.status === 'unavailable' ? 'Query activity unavailable.' : 'No active queries.'}</p>}
         </Disclosure>

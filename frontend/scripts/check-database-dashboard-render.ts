@@ -80,13 +80,14 @@ const incompleteMarkup = renderToStaticMarkup(React.createElement(QueryCode, { q
 assert.match(incompleteMarkup, /unfinished/)
 assert.match(healthyMarkup, /data-db-monitor-metrics/)
 assert.match(healthyMarkup, /hanasand/)
-assert.match(healthyMarkup, /42/)
 assert.match(healthyMarkup, /Backups/)
 assert.match(healthyMarkup, /Restore/)
 assert.match(healthyMarkup, /Database workbench/)
 assert.match(healthyMarkup, /SQL editor/)
 assert.match(healthyMarkup, /Inspect rows/)
-assert.match(healthyMarkup, /Check connection/)
+assert.doesNotMatch(healthyMarkup, /Check connection/)
+assert.match(healthyMarkup, /Connection/)
+assert.match(healthyMarkup, /id="database-workbench-content" hidden=""/)
 assert.match(healthyMarkup, /public\.users/)
 assert.doesNotMatch(healthyMarkup, /Clusters<\/span><\/div><p[^>]*>0</)
 
@@ -120,13 +121,13 @@ const storage: NonNullable<DatabaseOverview['storage']> = {
     sampledAt: healthyOverview.generatedAt, host: 'Inspur',
     disk: { availableBytes: 100e9, totalBytes: 2e12, dailyGrowthBytes: 50e9, daysUntilFull: 2, sampleSeconds: 86400 },
     instances: [
-        { id: 'cdn_database', engine: 'PostgreSQL', status: 'healthy', databases: [{ name: 'cdn', sizeBytes: 16e9, connections: 3 }] },
+        { id: 'cdn_database', engine: 'PostgreSQL', status: 'healthy', databases: [{ name: 'cdn', sizeBytes: 16e9, connections: 3, tableCount: 42 }] },
         { id: 'replica', engine: 'PostgreSQL', status: 'unhealthy', databases: [{ name: 'hanasand', sizeBytes: 250e9, connections: 0, replica: true }] },
     ],
 }
 const storageMarkup = renderToStaticMarkup(React.createElement(DatabaseDashboard, { overview: { ...healthyOverview, storage } }))
-for (const label of ['cdn_database', '16.00 GB', 'Replica', '1 need attention', '2 days', '+50.00 GB']) assert(storageMarkup.includes(label), label)
-assert(storageMarkup.indexOf('Storage and databases') < storageMarkup.indexOf('Database workbench'))
+for (const label of ['cdn_database', '16.00 GB', 'Replica', '1 need attention', '2 days', '+50.00 GB', '>42<']) assert(storageMarkup.includes(label), label)
+assert(storageMarkup.indexOf('Database workbench') < storageMarkup.indexOf('Storage and databases'))
 const staleMarkup = renderToStaticMarkup(React.createElement(DatabaseDashboard, { overview: { ...healthyOverview, storage: { ...storage, stale: true } } }))
 assert(staleMarkup.includes('Not verified'))
 assert(!staleMarkup.includes('2 days'))

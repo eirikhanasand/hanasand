@@ -59,7 +59,7 @@ export async function getDatabaseRows(req: FastifyRequest<{ Querystring: RowsQue
     }
 }
 
-async function requireDatabaseAccess(req: FastifyRequest, res: FastifyReply) {
+export async function requireDatabaseAccess(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
     if (!valid) {
         res.status(401).send({ error: 'Unauthorized.' })

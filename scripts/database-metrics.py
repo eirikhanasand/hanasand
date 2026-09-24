@@ -48,17 +48,53 @@ def collect_database(item):
                   test -S "$socket" && port=${socket##*.};
                 done;
                 export PGPASSWORD="${POSTGRES_PASSWORD:-}";
-                exec psql -X -h /var/run/postgresql -p "$port" -U "$user" -d postgres -At -v ON_ERROR_STOP=1 -c "$1"'''
-            output = command(['docker', 'exec', item['Id'], 'sh', '-c', script, 'metrics', sql])
+                exec psql -X -h /var/run/postgresql -p "$port" -U "$user" -d "$2" -At -v ON_ERROR_STOP=1 -c "$1"'''
+            output = command(['docker', 'exec', item['Id'], 'sh', '-c', script, 'metrics', sql, 'postgres'])
             result['databases'] = [json.loads(line) for line in output.splitlines() if line]
+            for database in result['databases']:
+                try:
+                    tables_sql = """SELECT json_build_object('schema', n.nspname, 'name', c.relname,
+                        'sizeBytes', pg_total_relation_size(c.oid), 'estimatedRows', c.reltuples::bigint,
+                        'writes', COALESCE(s.n_tup_ins,0)+COALESCE(s.n_tup_upd,0)+COALESCE(s.n_tup_del,0),
+                        'columns', COALESCE((SELECT json_agg(a.attname ORDER BY a.attnum) FROM pg_attribute a
+                            WHERE a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped),'[]'::json))
+                        FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+                        LEFT JOIN pg_stat_all_tables s ON s.relid=c.oid
+                        WHERE c.relkind IN ('r','p','m') AND n.nspname NOT IN ('pg_catalog','information_schema')
+                            AND n.nspname NOT LIKE 'pg_toast%' ORDER BY n.nspname,c.relname"""
+                    output = command(['docker', 'exec', item['Id'], 'sh', '-c', script, 'metrics', tables_sql, database['name']])
+                    database['tables'] = [json.loads(line) for line in output.splitlines() if line]
+                    database['tableCount'] = len(database['tables'])
+                except (OSError, subprocess.SubprocessError, ValueError):
+                    database['tableCount'] = None
         elif engine == 'MongoDB':
-            script = 'JSON.stringify(db.adminCommand({listDatabases:1}).databases.map(d=>({name:d.name,sizeBytes:Number(d.sizeOnDisk),connections:null})))'
+            script = '''JSON.stringify(db.adminCommand({listDatabases:1}).databases.map(d=>{
+                const database=db.getSiblingDB(d.name);
+                const tables=database.getCollectionInfos({type:'collection'}).map(c=>{
+                    const stats=database.getCollection(c.name).aggregate([{$collStats:{storageStats:{},latencyStats:{}}}]).toArray()[0];
+                    const s=stats.storageStats;
+                    return {schema:'',name:c.name,sizeBytes:Number(s.totalSize||s.storageSize||0),
+                        estimatedRows:Number(s.count||0),columns:[],writes:Number(stats.latencyStats.writes.ops)};
+                });
+                return {name:d.name,sizeBytes:Number(d.sizeOnDisk),connections:null,tableCount:tables.length,tables};
+            }))'''
             output = command(['docker', 'exec', item['Id'], 'mongosh', '--quiet', '--eval', script], timeout=45)
             result['databases'] = json.loads(output)
         else:
             output = command(['docker', 'exec', item['Id'], 'redis-cli', '--raw', 'INFO', 'memory'])
             memory = dict(line.split(':', 1) for line in output.splitlines() if ':' in line)
-            result['databases'] = [{'name': name, 'sizeBytes': int(memory['used_memory']), 'connections': None, 'memory': True}]
+            keyspace = command(['docker', 'exec', item['Id'], 'redis-cli', '--raw', 'INFO', 'keyspace'])
+            result['databases'] = []
+            for line in keyspace.splitlines():
+                if not line.startswith('db') or ':' not in line:
+                    continue
+                database, counts = line.split(':', 1)
+                fields = dict(part.split('=', 1) for part in counts.split(','))
+                result['databases'].append({'name': database, 'sizeBytes': None, 'connections': None,
+                    'memory': True, 'tableCount': int(fields['keys'])})
+            if not result['databases']:
+                result['databases'] = [{'name': 'db0', 'sizeBytes': 0, 'connections': None, 'memory': True, 'tableCount': 0}]
+            result['memoryBytes'] = int(memory['used_memory'])
         if not result['databases']:
             raise ValueError('Empty inventory')
         result['status'] = 'healthy'
@@ -85,6 +121,27 @@ def collect(destination):
     items = [item for item in items if engine_for(item)]
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
         databases = list(pool.map(collect_database, items))
+    writes_path = destination.with_name('database-table-writes.json')
+    try:
+        previous = json.loads(writes_path.read_text())
+    except (OSError, ValueError):
+        previous = {}
+    writes = {}
+    sampled_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    for instance in databases:
+        for database in instance['databases']:
+            for table in database.get('tables', []):
+                key = json.dumps([instance['id'], database['name'], table['schema'], table['name']])
+                old = previous.get(key, {})
+                count = table.pop('writes', None)
+                if count is None:
+                    continue
+                # PostgreSQL has no historical last-DML timestamp. Record observed
+                # counter increases, never invent a timestamp for existing rows.
+                last_write = sampled_at if count > old.get('count', count) else old.get('at')
+                writes[key] = {'count': count, 'at': last_write}
+                table['lastWriteObservedAt'] = last_write
+    atomic_write(writes_path, writes)
     stats = os.statvfs('/')
     available = stats.f_bavail * stats.f_frsize
     device = os.stat('/').st_dev

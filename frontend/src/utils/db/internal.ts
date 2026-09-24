@@ -12,7 +12,7 @@ export type DatabaseOverview = {
             id: string
             engine: string
             status: 'healthy' | 'unhealthy' | 'unavailable'
-            databases: Array<{ name: string, sizeBytes: number, connections: number | null, replica?: boolean, memory?: boolean }>
+            databases: Array<{ name: string, sizeBytes: number | null, connections: number | null, replica?: boolean, memory?: boolean, tableCount?: number | null, tables?: Array<{ schema: string, name: string, sizeBytes: number, estimatedRows: number, columns: string[], lastWriteObservedAt: string | null }> }>
         }>
     } | null
     status: 'healthy' | 'unavailable'
