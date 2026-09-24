@@ -35,6 +35,15 @@ def credentials():
     return json.loads(path.read_text())
 
 
+def mail_admin():
+    path = Path('/home/hanasand/hanasand/mail/stalwart/etc/config.toml')
+    try:
+        config = path.read_text()
+    except PermissionError:
+        config = subprocess.check_output(['docker', 'exec', 'hanasand_mail', 'cat', '/opt/stalwart/etc/config.toml'], text=True)
+    return tomllib.loads(config)['authentication']['fallback-admin']
+
+
 def api(base, username, password, path, body=None, method=None):
     request = urllib.request.Request(base + '/api' + path, headers={
         'Authorization': 'Basic ' + base64.b64encode((username + ':' + password).encode()).decode(),
@@ -55,7 +64,15 @@ def start(name, image, network, volumes, ports, aliases=(), extra=()):
     previous_ip = None
     if subprocess.run(['docker', 'inspect', name], capture_output=True).returncode == 0:
         current = json.loads(subprocess.check_output(['docker', 'inspect', name]))[0]
-        if current['Config']['Image'] == image:
+        expected_mounts = {
+            (os.path.realpath(volume.split(':', 1)[0]), volume.split(':')[1])
+            for volume in volumes
+        }
+        actual_mounts = {
+            (os.path.realpath(mount['Source']), mount['Destination'])
+            for mount in current.get('Mounts', [])
+        }
+        if current['Config']['Image'] == image and actual_mounts == expected_mounts:
             # Health/connector config is read at startup; apply credential changes.
             action = 'start' if name == 'hanasand-mail-relay-ovh' else 'restart'
             subprocess.run(['docker', action, name], check=True, stdout=subprocess.DEVNULL)
@@ -108,7 +125,7 @@ def install_certificate_refresh(revision):
 
 
 def activate_inspur():
-    admin = tomllib.loads(Path('/home/hanasand/hanasand/mail/stalwart/etc/config.toml').read_text())['authentication']['fallback-admin']
+    admin = mail_admin()
     def call(path, body=None):
         return api('http://127.0.0.1:8081', admin['user'], admin['secret'], path, body)
     # Queue backlog returns 503 during activation; connection checks must still pass.
@@ -215,8 +232,7 @@ enable = true
 def setup_inspur(image, api_container):
     saved = credentials()
     relay = json.loads((ROOT / 'ovh-credentials.json').read_text())
-    mail = Path('/home/hanasand/hanasand/mail/stalwart/etc/config.toml')
-    admin = tomllib.loads(mail.read_text())['authentication']['fallback-admin']
+    admin = mail_admin()
     base = 'http://127.0.0.1:8081'
     ensure_principal(base, admin, {'type': 'individual', 'name': 'relay-health', 'secrets': [saved['health']],
         'roles': [], 'enabledPermissions': ['authenticate', 'message-queue-list', 'message-queue-get']})
@@ -236,8 +252,7 @@ def setup_inspur(image, api_container):
 
 def configure_gateway(site):
     if site == 'inspur':
-        mail = Path('/home/hanasand/hanasand/mail/stalwart/etc/config.toml')
-        admin = tomllib.loads(mail.read_text())['authentication']['fallback-admin']
+        admin = mail_admin()
         info = json.loads(subprocess.check_output(['docker', 'inspect', 'hanasand-mail-relay-inspur']))[0]
         address = info['NetworkSettings']['Networks']['hanasand_hanasandnet']['IPAddress']
         # Trust only this pinned connector address, and only on incoming SMTP.
