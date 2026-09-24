@@ -27,13 +27,14 @@ export async function processRuleReprocessJob() {
     try {
         return await withTransaction(async query => {
             await query('SET LOCAL statement_timeout=\'10s\'')
-            await query('SET LOCAL lock_timeout=\'1s\'')
-            const lock = await query('SELECT pg_try_advisory_xact_lock(hashtextextended(\'mill:service-logs\',0)) AS locked')
-            if (!lock.rows[0].locked) return false
+            await query('SET LOCAL lock_timeout=\'5s\'')
+            // Join the bounded lock queue: repeatedly probing two busy workers
+            // can starve historical replay even while both keep making progress.
+            await query('SELECT pg_advisory_xact_lock(hashtextextended(\'mill:service-logs\',0))')
             // Live processing also reads raw rows before writing their projection.
             // Hold both worker locks so a fresh batch cannot recreate deleted rows.
-            const liveLock = await query('SELECT pg_try_advisory_xact_lock(hashtextextended(\'mill:live-service-logs\',0)) AS locked')
-            if (!liveLock.rows[0].locked) return false
+            await query('SELECT pg_advisory_xact_lock(hashtextextended(\'mill:live-service-logs\',0))')
+            await query('SET LOCAL lock_timeout=\'1s\'')
             const job = (await query(`SELECT * FROM mill_rule_reprocess_jobs WHERE status IN ('queued','running')
                 ORDER BY updated_at,id LIMIT 1 FOR UPDATE SKIP LOCKED`)).rows[0] as ReprocessJob | undefined
             if (!job) return false
@@ -135,7 +136,10 @@ export async function processRuleReprocessJob() {
             return true
         })
     } catch (error) {
-        if (!jobId) throw error
+        if (!jobId) {
+            if ((error as { code?: string }).code === '55P03') return false
+            throw error
+        }
         // A failed page rolls back its deletes and cursor together. Retry creates a new explicit run.
         await run('UPDATE mill_rule_reprocess_jobs SET status=\'failed\',error=$2,updated_at=NOW() WHERE id=$1 AND status IN (\'queued\',\'running\')',
             [jobId, error instanceof Error ? error.message.slice(0, 500) : 'Reprocessing failed.'])

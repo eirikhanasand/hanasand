@@ -79,7 +79,14 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('Mill replay removes only pr
         expect((await query('SELECT count(*) n FROM log_ingestion_copies')).rows[0].n).toBe('0')
         failDelete = false
         await enqueue('drop')
-        await processRuleReprocessJob()
+        const liveWorker = await pool.connect()
+        try {
+            await liveWorker.query('BEGIN')
+            await liveWorker.query("SELECT pg_advisory_xact_lock(hashtextextended('mill:live-service-logs',0))")
+            const release = (async () => { await Bun.sleep(100); await liveWorker.query('COMMIT') })()
+            const [processed] = await Promise.all([processRuleReprocessJob(), release])
+            expect(processed).toBe(true)
+        } finally { await liveWorker.query('ROLLBACK'); liveWorker.release() }
         const job = (await query("SELECT * FROM mill_rule_reprocess_jobs WHERE id='drop'")).rows[0]
         expect(job.status).toBe('completed')
         expect(job.removed_sources).toBe('1')
