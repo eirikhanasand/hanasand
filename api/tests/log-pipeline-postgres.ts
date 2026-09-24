@@ -48,7 +48,7 @@ try {
     for (const statement of logCountsSchema) await query(statement.replace('CREATE TABLE IF NOT EXISTS', 'CREATE TEMP TABLE IF NOT EXISTS'))
     const { backfillLogDimensions, dimensionLogWhere, foldLogCounts } = await import('../src/utils/logs/dimensions.ts')
     const { processLogBatch, processStoredLogs } = await import('../src/utils/mill/processLogs.ts')
-    const { MILL_RULES, millDefaultDefinition, createMillFindings, normalizeMillEvent } = await import('../src/handlers/mill.ts')
+    const { MILL_RULES, millDefaultDefinition, createMillFindings, normalizeMillEvent, loadConfiguredMillRules } = await import('../src/handlers/mill.ts')
     const { securityRules } = await import('../src/utils/mill/securityRules.ts')
     const { compileLogQuery } = await import('../src/utils/logs/kql.ts')
     const rules = MILL_RULES.map(rule => ({ ...rule, enabled: true, source: 'hanasand' as const, definition: millDefaultDefinition(rule.id) }))
@@ -393,7 +393,9 @@ try {
         await processStoredLogs() // Clearing the operator control restores full capacity.
         const recovered = await query("SELECT normalized FROM mill_events WHERE log_key=ANY($1::text[]) AND processing_status='processed'", [recoveryKeys])
         assert.equal(recovered.rowCount,251, 'Recovery resumes without losing any capped remainder')
-        assert.ok(recovered.rows.every(row => row.normalized.rules_checked === 105))
+        const enabledRules = (await loadConfiguredMillRules('fixture')).filter(rule => rule.enabled !== false).length
+        assert.ok(enabledRules > 0)
+        assert.ok(recovered.rows.every(row => row.normalized.rules_checked === enabledRules))
         for (const { source, ids } of histories) {
             const state = (await query('SELECT last_id::text,recent_id::text FROM log_processing_cursors WHERE name=$1', [source])).rows[0]
             assert.equal(state.last_id, ids[249], `${source} finishes its fixed historical range without rechecking forward rows`)
@@ -418,7 +420,7 @@ try {
             UNION ALL (SELECT * FROM mill_log_dimensions EXCEPT SELECT * FROM source)`)
         assert.equal(differences.rowCount, 0, 'Compact projection must match every currently processed collected event')
     }
-    await assertProjectionParity() // Includes late-auth severity changes, replay and all 105 detections.
+    await assertProjectionParity() // Includes late-auth severity changes, replay and all configured detections.
     await query("UPDATE mill_log_dimensions_state SET ready=FALSE,last_event_id=''")
     assert.deepEqual(await backfillLogDimensions(1), { processed: 1, ready: false })
     assert.equal((await query('SELECT ready FROM mill_log_dimensions_state')).rows[0].ready, false, 'Partial backfill is never reported as ready')
