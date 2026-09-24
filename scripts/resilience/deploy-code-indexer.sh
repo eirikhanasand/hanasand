@@ -3,7 +3,7 @@ set -eu
 cd /home/hanasand/hanasand
 release=${HANASAND_RELEASE_COMMIT:-$(git rev-parse HEAD)}
 test "$(git rev-parse --verify "$release^{commit}")" = "$release"
-root=/home/hanasand/code-review
+root=/home/hanasand/hanasand/ops/code-review
 mkdir -p "$root/published"
 chmod 750 "$root" "$root/published"
 if ! test -d "$root/repository.git"; then git clone --bare . "$root/repository.git"; fi

@@ -66,7 +66,7 @@ for port in ports:
     settings['PORT'] = port
     command = ['docker', 'run', '-d', '--name', name, '--restart', 'unless-stopped', '--network', 'host', '--memory', '512m' if kind=='auth' else '2g', '--cpus', '1' if kind=='auth' else '2', '--stop-timeout', '65', '-v', '/home/hanasand/resilience/status:/resilience:ro']
     if kind == 'api': command += ['-v', '/var/lib/hanasand/docker-storage:/var/lib/hanasand/docker-storage']
-    if kind in ('api', 'frontend'): command += ['-v', '/home/hanasand/code-review/published:/app/code-review:ro']
+    if kind in ('api', 'frontend'): command += ['-v', '/home/hanasand/hanasand/ops/code-review/published:/app/code-review:ro']
     # Passing names, not values, keeps multiline credentials out of process arguments.
     for key in settings: command += ['-e', key]
     for alias, address in aliases.items(): command += ['--add-host', alias + ':' + address]
