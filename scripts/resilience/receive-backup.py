@@ -14,7 +14,9 @@ root = pathlib.Path(os.environ.get('RESILIENCE_ROOT', '/home/ubuntu/hanasand-res
 backups = root/'backups'
 backups.mkdir(mode=0o700,exist_ok=True)
 staging = pathlib.Path(tempfile.mkdtemp(prefix='incoming-',dir=backups))
-allowed = {'base.tar.gz','pg_wal.tar.gz','backup_manifest','verification.json'}
+physical = {'base.tar.gz','pg_wal.tar.gz','backup_manifest','verification.json'}
+logical = {'hanasand.dump','verification.json'}
+allowed = physical | logical
 seen, checksums, total = set(), {}, 0
 try:
     with tarfile.open(fileobj=sys.stdin.buffer, mode='r|') as archive:
@@ -29,15 +31,17 @@ try:
                 target.flush(); os.fsync(target.fileno())
             (staging/member.name).chmod(0o600)
             checksums[member.name] = digest.hexdigest()
-    if seen != allowed: raise ValueError('Incomplete backup')
+    if seen not in (physical, logical): raise ValueError('Incomplete or mixed backup')
+    backup_format = 'pg_dump-custom' if seen == logical else 'pg_basebackup'
     proof = json.loads((staging/'verification.json').read_text())
-    if proof.get('restoreVerified') is not True or any(checksums.get(name) != proof.get('checksums',{}).get(name) for name in allowed-{'verification.json'}): raise ValueError('Backup verification mismatch')
+    if proof.get('format', 'pg_basebackup') != backup_format: raise ValueError('Backup format mismatch')
+    if proof.get('restoreVerified') is not True or any(checksums.get(name) != proof.get('checksums',{}).get(name) for name in seen-{'verification.json'}): raise ValueError('Backup verification mismatch')
     stamp = proof['backup']
     if len(stamp)!=16 or not stamp.endswith('Z') or not stamp[:8].isdecimal() or stamp[8]!='T' or not stamp[9:15].isdecimal(): raise ValueError('Invalid backup identity')
     final = backups/stamp
     if final.exists(): raise ValueError('Backup already received')
     staging.rename(final)
-    state = dict(status='verified', backup=stamp, verifiedAt=proof['verifiedAt'], restoreVerifiedAt=proof['verifiedAt'], receivedAt=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()), bytes=total, restoreRequired=False)
+    state = dict(status='verified', backup=stamp, verifiedAt=proof['verifiedAt'], restoreVerifiedAt=proof['verifiedAt'], receivedAt=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()), bytes=total, restoreRequired=False, format=backup_format)
     # The receiver owns backups/, while deployment owns the parent directory.
     with tempfile.NamedTemporaryFile(mode='w', dir=backups, prefix='status-', delete=False) as temporary:
         json.dump(state, temporary)

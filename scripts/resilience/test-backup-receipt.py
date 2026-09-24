@@ -44,3 +44,32 @@ with tempfile.TemporaryDirectory() as directory:
     assert b'Backup exceeds receiver capacity limit' in result.stderr
     assert not list((pathlib.Path(directory) / 'backups').iterdir())
 print('Oversized backup rejected before payload extraction.')
+
+# Logical replacements retain the same restore-proof and checksum requirements.
+for mode in ('valid', 'wrong-checksum', 'wrong-format', 'mixed'):
+    with tempfile.TemporaryDirectory() as directory:
+        payload = {'hanasand.dump': b'clean logical database archive'}
+        proof = {'restoreVerified': True, 'backup': '20260924T110000Z',
+                 'verifiedAt': '2026-09-24T11:00:00Z', 'format': 'pg_dump-custom',
+                 'checksums': {'hanasand.dump': hashlib.sha256(payload['hanasand.dump']).hexdigest()}}
+        if mode == 'wrong-checksum': proof['checksums']['hanasand.dump'] = '0' * 64
+        if mode == 'wrong-format': proof['format'] = 'pg_basebackup'
+        if mode == 'mixed': payload['base.tar.gz'] = b'physical archive'
+        payload['verification.json'] = json.dumps(proof).encode()
+        bundle = io.BytesIO()
+        with tarfile.open(fileobj=bundle, mode='w') as archive:
+            for name, body in payload.items():
+                info = tarfile.TarInfo(name); info.size = len(body)
+                archive.addfile(info, io.BytesIO(body))
+        result = subprocess.run(['python3', str(pathlib.Path(__file__).with_name('receive-backup.py'))],
+                                input=bundle.getvalue(), capture_output=True,
+                                env={**os.environ, 'RESILIENCE_ROOT': directory})
+        backups = pathlib.Path(directory) / 'backups'
+        if mode == 'valid':
+            assert result.returncode == 0, result.stderr.decode()
+            assert (backups / '20260924T110000Z/hanasand.dump').read_bytes() == payload['hanasand.dump']
+            assert json.loads((backups / 'status.json').read_text())['format'] == 'pg_dump-custom'
+        else:
+            assert result.returncode != 0, mode
+            assert not list(backups.iterdir()), mode
+print('Logical backups require matching format, complete members, and verified checksums.')
