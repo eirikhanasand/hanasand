@@ -9,6 +9,9 @@ import { reprocessRuleItems } from '#utils/mill/ruleReprocess.ts'
 
 const organizationId = process.argv[2]
 if (!organizationId || !(await run('SELECT id FROM organizations WHERE id=$1 AND status=\'active\'', [organizationId])).rows.length) throw new Error('An active organization ID is required.')
+// Keep the receipt existence check indexed during large historical replays.
+await run('CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_log_proxy_receipts_connection ON log_proxy_receipts(connection_id)')
+await run("SELECT gin_clean_pending_list('idx_mill_findings_event_ids'::regclass)")
 const ruleId = 'http.self_ingestion_success.v1'
 const conditions = [ ['http.path','/api/logs/ingest'], ['http.method','POST'], ['http.status_code','201'], ['source.ip','128.39.142.218'], ['severity','low'] ]
     .map(([path,value]) => ({path,value,operator:'equals' as const,caseSensitive:true}))
