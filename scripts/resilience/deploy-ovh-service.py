@@ -29,7 +29,7 @@ if (old['HostConfig']['NetworkMode'] != 'host' or settings.get('PORT') != str(se
     raise SystemExit(f'Expected the running OVH {kind} on host-network port{serving_port}.')
 image = 'hanasand-resilience-' + kind + ':' + release
 subprocess.run(['docker', 'image', 'inspect', image], check=True, stdout=subprocess.DEVNULL)
-candidate, previous = name + '-candidate', name + '-before-' + release[:12]
+candidate, previous = name + '-candidate-' + release[:12], name + '-before-' + release[:12]
 for target in (candidate, previous):
     if subprocess.run(['docker', 'inspect', target], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
         raise SystemExit(f'{target} already exists; inspect before retrying.')
