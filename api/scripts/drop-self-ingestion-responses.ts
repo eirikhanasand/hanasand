@@ -85,7 +85,13 @@ for (let offset=0;offset<unique.length;offset+=1000) {
             AND p.access->>'ip'='128.39.142.218'
             AND NOT EXISTS(SELECT 1 FROM log_proxy_receipts r WHERE r.connection_id=p.connection_id)
             RETURNING p.*`,[eligibleIds])).rows
-        const result=await reprocessRuleItems(items,{organization_id:organizationId},currentRule,query)
+        const result=await reprocessRuleItems(items,{organization_id:organizationId},currentRule,async (sql,values)=>{
+            // Bulk-remove the reporting rows before the FK cascade so their
+            // statement-level count trigger runs once, rather than once per event.
+            if(sql.startsWith('DELETE FROM mill_events WHERE organization_id=')) await query(`DELETE FROM mill_log_dimensions d
+                USING mill_events e WHERE d.event_id=e.id AND e.organization_id=$1 AND e.id=ANY($2::text[])`,values)
+            return query(sql,values)
+        })
         if(unused.length) await query(`INSERT INTO log_proxy_requests(connection_id,service_log_id,connection,access)
             SELECT p.connection_id,p.service_log_id,p.connection,p.access
             FROM jsonb_to_recordset($1::jsonb) AS p(connection_id uuid,service_log_id bigint,connection jsonb,access jsonb)
