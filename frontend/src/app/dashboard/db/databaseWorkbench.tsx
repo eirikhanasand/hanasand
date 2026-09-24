@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState, useTransition } from 'react'
-import { Activity, PlayCircle, Search } from 'lucide-react'
+import { Activity, Code2, PlayCircle, Search, Table2 } from 'lucide-react'
 import { dashboardPanelClass } from '@/components/dashboard/ui'
 import type { DatabaseOverview, DatabaseQueryResult } from '@/utils/db/internal'
 import { databaseHealthAction, databaseRowsAction, databaseSqlAction } from './actions'
@@ -28,6 +28,7 @@ export default function DatabaseWorkbench({ overview }: { overview: DatabaseOver
     const [message, setMessage] = useState('')
     const [result, setResult] = useState<DatabaseQueryResult | null>(null)
     const [isPending, startTransition] = useTransition()
+    const [mode, setMode] = useState<'rows' | 'sql'>('rows')
 
     function inspectRows() {
         startTransition(async () => {
@@ -65,11 +66,11 @@ export default function DatabaseWorkbench({ overview }: { overview: DatabaseOver
     }
 
     return (
-        <section className={`${dashboardPanelClass} p-4`} data-db-workbench>
-            <div className='flex flex-wrap items-center justify-between gap-3'>
+        <section className={`${dashboardPanelClass} min-w-0 overflow-hidden`} data-db-workbench>
+            <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border px-5 py-4'>
                 <div>
                     <h2 className='text-base font-semibold text-ui-text'>Database workbench</h2>
-                    <p className='mt-1 text-xs text-ui-muted'>Rows, liveness, and SQL execution.</p>
+                    <p className='mt-1 text-xs text-ui-muted'>{overview.clusters[0]?.name}</p>
                 </div>
                 <button
                     type='button'
@@ -78,13 +79,16 @@ export default function DatabaseWorkbench({ overview }: { overview: DatabaseOver
                     className='inline-flex min-h-10 items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10 disabled:opacity-60'
                 >
                     <Activity className='h-4 w-4' />
-                    Check live
+                    Check connection
                 </button>
             </div>
 
-            <div className='mt-4 grid gap-3 xl:grid-cols-[0.9fr_1.1fr]'>
-                <div className='rounded-md border border-ui-border bg-ui-canvas p-3'>
-                    <div className='grid gap-3 sm:grid-cols-[1fr_0.7fr_0.45fr_auto] sm:items-end'>
+            <div className='p-5'>
+                <div className='mb-4 flex gap-1 rounded-lg bg-ui-canvas p-1' aria-label='Workbench mode'>
+                    {([{ id: 'rows', label: 'Browse tables', icon: Table2 }, { id: 'sql', label: 'SQL editor', icon: Code2 }] as const).map(tab => <button key={tab.id} type='button' aria-pressed={mode === tab.id} onClick={() => setMode(tab.id)} className={`inline-flex min-h-10 items-center gap-2 rounded-md px-4 text-sm font-medium ${mode === tab.id ? 'bg-ui-raised text-ui-primary' : 'text-ui-muted hover:text-ui-text'}`}><tab.icon aria-hidden className='h-4 w-4' />{tab.label}</button>)}
+                </div>
+                {mode === 'rows' ? <div>
+                    <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_6rem_auto] sm:items-end'>
                         <label className='grid gap-1.5 text-sm'>
                             <span className='text-xs font-semibold uppercase text-ui-muted'>Table</span>
                             <select
@@ -94,7 +98,7 @@ export default function DatabaseWorkbench({ overview }: { overview: DatabaseOver
                                     setSchema(nextSchema || 'public')
                                     setTable(nextTable || '')
                                 }}
-                                className='min-h-10 rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-sm text-ui-text outline-none focus:border-ui-primary'
+                                className='h-11 w-full min-w-0 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text outline-none focus:border-ui-primary'
                             >
                                 {!tables.length && <option value={`${schema}.${table}`}>No tables indexed</option>}
                                 {tables.map(option => (
@@ -122,16 +126,15 @@ export default function DatabaseWorkbench({ overview }: { overview: DatabaseOver
                             Inspect rows
                         </button>
                     </div>
-                </div>
-
-                <div className='rounded-md border border-ui-border bg-ui-canvas p-3'>
+                </div> : <div>
                     <label className='grid gap-1.5 text-sm'>
                         <span className='text-xs font-semibold uppercase text-ui-muted'>SQL</span>
                         <textarea
                             value={sql}
                             onChange={event => setSql(event.target.value)}
-                            rows={4}
-                            className='min-h-28 rounded-md border border-ui-border bg-ui-panel px-3 py-2 font-mono text-xs text-ui-text outline-none focus:border-ui-primary'
+                            rows={7}
+                            spellCheck={false}
+                            className='min-h-48 w-full resize-y rounded-md border border-ui-border bg-ui-canvas p-4 font-mono text-sm leading-6 text-ui-text outline-none focus:border-ui-primary'
                         />
                     </label>
                     <button
@@ -143,16 +146,15 @@ export default function DatabaseWorkbench({ overview }: { overview: DatabaseOver
                         <PlayCircle className='h-4 w-4' />
                         {isPending ? 'Running...' : 'Execute SQL'}
                     </button>
-                </div>
-            </div>
+                </div>}
 
-            {message && <p className='mt-3 rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-sm text-ui-text'>{message}</p>}
-            {result ? <QueryResultTable result={result} /> : (
-                <div className='mt-3 rounded-md border border-dashed border-ui-border bg-ui-canvas px-3 py-3 text-sm text-ui-muted'>
-                    <p className='font-semibold text-ui-text'>Result grid</p>
-                    <p className='mt-1'>Inspect rows or execute SQL.</p>
-                </div>
-            )}
+                {message && <p role='status' className='mt-4 text-sm text-ui-text'>{message}</p>}
+                {result ? <QueryResultTable result={result} /> : (
+                    <div className='mt-5 border-t border-ui-border py-6 text-center text-sm text-ui-muted'>
+                        {mode === 'rows' ? 'Choose a table to view its rows.' : 'Run a query to see results.'}
+                    </div>
+                )}
+            </div>
         </section>
     )
 }

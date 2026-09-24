@@ -3,6 +3,18 @@
 import { requestService } from '@/utils/monitoring/serviceApi'
 
 export type DatabaseOverview = {
+    storage?: {
+        sampledAt: string
+        host: string
+        stale?: boolean
+        disk: { totalBytes: number, availableBytes: number, dailyGrowthBytes: number | null, daysUntilFull: number | null, sampleSeconds: number }
+        instances: Array<{
+            id: string
+            engine: string
+            status: 'healthy' | 'unhealthy' | 'unavailable'
+            databases: Array<{ name: string, sizeBytes: number, connections: number | null, replica?: boolean, memory?: boolean }>
+        }>
+    } | null
     status: 'healthy' | 'unavailable'
     generatedAt: string
     clusterCount: number | null

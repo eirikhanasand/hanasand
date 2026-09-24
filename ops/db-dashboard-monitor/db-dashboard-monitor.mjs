@@ -98,7 +98,12 @@ try {
     await page.locator('[data-db-monitor-metrics]:visible').waitFor({ state: 'visible', timeout: timeoutMs })
 
     const bodyText = await page.locator('body').innerText({ timeout: timeoutMs })
-    const signal = evaluateDashboardText(bodyText)
+    const inventory = await page.locator('[data-db-monitor-metrics]').evaluate(element => ({
+        clusters: element.getAttribute('data-clusters'),
+        databases: element.getAttribute('data-databases'),
+        storageBytes: element.getAttribute('data-storage-bytes'),
+    }))
+    const signal = evaluateDashboardText(bodyText, inventory)
     if (!signal.ok) {
         throw new MonitorFailure(signal.reason, signal.detail, signal.metrics)
     }
@@ -137,15 +142,15 @@ try {
     await browser?.close().catch(() => {})
 }
 
-export function evaluateDashboardText(text) {
+export function evaluateDashboardText(text, inventory = {}) {
     const lines = linesFromText(text)
     const fullText = lines.join('\n')
     const unavailablePattern = /Database telemetry is reconnecting|Database metrics unavailable|Query telemetry unavailable|Inventory stream retrying|Cluster stream retrying|Missing system_admin|Unauthorized/i
     const unavailableMatch = fullText.match(unavailablePattern)
     const metrics = {
-        clusters: parseIntegerMetric(lines, 'Clusters'),
-        databases: parseIntegerMetric(lines, 'DBs') ?? parseIntegerMetric(lines, 'Databases'),
-        storageBytes: parseStorageMetric(lines, 'Storage'),
+        clusters: inventory.clusters == null ? parseIntegerMetric(lines, 'Clusters') : Number(inventory.clusters),
+        databases: inventory.databases == null ? parseIntegerMetric(lines, 'DBs') ?? parseIntegerMetric(lines, 'Databases') : Number(inventory.databases),
+        storageBytes: inventory.storageBytes == null ? parseStorageMetric(lines, 'Storage') : Number(inventory.storageBytes),
         activeQueries: parseIntegerMetric(lines, 'Active queries'),
         longRunning: parseIntegerMetric(lines, 'Long-running'),
     }

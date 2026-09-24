@@ -61,3 +61,4 @@ UNIT
 systemctl daemon-reload
 systemctl enable --now hanasand-disk-directories.timer
 systemctl start --no-block hanasand-disk-directories.service
+sh "$script_dir/install-database-metrics.sh"

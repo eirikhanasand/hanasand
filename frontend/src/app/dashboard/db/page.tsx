@@ -1,4 +1,3 @@
-import ResiliencePanel from '@/components/system/resilience'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import ErrorNotice from '@/components/error/errorNotice'
 import { getDatabaseOverview } from '@/utils/db/internal'
@@ -11,7 +10,6 @@ export default async function DatabasePage() {
         return (
             <DashboardPage>
                 <DashboardHeader eyebrow='Operations' title='Database' actions={<DatabaseActions />} />
-                <ResiliencePanel />
                 <DashboardPanel className='p-5'>
                     <ErrorNotice message={operatorFetchError(overview)} />
                 </DashboardPanel>
@@ -19,7 +17,7 @@ export default async function DatabasePage() {
         )
     }
 
-    return <><ResiliencePanel /><DatabaseDashboard overview={overview} /></>
+    return <DatabaseDashboard overview={overview} />
 }
 
 function operatorFetchError(message: string) {

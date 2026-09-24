@@ -1,3 +1,5 @@
+import { readDatabaseStorage, type DatabaseStorage } from './storage.ts'
+
 type QueryParams = Array<string | number | boolean | null>
 type MetricsQuery = <T extends Record<string, unknown>>(query: string, params?: QueryParams) => Promise<{ rows: T[] }>
 
@@ -13,6 +15,7 @@ export type DatabaseQueryActivity = {
 }
 
 export type DatabaseOverview = {
+    storage?: DatabaseStorage | null
     status: 'healthy' | 'unavailable'
     generatedAt: string
     clusterCount: number | null
@@ -80,10 +83,11 @@ type TableRow = {
 
 export async function collectLiveDatabaseOverview() {
     const { queryOnce } = await import('#db')
-    return collectDatabaseOverview(async <T extends Record<string, unknown>>(query: string, params?: QueryParams) => {
+    const [overview, storage] = await Promise.all([collectDatabaseOverview(async <T extends Record<string, unknown>>(query: string, params?: QueryParams) => {
         const result = await queryOnce(query, params)
         return { rows: result.rows as T[] }
-    })
+    }), readDatabaseStorage()])
+    return { ...overview, storage }
 }
 
 export async function collectDatabaseOverview(query: MetricsQuery, now = new Date()): Promise<DatabaseOverview> {
