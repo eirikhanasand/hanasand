@@ -66,5 +66,16 @@ function pageHref(scope: string, sort: string, direction: string, page: number, 
     return `/ti/sources?${params.toString()}`
 }
 
-function Unavailable() { return <DashboardPanel className='grid min-h-80 place-items-center border-ui-warning/40 bg-ui-panel p-8 text-center'><div><RefreshCcw className='mx-auto h-8 w-8 text-ui-warning' /><h2 className='mt-4 text-xl font-semibold text-ui-text'>Source inventory is temporarily unavailable</h2><p className='mt-2 text-sm text-ui-muted'>The source service did not return an inventory. No zero-source result was inferred.</p><Link href='/ti/sources' className='mt-5 inline-flex rounded-md bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas'>Retry</Link></div></DashboardPanel> }
+function Unavailable() {
+    return <DashboardPanel className='grid min-h-80 place-items-center border-ui-warning/40 bg-ui-panel p-8 text-center'>
+        <div>
+            <RefreshCcw className='mx-auto h-8 w-8 text-ui-warning' />
+            <h2 className='mt-4 text-xl font-semibold text-ui-text'>Source inventory is temporarily unavailable</h2>
+            <Link href='/ti/sources' className='mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ui-primary'>
+                <RefreshCcw aria-hidden='true' className='h-4 w-4' />
+                Retry
+            </Link>
+        </div>
+    </DashboardPanel>
+}
 function value(input: string | string[] | undefined) { return Array.isArray(input) ? input[0] : input }
