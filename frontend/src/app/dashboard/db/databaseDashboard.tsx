@@ -58,12 +58,11 @@ export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) 
         </DashboardPanel>
 
         {overview.status !== 'unavailable' ? <DatabaseWorkbench overview={overview} /> : <p role='alert' className='text-sm text-ui-warning'>{overview.health.message}</p>}
-        <Disclosure title='Queries' id='active-queries' detail={`${overview.queries.length} shown · ${overview.queries.filter(q => q.isLongRunning).length} long-running`}>
-            <p className='text-xs text-ui-muted'>Long-running after {formatTime(overview.longRunningThresholdSeconds)} · Checked {formatDateTime(overview.generatedAt)}</p>
-            {overview.queries.length ? <div className='mt-4 space-y-3'>{overview.queries.map((query, index) => <QueryCard key={`${query.database}-${query.user}-${query.query}-${index}`} query={query} duration={formatTime(query.durationSeconds)} />)}</div> : <p className='mt-3 text-sm text-ui-muted'>{overview.status === 'unavailable' ? 'Query activity unavailable.' : 'No active queries.'}</p>}
+        <Disclosure title='Queries' id='active-queries' detail={`${overview.queries.length} shown · ${overview.queries.filter(q => q.isLongRunning).length} long-running · Long-running after ${formatTime(overview.longRunningThresholdSeconds)} · Checked ${formatDateTime(overview.generatedAt)}`}>
+            {overview.queries.length ? <div className='space-y-5 divide-y divide-ui-border [&>div+div]:pt-5'>{overview.queries.map((query, index) => <QueryCard key={`${query.database}-${query.user}-${query.query}-${index}`} query={query} duration={formatTime(query.durationSeconds)} />)}</div> : <p className='text-sm text-ui-muted'>{overview.status === 'unavailable' ? 'Query activity unavailable.' : 'No active queries.'}</p>}
         </Disclosure>
         <Disclosure title='Longest running query' detail={overview.longestQuery ? formatTime(overview.longestQuery.durationSeconds) : 'None'}>
-            {overview.longestQuery ? <QueryCard query={overview.longestQuery} duration={formatTime(overview.longestQuery.durationSeconds)} expanded /> : <p className='text-sm text-ui-muted'>No query to show.</p>}
+            {overview.longestQuery ? <QueryCard query={overview.longestQuery} duration={formatTime(overview.longestQuery.durationSeconds)} /> : <p className='text-sm text-ui-muted'>No query to show.</p>}
         </Disclosure>
     </DashboardPage>
 }
