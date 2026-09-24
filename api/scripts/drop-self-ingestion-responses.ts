@@ -5,6 +5,7 @@ import { eventProtectionRuleId, eventProtectionRule, eventProtectionDefinition, 
 import { normalizeLogEvent } from '#utils/mill/logEvent.ts'
 import { storedSourceLog } from '#utils/mill/storedSources.ts'
 import { matchesMillRule } from '#utils/mill/conditions.ts'
+import { PreviewRegexTimeout } from '#utils/mill/rulePreview.ts'
 import { reprocessRuleItems } from '#utils/mill/ruleReprocess.ts'
 
 const organizationId = process.argv[2]
@@ -61,7 +62,7 @@ const totals = {matched:0,protected:0,removedEvents:0,removedSources:0}
 console.log(JSON.stringify({candidates:unique.length}))
 for (let offset=0;offset<unique.length;offset+=1000) {
     const batch=unique.slice(offset,offset+1000)
-    const result=await withTransaction(async query=>{
+    const replay=()=>withTransaction(async query=>{
         await query('SET LOCAL lock_timeout=\'10s\'')
         // A crash can only leave a replay batch unapplied; the final synchronous
         // audit flushes all earlier deletes before this command reports success.
@@ -104,6 +105,16 @@ for (let offset=0;offset<unique.length;offset+=1000) {
             JOIN service_logs s ON s.id=p.service_log_id`,[JSON.stringify(unused)])
         return result
     })
+    let result: Awaited<ReturnType<typeof replay>> | undefined
+    for(let attempt=0;attempt<5;attempt++) {
+        try { result=await replay(); break }
+        catch(error) {
+            if(attempt===4 || !(error instanceof PreviewRegexTimeout || ['55P03','40P01','40001'].includes(String((error as {code?: string}).code)))) throw error
+            console.log(JSON.stringify({retry:attempt+1,offset,reason:error instanceof PreviewRegexTimeout?'Rule evaluation timed out':'Transaction contention'}))
+            await new Promise(resolve=>setTimeout(resolve,(attempt+1)*1000))
+        }
+    }
+    if(!result) throw new Error('Replay did not complete its batch.')
     for (const key of Object.keys(totals) as (keyof typeof totals)[]) totals[key]+=result[key]
     console.log(JSON.stringify({processed:Math.min(offset+1000,unique.length),...totals}))
 }
