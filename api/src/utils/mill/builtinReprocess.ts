@@ -1,3 +1,4 @@
+import { canonicalReplayKeys } from './replayEvidence.ts'
 import { analyzeCdnDelivery } from './analyzeCdnDeliveryLog.ts'
 import { cdnDeliveryRuleId } from './analyzeCdnDelivery.ts'
 import type run from '#db'
@@ -54,8 +55,7 @@ export async function reprocessBuiltinPage(job: ReprocessJob, query: typeof run)
     const projections = (await query(`SELECT id,log_key,organization_id,normalized,original FROM mill_events
         WHERE log_key=ANY($1::text[]) FOR UPDATE`, [keys])).rows
     const findings = new Set((await query('SELECT event_ids FROM mill_findings WHERE event_ids && $1::text[]', [projections.map(row => row.id)])).rows.flatMap(row => row.event_ids))
-    const canonical = new Set((await query(`SELECT service_log_id::text AS id FROM log_proxy_requests WHERE service_log_id=ANY($1::bigint[])
-        UNION SELECT substring(canonical_log_key FROM 9) FROM log_ingestion_canonical WHERE canonical_log_key=ANY($2::text[])`, [rows.map(row => String(row.id)), keys])).rows.map(row => row.id))
+    const canonical = await canonicalReplayKeys(keys, query)
     const retention = await loadLogRetentionRules(job.organization_id, query)
     const { loadConfiguredMillRules, collectMillEventFindings, normalizeMillEvent } = await import('../../handlers/mill.ts')
     const rules = await loadConfiguredMillRules(job.organization_id, query)
@@ -72,7 +72,7 @@ export async function reprocessBuiltinPage(job: ReprocessJob, query: typeof run)
         const related = projections.filter(projection => projection.log_key === key)
         // Findings and canonical pointers are evidence integrity, not a second
         // drop rule. Never delete another tenant's or a retained finding's source.
-        if (scope !== job.organization_id || canonical.has(id) || !row.source_event_id
+        if (scope !== job.organization_id || canonical.has(key) || !row.source_event_id
             || protectedEvent(normalizeLogEvent(row), id)
             || related.some(projection => projection.organization_id !== job.organization_id || findings.has(projection.id)
                 || protectedEvent({ ...projection.normalized, retained_original: projection.original }, projection.id))) {

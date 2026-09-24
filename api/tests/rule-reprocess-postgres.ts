@@ -32,6 +32,8 @@ try {
     for (const statement of (await import('../src/utils/db/logDimensionsSchema.ts')).logDimensionsSchema) await query(statement)
     for (const statement of (await import('../src/utils/db/logCountsSchema.ts')).logCountsSchema) await query(statement)
     await (await import('../src/utils/db/ruleReprocessSchema.ts')).default()
+    await (await import('../src/utils/db/proxyAnalyzeSchema.ts')).default()
+    await (await import('../src/utils/db/ingestionAnalyzeSchema.ts')).default()
     const { processRuleReprocessJob } = await import('../src/utils/mill/ruleReprocess.ts')
     const { postMillRuleReprocess, getMillRuleReprocess } = await import('../src/handlers/millRuleReprocess.ts')
     const { normalizeLogEvent } = await import('../src/utils/mill/logEvent.ts')
@@ -131,6 +133,26 @@ try {
     await postMillRuleReprocess(request(body), reply() as any)
     for (let i = 0; i < 10 && await processRuleReprocessJob(); i++) { /* disabled detector */ }
     assert.equal((await query("SELECT count(*) FROM mill_events WHERE id='process-rule'")).rows[0].count, '0', 'Disabled detector does not impose hidden retention')
+    // Canonical evidence survives custom Drop in both indexed and raw-only phases.
+    const canonicalIds: string[] = []
+    for (const kind of ['proxy', 'ingestion']) for (const indexed of [true, false]) {
+        const name = `canonical-${kind}-${indexed}`
+        const source = await add(name, {}, 'platform', indexed)
+        canonicalIds.push(String(source.id))
+        if (kind === 'proxy') await query("INSERT INTO log_proxy_requests VALUES($1,$2,'{}','{}')", [crypto.randomUUID(), source.id])
+        else await query("INSERT INTO log_ingestion_canonical(key,organization_id,source_event_id,canonical_log_key) VALUES($1,'platform',$1,$2)", [name, `service:${source.id}`])
+    }
+    await add('unreferenced-control')
+    const canonicalJob = await postMillRuleReprocess(request(body), reply() as any)
+    for (let i = 0; i < 10 && await processRuleReprocessJob(); i++) { /* both source and projection phases */ }
+    const canonicalDone = (await query('SELECT * FROM mill_rule_reprocess_jobs WHERE id=$1', [canonicalJob.job.id])).rows[0]
+    assert.equal(canonicalDone.status, 'completed')
+    assert.equal(canonicalDone.removed_events, '1')
+    assert.equal(canonicalDone.removed_sources, '1', 'Only the unreferenced control is removed')
+    assert.equal((await query('SELECT count(*) FROM service_logs WHERE id=ANY($1::bigint[])', [canonicalIds])).rows[0].count, '4')
+    assert.equal((await query("SELECT count(*) FROM mill_events WHERE id LIKE 'canonical-%'")).rows[0].count, '2')
+    assert.equal((await query('SELECT count(*) FROM log_proxy_requests')).rows[0].count, '2', 'Proxy associations do not cascade away')
+    assert.equal((await query("SELECT count(*) FROM log_ingestion_canonical c JOIN service_logs s ON c.canonical_log_key='service:'||s.id::text")).rows[0].count, '2', 'Ingestion pointers retain their source')
     // A changed or disabled rule stops at the next batch, including after a worker restart.
     const changed = await postMillRuleReprocess(request(body), reply() as any)
     await query("UPDATE mill_rules SET enabled=false WHERE id='rule'")

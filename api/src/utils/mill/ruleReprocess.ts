@@ -1,3 +1,4 @@
+import { canonicalReplayKeys } from './replayEvidence.ts'
 import run, { withTransaction } from '#db'
 import { normalizeLogEvent, type LogInput } from './logEvent.ts'
 import { storedSourceLog } from './storedSources.ts'
@@ -114,7 +115,8 @@ export async function processRuleReprocessJob() {
                 originals.push({ key: `service:traffic_events:${row.id}`, event: normalizeLogEvent(storedSourceLog('traffic_events', row)) })
             const retainedKeys = new Set(originals.filter(item => retentionStoreMatches(item.event, storageRules) || protectedEvent(item.event)).map(item => item.key))
             for (const keep of keeps) for (const index of await matchRulePage(originals.map(item => item.event), keep.definition!.conditions!)) retainedKeys.add(originals[index].key)
-            safe = safe.filter(item => !item.key || !retainedKeys.has(item.key))
+            const canonical = await canonicalReplayKeys(safe.flatMap(item => item.key ? [item.key] : []), query)
+            safe = safe.filter(item => !item.key || !retainedKeys.has(item.key) && !canonical.has(item.key))
             const ids = evidence.filter(row => safe.some(item => item.id === row.id || (item.key && item.key === row.log_key))).map(row => row.id)
             const serviceIds = new Set<string>(), trafficIds = new Set<string>()
             for (const item of safe) {
