@@ -71,7 +71,8 @@ export default function SignatureEditor({ rule, disabled, onChange }: { rule: Mi
                     } catch { event.target.setCustomValidity('Enter valid JSON storage criteria.') }
                 }} /></label>}
                 {Object.keys(definition.parameters || {}).length > 0 && <div className='grid gap-3 sm:grid-cols-2'>{Object.entries(definition.parameters || {}).map(([key, value]) => {
-                    const meta = parameterLabels[key]
+                    const meta = { ...parameterLabels[key], ...(rule.id.replace(/\.v\d+$/, '') === 'ssh.transport_debug'
+                        ? key === 'minimumGapMs' ? { min: 0 } : key === 'maxPerMinute' ? { max: 600 } : {} : {}) }
                     return <label key={key} className='grid gap-1.5 text-xs font-medium'>{key === 'minimumCount' ? (spray ? 'Minimum distinct users' : 'Minimum failed logins') : meta?.label || key}<div className='flex items-center gap-2'><input required type='number' min={meta?.min ?? 1} max={meta?.max} step={1} value={Number.isFinite(value) ? value : ''} onChange={event => onChange({ ...definition, parameters: { ...definition.parameters, [key]: event.target.value === '' ? NaN : Number(event.target.value) } })} className={inputClass} /><span className='shrink-0 text-ui-muted'>{key === 'minimumCount' && spray ? 'users' : meta?.unit}</span></div></label>
                 })}</div>}
                 {brute && <><p className='font-mono text-xs text-ui-muted'>GROUP BY user.id · failure → success</p>{selectors('failureConditions', 'Failure selector', 'event_type = authentication AND action = login AND outcome = failure')}</>}

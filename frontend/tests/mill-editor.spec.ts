@@ -165,3 +165,24 @@ test('owned Store scope is visible, editable and persists on reload', async ({ p
     await page.reload()
     await expect(page.getByLabel('Store scope')).toHaveValue('all')
 })
+
+test('SSH transport defaults and selectors save without browser range errors', async ({ page }) => {
+    let writes = 0
+    let saved = { ...initial, id: 'ssh.transport_debug.v1', name: 'SSH transport debug summaries', severity: 'low',
+        definition: { match: 'all', stage: 'analyze', action: 'drop', conditions: [{ path: 'host', operator: 'equals', value: 'inspur', caseSensitive: true }],
+            parameters: { maxDurationMs: 1000, maxAgeMs: 60000, minimumGapMs: 0, maxPerMinute: 600 } } }
+    await page.route('**/api/backend/mill/rules/*?*', async route => {
+        if (route.request().method() === 'PUT') { writes++; saved = { ...saved, ...route.request().postDataJSON(), version: '2' } }
+        return route.fulfill({ json: { rule: saved, canEdit: true, currentVersion: saved.version, triggerCount: 0, audit: [], nextOffset: null } })
+    })
+    await page.goto('http://mill-editor.test/mill/rules/ssh.transport_debug')
+    await expect(page.getByLabel('Minimum spacing')).toHaveValue('0')
+    await expect(page.getByLabel('Maximum per minute')).toHaveValue('600')
+    await page.getByLabel('Event selector 1 value').fill('ovhcloud')
+    await page.getByRole('button', { name: 'Save changes' }).click()
+    await expect(page.getByText('Rule saved. New events use this version.')).toBeVisible()
+    await page.reload()
+    await expect(page.getByLabel('Event selector 1 value')).toHaveValue('ovhcloud')
+    await expect(page.getByLabel('Event selector 1 match case')).toBeChecked()
+    expect(writes).toBe(1)
+})
