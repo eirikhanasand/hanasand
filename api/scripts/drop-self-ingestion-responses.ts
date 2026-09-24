@@ -11,7 +11,7 @@ const organizationId = process.argv[2]
 if (!organizationId || !(await run('SELECT id FROM organizations WHERE id=$1 AND status=\'active\'', [organizationId])).rows.length) throw new Error('An active organization ID is required.')
 // Keep the receipt existence check indexed during large historical replays.
 await run('CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_log_proxy_receipts_connection ON log_proxy_receipts(connection_id)')
-await run("SELECT gin_clean_pending_list('idx_mill_findings_event_ids'::regclass)")
+await run('SELECT gin_clean_pending_list(\'idx_mill_findings_event_ids\'::regclass)')
 const ruleId = 'http.self_ingestion_success.v1'
 const conditions = [ ['http.path','/api/logs/ingest'], ['http.method','POST'], ['http.status_code','201'], ['source.ip','128.39.142.218'], ['severity','low'] ]
     .map(([path,value]) => ({path,value,operator:'equals' as const,caseSensitive:true}))
@@ -63,6 +63,9 @@ for (let offset=0;offset<unique.length;offset+=1000) {
     const batch=unique.slice(offset,offset+1000)
     const result=await withTransaction(async query=>{
         await query('SET LOCAL lock_timeout=\'10s\'')
+        // A crash can only leave a replay batch unapplied; the final synchronous
+        // audit flushes all earlier deletes before this command reports success.
+        await query('SET LOCAL synchronous_commit=off')
         for (const lock of ['mill:service-logs','mill:live-service-logs']) await query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[lock])
         const currentRule=(await query('SELECT * FROM mill_rules WHERE organization_id=$1 AND rule_id=$2 FOR SHARE',[organizationId,ruleId])).rows[0]
         if (!currentRule?.enabled || currentRule.version!==rule.version) throw new Error('Rule changed during replay.')
@@ -104,7 +107,10 @@ for (let offset=0;offset<unique.length;offset+=1000) {
     for (const key of Object.keys(totals) as (keyof typeof totals)[]) totals[key]+=result[key]
     console.log(JSON.stringify({processed:Math.min(offset+1000,unique.length),...totals}))
 }
-await run(`INSERT INTO system_events(event_type,source,object_type,object_id,organization_id,context)
+await withTransaction(async query=>{
+    await query('SET LOCAL synchronous_commit=on')
+    await query(`INSERT INTO system_events(event_type,source,object_type,object_id,organization_id,context)
     VALUES('mill.rule.reprocessed','maintenance','mill_rule',$1,$2,$3::jsonb)`,[ruleId,organizationId,JSON.stringify({ruleId,version:rule.version,...totals})])
+})
 console.log(JSON.stringify({complete:true,...totals}))
 process.exit(0)
