@@ -1,12 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
-import path from 'node:path'
+import { getDashboardNavigation, navigationLinks } from '../src/utils/layout/dashboardNavigation'
+import { organizationPages } from '../src/utils/organizations/pages'
 
-test('authenticated dashboard exposes the organization workspace in Settings', async () => {
-    const root = process.cwd().endsWith(`${path.sep}frontend`) ? process.cwd() : path.join(process.cwd(), 'frontend')
-    const sidebar = await readFile(path.join(root, 'src/components/dashboard/dashboardSidebar.tsx'), 'utf8')
-
-    assert.match(sidebar, /href: '\/organizations', label: 'Organizations'/)
-    assert.match(sidebar, /title=\{item\.label\}/)
+test('organization destinations remain reachable exactly once after regrouping', () => {
+    const links = navigationLinks(getDashboardNavigation({ id: 'member', isAdmin: false, canManageSystem: false, canManageContent: false }))
+    for (const page of organizationPages) {
+        const matches = links.filter(link => link.href === page.href)
+        assert.equal(matches.length, 1)
+        assert.equal(matches[0].ancestors[0], 'Organization')
+    }
 })

@@ -1,4 +1,3 @@
-import { organizationPages } from '@/utils/organizations/pages'
 export type NavigationItem = {
     label: string
     href?: string
@@ -21,24 +20,23 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
     const link = (label: string, href: string, visible = true): NavigationItem => ({ label, href, visible })
     const group = (label: string, items: NavigationItem[]): NavigationItem => ({ label, items })
     const sections = [
-        group('Security operations', [
-            link('Overview', '/dashboard'),
-            group('Investigations', [
-                link('Threat Search', '/ti'),
-                link('Cases', '/cases'),
-                link('Browser', '/browser'),
-                link('Monitoring actions', '/dwm/actions'),
-            ]),
-            group('Monitoring', [
-                link('Dark web monitoring', '/dwm'),
-                link('Actors', '/dwm/actors'),
-                link('Watchlists', '/dwm/watchlists'),
-                group('Rules', [
-                    link('Match filter', '/mill/rules/match'),
-                    link('Analysis filter', '/mill/rules/analysis'),
-                    link('Detection filter', '/mill/rules/detection'),
-                ]),
-                link('Integrations', '/dwm/delivery'),
+        link('Overview', '/dashboard'),
+        group('Security & intelligence', [
+            link('Cases', '/cases'),
+            link('Threat Search', '/ti'),
+            link('Latest Activity', '/ti/activity', isAdmin),
+            link('Actors', '/dwm/actors'),
+            link('Actor Profiles', '/ti/enrichment', isAdmin),
+            link('Watchlists', '/dwm/watchlists'),
+            link('Dark Web Monitoring', '/dwm'),
+            link('Browser', '/browser'),
+            link('Monitoring Actions', '/dwm/actions'),
+            group('Collection', [
+                link('Collection Overview', '/ti/control', isAdmin),
+                link('Feeds', '/ti/sources', isAdmin),
+                link('Collection Targets', '/ti/domains', isAdmin),
+                link('Collection Runs', '/ti/runs', isAdmin),
+                link('Delivery Health', '/ti/timeliness', canReviewIntel),
             ]),
             group('Security tools', [
                 link('Security Scanner', canManageSystem ? '/scanner' : '/solutions/scanner'),
@@ -46,35 +44,21 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
                 link('Endpoint Checks', '/test'),
             ]),
         ]),
-        group('Threat intelligence', [
-            group('Intelligence', [
-                link('Latest Activity', '/ti/activity', isAdmin),
-                link('Actor Profiles', '/ti/enrichment', isAdmin),
-            ]),
-            group('Collection', [
-                link('Overview', '/ti/control', isAdmin),
-                link('Feeds', '/ti/sources', isAdmin),
-                link('Watchlist', '/ti/domains', isAdmin),
-                link('Collection', '/ti/runs', isAdmin),
-                link('Delivery', '/ti/timeliness', canReviewIntel),
-            ]),
-        ]),
-        group('Automation', [
-            link('Health Checks', '/automation/health'),
-            link('Cron Jobs', '/automation/cron'),
+        group('Logs & rules', [
+            link('Log Dashboard', '/logs', canManageSystem),
+            link('Realtime', '/logs/realtime', canManageSystem),
+            link('Search', '/logs/search', canManageSystem),
+            link('Errors', '/logs/errors', canManageSystem),
+            link('Traffic', '/traffic', canManageSystem),
+            link('Match Rules', '/mill/rules/match'),
+            link('Analysis Rules', '/mill/rules/analysis'),
+            link('Detection Rules', '/mill/rules/detection'),
         ]),
         group('Infrastructure', [
-            link('Overview', '/system'),
+            link('System Overview', '/system'),
             group('Compute', [
                 link('Virtual Machines', '/vms', hasVMs),
                 link('Host Updates', '/system/updates', isAdmin),
-            ]),
-            group('Logs', [
-                link('Dashboard', '/logs', canManageSystem),
-                link('Realtime', '/logs/realtime', canManageSystem),
-                link('Search', '/logs/search', canManageSystem),
-                link('Errors', '/logs/errors', canManageSystem),
-                link('Traffic', '/traffic', canManageSystem),
             ]),
             group('Health', [
                 link('AI Metrics', '/system/ai', canManageSystem),
@@ -87,46 +71,58 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
                 link('Backups', '/db/backups', isAdmin),
             ]),
         ]),
-        group('Content', [
-            link('Library', '/gallery'),
-            link('Upload', '/upload'),
-            link('Content Management', '/content', canManageContent),
-            group('Writing', [
-                link('Notes', '/notes', canManageContent || hasContentOrganization),
-                link('Articles', '/content/articles', canManageContent || hasContentOrganization),
-                link('Thoughts', '/content/thoughts', canManageContent || hasContentOrganization),
-            ]),
+        group('Automation', [
+            link('Health Checks', '/automation/health'),
+            link('Cron Jobs', '/automation/cron'),
+        ]),
+        group('Workspace', [
+            link('Projects', '/projects', isAdmin),
+            link('Notes', '/notes', canManageContent || hasContentOrganization),
+            link('Articles', '/content/articles', canManageContent || hasContentOrganization),
+            link('Thoughts', '/content/thoughts', canManageContent || hasContentOrganization),
+            link('Thesis', '/content/thesis', isAdmin),
+            link('Media Library', '/gallery'),
+            link('Uploads', '/upload'),
             link('Shares', '/shares'),
+            link('Content Management', '/content', canManageContent),
         ]),
-        group('Administration', [
-            group('Workspaces', [
-                link('Projects', '/projects', isAdmin),
-                link('Thesis', '/content/thesis', isAdmin),
-            ]),
-            group('Support', [
-                link('Support chats', '/support'),
-                link('Helpdesk', '/helpdesk', isAdmin),
-                link('Mail', '/mail'),
-            ]),
-            group('Management', [
-                link('Audit Log', '/management/audit', isAdmin),
-                link('Users', '/management/users', isAdmin),
-                link('Organizations', '/management/organizations', canManageOrganizations),
-                link('Roles', '/management/roles', isAdmin),
-                link('Service accounts', '/management/service-accounts', isAdmin),
-            ]),
+        group('Communication', [
+            link('Mail', '/mail'),
+            link('Support Chats', '/support'),
+            link('Helpdesk', '/helpdesk', isAdmin),
         ]),
-        group('Settings', [
-            group('Account', [
-                link('Profile', `/profile/${id}`),
-                link('Security', `/profile/${id}/security`),
-                link('Sessions', `/profile/${id}/sessions`),
-                link('Certificates', `/profile/${id}/certificates`),
-                link('Support tickets', `/profile/${id}/support`),
+        group('Organization', [
+            link('Organization Overview', '/organizations'),
+            link('Organization Settings', '/organizations/settings'),
+            link('Team', '/organizations/team'),
+            group('Access & credentials', [
+                link('API Keys', '/organizations/api-keys'),
+                link('Service Accounts', '/management/service-accounts', isAdmin),
             ]),
-            group('Organization', organizationPages.map(page => link(page.label, page.href))),
-            group('Billing', [link('Subscription', '/subscription')]),
-            group('Developer resources', [link('API Docs', '/api'), link('OpenAPI JSON', '/api/openapi')]),
+            group('Integrations & delivery', [
+                link('Integrations', '/dwm/delivery'),
+                link('Destinations', '/organizations/destinations'),
+                link('Delivery History', '/organizations/delivery'),
+            ]),
+            link('Organization Watchlists', '/organizations/watchlists'),
+            link('Alerts & Cases', '/organizations/alerts'),
+            link('Privacy & Retention', '/organizations/privacy'),
+            link('Activity', '/organizations/activity'),
+            link('Subscription', '/subscription'),
+        ]),
+        group('Platform administration', [
+            link('All Organizations', '/management/organizations', canManageOrganizations),
+            link('Platform Users', '/management/users', isAdmin),
+            link('Platform Roles', '/management/roles', isAdmin),
+            link('System Audit Log', '/management/audit', isAdmin),
+        ]),
+        group('Help & developer resources', [link('API Docs', '/api'), link('OpenAPI JSON', '/api/openapi')]),
+        group('Account', [
+            link('Profile', `/profile/${id}`),
+            link('Security', `/profile/${id}/security`),
+            link('Sessions', `/profile/${id}/sessions`),
+            link('Certificates', `/profile/${id}/certificates`),
+            link('My Support Tickets', `/profile/${id}/support`),
         ]),
     ]
     const permitted = (items: NavigationItem[]): NavigationItem[] => items

@@ -8,7 +8,7 @@ const access = { id: 'sidebar-test', isAdmin: true, canManageSystem: true, canMa
 const all = navigationLinks(getDashboardNavigation(access))
 assert.equal(all.length, new Set(all.map(item => item.href)).size)
 const memberAccess = { ...access, isAdmin: false, canManageSystem: false, canManageContent: false }
-assert.deepEqual(getDashboardNavigation(memberAccess).map(item => item.label), ['Security operations', 'Automation', 'Infrastructure', 'Content', 'Administration', 'Settings'])
+assert.deepEqual(getDashboardNavigation(memberAccess).map(item => item.label), ['Overview', 'Security & intelligence', 'Logs & rules', 'Infrastructure', 'Automation', 'Workspace', 'Communication', 'Organization', 'Help & developer resources', 'Account'])
 for (const permissions of [access, memberAccess]) {
     const automation = getDashboardNavigation(permissions).find(item => item.label === 'Automation')
     assert.deepEqual(automation.items.map(({ label, href, items }) => ({ label, href, items })), [
@@ -16,9 +16,9 @@ for (const permissions of [access, memberAccess]) {
         { label: 'Cron Jobs', href: '/automation/cron', items: undefined },
     ])
 }
-assert.deepEqual(navigationLinks(getDashboardNavigation(memberAccess)).filter(item => item.ancestors.includes('Content')).map(item => item.href), ['/shares'])
+assert.deepEqual(navigationLinks(getDashboardNavigation(memberAccess)).filter(item => item.ancestors.includes('Workspace')).map(item => item.href), ['/gallery', '/upload', '/shares'])
 const reviewer = navigationLinks(getDashboardNavigation({ ...memberAccess, canReviewIntel: true }))
-assert.deepEqual(reviewer.filter(item => item.href === '/ti/timeliness').map(item => item.label), ['Delivery'])
+assert.deepEqual(reviewer.filter(item => item.href === '/ti/timeliness').map(item => item.label), ['Delivery Health'])
 assert(reviewer.find(item => item.href === '/ti/timeliness').ancestors.includes('Collection'))
 assert(![...all, ...reviewer].some(item => item.href === '/ti/evaluation'))
 const operator = navigationLinks(getDashboardNavigation({ ...memberAccess, canManageSystem: true }))
@@ -28,41 +28,42 @@ assert(!navigationLinks(getDashboardNavigation({ ...memberAccess, hasVMs: false 
 assert(!operator.some(item => ['/db', '/system/updates'].includes(item.href)))
 for (const href of ['/logs', '/logs/realtime', '/logs/search', '/logs/errors']) assert(operator.some(item => item.href === href), `System administrators need access to ${href}`)
 assert.equal(all.find(item => item.href === '/dwm/actors')?.label, 'Actors')
-assert.deepEqual(all.filter(item => item.ancestors.includes('Logs')).map(({ label, href }) => ({ label, href })), [
-    { label: 'Dashboard', href: '/logs' },
-    { label: 'Realtime', href: '/logs/realtime' },
-    { label: 'Search', href: '/logs/search' },
-    { label: 'Errors', href: '/logs/errors' },
-    { label: 'Traffic', href: '/traffic' },
-])
+assert.deepEqual(all.filter(item => item.ancestors.includes('Logs & rules')).map(item => item.href), ['/logs', '/logs/realtime', '/logs/search', '/logs/errors', '/traffic', '/mill/rules/match', '/mill/rules/analysis', '/mill/rules/detection'])
 for (const href of ['/vulnerabilities', '/system/rates', '/load-testing']) assert.deepEqual(all.find(item => item.href === href)?.ancestors, ['Infrastructure', 'Health'])
 assert(!all.some(item => item.ancestors.includes('Observability') || item.ancestors.includes('Security & resilience')))
 for (const path of ['/management/users', '/management/roles']) {
-    assert.deepEqual(all.find(item => item.href === path)?.ancestors, ['Administration', 'Management'])
+    assert.deepEqual(all.find(item => item.href === path)?.ancestors, ['Platform administration'])
 }
 assert(!navigationLinks(getDashboardNavigation(memberAccess)).some(item => item.href.startsWith('/management')))
-assert.deepEqual(all.find(item => item.href === '/cases')?.ancestors, ['Security operations', 'Investigations'])
-assert.deepEqual(all.find(item => item.href === '/dwm/actors')?.ancestors, ['Security operations', 'Monitoring'])
-assert.deepEqual(getDashboardNavigation(access)[0].items.map(item => item.label), ['Overview', 'Investigations', 'Monitoring', 'Security tools'])
+assert.deepEqual(all.find(item => item.href === '/cases')?.ancestors, ['Security & intelligence'])
+assert.deepEqual(all.find(item => item.href === '/dwm/actors')?.ancestors, ['Security & intelligence'])
+assert.equal(getDashboardNavigation(access)[0].href, '/dashboard')
+assert.deepEqual(all.find(item => item.href === '/management/service-accounts')?.ancestors, ['Organization', 'Access & credentials'])
+assert.deepEqual(all.find(item => item.href === '/mail')?.ancestors, ['Communication'])
+assert.deepEqual(all.find(item => item.href === '/organizations')?.ancestors, ['Organization'])
+const orgManager = navigationLinks(getDashboardNavigation({ ...memberAccess, canManageOrganizations: true }))
+assert.deepEqual(orgManager.find(item => item.href === '/management/organizations')?.ancestors, ['Platform administration'])
+assert(!orgManager.some(item => item.href === '/management/users'))
 
 for (const permissions of [access, memberAccess]) {
     const links = navigationLinks(getDashboardNavigation(permissions))
     assert(!links.some(item => item.href === '/solutions'), 'Marketing catalog must not appear in the internal menu')
     for (const href of ['/dwm', '/cases', '/mill/rules/match', '/mill/rules/analysis', '/mill/rules/detection', '/ti', '/browser', '/organizations', '/pwned', '/test']) assert(links.some(item => item.href === href), `Missing product destination: ${href}`)
     assert(links.some(item => item.label === 'Security Scanner' && item.href === (permissions.canManageSystem ? '/scanner' : '/solutions/scanner')))
-    for (const category of ['match', 'analysis', 'detection']) assert.deepEqual(links.find(item => item.href === `/mill/rules/${category}`)?.ancestors, ['Security operations', 'Monitoring', 'Rules'])
+    for (const category of ['match', 'analysis', 'detection']) assert.deepEqual(links.find(item => item.href === `/mill/rules/${category}`)?.ancestors, ['Logs & rules'])
 }
-for (const path of ['/browser', '/browser/report', '/solutions', '/solutions/scanner', '/solutions/mill', '/pwned', '/test']) assert(hasAppSidebar(path), `Product loses the signed-in sidebar: ${path}`)
+for (const path of ['/browser', '/browser/report', '/solutions/scanner', '/solutions/mill', '/pwned', '/test']) assert(hasAppSidebar(path), `Product loses the signed-in sidebar: ${path}`)
 assert(!hasAppSidebar('/browser-unrelated'))
 
 // Exercise the real component; only Next routing is replaced.
 const build = await Bun.build({ entrypoints: ['sidebar-test-entry'], target: 'browser', plugins: [{ name: 'sidebar-fixture', setup(builder) {
-    builder.onResolve({ filter: /^(sidebar-test-entry|next\/link|next\/navigation)$/ }, args => ({ path: args.path, namespace: 'fixture' }))
+    builder.onResolve({ filter: /^(sidebar-test-entry|next\/link|next\/navigation|@\/components\/organizations\/workspaceProvider)$/ }, args => ({ path: args.path, namespace: 'fixture' }))
     builder.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ loader: 'tsx', resolveDir: process.cwd(), contents: args.path === 'next/navigation'
         ? 'import {useSyncExternalStore} from \'react\'; export function usePathname(){return useSyncExternalStore(callback=>{window.addEventListener(\'popstate\',callback);return()=>window.removeEventListener(\'popstate\',callback)},()=>location.pathname,()=>\'/dashboard/overview\')}'
-        : args.path === 'next/link'
-            ? 'export default function Link({href,children,...props}){return <a {...props} href={href} onClick={event=>{event.preventDefault();history.pushState({},\'\',href);window.dispatchEvent(new Event(\'popstate\'))}}>{children}</a>}'
-            : `import {createRoot} from 'react-dom/client'; import Sidebar from './src/components/dashboard/dashboardSidebar'; const root=createRoot(document.getElementById('root')); window.showSidebar=access=>root.render(<Sidebar {...access}/>); window.showSidebar(${JSON.stringify(access)});`,
+        : args.path === '@/components/organizations/workspaceProvider' ? 'export function useWorkspace(){return {organizationId:""}}'
+            : args.path === 'next/link'
+                ? 'export default function Link({href,children,...props}){return <a {...props} href={href} onClick={event=>{event.preventDefault();history.pushState({},\'\',href);window.dispatchEvent(new Event(\'popstate\'))}}>{children}</a>}'
+                : `import {createRoot} from 'react-dom/client'; import Sidebar from './src/components/dashboard/dashboardSidebar'; const root=createRoot(document.getElementById('root')); window.showSidebar=access=>root.render(<Sidebar {...access}/>); window.showSidebar(${JSON.stringify(access)});`,
     }))
 } }] })
 assert(build.success, build.logs.join('\n'))
@@ -88,18 +89,18 @@ try {
     const link = (name) => nav.getByRole('link', { name, exact: true })
     await link('Actors').waitFor({ state: 'visible' })
     assert.equal(await link('Actors').getAttribute('aria-current'), 'page')
-    await button('Rules').click()
-    for (const category of ['Match filter', 'Analysis filter', 'Detection filter']) {
+    await button('Logs & rules').click()
+    for (const category of ['Match Rules', 'Analysis Rules', 'Detection Rules']) {
         await link(category).click()
         assert.equal(await link(category).getAttribute('aria-current'), 'page')
-        assert.equal(await button('Rules').getAttribute('aria-expanded'), 'true')
+        assert.equal(await button('Logs & rules').getAttribute('aria-expanded'), 'true')
     }
-    await button('Rules').click()
-    assert.equal(await link('Match filter').isVisible(), false)
-    await button('Rules').focus()
+    await button('Logs & rules').click()
+    assert.equal(await link('Match Rules').isVisible(), false)
+    await button('Logs & rules').focus()
     await page.keyboard.press('Enter')
-    assert(await link('Match filter').isVisible())
-    await button('Investigations').click()
+    assert(await link('Match Rules').isVisible())
+    await button('Security & intelligence').click()
     await link('Browser').click()
     assert.equal(await link('Browser').getAttribute('aria-current'), 'page')
     assert.equal(await link('All products and solutions').count(), 0)
@@ -107,7 +108,7 @@ try {
     await page.getByRole('searchbox').fill('Cases')
     await link('Cases').click()
     assert.equal(new URL(page.url()).pathname, '/cases')
-    await button('Security operations').click()
+    await button('Security & intelligence').click()
     await button('Automation').click()
     await link('Health Checks').click()
     assert.equal(await link('Health Checks').getAttribute('aria-current'), 'page')
@@ -124,7 +125,7 @@ try {
     await link('Virtual Machines').click()
     await page.reload()
     await link('Virtual Machines').waitFor({ state: 'visible' })
-    assert.equal(await button('Security operations').getAttribute('aria-expanded'), 'false')
+    assert.equal(await button('Security & intelligence').getAttribute('aria-expanded'), 'false')
     await button('Pin Virtual Machines').click()
     assert.equal(await button('Pinned').getAttribute('aria-expanded'), 'true')
     await page.reload()
@@ -132,15 +133,18 @@ try {
     await page.getByRole('searchbox').fill('actor')
     assert.equal(await nav.getByRole('link').count(), 2)
     await link('Actor Profiles').click()
-    await button('Intelligence').waitFor({ state: 'visible' })
+    await button('Security & intelligence').waitFor({ state: 'visible' })
+    await button('Security & intelligence').click()
     assert.equal(await link('Actor Profiles').getAttribute('aria-current'), 'page')
     await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click()
-    await button('Open Settings').click()
+    await button('Open Account').click()
     await button('Account').waitFor({ state: 'visible' })
     assert(await button('Organization').isVisible())
     assert.equal(await button('Account & organization').count(), 0)
     await page.setViewportSize({ width: 390, height: 844 })
     await button('Account').focus()
+    await page.keyboard.press('Enter')
+    assert(!await link('Profile').isVisible())
     await page.keyboard.press('Enter')
     await link('Profile').waitFor({ state: 'visible' })
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Mobile sidebar must not overflow')
@@ -165,20 +169,20 @@ try {
     assert(await link('Virtual Machines').first().isVisible(), 'Collapse all must preserve pins')
     await button('Pinned').click()
     assert.equal(await collapseAll.count(), 0, 'Hide collapse all after manually closing the last menu')
-    await button('Settings').click()
-    assert.equal(await button('Account').getAttribute('aria-expanded'), 'false', 'Reopening a section must leave its submenus collapsed')
+    await button('Organization').click()
+    assert.equal(await button('Access & credentials').getAttribute('aria-expanded'), 'false', 'Reopening a section must leave its submenus collapsed')
     assert(await collapseAll.isVisible())
-    await button('Account').click()
-    await button('Settings').click()
+    await button('Access & credentials').click()
+    await button('Organization').click()
     assert.equal(await collapseAll.count(), 0, 'Expanded descendants inside a collapsed parent are not actionable')
-    await button('Settings').click()
+    await button('Organization').click()
     assert(await collapseAll.isVisible())
     await page.getByRole('searchbox').fill('profile')
     assert.equal(await collapseAll.count(), 0, 'Search results do not expose expandable menus')
     await page.getByRole('searchbox').fill('')
     assert(await collapseAll.isVisible())
     await page.evaluate(access => window.showSidebar(access), { ...memberAccess, id: 'different-user' })
-    await button('Content').click()
+    await button('Workspace').click()
     await link('Shares').click()
     assert.equal(await link('Shares').getAttribute('aria-current'), 'page')
     await page.getByRole('searchbox').fill('database')
@@ -186,8 +190,8 @@ try {
     await page.getByRole('searchbox').fill('')
     assert.equal(await button('Pinned').count(), 0, 'Pins must not leak between users')
     await page.evaluate(() => { Storage.prototype.setItem = () => { throw Error('Storage disabled') } })
-    await button('Settings').click()
-    assert.equal(await button('Settings').getAttribute('aria-expanded'), 'true')
+    await button('Organization').click()
+    assert.equal(await button('Organization').getAttribute('aria-expanded'), 'true')
     assert.deepEqual(errors, [])
     console.log(`Dashboard navigation passed: ${all.length} destinations, permissions, deep routes, persistence, pins, search, compact/mobile keyboard and unavailable storage.`)
 } finally {

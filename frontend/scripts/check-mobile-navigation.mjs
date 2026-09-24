@@ -12,7 +12,7 @@ const build = await Bun.build({ entrypoints: ['mobile-test-entry'], target: 'bro
         : args.path === 'next/link'
             ? 'export default function Link({href,children,onClick,...props}){return <a {...props} href={href} onClick={event=>{onClick?.(event);event.preventDefault();history.pushState({},\'\',href);window.dispatchEvent(new Event(\'popstate\'))}}>{children}</a>}'
             : args.path === 'next/image' ? 'export default function Image({priority,...props}){return <img {...props}/>}'
-                : args.path === '@/components/organizations/workspaceProvider' ? 'export function useWorkspace(){return {organizationId:"",organizations:[]}}; export function OrganizationSwitcher(){return <select aria-label="Org"><option>Personal workspace</option><option>Hanasand</option></select>}'
+                : args.path === '@/components/organizations/workspaceProvider' ? 'export function useWorkspace(){return {organizationId:"",organizations:[]}}; export function OrganizationSwitcher(){return <select aria-label="Org" className="h-10 min-w-0 max-w-20 sm:max-w-48"><option>Personal workspace</option><option>Hanasand</option></select>}'
                     : args.path === '@/components/support/supportAssistant' || args.path === '@/components/footer/footer' ? 'export default function Empty(){return null}'
                         : `import {createRoot} from 'react-dom/client';
 import MobileNavigation from './src/components/layout/mobileNavigation';
@@ -75,8 +75,10 @@ try {
             if (width < 1280) {
                 const label = token ? 'Open site navigation' : 'Open navigation'
                 await page.getByRole('button', { name: label, exact: true }).click()
-                await header.getByRole('link', { name: 'Hash Exposure Lookup', exact: true }).click()
-                assert(!await header.getByRole('link', { name: 'Hash Exposure Lookup', exact: true }).isVisible())
+                const publicMenu = header.getByRole('navigation', { name: 'Mobile main navigation' })
+                await publicMenu.locator('summary').filter({ hasText: 'Resources' }).click()
+                await publicMenu.getByRole('link', { name: /^Hash Exposure Lookup/ }).click()
+                assert(!await header.getByRole('navigation', { name: 'Mobile main navigation' }).getByRole('link', { name: /^Hash Exposure Lookup/ }).isVisible())
             }
             if (width === 1440 || width === 390) await page.screenshot({ path: `/tmp/shared-header-${token ? 'signed-in' : 'public'}-${width}.png` })
         }
@@ -94,7 +96,7 @@ try {
         await page.getByRole('searchbox', { name: 'Search navigation' }).waitFor()
         assert(await sidebar.isVisible())
         assert.deepEqual(await heading.boundingBox(), before, 'Opening navigation must not move content')
-        assert(await page.getByRole('button', { name: 'Security operations', exact: true }).isVisible(), 'Saved desktop compact mode must not hide mobile labels')
+        assert(await page.getByRole('button', { name: 'Security & intelligence', exact: true }).isVisible(), 'Saved desktop compact mode must not hide mobile labels')
         assert(!await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).first().isVisible())
         await page.getByRole('searchbox').fill('Cron Jobs')
         await page.getByRole('link', { name: 'Cron Jobs', exact: true }).click()
@@ -114,7 +116,7 @@ try {
             await page.screenshot({ path: '/tmp/mobile-navigation-open.png' })
         }
         await page.setViewportSize({ width: 1440, height: 900 })
-        await page.getByRole('button', { name: 'Open Security operations' }).waitFor()
+        await page.getByRole('button', { name: 'Open Security & intelligence' }).waitFor()
         assert(await sidebar.isVisible(), 'Desktop sidebar must remain available and compact')
         assert(!await page.getByRole('button', { name: 'Open navigation', exact: true }).isVisible())
         await page.setViewportSize({ width, height: 844 })

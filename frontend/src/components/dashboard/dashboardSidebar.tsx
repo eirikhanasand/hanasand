@@ -4,20 +4,24 @@ import Link from 'next/link'
 import { NAVIGATION_COOKIE, readNavigationPreferences, type NavigationPreferences as Preferences } from '@/utils/layout/navigationPreferences'
 import { getCookie, setCookie } from '@/utils/cookies/cookies'
 import { usePathname } from 'next/navigation'
-import { AlarmClockCheck, ChevronDown, ChevronsUp, FolderKanban, NotebookText, PanelLeftClose, PanelLeftOpen, Pin, Radar, Search, Server, Settings2, ShieldCheck } from 'lucide-react'
+import { AlarmClockCheck, ChevronDown, ChevronsUp, FolderKanban, NotebookText, PanelLeftClose, PanelLeftOpen, Pin, Search, Server, Settings2, ShieldCheck, House, ListFilter, Mail, CircleHelp, CircleUserRound } from 'lucide-react'
 import { useEffect, useId, useState, useSyncExternalStore } from 'react'
 import { getDashboardViewMode, setDashboardViewMode } from '@/utils/layout/viewMode'
 import { getDashboardNavigation, navigationLinks, type NavigationAccess, type NavigationItem } from '@/utils/layout/dashboardNavigation'
 import { useWorkspace } from '@/components/organizations/workspaceProvider'
 
 const sectionIcons: Record<string, typeof ShieldCheck> = {
-    'Security operations': ShieldCheck,
-    'Threat intelligence': Radar,
+    Overview: House,
+    'Security & intelligence': ShieldCheck,
+    'Logs & rules': ListFilter,
     Automation: AlarmClockCheck,
     Infrastructure: Server,
-    Content: NotebookText,
-    Administration: FolderKanban,
-    Settings: Settings2,
+    Workspace: NotebookText,
+    Communication: Mail,
+    Organization: FolderKanban,
+    'Platform administration': Settings2,
+    'Help & developer resources': CircleHelp,
+    Account: CircleUserRound,
     Pinned: Pin,
 }
 
@@ -67,7 +71,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
     const route = pathname
     const active = links.filter(item => route === item.href || route.startsWith(`${item.href}/`))
         .sort((left, right) => right.href.length - left.href.length)[0]
-    const activePath = active?.ancestors.join('/') ?? (pathname.startsWith('/automation') ? 'Automation' : '')
+    const activePath = (active?.ancestors.length ? active.ancestors.join('/') : active?.label) ?? (pathname.startsWith('/automation') ? 'Automation' : '')
 
     useEffect(() => {
         let saved = readNavigationPreferences(getCookie(NAVIGATION_COOKIE) || undefined, access.id)
@@ -149,13 +153,13 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
     const favorites = links.filter(item => preferences.pinned.includes(item.href))
         .sort((left, right) => preferences.pinned.indexOf(left.href) - preferences.pinned.indexOf(right.href))
     const search = query.trim().toLocaleLowerCase()
-    const hasExpandedMenu = !search && (sections.some(section => isExpanded(section.label)) || (favorites.length > 0 && isExpanded('Pinned')))
+    const hasExpandedMenu = !search && (sections.some(section => section.items && isExpanded(section.label)) || (favorites.length > 0 && isExpanded('Pinned')))
     const matches = search ? links.filter(item => [...item.ancestors, item.label].join(' ').toLocaleLowerCase().includes(search)) : []
 
     return (
         <aside aria-label='Dashboard sidebar' className={`site-chrome dashboard-sidebar-sticky noscroll min-h-0 w-full overflow-auto rounded-lg border border-ui-border bg-ui-panel text-ui-text p-2 shadow-sm shadow-ui-canvas/10 dark:shadow-ui-canvas/20 ${compact ? 'lg:w-16' : 'lg:w-58'}`}>
             <div className={`mb-2 flex items-center ${compact ? 'justify-center' : 'justify-between px-2'}`}>
-                {!compact && <h2 className='text-sm font-semibold text-ui-text'>Workspace</h2>}
+                {!compact && <h2 className='text-sm font-semibold text-ui-text'>Navigation</h2>}
                 <div className='flex shrink-0 items-center'>
                     {!compact && hasExpandedMenu && <button type='button' onClick={collapseAll} aria-label='Collapse all menus' title='Collapse all menus'
                         className='grid h-10 w-10 place-items-center rounded-lg text-ui-muted hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary'>
@@ -175,6 +179,8 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
             <nav aria-label='Main navigation' className='grid gap-1'>
                 {compact ? sections.map(section => {
                     const Icon = sectionIcons[section.label] || FolderKanban
+                    if (section.href) return <Link key={section.href} href={section.href} aria-label={section.label} title={section.label} aria-current={active?.href === section.href ? 'page' : undefined}
+                        className='grid h-10 w-full place-items-center rounded-md text-ui-muted hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary'><Icon className='h-4 w-4' /></Link>
                     return <button key={section.label} type='button' aria-label={`Open ${section.label}`} title={section.label}
                         onClick={() => { save({ ...preferences, expanded: { ...preferences.expanded, [section.label]: true } }); setDashboardViewMode('normal') }}
                         className={`grid h-10 w-full place-items-center rounded-md hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary ${activePath.startsWith(section.label) ? 'bg-ui-primary/10 text-ui-primary' : 'text-ui-muted'}`}>
@@ -188,7 +194,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
                     </div>)}
                 </div> : <>
                     {favorites.length > 0 && renderGroup({ label: 'Pinned', items: favorites })}
-                    {sections.map(section => renderGroup(section))}
+                    {sections.map(section => section.items ? renderGroup(section) : section.href ? renderLink({ label: section.label, href: section.href }) : null)}
                 </>}
             </nav>
             <nav aria-label='Workspace shortcuts' className='mt-2 grid gap-1 border-t border-ui-border pt-2 lg:hidden'>
