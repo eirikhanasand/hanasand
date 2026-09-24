@@ -39,7 +39,7 @@ test('changing failure detail keeps the same case and cooldown', () => {
 
 test('recovery monitoring is restricted to administrators', () => {
     expect(needsSystemAutomationAccess({ actionType: 'agent_prompt', targetUrl: 'system:resilience', organizationId: null, modelName: null })).toBe(true)
-    expect(automationReadScope('a', '$1', '$2')).toContain("a.target_url IS DISTINCT FROM 'system:resilience'")
+    expect(automationReadScope('a', '$1', '$2')).toContain('a.target_url IS DISTINCT FROM \'system:resilience\'')
 })
 
 

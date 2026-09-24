@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'bun:test'
 mock.module('#constants', () => ({ default: {} }))
-mock.module('#db', () => ({ default: async () => { throw new Error('Unexpected database access') }, withTransaction: async (fn: Function) => fn() }))
+mock.module('#db', () => ({ default: async () => { throw new Error('Unexpected database access') }, withTransaction: async (fn: () => unknown) => fn() }))
 const { default: recordLog } = await import('../src/utils/logs/recordLog.ts')
 const { mongoDefinition, mongoRuleId, mongoReconDefinition } = await import('../src/utils/mill/analyzeMongo.ts')
 const { normalizeBuiltinDefinition, collectMillEventFindings, normalizeMillEvent } = await import('../src/handlers/mill.ts')
@@ -12,13 +12,13 @@ test('ingestion drops with a receipt only when the platform rule is active', asy
         const statements: string[] = []
         const query: any = async (sql: string, params: unknown[]) => {
             statements.push(sql)
-            if (sql.includes("r.source='owned'")) {
+            if (sql.includes('r.source=\'owned\'')) {
                 expect(params[0]).toBeNull()
                 return { rows: [] }
             }
             if (sql.includes('FROM mill_rules')) {
                 expect(params[1]).toBe(mongoRuleId)
-                expect(sql).toContain("r.enabled AND r.definition->>'stage'='analyze' AND r.definition->>'action'='drop'")
+                expect(sql).toContain('r.enabled AND r.definition->>\'stage\'=\'analyze\' AND r.definition->>\'action\'=\'drop\'')
                 return { rows: active ? [{ organization_id: 'platform', version: '1', definition: mongoDefinition }] : [] }
             }
             return { rows: [], rowCount: 1 }

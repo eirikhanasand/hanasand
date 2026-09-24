@@ -11,7 +11,7 @@ const argv = ['/usr/lib/postgresql/15/bin/pg_isready', '-U', 'hanasand', '-d', '
 let auditId = 42
 function audit(args = argv, success = 'yes') {
     const id = String(auditId++)
-    const command = args.map(value => /^[\w@%+=:,./-]+$/.test(value) ? value : `'${value.replaceAll("'", "'\"'\"'")}'`).join(' ')
+    const command = args.map(value => /^[\w@%+=:,./-]+$/.test(value) ? value : `'${value.replaceAll('\'', '\'"\'"\'')}'`).join(' ')
     // Equivalent to the collector's parsed audit event, kept within the API
     // build context so the production image can run this ingestion regression.
     return { host: 'inspur', service: 'audit', level: 'info', message: command, timestamp: '2026-09-23T20:00:00.010Z',
@@ -45,7 +45,7 @@ test('ingestion retains readiness audit evidence and suspicious variants with bu
     const writes: string[] = []
     let stored: unknown[][] = []
     const query: any = async (sql: string, params: any[] = []) => {
-        if (sql.includes("r.source='owned'")) return { rows: [] }
+        if (sql.includes('r.source=\'owned\'')) return { rows: [] }
         if (sql.includes('FROM mill_rules')) return { rows: [{ organization_id: 'platform', version: '1', enabled: true,
             definition: { stage: 'analyze', action: 'drop', parameters: {} } }] }
         if (sql.includes('INSERT INTO service_logs')) { stored = JSON.parse(params[0]); return { rows: [], rowCount: rows.length } }

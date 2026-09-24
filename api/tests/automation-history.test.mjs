@@ -5,12 +5,12 @@ const { default: ensureIssues } = await import('../src/utils/db/monitoringIssues
 const { loadRuns } = await import('../src/handlers/automations.ts')
 const { recoverStaleAutomationRuns, executeAutomation } = await import('../src/utils/automations.ts')
 test('history pagination retains timestamp precision and recovery releases orphaned claims', async () => {
-    await query(`DROP TABLE IF EXISTS agent_automation_runs, monitoring_issue_notifications, monitoring_issues, agent_automations`)
-    await query(`CREATE TABLE agent_automation_runs (id text PRIMARY KEY, automation_id text, owner_id text, status text, warning boolean DEFAULT false, result text, error text, provider text, model text, artifacts jsonb DEFAULT '[]', started_at timestamptz DEFAULT NOW(), completed_at timestamptz, duration_ms int)`)
-    await query(`CREATE TABLE agent_automations (id text PRIMARY KEY, status text, last_status text, last_run_at timestamptz, updated_at timestamptz, last_error text, last_completed_at timestamptz, next_run_at timestamptz, schedule_kind text, consecutive_failures int DEFAULT 0, action_type text, paused_reason text, run_count int DEFAULT 0, certificate_status text, certificate_subject text, certificate_issuer text, certificate_expires_at timestamptz)`)
-    await query(`CREATE TABLE IF NOT EXISTS vms(name text PRIMARY KEY, owner text, created_by text, access_users jsonb, deleted_at timestamptz)`);
+    await query('DROP TABLE IF EXISTS agent_automation_runs, monitoring_issue_notifications, monitoring_issues, agent_automations')
+    await query('CREATE TABLE agent_automation_runs (id text PRIMARY KEY, automation_id text, owner_id text, status text, warning boolean DEFAULT false, result text, error text, provider text, model text, artifacts jsonb DEFAULT \'[]\', started_at timestamptz DEFAULT NOW(), completed_at timestamptz, duration_ms int)')
+    await query('CREATE TABLE agent_automations (id text PRIMARY KEY, status text, last_status text, last_run_at timestamptz, updated_at timestamptz, last_error text, last_completed_at timestamptz, next_run_at timestamptz, schedule_kind text, consecutive_failures int DEFAULT 0, action_type text, paused_reason text, run_count int DEFAULT 0, certificate_status text, certificate_subject text, certificate_issuer text, certificate_expires_at timestamptz)')
+    await query('CREATE TABLE IF NOT EXISTS vms(name text PRIMARY KEY, owner text, created_by text, access_users jsonb, deleted_at timestamptz)')
     await ensureIssues()
-    await query(`INSERT INTO agent_automation_runs(id,automation_id,owner_id,status,started_at) SELECT 'run-' || n, 'a', 'owner', 'completed', '2026-01-01 12:00:00.123456+00'::timestamptz FROM generate_series(1,125) n`)
+    await query('INSERT INTO agent_automation_runs(id,automation_id,owner_id,status,started_at) SELECT \'run-\' || n, \'a\', \'owner\', \'completed\', \'2026-01-01 12:00:00.123456+00\'::timestamptz FROM generate_series(1,125) n')
     const first = await loadRuns('a', 'owner')
     expect(first.total).toBe(125)
     expect(first.runs).toHaveLength(50)
@@ -22,7 +22,7 @@ test('history pagination retains timestamp precision and recovery releases orpha
     expect((await loadRuns('a', 'someone-else', false, { page: '2' })).runs).toHaveLength(0)
     await expect(loadRuns('a', 'owner', false, { page: '0' })).rejects.toThrow('Invalid history page')
 
-    await query(`INSERT INTO agent_automation_runs(id,automation_id,owner_id,status,started_at) VALUES ('new','a','owner','completed',NOW())`)
+    await query('INSERT INTO agent_automation_runs(id,automation_id,owner_id,status,started_at) VALUES (\'new\',\'a\',\'owner\',\'completed\',NOW())')
     const second = await loadRuns('a', 'owner', false, { cursor: first.nextCursor })
     const third = await loadRuns('a', 'owner', false, { cursor: second.nextCursor })
     expect(new Set([...first.runs, ...second.runs, ...third.runs].map(run => run.id)).size).toBe(125)
@@ -31,16 +31,16 @@ test('history pagination retains timestamp precision and recovery releases orpha
     expect((await loadRuns('a', 'someone-else')).total).toBe(0)
     expect((await loadRuns('a', 'owner', false, { to: '2026-01-01T00:00:00Z' })).total).toBe(0)
     await expect(loadRuns('a','owner',false,{cursor:'bad'})).rejects.toThrow('Invalid history cursor')
-    await query(`INSERT INTO agent_automations(id,status,last_status,last_run_at,updated_at,schedule_kind) VALUES ('orphan','active','running',NOW()-INTERVAL '1 day',NOW()-INTERVAL '1 day','interval'), ('live','active','running',NOW(),NOW(),'interval')`)
+    await query('INSERT INTO agent_automations(id,status,last_status,last_run_at,updated_at,schedule_kind) VALUES (\'orphan\',\'active\',\'running\',NOW()-INTERVAL \'1 day\',NOW()-INTERVAL \'1 day\',\'interval\'), (\'live\',\'active\',\'running\',NOW(),NOW(),\'interval\')')
     await recoverStaleAutomationRuns()
-    const rows = (await query(`SELECT id,last_status,next_run_at FROM agent_automations ORDER BY id`)).rows
+    const rows = (await query('SELECT id,last_status,next_run_at FROM agent_automations ORDER BY id')).rows
     expect(rows[0].last_status).toBe('running')
     expect(rows[1].last_status).toBe('failed')
     expect(rows[1].next_run_at).not.toBeNull()
-    await query(`INSERT INTO agent_automations(id,status,action_type,schedule_kind) VALUES ('unavailable','active','agent_prompt','interval')`)
+    await query('INSERT INTO agent_automations(id,status,action_type,schedule_kind) VALUES (\'unavailable\',\'active\',\'agent_prompt\',\'interval\')')
     const monitor = { id: 'unavailable', owner_id: 'owner', action_type: 'agent_prompt', monitoring_type: 'fetch', target_url: 'http://127.0.0.1:9', timeout_seconds: 1, retry_count: 0, notify_on: 'never', interval_minutes: 1, schedule_kind: 'interval', notification_destinations: [] }
     for (let attempt = 0; attempt < 4; attempt++) await executeAutomation(monitor)
-    const failed = (await query(`SELECT status,last_status,run_count,next_run_at FROM agent_automations WHERE id='unavailable'`)).rows[0]
+    const failed = (await query('SELECT status,last_status,run_count,next_run_at FROM agent_automations WHERE id=\'unavailable\'')).rows[0]
     expect(failed.status).toBe('active')
     expect(failed.last_status).toBe('failed')
     expect(failed.run_count).toBe(4)

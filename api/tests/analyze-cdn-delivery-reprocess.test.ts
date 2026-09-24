@@ -24,9 +24,9 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('CDN historical replay remov
     try {
         expect((await query('SELECT current_database() name')).rows[0].name).toBe('postgres_filter_test')
         await query(`CREATE SCHEMA ${namespace}`)
-        await query("CREATE TABLE organizations(id text PRIMARY KEY,name text,status text,created_at timestamptz DEFAULT NOW(),audit_safe_metadata jsonb DEFAULT '{}')")
+        await query('CREATE TABLE organizations(id text PRIMARY KEY,name text,status text,created_at timestamptz DEFAULT NOW(),audit_safe_metadata jsonb DEFAULT \'{}\')')
         await query('CREATE TABLE users(id text PRIMARY KEY)')
-        await query("INSERT INTO organizations(id,name,status) VALUES('platform','Hanasand','active')")
+        await query('INSERT INTO organizations(id,name,status) VALUES(\'platform\',\'Hanasand\',\'active\')')
         const schema = readFileSync(new URL('../src/utils/db/ensureSchema.ts', import.meta.url), 'utf8')
         for (const table of ['service_logs', 'mill_events', 'mill_findings', 'mill_rules', 'system_events']) {
             const ddl = schema.match(new RegExp('CREATE TABLE IF NOT EXISTS ' + table + ' \\([\\s\\S]*?\\n        \\)'))?.[0]
@@ -59,19 +59,19 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('CDN historical replay remov
             SELECT $1,organization_id,rule_id,version,'test',NOW(),$3::jsonb FROM mill_rules WHERE rule_id=$2`,
         [id, cdnDeliveryRuleId, JSON.stringify({ phase: 0, serviceEnd: String(raw.at(-1).id), trafficEnd: '0' })])
         await enqueue('disabled'); await processRuleReprocessJob()
-        expect((await query("SELECT status FROM mill_rule_reprocess_jobs WHERE id='disabled'")).rows[0].status).toBe('cancelled')
+        expect((await query('SELECT status FROM mill_rule_reprocess_jobs WHERE id=\'disabled\'')).rows[0].status).toBe('cancelled')
         await query('UPDATE mill_rules SET enabled=true WHERE rule_id=$1', [cdnDeliveryRuleId])
         const protectedRow = raw.find(row => row.source_event_id === protectedCopy.sourceEventId)
         await query(`INSERT INTO mill_findings(id,organization_id,finding_key,rule_id,severity,summary,event_ids)
             VALUES('finding','platform','finding','custom','high','Retain evidence',$1::text[])`, [[`event-${protectedRow.id}`]])
         failDelete = true
         await enqueue('rollback'); await processRuleReprocessJob()
-        expect((await query("SELECT status FROM mill_rule_reprocess_jobs WHERE id='rollback'")).rows[0].status).toBe('failed')
+        expect((await query('SELECT status FROM mill_rule_reprocess_jobs WHERE id=\'rollback\'')).rows[0].status).toBe('failed')
         for (const table of ['service_logs','mill_events']) expect((await query(`SELECT count(*) n FROM ${table}`)).rows[0].n).toBe('5')
         expect((await query('SELECT count(*) n FROM log_analyze_receipts')).rows[0].n).toBe('0')
         failDelete = false
         await enqueue('drop'); await processRuleReprocessJob()
-        const job = (await query("SELECT * FROM mill_rule_reprocess_jobs WHERE id='drop'")).rows[0]
+        const job = (await query('SELECT * FROM mill_rule_reprocess_jobs WHERE id=\'drop\'')).rows[0]
         expect(job.status).toBe('completed')
         expect(job.removed_sources).toBe('1'); expect(job.removed_events).toBe('1')
         for (const table of ['service_logs','mill_events']) expect((await query(`SELECT count(*) n FROM ${table}`)).rows[0].n).toBe('4')

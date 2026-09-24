@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { formatClaimSummary } from '../src/utils/dwm/display.ts'
 
-const source = readFileSync(new URL('../src/app/dashboard/dwm/dwm-analyst-portal.tsx', import.meta.url), 'utf8')
+const source = readFileSync(new URL('../src/app/dashboard/dwm/findings.tsx', import.meta.url), 'utf8')
 const pageSource = readFileSync(new URL('../src/app/dashboard/dwm/page.tsx', import.meta.url), 'utf8')
 const workflowSource = readFileSync(new URL('../src/app/dashboard/dwm/dwm-workflow-actions.tsx', import.meta.url), 'utf8')
 const caseDetailSource = readFileSync(new URL('../src/app/dashboard/cases/[id]/case-detail-client.tsx', import.meta.url), 'utf8')

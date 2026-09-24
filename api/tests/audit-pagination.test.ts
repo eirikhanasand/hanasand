@@ -54,7 +54,7 @@ test('HQL shares KQL operators and binds values before existing audit filters', 
     expect(response.statusCode).toBe(200)
     expect(response.body.queryResult).toEqual({ columns: ['Action', 'Description'], rows: [['restart', 'matched']], limit: 25, summarized: false })
     expect(response.body.pagination).toEqual({ total: 125, nextCursor: null })
-    expect(queries[0].values).toEqual(['failed', "x' OR 1=1 --", '%needle%', '%test%'])
+    expect(queries[0].values).toEqual(['failed', 'x\' OR 1=1 --', '%needle%', '%test%'])
     expect(queries[1].sql).toContain('ORDER BY e.created_at ASC, e.id DESC')
     expect(queries[1].sql).not.toContain('OR 1=1')
     expect(queries[1].sql).not.toContain('normalized')

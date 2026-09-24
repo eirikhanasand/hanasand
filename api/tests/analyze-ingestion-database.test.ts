@@ -24,8 +24,8 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('ingestion copies retain ful
         expect((await query('SELECT current_database() name')).rows[0].name).toBe('postgres_filter_test')
         await query(`CREATE SCHEMA ${namespace}`)
         await query('CREATE TABLE users(id text PRIMARY KEY)')
-        await query("CREATE TABLE organizations(id text PRIMARY KEY,name text,status text,created_at timestamptz DEFAULT NOW(),audit_safe_metadata jsonb DEFAULT '{}')")
-        await query("INSERT INTO organizations(id,name,status) VALUES('platform','Hanasand','active')")
+        await query('CREATE TABLE organizations(id text PRIMARY KEY,name text,status text,created_at timestamptz DEFAULT NOW(),audit_safe_metadata jsonb DEFAULT \'{}\')')
+        await query('INSERT INTO organizations(id,name,status) VALUES(\'platform\',\'Hanasand\',\'active\')')
         const schema = readFileSync(new URL('../src/utils/db/ensureSchema.ts', import.meta.url), 'utf8')
         for (const table of ['service_logs', 'mill_rules', 'system_events']) {
             const definition = schema.match(new RegExp('CREATE TABLE IF NOT EXISTS ' + table + ' \\([\\s\\S]*?\\n        \\)'))?.[0]
@@ -76,8 +76,8 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('ingestion copies retain ful
             await query('DELETE FROM mill_rules WHERE id IN (\'keep\',\'detect\')')
             await query('UPDATE mill_rules SET enabled=true,definition=$2::jsonb WHERE rule_id=$1', [ingestionRuleId, JSON.stringify(ingestionDefinition)])
             if (mode === 'disable') await query('UPDATE mill_rules SET enabled=false WHERE rule_id=$1', [ingestionRuleId])
-            if (mode === 'keep') await query("UPDATE mill_rules SET definition=jsonb_set(definition,'{action}','\"keep\"') WHERE rule_id=$1", [ingestionRuleId])
-            if (mode === 'condition') await query("UPDATE mill_rules SET definition=jsonb_set(definition,'{conditions}',$2::jsonb) WHERE rule_id=$1", [ingestionRuleId, JSON.stringify([{ path: 'service', operator: 'equals', value: 'other' }])])
+            if (mode === 'keep') await query('UPDATE mill_rules SET definition=jsonb_set(definition,\'{action}\',\'"keep"\') WHERE rule_id=$1', [ingestionRuleId])
+            if (mode === 'condition') await query('UPDATE mill_rules SET definition=jsonb_set(definition,\'{conditions}\',$2::jsonb) WHERE rule_id=$1', [ingestionRuleId, JSON.stringify([{ path: 'service', operator: 'equals', value: 'other' }])])
             if (mode === 'custom-keep' || mode === 'detect') await query(`INSERT INTO mill_rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
                 VALUES($1,'platform',$1,'1','Protect copies','Custom','high','Protect copies',$2::jsonb,'owned',true)`,
             [mode === 'detect' ? 'detect' : 'keep', JSON.stringify({ match: 'all', stage: mode === 'detect' ? 'detect' : 'analyze', action: 'keep', conditions: [{ path: 'service', operator: 'equals', value: 'hanasand-api-2' }] })])
@@ -89,7 +89,7 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('ingestion copies retain ful
         await ingest([copy]) // New detector overrides even a previously compacted replay.
         expect((await query('SELECT count(*) n FROM service_logs WHERE source_event_id=$1', [copy.sourceEventId])).rows[0].n).toBe('1')
         // Missing first evidence must retain the unmatched copy.
-        await query("DELETE FROM mill_rules WHERE id='detect'")
+        await query('DELETE FROM mill_rules WHERE id=\'detect\'')
         const expired = structuredClone(first)
         expired.sourceEventId = '7'.repeat(64)
         expired.metadata.structured.reqId = 'a7d04ac9-630e-4d75-a2b5-33ba95b81842'

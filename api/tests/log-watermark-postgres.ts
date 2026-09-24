@@ -27,7 +27,7 @@ try {
     assert.ok(performance.now() - blockedAt >= 75, 'Busy writers should receive a bounded wait instead of an immediate skip')
     await writer.query('COMMIT')
     assert.equal(String(await stableLogWatermark('service_logs')), '2')
-    await writer.query("SET statement_timeout = '500ms'")
+    await writer.query('SET statement_timeout = \'500ms\'')
     await writer.query('INSERT INTO service_logs DEFAULT VALUES')
     assert.equal(String(await stableLogWatermark('service_logs')), '3', 'Watermark lock must be released before log processing')
     await writer.query('BEGIN')

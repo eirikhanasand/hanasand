@@ -27,10 +27,10 @@ try {
         await c.query('INSERT INTO mill_log_dimensions VALUES($1,$2,$3,$4,$5,$6)',
             [String(++id),org,time,service,service ? 'high' : null,service ? 'ProcessLogs' : null])
     }
-    const scope = "EXISTS(SELECT 1 FROM organizations o WHERE o.id=mill_events.organization_id AND o.status='active')"
+    const scope = 'EXISTS(SELECT 1 FROM organizations o WHERE o.id=mill_events.organization_id AND o.status=\'active\')'
     async function parity() {
         for (const cutoff of ['2026-09-20 11:00:00Z',...times,'2026-09-21 00:00:01Z']) {
-            for (const filter of ['', "service='api'", "severity IN ('high','critical')", "log_type='ProcessLogs'", 'service IS NULL']) {
+            for (const filter of ['', 'service=\'api\'', 'severity IN (\'high\',\'critical\')', 'log_type=\'ProcessLogs\'', 'service IS NULL']) {
                 const time = 'event_timestamp >= $1::timestamptz'
                 const where = [time,scope,...(filter ? [filter] : [])]
                 const expected = await c.query(`SELECT severity,service,COUNT(*)::int AS count
@@ -44,17 +44,17 @@ try {
     await parity()
     await c.query(`UPDATE mill_log_dimensions SET event_timestamp='2026-09-20 14:00:00Z',
         service='changed',severity='critical',log_type='SystemLogs' WHERE event_id='1'`)
-    await c.query(`UPDATE mill_log_dimensions SET severity=severity`)
-    await c.query("DELETE FROM mill_log_dimensions WHERE event_id IN ('2','3','legacy')")
+    await c.query('UPDATE mill_log_dimensions SET severity=severity')
+    await c.query('DELETE FROM mill_log_dimensions WHERE event_id IN (\'2\',\'3\',\'legacy\')')
     await parity()
-    await c.query("UPDATE organizations SET status='active' WHERE id='b'")
+    await c.query('UPDATE organizations SET status=\'active\' WHERE id=\'b\'')
     await parity()
-    await c.query("SET LOCAL TIME ZONE 'Europe/Oslo'")
+    await c.query('SET LOCAL TIME ZONE \'Europe/Oslo\'')
     await parity()
     await c.query('TRUNCATE mill_log_dimensions')
     await parity()
     assert.equal(rollupLogCountsSql(['event_timestamp >= $1', 'event_timestamp < $2'],'event_timestamp >= $1'),null)
-    assert.equal(rollupLogCountsSql(['event_timestamp >= $1', "normalized->>'message'=$2"],'event_timestamp >= $1'),null)
+    assert.equal(rollupLogCountsSql(['event_timestamp >= $1', 'normalized->>\'message\'=$2'],'event_timestamp >= $1'),null)
     console.log('PASS '+cases+' exact count cases: bootstrap, inserts, updates, replay, deletes, null dimensions, organization visibility, subsecond/hour boundaries and future timestamps')
 } finally {
     await c.query('ROLLBACK')

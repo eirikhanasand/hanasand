@@ -51,7 +51,7 @@ test('schema statements cancel execution and roll back their changes', async () 
     })).then(() => null, error => error)
     expect(failure?.code).toBe('57014')
     expect(Date.now() - started).toBeLessThan(7000)
-    expect((await queryOnce("SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='should_rollback'")).rowCount).toBe(0)
+    expect((await queryOnce('SELECT 1 FROM information_schema.columns WHERE table_name=\'users\' AND column_name=\'should_rollback\'')).rowCount).toBe(0)
     expect((await queryOnce('SHOW statement_timeout')).rows[0].statement_timeout).toBe('0')
 }, 10000)
 
@@ -63,7 +63,7 @@ test('schema transactions cannot retain locks through multiple short statements'
     })).then(() => null, error => error)
     expect(failure?.code).toBe('57014')
     expect(Date.now() - started).toBeLessThan(9500)
-    expect((await queryOnce("SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='transaction_rollback'")).rowCount).toBe(0)
+    expect((await queryOnce('SELECT 1 FROM information_schema.columns WHERE table_name=\'users\' AND column_name=\'transaction_rollback\'')).rowCount).toBe(0)
 }, 12000)
 
 test('multi-statement schema batches also roll back within eight seconds', async () => {
@@ -72,5 +72,5 @@ test('multi-statement schema batches also roll back within eight seconds', async
         .then(() => null, error => error)
     expect(failure?.code).toBe('57014')
     expect(Date.now() - started).toBeLessThan(9500)
-    expect((await queryOnce("SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='batch_rollback'")).rowCount).toBe(0)
+    expect((await queryOnce('SELECT 1 FROM information_schema.columns WHERE table_name=\'users\' AND column_name=\'batch_rollback\'')).rowCount).toBe(0)
 }, 12000)

@@ -9,7 +9,7 @@ const input = { from: '2026-09-01T00:00:00Z', until: '2026-09-02T00:00:00Z', act
 const row = (id: number, severity = 'low', status = 200) => ({ id: String(id), timestamp: '2026-09-01 12:00:00.123456+00', normalized: { severity, http: { status_code: status }, service: `service-${id % 7}`, message: 'x'.repeat(1000) } })
 test('preview uses runtime selectors and excludes higher and unknown severities for Drop', async () => {
     const query = async (sql: string, params: unknown[]) => {
-        expect(sql).toContain("organization_id=$1 AND ($2::boolean OR ingestion_id <> 'logs')")
+        expect(sql).toContain('organization_id=$1 AND ($2::boolean OR ingestion_id <> \'logs\')')
         expect(sql).toContain('received_at <= $3::timestamptz')
         expect(params.slice(0, 6)).toEqual(['org-a', false, input.until, input.from, null, ''])
         expect(sql).toContain('jsonb_typeof')

@@ -15,7 +15,7 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
     if (sql.includes('UPDATE mill_events')) { eventUpdates++; for (const item of JSON.parse(p[0])) { stored[item.id].normalized = {...stored[item.id].normalized,...item.result};stored[item.id].processing_status='processed' }return { rows: [] } }
     throw new Error('Unexpected SQL '+sql)
 }
-mock.module('#db',()=>({ default:query, withTransaction: async(work:any)=>{ const before=structuredClone({stored,findings});try{return await work(query)}catch(error){stored=before.stored;findings=before.findings;throw error} } }))
+mock.module('#db',()=>({ default:query, withTransaction: async(work: any)=>{ const before=structuredClone({stored,findings});try{return await work(query)}catch(error){stored=before.stored;findings=before.findings;throw error} } }))
 const { processLog, processLogBatch } = await import('../src/utils/mill/processLogs.ts')
 const { MILL_RULES, millDefaultDefinition } = await import('../src/handlers/mill.ts')
 const { securityRules } = await import('../src/utils/mill/securityRules.ts')
@@ -24,7 +24,7 @@ const log = (executable='/usr/bin/whoami',command='whoami') => ({id:'real-log',s
 beforeEach(()=>{stored={};findings=[];fail=false;findingWrites=0;eventUpdates=0})
 test('an info-level whoami executes Mill and persists high severity plus evidence',async()=>{
     await processLog(log(),'org-a',rules())
-    const row:any=Object.values(stored)[0]
+    const row: any=Object.values(stored)[0]
     expect(row.processing_status).toBe('processed');expect(row.normalized.level).toBe('info');expect(row.normalized.severity).toBe('high')
     expect(row.normalized.detections[0].rule_id).toBe('process.recon.whoami.v1')
     expect(row.normalized.rules_checked).toBe(MILL_RULES.length)

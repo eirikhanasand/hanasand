@@ -109,8 +109,8 @@ test('resolution requires a comment and records its method and authenticated res
     expect(JSON.parse(values[9] as string)).toMatchObject({ type: 'ai', actor: 'owner', note: 'AI fixed the query; health checks passed.' })
     expect(JSON.parse(values[8] as string)).toMatchObject({ actor: 'owner', actorType: 'human' })
     expect((await patch({ status: 'in_progress' })).statusCode).toBe(200)
-    expect(sql).toContain("WHEN $5::text IN ('open', 'in_progress') THEN NULL")
-    expect(sql).toContain("'fromStatus'")
+    expect(sql).toContain('WHEN $5::text IN (\'open\', \'in_progress\') THEN NULL')
+    expect(sql).toContain('\'fromStatus\'')
     expect((await patch({ resolutionMethod: 'human' })).statusCode).toBe(400)
 })
 test('confirmation is conditional on the exact unresolved review and cannot be combined with a resolution', async () => {
@@ -119,9 +119,9 @@ test('confirmation is conditional on the exact unresolved review and cannot be c
     rows = [{ id: '3' }]
     expect((await patch({ confirmResolutionId: 'r1' })).statusCode).toBe(200)
     expect(values[10]).toBe('r1')
-    expect(sql).toContain("i.resolution->>'id' = $11")
-    expect(sql).toContain("i.resolution->>'confirmedAt' IS NULL")
-    expect(sql).toContain("IN ('resolved', 'closed')")
+    expect(sql).toContain('i.resolution->>\'id\' = $11')
+    expect(sql).toContain('i.resolution->>\'confirmedAt\' IS NULL')
+    expect(sql).toContain('IN (\'resolved\', \'closed\')')
 })
 
 test('legacy recovery is attributed to monitoring and unknown manual resolvers are never invented', async () => {

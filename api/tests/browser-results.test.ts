@@ -87,7 +87,7 @@ test('full history includes repeated URLs, paginates and keeps client ownership 
     expect(invalid.code).toBe(400)
 })
 
- test('saved location follows the observed IP and keeps enrichment through later network events', () => {
+test('saved location follows the observed IP and keeps enrichment through later network events', () => {
     const first = { url: 'https://example.com', ip: '1.1.1.1', country: 'Australia', country_code: 'AU' }
     const next = { url: first.url, ip: '8.8.8.8', country: 'United States', country_code: 'US' }
     const events = [

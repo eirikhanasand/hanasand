@@ -24,9 +24,9 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('Mill replay removes only pr
     try {
         expect((await query('SELECT current_database() name')).rows[0].name).toBe('postgres_filter_test')
         await query(`CREATE SCHEMA ${namespace}`)
-        await query("CREATE TABLE organizations(id text PRIMARY KEY,name text,status text,created_at timestamptz DEFAULT NOW(),audit_safe_metadata jsonb DEFAULT '{}')")
+        await query('CREATE TABLE organizations(id text PRIMARY KEY,name text,status text,created_at timestamptz DEFAULT NOW(),audit_safe_metadata jsonb DEFAULT \'{}\')')
         await query('CREATE TABLE users(id text PRIMARY KEY)')
-        await query("INSERT INTO organizations(id,name,status) VALUES('platform','Hanasand','active')")
+        await query('INSERT INTO organizations(id,name,status) VALUES(\'platform\',\'Hanasand\',\'active\')')
         const schema = readFileSync(new URL('../src/utils/db/ensureSchema.ts', import.meta.url), 'utf8')
         for (const table of ['service_logs', 'mill_events', 'mill_findings', 'mill_rules', 'system_events']) {
             const ddl = schema.match(new RegExp('CREATE TABLE IF NOT EXISTS ' + table + ' \\([\\s\\S]*?\\n        \\)'))?.[0]
@@ -59,7 +59,7 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('Mill replay removes only pr
         [id, ingestionRuleId, JSON.stringify({ phase: 0, serviceEnd: String(raw.at(-1).id), trafficEnd: '0' })])
         await enqueue('disabled')
         await processRuleReprocessJob()
-        expect((await query("SELECT status FROM mill_rule_reprocess_jobs WHERE id='disabled'")).rows[0].status).toBe('cancelled')
+        expect((await query('SELECT status FROM mill_rule_reprocess_jobs WHERE id=\'disabled\'')).rows[0].status).toBe('cancelled')
         expect((await query('SELECT count(*) n FROM service_logs')).rows[0].n).toBe('3')
         await query('UPDATE mill_rules SET enabled=true WHERE rule_id=$1', [ingestionRuleId])
         // Link one copy to an existing finding: neither raw nor indexed evidence may disappear.
@@ -69,11 +69,11 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('Mill replay removes only pr
         await processRuleReprocessJob()
         expect((await query('SELECT count(*) n FROM service_logs')).rows[0].n).toBe('3')
         // Remove the test-only linkage, then retry the same saved rule through Mill.
-        await query("DELETE FROM mill_findings WHERE id='finding'")
+        await query('DELETE FROM mill_findings WHERE id=\'finding\'')
         failDelete = true
         await enqueue('rollback')
         await processRuleReprocessJob()
-        expect((await query("SELECT status FROM mill_rule_reprocess_jobs WHERE id='rollback'")).rows[0].status).toBe('failed')
+        expect((await query('SELECT status FROM mill_rule_reprocess_jobs WHERE id=\'rollback\'')).rows[0].status).toBe('failed')
         expect((await query('SELECT count(*) n FROM service_logs')).rows[0].n).toBe('3')
         expect((await query('SELECT count(*) n FROM mill_events')).rows[0].n).toBe('3')
         expect((await query('SELECT count(*) n FROM log_ingestion_copies')).rows[0].n).toBe('0')
@@ -82,12 +82,12 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('Mill replay removes only pr
         const liveWorker = await pool.connect()
         try {
             await liveWorker.query('BEGIN')
-            await liveWorker.query("SELECT pg_advisory_xact_lock(hashtextextended('mill:live-service-logs',0))")
+            await liveWorker.query('SELECT pg_advisory_xact_lock(hashtextextended(\'mill:live-service-logs\',0))')
             const release = (async () => { await Bun.sleep(100); await liveWorker.query('COMMIT') })()
             const [processed] = await Promise.all([processRuleReprocessJob(), release])
             expect(processed).toBe(true)
         } finally { await liveWorker.query('ROLLBACK'); liveWorker.release() }
-        const job = (await query("SELECT * FROM mill_rule_reprocess_jobs WHERE id='drop'")).rows[0]
+        const job = (await query('SELECT * FROM mill_rule_reprocess_jobs WHERE id=\'drop\'')).rows[0]
         expect(job.status).toBe('completed')
         expect(job.removed_sources).toBe('1')
         expect(job.removed_events).toBe('1')

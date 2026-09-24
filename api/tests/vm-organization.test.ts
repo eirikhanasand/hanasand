@@ -20,7 +20,7 @@ const request = () => app.inject({ method: 'PUT', url: '/vm/personal/organizatio
 test('personal owner can transfer to an organization with an audit event and no individual grants', async () => {
     writes = []
     expect((await request()).statusCode).toBe(200)
-    expect(writes[0]).toContain("access_users = '[]'::jsonb")
+    expect(writes[0]).toContain('access_users = \'[]\'::jsonb')
     expect(writes[1]).toContain('vm.organization_assigned')
 })
 test('transfer rejects another owner, unavailable membership and an already organizational VM', async () => {

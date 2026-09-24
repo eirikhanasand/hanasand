@@ -7,7 +7,7 @@ const query = (sql: string, values?: unknown[]) => db.query(sql, values)
 let recordedOutcomes = 0
 let admin = false
 let user = 'alice'
-mock.module('../src/utils/db.ts', () => ({ default: query, queryOnce: query, withTransaction: async () => { throw Error("Unexpected transaction") } }))
+mock.module('../src/utils/db.ts', () => ({ default: query, queryOnce: query, withTransaction: async () => { throw Error('Unexpected transaction') } }))
 mock.module('../src/utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: true, id: user }) }))
 mock.module('../src/utils/auth/hasRole.ts', () => ({ default: async () => ({ valid: admin }) }))
 mock.module('../src/utils/monitoringIssues.ts', () => ({ loadMonitoringIssues: async () => [], recordMonitoringOutcome: async () => { recordedOutcomes++ } }))
@@ -63,7 +63,7 @@ test('personal automation persistence, owner and organization isolation, privile
     const orgJob = ownOrg.json().automation.id
     const scheduled = { actionType: 'echo', organizationId: 'org-a', targetUrl: null, modelName: null }
     await checkScheduledAutomationAccess(scheduled, 'alice')
-    await query("UPDATE organization_members SET status='removed' WHERE user_id='alice'")
+    await query('UPDATE organization_members SET status=\'removed\' WHERE user_id=\'alice\'')
     expect((await app.inject(`/automations/${orgJob}`)).statusCode).toBe(404)
     expect((await app.inject('/automations')).json().automations.map((row: { id: string }) => row.id)).toEqual([id])
     await expect(checkScheduledAutomationAccess(scheduled, 'alice')).rejects.toThrow('no longer have access')

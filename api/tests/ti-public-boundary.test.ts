@@ -176,7 +176,7 @@ describe('public TI API boundary', () => {
 
     test('ships batch search only through the canonical versioned API', async () => {
         const routes = await readFile(new URL('../src/routes.ts', import.meta.url), 'utf8')
-        expect(routes).not.toContain("fastify.post('/ti/search/batch'")
+        expect(routes).not.toContain('fastify.post(\'/ti/search/batch\'')
         expect(routes).not.toContain('postTiSearchBatch')
         expect(existsSync(fileURLToPath(new URL('../../frontend/src/app/api/ti/search/batch/route.ts', import.meta.url)))).toBe(false)
     })

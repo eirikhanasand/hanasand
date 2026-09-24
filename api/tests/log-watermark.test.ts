@@ -15,7 +15,7 @@ const { stableLogWatermark } = await import('../src/utils/mill/logWatermark.ts')
 beforeEach(() => { code = null; inTransaction = false; finished = false; statements = [] })
 test('reads an exact bigint watermark under one short transaction and releases before returning', async () => {
     expect(await stableLogWatermark('traffic_events')).toBe('9007199254740993')
-    expect(statements).toEqual(["SET LOCAL lock_timeout = '100ms'", 'LOCK TABLE traffic_events IN SHARE MODE', 'SELECT COALESCE(MAX(id), 0)::text AS last_id FROM traffic_events'])
+    expect(statements).toEqual(['SET LOCAL lock_timeout = \'100ms\'', 'LOCK TABLE traffic_events IN SHARE MODE', 'SELECT COALESCE(MAX(id), 0)::text AS last_id FROM traffic_events'])
     expect(finished).toBe(true)
     expect(inTransaction).toBe(false)
 })

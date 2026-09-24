@@ -12,6 +12,7 @@ const query = async (sql: string, params: unknown[] = []) => {
         if (events.has(id)) return { rows: [], rowCount: 0 }
         events.set(id, String(params[2]))
     } else if (sql.includes('UPDATE stripe_webhook_events')) events.set(String(params[0]), String(params[1]))
+    else if (sql.includes('FROM container_subscriptions')) return { rows: [], rowCount: 0 }
     else if (sql.includes('FROM users')) return { rows: userExists ? [{ id: 'member' }] : [], rowCount: userExists ? 1 : 0 }
     else if (sql.includes('SELECT user_id, plan_id')) return { rows: [], rowCount: 0 }
     else if (sql.includes('INSERT INTO billing_')) {
@@ -20,7 +21,7 @@ const query = async (sql: string, params: unknown[] = []) => {
     }
     return { rows: [{}], rowCount: 1 }
 }
-mock.module('../src/utils/db.ts', () => ({ default: query, withTransaction: async (work: (txQuery: typeof query) => Promise<unknown>) => {
+mock.module('../src/utils/db.ts', () => ({ default: query, withDatabaseAdvisoryLock: async (_key: string, work: () => Promise<unknown>) => work(), withTransaction: async (work: (txQuery: typeof query) => Promise<unknown>) => {
     const savedEvents = new Map(events), savedWrites = [...writes]
     try { return await work(query) } catch (error) { events = savedEvents; writes = savedWrites; throw error }
 } }))

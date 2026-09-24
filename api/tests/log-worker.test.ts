@@ -15,7 +15,7 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
     if (sql.includes('SELECT pg_advisory_xact_lock')) return { rows: [] }
     if (sql.includes('pg_try_advisory_xact_lock')) return { rows: [{ locked }] }
     if (sql.includes('AS delayed')) return { rows: [{ delayed }] }
-    if (sql.startsWith('SELECT id FROM organizations')) return { rows: (p[0] === 'missing' || inactiveScopes.has(p[0]) && sql.includes("status = 'active'")) ? [] : [{ id: 'platform' }] }
+    if (sql.startsWith('SELECT id FROM organizations')) return { rows: (p[0] === 'missing' || inactiveScopes.has(p[0]) && sql.includes('status = \'active\'')) ? [] : [{ id: 'platform' }] }
     if (sql.includes('INSERT INTO log_processing_cursors')) return { rows: [] }
     if (sql.includes('SELECT last_id, recent_id')) return { rows: [{ ...cursor }] }
     if (sql.includes('UPDATE log_processing_cursors')) {

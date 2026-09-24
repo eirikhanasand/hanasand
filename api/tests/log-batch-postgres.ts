@@ -11,7 +11,7 @@ mock.module('../src/utils/mill/analyzeLog.ts', () => ({ analyzeMongoPing: async 
 const { default: recordLog, recordLogBatch } = await import('../src/utils/logs/recordLog.ts')
 try {
     await query('BEGIN')
-    await query("CREATE TEMP TABLE organizations(id text PRIMARY KEY,status text,audit_safe_metadata jsonb DEFAULT '{}')")
+    await query('CREATE TEMP TABLE organizations(id text PRIMARY KEY,status text,audit_safe_metadata jsonb DEFAULT \'{}\')')
     await query(`CREATE TEMP TABLE service_logs(service text,host text,level text,message text,metadata jsonb,
         source_event_id text UNIQUE,created_at timestamptz)`)
     await query(`INSERT INTO organizations VALUES ('active','active','{}'),('deleted','deleted','{"privacyDeletionRunId":"fixture"}'),
@@ -36,6 +36,6 @@ try {
     await query('SAVEPOINT failed_batch')
     await assert.rejects(recordLogBatch([{ ...rows[0], sourceEventId: 'new' }, { ...rows[0], timestamp: 'invalid' }], query as any))
     await query('ROLLBACK TO SAVEPOINT failed_batch')
-    assert.equal((await query("SELECT COUNT(*)::int AS n FROM service_logs WHERE source_event_id='new'")).rows[0].n, 0)
+    assert.equal((await query('SELECT COUNT(*)::int AS n FROM service_logs WHERE source_event_id=\'new\'')).rows[0].n, 0)
     console.log('Batch parity, privacy, redaction, duplicate replay and failure atomicity passed')
 } finally { await query('ROLLBACK'); await client.end() }

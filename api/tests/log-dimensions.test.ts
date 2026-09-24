@@ -40,10 +40,10 @@ test('another backfill owner and completed initialization both avoid duplicate w
     expect(queries).toHaveLength(1)
 })
 test('only exact supported dimensions use the compact predicate', () => {
-    const active = "EXISTS (SELECT 1 FROM organizations o WHERE o.id = mill_events.organization_id AND o.status = 'active')"
-    expect(dimensionLogWhere(["ingestion_id = 'logs'", "processing_status = 'processed'", "normalized->>'log_type' = $1", "normalized->>'severity' IN ('high', 'critical')", "normalized->>'service' = $2", active]))
-        .toEqual(['log_type = $1', "severity IN ('high', 'critical')", 'service = $2', active])
-    for (const predicate of ["normalized->>'message' = $1", 'strpos(lower(normalized::text), $1) > 0', 'user_id = $1', "normalized->'detections' IS NOT NULL"]) expect(dimensionLogWhere([predicate])).toBeNull()
+    const active = 'EXISTS (SELECT 1 FROM organizations o WHERE o.id = mill_events.organization_id AND o.status = \'active\')'
+    expect(dimensionLogWhere(['ingestion_id = \'logs\'', 'processing_status = \'processed\'', 'normalized->>\'log_type\' = $1', 'normalized->>\'severity\' IN (\'high\', \'critical\')', 'normalized->>\'service\' = $2', active]))
+        .toEqual(['log_type = $1', 'severity IN (\'high\', \'critical\')', 'service = $2', active])
+    for (const predicate of ['normalized->>\'message\' = $1', 'strpos(lower(normalized::text), $1) > 0', 'user_id = $1', 'normalized->\'detections\' IS NOT NULL']) expect(dimensionLogWhere([predicate])).toBeNull()
 })
 test('one grouped scan yields exact severity totals, nullable dimensions and top services', () => {
     const result = foldLogCounts([{ severity: 'high', service: 'one', count: 3 }, { severity: 'low', service: 'one', count: 4 },

@@ -24,7 +24,7 @@ try {
     await query(`CREATE TEMP TABLE mill_rules(id text DEFAULT 'rule',organization_id text,rule_id text,version text,enabled boolean,definition jsonb,
         name text DEFAULT 'Rule',family text DEFAULT 'System',severity text DEFAULT 'low',explanation text DEFAULT '',source text DEFAULT 'hanasand',source_reference text,created_at timestamptz DEFAULT now())`)
     await query('CREATE TEMP TABLE log_analyze_receipts(key text PRIMARY KEY,organization_id text,rule_id text,rule_version text)')
-    await query("INSERT INTO organizations(id,name,status) VALUES('platform','Hanasand','active')")
+    await query('INSERT INTO organizations(id,name,status) VALUES(\'platform\',\'Hanasand\',\'active\')')
     await query('INSERT INTO mill_rules(organization_id,rule_id,version,enabled,definition) VALUES($1,$2,$3,true,$4)', ['platform', collectorRuleId, '1', JSON.stringify(collectorDefinition)])
     assert.equal(await analyzeCollectorExecution(event, query as any), true)
     assert.equal(await analyzeCollectorExecution(event, query as any), true)
@@ -39,19 +39,19 @@ try {
         assert.equal(await analyzeCollectorExecution(event, query as any), false)
     }
     await query('UPDATE mill_rules SET definition=$1::jsonb', [JSON.stringify(collectorDefinition)])
-    await query(`INSERT INTO mill_rules(organization_id,rule_id,version,enabled,definition,source,severity) VALUES('platform','custom.collector','1',true,$1,'owned','high')`,
+    await query('INSERT INTO mill_rules(organization_id,rule_id,version,enabled,definition,source,severity) VALUES(\'platform\',\'custom.collector\',\'1\',true,$1,\'owned\',\'high\')',
         [JSON.stringify({ match: 'all', stage: 'detect', conditions: [{ path: 'process.executable', operator: 'equals', value: '/usr/sbin/ausearch' }] })])
     // A newly configured detector protects even a replay that previously dropped.
     assert.equal(await analyzeCollectorExecution(event, query as any), false)
     await query('DELETE FROM log_analyze_receipts')
     assert.equal(await analyzeCollectorExecution(event, query as any), false)
     assert.equal((await query('SELECT count(*)::int AS n FROM log_analyze_receipts')).rows[0].n, 0)
-    await query("DELETE FROM mill_rules WHERE rule_id='custom.collector'")
+    await query('DELETE FROM mill_rules WHERE rule_id=\'custom.collector\'')
     await query('UPDATE mill_rules SET enabled=false')
     assert.equal(await analyzeCollectorExecution(event, query as any), false)
-    await query(`UPDATE mill_rules SET enabled=true,definition=jsonb_set(definition,'{action}','"keep"')`)
+    await query('UPDATE mill_rules SET enabled=true,definition=jsonb_set(definition,\'{action}\',\'"keep"\')')
     assert.equal(await analyzeCollectorExecution(event, query as any), false)
-    await query(`UPDATE mill_rules SET definition=jsonb_set(definition,'{action}','"drop"')`)
+    await query('UPDATE mill_rules SET definition=jsonb_set(definition,\'{action}\',\'"drop"\')')
     assert.equal(await analyzeCollectorExecution({ ...event, metadata: { ...event.metadata, unexpected: 'malicious' } }, query as any), false)
     await query('DELETE FROM log_analyze_receipts')
     await query('SAVEPOINT failed_batch')

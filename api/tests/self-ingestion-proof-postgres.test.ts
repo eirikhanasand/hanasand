@@ -35,7 +35,7 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('bulk replay reporting clean
         await client.query('CREATE TABLE mill_events(id text PRIMARY KEY,organization_id text); CREATE TABLE mill_log_dimensions(event_id text PRIMARY KEY REFERENCES mill_events(id) ON DELETE CASCADE,organization_id text,event_timestamp timestamptz,severity text,service text,log_type text)')
         const {logCountsSchema}=await import('../src/utils/db/logCountsSchema.ts')
         for(const sql of logCountsSchema) await client.query(sql)
-        await client.query("INSERT INTO mill_events VALUES('remove','org'),('keep','org'),('other','other'); INSERT INTO mill_log_dimensions SELECT id,organization_id,'2026-09-24T10:00Z','low','test','HttpLogs' FROM mill_events")
+        await client.query('INSERT INTO mill_events VALUES(\'remove\',\'org\'),(\'keep\',\'org\'),(\'other\',\'other\'); INSERT INTO mill_log_dimensions SELECT id,organization_id,\'2026-09-24T10:00Z\',\'low\',\'test\',\'HttpLogs\' FROM mill_events')
         const source=readFileSync(new URL('../scripts/drop-self-ingestion-responses.ts',import.meta.url),'utf8')
         const remove=source.match(/`(DELETE FROM mill_log_dimensions d[\s\S]*?ANY\(\$2::text\[\]\))`/)![1]
         await client.query(remove,['org',['remove','other']])

@@ -21,8 +21,8 @@ try {
     await query(`CREATE SCHEMA ${schema}`)
     for (const client of [source, cursors]) {
         await client.query(`SET search_path TO ${schema}`)
-        await client.query("SET statement_timeout='5s'")
-        await client.query("SET lock_timeout='250ms'")
+        await client.query('SET statement_timeout=\'5s\'')
+        await client.query('SET lock_timeout=\'250ms\'')
     }
     await query(`CREATE TABLE log_processing_cursors (name text PRIMARY KEY, last_id bigint DEFAULT 0,
         recent_id bigint, history_end_id bigint, checked_count bigint DEFAULT 0, updated_at timestamptz, last_error text)`)
@@ -67,7 +67,7 @@ try {
         try { const result = await work((sql: string, values: unknown[] = []) => client.query(sql, values)); await client.query('COMMIT'); return result }
         catch (error) { await client.query('ROLLBACK'); throw error }
     }
-    await cursors.query("SET lock_timeout='5s'")
+    await cursors.query('SET lock_timeout=\'5s\'')
     const secondPid = (await cursors.query('SELECT pg_backend_pid() AS pid')).rows[0].pid
     const first = withLogBatch(async () => { order.push('first'); await gate; order.push('first-complete') }, tx(source))
     while (!order.length) await Bun.sleep(1)

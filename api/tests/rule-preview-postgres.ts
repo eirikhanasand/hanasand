@@ -24,7 +24,7 @@ try {
     cases.push(...['^201$', '^(?=201)\\d{3}$', '^docker', 'LOGS$', '[a-z]+', '.*', '\\d{3}', '\\bLOGS\\b', '(docker|line).*', 'a{300}', '\\s', '[^a-z]+'].map(value => [{ path: 'message', operator: 'regex' as const, value }]))
     cases.push(...['equals', 'contains', 'regex'].map(operator => [{ path: 'message', operator, value: 'LOGS', caseSensitive: true }] as MillCondition[]))
     cases.push([{ path: 'http.status_code', operator: 'equals', value: '201' }, { path: 'severity', operator: 'contains', value: 'LOW' }])
-    cases.push([{ path: "message'); SELECT 1; --", operator: 'equals', value: "' OR TRUE --" }])
+    cases.push([{ path: 'message\'); SELECT 1; --', operator: 'equals', value: '\' OR TRUE --' }])
     let captured = { sql: '', params: [] as unknown[] }
     const query = async (sql: string, params: unknown[]) => { captured = { sql, params }; return client.query(sql, params) }
     for (const conditions of cases) {
@@ -32,7 +32,7 @@ try {
         assert.deepEqual(result.events.map(event => event.id).sort(), events.flatMap((event, id) => matchesMillRule(event, conditions) ? [String(id)] : []).sort(), JSON.stringify(conditions))
     }
     await client.query('INSERT INTO mill_rules VALUES($1,$2,true,$3)', ['test', 'builtin', eventProtectionDefinition])
-    await client.query("UPDATE mill_events SET original='{\"error\":\"retained evidence\"}' WHERE id='0'")
+    await client.query('UPDATE mill_events SET original=\'{"error":"retained evidence"}\' WHERE id=\'0\'')
     const dropInput = { ...input, action: 'drop' as const, conditions: [{ path: 'http.status_code', operator: 'equals' as const, value: '201' }] }
     const protectedPage = await scanRulePreview('test', true, dropInput, query as any)
     assert.equal(protectedPage.count, 1)
@@ -40,7 +40,7 @@ try {
     await client.query('UPDATE mill_rules SET enabled=false')
     assert.equal((await scanRulePreview('test', true, dropInput, query as any)).count, 2)
     await client.query('TRUNCATE mill_events')
-    await client.query(`INSERT INTO mill_events(id,normalized) SELECT n::text, jsonb_build_object('severity','low','http',jsonb_build_object('status_code',CASE WHEN n%1000=0 THEN 201 ELSE 200 END)) FROM generate_series(1,100000) n`)
+    await client.query('INSERT INTO mill_events(id,normalized) SELECT n::text, jsonb_build_object(\'severity\',\'low\',\'http\',jsonb_build_object(\'status_code\',CASE WHEN n%1000=0 THEN 201 ELSE 200 END)) FROM generate_series(1,100000) n')
     const began = performance.now()
     const page = await scanRulePreview('test', true, { ...input, conditions: [{ path: 'http.status_code', operator: 'equals', value: '201' }] }, query as any)
     assert.equal(page.count, 100); assert.equal(page.scanned, 100); assert.equal(page.cursor, null)

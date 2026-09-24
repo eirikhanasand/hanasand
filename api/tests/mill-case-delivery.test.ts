@@ -7,13 +7,13 @@ mock.module('#utils/auth/apiKeys.ts', () => ({ validateApiKey: async () => ({ or
 mock.module('#utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: true, id: 'analyst' }) }))
 mock.module('#db', () => ({ withTransaction: async () => { throw new Error('Ingestion must not edit rules') }, default: async (sql: string, p: any[] = []) => {
     if (sql.includes('FROM mill_rules')) return { rows: [] }
-    if (sql.includes('INSERT INTO mill_events')) { expect(sql).toContain("'pending'"); events.push({ ingestion_id: p[1], processing_status: 'pending', id: p[0], organization_id: p[2], source_vendor: p[3], source_product: p[4], event_timestamp: p[5], event_type: p[6], action: p[7], outcome: p[8], normalized: JSON.parse(p[15]) }); return { rows: [] } }
+    if (sql.includes('INSERT INTO mill_events')) { expect(sql).toContain('\'pending\''); events.push({ ingestion_id: p[1], processing_status: 'pending', id: p[0], organization_id: p[2], source_vendor: p[3], source_product: p[4], event_timestamp: p[5], event_type: p[6], action: p[7], outcome: p[8], normalized: JSON.parse(p[15]) }); return { rows: [] } }
     if (sql.includes('INSERT INTO mill_findings')) {
         if (failFinding) throw new Error('Finding persistence unavailable')
         for (const item of JSON.parse(p[0])) if (!findings.some(row => row.finding_key === item.finding_key)) findings.push({ ...item, status: 'new', evidence: { ...item.evidence, restrictedLog: events.some(event => event.ingestion_id === 'logs' && event.organization_id === item.organization_id && item.event_ids.includes(event.id)) }, first_observed: new Date().toISOString(), last_observed: new Date().toISOString() })
         return { rows: [] }
     }
-    if (sql.includes("UPDATE mill_events SET processing_status = 'processed'")) {
+    if (sql.includes('UPDATE mill_events SET processing_status = \'processed\'')) {
         const event = events.find(row => row.id === p[0] && row.organization_id === p[1])
         expect(event).toBeDefined()
         expect(findings.some(row => row.event_ids.includes(event.id))).toBe(true)
@@ -21,8 +21,8 @@ mock.module('#db', () => ({ withTransaction: async () => { throw new Error('Inge
         return { rows: [] }
     }
     if (sql.includes('SET case_delivery_attempted_at')) {
-        expect(sql).toContain("event.ingestion_id = 'logs'")
-        expect(sql).toContain("finding.evidence->>'restrictedLog' IS DISTINCT FROM 'true'")
+        expect(sql).toContain('event.ingestion_id = \'logs\'')
+        expect(sql).toContain('finding.evidence->>\'restrictedLog\' IS DISTINCT FROM \'true\'')
         return { rows: findings.filter(row => !row.case_id && row.rule_id !== 'scanner.hanasand_validation.v1' && !row.evidence?.restrictedLog && !events.some(event => event.ingestion_id === 'logs' && event.organization_id === row.organization_id && row.event_ids.includes(event.id))) }
     }
     if (sql.includes('FROM mill_events') && sql.includes('ANY')) {

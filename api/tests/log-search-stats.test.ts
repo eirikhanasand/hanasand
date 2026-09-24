@@ -27,8 +27,8 @@ test('dashboard uses one exact compact grouping scan after complete backfill', a
     const groups = statements.filter(sql => sql.includes('GROUP BY'))
     expect(groups).toHaveLength(1)
     expect(groups[0]).toContain('FROM mill_log_dimensions mill_events')
-    expect(groups[0]).toContain("o.status = 'active'")
-    expect(groups[0]).toContain("severity IN ('high', 'critical')")
+    expect(groups[0]).toContain('o.status = \'active\'')
+    expect(groups[0]).toContain('severity IN (\'high\', \'critical\')')
     expect(groups[0]).toContain('service = $2')
     expect(groups[0]).not.toContain('LIMIT')
 })
@@ -36,7 +36,7 @@ test('incomplete backfill retains exact original-table counters', async () => {
     ready = false
     expect((await app.inject('/logs/search?stats=1')).statusCode).toBe(200)
     expect(statements.some(sql => sql.includes('FROM mill_log_dimensions mill_events'))).toBe(false)
-    expect(statements.find(sql => sql.includes('GROUP BY'))).toContain("normalized->>'severity'")
+    expect(statements.find(sql => sql.includes('GROUP BY'))).toContain('normalized->>\'severity\'')
 })
 test('basic JSON search and arbitrary KQL predicates keep the full-data fallback', async () => {
     for (const suffix of ['search=needle', 'kql=' + encodeURIComponent('Logs | where UserId == "alice"'), 'kql=' + encodeURIComponent('Logs | where RuleId == "process.recon.whoami.v1"')]) {
@@ -64,17 +64,17 @@ test('reporting queries retain administrator authorization on every request', as
 })
 
 test('basic search stays literal and parameterized for rows and exact full-data counts', async () => {
-    for (const search of ['whoami', '%', '_', '\\', '!', 'a', 'xy', "needle' OR 1=1 --"]) {
+    for (const search of ['whoami', '%', '_', '\\', '!', 'a', 'xy', 'needle\' OR 1=1 --']) {
         statements = []; parameters = []
         const response = await app.inject('/logs/search?stats=1&search=' + encodeURIComponent(search))
         expect(response.statusCode).toBe(200)
         const selected = statements.findIndex(sql => sql.startsWith('SELECT id, normalized'))
         const grouped = statements.findIndex(sql => sql.includes('GROUP BY'))
         for (const index of [selected, grouped]) {
-            expect(statements[index]).toContain("translate(lower(normalized::text), ' ', '0') LIKE '%' ||")
-            expect(statements[index]).toContain("ESCAPE '!' AND strpos(lower(normalized::text), lower($2::text)) > 0")
+            expect(statements[index]).toContain('translate(lower(normalized::text), \' \', \'0\') LIKE \'%\' ||')
+            expect(statements[index]).toContain('ESCAPE \'!\' AND strpos(lower(normalized::text), lower($2::text)) > 0')
             expect(parameters[index]).toEqual([24, search])
-            expect(statements[index]).toContain("o.status = 'active'")
+            expect(statements[index]).toContain('o.status = \'active\'')
         }
         expect(statements[grouped]).not.toContain('LIMIT')
     }
@@ -112,7 +112,7 @@ test('ordinary dashboard filters sum maintained buckets plus exact boundary rows
     expect(grouped).toContain('bucket_seconds = 3600')
     expect(grouped).toContain('bucket_seconds = 60')
     expect(grouped).toContain('FROM mill_log_dimensions mill_events')
-    expect(grouped).toContain("INTERVAL '1 minute'")
+    expect(grouped).toContain('INTERVAL \'1 minute\'')
 })
 
 test('unready rollups preserve exact compact counts', async () => {

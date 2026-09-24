@@ -23,9 +23,9 @@ test('Cashflow and other organization administrators cannot list organizations',
     expect((await request()).code).toBe(403)
     expect(calls).toHaveLength(1)
     expect(calls[0].params).toEqual(['user-one', '3e735e7b-4d7f-444d-9806-231fa26cfcec'])
-    expect(calls[0].sql).toContain("m.role IN ('owner', 'admin')")
-    expect(calls[0].sql).toContain("m.status = 'active'")
-    expect(calls[0].sql).toContain("o.status = 'active'")
+    expect(calls[0].sql).toContain('m.role IN (\'owner\', \'admin\')')
+    expect(calls[0].sql).toContain('m.status = \'active\'')
+    expect(calls[0].sql).toContain('o.status = \'active\'')
     expect(calls[0].sql).toContain('u.active = TRUE')
 })
 test('Hanasand administrators receive the organization list', async () => {
@@ -35,8 +35,8 @@ test('Hanasand administrators receive the organization list', async () => {
     expect(response.payload.organizations[0].name).toBe('Cashflow')
     expect(calls).toHaveLength(2)
     expect(response.payload.organizations[0].last_active_at).toBe('2026-09-19T10:30:00Z')
-    expect(calls[1].sql).toContain("o.status <> 'deleted'")
-    expect(calls[1].sql).toContain("e.outcome = 'success'")
+    expect(calls[1].sql).toContain('o.status <> \'deleted\'')
+    expect(calls[1].sql).toContain('e.outcome = \'success\'')
     expect(calls[1].sql).toContain('k.organization_id = o.id')
 })
 test('navigation access checks do not load or expose the list', async () => {

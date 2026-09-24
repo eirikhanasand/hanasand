@@ -4,7 +4,7 @@ import { readinessAuditDefinition, readinessTimingAllowed, validReadinessAuditPa
 import type { CollectorLog } from '../src/utils/mill/analyzeCollector.ts'
 
 export const keys = generateKeyPairSync('ed25519')
-const quote = (value: string) => /^[\w@%+=:,./-]+$/.test(value) ? value : "'" + value.replaceAll("'", "'\"'\"'") + "'"
+const quote = (value: string) => /^[\w@%+=:,./-]+$/.test(value) ? value : '\'' + value.replaceAll('\'', '\'"\'"\'') + '\''
 export function fixture(serial = 0): { logs: CollectorLog[], fact: ReadinessExecutionProof } {
     const time = Date.parse('2026-09-24T00:00:00.100Z') + serial * 5000, nonce = '3e735e7b-4d7f-444d-9806-' + String(231260000000 + serial)
     const fact: ReadinessExecutionProof = { version: 2, host: 'inspur', containerId: 'a'.repeat(64), execId: createHash('sha256').update(`exec:${serial}`).digest('hex'), bootId: '3e735e7b-4d7f-444d-9806-231fa26cfcec',

@@ -8,7 +8,7 @@ const waitFor = async (check: () => boolean) => {
 
 test('keeps boot output during restart and reconnects the shell without recreating the browser session', async () => {
     const messages: Array<{ type: string; message?: string; data?: string }> = []
-    let exit = () => {}, bootOutput = (_data: string) => {}
+    let exit = () => {}, bootOutput = (data: string) => { void data }
     let state = 'Running', shells = 0, closes = 0
     const input: string[] = []
     const session = startConsoleSession('cashflow', message => messages.push(message as typeof messages[number]), {

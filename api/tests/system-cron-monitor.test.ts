@@ -55,5 +55,5 @@ test('job case identity survives changed blockers and separates a shared backend
     expect(await correlationKey(query, job, key, 'failure', reason)).not.toBe(await correlationKey(query, other, monitoringIssueFingerprint(other, 'failure', reason), 'failure', reason))
     expect(await correlationKey(query, job, key, 'failure', reason)).toBe(await correlationKey(query, job, key, 'failure', 'HTTP 503'))
     expect(needsSystemAutomationAccess({ actionType: 'agent_prompt', targetUrl: job.target_url, organizationId: 'platform', modelName: null })).toBe(true)
-    expect(automationReadScope('a', '$1', '$2')).toContain("COALESCE(a.target_url, '') NOT LIKE 'system:cron:%'")
+    expect(automationReadScope('a', '$1', '$2')).toContain('COALESCE(a.target_url, \'\') NOT LIKE \'system:cron:%\'')
 })

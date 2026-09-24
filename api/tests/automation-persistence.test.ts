@@ -7,7 +7,7 @@ const persistenceError = new Error('timeout exceeded when trying to connect')
 const actualNow = Date.now
 const query = async (sql: string) => {
     statements.push(sql)
-    if (sql.includes("SET status = 'completed'") || sql.includes('last_status = CASE WHEN $8')) {
+    if (sql.includes('SET status = \'completed\'') || sql.includes('last_status = CASE WHEN $8')) {
         if (++saveCount === failSave) throw persistenceError
     }
     return { rows: [] }
@@ -42,7 +42,7 @@ for (const save of [1, 2]) for (const warning of [false, true]) {
         await expect(executeAutomation(automation)).rejects.toBe(persistenceError)
         expect(probeCount).toBe(1)
         expect(outcomes).toEqual([])
-        expect(statements.some(sql => sql.includes("SET status = 'failed'"))).toBe(false)
+        expect(statements.some(sql => sql.includes('SET status = \'failed\''))).toBe(false)
     })
 }
 test('a real probe failure retains its result and failure scheduling', async () => {
@@ -70,5 +70,5 @@ test('non-monitoring actions retain their existing save-failure handling', async
     await executeAutomation({ ...automation, action_type: 'echo' })
     expect(probeCount).toBe(0)
     expect(outcomes).toEqual([])
-    expect(statements.some(sql => sql.includes("SET status = 'failed'"))).toBe(true)
+    expect(statements.some(sql => sql.includes('SET status = \'failed\''))).toBe(true)
 })

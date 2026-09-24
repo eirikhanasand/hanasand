@@ -28,7 +28,7 @@ test('parallel fresh requests still validate access without repeating timestamp 
 test('older active sessions refresh with an atomic age guard; expired and read-only sessions never write', async () => {
     row.timestamp = new Date(Date.now() - 60000).toISOString()
     const result = await validateSession({ id: 'member', token })
-    expect(queries[1]).toContain("timestamp <= NOW() - INTERVAL '30 seconds'")
+    expect(queries[1]).toContain('timestamp <= NOW() - INTERVAL \'30 seconds\'')
     expect(Date.parse(result!.refreshed.expires_at)).toBeGreaterThan(Date.now() + 86399000)
     queries.length = 0; readOnly = true
     await validateSession({ id: 'member', token })

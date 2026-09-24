@@ -28,7 +28,7 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
         return { rows: result }
     }
     if (sql.includes('SELECT count(*)::text AS count FROM mill_findings')) return { rows: [{ count: String(findings.filter(row => row.organizationId === p[0] && row.ruleId === p[1]).length) }] }
-    if (sql.includes("context->'after'->>'version'")) return { rows: audits.filter(row => row.organization_id === p[0] && row.object_id === p[1] && (row.context.after?.version === p[3] || row.context.before?.version === p[3])).slice(-1) }
+    if (sql.includes('context->\'after\'->>\'version\'')) return { rows: audits.filter(row => row.organization_id === p[0] && row.object_id === p[1] && (row.context.after?.version === p[3] || row.context.before?.version === p[3])).slice(-1) }
     if (sql.includes('FROM system_events')) return { rows: audits.filter(row => row.organization_id === p[0] && (row.object_id === p[1] || row.object_id === p[2])).slice(p[3], p[3] + 51) }
     if (sql.includes('INSERT INTO mill_events')) {
         events.push({ id: p[0], organization_id: p[2], event_timestamp: p[5], event_type: p[6], action: p[7], outcome: p[8], user_id: p[9], source_ip: p[11], normalized: JSON.parse(p[15]) })
@@ -38,7 +38,7 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
     if (sql.trimStart().startsWith('SELECT') && sql.includes('FROM mill_events')) {
         const result = events.filter(row => row.organization_id === p[0] && (sql.includes('source_ip = $2') ? row.source_ip === p[1] : row.user_id === p[1]) && row.id !== p[2] && row.event_type === 'authentication' && row.action === 'login' && Date.parse(row.event_timestamp) <= Date.parse(p[3]))
             .sort((a, b) => Date.parse(b.event_timestamp) - Date.parse(a.event_timestamp))
-        return { rows: sql.includes("INTERVAL '1 minute'") ? result.filter(row => row.outcome === 'failure' && Date.parse(row.event_timestamp) >= Date.parse(p[3]) - p[4] * 60000) : result.slice(0, p[4]) }
+        return { rows: sql.includes('INTERVAL \'1 minute\'') ? result.filter(row => row.outcome === 'failure' && Date.parse(row.event_timestamp) >= Date.parse(p[3]) - p[4] * 60000) : result.slice(0, p[4]) }
     }
     if (sql.includes('INSERT INTO mill_findings')) { findings.push(...JSON.parse(p[0]).map((item: any) => ({ organizationId: item.organization_id, ruleId: item.rule_id, severity: item.severity, evidence: item.evidence }))); return { rows: [] } }
     throw new Error(`Unexpected query: ${sql}`)

@@ -28,7 +28,7 @@ test('creation cannot accept a wildcard or arbitrary admin endpoint', async () =
 test('creation uses a separate service identity and returns the secret once', async () => {
     const res = reply(); await postServiceAccount({ body } as any, res as any)
     expect(res.statusCode).toBe(201); expect(res.body.apiKey.ownerId.startsWith('svc_')).toBe(true)
-    expect(writes[0]).toContain("'service'"); expect(res.body.secret).toBe('once')
+    expect(writes[0]).toContain('\'service\''); expect(res.body.secret).toBe('once')
     expect(writes.some(sql => sql.includes('user_roles'))).toBe(false)
 })
 test('deletion revokes all credentials and retains audit identity', async () => {
@@ -71,7 +71,7 @@ test('description edits validate text, support clearing, and only affect active 
         expect(res.statusCode).toBe(200)
         expect(values.at(-1)).toEqual(['svc_fixture', null, description.trim()])
         expect(res.body).toEqual({ id: 'svc_fixture', name: 'Existing monitor', description: description.trim() })
-        expect(writes.at(-1)).toContain("account_type = 'service' AND active = TRUE")
+        expect(writes.at(-1)).toContain('account_type = \'service\' AND active = TRUE')
     }
     found = false
     const res = reply(); await patchServiceAccount({ params: { id: 'user_or_missing' }, body: { description: 'No' } } as any, res as any)

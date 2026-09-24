@@ -355,7 +355,7 @@ test('resolution cancels a pending AI answer and authenticated feedback is owner
     expect(chat.pending).toBe(false)
     expect(chat.messages.some(m => m.sender_kind === 'assistant')).toBe(false)
     const ownId = randomUUID()
-    await query("INSERT INTO support_tickets(id,user_id,subject,status,resolution_version) VALUES($1,'customer','Account chat','closed',0)", [ownId])
+    await query('INSERT INTO support_tickets(id,user_id,subject,status,resolution_version) VALUES($1,\'customer\',\'Account chat\',\'closed\',0)', [ownId])
     const request = { method: 'POST' as const, url: `/support/tickets/${ownId}/feedback`, payload: { rating: 3, comment: 'More detail please', resolutionVersion: 0 } }
     expect((await app.inject({ ...request, headers: { 'test-user': 'agent' } })).statusCode).toBe(404)
     expect((await app.inject({ ...request, headers: { 'test-user': 'customer' } })).statusCode).toBe(200)

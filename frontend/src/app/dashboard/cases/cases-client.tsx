@@ -2,7 +2,7 @@
 
 import Link from '@/components/organizations/workspaceLink'
 import { CreateCase } from './create-case'
-import { RefreshCw } from 'lucide-react'
+import { Filter, RefreshCw } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
 export type CaseResolution = { id?: string, type: 'human' | 'ai' | 'automation' | 'unknown', actor?: string, at?: string, note?: string, confirmedBy?: string, confirmedAt?: string }
@@ -29,6 +29,7 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
     const [owner, setOwner] = useState('all')
     const [resolutionType, setResolutionType] = useState('all')
     const [review, setReview] = useState('all')
+    const [filtersOpen, setFiltersOpen] = useState(true)
     const [cursor, setCursor] = useState<string | null>(null)
     useEffect(() => {
         const controller = new AbortController()
@@ -76,13 +77,19 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
     })
     return <section className='min-w-0 rounded-lg border border-ui-border bg-ui-panel'>
         <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border p-4'>
-            <h1 className='text-lg font-semibold text-ui-text'>Cases</h1>
+            <div>
+                <h1 className='text-lg font-semibold text-ui-text'>Cases</h1>
+                {(!loading || rows.length > 0) && <p className='mt-1 text-xs text-ui-muted'>{visible.length} matching · {rows.length} cases loaded{nextCursor ? ' · More cases available below' : ''}</p>}
+            </div>
             <div className='flex items-center gap-2'><CreateCase organizationId={organizationId} />
+                <button type='button' aria-label={filtersOpen ? 'Hide filters' : 'Show filters'} aria-expanded={filtersOpen} title={filtersOpen ? 'Hide filters' : 'Show filters'} className='inline-flex h-8 w-8 items-center justify-center rounded text-ui-primary hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary' onClick={() => setFiltersOpen(value => !value)}>
+                    <Filter className='h-4 w-4' aria-hidden='true' />
+                </button>
                 <button type='button' aria-label='Refresh cases' title='Refresh cases' className='inline-flex h-8 w-8 items-center justify-center rounded text-ui-primary hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary' onClick={() => { setPage(1); setCursor(null); setRevision(value => value + 1) }}>
                     <RefreshCw className='h-4 w-4' aria-hidden='true' />
                 </button></div>
         </div>
-        <div className='flex flex-wrap items-end gap-3 p-4'>
+        {filtersOpen && <div className='flex flex-wrap items-end gap-3 p-4'>
             <CaseFilter label='Status' value={status} onChange={setStatus} options={['active', 'all', 'open', 'in_progress', 'escalated', 'resolved', 'closed', 'suppressed', 'false_positive']} />
             <CaseFilter label='Severity' value={severity} onChange={setSeverity} options={['all', 'critical', 'high', 'medium', 'low']} />
             <CaseFilter label='Source' value={source} onChange={setSource} options={['all', 'monitoring', 'security', 'intelligence', 'manual']} />
@@ -91,11 +98,10 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
             <CaseFilter label='Human review' value={review} onChange={value => { setReview(value); if (value !== 'all') setStatus('all') }} options={['all', 'pending', 'confirmed']} />
             <button type='button' className='px-2 py-2 text-sm text-ui-primary' onClick={() => { setQuery(''); setStatus('active'); setSeverity('all'); setSource('all'); setOwner('all'); setResolutionType('all'); setReview('all') }}>Reset filters</button>
             <input aria-label='Search cases' placeholder='Search cases' value={query} onChange={event => setQuery(event.target.value)} className='w-44 min-w-0 max-w-full rounded border border-ui-border bg-ui-canvas p-2 text-sm text-ui-text' />
-        </div>
+        </div>}
         {Object.values(warnings).filter(Boolean).map(warning => <p role='alert' key={warning} className='px-4 pb-3 text-sm text-ui-danger'>{warning}</p>)}
         {loading && <p role='status' className='px-4 pb-3 text-sm text-ui-muted'>{rows.length ? 'Updating cases…' : 'Loading cases…'}</p>}
         {(!loading || rows.length > 0) && <>
-            <p className='px-4 pb-3 text-xs text-ui-muted'>{visible.length} matching · {rows.length} cases loaded{nextCursor ? ' · More cases available below' : ''}</p>
             {!visible.length ? <p className='p-4 text-ui-muted'>{Object.values(warnings).some(Boolean) ? 'No cases could be displayed from the available sources.' : rows.length ? 'No cases match the current filters.' : 'No cases yet.'}</p> : <div className='overflow-x-auto'><table className='w-full text-left text-sm'>
                 <thead className='border-y border-ui-border bg-ui-raised text-ui-muted'><tr>{['Case', 'Severity', 'Status', 'Owner', 'Updated'].map(label => <th key={label} scope='col' className='p-4'>{label}</th>)}</tr></thead>
                 <tbody className='divide-y divide-ui-border'>{visible.map(row => <tr key={row.caseId || row.id} className='text-ui-text'>

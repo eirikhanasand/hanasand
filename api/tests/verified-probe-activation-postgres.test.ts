@@ -28,7 +28,7 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('probe activation requires k
             INSERT INTO organizations VALUES('platform','Hanasand','active',NOW());
             CREATE TABLE mill_rules(organization_id text,rule_id text,source text,name text,explanation text,severity text,enabled boolean,definition jsonb,version text,updated_at timestamptz);
             CREATE TABLE system_events(event_type text,source text,object_type text,object_id text,organization_id text,context jsonb)`)
-        for (const id of ids) await pool.query(`INSERT INTO mill_rules VALUES('platform',$1,'hanasand','Unavailable','Missing proof','low',false,$2,'1',NOW())`,
+        for (const id of ids) await pool.query('INSERT INTO mill_rules VALUES(\'platform\',$1,\'hanasand\',\'Unavailable\',\'Missing proof\',\'low\',false,$2,\'1\',NOW())',
             [id, JSON.stringify({ match: 'all', conditions: [], stage: 'analyze', action: 'keep', parameters: {} })])
         expect((await activate(false)).status).not.toBe(0)
         expect((await state()).every(row => !row.enabled && row.version === '1')).toBe(true)
@@ -44,7 +44,7 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('probe activation requires k
         }
         expect((await activate(true)).status).toBe(0)
         expect((await pool.query('SELECT count(*)::int n FROM system_events')).rows[0].n).toBe(2)
-        await pool.query("UPDATE mill_rules SET enabled=false; TRUNCATE system_events; ALTER TABLE system_events ADD CHECK(object_id <> 'postgresql.readiness_audit.v1')")
+        await pool.query('UPDATE mill_rules SET enabled=false; TRUNCATE system_events; ALTER TABLE system_events ADD CHECK(object_id <> \'postgresql.readiness_audit.v1\')')
         expect((await activate(true)).status).not.toBe(0)
         expect((await state()).every(row => !row.enabled && row.version === '2')).toBe(true)
         expect((await pool.query('SELECT count(*)::int n FROM system_events')).rows[0].n).toBe(0)

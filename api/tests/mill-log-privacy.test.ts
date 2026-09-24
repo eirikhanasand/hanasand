@@ -10,10 +10,10 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
     if (sql.includes('FROM mill_events')) {
         if (sql.includes('WHERE id = $1')) return { rows: events.filter(row => row.id === p[0] && row.organization_id === p[1]) }
         if (sql.includes('event_timestamp::text AS timestamp')) {
-            expect(sql).toContain("($2::boolean OR ingestion_id <> 'logs')")
+            expect(sql).toContain('($2::boolean OR ingestion_id <> \'logs\')')
             return { rows: events.filter(row => row.organization_id === p[0] && (p[1] || row.ingestion_id !== 'logs')).map(row => ({ ...row, timestamp: row.event_timestamp })) }
         }
-        expect(sql).toContain("($3::boolean OR ingestion_id <> 'logs')")
+        expect(sql).toContain('($3::boolean OR ingestion_id <> \'logs\')')
         return { rows: events.filter(row => row.organization_id === p[0] && (p[2] || row.ingestion_id !== 'logs')) }
     }
     throw new Error(sql)

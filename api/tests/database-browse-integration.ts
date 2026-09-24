@@ -34,7 +34,8 @@ try {
     ]) {
         const count = await browseDatabase({ instance, database, schema, table: name, mode: 'count' })
         assert.equal('totalRows' in count && count.totalRows, 13, name)
-        let cursor: string | undefined, rows: unknown[] = [], pages = 0
+        let cursor: string | undefined, pages = 0
+        const rows: unknown[] = []
         do {
             const page = await browseDatabase({ instance, database, schema, table: name, mode: 'rows', cursor })
             assert('rows' in page); assert(page.rows.length <= 5)
@@ -46,7 +47,8 @@ try {
         if (name === 'odd table') { assert.equal((rows[0] as any).id, '9007199254740993'); assert.equal((rows[0] as any).__preview_cursor.length, 16384) }
         if (name === 'ordered') assert.deepEqual(rows.map((row: any) => Number(row.id)), Array.from({ length: 13 }, (_, index) => index + 1))
     }
-    let cursor: string | undefined, keys: string[] = []
+    let cursor: string | undefined
+    const keys: string[] = []
     do { const page = await browseDatabase({ instance: 'db-preview-redis-test', database: 'db0', mode: 'contents', cursor }); assert('items' in page); assert(page.items.length <= 5); keys.push(...page.items.map(item => item.name)); cursor = page.nextCursor || undefined } while (cursor)
     assert.equal(new Set(keys).size, 18)
     await assert.rejects(browseDatabase({ instance: 'unknown', database: 'preview', mode: 'contents' }))

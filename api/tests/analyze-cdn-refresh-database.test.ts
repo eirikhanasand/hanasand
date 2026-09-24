@@ -26,8 +26,8 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real CDN ingestion keeps su
         expect((await query('SELECT current_database() name')).rows[0].name).toBe('postgres_filter_test')
         await query(`CREATE SCHEMA ${namespace}`)
         await query('CREATE TABLE users(id text PRIMARY KEY)')
-        await query("CREATE TABLE organizations(id text PRIMARY KEY,name text,status text,created_at timestamptz DEFAULT NOW(),audit_safe_metadata jsonb DEFAULT '{}')")
-        await query("INSERT INTO organizations(id,name,status) VALUES('platform','Hanasand','active')")
+        await query('CREATE TABLE organizations(id text PRIMARY KEY,name text,status text,created_at timestamptz DEFAULT NOW(),audit_safe_metadata jsonb DEFAULT \'{}\')')
+        await query('INSERT INTO organizations(id,name,status) VALUES(\'platform\',\'Hanasand\',\'active\')')
         const schema = readFileSync(new URL('../src/utils/db/ensureSchema.ts', import.meta.url), 'utf8')
         for (const table of ['service_logs', 'mill_rules', 'system_events']) {
             const definition = schema.match(new RegExp('CREATE TABLE IF NOT EXISTS ' + table + ' \\([\\s\\S]*?\\n        \\)'))?.[0]
@@ -76,7 +76,7 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real CDN ingestion keeps su
         await query('UPDATE mill_rules SET definition=$2::jsonb WHERE rule_id=$1', [cdnRefreshRuleId, JSON.stringify(cdnRefreshDefinition)])
         for (const mode of ['disable', 'keep', 'custom-keep']) {
             if (mode === 'disable') await query('UPDATE mill_rules SET enabled=false WHERE rule_id=$1', [cdnRefreshRuleId])
-            if (mode === 'keep') await query("UPDATE mill_rules SET enabled=true,definition=jsonb_set(definition,'{action}','\"keep\"') WHERE rule_id=$1", [cdnRefreshRuleId])
+            if (mode === 'keep') await query('UPDATE mill_rules SET enabled=true,definition=jsonb_set(definition,\'{action}\',\'"keep"\') WHERE rule_id=$1', [cdnRefreshRuleId])
             if (mode === 'custom-keep') {
                 await query('UPDATE mill_rules SET enabled=true,definition=$2::jsonb WHERE rule_id=$1', [cdnRefreshRuleId, JSON.stringify(cdnRefreshDefinition)])
                 await query(`INSERT INTO mill_rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
@@ -89,7 +89,7 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real CDN ingestion keeps su
             expect(Number((await query('SELECT count(*) n FROM service_logs WHERE source_event_id=$1', [retained.sourceEventId])).rows[0].n)).toBe(1)
             expect(await count('log_analyze_receipts')).toBe(2)
         }
-        await query("DELETE FROM mill_rules WHERE id='keep'")
+        await query('DELETE FROM mill_rules WHERE id=\'keep\'')
         await query(`INSERT INTO mill_rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
             VALUES('detect','platform','custom.cdn_detection','1','Detect CDN','Custom','high','Protect CDN evidence',$1::jsonb,'owned',true)`,
         [JSON.stringify({ match: 'all', stage: 'detect', action: 'keep', conditions: [{ path: 'service', operator: 'equals', value: 'cdn' }] })])

@@ -8,19 +8,19 @@ const options={host:process.env.DB_HOST,port:Number(process.env.DB_PORT||5432),d
 const admin=new pg.Client(options), migration=new pg.Client(options), writer=new pg.Client(options)
 const clients=[admin,migration,writer]
 const schema='fixture_queue_lock_'+Date.now()+'_'+process.pid
-let afterQuery:((sql:string)=>Promise<void>)|undefined
-const run=async(sql:string,params:any[]=[])=>{const result=await migration.query(sql,params);await afterQuery?.(sql);return result}
-mock.module('#db',()=>({default:run,withTransaction:async(work:any)=>{
+let afterQuery: ((sql: string) => Promise<void>)|undefined
+const run=async(sql: string,params: any[]=[])=>{const result=await migration.query(sql,params);await afterQuery?.(sql);return result}
+mock.module('#db',()=>({default:run,withTransaction:async(work: any)=>{
     await run('BEGIN')
     try {const result=await work(run);await run('COMMIT');return result}
     catch(error){await migration.query('ROLLBACK');throw error}
 }}))
 const {default:ensureSchema}=await import('../src/utils/db/logProcessQueueSchema.ts')
-const deferred=()=>{let resolve!:()=>void;const promise=new Promise<void>(yes=>resolve=yes);return {promise,resolve}}
-async function waitSourceLock(pid:number,mode:string){
+const deferred=()=>{let resolve!: () => void;const promise=new Promise<void>(yes=>resolve=yes);return {promise,resolve}}
+async function waitSourceLock(pid: number,mode: string){
     const until=Date.now()+5000
     while(Date.now()<until){
-        const result=await admin.query(`SELECT 1 FROM pg_locks WHERE pid=$1 AND relation='service_logs'::regclass AND mode=$2 AND NOT granted`,[pid,mode])
+        const result=await admin.query('SELECT 1 FROM pg_locks WHERE pid=$1 AND relation=\'service_logs\'::regclass AND mode=$2 AND NOT granted',[pid,mode])
         if(result.rowCount)return
         await Bun.sleep(10)
     }
@@ -30,7 +30,7 @@ let created=false
 try {
     for(const client of clients)await client.connect()
     await admin.query('CREATE SCHEMA '+schema);created=true
-    for(const client of clients){await client.query('SET search_path TO '+schema);await client.query("SET statement_timeout='10s'")}
+    for(const client of clients){await client.query('SET search_path TO '+schema);await client.query('SET statement_timeout=\'10s\'')}
     await admin.query('CREATE TABLE service_logs(id bigserial PRIMARY KEY,metadata jsonb NOT NULL DEFAULT \'{}\'::jsonb)')
     await admin.query('CREATE TABLE log_processing_cursors(name text PRIMARY KEY,recent_id bigint)')
     const migrationPid=(await migration.query('SELECT pg_backend_pid() AS pid')).rows[0].pid
@@ -45,7 +45,7 @@ try {
     await waitSourceLock(migrationPid,'ShareRowExclusiveLock')
     await writer.query('COMMIT')
     assert.equal((await initial).error,null)
-    const boundary=(await admin.query("SELECT recent_id::text FROM log_processing_cursors WHERE name='process_logs_recovery'")).rows[0].recent_id
+    const boundary=(await admin.query('SELECT recent_id::text FROM log_processing_cursors WHERE name=\'process_logs_recovery\'')).rows[0].recent_id
     assert.equal(boundary,initialId)
 
     // Reinstall while a writer has the source lock but has not reached its queue trigger.
@@ -58,7 +58,7 @@ try {
     await writer.query('COMMIT')
     assert.equal((await reinstall).error,null,'Reinstall must let the source writer finish without deadlock')
     assert.equal((await admin.query('SELECT count(*)::int AS count FROM log_process_queue WHERE log_id=$1',[beforeId])).rows[0].count,1)
-    assert.equal((await admin.query("SELECT recent_id::text FROM log_processing_cursors WHERE name='process_logs_recovery'")).rows[0].recent_id,boundary,'Reinstall preserves recovery progress')
+    assert.equal((await admin.query('SELECT recent_id::text FROM log_processing_cursors WHERE name=\'process_logs_recovery\'')).rows[0].recent_id,boundary,'Reinstall preserves recovery progress')
 
     // Writers arriving after migration owns the source lock wait, then use the committed trigger.
     const held=deferred(),release=deferred()

@@ -15,9 +15,9 @@ const transaction = async <T>(work: (query: typeof query) => Promise<T>) => {
 }
 mock.module('#db', () => ({ default: query, withTransaction: transaction }))
 try {
-    await query("CREATE TABLE organizations(id text PRIMARY KEY,name text,status text,created_at timestamptz DEFAULT NOW(),audit_safe_metadata jsonb DEFAULT '{}')")
+    await query('CREATE TABLE organizations(id text PRIMARY KEY,name text,status text,created_at timestamptz DEFAULT NOW(),audit_safe_metadata jsonb DEFAULT \'{}\')')
     await query('CREATE TABLE users(id text PRIMARY KEY)')
-    await query("INSERT INTO organizations(id,name,status) VALUES('platform','Hanasand','active'),('customer','Customer','active')")
+    await query('INSERT INTO organizations(id,name,status) VALUES(\'platform\',\'Hanasand\',\'active\'),(\'customer\',\'Customer\',\'active\')')
     const schema = readFileSync(new URL('../src/utils/db/ensureSchema.ts', import.meta.url), 'utf8')
     for (const table of ['service_logs', 'mill_events', 'mill_findings', 'mill_rules', 'system_events']) {
         const definition = schema.match(new RegExp('CREATE TABLE IF NOT EXISTS ' + table + ' \\([\\s\\S]*?\\n        \\)'))?.[0]
@@ -66,7 +66,7 @@ try {
         if (mode === 'foreign-socket') f.req.raw.socket.remoteAddress = '192.0.2.25'
         if (mode !== 'unmatched') await recordProxyRequest(f.req, { statusCode: mode === 'error' ? 500 : 200 } as any)
         if (mode === 'disabled') await query('UPDATE mill_rules SET enabled=false WHERE rule_id=$1', [proxyRuleId])
-        if (mode === 'keep') await query("UPDATE mill_rules SET definition=jsonb_set(definition,'{action}','\"keep\"') WHERE rule_id=$1", [proxyRuleId])
+        if (mode === 'keep') await query('UPDATE mill_rules SET definition=jsonb_set(definition,\'{action}\',\'"keep"\') WHERE rule_id=$1', [proxyRuleId])
         await recordLog(f.log)
         assert.equal((await query('SELECT count(*)::int n FROM service_logs WHERE source_event_id=$1', [f.log.sourceEventId])).rows[0].n, 1, mode)
         await query('UPDATE mill_rules SET enabled=true,definition=$2::jsonb WHERE rule_id=$1', [proxyRuleId, JSON.stringify(proxyDefinition)])
@@ -78,21 +78,21 @@ try {
     assert.equal(await count('log_proxy_receipts'), 2)
     const { rawLogRetentionSql } = await import('../src/utils/mill/rawLogRetention.ts')
     const { normalizeLogEvent } = await import('../src/utils/mill/logEvent.ts')
-    await query("UPDATE service_logs SET created_at=NOW()-INTERVAL '8 days' WHERE id=$1", [first])
+    await query('UPDATE service_logs SET created_at=NOW()-INTERVAL \'8 days\' WHERE id=$1', [first])
     assert.equal((await query(rawLogRetentionSql)).rows[0].deleted, 0, 'Pending canonical evidence cannot expire')
     const canonical = (await query('SELECT * FROM service_logs WHERE id=$1', [first])).rows[0]
-    await query("INSERT INTO mill_events(id,ingestion_id,organization_id,event_timestamp,log_key,normalized,processing_status) VALUES('canonical','logs','platform',NOW(),$1,$2::jsonb,'processed')", [`service:${first}`, JSON.stringify(normalizeLogEvent(canonical))])
+    await query('INSERT INTO mill_events(id,ingestion_id,organization_id,event_timestamp,log_key,normalized,processing_status) VALUES(\'canonical\',\'logs\',\'platform\',NOW(),$1,$2::jsonb,\'processed\')', [`service:${first}`, JSON.stringify(normalizeLogEvent(canonical))])
     assert.equal((await query(rawLogRetentionSql)).rows[0].deleted, 1)
     assert.equal((await query('SELECT count(*)::int n FROM log_proxy_requests WHERE service_log_id=$1', [first])).rows[0].n, 0)
     await recordLog(safe.log)
     assert.equal((await query('SELECT count(*)::int n FROM service_logs WHERE source_event_id=$1', [safe.log.sourceEventId])).rows[0].n, 0, 'Replay receipt survives raw cleanup')
-    assert.equal((await query("SELECT normalized#>>'{metadata,proxy,id}' id FROM mill_events WHERE id='canonical'")).rows[0].id, safe.connection)
-    await query("UPDATE mill_rules SET definition=jsonb_set(definition,'{parameters,requestThreshold}','1') WHERE rule_id='http.routine_access.v1'")
+    assert.equal((await query('SELECT normalized#>>\'{metadata,proxy,id}\' id FROM mill_events WHERE id=\'canonical\'')).rows[0].id, safe.connection)
+    await query('UPDATE mill_rules SET definition=jsonb_set(definition,\'{parameters,requestThreshold}\',\'1\') WHERE rule_id=\'http.routine_access.v1\'')
     const rate = await fixture()
     rate.req.ip = '192.0.2.99'
     await recordProxyRequest(rate.req, { statusCode: 200 } as any)
     await recordProxyRequest({ ...rate.req, id: randomUUID() }, { statusCode: 200 } as any)
-    assert.equal((await query("SELECT count(*)::int n FROM mill_findings WHERE rule_id='http.routine_access.v1'")).rows[0].n, 1, 'IP rate alerts still fire while canonical evidence is kept')
+    assert.equal((await query('SELECT count(*)::int n FROM mill_findings WHERE rule_id=\'http.routine_access.v1\'')).rows[0].n, 1, 'IP rate alerts still fire while canonical evidence is kept')
     await query(`INSERT INTO mill_rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
         VALUES('proxy-review','platform','custom.proxy-review','1','Review proxy source','Network','high','Review','{"match":"all","conditions":[{"path":"service","operator":"equals","value":"hanasand-proxy-1"}]}','owned',true)`)
     await recordLog(safe.log)

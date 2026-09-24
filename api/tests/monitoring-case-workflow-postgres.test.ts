@@ -16,10 +16,10 @@ test('durable recovery history, comments, progress, AI review and stale-review r
     await query(`CREATE TABLE organizations(id text, status text); CREATE TABLE organization_members(organization_id text, user_id text, status text, role text DEFAULT 'editor');
         CREATE TABLE agent_automations(id text PRIMARY KEY, name text, owner_id text, organization_id text, action_type text, target_url text, model_name text, notification_destinations text[], monitoring_type text, timeout_seconds int, retry_count int, follow_redirects boolean, expected_down boolean, upside_down boolean);
         CREATE TABLE agent_automation_runs(id text PRIMARY KEY, automation_id text, started_at timestamptz DEFAULT NOW(), completed_at timestamptz, duration_ms int, status text, warning boolean, error text, result text);`)
-    await query(`CREATE TABLE IF NOT EXISTS vms(name text PRIMARY KEY, owner text, created_by text, access_users jsonb, deleted_at timestamptz)`);
+    await query('CREATE TABLE IF NOT EXISTS vms(name text PRIMARY KEY, owner text, created_by text, access_users jsonb, deleted_at timestamptz)')
     await schema()
     await schema()
-    await query("INSERT INTO agent_automations(id,name,owner_id,action_type) VALUES ('workflow','Test monitor','owner','agent_prompt')")
+    await query('INSERT INTO agent_automations(id,name,owner_id,action_type) VALUES (\'workflow\',\'Test monitor\',\'owner\',\'agent_prompt\')')
     const automation = { id: 'workflow', monitoring_type: 'fetch', target_url: 'https://example.com', notify_on: 'never' } as any
     async function outcome(id: string, kind: 'failure' | null, message: string) {
         await query('INSERT INTO agent_automation_runs(id,automation_id) VALUES ($1,$2)', [id, automation.id])

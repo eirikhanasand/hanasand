@@ -10,7 +10,7 @@ describe('production monitor notification transitions', () => {
         const schema = await readFile(path.join(import.meta.dir, '../src/utils/db/ensureSchema.ts'), 'utf8')
         expect(source).toContain('WINDOW status_history_window AS')
         expect(source).not.toContain('WINDOW window AS')
-        expect(source).toContain("WHERE status IN ('down', 'degraded')")
+        expect(source).toContain('WHERE status IN (\'down\', \'degraded\')')
         expect(source).not.toContain('FROM service_monitor_results recovered')
         expect(source).toContain('LAG(status) OVER status_history_window')
         expect(schema).toContain('idx_service_monitor_results_non_up')
@@ -26,16 +26,16 @@ describe('production monitor notification transitions', () => {
 
     test('processing backlog deduplicates current review tasks by their persisted id', async () => {
         const source = await readFile(path.join(import.meta.dir, '../src/utils/status/monitor.ts'), 'utf8')
-        expect(source).toContain("SELECT DISTINCT record->>'id' AS review_id")
+        expect(source).toContain('SELECT DISTINCT record->>\'id\' AS review_id')
         expect(source).toContain('CROSS JOIN LATERAL')
-        expect(source).toContain("(record->>'id') = pending.review_id")
+        expect(source).toContain('(record->>\'id\') = pending.review_id')
         expect(source).toMatch(/ORDER BY updated_at DESC\s+LIMIT 1/)
         expect(source).not.toContain('SELECT DISTINCT ON (record->>\'taskId\') record, updated_at')
     })
 
     test('source collection has a persisted monitor with defined thresholds', async () => {
         const source = await readFile(path.join(import.meta.dir, '../src/utils/status/monitor.ts'), 'utf8')
-        expect(source).toContain("check('threat-intelligence', 'Source collection'")
+        expect(source).toContain('check(\'threat-intelligence\', \'Source collection\'')
         expect(source).toContain('const SOURCE_OPERATIONS_DEGRADED_RATIO = 0.05')
         expect(source).toContain('!storage || storage.databaseAvailable === false')
         expect(source).not.toContain('storage?.ok !== true')
@@ -50,14 +50,14 @@ describe('production monitor notification transitions', () => {
     test('latest activity monitor uses the authenticated scraper health path', async () => {
         const source = await readFile(path.join(import.meta.dir, '../src/utils/status/monitor.ts'), 'utf8')
         const latestActivity = source.slice(source.indexOf('check(\'dark-web-monitoring\', \'Latest activity\''))
-        expect(latestActivity).toContain("fetchJson('/v1/dwm/exposure-queue?limit=1&tenantId=default'")
-        expect(latestActivity).toContain("'x-hanasand-service-token'")
+        expect(latestActivity).toContain('fetchJson(\'/v1/dwm/exposure-queue?limit=1&tenantId=default\'')
+        expect(latestActivity).toContain('\'x-hanasand-service-token\'')
         expect(latestActivity).toContain('}, scraperBase, remainingMonitorTimeout(deadline))')
     })
 
     test('public search retries are bounded by attempt count and a shared deadline', async () => {
         const source = await readFile(path.join(import.meta.dir, '../src/utils/status/monitor.ts'), 'utf8')
-        const publicSearch = source.slice(source.indexOf("check('threat-intelligence', 'Public search'"), source.indexOf("check('threat-intelligence', 'Source collection'"))
+        const publicSearch = source.slice(source.indexOf('check(\'threat-intelligence\', \'Public search\''), source.indexOf('check(\'threat-intelligence\', \'Source collection\''))
         expect(publicSearch).toContain('const deadline = Date.now() + MONITOR_REQUEST_TIMEOUT_MS')
         expect(publicSearch).toContain('attempt < 2 && Date.now() < deadline')
         expect(publicSearch).toContain('remainingMonitorTimeout(deadline)')

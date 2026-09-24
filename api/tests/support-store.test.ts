@@ -90,7 +90,7 @@ test('cached access rejects unknown, mismatched, expired and revoked sessions wi
     await Bun.sleep(3050)
     authority = 'online'
     await validateSupportSession({ token })
-    await query("UPDATE support_auth_sessions SET expires_at=NOW()-INTERVAL '1 second'")
+    await query('UPDATE support_auth_sessions SET expires_at=NOW()-INTERVAL \'1 second\'')
     authority = 'offline'
     expect(await validateSupportSession({ token })).toBeNull()
 }, 10000)

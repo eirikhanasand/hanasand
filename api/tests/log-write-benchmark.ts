@@ -49,12 +49,12 @@ async function setup(optimized: boolean, ginKB: number) {
     await q('CHECKPOINT')
 }
 try {
-    assert.equal((await q("SELECT 1 FROM pg_database WHERE datname NOT IN ('postgres','template0','template1','log_write_benchmark')")).rowCount, 0,
+    assert.equal((await q('SELECT 1 FROM pg_database WHERE datname NOT IN (\'postgres\',\'template0\',\'template1\',\'log_write_benchmark\')')).rowCount, 0,
         'Use a dedicated disposable PostgreSQL instance: this benchmark changes instance settings.')
     await q('CREATE EXTENSION IF NOT EXISTS pg_trgm')
     await q('CREATE TABLE organizations (id text PRIMARY KEY, status text, audit_safe_metadata jsonb DEFAULT \'{}\', name text, created_at timestamptz DEFAULT NOW())')
     await q('CREATE TABLE users (id text PRIMARY KEY)')
-    await q("INSERT INTO organizations(id,status,name) VALUES ('benchmark','active','Benchmark')")
+    await q('INSERT INTO organizations(id,status,name) VALUES (\'benchmark\',\'active\',\'Benchmark\')')
     for (const table of ['mill_events', 'mill_findings', 'mill_rules']) {
         const definition = schema.match(new RegExp('CREATE TABLE IF NOT EXISTS ' + table + ' \\([\\s\\S]*?\\n        \\)'))?.[0]
         assert.ok(definition); await q(definition)
@@ -65,7 +65,7 @@ try {
     for (const { name, definition } of catalog.indexes) {
         if (!(await q('SELECT to_regclass($1) AS relation', [name])).rows[0].relation) await q(definition)
     }
-    await q("SET statement_timeout='60s'"); await reader.query("SET statement_timeout='8s'")
+    await q('SET statement_timeout=\'60s\''); await reader.query('SET statement_timeout=\'8s\'')
     const scenarios = [
         { batch: 1000, optimized: false, ginKB: 4096, writer: 100 },
         { batch: 1000, optimized: true, ginKB: 4096, writer: 100 },
@@ -112,7 +112,7 @@ try {
                     freshMs.push(performance.now() - began)
                 }
                 // Include deferred index cleanup and data writes, not just acceptance.
-                await q("SELECT gin_clean_pending_list('idx_mill_logs_phrase_trgm')")
+                await q('SELECT gin_clean_pending_list(\'idx_mill_logs_phrase_trgm\')')
                 await q('CHECKPOINT')
             } finally { stopped = true; await searcher }
             if (searchError) throw searchError
@@ -121,12 +121,12 @@ try {
             const writerDelta = Object.fromEntries(Object.keys(writerBefore).map(key => [key, Number(writerAfter[key]) - Number(writerBefore[key])]))
             const walBytes = Number((await q('SELECT pg_wal_lsn_diff(pg_current_wal_lsn(),$1) AS bytes', [initial])).rows[0].bytes)
             const total = count + Math.ceil(count / scenario.batch)
-            assert.equal(Number((await q("SELECT count(*) FROM mill_events WHERE processing_status='processed'")).rows[0].count), total)
+            assert.equal(Number((await q('SELECT count(*) FROM mill_events WHERE processing_status=\'processed\'')).rows[0].count), total)
             assert.equal(Number((await q('SELECT count(*) FROM mill_log_dimensions')).rows[0].count), total)
             assert.equal(Number((await q('SELECT sum(event_count) FROM mill_log_counts WHERE bucket_seconds=3600')).rows[0].sum), total)
             const updateStart = performance.now(), updateWal = (await q('SELECT pg_current_wal_lsn() AS lsn')).rows[0].lsn
-            const updateRows = (await q("UPDATE mill_events SET normalized=normalized||jsonb_build_object('evaluated_at','2026-09-20T00:00:00Z') WHERE id IN (SELECT id FROM mill_events ORDER BY id LIMIT 1000)")).rowCount!
-            await q("SELECT gin_clean_pending_list('idx_mill_logs_phrase_trgm')")
+            const updateRows = (await q('UPDATE mill_events SET normalized=normalized||jsonb_build_object(\'evaluated_at\',\'2026-09-20T00:00:00Z\') WHERE id IN (SELECT id FROM mill_events ORDER BY id LIMIT 1000)')).rowCount!
+            await q('SELECT gin_clean_pending_list(\'idx_mill_logs_phrase_trgm\')')
             await q('CHECKPOINT')
             const updateMs = performance.now() - updateStart
             const updateWalBytes = Number((await q('SELECT pg_wal_lsn_diff(pg_current_wal_lsn(),$1) AS bytes', [updateWal])).rows[0].bytes)

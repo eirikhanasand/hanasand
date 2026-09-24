@@ -24,7 +24,7 @@ try {
     checks = await pair(bucket('global', 2), bucket('route', 1))
     assert.equal(checks.globalCheck.allowed, false)
     assert.equal(checks.routeCheck, null)
-    assert.equal((await pool.query("SELECT request_count FROM api_rate_limit_buckets WHERE bucket_key='route'")).rows[0].request_count, 2)
+    assert.equal((await pool.query('SELECT request_count FROM api_rate_limit_buckets WHERE bucket_key=\'route\'')).rows[0].request_count, 2)
     assert.ok(checks.globalCheck.retryAfterMs > 0)
     assert.ok(Number.isFinite(checks.globalCheck.resetAt))
 
@@ -36,8 +36,8 @@ try {
         [{bucket_key: 'global', request_count: 18}, {bucket_key: 'route', request_count: 11}])
 
     await assert.rejects(pair(bucket('rollback-global'), bucket('broken-route')), /check constraint/)
-    assert.equal((await pool.query("SELECT COUNT(*)::int AS count FROM api_rate_limit_buckets WHERE bucket_key='rollback-global'")).rows[0].count, 0)
-    await pool.query("UPDATE api_rate_limit_buckets SET window_started_at='2000-01-01', request_count=100")
+    assert.equal((await pool.query('SELECT COUNT(*)::int AS count FROM api_rate_limit_buckets WHERE bucket_key=\'rollback-global\'')).rows[0].count, 0)
+    await pool.query('UPDATE api_rate_limit_buckets SET window_started_at=\'2000-01-01\', request_count=100')
     checks = await pair()
     assert.equal(checks.globalCheck.remaining, 99)
     assert.equal(checks.routeCheck?.remaining, 99)
@@ -46,9 +46,9 @@ try {
     const locked = await pool.connect()
     try {
         await locked.query('BEGIN')
-        await locked.query("SELECT 1 FROM api_rate_limit_buckets WHERE bucket_key='expired-1' FOR UPDATE")
+        await locked.query('SELECT 1 FROM api_rate_limit_buckets WHERE bucket_key=\'expired-1\' FOR UPDATE')
         await pair()
-        assert.equal((await pool.query("SELECT COUNT(*)::int AS count FROM api_rate_limit_buckets WHERE bucket_key LIKE 'expired-%'")).rows[0].count, 300)
+        assert.equal((await pool.query('SELECT COUNT(*)::int AS count FROM api_rate_limit_buckets WHERE bucket_key LIKE \'expired-%\'')).rows[0].count, 300)
     } finally {await locked.query('ROLLBACK'); locked.release()}
 
     const single = await consumeSharedRateLimitBucket(bucket('single', 1), query)

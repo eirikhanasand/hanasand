@@ -78,7 +78,7 @@ test('storage failure prevents acknowledgment; Keep and configured selectors are
 
 test('an existing detector protects originals even on receipt replay', async () => {
     const query: any = async (sql: string) => {
-        if (sql.includes("r.definition->>'stage'")) return { rows: [{ organization_id: 'platform', definition: proxyDefinition }] }
+        if (sql.includes('r.definition->>\'stage\'')) return { rows: [{ organization_id: 'platform', definition: proxyDefinition }] }
         if (sql.includes('FROM mill_rules')) return { rows: [{ rule_id: 'custom.proxy-port', version: '1', source: 'owned', enabled: true, severity: 'high', name: 'Review proxy source', definition: { match: 'all', conditions: [{ path: 'service', operator: 'equals', value: 'hanasand-proxy-1' }] } }] }
         throw new Error('A matching detector must prevent any receipt lookup or write')
     }

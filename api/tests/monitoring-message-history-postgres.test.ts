@@ -12,17 +12,17 @@ const { recordMonitoringOutcome, loadMonitoringIssues } = await import('../src/u
 
 test('preserves delivered content and counts, excludes failures, and imports legacy IDs once', async () => {
     await query('CREATE TABLE agent_automations (id text PRIMARY KEY); CREATE TABLE agent_automation_runs(id text PRIMARY KEY, automation_id text, status text DEFAULT \'failed\', warning boolean DEFAULT false, started_at timestamptz DEFAULT NOW(), completed_at timestamptz DEFAULT NOW())')
-    await query(`CREATE TABLE IF NOT EXISTS vms(name text PRIMARY KEY, owner text, created_by text, access_users jsonb, deleted_at timestamptz)`);
+    await query('CREATE TABLE IF NOT EXISTS vms(name text PRIMARY KEY, owner text, created_by text, access_users jsonb, deleted_at timestamptz)')
     await schema()
-    await query("INSERT INTO agent_automations VALUES ('monitor',NULL)")
+    await query('INSERT INTO agent_automations VALUES (\'monitor\',NULL)')
     const automation = { id: 'monitor', name: 'Health check', monitoring_type: 'fetch', target_url: 'https://example.com', notify_on: 'failure', notification_destinations: ['destination'] } as any
-    await query("INSERT INTO agent_automation_runs(id,automation_id,started_at,completed_at) VALUES ('baseline','monitor',NOW()-INTERVAL '2 minutes',NOW()-INTERVAL '2 minutes')")
+    await query('INSERT INTO agent_automation_runs(id,automation_id,started_at,completed_at) VALUES (\'baseline\',\'monitor\',NOW()-INTERVAL \'2 minutes\',NOW()-INTERVAL \'2 minutes\')')
     async function check(id: string, message: string) {
         await query('INSERT INTO agent_automation_runs(id,automation_id) VALUES ($1,\'monitor\')', [id])
         await recordMonitoringOutcome(automation, id, 'failure', message)
     }
     await check('first', 'HTTP 503 in 20ms')
-    await query("UPDATE monitoring_issue_notifications SET next_attempt_at=NOW()-INTERVAL '1 second'")
+    await query('UPDATE monitoring_issue_notifications SET next_attempt_at=NOW()-INTERVAL \'1 second\'')
     await check('second', 'HTTP 503 in 30ms')
     let item = (await loadMonitoringIssues('monitor'))[0]
     expect(item.notifications).toHaveLength(2)
@@ -30,12 +30,12 @@ test('preserves delivered content and counts, excludes failures, and imports leg
     expect(item.notifications[0].message.content).toContain('@everyone')
     expect(JSON.stringify(item.notifications)).not.toContain('destination')
     fail = true
-    await query("UPDATE monitoring_issue_notifications SET next_attempt_at=NOW()-INTERVAL '1 second'")
+    await query('UPDATE monitoring_issue_notifications SET next_attempt_at=NOW()-INTERVAL \'1 second\'')
     await check('third', 'HTTP 503 in 40ms')
     item = (await loadMonitoringIssues('monitor'))[0]
     expect(item.notifications.filter((n: any) => n.deliveredAt)).toHaveLength(2)
     expect(item.notifications.find((n: any) => n.error)?.error).toBe('Delivery failed')
-    await query("INSERT INTO monitoring_issue_notifications(issue_id,destination,next_attempt_at,delivered_at,message_id) VALUES ($1,'legacy-secret',NOW(),NOW(),'999')",[item.id])
+    await query('INSERT INTO monitoring_issue_notifications(issue_id,destination,next_attempt_at,delivered_at,message_id) VALUES ($1,\'legacy-secret\',NOW(),NOW(),\'999\')',[item.id])
     await schema(); await schema()
     item = (await loadMonitoringIssues('monitor'))[0]
     expect(item.notifications.filter((n: any) => n.deliveredAt)).toHaveLength(3)

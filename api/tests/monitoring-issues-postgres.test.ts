@@ -19,17 +19,17 @@ const { executeAutomation } = await import('../src/utils/automations.ts')
 import type { AutomationRow } from '../src/utils/automations.ts'
 
 test('database aggregation, concurrent delivery, rolling cooldown, recovery and delivery failure', async () => {
-    await query(`CREATE TABLE IF NOT EXISTS agent_automation_runs (id text PRIMARY KEY, automation_id text, owner_id text, status text, warning boolean DEFAULT false, result text, error text, provider text, model text, artifacts jsonb DEFAULT '[]', started_at timestamptz DEFAULT NOW(), completed_at timestamptz, duration_ms int)`)
-    await query(`CREATE TABLE IF NOT EXISTS agent_automations (id text PRIMARY KEY, status text, last_status text, last_run_at timestamptz, updated_at timestamptz, last_error text, last_completed_at timestamptz, next_run_at timestamptz, schedule_kind text, consecutive_failures int DEFAULT 0, action_type text, paused_reason text, run_count int DEFAULT 0, certificate_status text, certificate_subject text, certificate_issuer text, certificate_expires_at timestamptz)`)
-    await query("ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS target_url text DEFAULT 'http://127.0.0.1:9'")
-    await query("ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS monitoring_type text DEFAULT 'fetch'")
-    await query(`CREATE TABLE IF NOT EXISTS vms(name text PRIMARY KEY, owner text, created_by text, access_users jsonb, deleted_at timestamptz)`);
+    await query('CREATE TABLE IF NOT EXISTS agent_automation_runs (id text PRIMARY KEY, automation_id text, owner_id text, status text, warning boolean DEFAULT false, result text, error text, provider text, model text, artifacts jsonb DEFAULT \'[]\', started_at timestamptz DEFAULT NOW(), completed_at timestamptz, duration_ms int)')
+    await query('CREATE TABLE IF NOT EXISTS agent_automations (id text PRIMARY KEY, status text, last_status text, last_run_at timestamptz, updated_at timestamptz, last_error text, last_completed_at timestamptz, next_run_at timestamptz, schedule_kind text, consecutive_failures int DEFAULT 0, action_type text, paused_reason text, run_count int DEFAULT 0, certificate_status text, certificate_subject text, certificate_issuer text, certificate_expires_at timestamptz)')
+    await query('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS target_url text DEFAULT \'http://127.0.0.1:9\'')
+    await query('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS monitoring_type text DEFAULT \'fetch\'')
+    await query('CREATE TABLE IF NOT EXISTS vms(name text PRIMARY KEY, owner text, created_by text, access_users jsonb, deleted_at timestamptz)')
     await schema()
-    await query("INSERT INTO agent_automations(id,status,action_type,schedule_kind) VALUES ('issues','active','agent_prompt','interval'), ('other-issues','active','agent_prompt','interval')")
+    await query('INSERT INTO agent_automations(id,status,action_type,schedule_kind) VALUES (\'issues\',\'active\',\'agent_prompt\',\'interval\'), (\'other-issues\',\'active\',\'agent_prompt\',\'interval\')')
     const monitor = { id: 'issues', owner_id: 'owner', action_type: 'agent_prompt', monitoring_type: 'fetch', target_url: 'http://127.0.0.1:9', timeout_seconds: 1, retry_count: 0, notify_on: 'failure', interval_minutes: 1, schedule_kind: 'interval', notification_destinations: ['test-discord', 'test-discord'] } as AutomationRow
     let checkedAt = Date.now() - 86_400_000
     async function check(id: string, message = 'HTTP 503', kind: 'failure' | 'warning' | null = 'failure', automation = monitor) {
-        await query("INSERT INTO agent_automation_runs(id,automation_id,owner_id,status,warning,started_at,completed_at) VALUES ($1,$2,'owner',$3,$4,$5,$5)", [id, automation.id, kind === 'failure' ? 'failed' : 'completed', kind === 'warning', new Date(checkedAt += 120_000)])
+        await query('INSERT INTO agent_automation_runs(id,automation_id,owner_id,status,warning,started_at,completed_at) VALUES ($1,$2,\'owner\',$3,$4,$5,$5)', [id, automation.id, kind === 'failure' ? 'failed' : 'completed', kind === 'warning', new Date(checkedAt += 120_000)])
         await recordMonitoringOutcome(automation, id, kind, message)
     }
     await check('grace-baseline')
@@ -50,10 +50,10 @@ test('database aggregation, concurrent delivery, rolling cooldown, recovery and 
     const reopened = (await loadMonitoringIssues('issues')).find(issue => issue.summary === 'HTTP 503')!
     expect(reopened.caseNumber).toBe(issues[0].caseNumber)
     expect(reopened.resolvedAt).toBeNull()
-    await query("UPDATE monitoring_issue_notifications SET next_attempt_at=NOW()+INTERVAL '1 minute' WHERE issue_id=$1", [reopened.id])
+    await query('UPDATE monitoring_issue_notifications SET next_attempt_at=NOW()+INTERVAL \'1 minute\' WHERE issue_id=$1', [reopened.id])
     await check('before-window')
     expect(sent).toHaveLength(2)
-    await query("UPDATE monitoring_issue_notifications SET next_attempt_at=NOW()-INTERVAL '1 second' WHERE issue_id=$1", [reopened.id])
+    await query('UPDATE monitoring_issue_notifications SET next_attempt_at=NOW()-INTERVAL \'1 second\' WHERE issue_id=$1', [reopened.id])
     await Promise.all([check('after-window-1'), check('after-window-2')])
     expect(sent).toHaveLength(3)
     await check('other-owner-baseline', 'HTTP 503', 'failure', { ...monitor, id: 'other-issues', owner_id: 'other-owner' })
@@ -65,12 +65,12 @@ test('database aggregation, concurrent delivery, rolling cooldown, recovery and 
     failDelivery = true
     await check('delivery-baseline')
     await executeAutomation(monitor)
-    const result = (await query("SELECT last_status,last_error FROM agent_automations WHERE id='issues'")).rows[0]
+    const result = (await query('SELECT last_status,last_error FROM agent_automations WHERE id=\'issues\'')).rows[0]
     expect(result.last_status).toBe('failed')
     expect(result.last_error).not.toContain('delivery')
     issues = await loadMonitoringIssues('issues')
     expect(issues.some(issue => issue.notifications.some((n: { error: string }) => n.error === 'Test delivery unavailable'))).toBe(true)
-    await query("INSERT INTO agent_automation_runs(id,automation_id,owner_id,status,error,started_at) VALUES ('historical-1','issues','owner','failed','Historical timeout','2026-01-01'), ('historical-2','issues','owner','failed','Historical timeout','2026-01-02')")
+    await query('INSERT INTO agent_automation_runs(id,automation_id,owner_id,status,error,started_at) VALUES (\'historical-1\',\'issues\',\'owner\',\'failed\',\'Historical timeout\',\'2026-01-01\'), (\'historical-2\',\'issues\',\'owner\',\'failed\',\'Historical timeout\',\'2026-01-02\')')
     await backfillMonitoringIssues()
     await backfillMonitoringIssues()
     const historical = (await loadMonitoringIssues('issues')).find(issue => issue.summary === 'Historical timeout')!
@@ -99,7 +99,7 @@ test('JSON checks share a fetch across concurrent rules and cache source failure
         expect(evaluateJsonRule(snapshots[1].payload, { path: 'ram', aggregate: 'max', operator: 'gt', value: 80 }).exceeded).toBe(false)
         await sharedJsonSnapshot({ ...source, owner_id: 'other-json-owner' })
         expect(requests).toBe(2)
-        await query("UPDATE monitoring_json_snapshots SET expires_at = NOW() - INTERVAL '1 second'")
+        await query('UPDATE monitoring_json_snapshots SET expires_at = NOW() - INTERVAL \'1 second\'')
         broken = true
         const failures = await Promise.allSettled(Array.from({ length: 12 }, () => sharedJsonSnapshot(source)))
         expect(requests).toBe(3)

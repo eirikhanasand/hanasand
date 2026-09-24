@@ -68,7 +68,7 @@ test('deletion email, independent one-use restoration, and secure password chang
     expect(url.searchParams.has('restoreToken')).toBe(false)
     const emailToken = new URLSearchParams(url.hash.slice(1)).get('restoreToken')!
     expect(emailToken).not.toBe(deleted.json().restore_token)
-    await query("UPDATE users SET deletion_restore_token_hash = 'rotated-by-login'")
+    await query('UPDATE users SET deletion_restore_token_hash = \'rotated-by-login\'')
     expect((await restore('invalid')).statusCode).toBe(400)
     const restored = await restore(emailToken)
     expect(restored.statusCode, restored.body).toBe(200)
@@ -90,9 +90,9 @@ test('deletion email, independent one-use restoration, and secure password chang
 test('expired and administratively disabled accounts cannot be restored; unknown locations are explicit and HTML escaped', async () => {
     await remove()
     const token = new URLSearchParams(new URL(mail!.textBody.split('Restore account: ')[1]).hash.slice(1)).get('restoreToken')!
-    await query("UPDATE users SET deletion_scheduled_at = NOW() - INTERVAL '1 second'")
+    await query('UPDATE users SET deletion_scheduled_at = NOW() - INTERVAL \'1 second\'')
     expect((await restore(token)).statusCode).toBe(400)
-    await query("UPDATE users SET deletion_scheduled_at = NOW() + INTERVAL '1 day', active = FALSE")
+    await query('UPDATE users SET deletion_scheduled_at = NOW() + INTERVAL \'1 day\', active = FALSE')
     expect((await restore(token)).statusCode).toBe(400)
     const message = accountDeletionMail({ id: '<script>', restoreToken: 'secret', requestedAt: new Date(), deletionScheduledAt: new Date(), ip: '::1', userAgent: '' })
     expect(message.textBody).toContain('City: Unavailable')

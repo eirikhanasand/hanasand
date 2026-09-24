@@ -84,7 +84,7 @@ test('suspicious lookalikes, unknown evidence and unbound caller proof always ke
     }
 })
 
- test('persisted timing values are required and changes alter matching', () => {
+test('persisted timing values are required and changes alter matching', () => {
     const log = modelFixture()
     expect(timingEligible(log, undefined, testKey)).toBe(false)
     expect(validModelDiscoveryParameters({})).toBe(false)

@@ -42,15 +42,15 @@ test('host cases follow current VM access without granting monitor administratio
     expect(await list()).toEqual([])
     expect((await app.inject('/cases?organizationId=selected-org')).json().items).toEqual([])
     viewer = 'eiriktest'
-    await query("UPDATE vms SET access_users='[]'")
+    await query('UPDATE vms SET access_users=\'[]\'')
     expect((await app.inject('/cases/HA-1')).statusCode).toBe(404)
     viewer = 'sindre'
     await query('UPDATE vms SET deleted_at=NOW()')
     expect(await list()).toEqual([])
     await query('UPDATE vms SET deleted_at=NULL')
-    await query("UPDATE agent_automations SET target_url='another.example:443' WHERE id='tls'")
+    await query('UPDATE agent_automations SET target_url=\'another.example:443\' WHERE id=\'tls\'')
     expect(await list()).toEqual([])
-    await query("UPDATE agent_automations SET target_url='pengeflyt.com:443',organization_id='private-org' WHERE id='tls'")
+    await query('UPDATE agent_automations SET target_url=\'pengeflyt.com:443\',organization_id=\'private-org\' WHERE id=\'tls\'')
     expect(await list()).toEqual([])
     viewer = 'admin'
     expect((await list()).map((item: any) => item.id)).toEqual(['HA-2'])
@@ -58,12 +58,12 @@ test('host cases follow current VM access without granting monitor administratio
     expect((await app.inject('/cases?organizationId=selected-org')).json().items).toEqual([])
     expect((await app.inject('/cases/HA-1?organizationId=selected-org')).statusCode).toBe(404)
     expect((await app.inject('/cases/HA-1?organizationId=private-org')).json().case.canManage).toBe(true)
-    await query("INSERT INTO organizations VALUES ('private-org','active')")
+    await query('INSERT INTO organizations VALUES (\'private-org\',\'active\')')
     await query('UPDATE monitoring_issues SET comments=$1::jsonb, disk_diagnostics=$2::jsonb WHERE id=2', [JSON.stringify([{ body: 'Preserve history' }]), JSON.stringify({ host: 'inspur' })])
     const { assignMonitoringOrganization } = await import('../scripts/scope-hanasand-monitoring.ts')
     await expect(assignMonitoringOrganization(['other'], 'wrong-owner', 'private-org', true)).rejects.toThrow()
     expect((await assignMonitoringOrganization(['other'], 'admin', 'private-org')).applied).toBe(false)
-    expect((await query("SELECT organization_id FROM agent_automations WHERE id='other'")).rows[0].organization_id).toBeNull()
+    expect((await query('SELECT organization_id FROM agent_automations WHERE id=\'other\'')).rows[0].organization_id).toBeNull()
     await assignMonitoringOrganization(['other'], 'admin', 'private-org', true)
     const saved = (await query('SELECT id,comments,disk_diagnostics,correlation_key FROM monitoring_issues WHERE id=2')).rows[0]
     expect(saved).toMatchObject({ id: '2', comments: [{ body: 'Preserve history' }], disk_diagnostics: { host: 'inspur' } })
