@@ -11,9 +11,8 @@ const entry = path.join(temporary, 'entry.tsx')
 await writeFile(entry, `import React from '${root}/node_modules/react/index.js';
 import {createRoot} from '${root}/node_modules/react-dom/client.js';
 import Workbench from '${root}/src/app/dashboard/db/databaseWorkbench.tsx';
-import Connection from '${root}/src/app/dashboard/db/databaseConnection.tsx';
 import Inventory from '${root}/src/app/dashboard/db/databaseInventory.tsx';
-createRoot(document.getElementById('root')).render(<><Connection/><Workbench overview={{clusters:[]}}/><Inventory stale={false} instances={[{id:'test',engine:'PostgreSQL',status:'healthy',databases:[{name:'example',sizeBytes:1000,tableCount:1,connections:1,tables:[{schema:'public',name:'items',sizeBytes:100,columns:['id','value'],lastWriteObservedAt:null}]}]}]}/></>);`)
+createRoot(document.getElementById('root')).render(<><Workbench overview={{clusters:[]}}/><Inventory stale={false} instances={[{id:'test',engine:'PostgreSQL',status:'healthy',databases:[{name:'example',sizeBytes:1000,tableCount:1,connections:1,tables:[{schema:'public',name:'items',sizeBytes:100,columns:['id','value'],lastWriteObservedAt:null}]}]}]}/></>);`)
 const build = await Bun.build({ entrypoints: [entry], target: 'browser', outdir: temporary, plugins: [{ name: 'server-actions', setup(builder) {
     builder.onResolve({ filter: /^react\/jsx/ }, args => ({ path: path.join(root, 'node_modules', args.path + '.js') }))
     builder.onLoad({ filter: /dashboard\/db\/actions\.ts$/ }, () => ({ contents: 'export async function databaseRowsAction(){return {rows:[],fields:[],rowCount:0}};export const databaseSqlAction=databaseRowsAction;', loader: 'js' }))
@@ -43,6 +42,10 @@ try {
     await page.getByText('Connected', { exact: true }).waitFor()
     assert.equal(await page.getByText(/Checked \d+s ago/).count(), 0)
     assert.equal(await page.getByRole('button', { name: 'Inspect rows' }).isVisible(), false)
+    assert.equal(await page.locator('[data-db-workbench]').isVisible(), false)
+    await page.getByRole('button', { name: 'Search', exact: true }).click()
+    await page.getByRole('heading', { name: 'Search', exact: true }).waitFor()
+    await page.getByRole('button', { name: 'Search', exact: true }).click()
     await page.keyboard.press('Meta+j')
     await page.getByRole('button', { name: 'Inspect rows' }).waitFor()
     await page.keyboard.press('Meta+j')

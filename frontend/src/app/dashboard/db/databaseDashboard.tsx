@@ -6,7 +6,6 @@ import type { DatabaseOverview } from '@/utils/db/internal'
 import DatabaseWorkbench from './databaseWorkbench'
 import DatabaseRefresh from './databaseRefresh'
 import DatabaseInventory from './databaseInventory'
-import DatabaseConnection from './databaseConnection'
 import QueryCard from './queryCard'
 
 
@@ -21,14 +20,14 @@ export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) 
 
     return <DashboardPage>
         <DatabaseRefresh />
-        <section className='grid gap-3 sm:grid-cols-2 xl:grid-cols-5' aria-label='Storage health' data-db-monitor-metrics data-clusters={overview.clusterCount} data-databases={overview.databaseCount} data-storage-bytes={overview.totalSizeBytes}>
+        <DatabaseWorkbench overview={overview}>
+        <section className='grid gap-3 sm:grid-cols-2 xl:grid-cols-4' aria-label='Storage health' data-db-monitor-metrics data-clusters={overview.clusterCount} data-databases={overview.databaseCount} data-storage-bytes={overview.totalSizeBytes}>
             <MetricCard icon={<HardDrive />} label='Disk free' value={disk ? formatBytes(disk.availableBytes) : 'Unavailable'} detail={disk ? `${formatBytes(disk.totalBytes)} total · ${storage?.host}` : 'Storage measurements unavailable'} />
             <MetricCard icon={<TrendingUp />} label='Growth / day' value={daily == null ? 'Measuring' : `${daily < 0 ? '−' : '+'}${formatBytes(Math.abs(daily))}`} detail={disk ? `Net disk change · ${Math.min(24, disk.sampleSeconds / 3600).toFixed(1)}h sampled` : 'No recent measurement'} />
             <MetricCard icon={<Clock3 />} label='Disk full in' value={!disk || daily == null ? 'Not enough history' : days == null ? 'Not growing' : days < 1 ? `${Math.max(1, Math.round(days * 24))} hours` : `${Math.round(days)} days`} detail='Estimated at the measured rate' />
             <MetricCard icon={fresh && !issues.length ? <CheckCircle2 /> : <AlertTriangle />} label='Database health' value={!fresh ? 'Not verified' : issues.length ? `${issues.length} need attention` : 'Healthy'} detail={storage ? `Checked ${formatDateTime(storage.sampledAt)}` : 'Inventory unavailable'} />
-            <DatabaseConnection />
         </section>
-        {overview.status !== 'unavailable' ? <DatabaseWorkbench overview={overview} /> : <p role='alert' className='text-sm text-ui-warning'>{overview.health.message}</p>}
+        </DatabaseWorkbench>
 
         <DashboardPanel className='min-w-0 overflow-hidden' id='storage-inventory'>
             <div className='flex flex-wrap items-center justify-between gap-2 border-b border-ui-border px-5 py-4'>

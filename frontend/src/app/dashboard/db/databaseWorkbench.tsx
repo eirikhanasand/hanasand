@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState, useTransition, type ReactNode } from 'react'
 import { Code2, PlayCircle, Search, Table2 } from 'lucide-react'
 import { dashboardPanelClass } from '@/components/dashboard/ui'
 import type { DatabaseOverview, DatabaseQueryResult } from '@/utils/db/internal'
 import { databaseRowsAction, databaseSqlAction } from './actions'
+import DatabaseConnection from './databaseConnection'
 
 type TableOption = {
     schema: string
@@ -12,7 +13,7 @@ type TableOption = {
     database: string
 }
 
-export default function DatabaseWorkbench({ overview }: { overview: DatabaseOverview }) {
+export default function DatabaseWorkbench({ overview, children }: { overview: DatabaseOverview, children?: ReactNode }) {
     const tables = useMemo<TableOption[]>(() => overview.clusters.flatMap(cluster =>
         cluster.databases.flatMap(database => (database.tables || []).map(table => ({
             schema: table.schema,
@@ -65,13 +66,19 @@ export default function DatabaseWorkbench({ overview }: { overview: DatabaseOver
     }
 
     return (
-        <section className={`${dashboardPanelClass} min-w-0 overflow-hidden`} data-db-workbench>
-            <button type='button' aria-expanded={open} aria-controls='database-workbench-content' onClick={() => setOpen(value => !value)} className='flex w-full cursor-pointer items-center justify-between gap-3 px-5 py-4 text-left hover:bg-ui-primary/5 focus-visible:outline-ui-primary'>
-                <span className='text-base font-semibold'>Database workbench</span><kbd className='rounded border border-ui-border px-2 py-1 text-xs text-ui-muted'>⌘ J</kbd>
-            </button>
-            <div id='database-workbench-content' hidden={!open} className='border-t border-ui-border'>
+        <>
+            <div className='flex flex-wrap items-center justify-end gap-3'>
+                <DatabaseConnection />
+                <button type='button' aria-label='Search' title='Search (⌘ J)' disabled={overview.status === 'unavailable'} aria-expanded={open} aria-controls='database-workbench-content' onClick={() => setOpen(value => !value)} className='inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-ui-primary hover:bg-ui-primary/10 focus-visible:outline-ui-primary disabled:opacity-50'>
+                    <Search aria-hidden className='h-4 w-4' /><kbd className='text-xs'>⌘ J</kbd>
+                </button>
+            </div>
+            {children}
+            {overview.status === 'unavailable' && <p role='alert' className='text-sm text-ui-warning'>{overview.health.message}</p>}
+            <section id='database-workbench-content' hidden={!open || overview.status === 'unavailable'} className={`${dashboardPanelClass} min-w-0 overflow-hidden`} data-db-workbench aria-label='Search'>
                 <div className='p-5'>
-                    <div className='mb-4 flex gap-1 rounded-lg bg-ui-canvas p-1' aria-label='Workbench mode'>
+                    <h2 className='mb-4 text-base font-semibold'>Search</h2>
+                    <div className='mb-4 flex gap-1 rounded-lg bg-ui-canvas p-1' aria-label='Search mode'>
                         {([{ id: 'rows', label: 'Browse tables', icon: Table2 }, { id: 'sql', label: 'SQL editor', icon: Code2 }] as const).map(tab => <button key={tab.id} type='button' aria-pressed={mode === tab.id} onClick={() => setMode(tab.id)} className={`inline-flex min-h-10 items-center gap-2 rounded-md px-4 text-sm font-medium ${mode === tab.id ? 'bg-ui-raised text-ui-primary' : 'text-ui-muted hover:text-ui-text'}`}><tab.icon aria-hidden className='h-4 w-4' />{tab.label}</button>)}
                     </div>
                     {mode === 'rows' ? <div>
@@ -142,8 +149,8 @@ export default function DatabaseWorkbench({ overview }: { overview: DatabaseOver
                         </div>
                     )}
                 </div>
-            </div>
-        </section>
+            </section>
+        </>
     )
 }
 
