@@ -1,3 +1,4 @@
+import { logPromptEvidence, writeEvidence } from './prompt-evidence.mjs';
 import { readPower } from './power.mjs';
 import { createLanePool, modelEndpoints } from './lanes.mjs';
 import { createModelProbe } from './model-probe.mjs';
@@ -119,23 +120,29 @@ async function handlePromptRequest(request) {
     timestamp: new Date().toISOString()
   });
 
+  const requestId = crypto.randomUUID();
+  let httpStatus = null;
   let lane;
   let failure = null;
   try {
     lane = lanePool.acquire(modelLanes.map(item => item.url));
     sendClientUpdate("generating", { conversationId });
+    const requestBody = {
+      model: MODEL,
+      messages: Array.isArray(request.messages) ? request.messages : [],
+      temperature: Number.isFinite(Number(request.temperature)) ? Number(request.temperature) : 0,
+      max_tokens: Math.max(16, Math.min(Number(request.maxTokens) || 512, 4096))
+    };
+    logPromptEvidence(requestBody, { request_id: requestId, conversation_id: conversationId,
+      client: CLIENT_NAME, model: MODEL, lane: new URL(lane.url).port, timestamp: new Date().toISOString() });
     const response = await fetch(new URL("/v1/chat/completions", lane.url), {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: Array.isArray(request.messages) ? request.messages : [],
-        temperature: Number.isFinite(Number(request.temperature)) ? Number(request.temperature) : 0,
-        max_tokens: Math.max(16, Math.min(Number(request.maxTokens) || 512, 4096))
-      }),
+      body: JSON.stringify(requestBody),
       signal: AbortSignal.timeout(Number(process.env.HANASAND_AI_CLIENT_TIMEOUT_MS ?? "45000"))
     });
 
+    httpStatus = response.status;
     if (!response.ok) {
       throw new Error(`model returned HTTP ${response.status}: ${(await response.text()).slice(0, 240)}`);
     }
@@ -176,6 +183,9 @@ async function handlePromptRequest(request) {
     });
   } finally {
     lane?.release();
+    writeEvidence({ event_type: 'model_prompt_result', protected: true,
+      level: failure ? 'error' : 'info', request_id: requestId, conversation_id: conversationId,
+      outcome: failure ? 'failed' : 'completed', status: httpStatus, duration_ms: Date.now() - started });
     sendClientUpdate(lanePool.activeRequests ? "generating" : failure ? "error" : "idle", { lastError: failure });
   }
 }

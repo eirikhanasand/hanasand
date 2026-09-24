@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import { expect, test } from 'bun:test';
 import { createLanePool, modelEndpoints } from './lanes.mjs';
 
@@ -28,11 +29,15 @@ test('the model client routes concurrent prompts and releases failed lanes', asy
   let socket;
   const api = Bun.serve({ port: 0, fetch(request, server) { if (server.upgrade(request)) return; return new Response('', { status: 404 }); },
     websocket: { open(ws) { socket = ws; }, message(_ws, data) { messages.push(JSON.parse(String(data))); } } });
-  const child = Bun.spawn([process.execPath, new URL('./client.mjs', import.meta.url).pathname], { stdout: 'ignore', stderr: 'pipe', env: {
+  let output = '';
+  const child = spawn(process.execPath, [new URL('./client.mjs', import.meta.url).pathname], { stdio: ['ignore', 'pipe', 'pipe'], env: {
     ...process.env, HANASAND_AI_CLIENT_HEALTH_PORT: '0', HANASAND_AI_CLIENT_API_WS: `ws://127.0.0.1:${api.port}`,
     HANASAND_AI_OPENAI_BASE: `http://127.0.0.1:${servers[0].port}`, HANASAND_AI_MODEL_LANE_PORTS: servers.map(server => server.port).join(','),
     HANASAND_AI_MODEL_MAX_REQUESTS: '1', HANASAND_AI_MODEL: 'hanasand',
   } });
+  child.stdout.on('data', chunk => { output += chunk.toString(); });
+  child.stderr.resume();
+  const exited = new Promise(resolve => child.on('close', resolve));
   const waitFor = async predicate => {
     const deadline = Date.now() + 5000;
     while (!predicate()) { if (Date.now() > deadline) throw Error('Model client test timed out'); await Bun.sleep(5); }
@@ -52,12 +57,20 @@ test('the model client routes concurrent prompts and releases failed lanes', asy
     expect(calls).toEqual([2, 1]);
     expect(messages.filter(message => message.type === 'prompt_complete').map(message => message.content).sort()).toEqual(['lane-0', 'lane-1']);
     await waitFor(() => messages.at(-1)?.client?.lanes?.every(lane => lane.activeRequests === 0 && lane.availableRequests === 1));
+    await waitFor(() => output.includes('model_prompt_result'));
   } finally {
-    child.kill(); await child.exited;
+    child.kill(); await exited;
     for (const queue of gates) for (const release of queue) release();
     for (const server of servers) server.stop(true);
     api.stop(true);
   }
+  const evidence = output.trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
+  const prompts = evidence.filter(row => row.event_type === 'model_prompt');
+  expect(prompts).toHaveLength(3);
+  expect(prompts.every(row => JSON.parse(row.body).messages[0].content === 'test')).toBe(true);
+  expect(evidence.filter(row => row.event_type === 'model_prompt_result' && row.outcome === 'failed')).toHaveLength(2);
+  expect(evidence.filter(row => row.event_type === 'model_prompt_result' && row.outcome === 'completed')).toHaveLength(2);
+
 }, 15_000);
 
 test('removed lanes get no new requests and custom endpoints stay authoritative', () => {
