@@ -124,7 +124,7 @@ async function main() {
 
     const testDelivery = await testDwmWebhookDestination(ownerId, destination.id, { dryRun: true })
     expect(testDelivery?.status === 'dry_run', 'Test delivery should default to dry_run.', testDelivery)
-    expect(testDelivery.alertId === 'webhook_test', 'Test delivery should use the test alert contract.', testDelivery)
+    expect(testDelivery.alertId.startsWith('webhook_test_'), 'Test delivery should use the test alert contract.', testDelivery)
     expect(testDelivery.endpointHash?.startsWith('endpoint_'), 'Test delivery should persist endpoint hash.', testDelivery)
     expect(testDelivery.payloadHash?.startsWith('payload_'), 'Test delivery should persist payload hash.', testDelivery)
     expect(testDelivery.attemptedAt, 'Test delivery should expose attemptedAt.', testDelivery)
@@ -186,7 +186,7 @@ async function main() {
     const deliveryEvidence = buildDwmWebhookDeliveryEvidence({ deliveries, auditEvents })
     const replayEvidence = deliveryEvidence.find(item => item.alertId === alert.id && item.eventType === 'dwm.alert.replayed')
     const skippedLiveEvidence = deliveryEvidence.find(item => item.alertId === alert.id && item.status === 'skipped')
-    const testEvidence = deliveryEvidence.find(item => item.alertId === 'webhook_test')
+    const testEvidence = deliveryEvidence.find(item => item.deliveryId === testDelivery.id)
     expect(deliveryEvidence.length >= 3, 'Delivery evidence view should include persisted attempts.', deliveryEvidence)
     expect(replayEvidence?.destinationId === destination.id, 'Replay evidence should include destination id.', replayEvidence)
     expect(replayEvidence?.requestId && replayEvidence.requestId === replayEvidence.deliveryId, 'Replay evidence should include stable request id.', replayEvidence)

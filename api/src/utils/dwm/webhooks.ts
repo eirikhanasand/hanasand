@@ -7112,7 +7112,7 @@ export function buildDwmWebhookDestinationTestContract({
                 name: destination.name,
                 org_id: destination.orgId,
             },
-            alert: buildDwmWebhookTestAlert({ org_id: destination.orgId }, 'preview'),
+            alert: buildDwmWebhookTestAlert({ org_id: destination.orgId }, ''),
             eventType: 'dwm.alert.test',
             deliveryId: `destination-test-preview:${destination.id}`,
         })
@@ -9913,7 +9913,7 @@ function provenanceSummary(value: unknown) {
 
 export function buildDwmWebhookTestAlert(destination: Pick<DwmWebhookDestinationRow, 'org_id'>, testId: string = crypto.randomUUID()) {
     return {
-        id: `webhook_test_${testId}`,
+        id: testId ? `webhook_test_${testId}` : 'webhook_test',
         orgName: destination.org_id,
         title: 'Hanasand delivery test',
         severity: 'medium',
