@@ -81,7 +81,7 @@ test('dashboard lands on severity counts and keeps active services inside operat
     await expect(page.getByRole('navigation', { name: 'Log pages' }).getByRole('link')).toHaveText(['Dashboard', 'Realtime', 'Search', 'Errors', 'Traffic'])
     await expect(page.getByRole('link', { name: 'Dashboard', exact: true })).toHaveAttribute('aria-current', 'page')
     await expect(page.getByRole('region', { name: 'Events by severity' }).getByRole('link', { name: 'Errors 0' })).toHaveAttribute('href', '/logs/errors')
-    await expect(page.getByText('Most active services in the selected time range')).toBeVisible()
+    await expect(page.locator('details').filter({ has: page.getByText('Most active', { exact: true }) })).toHaveAttribute('open', '')
     await page.getByRole('region', { name: 'Events by severity' }).getByRole('link').filter({ hasText: 'high' }).click()
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Search logs')
     await page.getByRole('button', { name: 'Filter logs', exact: true }).click()
