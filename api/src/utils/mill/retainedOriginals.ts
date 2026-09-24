@@ -8,7 +8,7 @@ export function retainedOriginals(log: LogInput & { source_event_id?: string }):
         ? metadata.original_records
         : log.service === 'postgres-session-analyzer' && /^postgres-session:[a-f0-9]{64}$/.test(log.source_event_id || '') && metadata.collector === 'postgres-session-analyzer'
             ? metadata.lifecycle_records : undefined
-    const sourceService = ({ 'postgresql.readiness_sessions.v1': 'hanasand_database', 'system.completed_telemetry_cycles.v1': 'systemd', 'ssh.completed_session_windows.v1': 'sshd' } as Record<string, string>)[String(metadata.rule_id)]
+    const sourceService = ({ 'postgresql.readiness_sessions.v1': 'hanasand_database', 'system.completed_telemetry_cycles.v1': 'systemd', 'ssh.completed_session_windows.v1': 'sshd', 'ssh.transport_debug.v1': 'sshd' } as Record<string, string>)[String(metadata.rule_id)]
     if (!sourceService || !Array.isArray(records) || !records.length || records.length > 200) return []
     return records.flatMap((value, index) => {
         if (!value || typeof value !== 'object' || Array.isArray(value)) return []

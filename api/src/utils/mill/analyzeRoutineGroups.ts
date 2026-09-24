@@ -1,3 +1,4 @@
+import { sshTransportRuleId, sshTransportDefinition } from './analyzeSshTransport.ts'
 import { createHash } from 'node:crypto'
 import ipaddr from 'ipaddr.js'
 import type { MillCondition } from './conditions.ts'
@@ -17,9 +18,9 @@ export const sshWindowDefinition = { ...routineGroupDefinition, conditions: [
     { path: 'metadata.unit', operator: 'regex', value: '^(ssh|sshd)\\.service$' },
 ] as MillCondition[], parameters: { maxDurationMs: 30000, maxAgeMs: 60000, minimumGapMs: 30000, maxPerMinute: 2 } }
 export function validateRoutineGroupParameters(ruleId: string, parameters: unknown): string | null {
-    if (![telemetryRuleId, sshWindowRuleId].includes(ruleId) || !parameters || typeof parameters !== 'object' || Array.isArray(parameters)) return 'Invalid routine group parameters.'
-    const telemetry = ruleId === telemetryRuleId
-    const bounds: Record<string, [number, number]> = { maxDurationMs: [1, telemetry ? 5000 : 30000], maxAgeMs: [1, 60000], minimumGapMs: [telemetry ? 900 : 30000, 60000], maxPerMinute: [1, telemetry ? 65 : 2] }
+    if (![telemetryRuleId, sshWindowRuleId, sshTransportRuleId].includes(ruleId) || !parameters || typeof parameters !== 'object' || Array.isArray(parameters)) return 'Invalid routine group parameters.'
+    const telemetry = ruleId === telemetryRuleId, transport = ruleId === sshTransportRuleId
+    const bounds: Record<string, [number, number]> = { maxDurationMs: [1, telemetry ? 5000 : 30000], maxAgeMs: [1, 60000], minimumGapMs: [transport ? 0 : telemetry ? 900 : 30000, 60000], maxPerMinute: [1, transport ? 600 : telemetry ? 65 : 2] }
     for (const [name, value] of Object.entries(parameters)) {
         if (!bounds[name] || !Number.isSafeInteger(value) || value < bounds[name][0] || value > bounds[name][1]) return `Invalid ${name}.`
     }
@@ -27,7 +28,7 @@ export function validateRoutineGroupParameters(ruleId: string, parameters: unkno
 }
 export function routineGroupParameters(ruleId: string, parameters: unknown) {
     if (validateRoutineGroupParameters(ruleId, parameters)) return null
-    return { ...(ruleId === telemetryRuleId ? telemetryDefinition : sshWindowDefinition).parameters, ...parameters as Partial<typeof telemetryDefinition.parameters> }
+    return { ...(ruleId === telemetryRuleId ? telemetryDefinition : ruleId === sshTransportRuleId ? sshTransportDefinition : sshWindowDefinition).parameters, ...parameters as Partial<typeof telemetryDefinition.parameters> }
 }
 export const telemetryRule = {
     id: telemetryRuleId, version: '1', name: 'Completed host telemetry cycles', family: 'System', severity: 'low', enabled: false,

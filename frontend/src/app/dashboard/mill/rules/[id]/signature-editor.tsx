@@ -28,7 +28,7 @@ export default function SignatureEditor({ rule, disabled, onChange }: { rule: Mi
     const brute = rule.id.startsWith('auth.brute_force_success.')
     const spray = rule.id.startsWith('auth.password_spray.')
     const builtIn = rule.source === 'hanasand'
-    const configurableAnalysis = ['model.verified_discovery_probes', 'postgresql.readiness_audit', 'http.duplicate_ingestion_records', 'proxy.redundant_connections', 'cdn.successful_cache_refresh', 'collector.routine_executions', 'system.completed_telemetry_cycles', 'ssh.completed_session_windows', 'postgresql.readiness_sessions', 'http.routine_access', 'mongodb.cashflow_connections'].includes(rule.id.replace(/\.v\d+$/, ''))
+    const configurableAnalysis = ['model.verified_discovery_probes', 'postgresql.readiness_audit', 'http.duplicate_ingestion_records', 'proxy.redundant_connections', 'cdn.successful_cache_refresh', 'collector.routine_executions', 'system.completed_telemetry_cycles', 'ssh.completed_session_windows', 'ssh.transport_debug', 'postgresql.readiness_sessions', 'http.routine_access', 'mongodb.cashflow_connections'].includes(rule.id.replace(/\.v\d+$/, ''))
     const conditions = definition.conditions || []
     function selectors(key: 'conditions' | 'failureConditions', title: string, required: string) {
         const items = definition[key] || []

@@ -1,3 +1,4 @@
+import { sshTransportRule, sshTransportRuleId, sshTransportDefinition } from '#utils/mill/analyzeSshTransport.ts'
 import { ensureAnalysisPolicySchema, ensureEventProtectionRule, migrateAnalysisPolicy } from './analysisPolicySchema.ts'
 import { ingestionRule, ingestionDefinition } from '../mill/analyzeIngestion.ts'
 import ensureIngestionAnalyzeSchema from './ingestionAnalyzeSchema.ts'
@@ -48,7 +49,7 @@ export default async function ensureLogAnalyzeSchema() {
     await ensureEventProtectionRule(run)
     // Seed once for the platform organization only. Restarts must never undo a
     // user's later Keep/Disable choice. The first version is included in history.
-    for (const [rule, definition] of [[ingestionRule, ingestionDefinition], [cdnRefreshRule, cdnRefreshDefinition], [modelDiscoveryRule, modelDiscoveryDefinition], [readinessAuditRule, readinessAuditDefinition], [telemetryRule, telemetryDefinition], [sshWindowRule, sshWindowDefinition], [collectorRule, collectorDefinition], [proxyRule, proxyDefinition], [postgresRule, postgresDefinition], [accessRule, accessDefinition], [mongoRule, mongoDefinition], [mongoReconRule, mongoReconDefinition]] as const) {
+    for (const [rule, definition] of [[ingestionRule, ingestionDefinition], [cdnRefreshRule, cdnRefreshDefinition], [modelDiscoveryRule, modelDiscoveryDefinition], [readinessAuditRule, readinessAuditDefinition], [telemetryRule, telemetryDefinition], [sshWindowRule, sshWindowDefinition], [sshTransportRule, sshTransportDefinition], [collectorRule, collectorDefinition], [proxyRule, proxyDefinition], [postgresRule, postgresDefinition], [accessRule, accessDefinition], [mongoRule, mongoDefinition], [mongoReconRule, mongoReconDefinition]] as const) {
         await run(`WITH installed AS (
         INSERT INTO mill_rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
         SELECT gen_random_uuid()::text,o.id,$2,'1',$3,$6,$7,$4,$5::jsonb,$8,$9
@@ -57,7 +58,7 @@ export default async function ensureLogAnalyzeSchema() {
         INSERT INTO system_events(event_type,source,object_type,object_id,organization_id,context)
         SELECT 'mill.rule.created','mill','mill_rule',rule_id,organization_id,
             jsonb_build_object('ruleId',rule_id,'after',jsonb_build_object('version',version,'name',name,'explanation',explanation,'severity',severity,'enabled',enabled,'definition',definition))
-        FROM installed`, [process.env.PLATFORM_LOG_ORGANIZATION_ID || null, rule.id, rule.name, rule.explanation, JSON.stringify(definition), rule.family, rule.severity, 'source' in rule ? rule.source : 'hanasand', ![modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id)])
+        FROM installed`, [process.env.PLATFORM_LOG_ORGANIZATION_ID || null, rule.id, rule.name, rule.explanation, JSON.stringify(definition), rule.family, rule.severity, 'source' in rule ? rule.source : 'hanasand', ![modelDiscoveryRuleId, readinessAuditRuleId, sshTransportRuleId].includes(rule.id)])
         await migrateAnalysisPolicy(rule.id, definition, run)
     }
 }

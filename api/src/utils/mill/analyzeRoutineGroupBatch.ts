@@ -1,3 +1,4 @@
+import { sshTransportGroups, sshTransportRuleId } from './analyzeSshTransport.ts'
 import { collectMillEventFindings, loadConfiguredMillRules, normalizeMillEvent } from '../../handlers/mill.ts'
 import type run from '#db'
 import { customRetentionAction, loadLogRetentionRules } from './customRetention.ts'
@@ -9,7 +10,13 @@ import { completedSshWindows, completedTelemetryCycles, routineEvidence, routine
 // protection and removal of originals after the canonical record is durable.
 export async function analyzeRoutineGroupBatch<T extends RoutineLog>(entries: T[], query: typeof run, options?: { historicalReplay?: { ruleId: string } }): Promise<T[]> {
     const selected = options?.historicalReplay?.ruleId
-    const groups = [...completedTelemetryCycles(entries), ...completedSshWindows(entries)]
+    const transport = entries.some(log => log.service === 'sshd') && (!selected || selected === sshTransportRuleId)
+        ? await query(`SELECT r.definition FROM mill_rules r JOIN organizations o ON o.id=r.organization_id
+            WHERE o.status='active' AND (o.id=$1 OR ($1::text IS NULL AND lower(o.name)='hanasand'))
+            AND r.rule_id=$2 AND r.enabled AND r.definition->>'stage'='analyze' AND r.definition->>'action'='drop'
+            ORDER BY o.created_at LIMIT 1 FOR SHARE OF r,o`, [process.env.PLATFORM_LOG_ORGANIZATION_ID || null, sshTransportRuleId]) : null
+    const groups = [...completedTelemetryCycles(entries), ...completedSshWindows(entries),
+        ...await sshTransportGroups(entries, transport?.rows[0]?.definition?.conditions || [])]
         .filter(group => !options?.historicalReplay || group.ruleId === selected)
         .sort((a, b) => `${a.ruleId}:${a.scope}`.localeCompare(`${b.ruleId}:${b.scope}`) || a.started - b.started)
     if (!groups.length) return entries
@@ -62,7 +69,7 @@ export async function analyzeRoutineGroupBatch<T extends RoutineLog>(entries: T[
         const summary = await query(`INSERT INTO service_logs(service,host,level,message,metadata,source_event_id,created_at)
             VALUES('routine-group-analyzer',$1,'info',$2,$3::jsonb,$4,$5::timestamptz)
             ON CONFLICT(source_event_id) DO NOTHING RETURNING id`,
-        [group.logs[0].host, group.ruleId === telemetryRuleId ? 'Completed host telemetry cycle' : 'Completed SSH session window adjustments', JSON.stringify(routineEvidence(group)), `routine-group:${group.key}`, new Date(group.ended).toISOString()])
+        [group.logs[0].host, group.ruleId === telemetryRuleId ? 'Completed host telemetry cycle' : group.ruleId === sshTransportRuleId ? 'SSH transport debug summary' : 'Completed SSH session window adjustments', JSON.stringify(routineEvidence(group)), `routine-group:${group.key}`, new Date(group.ended).toISOString()])
         if (!summary.rowCount) continue
         await query(`INSERT INTO log_analyze_receipts(key,organization_id,rule_id,rule_version)
             SELECT unnest($1::text[]),$2,$3,$4 ON CONFLICT DO NOTHING`, [receipts, rule.organization_id, group.ruleId, rule.version])
