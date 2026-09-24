@@ -126,13 +126,13 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
                 link('Activity', '/organizations/activity'),
             ]),
         ]),
-        group('Platform administration', [
+        group('Administration', [
             link('All Organizations', '/management/organizations', canManageOrganizations),
             link('Platform Users', '/management/users', isAdmin),
             link('Platform Roles', '/management/roles', isAdmin),
             link('System Audit Log', '/management/audit', isAdmin),
         ]),
-        group('Help & developer resources', [link('API Docs', '/api'), link('OpenAPI JSON', '/api/openapi')]),
+        group('Resources', [link('API Docs', '/api'), link('OpenAPI JSON', '/api/openapi')]),
         group('Account', [
             link('Profile', `/profile/${id}`),
             link('Security', `/profile/${id}/security`),

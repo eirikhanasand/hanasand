@@ -2,23 +2,25 @@ import run from '#db'
 import { eligibleCustomDrop } from './dropEligibility.ts'
 import { Worker } from 'node:worker_threads'
 import { matchesMillRule, type MillCondition } from './conditions.ts'
+import { previewPredicate } from './previewPredicate.ts'
 import { loadLogRetentionRules, retentionStoreMatches } from './customRetention.ts'
 
 export type PreviewEvent = { id: string, timestamp: string, normalized: Record<string, unknown>, rank: number }
 type Cursor = { time: string, id: string }
 export type PreviewRequest = { from: string | null, until: string, cursor?: Cursor | null, action: 'drop' | 'keep', sample?: boolean, conditions: MillCondition[] }
 
-// Scan in bounded indexed pages: use the actual rule engine, including JavaScript
-// regex semantics. A count is complete only after the last page of the snapshot.
+// Page database-filtered candidates, then retain the authoritative runtime check.
 export async function scanRulePreview(organizationId: string, canReadLogs: boolean, input: PreviewRequest, query = run) {
+    const params: (string | boolean | null | string[])[] = [organizationId, canReadLogs, input.until, input.from, input.cursor?.time || null, input.cursor?.id || '']
+    const filter = previewPredicate(input.conditions, params)
     const scope = `organization_id=$1 AND ($2::boolean OR ingestion_id <> 'logs')
         AND event_timestamp <= $3::timestamptz AND received_at <= $3::timestamptz
         AND ($4::timestamptz IS NULL OR event_timestamp >= $4::timestamptz)
-        AND ($5::timestamptz IS NULL OR (event_timestamp,id) < ($5::timestamptz,$6::text))`
+        AND ($5::timestamptz IS NULL OR (event_timestamp,id) < ($5::timestamptz,$6::text)) AND ${filter}`
     const rules = input.action === 'drop' ? await loadLogRetentionRules(organizationId, query) : []
     const result = await query(`SELECT id, event_timestamp::text AS timestamp, normalized${input.action === 'drop' ? ', original' : ''}
-        FROM mill_events WHERE ${scope}
-        ORDER BY event_timestamp DESC, id DESC LIMIT 2000`, [organizationId, canReadLogs, input.until, input.from, input.cursor?.time || null, input.cursor?.id || ''])
+        FROM mill_events WHERE ${scope} ${input.action === 'drop' ? 'AND normalized->>\'severity\' = \'low\'' : ''}
+        ORDER BY event_timestamp DESC, id DESC LIMIT 2000`, params)
     const eligible = result.rows.filter(row => input.action !== 'drop' || eligibleCustomDrop(row.normalized || {})
         && !retentionStoreMatches(row.normalized || {}, rules) && !retentionStoreMatches(row.original || {}, rules)) as PreviewEvent[]
     const matches = input.conditions.some(condition => condition.operator === 'regex')

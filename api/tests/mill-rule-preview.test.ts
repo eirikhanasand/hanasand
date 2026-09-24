@@ -12,6 +12,8 @@ test('preview uses runtime selectors and excludes higher and unknown severities 
         expect(sql).toContain("organization_id=$1 AND ($2::boolean OR ingestion_id <> 'logs')")
         expect(sql).toContain('received_at <= $3::timestamptz')
         expect(params.slice(0, 6)).toEqual(['org-a', false, input.until, input.from, null, ''])
+        expect(sql).toContain('jsonb_typeof')
+        expect(params).toContainEqual(['http', 'status_code'])
         return { rows: [row(1), row(2, 'high'), row(3, 'unknown'), row(4, 'low', 404)] }
     }
     const page = await scanRulePreview('org-a', false, input, query as any)

@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { NAVIGATION_COOKIE, readNavigationPreferences, type NavigationPreferences as Preferences } from '@/utils/layout/navigationPreferences'
 import { getCookie, setCookie } from '@/utils/cookies/cookies'
 import { usePathname } from 'next/navigation'
-import { AlarmClockCheck, ChevronDown, ChevronsUp, FolderKanban, NotebookText, PanelLeftClose, PanelLeftOpen, Pin, Search, Server, Settings2, ShieldCheck, House, ListFilter, Mail, CircleHelp, CircleUserRound } from 'lucide-react'
+import { AlarmClockCheck, ChevronDown, ChevronsUp, FolderKanban, NotebookText, PanelLeftClose, PanelLeftOpen, Pin, Search, Server, Settings2, ShieldCheck, House, ListFilter, Mail, CircleUserRound, Code2 } from 'lucide-react'
 import { useEffect, useId, useState, useSyncExternalStore } from 'react'
 import { getDashboardViewMode, setDashboardViewMode } from '@/utils/layout/viewMode'
 import { getDashboardNavigation, navigationLinks, pinnedNavigation, type NavigationAccess, type NavigationItem } from '@/utils/layout/dashboardNavigation'
@@ -19,8 +19,8 @@ const sectionIcons: Record<string, typeof ShieldCheck> = {
     Workspace: NotebookText,
     Communication: Mail,
     Organization: FolderKanban,
-    'Platform administration': Settings2,
-    'Help & developer resources': CircleHelp,
+    Administration: Settings2,
+    Resources: Code2,
     Account: CircleUserRound,
     Pinned: Pin,
 }
