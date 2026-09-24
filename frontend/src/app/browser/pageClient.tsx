@@ -1,6 +1,7 @@
 'use client'
 
 import SiteNetworkDetails, { type SiteNetwork } from './SiteNetworkDetails'
+import BrowserRunMetrics, { type RunMetrics } from './BrowserRunMetrics'
 import BrowserDebug from './BrowserDebug'
 import BrowserHistory from './BrowserHistory'
 import BrowserReportPageClient from './report/pageClient'
@@ -463,6 +464,8 @@ export default function BrowserPageClient({ initialData, resultId, resultRunId }
     const runRemainingSeconds = runTiming ? Math.max(0, Math.ceil((new Date(runTiming.expiresAt).getTime() - clockNow) / 1000)) : 0
     const paidBrowserPlan = Boolean(quota?.paid)
     const runIsActive = sessionState === 'queued' || sessionState === 'connecting' || sessionState === 'live'
+    const metricEvent = sessionState === 'ended' ? stoppedRunRef.current ? 'Stopped' : 'Completed' : sessionState === 'failed' ? 'Failed' : compactBrowserEvent(events[0] || sessionStateLabel(sessionState))
+    const runMetrics = { ...streamStats, capacity, event: metricEvent }
     useEffect(() => {
         if (!runIsActive) {
             setStreamUrl('')
@@ -518,6 +521,8 @@ export default function BrowserPageClient({ initialData, resultId, resultRunId }
             consoleEvents,
             providerConsoleEvents,
             capacity,
+            streamStats,
+            metricEvent,
         }), null, 2)], { type: 'application/json' })
         const url = URL.createObjectURL(blob)
         const link = document.createElement('a')
@@ -525,7 +530,7 @@ export default function BrowserPageClient({ initialData, resultId, resultRunId }
         link.download = `browser-sandbox-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
         link.click()
         URL.revokeObjectURL(url)
-    }, [activeUrl, capacity, captures, consoleEvents, providerConsoleEvents, events, normalizedTarget, selectedProfile, sessionState, socketState, summary])
+    }, [activeUrl, capacity, captures, consoleEvents, providerConsoleEvents, events, normalizedTarget, selectedProfile, sessionState, socketState, summary, streamStats, metricEvent])
 
     const saveReport = useCallback(async (automatic = false) => {
         if (!currentRunId || !captures.length) return
@@ -554,6 +559,8 @@ export default function BrowserPageClient({ initialData, resultId, resultRunId }
                         consoleEvents,
                         providerConsoleEvents,
                         capacity,
+                        streamStats,
+                        metricEvent,
                     }),
                 }),
             })
@@ -578,7 +585,7 @@ export default function BrowserPageClient({ initialData, resultId, resultRunId }
             setShareStatus('failed')
             setShareError(error instanceof Error ? error.message : 'Could not save the report. Try again.')
         }
-    }, [activeUrl, capacity, captures, consoleEvents, providerConsoleEvents, currentRunId, events, normalizedTarget, selectedProfile, sessionState, socketState, summary])
+    }, [activeUrl, capacity, captures, consoleEvents, providerConsoleEvents, currentRunId, events, normalizedTarget, selectedProfile, sessionState, socketState, summary, streamStats, metricEvent])
 
     useEffect(() => {
         if (sessionState !== 'ended' || !currentRunId || !captures.length) return
@@ -1436,10 +1443,7 @@ export default function BrowserPageClient({ initialData, resultId, resultRunId }
                                 }}>{typeof navigator !== 'undefined' && typeof navigator.share === 'function' ? 'Share link' : 'Copy link'}</button>
                             </div> : null}
                             {shareError ? <p role='alert' className='text-sm text-ui-danger'>{shareError}</p> : null}
-                            <div data-browser-status className='flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ui-muted sm:justify-end'>
-                                <span aria-label='Browser capacity' title={sessionState === 'queued' ? queueCopy(capacity) : 'Active browser sessions'}>{capacity?.activeSessions ?? 0}/{capacity?.maxSessions ?? 100}</span>
-                                <span>{sessionState === 'ended' ? stoppedRunRef.current ? 'Stopped' : 'Completed' : sessionState === 'failed' ? 'Failed' : compactBrowserEvent(events[0] || sessionStateLabel(sessionState))}{streamStats.fps !== undefined ? ` · ${Math.round(streamStats.fps)} FPS` : ''}{streamStats.latencyMs !== undefined ? <> · <span title='Ping' aria-label={`Ping: ${Math.round(streamStats.latencyMs)} milliseconds`}>{Math.round(streamStats.latencyMs)}ms</span></> : null}</span>
-                            </div>
+                            {runIsActive ? <div data-browser-status className='sm:self-end' title={sessionState === 'queued' ? queueCopy(capacity) : undefined}><BrowserRunMetrics metrics={runMetrics} /></div> : null}
                         </div>
                     </div>
                 </header>
@@ -1527,7 +1531,7 @@ export default function BrowserPageClient({ initialData, resultId, resultRunId }
 
                         </div>
                         <div className='mt-4 grid min-w-0 gap-4'>
-                            <EvidenceWorkspace captures={captures} profile={selectedProfile} target={normalizedTarget} summary={summary} consoleEvents={consoleEvents} />
+                            <EvidenceWorkspace metrics={!runIsActive ? runMetrics : undefined} captures={captures} profile={selectedProfile} target={normalizedTarget} summary={summary} consoleEvents={consoleEvents} />
                             <details className='rounded-lg border border-ui-border p-3'><summary className='cursor-pointer text-sm font-semibold'>Analyst notes and captures</summary><div className='mt-3 grid min-w-0 gap-4 xl:grid-cols-2'>
                                 <AnalystSummary summary={summary} captures={captures} />
                                 <CaptureTimeline captures={captures} />
@@ -1934,12 +1938,14 @@ function AnalystSummary({ summary, captures }: { summary: ReturnType<typeof buil
 }
 
 function EvidenceWorkspace({
+    metrics,
     captures,
     profile,
     target,
     summary,
     consoleEvents,
 }: {
+    metrics?: RunMetrics
     captures: Capture[]
     profile: SandboxProfile
     target: string
@@ -1967,6 +1973,7 @@ function EvidenceWorkspace({
             </div>
             <div className='grid gap-2 p-3'>
                 <EvidencePanel title='Statistics'>
+                    {metrics ? <div className='mb-3'><BrowserRunMetrics metrics={metrics} /></div> : null}
                     <div className='grid gap-2 text-xs text-ui-muted sm:grid-cols-2'>
                         <EvidenceFact label='Final URL' value={summary.urlTimeline.at(-1)?.url || latestPage?.url || 'unknown'} mono />
                         <EvidenceFact label='URL states' value={String(summary.urlTimeline.length || pageCaptures.length || 0)} />
@@ -2404,6 +2411,8 @@ function buildExportReport(input: {
     consoleEvents: string[]
     providerConsoleEvents: string[]
     capacity: SandboxCapacity | null
+    streamStats: StreamStats
+    metricEvent: string
 }) {
     return {
         exportedAt: new Date().toISOString(),
@@ -2413,6 +2422,7 @@ function buildExportReport(input: {
             run: input.sessionState,
             connection: input.socketState,
             capacity: input.capacity,
+            metrics: { ...input.streamStats, event: input.metricEvent },
         },
         profile: input.profile,
         analystSummary: {

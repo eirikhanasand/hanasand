@@ -2,6 +2,7 @@
 
 import SiteNetworkDetails, { type SiteNetwork } from '../SiteNetworkDetails'
 import Link from 'next/link'
+import BrowserRunMetrics, { type RunMetrics } from '../BrowserRunMetrics'
 import BrowserDebug from '../BrowserDebug'
 import BrowserHistory from '../BrowserHistory'
 import { hasSuspiciousFindings, reportMarkdown } from './presentation'
@@ -18,7 +19,7 @@ type BrowserReport = {
     exportedAt?: string
     consoleEvents?: string[]
     providerConsoleEvents?: string[]
-    status?: { run?: string; connection?: string; capacity?: { activeSessions?: number; maxSessions?: number; queuedSessions?: number; queuePosition?: number } }
+    status?: { metrics?: RunMetrics; run?: string; connection?: string; capacity?: { activeSessions?: number; maxSessions?: number; queuedSessions?: number; queuePosition?: number } }
     captures?: Array<{
         kind?: string
         label?: string
@@ -117,7 +118,6 @@ export default function BrowserReportPageClient({ runId = '', token = '', result
                         <span className='rounded border border-ui-border bg-ui-raised px-2 py-1'>{/^Review required/i.test(analystReport.verdict || '') ? suspicious ? 'Suspicious activity observed' : 'No signs of suspicious activity.' : analystReport.verdict || 'Verdict unavailable'}</span>
                         {report.status?.run ? <span className='rounded border border-ui-border bg-ui-raised px-2 py-1'>Run {report.status.run}</span> : null}
                         {report.status?.connection ? <span className='rounded border border-ui-border bg-ui-raised px-2 py-1'>Connection {report.status.connection}</span> : null}
-                        {report.status?.capacity ? <span className='rounded border border-ui-border bg-ui-raised px-2 py-1'>Capacity {report.status.capacity.activeSessions || 0}/{report.status.capacity.maxSessions || '?'}{report.status.capacity.queuePosition ? ` · queue #${report.status.capacity.queuePosition}` : ''}</span> : null}
                         {report.exportedAt ? <span className='rounded border border-ui-border bg-ui-raised px-2 py-1'>Exported {report.exportedAt}</span> : null}
                     </div>
                 </header>
@@ -265,6 +265,9 @@ export default function BrowserReportPageClient({ runId = '', token = '', result
                         </ReportPanel>
                     </div>
                     <aside className='grid content-start gap-4'>
+                        <ReportPanel title='Statistics'>
+                            <BrowserRunMetrics metrics={{ ...report.status?.metrics, event: report.status?.metrics?.event || report.status?.run, capacity: report.status?.capacity }} />
+                        </ReportPanel>
                         <ReportPanel title='Evidence checklist'>
                             <ReportList items={Object.entries(analystReport.evidenceChecklist || {}).map(([key, value]) => `${key}: ${value}`)} empty='No checklist saved.' />
                         </ReportPanel>
