@@ -13,6 +13,13 @@ spec.loader.exec_module(shrink)
 
 
 class ShrinkTests(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        lock = patch.object(shrink, 'DEPLOY_LOCK', Path(directory.name) / 'deploy.lock')
+        lock.start()
+        self.addCleanup(lock.stop)
+
     def inventory(self, **extra):
         return {'database_bytes': shrink.THRESHOLD + 1, 'replica': False, 'busy': False,
                 'tables': [{'name': 'traffic_events', 'bytes': 100}, {'name': 'service_logs', 'bytes': 200}], **extra}
@@ -61,6 +68,13 @@ class ShrinkTests(unittest.TestCase):
             self.assertEqual(saved['status'], 'failed')
             self.assertIn('last_attempt', saved)
             self.assertNotIn('observed_relation_decrease_bytes', saved)
+
+    def test_active_deployment_prevents_any_database_work(self):
+        with tempfile.TemporaryDirectory() as directory, shrink.DEPLOY_LOCK.open('a') as lock:
+            shrink.fcntl.flock(lock, shrink.fcntl.LOCK_EX | shrink.fcntl.LOCK_NB)
+            with patch.object(shrink, 'sql') as sql:
+                self.assertEqual(shrink.attempt(Path(directory) / 'status.json'), {'status': 'maintenance_busy'})
+                sql.assert_not_called()
 
     def test_no_data_deletion_or_unbounded_rewrite(self):
         script = shrink.vacuum_script('traffic_events')

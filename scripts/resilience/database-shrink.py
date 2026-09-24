@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Bounded physical tail reclamation; never deletes live rows or rewrites tables."""
 import argparse
+from contextlib import ExitStack
 import fcntl
 import json
 import os
@@ -14,6 +15,7 @@ COOLDOWN = 3600
 TABLE_COOLDOWN = 6 * 3600
 TABLES = ('traffic_events', 'mill_log_dimensions', 'service_logs', 'mill_events')
 STATE = Path('/home/hanasand/resilience/database-shrink/status.json')
+DEPLOY_LOCK = Path('/tmp/hanasand-frontend-deploy.lock')
 BUSY_SQL = """EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid <> pg_backend_pid()
   AND (application_name = 'pg_dump' AND xact_start IS NOT NULL
     OR state = 'active' AND query ~* '^\\s*(VACUUM|REINDEX|CLUSTER)\\s'))
@@ -98,11 +100,13 @@ def save(path, state):
 
 def attempt(path=STATE, check_only=False):
     path.parent.mkdir(parents=True, exist_ok=True)
-    with (path.parent / 'maintenance.lock').open('a') as lock:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            return {'status': 'maintenance_busy'}
+    with ExitStack() as stack:
+        for lock_path in (path.parent / 'maintenance.lock', DEPLOY_LOCK):
+            lock = stack.enter_context(lock_path.open('a'))
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return {'status': 'maintenance_busy'}
         state = json.loads(path.read_text()) if path.exists() else {}
         now = time.time()
         inventory = sql(INVENTORY_SQL)[0]
