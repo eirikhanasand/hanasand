@@ -1,6 +1,6 @@
 import { readFile, lstat } from 'node:fs/promises'
 import { createPrivateKey, sign } from 'node:crypto'
-import type { AtomicEventGroup, LogEvent } from './core'
+import type { AtomicEvents, LogEvent } from './core'
 import { matchesReadinessFact, readinessCanonical, readinessRole, readinessRoles, readinessChainPayload } from '../../api/src/utils/mill/analyzeReadinessAudit'
 
 const trustedContext = new WeakSet<object>()
@@ -20,7 +20,7 @@ export function markReadinessContext(event: LogEvent, attrs: Record<string, stri
     trustedContext.add(event)
 }
 
-export function signReadinessChain(events: LogEvent[], fact: unknown, key: ReturnType<typeof createPrivateKey>): AtomicEventGroup | undefined {
+export function signReadinessChain(events: LogEvent[], fact: unknown, key: ReturnType<typeof createPrivateKey>): AtomicEvents | undefined {
     if (events.some(event => !trustedContext.has(event) || event.metadata?.readiness_execution) || key.asymmetricKeyType !== 'ed25519') return
     const payload = readinessChainPayload(events, fact as any)
     if (!payload) return
@@ -30,7 +30,7 @@ export function signReadinessChain(events: LogEvent[], fact: unknown, key: Retur
 }
 
 // A missing/malformed key, incomplete chain or native observation preserves originals.
-export async function* attestReadinessAudit(events: AsyncIterable<LogEvent>, root: string, host: string): AsyncGenerator<LogEvent | AtomicEventGroup> {
+export async function* attestReadinessAudit(events: AsyncIterable<LogEvent>, root: string, host: string): AsyncGenerator<LogEvent | AtomicEvents> {
     const pending: LogEvent[] = []
     let overflow = false
     try {
