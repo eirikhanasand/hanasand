@@ -104,7 +104,7 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
             link('Helpdesk', '/helpdesk', isAdmin),
         ]),
         group('Organization', [
-            link('Organization Overview', '/organizations'),
+            link('Overview', '/organizations'),
             group('Settings & billing', [
                 link('Organization Settings', '/organizations/settings'),
                 link('Privacy & Retention', '/organizations/privacy'),
@@ -121,16 +121,16 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
                 link('Delivery History', '/organizations/delivery'),
             ]),
             group('Monitoring & activity', [
-                link('Organization Watchlists', '/organizations/watchlists'),
+                link('Watchlists', '/organizations/watchlists'),
                 link('Alerts & Cases', '/organizations/alerts'),
                 link('Activity', '/organizations/activity'),
             ]),
         ]),
         group('Administration', [
-            link('All Organizations', '/management/organizations', canManageOrganizations),
-            link('Platform Users', '/management/users', isAdmin),
-            link('Platform Roles', '/management/roles', isAdmin),
-            link('System Audit Log', '/management/audit', isAdmin),
+            link('Organizations', '/management/organizations', canManageOrganizations),
+            link('Users', '/management/users', isAdmin),
+            link('Roles', '/management/roles', isAdmin),
+            link('Audit Log', '/management/audit', isAdmin),
         ]),
         group('Resources', [link('API Docs', '/api'), link('OpenAPI JSON', '/api/openapi')]),
         group('Account', [
@@ -138,7 +138,7 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
             link('Security', `/profile/${id}/security`),
             link('Sessions', `/profile/${id}/sessions`),
             link('Certificates', `/profile/${id}/certificates`),
-            link('My Support Tickets', `/profile/${id}/support`),
+            link('Tickets', `/profile/${id}/support`),
         ]),
     ]
     const permitted = (items: NavigationItem[]): NavigationItem[] => items
