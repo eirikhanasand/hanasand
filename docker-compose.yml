@@ -450,6 +450,8 @@ services:
       - -c
       - shared_buffers=${DB_SHARED_BUFFERS:-32GB}
       - -c
+      - track_activity_query_size=64kB
+      - -c
       - effective_cache_size=48GB
       - -c
       - work_mem=16MB
