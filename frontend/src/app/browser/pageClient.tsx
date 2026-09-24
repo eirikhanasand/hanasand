@@ -1,5 +1,6 @@
 'use client'
 
+import SiteNetworkDetails, { type SiteNetwork } from './SiteNetworkDetails'
 import BrowserDebug from './BrowserDebug'
 import BrowserHistory from './BrowserHistory'
 import BrowserReportPageClient from './report/pageClient'
@@ -87,7 +88,6 @@ type SandboxWebCrackLoad = {
     action?: string
     reason?: string
 }
-type SiteNetwork = { url: string; ip: string; provider?: string | null; city?: string | null; country?: string | null }
 type SandboxNetworkSummary = {
     site?: SiteNetwork
     requestCount?: number
@@ -458,7 +458,7 @@ export default function BrowserPageClient({ initialData, resultId, resultRunId }
     const activeTool = useMemo(() => selectedProfile.tools.find(tool => tool.id === activeSandboxTab), [activeSandboxTab, selectedProfile.tools])
     const activeToolCapture = activeTool ? selectToolCapture(toolCaptures, activeTool, normalizedTarget) : undefined
     const activeViewportImage = activeTool ? activeToolCapture?.image : activeImage || latestPageImage
-    const siteNetwork = captures.find(capture => capture.networkSummary?.site && historyDomainKey(capture.networkSummary.site.url) === historyDomainKey(activeUrl || normalizedTarget))?.networkSummary?.site
+    const siteNetwork = captures.findLast(capture => capture.networkSummary?.site && historyDomainKey(capture.networkSummary.site.url) === historyDomainKey(activeUrl || normalizedTarget))?.networkSummary?.site
     const viewportFrame = streamUrl ? streamFrame || browserMetadata : activeToolCapture?.frameWidth && activeToolCapture?.frameHeight ? { width: activeToolCapture.frameWidth, height: activeToolCapture.frameHeight } : activeFrame
     const runRemainingSeconds = runTiming ? Math.max(0, Math.ceil((new Date(runTiming.expiresAt).getTime() - clockNow) / 1000)) : 0
     const paidBrowserPlan = Boolean(quota?.paid)
@@ -1612,7 +1612,7 @@ function SandboxTabStrip({
                 status=''
                 onClick={() => onSelect('browser')}
             /></h1>
-            {[siteNetwork?.ip, siteNetwork?.provider, [siteNetwork?.city, siteNetwork?.country].filter(Boolean).join(', ')].filter(Boolean).map(value => <span key={value} className='text-xs text-ui-muted'>· {value}</span>)}
+            <SiteNetworkDetails site={siteNetwork} />
             {tools.map(tool => {
                 const capture = selectToolCapture(toolCaptures, tool, target)
                 const status = providerTabStatus(capture, capture?.toolAnalysis)

@@ -1,5 +1,6 @@
 'use client'
 
+import SiteNetworkDetails, { type SiteNetwork } from '../SiteNetworkDetails'
 import Link from 'next/link'
 import BrowserDebug from '../BrowserDebug'
 import BrowserHistory from '../BrowserHistory'
@@ -9,6 +10,7 @@ import { useEffect, useMemo, useState } from 'react'
 type NetworkRequestRow = { url?: string; method?: string; status?: number; failure?: string; host?: string; mimeType?: string; durationMs?: number; initiator?: string; ip?: string; asn?: string; port?: number; protocol?: string; tlsSubject?: string; tlsIssuer?: string; tlsValidFrom?: number; tlsValidTo?: number }
 
 type BrowserReport = {
+    siteNetwork?: SiteNetwork
     runId?: string
     runs?: Array<{ id: string; startedAt: string; status: string }>
     target?: string
@@ -109,7 +111,7 @@ export default function BrowserReportPageClient({ runId = '', token = '', result
                         {onRerun && report.target ? <div className='flex flex-wrap gap-2'>{clientId ? <BrowserHistory clientId={clientId} /> : null}<button type='button' onClick={() => onRerun(report.target!, true)} className='rounded-md border border-ui-border px-3 py-2 text-sm font-semibold hover:border-ui-primary'>Quick run</button><button type='button' onClick={() => onRerun(report.target!)} className='rounded-md border border-ui-border px-3 py-2 text-sm font-semibold hover:border-ui-primary'>Run again</button></div> : null}
                     </div>
                     {report.runs && report.runs.length > 1 ? <label className='mt-3 flex flex-wrap items-center gap-2 text-sm'>Run<select aria-label='Saved run' className='rounded-md border border-ui-border bg-ui-canvas p-2' value={report.runId} onChange={event => setSelectedRun(event.target.value)}>{report.runs.map(run => <option key={run.id} value={run.id}>{new Date(run.startedAt).toLocaleString()} · {run.status}</option>)}</select></label> : null}
-                    <h1 className='mt-2 break-all text-2xl font-semibold'>{report.target || 'Saved browser run'}</h1>
+                    <div className='mt-2 flex flex-wrap items-center gap-2'><h1 className='break-all text-2xl font-semibold'>{report.target || 'Saved browser run'}</h1><SiteNetworkDetails site={report.siteNetwork} /></div>
                     <p className='mt-2 break-all font-mono text-xs text-ui-muted'>Final URL: {report.finalUrl || report.target || 'unknown'}</p>
                     <div className='mt-3 flex flex-wrap gap-2 text-xs'>
                         <span className='rounded border border-ui-border bg-ui-raised px-2 py-1'>{/^Review required/i.test(analystReport.verdict || '') ? suspicious ? 'Suspicious activity observed' : 'No signs of suspicious activity.' : analystReport.verdict || 'Verdict unavailable'}</span>

@@ -101,6 +101,12 @@ try {
     await loading.waitFor({ state: 'detached' })
     assert.equal(await page.getByRole('tablist').count(), 1)
     await page.evaluate(image => window.deliver({ type: 'frame', image, width: 1280, height: 720, url: 'https://example.com', reason: 'load', networkSummary: { requestCount: 125, uniqueDomainCount: 18, failedCount: 0 } }), image)
+    await page.evaluate(() => window.deliver({ type: 'site_network', site: { url: 'https://example.com', ip: '1.1.1.1', country: 'Australia', country_code: 'AU' } }))
+    const ipLink = page.getByRole('link', { name: '1.1.1.1 on VirusTotal (opens in a new tab)' })
+    assert.equal(await ipLink.getAttribute('href'), 'https://www.virustotal.com/gui/ip-address/1.1.1.1')
+    assert.equal(await ipLink.getAttribute('target'), '_blank')
+    assert.equal(await ipLink.getByRole('img', { name: 'Australia' }).textContent(), '🇦🇺')
+
     await page.locator('summary').filter({ hasText: /^Network \/ requests/ }).getByText('125', { exact: true }).waitFor()
     assert.equal(await page.getByText('No high-signal malicious pattern was extracted from the rendered page yet.', { exact: true }).count(), 0)
     await page.evaluate(() => {

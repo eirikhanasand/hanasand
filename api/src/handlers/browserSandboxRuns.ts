@@ -1,3 +1,4 @@
+import { sessionNetwork } from '../utils/auth/sessionNetwork.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { createHash, randomUUID } from 'node:crypto'
 import run, { withTransaction } from '#db'
@@ -408,7 +409,13 @@ export async function getBrowserResult(req: FastifyRequest<{ Params: { id: strin
         if (!selected) return res.status(404).send({ error: 'Result not found or unavailable to this account.' })
         const stored = await run('SELECT metadata FROM browser_runs WHERE id = $1', [selected.id])
         const evidence = await run('SELECT payload FROM browser_run_evidence WHERE run_id = $1 ORDER BY id', [selected.id])
-        return res.header('cache-control', 'private, no-store').send(buildStoredBrowserReport(selected, stored.rows[0]?.metadata?.report, evidence.rows.map(row => row.payload), rows.rows))
+        const report = buildStoredBrowserReport(selected, stored.rows[0]?.metadata?.report, evidence.rows.map(row => row.payload), rows.rows)
+        // Legacy captures retain the observed IP; enrich locally without resolving the domain again.
+        if (report.siteNetwork?.ip && !report.siteNetwork.country_code) {
+            const location = await sessionNetwork(report.siteNetwork.ip).catch(() => null)
+            report.siteNetwork = { ...report.siteNetwork, ...location?.network }
+        }
+        return res.header('cache-control', 'private, no-store').send(report)
     } catch (error) {
         req.log.error(error)
         return res.status(500).send({ error: 'Could not load the saved browser result.' })
@@ -425,6 +432,8 @@ export function buildStoredBrowserReport(selected: Record<string, any>, saved: a
     const logs = (provider: boolean) => events.filter(event => ['console', 'pageerror'].includes(event.type) && (event.source === 'provider') === provider)
         .map(event => `${event.name ? `[${event.name}] ` : ''}[${event.level || (event.type === 'pageerror' ? 'error' : 'log')}] ${event.text || event.message || ''}${event.url ? ` (${event.url}${event.line ? `:${event.line}` : ''})` : ''}`)
     const latest = [...events].reverse().find(event => event.networkSummary)?.networkSummary
+    const latestSite = latest?.site
+    const storedSite = [...events].reverse().find(event => event.networkSummary?.site?.ip === latestSite?.ip && event.networkSummary?.site?.country_code)?.networkSummary?.site
     const pageCaptures = captures.filter(capture => capture.kind === 'page')
     const providerCaptures = new Map<string, Record<string, any>>()
     for (const event of events.filter(event => event.type === 'tool_capture')) providerCaptures.set(event.id || event.name, event)
@@ -440,6 +449,7 @@ export function buildStoredBrowserReport(selected: Record<string, any>, saved: a
     return {
         ...saved,
         analystSummary: saved?.analystSummary || { narrative: `Loaded ${selected.target} and captured ${pageCaptures.length} screenshots.` },
+        siteNetwork: (latestSite ? { ...latestSite, ...storedSite } : undefined) || saved?.siteNetwork || saved?.captures?.findLast((capture: any) => capture.networkSummary?.site)?.networkSummary.site,
         target: selected.target,
         finalUrl: captures.filter(capture => capture.kind === 'page').at(-1)?.url || saved?.finalUrl || selected.target,
         status: { ...saved?.status, run: selected.status },

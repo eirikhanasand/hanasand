@@ -86,3 +86,15 @@ test('full history includes repeated URLs, paginates and keeps client ownership 
     await getBrowserRuns({ query: { clientId: 'history-test-client', history: 'all', offset: '-1' }, log: { error: console.error } } as any, invalid as any)
     expect(invalid.code).toBe(400)
 })
+
+ test('saved location follows the observed IP and keeps enrichment through later network events', () => {
+    const first = { url: 'https://example.com', ip: '1.1.1.1', country: 'Australia', country_code: 'AU' }
+    const next = { url: first.url, ip: '8.8.8.8', country: 'United States', country_code: 'US' }
+    const events = [
+        { type: 'frame', networkSummary: { site: first } },
+        { type: 'frame', networkSummary: { site: next } },
+        { type: 'downloads', networkSummary: { site: { url: next.url, ip: next.ip } } },
+    ]
+    expect(buildStoredBrowserReport(records[0], {}, events, []).siteNetwork).toEqual(next)
+    expect(buildStoredBrowserReport(records[0], {}, events.slice(0, 1), []).siteNetwork).toEqual(first)
+})
