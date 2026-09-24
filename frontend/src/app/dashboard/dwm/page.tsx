@@ -19,7 +19,10 @@ export default async function DashboardDwmPage({
     const token = cookieStore.get('access_token')?.value
     if (!identityId || !token) redirect('/login?path=%2Fdwm')
 
-    if (firstParam(params?.panel) === 'actions') redirect('/dwm/actions')
+    if (firstParam(params?.panel) === 'actions') {
+        const sharedOrg = firstParam(params?.org) || firstParam(params?.organizationId) || firstParam(params?.orgId)
+        redirect(sharedOrg ? `/dwm/actions?org=${encodeURIComponent(sharedOrg)}` : '/dwm/actions')
+    }
 
     const organizationId = await activeOrganizationId()
     if (firstParam(params?.panel) === 'alerts') {
