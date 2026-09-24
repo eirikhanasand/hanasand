@@ -1,6 +1,6 @@
 import { readFile, lstat } from 'node:fs/promises'
 import { createPrivateKey, sign } from 'node:crypto'
-import type { LogEvent } from './core'
+import type { AtomicEventGroup, LogEvent } from './core'
 import { matchesReadinessFact, readinessCanonical, readinessRole, readinessRoles, readinessChainPayload } from '../../api/src/utils/mill/analyzeReadinessAudit'
 
 const trustedContext = new WeakSet<object>()
@@ -20,17 +20,17 @@ export function markReadinessContext(event: LogEvent, attrs: Record<string, stri
     trustedContext.add(event)
 }
 
-export function signReadinessChain(events: LogEvent[], fact: unknown, key: ReturnType<typeof createPrivateKey>): LogEvent[] | undefined {
+export function signReadinessChain(events: LogEvent[], fact: unknown, key: ReturnType<typeof createPrivateKey>): AtomicEventGroup | undefined {
     if (events.some(event => !trustedContext.has(event) || event.metadata?.readiness_execution) || key.asymmetricKeyType !== 'ed25519') return
     const payload = readinessChainPayload(events, fact as any)
     if (!payload) return
     const ordered = readinessRoles.map(role => events.find(event => readinessRole(event) === role)!)
-    return ordered.map((event, index) => index ? event : { ...event, metadata: { ...event.metadata, readiness_execution: { ...payload,
-        signature: sign(null, Buffer.from(readinessCanonical(payload)), key).toString('base64') } as any } })
+    return { atomic: true, events: ordered.map((event, index) => index ? event : { ...event, metadata: { ...event.metadata, readiness_execution: { ...payload,
+        signature: sign(null, Buffer.from(readinessCanonical(payload)), key).toString('base64') } as any } }) }
 }
 
 // A missing/malformed key, incomplete chain or native observation preserves originals.
-export async function* attestReadinessAudit(events: AsyncIterable<LogEvent>, root: string, host: string): AsyncGenerator<LogEvent> {
+export async function* attestReadinessAudit(events: AsyncIterable<LogEvent>, root: string, host: string): AsyncGenerator<LogEvent | AtomicEventGroup> {
     const pending: LogEvent[] = []
     let overflow = false
     try {
@@ -67,7 +67,8 @@ export async function* attestReadinessAudit(events: AsyncIterable<LogEvent>, roo
             const signed = signReadinessChain(matches, fact, key)
             if (!signed) continue
             for (const event of matches) used.add(event)
-            for (const event of signed) yield event
+            // Transport must deliver the authenticated originals together, including retries.
+            yield signed
         } catch {}
     }
     for (const event of pending) if (!used.has(event)) yield event

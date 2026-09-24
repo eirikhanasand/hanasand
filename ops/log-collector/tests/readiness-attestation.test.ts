@@ -16,8 +16,10 @@ test('raw complete native chain signs once and verifies every member',()=>{
  configure();const {events,fact}=parsed()
  expect(readinessWrapperScript).toBe(observedScript)
  const signed=signReadinessChain(events,fact,keys.privateKey)!
- expect(signed).toHaveLength(4);expect(eligibleReadinessChain(signed)).toBe(true)
- expect(signed.filter(event=>event.metadata.readiness_execution)).toHaveLength(1)
+ expect(signed.atomic).toBe(true)
+ expect(signed.events).toHaveLength(4);expect(eligibleReadinessChain(signed.events)).toBe(true)
+ expect(signed.events.filter(event=>event.metadata.readiness_execution)).toHaveLength(1)
+ expect(signed.events.map(event=>event.sourceEventId)).toEqual(events.map(event=>event.sourceEventId))
  expect(signReadinessChain(structuredClone(events),fact,keys.privateKey)).toBeUndefined()
  for(let index=0;index<4;index++)expect(signReadinessChain(events.filter((_,i)=>i!==index),fact,keys.privateKey)).toBeUndefined()
 })
