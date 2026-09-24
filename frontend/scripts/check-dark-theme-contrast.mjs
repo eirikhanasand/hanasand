@@ -21,7 +21,6 @@ const tiAuditPage = readFileSync(path.join(frontendRoot, 'src/app/dashboard/ti/a
 const errorNotice = readFileSync(path.join(frontendRoot, 'src/components/error/errorNotice.tsx'), 'utf8')
 const notesPage = readFileSync(path.join(frontendRoot, 'src/app/dashboard/notes/pageClient.tsx'), 'utf8')
 const dbBackupPage = readFileSync(path.join(frontendRoot, 'src/app/dashboard/db/backups/backupPage.tsx'), 'utf8')
-const tiDomainsPage = readFileSync(path.join(frontendRoot, 'src/app/dashboard/ti/domains/page.tsx'), 'utf8')
 const trafficClient = readFileSync(path.join(frontendRoot, 'src/app/dashboard/traffic/pageClient.tsx'), 'utf8')
 const logsClient = readFileSync(path.join(frontendRoot, 'src/app/dashboard/logs/pageClient.tsx'), 'utf8')
 const loadTestingClient = readFileSync(path.join(frontendRoot, 'src/app/dashboard/load-testing/pageClient.tsx'), 'utf8')
@@ -310,26 +309,6 @@ for (const required of [
 const bannedDbBackupPageColor = /\b(?:bg|text|border|ring|outline)-\[#|\b(?:bg|text|border|ring|outline)-(?:white|black)\//g
 if (bannedDbBackupPageColor.test(dbBackupPage)) {
     violations.push('database backup page should not use one-off color Tailwind utilities after palette migration')
-}
-
-for (const required of [
-    'bg-ui-panel',
-    'bg-ui-raised',
-    'border-ui-border',
-    'text-ui-text',
-    'text-ui-muted',
-    'text-ui-primary',
-    'text-ui-success',
-    'text-ui-warning',
-]) {
-    if (!tiDomainsPage.includes(required)) {
-        violations.push(`TI domains page should use shared palette class ${required}`)
-    }
-}
-
-const bannedTiDomainsPageColor = /\b(?:bg|text|border|ring|outline)-\[#|\b(?:bg|text|border|ring|outline)-(?:white|black)\//g
-if (bannedTiDomainsPageColor.test(tiDomainsPage)) {
-    violations.push('TI domains page should not use one-off color Tailwind utilities after palette migration')
 }
 
 for (const required of [

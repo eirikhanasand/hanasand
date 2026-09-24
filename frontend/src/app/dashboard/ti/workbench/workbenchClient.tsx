@@ -1522,7 +1522,6 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
     }
     if (selected.kind === 'source_capture') {
         const sourceHref = relatedLinkHref(selected, 'Open source')
-        const domainHref = relatedLinkHref(selected, 'Open domain')
         rows.push({
             id: 'open_capture_source',
             label: 'Open source',
@@ -1531,26 +1530,9 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             href: sourceHref,
             disabledReason: sourceHref ? undefined : 'Source capture drill-in requires /ti/sources/:id.',
         })
-        rows.push({
-            id: 'open_capture_domain',
-            label: 'Open domain',
-            detail: domainHref ? `${selected.matchedTerm} via ${domainHref}.` : 'Selected evidence did not include a domain context link.',
-            tone: domainHref ? 'ready' : 'blocked',
-            href: domainHref,
-            disabledReason: domainHref ? undefined : 'Domain drill-in requires /ti/domains/:domain.',
-        })
     }
     if (selected.kind === 'ti_domain') {
-        const domainHref = relatedLinkHref(selected, 'Open domain')
         const sourcesHref = relatedLinkHref(selected, 'Review sources')
-        rows.push({
-            id: 'open_domain_review',
-            label: 'Open domain',
-            detail: domainHref ? `${selected.matchedTerm || selected.company} via ${domainHref}.` : 'Selected domain item did not include a domain review link.',
-            tone: domainHref ? 'ready' : 'blocked',
-            href: domainHref,
-            disabledReason: domainHref ? undefined : 'Domain review requires /ti/domains/:domain.',
-        })
         rows.push({
             id: 'review_domain_sources',
             label: 'Review sources',

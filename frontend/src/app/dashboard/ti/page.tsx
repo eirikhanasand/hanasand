@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { Activity, AlertTriangle, ArrowRight, Camera, Clock3, DatabaseZap, ExternalLink, PlayCircle, Radar, Send, ShieldCheck, Webhook } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import { getTiEnrichmentOverview } from '@/utils/tiAdmin/enrichment'
-import { formatTiDate, getTiAdminOverview, sourceById, type TiAdminOverview } from '@/utils/tiAdmin/ops'
+import { formatTiDate, getTiAdminOverview, type TiAdminOverview } from '@/utils/tiAdmin/ops'
 import { evidenceStrengthLabel } from '@/utils/dwm/display'
 import ManualRunButton from './manualRunButton'
 import TiDataAvailability from './ti-data-availability'
@@ -29,7 +29,7 @@ export default async function TiAdminPage() {
     const currentActor = actorRows.find(actor => activeActorRun && (sameKey(actor.name) === sameKey(activeActorRun.actor_name) || sameKey(actor.id) === sameKey(activeActorRun.actor_key))) || actorRows[0]
     const latestDiscovery = enrichment.pipeline?.latestDiscoveries[0]
     const runQueries = [...new Set(sources.flatMap(source => source.domains).filter(domain => !domain.includes('only')))]
-    const actionItems = buildActionItems({ reviewDomains, candidateSources, staleSources, failedRuns, latestCapture })
+    const actionItems = buildActionItems({ candidateSources, staleSources, failedRuns, latestCapture })
 
     return (
         <DashboardPage>
@@ -183,38 +183,7 @@ export default async function TiAdminPage() {
                 </DashboardPanel>
             </div>
 
-            <div className='grid gap-4 xl:grid-cols-2'>
-                <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
-                    <PanelTitle title='Monitored entities' actionHref='/ti/domains' actionLabel='Entities' />
-                    <div className='overflow-x-auto'>
-                        <table className='min-w-full divide-y divide-ui-border text-sm'>
-                            <thead className='bg-ui-canvas text-left text-xs font-semibold uppercase text-ui-muted'>
-                                <tr>
-                                    <th className='px-4 py-3'>Entity</th>
-                                    <th className='px-4 py-3'>State</th>
-                                    <th className='px-4 py-3'>Results</th>
-                                    <th className='px-4 py-3'>Last seen</th>
-                                    <th className='px-4 py-3'>Sources</th>
-                                </tr>
-                            </thead>
-                            <tbody className='divide-y divide-ui-border bg-ui-panel'>
-                                {domains.map(domain => (
-                                    <tr key={domain.domain} className='hover:bg-ui-panel'>
-                                        <td className='px-4 py-4'>
-                                            <Link href={`/ti/domains/${encodeURIComponent(domain.domain)}`} className='font-semibold text-ui-text hover:text-ui-primary'>{domain.company}</Link>
-                                            <p className='mt-1 font-mono text-xs text-ui-muted'>{domain.domain}</p>
-                                        </td>
-                                        <td className='px-4 py-4'><StatusPill label={operationalStateLabel(domain.status)} tone={domain.status === 'review' ? 'watch' : domain.status === 'watching' ? 'ok' : 'neutral'} /></td>
-                                        <td className='px-4 py-3 font-semibold text-ui-text'>{domain.resultCount}</td>
-                                        <td className='whitespace-nowrap px-4 py-3 text-ui-muted'>{formatTiDate(domain.lastSeenAt)}</td>
-                                        <td className='px-4 py-3 text-ui-muted'>{domain.sourceIds.map(id => sourceById(overview, id)?.name || id).join(', ')}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </DashboardPanel>
-
+            <div>
                 <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
                     <PanelTitle title='Recent evidence' actionHref='/ti/sources' actionLabel='Evidence' />
                     <div className='overflow-x-auto'>
@@ -291,23 +260,13 @@ export default async function TiAdminPage() {
     )
 }
 
-function buildActionItems({ reviewDomains, candidateSources, staleSources, failedRuns, latestCapture }: {
-    reviewDomains: TiAdminOverview['domains']
+function buildActionItems({ candidateSources, staleSources, failedRuns, latestCapture }: {
     candidateSources: TiAdminOverview['sources']
     staleSources: TiAdminOverview['sources']
     failedRuns: TiAdminOverview['runs']
     latestCapture?: TiAdminOverview['captures'][number]
 }) {
     return [
-        ...reviewDomains.map(domain => ({
-            kind: 'domain',
-            priority: 'review',
-            tone: 'watch' as const,
-            title: domain.company,
-            reason: `${domain.resultCount} result${domain.resultCount === 1 ? '' : 's'} with linked sources for ${domain.domain}`,
-            state: `Last seen ${formatTiDate(domain.lastSeenAt)}`,
-            href: `/ti/domains/${encodeURIComponent(domain.domain)}`,
-        })),
         ...failedRuns.map(run => ({
             kind: 'run',
             priority: 'failed',

@@ -26,3 +26,9 @@ test('every dropdown has at most five entries, including long pinned lists', () 
     check([{ label: 'Pinned', items: pinned }])
     assert.deepEqual(navigationLinks(pinned).map(item => item.href), links.map(item => item.href))
 })
+
+test('feeds remain reachable without the removed collection targets entry', () => {
+    const links = navigationLinks(getDashboardNavigation({ id: 'admin', isAdmin: true, canManageSystem: true, canManageContent: true }))
+    assert.equal(links.filter(link => link.href === '/ti/sources').length, 1)
+    assert.equal(links.some(link => link.href?.startsWith('/ti/domains')), false)
+})

@@ -202,11 +202,6 @@ export async function getTiCollectionRunsPage(tenantId: string | null = null, pa
     return { runs, total: result.total, nextCursor: result.nextCursor, previousCursor: result.previousCursor, available: result.ok }
 }
 
-export async function getTiAdminDomain(domain: string) {
-    const decoded = decodeURIComponent(domain)
-    return (await getTiAdminOverview()).domains.find(item => item.domain === decoded) || null
-}
-
 export function sourceRuns(overview: TiAdminOverview, sourceId: string) {
     return overview.runs.filter(run => run.sourceId === sourceId)
 }

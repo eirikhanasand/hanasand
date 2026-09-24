@@ -48,10 +48,6 @@
     "/ti/control"
   ],
   [
-    "/dashboard/ti/domains",
-    "/ti/domains"
-  ],
-  [
     "/dashboard/ti/sources",
     "/ti/sources"
   ],
