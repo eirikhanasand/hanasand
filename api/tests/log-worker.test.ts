@@ -333,11 +333,11 @@ test('fresh arrivals are serviced between durable historical pages', async () =>
     const original = findings.persistMillEventFindings
     const hook = spyOn(findings, 'persistMillEventFindings').mockImplementation(async rows => {
         await original(rows)
-        if (checked.length === 50) priority.push({ ...makeLog('1001'), created_at: new Date().toISOString() })
+        if (checked.length === 200) priority.push({ ...makeLog('1001'), created_at: new Date().toISOString() })
     })
     try {
         await processStoredLogs()
-        expect(checked.indexOf('1001')).toBe(50)
+        expect(checked.indexOf('1001')).toBe(200)
         expect(checked).toHaveLength(251)
         expect(cursor.last_id).toBe('250')
     } finally { hook.mockRestore(); timer.mockRestore() }
