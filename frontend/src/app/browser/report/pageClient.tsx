@@ -4,7 +4,8 @@ import NetworkTable, { type NetworkRequestRow } from './NetworkTable'
 import ReportExport from './ReportExport'
 import SiteNetworkDetails, { type SiteNetwork } from '../SiteNetworkDetails'
 import Link from 'next/link'
-import BrowserRunMetrics, { type RunMetrics } from '../BrowserRunMetrics'
+import { type RunMetrics } from '../BrowserRunMetrics'
+import ReportStatistics from './ReportStatistics'
 import BrowserDebug from '../BrowserDebug'
 import BrowserHistory from '../BrowserHistory'
 import { hasSuspiciousFindings, reportMarkdown } from './presentation'
@@ -115,7 +116,8 @@ export default function BrowserReportPageClient({ runId = '', token = '', result
                 <header className='rounded-lg border border-ui-border bg-ui-panel p-4'>
                     <div className='flex flex-wrap items-center justify-between gap-3'>
                         <Link href='/browser' className='rounded-md border border-ui-border px-3 py-2 text-sm font-semibold text-ui-text hover:border-ui-primary'>Back to browser</Link>
-                        <div className='flex flex-col items-end gap-2'>
+                        <div className='flex flex-wrap items-center gap-2'>
+                            <ReportStatistics metrics={{ ...report.status?.metrics, event: report.status?.metrics?.event || report.status?.run, capacity: report.status?.capacity }} />
                             {onRerun && report.target ? <div className='flex flex-wrap gap-2'>{clientId ? <BrowserHistory clientId={clientId} /> : null}<button type='button' onClick={() => onRerun(report.target!, true)} className='rounded-md border border-ui-border px-3 py-2 text-sm font-semibold hover:border-ui-primary'>Quick run</button><button type='button' onClick={() => onRerun(report.target!)} className='rounded-md border border-ui-border px-3 py-2 text-sm font-semibold hover:border-ui-primary'>Run again</button></div> : null}
                             <ReportExport report={report} markdown={markdown} />
                         </div>
@@ -131,7 +133,7 @@ export default function BrowserReportPageClient({ runId = '', token = '', result
                     </div>
                 </header>
 
-                <section className='grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]'>
+                <section className='grid min-w-0 gap-4'>
                     <div className='grid gap-4'>
                         <ReportPanel title='Summary'>
                             <p className='text-sm leading-6 text-ui-muted'>{summary.narrative || 'No analyst summary was saved with this report.'}</p>
@@ -197,11 +199,6 @@ export default function BrowserReportPageClient({ runId = '', token = '', result
                             ].filter(Boolean).join(' · '))} empty='No script artifacts saved.' />
                         </ReportPanel>
 
-                    </div>
-                    <aside className='grid content-start gap-4'>
-                        <ReportPanel title='Statistics'>
-                            <BrowserRunMetrics metrics={{ ...report.status?.metrics, event: report.status?.metrics?.event || report.status?.run, capacity: report.status?.capacity }} />
-                        </ReportPanel>
                         {actions.length ? <ReportPanel title='Actions'>
                             <ReportList items={actions} empty='' />
                         </ReportPanel> : null}
@@ -217,7 +214,7 @@ export default function BrowserReportPageClient({ runId = '', token = '', result
                         {reportIndicators(report).length > 0 ? <ReportPanel title='Indicators'>
                             <pre className='max-h-72 overflow-auto whitespace-pre-wrap break-all rounded-md border border-ui-border bg-ui-canvas p-3 text-xs text-ui-text'>{reportIndicators(report).join('\n')}</pre>
                         </ReportPanel> : null}
-                    </aside>
+                    </div>
                 </section>
                 <BrowserDebug className='mt-4' indicatorCount={reportIndicators(report).length} logs={report.consoleEvents} />
             </section>
