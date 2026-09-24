@@ -20,13 +20,15 @@ const build = await Bun.build({ entrypoints: [entry], target: 'browser', outdir:
 } }] })
 assert(build.success, build.logs.join('\n'))
 let checks = 0, healthFails = false
-const pages: number[] = []
+const pages: string[] = []
 const server = Bun.serve({ port: 0, fetch(request) {
     const url = new URL(request.url)
     if (url.pathname === '/bundle.js') return new Response(Bun.file(build.outputs[0].path))
     if (url.pathname === '/api/db/health') { checks++; return Response.json({ ok: !healthFails }, { status: healthFails ? 503 : 200 }) }
     if (url.pathname === '/api/db/browse') {
-        const offset = Number(url.searchParams.get('cursor') || 0); pages.push(offset)
+        const cursor = url.searchParams.get('cursor') || '0'; pages.push(cursor)
+        if (cursor === '5') return Response.json({ rows: [], fields: ['id','value'], nextCursor: 'gap' })
+        const offset = cursor === 'gap' ? 5 : Number(cursor)
         return Response.json({ rows: Array.from({ length: Math.min(5, 13 - offset) }, (_, n) => ({ id: offset+n, value: 'sample' })), fields: ['id','value'], nextCursor: offset < 10 ? String(offset+5) : null })
     }
     return new Response('<html><head><style>.max-h-80{max-height:320px}.overflow-auto{overflow:auto}.h-px{height:1px}td{padding:8px} [hidden]{display:none}</style></head><body><div id="root"></div><script type="module" src="/bundle.js"></script></body></html>', { headers: { 'Content-Type': 'text/html' } })
@@ -54,7 +56,7 @@ try {
         await page.waitForTimeout(100)
     }
     await page.getByText('13 rows · End of preview').waitFor()
-    assert.deepEqual(pages, [0,5,10])
+    assert.deepEqual(pages, ['0','5','gap','10'])
     await page.clock.runFor(5100)
     await page.waitForFunction(() => document.body.textContent?.includes('Connected'))
     assert(checks >= 2)

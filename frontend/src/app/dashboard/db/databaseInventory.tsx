@@ -122,7 +122,7 @@ function RowPreview({ instance, database, item }: { instance: string, database: 
         const observer = new IntersectionObserver(entries => { if (entries.some(entry => entry.isIntersecting)) consume.current() }, { root: viewport.current, rootMargin: '80px' })
         observer.observe(sentinel.current)
         return () => observer.disconnect()
-    }, [busy, done, error, rows.length])
+    }, [busy, done, error, rows])
     return <div>
         <div ref={viewport} className='max-h-80 overflow-auto rounded border border-ui-border' tabIndex={0} aria-label={`${item.name} rows`}>
             <table className='min-w-full text-left text-xs'><thead className='sticky top-0 bg-ui-raised text-ui-muted'><tr>{fields.map(field => <th key={field} className='whitespace-nowrap px-3 py-2 font-medium'>{field}</th>)}</tr></thead><tbody className='divide-y divide-ui-border'>
