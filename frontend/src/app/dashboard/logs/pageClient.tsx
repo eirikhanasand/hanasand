@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
-import { Copy, ChevronDown, Search } from 'lucide-react'
+import { Copy, ChevronDown, Search, ListFilter, X } from 'lucide-react'
 import { retainEvents } from '@/utils/logs/retainEvents'
 import EventFeed from './eventFeed'
 import LogCatchupProgress, { type CatchupProgress } from './catchupProgress'
@@ -50,10 +50,27 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
     const [errors, setErrors] = useState(initialErrors)
     const [refresh, setRefresh] = useState(0)
     const [paged, setPaged] = useState(false)
+    const filterPanel = useRef<HTMLDivElement>(null)
+    const filterButton = useRef<HTMLButtonElement>(null)
+    const [filtersOpen, setFiltersOpen] = useState(false)
     const loadMore = useRef<(cursor: string) => void>(() => {})
     const editing = useRef(false)
     const pausedUpdates = useRef(false)
     const queryIdentity = useRef('')
+    useEffect(() => {
+        if (view === 'errors') return
+        const openFilters = (event: KeyboardEvent) => {
+            if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'j' || event.altKey || event.shiftKey || event.repeat || document.querySelector('dialog[open]')) return
+            event.preventDefault()
+            if (!filterPanel.current?.matches(':popover-open')) {
+                filterButton.current?.focus()
+                filterPanel.current?.showPopover()
+            }
+            filterPanel.current?.querySelector<HTMLInputElement | HTMLTextAreaElement>('input[type="search"]:enabled, textarea')?.focus()
+        }
+        window.addEventListener('keydown', openFilters)
+        return () => window.removeEventListener('keydown', openFilters)
+    }, [view])
     useEffect(() => {
         const finishSelection = () => { editing.current = false }
         window.addEventListener('pointerup', finishSelection)
@@ -139,32 +156,37 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
     const processingError = data?.processing?.last_error?.endsWith('Waiting for active log writes; will retry.') ? null : data?.processing?.last_error
     const commandChecksDelayed = pendingCommands?.oldest_queued_at && Date.parse(data?.generated_at || '') - Date.parse(pendingCommands.oldest_queued_at) >= 60_000
     const serviceOptions = [...new Set([...initialServices.map(item => item.service), ...(data?.services.map(item => item.service) || []), ...(service === 'all' ? [] : [service])])].sort()
+    const activeFilters = [service !== 'all', !advanced && !!search, !advanced && table !== 'Logs', advanced && !!appliedHql, hours !== '24', view !== 'realtime' && severity !== 'all'].filter(Boolean).length
     return <div className='grid min-w-0 gap-4'>
         <header className='flex flex-wrap items-center justify-between gap-3'>
             <div><h1 className='text-2xl font-semibold'>{view === 'dashboard' ? 'Logs' : view === 'realtime' ? 'Realtime' : view === 'errors' ? 'Errors' : 'Search logs'}</h1><p className='mt-1 text-sm text-ui-muted'>{view === 'realtime' ? 'High and critical events checked by Mill. Expand an event to investigate.' : view === 'errors' ? 'Application errors, response codes, and request details.' : 'Search structured events and investigate detections across your services and hosts.'}</p></div>
-            <nav aria-label='Log pages' className='flex flex-wrap gap-2'>{[['Dashboard', '/logs'], ['Realtime', '/logs/realtime'], ['Search', '/logs/search'], ['Errors', '/logs/errors'], ['Traffic', '/traffic']].map(([label, href]) => <Link key={href} href={href} aria-current={pathname === href || pathname === `/dashboard${href}` ? 'page' : undefined} className={`${fieldClass} ${pathname === href ? 'font-semibold text-ui-primary' : ''}`}>{label}</Link>)}</nav>
+            <nav aria-label='Log pages' className='flex flex-wrap gap-2'>{[['Dashboard', '/logs'], ['Realtime', '/logs/realtime'], ['Search', '/logs/search'], ['Errors', '/logs/errors'], ['Traffic', '/traffic']].map(([label, href]) => <Link key={href} href={href} aria-current={pathname === href || pathname === `/dashboard${href}` ? 'page' : undefined} className={`${fieldClass} ${pathname === href ? 'font-semibold text-ui-primary' : ''}`}>{label}</Link>)}{view !== 'errors' && <button ref={filterButton} type='button' popoverTarget='log-filters' aria-label='Filter logs' aria-expanded={filtersOpen} aria-controls='log-filters' aria-keyshortcuts='Meta+J Control+J' title='Filter logs (⌘J)' className={`${fieldClass} relative inline-flex items-center justify-center ${activeFilters ? 'border-ui-primary text-ui-primary' : ''}`}><ListFilter size={18} aria-hidden />{!!activeFilters && <span className='absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-ui-primary text-[10px] font-semibold text-ui-canvas'>{activeFilters}<span className='sr-only'> active filters</span></span>}</button>}</nav>
         </header>
         {error && <div role='alert' className='flex flex-wrap items-center justify-between gap-2 rounded-lg border border-ui-danger p-3 text-sm text-ui-danger'><span>{error}</span><button type='button' className={fieldClass} onClick={() => setRefresh(value => value + 1)}>Retry</button></div>}
         {view === 'errors' ? <><div className='flex items-center justify-between gap-3 text-xs text-ui-muted'><span role='status'>{busy ? 'Refreshing…' : copied ? 'Event copied' : 'Recent application errors'}</span><button type='button' className={fieldClass} disabled={busy} onClick={() => setRefresh(value => value + 1)}>Refresh errors</button></div><ErrorsPanel events={errors} expanded={expanded} onToggle={toggle} onCopy={event => void copy(event)} /></> : <>
-            <section className={`${dashboardPanelClass} grid gap-3 p-4`} aria-label='Log search' data-logs-toolbar>
-                <div className='flex min-w-0 items-center gap-3'>
-                    <label className='relative min-w-0 flex-1'><Search size={16} aria-hidden className='pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ui-muted' /><input type='search' aria-label='Search logs' placeholder='Search messages, commands, hosts…' value={search} onChange={event => setSearch(event.target.value)} disabled={advanced} className={`${fieldClass} h-11 w-full min-w-0 pl-9 disabled:opacity-50`} /></label>
-                    <label className={`${fieldClass} flex h-11 shrink-0 cursor-pointer items-center gap-2 ${advanced ? 'border-ui-primary bg-ui-primary/10 text-ui-primary' : ''}`}><input type='checkbox' checked={advanced} onChange={event => { setAdvanced(event.target.checked); if (event.target.checked) setAppliedHql(hql) }} className='size-4 accent-ui-primary' />HQL</label>
-                    {view === 'realtime' && <button type='button' onClick={togglePaused} className={`${fieldClass} h-11 shrink-0`}>{paused ? 'Resume' : 'Pause'}</button>}
+            <div ref={filterPanel} id='log-filters' popover='auto' role='dialog' aria-label='Log filters' onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); filterPanel.current?.hidePopover(); filterButton.current?.focus() } }} onToggle={event => { setFiltersOpen(event.newState === 'open'); if (event.newState === 'open') filterPanel.current?.querySelector<HTMLInputElement | HTMLTextAreaElement>('input[type="search"]:enabled, textarea')?.focus() }} className='fixed top-24 right-4 bottom-auto left-auto m-0 max-h-[calc(100dvh-7rem)] w-[calc(100%-2rem)] max-w-2xl overflow-y-auto rounded-xl border border-ui-border bg-ui-panel p-4 text-ui-text shadow-2xl' data-logs-toolbar>
+                <div className='mb-4 flex items-center justify-between'><h2 className='text-sm font-semibold'>Filter logs</h2><button type='button' popoverTarget='log-filters' popoverTargetAction='hide' aria-label='Close log filters' className='rounded-md p-1 text-ui-muted hover:bg-ui-raised hover:text-ui-text'><X size={18} aria-hidden /></button></div>
+                <div className='grid gap-3'>
+                    <div className='flex min-w-0 items-center gap-3'>
+                        <label className='relative min-w-0 flex-1'><Search size={16} aria-hidden className='pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ui-muted' /><input autoFocus={!advanced} type='search' aria-label='Search logs' placeholder='Search messages, commands, hosts…' value={search} onChange={event => setSearch(event.target.value)} disabled={advanced} className={`${fieldClass} h-11 w-full min-w-0 pl-9 pr-16 disabled:opacity-50`} /><kbd className='pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 rounded border border-ui-border bg-ui-raised px-1.5 py-0.5 font-sans text-xs text-ui-muted'>⌘J</kbd></label>
+                        <label className={`${fieldClass} flex h-11 shrink-0 cursor-pointer items-center gap-2 ${advanced ? 'border-ui-primary bg-ui-primary/10 text-ui-primary' : ''}`}><input type='checkbox' checked={advanced} onChange={event => { setAdvanced(event.target.checked); if (event.target.checked) setAppliedHql(hql) }} className='size-4 accent-ui-primary' />HQL</label>
+
+                    </div>
+                    <div className={'grid min-w-0 grid-cols-2 gap-3 '}>
+                        <select aria-label='Service' value={service} onChange={event => setService(event.target.value)} className={`${fieldClass} h-11 w-full min-w-0 truncate`} data-logs-service-filter><option value='all'>All services</option>{serviceOptions.map(value => <option key={value}>{value}</option>)}</select>
+                        {!advanced && <select aria-label='Log type' value={table} onChange={event => setTable(event.target.value)} className={`${fieldClass} h-11 w-full min-w-0`}>{logTables.map(value => <option key={value} value={value}>{value === 'Logs' ? 'All log types' : value}</option>)}</select>}
+                        <select aria-label='Time range' value={hours} onChange={event => setHours(event.target.value)} className={`${fieldClass} h-11 w-full min-w-0`}>{[['1','Last hour'],['24','Last 24 hours'],['168','Last 7 days'],['720','Last 30 days'],['2160','Last 90 days']].map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select>
+                        {view !== 'realtime' && <select aria-label='Severity' value={severity} onChange={event => setSeverity(event.target.value)} className={`${fieldClass} h-11 w-full min-w-0`}><option value='all'>All severities</option>{['low','medium','high','critical'].map(value => <option key={value}>{value}</option>)}</select>}
+                    </div>
+                    {advanced && <form onSubmit={event => { event.preventDefault(); setAppliedHql(hql); setRefresh(value => value + 1) }} className='grid gap-3 border-t border-ui-border pt-4'>
+                        <textarea autoFocus aria-label='HQL query' value={hql} onChange={event => setHql(event.target.value)} rows={3} spellCheck={false} className={`${fieldClass} min-w-0 font-mono`} />
+                        <button className='justify-self-start rounded-lg bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas'>Run query</button>
+                        {hql !== appliedHql && <p className='text-xs text-ui-warning'>Query edited. Run it to update the results.</p>}
+                        <details className='text-xs text-ui-muted'><summary className='cursor-pointer'>HQL syntax and tables</summary><p className='mt-2'>Tables: Logs, ProcessLogs, SigninLogs, ApplicationLogs, HttpLogs, SystemLogs. HQL (Hanasand Query Language) supports this subset: where, project, order by, take (1–500), summarize count() by. Conditions: ==, !=, &gt;, &gt;=, &lt;, &lt;=, contains, has, startswith, endswith, in, and, or, not, parentheses and ago(24h). Other operators are rejected.</p><p className='mt-2'>Put where before order by. After project or summarize, only take is supported. Put take last. Fields: {Object.keys(fieldNames).join(', ')}. The selected time range, service and severity filters always apply.</p><pre className='mt-2 whitespace-pre-wrap'>ProcessLogs | where CommandLine contains &quot;whoami&quot; | project TimeGenerated, Host, CommandLine</pre></details>
+                    </form>}
                 </div>
-                <div className={`grid min-w-0 grid-cols-2 gap-3 ${advanced && view === 'realtime' ? '' : advanced || view === 'realtime' ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}>
-                    <select aria-label='Service' value={service} onChange={event => setService(event.target.value)} className={`${fieldClass} h-11 w-full min-w-0 truncate`} data-logs-service-filter><option value='all'>All services</option>{serviceOptions.map(value => <option key={value}>{value}</option>)}</select>
-                    {!advanced && <select aria-label='Log type' value={table} onChange={event => setTable(event.target.value)} className={`${fieldClass} h-11 w-full min-w-0`}>{logTables.map(value => <option key={value} value={value}>{value === 'Logs' ? 'All log types' : value}</option>)}</select>}
-                    <select aria-label='Time range' value={hours} onChange={event => setHours(event.target.value)} className={`${fieldClass} h-11 w-full min-w-0`}>{[['1','Last hour'],['24','Last 24 hours'],['168','Last 7 days'],['720','Last 30 days'],['2160','Last 90 days']].map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select>
-                    {view !== 'realtime' && <select aria-label='Severity' value={severity} onChange={event => setSeverity(event.target.value)} className={`${fieldClass} h-11 w-full min-w-0`}><option value='all'>All severities</option>{['low','medium','high','critical'].map(value => <option key={value}>{value}</option>)}</select>}
-                </div>
-                {advanced && <form onSubmit={event => { event.preventDefault(); setAppliedHql(hql); setRefresh(value => value + 1) }} className='grid gap-3 border-t border-ui-border pt-4'>
-                    <textarea aria-label='HQL query' value={hql} onChange={event => setHql(event.target.value)} rows={3} spellCheck={false} className={`${fieldClass} min-w-0 font-mono`} />
-                    <button className='justify-self-start rounded-lg bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas'>Run query</button>
-                    {hql !== appliedHql && <p className='text-xs text-ui-warning'>Query edited. Run it to update the results.</p>}
-                    <details className='text-xs text-ui-muted'><summary className='cursor-pointer'>HQL syntax and tables</summary><p className='mt-2'>Tables: Logs, ProcessLogs, SigninLogs, ApplicationLogs, HttpLogs, SystemLogs. HQL (Hanasand Query Language) supports this subset: where, project, order by, take (1–500), summarize count() by. Conditions: ==, !=, &gt;, &gt;=, &lt;, &lt;=, contains, has, startswith, endswith, in, and, or, not, parentheses and ago(24h). Other operators are rejected.</p><p className='mt-2'>Put where before order by. After project or summarize, only take is supported. Put take last. Fields: {Object.keys(fieldNames).join(', ')}. The selected time range, service and severity filters always apply.</p><pre className='mt-2 whitespace-pre-wrap'>ProcessLogs | where CommandLine contains &quot;whoami&quot; | project TimeGenerated, Host, CommandLine</pre></details>
-                </form>}
-            </section>
+            </div>
+            {view === 'realtime' && <div className='flex justify-end'>{view === 'realtime' && <button type='button' onClick={togglePaused} className={`${fieldClass} h-11 shrink-0`}>{paused ? 'Resume' : 'Pause'}</button>}</div>}
             {processingError && <p role='alert' className='text-sm text-ui-danger'>Mill processing is delayed: {processingError}</p>}
             {commandChecksDelayed && <p role='status' className='text-sm text-ui-warning'>Command checks are delayed. {pendingCommands.has_more ? 'More than ' : ''}{pendingCommands.count.toLocaleString()} {pendingCommands.count === 1 ? 'command is' : 'commands are'} waiting; oldest received {new Date(pendingCommands.oldest_queued_at!).toLocaleString()}.</p>}
             <LogCatchupProgress progress={data?.processing?.catchup} catchingUp={!!data?.processing?.sources?.some(isCatchingUp)} now={data?.generated_at || new Date().toISOString()} stalled={!!processingError} />
