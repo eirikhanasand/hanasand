@@ -8,8 +8,9 @@ let connectionError = new Error('timeout exceeded when trying to connect')
 let queryFails = true
 const client = Object.assign(new EventEmitter(), { query: async () => { queries++; if (queryFails) throw failure; return { rows: [{ ok: true }] } }, release: (error?: Error) => { releasedWith = error } })
 const pool: { current?: EventEmitter, options?: { min: number, max: number, idleTimeoutMillis: number } } = {}
+const created: NonNullable<typeof pool.options>[] = []
 class Pool extends EventEmitter {
-    constructor(options: NonNullable<typeof pool.options>) { super(); pool.current = this; pool.options = options }
+    constructor(options: NonNullable<typeof pool.options>) { super(); pool.current = this; pool.options = options; created.push(options) }
     async connect() { attempts++; if (connectionFailures-- > 0) throw connectionError; return client }
 }
 mock.module('pg', () => ({ default: { Pool } }))
@@ -28,9 +29,12 @@ try {
     ]) {
         process.env.API_HTTP_ONLY = role.api
         process.env.AUTH_SERVICE_ONLY = role.auth
+        created.length = 0
         await import(`../src/utils/db.ts?pool-role=${role.name}`)
         assert.equal(pool.options!.min, role.min, role.name)
-        assert.equal(pool.options!.max, Number(config.DB_MAX_CONN) || 20, 'Connection limits must not grow')
+        const budget = Number(config.DB_MAX_CONN) || 20
+        assert.equal(created.reduce((total, options) => total + options.max, 0), budget, 'Total connection limits must not grow')
+        assert.equal(created.length, role.name === 'worker' && budget >= 12 ? 2 : 1, 'Only the scheduled worker reserves Mill capacity')
         assert.equal(pool.options!.idleTimeoutMillis, Number(config.DB_IDLE_TIMEOUT_MS) || role.idle, 'Preserve idle overrides and non-API defaults')
     }
     process.env.API_HTTP_ONLY = '1'; process.env.AUTH_SERVICE_ONLY = '0'
