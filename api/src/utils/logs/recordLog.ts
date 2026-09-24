@@ -1,3 +1,4 @@
+import { classifyApplicationError } from '../mill/applicationError.ts'
 import { analyzeCdnDelivery } from '../mill/analyzeCdnDeliveryLog.ts'
 import { analyzeIngestion } from '../mill/analyzeIngestion.ts'
 import { analyzeModelDiscovery } from '../mill/analyzeModelDiscoveryLog.ts'
@@ -68,10 +69,12 @@ async function prepareLog({
             ? metadata.tenantId
             : null
     if (!retention.has(scopeId || '')) retention.set(scopeId || '', await loadLogRetentionRules(scopeId, query))
+    const classification = classifyApplicationError({ service, level, message, metadata }, retention.get(scopeId || ''))
+    if (classification) { level = classification.level; metadata = classification.metadata }
     const redactedMessage = redactLogText(message)
     const redactedMetadata = redactLogValue(metadata) as Record<string, unknown>
     const retentionAction = Object.hasOwn(metadata, 'unrecognized_ingest_fields') ? 'keep' : customRetentionAction(normalizeLogEvent({ id: sourceEventId || '', service, host, level,
-        message: redactedMessage, metadata: redactedMetadata, created_at: timestamp || new Date() }), retention.get(scopeId || '')!)
+        message: redactedMessage, metadata: redactedMetadata, created_at: timestamp || new Date() }, retention.get(scopeId || '')), retention.get(scopeId || '')!)
     // Explicit Store exceptions must win before any built-in analyzer can drop.
     if (retentionAction !== 'keep') {
         if (await analyzeModelDiscovery({ service, host, level, message, metadata, sourceEventId, timestamp }, query === run ? undefined : query)) return

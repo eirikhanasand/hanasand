@@ -46,19 +46,19 @@ async function queryErrorEvents(query: ErrorQuery) {
                 metadata->>'path' AS path,
                 NULLIF(metadata->>'status_code', '')::int AS status_code,
                 metadata->>'error_code' AS error_code,
-                metadata->>'error_message' AS message,
+                COALESCE(metadata->>'error_message', message) AS message,
                 metadata->>'request_id' AS request_id,
                 metadata->>'user_id' AS user_id,
                 level,
                 created_at
             FROM service_logs
-            WHERE metadata->>'category' = 'http_response_error'
+            WHERE metadata->>'category' IN ('http_response_error', 'application_error')
               AND ($1::text IS NULL OR metadata->>'surface' = $1)
               AND ($2::int IS NULL OR NULLIF(metadata->>'status_code', '')::int = $2)
               AND ($3::text IS NULL OR metadata->>'error_code' = $3)
               AND ($4::text IS NULL OR message ILIKE '%' || $4 || '%' OR metadata::text ILIKE '%' || $4 || '%')
-              AND ($5::boolean OR NOT ${expectedHttpProbePredicate()})
-              AND ($5::boolean OR NOT ${scannerHttpProbePredicate()})
+              AND ($5::boolean OR NOT COALESCE(${expectedHttpProbePredicate()}, FALSE))
+              AND ($5::boolean OR NOT COALESCE(${scannerHttpProbePredicate()}, FALSE))
             ORDER BY created_at DESC
             LIMIT $6
         `, [surface, normalizedStatus, code, q, includeExpected, limit]),
@@ -136,8 +136,8 @@ async function queryErrorEvents(query: ErrorQuery) {
             WITH raw_events AS NOT MATERIALIZED (
                 SELECT metadata->>'surface' AS surface, NULLIF(metadata->>'status_code', '')::int AS status_code, metadata->>'error_code' AS error_code, metadata->>'path' AS path, created_at
                 FROM service_logs
-                WHERE metadata->>'category' = 'http_response_error'
-                  AND ($1::boolean OR NOT ${expectedHttpProbePredicate()})
+                WHERE metadata->>'category' IN ('http_response_error', 'application_error')
+                  AND ($1::boolean OR NOT COALESCE(${expectedHttpProbePredicate()}, FALSE))
                 UNION ALL
                 SELECT 'auth', CASE
                     WHEN reason = 'bad_password' THEN 401
@@ -174,7 +174,7 @@ async function queryErrorEvents(query: ErrorQuery) {
             events AS (
                 SELECT *
                 FROM event_counts
-                WHERE $1::boolean OR NOT (project_scan OR share_scan)
+                WHERE $1::boolean OR NOT (COALESCE(project_scan, FALSE) OR COALESCE(share_scan, FALSE))
             ),
             stats AS (
                 SELECT

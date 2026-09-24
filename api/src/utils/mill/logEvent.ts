@@ -1,8 +1,11 @@
+import { classifyApplicationError } from './applicationError.ts'
 import { mongoCommandFromLog } from './analyzeMongo.ts'
 export type LogInput = { id: string | number, service: string, host?: string, level: string, message: string, created_at: string | Date, metadata?: Record<string, unknown>, source_event_id?: string }
 export const severityOrder = ['low', 'medium', 'high', 'critical'] as const
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
-export function normalizeLogEvent(log: LogInput) {
+export function normalizeLogEvent(log: LogInput, rules?: Parameters<typeof classifyApplicationError>[1]) {
+    const classification = classifyApplicationError(log, rules)
+    if (classification) log = { ...log, level: classification.level, metadata: classification.metadata }
     const mongo = mongoCommandFromLog(log)
     const metadata = object(log.metadata)
     const structured = object(metadata.structured)
@@ -30,6 +33,6 @@ export function normalizeLogEvent(log: LogInput) {
         user: signin ? { ...user, id: `${log.host || 'unknown'}:${signin[1]}`, name: signin[1] } : user,
         source: { ...source, ip: mongo?.ip || signin?.[2] || source.ip || request.remoteAddress || metadata.source_ip || access.ip },
         device: metadata.device || structured.device, metadata,
-        severity: log.level === 'fatal' ? 'critical' : log.level === 'error' ? 'high' : log.level === 'warn' ? 'medium' : 'low',
+        severity: classification?.severity || (log.level === 'fatal' ? 'critical' : log.level === 'error' ? 'high' : log.level === 'warn' ? 'medium' : 'low'),
     }
 }

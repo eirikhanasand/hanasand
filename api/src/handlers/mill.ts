@@ -1,3 +1,4 @@
+import { applicationErrorRule, applicationErrorRuleId, applicationErrorDefinition } from '#utils/mill/applicationError.ts'
 import { cdnDeliveryRule, cdnDeliveryRuleId, cdnDeliveryDefinition } from '#utils/mill/analyzeCdnDelivery.ts'
 import { sshTransportRule, sshTransportRuleId, sshTransportDefinition } from '#utils/mill/analyzeSshTransport.ts'
 import { eventProtectionRule, eventProtectionRuleId, eventProtectionDefinition, normalizeEventProtection, type EventProtectionPolicy } from '#utils/mill/eventProtection.ts'
@@ -37,6 +38,7 @@ type MillDefinition = { match: 'all', conditions: MillCondition[], storeScope?: 
 type MillRule = { id: string, detectionLogic?: string, recordId?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'owned' | 'open_source', sourceReference?: string, definition?: MillDefinition }
 
 export const MILL_RULES: MillRule[] = [
+    applicationErrorRule,
     eventProtectionRule,
     cdnRefreshRule,
     cdnDeliveryRule,
@@ -64,6 +66,7 @@ export const MILL_RULES: MillRule[] = [
 // Stored IDs remain unchanged so existing findings and organization overrides retain their lineage.
 export function millRuleSlug(id: string) { return id.replace(/\.v\d+$/, '') }
 export function millDefaultDefinition(id: string): MillDefinition {
+    if (id === applicationErrorRuleId) return structuredClone(applicationErrorDefinition)
     if (id === cdnDeliveryRuleId) return structuredClone(cdnDeliveryDefinition)
     if (id === cdnRefreshRuleId) return structuredClone(cdnRefreshDefinition)
     if (id === modelDiscoveryRuleId) return structuredClone(modelDiscoveryDefinition)
@@ -107,8 +110,9 @@ export function normalizeBuiltinDefinition(id: string, value: unknown): { defini
         if (input.action !== 'keep') return { error: 'A protection rule must use Store. Disable it to stop retaining its matches.' }
         definition.protection = result.protection
     }
+    if (id === applicationErrorRuleId && input.action !== 'keep') return { error: 'Application errors must use Store.' }
     if (defaults.stage) {
-        const configuredPolicy = [modelDiscoveryRuleId, readinessAuditRuleId, proxyRuleId, ingestionRuleId, telemetryRuleId, sshWindowRuleId, sshTransportRuleId, collectorRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, postgresRuleId, accessRuleId, mongoRuleId].includes(id)
+        const configuredPolicy = [applicationErrorRuleId, modelDiscoveryRuleId, readinessAuditRuleId, proxyRuleId, ingestionRuleId, telemetryRuleId, sshWindowRuleId, sshTransportRuleId, collectorRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, postgresRuleId, accessRuleId, mongoRuleId].includes(id)
         if (input.stage !== 'analyze' || !['drop', 'keep'].includes(String(input.action)) || !Array.isArray(input.conditions) || (!configuredPolicy && input.conditions.length)) return { error: 'Choose Keep or Count and drop. The required safety checks cannot be removed.' }
         definition.action = input.action as 'drop' | 'keep'
     }

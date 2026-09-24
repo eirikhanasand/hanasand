@@ -14,7 +14,7 @@ type RowsQuery = {
 }
 
 export async function getDatabaseHealth(req: FastifyRequest, res: FastifyReply) {
-    if (!await requireDatabaseAccess(req, res)) return
+    if (!await requireDatabaseAccess(req, res)) return res
 
     try {
         const result = await queryOnce('SELECT current_database() AS database, now() AS checked_at')
@@ -26,7 +26,7 @@ export async function getDatabaseHealth(req: FastifyRequest, res: FastifyReply) 
 }
 
 export async function postDatabaseQuery(req: FastifyRequest<{ Body: QueryBody }>, res: FastifyReply) {
-    if (!await requireDatabaseAccess(req, res)) return
+    if (!await requireDatabaseAccess(req, res)) return res
 
     const sql = req.body?.sql?.trim()
     if (!sql) return res.status(400).send({ message: 'SQL statement is required.' })
@@ -41,7 +41,7 @@ export async function postDatabaseQuery(req: FastifyRequest<{ Body: QueryBody }>
 }
 
 export async function getDatabaseRows(req: FastifyRequest<{ Querystring: RowsQuery }>, res: FastifyReply) {
-    if (!await requireDatabaseAccess(req, res)) return
+    if (!await requireDatabaseAccess(req, res)) return res
 
     const schema = req.query.schema || 'public'
     const table = req.query.table
@@ -62,13 +62,13 @@ export async function getDatabaseRows(req: FastifyRequest<{ Querystring: RowsQue
 export async function requireDatabaseAccess(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
     if (!valid) {
-        res.status(401).send({ error: 'Unauthorized.' })
+        if (!res.sent && res.statusCode < 400) res.status(401).send({ error: 'Unauthorized.' })
         return false
     }
 
     const role = await hasRole(req, res, 'system_admin')
     if (!role.valid) {
-        res.status(403).send({ error: 'Missing system_admin role.' })
+        if (!res.sent && res.statusCode < 400) res.status(403).send({ error: 'Missing system_admin role.' })
         return false
     }
 

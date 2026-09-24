@@ -161,7 +161,7 @@ process.on('unhandledRejection', reason => {
     void recordLog({
         level: 'fatal',
         message: reason instanceof Error ? reason.message : String(reason),
-        metadata: { reason },
+        metadata: { reason: reason instanceof Error ? { name: reason.name, message: reason.message, stack: reason.stack, code: (reason as Error & { code?: string }).code } : reason },
     }).catch(error => fastify.log.error(error, 'Failed to persist unhandled rejection log'))
 })
 

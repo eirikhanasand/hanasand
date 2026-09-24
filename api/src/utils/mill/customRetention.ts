@@ -1,9 +1,10 @@
+import { applicationErrorRuleId } from './applicationError.ts'
 import run from '#db'
 import { matchesEventProtection, normalizeEventProtection, type EventProtectionPolicy } from './eventProtection.ts'
 import { eligibleCustomDrop } from './dropEligibility.ts'
 import { matchesMillRule, type MillCondition } from './conditions.ts'
 
-export type RetentionRule = { source?: string, enabled?: boolean, definition?: { stage?: string, action?: string, conditions?: MillCondition[], storeScope?: 'custom_drop' | 'all', protection?: EventProtectionPolicy } }
+export type RetentionRule = { id?: string, version?: string, severity?: string, source?: string, enabled?: boolean, definition?: { stage?: string, action?: string, conditions?: MillCondition[], storeScope?: 'custom_drop' | 'all', protection?: EventProtectionPolicy } }
 
 export function customRetentionAction(event: Record<string, unknown>, rules: RetentionRule[]): 'drop' | 'keep' | undefined {
     if (retentionStoreMatches(event, rules, 'all')) return 'keep'
@@ -25,9 +26,9 @@ export function retentionStoreMatches(event: Record<string, unknown>, rules: Ret
 }
 
 export async function loadLogRetentionRules(organizationId: string | null, query: typeof run = run): Promise<RetentionRule[]> {
-    const result = await query(`SELECT r.source, r.enabled, r.definition FROM mill_rules r JOIN organizations scope ON scope.id=r.organization_id AND scope.status='active'
+    const result = await query(`SELECT r.rule_id AS id, r.version, r.severity, r.source, r.enabled, r.definition FROM mill_rules r JOIN organizations scope ON scope.id=r.organization_id AND scope.status='active'
         WHERE r.organization_id = COALESCE($1, (SELECT id FROM organizations WHERE status='active'
             AND (id=$2 OR ($2::text IS NULL AND lower(name)='hanasand')) ORDER BY created_at LIMIT 1))
-        AND (r.source='owned' OR r.definition ? 'protection') AND r.enabled AND r.definition->>'stage'='analyze'`, [organizationId, process.env.PLATFORM_LOG_ORGANIZATION_ID || null])
+        AND ((r.source='owned' OR r.definition ? 'protection') AND r.enabled OR r.rule_id=$3) AND r.definition->>'stage'='analyze'`, [organizationId, process.env.PLATFORM_LOG_ORGANIZATION_ID || null, applicationErrorRuleId])
     return result.rows
 }
