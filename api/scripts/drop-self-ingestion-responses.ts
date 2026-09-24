@@ -41,11 +41,15 @@ const rule = (await run('SELECT * FROM mill_rules WHERE organization_id=$1 AND r
 if (!rule?.enabled || rule.definition.action!=='drop' || !isDeepStrictEqual(rule.definition.conditions,definition.conditions)) throw new Error('Saved drop rule differs from the requested rule.')
 // Select likely matches once, then re-evaluate every source, finding and Store
 // policy under the same locks used by the normal reprocessing worker.
-const events = (await run(`SELECT id,log_key AS key FROM mill_events WHERE organization_id=$1 AND ingestion_id='logs'
+const services = ['hanasand-api', 'hanasand-api-1', 'hanasand-api-2', 'hanasand-api-3', 'hanasand-api-4', 'http-traffic']
+const events = (await run(`SELECT id,log_key AS key FROM mill_events WHERE organization_id=$1 AND ingestion_id='logs' AND processing_status='processed' AND normalized->>'service'=ANY($2::text[])
     AND normalized->'http'->>'path'='/api/logs/ingest' AND normalized->'source'->>'ip'='128.39.142.218'
-    AND normalized->'http'->>'status_code'='201' AND normalized->>'severity'='low'`,[organizationId])).rows
-const sources = (await run(`SELECT id FROM service_logs WHERE metadata->>'path'='/api/logs/ingest'
-    OR metadata->'structured'->'access'->>'path'='/api/logs/ingest'`)).rows
+    AND normalized->'http'->>'status_code'='201' AND normalized->>'severity'='low'`,[organizationId,services])).rows
+const sources = (await run(`SELECT id FROM service_logs WHERE service=ANY($1::text[]) AND level IN ('info','debug') AND (
+    metadata->>'path'='/api/logs/ingest' OR metadata->>'url'='/api/logs/ingest'
+    OR metadata->'request'->>'url'='/api/logs/ingest' OR metadata->'request'->>'path'='/api/logs/ingest'
+    OR metadata->'structured'->'req'->>'url'='/api/logs/ingest' OR metadata->'structured'->'req'->>'path'='/api/logs/ingest'
+    OR metadata->'structured'->'access'->>'path'='/api/logs/ingest')`, [services])).rows
 const traffic = (await run('SELECT id FROM traffic_events WHERE path=\'/api/logs/ingest\' AND ip=\'128.39.142.218\' AND status=201')).rows
 const candidates = [...events.map(row=>({id:row.id,key:row.key})),...sources.map(row=>({id:'',key:`service:${row.id}`})),...traffic.map(row=>({id:'',key:`service:traffic_events:${row.id}`}))]
 const unique = [...new Map(candidates.map(row=>[row.key || row.id,row])).values()]
