@@ -166,10 +166,10 @@ type PortalProps = {
     initialAlertId?: string
     publicTiHandoff?: PublicTiHandoffDecodeResult | null
     isAdmin?: boolean
-    view?: DwmView
+    view?: FindingsView
 }
 
-export type DwmView = 'overview' | 'cases' | 'watchlists' | 'sources' | 'delivery' | 'actors' | 'actions'
+export type FindingsView = 'overview' | 'cases' | 'watchlists' | 'sources' | 'delivery' | 'actors' | 'actions'
 
 export type DwmDataHealth = {
     snapshot: DataHealthItem
@@ -190,7 +190,7 @@ const DWM_TIMELINE_PREVIEW_ROWS = 4
 const DWM_RECOVERY_PREVIEW_ROWS = 3
 const DWM_DELIVERY_PREVIEW_ROWS = 3
 
-export function DwmAnalystPortal({
+export function Findings({
     tenantId,
     organizationId,
     snapshot: initialSnapshot,
@@ -385,7 +385,7 @@ export function DwmAnalystPortal({
     }
 
     if (view === 'overview') {
-        return <MonitoringOverview snapshot={snapshot} operations={operations} alerts={alerts} dataHealth={dataHealth}
+        return <MonitoringOverview snapshot={snapshot} alerts={alerts} dataHealth={dataHealth}
             organizationId={organizationId} initialAlertId={initialAlertId} actionMessage={actionMessage}
             onRefresh={() => setRefreshVersion(version => version + 1)}
             caseHref={alert => { const id = alertCaseId(alert); return id ? caseDetailHref(id, alert.id, alertOrganizationId(alert, organizationId), 'alert_queue') : undefined }} />
@@ -1380,7 +1380,7 @@ function WorkflowSpineStep({ step, index }: { step: WorkflowStepModel, index: nu
             ? 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'
             : 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'
     const body = (
-        <div className='min-h-[136px] rounded-lg border border-ui-border bg-ui-panel p-3'>
+        <div className='min-h-34 rounded-lg border border-ui-border bg-ui-panel p-3'>
             <div className='flex items-center justify-between gap-2'>
                 <span className='grid h-7 w-7 place-items-center rounded-full border border-ui-border bg-ui-raised text-xs font-semibold text-ui-text'>{index}</span>
                 <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${toneClass}`}>{step.state}</span>

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from '@/components/organizations/workspaceLink'
 import type { DwmActorOverview, DwmProductSnapshot } from '@/utils/dwm/product'
 import { customerAlertSummary, safeEvidenceExcerpt } from '@/utils/dwm/display'
-import type { DwmDataHealth, OperationsSnapshot, PortalAlert } from './dwm-analyst-portal'
+import type { DwmDataHealth, PortalAlert } from './findings'
 
 const panel = 'min-w-0 rounded-lg border border-ui-border bg-ui-panel'
 const control = 'rounded-md border border-ui-border bg-ui-canvas px-3 py-2 text-sm text-ui-text'
@@ -34,9 +34,8 @@ function Pages({ count, page, setPage }: { count: number, page: number, setPage:
     </nav>
 }
 
-export function MonitoringOverview({ snapshot, operations, alerts, dataHealth, organizationId, initialAlertId, actionMessage, onRefresh, caseHref }: {
+export function MonitoringOverview({ snapshot, alerts, dataHealth, organizationId, initialAlertId, actionMessage, onRefresh, caseHref }: {
     snapshot: DwmProductSnapshot
-    operations: OperationsSnapshot | null
     alerts: PortalAlert[]
     dataHealth: DwmDataHealth
     organizationId?: string
@@ -55,22 +54,37 @@ export function MonitoringOverview({ snapshot, operations, alerts, dataHealth, o
     const scopedHref = (path: string) => organizationId ? `${path}?organizationId=${encodeURIComponent(organizationId)}` : path
     return <div className='grid min-w-0 gap-4' data-dwm-overview>
         <header className='flex flex-wrap items-start justify-between gap-3'>
-            <div><h1 className='text-xl font-semibold text-ui-text'>Dark web monitoring</h1><p className='mt-1 text-sm text-ui-muted'>Events matching your watchlist. Cases are created automatically when source evidence is available.</p></div>
+            <h1 className='text-xl font-semibold text-ui-text'>Findings</h1>
             <button onClick={onRefresh} className={control}>Refresh</button>
         </header>
-        <section className={`${panel} p-4`}>
-            <div className='flex flex-wrap items-center justify-between gap-2'><h2 className='font-semibold text-ui-text'>Your watchlist</h2><Link className={link} href={scopedHref('/dwm/watchlists')}>Manage watchlist</Link></div>
-            <LoadState state={dataHealth.snapshot.state} subject='Watchlist' onRetry={onRefresh} />
-            {dataHealth.snapshot.state === 'live' && (snapshot.watchlist.length ? <ul className='mt-3 flex flex-wrap gap-2'>{snapshot.watchlist.map(term => <li key={`${term.kind}:${term.value}`} className='max-w-full wrap-break-word rounded-md bg-ui-raised px-3 py-1 text-sm text-ui-text'>{term.value} <span className='text-ui-muted'>· {label(term.kind)}</span></li>)}</ul> : <p className='mt-2 text-sm text-ui-muted'>Add a company, domain, brand, or other term to start matching findings.</p>)}
-        </section>
         <section className={panel}>
             <header className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border p-4'>
-                <div><h2 className='font-semibold text-ui-text'>Recent findings</h2>{dataHealth.alerts.state === 'live' && <p className='mt-1 text-sm text-ui-muted'>{alerts.length} findings · {pending} needing review</p>}</div>
-                <div className='flex flex-wrap gap-2'><input aria-label='Search findings' placeholder='Company, domain, or actor' className={`${control} min-w-0 max-w-full`} value={query} onChange={event => { setQuery(event.target.value); setPage(0) }} /><select aria-label='Filter findings' className={control} value={filter} onChange={event => { setFilter(event.target.value); setPage(0) }}><option value='all'>All findings</option><option value='review'>Needs review</option></select></div>
+                <div>
+                    <h2 className='font-semibold text-ui-text'>Recent findings</h2>
+                    {dataHealth.alerts.state === 'live' && <p className='mt-1 text-sm text-ui-muted'>{alerts.length} findings · {pending} needing review</p>}
+                </div>
+                <div className='flex flex-wrap gap-2'>
+                    <input
+                        aria-label='Search findings'
+                        placeholder='Company, domain, or actor'
+                        className={`${control} min-w-0 max-w-full`}
+                        value={query}
+                        onChange={event => { setQuery(event.target.value); setPage(0) }}
+                    />
+                    <select
+                        aria-label='Filter findings'
+                        className={control}
+                        value={filter}
+                        onChange={event => { setFilter(event.target.value); setPage(0) }}
+                    >
+                        <option value='all'>All findings</option>
+                        <option value='review'>Needs review</option>
+                    </select>
+                </div>
             </header>
             <LoadState state={dataHealth.alerts.state} subject='Findings' onRetry={onRefresh} />
             {actionMessage && <p role={actionMessage.ok ? 'status' : 'alert'} className={`p-4 text-sm ${actionMessage.ok ? 'text-ui-text' : 'text-ui-danger'}`}>{actionMessage.text}</p>}
-            {dataHealth.alerts.state === 'live' && !rows.length && <p className='p-6 text-sm text-ui-muted'>{alerts.length ? 'No findings match this filter.' : snapshot.watchlist.length ? 'No saved findings match your watchlist yet. Check collection health below to see whether sources have been collected.' : 'No saved findings yet. Add watchlist terms to monitor what matters to you.'}</p>}
+            {dataHealth.alerts.state === 'live' && !rows.length && <p className='p-6 text-sm text-ui-muted'>{alerts.length ? 'No findings match this filter.' : snapshot.watchlist.length ? 'No findings yet.' : 'No findings yet.'}</p>}
             {dataHealth.alerts.state === 'live' && <div className='divide-y divide-ui-border'>{rows.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(alert => {
                 const href = caseHref(alert)
                 const evidence = alert.evidence || []
@@ -99,27 +113,8 @@ export function MonitoringOverview({ snapshot, operations, alerts, dataHealth, o
             })}</div>}
             <Pages count={rows.length} page={currentPage} setPage={setPage} />
         </section>
-        <SourceCollectionStatus operations={operations} state={dataHealth.operations.state} onRetry={onRefresh} />
         <Link className={link} href={scopedHref('/dwm/actors')}>Browse monitored actors</Link>
     </div>
-}
-
-function SourceCollectionStatus({ operations, state, onRetry }: { operations: OperationsSnapshot | null, state: string, onRetry: () => void }) {
-    const [page, setPage] = useState(0)
-    const rows = operations?.sourceHealth || []
-    const currentPage = Math.min(page, Math.max(0, Math.ceil(rows.length / pageSize) - 1))
-    const statuses: Record<string, string> = { succeeded: 'Last attempt succeeded', failed: 'Collection failed', degraded: 'Collected with warnings', not_collected: 'No successful collection', paused: 'Collection paused' }
-    return <section className={panel}>
-        <header className='border-b border-ui-border p-4'><h2 className='font-semibold text-ui-text'>Collection health</h2><p className='mt-1 text-sm text-ui-muted'>Recorded results and successful collection times. Configuration alone does not confirm collection.</p></header>
-        <LoadState state={state} subject='Collection health' onRetry={onRetry} />
-        {state === 'live' && !rows.length && <p className='p-4 text-sm text-ui-muted'>No sources are available in this monitoring scope.</p>}
-        {state === 'live' && <ul className='divide-y divide-ui-border'>{rows.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(source => <li key={source.sourceId} className='grid gap-2 p-4 sm:grid-cols-3'>
-            <div className='min-w-0'><p className='wrap-break-word text-sm font-semibold text-ui-text'>{source.sourceName}</p><p className='mt-1 text-xs text-ui-muted'>{label(source.family)} · {source.approvedMetadataOnly ? 'Metadata only' : 'Content collection'}</p></div>
-            <div className='text-sm text-ui-text'>{source.collectionStatus ? statuses[source.collectionStatus] : 'Collection result not recorded'}<p className='mt-1 text-xs text-ui-muted'>Last attempt: <Timestamp value={source.lastAttemptAt} /></p></div>
-            <p className='text-xs text-ui-muted'>Last success: <Timestamp value={source.lastSuccessAt || source.lastCollectedAt} /></p>
-        </li>)}</ul>}
-        <Pages count={rows.length} page={currentPage} setPage={setPage} />
-    </section>
 }
 
 export function ActorDirectory({ actors, state, onRetry, query = '' }: { actors: DwmActorOverview[], state: string, onRetry: () => void, query?: string }) {

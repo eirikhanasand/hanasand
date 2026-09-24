@@ -5,7 +5,7 @@ import { decodePublicTiHandoffPayload, PUBLIC_TI_HANDOFF_SOURCE } from '@/utils/
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import parseCookie from '@/utils/cookies/parseCookie'
-import { DwmAnalystPortal, type DwmView } from './dwm-analyst-portal'
+import { Findings, type FindingsView } from './findings'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,7 +40,7 @@ export default async function DashboardDwmPage({
 
     return (
         <DashboardPage className='gap-2 sm:gap-3'>
-            <DwmAnalystPortal
+            <Findings
                 key={`${tenantId}:${organizationId || 'personal'}`}
                 tenantId={tenantId}
                 organizationId={organizationId}
@@ -86,7 +86,7 @@ function loadingDataHealth() {
     }
 }
 
-function normalizeDwmView(value: string | undefined): DwmView {
+function normalizeDwmView(value: string | undefined): FindingsView {
     return value === 'watchlists' || value === 'sources' || value === 'delivery' || value === 'actors' || value === 'actions' ? value : 'overview'
 }
 

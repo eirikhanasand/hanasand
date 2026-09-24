@@ -12,7 +12,7 @@ test('dashboard DWM keeps scoped workflow and durable delivery wording', async (
     const workbench = await readFile(path.join(root, 'src/app/dashboard/ti/workbench/workbenchClient.tsx'), 'utf8')
     const caseDetail = await readFile(path.join(root, 'src/app/dashboard/cases/[id]/case-detail-client.tsx'), 'utf8')
 
-    expect(dwmPage).toContain('<DwmAnalystPortal')
+    expect(dwmPage).toContain('<Findings')
     expect(dwmPage).toContain('snapshot={loadingSnapshot(tenantId)}')
     expect(dwmPage).toContain('dataHealth={loadingDataHealth()}')
     expect(dwmPage).toContain('view={normalizeDwmView(firstParam(params?.panel))}')
