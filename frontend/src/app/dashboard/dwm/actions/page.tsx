@@ -1,9 +1,15 @@
-import DashboardDwmPage, { dynamic } from '../page'
+import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
+import { DashboardPage } from '@/components/dashboard/ui'
+import { activeOrganizationId } from '@/utils/organizations/serverWorkspace'
+import DeliveryClient from './deliveryClient'
 
-export { dynamic }
+export const dynamic = 'force-dynamic'
 
-export default function Page(props: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
-    return DashboardDwmPage({
-        searchParams: Promise.resolve(props.searchParams).then(async params => ({ ...(await params), panel: 'actions' })),
-    })
+export default async function Page() {
+    const store = await cookies()
+    const identityId = store.get('impersonating_id')?.value || store.get('id')?.value
+    if (!identityId || !store.get('access_token')?.value) redirect('/login?path=%2Fdwm%2Factions')
+    const scopeId = await activeOrganizationId() || identityId
+    return <DashboardPage><DeliveryClient key={scopeId} scopeId={scopeId} /></DashboardPage>
 }

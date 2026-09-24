@@ -19,6 +19,8 @@ export default async function DashboardDwmPage({
     const token = cookieStore.get('access_token')?.value
     if (!identityId || !token) redirect('/login?path=%2Fdwm')
 
+    if (firstParam(params?.panel) === 'actions') redirect('/dwm/actions')
+
     const organizationId = await activeOrganizationId()
     if (firstParam(params?.panel) === 'alerts') {
         const sharedOrg = firstParam(params?.org) || firstParam(params?.organizationId) || firstParam(params?.orgId)

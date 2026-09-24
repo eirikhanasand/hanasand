@@ -360,7 +360,7 @@ export function DwmAnalystPortal({
                         <div className='grid gap-2 px-4 py-8 text-center'>
                             <h2 className='text-base font-semibold text-ui-text'>Create your first watchlist</h2>
                             <p className='mx-auto max-w-md text-sm leading-6 text-ui-muted'>Add a company, domain, vendor, brand, or product to start monitoring.</p>
-                            <div><Link href='/dwm/actions?focus=watchlist' className='inline-flex min-h-9 items-center rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>Create watchlist</Link></div>
+                            <div><Link href='/organizations/watchlists' className='inline-flex min-h-9 items-center rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>Create watchlist</Link></div>
                         </div>
                     ) : <div className='p-3'>{workflowActions}</div>}
                 </section>
@@ -405,7 +405,7 @@ export function DwmAnalystPortal({
         )
     }
 
-    if (view === 'actions') return workflowActions
+    if (view === 'actions') return <Link href='/dwm/actions'>Delivery</Link>
 
     if (view === 'cases') {
         return <CaseOverview organizationId={organizationId} state={casesState} alerts={alerts} operations={operations} isAdmin={isAdmin} />

@@ -7112,7 +7112,7 @@ export function buildDwmWebhookDestinationTestContract({
                 name: destination.name,
                 org_id: destination.orgId,
             },
-            alert: buildTestAlert({ org_id: destination.orgId }),
+            alert: buildDwmWebhookTestAlert({ org_id: destination.orgId }, 'preview'),
             eventType: 'dwm.alert.test',
             deliveryId: `destination-test-preview:${destination.id}`,
         })
@@ -7303,7 +7303,7 @@ export async function testDwmWebhookDestination(ownerId: string, id: string, inp
         ownerId,
         destination,
         eventType: 'dwm.alert.test',
-        alert: buildTestAlert(destination),
+        alert: buildDwmWebhookTestAlert(destination),
         dryRun: parseBoolean(input.dryRun ?? input.dry_run, true),
         live: parseBoolean(input.live, false),
         markTested: true,
@@ -9911,14 +9911,14 @@ function provenanceSummary(value: unknown) {
     return truncate(parts.join(' | '), 500)
 }
 
-function buildTestAlert(destination: Pick<DwmWebhookDestinationRow, 'org_id'>) {
+export function buildDwmWebhookTestAlert(destination: Pick<DwmWebhookDestinationRow, 'org_id'>, testId: string = crypto.randomUUID()) {
     return {
-        id: 'webhook_test',
+        id: `webhook_test_${testId}`,
         orgName: destination.org_id,
-        title: 'Hanasand DWM webhook test',
+        title: 'Hanasand delivery test',
         severity: 'medium',
-        claimSummary: 'This dry-run verifies the destination, Discord formatting, and delivery ledger without exposing the webhook secret.',
-        recommendedAction: 'Nothing to do. Confirm this preview has the context your team expects.',
+        claimSummary: 'This is an example message from Hanasand to test your delivery destination.',
+        recommendedAction: 'No action is needed.',
         matchedTerm: { value: 'example.com', kind: 'domain' },
         domain: 'example.com',
         sourceFamily: 'dark_web',

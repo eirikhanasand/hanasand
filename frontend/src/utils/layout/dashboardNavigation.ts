@@ -35,7 +35,7 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
             group('Monitoring', [
                 link('Watchlists', '/dwm/watchlists'),
                 link('Dark Web Monitoring', '/dwm'),
-                link('Monitoring Actions', '/dwm/actions'),
+                link('Delivery', '/dwm/actions'),
             ]),
             group('Collection', [
                 link('Feeds', '/ti/sources', isAdmin),
