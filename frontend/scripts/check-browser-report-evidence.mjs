@@ -53,10 +53,7 @@ for (const token of [
     'Providers',
     'Screenshots',
     'Network evidence',
-    'DNS / IP / certificate evidence',
     'Script artifacts',
-    'URLs',
-    'Markdown export',
     'Threat context',
     'Indicators',
 ]) {
@@ -66,8 +63,8 @@ for (const token of [
 assert.ok(!liveClient.includes('RunDetailModal'), 'history must not retain its removed popup')
 assertIncludes(liveClient, 'href={`/browser/${run.resultId}`}', 'history rows must link to stable result pages')
 assertIncludes(backendProxy, 'pathSegments[1] === \'results\'', 'anonymous results still pass through to API ownership checks')
-assertIncludes(reportClient, 'networkPeer(request)', 'network table must expose peer/certificate details')
-assertIncludes(reportClient, 'download.sha256', 'saved browser report must expose download hashes')
+assertIncludes(reportClient, '<NetworkTable', 'saved report must use the unified network table')
+assertIncludes(reportClient, '<ReportExport report={report}', 'exports must retain the complete report evidence')
 assertIncludes(backendProxy, 'anonymousAllowed', 'browser run reports must be saveable without console auth')
 assertIncludes(backendProxy, 'browser', 'anonymous backend proxy exception must stay scoped to browser routes')
 assertIncludes(backendProxy, 'runs', 'anonymous backend proxy exception must stay scoped to browser runs')

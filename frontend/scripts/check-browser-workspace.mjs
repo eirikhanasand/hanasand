@@ -12,6 +12,7 @@ let historyRequests = 0
 const css = (await postcss([tailwind()]).process(await readFile('src/app/globals.css', 'utf8'), { from: 'src/app/globals.css' })).css
 const server = Bun.serve({ port: 0, fetch(request) {
     const url = new URL(request.url)
+    if (url.pathname === '/fonts/ThesisSans.ttf') return new Response(Bun.file('public/fonts/ThesisSans.ttf'))
     if (url.pathname === '/app.js') return new Response(bundle, { headers: { 'content-type': 'text/javascript' } })
     if (url.pathname === '/app.css') return new Response(css, { headers: { 'content-type': 'text/css' } })
     if (url.pathname.endsWith('/report') && request.method === 'POST') {
@@ -249,6 +250,12 @@ try {
     const multilineLog = '[VirusTotal] [info] CSP report-only warning\nSecond line (https://example.com/script.js:5)'
     const unstructuredLog = 'Legacy message without prefixes\nStill preserved'
     savedReport = { ...report, consoleEvents: [...report.consoleEvents, multilineLog.replace('[VirusTotal] ', ''), unstructuredLog] }
+    savedReport.analystReport.networkEvidence = { requests: 2, recentRequests: [
+        { url: 'https://example.com/', method: 'GET' },
+        { url: 'https://example.com/', method: 'GET', status: 200, ip: '93.184.215.14', tlsIssuer: 'Test issuer', tlsSubject: 'example.com', tlsValidTo: 1900000000 },
+        { url: 'https://example.com/blocked.js', failure: 'Blocked' },
+    ] }
+    savedReport.analystReport.resourceUrls = ['https://example.com/', 'https://example.com/unvisited']
     const savedPage = await browser.newPage()
     await savedPage.goto(new URL('/saved', server.url).toString())
     assert.equal(await savedPage.getByRole('link', { name: 'Back to browser', exact: true }).getAttribute('href'), '/browser')
@@ -269,6 +276,27 @@ try {
     assert.deepEqual(await savedDebug.locator('tbody tr').last().locator('td').allTextContents(), ['', unstructuredLog])
     await savedDebug.getByRole('button', { name: 'Raw', exact: true }).click()
     assert.equal(await savedDebug.locator('pre').textContent(), savedRaw)
+    for (const title of ['Evidence checklist', 'Threat context', 'URLs', 'Markdown export']) assert.equal(await savedPage.locator('summary').filter({ hasText: new RegExp(`^${title}$`) }).count(), 0)
+    await savedPage.locator('summary').filter({ hasText: /^Network evidence$/ }).click()
+    const networkTable = savedPage.getByRole('table', { name: 'Network requests and extracted URLs' })
+    const visitedRow = networkTable.locator('tbody tr').filter({ has: savedPage.getByText('https://example.com/', { exact: true }) })
+    assert.equal(await visitedRow.count(), 1, 'Request and response merge into one row')
+    assert.equal(await visitedRow.getByLabel('Certificate captured').count(), 1)
+    assert((await visitedRow.innerText()).includes('Test issuer'))
+    assert((await networkTable.locator('tr').filter({ hasText: 'https://example.com/unvisited' }).innerText()).includes('Not contacted'))
+    assert((await networkTable.locator('tr').filter({ hasText: 'https://example.com/blocked.js' }).innerText()).includes('Blocked'))
+    for (const [format, extension] of [['Markdown', 'md'], ['JSON', 'json'], ['PDF', 'pdf']]) {
+        await savedPage.getByRole('button', { name: 'Export', exact: true }).click()
+        const downloading = savedPage.waitForEvent('download')
+        await savedPage.getByRole('button', { name: format, exact: true }).click()
+        const download = await downloading
+        assert.equal(download.suggestedFilename(), `browser-report.${extension}`)
+        await download.saveAs(`/tmp/browser-report-test.${extension}`)
+        const bytes = await readFile(`/tmp/browser-report-test.${extension}`)
+        if (format === 'JSON') { const exported = JSON.parse(bytes); assert.equal(exported.schemaVersion, 1); assert.equal(exported.target, report.target); assert.equal(exported.consoleEvents.length, 29) }
+        if (format === 'Markdown') assert(bytes.toString().includes('## URLs'))
+        if (format === 'PDF') assert(bytes.toString().startsWith('%PDF-'))
+    }
     await savedPage.close()
     await page.getByText('VirusTotal 2/70 detections', { exact: true }).waitFor()
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Expanded mobile report must not overflow')

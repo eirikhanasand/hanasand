@@ -1,5 +1,7 @@
 'use client'
 
+import NetworkTable, { type NetworkRequestRow } from './NetworkTable'
+import ReportExport from './ReportExport'
 import SiteNetworkDetails, { type SiteNetwork } from '../SiteNetworkDetails'
 import Link from 'next/link'
 import BrowserRunMetrics, { type RunMetrics } from '../BrowserRunMetrics'
@@ -8,7 +10,7 @@ import BrowserHistory from '../BrowserHistory'
 import { hasSuspiciousFindings, reportMarkdown } from './presentation'
 import { useEffect, useMemo, useState } from 'react'
 
-type NetworkRequestRow = { url?: string; method?: string; status?: number; failure?: string; host?: string; mimeType?: string; durationMs?: number; initiator?: string; ip?: string; asn?: string; port?: number; protocol?: string; tlsSubject?: string; tlsIssuer?: string; tlsValidFrom?: number; tlsValidTo?: number }
+
 
 type BrowserReport = {
     siteNetwork?: SiteNetwork
@@ -28,6 +30,7 @@ type BrowserReport = {
         capturedAt?: string
         reason?: string
         image?: string | null
+        networkSummary?: { recentRequests?: NetworkRequestRow[] }
         frameQuality?: { looksBlank?: boolean; visibleTextLength?: number; elementCount?: number }
         evidence?: { verdict?: string; sourceUrls?: string[]; textExcerpt?: string; sourceCode?: string }
     }>
@@ -102,6 +105,9 @@ export default function BrowserReportPageClient({ runId = '', token = '', result
     const summary = report.analystSummary || {}
     const suspicious = hasSuspiciousFindings(report)
     const actions = suspicious ? analystReport.recommendedActions || [] : []
+    const threatContext = reportThreatAssociations(report)
+    const networkRequests = [...(report.captures || []).filter(capture => capture.kind !== 'tool').flatMap(capture => capture.networkSummary?.recentRequests || []), ...(analystReport.networkEvidence?.recentRequests || [])]
+    const markdown = reportMarkdown(analystReport.markdown || `# Browser report\n\n${report.target || ''}\n\n${summary.narrative || ''}\n\n## Network\n${networkRequests.map(request => [request.method, request.status, request.url].filter(Boolean).join(' ')).join('\n')}`, suspicious)
 
     return (
         <main className='min-h-full bg-ui-canvas px-4 py-6 text-ui-text'>
@@ -109,7 +115,10 @@ export default function BrowserReportPageClient({ runId = '', token = '', result
                 <header className='rounded-lg border border-ui-border bg-ui-panel p-4'>
                     <div className='flex flex-wrap items-center justify-between gap-3'>
                         <Link href='/browser' className='rounded-md border border-ui-border px-3 py-2 text-sm font-semibold text-ui-text hover:border-ui-primary'>Back to browser</Link>
-                        {onRerun && report.target ? <div className='flex flex-wrap gap-2'>{clientId ? <BrowserHistory clientId={clientId} /> : null}<button type='button' onClick={() => onRerun(report.target!, true)} className='rounded-md border border-ui-border px-3 py-2 text-sm font-semibold hover:border-ui-primary'>Quick run</button><button type='button' onClick={() => onRerun(report.target!)} className='rounded-md border border-ui-border px-3 py-2 text-sm font-semibold hover:border-ui-primary'>Run again</button></div> : null}
+                        <div className='flex flex-col items-end gap-2'>
+                            {onRerun && report.target ? <div className='flex flex-wrap gap-2'>{clientId ? <BrowserHistory clientId={clientId} /> : null}<button type='button' onClick={() => onRerun(report.target!, true)} className='rounded-md border border-ui-border px-3 py-2 text-sm font-semibold hover:border-ui-primary'>Quick run</button><button type='button' onClick={() => onRerun(report.target!)} className='rounded-md border border-ui-border px-3 py-2 text-sm font-semibold hover:border-ui-primary'>Run again</button></div> : null}
+                            <ReportExport report={report} markdown={markdown} />
+                        </div>
                     </div>
                     {report.runs && report.runs.length > 1 ? <label className='mt-3 flex flex-wrap items-center gap-2 text-sm'>Run<select aria-label='Saved run' className='rounded-md border border-ui-border bg-ui-canvas p-2' value={report.runId} onChange={event => setSelectedRun(event.target.value)}>{report.runs.map(run => <option key={run.id} value={run.id}>{new Date(run.startedAt).toLocaleString()} · {run.status}</option>)}</select></label> : null}
                     <div className='mt-2 flex flex-wrap items-center gap-2'><h1 className='break-all text-2xl font-semibold'>{report.target || 'Saved browser run'}</h1><SiteNetworkDetails site={report.siteNetwork} /></div>
@@ -172,77 +181,7 @@ export default function BrowserReportPageClient({ runId = '', token = '', result
                             {!(report.captures || []).some(capture => capture.image) ? <p className='text-sm text-ui-muted'>No screenshots saved.</p> : null}
                         </ReportPanel>
                         <ReportPanel title='Network evidence'>
-                            <ReportList items={[
-                                `${analystReport.networkEvidence?.requests || 0} requests`,
-                                `${analystReport.networkEvidence?.responses || 0} responses`,
-                                `${analystReport.networkEvidence?.blockedOrFailed || 0} blocked/failed`,
-                                `final URL: ${analystReport.networkEvidence?.finalUrl || report.finalUrl || report.target || 'unknown'}`,
-                                ...((analystReport.networkEvidence?.urlStates || []).map(url => `URL state: ${url}`)),
-                                ...((analystReport.networkEvidence?.redirectChain || []).map(url => `redirect: ${url}`)),
-                            ]} empty='No network evidence saved.' />
-                            {analystReport.networkEvidence?.peerSummary?.length ? (
-                                <>
-                                    <p className='mt-3 text-xs font-semibold uppercase text-ui-muted'>DNS / IP / certificate evidence</p>
-                                    <ReportList items={analystReport.networkEvidence.peerSummary.map(peer => [
-                                        peer.host || peer.url || 'peer',
-                                        peer.ip ? `${peer.ip}${peer.port ? `:${peer.port}` : ''}` : '',
-                                        peer.asn ? `AS${peer.asn}` : '',
-                                        peer.protocol || '',
-                                        peer.tlsSubject ? `cert ${peer.tlsSubject}` : '',
-                                        peer.tlsIssuer || '',
-                                        peer.tlsValidTo ? `expires ${formatEpochDate(peer.tlsValidTo)}` : '',
-                                    ].filter(Boolean).join(' · '))} empty='No peer evidence saved.' />
-                                </>
-                            ) : null}
-                            {analystReport.networkEvidence?.recentRequests?.length ? (
-                                <div className='mt-3 max-h-96 overflow-auto rounded-md border border-ui-border'>
-                                    <table className='w-full min-w-[56rem] border-collapse text-left text-xs'>
-                                        <thead className='sticky top-0 bg-ui-raised text-ui-muted'>
-                                            <tr>
-                                                <th className='border-b border-ui-border px-2 py-1'>Method</th>
-                                                <th className='border-b border-ui-border px-2 py-1'>Status</th>
-                                                <th className='border-b border-ui-border px-2 py-1'>Host</th>
-                                                <th className='border-b border-ui-border px-2 py-1'>MIME</th>
-                                                <th className='border-b border-ui-border px-2 py-1'>Peer</th>
-                                                <th className='border-b border-ui-border px-2 py-1'>Time</th>
-                                                <th className='border-b border-ui-border px-2 py-1'>Initiator</th>
-                                                <th className='border-b border-ui-border px-2 py-1'>Block reason</th>
-                                                <th className='border-b border-ui-border px-2 py-1'>URL</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {analystReport.networkEvidence.recentRequests.slice(-40).map((request, index) => (
-                                                <tr key={`${request.url}-${request.status}-${request.failure}-${index}`}>
-                                                    <td className='border-b border-ui-border/60 px-2 py-1'>{request.method || 'GET'}</td>
-                                                    <td className='border-b border-ui-border/60 px-2 py-1'>{request.status || request.failure || ''}</td>
-                                                    <td className='max-w-36 truncate border-b border-ui-border/60 px-2 py-1 font-mono'>{request.host || ''}</td>
-                                                    <td className='max-w-40 truncate border-b border-ui-border/60 px-2 py-1'>{request.mimeType || ''}</td>
-                                                    <td className='max-w-64 truncate border-b border-ui-border/60 px-2 py-1 font-mono text-ui-muted'>{networkPeer(request)}</td>
-                                                    <td className='border-b border-ui-border/60 px-2 py-1'>{request.durationMs !== undefined ? `${request.durationMs}ms` : ''}</td>
-                                                    <td className='max-w-48 truncate border-b border-ui-border/60 px-2 py-1 font-mono text-ui-muted'>{request.initiator || ''}</td>
-                                                    <td className='max-w-48 truncate border-b border-ui-border/60 px-2 py-1 text-ui-danger'>{request.failure || ''}</td>
-                                                    <td className='max-w-[28rem] truncate border-b border-ui-border/60 px-2 py-1 font-mono text-ui-text'>{request.url || ''}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            ) : null}
-                            {analystReport.networkEvidence?.contactedDomains?.length ? (
-                                <>
-                                    <p className='mt-3 text-xs font-semibold uppercase text-ui-muted'>Contacted domains</p>
-                                    <pre className='mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-md border border-ui-border bg-ui-canvas p-3 text-xs text-ui-text'>{analystReport.networkEvidence.contactedDomains.join('\n')}</pre>
-                                </>
-                            ) : null}
-                            {analystReport.networkEvidence?.downloads?.length ? (
-                                <pre className='mt-3 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-md border border-ui-border bg-ui-canvas p-3 text-xs text-ui-text'>{analystReport.networkEvidence.downloads.map(download => [
-                                    download.fileName || download.url || 'download',
-                                    download.bytes !== undefined ? `${download.bytes} bytes` : '',
-                                    download.sha256 ? `sha256 ${download.sha256}` : download.hashStatus || '',
-                                    download.virusTotal?.total ? `VirusTotal: ${download.virusTotal.flagged || 0}/${download.virusTotal.total} detections` : download.virusTotal?.detail || download.virusTotal?.status || '',
-                                    download.url && download.fileName ? download.url : '',
-                                ].filter(Boolean).join('\n')).join('\n\n')}</pre>
-                            ) : null}
+                            <NetworkTable requests={networkRequests} urls={reportResourceUrls(report)} complete={typeof analystReport.networkEvidence?.requests === 'number' && analystReport.networkEvidence.requests <= new Set(networkRequests.map(request => request.url)).size} />
                         </ReportPanel>
                         <ReportPanel title='Console logs'>
                             <pre className='max-h-96 overflow-auto whitespace-pre-wrap break-all font-mono text-xs text-ui-muted'>{report.consoleEvents?.join('\n') || 'No console output saved from the inspected page.'}</pre>
@@ -257,32 +196,24 @@ export default function BrowserReportPageClient({ runId = '', token = '', result
                                 ...scriptIndicatorList(script).slice(0, 6),
                             ].filter(Boolean).join(' · '))} empty='No script artifacts saved.' />
                         </ReportPanel>
-                        <ReportPanel title='URLs'>
-                            <ReportList items={reportResourceUrls(report).slice(0, 80)} empty='No URLs saved.' />
-                        </ReportPanel>
-                        <ReportPanel title='Markdown export'>
-                            <pre className='max-h-96 overflow-auto whitespace-pre-wrap break-all rounded-md border border-ui-border bg-ui-canvas p-3 text-xs text-ui-text'>{reportMarkdown(analystReport.markdown || '', suspicious) || 'No markdown export saved.'}</pre>
-                        </ReportPanel>
+
                     </div>
                     <aside className='grid content-start gap-4'>
                         <ReportPanel title='Statistics'>
                             <BrowserRunMetrics metrics={{ ...report.status?.metrics, event: report.status?.metrics?.event || report.status?.run, capacity: report.status?.capacity }} />
                         </ReportPanel>
-                        <ReportPanel title='Evidence checklist'>
-                            <ReportList items={Object.entries(analystReport.evidenceChecklist || {}).map(([key, value]) => `${key}: ${value}`)} empty='No checklist saved.' />
-                        </ReportPanel>
                         {actions.length ? <ReportPanel title='Actions'>
                             <ReportList items={actions} empty='' />
                         </ReportPanel> : null}
-                        <ReportPanel title='Threat context'>
-                            <ReportList items={reportThreatAssociations(report).map(item => [
+                        {threatContext.length ? <ReportPanel title='Threat context'>
+                            <ReportList items={threatContext.map(item => [
                                 item.name || 'Threat association',
                                 item.category || 'context',
                                 item.confidence ? `${item.confidence} confidence` : '',
                                 item.source ? item.source.replace(/_/g, ' ') : '',
                                 item.evidence || '',
-                            ].filter(Boolean).join(' · '))} empty='No threat context saved.' />
-                        </ReportPanel>
+                            ].filter(Boolean).join(' · '))} empty='' />
+                        </ReportPanel> : null}
                         {reportIndicators(report).length > 0 ? <ReportPanel title='Indicators'>
                             <pre className='max-h-72 overflow-auto whitespace-pre-wrap break-all rounded-md border border-ui-border bg-ui-canvas p-3 text-xs text-ui-text'>{reportIndicators(report).join('\n')}</pre>
                         </ReportPanel> : null}
@@ -299,27 +230,12 @@ function providerVendorLabel(provider: { vendorFlagged?: number; vendorTotal?: n
     return provider.vendorTotal ? `${flagged}/${provider.vendorTotal}` : `${flagged} flagged`
 }
 
-function networkPeer(request: NetworkRequestRow) {
-    return [
-        request.ip ? `${request.ip}${request.port ? `:${request.port}` : ''}` : '',
-        request.asn ? `AS${request.asn}` : '',
-        request.protocol || '',
-        request.tlsSubject ? `cert ${request.tlsSubject}` : '',
-        request.tlsIssuer || '',
-        request.tlsValidTo ? `expires ${formatEpochDate(request.tlsValidTo)}` : '',
-    ].filter(Boolean).join(' · ')
-}
-
-function formatEpochDate(value: number) {
-    return new Date(value * 1000).toISOString().slice(0, 10)
-}
-
 function reportUrlTimeline(report: BrowserReport) {
     return report.analystReport?.urlTimeline?.length ? report.analystReport.urlTimeline : report.analystSummary?.urlTimeline || []
 }
 
 function reportResourceUrls(report: BrowserReport) {
-    return Array.from(new Set([...(report.analystReport?.resourceUrls || []), ...(report.captures || []).flatMap(capture => capture.evidence?.sourceUrls || [])])).filter(Boolean)
+    return Array.from(new Set([...(report.analystReport?.resourceUrls || []), ...(report.captures || []).filter(capture => capture.kind !== 'tool').flatMap(capture => capture.evidence?.sourceUrls || [])])).filter(Boolean)
 }
 
 function reportIndicators(report: BrowserReport) {
