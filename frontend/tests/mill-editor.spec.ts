@@ -90,8 +90,30 @@ test('Analyze rule exposes reversible retention and persists its action', async 
     await page.getByRole('button', { name: 'Save changes' }).click()
     await page.reload()
     await expect(page.getByLabel('Action', { exact: true })).toHaveValue('keep')
-    await expect(page.getByRole('button', { name: 'Add event selector condition' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Add event selector condition' })).toBeVisible()
     await page.screenshot({ path: '/tmp/hanasand-analyze-rule.png', fullPage: true })
+})
+
+test('storage protection criteria are visible, editable and reject invalid JSON', async ({ page }) => {
+    let writes = 0
+    let saved = { ...initial, id: 'security.event_evidence.v1', name: 'Store security and failure evidence',
+        definition: { match: 'all', stage: 'analyze', action: 'keep', conditions: [], parameters: {},
+            protection: { appliesTo: 'custom_drop', checks: [{ keys: ['error'], operator: 'signal' }] } } }
+    await page.route('**/api/backend/mill/rules/*?*', async route => {
+        if (route.request().method() === 'PUT') { writes++; saved = { ...saved, ...route.request().postDataJSON(), version: '2' } }
+        return route.fulfill({ json: { rule: saved, canEdit: true, currentVersion: saved.version, triggerCount: 0, audit: [], nextOffset: null } })
+    })
+    await page.goto('http://mill-editor.test/mill/rules/security.event_evidence')
+    await expect(page.getByLabel('Signature preview')).toContainText('custom_drop')
+    await page.getByLabel('Storage criteria').fill('{invalid')
+    await page.getByRole('button', { name: 'Save changes' }).click()
+    expect(writes).toBe(0)
+    await page.getByLabel('Storage criteria').fill(JSON.stringify({ appliesTo: 'all', checks: [{ keys: ['error', 'failure'], operator: 'signal' }] }))
+    await page.getByRole('button', { name: 'Save changes' }).click()
+    await expect(page.getByText('Rule saved. New events use this version.')).toBeVisible()
+    await page.reload()
+    await expect(page.getByLabel('Storage criteria')).toContainText('failure')
+    expect(writes).toBe(1)
 })
 
 

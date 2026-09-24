@@ -102,7 +102,7 @@ export function normalizeBuiltinDefinition(id: string, value: unknown): { defini
         definition.protection = result.protection
     }
     if (defaults.stage) {
-        const configuredPolicy = [modelDiscoveryRuleId, readinessAuditRuleId, proxyRuleId, ingestionRuleId, telemetryRuleId, sshWindowRuleId, collectorRuleId, cdnRefreshRuleId, postgresRuleId].includes(id)
+        const configuredPolicy = [modelDiscoveryRuleId, readinessAuditRuleId, proxyRuleId, ingestionRuleId, telemetryRuleId, sshWindowRuleId, collectorRuleId, cdnRefreshRuleId, postgresRuleId, accessRuleId, mongoRuleId].includes(id)
         if (input.stage !== 'analyze' || !['drop', 'keep'].includes(String(input.action)) || !Array.isArray(input.conditions) || (!configuredPolicy && input.conditions.length)) return { error: 'Choose Keep or Count and drop. The required safety checks cannot be removed.' }
         definition.action = input.action as 'drop' | 'keep'
     }

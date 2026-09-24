@@ -10,7 +10,7 @@ import { analyzePostgresBatch } from '../mill/analyzePostgresBatch.ts'
 import { customRetentionAction, loadLogRetentionRules } from '../mill/customRetention.ts'
 import { normalizeLogEvent } from '../mill/logEvent.ts'
 import { redactLogText, redactLogValue } from './redact.ts'
-import { accessFromLog } from '../mill/analyzeAccess.ts'
+import { verifiedAccessFromLog } from '../mill/analyzeAccess.ts'
 import { analyzeAccess, analyzeMongoPing } from '../mill/analyzeLog.ts'
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'fatal'
@@ -77,7 +77,7 @@ async function prepareLog({
         if (await analyzeCdnRefresh({ service, host, level, message, metadata, sourceEventId, timestamp }, query === run ? undefined : query)) return
         if (await analyzeCollectorExecution({ service, host, level, message, metadata, sourceEventId, timestamp }, query === run ? undefined : query)) return
         if (await analyzeMongoPing({ service, host, level, message, metadata, sourceEventId }, query === run ? undefined : query)) return
-        const access = accessFromLog({ service, host, level, message, metadata, sourceEventId, timestamp })
+        const access = verifiedAccessFromLog({ service, host, level, message, metadata, sourceEventId, timestamp })
         if (access && await analyzeAccess(access, query === run ? undefined : query)) return
     }
     message = redactedMessage
@@ -137,7 +137,8 @@ export default async function recordLog(entry: Parameters<typeof prepareLog>[0],
 export async function recordLogBatch(entries: Parameters<typeof prepareLog>[0][], query: typeof run) {
     const rows = []
     const retention = new Map<string, Awaited<ReturnType<typeof loadLogRetentionRules>>>()
-    for (const entry of await analyzeRoutineGroupBatch(await analyzePostgresBatch(await analyzeReadinessAuditBatch(entries.map(preserveUnrecognizedFields), query), query), query)) {
+    const originals = entries.map(entry => ({ ...preserveUnrecognizedFields(entry), service: entry.service ?? process.env.SERVICE_NAME ?? 'hanasand-api' }))
+    for (const entry of await analyzeRoutineGroupBatch(await analyzePostgresBatch(await analyzeReadinessAuditBatch(originals, query), query), query)) {
         const values = await prepareLog(entry, query, retention)
         if (values) rows.push(values)
     }

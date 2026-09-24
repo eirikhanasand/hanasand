@@ -4,7 +4,7 @@ import type { MillRule } from '../detection-rules'
 type Definition = NonNullable<MillRule['definition']>
 type Condition = NonNullable<Definition['conditions']>[number]
 const inputClass = 'w-full min-w-0 rounded-md border border-ui-border bg-ui-canvas px-3 py-2 font-mono text-sm text-ui-text outline-none focus:border-ui-primary disabled:opacity-70'
-const parameterLabels: Record<string, { label: string, unit: string, max: number }> = {
+const parameterLabels: Record<string, { label: string, unit: string, max: number, min?: number }> = {
     windowMinutes: { label: 'Time window', unit: 'minutes', max: 10080 },
     minimumCount: { label: 'Minimum count', unit: 'events', max: 1000 },
     distanceKm: { label: 'Minimum distance', unit: 'km', max: 20040 },
@@ -13,6 +13,13 @@ const parameterLabels: Record<string, { label: string, unit: string, max: number
     maxDurationMs: { label: 'Maximum duration', unit: 'ms', max: 60000 },
     minIntervalMs: { label: 'Minimum interval', unit: 'ms', max: 3600000 },
     maxIntervalMs: { label: 'Maximum interval', unit: 'ms', max: 3600000 },
+    maxAgeMs: { label: 'Maximum record age', unit: 'ms', max: 31536000000 },
+    maxFutureMs: { label: 'Clock tolerance', unit: 'ms', max: 60000, min: 0 },
+    minSpacingMs: { label: 'Minimum spacing', unit: 'ms', max: 60000, min: 0 },
+    maxSessions: { label: 'Maximum sessions', unit: 'sessions', max: 64 },
+    windowMs: { label: 'Counting window', unit: 'ms', max: 3600000 },
+    minimumGapMs: { label: 'Minimum spacing', unit: 'ms', max: 60000 },
+    maxPerMinute: { label: 'Maximum per minute', unit: 'events', max: 65 },
 }
 
 export default function SignatureEditor({ rule, disabled, onChange }: { rule: MillRule, disabled: boolean, onChange: (definition: Definition) => void }) {
@@ -21,7 +28,7 @@ export default function SignatureEditor({ rule, disabled, onChange }: { rule: Mi
     const brute = rule.id.startsWith('auth.brute_force_success.')
     const spray = rule.id.startsWith('auth.password_spray.')
     const builtIn = rule.source === 'hanasand'
-    const configurableAnalysis = ['model.verified_discovery_probes', 'postgresql.readiness_audit', 'http.duplicate_ingestion_records', 'proxy.redundant_connections', 'cdn.successful_cache_refresh', 'collector.routine_executions', 'system.completed_telemetry_cycles', 'ssh.completed_session_windows'].includes(rule.id.replace(/\.v\d+$/, ''))
+    const configurableAnalysis = ['model.verified_discovery_probes', 'postgresql.readiness_audit', 'http.duplicate_ingestion_records', 'proxy.redundant_connections', 'cdn.successful_cache_refresh', 'collector.routine_executions', 'system.completed_telemetry_cycles', 'ssh.completed_session_windows', 'postgresql.readiness_sessions', 'http.routine_access', 'mongodb.cashflow_connections'].includes(rule.id.replace(/\.v\d+$/, ''))
     const conditions = definition.conditions || []
     function selectors(key: 'conditions' | 'failureConditions', title: string, required: string) {
         const items = definition[key] || []
@@ -45,20 +52,29 @@ export default function SignatureEditor({ rule, disabled, onChange }: { rule: Mi
     const signature = {
         rule: rule.id.replace(/\.v\d+$/, ''),
         ...(analyze ? { stage: 'before storage', action: definition.action } : {}),
+        ...(definition.protection ? { protection: definition.protection } : {}),
         ...(builtIn ? { engine: brute ? 'sequence' : spray ? 'distinct_count' : 'builtin', ...(brute ? { group_by: 'user.id', sequence: [{ event_type: 'authentication', action: 'login', outcome: 'failure', where: definition.failureConditions || [], count_at_least: definition.parameters?.minimumCount }, { event_type: 'authentication', action: 'login', outcome: 'success', where: conditions }] } : { where: conditions }), ...definition.parameters } : { match: 'all', where: conditions }),
     }
     return <DashboardPanel className='overflow-hidden'>
         <header className='flex flex-wrap items-center justify-between gap-2 border-b border-ui-border px-5 py-4'><div><h2 className='font-semibold'>{analyze ? 'Analyze rule' : 'Detection signature'}</h2><p className='mt-1 text-xs text-ui-muted'>{analyze ? 'Runs before storage and detection. Dropped logs cannot be recovered.' : 'Selectors and parameters are executed on new events and replays.'}</p></div><span className='rounded-md border border-ui-border px-2 py-1 font-mono text-xs'>{analyze ? 'ANALYZE FIRST' : brute ? 'SEQUENCE' : spray ? 'DISTINCT COUNT' : 'MATCH'}</span></header>
         <div className='grid min-w-0 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]'>
             <fieldset disabled={disabled} className='grid min-w-0 content-start gap-4 p-4 sm:p-5'>
-                {analyze && <><label className='grid gap-2 text-sm'>Action<select aria-label='Action' className={inputClass} value={definition.action} onChange={event => onChange({ ...definition, action: event.target.value as 'drop' | 'keep' })}><option value='drop'>Drop</option><option value='keep'>Store</option></select></label><p className='text-sm text-ui-muted'>{rule.explanation}</p></>}
+                {analyze && <><label className='grid gap-2 text-sm'>Action<select aria-label='Action' className={inputClass} value={definition.action} onChange={event => onChange({ ...definition, action: event.target.value as 'drop' | 'keep' })}><option value='drop' disabled={Boolean(definition.protection)}>Drop</option><option value='keep'>Store</option></select></label><p className='text-sm text-ui-muted'>{rule.explanation}</p></>}
+                {definition.protection && <label className='grid gap-2 text-sm'>Storage criteria<textarea key={rule.id + rule.version} aria-label='Storage criteria' rows={16} className={inputClass} defaultValue={JSON.stringify(definition.protection, null, 2)} onChange={event => {
+                    try {
+                        const protection: unknown = JSON.parse(event.target.value)
+                        if (!protection || typeof protection !== 'object' || Array.isArray(protection)) throw new Error('Use a JSON object.')
+                        event.target.setCustomValidity('')
+                        onChange({ ...definition, protection: protection as Record<string, unknown> })
+                    } catch { event.target.setCustomValidity('Enter valid JSON storage criteria.') }
+                }} /></label>}
                 {Object.keys(definition.parameters || {}).length > 0 && <div className='grid gap-3 sm:grid-cols-2'>{Object.entries(definition.parameters || {}).map(([key, value]) => {
                     const meta = parameterLabels[key]
-                    return <label key={key} className='grid gap-1.5 text-xs font-medium'>{key === 'minimumCount' ? (spray ? 'Minimum distinct users' : 'Minimum failed logins') : meta?.label || key}<div className='flex items-center gap-2'><input required type='number' min={1} max={meta?.max} step={1} value={Number.isFinite(value) ? value : ''} onChange={event => onChange({ ...definition, parameters: { ...definition.parameters, [key]: event.target.value === '' ? NaN : Number(event.target.value) } })} className={inputClass} /><span className='shrink-0 text-ui-muted'>{key === 'minimumCount' && spray ? 'users' : meta?.unit}</span></div></label>
+                    return <label key={key} className='grid gap-1.5 text-xs font-medium'>{key === 'minimumCount' ? (spray ? 'Minimum distinct users' : 'Minimum failed logins') : meta?.label || key}<div className='flex items-center gap-2'><input required type='number' min={meta?.min ?? 1} max={meta?.max} step={1} value={Number.isFinite(value) ? value : ''} onChange={event => onChange({ ...definition, parameters: { ...definition.parameters, [key]: event.target.value === '' ? NaN : Number(event.target.value) } })} className={inputClass} /><span className='shrink-0 text-ui-muted'>{key === 'minimumCount' && spray ? 'users' : meta?.unit}</span></div></label>
                 })}</div>}
                 {brute && <><p className='font-mono text-xs text-ui-muted'>GROUP BY user.id · failure → success</p>{selectors('failureConditions', 'Failure selector', 'event_type = authentication AND action = login AND outcome = failure')}</>}
                 {(!analyze || !builtIn || configurableAnalysis) && selectors('conditions', brute ? 'Success selector' : 'Event selector', builtIn ? brute ? 'event_type = authentication AND action = login AND outcome = success' : rule.id.startsWith('auth.') ? `event_type = authentication AND action = login AND outcome = ${spray ? 'failure' : 'success'}` : rule.detectionLogic || '' : '')}
-                {!analyze && <p className='text-xs leading-5 text-ui-muted'>Fields use paths in the normalized event, such as EventID, event.code, signature_id, or source.ip. Field names are case-sensitive; values are case-insensitive. Use regex <code className='font-mono'>^(4625|4771)$</code> to select multiple event IDs. Empty built-in selectors accept every event matching the required fields.</p>}
+                {!analyze && <p className='text-xs leading-5 text-ui-muted'>Fields use paths in the normalized event, such as EventID, event.code, signature_id, or source.ip. Field names are case-sensitive; values are case-insensitive unless Match case is selected. Use regex <code className='font-mono'>^(4625|4771)$</code> to select multiple event IDs. Empty built-in selectors accept every event matching the required fields.</p>}
             </fieldset>
             <aside className='min-w-0 border-t border-ui-border bg-ui-raised p-5 xl:border-t-0 xl:border-l'><h3 className='mb-3 text-xs font-semibold uppercase tracking-wide text-ui-muted'>Signature preview</h3><pre aria-label='Signature preview' className='max-h-[38rem] overflow-auto whitespace-pre-wrap wrap-break-word font-mono text-xs leading-6 text-ui-text'>{JSON.stringify(signature, null, 2)}</pre></aside>
         </div>

@@ -6,6 +6,7 @@ import { eligibleCustomDrop } from './dropEligibility.ts'
 import { matchSecurityRules } from './securityRules.ts'
 import { matchRulePage } from './rulePreview.ts'
 import type { MillCondition } from './conditions.ts'
+import { builtinReprocessable, reprocessBuiltinPage } from './builtinReprocess.ts'
 
 type Cursor = { phase: number, time?: string, id?: string, serviceEnd: string, trafficEnd: string }
 export type ReprocessJob = { id: string, organization_id: string, rule_id: string, rule_version: string, status: string,
@@ -19,7 +20,7 @@ const protectedEvent = (event: Record<string, unknown>) => !eligibleCustomDrop(e
     || Boolean((event.metadata as Record<string, unknown>)?.unrecognized_ingest_fields)
 
 export function reprocessableRule(rule: Rule | undefined): rule is Rule {
-    return Boolean(rule && rule.source === 'owned' && rule.enabled && rule.definition?.stage === 'analyze'
+    return Boolean(rule && (rule.source === 'owned' || rule.source === 'hanasand' && builtinReprocessable(rule.rule_id)) && rule.enabled && rule.definition?.stage === 'analyze'
         && rule.definition.action === 'drop' && rule.definition.conditions?.length)
 }
 
@@ -45,6 +46,7 @@ export async function processRuleReprocessJob() {
                 await query('UPDATE mill_rule_reprocess_jobs SET status=\'cancelled\',error=\'The rule changed or was disabled. Start a new run to use its current version.\',updated_at=NOW() WHERE id=$1', [job.id])
                 return true
             }
+            if (rule.source === 'hanasand') return reprocessBuiltinPage(job, query)
             const cursor = { ...job.cursor }
             let items: Item[], scanned: number
             if (cursor.phase === 0) {

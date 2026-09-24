@@ -43,7 +43,7 @@ export async function postMillRuleReprocess(req: Request, res: FastifyReply) {
     return withTransaction(async query => {
         const rule = (await query(`SELECT * FROM mill_rules WHERE organization_id=$1
             AND regexp_replace(rule_id,'\\.v[0-9]+$','')=$2 FOR UPDATE`, [scope.organizationId, millRuleSlug(req.params.id)])).rows[0]
-        if (!reprocessableRule(rule)) return res.status(400).send({ error: 'Save and enable a custom Analyze drop rule before reprocessing.' })
+        if (!reprocessableRule(rule)) return res.status(400).send({ error: 'Save and enable an Analyze drop rule with stored-log processing before reprocessing.' })
         if (rule.version !== body.version) return res.status(409).send({ error: 'This rule changed. Reload it before reprocessing.' })
         const existing = (await query(`SELECT ${columns} FROM mill_rule_reprocess_jobs WHERE organization_id=$1 AND rule_id=$2
             AND status IN ('queued','running')`, [scope.organizationId, rule.rule_id])).rows[0]

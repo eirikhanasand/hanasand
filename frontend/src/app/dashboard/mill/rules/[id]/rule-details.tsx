@@ -103,7 +103,7 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
                     </DashboardPanel>
                 </div>
             </form>
-            {data.canEdit && !data.isHistorical && data.rule.source === 'owned' && data.rule.definition?.stage === 'analyze' &&
+            {data.canEdit && !data.isHistorical && data.rule.definition?.stage === 'analyze' && data.rule.definition?.action === 'drop' &&
                 <ReprocessRule key={organizationId + data.rule.id} rule={data.rule} organizationId={organizationId} disabled={busy || JSON.stringify(draft) !== JSON.stringify(data.rule)} />}
             <DashboardPanel className='grid gap-4 p-5 sm:p-6'>
                 <div className='flex items-center gap-2'><History size={18} className='text-ui-muted' aria-hidden='true' /><h2 className='text-sm font-semibold'>Audit log</h2></div>
