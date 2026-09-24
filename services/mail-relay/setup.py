@@ -16,7 +16,7 @@ import urllib.request
 import urllib.error
 
 STALWART_IMAGE = 'stalwartlabs/stalwart@sha256:b6c2a04a79695136d5e2c16e9da0254135d0c3f3b1f8147873e812916b0ae8c4'
-ROOT = Path.home() / 'resilience-mail-relay'
+ROOT = Path.home() / 'hanasand/mail/mail-relay'
 
 
 def write_secret(path, value):
