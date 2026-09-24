@@ -58,7 +58,11 @@ export async function guestExport(store: Store, config: Config, write = writeOut
     for (const name of checkpointFiles(store.root)) if (fs.existsSync(store.path(name))) fs.copyFileSync(store.path(name), join(pending, name));
     const staging = store.path('export.pending'), fd = fs.openSync(staging, 'w', 0o600); let first = true;
     const guestStore = new Store(pending);
-    guestStore.send = async (events: Events) => { for await (const item of events) { fs.writeSync(fd, (first ? '' : ',') + JSON.stringify(item)); first = false; } };
+    guestStore.send = async (events: Events) => { for await (const item of events) {
+      for (const entry of 'atomic' in item && item.atomic === true ? item.events : [item]) {
+        fs.writeSync(fd, (first ? '' : ',') + JSON.stringify(entry)); first = false;
+      }
+    } };
     try {
       fs.writeSync(fd, '{"id":' + JSON.stringify(randomUUID().replaceAll('-', '')) + ',"events":[');
       const failures = await collect(new Sources(guestStore));

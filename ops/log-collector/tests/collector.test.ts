@@ -14,7 +14,7 @@ afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 async function* lines(text: string) { for (const line of text.match(/[^\n]*\n|[^\n]+$/g) || []) yield line; }
 async function array<T>(iterable: AsyncIterable<T>) { const result: T[] = []; for await (const item of iterable) result.push(item); return result; }
 function queued(lane = 'history') { return store.queuedNames(lane, 1000).flatMap(path => JSON.parse(fs.readFileSync(path, 'utf8')).events) as LogEvent[]; }
-function capture() { const events: LogEvent[] = []; store.send = async items => { for await (const item of items) events.push(item); }; return events; }
+function capture() { const events: LogEvent[] = []; store.send = async items => { for await (const item of items) events.push(...('atomic' in item ? item.events : [item])); }; return events; }
 const audit = (id = 456, args = 'argc=1 a0="whoami"') => `type=SYSCALL msg=audit(1789817000.123:${id}): success=yes pid=123 ppid=100 uid=1000 auid=1000 exe="/usr/bin/whoami"\ntype=EXECVE msg=audit(1789817000.123:${id}): ${args}\n`;
 const logLine = (message: string, second = 1, stream = 'stdout') => Buffer.from(JSON.stringify({ log: message + '\n', time: `2026-09-19T00:00:${String(second).padStart(2, '0')}.1Z`, stream }) + '\n');
 function logFixture() { const path = join(root, 'container-json.log'); return { name: 'cdn', path, since: config.start! }; }

@@ -12,7 +12,8 @@ export type Json = null | boolean | number | string | Json[] | { [key: string]: 
 export type Metadata = { [key: string]: Json };
 export interface Config { host: string; start?: string; url?: string; token?: string; guestCollection?: boolean }
 export interface LogEvent { sourceEventId: string; service: string; host: string; message: string; timestamp: string; level: string; metadata: Metadata }
-export type Events = Iterable<LogEvent> | AsyncIterable<LogEvent>;
+export type AtomicEventGroup = { events: LogEvent[]; atomic: true };
+export type Events = Iterable<LogEvent | AtomicEventGroup> | AsyncIterable<LogEvent | AtomicEventGroup>;
 export const MAX_RECORD_BYTES = 8 * 1024 * 1024;
 export const BATCH_BYTES = 256 * 1024;
 export const BATCH_COUNT = 100;
@@ -117,14 +118,14 @@ export class Store {
     fs.renameSync(pending, path); syncDirectory(dirname(path));
   }
   async durable() { if (this.persistence) { await this.persistence.barrier(); this.pendingBatches = 0; } }
-  queueBatch(batch: LogEvent[], lane: string) {
+  queueBatch(batch: LogEvent[], lane: string, atomic = false) {
     const root = this.path('queue/' + lane);
     fs.mkdirSync(root, { recursive: true, mode: 0o700 });
     if (!this.persistence) { syncDirectory(dirname(root)); syncDirectory(this.root); }
     const identity = (BigInt(Date.now()) * 1000000n).toString().padStart(20, '0') + '-' + randomUUID().replaceAll('-', '');
     const pending = join(root, identity + '.pending'), path = join(root, identity + '.json');
     const fd = fs.openSync(pending, 'wx', 0o600);
-    try { fs.writeFileSync(fd, JSON.stringify({ events: batch })); if (!this.persistence) fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+    try { fs.writeFileSync(fd, JSON.stringify({ events: batch, ...(atomic ? { atomic: true } : {}) })); if (!this.persistence) fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
     if (this.persistence) { this.persistence.queue(pending); this.pendingBatches++; }
     else { fs.renameSync(pending, path); syncDirectory(root); }
   }
@@ -132,13 +133,29 @@ export class Store {
     const batches: Record<string, LogEvent[]> = { live: [], history: [] }, sizes = { live: 0, history: 0 };
     let flushed = performance.now();
     const flush = () => { for (const lane of ['live', 'history'] as const) if (batches[lane].length) { this.queueBatch(batches[lane], lane); batches[lane] = []; sizes[lane] = 0; } };
-    for await (const item of events) {
+    const laneFor = (item: LogEvent) => !Number.isFinite(Date.parse(item.timestamp)) || Date.parse(item.timestamp) >= Date.now() - 60000 ? 'live' : 'history';
+    const append = async (item: LogEvent) => {
       if (this.pendingBatches >= 128) await this.durable();
-      const timestamp = Date.parse(item.timestamp);
-      const lane = !Number.isFinite(timestamp) || timestamp >= Date.now() - 60000 ? 'live' : 'history', size = jsonSize(item);
+      const lane = laneFor(item), size = jsonSize(item);
       if (batches[lane].length && (sizes[lane] + size > BATCH_BYTES || batches[lane].length >= BATCH_COUNT)) { this.queueBatch(batches[lane], lane); batches[lane] = []; sizes[lane] = 0; }
       batches[lane].push(item); sizes[lane] += size;
       if (performance.now() - flushed >= 100) { flush(); flushed = performance.now(); }
+    };
+    for await (const item of events) {
+      if ('atomic' in item && item.atomic === true) {
+        if (!item.events.length) continue;
+        if (item.events.length <= BATCH_COUNT && jsonSize({ events: item.events }) <= BATCH_BYTES) {
+          if (this.pendingBatches >= 128) await this.durable();
+          // Correlated evidence must reach the receiver together. This is only
+          // a transport boundary; the receiver still evaluates its saved rules.
+          flush();
+          this.queueBatch(item.events, item.events.some(event => laneFor(event) === 'live') ? 'live' : 'history', true);
+          flushed = performance.now();
+        } else {
+          // Oversized groups lose grouping, never evidence or the existing limits.
+          for (const event of item.events) await append(event);
+        }
+      } else await append(item as LogEvent);
     }
     flush();
   }
@@ -156,9 +173,11 @@ export class Store {
     if (lane === 'history' && this.queuedNames('live', 1).length) return [];
     const paths: string[] = []; let size = 0, count = 0;
     for (const path of this.queuedNames(lane, BATCH_COUNT)) {
-      const raw = readBounded(path, 512000), entries = (JSON.parse(raw.toString()) as { events: LogEvent[] }).events.length;
+      const raw = readBounded(path, 512000), batch = JSON.parse(raw.toString()) as { events: LogEvent[]; atomic?: boolean }, entries = batch.events.length;
+      if (batch.atomic && paths.length) break;
       if (paths.length && (size + raw.length > BATCH_BYTES || count + entries > BATCH_COUNT)) break;
       paths.push(path); size += raw.length; count += entries;
+      if (batch.atomic) break;
     }
     return paths;
   }
@@ -188,14 +207,19 @@ export class Delivery {
   }
   close() { this.agent.destroy(); }
   async deliver(paths: string[]): Promise<number> {
-    const queued = paths.flatMap(path => (JSON.parse(readBounded(path, 512000).toString()) as { events: LogEvent[] }).events);
+    const batches = paths.map(path => JSON.parse(readBounded(path, 512000).toString()) as { events: LogEvent[]; atomic?: boolean });
+    const atomic = batches.some(batch => batch.atomic === true);
+    if (atomic && paths.length !== 1) throw new DeliveryError('Atomic evidence group must be delivered separately');
+    const queued = batches.flatMap(batch => batch.events);
     if (queued.some(item => typeof item.sourceEventId !== 'string' || !item.sourceEventId)) throw new DeliveryError('Missing stable event identity');
     // Live and recovery cursors overlap. Only skip IDs for which this process
     // already received an exact durable ACK; restart/expiry safely replays them.
     const now = Date.now();
     for (const [id, at] of this.acknowledged) { if (at > now - 120000) break; this.acknowledged.delete(id); }
     const seen = new Set<string>();
-    const events = queued.filter(item => { if (this.acknowledged.has(item.sourceEventId) || seen.has(item.sourceEventId)) return false; seen.add(item.sourceEventId); return true; });
+    // Replays of correlated evidence must include every member, even when one
+    // member was acknowledged earlier without the later completion evidence.
+    const events = atomic ? queued : queued.filter(item => { if (this.acknowledged.has(item.sourceEventId) || seen.has(item.sourceEventId)) return false; seen.add(item.sourceEventId); return true; });
     const payload = JSON.stringify({ events });
     if (Buffer.byteLength(payload) > 512000 || events.length > BATCH_COUNT) throw new Error('Delivery batch exceeds ingestion limit');
     if (events.length) try {
