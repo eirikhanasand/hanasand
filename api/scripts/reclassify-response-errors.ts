@@ -22,8 +22,14 @@ await withTransaction(async query => {
 const rules = await loadConfiguredMillRules(organizationId)
 const rule = rules.find(rule => rule.id === applicationErrorRuleId)
 if (!rule?.enabled || rule.severity !== 'medium') throw new Error('The saved rule must be enabled at medium severity.')
-const rows = (await run(`SELECT e.id AS event_id,s.* FROM mill_events e JOIN service_logs s ON e.log_key='service:'||s.id::text
-    WHERE e.organization_id=$1 AND e.ingestion_id='logs' AND e.normalized->>'service'='hanasand-api'
+const rows = (await run(`SELECT e.id AS event_id, COALESCE(s.id::text, substring(e.log_key FROM 9)) AS id,
+        COALESCE(s.service,e.normalized->>'service') AS service, COALESCE(s.host,e.normalized->>'host') AS host,
+        COALESCE(s.level,e.normalized->>'level') AS level, COALESCE(s.message,e.normalized->>'message') AS message,
+        COALESCE(s.created_at,e.event_timestamp) AS created_at,
+        COALESCE(s.metadata,e.normalized->'metadata','{}'::jsonb) || CASE WHEN s.id IS NULL
+            THEN jsonb_build_object('recovered_from_mill_event',e.id) ELSE '{}'::jsonb END AS metadata
+    FROM mill_events e LEFT JOIN service_logs s ON e.log_key='service:'||s.id::text
+    WHERE e.organization_id=$1 AND e.ingestion_id='logs' AND e.log_key ~ '^service:[0-9]+$' AND e.normalized->>'service'='hanasand-api'
     AND e.normalized->>'message'=$2 AND e.normalized->>'severity'='critical'
     ORDER BY s.id`, [organizationId, applicationErrorDefinition.conditions[1].value])).rows as (LogInput & { event_id: string })[]
 let processed = 0
@@ -34,7 +40,13 @@ for (let offset = 0; offset < rows.length; offset += 50) {
         return { ...log, level: classification.level, metadata: classification.metadata }
     })
     await withTransaction(async query => {
-        for (const log of batch) await query('UPDATE service_logs SET level=$2,metadata=$3::jsonb WHERE id=$1', [String(log.id), log.level, JSON.stringify(log.metadata)])
+        for (const log of batch) {
+            // Older raw rows may have expired while their structured evidence remains.
+            // Restore that evidence under its original ID, marking its provenance.
+            await query(`INSERT INTO service_logs(id,service,host,level,message,metadata,created_at)
+                VALUES($1,$2,$3,$4,$5,$6::jsonb,$7) ON CONFLICT(id) DO UPDATE SET level=EXCLUDED.level,metadata=EXCLUDED.metadata`,
+            [String(log.id), log.service, log.host || '', log.level, log.message, JSON.stringify(log.metadata), log.created_at])
+        }
         await query('UPDATE mill_events SET processing_status=\'pending\' WHERE organization_id=$1 AND id=ANY($2::text[])', [organizationId, batch.map(log => log.event_id)])
     })
     await processLogBatch(batch, organizationId, rules)
