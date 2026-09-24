@@ -1,5 +1,5 @@
 import type { MillCondition } from './conditions.ts'
-import { matchRulePage } from './rulePreview.ts'
+import { matchAnalysisEvents } from './analysisMatcher.ts'
 
 type AnalysisDefinition = { stage?: string, action?: string, conditions?: MillCondition[] }
 
@@ -9,5 +9,5 @@ export async function matchesAnalysisPolicy(events: Record<string, unknown>[], d
     if (!events.length || definition?.stage !== 'analyze' || definition.action !== 'drop'
         || !Array.isArray(definition.conditions)) return false
     if (!definition.conditions.length) return true
-    return (await matchRulePage(events, definition.conditions)).length === events.length
+    return (await matchAnalysisEvents(events, definition.conditions)).length === events.length
 }

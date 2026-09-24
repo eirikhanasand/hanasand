@@ -1,3 +1,6 @@
 import { parentPort, workerData } from 'node:worker_threads'
-import { matchesMillRule } from './conditions.ts'
-parentPort?.postMessage(workerData.events.map((event: Record<string, unknown>, index: number) => matchesMillRule(event, workerData.conditions) ? index : -1).filter((index: number) => index >= 0))
+import { matchesMillRule, type MillCondition } from './conditions.ts'
+const evaluate = (input: { events: Record<string, unknown>[], conditions: MillCondition[] }) =>
+    parentPort?.postMessage(input.events.flatMap((event, index) => matchesMillRule(event, input.conditions) ? [index] : []))
+if (workerData.reusable) parentPort?.on('message', evaluate)
+else evaluate(workerData)
