@@ -1,17 +1,17 @@
 import run from '#db'
-import { eventProtectionDefinition, eventProtectionRule } from '../mill/eventProtection.ts'
+import { authenticationAuditStoreRule, eventProtectionDefinition, eventProtectionRule } from '../mill/eventProtection.ts'
 
 export async function ensureEventProtectionRule(query: typeof run, organizationId: string | null = null) {
-    await query(`WITH installed AS (
+    for (const rule of [{ ...eventProtectionRule, definition: { ...eventProtectionDefinition, parameters: {} }, source: 'hanasand' },
+        { ...authenticationAuditStoreRule, source: 'owned' }]) await query(`WITH installed AS (
         INSERT INTO mill_rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
-        SELECT gen_random_uuid()::text,id,$2,'1',$3,$4,$5,$6,$7::jsonb,'hanasand',true
+        SELECT gen_random_uuid()::text,id,$2,'1',$3,$4,$5,$6,$7::jsonb,$8,true
         FROM organizations WHERE ($1::text IS NULL OR id=$1)
         ON CONFLICT(organization_id,rule_id) DO NOTHING RETURNING *)
         INSERT INTO system_events(event_type,source,object_type,object_id,organization_id,context)
         SELECT 'mill.rule.created','mill','mill_rule',rule_id,organization_id,
             jsonb_build_object('ruleId',rule_id,'after',jsonb_build_object('version',version,'name',name,'explanation',explanation,'severity',severity,'enabled',enabled,'definition',definition))
-        FROM installed`, [organizationId, eventProtectionRule.id, eventProtectionRule.name, eventProtectionRule.family,
-        eventProtectionRule.severity, eventProtectionRule.explanation, JSON.stringify({ ...eventProtectionDefinition, parameters: {} })])
+        FROM installed`, [organizationId, rule.id, rule.name, rule.family, rule.severity, rule.explanation, JSON.stringify(rule.definition), rule.source])
 }
 
 export async function ensureAnalysisPolicySchema(query: typeof run = run) {

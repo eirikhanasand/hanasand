@@ -37,6 +37,8 @@ try {
     const { normalizeLogEvent } = await import('../src/utils/mill/logEvent.ts')
     const { eventProtectionDefinition, eventProtectionRuleId } = await import('../src/utils/mill/eventProtection.ts')
     await query(`INSERT INTO mill_rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled) VALUES('protection','platform',$1,'1','Store evidence','Security','low','Store evidence',$2,'hanasand',true)`, [eventProtectionRuleId, JSON.stringify(eventProtectionDefinition)])
+    const { ensureEventProtectionRule } = await import('../src/utils/db/analysisPolicySchema.ts')
+    await ensureEventProtectionRule(query as any)
     const definition = { stage: 'analyze', action: 'drop', match: 'all', conditions: [{ path: 'message', operator: 'regex', value: '^routine' }] }
     await query(`INSERT INTO mill_rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
         VALUES('rule','platform','custom.test.v1','1','Routine','Custom','low','Routine test events',$1,'owned',true),
@@ -96,6 +98,31 @@ try {
     assert.ok(Number(rangedJob.scanned) < 500, 'a short range does not walk older raw logs')
     assert.equal((await query("SELECT count(*) FROM service_logs WHERE message='routine archived'")).rows[0].count, '500')
     await query("DELETE FROM service_logs WHERE message='routine archived'")
+    // The visible Store rule controls authentication retention, including edited criteria.
+    await query("UPDATE mill_rules SET enabled=false WHERE rule_id='security.authentication_audit_retention.v1'")
+    await ensureEventProtectionRule(query as any)
+    assert.equal((await query("SELECT enabled FROM mill_rules WHERE organization_id='platform' AND rule_id='security.authentication_audit_retention.v1'")).rows[0].enabled, false, 'Restart preserves disabled Store policy')
+    await postMillRuleReprocess(request(body), reply() as any)
+    for (let i = 0; i < 10 && await processRuleReprocessJob(); i++) { /* current stored policy */ }
+    assert.equal((await query("SELECT count(*) FROM mill_events WHERE id='auth'")).rows[0].count, '0', 'Disabled Store policy no longer secretly retains authentication')
+    const editedStore = { stage: 'analyze', action: 'keep', match: 'all', conditions: [{ path: 'event_type', operator: 'equals', value: 'audit' }] }
+    await query("UPDATE mill_rules SET enabled=true,definition=$1,version='2' WHERE organization_id='platform' AND rule_id='security.authentication_audit_retention.v1'", [JSON.stringify(editedStore)])
+    await query("INSERT INTO organizations(id,name,status) VALUES('new-tenant','New tenant','active')")
+    await ensureEventProtectionRule(query as any, 'new-tenant')
+    await ensureEventProtectionRule(query as any)
+    const edited = (await query("SELECT definition,version FROM mill_rules WHERE organization_id='platform' AND rule_id='security.authentication_audit_retention.v1'")).rows[0]
+    assert.deepEqual(edited.definition, editedStore, 'Policy installation never replaces edited Store criteria')
+    assert.equal(edited.version, '2')
+    assert.equal((await query("SELECT enabled FROM mill_rules WHERE organization_id='new-tenant' AND rule_id='security.authentication_audit_retention.v1'")).rows[0].enabled, true, 'New organizations receive the visible default')
+    // Current configured detectors, not a hardcoded enabled set, protect process evidence.
+    await query("INSERT INTO mill_events(id,ingestion_id,organization_id,event_timestamp,normalized) VALUES('process-rule','mill-test','platform',NOW()-interval '1 minute',$1)", [JSON.stringify({ severity: 'low', message: 'routine process', event_type: 'process', action: 'exec', process: { executable: '/usr/bin/id' } })])
+    await postMillRuleReprocess(request(body), reply() as any)
+    for (let i = 0; i < 10 && await processRuleReprocessJob(); i++) { /* enabled default detector */ }
+    assert.equal((await query("SELECT count(*) FROM mill_events WHERE id='process-rule'")).rows[0].count, '1')
+    await query("INSERT INTO mill_rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled) VALUES('detector','platform','process.recon.id.v1','1','ID','Reconnaissance','low','ID detector','{\"match\":\"all\",\"conditions\":[]}','hanasand',false)")
+    await postMillRuleReprocess(request(body), reply() as any)
+    for (let i = 0; i < 10 && await processRuleReprocessJob(); i++) { /* disabled detector */ }
+    assert.equal((await query("SELECT count(*) FROM mill_events WHERE id='process-rule'")).rows[0].count, '0', 'Disabled detector does not impose hidden retention')
     // A changed or disabled rule stops at the next batch, including after a worker restart.
     const changed = await postMillRuleReprocess(request(body), reply() as any)
     await query("UPDATE mill_rules SET enabled=false WHERE id='rule'")

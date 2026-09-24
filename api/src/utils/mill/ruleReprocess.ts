@@ -3,7 +3,7 @@ import { normalizeLogEvent, type LogInput } from './logEvent.ts'
 import { storedSourceLog } from './storedSources.ts'
 import { loadLogRetentionRules, retentionStoreMatches } from './customRetention.ts'
 import { eligibleCustomDrop } from './dropEligibility.ts'
-import { matchSecurityRules } from './securityRules.ts'
+import { collectMillEventFindings, loadConfiguredMillRules, normalizeMillEvent } from '../../handlers/mill.ts'
 import { matchRulePage } from './rulePreview.ts'
 import type { MillCondition } from './conditions.ts'
 import { builtinReprocessable, reprocessBuiltinPage } from './builtinReprocess.ts'
@@ -15,9 +15,7 @@ export type ReprocessJob = { id: string, organization_id: string, rule_id: strin
 type Rule = { rule_id: string, version: string, source: string, enabled: boolean, definition: { stage: string, action: string, conditions: MillCondition[] } }
 type Item = { id: string, key: string | null, event: Record<string, unknown>, original?: Record<string, unknown> }
 const size = 200
-const protectedEvent = (event: Record<string, unknown>) => !eligibleCustomDrop(event) || matchSecurityRules(event).length > 0
-    || event.event_type === 'authentication' || event.event_type === 'audit'
-    || Boolean((event.metadata as Record<string, unknown>)?.unrecognized_ingest_fields)
+
 
 export function reprocessableRule(rule: Rule | undefined): rule is Rule {
     return Boolean(rule && (rule.source === 'owned' || rule.source === 'hanasand' && builtinReprocessable(rule.rule_id)) && rule.enabled && rule.definition?.stage === 'analyze'
@@ -84,9 +82,15 @@ export async function processRuleReprocessJob() {
             // All selectors, including regex, use the same bounded evaluator as preview.
             const matches = (await matchRulePage(items.map(item => item.event), rule.definition.conditions)).map(index => items[index])
             const storageRules = await loadLogRetentionRules(job.organization_id, query)
+            const detectors = await loadConfiguredMillRules(job.organization_id, query)
+            const protectedEvent = (event: Record<string, unknown>) => !eligibleCustomDrop(event)
+                || Boolean((event.metadata as Record<string, unknown>)?.unrecognized_ingest_fields)
+                || collectMillEventFindings(job.organization_id, '', normalizeMillEvent(event, {}), detectors).findings.length > 0
             const keeps = storageRules.filter(r => r.definition?.action === 'keep' && !r.definition.protection && r.definition.conditions?.length)
             const kept = new Set<number>()
             for (const keep of keeps) for (const index of await matchRulePage(matches.map(item => item.event), keep.definition!.conditions!)) kept.add(index)
+            // Unsupported source tables cannot be reconciled atomically by this worker.
+            // Keep their projections, along with unknown envelopes and existing finding evidence.
             let safe = matches.filter((item, index) => !kept.has(index) && !retentionStoreMatches({ ...item.event, retained_original: item.original }, storageRules) && !protectedEvent({ ...item.event, retained_original: item.original })
                 && !/^service:(?:login_events|system_events):/.test(item.key || ''))
             const keys = safe.flatMap(item => item.key ? [item.key] : [])
