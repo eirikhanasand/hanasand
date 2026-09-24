@@ -7,7 +7,7 @@ import { usePathname } from 'next/navigation'
 import { AlarmClockCheck, ChevronDown, ChevronsUp, FolderKanban, NotebookText, PanelLeftClose, PanelLeftOpen, Pin, Search, Server, Settings2, ShieldCheck, House, ListFilter, Mail, CircleHelp, CircleUserRound } from 'lucide-react'
 import { useEffect, useId, useState, useSyncExternalStore } from 'react'
 import { getDashboardViewMode, setDashboardViewMode } from '@/utils/layout/viewMode'
-import { getDashboardNavigation, navigationLinks, type NavigationAccess, type NavigationItem } from '@/utils/layout/dashboardNavigation'
+import { getDashboardNavigation, navigationLinks, pinnedNavigation, type NavigationAccess, type NavigationItem } from '@/utils/layout/dashboardNavigation'
 import { useWorkspace } from '@/components/organizations/workspaceProvider'
 
 const sectionIcons: Record<string, typeof ShieldCheck> = {
@@ -102,7 +102,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
         const keys = [
             ...Object.keys(preferences.expanded),
             'Pinned',
-            ...links.flatMap(item => item.ancestors.map((_, index) => item.ancestors.slice(0, index + 1).join('/'))),
+            ...navigationLinks([...sections, { label: 'Pinned', items: pinnedNavigation(favorites) }]).flatMap(item => item.ancestors.map((_, index) => item.ancestors.slice(0, index + 1).join('/'))),
         ]
         save({ ...preferences, expanded: Object.fromEntries(keys.map(key => [key, false])) })
         setQuery('')
@@ -193,7 +193,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
                         {renderLink(item)}
                     </div>)}
                 </div> : <>
-                    {favorites.length > 0 && renderGroup({ label: 'Pinned', items: favorites })}
+                    {favorites.length > 0 && renderGroup({ label: 'Pinned', items: pinnedNavigation(favorites) })}
                     {sections.map(section => section.items ? renderGroup(section) : section.href ? renderLink({ label: section.label, href: section.href }) : null)}
                 </>}
             </nav>

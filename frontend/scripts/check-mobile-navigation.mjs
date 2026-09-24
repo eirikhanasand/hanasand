@@ -122,6 +122,22 @@ try {
         await page.setViewportSize({ width, height: 844 })
         assert(!await sidebar.isVisible(), 'Returning from desktop must close the mobile overlay')
     }
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto(`${server.url}cases/HA-1991`)
+    await page.getByRole('button', { name: 'Open Logs & rules', exact: true }).click()
+    const sidebar = page.getByRole('complementary', { name: 'Dashboard sidebar' })
+    await page.getByRole('button', { name: 'Collapse all menus', exact: true }).click()
+    const top = (await sidebar.boundingBox()).y
+    for (const name of ['Security & intelligence', 'Investigations', 'Intelligence', 'Monitoring', 'Collection', 'Logs & rules', 'Logs', 'Rules']) {
+        const toggle = sidebar.getByRole('button', { name, exact: true })
+        await toggle.scrollIntoViewIfNeeded()
+        const headingTop = (await sidebar.getByRole('heading', { name: 'Navigation' }).boundingBox()).y
+        await toggle.click()
+        assert.equal((await sidebar.boundingBox()).y, top, `${name} must expand downwards`)
+        assert.equal((await sidebar.getByRole('heading', { name: 'Navigation' }).boundingBox()).y, headingTop, `${name} must not scroll the sidebar header upwards`)
+    }
+    assert(top >= 72, 'Sidebar must remain below the site header')
+    await page.screenshot({ path: '/tmp/sidebar-nested-desktop.png' })
     assert.deepEqual(errors, [])
     console.log(`Shared header passed on ${routes.length} page paths, signed in and out. Desktop/mobile menus, account controls, sizing, sidebar search, Escape/focus, backdrop and view preference passed.`)
 } finally {

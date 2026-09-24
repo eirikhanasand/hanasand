@@ -22,15 +22,21 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
     const sections = [
         link('Overview', '/dashboard'),
         group('Security & intelligence', [
-            link('Cases', '/cases'),
-            link('Threat Search', '/ti'),
-            link('Latest Activity', '/ti/activity', isAdmin),
-            link('Actors', '/dwm/actors'),
-            link('Actor Profiles', '/ti/enrichment', isAdmin),
-            link('Watchlists', '/dwm/watchlists'),
-            link('Dark Web Monitoring', '/dwm'),
-            link('Browser', '/browser'),
-            link('Monitoring Actions', '/dwm/actions'),
+            group('Investigations', [
+                link('Cases', '/cases'),
+                link('Threat Search', '/ti'),
+                link('Browser', '/browser'),
+            ]),
+            group('Intelligence', [
+                link('Latest Activity', '/ti/activity', isAdmin),
+                link('Actors', '/dwm/actors'),
+                link('Actor Profiles', '/ti/enrichment', isAdmin),
+            ]),
+            group('Monitoring', [
+                link('Watchlists', '/dwm/watchlists'),
+                link('Dark Web Monitoring', '/dwm'),
+                link('Monitoring Actions', '/dwm/actions'),
+            ]),
             group('Collection', [
                 link('Collection Overview', '/ti/control', isAdmin),
                 link('Feeds', '/ti/sources', isAdmin),
@@ -45,14 +51,18 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
             ]),
         ]),
         group('Logs & rules', [
-            link('Log Dashboard', '/logs', canManageSystem),
-            link('Realtime', '/logs/realtime', canManageSystem),
-            link('Search', '/logs/search', canManageSystem),
-            link('Errors', '/logs/errors', canManageSystem),
-            link('Traffic', '/traffic', canManageSystem),
-            link('Match Rules', '/mill/rules/match'),
-            link('Analysis Rules', '/mill/rules/analysis'),
-            link('Detection Rules', '/mill/rules/detection'),
+            group('Logs', [
+                link('Log Dashboard', '/logs', canManageSystem),
+                link('Realtime', '/logs/realtime', canManageSystem),
+                link('Search', '/logs/search', canManageSystem),
+                link('Errors', '/logs/errors', canManageSystem),
+                link('Traffic', '/traffic', canManageSystem),
+            ]),
+            group('Rules', [
+                link('Match Rules', '/mill/rules/match'),
+                link('Analysis Rules', '/mill/rules/analysis'),
+                link('Detection Rules', '/mill/rules/detection'),
+            ]),
         ]),
         group('Infrastructure', [
             link('System Overview', '/system'),
@@ -77,13 +87,17 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
         ]),
         group('Workspace', [
             link('Projects', '/projects', isAdmin),
-            link('Notes', '/notes', canManageContent || hasContentOrganization),
-            link('Articles', '/content/articles', canManageContent || hasContentOrganization),
-            link('Thoughts', '/content/thoughts', canManageContent || hasContentOrganization),
-            link('Thesis', '/content/thesis', isAdmin),
-            link('Media Library', '/gallery'),
-            link('Uploads', '/upload'),
-            link('Shares', '/shares'),
+            group('Writing', [
+                link('Notes', '/notes', canManageContent || hasContentOrganization),
+                link('Articles', '/content/articles', canManageContent || hasContentOrganization),
+                link('Thoughts', '/content/thoughts', canManageContent || hasContentOrganization),
+                link('Thesis', '/content/thesis', isAdmin),
+            ]),
+            group('Media & sharing', [
+                link('Media Library', '/gallery'),
+                link('Uploads', '/upload'),
+                link('Shares', '/shares'),
+            ]),
             link('Content Management', '/content', canManageContent),
         ]),
         group('Communication', [
@@ -93,9 +107,13 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
         ]),
         group('Organization', [
             link('Organization Overview', '/organizations'),
-            link('Organization Settings', '/organizations/settings'),
-            link('Team', '/organizations/team'),
+            group('Settings & billing', [
+                link('Organization Settings', '/organizations/settings'),
+                link('Privacy & Retention', '/organizations/privacy'),
+                link('Subscription', '/subscription'),
+            ]),
             group('Access & credentials', [
+                link('Team', '/organizations/team'),
                 link('API Keys', '/organizations/api-keys'),
                 link('Service Accounts', '/management/service-accounts', isAdmin),
             ]),
@@ -104,11 +122,11 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
                 link('Destinations', '/organizations/destinations'),
                 link('Delivery History', '/organizations/delivery'),
             ]),
-            link('Organization Watchlists', '/organizations/watchlists'),
-            link('Alerts & Cases', '/organizations/alerts'),
-            link('Privacy & Retention', '/organizations/privacy'),
-            link('Activity', '/organizations/activity'),
-            link('Subscription', '/subscription'),
+            group('Monitoring & activity', [
+                link('Organization Watchlists', '/organizations/watchlists'),
+                link('Alerts & Cases', '/organizations/alerts'),
+                link('Activity', '/organizations/activity'),
+            ]),
         ]),
         group('Platform administration', [
             link('All Organizations', '/management/organizations', canManageOrganizations),
@@ -136,4 +154,9 @@ export function navigationLinks(items: NavigationItem[], ancestors: string[] = [
     return items.flatMap(item => item.items
         ? navigationLinks(item.items, [...ancestors, item.label])
         : item.href ? [{ label: item.label, href: item.href, ancestors }] : [])
+}
+
+export function pinnedNavigation(items: NavigationItem[]): NavigationItem[] {
+    if (items.length <= 5) return items
+    return [...items.slice(0, 4), { label: 'More pins', items: pinnedNavigation(items.slice(4)) }]
 }

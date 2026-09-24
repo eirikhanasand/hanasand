@@ -81,6 +81,11 @@ const tasks: TestTask[] = [
         command: [bun, 'scripts/check-automation-routes.mjs'],
     },
     {
+        id: 'dashboard-navigation-structure',
+        title: 'Navigation grouping and organization destinations',
+        command: [bun, 'test', 'tests/dashboard-navigation.test.ts'],
+    },
+    {
         id: 'dashboard-navigation',
         title: 'Dashboard navigation interactions',
         command: [bun, 'scripts/check-dashboard-navigation.mjs'],

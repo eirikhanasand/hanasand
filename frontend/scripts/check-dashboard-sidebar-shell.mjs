@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 const css = await readFile(new URL('../src/app/globals.css', import.meta.url), 'utf8')
 const desktopBlock = css.match(/@media \(min-width: 1024px\)\s*\{([\s\S]*?)\n\}/)?.[1] || ''
 
-if (!desktopBlock.includes('top: 0.75rem') || !desktopBlock.includes('max-height: calc(100dvh - 5.5rem)')) {
+if (!desktopBlock.includes('margin-top: 0.75rem') || !desktopBlock.includes('max-height: calc(100dvh - 6rem)')) {
     throw new Error('Desktop dashboard sidebar must keep a header-safe inset and bounded height.')
 }
 
@@ -12,3 +12,5 @@ if (desktopBlock.includes('height: 100%')) {
 }
 
 console.log('Dashboard sidebar shell contract passed.')
+
+if (!css.includes('overflow-anchor: none')) throw new Error('Expanding menus must not shift the sidebar scroll anchor.')
