@@ -3,7 +3,7 @@ import { matchesEventProtection, normalizeEventProtection, type EventProtectionP
 import { eligibleCustomDrop } from './dropEligibility.ts'
 import { matchesMillRule, type MillCondition } from './conditions.ts'
 
-export type RetentionRule = { source?: string, enabled?: boolean, definition?: { stage?: string, action?: string, conditions?: MillCondition[], protection?: EventProtectionPolicy } }
+export type RetentionRule = { source?: string, enabled?: boolean, definition?: { stage?: string, action?: string, conditions?: MillCondition[], storeScope?: 'custom_drop' | 'all', protection?: EventProtectionPolicy } }
 
 export function customRetentionAction(event: Record<string, unknown>, rules: RetentionRule[]): 'drop' | 'keep' | undefined {
     if (retentionStoreMatches(event, rules, 'all')) return 'keep'
@@ -20,7 +20,7 @@ export function retentionStoreMatches(event: Record<string, unknown>, rules: Ret
             // An unreadable active protection rule cannot authorize dropping evidence.
             return !protection || (scope === 'custom_drop' || protection.appliesTo === 'all') && matchesEventProtection(event, protection)
         }
-        return rule.source === 'owned' && Boolean(rule.definition.conditions?.length) && matchesMillRule(event, rule.definition.conditions!)
+        return (scope === 'custom_drop' || rule.definition.storeScope !== 'custom_drop') && rule.source === 'owned' && Boolean(rule.definition.conditions?.length) && matchesMillRule(event, rule.definition.conditions!)
     })
 }
 

@@ -14,7 +14,7 @@ mock.module('#db', () => ({ default: query, withTransaction: async (work: any) =
 mock.module('../src/utils/mill/analyzeLog.ts', () => ({ analyzeMongoPing: async () => false, analyzeAccess: async () => false }))
 const { default: recordLog, recordLogBatch } = await import('../src/utils/logs/recordLog.ts')
 const { customRetentionAction } = await import('../src/utils/mill/customRetention.ts')
-const { eventProtectionDefinition } = await import('../src/utils/mill/eventProtection.ts')
+const { authenticationAuditStoreRule, eventProtectionDefinition } = await import('../src/utils/mill/eventProtection.ts')
 const drop = { source: 'owned', enabled: true, organizationId: 'org-a', definition: { stage: 'analyze', action: 'drop', conditions: [{ path: 'event_type', operator: 'equals', value: 'application' }] } }
 const entry = { service: 'example', level: 'info' as const, message: 'heartbeat', metadata: { organizationId: 'org-a' } }
 beforeEach(() => { reads = 0; writes = []; failed = false; rules = [structuredClone(drop)] })
@@ -66,4 +66,14 @@ test('persisted scope preserves lossless compaction while all-scope Store takes 
     expect(customRetentionAction(event, [drop, protection])).toBeUndefined()
     const all = { ...protection, definition: { ...protection.definition, protection: { ...protection.definition.protection, appliesTo: 'all' as const } } }
     expect(customRetentionAction(event, [drop, all])).toBe('keep')
+})
+
+test('authentication Store scope protects custom Drop without blocking lossless compaction', () => {
+    const event = { event_type: 'authentication', severity: 'low' }
+    const store = { source: 'owned', enabled: true, definition: authenticationAuditStoreRule.definition } as any
+    const authDrop = { ...drop, definition: { ...drop.definition, conditions: [{ path: 'event_type', operator: 'equals', value: 'authentication' }] } } as any
+    expect(customRetentionAction(event, [store])).toBeUndefined()
+    expect(customRetentionAction(event, [authDrop, store])).toBeUndefined()
+    expect(customRetentionAction(event, [authDrop, { ...store, enabled: false }])).toBe('drop')
+    expect(customRetentionAction(event, [{ ...store, definition: { ...store.definition, storeScope: 'all' } }])).toBe('keep')
 })

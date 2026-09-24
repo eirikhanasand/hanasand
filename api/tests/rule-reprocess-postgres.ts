@@ -98,6 +98,14 @@ try {
     assert.ok(Number(rangedJob.scanned) < 500, 'a short range does not walk older raw logs')
     assert.equal((await query("SELECT count(*) FROM service_logs WHERE message='routine archived'")).rows[0].count, '500')
     await query("DELETE FROM service_logs WHERE message='routine archived'")
+    // Upgrade only the exact legacy default, retaining the user's disabled state.
+    await query("UPDATE mill_rules SET definition=definition-'storeScope',enabled=false,version='4' WHERE organization_id='platform' AND rule_id='security.authentication_audit_retention.v1'")
+    await ensureEventProtectionRule(query as any)
+    const migrated = (await query("SELECT definition,enabled,version FROM mill_rules WHERE organization_id='platform' AND rule_id='security.authentication_audit_retention.v1'")).rows[0]
+    assert.equal(migrated.definition.storeScope, 'custom_drop')
+    assert.equal(migrated.enabled, false)
+    assert.equal(migrated.version, '5')
+    assert.equal((await query("SELECT count(*) FROM system_events WHERE object_id='security.authentication_audit_retention.v1' AND event_type='mill.rule.updated' AND organization_id='platform'")).rows[0].count, '1', 'Scope correction is audited once')
     // The visible Store rule controls authentication retention, including edited criteria.
     await query("UPDATE mill_rules SET enabled=false WHERE rule_id='security.authentication_audit_retention.v1'")
     await ensureEventProtectionRule(query as any)

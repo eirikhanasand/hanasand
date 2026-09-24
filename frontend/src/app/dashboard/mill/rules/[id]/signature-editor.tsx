@@ -52,6 +52,7 @@ export default function SignatureEditor({ rule, disabled, onChange }: { rule: Mi
     const signature = {
         rule: rule.id.replace(/\.v\d+$/, ''),
         ...(analyze ? { stage: 'before storage', action: definition.action } : {}),
+        ...(definition.storeScope ? { storeScope: definition.storeScope } : {}),
         ...(definition.protection ? { protection: definition.protection } : {}),
         ...(builtIn ? { engine: brute ? 'sequence' : spray ? 'distinct_count' : 'builtin', ...(brute ? { group_by: 'user.id', sequence: [{ event_type: 'authentication', action: 'login', outcome: 'failure', where: definition.failureConditions || [], count_at_least: definition.parameters?.minimumCount }, { event_type: 'authentication', action: 'login', outcome: 'success', where: conditions }] } : { where: conditions }), ...definition.parameters } : { match: 'all', where: conditions }),
     }
@@ -60,6 +61,7 @@ export default function SignatureEditor({ rule, disabled, onChange }: { rule: Mi
         <div className='grid min-w-0 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]'>
             <fieldset disabled={disabled} className='grid min-w-0 content-start gap-4 p-4 sm:p-5'>
                 {analyze && <><label className='grid gap-2 text-sm'>Action<select aria-label='Action' className={inputClass} value={definition.action} onChange={event => onChange({ ...definition, action: event.target.value as 'drop' | 'keep' })}><option value='drop' disabled={Boolean(definition.protection)}>Drop</option><option value='keep'>Store</option></select></label><p className='text-sm text-ui-muted'>{rule.explanation}</p></>}
+                {analyze && !builtIn && definition.action === 'keep' && <label className='grid gap-2 text-sm'>Store scope<select aria-label='Store scope' className={inputClass} value={definition.storeScope || 'all'} onChange={event => onChange({ ...definition, storeScope: event.target.value as 'all' | 'custom_drop' })}><option value='all'>All Drop and compaction rules</option><option value='custom_drop'>Custom Drop rules only</option></select></label>}
                 {definition.protection && <label className='grid gap-2 text-sm'>Storage criteria<textarea key={rule.id + rule.version} aria-label='Storage criteria' rows={16} className={inputClass} defaultValue={JSON.stringify(definition.protection, null, 2)} onChange={event => {
                     try {
                         const protection: unknown = JSON.parse(event.target.value)

@@ -1,3 +1,4 @@
+import { sshTransportRule, sshTransportRuleId, sshTransportDefinition } from '#utils/mill/analyzeSshTransport.ts'
 import { eventProtectionRule, eventProtectionRuleId, eventProtectionDefinition, normalizeEventProtection, type EventProtectionPolicy } from '#utils/mill/eventProtection.ts'
 import { ingestionRule, ingestionRuleId, ingestionDefinition } from '#utils/mill/analyzeIngestion.ts'
 import { listRule, ruleCategory, loadRuleHits } from '#utils/mill/ruleList.ts'
@@ -31,7 +32,7 @@ export { matchesMillRule } from '#utils/mill/conditions.ts'
 
 type MillEvent = Record<string, unknown>
 type MillBody = { source?: Record<string, unknown>, events?: unknown }
-type MillDefinition = { match: 'all', conditions: MillCondition[], protection?: EventProtectionPolicy, failureConditions?: MillCondition[], parameters?: Record<string, number>, stage?: 'analyze' | 'match' | 'detect', action?: 'drop' | 'keep' }
+type MillDefinition = { match: 'all', conditions: MillCondition[], storeScope?: 'custom_drop' | 'all', protection?: EventProtectionPolicy, failureConditions?: MillCondition[], parameters?: Record<string, number>, stage?: 'analyze' | 'match' | 'detect', action?: 'drop' | 'keep' }
 type MillRule = { id: string, detectionLogic?: string, recordId?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'owned' | 'open_source', sourceReference?: string, definition?: MillDefinition }
 
 export const MILL_RULES: MillRule[] = [
@@ -41,6 +42,7 @@ export const MILL_RULES: MillRule[] = [
     readinessAuditRule,
     telemetryRule,
     sshWindowRule,
+    sshTransportRule,
     collectorRule,
     postgresRule,
     accessRule,
@@ -64,6 +66,7 @@ export function millDefaultDefinition(id: string): MillDefinition {
     if (id === modelDiscoveryRuleId) return structuredClone(modelDiscoveryDefinition)
     if (id === readinessAuditRuleId) return structuredClone(readinessAuditDefinition)
     if (id === telemetryRuleId) return structuredClone(telemetryDefinition)
+    if (id === sshTransportRuleId) return structuredClone(sshTransportDefinition)
     if (id === sshWindowRuleId) return structuredClone(sshWindowDefinition)
     if (id === eventProtectionRuleId) return { ...structuredClone(eventProtectionDefinition), parameters: {} }
     if (id === collectorRuleId) return structuredClone(collectorDefinition)
@@ -102,7 +105,7 @@ export function normalizeBuiltinDefinition(id: string, value: unknown): { defini
         definition.protection = result.protection
     }
     if (defaults.stage) {
-        const configuredPolicy = [modelDiscoveryRuleId, readinessAuditRuleId, proxyRuleId, ingestionRuleId, telemetryRuleId, sshWindowRuleId, collectorRuleId, cdnRefreshRuleId, postgresRuleId, accessRuleId, mongoRuleId].includes(id)
+        const configuredPolicy = [modelDiscoveryRuleId, readinessAuditRuleId, proxyRuleId, ingestionRuleId, telemetryRuleId, sshWindowRuleId, sshTransportRuleId, collectorRuleId, cdnRefreshRuleId, postgresRuleId, accessRuleId, mongoRuleId].includes(id)
         if (input.stage !== 'analyze' || !['drop', 'keep'].includes(String(input.action)) || !Array.isArray(input.conditions) || (!configuredPolicy && input.conditions.length)) return { error: 'Choose Keep or Count and drop. The required safety checks cannot be removed.' }
         definition.action = input.action as 'drop' | 'keep'
     }
@@ -119,7 +122,7 @@ export function normalizeBuiltinDefinition(id: string, value: unknown): { defini
         definition.parameters = parameters
         return { definition }
     }
-    if ([telemetryRuleId, sshWindowRuleId].includes(id)) {
+    if ([telemetryRuleId, sshWindowRuleId, sshTransportRuleId].includes(id)) {
         const error = validateRoutineGroupParameters(id, parameters)
         if (error) return { error }
         definition.parameters = parameters as Record<string, number>
@@ -424,7 +427,9 @@ export async function putMillRule(req: FastifyRequest<{ Params: { id: string } }
         if (normalized.error || !normalized.conditions.length) return res.status(400).send({ error: normalized.error || 'Add at least one condition.' })
         const action = body.action ?? rule.definition?.action ?? 'keep'
         if (!['keep', 'drop'].includes(String(action)) || (rule.definition?.stage !== 'analyze' && action !== 'keep')) return res.status(400).send({ error: 'Drop requires an Analyze rule.' })
-        definition = { ...rule.definition, match: 'all', conditions: normalized.conditions, action: action as 'drop' | 'keep' }
+        const storeScope = body.storeScope ?? rule.definition?.storeScope ?? 'all'
+        if (!['all', 'custom_drop'].includes(String(storeScope))) return res.status(400).send({ error: 'Choose whether Store applies to all rules or custom Drop rules.' })
+        definition = { ...rule.definition, match: 'all', conditions: normalized.conditions, action: action as 'drop' | 'keep', ...(body.storeScope !== undefined || rule.definition?.storeScope ? { storeScope: storeScope as 'all' | 'custom_drop' } : {}) }
     } else {
         if (body.conditions !== undefined) return res.status(400).send({ error: 'Use the detection definition to edit built-in selectors.' })
         if (body.definition !== undefined) {

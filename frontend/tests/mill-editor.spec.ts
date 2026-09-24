@@ -146,3 +146,22 @@ test('verified probe policy is editable and persists with its Mill rule', async 
     await page.setViewportSize({ width: 390, height: 844 })
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })
+
+test('owned Store scope is visible, editable and persists on reload', async ({ page }) => {
+    let saved = { ...initial, id: 'security.authentication_audit_retention.v1', source: 'owned', name: 'Store authentication and audit events', definition: { match: 'all', stage: 'analyze', action: 'keep', storeScope: 'custom_drop', conditions: [{ path: 'event_type', operator: 'regex', value: '^(authentication|audit)$' }] } }
+    await page.route('**/api/backend/mill/rules/*?*', async route => {
+        if (route.request().method() === 'PUT') {
+            const body = route.request().postDataJSON()
+            expect(body.storeScope).toBe('all')
+            saved = { ...saved, version: '2', definition: { ...saved.definition, storeScope: body.storeScope } }
+        }
+        return route.fulfill({ json: { rule: saved, canEdit: true, currentVersion: saved.version, triggerCount: 0, audit: [], nextOffset: null } })
+    })
+    await page.goto('http://mill-editor.test/mill/rules/security.authentication_audit_retention')
+    await expect(page.getByLabel('Store scope')).toHaveValue('custom_drop')
+    await page.getByLabel('Store scope').selectOption('all')
+    await page.getByRole('button', { name: 'Save changes' }).click()
+    await expect(page.getByText('Rule saved. New events use this version.')).toBeVisible()
+    await page.reload()
+    await expect(page.getByLabel('Store scope')).toHaveValue('all')
+})

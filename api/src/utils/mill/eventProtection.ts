@@ -72,5 +72,5 @@ export function matchesEventProtection(event: Record<string, unknown>, policy: E
 export const authenticationAuditStoreRule = {
     id: 'security.authentication_audit_retention.v1', name: 'Store authentication and audit events', family: 'Security', severity: 'low',
     explanation: 'Store authentication and audit events even when a Drop rule matches.',
-    definition: { match: 'all', stage: 'analyze', action: 'keep', conditions: [{ path: 'event_type', operator: 'regex', value: '^(authentication|audit)$' }] },
+    definition: { match: 'all', stage: 'analyze', action: 'keep', storeScope: 'custom_drop', conditions: [{ path: 'event_type', operator: 'regex', value: '^(authentication|audit)$' }] },
 }

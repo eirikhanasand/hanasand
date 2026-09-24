@@ -420,3 +420,15 @@ test('compact list returns only selected category and displayed data, keeps deta
     await getMillRules(req, invalid as any)
     expect(invalid.statusCode).toBe(400)
 })
+
+test('owned Store scope is validated, saved and audited', async () => {
+    systemAdmin = true
+    const conditions = [{ path: 'event_type', operator: 'equals', value: 'authentication' }]
+    const created = await postMillRule(request('', { ...edit, stage: 'analyze', action: 'keep', conditions }), reply() as any)
+    const changed = await putMillRule(request(created.rule.id, { ...edit, conditions, action: 'keep', storeScope: 'custom_drop' }), reply() as any)
+    expect(changed.rule.definition.storeScope).toBe('custom_drop')
+    expect(audits.at(-1).context.after.definition.storeScope).toBe('custom_drop')
+    const invalid = reply()
+    await putMillRule(request(created.rule.id, { ...edit, version: changed.rule.version, conditions, storeScope: 'hidden' }), invalid as any)
+    expect(invalid.statusCode).toBe(400)
+})
