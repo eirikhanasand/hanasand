@@ -521,7 +521,7 @@ async function applySchema() {
     `)
     await run('CREATE INDEX IF NOT EXISTS idx_host_update_events_host_occurred ON host_update_events(host, occurred_at DESC)')
     await ensureIndex(run, 'idx_service_logs_http_errors', 'CREATE INDEX IF NOT EXISTS idx_service_logs_http_errors ON service_logs((metadata->>\'category\'), created_at DESC)')
-    await run('CREATE INDEX IF NOT EXISTS idx_service_logs_http_error_code ON service_logs((metadata->>\'error_code\'), created_at DESC) WHERE metadata->>\'category\' = \'http_response_error\'')
+    await ensureIndex(run, 'idx_service_logs_http_error_code', 'CREATE INDEX IF NOT EXISTS idx_service_logs_http_error_code ON service_logs((metadata->>\'error_code\'), created_at DESC) WHERE metadata->>\'category\' = \'http_response_error\'')
     await run(`
         CREATE TABLE IF NOT EXISTS scheduled_job_controls (
             id TEXT PRIMARY KEY,
