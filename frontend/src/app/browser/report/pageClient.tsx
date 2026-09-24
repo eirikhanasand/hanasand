@@ -104,7 +104,7 @@ export default function BrowserReportPageClient({ runId = '', token = '', result
     const actions = suspicious ? analystReport.recommendedActions || [] : []
 
     return (
-        <main className='min-h-[calc(100vh-4.5rem)] bg-ui-canvas px-4 py-6 text-ui-text'>
+        <main className='min-h-full bg-ui-canvas px-4 py-6 text-ui-text'>
             <section className='mx-auto grid max-w-6xl gap-4'>
                 <header className='rounded-lg border border-ui-border bg-ui-panel p-4'>
                     <div className='flex flex-wrap items-center justify-between gap-3'>
@@ -288,7 +288,7 @@ export default function BrowserReportPageClient({ runId = '', token = '', result
                         </ReportPanel> : null}
                     </aside>
                 </section>
-                <BrowserDebug className='mt-4' indicatorCount={reportIndicators(report).length} logs={report.providerConsoleEvents} />
+                <BrowserDebug className='mt-4' indicatorCount={reportIndicators(report).length} logs={report.consoleEvents} />
             </section>
         </main>
     )

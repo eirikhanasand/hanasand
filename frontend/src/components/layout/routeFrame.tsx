@@ -24,11 +24,11 @@ export default function RouteFrame({ children, serverPath, token, sidebar, banne
     const isAppSurface = showSidebar || isDashboard || isLoggedInTi || (!isPublicProduct && (isShare || pathname.startsWith('/ai') || isDashboard || isProfile || isOrganizations))
 
     return (
-        <div data-route-frame className={`enterprise-theme relative z-10 mt-18 h-[calc(100dvh-4.5rem)] w-full ${isBrowserLanding ? 'overflow-hidden' : 'overflow-auto'}`}>
+        <div data-route-frame className={`enterprise-theme relative z-10 mt-18 h-[calc(100dvh-4.5rem)] w-full ${isBrowserLanding || showSidebar ? 'overflow-hidden overscroll-none' : 'overflow-auto'}`}>
             <main className={`w-full ${isAppSurface || isBrowserLanding ? 'h-full' : isPublicProduct ? 'min-h-full' : 'min-h-[90.5vh] pt-3 md:pt-0'}`}>
                 {showSidebar ? (
                     <div className='h-full min-h-0 bg-ui-canvas px-2 pb-2 text-ui-text'>
-                        <div className='grid h-full min-h-0 gap-2 lg:grid-cols-[auto_minmax(0,1fr)]'>
+                        <div className='grid h-full min-h-0 grid-rows-[minmax(0,1fr)] gap-2 lg:grid-cols-[auto_minmax(0,1fr)]'>
                             {mobile.open && <button type='button' aria-label='Close navigation backdrop' onClick={mobile.close}
                                 className='fixed inset-x-0 bottom-0 top-18 z-100 bg-black/30 lg:hidden' />}
                             <div id='mobile-navigation' onClick={event => {
@@ -36,7 +36,7 @@ export default function RouteFrame({ children, serverPath, token, sidebar, banne
                             }} className={`${mobile.open ? 'block' : 'hidden'} fixed inset-x-2 top-20 z-101 max-h-[calc(100dvh-5.5rem)] overflow-y-auto lg:contents`}>
                                 {sidebar}
                             </div>
-                            <div className={`min-h-0 min-w-0 ${isBrowserLanding ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'}`}>{banner}{children}</div>
+                            <div className={`min-h-0 min-w-0 ${isBrowserLanding ? 'flex flex-col overflow-hidden' : 'overflow-y-auto overscroll-contain'}`}>{banner}{children}</div>
                         </div>
                     </div>
                 ) : children}

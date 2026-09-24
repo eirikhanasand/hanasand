@@ -191,11 +191,12 @@ try {
     const debug = page.locator('details').filter({ has: page.locator('summary', { hasText: /^Debug$/ }) })
     await debug.locator('summary').click()
     assert((await debug.innerText()).includes('0 Indicators'))
-    assert((await debug.innerText()).includes('Provider warning 29'))
+    assert(!(await debug.innerText()).includes('Provider warning'))
+    assert((await debug.innerText()).includes('Target startup welcome'))
     const rawDebug = await debug.locator('pre').textContent()
     await debug.getByRole('button', { name: 'Pretty', exact: true }).click()
-    assert.equal(await debug.locator('tbody tr').count(), 30)
-    assert.deepEqual(await debug.locator('tbody tr').last().locator('td').allTextContents(), ['VirusTotal', 'warning', 'Provider warning 29'])
+    assert.equal(await debug.locator('tbody tr').count(), 27)
+    assert.deepEqual(await debug.locator('tbody tr').last().locator('td').allTextContents(), ['error', 'Target error'])
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Pretty logs fit mobile')
     await debug.getByRole('button', { name: 'Raw', exact: true }).click()
     assert.equal(await debug.locator('pre').textContent(), rawDebug)
@@ -247,7 +248,7 @@ try {
     assert(report.consoleEvents[0].includes('Target startup welcome'))
     const multilineLog = '[VirusTotal] [info] CSP report-only warning\nSecond line (https://example.com/script.js:5)'
     const unstructuredLog = 'Legacy message without prefixes\nStill preserved'
-    savedReport = { ...report, providerConsoleEvents: [...report.providerConsoleEvents, multilineLog, unstructuredLog] }
+    savedReport = { ...report, consoleEvents: [...report.consoleEvents, multilineLog.replace('[VirusTotal] ', ''), unstructuredLog] }
     const savedPage = await browser.newPage()
     await savedPage.goto(new URL('/saved', server.url).toString())
     assert.equal(await savedPage.getByRole('link', { name: 'Back to browser', exact: true }).getAttribute('href'), '/browser')
@@ -263,9 +264,9 @@ try {
     assert((await savedDebug.innerText()).includes('0 Indicators'))
     const savedRaw = await savedDebug.locator('pre').textContent()
     await savedDebug.getByRole('button', { name: 'Pretty', exact: true }).click()
-    assert.equal(await savedDebug.locator('tbody tr').count(), 32)
-    assert.deepEqual(await savedDebug.locator('tbody tr').nth(30).locator('td').allTextContents(), ['VirusTotal', 'info', multilineLog.replace('[VirusTotal] [info] ', '')])
-    assert.deepEqual(await savedDebug.locator('tbody tr').last().locator('td').allTextContents(), ['', '', unstructuredLog])
+    assert.equal(await savedDebug.locator('tbody tr').count(), 29)
+    assert.deepEqual(await savedDebug.locator('tbody tr').nth(27).locator('td').allTextContents(), ['info', multilineLog.replace('[VirusTotal] [info] ', '')])
+    assert.deepEqual(await savedDebug.locator('tbody tr').last().locator('td').allTextContents(), ['', unstructuredLog])
     await savedDebug.getByRole('button', { name: 'Raw', exact: true }).click()
     assert.equal(await savedDebug.locator('pre').textContent(), savedRaw)
     await savedPage.close()

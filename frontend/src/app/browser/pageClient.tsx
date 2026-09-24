@@ -1536,7 +1536,7 @@ export default function BrowserPageClient({ initialData, resultId, resultRunId }
                                 <AnalystSummary summary={summary} captures={captures} />
                                 <CaptureTimeline captures={captures} />
                             </div></details>
-                            <BrowserDebug indicatorCount={summary.indicators.length} logs={providerConsoleEvents} />
+                            <BrowserDebug indicatorCount={summary.indicators.length} logs={consoleEvents} />
                         </div>
                     </div>
                 </div>

@@ -138,6 +138,24 @@ try {
     }
     assert(top >= 72, 'Sidebar must remain below the site header')
     await page.screenshot({ path: '/tmp/sidebar-nested-desktop.png' })
+    await page.goto(`${server.url}browser/saved-result`)
+    const reportFrame = page.locator('[data-route-frame]')
+    const report = page.locator('article')
+    await report.waitFor()
+    const sidebarTop = (await sidebar.boundingBox()).y
+    const content = report.locator('..')
+    await content.evaluate(el => { el.scrollTop = el.scrollHeight })
+    const bottom = await content.evaluate(el => el.scrollTop)
+    const box = await content.boundingBox()
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height - 30)
+    await page.mouse.wheel(0, 1500)
+    await page.waitForTimeout(150)
+    assert.equal(await content.evaluate(el => el.scrollTop), bottom, 'Content stops at its end')
+    assert.equal(await reportFrame.evaluate(el => el.scrollTop), 0, 'Scrolling the report never scrolls the outer frame')
+    assert.equal(await page.evaluate(() => scrollY), 0, 'Scrolling the report never scrolls the document')
+    assert.equal((await sidebar.boundingBox()).y, sidebarTop, 'Sidebar stays fixed when scrolling the report past its end')
+    assert(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight), 'No blank document overflow below the report')
+
     assert.deepEqual(errors, [])
     console.log(`Shared header passed on ${routes.length} page paths, signed in and out. Desktop/mobile menus, account controls, sizing, sidebar search, Escape/focus, backdrop and view preference passed.`)
 } finally {
