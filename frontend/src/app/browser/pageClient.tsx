@@ -820,7 +820,7 @@ export default function BrowserPageClient({ initialData, resultId, resultRunId }
             }
             if (payload.type === 'site_network' && payload.site && typeof payload.site === 'object') {
                 const site = payload.site as SiteNetwork
-                setCaptures(current => current.map(capture => capture.kind === 'page' && (capture.url === site.url || (capture.networkSummary?.site?.url === site.url && capture.networkSummary.site.ip === site.ip))
+                setCaptures(current => current.map(capture => capture.kind === 'page' && (capture.networkSummary?.site ? capture.networkSummary.site.url === site.url && capture.networkSummary.site.ip === site.ip : capture.url === site.url)
                     ? { ...capture, networkSummary: { ...capture.networkSummary, site } } : capture))
                 return
             }
