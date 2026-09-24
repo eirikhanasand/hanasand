@@ -39,7 +39,7 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
             ]),
             group('Collection', [
                 link('Feeds', '/ti/sources', isAdmin),
-                link('Collection Runs', '/ti/runs', isAdmin),
+                link('Collection', '/ti/runs', isAdmin),
                 link('Delivery Health', '/ti/timeliness', canReviewIntel),
             ]),
             group('Security tools', [
