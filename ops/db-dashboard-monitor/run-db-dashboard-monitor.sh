@@ -4,10 +4,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 CURRENT_DEPLOY_DIR="/home/hanasand/hanasand/ops/db-dashboard-monitor"
 APP_DIR="${HANASAND_DB_MONITOR_DIR:-$CURRENT_DEPLOY_DIR}"
-ENV_FILE="${HANASAND_DB_MONITOR_ENV:-/home/hanasand/monitor-state/db-dashboard-monitor.env}"
-LOG_FILE="${HANASAND_DB_MONITOR_LOG:-/home/hanasand/monitor-state/db-dashboard-monitor.log}"
+ENV_FILE="${HANASAND_DB_MONITOR_ENV:-/home/hanasand/hanasand/ops/monitoring-state/db-dashboard-monitor.env}"
+LOG_FILE="${HANASAND_DB_MONITOR_LOG:-/home/hanasand/hanasand/ops/monitoring-state/db-dashboard-monitor.log}"
 LOCK_FILE="${HANASAND_DB_MONITOR_LOCK:-/tmp/hanasand-db-dashboard-monitor.lock}"
-PAUSE_FILE="${HANASAND_DB_MONITOR_PAUSE:-/home/hanasand/monitor-state/db-dashboard-monitor.pause}"
+PAUSE_FILE="${HANASAND_DB_MONITOR_PAUSE:-/home/hanasand/hanasand/ops/monitoring-state/db-dashboard-monitor.pause}"
 
 mkdir -p "$(dirname "$LOG_FILE")"
 
@@ -27,7 +27,7 @@ if [[ ! -f "$APP_DIR/db-dashboard-monitor.mjs" ]]; then
   APP_DIR="$SCRIPT_DIR"
 fi
 
-SERVICE_ACCOUNT_ENV="${HANASAND_SERVICE_ACCOUNT_ENV:-/home/hanasand/monitor-state/service-accounts.env}"
+SERVICE_ACCOUNT_ENV="${HANASAND_SERVICE_ACCOUNT_ENV:-/home/hanasand/hanasand/ops/monitoring-state/service-accounts.env}"
 if [[ -f "$SERVICE_ACCOUNT_ENV" ]]; then
   set -a
   source "$SERVICE_ACCOUNT_ENV"

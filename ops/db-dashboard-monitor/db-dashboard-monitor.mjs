@@ -10,8 +10,8 @@ const dashboardPath = (process.env.HANASAND_DB_MONITOR_PATH || '/db').replace(/^
 const serviceKey = process.env.HANASAND_DB_MONITOR_SERVICE_ACCOUNT_KEY || ''
 const apiBaseUrl = trimSlash(process.env.HANASAND_DB_MONITOR_API_BASE_URL || 'https://api.hanasand.com/api')
 const discordMention = process.env.HANASAND_DB_MONITOR_DISCORD_MENTION || '@here'
-const statePath = process.env.HANASAND_DB_MONITOR_STATE || '/home/hanasand/monitor-state/db-dashboard-monitor.json'
-const failureScreenshotPath = process.env.HANASAND_DB_MONITOR_SCREENSHOT || '/home/hanasand/monitor-state/db-dashboard-monitor-failure.png'
+const statePath = process.env.HANASAND_DB_MONITOR_STATE || '/home/hanasand/hanasand/ops/monitoring-state/db-dashboard-monitor.json'
+const failureScreenshotPath = process.env.HANASAND_DB_MONITOR_SCREENSHOT || '/home/hanasand/hanasand/ops/monitoring-state/db-dashboard-monitor-failure.png'
 const cdnBaseUrl = trimSlash(process.env.HANASAND_DB_MONITOR_CDN_BASE_URL || 'https://cdn.hanasand.com/api')
 const cdnUploadFolder = trimSlashes(process.env.HANASAND_DB_MONITOR_CDN_FOLDER || 'monitor/db-dashboard')
 const cdnUploadUser = process.env.HANASAND_DB_MONITOR_CDN_USER || ''
@@ -19,7 +19,7 @@ const cdnUploadToken = process.env.HANASAND_DB_MONITOR_CDN_TOKEN || ''
 const timeoutMs = Number(process.env.HANASAND_DB_MONITOR_TIMEOUT_MS || 30_000)
 const failureThreshold = Math.max(Number(process.env.HANASAND_DB_MONITOR_FAILURE_THRESHOLD || 2), 1)
 const backupStatusPath = process.env.HANASAND_TI_BACKUP_STATUS || '/home/hanasand/backups/threat-intel/LATEST-STATUS'
-const backupStatePath = process.env.HANASAND_TI_BACKUP_MONITOR_STATE || '/home/hanasand/monitor-state/threat-intel-backup.json'
+const backupStatePath = process.env.HANASAND_TI_BACKUP_MONITOR_STATE || '/home/hanasand/hanasand/ops/monitoring-state/threat-intel-backup.json'
 const backupMaxAgeHours = Math.max(Number(process.env.HANASAND_TI_BACKUP_MAX_AGE_HOURS || 30), 1)
 const statusIngestBaseUrl = trimSlash(process.env.HANASAND_STATUS_INGEST_BASE_URL || 'https://api.hanasand.com')
 const statusIngestToken = process.env.HANASAND_STATUS_INGEST_TOKEN || ''
@@ -52,7 +52,7 @@ if (process.argv.includes('--self-test')) {
 }
 
 await handleResult(await checkStatusFeed(`${baseUrl}/api/status`), {
-    statePath: process.env.HANASAND_STATUS_FEED_MONITOR_STATE || '/home/hanasand/monitor-state/status-feed-monitor.json',
+    statePath: process.env.HANASAND_STATUS_FEED_MONITOR_STATE || '/home/hanasand/hanasand/ops/monitoring-state/status-feed-monitor.json',
     service: 'production-monitor', checkName: 'Public status feed', title: 'Public status monitoring', noScreenshot: true,
 })
 
@@ -421,7 +421,7 @@ function resultFields(result) {
         {
             name: 'Evidence',
             value: backupFailure
-                ? `${backupStatusPath}\n/home/hanasand/monitor-state/threat-intel-backup.log`
+                ? `${backupStatusPath}\n/home/hanasand/hanasand/ops/monitoring-state/threat-intel-backup.log`
                 : result.ok ? `${baseUrl}${dashboardPath}` : `${baseUrl}${dashboardPath}\nScreenshot: ${screenshot}`,
             inline: false,
         },
