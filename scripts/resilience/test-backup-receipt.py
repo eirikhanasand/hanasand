@@ -48,6 +48,13 @@ print('Oversized backup rejected before payload extraction.')
 # Logical replacements retain the same restore-proof and checksum requirements.
 for mode in ('valid', 'wrong-checksum', 'wrong-format', 'mixed'):
     with tempfile.TemporaryDirectory() as directory:
+        physical_history = []
+        if mode == 'valid':
+            for day in range(1, 16):
+                old = pathlib.Path(directory) / 'backups' / f'202608{day:02d}T110000Z'
+                old.mkdir(parents=True)
+                (old / 'verification.json').write_text(json.dumps({'restoreVerified': True}))
+                physical_history.append(old)
         payload = {'hanasand.dump': b'clean logical database archive'}
         proof = {'restoreVerified': True, 'backup': '20260924T110000Z',
                  'verifiedAt': '2026-09-24T11:00:00Z', 'format': 'pg_dump-custom',
@@ -69,6 +76,7 @@ for mode in ('valid', 'wrong-checksum', 'wrong-format', 'mixed'):
             assert result.returncode == 0, result.stderr.decode()
             assert (backups / '20260924T110000Z/hanasand.dump').read_bytes() == payload['hanasand.dump']
             assert json.loads((backups / 'status.json').read_text())['format'] == 'pg_dump-custom'
+            assert all(old.exists() for old in physical_history)
         else:
             assert result.returncode != 0, mode
             assert not list(backups.iterdir()), mode

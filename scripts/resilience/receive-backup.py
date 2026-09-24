@@ -48,8 +48,10 @@ try:
         temporary.flush()
         os.fsync(temporary.fileno())
     os.replace(temporary.name, backups/'status.json')
-    # Only this receiver's timestamped verified bundles are eligible for retention.
-    bundles=sorted(path for path in backups.iterdir() if len(path.name)==16 and (path/'verification.json').is_file())
+    # Keep each recovery format's history independent. A logical replacement
+    # must not retire a physical recovery baseline through routine retention.
+    bundles=sorted(path for path in backups.iterdir() if len(path.name)==16 and (path/'verification.json').is_file()
+                   and json.loads((path/'verification.json').read_text()).get('format', 'pg_basebackup') == backup_format)
     for old in bundles[:-14]: shutil.rmtree(old)
     print(json.dumps({'received':stamp,'verified':True,'bytes':total}))
 except Exception:
