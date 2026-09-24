@@ -1,3 +1,4 @@
+import ContainerHostPlans from '@/components/vms/containerHostPlans'
 import Link from 'next/link'
 import { CheckCircle2 } from 'lucide-react'
 import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
@@ -20,6 +21,7 @@ export default function SubscriptionPage() {
             <section className='grid gap-3 md:grid-cols-2 xl:grid-cols-4' aria-label='Available plans'>
                 {commercialAccessPlans.map(plan => <PlanCard key={plan.id} plan={plan} />)}
             </section>
+            <ContainerHostPlans />
 
             <p className='text-center text-xs text-ui-muted'>Payments and subscription changes are handled securely by Stripe.</p>
         </DashboardPage>

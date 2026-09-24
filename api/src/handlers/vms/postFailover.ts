@@ -1,4 +1,5 @@
 import { hasVmAccess } from '#utils/vms/access.ts'
+import { requestFailover } from '#utils/vms/failover.ts'
 import { vmLifecycleLock } from '#utils/vms/lifecycleLock.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
@@ -29,6 +30,7 @@ export default async function postVmFailover(req: FastifyRequest, res: FastifyRe
 
             const vm = currentResult.rows[0] as {
                 name: string
+                failover_premium: boolean
                 owner: string
                 created_by: string
                 access_users: string[] | null
@@ -43,21 +45,15 @@ export default async function postVmFailover(req: FastifyRequest, res: FastifyRe
             }
             if (vm.deleted_at) return res.status(409).send({ error: 'This VM is scheduled for deletion. Restore it before making changes.' })
 
-            if (!vm.failover_enabled || !vm.failover_host) {
+            if (!vm.failover_enabled || !vm.failover_premium || !vm.failover_host) {
                 return res.status(402).send({ error: 'Failover is a premium option and is not enabled for this host.' })
             }
 
-            const result = await run(`
-            UPDATE vms
-            SET primary_host = $2,
-                failover_host = $3
-            WHERE LOWER(name) = LOWER($1)
-            RETURNING *
-        `, [vmName, vm.failover_host, vm.primary_host])
-
-            return res.send({
-                message: `Failover target for ${vmName} is now ${result.rows[0].primary_host}.`,
-                vm: result.rows[0],
+            const body = req.body as { targetHost?: string; requestId?: string } | undefined
+            await requestFailover(vm, body?.targetHost, body?.requestId)
+            return res.status(202).send({
+                message: 'Host switch queued. The container will stop briefly while its final disk copy is transferred.',
+                vm: currentResult.rows[0],
             })
         })
     } catch (error) {

@@ -1,3 +1,4 @@
+import { applyContainerStripeEvent } from './containerBilling.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import run, { withTransaction } from '#db'
@@ -150,6 +151,7 @@ export async function receiveStripeWebhook(req: FastifyRequest, reply: FastifyRe
 
 async function applyStripeEvent(event: StripeEvent, query: typeof run) {
     const object = event.data!.object!
+    if (await applyContainerStripeEvent(event.type || '', object)) return
     if (event.type === 'checkout.session.completed') {
         const userId = text((object.metadata as Record<string, unknown> | undefined)?.user_id)
         const planId = text((object.metadata as Record<string, unknown> | undefined)?.plan_id)

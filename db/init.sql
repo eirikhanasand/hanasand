@@ -812,3 +812,27 @@ RETURNS BOOLEAN LANGUAGE SQL STABLE AS $$
         END
     )
 $$;
+-- Paid host options belong to one container and never transfer to a recreated name.
+CREATE TABLE IF NOT EXISTS container_subscriptions (
+    id UUID PRIMARY KEY,
+    vm_name TEXT REFERENCES vms(name) ON UPDATE CASCADE ON DELETE SET NULL,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    feature TEXT NOT NULL CHECK (feature IN ('always_running', 'failover')),
+    stripe_subscription_id TEXT UNIQUE,
+    stripe_checkout_id TEXT UNIQUE,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS container_subscriptions_vm ON container_subscriptions(vm_name, feature);
+CREATE TABLE IF NOT EXISTS vm_failover (
+    vm_name TEXT PRIMARY KEY REFERENCES vms(name) ON UPDATE CASCADE ON DELETE CASCADE,
+    replica_id UUID NOT NULL,
+    phase TEXT NOT NULL DEFAULT 'queued',
+    target_host TEXT NOT NULL,
+    requested_host TEXT,
+    request_id UUID,
+    synced_at TIMESTAMPTZ,
+    error TEXT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

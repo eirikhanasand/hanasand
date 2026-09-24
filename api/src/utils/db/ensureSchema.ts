@@ -12,6 +12,8 @@ import ensureLogDimensionsSchema from './logDimensionsSchema.ts'
 import ensureLogProcessQueueSchema from './logProcessQueueSchema.ts'
 import ensureSharedMailSchema from './sharedMailSchema.ts'
 import ensureVmOrganizationSchema from './vmOrganizationSchema.ts'
+import { ensureFailoverSchema } from '../vms/failover.ts'
+import { ensureContainerBillingSchema } from '../../handlers/containerBilling.ts'
 import ensureCaseDevelopmentSchema from './caseDevelopmentSchema.ts'
 import run, { queryOnce, withSchemaLockTimeout } from '#db'
 import { ensureTrafficHistorySchema } from '../traffic/history.ts'
@@ -53,6 +55,8 @@ export default async function ensureSchema() {
 async function applySchema() {
     await run('CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_vm_metrics_name_created ON vm_metrics(name, created_at DESC)')
     await ensureRoleSchema()
+    await ensureContainerBillingSchema()
+    await ensureFailoverSchema()
     await ensureAccountIdentitySchema()
     await ensureServiceAccountsSchema()
     await ensureThesisSchema()

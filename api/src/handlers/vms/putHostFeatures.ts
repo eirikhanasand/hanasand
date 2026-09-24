@@ -1,4 +1,5 @@
 import { hasVmAccess } from '#utils/vms/access.ts'
+import { enableFailover } from '#utils/vms/failover.ts'
 import { vmLifecycleLock } from '#utils/vms/lifecycleLock.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
@@ -79,9 +80,14 @@ export default async function putVmHostFeatures(req: FastifyRequest, res: Fastif
             const primaryHost = isAdmin && typeof body.primary_host === 'string'
                 ? normalizeHost(body.primary_host, vm.primary_host)
                 : vm.primary_host
-            const failoverHost = isAdmin && Object.prototype.hasOwnProperty.call(body, 'failover_host')
+            let failoverHost = isAdmin && Object.prototype.hasOwnProperty.call(body, 'failover_host')
                 ? normalizeOptionalHost(body.failover_host)
                 : vm.failover_host
+
+            const transfer = (await run('SELECT requested_host FROM vm_failover WHERE vm_name = $1', [vm.name])).rows[0]
+            if (transfer?.requested_host) return res.status(409).send({ error: 'Wait for the host switch to finish before changing options.' })
+            if (primaryHost !== vm.primary_host) return res.status(409).send({ error: 'Use failover to transfer the container before changing its host.' })
+            if (failoverEnabled && !vm.failover_enabled) failoverHost = await enableFailover(vm)
 
             if (alwaysEnabled !== vm.always_running_enabled || alwaysPremium !== vm.always_running_premium) {
                 await applyAlwaysRunning({ name: vm.name, primary_host: primaryHost }, alwaysEnabled && alwaysPremium)

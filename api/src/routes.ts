@@ -4,6 +4,7 @@ import { getDockerStorage, clearDockerStorage } from './handlers/dockerStorage.t
 import { searchLogs } from './handlers/logs/search.ts'
 import { getManagementOrganizations } from './handlers/managementOrganizations.ts'
 import assignVmOrganization from './handlers/vms/organization.ts'
+import { getContainerProducts, createContainerCheckout } from './handlers/containerBilling.ts'
 import { caseRepositoryWebhooks, getCaseDevelopment, getCaseRepositories, postCaseRepository, deleteCaseRepository, getCaseCommits, postCaseCommit } from './handlers/caseDevelopment.ts'
 import { getServiceAccounts, postServiceAccount, patchServiceAccount, deleteServiceAccount, serviceAccountSelf } from './handlers/serviceAccounts.ts'
 import authRoutes from './authRoutes.ts'
@@ -498,6 +499,8 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/status/ingest', ingestStatus)
     fastify.get('/commercial/contact-requests', getCommercialContactRequests)
     fastify.post('/commercial/contact-requests', postCommercialContactRequest)
+    fastify.get('/billing/container-products', getContainerProducts)
+    fastify.post('/billing/container-checkout', createContainerCheckout)
     fastify.get('/billing/subscription', getBillingSubscription)
     fastify.post('/billing/portal', createBillingPortal)
     fastify.post('/billing/webhook', receiveStripeWebhook)

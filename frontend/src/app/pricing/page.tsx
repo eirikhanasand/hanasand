@@ -1,3 +1,4 @@
+import ContainerHostPlans from '@/components/vms/containerHostPlans'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { CheckCircle2 } from 'lucide-react'
@@ -41,6 +42,7 @@ export default function PricingPage() {
                         </article>
                     ))}
                 </section>
+                <ContainerHostPlans />
                 <p className='text-center text-xs text-ui-muted'>Secure checkout is handled by Stripe.</p>
             </div>
         </main>
