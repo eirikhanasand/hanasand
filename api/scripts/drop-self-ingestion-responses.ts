@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { isDeepStrictEqual } from 'node:util'
 import { randomUUID } from 'node:crypto'
 import run, { withTransaction } from '#db'
@@ -63,6 +64,11 @@ events.length=0; sources.length=0; traffic.length=0; candidates.length=0
 const totals = {matched:0,protected:0,removedEvents:0,removedSources:0}
 console.log(JSON.stringify({candidates:unique.length}))
 for (let offset=0;offset<unique.length;offset+=1000) {
+    if(existsSync('/tmp/hanasand-ingestion-replay.pause')) {
+        console.log(JSON.stringify({paused:true,processed:offset}))
+        while(existsSync('/tmp/hanasand-ingestion-replay.pause')) await new Promise(resolve=>setTimeout(resolve,1000))
+        console.log(JSON.stringify({resumed:true,processed:offset}))
+    }
     const batch=unique.slice(offset,offset+1000)
     const replay=()=>withTransaction(async query=>{
         await query('SET LOCAL lock_timeout=\'10s\'')
