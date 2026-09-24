@@ -30,6 +30,7 @@ const tasks: TestTask[] = [
     { id: 'workspace-organization-browser', title: 'Global organization switcher and shared links', command: [bun, 'scripts/check-workspace-organization.mjs'], requires: 'playwright' },
     { id: 'workspace-organization', title: 'Shared organization scope and cookie authorization', command: [bun, 'test', 'tests/workspace-organization.test.ts'] },
     { id: 'incident-updates', title: 'Meaningful incident timeline updates', command: [bun, 'test', 'scripts/check-incident-updates.test.mjs'] },
+    { id: 'logs-server', title: 'Log dashboard server preload', command: [bun, 'test', 'tests/logs-server.test.tsx'] },
     { id: 'dashboard-overview-server', title: 'Dashboard monitoring server rendering', command: [bun, 'test', 'tests/dashboard-overview-server.test.ts'] },
     { id: 'service-account-boundary', title: 'Scoped service account browser access', command: [bun, 'tests/service-account-boundary.test.ts'] },
     { id: 'numbered-pagination', title: 'Numbered page navigation', command: [bun, 'test', 'tests/numbered-pagination.test.tsx'] },

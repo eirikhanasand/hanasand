@@ -175,3 +175,22 @@ test('legacy KQL links retain their query when renamed to HQL', async ({ page })
     await expect.poll(() => new URL(page.url()).searchParams.get('hql')).toBe(hql)
     expect(new URL(page.url()).searchParams.has('kql')).toBe(false)
 })
+
+test('preloaded dashboard stays populated without an immediate client fetch and filters still refresh', async ({ page }) => {
+    await page.clock.install()
+    const seed = { ...result(), counts: [{ severity: 'low', count: 12345 }], services: [{ service: 'preloaded-service', count: 321 }] }
+    await page.addInitScript(data => { (window as Window & { logsInitialData?: unknown }).logsInitialData = data }, seed)
+    const requests: URL[] = []
+    await page.route('**/api/backend/logs/search?*', route => { requests.push(new URL(route.request().url())); return route.fulfill({ json: seed }) })
+    await openLogs(page, '/logs')
+    await expect(page.getByRole('region', { name: 'Events by severity' })).toContainText('12,345')
+    await expect(page.getByRole('term').filter({ hasText: 'preloaded-service' })).toBeVisible()
+    await page.clock.runFor(400)
+    expect(requests).toHaveLength(0)
+    await page.clock.runFor(5000)
+    await expect.poll(() => requests.length).toBe(1)
+    await page.getByRole('button', { name: 'Filter logs', exact: true }).click()
+    await page.getByRole('searchbox', { name: 'Search logs' }).fill('whoami')
+    await page.clock.runFor(300)
+    await expect.poll(() => requests.at(-1)?.searchParams.get('search')).toBe('whoami')
+})

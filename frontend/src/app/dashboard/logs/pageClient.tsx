@@ -4,20 +4,16 @@ import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { Copy, ChevronDown, Search, ListFilter, X } from 'lucide-react'
+import { logSearchParams, logTables, type LogEvent as Event, type LogSearchResult as Result, type ProcessingSource } from '@/utils/logs/search'
 import { retainEvents } from '@/utils/logs/retainEvents'
 import EventFeed from './eventFeed'
-import LogCatchupProgress, { type CatchupProgress } from './catchupProgress'
+import LogCatchupProgress from './catchupProgress'
 import ErrorsPanel from './errorsPanel'
 import type { ErrorEvent, ErrorEventsResponse, LogService } from '@/utils/logs/getLogs'
 import { dashboardPanelClass } from '@/components/dashboard/ui'
 
-type Event = { id: string, event_timestamp: string, normalized: { severity: string, level: string, log_type: string, service: string, host: string, message: string, process?: { executable?: string, command_line?: string }, detections?: Array<{ rule_id: string, summary: string, severity: string }>, rules_checked?: number, [key: string]: unknown } }
-type PendingCommands = { count: number, has_more: boolean, oldest_queued_at: string | null }
-type ProcessingSource = { name: string, last_id?: string | null, recent_id?: string | null, history_end_id?: string | null }
-type Result = { rows: Event[], next_cursor?: string | null, counts: Array<{ severity: string, count: number }>, services: Array<{ service: string, count: number }>, processing: { updated_at: string, last_error?: string, skipped_events?: number, catchup?: CatchupProgress | null, sources?: ProcessingSource[], pending_commands?: PendingCommands } | null, generated_at?: string, summarize?: string, projection?: string[], limit: number }
 const colors: Record<string, string> = { low: 'text-ui-muted bg-ui-raised', medium: 'text-ui-warning bg-ui-warning/10', high: 'text-ui-danger bg-ui-danger/10', critical: 'text-ui-danger bg-ui-danger/20 ring-1 ring-ui-danger' }
 const fieldClass = 'rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm text-ui-text'
-const logTables = ['Logs', 'ProcessLogs', 'SigninLogs', 'ApplicationLogs', 'HttpLogs', 'SystemLogs']
 const fieldNames: Record<string, string> = { TimeGenerated: 'timestamp', Severity: 'severity', Level: 'level', Service: 'service', Host: 'host', Message: 'message', LogType: 'log_type', CommandLine: 'process.command_line', Executable: 'process.executable', UserId: 'user.id', RuleId: 'detections' }
 function projected(event: Event, fields: string[]) {
     return Object.fromEntries(fields.map(field => [field, field === 'TimeGenerated' ? event.event_timestamp : field === 'RuleId' ? event.normalized.detections?.map(rule => rule.rule_id) : fieldNames[field]?.split('.').reduce<unknown>((value, key) => value && typeof value === 'object' ? (value as Record<string, unknown>)[key] : undefined, event.normalized)]))
@@ -28,7 +24,7 @@ function isCatchingUp({ last_id, recent_id, history_end_id }: ProcessingSource) 
         && /^\d+$/.test(last_id) && /^\d+$/.test(recent_id)
         && BigInt(last_id) < BigInt(recent_id)
 }
-export default function LogsPageClient({ initialServices, initialErrors, initialServiceFilter = 'all' }: { initialServices: LogService[], initialErrors: ErrorEventsResponse, initialServiceFilter?: string }) {
+export default function LogsPageClient({ initialServices, initialErrors, initialServiceFilter = 'all', initialData = null, initialError = '' }: { initialServices: LogService[], initialErrors: ErrorEventsResponse, initialServiceFilter?: string, initialData?: Result | null, initialError?: string }) {
     const pathname = usePathname()
     const params = useSearchParams()
     const view = pathname.endsWith('/realtime') ? 'realtime' : pathname.endsWith('/search') ? 'search' : pathname.endsWith('/errors') ? 'errors' : 'dashboard'
@@ -41,8 +37,8 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
     const [appliedHql, setAppliedHql] = useState(initialHql)
     const [hours, setHours] = useState(params.get('hours') || '24')
     const [severity, setSeverity] = useState(params.get('severity') || 'all')
-    const [data, setData] = useState<Result | null>(null)
-    const [error, setError] = useState('')
+    const [data, setData] = useState<Result | null>(initialData)
+    const [error, setError] = useState(initialError)
     const [busy, setBusy] = useState(false)
     const [paused, setPaused] = useState(false)
     const [expanded, setExpanded] = useState<Record<string, boolean>>({})
@@ -56,7 +52,7 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
     const loadMore = useRef<(cursor: string) => void>(() => {})
     const editing = useRef(false)
     const pausedUpdates = useRef(false)
-    const queryIdentity = useRef('')
+    const queryIdentity = useRef(JSON.stringify([view, service, search, table, advanced, appliedHql, hours, severity]))
     useEffect(() => {
         if (view === 'errors') return
         const openFilters = (event: KeyboardEvent) => {
@@ -97,7 +93,8 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
     }, [view, service, search, table, advanced, appliedHql, hours, severity])
     useEffect(() => {
         const identity = JSON.stringify([view, service, search, table, advanced, appliedHql, hours, severity])
-        if (queryIdentity.current !== identity) { setData(null); setError(''); queryIdentity.current = identity }
+        const sameQuery = queryIdentity.current === identity
+        if (!sameQuery) { setData(null); setError(''); queryIdentity.current = identity }
         setBusy(false)
         setPaged(false)
         const controller = new AbortController()
@@ -106,13 +103,7 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
         async function load(manual = false, cursor?: string) {
             if (inFlight || (!manual && (pausedUpdates.current || editing.current))) return
             inFlight = true; setBusy(true)
-            const params = new URLSearchParams({ hours, hql: advanced && appliedHql ? appliedHql : `${table} | take 200` })
-            if (search && !advanced) params.set('search', search)
-            if (service !== 'all') params.set('service', service)
-            if (view === 'realtime') params.set('severity', 'high,critical')
-            else if (severity !== 'all') params.set('severity', severity)
-            if (view === 'dashboard') params.set('stats', '1')
-            if (view === 'search' && !advanced) params.set('paginate', '1')
+            const params = logSearchParams({ view, hours, advanced, appliedHql, table, search, service, severity })
             if (cursor) params.set('cursor', cursor)
             try {
                 const response = await fetch(view === 'errors' ? '/api/backend/logs/errors?limit=150' : `/api/backend/logs/search?${params}`, { signal: controller.signal, cache: 'no-store' })
@@ -137,11 +128,11 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
         }
         // Pause freezes automatic updates; explicit filters, retries and Resume
         // still load once even while an event's text is selected.
-        const debounce = setTimeout(() => void load(true), 250)
+        const debounce = initialData && sameQuery && refresh === 0 ? undefined : setTimeout(() => void load(true), 250)
         loadMore.current = cursor => void load(true, cursor)
         const interval = view !== 'errors' ? setInterval(() => void load(), view === 'search' ? 10_000 : 5000) : undefined
         return () => { controller.abort(); clearTimeout(debounce); clearInterval(interval); loadMore.current = () => {} }
-    }, [view, service, search, table, advanced, appliedHql, hours, severity, refresh])
+    }, [view, service, search, table, advanced, appliedHql, hours, severity, refresh, initialData])
     function togglePaused() {
         pausedUpdates.current = !pausedUpdates.current
         setPaused(pausedUpdates.current)
@@ -188,13 +179,13 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
             </div>
             {view === 'realtime' && <div className='flex justify-end'>{view === 'realtime' && <button type='button' onClick={togglePaused} className={`${fieldClass} h-11 shrink-0`}>{paused ? 'Resume' : 'Pause'}</button>}</div>}
             {processingError && <p role='alert' className='text-sm text-ui-danger'>Mill processing is delayed: {processingError}</p>}
-            {view !== 'realtime' && commandChecksDelayed && <p role='status' className='text-sm text-ui-warning'>Command checks are delayed. {pendingCommands.has_more ? 'More than ' : ''}{pendingCommands.count.toLocaleString()} {pendingCommands.count === 1 ? 'command is' : 'commands are'} waiting; oldest received {new Date(pendingCommands.oldest_queued_at!).toLocaleString()}.</p>}
+            {view !== 'realtime' && commandChecksDelayed && <p suppressHydrationWarning role='status' className='text-sm text-ui-warning'>Command checks are delayed. {pendingCommands.has_more ? 'More than ' : ''}{pendingCommands.count.toLocaleString('en-US')} {pendingCommands.count === 1 ? 'command is' : 'commands are'} waiting; oldest received {new Date(pendingCommands.oldest_queued_at!).toLocaleString()}.</p>}
             {view !== 'realtime' && <LogCatchupProgress progress={data?.processing?.catchup} catchingUp={!!data?.processing?.sources?.some(isCatchingUp)} now={data?.generated_at || new Date().toISOString()} stalled={!!processingError} />}
-            {!!data?.processing?.skipped_events && <p role='status' className='text-sm text-ui-warning'>{data.processing.skipped_events.toLocaleString()} events remain excluded from detection.</p>}
+            {!!data?.processing?.skipped_events && <p role='status' className='text-sm text-ui-warning'>{data.processing.skipped_events.toLocaleString('en-US')} events remain excluded from detection.</p>}
             {data && !data.processing && !busy && <p role='status' className='text-sm text-ui-warning'>Waiting for the log processor to check in.</p>}
             {view === 'dashboard' ? <>
-                <section className='grid gap-3 sm:grid-cols-5' aria-label='Events by severity' data-logs-metrics>{['low','medium','high','critical'].map(value => <Link key={value} href={`/logs/search?${new URLSearchParams({ hours, ...(service !== 'all' ? { service } : {}), ...(advanced && appliedHql ? { hql: appliedHql } : { table, search }), severity: value })}`} className={`${dashboardPanelClass} p-4`} data-logs-metric-card><p className='text-sm capitalize text-ui-muted'>{value}</p><p className='mt-2 text-2xl font-semibold tabular-nums'>{data ? (data.counts.find(item => item.severity === value)?.count || 0).toLocaleString() : '—'}</p></Link>)}<Link href='/logs/errors' className={`${dashboardPanelClass} p-4`} data-logs-metric-card><p className='text-sm text-ui-muted'>Errors</p><p className='mt-2 text-2xl font-semibold tabular-nums'>{errors.summary.total.toLocaleString()}</p></Link></section>
-                <details open className={`${dashboardPanelClass} group overflow-hidden`}><summary className='flex cursor-pointer list-none items-center justify-between border-b border-ui-border bg-ui-raised px-4 py-3 text-sm font-semibold [&::-webkit-details-marker]:hidden'>Most active<ChevronDown size={18} aria-hidden className='-rotate-90 text-ui-muted transition-transform group-open:rotate-0' /></summary><div className='p-4'><dl className='grid gap-2'>{data?.services.map(item => <div key={item.service} className='flex justify-between gap-3 text-sm'><dt>{item.service}</dt><dd>{item.count.toLocaleString()}</dd></div>)}</dl></div></details>
+                <section className='grid gap-3 sm:grid-cols-5' aria-label='Events by severity' data-logs-metrics>{['low','medium','high','critical'].map(value => <Link key={value} href={`/logs/search?${new URLSearchParams({ hours, ...(service !== 'all' ? { service } : {}), ...(advanced && appliedHql ? { hql: appliedHql } : { table, search }), severity: value })}`} className={`${dashboardPanelClass} p-4`} data-logs-metric-card><p className='text-sm capitalize text-ui-muted'>{value}</p><p className='mt-2 text-2xl font-semibold tabular-nums'>{data ? (data.counts.find(item => item.severity === value)?.count || 0).toLocaleString('en-US') : '—'}</p></Link>)}<Link href='/logs/errors' className={`${dashboardPanelClass} p-4`} data-logs-metric-card><p className='text-sm text-ui-muted'>Errors</p><p className='mt-2 text-2xl font-semibold tabular-nums'>{errors.summary.total.toLocaleString('en-US')}</p></Link></section>
+                <details open className={`${dashboardPanelClass} group overflow-hidden`}><summary className='flex cursor-pointer list-none items-center justify-between border-b border-ui-border bg-ui-raised px-4 py-3 text-sm font-semibold [&::-webkit-details-marker]:hidden'>Most active<ChevronDown size={18} aria-hidden className='-rotate-90 text-ui-muted transition-transform group-open:rotate-0' /></summary><div className='p-4'><dl className='grid gap-2'>{data?.services.map(item => <div key={item.service} className='flex justify-between gap-3 text-sm'><dt>{item.service}</dt><dd>{item.count.toLocaleString('en-US')}</dd></div>)}</dl></div></details>
             </> : <section className={`${dashboardPanelClass} min-w-0 overflow-hidden`} aria-label='Log events'>
                 <div className='flex flex-wrap justify-between gap-2 border-b border-ui-border p-3 text-xs text-ui-muted'><span>{data?.rows.length || 0} results{data && data.rows.length === data.limit && (view !== 'search' || advanced) ? ` · limited to ${data.limit}; narrow your search or use take up to 500` : ''}</span><span role='status'>{busy ? 'Searching…' : paused ? 'Paused' : view === 'realtime' ? 'Updates every 5 seconds' : 'Results'}{copied ? ' · Event copied' : ''}</span></div>
                 <EventFeed rows={data?.rows || []}>{data?.summarize ? <table className='w-full text-left text-sm'><thead><tr><th className='p-3'>{data.summarize}</th><th className='p-3'>Count</th></tr></thead><tbody>{(data.rows as unknown as Array<{value: string,count: number}>).map(row => <tr key={row.value}><td className='p-3'>{row.value}</td><td className='p-3'>{row.count}</td></tr>)}</tbody></table> : data?.rows.map(event => <article key={event.id} className='select-text border-b border-ui-border p-4 last:border-b-0' onPointerDown={() => { editing.current = true }} onPointerUp={() => { editing.current = false }} onPointerLeave={() => { editing.current = false }}>

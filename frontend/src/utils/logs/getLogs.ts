@@ -1,3 +1,4 @@
+import { logSearchParams, logTables, type LogSearchResult } from './search'
 import config from '@/config'
 
 export type ServiceLog = {
@@ -206,5 +207,25 @@ export async function getRealtimeLogs({ token, id, service }: { token?: string, 
             generated_at: new Date().toISOString(),
             unavailable_reason: 'Log stream is reconnecting.',
         } satisfies LogRealtimeResponse
+    }
+}
+
+export async function getLogDashboard({ token, id, params, impersonationToken }: { token: string, id: string, params: Record<string, string | string[] | undefined>, impersonationToken?: string }): Promise<{ data: LogSearchResult | null, error: string }> {
+    const value = (key: string) => { const input = params[key]; return (Array.isArray(input) ? input[0] : input) || '' }
+    const appliedHql = value('hql') || value('kql')
+    const query = logSearchParams({ view: 'dashboard', hours: value('hours') || '24', advanced: !!appliedHql,
+        appliedHql, table: logTables.includes(value('table')) ? value('table') : 'Logs', search: value('search'),
+        service: value('service') || 'all', severity: value('severity') || 'all' })
+    try {
+        const response = await fetch(`${config.url.api}/logs/search?${query}`, {
+            cache: 'no-store', signal: AbortSignal.timeout(10_000),
+            headers: { id, Authorization: `Bearer ${token}`, ...(impersonationToken ? { 'x-impersonation-token': impersonationToken } : {}) },
+        })
+        const body = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(body.error || 'Could not load logs.')
+        if (!Array.isArray(body.rows) || !Array.isArray(body.counts) || !Array.isArray(body.services)) throw new Error('Could not load logs.')
+        return { data: body as LogSearchResult, error: '' }
+    } catch (cause) {
+        return { data: null, error: cause instanceof Error && cause.name !== 'TimeoutError' ? cause.message : 'Could not load logs.' }
     }
 }
