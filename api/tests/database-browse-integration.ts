@@ -18,17 +18,18 @@ process.env.DB_STORAGE_METRICS_FILE = join(directory, 'databases.json')
 try {
     await pg.query('CREATE TABLE IF NOT EXISTS "odd table" (id bigint PRIMARY KEY, "__preview_cursor" text); TRUNCATE "odd table"; INSERT INTO "odd table" SELECT 9007199254740992+i, repeat(\'x\',20000) FROM generate_series(1,13) i; CREATE TABLE IF NOT EXISTS heap (n int); TRUNCATE heap; INSERT INTO heap SELECT generate_series(1,13)')
     await mongo.connect(); await mongo.db('preview').collection('items').deleteMany({}); await mongo.db('preview').collection('items').insertMany(Array.from({ length: 13 }, (_, n) => ({ n })))
+    await pg.query('CREATE TABLE IF NOT EXISTS ordered (id int PRIMARY KEY); TRUNCATE ordered; INSERT INTO ordered SELECT generate_series(1,13)')
     await redis.connect(); await redis.flushDb()
     for (let n = 0; n < 13; n++) { await redis.set(`key${n}`, String(n)); await redis.rPush('list', String(n)); await redis.hSet('hash', `field${n}`, String(n)); await redis.sAdd('set', String(n)); await redis.zAdd('zset', { score: n, value: String(n) }); await redis.xAdd('stream', '*', { n: String(n) }) }
     const table = (name: string, columns: string[], schema = '') => ({ name, schema, columns })
     await writeFile(process.env.DB_STORAGE_METRICS_FILE, JSON.stringify({ sampledAt: new Date().toISOString(), disk: { availableBytes: 1 }, instances: [
-        { id: 'db-preview-postgres-test', engine: 'PostgreSQL', databases: [{ name: 'preview', tables: [table('odd table', ['id', '__preview_cursor'], 'public'), table('heap', ['n'], 'public')] }] },
+        { id: 'db-preview-postgres-test', engine: 'PostgreSQL', databases: [{ name: 'preview', tables: [table('odd table', ['id', '__preview_cursor'], 'public'), table('heap', ['n'], 'public'), table('ordered', ['id'], 'public')] }] },
         { id: 'db-preview-mongo-test', engine: 'MongoDB', databases: [{ name: 'preview', tables: [table('items', [])] }] },
         { id: 'db-preview-redis-test', engine: 'Redis', databases: [{ name: 'db0' }] },
     ] }))
     const timings: number[] = []
     for (const [instance, database, schema, name] of [
-        ['db-preview-postgres-test', 'preview', 'public', 'odd table'], ['db-preview-postgres-test', 'preview', 'public', 'heap'],
+        ['db-preview-postgres-test', 'preview', 'public', 'odd table'], ['db-preview-postgres-test', 'preview', 'public', 'heap'], ['db-preview-postgres-test', 'preview', 'public', 'ordered'],
         ['db-preview-mongo-test', 'preview', '', 'items'], ...['list', 'hash', 'set', 'zset', 'stream'].map(key => ['db-preview-redis-test', 'db0', '', key]),
     ]) {
         let cursor: string | undefined, rows: unknown[] = [], pages = 0
@@ -41,6 +42,7 @@ try {
         } while (cursor)
         assert.equal(rows.length, 13, name); assert.equal(new Set(rows.map(row => JSON.stringify(row))).size, 13, name)
         if (name === 'odd table') { assert.equal((rows[0] as any).id, '9007199254740993'); assert.equal((rows[0] as any).__preview_cursor.length, 16384) }
+        if (name === 'ordered') assert.deepEqual(rows.map((row: any) => Number(row.id)), Array.from({ length: 13 }, (_, index) => index + 1))
     }
     let cursor: string | undefined, keys: string[] = []
     do { const page = await browseDatabase({ instance: 'db-preview-redis-test', database: 'db0', mode: 'contents', cursor }); assert('items' in page); assert(page.items.length <= 5); keys.push(...page.items.map(item => item.name)); cursor = page.nextCursor || undefined } while (cursor)

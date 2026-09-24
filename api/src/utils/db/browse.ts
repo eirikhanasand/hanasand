@@ -93,7 +93,9 @@ export async function browseDatabase(input: BrowseInput) {
         const keys = primary.rows.map(row => row.name)
         if (!keys.length) return browseHeap(connection.pg, input, cursor, name, table.columns, started)
         // A physical cursor avoids growing OFFSET scans for tables without a key.
-        const order = keys.length ? keys.map(quote) : ['tableoid', 'ctid']
+        // Qualify keys so ORDER BY uses indexed source values, not the text
+        // aliases in the preview projection (which would sort the whole table).
+        const order = keys.map(key => `preview_row.${quote(key)}`)
         const values = cursor.values || []
         if (values.length && values.length !== order.length) throw new Error('Invalid cursor')
         const columns = table.columns.map(column => `left(${quote(column)}::text,16384) AS ${quote(column)}`).join(',')
@@ -101,7 +103,7 @@ export async function browseDatabase(input: BrowseInput) {
         const where = values.length ? `WHERE (${order.join(',')}) > (${order.map((_, index) => `$${index + 1}${keys.length ? '' : index === 0 ? '::oid' : '::tid'}`).join(',')})` : ''
         let cursorColumn = '__preview_cursor'
         while (table.columns.includes(cursorColumn)) cursorColumn += '_'
-        const result = await connection.pg.query(`SELECT ${columns ? `${columns},` : ''} ${keyProjection} AS ${quote(cursorColumn)} FROM ${name} ${where} ORDER BY ${order.join(',')} LIMIT 6`, values)
+        const result = await connection.pg.query(`SELECT ${columns ? `${columns},` : ''} ${keyProjection} AS ${quote(cursorColumn)} FROM ${name} AS preview_row ${where} ORDER BY ${order.join(',')} LIMIT 6`, values)
         const rows = result.rows.slice(0, 5)
         const nextCursor = result.rows.length > 5 ? encode({ ...cursor, values: rows.at(-1)![cursorColumn] }) : null
         for (const row of rows) delete row[cursorColumn]
