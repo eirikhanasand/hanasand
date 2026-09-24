@@ -27,6 +27,8 @@ export async function processRuleReprocessJob() {
     try {
         return await withTransaction(async query => {
             await query('SET LOCAL statement_timeout=\'10s\'')
+            const pending = await query("SELECT EXISTS(SELECT 1 FROM mill_rule_reprocess_jobs WHERE status IN ('queued','running')) AS pending")
+            if (!pending.rows[0].pending) return false
             await query('SET LOCAL lock_timeout=\'5s\'')
             // Join the bounded lock queue: repeatedly probing two busy workers
             // can starve historical replay even while both keep making progress.
