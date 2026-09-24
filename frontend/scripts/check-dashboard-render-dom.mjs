@@ -32,11 +32,6 @@ const pageSpecs = [
         requiredSelectors: ['[data-readiness-row-id]', '[data-readiness-owner-lane]', '[data-readiness-operator-action]', '[data-readiness-workflow-blocker]', '[data-readiness-customer-impact]', '[data-readiness-source-reference]', '[data-readiness-action-count]', '[data-readiness-backend-contract-version]', '[data-readiness-priority]', '[data-readiness-detail]', '[data-readiness-detail-actions]'],
     },
     {
-        id: 'dashboard_ti_control',
-        path: '/ti/control',
-        requiredSelectors: ['.source-ops-workbench', 'button'],
-    },
-    {
         id: 'public_ti',
         path: '/ti',
         requiredSelectors: ['main'],
@@ -490,8 +485,8 @@ async function inspectRenderedPage(page, spec) {
             return issues
         }
 
-        const rowElements = Array.from(document.querySelectorAll('[data-readiness-row-id], [data-readiness-detail], .source-ops-workbench button, .source-ops-workbench a'))
-        const actionElements = Array.from(document.querySelectorAll('[data-readiness-row-id] a, [data-readiness-row-id] button, [data-readiness-detail] a, [data-readiness-detail] button, .source-ops-workbench button, .source-ops-workbench a'))
+        const rowElements = Array.from(document.querySelectorAll('[data-readiness-row-id], [data-readiness-detail]'))
+        const actionElements = Array.from(document.querySelectorAll('[data-readiness-row-id] a, [data-readiness-row-id] button, [data-readiness-detail] a, [data-readiness-detail] button'))
         const visibleRows = rowElements
             .map((element, index) => ({ element, rect: visibleRect(element), index }))
             .filter(item => item.rect)

@@ -44,7 +44,7 @@ export default async function TiAdminPage() {
             <section className='grid gap-3 xl:grid-cols-[1.1fr_1fr_1fr]'>
                 <LiveLane
                     title='Collection'
-                    href='/ti/control'
+                    href='/ti/runs'
                     icon={<DatabaseZap className='h-4 w-4' />}
                     state={operationalStateLabel(latestRun?.status || 'scheduled')}
                     stateTone={latestRun?.status === 'failed' ? 'bad' : latestRun?.status === 'running' || latestRun?.status === 'queued' ? 'watch' : 'ok'}

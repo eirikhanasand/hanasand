@@ -1718,10 +1718,10 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
         })
         rows.push({
             id: 'open_source_operations',
-            label: 'Collection',
-            detail: 'Open collection for parser checks, source requests, and canary runs.',
+            label: 'Feeds',
+            detail: 'View and manage collection feeds.',
             tone: 'ready',
-            href: '/ti/control',
+            href: '/ti/sources',
         })
         for (const action of (selected.actions || []).filter(candidate => candidate.id === 'request_source_coverage' || candidate.id === 'run_canary_collection')) {
             rows.push({

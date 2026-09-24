@@ -1048,7 +1048,7 @@ assert.ok(workbenchSource.includes('active sources, ${sourceCoverage.captureCoun
 assert.ok(workbenchSource.includes('inspect_source_inventory'), 'Source readiness should expose the backed source inventory drill-in.')
 assert.ok(workbenchSource.includes('/api/ti/scraper/control'), 'Source readiness should link to the backed scraper control source inventory proxy.')
 assert.ok(workbenchSource.includes('open_source_operations'), 'Source readiness should deep-link to the source operations workspace.')
-assert.ok(workbenchSource.includes('/ti/control'), 'Source readiness should expose the backed source operations UI route.')
+assert.ok(workbenchSource.includes('/ti/sources'), 'Source readiness should expose the backed source operations UI route.')
 assert.ok(workbenchSource.includes('open_capture_source'), 'Selected source captures should expose the exact source profile drill-in.')
 assert.ok(workbenchSource.includes('open_capture_domain'), 'Selected source captures should expose the exact domain context drill-in.')
 assert.ok(workbenchSource.includes('relatedLinkHref(selected, \'Open source\')'), 'Source capture drill-ins should reuse backed related source links.')

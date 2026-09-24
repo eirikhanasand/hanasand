@@ -30,7 +30,7 @@ export default async function TiEnrichmentPage() {
                         <p className='mt-2 text-xs text-ui-muted'>{worker.state === 'unavailable' ? worker.lastError || 'The enrichment status service could not be reached.' : worker.lastSuccessfulRunAt ? `Last successful run ${formatTiDate(worker.lastSuccessfulRunAt)}${worker.snapshotFresh === false ? ' · snapshot is stale' : ''}.` : 'Waiting for the first GPU enrichment result.'}</p>
                     </div>
                     <div className='flex flex-wrap gap-2'>
-                        <Link href='/ti/control' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm font-semibold text-ui-text hover:bg-ui-raised'>Collection control</Link>
+                        <Link href='/ti/runs' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm font-semibold text-ui-text hover:bg-ui-raised'>Collection runs</Link>
                         <Link href='/ti/sources' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm font-semibold text-ui-text hover:bg-ui-raised'>View feeds <ArrowRight className='h-4 w-4' /></Link>
                     </div>
                 </div>

@@ -4,7 +4,6 @@ import { readFileSync } from 'node:fs'
 const workbenchSource = readFileSync(new URL('../src/app/dashboard/ti/workbench/workbenchClient.tsx', import.meta.url), 'utf8')
 const modelSource = readFileSync(new URL('../src/app/dashboard/operatorConsoleModel.ts', import.meta.url), 'utf8')
 const pageSource = readFileSync(new URL('../src/app/dashboard/page.tsx', import.meta.url), 'utf8')
-const sourceOpsSource = readFileSync(new URL('../src/app/dashboard/ti/control/scraperControlClient.tsx', import.meta.url), 'utf8')
 const checkerSource = readFileSync(new URL('./check-product-progress-contract.ts', import.meta.url), 'utf8')
 const webhookProofCheckerSource = readFileSync(new URL('./check-product-progress-webhook-proof.ts', import.meta.url), 'utf8')
 const alertGenerationProofCheckerSource = readFileSync(new URL('./check-product-progress-alert-generation.ts', import.meta.url), 'utf8')
@@ -72,7 +71,6 @@ const readinessRows = {
 
 const renderedRouteIds = [
     'dashboard',
-    'dashboard_ti_control',
     'public_ti',
     'public_ti_apt29',
     'ti_workbench',
@@ -181,7 +179,7 @@ for (const requiredClass of [
     assert.ok(workbenchSource.includes(requiredClass), `Missing render guard class ${requiredClass}`)
 }
 
-for (const source of [workbenchSource, modelSource, pageSource, sourceOpsSource]) {
+for (const source of [workbenchSource, modelSource, pageSource]) {
     const lowered = source.toLowerCase()
     for (const bannedCopy of ['control room', 'prompt-shaped', 'acceptance criteria', 'coordinator', 'delegation', 'you are tasked']) {
         assert.equal(lowered.includes(bannedCopy), false, `Dashboard source includes banned copy: ${bannedCopy}`)
@@ -192,11 +190,7 @@ for (const source of [workbenchSource, modelSource, pageSource, sourceOpsSource]
 }
 
 for (const bannedUiCopy of ['APT29', 'LockBit', 'dashboard slop', 'how this feeds', '/ti/<query>', 'dashboard handoff', 'backed handoff']) {
-    assert.equal(sourceOpsSource.includes(bannedUiCopy) || pageSource.includes(bannedUiCopy) || modelSource.includes(bannedUiCopy), false, `Dashboard visible source includes prompt/example copy: ${bannedUiCopy}`)
-}
-
-for (const sourceOpsGuard of ['source-ops-workbench grid gap-2', 'border-ui-border', 'bg-ui-panel', 'hover:bg-ui-raised', 'grid gap-2 sm:grid-cols-2', 'min-h-9 min-w-0 px-2.5 py-1.5', 'whitespace-normal sm:whitespace-nowrap']) {
-    assert.ok(sourceOpsSource.includes(sourceOpsGuard), `Source operations action guard missing: ${sourceOpsGuard}`)
+    assert.equal(pageSource.includes(bannedUiCopy) || modelSource.includes(bannedUiCopy), false, `Dashboard visible source includes prompt/example copy: ${bannedUiCopy}`)
 }
 
 for (const field of ['ownerLane', 'unavailableReason', 'staleAfterSeconds', 'proofTimestamp', 'expectedDashboardRowId', 'integrationProbeHint', 'backendProofContractVersion']) {
@@ -205,7 +199,6 @@ for (const field of ['ownerLane', 'unavailableReason', 'staleAfterSeconds', 'pro
 
 for (const requiredToken of [
     'hanasand.dashboard.render-proof.v1',
-    '/ti/control',
     '/ti/apt29',
     '/ti/workbench',
     '/automation/cron',
