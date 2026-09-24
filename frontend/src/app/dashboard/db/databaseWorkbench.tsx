@@ -68,6 +68,7 @@ export default function DatabaseWorkbench({ overview, children }: { overview: Da
     return (
         <>
             <div className='flex flex-wrap items-center justify-end gap-3'>
+                <h1 className='mr-auto text-xl font-semibold text-ui-text'>Databases</h1>
                 <DatabaseConnection />
                 <button type='button' aria-label='Search' title='Search (⌘ J)' disabled={overview.status === 'unavailable'} aria-expanded={open} aria-controls='database-workbench-content' onClick={() => setOpen(value => !value)} className='inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-ui-primary hover:bg-ui-primary/10 focus-visible:outline-ui-primary disabled:opacity-50'>
                     <Search aria-hidden className='h-4 w-4' /><kbd className='text-xs'>⌘ J</kbd>
