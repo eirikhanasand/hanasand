@@ -4,7 +4,7 @@ import { createClient } from 'redis'
 import { getRuntimeContainer } from '#utils/docker/engine.ts'
 import { readDatabaseStorage, readRedisWrites } from './storage.ts'
 
-export type BrowseInput = { instance: string, database: string, mode: 'contents' | 'rows', schema?: string, table?: string, cursor?: string }
+export type BrowseInput = { instance: string, database: string, mode: 'contents' | 'rows' | 'count', schema?: string, table?: string, cursor?: string }
 type Cursor = { target: string, values?: unknown[], scan?: string, index?: number, offset?: number }
 type RedisConnection = { sendCommand(args: string[]): Promise<unknown>, type(key: string): Promise<string>, getRange(key: string, start: number, end: number): Promise<string | null>, destroy(): void }
 type Connection = { pg?: Pool, mongo?: MongoClient, redis?: RedisConnection, used: number }
@@ -89,6 +89,12 @@ export async function browseDatabase(input: BrowseInput) {
         const table = database.tables?.find(item => item.name === input.table && item.schema === input.schema)
         if (!table) throw new Error('Unknown table')
         const name = `${quote(table.schema)}.${quote(table.name)}`
+        if (input.mode === 'count') {
+            // Retain the connection's short statement timeout for large tables.
+            const totalRows = await connection.pg.query(`SELECT count(*) AS count FROM ${name}`)
+                .then(result => Number(result.rows[0].count)).catch(() => null)
+            return { totalRows, nextCursor: null, elapsedMs: performance.now() - started }
+        }
         const primary = await connection.pg.query<{ name: string }>('SELECT a.attname AS name FROM pg_index i JOIN pg_attribute a ON a.attrelid=i.indrelid AND a.attnum=ANY(i.indkey) WHERE i.indrelid=$1::regclass AND i.indisprimary ORDER BY array_position(i.indkey,a.attnum)', [name])
         const keys = primary.rows.map(row => row.name)
         if (!keys.length) return browseHeap(connection.pg, input, cursor, name, table.columns, started)
@@ -111,6 +117,10 @@ export async function browseDatabase(input: BrowseInput) {
     }
     if (connection.mongo) {
         if (!database.tables?.some(item => item.name === input.table)) throw new Error('Unknown collection')
+        if (input.mode === 'count') {
+            const totalRows = await connection.mongo.db(input.database).collection(input.table!).countDocuments({}, { maxTimeMS: 2000 }).catch(() => null)
+            return { totalRows, nextCursor: null, elapsedMs: performance.now() - started }
+        }
         const after = cursor.values?.[0]
         const documents = await connection.mongo.db(input.database).collection(input.table!).find(after === undefined ? {} : { _id: { $gt: BSON.EJSON.deserialize(after as Record<string, unknown>) } }, { maxTimeMS: 2000 }).sort({ _id: 1 }).limit(6).toArray()
         const rows = documents.slice(0, 5).map(document => BSON.EJSON.serialize(document, { relaxed: true }))
@@ -130,6 +140,11 @@ export async function browseDatabase(input: BrowseInput) {
     const key = input.table
     if (!key) throw new Error('Key required')
     const type = await redis.type(key)
+    if (input.mode === 'count') {
+        const command = ({ list: 'LLEN', zset: 'ZCARD', hash: 'HLEN', set: 'SCARD', stream: 'XLEN' } as Record<string, string>)[type]
+        const totalRows = command ? Number(await redis.sendCommand([command, key])) : type === 'string' ? 1 : type === 'none' ? 0 : null
+        return { totalRows, nextCursor: null, elapsedMs: performance.now() - started }
+    }
     let rows: Record<string, unknown>[] = [], nextCursor: string | null = null
     const offset = cursor.offset || 0
     if (type === 'string') rows = [{ value: await redis.getRange(key, 0, 16383) }]

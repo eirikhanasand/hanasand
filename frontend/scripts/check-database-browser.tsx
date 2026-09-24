@@ -1,36 +1,41 @@
 // @ts-nocheck -- This standalone browser harness uses Bun's build/server APIs.
 import { chromium } from '@playwright/test'
-import { mkdtemp, writeFile, rm } from 'node:fs/promises'
+import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import assert from 'node:assert/strict'
+import postcss from 'postcss'
+import tailwind from '@tailwindcss/postcss'
 
 const temporary = await mkdtemp(path.join(tmpdir(), 'db-browser-ui-'))
 const root = process.cwd()
+const css = (await postcss([tailwind()]).process(await readFile(path.join(root, 'src/app/globals.css'), 'utf8'), { from: path.join(root, 'src/app/globals.css') })).css
+const fields = ['id', ...Array.from({length: 24}, (_, n) => `column_${n}`)]
 const entry = path.join(temporary, 'entry.tsx')
 await writeFile(entry, `import React from '${root}/node_modules/react/index.js';
 import {createRoot} from '${root}/node_modules/react-dom/client.js';
 import Workbench from '${root}/src/app/dashboard/db/databaseWorkbench.tsx';
 import Inventory from '${root}/src/app/dashboard/db/databaseInventory.tsx';
-createRoot(document.getElementById('root')).render(<><Workbench overview={{clusters:[]}}/><Inventory stale={false} instances={[{id:'test',engine:'PostgreSQL',status:'healthy',databases:[{name:'example',sizeBytes:1000,tableCount:1,connections:1,tables:[{schema:'public',name:'items',sizeBytes:100,columns:['id','value'],lastWriteObservedAt:null}]}]}]}/></>);`)
+createRoot(document.getElementById('root')).render(<><Workbench overview={{clusters:[]}}/><Inventory stale={false} instances={[{id:'test',engine:'PostgreSQL',status:'healthy',databases:[{name:'example',sizeBytes:1000,tableCount:1,connections:1,tables:[{schema:'public',name:'items',sizeBytes:100,columns:${JSON.stringify(fields)},lastWriteObservedAt:null},...Array.from({length: 7},(_,n)=>({schema:'public',name:'extra_'+n,sizeBytes:100,columns:['id'],lastWriteObservedAt:null}))]}]}]}/></>);`)
 const build = await Bun.build({ entrypoints: [entry], target: 'browser', outdir: temporary, plugins: [{ name: 'server-actions', setup(builder) {
     builder.onResolve({ filter: /^react\/jsx/ }, args => ({ path: path.join(root, 'node_modules', args.path + '.js') }))
     builder.onLoad({ filter: /dashboard\/db\/actions\.ts$/ }, () => ({ contents: 'export async function databaseRowsAction(){return {rows:[],fields:[],rowCount:0}};export const databaseSqlAction=databaseRowsAction;', loader: 'js' }))
 } }] })
 assert(build.success, build.logs.join('\n'))
-let checks = 0, healthFails = false
+let checks = 0, healthFails = false, rowCount = 13
 const pages: string[] = []
 const server = Bun.serve({ port: 0, fetch(request) {
     const url = new URL(request.url)
     if (url.pathname === '/bundle.js') return new Response(Bun.file(build.outputs[0].path))
     if (url.pathname === '/api/db/health') { checks++; return Response.json({ ok: !healthFails }, { status: healthFails ? 503 : 200 }) }
     if (url.pathname === '/api/db/browse') {
+        if (url.searchParams.get('mode') === 'count') return Response.json({ totalRows: rowCount, nextCursor: null })
         const cursor = url.searchParams.get('cursor') || '0'; pages.push(cursor)
-        if (cursor === '5') return Response.json({ rows: [], fields: ['id','value'], nextCursor: 'gap' })
+        if (cursor === '5') return Response.json({ rows: [], fields, nextCursor: 'gap' })
         const offset = cursor === 'gap' ? 5 : Number(cursor)
-        return Response.json({ rows: Array.from({ length: Math.min(5, 13 - offset) }, (_, n) => ({ id: offset+n, value: 'sample' })), fields: ['id','value'], nextCursor: offset < 10 ? String(offset+5) : null })
+        return Response.json({ rows: Array.from({ length: Math.min(5, rowCount - offset) }, (_, n) => ({ id: offset+n, ...Object.fromEntries(fields.slice(1).map(field => [field, 'x'.repeat(500)])) })), fields, nextCursor: offset + 5 < rowCount ? String(offset+5) : null })
     }
-    return new Response('<html><head><style>.max-h-80{max-height:320px}.overflow-auto{overflow:auto}.h-px{height:1px}td{padding:8px} [hidden]{display:none}</style></head><body><div id="root"></div><script type="module" src="/bundle.js"></script></body></html>', { headers: { 'Content-Type': 'text/html' } })
+    return new Response(`<html><head><style>${css}</style></head><body><div id="root"></div><script type="module" src="/bundle.js"></script></body></html>`, { headers: { 'Content-Type': 'text/html' } })
 } })
 const browser = await chromium.launch({ headless: true })
 try {
@@ -51,20 +56,52 @@ try {
     await page.keyboard.press('Meta+j')
     assert.equal(await page.getByRole('button', { name: 'Inspect rows' }).isVisible(), false)
     await page.getByRole('button', { name: 'example', exact: true }).click()
+    const search = page.getByRole('searchbox', { name: 'Search tables' })
+    await search.waitFor()
+    assert.equal(await page.getByText('Last write: Never', { exact: false }).count(), 0)
+    const list = page.locator('[data-table-selector]').first().locator('../..')
+    assert(await list.evaluate(element => element.scrollHeight > element.clientHeight))
+    const listSize = await list.evaluate(element => ({ height: element.clientHeight, five: Array.from(element.querySelectorAll('[data-table-selector]')).slice(0,5).reduce((sum, button) => sum + button.getBoundingClientRect().height + 2, 48) }))
+    assert(Math.abs(listSize.height - listSize.five) <= 1)
+    await page.keyboard.press('Meta+x')
+    assert(await search.evaluate(element => element === document.activeElement))
+    await search.fill('extra_6')
+    assert.equal(await page.locator('[data-table-selector]').count(), 1)
+    await search.fill('not-a-table')
+    await page.getByText('No matching tables.').waitFor()
+    await search.fill('')
     await page.getByRole('button', { name: /public.items/ }).click()
-    for (let attempt = 0; attempt < 5 && !await page.getByText('13 rows · End of preview').count(); attempt++) {
+    await page.getByText('5/13 rows', { exact: true }).waitFor()
+    for (const width of [1280, 390]) {
+        await page.setViewportSize({ width, height: 760 })
+        const sizes = await page.getByLabel('items rows').evaluate(element => ({
+            page: document.documentElement.scrollWidth, viewport: window.innerWidth,
+            inner: element.scrollWidth, outer: element.clientWidth,
+        }))
+        assert(sizes.page <= sizes.viewport, `Page overflow at ${width}: ${JSON.stringify(sizes)}`)
+        assert(sizes.inner > sizes.outer, 'Wide columns must scroll inside the preview')
+        await page.getByLabel('items rows').evaluate(element => { element.scrollLeft = 100 })
+        assert(await page.getByLabel('items rows').evaluate(element => element.scrollLeft > 0))
+    }
+    for (let attempt = 0; attempt < 5 && !await page.getByText('13/13 rows').count(); attempt++) {
         await page.getByLabel('items rows').scrollIntoViewIfNeeded()
         await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
         await page.getByLabel('items rows').evaluate(element => { element.scrollTop = element.scrollHeight })
         await page.waitForTimeout(100)
     }
-    await page.getByText('13 rows · End of preview').waitFor()
+    await page.getByText('13/13 rows').waitFor()
     assert.deepEqual(pages, ['0','5','gap','10'])
+    for (const count of [1, 0]) {
+        await page.getByRole('button', { name: /public.items/ }).click()
+        rowCount = count
+        await page.getByRole('button', { name: /public.items/ }).click()
+        await page.getByText(`${count}/${count} ${count === 1 ? 'row' : 'rows'}`, { exact: true }).waitFor()
+    }
     await page.clock.runFor(5100)
     await page.waitForFunction(() => document.body.textContent?.includes('Connected'))
     assert(checks >= 2)
     healthFails = true
     await page.clock.runFor(5100)
     await page.getByText('Unavailable', { exact: true }).waitFor()
-    console.log(JSON.stringify({ result: 'passed', checks: ['collapsed workbench', 'Cmd+J', 'inline database expansion', 'five-row infinite pages', '5s health refresh', 'connection failure'] }))
+    console.log(JSON.stringify({ result: 'passed', checks: ['collapsed workbench', 'Cmd+J', 'inline database expansion', 'five-row infinite pages', 'partial and complete row counts', 'wide table containment at desktop and mobile widths', '5s health refresh', 'connection failure'] }))
 } finally { await browser.close(); server.stop(); await rm(temporary, { recursive: true, force: true }) }

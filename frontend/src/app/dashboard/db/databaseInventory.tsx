@@ -6,7 +6,7 @@ import type { DatabaseOverview } from '@/utils/db/internal'
 type Instance = NonNullable<DatabaseOverview['storage']>['instances'][number]
 type Database = Instance['databases'][number]
 type Item = { schema: string, name: string, sizeBytes: number | null, columns?: string[], lastWriteObservedAt?: string | null, type?: string }
-type Page = { rows?: Record<string, unknown>[], fields?: string[], items?: Item[], nextCursor: string | null, elapsedMs?: number }
+type Page = { rows?: Record<string, unknown>[], fields?: string[], items?: Item[], nextCursor: string | null, elapsedMs?: number, totalRows?: number | null }
 
 async function fetchPage(params: URLSearchParams, signal?: AbortSignal): Promise<Page> {
     const response = await fetch(`/api/db/browse?${params}`, { cache: 'no-store', signal })
@@ -43,6 +43,34 @@ function DatabaseContents({ instance, database }: { instance: Instance, database
     const [items, setItems] = useState<Item[]>(database.tables || [])
     const [cursor, setCursor] = useState<string | null>(null)
     const [selected, setSelected] = useState<string | null>(null)
+    const [search, setSearch] = useState('')
+    const searchInput = useRef<HTMLInputElement>(null)
+    const list = useRef<HTMLDivElement>(null)
+    const [listHeight, setListHeight] = useState<number>()
+    const manyTables = items.length > 5
+    useEffect(() => {
+        if (!manyTables) return
+        const focusSearch = (event: KeyboardEvent) => {
+            const target = event.target as HTMLElement | null
+            if (event.metaKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'x'
+                && !target?.closest('input, textarea, select, [contenteditable="true"]')) {
+                event.preventDefault(); searchInput.current?.focus()
+            }
+        }
+        window.addEventListener('keydown', focusSearch)
+        return () => window.removeEventListener('keydown', focusSearch)
+    }, [manyTables])
+    useEffect(() => {
+        if (!manyTables || !list.current) return
+        const buttons = Array.from(list.current.querySelectorAll<HTMLElement>('[data-table-selector]')).slice(0, 5)
+        if (buttons.length < 5) return
+        const measure = () => setListHeight(buttons.reduce((height, button) => height + button.getBoundingClientRect().height + 2, 48))
+        const observer = new ResizeObserver(measure)
+        buttons.forEach(button => observer.observe(button))
+        measure()
+        return () => observer.disconnect()
+    }, [manyTables, items, search])
+    const visibleItems = items.filter(item => `${item.schema}.${item.name}`.toLowerCase().includes(search.toLowerCase()))
     const [error, setError] = useState('')
     const [pending, setPending] = useState(!database.tables)
     const params = () => new URLSearchParams({ instance: instance.id, database: database.name, mode: 'contents' })
@@ -61,18 +89,22 @@ function DatabaseContents({ instance, database }: { instance: Instance, database
             setItems(previous => [...previous, ...(page.items || []).filter(item => !previous.some(old => old.name === item.name && old.schema === item.schema))]); setCursor(page.nextCursor)
         } catch (reason) { setError(reason instanceof Error ? reason.message : 'Preview unavailable.') } finally { setPending(false) }
     }
-    return <div className='min-w-0 space-y-3'>
-        {items.map(item => {
-            const key = `${item.schema}.${item.name}`, open = selected === key
-            return <div key={key} className={`overflow-hidden rounded-md border ${open ? 'border-ui-primary bg-ui-canvas' : 'border-ui-border bg-ui-panel'}`}>
-                <button type='button' aria-expanded={open} onClick={() => setSelected(open ? null : key)} className={`grid w-full cursor-pointer grid-cols-1 gap-2 p-3 text-left transition hover:bg-ui-primary/10 sm:grid-cols-[minmax(0,1fr)_12rem_7rem] ${open ? 'bg-ui-primary/10' : ''}`}>
-                    <span className='min-w-0 wrap-break-word font-medium'>{item.schema ? `${item.schema}.` : ''}{item.name}{item.type && <span className='ml-2 text-xs text-ui-muted'>{item.type}</span>}</span>
-                    <span className='text-xs text-ui-muted' title='Last observed write. Never means no writes observed in the available monitoring history.'>Last write: {item.lastWriteObservedAt ? new Date(item.lastWriteObservedAt).toLocaleString() : 'Never'}</span>
-                    <span className='text-xs tabular-nums text-ui-muted'>{bytes(item.sizeBytes)}</span>
-                </button>
-                {open && <div className='border-t border-ui-primary/30 p-3'><RowPreview instance={instance.id} database={database.name} item={item} /></div>}
-            </div>
-        })}
+    return <div className='min-w-0 space-y-3 [contain:inline-size]'>
+        {manyTables && <input ref={searchInput} type='search' value={search} onChange={event => setSearch(event.target.value)} placeholder='Search tables…' aria-label='Search tables' aria-keyshortcuts='Meta+X' className='w-full max-w-xs rounded border border-ui-border bg-ui-canvas px-3 py-1.5 text-sm' />}
+        <div ref={list} className='min-w-0 space-y-3 overflow-y-auto' style={{ maxHeight: manyTables ? listHeight : undefined }}>
+            {visibleItems.map(item => {
+                const key = `${item.schema}.${item.name}`, open = selected === key
+                return <div key={key} className={`overflow-hidden rounded-md border ${open ? 'border-ui-primary bg-ui-canvas' : 'border-ui-border bg-ui-panel'}`}>
+                    <button data-table-selector type='button' aria-expanded={open} onClick={() => setSelected(open ? null : key)} className={`grid w-full cursor-pointer grid-cols-1 gap-2 p-3 text-left transition hover:bg-ui-primary/10 sm:grid-cols-[minmax(0,1fr)_12rem_7rem] ${open ? 'bg-ui-primary/10' : ''}`}>
+                        <span className='min-w-0 wrap-break-word font-medium'>{item.schema ? `${item.schema}.` : ''}{item.name}{item.type && <span className='ml-2 text-xs text-ui-muted'>{item.type}</span>}</span>
+                        <span className='text-xs text-ui-muted' title={item.lastWriteObservedAt ? 'Last observed write' : 'No writes observed'}>{item.lastWriteObservedAt ? `Last write: ${new Date(item.lastWriteObservedAt).toLocaleString()}` : '—'}</span>
+                        <span className='text-xs tabular-nums text-ui-muted'>{bytes(item.sizeBytes)}</span>
+                    </button>
+                    {open && <div className='border-t border-ui-primary/30 p-3'><RowPreview instance={instance.id} database={database.name} item={item} /></div>}
+                </div>
+            })}
+        </div>
+        {search && !visibleItems.length && <p className='text-sm text-ui-muted'>No matching tables.</p>}
         {!pending && !error && !items.length && <p className='text-sm text-ui-muted'>Empty database.</p>}
         {pending && <p role='status' className='text-sm text-ui-muted'>Loading…</p>}
         {error && <p role='alert' className='text-sm text-ui-warning'>{error} <button type='button' onClick={more} className='underline'>Retry</button></p>}
@@ -85,6 +117,7 @@ function RowPreview({ instance, database, item }: { instance: string, database: 
     const [fields, setFields] = useState(item.columns || [])
     const [error, setError] = useState('')
     const [done, setDone] = useState(false)
+    const [totalRows, setTotalRows] = useState<number | null>(null)
     const [busy, setBusy] = useState(true)
     const sentinel = useRef<HTMLDivElement>(null)
     const viewport = useRef<HTMLDivElement>(null)
@@ -92,6 +125,10 @@ function RowPreview({ instance, database, item }: { instance: string, database: 
     useEffect(() => {
         const controller = new AbortController()
         let loading = false, finished = false, nextCursor: string | null = null
+        // Count independently so large tables cannot delay or break row loading.
+        void fetchPage(new URLSearchParams({ instance, database, mode: 'count', schema: item.schema, table: item.name }), controller.signal)
+            .then(page => { if (!controller.signal.aborted) setTotalRows(page.totalRows ?? null) })
+            .catch(() => {})
         const request = (cursor: string | null) => {
             const params = new URLSearchParams({ instance, database, mode: 'rows', schema: item.schema, table: item.name })
             if (cursor) params.set('cursor', cursor)
@@ -123,16 +160,17 @@ function RowPreview({ instance, database, item }: { instance: string, database: 
         observer.observe(sentinel.current)
         return () => observer.disconnect()
     }, [busy, done, error, rows])
-    return <div>
-        <div ref={viewport} className='max-h-80 overflow-auto rounded border border-ui-border' tabIndex={0} aria-label={`${item.name} rows`}>
+    const total = done ? rows.length : totalRows === null ? null : Math.max(rows.length, totalRows)
+    return <div className='min-w-0'>
+        <div ref={viewport} className='min-w-0 max-w-full max-h-80 overflow-auto rounded border border-ui-border' tabIndex={0} aria-label={`${item.name} rows`}>
             <table className='min-w-full text-left text-xs'><thead className='sticky top-0 bg-ui-raised text-ui-muted'><tr>{fields.map(field => <th key={field} className='whitespace-nowrap px-3 py-2 font-medium'>{field}</th>)}</tr></thead><tbody className='divide-y divide-ui-border'>
-                {rows.map((row, index) => <tr key={index}>{fields.map(field => <td key={field} className='max-w-80 px-3 py-2 align-top'><pre className='max-h-32 overflow-auto whitespace-pre-wrap wrap-break-word font-mono'>{cell(row[field])}</pre></td>)}</tr>)}
+                {rows.map((row, index) => <tr key={index}>{fields.map(field => <td key={field} className='max-w-80 px-3 py-2 align-top'><pre className='max-w-80 whitespace-pre-wrap [overflow-wrap:anywhere] font-mono'>{cell(row[field])}</pre></td>)}</tr>)}
             </tbody></table>
             <div ref={sentinel} className='h-px' />
         </div>
         {busy && <p role='status' className='mt-2 text-xs text-ui-muted'>Loading rows…</p>}
         {error && <p role='alert' className='mt-2 text-xs text-ui-warning'>{error} <button type='button' onClick={() => consume.current()} className='underline'>Retry</button></p>}
-        {!busy && done && <p className='mt-2 text-xs text-ui-muted'>{rows.length ? `${rows.length} rows · End of preview` : 'No rows.'}</p>}
+        {(rows.length > 0 || done) && <p className='mt-2 text-xs text-ui-muted'>{rows.length}/{total ?? '…'} {total === 1 ? 'row' : 'rows'}</p>}
     </div>
 }
 

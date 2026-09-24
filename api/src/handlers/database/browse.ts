@@ -6,7 +6,7 @@ export default async function getDatabaseBrowse(req: FastifyRequest<{ Querystrin
     res.header('Cache-Control', 'no-store')
     if (!await requireDatabaseAccess(req, res)) return res
     const input = req.query
-    if (typeof input.instance !== 'string' || typeof input.database !== 'string' || !['contents', 'rows'].includes(input.mode)
+    if (typeof input.instance !== 'string' || typeof input.database !== 'string' || !['contents', 'rows', 'count'].includes(input.mode)
         || [input.schema, input.table, input.cursor].some(value => value !== undefined && typeof value !== 'string')) return res.status(400).send({ message: 'Invalid database selection.' })
     try {
         return res.send(await browseDatabase(input))

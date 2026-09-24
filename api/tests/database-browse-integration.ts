@@ -32,6 +32,8 @@ try {
         ['db-preview-postgres-test', 'preview', 'public', 'odd table'], ['db-preview-postgres-test', 'preview', 'public', 'heap'], ['db-preview-postgres-test', 'preview', 'public', 'ordered'],
         ['db-preview-mongo-test', 'preview', '', 'items'], ...['list', 'hash', 'set', 'zset', 'stream'].map(key => ['db-preview-redis-test', 'db0', '', key]),
     ]) {
+        const count = await browseDatabase({ instance, database, schema, table: name, mode: 'count' })
+        assert.equal('totalRows' in count && count.totalRows, 13, name)
         let cursor: string | undefined, rows: unknown[] = [], pages = 0
         do {
             const page = await browseDatabase({ instance, database, schema, table: name, mode: 'rows', cursor })
