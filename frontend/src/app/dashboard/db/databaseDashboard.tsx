@@ -39,7 +39,7 @@ export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) 
 
 
         <Disclosure title='Queries' id='active-queries' detail={`${overview.queries.length} shown · ${overview.queries.filter(q => q.isLongRunning).length} long-running · Long-running after ${formatTime(overview.longRunningThresholdSeconds)} · Checked ${formatDateTime(overview.generatedAt)}`}>
-            {overview.queries.length ? <div className='space-y-5 divide-y divide-ui-border [&>div+div]:pt-5'>{overview.queries.map((query, index) => <QueryCard key={`${query.database}-${query.user}-${query.query}-${index}`} query={query} duration={formatTime(query.durationSeconds)} />)}</div> : <p className='text-sm text-ui-muted'>{overview.status === 'unavailable' ? 'Query activity unavailable.' : 'No active queries.'}</p>}
+            {overview.queries.length ? <div className='space-y-5 divide-y divide-ui-border [&>details+details]:pt-5'>{overview.queries.map((query, index) => <QueryCard key={`${query.database}-${query.user}-${query.query}-${index}`} query={query} duration={formatTime(query.durationSeconds)} collapsible />)}</div> : <p className='text-sm text-ui-muted'>{overview.status === 'unavailable' ? 'Query activity unavailable.' : 'No active queries.'}</p>}
         </Disclosure>
         <Disclosure title='Longest running query' detail={overview.longestQuery ? formatTime(overview.longestQuery.durationSeconds) : 'None'}>
             {overview.longestQuery ? <QueryCard query={overview.longestQuery} duration={formatTime(overview.longestQuery.durationSeconds)} /> : <p className='text-sm text-ui-muted'>No query to show.</p>}
