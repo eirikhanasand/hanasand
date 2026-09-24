@@ -1,3 +1,3 @@
-import LogsPage, { type LogsPageProps } from '../page'
-export { dynamic } from '../page'
+import LogsPage, { type LogsPageProps } from '../logsPage'
+export const dynamic = 'force-dynamic'
 export default function Page(props: LogsPageProps) { return LogsPage({ ...props, view: 'realtime' }) }

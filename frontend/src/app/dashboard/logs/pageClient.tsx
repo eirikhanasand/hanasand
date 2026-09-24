@@ -37,7 +37,7 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
     const [appliedHql, setAppliedHql] = useState(initialHql)
     const [hours, setHours] = useState(params.get('hours') || '24')
     const [severity, setSeverity] = useState(params.get('severity') || 'all')
-    const [data, setData] = useState<Result | null>(initialData && view === 'realtime' ? { ...initialData, rows: realtimeEvents(initialData.rows) } : initialData)
+    const [data, setData] = useState<Result | null>(initialData && view === 'realtime' && !initialData.summarize ? { ...initialData, rows: realtimeEvents(initialData.rows) } : initialData)
     const [error, setError] = useState(initialError)
     const [busy, setBusy] = useState(false)
     const [paused, setPaused] = useState(false)
