@@ -37,7 +37,7 @@ export default function QueryCard({ query, duration, expanded = false }: { query
                 {[
                     ['Database', query.database], ['User', query.user], ['State', query.state],
                     ['Duration', duration], ['Wait', [query.waitEventType, query.waitEvent].filter(Boolean).join(' / ') || 'None'],
-                ].map(([label, value]) => <div key={label} className='min-w-0'><dt className='text-xs text-ui-muted'>{label}</dt><dd className='mt-1 break-words font-medium text-ui-text'>{value || 'Unknown'}</dd></div>)}
+                ].map(([label, value]) => <div key={label} className='min-w-0'><dt className='text-xs text-ui-muted'>{label}</dt><dd className='mt-1 wrap-break-word font-medium text-ui-text'>{value || 'Unknown'}</dd></div>)}
             </dl>
             <QueryCode query={query.query} />
         </div>
