@@ -40,6 +40,7 @@ const overview = await collectDatabaseOverview(async (query) => {
     }
 
     if (query.includes('FROM pg_stat_activity')) {
+        assert.doesNotMatch(query, /LEFT\(|regexp_replace/)
         activityStartedAfterInventory = inventoryFinished
         return {
             rows: [
@@ -59,7 +60,7 @@ const overview = await collectDatabaseOverview(async (query) => {
                     duration_seconds: -0.5,
                     wait_event_type: null,
                     wait_event: null,
-                    query: 'select 1',
+                    query: `select '${'x'.repeat(600)}'\nFROM users`,
                 },
             ],
         }
@@ -78,6 +79,7 @@ assert.equal(overview.longestQuery?.database, 'hanasand')
 assert.equal(overview.longestQuery?.isLongRunning, true)
 assert.match(overview.longestQuery?.query || '', /token=\[redacted\]/)
 assert.equal(overview.queries[1]?.durationSeconds, 0)
+assert.match(overview.queries[1]?.query || '', /x{600}'\nFROM users/)
 assert.equal(overview.clusters[0]?.databases[0]?.tableCount, 42)
 assert.deepEqual(overview.clusters[0]?.databases[0]?.tables?.[0], { schema: 'public', name: 'users', estimatedRows: 12 })
 assert.equal(activityStartedAfterInventory, true, 'Activity sampling should run after inventory queries to avoid self-noise.')

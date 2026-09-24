@@ -145,7 +145,7 @@ export async function collectDatabaseOverview(query: MetricsQuery, now = new Dat
                 GREATEST(EXTRACT(EPOCH FROM now() - query_start), 0)::float AS duration_seconds,
                 wait_event_type,
                 wait_event,
-                LEFT(regexp_replace(COALESCE(query, ''), E'\\\\s+', ' ', 'g'), 500) AS query
+                COALESCE(query, '') AS query
             FROM pg_stat_activity
             WHERE pid <> pg_backend_pid()
               AND backend_type = 'client backend'

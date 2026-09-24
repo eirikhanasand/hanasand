@@ -2,9 +2,10 @@ import { AlertTriangle, ArchiveRestore, CheckCircle2, ChevronDown, Clock3, Datab
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
-import type { DatabaseOverview, DatabaseQueryActivity } from '@/utils/db/internal'
+import type { DatabaseOverview } from '@/utils/db/internal'
 import DatabaseWorkbench from './databaseWorkbench'
 import DatabaseRefresh from './databaseRefresh'
+import QueryCard from './queryCard'
 
 type StorageInstance = NonNullable<DatabaseOverview['storage']>['instances'][number]
 type StorageRow = { instance: StorageInstance, database: Omit<StorageInstance['databases'][number], 'sizeBytes'> & { sizeBytes: number | null } }
@@ -59,10 +60,10 @@ export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) 
         {overview.status !== 'unavailable' ? <DatabaseWorkbench overview={overview} /> : <p role='alert' className='text-sm text-ui-warning'>{overview.health.message}</p>}
         <Disclosure title='Queries' id='active-queries' detail={`${overview.queries.length} shown · ${overview.queries.filter(q => q.isLongRunning).length} long-running`}>
             <p className='text-xs text-ui-muted'>Long-running after {formatTime(overview.longRunningThresholdSeconds)} · Checked {formatDateTime(overview.generatedAt)}</p>
-            {overview.queries.length ? <QueryTable queries={overview.queries} /> : <p className='mt-3 text-sm text-ui-muted'>{overview.status === 'unavailable' ? 'Query activity unavailable.' : 'No active queries.'}</p>}
+            {overview.queries.length ? <div className='mt-4 space-y-3'>{overview.queries.map((query, index) => <QueryCard key={`${query.database}-${query.user}-${query.query}-${index}`} query={query} duration={formatTime(query.durationSeconds)} />)}</div> : <p className='mt-3 text-sm text-ui-muted'>{overview.status === 'unavailable' ? 'Query activity unavailable.' : 'No active queries.'}</p>}
         </Disclosure>
         <Disclosure title='Longest running query' detail={overview.longestQuery ? formatTime(overview.longestQuery.durationSeconds) : 'None'}>
-            {overview.longestQuery ? <LongestQuery query={overview.longestQuery} /> : <p className='text-sm text-ui-muted'>No query to show.</p>}
+            {overview.longestQuery ? <QueryCard query={overview.longestQuery} duration={formatTime(overview.longestQuery.durationSeconds)} expanded /> : <p className='text-sm text-ui-muted'>No query to show.</p>}
         </Disclosure>
     </DashboardPage>
 }
@@ -101,67 +102,6 @@ function MetricCard({ icon, label, value, detail }: { icon: ReactNode, label: st
         <div className='flex items-center gap-2 text-sm text-ui-muted'><span aria-hidden className='text-ui-primary [&>svg]:h-4 [&>svg]:w-4'>{icon}</span>{label}</div>
         <p className='mt-3 text-xl font-semibold tabular-nums'>{value}</p><p className='mt-2 text-xs text-ui-muted'>{detail}</p>
     </DashboardPanel>
-}
-
-function QueryTable({ queries }: { queries: DatabaseQueryActivity[] }) {
-    return (
-        <div className='mt-3 overflow-x-auto'>
-            <table className='min-w-full text-left text-sm'>
-                <thead className='border-b border-ui-border text-xs uppercase text-ui-muted'>
-                    <tr>
-                        <th className='py-2 pr-3 font-semibold'>Duration</th>
-                        <th className='px-3 py-2 font-semibold'>Database</th>
-                        <th className='px-3 py-2 font-semibold'>User</th>
-                        <th className='px-3 py-2 font-semibold'>State</th>
-                        <th className='px-3 py-2 font-semibold'>Wait</th>
-                        <th className='py-2 pl-3 font-semibold'>Query</th>
-                    </tr>
-                </thead>
-                <tbody className='divide-y divide-ui-border'>
-                    {queries.map((query, index) => (
-                        <tr key={`${query.database}-${query.user}-${query.durationSeconds}-${index}`} className='align-top text-ui-text'>
-                            <td className='whitespace-nowrap py-2 pr-3 font-semibold text-ui-text'>
-                                {formatTime(query.durationSeconds)}
-                                {query.isLongRunning && <span className='ml-2 rounded-full bg-ui-danger/10 px-2 py-0.5 text-xs text-ui-danger'>Long</span>}
-                            </td>
-                            <td className='px-3 py-2'>{query.database || 'Database syncing'}</td>
-                            <td className='px-3 py-2'>{query.user || 'User syncing'}</td>
-                            <td className='px-3 py-2'>{query.state || 'State syncing'}</td>
-                            <td className='px-3 py-2'>{[query.waitEventType, query.waitEvent].filter(Boolean).join(' / ') || 'Clear'}</td>
-                            <td className='max-w-[28rem] py-2 pl-3 text-xs text-ui-muted'>
-                                <code className='wrap-break-word'>{query.query || 'Query text unavailable'}</code>
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
-    )
-}
-
-function LongestQuery({ query }: { query: DatabaseQueryActivity }) {
-    return (
-        <div className='mt-3 rounded-md border border-ui-border bg-ui-canvas p-3 text-sm text-ui-muted'>
-            <div className='grid gap-3 sm:grid-cols-3 xl:grid-cols-5'>
-                <Fact label='Database' value={query.database || 'Database syncing'} />
-                <Fact label='User' value={query.user || 'User syncing'} />
-                <Fact label='State' value={query.state || 'State syncing'} />
-                <Fact label='Duration' value={formatTime(query.durationSeconds)} />
-                <Fact label='Wait' value={[query.waitEventType, query.waitEvent].filter(Boolean).join(' / ') || 'Clear'} />
-            </div>
-            <pre className='mt-3 max-h-96 overflow-auto whitespace-pre-wrap wrap-break-word rounded-md border border-ui-border bg-ui-panel p-3 text-xs text-ui-muted'>
-                {query.query || 'Query text unavailable'}
-            </pre>
-        </div>
-    )
-}
-
-function Fact({ label, value }: { label: string, value: string }) {
-    return (
-        <p>
-            <span className='font-semibold text-ui-text'>{label}:</span> {value}
-        </p>
-    )
 }
 
 function formatBytes(bytes: number | null) {
