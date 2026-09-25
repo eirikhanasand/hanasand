@@ -37,7 +37,11 @@ with socket.socket() as listener:
     listener.bind(('127.0.0.1', candidate_port))
 settings.pop('COMPACT_PWNED_RANGE_API', None)
 settings.update(PWNED_LOOKUP_API='https://api.hanasand.com/api/pwned',
-                HANASAND_RELEASE_COMMIT=release, HOSTNAME='127.0.0.1')
+                HANASAND_RELEASE_COMMIT=release, HOSTNAME='127.0.0.1',
+                RECOVERY_SITE='ovhcloud')
+if kind == 'frontend':
+    settings.update(RECOVERY_STATUS_URL=settings.get('RESILIENCE_STATUS_URL', 'http://127.0.0.1:19901/status'),
+                    RECOVERY_STATE_FILE=settings.get('RESILIENCE_STATE_FILE', '/resilience/state.json'))
 if kind == 'api':
     settings.update(AI_HEALTH_WORKER_BASE='http://127.0.0.1:28080', API_HTTP_ONLY='1')
 
