@@ -27,10 +27,16 @@ def render(config):
         if tcp:
             lines += ['    mode tcp', '    option pgsql-check user hanasand_replica', '    timeout client 1h', '    timeout server 1h']
         else:
-            lines += ['    option httpchk', f"    http-check send meth GET uri {service.get('checkPath', '/ready')} ver HTTP/1.1 hdr Host {service.get('host', 'api.hanasand.com')}", '    http-check expect status 200']
+            lines += ['    option httpchk', '    http-check expect status 200']
         for index, instance in enumerate(service['instances']):
             if not instance.get('address'):
                 continue
+            # Standby sites can expose a compatibility readiness route while the
+            # primary uses the recovery route. Keep the check attached to the
+            # instance so failover does not mark a healthy standby unavailable.
+            if not tcp:
+                check_path = instance.get('checkPath', service.get('checkPath', '/ready'))
+                lines.append(f"    http-check send meth GET uri {check_path} ver HTTP/1.1 hdr Host {instance.get('host', service.get('host', 'api.hanasand.com'))}")
             suffix = ' backup' if index else ''
             if instance.get('checkPort'):
                 check_port = int(instance['checkPort'])

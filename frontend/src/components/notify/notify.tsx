@@ -16,12 +16,13 @@ export default function Notify({ message, color, fullWidth, className, glow, bac
     }
 
     const variant = color === 'info' || color?.includes('blue') ? 'info' : color === 'success' || color?.includes('green') ? 'success' : 'error'
+    const sessionValidationNotice = typeof message === 'string' && message.includes('Session validation is unavailable')
     const content = (
         <ErrorNotice
             compact
             message={message}
             variant={variant}
-            className={`${fullWidth ? 'w-full' : 'max-w-xs'} ${className || ''} ${background || ''} ${glow ? 'shadow-lg shadow-ui-primary/10' : ''}`}
+            className={`${fullWidth ? 'w-full' : 'max-w-xs'} ${sessionValidationNotice ? 'mt-0.5' : ''} ${className || ''} ${background || ''} ${glow ? 'shadow-lg shadow-ui-primary/10' : ''}`}
         />
     )
 

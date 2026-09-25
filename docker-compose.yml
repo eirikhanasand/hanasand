@@ -415,7 +415,10 @@ services:
       TI_AUTOMATIC_EVALUATION_INTERVAL_SECONDS: ${TI_AUTOMATIC_EVALUATION_INTERVAL_SECONDS:-60}
       TI_AUTOMATIC_EVALUATION_MAX_TASKS_PER_CYCLE: ${TI_AUTOMATIC_EVALUATION_MAX_TASKS_PER_CYCLE:-2}
       TI_AUTOMATIC_EVALUATION_SAMPLE_SIZE: ${TI_AUTOMATIC_EVALUATION_SAMPLE_SIZE:-50}
-      HANASAND_AUTH_API_BASE: ${HANASAND_AUTH_API_BASE:-http://api:8080/api}
+      # Use the stable container alias shared by the regular and recovery
+      # networks. The recovery API runs with host networking, so `api` is not
+      # resolvable from the scraper's bridge network during failover.
+      HANASAND_AUTH_API_BASE: ${HANASAND_AUTH_API_BASE:-http://hanasand_api:8080/api}
       TI_SCRAPER_SERVICE_TOKEN: ${TI_SCRAPER_SERVICE_TOKEN:-}
     volumes:
       - ti_scraper_evidence:/var/lib/ti-scraper/evidence

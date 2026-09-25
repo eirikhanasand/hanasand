@@ -10,9 +10,12 @@ def service(id, name, port, check, ports):
     entries = []
     for index, (instance, remote_site, endpoint_port) in enumerate(ports):
         endpoint = f"{remote_site}:{endpoint_port}"
-        health = f"postgres://127.0.0.1:{endpoint_port}" if id == 'database' else f"http://127.0.0.1:{endpoint_port}{check}"
+        instance_check = '/api/recovery/ready' if id == 'frontend' else check
+        if id == 'frontend' and remote_site == 'ovhcloud': instance_check = '/api/resilience/ready'
+        health = f"postgres://127.0.0.1:{endpoint_port}" if id == 'database' else f"http://127.0.0.1:{endpoint_port}{instance_check}"
         if site == 'ovhcloud' and remote_site == 'inspur' and id != 'database': health = f"peer:{instance}"
         entry = dict(id=instance, site=remote_site, endpoint=endpoint, health=health)
+        if id != 'database': entry['checkPath'] = instance_check
         if site == 'inspur' or id == 'database' or remote_site == 'ovhcloud': entry['address'] = f"127.0.0.1:{endpoint_port}"
         entries.append(entry)
     services.append(dict(id=id, name=name, listenPort=port if site == 'inspur' or id == 'database' else None, checkPath=check, instances=entries))

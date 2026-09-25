@@ -207,6 +207,13 @@ assert 'server inspur-ti-1 172.20.0.6:8097 check port 8098' in rendered
 assert 'server inspur-ti-2 127.0.0.1:18102 check backup' in rendered
 print('Independent readiness port preserves serving ports and backup routing.')
 
+site_specific = {'services': [{'id': 'frontend', 'listenPort': 13000, 'checkPath': '/api/recovery/ready', 'instances': [
+    {'id': 'inspur-frontend-1', 'address': '127.0.0.1:3200'},
+    {'id': 'ovh-frontend', 'address': '127.0.0.1:29300', 'checkPath': '/api/resilience/ready'}]}]}
+site_rendered = render(site_specific)
+assert 'uri /api/recovery/ready' in site_rendered and 'uri /api/resilience/ready' in site_rendered
+print('Per-site frontend readiness paths are rendered independently.')
+
 assert 'default-server inter 2s fall 31 rise 31' in rendered
 old = {'healthy': True, 'observed': True, 'count': 3}
 failed = monitor.stable_observation(old, False, 100)
