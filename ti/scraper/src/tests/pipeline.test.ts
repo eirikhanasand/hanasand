@@ -1,4 +1,3 @@
-import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { describe, expect, test } from "bun:test";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { SOURCE_SPECIFIC_EXTRACTOR_VERSION } from "../pipeline/sourceSpecificExtraction.ts";

@@ -182,7 +182,7 @@ async function boundedCollectionSchedulerStatus(
     // default scheduler probe time out on the production fleet. Two rows is
     // the smallest bounded query that also keeps operational totals measured.
     limit: page.limit ?? 2,
-    cursor: page.cursor,
+    cursor: page.cursor === undefined ? undefined : String(page.cursor),
     // Aggregate status uses the bounded totals query; the executable-only
     // detail query performs per-source lateral joins and is not needed here.
     executableOnly: false

@@ -1182,7 +1182,7 @@ function actorIdentity(store: any, tenantId: string | undefined, query: string) 
     status: candidate.identity.status,
     aptNumberDesignationPresent: candidate.identity.aptNumberDesignationPresent,
     sourceUrl: candidate.identity.sourceUrl,
-    referenceSources: candidate.identity.referenceSources,
+    referenceSources: "referenceSources" in candidate.identity ? candidate.identity.referenceSources : [],
     createdAt: candidate.identity.createdAt,
     modifiedAt: candidate.identity.modifiedAt,
     catalogVersion: candidate.identity.catalogVersion,

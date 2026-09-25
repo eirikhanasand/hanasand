@@ -77,7 +77,7 @@ export async function recordMonitoringOutcome(automation: AutomationRow, runId: 
                 history = monitoring_issues.history || CASE WHEN monitoring_issues.resolved_at IS NOT NULL THEN jsonb_build_array(jsonb_build_object(
                     'id', $5::text, 'at', NOW(), 'actor', 'Health monitoring', 'actorType', 'automation', 'action', 'recurred', 'note', EXCLUDED.summary, 'runId', $5::text)) ELSE '[]'::jsonb END,
                 resolution = CASE WHEN monitoring_issues.status_override IS NULL THEN NULL ELSE monitoring_issues.resolution END
-            RETURNING id`, [automation.id, fingerprint, kind, redactSecretBearingText(message), runId, key, ['system:ti-delivery', 'system:ti-collection', 'system:ti-enrichment'].includes(automation.target_url) && kind === 'failure' ? 'critical' : null])
+            RETURNING id`, [automation.id, fingerprint, kind, redactSecretBearingText(message), runId, key, automation.target_url !== null && ['system:ti-delivery', 'system:ti-collection', 'system:ti-enrichment'].includes(automation.target_url) && kind === 'failure' ? 'critical' : null])
         const id = result.rows[0].id as string
         await query('INSERT INTO monitoring_issue_checks VALUES ($1,$2,true) ON CONFLICT(issue_id,automation_id) DO UPDATE SET active=true', [id, automation.id])
         await query('UPDATE agent_automation_runs SET issue_id = $2 WHERE id = $1', [runId, id])

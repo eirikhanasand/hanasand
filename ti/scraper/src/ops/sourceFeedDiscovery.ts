@@ -314,7 +314,7 @@ function retainedPublisherReferences(store: DiscoveryStore) {
     const parent = allSources.get(String(plan.parentSourceId));
     // Discovery proves public feeds; it does not activate their parent source.
     const qualifyingParent = parent?.status === "candidate"
-      && parent.governance?.approvalState === "approved"
+      && (parent.governance as Record<string, any> | undefined)?.approvalState === "approved"
       && parent.metadata?.sourcePortfolioVerification?.outcome === "content_parsed"
       && parent.metadata?.sourcePortfolioExcluded !== true
       && sourceCollectionLane({ ...parent, status: "active", metadata: { ...parent.metadata, productionCollection: true } }) === "public";

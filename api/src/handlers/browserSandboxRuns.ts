@@ -404,7 +404,7 @@ export async function getBrowserResult(req: FastifyRequest<{ Params: { id: strin
         const clientId = cleanClientId(req.query?.clientId)
         const rows = await run(`SELECT id, target, network, status, created_at, title FROM browser_runs
             WHERE result_id = $1::uuid AND (owner_id = $2 OR client_id_hash = $3)
-            ORDER BY created_at DESC, id DESC`, [req.params.id, user.valid ? user.id : null, clientId ? hashValue(clientId) : null])
+            ORDER BY created_at DESC, id DESC`, [req.params.id, user.valid ? user.id ?? null : null, clientId ? hashValue(clientId) : null])
         const selected = req.query?.run ? rows.rows.find(row => row.id === req.query.run) : rows.rows[0]
         if (!selected) return res.status(404).send({ error: 'Result not found or unavailable to this account.' })
         const stored = await run('SELECT metadata FROM browser_runs WHERE id = $1', [selected.id])
@@ -423,7 +423,7 @@ export async function getBrowserResult(req: FastifyRequest<{ Params: { id: strin
 }
 
 export function buildStoredBrowserReport(selected: Record<string, any>, saved: any, events: Record<string, any>[], versions: Record<string, any>[]) {
-    const captures = events.filter(event => event.type === 'frame' || event.type === 'tool_capture').map(event => ({
+    const captures: Record<string, any>[] = events.filter(event => event.type === 'frame' || event.type === 'tool_capture').map(event => ({
         ...event,
         kind: event.type === 'frame' ? 'page' : 'tool',
         label: event.type === 'frame' ? 'Screenshot' : event.name || 'Provider',

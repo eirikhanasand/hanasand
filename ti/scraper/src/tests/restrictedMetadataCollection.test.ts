@@ -11,6 +11,8 @@ import { bootstrapRuntimeSources } from "../runtime/sourceBootstrap.ts";
 import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { source } from "./helpers/apiSourceFixtures.ts";
+import { sourceAutomaticReviewEvidenceBindings } from "../api/automaticReviewRoutes.ts";
+import { SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticSourceReviewIdentity } from "../policy/sourceAutomaticReview.ts";
 
 describe("restricted metadata collection", () => {
   test("bounds stalled Tor response bodies with the request deadline", async () => {

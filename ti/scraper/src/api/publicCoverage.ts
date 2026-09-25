@@ -16,11 +16,12 @@ export async function publicCoverage(options: ApiServerOptions) {
   const measured = summary.operationalMetricsMeasured !== false
     && summary.measurementState !== "source_counts_only"
     && sourceQualification.measurementState !== "not_measured";
-  const latency = typeof options.store.queryPublicCoverageLatency === "function"
-    ? await options.store.queryPublicCoverageLatency()
+  const coverageStore = options.store as typeof options.store & { queryPublicCoverageLatency?: () => Promise<any>; queryPublicCoverageCadence?: () => Promise<any> };
+  const latency = typeof coverageStore.queryPublicCoverageLatency === "function"
+    ? await coverageStore.queryPublicCoverageLatency()
     : latencySummary((options.store.listTimelinessRecords?.() ?? []).filter((record: any) => !record.tenantId));
-  const cadence = typeof options.store.queryPublicCoverageCadence === "function"
-    ? await options.store.queryPublicCoverageCadence()
+  const cadence = typeof coverageStore.queryPublicCoverageCadence === "function"
+    ? await coverageStore.queryPublicCoverageCadence()
     : cadenceSummary(typeof options.store?.listSources === "function" ? options.store.listSources() : []);
 
   return {

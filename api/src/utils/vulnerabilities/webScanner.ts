@@ -246,7 +246,7 @@ async function tlsCertificateCheck(host: string): Promise<WebScanCheck> {
 async function explainChecks(checks: WebScanCheck[]): Promise<WebScanCheck[]> {
     const fallback = new Map(checks.map(check => [check.id, fallbackExplanation(check)]))
     try {
-        const completion = await requestGptCompletion('gpt', { maxTokens: 700, temperature: 0, messages: [{ role: 'system', content: 'Explain each web security check in one concise sentence. Return only a JSON object keyed by check id. Use only supplied evidence.' }, { role: 'user', content: JSON.stringify(checks.map(check => ({ id: check.id, status: check.status, severity: check.severity, title: check.title, evidence: check.evidence }))) }] }, 15_000)
+        const completion = await requestGptCompletion('gpt', { conversationId: `web-scan-${crypto.randomUUID()}`, maxTokens: 700, temperature: 0, messages: [{ role: 'system', content: 'Explain each web security check in one concise sentence. Return only a JSON object keyed by check id. Use only supplied evidence.' }, { role: 'user', content: JSON.stringify(checks.map(check => ({ id: check.id, status: check.status, severity: check.severity, title: check.title, evidence: check.evidence }))) }] }, 15_000)
         const generated = parseExplanationObject(completion.content || '')
         return checks.map(check => ({ ...check, explanation: isUsefulExplanation(generated[check.id]) ? generated[check.id] : fallback.get(check.id) }))
     } catch {

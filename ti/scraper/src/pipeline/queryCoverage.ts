@@ -30,7 +30,7 @@ export function buildQueryCoverageReport(store: CaptureMetadataStore, input: { t
 }
 
 function measure(queryClass: (typeof QUERY_CLASSES)[number], data: any, generatedAt: string) {
-  const types = new Set(queryClass.types);
+  const types = new Set<string>(queryClass.types);
   const subjects = [...data.entities, ...data.indicators, ...data.incidents, ...data.claims].filter((record: any) => types.has(String(record.type ?? "").toLowerCase()));
   const subjectCaptureIds = new Set(subjects.map((record: any) => record.captureId).filter(Boolean).map(String));
   const matchingCaptures = data.captures.filter((capture: any) => subjectCaptureIds.has(String(capture.id)) || captureMatches(queryClass.id, capture));

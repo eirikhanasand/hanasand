@@ -15,7 +15,7 @@ WORKDIR /app/ti/scraper
 # keep the production image build focused on the executable type boundary.
 RUN bun run check
 
-FROM deps AS runtime
+FROM test AS runtime
 
 COPY . /app/
 WORKDIR /app/ti/scraper

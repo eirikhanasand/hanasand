@@ -18,7 +18,7 @@ export type ActorIdentityRecord = {
   normalizedCanonicalName: string;
   associatedNames: string[];
   status: MitreActorIdentityStatus;
-  lookupPolicy: ActorLookupPolicy;
+  lookupPolicy?: ActorLookupPolicy;
   aptNumberDesignationPresent: boolean;
   sourceUrl: string;
   catalogVersion: string;
@@ -108,43 +108,6 @@ export type MitreActorResolution = {
   ambiguous: boolean;
 };
 
-export type ActorIdentityRecord = {
-  id: string;
-  catalogId: string;
-  externalId: string;
-  canonicalName: string;
-  normalizedCanonicalName: string;
-  associatedNames: string[];
-  status: MitreActorIdentityStatus;
-  lookupPolicy?: ActorLookupPolicy;
-  aptNumberDesignationPresent: boolean;
-  sourceUrl: string;
-  catalogVersion: string;
-  catalogModifiedAt?: string;
-  bundleSha256: string;
-  retrievedAt: string;
-  revokedByExternalId?: string;
-  relatedOperationNames?: string[];
-  lineageRelations?: Array<{ relationship: "evolved_from"; name: string; targetIdentityId?: string }>;
-  canonicalIdentityId?: string;
-  canonicalIdentityEvidence?: {
-    relationship: "same_as";
-    matchedLabel: string;
-    sourceCatalogId: string;
-    sourceCatalogVersion: string;
-    sourceCaptureId: string;
-    targetCatalogId: string;
-    targetCatalogVersion: string;
-    targetCaptureId: string;
-  };
-  activityEvidence?: Array<{
-    kind: "recent_public_claim" | "reachable_publication_location";
-    observedAt: string;
-    count: number;
-    contentHash: string;
-  }>;
-};
-
 type JsonObject = Record<string, unknown>;
 
 export function parseMitreActorCatalog(
@@ -184,10 +147,10 @@ export function parseMitreActorCatalog(
     const status: MitreActorIdentityStatus = group.revoked === true ? "revoked" : group.x_mitre_deprecated === true ? "deprecated" : "current";
     const labels = [canonicalName, ...associatedNames];
     const referenceUrls = references(group).map((reference) => string(reference.url)).filter(Boolean);
-    const referenceSources = uniqueReferenceSources(references(group).map((reference) => ({
-      name: optionalString(reference.description) || optionalString(reference.source_name),
-      url: optionalString(reference.url)
-    })).filter((reference): reference is { name: string; url?: string } => Boolean(reference.name)));
+    const referenceSources = uniqueReferenceSources(references(group).flatMap((reference) => {
+      const name = optionalString(reference.description) || optionalString(reference.source_name);
+      return name ? [{ name, url: optionalString(reference.url) }] : [];
+    }));
     const sourceReference = references(group).find((reference) => reference.source_name === "mitre-attack");
     return {
       id: `mitre-attack-enterprise:${externalId}`,

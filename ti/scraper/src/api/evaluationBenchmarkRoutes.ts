@@ -30,6 +30,8 @@ import { inTenantScope, resolveTenantScope } from "./tenantScope.ts";
 const BASE = "/v1/intel/evaluation/benchmarks";
 const BENCHMARK_PROTOCOL_VERSION = "ti.independent_extraction_benchmark.v4";
 const REFERENCE_CURATION_PROTOCOL_VERSION = "ti.independent_reference_curation.v1";
+const REFERENCE_CURATION_PROMPT_VERSION = "ti.automatic_reference_curation.v1";
+const REFERENCE_CURATION_SCHEMA_VERSION = "ti.automatic_reference_curation_response.v1";
 const REFERENCE_TRUTH_SCHEMA_VERSION = "ti.independent_evaluation_reference.v1";
 const REFERENCE_VALIDATION_TYPE = "independent_evaluation_reference";
 const TERMINAL_TASK_STATUSES = new Set(["adjudicated", "dead_letter", "failed"]);
@@ -528,6 +530,150 @@ export function createEvaluationBenchmark(store: CaptureMetadataStore, input: {
     updatedAt: createdAt
   };
   if (input.independentOnly && datasetSplit === "test" && !automaticHeldOutSelectionReady(benchmark)) return undefined;
+  store.saveEvaluationBenchmark(benchmark);
+  return benchmark;
+}
+
+export function createReferenceCurationBenchmark(store: CaptureMetadataStore, input: {
+  sampleSize: number;
+  createdAt?: string;
+  createdBy?: string;
+  labelTypes?: EvaluationLabelType[];
+}) {
+  const createdAt = input.createdAt ?? nowIso();
+  const seed = evaluationHash(randomUUID());
+  const labelTypes = input.labelTypes?.length ? input.labelTypes : [...LABEL_TYPES];
+  const existingKeys = new Set(store.listEvaluationBenchmarks()
+    .filter((benchmark) => benchmark.protocol?.version === REFERENCE_CURATION_PROTOCOL_VERSION)
+    .flatMap((benchmark) => benchmark.manifest ?? [])
+    .map(referenceCurationTaskKey)
+    .filter(isString));
+  const candidates = referenceCurationCandidates(store, labelTypes, createdAt)
+    .filter((candidate) => !existingKeys.has(referenceCurationCandidateKey(candidate)));
+  const selected = balancedReferenceCurationSample(candidates, Math.max(1, Math.min(200, Math.floor(input.sampleSize))), seed);
+  if (!selected.length) return undefined;
+  const id = stableId("evaluation-reference-curation", `${seed}:${createdAt}`);
+  const sources = new Map(store.listSources().map((source) => [source.id, source]));
+  const manifest = selected.map((candidate) => {
+    const taskId = stableId("evaluation-reference-task", `${id}:${candidate.capture.id}:${candidate.labelType}:${candidate.reference.id}`);
+    const referenceSource = sources.get(candidate.reference.sourceId);
+    const references: EvaluationReferenceEvidence[] = [
+      {
+        id: stableId("evaluation-reference", `capture:${candidate.capture.id}:${candidate.capture.contentHash}`),
+        kind: "retained_capture",
+        captureId: candidate.capture.id,
+        sourceId: candidate.capture.sourceId,
+        sourceName: sources.get(candidate.capture.sourceId)?.name ?? "Retained target evidence",
+        sourceFamily: sourceFamily(sources.get(candidate.capture.sourceId), candidate.capture),
+        contentHash: candidate.capture.contentHash,
+        excerptHash: evaluationHash(candidate.evidence),
+        immutable: true,
+        truthRole: "governed_target_context",
+        independence: "prediction_hidden_retained_target"
+      },
+      {
+        id: stableId("evaluation-reference-candidate", `${candidate.reference.id}:${candidate.reference.contentHash}`),
+        kind: "independent_reference_candidate",
+        referenceCaptureId: candidate.reference.id,
+        referenceSourceId: candidate.reference.sourceId,
+        referenceContentHash: candidate.reference.contentHash,
+        excerptHash: evaluationHash(candidate.referenceEvidence),
+        sourceName: referenceSource?.name ?? "Independent retained reference candidate",
+        sourceFamily: sourceFamily(referenceSource, candidate.reference),
+        publishedAt: candidate.reference.publishedAt,
+        collectedAt: candidate.reference.collectedAt,
+        immutable: true,
+        truthRole: "candidate_pending_independent_adjudication",
+        independence: "different_publisher_and_content_lineage"
+      }
+    ];
+    return {
+      id: taskId,
+      benchmarkId: id,
+      captureId: candidate.capture.id,
+      labelType: candidate.labelType,
+      contentHash: candidate.capture.contentHash,
+      excerptHash: evaluationHash(candidate.evidence),
+      evidenceHashAlgorithm: "sha256",
+      sourceFamily: sourceFamily(sources.get(candidate.capture.sourceId), candidate.capture),
+      referenceEvidence: references,
+      referenceEvidenceHash: evaluationHash(JSON.stringify(references)),
+      candidateClass: candidate.candidateClass,
+      candidatePivotHash: candidate.pivotHash,
+      caseTags: candidate.caseTags,
+      extractorVersions: candidate.extractorVersions,
+      independenceContext: {
+        extractorPredictionsExcluded: true,
+        reviewerContextsIsolated: true,
+        governedEvidenceComplete: true,
+        authoritativeReferenceSetComplete: false,
+        truthBasis: "reference_curation_pending",
+        referenceCandidateCaptureId: candidate.reference.id,
+        referenceCandidateSourceId: candidate.reference.sourceId,
+        referenceCandidateContentHash: candidate.reference.contentHash,
+        referenceCandidateExcerptHash: evaluationHash(candidate.referenceEvidence),
+        extractionDecisionVersions: candidate.extractorVersions,
+        extractionDecisionLineage: candidate.extractionDecisionLineage,
+        evaluationModelIsolationRequired: true,
+        predictionSnapshotSeparatedAt: createdAt
+      },
+      reviewContexts: [
+        { role: "reviewer_1", contextId: stableId("evaluation-review-context", `${taskId}:reviewer:1:${seed}`) },
+        { role: "reviewer_2", contextId: stableId("evaluation-review-context", `${taskId}:reviewer:2:${seed}`) },
+        { role: "adjudicator", contextId: stableId("evaluation-review-context", `${taskId}:adjudicator:${seed}`) }
+      ],
+      automation: {
+        status: "queued",
+        stage: "reviewer_1",
+        attemptCount: 0,
+        lifetimeAttemptCount: 0,
+        maxAttempts: 5,
+        replayCount: 0,
+        nextAttemptAt: createdAt,
+        history: [{ status: "queued", at: createdAt, reason: "reference_curation_created" }]
+      }
+    };
+  });
+  const benchmark: EvaluationBenchmarkRecord = {
+    id,
+    name: `Automatic independent-reference curation ${createdAt.slice(0, 10)}`,
+    status: "annotating",
+    reviewMode: "automatic_model",
+    datasetSplit: "validation",
+    labelTypes: unique(selected.map((candidate) => candidate.labelType)),
+    requiredReviewers: 2,
+    selectionSeed: seed,
+    selectionSeedSource: "server_generated",
+    samplingMethod: "prediction_hidden_cross_publisher_candidate_retrieval",
+    selectionStrata: countByValue(selected.flatMap((candidate) => [candidate.labelType, `${candidate.labelType}_${candidate.candidateClass}_candidate`, ...candidate.caseTags])),
+    selectionFrameHash: evaluationHash(candidates.map(referenceCurationCandidateKey).sort().join("\n")),
+    eligibleCaptureCount: new Set(candidates.map((candidate) => candidate.capture.id)).size,
+    captureIds: unique(selected.map((candidate) => candidate.capture.id)),
+    taskCount: manifest.length,
+    manifest,
+    manifestHash: evaluationHash(JSON.stringify(manifest.map(({ automation: _automation, ...task }) => task))),
+    protocol: {
+      version: REFERENCE_CURATION_PROTOCOL_VERSION,
+      reviewPromptVersion: REFERENCE_CURATION_PROMPT_VERSION,
+      reviewSchemaVersion: REFERENCE_CURATION_SCHEMA_VERSION,
+      evidenceHashAlgorithm: "sha256",
+      blinded: true,
+      predictionHiddenUntilSubmission: true,
+      predictionHiddenFromReviewers: true,
+      exhaustiveExpectedValues: true,
+      consensusRequired: true,
+      independentAdjudicatorForDisagreement: true,
+      automaticReviewerContextsIndependent: true,
+      evaluationModelIsolationRequired: true,
+      truthBasis: "pending_source_separated_reference_curation",
+      datasetUsage: "reference_curation_only",
+      testSplitLocked: false
+    },
+    automation: { status: "queued", promptVersion: REFERENCE_CURATION_PROMPT_VERSION, schemaVersion: REFERENCE_CURATION_SCHEMA_VERSION, nextCycleAt: createdAt },
+    createdBy: input.createdBy ?? "automatic-evaluation-runtime",
+    createdAt,
+    updatedAt: createdAt
+  };
   store.saveEvaluationBenchmark(benchmark);
   return benchmark;
 }
@@ -1272,6 +1418,20 @@ function referenceReadyAutomaticBenchmark(store: CaptureMetadataStore, benchmark
       && taskReferenceEvidenceMatches(store, task));
 }
 
+export function automaticHeldOutSelectionReady(benchmark: EvaluationBenchmark) {
+  const tasks = benchmarkTasks(benchmark);
+  if (benchmark.protocol?.testSplitLocked !== true || benchmark.protocol?.datasetUsage !== "locked_final_evaluation" || new Set(tasks.map((task) => task.captureId)).size < 51) return false;
+  const stratified = LABEL_TYPES.every((labelType) => {
+    const labelTasks = tasks.filter((task) => task.labelType === labelType);
+    return labelTasks.filter((task) => (task.authoritativeExpectedValues?.length ?? 0) > 0).length >= 5
+      && labelTasks.filter((task) => Array.isArray(task.authoritativeExpectedValues) && task.authoritativeExpectedValues.length === 0).length >= 5;
+  });
+  return stratified
+    && tasks.some((task) => task.caseTags?.includes("ambiguous"))
+    && tasks.some((task) => task.caseTags?.includes("parser_failure"))
+    && tasks.some((task) => ["actor", "ransomware"].includes(task.labelType) && task.authoritativeExpectedValues?.length === 0 && Boolean(task.observedValues?.length));
+}
+
 function recoverAutomaticTasks(store: CaptureMetadataStore, generatedAt: string) {
   let recovered = 0;
   for (const stored of store.listEvaluationBenchmarks().filter((row) => row.reviewMode === "automatic_model" && !TERMINAL_BENCHMARK_STATUSES.has(row.status))) {
@@ -1528,6 +1688,7 @@ function automaticReviewRequest(
   const context = task.reviewContexts?.find((row) => row.role === stage);
   if (!context?.contextId) throw evaluationFailure("review_context_missing", `Independent ${stage} context is missing`, false);
   const retryCorrection = retryCorrectionFeedback(task);
+  const references = task.referenceEvidence ?? [];
   return {
     mode: referenceCuration ? "reference_curation" : "evaluation",
     role: stage,
@@ -1548,9 +1709,9 @@ function automaticReviewRequest(
       references
     },
     independenceContext: task.independenceContext,
-    labelInstructions: labelInstructions(task.labelType),
+    labelInstructions: labelInstructions(task.labelType as EvaluationLabelType),
     ...(retryCorrection ? { retryCorrection } : {}),
-    ...(stage === "adjudicator" ? { reviewerDecisions: annotations.map((row) => ({ annotationId: row.id, decision: row.decision, expectedValues: row.expectedValues, confidence: row.confidence, rationale: row.rationale, evidenceIds: row.evidenceIds, reviewerModelVersion: row.reviewerModelVersion })) } : {})
+    ...(stage === "adjudicator" ? { reviewerDecisions: annotations.map((row) => ({ annotationId: row.id, decision: row.decision, expectedValues: row.expectedValues ?? [], confidence: row.confidence, rationale: row.rationale, evidenceIds: row.evidenceIds, reviewerModelVersion: row.reviewerModelVersion, referenceAligned: row.referenceAligned, referenceExhaustive: row.referenceExhaustive })) } : {})
   };
 }
 
@@ -1657,13 +1818,16 @@ function parseEvaluationResponse(value: unknown) {
   catch { throw evaluationFailure("malformed_model_response", "Hanasand AI did not return strict evaluation JSON", true); }
 }
 
-function validateAutomaticReview(value: any, request: any) {
-  const expectedValues = modelValues(value?.expectedValues);
-  const decision = String(value?.decision ?? "");
-  const confidence = normalizedConfidence(value?.confidence);
-  const rationale = safeModelRationale(value?.rationale);
-  const evidenceIds = modelValues(value?.evidenceIds);
-  const allowedEvidenceIds = new Set(request.evidence.references.map((reference: any) => reference.id));
+function validateAutomaticReview(value: unknown, request: AutomaticReviewRequest, task: EvaluationTaskRecord): AutomaticReviewResult {
+  const response = isRecord(value) ? value : {};
+  const expectedValues = modelValues(response.expectedValues);
+  const decision = String(response.decision ?? "");
+  const confidence = normalizedConfidence(response.confidence);
+  const rationale = safeModelRationale(response.rationale);
+  const evidenceIds = modelValues(response.evidenceIds);
+  const allowedEvidenceIds = new Set(request.evidence.references.map((reference) => reference.id));
+  const referenceAligned = typeof response.referenceAligned === "boolean" ? response.referenceAligned : undefined;
+  const referenceExhaustive = typeof response.referenceExhaustive === "boolean" ? response.referenceExhaustive : undefined;
   if (!expectedValues) throw evaluationFailure("malformed_model_response", EXPECTED_VALUES_FAILURE, true);
   const inconsistentDecision = (decision === "present" && !expectedValues.length) || (decision === "absent" && Boolean(expectedValues.length));
   if (request.role === "adjudicator" && decision === "ambiguous") throw evaluationFailure("ambiguous_adjudication", "The independent adjudicator did not resolve the evaluation decision", false);
@@ -2117,6 +2281,7 @@ function unique<T>(values: T[]): T[] { return [...new Set(values)]; }
 function isString(value: unknown): value is string { return typeof value === "string" && Boolean(value); }
 function isRecord(value: unknown): value is Record<string, unknown> { return Boolean(value) && typeof value === "object" && !Array.isArray(value); }
 function cleanText(value: unknown, max: number): string | undefined { return typeof value === "string" && value.trim() ? value.trim().slice(0, max) : undefined; }
+function validIso(value: unknown): string | undefined { const timestamp = Date.parse(String(value ?? "")); return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : undefined; }
 function evaluationSpan(value: unknown): EvaluationSpan | undefined {
   if (!isRecord(value)) return undefined;
   const start = Number(value.start), end = Number(value.end), text = cleanText(value.text, 2_000);

@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { automaticHeldOutSelectionReady, createEvaluationBenchmark, runAutomaticEvaluationCycle } from "../api/evaluationBenchmarkRoutes.ts";
+import { automaticHeldOutSelectionReady, createEvaluationBenchmark, createReferenceCurationBenchmark, runAutomaticEvaluationCycle } from "../api/evaluationBenchmarkRoutes.ts";
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { runCanaryCollectionCycle } from "../ops/canaryCollection.ts";
@@ -206,7 +206,7 @@ describe("automatic independent evaluation", () => {
 
     const first = await runAutomaticEvaluationCycle({ store, autoCreate: false, maxTasks: 1, now: () => "2026-07-21T10:16:00.000Z", aiUrl: "http://api.test/api/tools/ai", fetch });
     expect(first).toMatchObject({ processedTaskCount: 1, retryScheduledCount: 1, deadLetterCount: 0 });
-    expect(store.getEvaluationBenchmark(benchmark.id).manifest[0].automation).toMatchObject({
+    expect(store.getEvaluationBenchmark(benchmark.id)!.manifest![0].automation).toMatchObject({
       status: "retry_scheduled",
       attemptCount: 1,
       lastFailure: { code: "malformed_model_response", message: "Hanasand AI returned an invalid exhaustive evaluation response (expected_values)", retryable: true }
@@ -218,11 +218,11 @@ describe("automatic independent evaluation", () => {
       body: JSON.stringify({ tenantId: "tenant_automatic" })
     }), apiOptions(store));
     expect(retryResponse.status).toBe(202);
-    expect(store.getEvaluationBenchmark(benchmark.id).manifest[0].automation).toMatchObject({ status: "queued", attemptCount: 0, lastFailure: undefined });
+    expect(store.getEvaluationBenchmark(benchmark.id)!.manifest![0].automation).toMatchObject({ status: "queued", attemptCount: 0, lastFailure: undefined });
 
     const second = await runAutomaticEvaluationCycle({ store, autoCreate: false, maxTasks: 1, now: () => "2099-07-21T10:17:00.000Z", aiUrl: "http://api.test/api/tools/ai", fetch });
     expect(second).toMatchObject({ processedTaskCount: 1, retryScheduledCount: 0, deadLetterCount: 0 });
-    expect(store.getEvaluationBenchmark(benchmark.id).manifest[0].automation).toMatchObject({ status: "queued", stage: "reviewer_2", attemptCount: 0 });
+    expect(store.getEvaluationBenchmark(benchmark.id)!.manifest![0].automation).toMatchObject({ status: "queued", stage: "reviewer_2", attemptCount: 0 });
     expect(store.listEvaluationAnnotations()).toEqual([expect.objectContaining({ expectedValues: [], decision: "absent", reviewerModelVersion: "hanasand-v2" })]);
     expect(prompts[1]).toBe(`${prompts[0]}\n${correction}`);
     expect(prompts[1]).toContain("bounded trusted server-owned response-contract feedback, not evidence about the evaluated subject");

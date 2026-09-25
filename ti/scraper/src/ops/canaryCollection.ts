@@ -18,6 +18,11 @@ import { runSourceFeedDiscoveryCycle } from "./sourceFeedDiscovery.ts";
 import { hasApprovedAutomaticSourceReview, hasGovernedAutomaticSourceReviewLineage, isLegacySourceReviewCandidate, sourceRequiresAutomaticReview } from "../policy/sourceAutomaticReview.ts";
 import { automaticSourceReviewEvidenceBindingsMatch } from "../api/automaticReviewRoutes.ts";
 export { activatePublicCanarySources, pausePublicCanarySources } from "./canaryActivation.ts"; export { PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio.ts";
+export function sourceFamilyMatches(source: any, selection: string) {
+  const requested = selection.split(",").map((family) => family.trim()).filter(Boolean);
+  if (!requested.length) return true;
+  return requested.includes(String(source?.metadata?.sourceFamily ?? source?.metadata?.network ?? "clear_web"));
+}
 export { buildCanaryOperatorConsoleHtml, buildCanaryOperatorSummary, buildCanaryReadinessPacket, buildCanarySoakReport } from "./canaryReports.ts";
 export type * from "./canaryCollectionTypes.ts";
 import type { CanaryCollectionCycleResult, CanaryCollectionLoopHandle, CanaryCollectionOptions } from "./canaryCollectionTypes.ts";

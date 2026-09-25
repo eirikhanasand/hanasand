@@ -14,7 +14,7 @@ export interface ApiServerOptions {
   defaultCanaryLoop?: unknown;
   runExecutor?: (runId: string) => void;
   authApiBase?: string;
-  authFetch?: typeof fetch;
+  authFetch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   serviceToken?: string;
   orgAlertCaseActionLedgerRepository?: InMemoryOrgAlertCaseActionLedgerRepository;
   [key: string]: unknown;

@@ -31,7 +31,7 @@ export function ingestionCopy(log: ProxyLog) {
     if (!fields(log, ['service', 'host', 'level', 'message', 'metadata', 'sourceEventId', 'timestamp']) || log.level !== 'info'
         || !/^[a-f0-9]{64}$/.test(log.sourceEventId || '') || !log.timestamp || !Number.isFinite(Date.parse(log.timestamp))
         || !fields(meta, ['collector', 'container_id', 'stream', 'structured']) || meta.collector !== 'docker' || meta.stream !== 'stdout'
-        || !/^[a-f0-9]{12,64}$/.test(meta.container_id || '')) return null
+        || typeof meta.container_id !== 'string' || !/^[a-f0-9]{12,64}$/.test(meta.container_id)) return null
     const row = meta.structured
     if (!fields(row, ['level', 'time', 'pid', 'hostname', 'reqId', 'access', 'req', 'msg']) || row.level !== 30 || row.msg !== 'http_access'
         || !Number.isSafeInteger(row.pid) || row.pid < 1 || !Number.isSafeInteger(row.time)

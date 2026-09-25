@@ -45,7 +45,9 @@ export async function analyzeRoutineGroupBatch<T extends RoutineLog>(entries: T[
         const receipts = group.logs.map(log => routineReceipt(group.ruleId, log))
         const replay = await query('SELECT key FROM log_analyze_receipts WHERE organization_id=$1 AND rule_id=$2 AND key=ANY($3::text[])', [rule.organization_id, group.ruleId, receipts])
         if (!options?.historicalReplay) {
-            const stored = await query('SELECT source_event_id FROM service_logs WHERE source_event_id=ANY($1::text[])', [group.logs.map(log => log.sourceEventId)])
+            const sourceEventIds = group.logs.map(log => log.sourceEventId)
+            if (sourceEventIds.some(id => typeof id !== 'string')) continue
+            const stored = await query('SELECT source_event_id FROM service_logs WHERE source_event_id=ANY($1::text[])', [sourceEventIds as string[]])
             if (stored.rows.length) continue
         }
         await query('INSERT INTO log_routine_group_state(organization_id,rule_id,scope) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [rule.organization_id, group.ruleId, group.scope])
@@ -66,10 +68,12 @@ export async function analyzeRoutineGroupBatch<T extends RoutineLog>(entries: T[
             if (replay.rows.length === group.logs.length) for (const log of group.logs) dropped.add(log as T)
             continue
         }
+        const host = group.logs[0]?.host
+        if (typeof host !== 'string') continue
         const summary = await query(`INSERT INTO service_logs(service,host,level,message,metadata,source_event_id,created_at)
             VALUES('routine-group-analyzer',$1,'info',$2,$3::jsonb,$4,$5::timestamptz)
             ON CONFLICT(source_event_id) DO NOTHING RETURNING id`,
-        [group.logs[0].host, group.ruleId === telemetryRuleId ? 'Completed host telemetry cycle' : group.ruleId === sshTransportRuleId ? 'SSH transport debug summary' : 'Completed SSH session window adjustments', JSON.stringify(routineEvidence(group)), `routine-group:${group.key}`, new Date(group.ended).toISOString()])
+        [host, group.ruleId === telemetryRuleId ? 'Completed host telemetry cycle' : group.ruleId === sshTransportRuleId ? 'SSH transport debug summary' : 'Completed SSH session window adjustments', JSON.stringify(routineEvidence(group)), `routine-group:${group.key}`, new Date(group.ended).toISOString()])
         if (!summary.rowCount) continue
         await query(`INSERT INTO log_analyze_receipts(key,organization_id,rule_id,rule_version)
             SELECT unnest($1::text[]),$2,$3,$4 ON CONFLICT DO NOTHING`, [receipts, rule.organization_id, group.ruleId, rule.version])

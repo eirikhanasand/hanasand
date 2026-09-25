@@ -13,9 +13,9 @@ import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { parseCurrentRansomwareOperations } from "../pipeline/ransomwareOperationCatalog.ts";
 import { qualifySourcePortfolio } from "../ops/sourcePortfolioQualification.ts";
 import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
-import { InMemoryScraperStore } from "../storage/memoryStore.ts";
+import { InMemoryObjectEvidenceStore, InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { PostgresScraperStore, normalizeLegacySourceForImport, toJson } from "../storage/postgresScraperStore.ts";
-import { hashContent } from "../utils.ts";
+import { hashContent, stableId } from "../utils.ts";
 import { api, body, source } from "./helpers/apiSourceFixtures.ts";
 import { fixtureCapture } from "./helpers/storageFixtures.ts";
 import { SOURCE_AUTOMATIC_REVIEW_COMPATIBLE_PROMPT_VERSIONS, SOURCE_AUTOMATIC_REVIEW_PROMPT_VERSION, SOURCE_AUTOMATIC_REVIEW_SCHEMA, automaticSourceReviewIdentity } from "../policy/sourceAutomaticReview.ts";
@@ -1882,17 +1882,10 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     first.saveSource(source({ id: "src_actor_catalog", name: "Authoritative actor catalog" }));
     first.saveSource(source({ id: "src_worldleaks_observation", name: "WorldLeaks observation", url: "https://publisher.example/worldleaks" }));
     first.saveCapture(catalogCapture("cap_actor_catalog_worldleaks", "catalog-worldleaks"));
-    const { catalogModifiedAt: _catalogModifiedAt, modifiedAt: _modifiedAt, ...identity } = {
-      ...actorIdentity("worldleaks", "WorldLeaks", []),
-      id: "ransomware-live-current-operations:worldleaks",
-      catalogId: "ransomware-live-current-operations",
-      externalId: "ransomwarelive:worldleaks",
-      lookupPolicy: "text_safe"
-    };
+    const ransomwareSnapshot = ransomwareCatalog(["WorldLeaks"]);
     first.replaceActorIdentityCatalog({
-      ...actorCatalog([identity], "catalog-worldleaks"),
-      catalogId: "ransomware-live-current-operations",
-      catalogName: "Ransomware.live current operations"
+      ...ransomwareSnapshot,
+      identities: ransomwareSnapshot.identities.map(identity => ({ ...identity, status: "retired" as const, activityEvidence: [] }))
     }, {
       sourceId: "src_actor_catalog",
       captureId: "cap_actor_catalog_worldleaks",
@@ -3900,6 +3893,7 @@ function actorIdentity(externalId: string, canonicalName: string, associatedName
     contributors: [],
     sourceUrl: `https://attack.mitre.org/groups/${externalId}/`,
     referenceUrls: [],
+    referenceSources: [],
     catalogVersion: "test-version",
     catalogModifiedAt: collectedAt,
     bundleSha256: "identity-bundle",

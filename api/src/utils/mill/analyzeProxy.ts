@@ -66,11 +66,14 @@ export async function analyzeProxy(log: ProxyLog, query?: typeof run): Promise<b
     const proof = (await query(`SELECT p.connection,p.access,p.service_log_id,s.metadata,s.level,s.message,s.created_at
         FROM log_proxy_requests p JOIN service_logs s ON s.id=p.service_log_id
         WHERE p.connection_id=$1 FOR SHARE OF p,s`, [connection.id])).rows[0]
+    const logTimestamp = log.timestamp
+    const accessTimestamp = proof?.access?.timestamp
     if (!proof || !isDeepStrictEqual(proof.connection, connection) || !safeProxyRequest(proof.access)
         || !isDeepStrictEqual(proof.metadata?.proxy, connection) || !isDeepStrictEqual(proof.metadata?.access, proof.access)
         || proof.level !== 'info' || proof.message !== 'proxy_request_completed'
-        || Date.parse(proof.access.timestamp) < Date.parse(log.timestamp) - 1000
-        || Date.parse(proof.access.timestamp) > Date.parse(log.timestamp) + 60000) return false
+        || typeof logTimestamp !== 'string' || typeof accessTimestamp !== 'string'
+        || Date.parse(accessTimestamp) < Date.parse(logTimestamp) - 1000
+        || Date.parse(accessTimestamp) > Date.parse(logTimestamp) + 60000) return false
     const receipt = await query(`INSERT INTO log_proxy_receipts(key,organization_id,connection_id,canonical_log_key,original)
         VALUES($1,$2,$3,$4,$5::jsonb) ON CONFLICT DO NOTHING RETURNING key`,
     [key, rule.organization_id, connection.id, `service:${proof.service_log_id}`, JSON.stringify(log)])

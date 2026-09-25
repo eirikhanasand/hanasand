@@ -5,6 +5,7 @@ export type NormalizedCapture = {
   status: "normalized" | "metadata_only" | "unparsed";
   failureCategory?: "dynamic_application_data" | "empty_after_cleanup" | "unsupported_media";
   failureReason?: string;
+  metadata?: Record<string, unknown>;
   title?: string;
   author?: string;
   publishedAt?: string;
@@ -38,7 +39,7 @@ export function normalizeCapturedContent(input: { body?: unknown; html?: unknown
   const title = first(String(metadata.title ?? ""), html ? htmlValue(raw, /<title\b[^>]*>([\s\S]*?)<\/title>/i) : undefined, html ? htmlValue(raw, /<h1\b[^>]*>([\s\S]*?)<\/h1>/i) : undefined);
   const author = first(String(metadata.author ?? metadata.byline ?? ""), html ? htmlValue(raw, AUTHOR_META) : undefined);
   const publishedAt = first(String(input.publishedAt ?? ""), html ? htmlValue(raw, DATE_META) : undefined);
-  const headings = html ? matches(raw, /<h[1-3]\b[^>]*>([\s\S]*?)<\/h[1-3]>/gi).map(cleanText).filter(Boolean).slice(0, 20) : [];
+  const headings = html ? matches(raw, /<h[1-3]\b[^>]*>([\s\S]*?)<\/h[1-3]>/gi).map(value => cleanText(value)).filter(Boolean).slice(0, 20) : [];
   const links = html ? matches(raw, /<a\b[^>]*href=["'](https?:\/\/[^"']+)["'][^>]*>/gi, 1).map(safeUrl).filter(Boolean).slice(0, 50) as string[] : [];
   const cleaned = cleanText(raw, html);
   const text = meaningful(cleaned);

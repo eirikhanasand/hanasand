@@ -18,7 +18,7 @@ export async function analyzePostgresBatch<T extends PostgresLog>(entries: T[], 
     const parameters = rule.definition.parameters
     const { loadConfiguredMillRules, collectMillEventFindings, normalizeMillEvent } = await import('../../handlers/mill.ts')
     const rules = await loadConfiguredMillRules(rule.organization_id, query)
-    const eligible = []
+    const eligible: typeof sessions = []
     for (const session of sessions) {
         const originals = session.logs.map(log => ({ ...normalizeLogEvent({ ...log, service: log.service!, id: log.sourceEventId!, created_at: log.timestamp! }),
             postgres_session: { client: session.client, user: session.user, database: session.database, application: session.application, duration_ms: session.durationMs } }))
