@@ -25,7 +25,7 @@ export async function correlationKey(query: typeof queryOnce, a: AutomationRow, 
     if ((await query('SELECT to_regclass(\'public.monitoring_case_vms\') AS relation')).rows[0]?.relation) {
         resources = (await query('SELECT vm_name FROM monitoring_case_vms WHERE automation_id=$1 AND target_url=$2 ORDER BY vm_name', [a.id, a.target_url])).rows.map(row => row.vm_name)
     }
-    const restricted = Boolean(a.target_url?.startsWith('system:cron:')) || ['system:metrics', 'system:ti-delivery', 'system:ti-collection', 'system:ti-enrichment', 'system:resilience'].includes(a.target_url || '') || a.action_type === 'mail_health_check'
+    const restricted = Boolean(a.target_url?.startsWith('system:cron:')) || ['system:metrics', 'system:ti-delivery', 'system:ti-collection', 'system:ti-enrichment', 'system:recovery'].includes(a.target_url || '') || a.action_type === 'mail_health_check'
         || [a.model_name, ...(a.notification_destinations || [])].some(value => value?.startsWith('discord-webhook-file:'))
     return createHash('sha256').update(JSON.stringify([monitoringScope(a), restricted, resources,
         a.expected_down || false, a.upside_down || false, kind, endpoint || fingerprint])).digest('hex')

@@ -1,0 +1,13 @@
+[Unit]
+Description=Reclaim empty PostgreSQL log table tails above 20 GB
+After=docker.service
+
+[Service]
+Type=oneshot
+User=hanasand
+Group=hanasand
+SupplementaryGroups=docker
+ExecStart=/usr/bin/python3 /home/hanasand/runtime/database-shrink.py
+TimeoutStartSec=150
+Nice=15
+IOSchedulingClass=idle

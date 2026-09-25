@@ -79,7 +79,7 @@ services:
       - /var/spool/cron/crontabs:/host/cron/crontabs
       - /var/lib/hanasand:/host/var/lib/hanasand:ro
       - /var/lib/hanasand/docker-storage:/var/lib/hanasand/docker-storage
-      - ${HANASAND_RESILIENCE_STATUS_DIR:-/home/hanasand/resilience/status}:/resilience:ro
+      - ${HANASAND_RECOVERY_STATUS_DIR:-/home/hanasand/runtime/status}:/recovery:ro
       - api_state:/var/lib/hanasand
       - ${HANASAND_APP_UPDATE_DIR:-/srv/hanasand/app-updates}:/srv/hanasand/app-updates
     extra_hosts:

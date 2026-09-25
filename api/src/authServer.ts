@@ -1,4 +1,4 @@
-import { recoveryReadOnly, recoveryRequestAllowed } from './utils/resilience.ts'
+import { recoveryReadOnly, recoveryRequestAllowed } from './utils/recovery.ts'
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import { randomUUID } from 'node:crypto'
@@ -28,8 +28,8 @@ export function createAuthServer() {
             // Exercise the session schema and writable primary, not just a listening socket.
             await queryOnce('SELECT token_id, revoked_at FROM tokens LIMIT 0')
             const result = await queryOnce('SELECT pg_is_in_recovery() AS recovery, current_setting(\'transaction_read_only\') AS read_only')
-            if (!process.env.RESILIENCE_STATE_FILE && !recoveryReadOnly() && (result.rows[0].recovery || result.rows[0].read_only !== 'off')) throw new Error('Database is read-only')
-            return { ok: true, service: 'authentication', site: process.env.RESILIENCE_SITE || 'unknown', release: process.env.HANASAND_RELEASE_COMMIT || 'unknown' }
+            if (!process.env.RECOVERY_STATE_FILE && !recoveryReadOnly() && (result.rows[0].recovery || result.rows[0].read_only !== 'off')) throw new Error('Database is read-only')
+            return { ok: true, service: 'authentication', site: process.env.RECOVERY_SITE || 'unknown', release: process.env.HANASAND_RELEASE_COMMIT || 'unknown' }
         } catch {
             return reply.code(503).send({ ok: false })
         }

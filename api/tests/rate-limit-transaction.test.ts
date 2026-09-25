@@ -14,7 +14,7 @@ mock.module('#db', () => ({
 }))
 mock.module('#utils/auth/session.ts', () => ({ validateSession: async () => ({ user: { id: 'audit-user' }, roles: [], session: {} }) }))
 mock.module('#utils/auth/apiKeys.ts', () => ({ validateApiKey: async () => null, matchApiKeyScope: () => null, organizationPublicApiScopes: () => [] }))
-mock.module('#utils/resilience.ts', () => ({ recoveryReadOnly: () => false }))
+mock.module('#utils/recovery.ts', () => ({ recoveryReadOnly: () => false }))
 mock.module('#utils/rateLimit/config.ts', () => ({
     registerRateLimitRoute: () => {}, resetSharedRateLimitBuckets: () => {},
     getRateLimitSettings: async () => ({ enabled: true, defaults: { authenticated: { windowMs: 60000, maxRequests: 100 } }, overrides: [] }),

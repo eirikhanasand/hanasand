@@ -40,17 +40,17 @@ const reply = async () => 'You can reset your password from the sign-in page.'
 async function duringFailover(work: (standby: () => Promise<void>) => Promise<void>) {
     const directory = mkdtempSync(join(tmpdir(), 'support-active-test-'))
     const original = { ...process.env }
-    process.env.RESILIENCE_STATE_FILE = join(directory, 'state.json')
-    process.env.RESILIENCE_SITE = 'ovhcloud'
-    process.env.RESILIENCE_ESSENTIAL_ONLY = '1'
+    process.env.RECOVERY_STATE_FILE = join(directory, 'state.json')
+    process.env.RECOVERY_SITE = 'ovhcloud'
+    process.env.RECOVERY_ESSENTIAL_ONLY = '1'
     const placement = async (activeSite: string) => {
-        writeFileSync(process.env.RESILIENCE_STATE_FILE!, JSON.stringify({ site: 'ovhcloud', readOnly: false,
+        writeFileSync(process.env.RECOVERY_STATE_FILE!, JSON.stringify({ site: 'ovhcloud', readOnly: false,
             updatedAt: new Date().toISOString(), services: [{ id: 'api', activeSite, status: 'failed_over' }] }))
         await Bun.sleep(1050)
     }
     try { await placement('ovhcloud'); await work(() => placement('inspur')) }
     finally {
-        for (const key of ['RESILIENCE_STATE_FILE', 'RESILIENCE_SITE', 'RESILIENCE_ESSENTIAL_ONLY']) {
+        for (const key of ['RECOVERY_STATE_FILE', 'RECOVERY_SITE', 'RECOVERY_ESSENTIAL_ONLY']) {
             if (original[key] === undefined) delete process.env[key]
             else process.env[key] = original[key]
         }

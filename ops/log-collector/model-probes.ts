@@ -42,7 +42,7 @@ export function enrichModelProbe(log: LogEvent, cursor: string, options: {
   const match = /^\(APIServer pid=([1-9]\d*)\) INFO: +[0-9.]+:([1-9]\d*) - "[A-Z]+ \S*[?&]hanasand_probe=([a-f0-9-]{36})(?:&[^ ]*)? HTTP\/1\.1" [1-5]\d\d [A-Za-z ]+$/.exec(log.message);
   if (!match || log.metadata.pid !== match[1]) return log;
   try {
-    const key = verificationKey(options.keyFile || process.env.MODEL_PROBE_VERIFICATION_FILE || '/home/hanasand/resilience/probe-verification.json');
+    const key = verificationKey(options.keyFile || process.env.MODEL_PROBE_VERIFICATION_FILE || '/home/hanasand/runtime/probe-verification.json');
     if (!key) return log;
     const time = Date.parse(log.timestamp);
     if (!Number.isFinite(time)) return log;

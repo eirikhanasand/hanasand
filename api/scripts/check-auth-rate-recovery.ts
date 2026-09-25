@@ -5,7 +5,7 @@ let validations = 0
 let fail = true
 let handled = 0
 let sharedChecks = 0
-mock.module('../src/utils/resilience.ts', () => ({ recoveryReadOnly: () => false }))
+mock.module('../src/utils/recovery.ts', () => ({ recoveryReadOnly: () => false }))
 mock.module('../src/utils/rateLimit/config.ts', () => ({
     registerRateLimitRoute: () => {}, resetSharedRateLimitBuckets: async () => {}, consumeSharedRateLimitPair: async () => {}, consumeSharedRateLimitBucket: async () => {},
     getRateLimitSettings: async () => { sharedChecks++; throw Object.assign(new Error('Replica rejects shared limiter writes'), { code: '25006' }) },

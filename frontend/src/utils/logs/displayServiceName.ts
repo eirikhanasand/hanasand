@@ -14,7 +14,7 @@ const instanceNames: Record<string, string> = {
 // Keep the original service identifier for log queries and filter URLs.
 export function displayLogServiceName(service: string) {
     if (service === 'hanasand_api') return 'hanasand-api-worker'
-    if (!service.startsWith('hanasand-resilience-')) return service
-    const name = service.slice('hanasand-resilience-'.length)
+    if (!service.startsWith('hanasand-recovery-')) return service
+    const name = service.slice('hanasand-recovery-'.length)
     return `hanasand-${instanceNames[name] || name}`
 }

@@ -1,4 +1,4 @@
-import { recoveryReadOnly } from '../../api/src/utils/resilience'
+import { recoveryReadOnly } from '../../api/src/utils/recovery'
 import { appPagePath, canonicalAppPath } from './utils/routes/appRoutes'
 import { NextRequest, NextResponse } from 'next/server'
 import pathIsAllowedWhileUnauthorized from './utils/proxy/pathIsAllowedWhileUnauthorized'

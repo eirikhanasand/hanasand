@@ -2,7 +2,7 @@ import { SupportStateError } from './lifecycle.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { queryOnce, withTransaction, independentSupport } from './db.ts'
 import { answerSupport, asksForHuman, handoffMarker, handoffMessage } from './assistant.ts'
-import { supportFailoverActive } from '../resilience.ts'
+import { supportFailoverActive } from '../recovery.ts'
 
 type Input = { requestId: string; message: string; handoff: boolean; conversationId?: string }
 

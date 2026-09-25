@@ -1,6 +1,6 @@
 import { afterAll, afterEach, expect, mock, spyOn, test } from 'bun:test'
 
-const originalEssential = process.env.RESILIENCE_ESSENTIAL_ONLY
+const originalEssential = process.env.RECOVERY_ESSENTIAL_ONLY
 const originalAuth = process.env.AUTH_SERVICE_ONLY
 const warmLogs = mock(async () => {})
 const stopLogs = mock(() => {})
@@ -20,20 +20,20 @@ afterEach(() => {
     stop?.()
     stop = undefined
     for (const fn of [warmLogs, stopLogs, refreshLogs, warmTraffic, stopTraffic, refreshTraffic, warn, intervals]) fn.mockClear()
-    if (originalEssential === undefined) delete process.env.RESILIENCE_ESSENTIAL_ONLY
-    else process.env.RESILIENCE_ESSENTIAL_ONLY = originalEssential
+    if (originalEssential === undefined) delete process.env.RECOVERY_ESSENTIAL_ONLY
+    else process.env.RECOVERY_ESSENTIAL_ONLY = originalEssential
     if (originalAuth === undefined) delete process.env.AUTH_SERVICE_ONLY
     else process.env.AUTH_SERVICE_ONLY = originalAuth
 })
 
 test('backup API starts no analytics queries or refresh timers', async () => {
-    process.env.RESILIENCE_ESSENTIAL_ONLY = '1'
+    process.env.RECOVERY_ESSENTIAL_ONLY = '1'
     stop = await startBackgroundAnalytics({ warn })
     for (const fn of [warmLogs, refreshLogs, warmTraffic, refreshTraffic, intervals]) expect(fn).not.toHaveBeenCalled()
 })
 
 test('primary analytics retain warming, refresh and shutdown', async () => {
-    delete process.env.RESILIENCE_ESSENTIAL_ONLY
+    delete process.env.RECOVERY_ESSENTIAL_ONLY
     delete process.env.AUTH_SERVICE_ONLY
     stop = await startBackgroundAnalytics({ warn })
     for (const fn of [warmLogs, refreshLogs, warmTraffic, refreshTraffic, intervals]) expect(fn).toHaveBeenCalledTimes(1)
@@ -44,7 +44,7 @@ test('primary analytics retain warming, refresh and shutdown', async () => {
 })
 
 test('auth workers retain log warming without traffic analytics', async () => {
-    delete process.env.RESILIENCE_ESSENTIAL_ONLY
+    delete process.env.RECOVERY_ESSENTIAL_ONLY
     process.env.AUTH_SERVICE_ONLY = '1'
     stop = await startBackgroundAnalytics({ warn })
     expect(warmLogs).toHaveBeenCalledTimes(1)
@@ -52,7 +52,7 @@ test('auth workers retain log warming without traffic analytics', async () => {
 })
 
 test('traffic warm failure keeps retries and shutdown available', async () => {
-    delete process.env.RESILIENCE_ESSENTIAL_ONLY
+    delete process.env.RECOVERY_ESSENTIAL_ONLY
     delete process.env.AUTH_SERVICE_ONLY
     warmTraffic.mockRejectedValueOnce(new Error('Database busy'))
     stop = await startBackgroundAnalytics({ warn })

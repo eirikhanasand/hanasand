@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mock } from 'bun:test'
 import { NextRequest } from 'next/server'
 let readOnly = true
-mock.module('../../api/src/utils/resilience', () => ({ recoveryReadOnly: () => readOnly }))
+mock.module('../../api/src/utils/recovery', () => ({ recoveryReadOnly: () => readOnly }))
 const { proxy } = await import('../src/proxy')
 const request = (method: string, path: string) => new NextRequest('https://hanasand.com' + path, { method })
 assert.equal((await proxy(request('POST', '/api/cases'))).status, 503)

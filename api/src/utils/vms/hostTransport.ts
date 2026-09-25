@@ -30,7 +30,7 @@ export async function internalHostFetch(host: string, path: string, options: Req
         } else req.end(options.body as string | Buffer | undefined)
     })
 }
-export async function hostJson<T = Record<string,unknown>>(host: string, name: string, suffix = '/resilience', body?: unknown): Promise<T> {
+export async function hostJson<T = Record<string,unknown>>(host: string, name: string, suffix = '/recovery', body?: unknown): Promise<T> {
     const response = await internalHostFetch(host, '/vm/' + encodeURIComponent(name) + suffix, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     const result = await response.json()
     if (!response.ok) throw Object.assign(new Error(result.error || 'Container host request failed.'), { statusCode: response.status })

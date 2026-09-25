@@ -34,7 +34,7 @@ export async function getDockerStorage(req: FastifyRequest, res: FastifyReply) {
 export async function clearDockerStorage(req: FastifyRequest, res: FastifyReply) {
     if (!await authorize(req, res)) return
     res.header('Cache-Control', 'no-store')
-    if (process.env.RESILIENCE_SITE === 'ovh' || process.env.RESILIENCE_SITE === 'ovhcloud') {
+    if (process.env.RECOVERY_SITE === 'ovh' || process.env.RECOVERY_SITE === 'ovhcloud') {
         return res.status(503).send({ error: 'Inspur must be available to clear its storage.' })
     }
     try {

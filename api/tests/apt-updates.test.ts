@@ -9,7 +9,7 @@ process.env.OVH_HOST_METRICS_PATH = join(directory, 'ovh.json')
 const queries: Array<{ sql: string, params: unknown[] }> = []
 let rows: unknown[] = []
 let readOnly = false
-mock.module('../src/utils/resilience.ts', () => ({ recoveryReadOnly: () => readOnly }))
+mock.module('../src/utils/recovery.ts', () => ({ recoveryReadOnly: () => readOnly }))
 mock.module('#db', () => ({ default: async (sql: string, params: unknown[] = []) => { queries.push({ sql, params }); return { rows } } }))
 let authenticated = true
 let admin = true
@@ -56,9 +56,9 @@ test('host allowlist and system administrator authorization are enforced', async
 })
 
 test('OVH standby reads host-scoped replicated snapshots without writing', async () => {
-    const prior = process.env.RESILIENCE_SITE
+    const prior = process.env.RECOVERY_SITE
     try {
-        process.env.RESILIENCE_SITE = 'ovhcloud'
+        process.env.RECOVERY_SITE = 'ovhcloud'
         for (const host of ['inspur', 'ovhcloud'] as const) {
             const status = { status: 'ok', run_id: host, checked_at: new Date().toISOString() }
             rows = [{ payload: status }]; queries.length = 0
@@ -67,12 +67,12 @@ test('OVH standby reads host-scoped replicated snapshots without writing', async
             expect(queries).toHaveLength(1)
             expect(queries[0].params).toEqual([host === 'inspur' ? 'hanasand' : host])
         }
-        process.env.RESILIENCE_SITE = 'inspur'; readOnly = true; queries.length = 0
+        process.env.RECOVERY_SITE = 'inspur'; readOnly = true; queries.length = 0
         await persistHostUpdateStatus({ status: 'ok' }, 'run')
         expect(queries).toHaveLength(0)
     } finally {
-        if (prior === undefined) delete process.env.RESILIENCE_SITE
-        else process.env.RESILIENCE_SITE = prior
+        if (prior === undefined) delete process.env.RECOVERY_SITE
+        else process.env.RECOVERY_SITE = prior
         rows = []; readOnly = false
     }
 })

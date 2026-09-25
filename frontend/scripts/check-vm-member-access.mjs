@@ -24,7 +24,7 @@ const api = Bun.serve({
 const env = {
     ...process.env,
     FRONTEND_INTERNAL_API: `${api.url}api`, FRONTEND_AUTH_API: `${api.url}api`,
-    RESILIENCE_STATUS_URL: `${api.url}status`, RESILIENCE_STATE_FILE: `${scratch}/state.json`,
+    RECOVERY_STATUS_URL: `${api.url}status`, RECOVERY_STATE_FILE: `${scratch}/state.json`,
     NEXT_DIST_DIR: '.next/vm-access-check',
     PLAYWRIGHT_MANAGED_SERVERS: '0', PLAYWRIGHT_BASE_URL: 'http://127.0.0.1:3267',
     VM_FIXTURE_API: api.url.toString().replace(/\/$/, '')

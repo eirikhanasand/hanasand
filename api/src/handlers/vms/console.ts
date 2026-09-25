@@ -4,7 +4,7 @@ import WebSocket from 'ws'
 import run from '#db'
 import { validateSession } from '#utils/auth/session.ts'
 import { loadSQL } from '#utils/loadSQL.ts'
-import { recoveryReadOnly } from '#utils/resilience.ts'
+import { recoveryReadOnly } from '#utils/recovery.ts'
 import { startConsoleSession } from '#utils/vms/consoleSession.ts'
 
 export async function consoleAccess(name: string, id: string, token: string) {

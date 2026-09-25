@@ -161,7 +161,7 @@ test('standby case grants allow reader fields but not case writes or unrelated s
  ALTER TABLE agent_automations ADD COLUMN name text,ADD COLUMN model_name text,ADD COLUMN timeout_seconds int,
  ADD COLUMN retry_count int,ADD COLUMN follow_redirects boolean,ADD COLUMN expected_down boolean,ADD COLUMN upside_down boolean;
  ALTER TABLE agent_automation_runs ADD COLUMN duration_ms int,ADD COLUMN error text,ADD COLUMN result text;`)
-    const grants=readFileSync(new URL('../../scripts/resilience/standby-permissions.sql',import.meta.url),'utf8')
+    const grants=readFileSync(new URL('../../scripts/recovery/standby-permissions.sql',import.meta.url),'utf8')
         .split('-- Monitoring case reads:')[1]!.split('-- End monitoring case reads.')[0]!
     await q('-- Monitoring case reads:'+grants)
     const client=new pg.Client({host:process.env.DB_HOST,user:process.env.DB_USER||'hanasand',password:process.env.DB_PASSWORD,database:process.env.DB||'hanasand',port:Number(process.env.DB_PORT)||5432})

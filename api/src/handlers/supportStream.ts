@@ -4,7 +4,7 @@ import { queryOnce } from '#utils/support/db.ts'
 import { validateSupportSession as validateSession } from '#utils/support/auth.ts'
 import { supportSessionHash } from '#utils/support/conversation.ts'
 import { supportNotifications, type SupportChange } from '#utils/support/live.ts'
-import { recoveryRequestAllowed } from '#utils/resilience.ts'
+import { recoveryRequestAllowed } from '#utils/recovery.ts'
 import { forwardSupportSocket } from '#utils/support/transport.ts'
 
 export function supportChangeAllowed(change: SupportChange, viewer: { visitor?: string; id?: string; support?: boolean }) {

@@ -13,8 +13,8 @@ test('support socket proxy forwards private authentication and buffered text mes
     try {
         process.env.SUPPORT_SERVICE_KEY = 'private-test-key'.repeat(4)
         delete process.env.SUPPORT_INTERNAL_SERVICE
-        delete process.env.RESILIENCE_STATE_FILE
-        delete process.env.RESILIENCE_ESSENTIAL_ONLY
+        delete process.env.RECOVERY_STATE_FILE
+        delete process.env.RECOVERY_ESSENTIAL_ONLY
         await upstream.register(websocket)
         upstream.addHook('onRequest', (req, res, done) => {
             if (req.headers['x-support-service-key'] !== process.env.SUPPORT_SERVICE_KEY) { res.code(403).send(); return }
@@ -40,7 +40,7 @@ test('support socket proxy forwards private authentication and buffered text mes
         for (const socket of edge.websocketServer?.clients || []) socket.terminate()
         for (const socket of upstream.websocketServer?.clients || []) socket.terminate()
         await edge.close(); await upstream.close()
-        for (const key of ['SUPPORT_SERVICE_KEY', 'SUPPORT_SERVICE_BASE', 'SUPPORT_INTERNAL_SERVICE', 'RESILIENCE_STATE_FILE', 'RESILIENCE_ESSENTIAL_ONLY']) {
+        for (const key of ['SUPPORT_SERVICE_KEY', 'SUPPORT_SERVICE_BASE', 'SUPPORT_INTERNAL_SERVICE', 'RECOVERY_STATE_FILE', 'RECOVERY_ESSENTIAL_ONLY']) {
             if (original[key] === undefined) delete process.env[key]
             else process.env[key] = original[key]
         }

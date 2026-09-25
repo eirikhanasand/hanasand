@@ -8,7 +8,7 @@ mock.module('../src/utils/db.ts', () => ({ default: async (sql: string) => {
     if (sql.includes('UPDATE tokens')) return { rows: [{ timestamp: new Date().toISOString() }] }
     return { rows: row ? [{ ...row }] : [] }
 } }))
-mock.module('../src/utils/resilience.ts', () => ({ recoveryReadOnly: () => readOnly }))
+mock.module('../src/utils/recovery.ts', () => ({ recoveryReadOnly: () => readOnly }))
 const { validateSession } = await import('../src/utils/auth/session.ts')
 beforeEach(() => {
     queries.length = 0; readOnly = false

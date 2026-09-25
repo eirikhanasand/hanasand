@@ -1,4 +1,4 @@
-import { recoveryReadOnly } from '../resilience.ts'
+import { recoveryReadOnly } from '../recovery.ts'
 import { randomUUID } from 'crypto'
 import run from '#db'
 

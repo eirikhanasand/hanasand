@@ -6,7 +6,7 @@ mock.module('#db', () => ({ default: async () => ({ rows: [] }), withTransaction
 mock.module('#utils/auth/internalToken.ts', () => ({ default: (req: any) => req.headers.authorization === 'Bearer existing-internal' }))
 mock.module('#utils/auth/session.ts', () => ({ validateSession: async () => null }))
 mock.module('#utils/auth/apiKeys.ts', () => ({ validateApiKey: async () => null, matchApiKeyScope: () => null, organizationPublicApiScopes: () => [] }))
-mock.module('#utils/resilience.ts', () => ({ recoveryReadOnly: () => false }))
+mock.module('#utils/recovery.ts', () => ({ recoveryReadOnly: () => false }))
 mock.module('#utils/logs/recordLog.ts', () => ({ default: async () => { stored++ }, recordLogBatch: async (entries: unknown[]) => { stored += entries.length } }))
 mock.module('#utils/rateLimit/config.ts', () => ({ registerRateLimitRoute: () => {}, resetSharedRateLimitBuckets: () => {},
     getRateLimitSettings: async () => ({enabled:true, defaults: {internal:{windowMs:60000,maxRequests:6000},anonymous:{windowMs:60000,maxRequests:90}},overrides:[]}),

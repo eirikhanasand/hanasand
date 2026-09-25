@@ -1,6 +1,0 @@
-[Unit]
-Description=Back up the independent support database
-After=docker.service
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/python3 /home/ubuntu/hanasand-resilience/support/support-store.py backup

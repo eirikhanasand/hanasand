@@ -8,7 +8,7 @@ const execute = async (sql: string) => {
     return { rows: sql.includes('pg_try_advisory_xact_lock') ? [{ acquired: true }] : [{ pending: false }] }
 }
 mock.module('#db', () => ({ queryOnce: execute, withTransaction: async (work: (query: typeof execute) => Promise<unknown>) => work(execute) }))
-mock.module('../src/utils/resilience.ts', () => ({ recoveryReadOnly: () => readOnly }))
+mock.module('../src/utils/recovery.ts', () => ({ recoveryReadOnly: () => readOnly }))
 const { refreshTrafficHistory } = await import('../src/utils/traffic/history.ts')
 let stop: (() => void) | undefined
 const intervals = spyOn(globalThis, 'setInterval')

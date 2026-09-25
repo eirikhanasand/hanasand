@@ -17,7 +17,7 @@ function historicalLimit(value: string | number) {
 // Short operator trials expire back to the configured limit even if their
 // controller exits. The existing read-only mount avoids restarting ingestion.
 export function readLogCatchupSettings(
-    path = process.env.LOG_CATCHUP_CONFIG_FILE || '/resilience/log-catchup.json',
+    path = process.env.LOG_CATCHUP_CONFIG_FILE || '/recovery/log-catchup.json',
     fallback = process.env.LOG_CATCHUP_BATCH_LIMIT ?? '1000',
     now = Date.now(),
 ) {

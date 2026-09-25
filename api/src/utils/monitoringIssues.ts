@@ -21,7 +21,7 @@ export function monitoringIssueFingerprint(automation: Pick<AutomationRow, 'targ
     // Group changing durations and retry counts, but retain HTTP codes and error details.
     // TI health and connection failures describe the same check. Keep its rule
     // in the identity so separate checks of the same source remain separate.
-    const reason = automation.monitoring_type === 'json' && (isIntelHealthCheck(automation) || automation.target_url === 'system:resilience' || message.startsWith('JSON threshold exceeded:') || automation.target_url === 'system:metrics' && isHostThresholdMessage(message))
+    const reason = automation.monitoring_type === 'json' && (isIntelHealthCheck(automation) || automation.target_url === 'system:recovery' || message.startsWith('JSON threshold exceeded:') || automation.target_url === 'system:metrics' && isHostThresholdMessage(message))
         ? JSON.stringify(automation.json_rule) : redactSecretBearingText(message)
             .replace(/ Failed after \d+ attempts?\.$/, '')
             .replace(/\b\d+(?:\.\d+)?\s*(?:milliseconds?|ms|seconds?|minutes?|hours?|days?)\b/gi, '<duration>')

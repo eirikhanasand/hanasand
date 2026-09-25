@@ -85,7 +85,7 @@ export function selectStatusIncident<T extends { checks: unknown[], history: unk
 
 async function statusPayload(summary: boolean) {
     // Recovery instances only read snapshots maintained by the primary.
-    if (process.env.RESILIENCE_ESSENTIAL_ONLY !== '1') await ensureStatusSnapshots()
+    if (process.env.RECOVERY_ESSENTIAL_ONLY !== '1') await ensureStatusSnapshots()
     if (!summary) {
         refreshHistory()
         // A new or idle replica must load the saved history before answering.
@@ -146,7 +146,7 @@ function refreshHistory() {
         }
     })()
     historyRefresh = historyLoad.then(async () => {
-        if (savedIsFresh || process.env.RESILIENCE_ESSENTIAL_ONLY === '1') return
+        if (savedIsFresh || process.env.RECOVERY_ESSENTIAL_ONLY === '1') return
         // History scans never block current checks. A database lock shares one
         // refresh across API instances; the persisted snapshot survives restarts.
         await withTransaction(async query => {

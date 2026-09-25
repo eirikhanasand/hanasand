@@ -17,7 +17,7 @@ mock.module('@/components/layout/routeFrame', () => ({ default: ({ children, sid
 mock.module('@/components/dashboard/dashboardSidebar', () => ({ default: ({ canManageOrganizations }: { canManageOrganizations: boolean }) => createElement('nav', null, canManageOrganizations ? 'Management allowed' : 'Navigation') }))
 mock.module('@/components/header/header', () => ({ default: () => null }))
 mock.module('@/components/box/detachedBoxHost', () => ({ default: () => null }))
-mock.module('@/components/system/resilience', () => ({ RecoveryBanner: () => null }))
+mock.module('@/components/system/recovery', () => ({ RecoveryBanner: () => null }))
 mock.module('@/components/impersonation/impersonationBanner', () => ({ default: () => null }))
 const { default: Layout } = await import('../src/app/layout')
 for (const allowed of [true, false]) {

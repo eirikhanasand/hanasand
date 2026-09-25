@@ -42,7 +42,7 @@ test('manual cleanup queues once and status comes from persistent host state', a
     expect(response.body).toMatchObject({ queued: true, stale: false, lastSuccessAt: '2026-09-18T01:00:00Z' })
 })
 test('standby cannot enqueue cleanup against the wrong host', async () => {
-    process.env.RESILIENCE_SITE = 'ovhcloud'
+    process.env.RECOVERY_SITE = 'ovhcloud'
     expect((await invoke(clearDockerStorage)).code).toBe(503)
-    delete process.env.RESILIENCE_SITE
+    delete process.env.RECOVERY_SITE
 })

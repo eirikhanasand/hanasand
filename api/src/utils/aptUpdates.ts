@@ -1,13 +1,13 @@
 import { readFile } from 'node:fs/promises'
 import run from '#db'
-import { recoveryReadOnly } from './resilience.ts'
+import { recoveryReadOnly } from './recovery.ts'
 
 const statusPath = process.env.APT_UPDATE_STATUS_PATH || '/host/var/lib/hanasand/apt-updates/status.json'
 export const updateHosts = ['inspur', 'ovhcloud'] as const
 export type UpdateHost = typeof updateHosts[number]
 // Preserve the existing Inspur history, recorded before hosts could be selected.
 const historyHost = (host: UpdateHost) => host === 'inspur' ? 'hanasand' : host
-const replica = () => ['ovh', 'ovhcloud'].includes(process.env.RESILIENCE_SITE || '')
+const replica = () => ['ovh', 'ovhcloud'].includes(process.env.RECOVERY_SITE || '')
 
 export async function readHostUpdateStatus(host: UpdateHost = 'inspur') {
     try {

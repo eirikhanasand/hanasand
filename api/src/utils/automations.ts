@@ -1,7 +1,7 @@
 import { setTimeout as retryDelay } from 'node:timers/promises'
 import { checkScheduledAutomationAccess } from './automationAccess.ts'
 import { hostCheckMessage } from './hostCheckMessage.ts'
-import { resilienceCheckMessage } from './resilienceMonitoring.ts'
+import { recoveryCheckMessage } from './recoveryMonitoring.ts'
 import { MonitoringResponseError } from './monitoringResponseError.ts'
 import { monitoringLookup, monitoringUrl, publicMonitoringRequest, resolveMonitoringAddresses } from './publicMonitoringRequest.ts'
 import run from '#db'
@@ -231,7 +231,7 @@ export function normalizeAutomationInput(input: AutomationInput, existing?: Auto
     const prompt = clean(input.prompt) || existing?.prompt || ''
     const monitoringType = parseMonitoringType(input.monitoringType ?? input.monitoring_type ?? existing?.monitoring_type)
     const rawTarget = clean(input.targetUrl ?? input.target_url ?? existing?.target_url)
-    const targetUrl = monitoringType === 'tcp' || monitoringType === 'ssh' || monitoringType === 'json' && ['system:metrics', 'system:ti-delivery', 'system:ti-collection', 'system:ti-enrichment', 'system:resilience'].includes(rawTarget) ? rawTarget : normalizeTargetUrl(rawTarget)
+    const targetUrl = monitoringType === 'tcp' || monitoringType === 'ssh' || monitoringType === 'json' && ['system:metrics', 'system:ti-delivery', 'system:ti-collection', 'system:ti-enrichment', 'system:recovery'].includes(rawTarget) ? rawTarget : normalizeTargetUrl(rawTarget)
     const jsonRule = monitoringType === 'json' ? normalizeJsonRule(input.jsonRule ?? input.json_rule ?? existing?.json_rule) : null
     const followRedirects = parseBoolean(input.followRedirects ?? input.follow_redirects ?? existing?.follow_redirects, true)
     const userAgent = clean(input.userAgent ?? input.user_agent ?? existing?.user_agent) || null
@@ -263,7 +263,7 @@ export function normalizeAutomationInput(input: AutomationInput, existing?: Auto
         if (!targetUrl) throw new Error('Monitoring needs a URL to check.')
         if (monitoringType === 'tcp' || monitoringType === 'ssh') {
             if (!/^[^:/\s]+(?::\d+)?$/.test(targetUrl)) throw new Error(`${monitoringType.toUpperCase()} checks need a host and optional port.`)
-        } else if (!(monitoringType === 'json' && ['system:metrics', 'system:ti-delivery', 'system:ti-collection', 'system:ti-enrichment', 'system:resilience'].includes(targetUrl!))) {
+        } else if (!(monitoringType === 'json' && ['system:metrics', 'system:ti-delivery', 'system:ti-collection', 'system:ti-enrichment', 'system:recovery'].includes(targetUrl!))) {
             let parsedUrl: URL
             try { parsedUrl = monitoringUrl(targetUrl) } catch { throw new Error('Monitoring URL must be a valid HTTP or HTTPS URL.') }
             if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error('Monitoring URL must use HTTP or HTTPS.')
@@ -600,7 +600,7 @@ async function runJsonCheck(automation: AutomationRow, attempt: number) {
         const inverted = automation.upside_down || automation.expected_down
         const failed = inverted ? !exceeded : exceeded
         const message = (automation.target_url === 'system:metrics' ? hostCheckMessage(rule, observed, failed, inverted) : null)
-            ?? (automation.target_url === 'system:resilience' ? resilienceCheckMessage(snapshot.payload, rule, inverted) : null)
+            ?? (automation.target_url === 'system:recovery' ? recoveryCheckMessage(snapshot.payload, rule, inverted) : null)
             ?? `JSON ${failed ? 'threshold exceeded' : 'check passed'}: ${rule.path} = ${observed}; alert ${rule.operator} ${rule.value} (${rule.aggregate}).`
         if (failed) throw new Error(message)
         return { provider: 'hanasand-monitoring', model: 'json', message, certificate, warning: false }

@@ -4,7 +4,7 @@ import Fastify from 'fastify'
 mock.module('../src/constants.ts', () => ({ default: { vm_api_token: 'code-access-test-token' } }))
 mock.module('../src/utils/auth/session.ts', () => ({ validateSession: async() => null }))
 mock.module('../src/utils/db.ts', () => ({ default: async() => ({ rows: [] }), queryOnce: async() => ({ rows: [] }), withTransaction: async() => {}, isTransientDatabaseError: () => false }))
-mock.module('../src/utils/resilience.ts', () => ({ recoveryReadOnly: () => false }))
+mock.module('../src/utils/recovery.ts', () => ({ recoveryReadOnly: () => false }))
 mock.module('../src/utils/rateLimit/config.ts', () => ({
     registerRateLimitRoute: () => {}, resetSharedRateLimitBuckets: async() => {}, consumeSharedRateLimitPair: async () => {}, consumeSharedRateLimitBucket: async() => {},
     getRateLimitSettings: async() => ({ enabled: false }),

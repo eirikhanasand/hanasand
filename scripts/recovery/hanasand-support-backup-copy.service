@@ -1,0 +1,7 @@
+[Unit]
+Description=Keep an independent support snapshot on Inspur
+After=docker.service
+[Service]
+Type=oneshot
+User=hanasand
+ExecStart=/usr/bin/python3 /home/hanasand/runtime/support-backup-copy.py

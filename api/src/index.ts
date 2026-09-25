@@ -2,7 +2,7 @@ import { processLiveLogs, processStoredLogs } from '#utils/mill/processLogs.ts'
 import { processRuleReprocessJob } from '#utils/mill/ruleReprocess.ts'
 import { startLogProcessor } from '#utils/mill/processor.ts'
 import { startBackgroundAnalytics } from './utils/backgroundAnalytics.ts'
-import { recoveryRequestAllowed, recoveryState, recoveryReadOnly } from './utils/resilience.ts'
+import { recoveryRequestAllowed, recoveryState, recoveryReadOnly } from './utils/recovery.ts'
 import { queryOnce, closeDatabase, withMillDatabase } from './utils/db.ts'
 import Fastify from 'fastify'
 import apiRoutes from './routes.ts'
@@ -53,7 +53,7 @@ fastify.addHook('onRequest', async (req, reply) => {
 fastify.get('/ready', async (_req, reply) => {
     try {
         const result = await queryOnce('SELECT pg_is_in_recovery() AS replica')
-        return { ok: true, service: 'api', site: process.env.RESILIENCE_SITE || 'unknown', release: process.env.HANASAND_RELEASE_COMMIT || 'unknown', readOnly: result.rows[0].replica, recovery: recoveryState().mode || 'normal' }
+        return { ok: true, service: 'api', site: process.env.RECOVERY_SITE || 'unknown', release: process.env.HANASAND_RELEASE_COMMIT || 'unknown', readOnly: result.rows[0].replica, recovery: recoveryState().mode || 'normal' }
     } catch { return reply.code(503).send({ ok: false }) }
 })
 if (httpWorkerOnly) {
@@ -85,16 +85,16 @@ fastify.register(cors, {
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD']
 })
 
-if (!browserWorkerOnly && process.env.RESILIENCE_ESSENTIAL_ONLY !== '1') fastify.register(fp)
+if (!browserWorkerOnly && process.env.RECOVERY_ESSENTIAL_ONLY !== '1') fastify.register(fp)
 fastify.register(ws)
 if (!browserWorkerOnly) {
     fastify.register(rateLimit)
     fastify.addHook('onSend', async (req, res, payload) => {
-        if (!recoveryReadOnly() && process.env.RESILIENCE_ESSENTIAL_ONLY !== '1') await recordHttpErrorResponse(req, res, payload)
+        if (!recoveryReadOnly() && process.env.RECOVERY_ESSENTIAL_ONLY !== '1') await recordHttpErrorResponse(req, res, payload)
         return payload
     })
     fastify.addHook('onResponse', async (req, res) => {
-        await recordTraffic(req, res, !recoveryReadOnly() && process.env.RESILIENCE_ESSENTIAL_ONLY !== '1')
+        await recordTraffic(req, res, !recoveryReadOnly() && process.env.RECOVERY_ESSENTIAL_ONLY !== '1')
     })
     fastify.register(publicTiApi, { prefix: '/api/v1' })
     fastify.register(apiRoutes, { prefix: '/api' })
@@ -107,7 +107,7 @@ if (browserWorkerOnly) {
 }
 if (!browserWorkerOnly) {
     fastify.addHook('onResponse', async (req, res) => {
-        if (recoveryReadOnly() || process.env.RESILIENCE_ESSENTIAL_ONLY === '1' || res.statusCode < 400) {
+        if (recoveryReadOnly() || process.env.RECOVERY_ESSENTIAL_ONLY === '1' || res.statusCode < 400) {
             return
         }
         if (res.statusCode === 401 || res.statusCode === 403) {
@@ -144,7 +144,7 @@ if (!browserWorkerOnly) {
         }).catch(error => fastify.log.error(error, 'Failed to persist production monitor signal'))
     })
     fastify.addHook('onError', async (req, _res, error) => {
-        if (recoveryReadOnly() || process.env.RESILIENCE_ESSENTIAL_ONLY === '1') return
+        if (recoveryReadOnly() || process.env.RECOVERY_ESSENTIAL_ONLY === '1') return
         await recordLog({
             level: 'error',
             message: error.message,

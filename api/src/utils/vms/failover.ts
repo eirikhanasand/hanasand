@@ -22,7 +22,7 @@ export async function assertFailoverAvailable(vm: { name: string; primary_host: 
     if (!target) throw new Error('This container host does not support failover.')
     const source = await inspectHostVm(vm.primary_host, vm.name)
     if (!portableContainer(source.instance)) throw new Error('Failover requires a persistent container without attached host disks or custom host devices.')
-    await hostJson(target, vm.name, '/resilience-eligibility')
+    await hostJson(target, vm.name, '/recovery-eligibility')
     return target
 }
 export async function enableFailover(vm: { name: string; primary_host: string }) {
@@ -42,19 +42,19 @@ export async function requestFailover(vm: { name: string; primary_host: string; 
 }
 async function copy(name: string, source: string, target: string, id: string) {
     const stagingName = 'fo-' + randomUUID().replaceAll('-', '')
-    const archive = await internalHostFetch(source, '/vm/' + encodeURIComponent(name) + '/resilience-export', { headers: { 'x-replica-id': id } })
+    const archive = await internalHostFetch(source, '/vm/' + encodeURIComponent(name) + '/recovery-export', { headers: { 'x-replica-id': id } })
     if (!archive.ok || !archive.body) { await archive.body?.cancel(); throw new Error('The source host could not export this container.') }
     try {
-        const result = await internalHostFetch(target, '/vm/' + stagingName + '/resilience-import', {
+        const result = await internalHostFetch(target, '/vm/' + stagingName + '/recovery-import', {
             method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'x-replica-id': id }, body: archive.body,
         })
         const body = await result.json()
         if (!result.ok) throw new Error(body.error || 'The standby disk could not be imported.')
-        await hostJson(target, name, '/resilience-install', { replicaId: id, stagingName })
+        await hostJson(target, name, '/recovery-install', { replicaId: id, stagingName })
     } catch (error) {
         await archive.body.cancel().catch(() => {})
         // This name is unique to this attempt; the host also verifies its identity and stopped state.
-        await hostJson(target, stagingName, '/resilience/remove-copy', { replicaId: id }).catch(() => {})
+        await hostJson(target, stagingName, '/recovery/remove-copy', { replicaId: id }).catch(() => {})
         throw error
     }
 }
@@ -78,15 +78,15 @@ export async function processVmFailover(name: string) {
                 if (standby.instance.status === 'Running') {
                     if (original.instance.status !== 'Stopped' || standby.instance.config['user.hanasand.failover_role'] !== 'active') throw new Error('Cannot safely confirm which container is active.')
                 } else {
-                    await hostJson(source, name, '/resilience/demote', { replicaId: id })
+                    await hostJson(source, name, '/recovery/demote', { replicaId: id })
                     // Final copy after stopping includes every completed write.
                     await copy(name, source, target, id)
                     if ((await inspectHostVm(source, name)).instance.status !== 'Stopped') throw new Error('The original container has not stopped.')
-                    try { await hostJson(target, name, '/resilience/promote', { replicaId: id }) }
+                    try { await hostJson(target, name, '/recovery/promote', { replicaId: id }) }
                     catch (error) {
                         // Restart the original only after the target is positively confirmed stopped.
                         const current = await inspectHostVm(target, name)
-                        if (current.instance.status === 'Stopped') await hostJson(source, name, '/resilience/promote', { replicaId: id })
+                        if (current.instance.status === 'Stopped') await hostJson(source, name, '/recovery/promote', { replicaId: id })
                         throw error
                     }
                 }
@@ -94,9 +94,9 @@ export async function processVmFailover(name: string) {
                 if (verified.instance.status !== 'Running') throw new Error('Standby promotion was not confirmed.')
                 await run('UPDATE vms SET primary_host = $2, failover_host = $3 WHERE name = $1 AND deleted_at IS NULL', [name, target, source])
                 await run('UPDATE vm_failover SET phase = \'ready\', target_host = $2, requested_host = NULL, synced_at = NOW(), error = NULL, updated_at = NOW() WHERE vm_name = $1', [name, source])
-                if (vm.always_running_enabled && vm.always_running_premium) await hostJson(target, name, '/resilience/policy', { enabled: true })
+                if (vm.always_running_enabled && vm.always_running_premium) await hostJson(target, name, '/recovery/policy', { enabled: true })
             } else {
-                await hostJson(source, name, '/resilience/prepare', { replicaId: id })
+                await hostJson(source, name, '/recovery/prepare', { replicaId: id })
                 await copy(name, source, target, id)
                 await run('UPDATE vm_failover SET phase = \'ready\', target_host = $2, synced_at = NOW(), error = NULL, updated_at = NOW() WHERE vm_name = $1', [name, target])
             }
@@ -107,7 +107,7 @@ export async function processVmFailover(name: string) {
                     const active = (await run('SELECT primary_host FROM vms WHERE name = $1', [name])).rows[0]
                     const standby = await inspectHostVm(target, name)
                     if (active?.primary_host === source && standby.instance.status === 'Stopped') {
-                        await hostJson(source, name, '/resilience/promote', { replicaId: id })
+                        await hostJson(source, name, '/recovery/promote', { replicaId: id })
                     }
                 } catch { /* Leave both identities unchanged until their state can be verified. */ }
             }

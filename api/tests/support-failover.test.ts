@@ -2,7 +2,7 @@ import { afterAll, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { recoveryRequestAllowed, supportFailoverActive } from '../src/utils/resilience.ts'
+import { recoveryRequestAllowed, supportFailoverActive } from '../src/utils/recovery.ts'
 
 const directory = mkdtempSync(join(tmpdir(), 'support-failover-'))
 const original = { ...process.env }
@@ -12,7 +12,7 @@ async function state(services: unknown, overrides = {}) {
     await Bun.sleep(1050)
 }
 afterAll(() => {
-    for (const key of ['RESILIENCE_STATE_FILE', 'RESILIENCE_ESSENTIAL_ONLY', 'RESILIENCE_SITE', 'SUPPORT_SERVICE_BASE', 'SUPPORT_SERVICE_KEY']) {
+    for (const key of ['RECOVERY_STATE_FILE', 'RECOVERY_ESSENTIAL_ONLY', 'RECOVERY_SITE', 'SUPPORT_SERVICE_BASE', 'SUPPORT_SERVICE_KEY']) {
         if (original[key] === undefined) delete process.env[key]
         else process.env[key] = original[key]
     }
@@ -20,9 +20,9 @@ afterAll(() => {
 })
 
 test('support follows active placement, fails closed, and leaves unrelated recovery routes restricted', async () => {
-    process.env.RESILIENCE_STATE_FILE = path
-    process.env.RESILIENCE_ESSENTIAL_ONLY = '1'
-    process.env.RESILIENCE_SITE = 'ovhcloud'
+    process.env.RECOVERY_STATE_FILE = path
+    process.env.RECOVERY_ESSENTIAL_ONLY = '1'
+    process.env.RECOVERY_SITE = 'ovhcloud'
     const active = [{ id: 'api', activeSite: 'ovhcloud', status: 'failed_over' }]
     const allowed = () => ['GET', 'POST'].every(method => recoveryRequestAllowed(method, '/api/support/chat'))
     await state([{ id: 'api', activeSite: 'inspur', status: 'up' }])
@@ -33,7 +33,7 @@ test('support follows active placement, fails closed, and leaves unrelated recov
     expect(recoveryRequestAllowed('GET', '/api/ws/support')).toBe(true)
     expect(recoveryRequestAllowed('POST', '/api/support-admin')).toBe(false)
     expect(recoveryRequestAllowed('POST', '/api/ai/deployments')).toBe(false)
-    expect(process.env.RESILIENCE_ESSENTIAL_ONLY).toBe('1')
+    expect(process.env.RECOVERY_ESSENTIAL_ONLY).toBe('1')
     await state([{ id: 'frontend', activeSite: 'ovhcloud', status: 'failed_over' }])
     expect(allowed()).toBe(true)
     for (const overrides of [{ readOnly: true }, { site: 'inspur' }, { updatedAt: new Date(0).toISOString() }]) {
@@ -53,6 +53,6 @@ test('support follows active placement, fails closed, and leaves unrelated recov
     expect(allowed()).toBe(false)
     await state([{ id: 'api', activeSite: 'inspur', status: 'up' }])
     expect(allowed()).toBe(false)
-    delete process.env.RESILIENCE_ESSENTIAL_ONLY
+    delete process.env.RECOVERY_ESSENTIAL_ONLY
     expect(allowed()).toBe(true)
 }, 15000)

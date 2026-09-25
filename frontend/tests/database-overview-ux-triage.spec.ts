@@ -5,7 +5,7 @@ import path from 'node:path'
 test('database page prioritizes storage and uses full-width disclosures', async () => {
     const dashboard = await readFile(path.join(process.cwd(), 'src/app/dashboard/db/databaseDashboard.tsx'), 'utf8')
     const page = await readFile(path.join(process.cwd(), 'src/app/dashboard/db/page.tsx'), 'utf8')
-    expect(page).not.toContain('ResiliencePanel')
+    expect(page).not.toContain('RecoveryPanel')
     expect(dashboard).toContain('aria-label=\'Storage health\'')
     expect(dashboard).toContain('title=\'Queries\'')
     expect(dashboard).toContain('title=\'Longest running query\'')

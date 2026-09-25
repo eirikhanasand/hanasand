@@ -38,7 +38,7 @@ const coreTasks: TestTask[] = [
     { id: 'password-policy', title: 'Password requirements', command: [bun, 'test', 'tests/password-policy.test.ts'] },
     { id: 'code-review-access', title: 'Read-only code review access', command: [bun, 'test', 'tests/code-review-access.test.ts'] },
     scriptTask('status-summary', 'Bounded current status query', 'check-status-summary.ts'),
-    scriptTask('resilience', 'Recovery boundaries and stale state', 'check-resilience.ts'),
+    scriptTask('recovery', 'Recovery boundaries and stale state', 'check-recovery.ts'),
     scriptTask('auth-boundary', 'Authentication outage classification', 'check-auth-boundary.ts'),
     scriptTask('database-pool-error', 'Checked-out connection recovery', 'check-database-pool-error.ts'),
     scriptTask('auth-rate-recovery', 'Bounded pre-handler recovery without action replay', 'check-auth-rate-recovery.ts'),

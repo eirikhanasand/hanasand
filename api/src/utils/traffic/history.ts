@@ -1,5 +1,5 @@
 import { queryOnce, withTransaction } from '../db.ts'
-import { recoveryReadOnly } from '../resilience.ts'
+import { recoveryReadOnly } from '../recovery.ts'
 
 export async function ensureTrafficHistorySchema() {
     await queryOnce(`

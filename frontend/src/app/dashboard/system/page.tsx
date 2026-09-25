@@ -1,6 +1,6 @@
 import VmPage from '../vms/page'
 import { canViewHostMetrics } from '@/utils/vms/hostAccess'
-import ResiliencePanel from '@/components/system/resilience'
+import RecoveryPanel from '@/components/system/recovery'
 import DockerStoragePanel from '@/components/system/dockerStorage'
 import { cookies } from 'next/headers'
 import SystemDashboard from './clientPage'
@@ -27,7 +27,7 @@ export default async function page() {
                 title='System'
                 description='Operate containers, host resources, and virtual machines from one live surface.'
             />
-            <ResiliencePanel />
+            <RecoveryPanel />
             <DockerStoragePanel />
             <SystemDashboard
                 id={id}

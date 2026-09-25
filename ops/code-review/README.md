@@ -9,5 +9,5 @@ read-only.
 Both paths are runtime data and are excluded from Git: the mirror is nearly
 1 GB and the generated inventory is tens of MB. Deployment scripts and indexer
 code live in the main project. Run
-scripts/resilience/deploy-code-indexer.sh from the project root to initialize
+scripts/recovery/deploy-code-indexer.sh from the project root to initialize
 or refresh the indexer.

@@ -1,6 +1,6 @@
 import { shouldProxySupport, hasSupportServiceKey } from '#utils/support/config.ts'
 import { hasLogIngestToken } from '#utils/auth/logIngestToken.ts'
-import { recoveryReadOnly } from '#utils/resilience.ts'
+import { recoveryReadOnly } from '#utils/recovery.ts'
 import fp from 'fastify-plugin'
 import type { FastifyInstance, FastifyReply, FastifyRequest, RouteOptions } from 'fastify'
 import { matchApiKeyScope, organizationPublicApiScopes, validateApiKey } from '#utils/auth/apiKeys.ts'

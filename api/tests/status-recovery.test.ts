@@ -14,8 +14,8 @@ mock.module('#db', () => ({
 const { default: getStatus } = await import('../src/handlers/status/get.ts')
 
 test('restricted recovery serves saved timestamps without schema writes or history scans', async () => {
-    const previous = process.env.RESILIENCE_ESSENTIAL_ONLY
-    process.env.RESILIENCE_ESSENTIAL_ONLY = '1'
+    const previous = process.env.RECOVERY_ESSENTIAL_ONLY
+    process.env.RECOVERY_ESSENTIAL_ONLY = '1'
     try {
         let payload: any
         const reply: any = { header() { return this }, type() { return this }, send(value: string) { payload = JSON.parse(value); return this } }
@@ -25,7 +25,7 @@ test('restricted recovery serves saved timestamps without schema writes or histo
         expect(queries.some(sql => /CREATE|INSERT|UPDATE|service_monitor_results/.test(sql))).toBe(false)
         expect(rebuilds).toBe(0)
     } finally {
-        if (previous === undefined) delete process.env.RESILIENCE_ESSENTIAL_ONLY
-        else process.env.RESILIENCE_ESSENTIAL_ONLY = previous
+        if (previous === undefined) delete process.env.RECOVERY_ESSENTIAL_ONLY
+        else process.env.RECOVERY_ESSENTIAL_ONLY = previous
     }
 })

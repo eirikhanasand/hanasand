@@ -1,4 +1,4 @@
-import ResiliencePanel from '@/components/system/resilience'
+import RecoveryPanel from '@/components/system/recovery'
 import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
 import BackupPage from './backupPage'
 import { getBackupFiles, getBackupServices } from '@/utils/db/internal'
@@ -14,7 +14,7 @@ export default async function DatabaseBackupsPage() {
                 title='Database Backups'
                 description='Backup health, restore lanes, schedule, and storage context for the production database.'
             />
-            <ResiliencePanel />
+            <RecoveryPanel />
             <BackupPage backups={typeof backups === 'string' ? [] : backups} files={typeof files === 'string' ? [] : files} loadError={errors} />
         </DashboardPage>
     )

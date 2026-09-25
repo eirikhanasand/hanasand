@@ -2,7 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import WebSocket from 'ws'
 import { supportServiceConfigured, shouldProxySupport } from './config.ts'
 export { supportServiceConfigured, shouldProxySupport, supportRequestPath, hasSupportServiceKey } from './config.ts'
-import { recoveryRequestAllowed } from '../resilience.ts'
+import { recoveryRequestAllowed } from '../recovery.ts'
 
 export async function forwardSupportRequest(req: FastifyRequest, res: FastifyReply) {
     if (!shouldProxySupport(req.url)) return

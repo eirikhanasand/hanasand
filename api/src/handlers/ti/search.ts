@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { searchThreatIntel } from '#utils/ti/search.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import { recoveryReadOnly } from '#utils/resilience.ts'
+import { recoveryReadOnly } from '#utils/recovery.ts'
 import { consumeBillingQuota, getBillingQuota } from '../billing.ts'
 
 interface SearchBody {

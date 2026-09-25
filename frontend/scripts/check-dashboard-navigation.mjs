@@ -30,7 +30,7 @@ for (const href of ['/logs', '/logs/realtime', '/logs/search', '/logs/errors']) 
 assert.equal(all.find(item => item.href === '/dwm/actors')?.label, 'Actors')
 assert.deepEqual(all.filter(item => item.ancestors.includes('Logs & rules')).map(item => item.href), ['/logs', '/logs/realtime', '/logs/search', '/logs/errors', '/traffic', '/mill/rules/match', '/mill/rules/analysis', '/mill/rules/detection'])
 for (const href of ['/vulnerabilities', '/system/rates', '/load-testing']) assert.deepEqual(all.find(item => item.href === href)?.ancestors, ['Infrastructure', 'Health'])
-assert(!all.some(item => item.ancestors.includes('Observability') || item.ancestors.includes('Security & resilience')))
+assert(!all.some(item => item.ancestors.includes('Observability') || item.ancestors.includes('Security & recovery')))
 for (const path of ['/management/users', '/management/roles']) {
     assert.deepEqual(all.find(item => item.href === path)?.ancestors, ['Platform administration'])
 }
