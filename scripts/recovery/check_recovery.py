@@ -118,7 +118,7 @@ remote_migrated = isolated.migrate(remote_fixture)
 assert remote_migrated['services'][0]['instances'][0]['address'] == '127.0.0.1:28097'
 assert remote_migrated['services'][0]['instances'][0]['health'] == 'peer:inspur-ti-1'
 assert remote_migrated['services'][0]['instances'][1] == remote_fixture['services'][0]['instances'][1]
-assert set(isolated.GROUPS) == {'replication', 'database', 'intelligence', 'web', 'support', 'monitor'}
+assert set(isolated.GROUPS) == {'ai', 'replication', 'database', 'intelligence', 'web', 'support', 'monitor'}
 for forwards in isolated.GROUPS.values():
     assert all(value.startswith('127.0.0.1:') and ':127.0.0.1:' in value for value in forwards[1::2])
 # Add compressed replication without restarting existing tunnels or mixing bulk WAL with queries.
@@ -147,7 +147,7 @@ with tempfile.TemporaryDirectory() as directory:
     with patch.object(isolated.pathlib.Path, 'home', return_value=home):
         isolated.authorize()
         isolated.authorize()
-    assert authorized.read_text() == '# untouched\n' + 'permitopen="127.0.0.1:19181",' + key
+    assert authorized.read_text() == '# untouched\n' + 'permitopen="127.0.0.1:19181",permitlisten="127.0.0.1:28080",' + key
 legacy = ['-NT', '-i', '/run/key', '-o', 'StrictHostKeyChecking=yes', '-R', '127.0.0.1:18503:127.0.0.1:8503', '-L', '127.0.0.1:19300:127.0.0.1:19300', 'ubuntu@192.99.32.185']
 remaining, replication = isolated.replication_commands(legacy)
 assert remaining == legacy[:5] + legacy[7:]

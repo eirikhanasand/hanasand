@@ -71,8 +71,11 @@ for port in ports:
     for key in settings: command += ['-e', key]
     for alias, address in aliases.items(): command += ['--add-host', alias + ':' + address]
     if kind != 'auth':
+        destinations = ({'/var/lib/hanasand', '/srv/hanasand/app-updates', '/var/run/docker.sock',
+                         '/var/snap/lxd/common/lxd/unix.socket', '/var/spool/cron/crontabs',
+                         '/host/var/lib/hanasand'} if kind == 'api' else {'/var/lib/hanasand-prompt'})
         for mount in original['Mounts']:
-            if mount['Destination'] in ('/recovery', '/app/code-review', '/var/lib/hanasand/docker-storage'): continue
+            if mount['Destination'] not in destinations: continue
             source_path = mount['Name'] if mount['Type']=='volume' else mount['Source']
             command += ['-v', source_path+':'+mount['Destination']+('' if mount['RW'] else ':ro')]
     command += ['--entrypoint', 'bun', image, 'src/index.ts' if kind=='api' else 'src/authServer.ts' if kind=='auth' else 'server.js']

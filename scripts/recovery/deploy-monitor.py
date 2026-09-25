@@ -19,10 +19,13 @@ image = 'hanasand-recovery-monitor:' + release
 subprocess.run(['docker', 'build', '-f', 'Dockerfile.monitor', '-t', image, '.'], cwd=pathlib.Path(__file__).parent, check=True)
 settings = dict(value.split('=', 1) for value in old['Config']['Env'])
 settings['HANASAND_RELEASE_COMMIT'] = release
+settings['RECOVERY_ROOT'] = '/recovery'
 command = ['docker', 'run', '-d', '--name', name, '--restart', 'unless-stopped', '--network', 'host']
 for mount in old['Mounts']:
+    if mount['Destination'] != '/var/run/docker.sock': continue
     source = mount.get('Name') if mount['Type'] == 'volume' else mount['Source']
     command += ['-v', source + ':' + mount['Destination'] + ('' if mount['RW'] else ':ro')]
+command += ['-v', '/home/hanasand/hanasand/ops/runtime:/recovery']
 for key in settings:
     if key.startswith('RECOVERY_') or key == 'HANASAND_RELEASE_COMMIT':
         command += ['-e', key]
