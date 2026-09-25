@@ -29,7 +29,7 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
     const [owner, setOwner] = useState('all')
     const [resolutionType, setResolutionType] = useState('all')
     const [review, setReview] = useState('all')
-    const [filtersOpen, setFiltersOpen] = useState(true)
+    const [filtersOpen, setFiltersOpen] = useState(false)
     const [cursor, setCursor] = useState<string | null>(null)
     useEffect(() => {
         const controller = new AbortController()
