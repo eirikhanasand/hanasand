@@ -10,7 +10,7 @@ const planFields = [
     ['Task', ['task', 'goal', 'item', 'milestone']], ['Hours', ['hours', 'estimate', 'estimated hours', 'effort']], ['Notes', ['notes', 'note', 'description']],
     ['Status', ['status', 'state']], ['Sprint', ['sprint', 'iteration']], ['Progress', ['progress', '% complete']], ['Details', ['details', 'detail', 'updates']], ['Subgoals', ['subgoals', 'sub-goals', 'checklist']],
 ] as const
-const statuses = ['Planned', 'In progress', 'Blocked', 'Completed']
+const statuses = ['Planned', 'In progress', 'Waiting', 'Completed']
 const subgoalLines = (value: string) => value.split('\n').map(line => /^\s*-\s*\[([ xX])\]\s*(.*)$/.exec(line)).filter((match): match is RegExpExecArray => !!match).map(match => ({ done: match[1].toLowerCase() === 'x', text: match[2] }))
 
 export default function PlanSheet(props: SheetEditorProps) {
