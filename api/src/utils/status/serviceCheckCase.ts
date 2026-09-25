@@ -13,7 +13,7 @@ export async function recordServiceCheckCase(service: string, checkName: string,
         (id, owner_id, organization_id, name, prompt, target_url, monitoring_type, schedule_kind, interval_minutes,
          status, action_type, notify_on, notify_warnings, model_name, notification_destinations, next_run_at)
         SELECT $1, owner_id, organization_id, $2, $3, $4, 'fetch', 'interval', 1,
-            'active', 'agent_prompt', 'failure', true, model_name, notification_destinations, NULL
+            'paused', 'agent_prompt', 'failure', true, model_name, notification_destinations, NULL
         FROM agent_automations WHERE name = 'Hanasand API' AND status <> 'archived' AND organization_id IS NOT NULL
         ORDER BY created_at LIMIT 1 ON CONFLICT (id) DO NOTHING`,
     [automationId, checkName, `Production health check: ${service} / ${checkName}`, service === 'scheduled-jobs' && result.checkId

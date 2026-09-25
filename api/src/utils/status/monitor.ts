@@ -4,7 +4,10 @@ import { activityCountDrop, activityFreshnessMinutes, activityCollectorHealthy, 
 import { recordMonitorResult } from './record.ts'
 
 const apiBase = process.env.MONITOR_API_BASE || `http://127.0.0.1:${Number(process.env.PORT) || 8081}/api`
-const publicApiBase = (process.env.MONITOR_PUBLIC_API_BASE || 'https://api.hanasand.com/api/v1').replace(/\/$/, '')
+// The synthetic monitor runs inside the API container. Prefer the local API
+// endpoint so hairpin DNS/TLS failures cannot turn a healthy service into a
+// false outage; operators can still override this for an external probe.
+const publicApiBase = (process.env.MONITOR_PUBLIC_API_BASE || `${apiBase.replace(/\/$/, '')}/v1`).replace(/\/$/, '')
 const webBase = (process.env.MONITOR_WEB_BASE || 'https://hanasand.com').replace(/\/$/, '')
 const scraperBase = (process.env.TI_SCRAPER_API_BASE || 'http://ti-scraper:8097').replace(/\/$/, '')
 const modelClientBase = (process.env.HANASAND_MODEL_CLIENT_HEALTH_BASE || 'http://hanasand_ai_model_client:18182').replace(/\/$/, '')
