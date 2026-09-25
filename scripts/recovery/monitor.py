@@ -64,9 +64,16 @@ def choose_service(service, observations):
 
 def apply_dns_placement(services, dns_state):
     hosts = {'frontend': 'hanasand.com', 'api': 'api.hanasand.com', 'auth': 'api.hanasand.com'}
-    return [choose_service(service, {i['id']: i['healthy'] and i['site'] == 'ovhcloud' for i in service['instances']})
-            if dns_state.get(hosts.get(service['id']), {}).get('activeSite') == 'ovhcloud' else service
-            for service in services]
+    placed = []
+    for service in services:
+        if dns_state.get(hosts.get(service['id']), {}).get('activeSite') != 'ovhcloud':
+            placed.append(service)
+            continue
+        ovh = choose_service(service, {i['id']: i['healthy'] and i['site'] == 'ovhcloud' for i in service['instances']})
+        # A stale DNS cutover must not make a healthy local backup disappear
+        # while the standby endpoint is still returning a readiness error.
+        placed.append(ovh if ovh.get('activeInstance') else service)
+    return placed
 
 
 def transition_embed(previous, current, services, drill=False):

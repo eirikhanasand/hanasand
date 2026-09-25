@@ -86,6 +86,8 @@ print('DNS failover, stable failback and unrelated-record protection checks pass
 
 assert monitor.apply_dns_placement([primary], {'api.hanasand.com': {'activeSite': 'ovhcloud'}})[0]['activeInstance'] == 'ovh-api'
 assert monitor.apply_dns_placement([primary], {'api.hanasand.com': {'activeSite': 'inspur'}})[0]['activeInstance'] == 'inspur-api-1'
+assert monitor.apply_dns_placement([primary], {'api.hanasand.com': {'activeSite': 'ovhcloud'}})[0]['status'] == 'failed_over'
+assert monitor.apply_dns_placement([primary], {'api.hanasand.com': {'activeSite': 'ovhcloud'}})[0]['activeInstance'] == 'ovh-api'
 
 # Public recovery status must not disclose private host capacity.
 private = {'sampledAt': monitor.time.time(), 'updatedAt': 'now', 'mode': 'normal', 'readOnly': False, 'services': [], 'compute': {'memoryTotalBytes': 123}, 'sites': {'inspur': {'compute': {'diskFreeBytes': 456}}}, 'replicaEligibility': {'memory': 123}}
