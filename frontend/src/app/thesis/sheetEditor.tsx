@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowDown, ArrowUp, Pencil } from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowLeft, ArrowRight, Pencil } from 'lucide-react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { marked } from 'marked'
@@ -126,7 +126,7 @@ function InlineTable({ data, index, active, onSelect, onNavigate, onChange }: { 
 }
 
 export type TableInteraction = { active: Cell | null, onSelect: (cell: Cell) => void, onNavigate: (cell: Cell, extend?: boolean) => void }
-export type CustomTableControls = { index: number, cells: string[][], copyCells?: string[][], changeRow: (row: number, remove: boolean) => number, canRemoveRow: (row: number) => boolean, extendRow: (direction: -1 | 1) => number }
+export type CustomTableControls = { index: number, cells: string[][], copyCells?: string[][], changeRow: (row: number, remove: boolean, direction?: -1 | 1) => number, changeColumn?: (col: number, direction: -1 | 1) => void, canRemoveRow: (row: number) => boolean, extendRow: (direction: -1 | 1) => number }
 export type SheetEditorProps = { contentOnly?: boolean, sheet: Sheet, canEdit: boolean, actions?: ReactNode, trailingActions?: ReactNode, showInsertTable?: boolean, titleAside?: ReactNode, beforeContent?: ReactNode, customTable?: CustomTableControls, renderTable?: (data: TableData, index: number, interaction: TableInteraction) => ReactNode, onChange: (field: 'title' | 'body', value: string, group?: string) => void }
 
 export default function SheetEditor({ sheet, canEdit, onChange, actions, trailingActions, titleAside, beforeContent, renderTable, customTable, showInsertTable = true, contentOnly = false }: SheetEditorProps) {
@@ -134,6 +134,7 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions, trailin
     const [writing, setWriting] = useState(false)
     const selection = useRef<{ source: string, start: number, end: number } | null>(null)
     const [active, setActive] = useState<Cell | null>(null)
+    const [contextMenu, setContextMenu] = useState<{ x: number, y: number } | null>(null)
     const [wholeTable, setWholeTable] = useState<number | null>(null)
     useEffect(() => { setWholeTable(null) }, [sheet.body, active])
     const [pending, setPending] = useState<(PendingTable & { table: number, source: string }) | null>(null)
@@ -200,16 +201,18 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions, trailin
         const target = parsed[index]
         onChange('body', sheet.body.slice(0, target.start) + writeTable(data) + sheet.body.slice(target.end), group)
     }
-    function changeShape(axis: 'row' | 'column', remove: boolean) {
+    function changeShape(axis: 'row' | 'column', remove: boolean, direction: -1 | 1 = 1) {
         if (!cell || !table) return
         if (custom) {
-            if (axis === 'row') focusCell({ ...cell, row: custom.changeRow(cell.row, remove) })
+            if (axis === 'row') focusCell({ ...cell, row: custom.changeRow(cell.row, remove, direction) })
+            else if (!remove) custom.changeColumn?.(cell.col, direction)
             return
         }
         const index = axis === 'row' ? cell.row : cell.col
-        const data = reshape(table.data, axis, index + (remove ? 0 : 1), remove)
+        const insertion = index + (direction > 0 ? 1 : 0)
+        const data = reshape(table.data, axis, remove ? index : insertion, remove)
         updateTable(cell.table, data, undefined, true)
-        focusCell({ ...cell, row: axis === 'row' ? Math.min(index + (remove ? 0 : 1), data.cells.length - 1) : cell.row, col: axis === 'column' ? Math.min(index + (remove ? 0 : 1), data.cells[0].length - 1) : cell.col })
+        focusCell({ ...cell, row: axis === 'row' ? Math.min(remove ? index : insertion, data.cells.length - 1) : cell.row, col: axis === 'column' ? Math.min(remove ? index : insertion, data.cells[0].length - 1) : cell.col })
     }
     const tokens = marked.lexer(sheet.body)
     const compact = (contentOnly || parsed.length > 0 || tokens.some(token => token.type === 'code')) && tokens.every(token => ['space', 'table', 'code', 'html'].includes(token.type) && (token.type !== 'html' || /^<!-- thesis-table:/.test(token.raw)))
@@ -258,7 +261,7 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions, trailin
         onChange('body', sheet.body.slice(0, start) + value + sheet.body.slice(end))
         setActive(null)
     }
-    return <div ref={root} className='grid min-w-0 gap-5' onBlurCapture={event => {
+    return <div ref={root} className='grid min-w-0 gap-5' onKeyDownCapture={event => { if (event.key === 'Escape') setContextMenu(null) }} onBlurCapture={event => {
         if (!(event.relatedTarget as HTMLElement | null)?.closest('[data-table-cell], [data-table-tools]')) setActive(null)
     }}>
         <div className={titleAside ? 'grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-3' : 'flex min-w-0 items-start gap-4'}>
@@ -271,14 +274,16 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions, trailin
                 {canEdit && compact && <button className={sheetButton} aria-label={writing ? 'Hide text editor' : 'Add text'} title={writing ? 'Hide text editor' : 'Add text'} aria-pressed={writing} onClick={() => setWriting(value => !value)}><Pencil size={18} /></button>}
                 {canEdit && showInsertTable && <button className={sheetButton} onMouseDown={event => event.preventDefault()} onClick={insert}>Insert table</button>}
                 {trailingActions}
-                {canEdit && cell && table && <div className='flex shrink-0 items-center gap-2' role='group' aria-label='Active table controls'>
+                {canEdit && cell && table && <div className='flex shrink-0 flex-wrap items-center gap-2' role='group' aria-label='Active table controls'>
                     <span className='text-sm font-semibold text-ui-primary'>Table {cell.table + 1} · {columnName(cell.col)}{cell.row + 1}</span>
                     <button className={sheetButton} aria-label={`Select table ${cell.table + 1}`} aria-pressed={wholeTable === cell.table} onClick={selectWholeTable}>Select table</button>
                     <button className={sheetButton} aria-label={`Delete table ${cell.table + 1}`} onClick={() => deleteTable(cell.table)}>Delete table</button>
-                    <button className={sheetButton} aria-label={`Add row below ${cell.row + 1}`} title={`Add row below ${cell.row + 1}`} onClick={() => changeShape('row', false)}>+ Row</button>
+                    <button className={sheetButton} aria-label={`Add row above ${cell.row + 1}`} title={`Add row above ${cell.row + 1}`} onClick={() => changeShape('row', false, -1)}><ArrowUp size={16} /> Row</button>
+                    <button className={sheetButton} aria-label={`Add row below ${cell.row + 1}`} title={`Add row below ${cell.row + 1}`} onClick={() => changeShape('row', false, 1)}><ArrowDown size={16} /> Row</button>
                     <button className={sheetButton} aria-label={`Remove row ${cell.row + 1}`} title={`Remove row ${cell.row + 1}`} disabled={custom ? !custom.canRemoveRow(cell.row) : cell.row === 0} onClick={() => changeShape('row', true)}>− Row</button>
-                    {!custom && <><button className={sheetButton} aria-label={`Add column after ${columnName(cell.col)}`} title={`Add column after ${columnName(cell.col)}`} onClick={() => changeShape('column', false)}>+ Column</button>
-                        <button className={sheetButton} aria-label={`Remove column ${columnName(cell.col)}`} title={`Remove column ${columnName(cell.col)}`} disabled={table.data.cells[0].length <= 1} onClick={() => changeShape('column', true)}>− Column</button></>}
+                    <button className={sheetButton} aria-label={`Add column left of ${columnName(cell.col)}`} title={`Add column left of ${columnName(cell.col)}`} onClick={() => changeShape('column', false, -1)}><ArrowLeft size={16} /> Column</button>
+                    <button className={sheetButton} aria-label={`Add column right of ${columnName(cell.col)}`} title={`Add column right of ${columnName(cell.col)}`} onClick={() => changeShape('column', false, 1)}><ArrowRight size={16} /> Column</button>
+                    {!custom && <button className={sheetButton} aria-label={`Remove column ${columnName(cell.col)}`} title={`Remove column ${columnName(cell.col)}`} disabled={table.data.cells[0].length <= 1} onClick={() => changeShape('column', true)}>− Column</button>}
                     <span className='flex gap-2 [@media(hover:hover)_and_(pointer:fine)]:hidden'>
                         <button className={sheetButton} aria-label='Cell above' onClick={() => selectCell({ ...cell, row: cell.row - 1 }, true, true)}><ArrowUp size={18} /></button>
                         <button className={sheetButton} aria-label='Cell below' onClick={() => selectCell({ ...cell, row: cell.row + 1 }, true, true)}><ArrowDown size={18} /></button>
@@ -287,6 +292,22 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions, trailin
             </div>}
         </div>
         {beforeContent}
-        {(!compact || writing || sheet.body.trim()) && <div className='min-w-0'>{content}{prose(sheet.body.slice(offset), offset, sheet.body.length)}</div>}
+        {(!compact || writing || sheet.body.trim()) && <div className='min-w-0' onClick={() => setContextMenu(null)} onContextMenu={event => {
+            if (!canEdit) return
+            const target = event.target as HTMLElement
+            const address = target.closest<HTMLElement>('[data-table-cell]')?.dataset.tableCell
+            if (!address) return
+            const [tableIndex, row, col] = address.split(':').map(Number)
+            event.preventDefault()
+            selectCell({ table: tableIndex, row, col })
+            setContextMenu({ x: event.clientX, y: event.clientY })
+        }}>{content}{prose(sheet.body.slice(offset), offset, sheet.body.length)}</div>}
+        {contextMenu && cell && table && <div role='menu' aria-label='Table actions' className='fixed z-50 grid min-w-48 gap-1 rounded-lg border border-ui-border bg-ui-panel p-2 shadow-xl' style={{ left: Math.max(8, Math.min(contextMenu.x, window.innerWidth - 210)), top: Math.max(8, Math.min(contextMenu.y, window.innerHeight - 220)) }} onKeyDown={event => { if (event.key === 'Escape') setContextMenu(null) }}>
+            <button role='menuitem' className={sheetButton} onClick={() => { changeShape('row', false, -1); setContextMenu(null) }}>Insert row above</button>
+            <button role='menuitem' className={sheetButton} onClick={() => { changeShape('row', false, 1); setContextMenu(null) }}>Insert row below</button>
+            <button role='menuitem' className={sheetButton} onClick={() => { changeShape('column', false, -1); setContextMenu(null) }}>Insert column left</button><button role='menuitem' className={sheetButton} onClick={() => { changeShape('column', false, 1); setContextMenu(null) }}>Insert column right</button>
+            <button role='menuitem' className={sheetButton} disabled={custom ? !custom.canRemoveRow(cell.row) : cell.row === 0} onClick={() => { changeShape('row', true); setContextMenu(null) }}>Delete row</button>
+            {!custom && <button role='menuitem' className={sheetButton} onClick={() => { changeShape('column', true); setContextMenu(null) }}>Delete column</button>}
+        </div>}
     </div>
 }

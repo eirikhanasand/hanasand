@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { Copy, Info, Minus, Plus, Redo2, Settings2, Undo2 } from 'lucide-react'
 import SheetEditor, { sheetButton } from './sheetEditor'
 import TimetableSheet from './timetableSheet'
+import PlanSheet from './planSheet'
 import type { ActivityLog } from './timetableData'
 import CodeAccess from './codeAccess'
 import type { Sheet, SheetSettings } from './workspace'
@@ -13,7 +14,7 @@ import type { ThesisDocument } from '@/utils/thesis'
 import useThesis from './useThesis'
 
 function ReadOnlySheet({ sheet }: { sheet: Sheet }) {
-    const Component = sheet.id === 'Timetable' || sheet.name?.toLowerCase() === 'timetable' ? TimetableSheet : SheetEditor
+    const Component = sheet.id === 'Timetable' || sheet.name?.toLowerCase() === 'timetable' ? TimetableSheet : sheet.id === 'Plan' || sheet.name?.toLowerCase() === 'plan' ? PlanSheet : SheetEditor
     return <Component sheet={sheet} canEdit={false} onChange={() => {}} />
 }
 
@@ -85,7 +86,7 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
         thesis.update('body', body)
         if (key === 'history' && !value) setHistory(null)
     }
-    const Editor = sheets[active].id === 'Timetable' || sheets[active].name.toLowerCase() === 'timetable' ? TimetableSheet : SheetEditor
+    const Editor = sheets[active].id === 'Timetable' || sheets[active].name.toLowerCase() === 'timetable' ? TimetableSheet : sheets[active].id === 'Plan' || sheets[active].name.toLowerCase() === 'plan' ? PlanSheet : SheetEditor
     function updateActivityLog(activityLog: ActivityLog) {
         if (!canEdit) return false
         const body = writeSheets(sheets.map((sheet, index) => index === active ? { ...sheet, activityLog } : sheet))

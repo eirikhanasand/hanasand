@@ -64,7 +64,7 @@ test('sheet markdown, inline tables, persistence and inherited reader permission
     await page.getByRole('button', { name: 'Remove row 4', exact: true }).click()
     await expect(cell('A4')).toHaveCount(0)
     await cell('C2').focus()
-    await page.getByRole('button', { name: 'Add column after C', exact: true }).click()
+    await page.getByRole('button', { name: 'Add column right of C', exact: true }).click()
     await cell('D2').focus()
     await page.getByRole('button', { name: 'Remove column D', exact: true }).click()
     await expect(cell('D2')).toHaveCount(0)

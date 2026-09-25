@@ -104,11 +104,23 @@ export default function TimetableSheet({ onActivityLogChange, ...props }: SheetE
         cells: displayedCells,
         copyCells: [...displayedCells, [`${model.plannedWeeks} weeks`, ...model.totals]],
         canRemoveRow: row => row > 0 && model.weeks[row - 1]?.sourceRow !== undefined,
-        changeRow: (row, remove) => {
-            if (!remove) return addWeekNear(row, row === 0 ? -1 : 1)
+        changeRow: (row, remove, direction = 1) => {
+            if (!remove) return addWeekNear(row, direction)
             const week = model.weeks[row - 1]
             changeWeek(week)
             return Math.max(0, Math.min(row, model.weeks.length - (week?.activities.length ? 0 : 1)))
+        },
+        changeColumn: (col, direction) => {
+            const table = parsed[target]
+            const cells = table.data.cells.map(row => [...row])
+            const insertAt = col <= 0 ? 1 : Math.min(cells[0].length - 1, col + (direction > 0 ? 1 : 0))
+            let name = 'Category', suffix = 2
+            while (cells[0].includes(name)) name = `Category ${suffix++}`
+            cells[0].splice(insertAt, 0, name)
+            for (const row of cells.slice(1)) row.splice(insertAt, 0, '')
+            const widths = [...table.data.widths]
+            widths.splice(insertAt, 0, 180)
+            props.onChange('body', sheet.body.slice(0, table.start) + writeTable({ ...table.data, cells, widths }) + sheet.body.slice(table.end))
         },
         extendRow: direction => addWeekNear(direction < 0 ? 1 : model.weeks.length, direction),
     } : undefined} titleAside={model && <details className='thesis-hours-progress'><summary aria-label='Hours spent and expected'><strong>{model.totals.at(-1)} / {expectedHoursText(model.expectedHours)} h</strong><span>spent / expected</span></summary><div>12 hours per week before Christmas; 7.5 hours per weekday from January. Before Christmas, each public holiday deducts 2.4 hours. Weeks 51–53 and Norwegian weekday public holidays are excluded. Work logged on days off still counts as spent.</div></details>} actions={<>
@@ -128,6 +140,7 @@ export default function TimetableSheet({ onActivityLogChange, ...props }: SheetE
             'data-table-cell': `${index}:${row}:${col}`,
             'data-active': interaction.active?.table === index && interaction.active.row === row && interaction.active.col === col,
             onFocus: () => interaction.onSelect({ table: index, row, col }),
+            onClick: () => interaction.onSelect({ table: index, row, col }),
             onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => {
                 if (event.metaKey || event.ctrlKey || event.altKey) return
                 let nextRow = row, nextCol = col
