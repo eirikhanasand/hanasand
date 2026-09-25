@@ -10,6 +10,7 @@ assert.equal((await proxy(request('POST', '/api/cases'))).status, 503)
 assert.equal((await proxy(request('POST', '/api/auth/login'))).status, 503)
 assert.equal((await proxy(request('POST', '/dashboard/notes'))).status, 503, 'Server actions must also be protected')
 assert.equal((await proxy(request('GET', '/api/cases'))).status, 200)
+assert.equal((await proxy(request('POST', '/api/pwned'))).status, 200, 'The read-only password index lookup must remain available')
 assert.equal((await proxy(request('POST', '/api/ti/search'))).status, 200)
 for (const path of ['/api/support/chat', '/api/backend/support/tickets', '/api/backend/support/tickets/id/messages', '/api/backend/support/tickets/id/status', '/api/backend/support/tickets/id/feedback']) {
     assert.equal((await proxy(request('POST', path))).status, 200, 'The support API must enforce authentication and active placement')
