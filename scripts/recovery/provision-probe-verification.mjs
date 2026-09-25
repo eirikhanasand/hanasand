@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 
-const configPath = '/home/hanasand/runtime/probe-verification.json';
+const configPath = '/home/hanasand/hanasand/ops/runtime/probe-verification.json';
 const privatePath = '/var/lib/hanasand-log-collector/readiness-private.pem';
 const scratch = mkdtempSync(join(tmpdir(), 'hanasand-probe-keys-'));
 const stagedPrivate = join(scratch, 'readiness-private.pem');

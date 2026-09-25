@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 # Run on Inspur. Only this task-owned tunnel is replaced; application services stay up.
-secrets=/home/hanasand/secrets
+secrets=/home/hanasand/hanasand/ops/secrets/private
 test -s "$secrets/reverse-tunnel-key"
 test -s "$secrets/ovh-known-hosts"
 set -- -R 127.0.0.1:18503:127.0.0.1:8503

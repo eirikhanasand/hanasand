@@ -5,7 +5,7 @@ case "$kind" in frontend|api|auth) ;; *) exit 2;; esac
 test "$(pwd)" = /home/hanasand/hanasand
 exec 9>/tmp/hanasand-frontend-deploy.lock
 flock 9
-root=/home/hanasand/runtime
+root=/home/hanasand/hanasand/ops/runtime
 release=${HANASAND_RELEASE_COMMIT:-$(git rev-parse HEAD)}
 test "$(git rev-parse --verify "$release^{commit}")" = "$release"
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)

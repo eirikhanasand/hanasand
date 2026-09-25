@@ -5,7 +5,7 @@ import stat
 from pathlib import Path
 
 
-def probe_verification_settings(path='/home/hanasand/runtime/probe-verification.json'):
+def probe_verification_settings(path='/home/hanasand/hanasand/ops/runtime/probe-verification.json'):
     source = Path(path)
     if not source.exists():
         return {}

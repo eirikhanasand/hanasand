@@ -37,14 +37,14 @@ settings.update(support_settings(worker=True))
 settings.update(probe_verification_settings())
 settings['DB_BACKUP_WORKER_SOCKET']='/var/lib/hanasand/backups/database/.worker.sock'
 # Collectors receive a credential that authenticates only log ingestion.
-log_ingest_file = Path('/home/hanasand/runtime/log-ingest.json')
+log_ingest_file = Path('/home/hanasand/hanasand/ops/runtime/log-ingest.json')
 if log_ingest_file.exists():
     log_ingest = json.loads(log_ingest_file.read_text())
     if not isinstance(log_ingest, dict) or set(log_ingest) != {'LOG_INGEST_TOKEN'} or not isinstance(log_ingest['LOG_INGEST_TOKEN'], str) or len(log_ingest['LOG_INGEST_TOKEN']) < 32:
         raise SystemExit('Invalid log ingestion configuration')
     settings.update(log_ingest)
 
-mail_file = Path('/home/hanasand/runtime/mail.json')
+mail_file = Path('/home/hanasand/hanasand/ops/runtime/mail.json')
 if mail_file.exists():
     mail = json.loads(mail_file.read_text())
     allowed = {'MAIL_ADMIN_USERNAME', 'MAIL_ADMIN_PASSWORD', 'MAIL_SERVICE_KEY', 'MAIL_SYSTEM_SENDER_PASSWORD', 'MAIL_INTERNAL_URL', 'MAIL_SMTP_INTERNAL_PORT'}
@@ -59,7 +59,7 @@ with tempfile.NamedTemporaryFile(mode='w',suffix='.json',prefix='monitoring-work
 os.chmod(override,0o600)
 def apply(target,env):
     Path(override).write_text(json.dumps({'services':{'api':{'image':target,'command':original['Config']['Cmd'],'environment':env,'stop_grace_period':'65s',
-        'volumes':['/home/hanasand/runtime/status:/recovery:ro'],
+        'volumes':['/home/hanasand/hanasand/ops/runtime/status:/recovery:ro'],
         'networks':{'hanasandnet':{'gw_priority':1},'pwnednet':{},'browsernet':{}}}}}))
     subprocess.run(['docker','compose','-f','docker-compose.yml','-f',override,'up','-d','--no-deps','--no-build','api'],cwd=root,check=True)
 def ready(expected):

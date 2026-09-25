@@ -7,9 +7,9 @@ import shutil
 import time
 import urllib.request
 
-config = json.loads(Path('/home/hanasand/runtime/support.json').read_text())
+config = json.loads(Path('/home/hanasand/hanasand/ops/runtime/support.json').read_text())
 assert config['SUPPORT_SERVICE_BASE'] == 'http://127.0.0.1:29181'
-destination = Path('/home/hanasand/runtime/support-backups')
+destination = Path('/home/hanasand/hanasand/ops/runtime/support-backups')
 destination.mkdir(mode=0o700, exist_ok=True)
 stamp = time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())
 temporary = destination / (stamp + '.partial')

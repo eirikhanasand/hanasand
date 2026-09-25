@@ -88,8 +88,8 @@ def start(image, group=None):
                 print('Replication still uses the legacy tunnel. Finish any backup before split-replication.')
                 continue
         subprocess.run(['docker', 'run', '-d', '--name', name, '--restart', 'unless-stopped', '--network', 'host', '--memory', '128m', '--cpus', '2' if group == 'replication' else '.5',
-                        '-v', '/home/hanasand/secrets/reverse-tunnel-key:/run/key:ro',
-                        '-v', '/home/hanasand/secrets/ovh-known-hosts:/run/known_hosts:ro',
+                        '-v', '/home/hanasand/hanasand/ops/secrets/private/reverse-tunnel-key:/run/key:ro',
+                        '-v', '/home/hanasand/hanasand/ops/secrets/private/ovh-known-hosts:/run/known_hosts:ro',
                         '--entrypoint', 'ssh', image, '-NT',
                         *(['-C'] if group == 'replication' else []), '-i', '/run/key',
                         '-o', 'UserKnownHostsFile=/run/known_hosts', '-o', 'StrictHostKeyChecking=yes',

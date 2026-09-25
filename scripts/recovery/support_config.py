@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 
-def support_settings(path='/home/hanasand/runtime/support.json', worker=False):
+def support_settings(path='/home/hanasand/hanasand/ops/runtime/support.json', worker=False):
     source = Path(path)
     if not source.exists():
         return {}

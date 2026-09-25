@@ -22,7 +22,7 @@ if kind == 'api':
     settings.update(probe_verification_settings())
     settings['DB_BACKUP_WORKER_SOCKET']='/var/lib/hanasand/backups/database/.worker.sock'
 # Collectors receive a credential that authenticates only log ingestion.
-log_ingest_file = Path('/home/hanasand/runtime/log-ingest.json')
+log_ingest_file = Path('/home/hanasand/hanasand/ops/runtime/log-ingest.json')
 if kind == 'api' and log_ingest_file.exists():
     log_ingest = json.loads(log_ingest_file.read_text())
     if not isinstance(log_ingest, dict) or set(log_ingest) != {'LOG_INGEST_TOKEN'} or not isinstance(log_ingest['LOG_INGEST_TOKEN'], str) or len(log_ingest['LOG_INGEST_TOKEN']) < 32:
@@ -30,7 +30,7 @@ if kind == 'api' and log_ingest_file.exists():
     settings.update(log_ingest)
 
 if kind in ('api', 'auth'):
-    mail_file = Path('/home/hanasand/runtime/mail.json')
+    mail_file = Path('/home/hanasand/hanasand/ops/runtime/mail.json')
     if mail_file.exists():
         mail = json.loads(mail_file.read_text())
         allowed = {'MAIL_ADMIN_USERNAME', 'MAIL_ADMIN_PASSWORD', 'MAIL_SERVICE_KEY', 'MAIL_SYSTEM_SENDER_PASSWORD', 'MAIL_INTERNAL_URL', 'MAIL_SMTP_INTERNAL_PORT'}
@@ -40,7 +40,7 @@ if kind in ('api', 'auth'):
 
 # Keep provider secrets separate from the shared API/frontend environment.
 if kind == 'auth':
-    secret_file = Path('/home/hanasand/runtime/auth-providers.json')
+    secret_file = Path('/home/hanasand/hanasand/ops/runtime/auth-providers.json')
     if secret_file.exists():
         secrets = json.loads(secret_file.read_text())
         allowed = {'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'APPLE_CLIENT_ID', 'APPLE_TEAM_ID', 'APPLE_KEY_ID', 'APPLE_PRIVATE_KEY'}
@@ -64,7 +64,7 @@ for port in ports:
     with socket.socket() as listener:
         listener.bind(('127.0.0.1', int(port)))
     settings['PORT'] = port
-    command = ['docker', 'run', '-d', '--name', name, '--restart', 'unless-stopped', '--network', 'host', '--memory', '512m' if kind=='auth' else '2g', '--cpus', '1' if kind=='auth' else '2', '--stop-timeout', '65', '-v', '/home/hanasand/runtime/status:/recovery:ro']
+    command = ['docker', 'run', '-d', '--name', name, '--restart', 'unless-stopped', '--network', 'host', '--memory', '512m' if kind=='auth' else '2g', '--cpus', '1' if kind=='auth' else '2', '--stop-timeout', '65', '-v', '/home/hanasand/hanasand/ops/runtime/status:/recovery:ro']
     if kind == 'api': command += ['-v', '/var/lib/hanasand/docker-storage:/var/lib/hanasand/docker-storage']
     if kind in ('api', 'frontend'): command += ['-v', '/home/hanasand/hanasand/ops/code-review/published:/app/code-review:ro']
     # Passing names, not values, keeps multiline credentials out of process arguments.

@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
-root=/home/hanasand/runtime
+root=/home/hanasand/hanasand/ops/runtime
 backups=${HANASAND_BACKUP_DIR:-/var/backups/hanasand}
-secrets=/home/hanasand/secrets
+secrets=/home/hanasand/hanasand/ops/secrets/private
 image=postgres@sha256:29342cb52157b098821961d2c14eec3c019071f56a5d559e990cf07cf541ea9b
 exec 9>"$root/backup.lock"
 flock -n 9 || exit 0

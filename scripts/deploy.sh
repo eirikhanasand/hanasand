@@ -1,6 +1,6 @@
 #!/bin/sh
 set -eu
-if test -f /home/hanasand/runtime/config.json; then exec sh scripts/recovery/deploy-pair.sh frontend "$@"; fi
+if test -f /home/hanasand/hanasand/ops/runtime/config.json; then exec sh scripts/recovery/deploy-pair.sh frontend "$@"; fi
 
 root=$(pwd)
 test "$root" = "/home/hanasand/hanasand" || {

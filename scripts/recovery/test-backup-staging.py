@@ -55,7 +55,7 @@ elif command == 'docker' and args[0] == 'run':
         old.mkdir(parents=True)
         (old / 'verification.json').write_text('{}')
         script = root / 'backup.sh'
-        script.write_text(source.replace('root=/home/hanasand/runtime', 'root=' + shlex.quote(str(root)), 1))
+        script.write_text(source.replace('root=/home/hanasand/hanasand/ops/runtime', 'root=' + shlex.quote(str(root)), 1))
         (root / 'verify-backup.sh').write_text('''#!/bin/sh
 printf '["verify"]\\n' >> "$MOCK_LOG"
 [ "${MOCK_FAIL:-}" != verify ] || exit 47
