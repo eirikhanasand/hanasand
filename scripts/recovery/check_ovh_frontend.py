@@ -8,7 +8,9 @@ from unittest.mock import patch
 
 script = Path(__file__).with_name('deploy-ovh-service.py')
 release = 'a' * 40
-original = {'Config': {'Env': ['PORT=19300', 'PRIVATE_VALUE=fixture']},
+original = {'Config': {'Env': ['PORT=19300', 'PRIVATE_VALUE=fixture',
+                              'RECOVERY_STATUS_URL=http://127.0.0.1:19901/status',
+                              'RECOVERY_STATE_FILE=/recovery/state.json']},
             'HostConfig': {'NetworkMode': 'host', 'Memory': 2147483648, 'NanoCpus': 1000000000,
                            'RestartPolicy': {'Name': 'unless-stopped'}, 'ExtraHosts': ['kept:127.0.0.2']},
             'State': {'Running': True},
@@ -27,6 +29,9 @@ for kind, failure in ((kind, failure) for kind in ('frontend', 'api', 'auth') fo
             assert kwargs['env']['PRIVATE_VALUE'] == 'fixture'
             assert 'PRIVATE_VALUE=fixture' not in command
             assert kwargs['env']['PWNED_LOOKUP_API'] == 'https://api.hanasand.com/api/pwned'
+            if kind == 'frontend':
+                assert kwargs['env']['RECOVERY_STATUS_URL'] == 'http://127.0.0.1:19901/status'
+                assert kwargs['env']['RECOVERY_STATE_FILE'] == '/recovery/state.json'
             assert '/fixture:/recovery:ro' in command and 'kept:127.0.0.2' in command
         return SimpleNamespace(returncode=1 if command[:2] == ['docker', 'inspect'] else 0)
     class Response(io.BytesIO):
@@ -36,7 +41,7 @@ for kind, failure in ((kind, failure) for kind in ('frontend', 'api', 'auth') fo
         if command[:2] == ['docker', 'inspect']:
             return json.dumps([original]).encode()
         assert command[:2] == ['docker', 'exec']
-        corrupt = (command[2].endswith('-candidate') and failure == 'candidate') or (command[2] == name and failure == 'serving')
+        corrupt = ('-candidate-' in command[2] and failure == 'candidate') or (command[2] == name and failure == 'serving')
         return json.dumps({'ok': False, 'count': 0 if corrupt else 44, 'source': 'compact-index'}).encode()
     def urlopen(request, **kwargs):
         url = request if isinstance(request, str) else request.full_url

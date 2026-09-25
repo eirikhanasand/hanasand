@@ -40,8 +40,8 @@ settings.update(PWNED_LOOKUP_API='https://api.hanasand.com/api/pwned',
                 HANASAND_RELEASE_COMMIT=release, HOSTNAME='127.0.0.1',
                 RECOVERY_SITE='ovhcloud')
 if kind == 'frontend':
-    settings.update(RECOVERY_STATUS_URL=settings.get('RESILIENCE_STATUS_URL', 'http://127.0.0.1:19901/status'),
-                    RECOVERY_STATE_FILE=settings.get('RESILIENCE_STATE_FILE', '/resilience/state.json'))
+    settings.update(RECOVERY_STATUS_URL=settings.get('RECOVERY_STATUS_URL', 'http://127.0.0.1:19901/status'),
+                    RECOVERY_STATE_FILE=settings.get('RECOVERY_STATE_FILE', '/recovery/state.json'))
 if kind == 'api':
     settings.update(AI_HEALTH_WORKER_BASE='http://127.0.0.1:28080', API_HTTP_ONLY='1')
 
