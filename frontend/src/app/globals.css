@@ -345,7 +345,7 @@ button:not(:disabled),
 
 @media (min-width: 1024px) {
   .dashboard-sidebar-sticky {
-    margin-top: 0.75rem;
+    margin-top: 1.25rem;
     max-height: calc(100dvh - 6rem);
   }
 }
