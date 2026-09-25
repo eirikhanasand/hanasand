@@ -94,8 +94,8 @@ def check(port, target):
     with urllib.request.urlopen(request, timeout=20) as response:
         header = response.read(12)
         if (response.headers.get('Content-Type') != 'application/vnd.hanasand.pwned-prefix'
-                or header[:8] != b'PWNPRF02' or int.from_bytes(header[8:], 'little') != 3):
-            raise RuntimeError('Expected all three compact indexes through the HTTPS API.')
+                or header[:8] != b'PWNPRF02' or int.from_bytes(header[8:], 'little') != 2):
+            raise RuntimeError('Expected both compact indexes through the HTTPS API.')
 
 # Test new runtime and HTTPS lookup without changing the serving instance.
 try:

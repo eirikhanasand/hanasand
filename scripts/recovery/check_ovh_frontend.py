@@ -48,7 +48,7 @@ for kind, failure in ((kind, failure) for kind in ('frontend', 'api', 'auth') fo
         if url.endswith('/ready'):
             return Response(json.dumps({'ok': True, 'release': release}).encode())
         corrupt = ('19301' in url and failure == 'candidate') or ('19300' in url and failure == 'serving')
-        return Response(b'incorrect' if corrupt else b'PWNPRF02' + (3).to_bytes(4, 'little'))
+        return Response(b'incorrect' if corrupt else b'PWNPRF02' + (2).to_bytes(4, 'little'))
     with patch('sys.argv', [str(script), kind, release]), patch('subprocess.run', side_effect=run), \
          patch('subprocess.check_output', side_effect=check_output), \
          patch('urllib.request.urlopen', side_effect=urlopen), patch('fcntl.flock'), \
