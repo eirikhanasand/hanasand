@@ -246,8 +246,25 @@ async function ensureDomainPrincipal() {
             externalMembers: [],
         })
     } else if (domain.catchAllAddress !== catchAllAddress) {
-        await setDomainCatchAllAddress(mailConfig.domain, catchAllAddress)
+        try {
+            await setDomainCatchAllAddress(mailConfig.domain, catchAllAddress)
+        } catch (error) {
+            if (!isDomainCatchAllUnsupported(error)) throw error
+            await ensureSupportCatchAllAlias()
+        }
     }
+}
+
+async function ensureSupportCatchAllAlias() {
+    const alias = "@" + mailConfig.domain
+    const support = await findPrincipalByName('support', 'individual')
+    if (!support) throw new Error('The support mailbox is required for catch-all delivery.')
+    if (support.emails?.includes(alias)) return
+    await patchPrincipal('support', [{ action: 'addItem', field: 'emails', value: alias }])
+}
+
+function isDomainCatchAllUnsupported(error: unknown) {
+    return error instanceof Error && error.message.includes('(400) for x:Domain/query')
 }
 
 function isAlreadyAttachedError(error: unknown) {
