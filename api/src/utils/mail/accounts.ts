@@ -256,7 +256,7 @@ async function ensureDomainPrincipal() {
 }
 
 async function ensureSupportCatchAllAlias() {
-    const alias = "@" + mailConfig.domain
+    const alias = '@' + mailConfig.domain
     const support = await findPrincipalByName('support', 'individual')
     if (!support) throw new Error('The support mailbox is required for catch-all delivery.')
     if (support.emails?.includes(alias)) return
