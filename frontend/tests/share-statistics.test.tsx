@@ -23,7 +23,7 @@ test('empty shares hide statistics and retain the create action', async () => {
     expect(html).toContain('href="/s"')
 })
 
-test('populated shares show line totals and line counts in rows', async () => {
+test('populated shares keep analytics collapsed until requested', async () => {
     const share: Share = { id: 'code', alias: 'Code', path: 'code.ts', content: 'one two\n\nthree\n', wordCount: 99, estimatedMinutes: 1, timestamp: '2026-09-19T10:00:00Z', git: null, locked: false, owner: 'test', parent: '' }
     shares = [share, { ...share, id: 'note', content: 'single line', locked: true }]
     const html = renderToStaticMarkup(await Shares())
