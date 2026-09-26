@@ -7,6 +7,7 @@ import { DashboardPanel } from '@/components/dashboard/ui'
 import ErrorNotice from '@/components/error/errorNotice'
 import config from '@/config'
 import { getCookie } from '@/utils/cookies/cookies'
+import { isReservedPlaceholder } from '@/utils/users/isReservedPlaceholder'
 import assignRole from '@/utils/roles/assignRole'
 import unassignRole from '@/utils/roles/unassignRole'
 import RoleIconPicker from './roleIconPicker'
@@ -23,6 +24,7 @@ export default function RoleList({ roles, users, canManage, highestPriority }: {
     const [editing, setEditing] = useState(false)
     const [expanded, setExpanded] = useState<string | null>(null)
     const [search, setSearch] = useState('')
+    const [showReserved, setShowReserved] = useState(false)
     const [form, setForm] = useState<Role | 'new' | null>(null)
     const [removing, setRemoving] = useState<Role | null>(null)
     const [name, setName] = useState('')
@@ -120,7 +122,8 @@ export default function RoleList({ roles, users, canManage, highestPriority }: {
     const iconClass = 'inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded p-2 text-ui-muted hover:bg-ui-raised hover:text-ui-text disabled:opacity-50'
     const inputClass = 'min-h-11 min-w-0 w-full rounded-lg border border-ui-border bg-ui-canvas px-3 py-2 text-sm text-ui-text'
     const query = search.trim().toLowerCase()
-    const matchingUsers = users.filter(user => !query || `${user.name} ${user.username || ''} ${user.email || ''}`.toLowerCase().includes(query))
+    const listedUsers = users.filter(user => showReserved || !isReservedPlaceholder(user))
+    const matchingUsers = listedUsers.filter(user => !query || `${user.name} ${user.username || ''} ${user.email || ''}`.toLowerCase().includes(query))
     const visibleItems = items.filter(role => !query || role.name.toLowerCase().includes(query) || (role.description || '').toLowerCase().includes(query) || matchingUsers.length > 0)
     return (
         <DashboardPanel className='grid h-fit min-w-0 w-full self-start gap-3 p-4'>
@@ -131,10 +134,13 @@ export default function RoleList({ roles, users, canManage, highestPriority }: {
                     <button type='button' disabled={pending} aria-label='Add role' title='Add role' onClick={() => openForm('new')} className={iconClass}><Plus className='h-4 w-4' /></button>
                 </div>}
             </div>
-            <label className='flex min-h-10 items-center gap-2 rounded-lg border border-ui-border bg-ui-canvas px-3 text-ui-muted'>
-                <Search className='h-4 w-4 shrink-0' aria-hidden='true' />
-                <input aria-label='Filter roles and users' placeholder='Filter roles or users' value={search} onChange={event => setSearch(event.target.value)} className='min-w-0 flex-1 bg-transparent text-sm text-ui-text outline-none placeholder:text-ui-muted' />
-            </label>
+            <div className='flex items-center gap-2'>
+                <label className='flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-lg border border-ui-border bg-ui-canvas px-3 text-ui-muted'>
+                    <Search className='h-4 w-4 shrink-0' aria-hidden='true' />
+                    <input aria-label='Filter roles and users' placeholder='Filter roles or users' value={search} onChange={event => setSearch(event.target.value)} className='min-w-0 flex-1 bg-transparent text-sm text-ui-text outline-none placeholder:text-ui-muted' />
+                </label>
+                {users.some(isReservedPlaceholder) && <button type='button' onClick={() => setShowReserved(value => !value)} className='min-h-10 shrink-0 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm text-ui-muted hover:bg-ui-panel hover:text-ui-text'>{showReserved ? 'Hide reserved' : 'Show reserved'}</button>}
+            </div>
             {form && <form aria-label={form === 'new' ? 'Add role' : 'Edit role'} className='grid min-w-0 gap-4 rounded-xl border border-ui-primary/25 bg-ui-primary/5 p-3 sm:grid-cols-2 sm:p-4' onSubmit={event => { event.preventDefault(); void save(form === 'new' ? 'POST' : 'PUT', form === 'new' ? undefined : form.id) }}>
                 <label className='grid gap-1 text-xs text-ui-muted'>Name<input autoFocus required maxLength={120} value={name} disabled={pending} onChange={event => setName(event.target.value)} className={inputClass} /></label>
                 <label className='grid gap-1 text-xs text-ui-muted'>Priority<input aria-describedby='role-priority-help' type='number' step={1} min={form !== 'new' && form.id === 'administrator' ? 0 : Math.max(1, highestPriority)} max={2147483647} required value={priority} disabled={pending || form !== 'new' && form.id === 'administrator'} onChange={event => setPriority(event.target.value)} className={inputClass} /><span id='role-priority-help'>{form !== 'new' && form.id === 'administrator' ? 'Administrator is fixed at 0.' : 'Lower numbers have higher priority. 0 is reserved for Administrator.'}</span></label>
@@ -163,7 +169,7 @@ export default function RoleList({ roles, users, canManage, highestPriority }: {
                             const canChange = canManage && highestPriority <= role.priority
                             const isOpen = expanded === role.id
                             const roleMatchesQuery = role.name.toLowerCase().includes(query) || (role.description || '').toLowerCase().includes(query)
-                            const visibleUsers = query && !roleMatchesQuery ? matchingUsers : users
+                            const visibleUsers = query && !roleMatchesQuery ? matchingUsers : listedUsers
                             return <Fragment key={role.id}>
                                 <tr className='border-b border-ui-border/70 hover:bg-ui-raised/60'>
                                     <td className='px-3 py-2.5'>
