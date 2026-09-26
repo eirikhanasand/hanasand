@@ -410,7 +410,7 @@ export default function SystemDashboard({
                         <LinkButton href='/logs' icon={<TerminalSquare className='h-4 w-4' />} label='Open Logs' />
                     </div>
                     {containers.length ? (
-                        <div className='mt-4 max-h-[20rem] overflow-auto'>
+                        <div className='mt-4 max-h-80 overflow-auto'>
                             <table className='min-w-[40rem] text-left text-sm xl:min-w-full'>
                                 <thead className='sticky top-0 z-10 border-b border-ui-border bg-ui-panel text-xs uppercase text-ui-muted'>
                                     <tr>
