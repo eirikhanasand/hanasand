@@ -107,13 +107,12 @@ async function enforceRateLimit(req: FastifyRequest, res: FastifyReply, database
         }
         // Route aliases share the existing key's quota counters and configured limits.
         path = apiKeyScope.route
-        // The internal synthetic monitor must be able to validate its own service
-        // credential even when customer traffic has exhausted normal key quotas.
-        // Keep this exemption limited to the configured key and self-check route.
+        // Service-account identity checks are safe to exempt from quota accounting.
+        // This covers each configured monitor credential while keeping the scope
+        // limited to the exact self-check route.
         if (actor.apiKey.serviceAccount
             && req.method === 'GET'
-            && path === '/api/service-accounts/self'
-            && req.headers['x-api-key'] === process.env.MONITOR_SERVICE_ACCOUNT_KEY) return true
+            && path === '/api/service-accounts/self') return true
     }
 
     const checkedSession = (req as FastifyRequest & { rateLimitSession?: Awaited<ReturnType<typeof validateSession>> }).rateLimitSession

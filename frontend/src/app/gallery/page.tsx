@@ -3,7 +3,7 @@ import { buildRouteMetadata } from '../seo'
 import GalleryPageClient from './pageClient'
 
 export const metadata: Metadata = buildRouteMetadata({
-    title: 'Library',
+    title: 'Gallery',
     description: 'Browse your uploaded files and copy shareable links.',
     path: '/gallery',
     keywords: ['hanasand gallery', 'media uploads'],
