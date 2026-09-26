@@ -1,5 +1,7 @@
 *
 
+!articles
+!articles/**
 !frontend
 !frontend/**
 !api
