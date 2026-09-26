@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Clock3, FileCode2, LockKeyhole, Plus, Radio, Share2, Text } from 'lucide-react'
 import DashboardShare from './dashboardShare'
+import ShareAnalytics from './shareAnalytics'
 import { getUserShares } from '@/utils/share/getUserShares'
 import { countLines } from '@/utils/share/countLines'
 import { cookies } from 'next/headers'
@@ -26,15 +27,8 @@ export default async function Shares() {
 
     return (
         <div className='grid gap-3'>
-            {shareRows.length > 0 && <section aria-label='Share statistics' className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
-                <ShareMetric icon={<FileCode2 className='h-4 w-4' />} label='Shares' value={String(shareRows.length)} detail='total shares' tone={shareRows.length ? 'ok' : 'watch'} />
-                <ShareMetric icon={<LockKeyhole className='h-4 w-4' />} label='Locked' value={String(lockedCount)} detail={`${Math.max(shareRows.length - lockedCount, 0)} unlocked`} tone={lockedCount ? 'watch' : 'ok'} />
-                <ShareMetric icon={<Text className='h-4 w-4' />} label='Lines' value={totalLines.toLocaleString('en-US')} detail='total lines shared' tone='neutral' />
-                <ShareMetric icon={<Clock3 className='h-4 w-4' />} label='Latest share' value={latestShare ? shortDate(latestShare.timestamp) : 'None'} detail={latestShare?.alias || latestShare?.path || 'No shares yet'} tone={latestShare ? 'ok' : 'neutral'} />
-            </section>}
-
-            <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
-                <div className='flex flex-wrap items-start justify-between gap-3 border-b border-ui-border bg-ui-panel px-4 py-3'>
+            <DashboardPanel className='overflow-visible border-ui-border bg-ui-panel p-0'>
+                <div className='flex flex-wrap items-start justify-between gap-3 rounded-t-xl border-b border-ui-border bg-ui-panel px-4 py-3'>
                     <div>
                         <div className='flex items-center gap-2'>
                             <Radio className='h-4 w-4 text-ui-primary' />
@@ -44,10 +38,20 @@ export default async function Shares() {
                             {typeof shares === 'string' ? 'Could not load shares.' : `${shareRows.length} share${shareRows.length === 1 ? '' : 's'}.`}
                         </p>
                     </div>
-                    <Link prefetch={false} href='/s' className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10'>
-                        <Plus className='h-4 w-4' />
-                        <span>Create share</span>
-                    </Link>
+                    <div className='flex items-center gap-2'>
+                        <ShareAnalytics>
+                            {shareRows.length > 0 && <section aria-label='Share statistics' className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
+                                <ShareMetric icon={<FileCode2 className='h-4 w-4' />} label='Shares' value={String(shareRows.length)} detail='total shares' tone='ok' />
+                                <ShareMetric icon={<LockKeyhole className='h-4 w-4' />} label='Locked' value={String(lockedCount)} detail={`${Math.max(shareRows.length - lockedCount, 0)} unlocked`} tone={lockedCount ? 'watch' : 'ok'} />
+                                <ShareMetric icon={<Text className='h-4 w-4' />} label='Lines' value={totalLines.toLocaleString('en-US')} detail='total lines shared' tone='neutral' />
+                                <ShareMetric icon={<Clock3 className='h-4 w-4' />} label='Latest share' value={latestShare ? shortDate(latestShare.timestamp) : 'None'} detail={latestShare?.alias || latestShare?.path || 'No shares yet'} tone={latestShare ? 'ok' : 'neutral'} />
+                            </section>}
+                        </ShareAnalytics>
+                        <Link prefetch={false} href='/s' className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10'>
+                            <Plus className='h-4 w-4' />
+                            <span>Create</span>
+                        </Link>
+                    </div>
                 </div>
                 <div className='grid gap-1 p-3'>
                     {typeof shares === 'string'
@@ -63,7 +67,7 @@ export default async function Shares() {
                                     <p className='mt-2 text-sm leading-6 text-ui-muted'>Share a note, article, or workspace with a controlled link.</p>
                                     <Link prefetch={false} href='/s' className='mt-4 inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas'>
                                         <Plus className='h-4 w-4' />
-                                        Create share
+                                        Create
                                     </Link>
                                 </div>
                             </div>}
