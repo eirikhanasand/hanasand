@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
-import { mongoDefinition, eligibleMongoPing, mongoCommandFromLog, mongoReconDefinition } from '../src/utils/mill/analyzeMongo.ts'
-import { normalizeLogEvent } from '../src/utils/mill/logEvent.ts'
+import { mongoDefinition, eligibleMongoPing, mongoCommandFromLog, mongoReconDefinition } from '../src/utils/events/analyzeMongo.ts'
+import { normalizeLogEvent } from '../src/utils/events/logEvent.ts'
 
 const log = { host: 'inspur/cashflow', service: 'mongodb', level: 'info', sourceEventId: 'mongo:123' }
 const event = { t: { $date: '2026-09-21T14:00:00Z' }, s: 'I', c: 'COMMAND', id: 51803, ctx: 'conn123', msg: 'Slow query', attr: { type: 'command', command: { ping: 1, $db: 'admin' }, remote: '127.0.0.1:55250', durationMillis: 0, reslen: 17 } }

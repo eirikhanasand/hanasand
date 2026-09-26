@@ -1,11 +1,11 @@
 import { expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
-import { eligibleModelDiscovery as timingEligible, modelDiscoveryDefinition, validModelDiscoveryParameters, modelDiscoveryConfigured, modelLogDigest, modelProofMac, type ModelProbeLog } from '../src/utils/mill/analyzeModelDiscovery.ts'
+import { eligibleModelDiscovery as timingEligible, modelDiscoveryDefinition, validModelDiscoveryParameters, modelDiscoveryConfigured, modelLogDigest, modelProofMac, type ModelProbeLog } from '../src/utils/events/analyzeModelDiscovery.ts'
 
-import { matchesMillRule } from '../src/utils/mill/conditions.ts'
-import { normalizeLogEvent } from '../src/utils/mill/logEvent.ts'
+import { matchesRule } from '../src/utils/events/conditions.ts'
+import { normalizeLogEvent } from '../src/utils/events/logEvent.ts'
 const eligibleModelDiscovery = (log: ModelProbeLog, key: string) => timingEligible(log, modelDiscoveryDefinition.parameters, key)
-    && matchesMillRule(normalizeLogEvent({ ...log, id: log.sourceEventId!, created_at: log.timestamp! }), modelDiscoveryDefinition.conditions)
+    && matchesRule(normalizeLogEvent({ ...log, id: log.sourceEventId!, created_at: log.timestamp! }), modelDiscoveryDefinition.conditions)
 
 export const testKey = 'ab'.repeat(32)
 export function modelFixture(index = 1): ModelProbeLog {

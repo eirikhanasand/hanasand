@@ -120,7 +120,7 @@ try {
     console.log('Verified save and reload')
 
     const nav = page.getByRole('navigation', { name: 'Organization pages' })
-    for (const [label, selector] of [['Team', '#members'], ['Watchlists', '#watchlists'], ['Destinations', '#destinations'], ['API keys', '#mill-api-key'], ['Privacy & retention', '#privacy'], ['Delivery history', '#delivery-history'], ['Alerts & cases', '[data-org-scope-empty], [data-org-scope-records]'], ['Activity', '#audit']]) {
+    for (const [label, selector] of [['Team', '#members'], ['Watchlists', '#watchlists'], ['Destinations', '#destinations'], ['API keys', '#event-api-key'], ['Privacy & retention', '#privacy'], ['Delivery history', '#delivery-history'], ['Alerts & cases', '[data-org-scope-empty], [data-org-scope-records]'], ['Activity', '#audit']]) {
         console.log('Checking section:', label)
         await nav.getByRole('link', { name: label, exact: true }).click()
         await expect(page.locator(selector)).toBeVisible()

@@ -2,7 +2,7 @@ import { beforeEach, expect, mock, test } from 'bun:test'
 let checkpoints: Array<unknown[]> = [], skipped: string[] = []
 let busy: string | null = null
 let recentId = '100', watermark = '200', historyRows = 1, recentRows = 1, reads: Array<{ sql: string, values: unknown[] }>
-mock.module('../src/utils/mill/logWatermark.ts', () => ({ stableLogWatermark: async (source: string) => source === busy ? null : watermark }))
+mock.module('../src/utils/events/logWatermark.ts', () => ({ stableLogWatermark: async (source: string) => source === busy ? null : watermark }))
 const query = async (sql: string, values: unknown[] = []) => {
     if (sql.includes('SELECT last_id, recent_id')) return { rows: [{ last_id: '0', recent_id: recentId, history_end_id: recentId }] }
     if (sql.startsWith('SELECT *')) {
@@ -14,8 +14,8 @@ const query = async (sql: string, values: unknown[] = []) => {
     return { rows: [] }
 }
 mock.module('#db', () => ({ default: query }))
-const { storedSourceLog, processAdditionalLogSources } = await import('../src/utils/mill/storedSources.ts')
-const { normalizeLogEvent } = await import('../src/utils/mill/logEvent.ts')
+const { storedSourceLog, processAdditionalLogSources } = await import('../src/utils/events/storedSources.ts')
+const { normalizeLogEvent } = await import('../src/utils/events/logEvent.ts')
 const row = { id: 1, created_at: '2026-09-19T12:00:00Z' }
 beforeEach(() => { checkpoints = []; skipped = []; busy = null; recentId = '100'; watermark = '200'; historyRows = 1; recentRows = 1; reads = [] })
 test('website sign-ins retain real correlation fields without session credentials', () => {

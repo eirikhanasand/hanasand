@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { readLogCatchupLimit, readLogCatchupSettings } from '../src/utils/mill/catchupLimit.ts'
+import { readLogCatchupLimit, readLogCatchupSettings } from '../src/utils/events/catchupLimit.ts'
 
 let directory: string, path: string
 const originalHistoryLimit = process.env.LOG_CATCHUP_HISTORY_LIMIT

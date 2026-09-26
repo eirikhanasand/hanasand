@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { matchesAnalysisPolicy } from '../src/utils/mill/analysisPolicy.ts'
+import { matchesAnalysisPolicy } from '../src/utils/events/analysisPolicy.ts'
 
 test('analysis policy applies configured selectors to every retained context record', async () => {
     const definition = { stage: 'analyze', action: 'drop', conditions: [{ path: 'host', operator: 'equals' as const, value: 'inspur' }] }

@@ -28,7 +28,7 @@ assert(!navigationLinks(getDashboardNavigation({ ...memberAccess, hasVMs: false 
 assert(!operator.some(item => ['/db', '/system/updates'].includes(item.href)))
 for (const href of ['/logs', '/logs/realtime', '/logs/search', '/logs/errors']) assert(operator.some(item => item.href === href), `System administrators need access to ${href}`)
 assert.equal(all.find(item => item.href === '/dwm/actors')?.label, 'Actors')
-assert.deepEqual(all.filter(item => item.ancestors.includes('Logs & rules')).map(item => item.href), ['/logs', '/logs/realtime', '/logs/search', '/logs/errors', '/traffic', '/mill/rules/match', '/mill/rules/analysis', '/mill/rules/detection'])
+assert.deepEqual(all.filter(item => item.ancestors.includes('Logs & rules')).map(item => item.href), ['/logs', '/logs/realtime', '/logs/search', '/logs/errors', '/traffic', '/rules/match', '/rules/analysis', '/rules/detection'])
 for (const href of ['/vulnerabilities', '/system/rates', '/load-testing']) assert.deepEqual(all.find(item => item.href === href)?.ancestors, ['Infrastructure', 'Health'])
 assert(!all.some(item => item.ancestors.includes('Observability') || item.ancestors.includes('Security & recovery')))
 for (const path of ['/management/users', '/management/roles']) {
@@ -48,11 +48,11 @@ assert(!orgManager.some(item => item.href === '/management/users'))
 for (const permissions of [access, memberAccess]) {
     const links = navigationLinks(getDashboardNavigation(permissions))
     assert(!links.some(item => item.href === '/solutions'), 'Marketing catalog must not appear in the internal menu')
-    for (const href of ['/dwm', '/cases', '/mill/rules/match', '/mill/rules/analysis', '/mill/rules/detection', '/ti', '/browser', '/organizations', '/pwned', '/test']) assert(links.some(item => item.href === href), `Missing product destination: ${href}`)
+    for (const href of ['/dwm', '/cases', '/rules/match', '/rules/analysis', '/rules/detection', '/ti', '/browser', '/organizations', '/pwned', '/test']) assert(links.some(item => item.href === href), `Missing product destination: ${href}`)
     assert(links.some(item => item.label === 'Security Scanner' && item.href === (permissions.canManageSystem ? '/scanner' : '/solutions/scanner')))
-    for (const category of ['match', 'analysis', 'detection']) assert.deepEqual(links.find(item => item.href === `/mill/rules/${category}`)?.ancestors, ['Logs & rules', 'Rules'])
+    for (const category of ['match', 'analysis', 'detection']) assert.deepEqual(links.find(item => item.href === `/rules/${category}`)?.ancestors, ['Logs & rules', 'Rules'])
 }
-for (const path of ['/browser', '/browser/report', '/solutions/scanner', '/solutions/mill', '/pwned', '/test']) assert(hasAppSidebar(path), `Product loses the signed-in sidebar: ${path}`)
+for (const path of ['/browser', '/browser/report', '/solutions/scanner', '/solutions/security-monitoring', '/pwned', '/test']) assert(hasAppSidebar(path), `Product loses the signed-in sidebar: ${path}`)
 assert(!hasAppSidebar('/browser-unrelated'))
 
 // Exercise the real component; only Next routing is replaced.

@@ -3,7 +3,7 @@ import { appendFileSync, mkdtempSync, mkdirSync, writeFileSync, symlinkSync, unl
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { modelFixture, testKey } from '../../api/tests/analyze-model-discovery.test';
-import { modelProofMac, verifyModelDiscoveryEvidence } from '../../api/src/utils/mill/analyzeModelDiscovery';
+import { modelProofMac, verifyModelDiscoveryEvidence } from '../../api/src/utils/events/analyzeModelDiscovery';
 import { enrichModelProbe, ownsModelListener } from './model-probes';
 import type { LogEvent } from './core';
 import { signModelProof } from '../../ti/ai-model-client/model-probe.mjs';

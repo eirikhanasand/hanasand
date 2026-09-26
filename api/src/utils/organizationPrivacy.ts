@@ -270,14 +270,14 @@ function publicCandidates(retentionRun: RetentionRun, input: { heldAlertIds: str
                AND (delivery.payload <> '{}'::jsonb OR delivery.response_body IS NOT NULL OR delivery.error IS NOT NULL
                     OR delivery.endpoint_hint <> '' OR delivery.watchlist_name IS NOT NULL OR delivery.route IS NOT NULL OR delivery.case_path IS NOT NULL)
             UNION ALL
-            SELECT 'mill_event', event.id, 'delete',
+            SELECT 'event_event', event.id, 'delete',
                    CASE WHEN $2::boolean THEN 'organization_privacy_deletion' ELSE 'organization_retention_expired' END,
                    event.event_timestamp
               FROM events event
              WHERE event.organization_id = $1
                AND ($2::boolean OR event.event_timestamp <= $3)
             UNION ALL
-            SELECT 'mill_finding', finding.id, 'delete',
+            SELECT 'event_finding', finding.id, 'delete',
                    CASE WHEN $2::boolean THEN 'organization_privacy_deletion' ELSE 'organization_retention_expired' END,
                    finding.last_observed
               FROM findings finding
@@ -327,11 +327,11 @@ async function mutateAndRecordPublicCandidate(retentionRun: RetentionRun, candid
         `, [...params, input.heldAlertIds], retentionRun, item)
         return
     }
-    if (candidate.record_type === 'mill_event') {
+    if (candidate.record_type === 'event_event') {
         await mutateAndRecord('DELETE FROM events WHERE organization_id = $1 AND id = $2 RETURNING id', params, retentionRun, item)
         return
     }
-    if (candidate.record_type === 'mill_finding') {
+    if (candidate.record_type === 'event_finding') {
         await mutateAndRecord('DELETE FROM findings WHERE organization_id = $1 AND id = $2 RETURNING id', params, retentionRun, item)
         return
     }

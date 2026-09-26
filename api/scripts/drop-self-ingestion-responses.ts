@@ -2,12 +2,12 @@ import { existsSync } from 'node:fs'
 import { isDeepStrictEqual } from 'node:util'
 import { randomUUID } from 'node:crypto'
 import run, { withTransaction } from '#db'
-import { eventProtectionRuleId, eventProtectionRule, eventProtectionDefinition, normalizeEventProtection } from '#utils/mill/eventProtection.ts'
-import { normalizeLogEvent } from '#utils/mill/logEvent.ts'
-import { storedSourceLog } from '#utils/mill/storedSources.ts'
-import { matchesMillRule } from '#utils/mill/conditions.ts'
-import { PreviewRegexTimeout } from '#utils/mill/rulePreview.ts'
-import { reprocessRuleItems } from '#utils/mill/ruleReprocess.ts'
+import { eventProtectionRuleId, eventProtectionRule, eventProtectionDefinition, normalizeEventProtection } from '#utils/events/eventProtection.ts'
+import { normalizeLogEvent } from '#utils/events/logEvent.ts'
+import { storedSourceLog } from '#utils/events/storedSources.ts'
+import { matchesRule } from '#utils/events/conditions.ts'
+import { PreviewRegexTimeout } from '#utils/events/rulePreview.ts'
+import { reprocessRuleItems } from '#utils/events/ruleReprocess.ts'
 
 const organizationId = process.argv[2]
 if (!organizationId || !(await run('SELECT id FROM organizations WHERE id=$1 AND status=\'active\'', [organizationId])).rows.length) throw new Error('An active organization ID is required.')
@@ -35,13 +35,13 @@ await withTransaction(async query => {
             ON CONFLICT(organization_id,rule_id) DO UPDATE SET definition=EXCLUDED.definition,version=(rules.version::int+1)::text,updated_at=NOW()`,
         [randomUUID(),organizationId,eventProtectionRuleId,eventProtectionRule.name,eventProtectionRule.explanation,JSON.stringify(after)])
         await query(`INSERT INTO system_events(event_type,source,object_type,object_id,organization_id,context)
-            VALUES('mill.rule.updated','maintenance','mill_rule',$1,$2,$3::jsonb)`,[eventProtectionRuleId,organizationId,JSON.stringify({ruleId:eventProtectionRuleId,before:{definition:before},after:{definition:after},reason:'Allow expected POST transport flags only for successful self-ingestion responses.'})])
+            VALUES('event.rule.updated','maintenance','event_rule',$1,$2,$3::jsonb)`,[eventProtectionRuleId,organizationId,JSON.stringify({ruleId:eventProtectionRuleId,before:{definition:before},after:{definition:after},reason:'Allow expected POST transport flags only for successful self-ingestion responses.'})])
     }
     const inserted = await query(`INSERT INTO rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
         VALUES($1,$2,$3,'1','Successful self-ingestion responses','HTTP','low',$4,$5::jsonb,'owned',true)
         ON CONFLICT(organization_id,rule_id) DO NOTHING RETURNING id`,[randomUUID(),organizationId,ruleId,'Drop low-severity POST /api/logs/ingest 201 response records from 128.39.142.218. Keep the uploaded events, failures and detected activity.',JSON.stringify(definition)])
     if (inserted.rows.length) await query(`INSERT INTO system_events(event_type,source,object_type,object_id,organization_id,context)
-        VALUES('mill.rule.created','maintenance','mill_rule',$1,$2,$3::jsonb)`,[ruleId,organizationId,JSON.stringify({ruleId,after:{severity:'low',enabled:true,definition}})])
+        VALUES('event.rule.created','maintenance','event_rule',$1,$2,$3::jsonb)`,[ruleId,organizationId,JSON.stringify({ruleId,after:{severity:'low',enabled:true,definition}})])
 })
 const rule = (await run('SELECT * FROM rules WHERE organization_id=$1 AND rule_id=$2',[organizationId,ruleId])).rows[0]
 if (!rule?.enabled || rule.definition.action!=='drop' || !isDeepStrictEqual(rule.definition.conditions,definition.conditions)) throw new Error('Saved drop rule differs from the requested rule.')
@@ -75,7 +75,7 @@ for (let offset=0;offset<unique.length;offset+=1000) {
         // A crash can only leave a replay batch unapplied; the final synchronous
         // audit flushes all earlier deletes before this command reports success.
         await query('SET LOCAL synchronous_commit=off')
-        for (const lock of ['mill:service-logs','mill:live-service-logs']) await query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[lock])
+        for (const lock of ['event:service-logs','event:live-service-logs']) await query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[lock])
         const currentRule=(await query('SELECT * FROM rules WHERE organization_id=$1 AND rule_id=$2 FOR SHARE',[organizationId,ruleId])).rows[0]
         if (!currentRule?.enabled || currentRule.version!==rule.version) throw new Error('Rule changed during replay.')
         const items: Parameters<typeof reprocessRuleItems>[0]=[]
@@ -93,7 +93,7 @@ for (let offset=0;offset<unique.length;offset+=1000) {
         // POST/201 responses cannot prove the GET/200 proxy-compaction rule.
         // Release only unused proof rows for exact matches, then restore any whose
         // source survives the normal evidence checks, all in the same transaction.
-        const eligibleIds=items.filter(item=>matchesMillRule(item.event,currentRule.definition.conditions) && /^service:\d+$/.test(item.key || ''))
+        const eligibleIds=items.filter(item=>matchesRule(item.event,currentRule.definition.conditions) && /^service:\d+$/.test(item.key || ''))
             .map(item=>item.key!.slice(8))
         const unused=(await query(`DELETE FROM log_proxy_requests p WHERE p.service_log_id=ANY($1::bigint[])
             AND p.access->>'method'='POST' AND p.access->>'status'='201' AND p.access->>'path'='/api/logs/ingest'
@@ -129,7 +129,7 @@ for (let offset=0;offset<unique.length;offset+=1000) {
 await withTransaction(async query=>{
     await query('SET LOCAL synchronous_commit=on')
     await query(`INSERT INTO system_events(event_type,source,object_type,object_id,organization_id,context)
-    VALUES('mill.rule.reprocessed','maintenance','mill_rule',$1,$2,$3::jsonb)`,[ruleId,organizationId,JSON.stringify({ruleId,version:rule.version,...totals})])
+    VALUES('event.rule.reprocessed','maintenance','event_rule',$1,$2,$3::jsonb)`,[ruleId,organizationId,JSON.stringify({ruleId,version:rule.version,...totals})])
 })
 console.log(JSON.stringify({complete:true,...totals}))
 process.exit(0)

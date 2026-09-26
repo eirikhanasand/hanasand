@@ -38,7 +38,7 @@ async function handler(req: NextRequest, context: Context) {
     const path = pathSegments.map(segment => encodeURIComponent(segment)).join('/')
     const target = new URL(`${config.url.api}/${path}`)
     target.search = req.nextUrl.search
-    if (pathSegments[0] === 'mill' && !target.searchParams.has('organizationId')) {
+    if (['events', 'rules'].includes(pathSegments[0]) && !target.searchParams.has('organizationId')) {
         const organizationId = await activeOrganizationId()
         if (organizationId) target.searchParams.set('organizationId', organizationId)
     }

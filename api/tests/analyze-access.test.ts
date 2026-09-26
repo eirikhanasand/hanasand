@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { accessDefinition, eligibleAccess, inspectAccess, accessFromLog, verifiedAccessFromLog, type AccessEvent } from '../src/utils/mill/analyzeAccess.ts'
+import { accessDefinition, eligibleAccess, inspectAccess, accessFromLog, verifiedAccessFromLog, type AccessEvent } from '../src/utils/events/analyzeAccess.ts'
 
 const event: AccessEvent = { key: 'http-api:test', ip: '192.0.2.1', path: '/public/file', method: 'GET', status: 200,
     timestamp: new Date().toISOString(), inspection: inspectAccess({ url: '/public/file', headers: { host: 'hanasand.com' } }) }

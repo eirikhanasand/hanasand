@@ -80,7 +80,7 @@ class ShrinkTests(unittest.TestCase):
         script = shrink.vacuum_script('traffic_events')
         self.assertIn('TRUNCATE ON', script)
         self.assertIn('pg_try_advisory_lock', script)
-        self.assertIn('mill:live-service-logs', script)
+        self.assertIn('event:live-service-logs', script)
         self.assertNotIn('VACUUM FULL', script)
         self.assertNotIn('DELETE FROM', script)
         with self.assertRaises(ValueError):

@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
-import { ingestionCopy, ingestionDefinition } from '../src/utils/mill/analyzeIngestion.ts'
-import { matchesAnalysisPolicy } from '../src/utils/mill/analysisPolicy.ts'
-import { normalizeLogEvent } from '../src/utils/mill/logEvent.ts'
+import { ingestionCopy, ingestionDefinition } from '../src/utils/events/analyzeIngestion.ts'
+import { matchesAnalysisPolicy } from '../src/utils/events/analysisPolicy.ts'
+import { normalizeLogEvent } from '../src/utils/events/logEvent.ts'
 
 export function fixture() {
     const reqId = '67d04ac9-630e-4d75-a2b5-33ba95b81842'

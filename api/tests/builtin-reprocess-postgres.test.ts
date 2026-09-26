@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import pg from 'pg'
 import { fixture } from './analyze-ingestion.test.ts'
 
-test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('Mill replay removes only proven copies and preserves canonical records, findings and disabled rules', async () => {
+test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('Event replay removes only proven copies and preserves canonical records, findings and disabled rules', async () => {
     const namespace = `builtin_replay_${process.pid}_${Date.now()}`
     const pool = new pg.Pool({ host: '127.0.0.1', port: Number(process.env.POSTGRES_FILTER_TEST_PORT), user: 'postgres', database: 'postgres_filter_test', options: `-c search_path=${namespace}` })
     let failDelete = false
@@ -38,9 +38,9 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('Mill replay removes only pr
         const { default: install } = await import('../src/utils/db/logAnalyzeSchema.ts')
         const { default: jobs } = await import('../src/utils/db/ruleReprocessSchema.ts')
         const { recordLogBatch } = await import('../src/utils/logs/recordLog.ts')
-        const { normalizeLogEvent } = await import('../src/utils/mill/logEvent.ts')
-        const { processRuleReprocessJob } = await import('../src/utils/mill/ruleReprocess.ts')
-        const { ingestionRuleId } = await import('../src/utils/mill/analyzeIngestion.ts')
+        const { normalizeLogEvent } = await import('../src/utils/events/logEvent.ts')
+        const { processRuleReprocessJob } = await import('../src/utils/events/ruleReprocess.ts')
+        const { ingestionRuleId } = await import('../src/utils/events/analyzeIngestion.ts')
         await install(); await jobs()
         await query('UPDATE rules SET enabled=false WHERE rule_id=$1', [ingestionRuleId])
         const first = fixture()
@@ -68,7 +68,7 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('Mill replay removes only pr
         await enqueue('protected')
         await processRuleReprocessJob()
         expect((await query('SELECT count(*) n FROM service_logs')).rows[0].n).toBe('3')
-        // Remove the test-only linkage, then retry the same saved rule through Mill.
+        // Remove the test-only linkage, then retry the same saved rule through Event.
         await query('DELETE FROM findings WHERE id=\'finding\'')
         failDelete = true
         await enqueue('rollback')
@@ -82,7 +82,7 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('Mill replay removes only pr
         const liveWorker = await pool.connect()
         try {
             await liveWorker.query('BEGIN')
-            await liveWorker.query('SELECT pg_advisory_xact_lock(hashtextextended(\'mill:live-service-logs\',0))')
+            await liveWorker.query('SELECT pg_advisory_xact_lock(hashtextextended(\'event:live-service-logs\',0))')
             const release = (async () => { await Bun.sleep(100); await liveWorker.query('COMMIT') })()
             const [processed] = await Promise.all([processRuleReprocessJob(), release])
             expect(processed).toBe(true)

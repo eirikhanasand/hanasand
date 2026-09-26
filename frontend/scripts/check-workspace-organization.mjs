@@ -34,14 +34,14 @@ const server = Bun.serve({ port: 0, async fetch(request) {
     }
     if (url.pathname.startsWith('/api/')) {
         calls.push(url)
-        if (url.pathname.includes('/mill/rules')) return Response.json({ rules: [{ id: 'rule-one', name: `Rule for ${url.searchParams.get('organizationId')}`, family: 'authentication', enabled: true, severity: 'medium', source: 'hanasand', explanation: 'Recorded event rule.', evidence: [] }, { id: 'network.signature_alert.v1', name: 'Network match', family: 'network', severity: 'high', explanation: 'Matching signature.', evidence: [], source: 'hanasand', enabled: false }, { id: 'auth.new_country.v1', name: 'Country analysis', family: 'identity', severity: 'medium', explanation: 'New login location.', evidence: [], source: 'hanasand', enabled: true }] })
+        if (url.pathname.includes('/rules')) return Response.json({ rules: [{ id: 'rule-one', name: `Rule for ${url.searchParams.get('organizationId')}`, family: 'authentication', enabled: true, severity: 'medium', source: 'hanasand', explanation: 'Recorded event rule.', evidence: [] }, { id: 'network.signature_alert.v1', name: 'Network match', family: 'network', severity: 'high', explanation: 'Matching signature.', evidence: [], source: 'hanasand', enabled: false }, { id: 'auth.new_country.v1', name: 'Country analysis', family: 'identity', severity: 'medium', explanation: 'New login location.', evidence: [], source: 'hanasand', enabled: true }] })
         return Response.json({})
     }
     return new Response(`<html><head><link rel="stylesheet" href="/app.css"></head><body><div id="root"></div><script>window.initialWorkspace=${JSON.stringify(workspace)};</script><script type="module" src="/app.js"></script></body></html>`, { headers: { 'content-type': 'text/html', 'set-cookie': 'access_token=fixture; Path=/; SameSite=Lax' } })
 } })
 const built = await Bun.build({ entrypoints: ['workspace-fixture'], target: 'browser', plugins: [{ name: 'fixture', setup(builder) {
     builder.onResolve({ filter: /^(workspace-fixture|next\/link|next\/navigation|next\/image)$/ }, args => ({ path: args.path, namespace: 'fixture' }))
-    builder.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ loader: 'tsx', resolveDir: process.cwd(), contents: args.path === 'next/link' ? 'export default function Link({prefetch,replace,scroll,...props}){return <a {...props}/>}' : args.path === 'next/image' ? 'export default function Image({priority,fill,...props}){return <img {...props}/>}' : args.path === 'next/navigation' ? 'export const usePathname=()=>location.pathname;export const useSearchParams=()=>new URLSearchParams(location.search);export const useRouter=()=>({push:href=>location.assign(href),replace:href=>location.replace(href),refresh:()=>window.refreshWorkspace()});' : 'import {createRoot} from \'react-dom/client\';import WorkspaceProvider,{useWorkspace} from \'./src/components/organizations/workspaceProvider\';import Header from \'./src/components/header/header\';import MobileNavigation from \'./src/components/layout/mobileNavigation\';import DetectionRules from \'./src/app/dashboard/mill/rules/detection-rules\';import {workspaceShareUrl} from \'./src/utils/organizations/workspace\';function Content(){const {organizationId}=useWorkspace();return <><Header token path={location.pathname}/><div style={{paddingTop:80}}>{location.pathname.startsWith(\'/mill/rules\')?<DetectionRules category={location.pathname.includes(\'/analysis\')?\'analysis\':location.pathname.includes(\'/match\')?\'match\':\'detection\'}/>:<h1>Cases for {organizationId}</h1>}<button onClick={()=>navigator.clipboard.writeText(workspaceShareUrl(location.href,organizationId))}>Copy scoped link</button></div></>};const root=createRoot(document.getElementById(\'root\'));function render(initial){root.render(<WorkspaceProvider enabled initial={initial}><MobileNavigation enabled><Content/></MobileNavigation></WorkspaceProvider>)}window.refreshWorkspace=async()=>{const response=await fetch(\'/api/workspace-organization\');render((await response.json()).workspace)};render(window.initialWorkspace);' }))
+    builder.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ loader: 'tsx', resolveDir: process.cwd(), contents: args.path === 'next/link' ? 'export default function Link({prefetch,replace,scroll,...props}){return <a {...props}/>}' : args.path === 'next/image' ? 'export default function Image({priority,fill,...props}){return <img {...props}/>}' : args.path === 'next/navigation' ? 'export const usePathname=()=>location.pathname;export const useSearchParams=()=>new URLSearchParams(location.search);export const useRouter=()=>({push:href=>location.assign(href),replace:href=>location.replace(href),refresh:()=>window.refreshWorkspace()});' : 'import {createRoot} from \'react-dom/client\';import WorkspaceProvider,{useWorkspace} from \'./src/components/organizations/workspaceProvider\';import Header from \'./src/components/header/header\';import MobileNavigation from \'./src/components/layout/mobileNavigation\';import DetectionRules from \'./src/app/dashboard/rules/detection-rules\';import {workspaceShareUrl} from \'./src/utils/organizations/workspace\';function Content(){const {organizationId}=useWorkspace();return <><Header token path={location.pathname}/><div style={{paddingTop:80}}>{location.pathname.startsWith(\'/rules\')?<DetectionRules category={location.pathname.includes(\'/analysis\')?\'analysis\':location.pathname.includes(\'/match\')?\'match\':\'detection\'}/>:<h1>Cases for {organizationId}</h1>}<button onClick={()=>navigator.clipboard.writeText(workspaceShareUrl(location.href,organizationId))}>Copy scoped link</button></div></>};const root=createRoot(document.getElementById(\'root\'));function render(initial){root.render(<WorkspaceProvider enabled initial={initial}><MobileNavigation enabled><Content/></MobileNavigation></WorkspaceProvider>)}window.refreshWorkspace=async()=>{const response=await fetch(\'/api/workspace-organization\');render((await response.json()).workspace)};render(window.initialWorkspace);' }))
 } }] })
 assert(built.success, built.logs.join('\n'));bundle = await built.outputs.find(output => output.path.endsWith('.js')).text()
 for (const output of built.outputs.filter(output => output.path.endsWith('.css'))) css += await output.text()
@@ -54,7 +54,7 @@ try {
         assert(top >= headerBottom && top <= headerBottom + 32, 'Workspace notification sits just below the header')
     }
     await page.clock.install()
-    await page.goto(`${server.url}mill/rules?organizationId=org-one`)
+    await page.goto(`${server.url}event/rules?organizationId=org-one`)
     await page.getByRole('link', { name: 'Rule for org-one' }).waitFor().catch(async error => { console.log(await page.locator('body').innerText()); throw error })
     assert.equal(new URL(page.url()).search, '')
     assert.equal(await page.getByRole('combobox', { name: 'Org', exact: true }).count(), 1)
@@ -71,7 +71,7 @@ try {
     const shared = await page.evaluate(() => navigator.clipboard.readText())
     assert.equal(new URL(shared).searchParams.get('org'), 'org-one')
     assert(!shared.includes('organizationId'))
-    const second = await context.newPage(); await second.goto(`${server.url}mill/rules`)
+    const second = await context.newPage(); await second.goto(`${server.url}event/rules`)
     await second.getByRole('link', { name: 'Rule for org-one' }).waitFor()
     let finishSwitch
     switchGate = new Promise(resolve => { finishSwitch = resolve })
@@ -117,18 +117,18 @@ try {
     await page.getByRole('button', { name: 'Dismiss workspace notification' }).click()
     await page.emulateMedia({ reducedMotion: 'no-preference' })
     const since = calls.length
-    await page.goto(`${server.url}mill/rules?org=org-one`)
+    await page.goto(`${server.url}event/rules?org=org-one`)
     await page.getByRole('link', { name: 'Rule for org-one' }).waitFor()
-    assert(calls.slice(since).filter(url => url.pathname.includes('/mill/rules')).every(url => url.searchParams.get('organizationId') === 'org-one'))
+    assert(calls.slice(since).filter(url => url.pathname.includes('/rules')).every(url => url.searchParams.get('organizationId') === 'org-one'))
     for (const width of [320,390,768,1440]) { await page.setViewportSize({ width, height: 1000 }); assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Header overflow at ${width}`) }
     for (const [category, title, rule] of [['match', 'Match filter', 'Network match'], ['analysis', 'Analysis filter', 'Country analysis'], ['detection', 'Detection filter', 'Rule for org-one']]) {
-        await page.goto(`${server.url}mill/rules/${category}`)
+        await page.goto(`${server.url}event/rules/${category}`)
         await page.getByRole('heading', { name: title, exact: true }).waitFor()
         const table = page.getByRole('table')
         await table.getByRole('link', { name: rule }).waitFor()
         assert.equal(await page.getByRole('table').count(), 1)
         assert.equal(await table.locator('tbody tr').count(), 1)
-        assert((await table.getByRole('link').getAttribute('href')).startsWith(`/mill/rules/${category}/`))
+        assert((await table.getByRole('link').getAttribute('href')).startsWith(`/rules/${category}/`))
         await page.getByRole('searchbox', { name: 'Title', exact: true }).fill('unmatched title')
         await page.getByText('No rules in this category match these filters.').waitFor()
         await page.getByRole('button', { name: 'Clear filters' }).click()
@@ -136,7 +136,7 @@ try {
         await page.getByRole('combobox', { name: 'Status', exact: true }).selectOption(category === 'match' ? 'enabled' : 'disabled')
         await page.getByText('No rules in this category match these filters.').waitFor()
     }
-    await page.goto(`${server.url}mill/rules?org=foreign`)
+    await page.goto(`${server.url}event/rules?org=foreign`)
     await page.getByRole('alert').filter({ hasText: 'You do not have access' }).waitFor()
     assert.equal(await page.getByRole('heading', { name: 'Rules' }).count(), 0)
     await page.getByRole('link', { name: 'Keep current workspace' }).click()

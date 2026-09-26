@@ -17,7 +17,7 @@ export const logSearchIndexes = [
 export default async function ensureLogSearchIndexes() {
     // Concurrent index builds cannot run inside the schema transaction. Serialize
     // API/worker startup without blocking ingestion while PostgreSQL builds them.
-    await withDatabaseAdvisoryLock('mill:log-search-indexes', async () => {
+    await withDatabaseAdvisoryLock('event:log-search-indexes', async () => {
         for (const statement of logSearchIndexes) await run(statement)
         const invalid = await run(`SELECT c.relname FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
             WHERE c.relname IN ('idx_logs_phrase_trgm', 'idx_logs_service_time', 'idx_log_dimensions_service_time')

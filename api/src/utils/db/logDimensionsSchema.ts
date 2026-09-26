@@ -57,7 +57,7 @@ export const logDimensionsSchema = [
 
 export default async function ensureLogDimensionsSchema() {
     await withTransaction(async query => {
-        await query('SELECT pg_advisory_xact_lock(hashtextextended(\'mill:log-dimensions-schema\', 0))')
+        await query('SELECT pg_advisory_xact_lock(hashtextextended(\'event:log-dimensions-schema\', 0))')
         for (const statement of logDimensionsSchema) await query(statement)
     })
     await ensureLogSearchIndexes()

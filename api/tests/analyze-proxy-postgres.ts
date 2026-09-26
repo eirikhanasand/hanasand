@@ -28,7 +28,7 @@ try {
     const { default: install } = await import('../src/utils/db/logAnalyzeSchema.ts')
     const { recordProxyRequest } = await import('../src/utils/traffic/proxyRequest.ts')
     const { default: recordLog } = await import('../src/utils/logs/recordLog.ts')
-    const { proxyRuleId, proxyHeader, proxyDefinition } = await import('../src/utils/mill/analyzeProxy.ts')
+    const { proxyRuleId, proxyHeader, proxyDefinition } = await import('../src/utils/events/analyzeProxy.ts')
     await install()
     const count = async (table: string) => Number((await query(`SELECT count(*) n FROM ${table}`)).rows[0].n)
     async function fixture(headers: Record<string, string> = {}) {
@@ -76,8 +76,8 @@ try {
     assert.equal(await count('log_proxy_receipts'), 1)
     await recordLog(rollback.log)
     assert.equal(await count('log_proxy_receipts'), 2)
-    const { rawLogRetentionSql } = await import('../src/utils/mill/rawLogRetention.ts')
-    const { normalizeLogEvent } = await import('../src/utils/mill/logEvent.ts')
+    const { rawLogRetentionSql } = await import('../src/utils/events/rawLogRetention.ts')
+    const { normalizeLogEvent } = await import('../src/utils/events/logEvent.ts')
     await query('UPDATE service_logs SET created_at=NOW()-INTERVAL \'8 days\' WHERE id=$1', [first])
     assert.equal((await query(rawLogRetentionSql)).rows[0].deleted, 0, 'Pending canonical evidence cannot expire')
     const canonical = (await query('SELECT * FROM service_logs WHERE id=$1', [first])).rows[0]

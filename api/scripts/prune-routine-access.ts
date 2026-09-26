@@ -1,9 +1,9 @@
 // Explicit maintenance operation; ordinary ingestion never runs a database scan.
 // Run with --apply to delete approved historical GET/200 access records.
 import run, { closeDatabase, withTransaction } from '#db'
-import { platformAccessRule } from '#utils/mill/analyzeLog.ts'
-import { pruneAccessLogs } from '#utils/mill/pruneAccessLogs.ts'
-import { storedSourceLog } from '#utils/mill/storedSources.ts'
+import { platformAccessRule } from '#utils/events/analyzeLog.ts'
+import { pruneAccessLogs } from '#utils/events/pruneAccessLogs.ts'
+import { storedSourceLog } from '#utils/events/storedSources.ts'
 
 const apply = process.argv.includes('--apply')
 try {
@@ -23,7 +23,7 @@ try {
                 await withTransaction(async query => {
                     await query('SET LOCAL lock_timeout = \'2s\'')
                     await query('SET LOCAL statement_timeout = \'20s\'')
-                    const lock = await query('SELECT pg_try_advisory_xact_lock(hashtextextended(\'mill:service-logs\',0)) AS locked')
+                    const lock = await query('SELECT pg_try_advisory_xact_lock(hashtextextended(\'event:service-logs\',0)) AS locked')
                     if (!lock.rows[0].locked) return
                     const active = await platformAccessRule(query)
                     if (!active?.enabled || active.definition?.action !== 'drop') throw new Error('Analyze rule was disabled or changed to Keep; cleanup stopped.')

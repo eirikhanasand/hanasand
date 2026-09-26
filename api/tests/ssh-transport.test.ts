@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
-import { sshTransportDefinition, sshTransportGroups, sshTransportRuleId } from '../src/utils/mill/analyzeSshTransport.ts'
-import { routineEvidence, type RoutineLog } from '../src/utils/mill/analyzeRoutineGroups.ts'
-import { retainedOriginals } from '../src/utils/mill/retainedOriginals.ts'
+import { sshTransportDefinition, sshTransportGroups, sshTransportRuleId } from '../src/utils/events/analyzeSshTransport.ts'
+import { routineEvidence, type RoutineLog } from '../src/utils/events/analyzeRoutineGroups.ts'
+import { retainedOriginals } from '../src/utils/events/retainedOriginals.ts'
 
 export function transportFixture(): RoutineLog[] {
     return ['debug2: channel 0: window 1966080 sent adjust 131072', 'debug3: send packet: type 93', 'debug2: channel 0: rcvd adjust 32768', 'debug3: receive packet: type 93'].map((message, i) => ({

@@ -1,9 +1,9 @@
 import { expect, test } from 'bun:test'
-import { listRule, ruleCategory, loadRuleHits } from '../src/utils/mill/ruleList.ts'
-import { collectorRuleId } from '../src/utils/mill/analyzeCollector.ts'
-import { postgresRuleId } from '../src/utils/mill/analyzePostgres.ts'
-import { modelDiscoveryRuleId } from '../src/utils/mill/analyzeModelDiscovery.ts'
-import { readinessAuditRuleId } from '../src/utils/mill/analyzeReadinessAudit.ts'
+import { listRule, ruleCategory, loadRuleHits } from '../src/utils/events/ruleList.ts'
+import { collectorRuleId } from '../src/utils/events/analyzeCollector.ts'
+import { postgresRuleId } from '../src/utils/events/analyzePostgres.ts'
+import { modelDiscoveryRuleId } from '../src/utils/events/analyzeModelDiscovery.ts'
+import { readinessAuditRuleId } from '../src/utils/events/analyzeReadinessAudit.ts'
 
 test('list projection excludes definitions and evidence, preserves displayed fields', () => {
     const rule = { id: 'custom.test.v1', recordId: 'record', name: 'Test', explanation: 'Description', family: 'Custom', severity: 'low', source: 'owned', enabled: false,

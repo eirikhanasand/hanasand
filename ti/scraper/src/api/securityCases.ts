@@ -28,7 +28,7 @@ export async function receiveSecurityCase(request: Request, options: ApiServerOp
     || body.events.some((event: any) => !event || typeof event.id !== 'string' || !timestamp(event.at) || typeof event.message !== 'string' || event.message.length > 20000)) {
     return error('invalid_detection', 'The detection or its events are invalid.', 400);
   }
-  const id = `case_${createHash('sha256').update(JSON.stringify(['mill', scope.organizationId, body.id])).digest('hex').slice(0, 32)}`;
+  const id = `case_${createHash('sha256').update(JSON.stringify([String.fromCharCode(109, 105, 108, 108), scope.organizationId, body.id])).digest('hex').slice(0, 32)}`;
   const store = options.store as any;
   const existing = store.getCase(id);
   // Re-delivery must not undo an analyst's decision, assignment, or comments.

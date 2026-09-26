@@ -999,25 +999,25 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
         }
     }, 'organization-create')
 
-    const createMillApiKey = () => selectedOrganization && runAction('create-mill-api-key', async () => {
+    const createEventApiKey = () => selectedOrganization && runAction('create-event-api-key', async () => {
         requireManage()
         const payload = await requestJson<{ apiKey?: OrganizationApiKey, secret?: string }>(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/api-keys`, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ name: 'Mill ingestion' }),
+            body: JSON.stringify({ name: 'Event ingestion' }),
         })
         if (!payload.secret) throw new Error('The API key was created without a secret. Contact support before sending logs.')
         setNewApiKeySecret(payload.secret)
         return { message: 'Organization API key created. Copy the secret now; it will not be shown again.' }
-    }, 'mill-api-key', { type: 'organization', id: selectedOrganization.id })
+    }, 'event-api-key', { type: 'organization', id: selectedOrganization.id })
 
-    const revokeMillApiKey = (apiKey: OrganizationApiKey) => selectedOrganization && runAction('revoke-mill-api-key', async () => {
+    const revokeEventApiKey = (apiKey: OrganizationApiKey) => selectedOrganization && runAction('revoke-event-api-key', async () => {
         requireManage()
-        if (!window.confirm('Revoke this organization API key? Existing Mill senders will stop working.')) return 'No changes made.'
+        if (!window.confirm('Revoke this organization API key? Existing event senders will stop working.')) return 'No changes made.'
         await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/api-keys/${encodeURIComponent(apiKey.id)}`, { method: 'DELETE' })
         setNewApiKeySecret('')
         return 'Organization API key revoked.'
-    }, 'mill-api-key', { type: 'organization', id: selectedOrganization.id })
+    }, 'event-api-key', { type: 'organization', id: selectedOrganization.id })
 
     const saveSettings = () => selectedOrganization && runAction('save-settings', async () => {
         requireManage()
@@ -1506,7 +1506,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
                                     onSelectSubject={selectActivitySubject}
                                 />}
                                 {activePage === 'destinations' && <DestinationPanel destinations={bundle.webhooks} deliveries={bundle.deliveries} canManage={canEdit} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} createDraft={destinationCreateDraft} setCreateDraft={setDestinationCreateDraft} editing={editingDestinations} setEditing={setEditingDestinations} onSelectSubject={selectActivitySubject} onCreate={() => void createSavedDestination()} onTest={destination => void testSavedDestination(destination)} onUpdate={(destination, draft) => void updateSavedDestination(destination, draft)} onRotateSigningSecret={destination => void rotateDestinationSigningSecret(destination)} onDelete={destination => void deleteSavedDestination(destination)} signingSecret={newWebhookSigningSecret} onClearSigningSecret={() => setNewWebhookSigningSecret('')} />}
-                                {activePage === 'api-keys' && (canManage ? <MillApiKeyPanel apiKeys={bundle.apiKeys} secret={newApiKeySecret} canManage={canManage} busy={busy} rowMessage={rowMessages['mill-api-key']} onCreate={() => void createMillApiKey()} onRevoke={key => void revokeMillApiKey(key)} onClearSecret={() => setNewApiKeySecret('')} /> : <p className='rounded-lg border border-ui-border bg-ui-panel p-4 text-sm text-ui-muted'>Only this organization’s owners and admins can manage API keys.</p>)}
+                                {activePage === 'api-keys' && (canManage ? <EventApiKeyPanel apiKeys={bundle.apiKeys} secret={newApiKeySecret} canManage={canManage} busy={busy} rowMessage={rowMessages['event-api-key']} onCreate={() => void createEventApiKey()} onRevoke={key => void revokeEventApiKey(key)} onClearSecret={() => setNewApiKeySecret('')} /> : <p className='rounded-lg border border-ui-border bg-ui-panel p-4 text-sm text-ui-muted'>Only this organization’s owners and admins can manage API keys.</p>)}
                                 {activePage === 'privacy' && <PrivacyLifecyclePanel organization={selectedOrganization} privacy={bundle.privacy} retentionDays={Number(bundle.settings?.retentionDays || 365)} canManage={canManage} busy={busy} rowMessage={rowMessages.privacy} onRun={() => void runRetention()} onExport={() => void exportPrivacyData()} onDelete={(confirmation, currentPassword) => void requestPrivacyDeletion(confirmation, currentPassword)} />}
                                 {activePage === 'delivery' && <DeliveryHistoryPanel
                                     organization={selectedOrganization}
@@ -1673,11 +1673,11 @@ function ActionAnchor({ href, icon, label, disabled, disabledReason }: { href: s
     return <a className={classes} href={href}>{icon}{label}</a>
 }
 
-function MillApiKeyPanel({ apiKeys, secret, canManage, busy, rowMessage, onCreate, onRevoke, onClearSecret }: { apiKeys: OrganizationApiKey[], secret: string, canManage: boolean, busy: string, rowMessage?: RowMessage, onCreate: () => void, onRevoke: (apiKey: OrganizationApiKey) => void, onClearSecret: () => void }) {
+function EventApiKeyPanel({ apiKeys, secret, canManage, busy, rowMessage, onCreate, onRevoke, onClearSecret }: { apiKeys: OrganizationApiKey[], secret: string, canManage: boolean, busy: string, rowMessage?: RowMessage, onCreate: () => void, onRevoke: (apiKey: OrganizationApiKey) => void, onClearSecret: () => void }) {
     const activeKey = apiKeys.find(key => key.enabled !== false)
     const [copyStatus, setCopyStatus] = useState<RowMessage | undefined>()
-    const creating = busy === 'create-mill-api-key'
-    const revoking = busy === 'revoke-mill-api-key'
+    const creating = busy === 'create-event-api-key'
+    const revoking = busy === 'revoke-event-api-key'
     const copySecret = async () => {
         try {
             await navigator.clipboard.writeText(secret)
@@ -1687,17 +1687,12 @@ function MillApiKeyPanel({ apiKeys, secret, canManage, busy, rowMessage, onCreat
         }
     }
     return (
-        <details id='mill-api-key' open className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-mill-api-key>
+        <details id='event-api-key' open className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-event-api-key>
             <summary className='flex cursor-pointer list-none flex-col gap-3 p-4 outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 dark:hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
                 <SectionTitle icon={<KeyRound className='h-4 w-4' />} title='Security Monitoring access' detail='One organization API key for sending JSON logs to Hanasand Security Monitoring.' />
                 <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>{activeKey ? 'Configured' : 'Setup required'}</span>
             </summary>
             <div className='grid gap-3 border-t border-ui-border p-4 dark:border-ui-border'>
-                <div className='rounded-md border border-ui-border bg-ui-raised p-3 text-sm dark:border-ui-border dark:bg-ui-canvas'>
-                    <p className='font-semibold text-ui-text dark:text-ui-text'>Endpoint</p>
-                    <code className='mt-1 block break-all text-xs text-ui-muted dark:text-ui-muted'>https://api.hanasand.com/mill</code>
-                    <p className='mt-2 text-xs text-ui-muted dark:text-ui-muted'>Send a JSON object with the organization API key in the <code>x-api-key</code> header. The key also supports other organization API access.</p>
-                </div>
                 {activeKey ? (
                     <div className='flex flex-col gap-3 rounded-md border border-ui-border p-3 dark:border-ui-border sm:flex-row sm:items-center sm:justify-between'>
                         <div className='min-w-0'>

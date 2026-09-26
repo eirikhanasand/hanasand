@@ -1,4 +1,4 @@
-import { RAW_LOG_RETENTION_JOB_ID } from './mill/rawLogRetention.ts'
+import { RAW_LOG_RETENTION_JOB_ID } from './events/rawLogRetention.ts'
 import { VM_METRICS_JOB_ID } from './vms/collectMetrics.ts'
 import { existsSync } from 'node:fs'
 import { readFile, stat, writeFile, chmod, chown } from 'node:fs/promises'
@@ -217,11 +217,11 @@ const apiBackgroundJobDefinitions: Array<{
     {
         id: RAW_LOG_RETENTION_JOB_ID,
         name: 'Raw log retention',
-        description: 'Deletes raw service and traffic logs older than seven days after completed Mill ingestion. Keeps Mill events and traffic aggregates.',
+        description: 'Deletes raw service and traffic logs older than seven days after completed Event ingestion. Keeps Event events and traffic aggregates.',
         category: 'Backup/Database',
         schedule: 'Every minute',
         cadenceSeconds: API_CRON_CADENCE_SECONDS,
-        source: 'api/src/utils/mill/rawLogRetention.ts',
+        source: 'api/src/utils/events/rawLogRetention.ts',
         controls: ['run_now', 'pause', 'resume'],
     },
     {
@@ -311,7 +311,7 @@ const apiBackgroundJobDefinitions: Array<{
         category: 'Other/System',
         schedule: 'Every minute',
         cadenceSeconds: API_CRON_CADENCE_SECONDS,
-        source: 'api/src/utils/millCases.ts',
+        source: 'api/src/utils/caseDelivery.ts',
         controls: [],
     },
     {

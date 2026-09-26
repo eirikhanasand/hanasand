@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { matchAnalysisEvents } from '../src/utils/mill/analysisMatcher.ts'
+import { matchAnalysisEvents } from '../src/utils/events/analysisMatcher.ts'
 
 test('queued policy evaluations remain isolated and use current conditions', async () => {
     const results = await Promise.all(Array.from({ length: 40 }, (_, index) => matchAnalysisEvents([{ message: `event-${index}` }],

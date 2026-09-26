@@ -128,8 +128,8 @@
     "/mail"
   ],
   [
-    "/dashboard/mill",
-    "/mill"
+    "/dashboard/rules",
+    "/rules"
   ],
   [
     "/dashboard/dwm",

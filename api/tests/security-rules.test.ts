@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { securityRules, matchSecurityRules } from '../src/utils/mill/securityRules.ts'
+import { securityRules, matchSecurityRules } from '../src/utils/events/securityRules.ts'
 
 describe('process security rule catalog', () => {
     test('has approximately 100 distinct rules with stable IDs', () => {

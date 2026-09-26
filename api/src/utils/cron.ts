@@ -1,6 +1,6 @@
 import { usesBackupWorker } from './db/backupWorkerClient.ts'
-import { RAW_LOG_RETENTION_JOB_ID, retainRawLogs, retainTrafficLogs } from './mill/rawLogRetention.ts'
-import { deliverMillCases, MILL_CASE_DELIVERY_JOB_ID } from './millCases.ts'
+import { RAW_LOG_RETENTION_JOB_ID, retainRawLogs, retainTrafficLogs } from './events/rawLogRetention.ts'
+import { deliverCases, CASE_DELIVERY_JOB_ID } from './caseDelivery.ts'
 import { maintainDeletedVms } from './vms/deletion.ts'
 import collectVmMetrics, { VM_METRICS_JOB_ID } from './vms/collectMetrics.ts'
 import { schedule } from 'node-cron'
@@ -44,7 +44,7 @@ const apiCronRunners: Record<string, () => Promise<unknown> | unknown> = {
         return results
     },
     'api-vm-ensure-running': ensureAlwaysRunningVms,
-    [MILL_CASE_DELIVERY_JOB_ID]: deliverMillCases,
+    [CASE_DELIVERY_JOB_ID]: deliverCases,
     'api-vm-deletion': maintainDeletedVms,
     [VULNERABILITY_SCAN_JOB_ID]: runDueVulnerabilityScan,
     [DATABASE_BACKUP_JOB_ID]: runDueDatabaseBackup,
@@ -117,7 +117,7 @@ export default function cron() {
                 runDueApiCronJob('api-production-log-monitor'),
                 runDueApiCronJob(HOST_UPDATE_MONITOR_JOB_ID),
                 runDueApiCronJob('api-vm-ensure-running'),
-                runDueApiCronJob(MILL_CASE_DELIVERY_JOB_ID),
+                runDueApiCronJob(CASE_DELIVERY_JOB_ID),
                 runDueApiCronJob('api-vm-deletion'),
                 runDueApiCronJob(VULNERABILITY_SCAN_JOB_ID),
                 ...(usesBackupWorker() ? [] : [runDueApiCronJob(DATABASE_BACKUP_JOB_ID)]),

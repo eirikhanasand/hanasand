@@ -10,8 +10,8 @@ await client.connect()
 const query = (sql: string, values?: unknown[]) => client.query(sql, values)
 mock.module('#db', () => ({ default: query, queryOnce: query, withTransaction: async (work: any) => work(query), withDatabaseAdvisoryLock: async (_key: string, work: any) => work() }))
 mock.module('#constants', () => ({ default: {} }))
-const { analyzeCollectorExecution } = await import('../src/utils/mill/analyzeCollectorLog.ts')
-const { collectorRuleId, collectorDefinition } = await import('../src/utils/mill/analyzeCollector.ts')
+const { analyzeCollectorExecution } = await import('../src/utils/events/analyzeCollectorLog.ts')
+const { collectorRuleId, collectorDefinition } = await import('../src/utils/events/analyzeCollector.ts')
 const args = ['ausearch', '--input-logs', '--checkpoint', '/var/lib/hanasand-log-collector/audit-live.pending', '-k', 'hanasand_exec', '--raw']
 const event = { host: 'inspur', service: 'audit', level: 'info', message: args.join(' '), timestamp: '2026-09-23T20:00:00.010Z',
     sourceEventId: createHash('sha256').update('inspur:audit:msg=audit(1790193600.010:42)').digest('hex'),

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { completedTelemetryCycles, completedSshWindows, routineEvidence, routineReceipt, telemetryRuleId, sshWindowRuleId, telemetryDefinition, sshWindowDefinition, validateRoutineGroupParameters, type RoutineLog } from '../src/utils/mill/analyzeRoutineGroups.ts'
+import { completedTelemetryCycles, completedSshWindows, routineEvidence, routineReceipt, telemetryRuleId, sshWindowRuleId, telemetryDefinition, sshWindowDefinition, validateRoutineGroupParameters, type RoutineLog } from '../src/utils/events/analyzeRoutineGroups.ts'
 
 export function telemetryFixture(now = Date.now()): RoutineLog[] {
     return ['Starting hanasand-host-metrics.service - Collect Hanasand host telemetry...', 'hanasand-host-metrics.service: Deactivated successfully.', 'Finished hanasand-host-metrics.service - Collect Hanasand host telemetry.'].map((message, i) => ({

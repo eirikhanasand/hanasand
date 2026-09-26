@@ -1,10 +1,10 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
 import { createHash } from 'node:crypto'
 import { withTransaction } from '#db'
-import { analyzeAccess } from '#utils/mill/analyzeLog.ts'
+import { analyzeAccess } from '#utils/events/analyzeLog.ts'
 import recordLog from '#utils/logs/recordLog.ts'
-import { inspectAccess, ordinaryAccessPath } from '#utils/mill/analyzeAccess.ts'
-import { proxyConnection, proxyHeader } from '#utils/mill/analyzeProxy.ts'
+import { inspectAccess, ordinaryAccessPath } from '#utils/events/analyzeAccess.ts'
+import { proxyConnection, proxyHeader } from '#utils/events/analyzeProxy.ts'
 import { verifiedClientIp } from '#utils/http/publicBoundary.ts'
 import { redactLogText, redactLogValue } from '#utils/logs/redact.ts'
 

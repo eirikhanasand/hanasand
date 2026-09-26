@@ -1,9 +1,9 @@
-import { processLiveLogs, processStoredLogs } from '#utils/mill/processLogs.ts'
-import { processRuleReprocessJob } from '#utils/mill/ruleReprocess.ts'
-import { startLogProcessor } from '#utils/mill/processor.ts'
+import { processLiveLogs, processStoredLogs } from '#utils/events/processLogs.ts'
+import { processRuleReprocessJob } from '#utils/events/ruleReprocess.ts'
+import { startLogProcessor } from '#utils/events/processor.ts'
 import { startBackgroundAnalytics } from './utils/backgroundAnalytics.ts'
 import { recoveryRequestAllowed, recoveryState, recoveryReadOnly } from './utils/recovery.ts'
-import { queryOnce, closeDatabase, withMillDatabase } from './utils/db.ts'
+import { queryOnce, closeDatabase, withEventDatabase } from './utils/db.ts'
 import Fastify from 'fastify'
 import apiRoutes from './routes.ts'
 import cors from '@fastify/cors'
@@ -22,7 +22,7 @@ import { provisionExistingMailAccounts } from '#utils/mail/accounts.ts'
 import { isAllowedApiOrigin, TRUSTED_API_PROXIES } from '#utils/http/publicBoundary.ts'
 import publicTiApi from './handlers/ti/publicApi.ts'
 import { randomUUID } from 'node:crypto'
-import { ingestMill } from './handlers/mill.ts'
+import { ingestEvent } from './handlers/events.ts'
 
 process.on('uncaughtException', error => {
     if (isBunWebSocketErrorEvent(error)) {
@@ -98,7 +98,7 @@ if (!browserWorkerOnly) {
     })
     fastify.register(publicTiApi, { prefix: '/api/v1' })
     fastify.register(apiRoutes, { prefix: '/api' })
-    fastify.post('/mill', ingestMill)
+    fastify.post('/mill', ingestEvent)
 }
 if (browserWorkerOnly) {
     fastify.get('/', async () => ({ ok: true, service: 'browser-worker' }))
@@ -179,8 +179,8 @@ async function start() {
             })
         }
         if (!browserWorkerOnly && !httpWorkerOnly && process.env.AUTH_SERVICE_ONLY !== '1') {
-            const stopProcessing = startLogProcessor(() => withMillDatabase(processStoredLogs), error => fastify.log.error({ error }, 'Mill log processing failed; will retry'))
-            const stopLiveProcessing = startLogProcessor(() => withMillDatabase(processLiveLogs), error => fastify.log.error({ error }, 'Mill live processing failed; will retry'), () => 100, undefined, 100)
+            const stopProcessing = startLogProcessor(() => withEventDatabase(processStoredLogs), error => fastify.log.error({ error }, 'Event log processing failed; will retry'))
+            const stopLiveProcessing = startLogProcessor(() => withEventDatabase(processLiveLogs), error => fastify.log.error({ error }, 'Event live processing failed; will retry'), () => 100, undefined, 100)
             const stopReprocessing = startLogProcessor(processRuleReprocessJob, error => fastify.log.error({ error }, 'Rule reprocessing failed'), () => 1000)
             fastify.addHook('onClose', async () => { await Promise.all([stopProcessing(), stopLiveProcessing(), stopReprocessing()]) })
         }

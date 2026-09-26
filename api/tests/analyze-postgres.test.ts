@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { completedPostgresSessions, postgresSessionEvidence, postgresReceipt, postgresTimingAllowed, postgresDefinition, type PostgresLog } from '../src/utils/mill/analyzePostgres.ts'
+import { completedPostgresSessions, postgresSessionEvidence, postgresReceipt, postgresTimingAllowed, postgresDefinition, type PostgresLog } from '../src/utils/events/analyzePostgres.ts'
 
 export function fixture(now = Date.now() - 1000): PostgresLog[] {
     return ['connection received: host=[local]', 'connection authorized: user=hanasand database=hanasand application_name=pg_isready',

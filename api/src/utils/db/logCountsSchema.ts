@@ -68,7 +68,7 @@ export default async function ensureLogCountsSchema() {
     const initialized = await withTransaction(async query => {
         await query('SET LOCAL lock_timeout = \'2s\'')
         await query('SET LOCAL statement_timeout = \'30s\'')
-        await query('SELECT pg_advisory_xact_lock(hashtextextended(\'mill:log-counts-schema\', 0))')
+        await query('SELECT pg_advisory_xact_lock(hashtextextended(\'event:log-counts-schema\', 0))')
         // Serialize the one-time snapshot with writers. The short lock timeout
         // avoids queuing behind a busy writer; a failed bootstrap rolls back.
         await query('LOCK TABLE log_dimensions IN SHARE ROW EXCLUSIVE MODE')

@@ -2,7 +2,7 @@ import { expect, mock, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import pg from 'pg'
 import { fixture } from './analyze-postgres.test.ts'
-import { postgresRuleId, postgresDefinition } from '../src/utils/mill/analyzePostgres.ts'
+import { postgresRuleId, postgresDefinition } from '../src/utils/events/analyzePostgres.ts'
 
 // Opt-in disposable local cluster; this test never accepts a remote host/database.
 test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real transactions preserve evidence, retries, rollback and Keep', async () => {
@@ -45,8 +45,8 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real transactions preserve 
         let stored = await query('SELECT * FROM service_logs')
         expect(stored.rows).toHaveLength(1)
         expect(stored.rows[0].metadata.lifecycle_records).toEqual(logs)
-        const { processLogBatch } = await import('../src/utils/mill/processLogs.ts')
-        const { createMillFindings, normalizeMillEvent } = await import('../src/handlers/mill.ts')
+        const { processLogBatch } = await import('../src/utils/events/processLogs.ts')
+        const { createFindings, normalizeEvent } = await import('../src/handlers/events.ts')
         const detector = { id: 'fixture.postgres-original', version: '1', name: 'Original PostgreSQL service', severity: 'high', family: 'Database',
             explanation: 'Verify originals still reach detection', evidence: [], enabled: true, source: 'owned' as const,
             definition: { match: 'all' as const, stage: 'detect' as const, conditions: [{ path: 'service', operator: 'equals' as const, value: 'hanasand_database' }] } }
@@ -60,7 +60,7 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real transactions preserve 
         expect(finding.evidence.retainedOriginals.map((row: any) => row.message)).toEqual(logs.map(row => row.message))
         // A detector added later must also match during manual replay of the
         // canonical event, which does not pass through processLogBatch again.
-        await createMillFindings('platform', event.id, normalizeMillEvent(event.normalized, {}), [{ ...detector, id: 'fixture.postgres-replay' }])
+        await createFindings('platform', event.id, normalizeEvent(event.normalized, {}), [{ ...detector, id: 'fixture.postgres-replay' }])
         expect((await query('SELECT count(*) FROM findings WHERE rule_id=\'fixture.postgres-replay\'')).rows[0].count).toBe('1')
         expect((await query('SELECT dropped_records,retained_sessions FROM log_postgres_session_state')).rows[0]).toEqual({ dropped_records: '3', retained_sessions: '1' })
         await transaction(tx => recordLogBatch(logs.slice(0, 1), tx as any))
@@ -102,7 +102,7 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real transactions preserve 
             expect((await query('SELECT count(*) FROM service_logs WHERE source_event_id=ANY($1::text[])',[logs.map(log=>log.sourceEventId)])).rows[0].count).toBe('3')
             expect((await query('SELECT count(*) FROM log_analyze_receipts')).rows[0].count).toBe('3')
         }
-        const { analyzePostgresBatch } = await import('../src/utils/mill/analyzePostgresBatch.ts')
+        const { analyzePostgresBatch } = await import('../src/utils/events/analyzePostgresBatch.ts')
         await query('UPDATE rules SET definition=$2::jsonb WHERE rule_id=$1',[postgresRuleId,JSON.stringify(postgresDefinition)])
         await query('UPDATE log_postgres_session_state SET recent=\'[]\'')
         const historical = fixture().map((row,index)=>({...row,level:'info' as const,sourceEventId:String(index+4).repeat(64),message:row.message.replace('[123]','[654]')}))
@@ -125,7 +125,7 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real transactions preserve 
         await query('DELETE FROM service_logs WHERE service=\'postgres-session-analyzer\'')
         const retainedEvent = (await query('SELECT * FROM events WHERE id=$1', [event.id])).rows[0]
         expect(retainedEvent.normalized.metadata.lifecycle_records).toEqual(logs)
-        await createMillFindings('platform', event.id, normalizeMillEvent(retainedEvent.normalized, {}), [{ ...detector, id: 'fixture.after-raw-retention' }])
+        await createFindings('platform', event.id, normalizeEvent(retainedEvent.normalized, {}), [{ ...detector, id: 'fixture.after-raw-retention' }])
         expect((await query('SELECT count(*) FROM findings WHERE rule_id=\'fixture.after-raw-retention\'')).rows[0].count).toBe('1')
     } finally { await query(`DROP SCHEMA IF EXISTS ${namespace} CASCADE`); await pool.end() }
 }, 15000)

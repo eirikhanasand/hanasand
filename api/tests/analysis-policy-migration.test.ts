@@ -29,13 +29,13 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('policy migration preserves 
         expect(row.enabled).toBe(false)
         expect(row.version).toBe('4')
         expect(row.definition).toEqual({ ...definition, action: 'keep' })
-        const audit = (await query('SELECT context FROM system_events WHERE event_type=\'mill.rule.updated\'')).rows[0].context
+        const audit = (await query('SELECT context FROM system_events WHERE event_type=\'event.rule.updated\'')).rows[0].context
         expect(audit.before.version).toBe('3')
         expect(audit.after.definition).toEqual(row.definition)
         await query('UPDATE rules SET definition=jsonb_set(definition,\'{conditions}\',\'[]\') WHERE id=\'legacy\'')
         await migrateAnalysisPolicy('legacy', definition, query)
         expect((await query('SELECT definition FROM rules WHERE id=\'legacy\'')).rows[0].definition.conditions).toEqual([])
-        expect((await query('SELECT count(*) n FROM system_events WHERE event_type=\'mill.rule.updated\'')).rows[0].n).toBe('1')
+        expect((await query('SELECT count(*) n FROM system_events WHERE event_type=\'event.rule.updated\'')).rows[0].n).toBe('1')
         await query('UPDATE rules SET enabled=false WHERE rule_id=\'security.event_evidence.v1\'')
         await ensureEventProtectionRule(query)
         expect((await query('SELECT enabled FROM rules WHERE rule_id=\'security.event_evidence.v1\'')).rows[0].enabled).toBe(false)

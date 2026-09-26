@@ -17,7 +17,7 @@ mock.module('#db', () => ({ withTransaction: async (work: (query: (sql: string, 
     catch(error) { await reader.query('ROLLBACK'); throw error }
 } }))
 try {
-    const { stableLogWatermark } = await import('../src/utils/mill/logWatermark.ts')
+    const { stableLogWatermark } = await import('../src/utils/events/logWatermark.ts')
     await writer.query('BEGIN')
     await writer.query('INSERT INTO service_logs DEFAULT VALUES')
     await reader.query('INSERT INTO service_logs DEFAULT VALUES')

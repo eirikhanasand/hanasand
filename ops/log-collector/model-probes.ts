@@ -1,7 +1,7 @@
 import { lstatSync, readFileSync, readdirSync, readlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import type { LogEvent, Json } from './core';
-import { verifyModelDiscoveryEvidence, modelLogDigest, modelProofMac, validModelProofMac } from '../../api/src/utils/mill/analyzeModelDiscovery';
+import { verifyModelDiscoveryEvidence, modelLogDigest, modelProofMac, validModelProofMac } from '../../api/src/utils/events/analyzeModelDiscovery';
 
 type Proof = Record<string, unknown>;
 const cache = new Map<string, { stamp: string; proofs: Proof[] }>();

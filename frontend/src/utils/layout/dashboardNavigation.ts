@@ -57,9 +57,9 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
                 link('Traffic', '/traffic', canManageSystem),
             ]),
             group('Rules', [
-                link('Match Rules', '/mill/rules/match'),
-                link('Analysis Rules', '/mill/rules/analysis'),
-                link('Detection Rules', '/mill/rules/detection'),
+                link('Match Rules', '/rules/match'),
+                link('Analysis Rules', '/rules/analysis'),
+                link('Detection Rules', '/rules/detection'),
             ]),
         ]),
         group('Infrastructure', [

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
-import { eligibleCustomDrop } from '../src/utils/mill/dropEligibility.ts'
-import { eventProtectionDefinition, matchesEventProtection, normalizeEventProtection } from '../src/utils/mill/eventProtection.ts'
+import { eligibleCustomDrop } from '../src/utils/events/dropEligibility.ts'
+import { eventProtectionDefinition, matchesEventProtection, normalizeEventProtection } from '../src/utils/events/eventProtection.ts'
 const allowed = (event: Record<string, unknown>) => eligibleCustomDrop(event) && !matchesEventProtection(event, eventProtectionDefinition.protection)
 const base = { severity: 'low', http: { status_code: 200 } }
 test('known security and failure evidence wins over Low status at every nested level', () => {

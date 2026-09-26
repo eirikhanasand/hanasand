@@ -8,9 +8,9 @@ const client=new pg.Client({host:process.env.DB_HOST,port:Number(process.env.DB_
 await client.connect()
 const q=(sql: string,params: any[]=[])=>client.query(sql,params)
 const schema=readFileSync(new URL('../src/utils/db/ensureSchema.ts',import.meta.url),'utf8')
-const mill=readFileSync(new URL('../src/handlers/mill.ts',import.meta.url),'utf8')
-const worker=readFileSync(new URL('../src/utils/mill/processLogs.ts',import.meta.url),'utf8')
-const spray=mill.match(/const spray = await run\(`([\s\S]*?)`, \[organizationId, event\.sourceIp/)?.[1]
+const event=readFileSync(new URL('../src/handlers/events.ts',import.meta.url),'utf8')
+const worker=readFileSync(new URL('../src/utils/events/processLogs.ts',import.meta.url),'utf8')
+const spray=event.match(/const spray = await run\(`([\s\S]*?)`, \[organizationId, event\.sourceIp/)?.[1]
 const native=worker.match(/const pending = await run\(`([\s\S]*?)`\)/)?.[1]
 assert.ok(spray&&native,'Read the actual runtime SQL rather than a reconstructed query')
 assert.ok(spray.includes('source_ip = $2')&&spray.includes('md5(source_ip) = md5($2::text)'))

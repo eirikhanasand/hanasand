@@ -1,5 +1,5 @@
 import { afterAll, afterEach, expect, spyOn, test } from 'bun:test'
-import { startLogProcessor } from '../src/utils/mill/processor.ts'
+import { startLogProcessor } from '../src/utils/events/processor.ts'
 
 let callback: () => void, delay: number
 const timeout = spyOn(globalThis, 'setTimeout').mockImplementation(((fn: () => void, ms: number) => {

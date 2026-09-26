@@ -1,8 +1,8 @@
 import { expect, mock, test } from 'bun:test'
-import { accessDefinition, inspectAccess } from '../src/utils/mill/analyzeAccess.ts'
+import { accessDefinition, inspectAccess } from '../src/utils/events/analyzeAccess.ts'
 mock.module('#db', () => ({ default: async () => ({ rows: [] }), withTransaction: async (work: any) => work() }))
 mock.module('#utils/auth/sessionNetwork.ts', () => ({ sessionNetwork: async () => ({}) }))
-const { analyzeAccess } = await import('../src/utils/mill/analyzeLog.ts')
+const { analyzeAccess } = await import('../src/utils/events/analyzeLog.ts')
 test('Low-only retention cannot demote a separate DDoS alert', async () => {
     for (const configured of ['low', 'medium', 'high', 'critical']) {
         let findingSeverity = ''

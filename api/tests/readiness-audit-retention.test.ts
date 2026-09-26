@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'bun:test'
 import { createHash } from 'node:crypto'
-import { eligibleCollectorExecution, collectorDefinition } from '../src/utils/mill/analyzeCollector.ts'
+import { eligibleCollectorExecution, collectorDefinition } from '../src/utils/events/analyzeCollector.ts'
 
 mock.module('#constants', () => ({ default: {} }))
 mock.module('#db', () => ({ default: async () => { throw new Error('Unexpected database access') },

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { eventProtectionDefinition, matchesEventProtection, normalizeEventProtection } from '../src/utils/mill/eventProtection.ts'
+import { eventProtectionDefinition, matchesEventProtection, normalizeEventProtection } from '../src/utils/events/eventProtection.ts'
 const conditions = [{ path: 'http.path', operator: 'equals' as const, value: '/api/logs/ingest' }, { path: 'source.ip', operator: 'equals' as const, value: '128.39.142.218' }, { path: 'http.status_code', operator: 'equals' as const, value: '201' }, { path: 'http.method', operator: 'equals' as const, value: 'POST' }, { path: 'severity', operator: 'equals' as const, value: 'low' }]
 const policy = { ...eventProtectionDefinition.protection, checks: eventProtectionDefinition.protection.checks.map(check => check.keys.includes('inspection') || check.keys.includes('bodyEmpty') ? { ...check, unlessAll: conditions } : check) }
 const event = { http: { path: '/api/logs/ingest', status_code: 201, method: 'POST' }, source: { ip: '128.39.142.218' }, severity: 'low', metadata: { inspection: { version: 1, bodyEmpty: false, headersSafe: false, pathSafe: true } } }

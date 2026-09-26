@@ -36,7 +36,7 @@ function redactArguments(value: string[]) {
 }
 
 // Preserve command structure and observable behavior while removing common
-// credential forms from both raw service logs and normalized Mill evidence.
+// credential forms from both raw service logs and normalized Event evidence.
 export function redactLogValue(value: unknown): unknown {
     if (typeof value === 'string') return redactLogText(value)
     if (Array.isArray(value)) return value.every(child => typeof child === 'string') ? redactArguments(value) : value.map(redactLogValue)

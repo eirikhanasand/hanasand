@@ -11,7 +11,7 @@ const body = { object: 'list', data: [{ id: 'hanasand', object: 'model', created
         allow_create_engine: false, allow_sampling: true, allow_logprobs: true, allow_search_indices: false,
         allow_view: true, allow_fine_tuning: false, organization: '*', group: null, is_blocking: false }] }] }
 
-test('native probes attest observations; Mill policy decides timing, status and model root', async () => {
+test('native probes attest observations; Event policy decides timing, status and model root', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'model-probe-')), key = 'ab'.repeat(32)
     const requests: any[] = []
     let rootOverride = ''
@@ -50,7 +50,7 @@ test('native probes attest observations; Mill policy decides timing, status and 
         expect(requests[1].method).toBe('GET')
         expect(requests[1].body).toBe('')
         expect(requests[1].headers).toEqual({ host: '127.0.0.1:18088', accept: 'application/json', connection: 'close' })
-        await probe(1000) // Record observed cadence; the saved Mill rule excludes bursts.
+        await probe(1000) // Record observed cadence; the saved Event rule excludes bursts.
         expect(receipts().at(-1).startedAt - receipts().at(-1).previousStartedAt).toBe(1000)
         status = 500; expect((await probe()).ok).toBe(false); status = 200
         expect(receipts().at(-1).status).toBe(500)

@@ -26,11 +26,11 @@ export function withSchemaLockTimeout<T>(work: () => Promise<T>): Promise<T> {
     return schemaWork.run(true, work)
 }
 
-const millWork = new AsyncLocalStorage<boolean>()
+const eventWork = new AsyncLocalStorage<boolean>()
 const maxConnections = Number(DB_MAX_CONN) || 20
 // Reserve worker capacity without increasing its total connection budget.
-// Mill holds cursor and batch locks while committing evidence on another client.
-const millConnections = process.env.API_HTTP_ONLY !== '1' && process.env.AUTH_SERVICE_ONLY !== '1'
+// Event holds cursor and batch locks while committing evidence on another client.
+const eventConnections = process.env.API_HTTP_ONLY !== '1' && process.env.AUTH_SERVICE_ONLY !== '1'
     && maxConnections >= 12 ? 8 : 0
 const poolOptions = {
     user: DB_USER || 'hanasand',
@@ -38,7 +38,7 @@ const poolOptions = {
     database: DB || 'hanasand',
     password: DB_PASSWORD,
     port: Number(DB_PORT) || 5432,
-    max: maxConnections - millConnections,
+    max: maxConnections - eventConnections,
     // Keep one API connection between ten-second polls; burst connections still
     // expire normally and authentication/worker pools retain their own policy.
     min: process.env.API_HTTP_ONLY === '1' && process.env.AUTH_SERVICE_ONLY !== '1' ? 1 : 0,
@@ -52,22 +52,22 @@ const poolOptions = {
     keepAlive: true
 }
 const pool = new Pool(poolOptions)
-const millPool = millConnections ? new Pool({ ...poolOptions, max: millConnections }) : pool
+const eventPool = eventConnections ? new Pool({ ...poolOptions, max: eventConnections }) : pool
 
-export function withMillDatabase<T>(work: () => Promise<T>): Promise<T> {
-    return millWork.run(true, work)
+export function withEventDatabase<T>(work: () => Promise<T>): Promise<T> {
+    return eventWork.run(true, work)
 }
 
-function activePool() { return millWork.getStore() ? millPool : pool }
+function activePool() { return eventWork.getStore() ? eventPool : pool }
 
 // Checked-out clients can emit transport errors between queries, outside the pool's idle handler.
-for (const connectionPool of new Set([pool, millPool])) {
+for (const connectionPool of new Set([pool, eventPool])) {
     connectionPool.on('connect', client => client.on('error', error => console.error('Database connection failed:', error.message)))
     connectionPool.on('error', error => console.error('Idle database connection failed:', error.message))
 }
 
 export async function closeDatabase() {
-    await Promise.all([...new Set([pool, millPool])].map(connectionPool => connectionPool.end()))
+    await Promise.all([...new Set([pool, eventPool])].map(connectionPool => connectionPool.end()))
 }
 
 export default async function run(query: string, params?: SQLParamType, name?: string) {

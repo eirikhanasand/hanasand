@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
-import { applicationErrorRule, applicationErrorDefinition, classifyApplicationError } from '../src/utils/mill/applicationError.ts'
-import { normalizeLogEvent } from '../src/utils/mill/logEvent.ts'
+import { applicationErrorRule, applicationErrorDefinition, classifyApplicationError } from '../src/utils/events/applicationError.ts'
+import { normalizeLogEvent } from '../src/utils/events/logEvent.ts'
 
 const log = { id: '1', service: 'hanasand-api', level: 'fatal', message: 'Cannot writeHead headers after they are sent to the client', created_at: '2026-09-24T11:05:08.894Z', metadata: { reason: {} } }
 test('duplicate-response failures become medium application errors with original evidence', () => {

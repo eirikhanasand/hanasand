@@ -2,8 +2,8 @@ import { expect, mock, test } from 'bun:test'
 mock.module('#constants', () => ({ default: {} }))
 mock.module('#db', () => ({ default: async () => { throw new Error('Unexpected database access') }, withTransaction: async (fn: () => unknown) => fn() }))
 const { default: recordLog } = await import('../src/utils/logs/recordLog.ts')
-const { mongoDefinition, mongoRuleId, mongoReconDefinition } = await import('../src/utils/mill/analyzeMongo.ts')
-const { normalizeBuiltinDefinition, collectMillEventFindings, normalizeMillEvent } = await import('../src/handlers/mill.ts')
+const { mongoDefinition, mongoRuleId, mongoReconDefinition } = await import('../src/utils/events/analyzeMongo.ts')
+const { normalizeBuiltinDefinition, collectEventFindings, normalizeEvent } = await import('../src/handlers/events.ts')
 const log = { service: 'mongodb', host: 'inspur/cashflow', level: 'info' as const, sourceEventId: 'mongo:test', message: JSON.stringify({ t: { $date: '2026-09-21T14:00:00Z' }, s: 'I', c: 'COMMAND', id: 51803, ctx: 'conn123', msg: 'Slow query', attr: { type: 'command', command: { ping: 1, $db: 'admin' }, remote: '127.0.0.1:123', durationMillis: 0, reslen: 17 } }) }
 
 
@@ -43,13 +43,13 @@ test('rule supports Keep and editable stored selectors', () => {
 })
 
 test('retained enumeration reaches the real detection engine, unlike a ping', async () => {
-    const { normalizeLogEvent } = await import('../src/utils/mill/logEvent.ts')
+    const { normalizeLogEvent } = await import('../src/utils/events/logEvent.ts')
     const rule: any = { id: 'database.mongodb_enumeration.v1', version: '1', name: 'MongoDB enumeration', severity: 'high', family: 'Database', explanation: 'Enumeration', evidence: [], enabled: true, source: 'owned', definition: mongoReconDefinition }
     for (const name of ['ping', 'listDatabases', 'listCollections', 'find']) {
         const raw = JSON.parse(log.message)
         raw.attr.command = { [name]: 1, $db: 'admin' }
-        const event = normalizeMillEvent(normalizeLogEvent({ ...log, message: JSON.stringify(raw), id: 1, created_at: raw.t.$date }), {})
-        const result = collectMillEventFindings('platform', 'event', event, [rule])
+        const event = normalizeEvent(normalizeLogEvent({ ...log, message: JSON.stringify(raw), id: 1, created_at: raw.t.$date }), {})
+        const result = collectEventFindings('platform', 'event', event, [rule])
         expect(result.findings.length).toBe(['listDatabases', 'listCollections'].includes(name) ? 1 : 0)
     }
 })

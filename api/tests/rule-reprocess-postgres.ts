@@ -37,10 +37,10 @@ try {
     await (await import('../src/utils/db/ruleReprocessSchema.ts')).default()
     await (await import('../src/utils/db/proxyAnalyzeSchema.ts')).default()
     await (await import('../src/utils/db/ingestionAnalyzeSchema.ts')).default()
-    const { processRuleReprocessJob } = await import('../src/utils/mill/ruleReprocess.ts')
-    const { postMillRuleReprocess, getMillRuleReprocess } = await import('../src/handlers/millRuleReprocess.ts')
-    const { normalizeLogEvent } = await import('../src/utils/mill/logEvent.ts')
-    const { eventProtectionDefinition, eventProtectionRuleId } = await import('../src/utils/mill/eventProtection.ts')
+    const { processRuleReprocessJob } = await import('../src/utils/events/ruleReprocess.ts')
+    const { postRuleReprocess, getRuleReprocess } = await import('../src/handlers/ruleReprocess.ts')
+    const { normalizeLogEvent } = await import('../src/utils/events/logEvent.ts')
+    const { eventProtectionDefinition, eventProtectionRuleId } = await import('../src/utils/events/eventProtection.ts')
     await query('INSERT INTO rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled) VALUES(\'protection\',\'platform\',$1,\'1\',\'Store evidence\',\'Security\',\'low\',\'Store evidence\',$2,\'hanasand\',true)', [eventProtectionRuleId, JSON.stringify(eventProtectionDefinition)])
     const { ensureEventProtectionRule } = await import('../src/utils/db/analysisPolicySchema.ts')
     await ensureEventProtectionRule(query as any)
@@ -60,31 +60,31 @@ try {
     await add('preserve'); await add('failure', { outcome: 'failure' }); await add('other', {}, 'other'); await add('raw-only', {}, 'platform', false)
     await add('auth', { event_type: 'authentication' })
     await query('INSERT INTO findings(id,organization_id,finding_key,rule_id,severity,summary,event_ids) VALUES(\'f\',\'platform\',\'f\',\'other-rule\',\'low\',\'Evidence\',\'{finding}\')')
-    await query('INSERT INTO events(id,ingestion_id,organization_id,event_timestamp,normalized) VALUES(\'native\',\'mill-test\',\'platform\',NOW()-interval \'1 minute\',$1)', [JSON.stringify({ severity: 'low', message: 'routine native' })])
+    await query('INSERT INTO events(id,ingestion_id,organization_id,event_timestamp,normalized) VALUES(\'native\',\'event-test\',\'platform\',NOW()-interval \'1 minute\',$1)', [JSON.stringify({ severity: 'low', message: 'routine native' })])
     const body = { version: '1', confirm: true, from: null }
     for (const [payload, org, allowed, code] of [[{ ...body, confirm: false }, 'platform', true, 400], [body, 'other', true, 403], [body, 'platform', false, 403], [{ ...body, version: '0' }, 'platform', true, 409]] as const) {
-        authorized = allowed; const res = reply(); await postMillRuleReprocess(request(payload, org), res as any); assert.equal(res.statusCode, code)
+        authorized = allowed; const res = reply(); await postRuleReprocess(request(payload, org), res as any); assert.equal(res.statusCode, code)
     }
     authorized = true
-    const first = await postMillRuleReprocess(request(body), reply() as any)
-    const duplicate = await postMillRuleReprocess(request(body), reply() as any)
+    const first = await postRuleReprocess(request(body), reply() as any)
+    const duplicate = await postRuleReprocess(request(body), reply() as any)
     assert.equal(first.job.id, duplicate.job.id, 'double click returns the same active run')
     const liveWorker = await pool.connect()
     try {
         await liveWorker.query('BEGIN')
-        await liveWorker.query('SELECT pg_advisory_xact_lock(hashtextextended(\'mill:live-service-logs\',0))')
+        await liveWorker.query('SELECT pg_advisory_xact_lock(hashtextextended(\'event:live-service-logs\',0))')
         assert.equal(await processRuleReprocessJob(), false, 'yield to live processing instead of racing its pending writes')
         assert.equal((await query('SELECT status FROM rule_reprocess_jobs WHERE id=$1', [first.job.id])).rows[0].status, 'queued')
     } finally { await liveWorker.query('ROLLBACK'); liveWorker.release() }
     for (let i = 0; i < 10 && await processRuleReprocessJob(); i++) { /* bounded pages */ }
-    const done = (await getMillRuleReprocess(request(), reply() as any)).jobs[0]
+    const done = (await getRuleReprocess(request(), reply() as any)).jobs[0]
     assert.equal(done.status, 'completed'); assert.equal(done.removed_events, '2'); assert.equal(done.removed_sources, '2')
     assert.equal((await query('SELECT count(*) FROM log_analyze_receipts WHERE rule_id=\'custom.test.v1\'')).rows[0].count, '3', 'historical drops count indexed, raw, and native events')
     assert.deepEqual((await query('SELECT id FROM events ORDER BY id')).rows.map(row => row.id), ['auth', 'failure', 'finding', 'high', 'other', 'preserve'])
     assert.equal((await query('SELECT count(*) FROM service_logs')).rows[0].count, '6', 'retained evidence keeps raw originals too')
     assert.equal((await query('SELECT count(*) FROM log_dimensions')).rows[0].count, '6')
     assert.equal((await query('SELECT sum(event_count)::text AS total FROM log_counts WHERE bucket_seconds=60')).rows[0].total, '6', 'search counters follow actual deletion')
-    assert.equal((await query('SELECT count(*) FROM system_events WHERE event_type=\'mill.rule.reprocessed\'')).rows[0].count, '1')
+    assert.equal((await query('SELECT count(*) FROM system_events WHERE event_type=\'event.rule.reprocessed\'')).rows[0].count, '1')
     // Older indexed events kept source fields in columns only; replay must see
     // the same selector fields that new events expose in normalized JSON.
     await add('source-fields')
@@ -95,23 +95,23 @@ try {
         { path: 'source_product', operator: 'equals', value: 'Logs' },
         { path: 'message', operator: 'equals', value: 'routine source-fields' },
     ] })])
-    await postMillRuleReprocess(request(body), reply() as any)
+    await postRuleReprocess(request(body), reply() as any)
     for (let i = 0; i < 10 && await processRuleReprocessJob(); i++) { /* indexed and raw copies */ }
     assert.equal((await query('SELECT count(*) FROM events WHERE id=\'source-fields\'')).rows[0].count, '0')
     assert.equal((await query('SELECT count(*) FROM service_logs WHERE message=\'routine source-fields\'')).rows[0].count, '0')
     await query('UPDATE rules SET definition=$1 WHERE id=\'rule\'', [JSON.stringify(definition)])
     // Original evidence is checked for safety, not injected into preview's selector input.
-    await query('INSERT INTO events(id,ingestion_id,organization_id,event_timestamp,normalized,original) VALUES(\'selector-only\',\'mill-test\',\'platform\',NOW()-interval \'1 minute\',$1,$2)',
+    await query('INSERT INTO events(id,ingestion_id,organization_id,event_timestamp,normalized,original) VALUES(\'selector-only\',\'event-test\',\'platform\',NOW()-interval \'1 minute\',$1,$2)',
         [JSON.stringify({ severity: 'low', message: 'ordinary' }), JSON.stringify({ message: 'routine selector' })])
     await query('UPDATE rules SET definition=$1 WHERE id=\'rule\'', [JSON.stringify({ ...definition, conditions: [{ path: 'original.message', operator: 'contains', value: 'routine selector' }] })])
-    await postMillRuleReprocess(request(body), reply() as any)
+    await postRuleReprocess(request(body), reply() as any)
     for (let i = 0; i < 10 && await processRuleReprocessJob(); i++) { /* bounded pages */ }
     assert.equal((await query('SELECT count(*) FROM events WHERE id=\'selector-only\'')).rows[0].count, '1', 'selectors match the same normalized fields as preview')
     await query('DELETE FROM events WHERE id=\'selector-only\'')
     await query('UPDATE rules SET definition=$1 WHERE id=\'rule\'', [JSON.stringify(definition)])
     await query('INSERT INTO service_logs(service,level,message,created_at) SELECT \'test\',\'info\',\'routine archived\',NOW()-interval \'7 days\' FROM generate_series(1,500)')
     await query('INSERT INTO service_logs(service,level,message,created_at) SELECT \'test\',\'info\',\'routine recent\',NOW()-interval \'1 minute\' FROM generate_series(1,401)')
-    const ranged = await postMillRuleReprocess(request({ ...body, from: new Date(Date.now() - 3600_000).toISOString() }), reply() as any)
+    const ranged = await postRuleReprocess(request({ ...body, from: new Date(Date.now() - 3600_000).toISOString() }), reply() as any)
     for (let i = 0; i < 10 && await processRuleReprocessJob(); i++) { /* tied timestamps span multiple pages */ }
     const rangedJob = (await query('SELECT * FROM rule_reprocess_jobs WHERE id=$1', [ranged.job.id])).rows[0]
     assert.equal(rangedJob.status, 'completed')
@@ -126,12 +126,12 @@ try {
     assert.equal(migrated.definition.storeScope, 'custom_drop')
     assert.equal(migrated.enabled, false)
     assert.equal(migrated.version, '5')
-    assert.equal((await query('SELECT count(*) FROM system_events WHERE object_id=\'security.authentication_audit_retention.v1\' AND event_type=\'mill.rule.updated\' AND organization_id=\'platform\'')).rows[0].count, '1', 'Scope correction is audited once')
+    assert.equal((await query('SELECT count(*) FROM system_events WHERE object_id=\'security.authentication_audit_retention.v1\' AND event_type=\'event.rule.updated\' AND organization_id=\'platform\'')).rows[0].count, '1', 'Scope correction is audited once')
     // The visible Store rule controls authentication retention, including edited criteria.
     await query('UPDATE rules SET enabled=false WHERE rule_id=\'security.authentication_audit_retention.v1\'')
     await ensureEventProtectionRule(query as any)
     assert.equal((await query('SELECT enabled FROM rules WHERE organization_id=\'platform\' AND rule_id=\'security.authentication_audit_retention.v1\'')).rows[0].enabled, false, 'Restart preserves disabled Store policy')
-    await postMillRuleReprocess(request(body), reply() as any)
+    await postRuleReprocess(request(body), reply() as any)
     for (let i = 0; i < 10 && await processRuleReprocessJob(); i++) { /* current stored policy */ }
     assert.equal((await query('SELECT count(*) FROM events WHERE id=\'auth\'')).rows[0].count, '0', 'Disabled Store policy no longer secretly retains authentication')
     const editedStore = { stage: 'analyze', action: 'keep', match: 'all', conditions: [{ path: 'event_type', operator: 'equals', value: 'audit' }] }
@@ -144,12 +144,12 @@ try {
     assert.equal(edited.version, '2')
     assert.equal((await query('SELECT enabled FROM rules WHERE organization_id=\'new-tenant\' AND rule_id=\'security.authentication_audit_retention.v1\'')).rows[0].enabled, true, 'New organizations receive the visible default')
     // Current configured detectors, not a hardcoded enabled set, protect process evidence.
-    await query('INSERT INTO events(id,ingestion_id,organization_id,event_timestamp,normalized) VALUES(\'process-rule\',\'mill-test\',\'platform\',NOW()-interval \'1 minute\',$1)', [JSON.stringify({ severity: 'low', message: 'routine process', event_type: 'process', action: 'exec', process: { executable: '/usr/bin/id' } })])
-    await postMillRuleReprocess(request(body), reply() as any)
+    await query('INSERT INTO events(id,ingestion_id,organization_id,event_timestamp,normalized) VALUES(\'process-rule\',\'event-test\',\'platform\',NOW()-interval \'1 minute\',$1)', [JSON.stringify({ severity: 'low', message: 'routine process', event_type: 'process', action: 'exec', process: { executable: '/usr/bin/id' } })])
+    await postRuleReprocess(request(body), reply() as any)
     for (let i = 0; i < 10 && await processRuleReprocessJob(); i++) { /* enabled default detector */ }
     assert.equal((await query('SELECT count(*) FROM events WHERE id=\'process-rule\'')).rows[0].count, '1')
     await query('INSERT INTO rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled) VALUES(\'detector\',\'platform\',\'process.recon.id.v1\',\'1\',\'ID\',\'Reconnaissance\',\'low\',\'ID detector\',\'{"match":"all","conditions":[]}\',\'hanasand\',false)')
-    await postMillRuleReprocess(request(body), reply() as any)
+    await postRuleReprocess(request(body), reply() as any)
     for (let i = 0; i < 10 && await processRuleReprocessJob(); i++) { /* disabled detector */ }
     assert.equal((await query('SELECT count(*) FROM events WHERE id=\'process-rule\'')).rows[0].count, '0', 'Disabled detector does not impose hidden retention')
     // Canonical evidence survives custom Drop in both indexed and raw-only phases.
@@ -162,7 +162,7 @@ try {
         else await query('INSERT INTO log_ingestion_canonical(key,organization_id,source_event_id,canonical_log_key) VALUES($1,\'platform\',$1,$2)', [name, `service:${source.id}`])
     }
     await add('unreferenced-control')
-    const canonicalJob = await postMillRuleReprocess(request(body), reply() as any)
+    const canonicalJob = await postRuleReprocess(request(body), reply() as any)
     for (let i = 0; i < 10 && await processRuleReprocessJob(); i++) { /* both source and projection phases */ }
     const canonicalDone = (await query('SELECT * FROM rule_reprocess_jobs WHERE id=$1', [canonicalJob.job.id])).rows[0]
     assert.equal(canonicalDone.status, 'completed')
@@ -173,18 +173,18 @@ try {
     assert.equal((await query('SELECT count(*) FROM log_proxy_requests')).rows[0].count, '2', 'Proxy associations do not cascade away')
     assert.equal((await query('SELECT count(*) FROM log_ingestion_canonical c JOIN service_logs s ON c.canonical_log_key=\'service:\'||s.id::text')).rows[0].count, '2', 'Ingestion pointers retain their source')
     // A changed or disabled rule stops at the next batch, including after a worker restart.
-    const changed = await postMillRuleReprocess(request(body), reply() as any)
+    const changed = await postRuleReprocess(request(body), reply() as any)
     await query('UPDATE rules SET enabled=false WHERE id=\'rule\'')
     await processRuleReprocessJob()
     assert.equal((await query('SELECT status FROM rule_reprocess_jobs WHERE id=$1', [changed.job.id])).rows[0].status, 'cancelled')
     await query('UPDATE rules SET enabled=true WHERE id=\'rule\'')
-    const cancel = await postMillRuleReprocess(request(body), reply() as any)
-    await postMillRuleReprocess(request({ action: 'cancel', jobId: cancel.job.id }), reply() as any)
+    const cancel = await postRuleReprocess(request(body), reply() as any)
+    await postRuleReprocess(request({ action: 'cancel', jobId: cancel.job.id }), reply() as any)
     assert.equal(await processRuleReprocessJob(), false)
     // A delete failure rolls back both source and indexed copies, and the cursor.
     await add('rollback')
     await query('CREATE FUNCTION reject_test_delete() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION \'test delete rejected\'; END $$; CREATE TRIGGER reject_test_delete BEFORE DELETE ON service_logs FOR EACH ROW EXECUTE FUNCTION reject_test_delete()')
-    const failed = await postMillRuleReprocess(request(body), reply() as any)
+    const failed = await postRuleReprocess(request(body), reply() as any)
     await processRuleReprocessJob()
     assert.equal((await query('SELECT status,scanned FROM rule_reprocess_jobs WHERE id=$1', [failed.job.id])).rows[0].status, 'failed')
     assert.equal((await query('SELECT count(*) FROM events WHERE id=\'rollback\'')).rows[0].count, '1')
@@ -193,13 +193,13 @@ try {
         await query('DROP TRIGGER reject_test_delete ON service_logs')
         await add('ui-check')
         const Fastify = (await import('fastify')).default
-        const { postMillRule, postMillRulePreview, getMillEvents } = await import('../src/handlers/mill.ts')
+        const { postRule, postRulePreview, getEvents } = await import('../src/handlers/events.ts')
         const app = Fastify()
-        app.post('/api/backend/mill/rules', postMillRule)
-        app.post('/api/backend/mill/rules/preview', postMillRulePreview)
-        app.get('/api/backend/mill/events', getMillEvents)
-        app.get('/api/backend/mill/rules/:id/reprocess', getMillRuleReprocess)
-        app.post('/api/backend/mill/rules/:id/reprocess', postMillRuleReprocess)
+        app.post('/api/backend/rules', postRule)
+        app.post('/api/backend/rules/preview', postRulePreview)
+        app.get('/api/backend/events', getEvents)
+        app.get('/api/backend/rules/:id/reprocess', getRuleReprocess)
+        app.post('/api/backend/rules/:id/reprocess', postRuleReprocess)
         await app.listen({ port: 55448, host: '127.0.0.1' })
         let processing = false
         const timer = setInterval(async () => { if (processing) return; processing = true; try { await processRuleReprocessJob() } finally { processing = false } }, 200)

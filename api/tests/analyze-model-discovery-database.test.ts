@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { inflateRawSync } from 'node:zlib'
 import pg from 'pg'
 import { modelFixture, testKey } from './analyze-model-discovery.test.ts'
-import { modelDiscoveryRuleId, modelDiscoveryDefinition, modelProofMac, modelLogDigest } from '../src/utils/mill/analyzeModelDiscovery.ts'
+import { modelDiscoveryRuleId, modelDiscoveryDefinition, modelProofMac, modelLogDigest } from '../src/utils/events/analyzeModelDiscovery.ts'
 
 test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real ingestion preserves suspicious model activity, exact originals, retries and rollback', async () => {
     const port = Number(process.env.POSTGRES_FILTER_TEST_PORT)

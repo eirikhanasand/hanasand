@@ -49,7 +49,7 @@ test('organization API-key proxy lists, creates, revokes, and preserves authoriz
     assert.equal(list.status, 200)
     assert.deepEqual(await list.json(), { organizationId: 'org/proxy', apiKeys: [{ id: 'key-1', enabled: true }] })
 
-    const createBody = JSON.stringify({ name: 'Mill ingestion' })
+    const createBody = JSON.stringify({ name: 'Event ingestion' })
     const create = await collectionRoute.POST(new NextRequest('http://frontend.test/api/organizations/org/api-keys', { method: 'POST', headers, body: createBody }), context)
     assert.equal(create.status, 201)
     assert.deepEqual(await create.json(), { apiKey: { id: 'key-1' }, secret: 'shown-once' })

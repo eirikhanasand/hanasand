@@ -1,6 +1,6 @@
 import { closeDatabase, withTransaction } from '#db'
-import { modelDiscoveryRule, modelDiscoveryDefinition, modelDiscoveryConfigured } from '../src/utils/mill/analyzeModelDiscovery.ts'
-import { readinessAuditRule, readinessAuditDefinition, readinessAuditConfigured } from '../src/utils/mill/analyzeReadinessAudit.ts'
+import { modelDiscoveryRule, modelDiscoveryDefinition, modelDiscoveryConfigured } from '../src/utils/events/analyzeModelDiscovery.ts'
+import { readinessAuditRule, readinessAuditDefinition, readinessAuditConfigured } from '../src/utils/events/analyzeReadinessAudit.ts'
 import { isDeepStrictEqual } from 'node:util'
 
 // Explicit deployment action, never a startup migration: later user Disable or
@@ -23,7 +23,7 @@ const enabled = await withTransaction(async query => {
     if (!organizationId) throw new Error('Active platform organization not found.')
     const result: { ruleId: string, version: string }[] = []
     for (const { rule, definition } of selected) {
-        await query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`mill-rule:${organizationId}:${rule.id}`])
+        await query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`event-rule:${organizationId}:${rule.id}`])
         const current = await query('SELECT * FROM rules WHERE organization_id=$1 AND rule_id=$2 FOR UPDATE', [organizationId, rule.id])
         const row = current.rows[0]
         if (!row || row.source !== 'hanasand') throw new Error('Expected installed platform probe rule.')
@@ -37,7 +37,7 @@ const enabled = await withTransaction(async query => {
         await query(`UPDATE rules SET name=$3,explanation=$4,severity='low',enabled=true,definition=$5::jsonb,version=$6,updated_at=NOW()
             WHERE organization_id=$1 AND rule_id=$2`, [organizationId, rule.id, after.name, after.explanation, JSON.stringify(after.definition), after.version])
         await query(`INSERT INTO system_events(event_type,source,object_type,object_id,organization_id,context)
-            VALUES('mill.rule.updated','mill','mill_rule',$1,$2,$3::jsonb)`, [rule.id, organizationId,
+            VALUES('event.rule.updated','event','event_rule',$1,$2,$3::jsonb)`, [rule.id, organizationId,
             JSON.stringify({ ruleId: rule.id, before, after, reason: 'User-requested activation after native probe identity verification.' })])
         result.push({ ruleId: rule.id, version: after.version })
     }

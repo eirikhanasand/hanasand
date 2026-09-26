@@ -1,11 +1,11 @@
 import { expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
-import { eligibleCdnRefresh as timingEligible, cdnRefreshDefinition } from '../src/utils/mill/analyzeCdnRefresh.ts'
+import { eligibleCdnRefresh as timingEligible, cdnRefreshDefinition } from '../src/utils/events/analyzeCdnRefresh.ts'
 
-import { matchesMillRule } from '../src/utils/mill/conditions.ts'
-import { normalizeLogEvent } from '../src/utils/mill/logEvent.ts'
+import { matchesRule } from '../src/utils/events/conditions.ts'
+import { normalizeLogEvent } from '../src/utils/events/logEvent.ts'
 const eligibleCdnRefresh = (log: Parameters<typeof timingEligible>[0]) => timingEligible(log, cdnRefreshDefinition.parameters)
-    && matchesMillRule(normalizeLogEvent({ ...log, id: log.sourceEventId!, created_at: log.timestamp! }), cdnRefreshDefinition.conditions)
+    && matchesRule(normalizeLogEvent({ ...log, id: log.sourceEventId!, created_at: log.timestamp! }), cdnRefreshDefinition.conditions)
 
 function fixture() {
     const timestamp = '2026-09-24T00:00:00.001000001Z'

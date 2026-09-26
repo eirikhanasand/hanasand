@@ -11,7 +11,7 @@ mock.module('#db', () => ({ withTransaction: async (work: any) => {
         })
     } finally { inTransaction = false; finished = true }
 } }))
-const { stableLogWatermark } = await import('../src/utils/mill/logWatermark.ts')
+const { stableLogWatermark } = await import('../src/utils/events/logWatermark.ts')
 beforeEach(() => { code = null; inTransaction = false; finished = false; statements = [] })
 test('reads an exact bigint watermark under one short transaction and releases before returning', async () => {
     expect(await stableLogWatermark('traffic_events')).toBe('9007199254740993')

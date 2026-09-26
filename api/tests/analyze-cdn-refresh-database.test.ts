@@ -2,7 +2,7 @@ import { expect, mock, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import pg from 'pg'
 import { fixture } from './analyze-cdn-refresh.test.ts'
-import { cdnRefreshRuleId, cdnRefreshDefinition } from '../src/utils/mill/analyzeCdnRefresh.ts'
+import { cdnRefreshRuleId, cdnRefreshDefinition } from '../src/utils/events/analyzeCdnRefresh.ts'
 import { createHash } from 'node:crypto'
 
 test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real CDN ingestion keeps suspicious evidence and respects Keep, Disable, replay and rollback', async () => {

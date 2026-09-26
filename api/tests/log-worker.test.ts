@@ -57,8 +57,8 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
     if (sql.includes('UPDATE events SET')) { pending = pending.filter(row => row.id !== p[0]); return { rows: [] } }
     throw new Error(sql)
 }
-mock.module('../src/utils/mill/catchupProgress.ts', () => ({ refreshLogCatchupProgress: async () => {} }))
-mock.module('../src/utils/mill/recoverUnassignedLogs.ts', () => ({ recoverUnassignedLogs: async () => {} }))
+mock.module('../src/utils/events/catchupProgress.ts', () => ({ refreshLogCatchupProgress: async () => {} }))
+mock.module('../src/utils/events/recoverUnassignedLogs.ts', () => ({ recoverUnassignedLogs: async () => {} }))
 const transactionQuery = async (sql: string, p: any[] = []) => { transactionStatements.push(sql); return query(sql, p) }
 mock.module('#db', () => ({ default: query, withTransaction: async (work: any) => {
     const before = { ...cursor }
@@ -76,17 +76,17 @@ mock.module('#db', () => ({ default: query, withTransaction: async (work: any) =
     }
 } }))
 mock.module('../src/utils/logs/dimensions.ts', () => ({ backfillLogDimensions: async () => ({ processed: 0, ready: true }) }))
-mock.module('../src/utils/mill/processQueue.ts', () => ({ acknowledgeProcessedLogs: async (ids: string[]) => { acknowledged.push(ids) }, processQueuedLogs: async (_process: unknown, delayed: boolean, limit = 1000) => { queueRuns++; queueModes.push(delayed); queueLimits.push(limit) }, recoverProcessLogs: async (_process: unknown, limit: number) => { recoveryRuns++; recoveryLimits.push(limit) } }))
-mock.module('../src/utils/mill/storedSources.ts', () => ({ processAdditionalLogSources: async (_process: unknown, historyLimit: number, recentLimit: number, cursorQuery: unknown) => { additionalRuns++; historyLimits.push(historyLimit); recentLimits.push(recentLimit); additionalCursorQuery = cursorQuery } }))
-mock.module('../src/utils/mill/logWatermark.ts', () => ({ stableLogWatermark: async () => watermark }))
-mock.module('../src/handlers/mill.ts', () => ({
-    loadConfiguredMillRules: async () => [],
-    collectMillEventFindings: (scope: string, id: string, event: any) => ({ findings: [[scope, 'test.rule', 'low', event.normalized.message, [id], {}]] }),
-    persistMillEventFindings: async (findings: any[]) => { if (fail) throw new Error('Finding storage unavailable'); checked.push(...findings.map(finding => finding[3])) },
-    normalizeMillEvent: (event: any) => ({ timestamp: event.timestamp, eventType: event.event_type, action: event.action, outcome: event.outcome, normalized: event }),
-    createMillFindings: async (_scope: string, _id: string, event: any) => { if (fail) throw new Error('Finding storage unavailable'); checked.push(event.normalized.message) },
+mock.module('../src/utils/events/processQueue.ts', () => ({ acknowledgeProcessedLogs: async (ids: string[]) => { acknowledged.push(ids) }, processQueuedLogs: async (_process: unknown, delayed: boolean, limit = 1000) => { queueRuns++; queueModes.push(delayed); queueLimits.push(limit) }, recoverProcessLogs: async (_process: unknown, limit: number) => { recoveryRuns++; recoveryLimits.push(limit) } }))
+mock.module('../src/utils/events/storedSources.ts', () => ({ processAdditionalLogSources: async (_process: unknown, historyLimit: number, recentLimit: number, cursorQuery: unknown) => { additionalRuns++; historyLimits.push(historyLimit); recentLimits.push(recentLimit); additionalCursorQuery = cursorQuery } }))
+mock.module('../src/utils/events/logWatermark.ts', () => ({ stableLogWatermark: async () => watermark }))
+mock.module('../src/handlers/events.ts', () => ({
+    loadConfiguredRules: async () => [],
+    collectEventFindings: (scope: string, id: string, event: any) => ({ findings: [[scope, 'test.rule', 'low', event.normalized.message, [id], {}]] }),
+    persistEventFindings: async (findings: any[]) => { if (fail) throw new Error('Finding storage unavailable'); checked.push(...findings.map(finding => finding[3])) },
+    normalizeEvent: (event: any) => ({ timestamp: event.timestamp, eventType: event.event_type, action: event.action, outcome: event.outcome, normalized: event }),
+    createFindings: async (_scope: string, _id: string, event: any) => { if (fail) throw new Error('Finding storage unavailable'); checked.push(event.normalized.message) },
 }))
-const { processStoredLogs, processLiveLogs } = await import('../src/utils/mill/processLogs.ts')
+const { processStoredLogs, processLiveLogs } = await import('../src/utils/events/processLogs.ts')
 const originalLimit = process.env.LOG_CATCHUP_BATCH_LIMIT
 const originalHistoryLimit = process.env.LOG_CATCHUP_HISTORY_LIMIT
 afterEach(() => { if (originalHistoryLimit === undefined) delete process.env.LOG_CATCHUP_HISTORY_LIMIT; else process.env.LOG_CATCHUP_HISTORY_LIMIT = originalHistoryLimit })
@@ -156,7 +156,7 @@ test('later failure rolls back cursor positions but retry reuses already durable
     expect(cursor).toMatchObject({ last_id: '1', recent_id: '101', last_error: null })
     expect(checked).toEqual(['101', '1'])
 })
-test('inactive scopes fall back to Hanasand and direct Mill pending events retry', async () => {
+test('inactive scopes fall back to Hanasand and direct Event pending events retry', async () => {
     fresh = [makeLog('101', { organizationId: 'inactive', password: 'never-copy-this' })]
     pending = [{ id: 'native', organization_id: 'platform', normalized: { timestamp: '2026-09-19T00:00:00Z', message: 'native' } }]
     await processStoredLogs()
@@ -329,9 +329,9 @@ test('fresh arrivals are serviced between durable historical pages', async () =>
     const timer = spyOn(performance, 'now').mockImplementation(() => { clock += 300; return clock })
     backlog = Array.from({ length: 250 }, (_, n) => makeLog(String(n + 1)))
     cursor.history_end_id = '250'; watermark = '1000'; fresh = []
-    const findings = await import('../src/handlers/mill.ts')
-    const original = findings.persistMillEventFindings
-    const hook = spyOn(findings, 'persistMillEventFindings').mockImplementation(async rows => {
+    const findings = await import('../src/handlers/events.ts')
+    const original = findings.persistEventFindings
+    const hook = spyOn(findings, 'persistEventFindings').mockImplementation(async rows => {
         await original(rows)
         if (checked.length === 200) priority.push({ ...makeLog('1001'), created_at: new Date().toISOString() })
     })
@@ -382,8 +382,8 @@ test('live processing completes while a catch-up read is blocked and leaves its 
         expect(checked).toContain('2001')
         expect(acknowledged.flat()).toContain('2001')
         expect(cursor).toEqual(before)
-        expect(statements.some(sql => sql.includes('mill:live-service-logs'))).toBe(true)
-        expect(statements.some(sql => sql.includes('mill:log-batch'))).toBe(true)
+        expect(statements.some(sql => sql.includes('event:live-service-logs'))).toBe(true)
+        expect(statements.some(sql => sql.includes('event:log-batch'))).toBe(true)
     } finally { historyGate = undefined; historyEntered = undefined; release(); await historical }
 })
 
@@ -393,5 +393,5 @@ test('a live burst is committed together while historical pages still yield', as
     expect(await processLiveLogs()).toBe(true)
     expect(checked).toHaveLength(200)
     expect(statements.filter(sql => sql.includes('INSERT INTO events'))).toHaveLength(1)
-    expect(statements.filter(sql => sql.includes('mill:log-batch'))).toHaveLength(1)
+    expect(statements.filter(sql => sql.includes('event:log-batch'))).toHaveLength(1)
 })

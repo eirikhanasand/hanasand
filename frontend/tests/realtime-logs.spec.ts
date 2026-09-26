@@ -151,7 +151,7 @@ test('event text remains selectable and copies full evidence without navigating'
         return { selected: selection.toString(), userSelect: getComputedStyle(element).userSelect, insideButton: !!element.closest('button') }
     })).toEqual({ selected: 'whoami', userSelect: 'text', insideButton: false })
     await row.getByRole('button', { expanded: false }).click()
-    await expect(row).toContainText('Mill checked 105 enabled rules.')
+    await expect(row).toContainText('Event checked 105 enabled rules.')
     await row.getByRole('button', { name: 'Copy event JSON' }).click()
     expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem('copied-event')!))).toEqual(event().normalized)
     await expect(page).toHaveURL('http://logs.test/logs/realtime')

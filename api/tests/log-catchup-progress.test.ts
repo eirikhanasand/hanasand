@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { catchupSample } from '../src/utils/mill/catchupProgress.ts'
+import { catchupSample } from '../src/utils/events/catchupProgress.ts'
 
 test('catch-up starts with an exact remaining count and no invented ETA', () => {
     expect(catchupSample(4000, 900, { payload: {}, checked_count: 0, sampled_at: null }, new Date('2026-09-19T12:00:00Z'))).toMatchObject({ remaining: 4000, processed: 0, total: 4000, rate: null, estimated_seconds: null })

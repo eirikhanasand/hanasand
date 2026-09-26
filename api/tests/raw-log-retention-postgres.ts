@@ -13,7 +13,7 @@ mock.module('#db', () => ({ withTransaction: async (work) => {
         await client.query('COMMIT'); return result
     } catch (error) { await client.query('ROLLBACK'); throw error } finally { client.release() }
 } }))
-const { retainRawLogs, retainTrafficLogs } = await import('../src/utils/mill/rawLogRetention.ts')
+const { retainRawLogs, retainTrafficLogs } = await import('../src/utils/events/rawLogRetention.ts')
 try {
     await pool.query(`CREATE TABLE service_logs(id bigint PRIMARY KEY, created_at timestamptz);
         CREATE TABLE events(id text PRIMARY KEY, log_key text UNIQUE, ingestion_id text, processing_status text, normalized jsonb);
@@ -59,5 +59,5 @@ try {
     assert.deepEqual((await pool.query('SELECT * FROM events WHERE id LIKE \'traffic:%\' ORDER BY id')).rows, trafficBefore)
     assert.deepEqual(await retainTrafficLogs(), { deleted: 0 })
     assert.equal((await pool.query('SELECT context FROM system_events WHERE object_type=\'traffic_events\'')).rows[0].context.trafficHistoryPreserved,true)
-    console.log('PASS: age and ingestion gates, locked/pending/skipped/failed/missing/wrong-source protection, preserved Mill evidence, retry, queue cleanup, audit and bounded batches')
+    console.log('PASS: age and ingestion gates, locked/pending/skipped/failed/missing/wrong-source protection, preserved Event evidence, retry, queue cleanup, audit and bounded batches')
 } finally { await pool.end() }

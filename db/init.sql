@@ -446,7 +446,7 @@ CREATE TABLE IF NOT EXISTS events (
     device_id TEXT,
     normalized JSONB NOT NULL DEFAULT '{}'::jsonb,
     original JSONB NOT NULL DEFAULT '{}'::jsonb,
-    parser_version TEXT NOT NULL DEFAULT 'mill.v1',
+    parser_version TEXT NOT NULL DEFAULT 'event.v1',
     processing_status TEXT NOT NULL DEFAULT 'processed',
     UNIQUE (organization_id, ingestion_id, id)
 );

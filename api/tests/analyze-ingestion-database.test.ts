@@ -2,7 +2,7 @@ import { expect, mock, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import pg from 'pg'
 import { fixture } from './analyze-ingestion.test.ts'
-import { ingestionRuleId, ingestionDefinition } from '../src/utils/mill/analyzeIngestion.ts'
+import { ingestionRuleId, ingestionDefinition } from '../src/utils/events/analyzeIngestion.ts'
 
 test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('ingestion copies retain full canonical bodies, provenance, failures and current detector evidence', async () => {
     const port = Number(process.env.POSTGRES_FILTER_TEST_PORT)
@@ -35,7 +35,7 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('ingestion copies retain ful
         await query('ALTER TABLE service_logs ADD COLUMN source_event_id text UNIQUE')
         const { default: install } = await import('../src/utils/db/logAnalyzeSchema.ts')
         const { recordLogBatch } = await import('../src/utils/logs/recordLog.ts')
-        const { normalizeBuiltinDefinition } = await import('../src/handlers/mill.ts')
+        const { normalizeBuiltinDefinition } = await import('../src/handlers/events.ts')
         await install()
         expect(normalizeBuiltinDefinition(ingestionRuleId, ingestionDefinition).definition).toEqual(ingestionDefinition)
         expect(normalizeBuiltinDefinition(ingestionRuleId, { ...ingestionDefinition, conditions: [{ path: 'service', operator: 'equals', value: 'anything' }] }).error).toBeUndefined()

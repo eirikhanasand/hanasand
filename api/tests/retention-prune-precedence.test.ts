@@ -1,8 +1,8 @@
 import { expect, mock, test } from 'bun:test'
-import { accessDefinition } from '../src/utils/mill/analyzeAccess.ts'
+import { accessDefinition } from '../src/utils/events/analyzeAccess.ts'
 mock.module('#db', () => ({ default: async () => { throw new Error('Use test transaction') }, withTransaction: async (work: any) => work() }))
-mock.module('../src/utils/mill/analyzeLog.ts', () => ({ platformAccessRule: async () => ({ organization_id: 'platform', enabled: true, created_at: new Date('2026-09-01'), definition: accessDefinition }) }))
-const { pruneAccessLogs } = await import('../src/utils/mill/pruneAccessLogs.ts')
+mock.module('../src/utils/events/analyzeLog.ts', () => ({ platformAccessRule: async () => ({ organization_id: 'platform', enabled: true, created_at: new Date('2026-09-01'), definition: accessDefinition }) }))
+const { pruneAccessLogs } = await import('../src/utils/events/pruneAccessLogs.ts')
 const log = { id: '42', service: 'cdn', level: 'info', message: 'http_access', created_at: '2026-08-01T00:00:00Z',
     metadata: { structured: { access: { ip: '192.0.2.1', path: '/public/file', method: 'GET', status: 200,
         inspection: { version: 1, bodyEmpty: true, headersSafe: true, pathSafe: true } } } } }

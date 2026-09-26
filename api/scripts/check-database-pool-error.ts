@@ -34,7 +34,7 @@ try {
         assert.equal(pool.options!.min, role.min, role.name)
         const budget = Number(config.DB_MAX_CONN) || 20
         assert.equal(created.reduce((total, options) => total + options.max, 0), budget, 'Total connection limits must not grow')
-        assert.equal(created.length, role.name === 'worker' && budget >= 12 ? 2 : 1, 'Only the scheduled worker reserves Mill capacity')
+        assert.equal(created.length, role.name === 'worker' && budget >= 12 ? 2 : 1, 'Only the scheduled worker reserves Event capacity')
         assert.equal(pool.options!.idleTimeoutMillis, Number(config.DB_IDLE_TIMEOUT_MS) || role.idle, 'Preserve idle overrides and non-API defaults')
     }
     process.env.API_HTTP_ONLY = '1'; process.env.AUTH_SERVICE_ONLY = '0'

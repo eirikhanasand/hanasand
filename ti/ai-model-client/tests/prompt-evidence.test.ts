@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { promptEvidence } from '../prompt-evidence.mjs'
-import { matchesEventProtection, eventProtectionDefinition } from '../../../api/src/utils/mill/eventProtection.ts'
+import { matchesEventProtection, eventProtectionDefinition } from '../../../api/src/utils/events/eventProtection.ts'
 
 test('captures every role and injection evidence while redacting credentials before output', () => {
     const body = { model: 'hanasand', messages: [

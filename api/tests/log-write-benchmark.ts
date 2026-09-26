@@ -16,12 +16,12 @@ mock.module('#db', () => ({ default: q, queryOnce: q, withDatabaseAdvisoryLock: 
     await q('BEGIN'); try { const value = await work(q); await q('COMMIT'); return value }
     catch (error) { await q('ROLLBACK'); throw error }
 } }))
-const { processLogBatch } = await import('../src/utils/mill/processLogs.ts')
-const { MILL_RULES, millDefaultDefinition } = await import('../src/handlers/mill.ts')
+const { processLogBatch } = await import('../src/utils/events/processLogs.ts')
+const { BUILTIN_RULES, defaultRuleDefinition } = await import('../src/handlers/events.ts')
 const { logDimensionsSchema } = await import('../src/utils/db/logDimensionsSchema.ts')
 const { logCountsSchema } = await import('../src/utils/db/logCountsSchema.ts')
 const { basicLogSearchPredicate } = await import('../src/utils/logs/searchText.ts')
-const rules = MILL_RULES.map(rule => ({ ...rule, enabled: true, source: 'hanasand' as const, definition: millDefaultDefinition(rule.id) }))
+const rules = BUILTIN_RULES.map(rule => ({ ...rule, enabled: true, source: 'hanasand' as const, definition: defaultRuleDefinition(rule.id) }))
 const schema = readFileSync(new URL('../src/utils/db/ensureSchema.ts', import.meta.url), 'utf8')
 const catalog = JSON.parse(readFileSync('/benchmark-catalog.json', 'utf8'))
 const count = Number(process.env.BENCHMARK_ROWS || 10000)

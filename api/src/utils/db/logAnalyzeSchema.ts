@@ -1,21 +1,21 @@
-import { cdnDeliveryRule, cdnDeliveryRuleId, cdnDeliveryDefinition } from '../mill/analyzeCdnDelivery.ts'
-import { sshTransportRule, sshTransportRuleId, sshTransportDefinition } from '#utils/mill/analyzeSshTransport.ts'
+import { cdnDeliveryRule, cdnDeliveryRuleId, cdnDeliveryDefinition } from '../events/analyzeCdnDelivery.ts'
+import { sshTransportRule, sshTransportRuleId, sshTransportDefinition } from '#utils/events/analyzeSshTransport.ts'
 import { ensureAnalysisPolicySchema, ensureEventProtectionRule, migrateAnalysisPolicy } from './analysisPolicySchema.ts'
-import { ingestionRule, ingestionDefinition } from '../mill/analyzeIngestion.ts'
+import { ingestionRule, ingestionDefinition } from '../events/analyzeIngestion.ts'
 import ensureIngestionAnalyzeSchema from './ingestionAnalyzeSchema.ts'
 import { ensureModelProbeSchema } from './modelProbeSchema.ts'
 import { ensureReadinessAuditSchema } from './readinessAuditSchema.ts'
-import { cdnRefreshRule, cdnRefreshDefinition } from '../mill/analyzeCdnRefresh.ts'
-import { modelDiscoveryRule, modelDiscoveryRuleId, modelDiscoveryDefinition } from '../mill/analyzeModelDiscovery.ts'
-import { readinessAuditRule, readinessAuditRuleId, readinessAuditDefinition } from '../mill/analyzeReadinessAudit.ts'
-import { telemetryRule, sshWindowRule, telemetryDefinition, sshWindowDefinition } from '../mill/analyzeRoutineGroups.ts'
-import { collectorRule, collectorDefinition } from '../mill/analyzeCollector.ts'
-import { proxyRule, proxyDefinition } from '../mill/analyzeProxy.ts'
+import { cdnRefreshRule, cdnRefreshDefinition } from '../events/analyzeCdnRefresh.ts'
+import { modelDiscoveryRule, modelDiscoveryRuleId, modelDiscoveryDefinition } from '../events/analyzeModelDiscovery.ts'
+import { readinessAuditRule, readinessAuditRuleId, readinessAuditDefinition } from '../events/analyzeReadinessAudit.ts'
+import { telemetryRule, sshWindowRule, telemetryDefinition, sshWindowDefinition } from '../events/analyzeRoutineGroups.ts'
+import { collectorRule, collectorDefinition } from '../events/analyzeCollector.ts'
+import { proxyRule, proxyDefinition } from '../events/analyzeProxy.ts'
 import ensureProxyAnalyzeSchema from './proxyAnalyzeSchema.ts'
-import { postgresRule, postgresDefinition } from '../mill/analyzePostgres.ts'
+import { postgresRule, postgresDefinition } from '../events/analyzePostgres.ts'
 import run from '#db'
-import { mongoDefinition, mongoRule, mongoReconRule, mongoReconDefinition } from '../mill/analyzeMongo.ts'
-import { accessDefinition, accessRule } from '../mill/analyzeAccess.ts'
+import { mongoDefinition, mongoRule, mongoReconRule, mongoReconDefinition } from '../events/analyzeMongo.ts'
+import { accessDefinition, accessRule } from '../events/analyzeAccess.ts'
 
 export default async function ensureLogAnalyzeSchema() {
     // Compact retry receipts prevent a collector replay from inflating totals.
@@ -57,7 +57,7 @@ export default async function ensureLogAnalyzeSchema() {
         FROM organizations o WHERE o.status='active' AND (o.id=$1 OR ($1::text IS NULL AND lower(o.name)='hanasand'))
         ORDER BY o.created_at LIMIT 1 ON CONFLICT(organization_id,rule_id) DO NOTHING RETURNING *)
         INSERT INTO system_events(event_type,source,object_type,object_id,organization_id,context)
-        SELECT 'mill.rule.created','mill','mill_rule',rule_id,organization_id,
+        SELECT 'event.rule.created','event','event_rule',rule_id,organization_id,
             jsonb_build_object('ruleId',rule_id,'after',jsonb_build_object('version',version,'name',name,'explanation',explanation,'severity',severity,'enabled',enabled,'definition',definition))
         FROM installed`, [process.env.PLATFORM_LOG_ORGANIZATION_ID || null, rule.id, rule.name, rule.explanation, JSON.stringify(definition), rule.family, rule.severity, 'source' in rule ? rule.source : 'hanasand', ![modelDiscoveryRuleId, readinessAuditRuleId, sshTransportRuleId, cdnDeliveryRuleId].includes(rule.id)])
         await migrateAnalysisPolicy(rule.id, definition, run)

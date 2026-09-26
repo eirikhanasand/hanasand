@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import pg from 'pg'
 import { createHash } from 'node:crypto'
 import { transportFixture } from './ssh-transport.test.ts'
-import { sshTransportRuleId, sshTransportDefinition } from '../src/utils/mill/analyzeSshTransport.ts'
+import { sshTransportRuleId, sshTransportDefinition } from '../src/utils/events/analyzeSshTransport.ts'
 
 test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('SSH transport ingestion preserves originals, detection, saved policy, retries and rollback', async () => {
     const port = Number(process.env.POSTGRES_FILTER_TEST_PORT)
@@ -32,8 +32,8 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('SSH transport ingestion pre
         await query('ALTER TABLE service_logs ADD COLUMN source_event_id text UNIQUE')
         const { default: install } = await import('../src/utils/db/logAnalyzeSchema.ts')
         const { recordLogBatch } = await import('../src/utils/logs/recordLog.ts')
-        const { collectMillEventFindings, normalizeMillEvent } = await import('../src/handlers/mill.ts')
-        const { normalizeLogEvent } = await import('../src/utils/mill/logEvent.ts')
+        const { collectEventFindings, normalizeEvent } = await import('../src/handlers/events.ts')
+        const { normalizeLogEvent } = await import('../src/utils/events/logEvent.ts')
         await install()
         const fresh = (label: string) => transportFixture().map((row, i) => ({ ...row, metadata: { ...row.metadata, pid: String(10000 + label.length * 100) }, sourceEventId: createHash('sha256').update(label + i).digest('hex') }))
         const ingest = (rows: any[]) => tx(q => recordLogBatch(rows, q as any))
@@ -52,7 +52,7 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('SSH transport ingestion pre
         expect(await rawCount(logs)).toBe(0)
         expect(await receiptCount()).toBe(4)
         const detector: any = { id: 'owned.ssh', source: 'owned', enabled: true, version: '1', severity: 'high', name: 'SSH detector', explanation: 'test', definition: { match: 'all', conditions: [{ path: 'service', operator: 'equals', value: 'sshd' }] } }
-        const findings = collectMillEventFindings('platform', 'canonical', normalizeMillEvent(normalizeLogEvent(canonical[0]), {}), [detector]).findings
+        const findings = collectEventFindings('platform', 'canonical', normalizeEvent(normalizeLogEvent(canonical[0]), {}), [detector]).findings
         expect(findings).toHaveLength(1)
         expect((findings[0][5].retainedOriginals as any[]).map(row => row.message)).toEqual(logs.map(row => row.message))
         for (const [label, definition] of [['store', { match: 'all', stage: 'analyze', action: 'keep', conditions: detector.definition.conditions }], ['detect', detector.definition]] as const) {

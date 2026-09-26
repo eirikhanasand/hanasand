@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test'
-import { analyzeProxy, proxyConnection, proxyNotice, safeProxyRequest, proxyRuleId, proxyDefinition } from '../src/utils/mill/analyzeProxy.ts'
-import { matchesAnalysisPolicy } from '../src/utils/mill/analysisPolicy.ts'
-import { normalizeLogEvent } from '../src/utils/mill/logEvent.ts'
-import { normalizeBuiltinDefinition } from '../src/handlers/mill.ts'
+import { analyzeProxy, proxyConnection, proxyNotice, safeProxyRequest, proxyRuleId, proxyDefinition } from '../src/utils/events/analyzeProxy.ts'
+import { matchesAnalysisPolicy } from '../src/utils/events/analysisPolicy.ts'
+import { normalizeLogEvent } from '../src/utils/events/logEvent.ts'
+import { normalizeBuiltinDefinition } from '../src/handlers/events.ts'
 const id = 'bde2f19d-cecd-4d7f-8b97-738850a6c412'
 const header = `${id}|hanasand-proxy-1|127.0.0.1|41000|127.0.0.1|18080|api`
 const log = { service: 'hanasand-proxy-1', host: 'inspur', level: 'info', timestamp: '2026-09-24T00:00:00.000Z', sourceEventId: 'a'.repeat(64),

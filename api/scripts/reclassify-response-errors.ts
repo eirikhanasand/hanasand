@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import run, { withTransaction } from '#db'
-import { applicationErrorRule, applicationErrorRuleId, applicationErrorDefinition, classifyApplicationError } from '#utils/mill/applicationError.ts'
-import { loadConfiguredMillRules } from '../src/handlers/mill.ts'
-import { processLogBatch } from '#utils/mill/processLogs.ts'
-import type { LogInput } from '#utils/mill/logEvent.ts'
+import { applicationErrorRule, applicationErrorRuleId, applicationErrorDefinition, classifyApplicationError } from '#utils/events/applicationError.ts'
+import { loadConfiguredRules } from '../src/handlers/events.ts'
+import { processLogBatch } from '#utils/events/processLogs.ts'
+import type { LogInput } from '#utils/events/logEvent.ts'
 
 // Reuse canonical ingestion and stable event IDs; retain every source and finding.
 const organizationId = process.argv[2]
@@ -16,10 +16,10 @@ await withTransaction(async query => {
         ON CONFLICT(organization_id,rule_id) DO NOTHING RETURNING id`,
     [randomUUID(), organizationId, applicationErrorRuleId, applicationErrorRule.name, applicationErrorRule.family, applicationErrorRule.explanation, JSON.stringify(applicationErrorDefinition)])
     if (inserted.rows.length) await query(`INSERT INTO system_events(event_type,severity,source,service,object_type,object_id,organization_id,outcome,reason,context)
-        VALUES('mill.rule.created','notice','maintenance','hanasand-api','mill_rule',$1,$2,'success',$3,$4::jsonb)`,
+        VALUES('event.rule.created','notice','maintenance','hanasand-api','event_rule',$1,$2,'success',$3,$4::jsonb)`,
     [applicationErrorRuleId, organizationId, 'User requested medium application errors for duplicate response headers.', JSON.stringify({ ruleId: applicationErrorRuleId, after: applicationErrorRule })])
 })
-const rules = await loadConfiguredMillRules(organizationId)
+const rules = await loadConfiguredRules(organizationId)
 const rule = rules.find(rule => rule.id === applicationErrorRuleId)
 if (!rule?.enabled || rule.severity !== 'medium') throw new Error('The saved rule must be enabled at medium severity.')
 const rows = (await run(`SELECT e.id AS event_id, COALESCE(s.id::text, substring(e.log_key FROM 9)) AS id,
@@ -27,7 +27,7 @@ const rows = (await run(`SELECT e.id AS event_id, COALESCE(s.id::text, substring
         COALESCE(s.level,e.normalized->>'level') AS level, COALESCE(s.message,e.normalized->>'message') AS message,
         COALESCE(s.created_at,e.event_timestamp) AS created_at,
         COALESCE(s.metadata,e.normalized->'metadata','{}'::jsonb) || CASE WHEN s.id IS NULL
-            THEN jsonb_build_object('recovered_from_mill_event',e.id) ELSE '{}'::jsonb END AS metadata
+            THEN jsonb_build_object('recovered_from_event_event',e.id) ELSE '{}'::jsonb END AS metadata
     FROM events e LEFT JOIN service_logs s ON e.log_key='service:'||s.id::text
     WHERE e.organization_id=$1 AND e.ingestion_id='logs' AND e.log_key ~ '^service:[0-9]+$' AND e.normalized->>'service'='hanasand-api'
     AND e.normalized->>'message'=$2 AND e.normalized->>'severity'='critical'
@@ -54,7 +54,7 @@ for (let offset = 0; offset < rows.length; offset += 50) {
     console.log(JSON.stringify({ reingested: processed, total: rows.length }))
 }
 await run(`INSERT INTO system_events(event_type,severity,source,service,object_type,object_id,organization_id,outcome,reason,context)
-    VALUES('mill.events.reclassified','notice','maintenance','hanasand-api','mill_rule',$1,$2,'success',$3,$4::jsonb)`,
+    VALUES('event.events.reclassified','notice','maintenance','hanasand-api','event_rule',$1,$2,'success',$3,$4::jsonb)`,
 [applicationErrorRuleId, organizationId, 'Reingested duplicate-response errors under the saved classification rule.', JSON.stringify({ ruleId: applicationErrorRuleId, count: processed, eventIds: rows.map(row => row.event_id) })])
 console.log(JSON.stringify({ complete: true, reingested: processed }))
 process.exit(0)

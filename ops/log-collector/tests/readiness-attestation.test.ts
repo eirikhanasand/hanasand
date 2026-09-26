@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { fixture, configure, keys } from '../../../api/tests/analyze-readiness-audit.test'
 import { markReadinessContext, signReadinessChain, attestReadinessAudit } from '../readinessAttestation'
-import { eligibleReadinessChain, readinessWrapperScript } from '../../../api/src/utils/mill/analyzeReadinessAudit'
+import { eligibleReadinessChain, readinessWrapperScript } from '../../../api/src/utils/events/analyzeReadinessAudit'
 import { readinessWrapperScript as observedScript } from '../readinessObserver'
 import { parseAudit } from '../sources'
 import type { LogEvent } from '../core'

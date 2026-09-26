@@ -1,5 +1,5 @@
 import run from '#db'
-import { authenticationAuditStoreRule, eventProtectionDefinition, eventProtectionRule } from '../mill/eventProtection.ts'
+import { authenticationAuditStoreRule, eventProtectionDefinition, eventProtectionRule } from '../events/eventProtection.ts'
 
 export async function ensureEventProtectionRule(query: typeof run, organizationId: string | null = null) {
     for (const rule of [{ ...eventProtectionRule, definition: { ...eventProtectionDefinition, parameters: {} }, source: 'hanasand' },
@@ -9,7 +9,7 @@ export async function ensureEventProtectionRule(query: typeof run, organizationI
         FROM organizations WHERE ($1::text IS NULL OR id=$1)
         ON CONFLICT(organization_id,rule_id) DO NOTHING RETURNING *)
         INSERT INTO system_events(event_type,source,object_type,object_id,organization_id,context)
-        SELECT 'mill.rule.created','mill','mill_rule',rule_id,organization_id,
+        SELECT 'event.rule.created','event','event_rule',rule_id,organization_id,
             jsonb_build_object('ruleId',rule_id,'after',jsonb_build_object('version',version,'name',name,'explanation',explanation,'severity',severity,'enabled',enabled,'definition',definition))
         FROM installed`, [organizationId, rule.id, rule.name, rule.family, rule.severity, rule.explanation, JSON.stringify(rule.definition), rule.source])
     const legacyDefinition = Object.fromEntries(Object.entries(authenticationAuditStoreRule.definition).filter(([key]) => key !== 'storeScope'))
@@ -19,7 +19,7 @@ export async function ensureEventProtectionRule(query: typeof run, organizationI
         changed AS (UPDATE rules r SET definition=$4::jsonb,version=(r.version::bigint+1)::text,updated_at=NOW()
             FROM previous p WHERE r.id=p.id RETURNING r.*)
         INSERT INTO system_events(event_type,source,object_type,object_id,organization_id,context)
-        SELECT 'mill.rule.updated','mill','mill_rule',c.rule_id,c.organization_id,
+        SELECT 'event.rule.updated','event','event_rule',c.rule_id,c.organization_id,
             jsonb_build_object('ruleId',c.rule_id,'reason','Scope the default authentication Store rule to custom Drop rules',
                 'before',jsonb_build_object('version',p.version,'name',p.name,'explanation',p.explanation,'severity',p.severity,'enabled',p.enabled,'definition',p.definition),
                 'after',jsonb_build_object('version',c.version,'name',c.name,'explanation',c.explanation,'severity',c.severity,'enabled',c.enabled,'definition',c.definition))
@@ -47,8 +47,8 @@ export async function migrateAnalysisPolicy(ruleId: string, definition: { condit
         applied AS (INSERT INTO analysis_policy_migrations(organization_id,rule_id)
             SELECT organization_id,rule_id FROM previous ON CONFLICT DO NOTHING)
         INSERT INTO system_events(event_type,source,object_type,object_id,organization_id,context)
-        SELECT 'mill.rule.updated','mill','mill_rule',c.rule_id,c.organization_id,
-            jsonb_build_object('ruleId',c.rule_id,'reason','Move existing analysis policy into Mill',
+        SELECT 'event.rule.updated','event','event_rule',c.rule_id,c.organization_id,
+            jsonb_build_object('ruleId',c.rule_id,'reason','Move existing analysis policy into the rules engine',
                 'before',jsonb_build_object('version',p.version,'name',p.name,'explanation',p.explanation,'severity',p.severity,'enabled',p.enabled,'definition',p.definition),
                 'after',jsonb_build_object('version',c.version,'name',c.name,'explanation',c.explanation,'severity',c.severity,'enabled',c.enabled,'definition',c.definition))
         FROM changed c JOIN previous p ON p.id=c.id`, [ruleId, JSON.stringify(definition.conditions), JSON.stringify(definition.parameters || {})])

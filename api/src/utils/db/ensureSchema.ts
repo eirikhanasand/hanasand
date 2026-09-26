@@ -10,7 +10,6 @@ import ensureOrganizationRolesSchema from './organizationRolesSchema.ts'
 import ensureRoleSchema from './roleSchema.ts'
 import ensureLogDimensionsSchema from './logDimensionsSchema.ts'
 import ensureLogProcessQueueSchema from './logProcessQueueSchema.ts'
-import ensureEventStorageNames from './eventStorageNames.ts'
 import ensureSharedMailSchema from './sharedMailSchema.ts'
 import ensureVmOrganizationSchema from './vmOrganizationSchema.ts'
 import { ensureFailoverSchema } from '../vms/failover.ts'
@@ -54,7 +53,6 @@ export default async function ensureSchema() {
 }
 
 async function applySchema() {
-    await ensureEventStorageNames()
     await run('CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_vm_metrics_name_created ON vm_metrics(name, created_at DESC)')
     await ensureRoleSchema()
     await ensureContainerBillingSchema()
@@ -1483,12 +1481,12 @@ async function applySchema() {
             device_id TEXT,
             normalized JSONB NOT NULL DEFAULT '{}'::jsonb,
             original JSONB NOT NULL DEFAULT '{}'::jsonb,
-            parser_version TEXT NOT NULL DEFAULT 'mill.v1',
+            parser_version TEXT NOT NULL DEFAULT 'event.v1',
             processing_status TEXT NOT NULL DEFAULT 'processed',
             UNIQUE (organization_id, ingestion_id, id)
         )
     `)
-    await run('ALTER TABLE events ADD COLUMN IF NOT EXISTS parser_version TEXT NOT NULL DEFAULT \'mill.v1\'')
+    await run('ALTER TABLE events ADD COLUMN IF NOT EXISTS parser_version TEXT NOT NULL DEFAULT \'event.v1\'')
     await run('CREATE INDEX IF NOT EXISTS idx_events_org_time ON events(organization_id, event_timestamp DESC)')
     await run('ALTER TABLE events ADD COLUMN IF NOT EXISTS log_key TEXT')
     await run('CREATE INDEX IF NOT EXISTS idx_events_pending ON events(event_timestamp, id) WHERE processing_status = \'pending\'')

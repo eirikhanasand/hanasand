@@ -10,9 +10,9 @@ The four exact roles are the Docker command shell, wrapper entry, nonce-bearing 
 
 The initial two-event candidate was rejected: separate signed receipts increased service-log-only storage by approximately 98%. The final design stores the whole chain once and counts that dedicated receipt directly.
 
-Read-only production inspection confirmed the three baseline audit events have both service-log rows and processed Mill copies: 1,867 bytes plus 4,443 bytes per observed cycle, before indexes. The processing code persists these normalized copies; raw service rows expire only after seven days and completed processing.
+Read-only production inspection confirmed the three baseline audit events have both service-log rows and processed event copies: 1,867 bytes plus 4,443 bytes per observed cycle, before indexes. The processing code persists these normalized copies; raw service rows expire only after seven days and completed processing.
 
-A disposable PostgreSQL benchmark replicated the real event shapes over 1,000 cycles with unique source IDs, compressed signed chain receipts, service-log indexes, normalized Mill copies and common Mill indexes. Search GIN and dimension overhead were excluded. All figures include retained missed captures and split batches.
+A disposable PostgreSQL benchmark replicated the real event shapes over 1,000 cycles with unique source IDs, compressed signed chain receipts, service-log indexes, normalized event copies and common event indexes. Search GIN and dimension overhead were excluded. All figures include retained missed captures and split batches.
 
 | Scenario | Total bytes | Reduction from baseline |
 | --- | ---: | ---: |
@@ -23,7 +23,7 @@ A disposable PostgreSQL benchmark replicated the real event shapes over 1,000 cy
 
 A subsequent twenty-check live sample under disk pressure captured 9 native facts (45%). Repeating the benchmark with the fresh v2 event/fact sample produced 8,175,616 bytes at 45% complete capture (11.2% lower than baseline), and 8,372,224 bytes at 43.2% after a 4% split allowance (9.1% lower). These are conditional estimates: native fact capture is not the final receipt rate. Saved duration/cadence policy and incomplete transport groups can reduce qualification further. The 9.1% estimate requires 43.2% of cycles to qualify completely; below that, savings decline and may become negative because unmatched cycles retain the extra wrapper event. Measure sustained live receipts per cycle before claiming realized savings. Unproven checks are retained; capture rate is never improved by weakening proof.
 
-Host/service/executable selectors and duration/cadence limits are persisted in the visible Mill Analysis Rule definition. The native collector only authenticates evidence and never drops it. The API checks the saved conditions and parameters for the entire chain before every new receipt or replay; Disable and Keep remain authoritative.
+Host/service/executable selectors and duration/cadence limits are persisted in the visible Event Analysis Rule definition. The native collector only authenticates evidence and never drops it. The API checks the saved conditions and parameters for the entire chain before every new receipt or replay; Disable and Keep remain authoritative.
 
 These are shape-based estimates, not reclaimed production disk space or a guaranteed capture rate. Historical logs without native proof do not qualify; their reingestion savings are zero. A complete signed group can be reingested safely with one receipt, while current detectors and Keep rules still take precedence. No historical deletion is part of this rollout.
 

@@ -2,7 +2,7 @@ import { expect, mock, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import pg from 'pg'
 import { fixture, signed, configure } from './analyze-readiness-audit.test.ts'
-import { readinessAuditRuleId, readinessAuditDefinition } from '../src/utils/mill/analyzeReadinessAudit.ts'
+import { readinessAuditRuleId, readinessAuditDefinition } from '../src/utils/events/analyzeReadinessAudit.ts'
 import { inflateRawSync } from 'node:zlib'
 
 test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real readiness ingestion keeps suspicious evidence and respects Keep, Disable, replay and rollback', async () => {

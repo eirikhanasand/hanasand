@@ -71,8 +71,8 @@ def vacuum_script(table):
     # Session locks survive VACUUM's internal transactions and are released on
     # disconnect. Recheck busy work after locking to close the selection race.
     return """SELECT pg_try_advisory_lock(hashtextextended('hanasand:database-shrink',0))
-      AND pg_try_advisory_lock(hashtextextended('mill:service-logs',0))
-      AND pg_try_advisory_lock(hashtextextended('mill:live-service-logs',0)) AS acquired \\gset
+      AND pg_try_advisory_lock(hashtextextended('event:service-logs',0))
+      AND pg_try_advisory_lock(hashtextextended('event:live-service-logs',0)) AS acquired \\gset
 \\if :acquired
 SELECT NOT (""" + BUSY_SQL + """) AND NOT pg_is_in_recovery()
  AND pg_database_size(current_database()) > """ + str(THRESHOLD) + """ AS available \\gset

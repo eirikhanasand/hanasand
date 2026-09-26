@@ -42,7 +42,7 @@ test('errors, extra output and missing or invalid prior success cannot be attest
     }
     for (const previous of [0, -1, NaN, Infinity, start, start + 1]) expect(matchReadinessHealth([observation], health, container, previous)).toBeUndefined()
 })
-test('native evidence leaves duration and cadence retention policy to Mill rules', () => {
+test('native evidence leaves duration and cadence retention policy to Event rules', () => {
     expect(matchReadinessHealth([observation], { ...health, End: new Date(start + 1001).toISOString() }, container, start - 5000)).toBeDefined()
     for (const previous of [start - 1, start - 3999, start - 15001, start - 3600000]) {
         expect(matchReadinessHealth([observation], health, container, previous)).toBeDefined()

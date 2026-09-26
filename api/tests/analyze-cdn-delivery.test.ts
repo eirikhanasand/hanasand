@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
-import { verifyCdnDeliveryEnvelope, cdnDeliveryDefinition } from '../src/utils/mill/analyzeCdnDelivery.ts'
-import { matchesMillRule } from '../src/utils/mill/conditions.ts'
-import { normalizeLogEvent } from '../src/utils/mill/logEvent.ts'
+import { verifyCdnDeliveryEnvelope, cdnDeliveryDefinition } from '../src/utils/events/analyzeCdnDelivery.ts'
+import { matchesRule } from '../src/utils/events/conditions.ts'
+import { normalizeLogEvent } from '../src/utils/events/logEvent.ts'
 
 export function fixture() {
     const timestamp = '2026-09-24T00:00:00.001123456Z'
@@ -20,7 +20,7 @@ export function encode(log: ReturnType<typeof fixture>) {
     log.sourceEventId = createHash('sha256').update(`${log.host}:docker:${log.metadata.container_id}:${log.timestamp}:${log.message}`).digest('hex')
 }
 const eligible = (log: ReturnType<typeof fixture>, definition = cdnDeliveryDefinition) => verifyCdnDeliveryEnvelope(log)
-    && matchesMillRule(normalizeLogEvent({ ...log, id: log.sourceEventId, created_at: log.timestamp }), definition.conditions)
+    && matchesRule(normalizeLogEvent({ ...log, id: log.sourceEventId, created_at: log.timestamp }), definition.conditions)
 
 test('only the successful delivery copy matches; original request evidence is retained', () => {
     expect(eligible(fixture())).toBe(true)

@@ -218,8 +218,8 @@ import { getCommercialContactRequests, postCommercialContactRequest } from './ha
 import { getOrganizationPrivacy, postOrganizationPrivacy } from './handlers/organizationPrivacy.ts'
 import { deleteSavedSearch, getSavedSearches, postSavedSearch } from './handlers/ti/savedSearches.ts'
 import { getAptUpdates } from './handlers/aptUpdates.ts'
-import { postMillRulePreview, getMillEvents, getMillRule, putMillRule, getMillRules, ingestMill, postMillEventAction, postMillRule, postMillRuleAction, postMillRulePack, postMillSigmaPack } from './handlers/mill.ts'
-import { getMillRuleReprocess, postMillRuleReprocess } from './handlers/millRuleReprocess.ts'
+import { postRulePreview, getEvents, getRule, putRule, getRules, postEventAction, postRule, postRuleAction, postRulePack, postEventSigmaPack } from './handlers/events.ts'
+import { getRuleReprocess, postRuleReprocess } from './handlers/ruleReprocess.ts'
 import { createBillingPortal, getBillingSubscription, receiveStripeWebhook } from './handlers/billing.ts'
 
 /**
@@ -612,18 +612,17 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/logs/ingest', ingestLog)
     fastify.get('/logs/search', searchLogs)
 
-    // Mill: customer event ingestion and tenant-scoped analyst workflow
-    fastify.post('/mill', ingestMill)
-    fastify.get('/mill/events', getMillEvents)
-    fastify.post('/mill/events/:id/actions', postMillEventAction)
-    fastify.get('/mill/rules', getMillRules)
-    fastify.get('/mill/rules/:id', getMillRule)
-    fastify.put('/mill/rules/:id', putMillRule)
-    fastify.post('/mill/rules', postMillRule)
-    fastify.post('/mill/rules/preview', postMillRulePreview)
-    fastify.post('/mill/rules/packs', postMillRulePack)
-    fastify.post('/mill/rules/sigma', postMillSigmaPack)
-    fastify.post('/mill/rules/:id/actions', postMillRuleAction)
-    fastify.get('/mill/rules/:id/reprocess', getMillRuleReprocess)
-    fastify.post('/mill/rules/:id/reprocess', postMillRuleReprocess)
+    // Events and rules
+    fastify.get('/events', getEvents)
+    fastify.post('/events/:id/actions', postEventAction)
+    fastify.get('/rules', getRules)
+    fastify.get('/rules/:id', getRule)
+    fastify.put('/rules/:id', putRule)
+    fastify.post('/rules', postRule)
+    fastify.post('/rules/preview', postRulePreview)
+    fastify.post('/rules/packs', postRulePack)
+    fastify.post('/rules/sigma', postEventSigmaPack)
+    fastify.post('/rules/:id/actions', postRuleAction)
+    fastify.get('/rules/:id/reprocess', getRuleReprocess)
+    fastify.post('/rules/:id/reprocess', postRuleReprocess)
 }

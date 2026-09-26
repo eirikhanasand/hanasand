@@ -7,7 +7,7 @@ const client = new pg.Client({ host: process.env.DB_HOST, port: Number(process.e
 await client.connect()
 const query = (sql: string, values: unknown[] = []) => client.query(sql, values)
 mock.module('#db', () => ({ default: query, withTransaction: async (work: any) => work(query) }))
-mock.module('../src/utils/mill/analyzeLog.ts', () => ({ analyzeMongoPing: async () => false, analyzeAccess: async () => false }))
+mock.module('../src/utils/events/analyzeLog.ts', () => ({ analyzeMongoPing: async () => false, analyzeAccess: async () => false }))
 const { default: recordLog, recordLogBatch } = await import('../src/utils/logs/recordLog.ts')
 try {
     await query('BEGIN')

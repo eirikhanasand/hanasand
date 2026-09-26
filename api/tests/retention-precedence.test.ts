@@ -1,5 +1,5 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
-import { eventProtectionDefinition } from '../src/utils/mill/eventProtection.ts'
+import { eventProtectionDefinition } from '../src/utils/events/eventProtection.ts'
 
 let rules: any[] = [], calls: string[] = [], writes: string[] = [], eligible = '', failLookup = false
 const query: any = async (sql: string) => {
@@ -11,8 +11,8 @@ const query: any = async (sql: string) => {
     throw new Error(`Unexpected query: ${sql}`)
 }
 mock.module('#db', () => ({ default: query, withTransaction: async (work: any) => work(query) }))
-mock.module('../src/utils/mill/analyzeCollectorLog.ts', () => ({ analyzeCollectorExecution: async () => { calls.push('collector'); return eligible === 'collector' } }))
-mock.module('../src/utils/mill/analyzeLog.ts', () => ({
+mock.module('../src/utils/events/analyzeCollectorLog.ts', () => ({ analyzeCollectorExecution: async () => { calls.push('collector'); return eligible === 'collector' } }))
+mock.module('../src/utils/events/analyzeLog.ts', () => ({
     analyzeMongoPing: async () => { calls.push('mongo'); return eligible === 'mongo' },
     analyzeAccess: async () => { calls.push('http'); return eligible === 'http' },
 }))

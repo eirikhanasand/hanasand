@@ -47,11 +47,11 @@ try {
     const { logCountsSchema } = await import('../src/utils/db/logCountsSchema.ts')
     for (const statement of logCountsSchema) await query(statement.replace('CREATE TABLE IF NOT EXISTS', 'CREATE TEMP TABLE IF NOT EXISTS'))
     const { backfillLogDimensions, dimensionLogWhere, foldLogCounts } = await import('../src/utils/logs/dimensions.ts')
-    const { processLogBatch, processStoredLogs } = await import('../src/utils/mill/processLogs.ts')
-    const { MILL_RULES, millDefaultDefinition, createMillFindings, normalizeMillEvent, loadConfiguredMillRules } = await import('../src/handlers/mill.ts')
-    const { securityRules } = await import('../src/utils/mill/securityRules.ts')
+    const { processLogBatch, processStoredLogs } = await import('../src/utils/events/processLogs.ts')
+    const { BUILTIN_RULES, defaultRuleDefinition, createFindings, normalizeEvent, loadConfiguredRules } = await import('../src/handlers/events.ts')
+    const { securityRules } = await import('../src/utils/events/securityRules.ts')
     const { compileLogQuery } = await import('../src/utils/logs/kql.ts')
-    const rules = MILL_RULES.map(rule => ({ ...rule, enabled: true, source: 'hanasand' as const, definition: millDefaultDefinition(rule.id) }))
+    const rules = BUILTIN_RULES.map(rule => ({ ...rule, enabled: true, source: 'hanasand' as const, definition: defaultRuleDefinition(rule.id) }))
     const time = Date.now() - 60_000
     const rows = securityRules.flatMap((rule, index) => [true, false].map(positive => {
         const command = positive ? rule.positive : rule.negative
@@ -144,13 +144,13 @@ try {
     await processLogBatch(lateFailures, 'fixture', rules)
     assert.equal(Number((await query('SELECT count(*) AS count FROM findings')).rows[0].count), lateCount)
 
-    // Original non-process rules run against persisted native Mill events too.
+    // Original non-process rules run against persisted native Event events too.
     async function native(id: string, content: Record<string, unknown>, second: number) {
-        const event = normalizeMillEvent({ ...content, timestamp: new Date(time + second * 1000).toISOString() }, {})
+        const event = normalizeEvent({ ...content, timestamp: new Date(time + second * 1000).toISOString() }, {})
         await query(`INSERT INTO events (id, ingestion_id, organization_id, event_timestamp, event_type, action, outcome,
             user_id, source_ip, source_country, normalized) VALUES ($1, 'fixture', 'fixture', $2, $3, $4, $5, $6, $7, $8, $9)`,
         [id, event.timestamp, event.eventType, event.action, event.outcome, event.userId, event.sourceIp, event.sourceCountry, JSON.stringify(event.normalized)])
-        await createMillFindings('fixture', id, event, rules)
+        await createFindings('fixture', id, event, rules)
     }
     await native('country-a', { event_type: 'authentication', action: 'login', outcome: 'success', user: { id: 'traveller' },
         source: { country: 'NO', latitude: 59.9, longitude: 10.7 }, device: { id: 'one' } }, 1)
@@ -160,7 +160,7 @@ try {
     await native('vulnerability', { event_type: 'vulnerability', cve: 'CVE-2026-12345', asset: { id: 'fixture-host', version: '1' } }, 4)
     // Pre-storage Analyze rules have their own threshold/retention integration
     // check; a single stored fixture must not trigger their aggregate alert.
-    for (const rule of MILL_RULES.filter(rule => millDefaultDefinition(rule.id).stage !== 'analyze')) assert.ok((await query('SELECT 1 FROM findings WHERE rule_id = $1', [rule.id])).rowCount, `Persisted finding for ${rule.id}`)
+    for (const rule of BUILTIN_RULES.filter(rule => defaultRuleDefinition(rule.id).stage !== 'analyze')) assert.ok((await query('SELECT 1 FROM findings WHERE rule_id = $1', [rule.id])).rowCount, `Persisted finding for ${rule.id}`)
     for (const text of ['ProcessLogs | where Executable endswith "whoami"', 'SigninLogs | where Severity == "high"',
         'Logs | where RuleId == "process.recon.whoami.v1"', 'Logs | where Message contains "whoami"']) {
         const compiled = compileLogQuery(text)
@@ -176,7 +176,7 @@ try {
     await query('INSERT INTO login_events (user_id, ip, status, reason) VALUES (\'web-user\', \'192.0.2.55\', \'failed\', \'bad_password\')')
     await query('INSERT INTO traffic_events (domain, path, method, status) VALUES (\'hanasand.com\', \'/fixture\', \'GET\', 503)')
     await query('INSERT INTO system_events (event_type, severity, organization_id) VALUES (\'fixture.audit\', \'critical\', \'fixture\')')
-    const { processAdditionalLogSources } = await import('../src/utils/mill/storedSources.ts')
+    const { processAdditionalLogSources } = await import('../src/utils/events/storedSources.ts')
     await processAdditionalLogSources(logs => processLogBatch(logs, 'fixture', rules))
     for (const [source, type, severity] of [['login_events', 'SigninLogs', 'low'], ['traffic_events', 'HttpLogs', 'high'], ['system_events', 'SystemLogs', 'critical']]) {
         const { rows: [event] } = await query('SELECT normalized FROM events WHERE log_key = $1', [`service:${source}:1`])
@@ -237,7 +237,7 @@ try {
     // Upgrade fixture: pre-existing process events were never admitted to the
     // new queue. A fixed recovery snapshot must reach an aged command even as
     // newer commands continue arriving through the trigger.
-    const { acknowledgeProcessedLogs, processQueuedLogs, recoverProcessLogs, readPendingProcessLogs } = await import('../src/utils/mill/processQueue.ts')
+    const { acknowledgeProcessedLogs, processQueuedLogs, recoverProcessLogs, readPendingProcessLogs } = await import('../src/utils/events/processQueue.ts')
     await query('DROP TRIGGER log_process_queue_insert ON service_logs')
     const oldCommand = (await query(`INSERT INTO service_logs (service, host, level, message, metadata, created_at)
         VALUES ('audit', 'old-vm', 'info', 'whoami', $1, NOW() - INTERVAL '2 hours') RETURNING id::text`, [commandMetadata])).rows[0].id
@@ -393,7 +393,7 @@ try {
         await processStoredLogs() // Clearing the operator control restores full capacity.
         const recovered = await query('SELECT normalized FROM events WHERE log_key=ANY($1::text[]) AND processing_status=\'processed\'', [recoveryKeys])
         assert.equal(recovered.rowCount,251, 'Recovery resumes without losing any capped remainder')
-        const enabledRules = (await loadConfiguredMillRules('fixture')).filter(rule => rule.enabled !== false).length
+        const enabledRules = (await loadConfiguredRules('fixture')).filter(rule => rule.enabled !== false).length
         assert.ok(enabledRules > 0)
         assert.ok(recovered.rows.every(row => row.normalized.rules_checked === enabledRules))
         for (const { source, ids } of histories) {
@@ -472,7 +472,7 @@ try {
     const started = performance.now()
     await processLogBatch(Array.from({ length: 5000 }, (_, index) => ({ id: `volume-${index}`, service: 'fixture', host: 'fixture', level: 'info', message: 'Ordinary service log', created_at: new Date().toISOString() })), 'fixture', rules)
     console.log(`Ordinary-event throughput: ${Math.round(5000000 / (performance.now() - started))} events/second`)
-    const deliverySource = readFileSync(new URL('../src/utils/millCases.ts', import.meta.url), 'utf8')
+    const deliverySource = readFileSync(new URL('../src/utils/caseDelivery.ts', import.meta.url), 'utf8')
     const claimSql = deliverySource.match(/await run\(`(UPDATE findings[\s\S]*?RETURNING \*)`\)/)?.[1]
     assert.ok(claimSql, 'Actual case-delivery claim SQL must be found')
     const claimed = await query(claimSql)
@@ -624,7 +624,7 @@ try {
     const replayIds = (await query('INSERT INTO service_logs(service,level,message,metadata) VALUES (\'fixture\',\'info\',\'Unknown org original\', \'{"organizationId":"missing-scope"}\'), (\'fixture\',\'info\',\'Deleted org original\', \'{"organizationId":"deleted-scope"}\') RETURNING id::text')).rows.map(row => row.id)
     for (const id of replayIds) await query('INSERT INTO events(id,ingestion_id,organization_id,log_key,processing_status,normalized,event_timestamp) VALUES($1,\'logs\',\'fixture\',$2,\'skipped\',$3,NOW())', [
         (await import('node:crypto')).createHash('sha256').update('service:'+id).digest('hex'), 'service:'+id, { processing_reason: 'Organization is missing or inactive' }])
-    const { recoverUnassignedLogs } = await import('../src/utils/mill/recoverUnassignedLogs.ts')
+    const { recoverUnassignedLogs } = await import('../src/utils/events/recoverUnassignedLogs.ts')
     await recoverUnassignedLogs(logs => processLogBatch(logs, 'fixture', rules))
     await recoverUnassignedLogs(logs => processLogBatch(logs, 'fixture', rules))
     const replayed = (await query('SELECT processing_status,organization_id,normalized FROM events WHERE log_key=$1', ['service:'+replayIds[0]])).rows[0]
@@ -656,7 +656,7 @@ try {
             [acknowledgedHistory.map(row => 'service:'+row.id)])).rows[0].count), 500)
         console.log(`PostgreSQL ${cursorColumn} scan passed: pending holes processed in order at cap1, acknowledged rows skipped, complete durable coverage.`)
     }
-    const { refreshLogCatchupProgress } = await import('../src/utils/mill/catchupProgress.ts')
+    const { refreshLogCatchupProgress } = await import('../src/utils/events/catchupProgress.ts')
     await refreshLogCatchupProgress()
     await query('UPDATE log_catchup_progress SET sampled_at=NULL, attempted_at=NULL')
     await refreshLogCatchupProgress()
@@ -669,7 +669,7 @@ try {
     }
     assert.equal(progress.remaining,remaining,'Progress counts retained rows, not sequence gaps')
     assert.equal(progress.estimated_seconds,remaining ? null : 0,'No fabricated rate in the first sample')
-    console.log(`PostgreSQL verification passed: all ${MILL_RULES.length} rules, ${securityRules.length} negatives, retry deduplication, auth correlation, and KQL.`)
+    console.log(`PostgreSQL verification passed: all ${BUILTIN_RULES.length} rules, ${securityRules.length} negatives, retry deduplication, auth correlation, and KQL.`)
 } finally {
     await client.query('ROLLBACK')
     await client.end()

@@ -1,6 +1,6 @@
 // @ts-expect-error Bun provides this module when running focused tests.
 import { describe, expect, test } from 'bun:test'
-import { getRuleCategory } from '../src/app/dashboard/mill/rules/rule-categories'
+import { getRuleCategory } from '../src/app/dashboard/rules/rule-categories'
 
 describe('rule categories', () => {
     test.each([

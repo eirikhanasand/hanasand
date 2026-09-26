@@ -12,11 +12,11 @@ const query = async (sql: string, params: any[] = []): Promise<any> => {
     throw new Error('Unexpected query')
 }
 mock.module('#db', () => ({ default: query, withTransaction: async (work: any) => work(query) }))
-mock.module('../src/utils/mill/analyzeLog.ts', () => ({ analyzeMongoPing: async () => false, analyzeAccess: async () => false }))
+mock.module('../src/utils/events/analyzeLog.ts', () => ({ analyzeMongoPing: async () => false, analyzeAccess: async () => false }))
 const { default: recordLog, recordLogBatch } = await import('../src/utils/logs/recordLog.ts')
-const { customRetentionAction } = await import('../src/utils/mill/customRetention.ts')
-const { normalizeLogEvent } = await import('../src/utils/mill/logEvent.ts')
-const { authenticationAuditStoreRule, eventProtectionDefinition } = await import('../src/utils/mill/eventProtection.ts')
+const { customRetentionAction } = await import('../src/utils/events/customRetention.ts')
+const { normalizeLogEvent } = await import('../src/utils/events/logEvent.ts')
+const { authenticationAuditStoreRule, eventProtectionDefinition } = await import('../src/utils/events/eventProtection.ts')
 const drop = { source: 'owned', enabled: true, organizationId: 'org-a', definition: { stage: 'analyze', action: 'drop', conditions: [{ path: 'event_type', operator: 'equals', value: 'application' }] } }
 const entry = { service: 'example', level: 'info' as const, message: 'heartbeat', metadata: { organizationId: 'org-a' } }
 beforeEach(() => { reads = 0; writes = []; receipts = []; failed = false; rules = [structuredClone(drop)] })

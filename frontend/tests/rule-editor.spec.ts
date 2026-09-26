@@ -1,0 +1,188 @@
+import { expect, test } from '@playwright/test'
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import postcss from 'postcss'
+import tailwind from '@tailwindcss/postcss'
+let output: string, bundle: string, css: string
+const definition = { match: 'all', parameters: { windowMinutes: 15, minimumCount: 3 }, conditions: [], failureConditions: [] }
+const initial = { id: 'auth.brute_force_success.v1', version: '1', source: 'hanasand', name: 'Brute-force success', family: 'Authentication', severity: 'high', explanation: 'Multiple failed logins followed by a successful login for the same user.', evidence: [], enabled: true, definition }
+test.beforeAll(async () => {
+    output = mkdtempSync(path.join(tmpdir(), 'event-editor-'))
+    execFileSync('bun', ['build', 'tests/fixtures/event-editor.tsx', '--target=browser', '--define', 'process.env={"NODE_ENV":"production"}', '--outdir', output])
+    bundle = readFileSync(path.join(output, 'event-editor.js'), 'utf8')
+    css = (await postcss([tailwind()]).process(readFileSync('src/app/globals.css', 'utf8'), { from: path.resolve('src/app/globals.css') })).css
+})
+test.afterAll(() => rmSync(output, { recursive: true, force: true }))
+test.beforeEach(async ({ page }) => {
+    await page.route('http://event-editor.test/fixture.js', route => route.fulfill({ contentType: 'application/javascript', body: bundle }))
+    await page.route('http://event-editor.test/rules/*', route => route.fulfill({ contentType: 'text/html', body: `<html class="dark"><head><style>${css}</style></head><body><div id="root"></div><script type="module" src="/fixture.js"></script></body></html>` }))
+})
+test('edits executable selectors, persists on reload, canonicalizes current links and fits mobile', async ({ page }) => {
+    let saved = structuredClone(initial), writes = 0
+    await page.route('**/api/backend/rules/*?*', async route => {
+        if (route.request().method() === 'PUT') {
+            writes++
+            const body = route.request().postDataJSON()
+            expect(body.definition.parameters).toEqual({ windowMinutes: 30, minimumCount: 5 })
+            expect(body.definition.failureConditions).toEqual([{ path: 'EventID', operator: 'regex', value: '^(4625|4771)$' }])
+            expect(body.definition.conditions).toEqual([{ path: 'EventID', operator: 'equals', value: '4624' }])
+            saved = { ...saved, ...body, version: '2' }
+            return route.fulfill({ json: { rule: saved } })
+        }
+        return route.fulfill({ json: { rule: saved, isHistorical: false, currentVersion: saved.version, canEdit: true, triggerCount: 7, audit: [], nextOffset: null } })
+    })
+    await page.goto('http://event-editor.test/rules/auth.brute_force_success.v1')
+    await expect(page).toHaveURL('http://event-editor.test/rules/auth.brute_force_success')
+    await page.getByLabel('Time window').fill('30')
+    await page.getByLabel('Minimum failed logins').fill('5')
+    await page.getByRole('button', { name: 'Add failure selector condition' }).click()
+    await page.getByLabel('Failure selector 1 field').fill('EventID')
+    await page.getByLabel('Failure selector 1 operator').selectOption('regex')
+    await page.getByLabel('Failure selector 1 value').fill('^(4625|4771)$')
+    await page.getByRole('button', { name: 'Add success selector condition' }).click()
+    await page.getByLabel('Success selector 1 field').fill('EventID')
+    await page.getByLabel('Success selector 1 value').fill('4624')
+    await expect(page.getByLabel('Signature preview')).toContainText('"windowMinutes": 30')
+    await page.getByRole('button', { name: 'Save changes' }).click()
+    await expect(page.getByText('Rule saved. New events use this version.')).toBeVisible()
+    await page.reload()
+    await expect(page.getByLabel('Time window')).toHaveValue('30')
+    await expect(page.getByLabel('Failure selector 1 value')).toHaveValue('^(4625|4771)$')
+    expect(writes).toBe(1)
+    await page.screenshot({ path: '/tmp/event-editor-desktop.png', fullPage: true })
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.screenshot({ path: '/tmp/event-editor-mobile.png', fullPage: true })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})
+test('historical rules retain their version, disallow edits, and link to current', async ({ page }) => {
+    await page.route('**/api/backend/rules/*?*', route => route.fulfill({ json: { rule: initial, isHistorical: true, currentVersion: '2', canEdit: false, triggerCount: 7, audit: [], nextOffset: null } }))
+    await page.goto('http://event-editor.test/rules/auth.brute_force_success.v1')
+    await expect(page.getByText('Version 1 · Historical')).toBeVisible()
+    await expect(page.getByLabel('Time window')).toBeDisabled()
+    await expect(page.getByRole('button', { name: 'Save changes' })).toHaveCount(0)
+    await expect(page.getByRole('link', { name: 'Open current rule' })).toHaveAttribute('href', '/rules/auth.brute_force_success')
+})
+test('failed saves preserve the draft and show the server error', async ({ page }) => {
+    await page.route('**/api/backend/rules/*?*', route => route.request().method() === 'PUT' ? route.fulfill({ status: 409, json: { error: 'This rule changed since you opened it. Reload the rule before saving again.' } }) : route.fulfill({ json: { rule: initial, canEdit: true, currentVersion: '1', triggerCount: 0, audit: [], nextOffset: null } }))
+    await page.goto('http://event-editor.test/rules/auth.brute_force_success')
+    await page.getByLabel('Time window').fill('25')
+    await page.getByRole('button', { name: 'Save changes' }).click()
+    await expect(page.getByRole('alert')).toContainText('This rule changed')
+    await expect(page.getByLabel('Time window')).toHaveValue('25')
+})
+
+test('Analyze rule exposes reversible retention and persists its action', async ({ page }) => {
+    let saved = { ...initial, id: 'http.routine_access.v1', name: 'Routine successful requests',
+        definition: { match: 'all', stage: 'analyze', action: 'drop', conditions: [], parameters: { windowMinutes: 1, requestThreshold: 50 } } }
+    await page.route('**/api/backend/rules/*?*', async route => {
+        if (route.request().method() === 'PUT') {
+            saved = { ...saved, ...route.request().postDataJSON(), version: '2' }
+            return route.fulfill({ json: { rule: saved } })
+        }
+        return route.fulfill({ json: { rule: saved, canEdit: true, currentVersion: saved.version, triggerCount: 0, audit: [], nextOffset: null } })
+    })
+    await page.goto('http://event-editor.test/rules/http.routine_access')
+    await expect(page.getByText('ANALYZE FIRST', { exact: true })).toBeVisible()
+    await expect(page.getByLabel('Alert above')).toHaveValue('50')
+    await page.getByLabel('Action', { exact: true }).selectOption('keep')
+    await page.getByRole('button', { name: 'Save changes' }).click()
+    await page.reload()
+    await expect(page.getByLabel('Action', { exact: true })).toHaveValue('keep')
+    await expect(page.getByRole('button', { name: 'Add event selector condition' })).toBeVisible()
+    await page.screenshot({ path: '/tmp/hanasand-analyze-rule.png', fullPage: true })
+})
+
+test('storage protection criteria are visible, editable and reject invalid JSON', async ({ page }) => {
+    let writes = 0
+    let saved = { ...initial, id: 'security.event_evidence.v1', name: 'Store security and failure evidence',
+        definition: { match: 'all', stage: 'analyze', action: 'keep', conditions: [], parameters: {},
+            protection: { appliesTo: 'custom_drop', checks: [{ keys: ['error'], operator: 'signal' }] } } }
+    await page.route('**/api/backend/rules/*?*', async route => {
+        if (route.request().method() === 'PUT') { writes++; saved = { ...saved, ...route.request().postDataJSON(), version: '2' } }
+        return route.fulfill({ json: { rule: saved, canEdit: true, currentVersion: saved.version, triggerCount: 0, audit: [], nextOffset: null } })
+    })
+    await page.goto('http://event-editor.test/rules/security.event_evidence')
+    await expect(page.getByLabel('Signature preview')).toContainText('custom_drop')
+    await page.getByLabel('Storage criteria').fill('{invalid')
+    await page.getByRole('button', { name: 'Save changes' }).click()
+    expect(writes).toBe(0)
+    await page.getByLabel('Storage criteria').fill(JSON.stringify({ appliesTo: 'all', checks: [{ keys: ['error', 'failure'], operator: 'signal' }] }))
+    await page.getByRole('button', { name: 'Save changes' }).click()
+    await expect(page.getByText('Rule saved. New events use this version.')).toBeVisible()
+    await page.reload()
+    await expect(page.getByLabel('Storage criteria')).toContainText('failure')
+    expect(writes).toBe(1)
+})
+
+
+test('historical Drop rules display their recorded severity', async ({ page }) => {
+    await page.route('**/api/backend/rules/*?*', route => route.fulfill({ json: { rule: { ...initial, definition: { ...definition, stage: 'analyze', action: 'drop' } }, isHistorical: true, currentVersion: '2', canEdit: false, triggerCount: 0, audit: [], nextOffset: null } }))
+    await page.goto('http://event-editor.test/rules/auth.brute_force_success.v1')
+    await expect(page.getByRole('combobox', { name: /^Severity/ })).toHaveValue('high')
+    await expect(page.getByRole('combobox', { name: /^Severity/ })).toBeDisabled()
+})
+
+test('verified probe policy is editable and persists with its Event rule', async ({ page }) => {
+    let saved = { ...initial, id: 'model.verified_discovery_probes.v1', name: 'Verified model discovery probes',
+        definition: { match: 'all', stage: 'analyze', action: 'drop', conditions: [{ path: 'host', operator: 'equals', value: 'inspur' }],
+            parameters: { maxDurationMs: 1000, minIntervalMs: 5000, maxIntervalMs: 40000 } } }
+    await page.route('**/api/backend/rules/*?*', async route => {
+        if (route.request().method() === 'PUT') saved = { ...saved, ...route.request().postDataJSON(), version: '2' }
+        return route.fulfill({ json: { rule: saved, canEdit: true, currentVersion: saved.version, triggerCount: 0, audit: [], nextOffset: null } })
+    })
+    await page.goto('http://event-editor.test/rules/model.verified_discovery_probes')
+    await page.getByLabel('Maximum duration').fill('500')
+    await page.getByLabel('Event selector 1 value').fill('other-host')
+    await page.getByLabel('Event selector 1 match case').check()
+    await page.getByRole('button', { name: 'Save changes' }).click()
+    await expect(page.getByText('Rule saved. New events use this version.')).toBeVisible()
+    await page.reload()
+    await expect(page.getByLabel('Maximum duration')).toHaveValue('500')
+    await expect(page.getByLabel('Event selector 1 value')).toHaveValue('other-host')
+    await expect(page.getByLabel('Event selector 1 match case')).toBeChecked()
+    await expect(page.getByLabel('Signature preview')).toContainText('"maxDurationMs": 500')
+    await page.setViewportSize({ width: 390, height: 844 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})
+
+test('owned Store scope is visible, editable and persists on reload', async ({ page }) => {
+    let saved = { ...initial, id: 'security.authentication_audit_retention.v1', source: 'owned', name: 'Store authentication and audit events', definition: { match: 'all', stage: 'analyze', action: 'keep', storeScope: 'custom_drop', conditions: [{ path: 'event_type', operator: 'regex', value: '^(authentication|audit)$' }] } }
+    await page.route('**/api/backend/rules/*?*', async route => {
+        if (route.request().method() === 'PUT') {
+            const body = route.request().postDataJSON()
+            expect(body.storeScope).toBe('all')
+            saved = { ...saved, version: '2', definition: { ...saved.definition, storeScope: body.storeScope } }
+        }
+        return route.fulfill({ json: { rule: saved, canEdit: true, currentVersion: saved.version, triggerCount: 0, audit: [], nextOffset: null } })
+    })
+    await page.goto('http://event-editor.test/rules/security.authentication_audit_retention')
+    await expect(page.getByLabel('Store scope')).toHaveValue('custom_drop')
+    await page.getByLabel('Store scope').selectOption('all')
+    await page.getByRole('button', { name: 'Save changes' }).click()
+    await expect(page.getByText('Rule saved. New events use this version.')).toBeVisible()
+    await page.reload()
+    await expect(page.getByLabel('Store scope')).toHaveValue('all')
+})
+
+test('SSH transport defaults and selectors save without browser range errors', async ({ page }) => {
+    let writes = 0
+    let saved = { ...initial, id: 'ssh.transport_debug.v1', name: 'SSH transport debug summaries', severity: 'low',
+        definition: { match: 'all', stage: 'analyze', action: 'drop', conditions: [{ path: 'host', operator: 'equals', value: 'inspur', caseSensitive: true }],
+            parameters: { maxDurationMs: 1000, maxAgeMs: 60000, minimumGapMs: 0, maxPerMinute: 600 } } }
+    await page.route('**/api/backend/rules/*?*', async route => {
+        if (route.request().method() === 'PUT') { writes++; saved = { ...saved, ...route.request().postDataJSON(), version: '2' } }
+        return route.fulfill({ json: { rule: saved, canEdit: true, currentVersion: saved.version, triggerCount: 0, audit: [], nextOffset: null } })
+    })
+    await page.goto('http://event-editor.test/rules/ssh.transport_debug')
+    await expect(page.getByLabel('Minimum spacing')).toHaveValue('0')
+    await expect(page.getByLabel('Maximum per minute')).toHaveValue('600')
+    await page.getByLabel('Event selector 1 value').fill('ovhcloud')
+    await page.getByRole('button', { name: 'Save changes' }).click()
+    await expect(page.getByText('Rule saved. New events use this version.')).toBeVisible()
+    await page.reload()
+    await expect(page.getByLabel('Event selector 1 value')).toHaveValue('ovhcloud')
+    await expect(page.getByLabel('Event selector 1 match case')).toBeChecked()
+    expect(writes).toBe(1)
+})

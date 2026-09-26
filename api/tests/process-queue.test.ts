@@ -13,7 +13,7 @@ const query = async (sql: string, args: any[] = []) => {
     throw new Error(sql)
 }
 mock.module('#db', () => ({ default: query, withTransaction: async (work: any) => work(query) }))
-const { acknowledgeProcessedLogs, processQueuedLogs, recoverProcessLogs, readPendingProcessLogs } = await import('../src/utils/mill/processQueue.ts')
+const { acknowledgeProcessedLogs, processQueuedLogs, recoverProcessLogs, readPendingProcessLogs } = await import('../src/utils/events/processQueue.ts')
 beforeEach(() => { queue = []; recovered = []; calls = []; recoveryId = '0'; complete = new Set() })
 const process = async (rows: any[]) => { for (const row of rows) complete.add(row.id) }
 test('continuous newer arrivals cannot displace an admitted older command; work is capped', async () => {

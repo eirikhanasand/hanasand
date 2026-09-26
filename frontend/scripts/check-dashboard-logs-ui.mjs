@@ -66,7 +66,7 @@ try {
                 } else {
                     const event = page.locator('article').filter({ hasText: 'whoami' })
                     await event.getByRole('button', { expanded: false }).click()
-                    await expect(event).toContainText('Mill checked 105 enabled rules.')
+                    await expect(event).toContainText('Event checked 105 enabled rules.')
                     await event.getByRole('button', { name: 'Copy event JSON' }).click()
                     assert.equal(JSON.parse(await page.evaluate(() => navigator.clipboard.readText())).process.command_line, 'whoami')
                     if (route === '/logs/search') {

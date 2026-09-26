@@ -19,7 +19,7 @@ test('search refreshes progress every ten seconds without advancing the timestam
     const progress = page.getByRole('region', { name: 'Historical log catch-up' })
     await expect(progress.locator('time')).toHaveAttribute('datetime', generatedAt)
     await expect(progress).toContainText('25.0% · About 1 min remaining')
-    await expect(page.getByText('Mill processing is delayed:', { exact: false })).toHaveCount(0)
+    await expect(page.getByText('Event processing is delayed:', { exact: false })).toHaveCount(0)
     await expect(progress).not.toContainText('Results and counters will update')
     await page.clock.runFor(9000)
     expect(requests).toBe(1)

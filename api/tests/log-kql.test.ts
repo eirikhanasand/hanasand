@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { compileLogQuery } from '../src/utils/logs/kql.ts'
-import { normalizeLogEvent } from '../src/utils/mill/logEvent.ts'
+import { normalizeLogEvent } from '../src/utils/events/logEvent.ts'
 
 test('KQL values are parameters, fields and operators are allowlisted', () => {
     const query = compileLogQuery('ProcessLogs | where (Severity == "critical" or CommandLine contains "whoami") and TimeGenerated > ago(1h) | order by TimeGenerated desc | take 50')

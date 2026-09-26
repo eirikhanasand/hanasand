@@ -31,7 +31,7 @@ try {
         await query(`CREATE TABLE ${name} (id bigint PRIMARY KEY, created_at timestamptz DEFAULT NOW())`)
         await query(`INSERT INTO ${name}(id) VALUES (1),(201)`)
     }
-    const { processAdditionalLogSources } = await import('../src/utils/mill/storedSources.ts')
+    const { processAdditionalLogSources } = await import('../src/utils/events/storedSources.ts')
     let batches = 0, fail = true
     const process = async (logs: Array<{ id?: unknown }>) => {
         if (fail && ++batches === 4) throw new Error('History interrupted')
@@ -56,7 +56,7 @@ try {
     const positions = (await query('SELECT last_id::text, recent_id::text, checked_count::int FROM log_processing_cursors')).rows
     assert.equal(positions.length, 3)
     assert.ok(positions.every(row => row.last_id === '1' && row.recent_id === '201' && row.checked_count === 2))
-    const { withLogBatch } = await import('../src/utils/mill/logBatch.ts')
+    const { withLogBatch } = await import('../src/utils/events/logBatch.ts')
     const observer = new pg.Client(options)
     await observer.connect()
     let release!: () => void

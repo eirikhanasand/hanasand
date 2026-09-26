@@ -1,9 +1,9 @@
 import { expect, mock, test } from 'bun:test'
 mock.module('#constants', () => ({ default: {} }))
 mock.module('#db', () => ({ default: async () => { throw new Error('Unexpected database access') }, withTransaction: async (fn: () => unknown) => fn() }))
-const { analyzePostgresBatch } = await import('../src/utils/mill/analyzePostgresBatch.ts')
-const { postgresReceipt, postgresRuleId, postgresDefinition } = await import('../src/utils/mill/analyzePostgres.ts')
-const { normalizeBuiltinDefinition } = await import('../src/handlers/mill.ts')
+const { analyzePostgresBatch } = await import('../src/utils/events/analyzePostgresBatch.ts')
+const { postgresReceipt, postgresRuleId, postgresDefinition } = await import('../src/utils/events/analyzePostgres.ts')
+const { normalizeBuiltinDefinition } = await import('../src/handlers/events.ts')
 import { fixture } from './analyze-postgres.test.ts'
 
 function database(options: { enabled?: boolean, existing?: boolean, fail?: string, customKeep?: boolean, detector?: boolean, definition?: any } = {}) {

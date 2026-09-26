@@ -1,8 +1,8 @@
 import { expect, mock, test } from 'bun:test'
 mock.module('#constants', () => ({ default: {} }))
 mock.module('#db', () => ({ default: async () => { throw new Error('unexpected database access') }, withTransaction: async (fn: () => unknown) => fn() }))
-const { analyzeCdnRefresh } = await import('../src/utils/mill/analyzeCdnRefreshLog.ts')
-const { cdnRefreshRuleId, cdnRefreshDefinition } = await import('../src/utils/mill/analyzeCdnRefresh.ts')
+const { analyzeCdnRefresh } = await import('../src/utils/events/analyzeCdnRefreshLog.ts')
+const { cdnRefreshRuleId, cdnRefreshDefinition } = await import('../src/utils/events/analyzeCdnRefresh.ts')
 const { fixture } = await import('./analyze-cdn-refresh.test.ts')
 test('only enabled Drop rules admit receipts; suspicious or incomplete events never reach the database', async () => {
     for (const enabled of [false, true]) {

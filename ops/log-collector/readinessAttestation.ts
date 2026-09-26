@@ -1,7 +1,7 @@
 import { readFile, lstat } from 'node:fs/promises'
 import { createPrivateKey, sign } from 'node:crypto'
 import type { AtomicEventGroup, LogEvent } from './core'
-import { matchesReadinessFact, readinessCanonical, readinessRole, readinessRoles, readinessChainPayload } from '../../api/src/utils/mill/analyzeReadinessAudit'
+import { matchesReadinessFact, readinessCanonical, readinessRole, readinessRoles, readinessChainPayload } from '../../api/src/utils/events/analyzeReadinessAudit'
 
 const trustedContext = new WeakSet<object>()
 export function markReadinessContext(event: LogEvent, attrs: Record<string, string>, rows: string[]) {

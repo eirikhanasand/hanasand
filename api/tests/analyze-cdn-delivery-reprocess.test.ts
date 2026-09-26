@@ -38,9 +38,9 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('CDN historical replay remov
         const { default: install } = await import('../src/utils/db/logAnalyzeSchema.ts')
         const { default: jobs } = await import('../src/utils/db/ruleReprocessSchema.ts')
         const { recordLogBatch } = await import('../src/utils/logs/recordLog.ts')
-        const { normalizeLogEvent } = await import('../src/utils/mill/logEvent.ts')
-        const { processRuleReprocessJob } = await import('../src/utils/mill/ruleReprocess.ts')
-        const { cdnDeliveryRuleId } = await import('../src/utils/mill/analyzeCdnDelivery.ts')
+        const { normalizeLogEvent } = await import('../src/utils/events/logEvent.ts')
+        const { processRuleReprocessJob } = await import('../src/utils/events/ruleReprocess.ts')
+        const { cdnDeliveryRuleId } = await import('../src/utils/events/analyzeCdnDelivery.ts')
         await install(); await jobs()
         const good = fixture()
         const protectedCopy = { ...structuredClone(good), sourceEventId: 'c'.repeat(64) }

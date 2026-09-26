@@ -1,7 +1,7 @@
 import { createHash, generateKeyPairSync, sign } from 'node:crypto'
 import { expect, test } from 'bun:test'
-import { readinessAuditDefinition, readinessTimingAllowed, validReadinessAuditParameters, eligibleReadinessAudit, eligibleReadinessChain, completeReadinessChains, matchesReadinessFact, readinessArguments, readinessWrapperArguments, readinessCanonical, readinessChainPayload, readinessAuditRule, readinessRole, readinessRoles, type ReadinessExecutionProof } from '../src/utils/mill/analyzeReadinessAudit.ts'
-import type { CollectorLog } from '../src/utils/mill/analyzeCollector.ts'
+import { readinessAuditDefinition, readinessTimingAllowed, validReadinessAuditParameters, eligibleReadinessAudit, eligibleReadinessChain, completeReadinessChains, matchesReadinessFact, readinessArguments, readinessWrapperArguments, readinessCanonical, readinessChainPayload, readinessAuditRule, readinessRole, readinessRoles, type ReadinessExecutionProof } from '../src/utils/events/analyzeReadinessAudit.ts'
+import type { CollectorLog } from '../src/utils/events/analyzeCollector.ts'
 
 export const keys = generateKeyPairSync('ed25519')
 const quote = (value: string) => /^[\w@%+=:,./-]+$/.test(value) ? value : '\'' + value.replaceAll('\'', '\'"\'"\'') + '\''
@@ -117,7 +117,7 @@ test('batch groups isolate unrelated logs and reject overlapping or ambiguous ex
     expect(completeReadinessChains([...one,...collision])).toHaveLength(0)
 })
 
-test('authenticated timing is evaluated against persisted Mill parameters', () => {
+test('authenticated timing is evaluated against persisted Event parameters', () => {
     configure(); const {logs,fact}=fixture(), parameters=readinessAuditDefinition.parameters
     expect(validReadinessAuditParameters(parameters)).toBe(true)
     expect(readinessTimingAllowed(fact,parameters)).toBe(true)

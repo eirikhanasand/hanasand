@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import pg from 'pg'
 import { createHash } from 'node:crypto'
 import { telemetryFixture, sshFixture } from './analyze-routine-groups.test.ts'
-import { telemetryRuleId, sshWindowRuleId, telemetryDefinition, sshWindowDefinition } from '../src/utils/mill/analyzeRoutineGroups.ts'
+import { telemetryRuleId, sshWindowRuleId, telemetryDefinition, sshWindowDefinition } from '../src/utils/events/analyzeRoutineGroups.ts'
 
 test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real group ingestion preserves suspicious originals, findings, replay and rollback', async () => {
     const port = Number(process.env.POSTGRES_FILTER_TEST_PORT)
@@ -32,8 +32,8 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real group ingestion preser
         await query('ALTER TABLE service_logs ADD COLUMN source_event_id text UNIQUE')
         const { default: install } = await import('../src/utils/db/logAnalyzeSchema.ts')
         const { recordLogBatch } = await import('../src/utils/logs/recordLog.ts')
-        const { collectMillEventFindings, normalizeMillEvent } = await import('../src/handlers/mill.ts')
-        const { normalizeLogEvent } = await import('../src/utils/mill/logEvent.ts')
+        const { collectEventFindings, normalizeEvent } = await import('../src/handlers/events.ts')
+        const { normalizeLogEvent } = await import('../src/utils/events/logEvent.ts')
         await install()
         for (const [id, definition] of [[telemetryRuleId, telemetryDefinition], [sshWindowRuleId, sshWindowDefinition]]) await query('UPDATE rules SET definition=$2 WHERE rule_id=$1', [id, JSON.stringify(definition)])
         const ingest = (rows: any[]) => tx(q => recordLogBatch(rows, q as any))
@@ -44,7 +44,7 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real group ingestion preser
         expect(stored[0].metadata.original_records).toEqual(logs)
         expect((await query('SELECT count(*) FROM log_analyze_receipts')).rows[0].count).toBe('3')
         const rule: any = { id: 'owned.original', source: 'owned', enabled: true, version: '1', severity: 'high', name: 'Original detector', explanation: 'test', definition: { match: 'all', conditions: [{ path: 'service', operator: 'equals', value: 'systemd' }] } }
-        const findings = collectMillEventFindings('platform', 'canonical', normalizeMillEvent(normalizeLogEvent(stored[0]), {}), [rule]).findings
+        const findings = collectEventFindings('platform', 'canonical', normalizeEvent(normalizeLogEvent(stored[0]), {}), [rule]).findings
         expect(findings).toHaveLength(1)
         expect(findings[0][2]).toBe('high')
         expect(findings[0][4]).toEqual(['canonical'])
@@ -102,7 +102,7 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real group ingestion preser
         await ingest(policyBurst)
         expect((await query('SELECT count(*) FROM service_logs WHERE source_event_id=ANY($1::text[])', [policyBurst.map(x => x.sourceEventId)])).rows[0].count).toBe('6')
         expect((await query('SELECT count(*) FROM log_analyze_receipts')).rows[0].count).toBe(receiptsBeforePolicy)
-        const { analyzeRoutineGroupBatch } = await import('../src/utils/mill/analyzeRoutineGroupBatch.ts')
+        const { analyzeRoutineGroupBatch } = await import('../src/utils/events/analyzeRoutineGroupBatch.ts')
         await query('DELETE FROM log_routine_group_state')
         for (const [id, definition] of [[telemetryRuleId, telemetryDefinition], [sshWindowRuleId, sshWindowDefinition]]) await query('UPDATE rules SET definition=$2 WHERE rule_id=$1', [id, JSON.stringify(definition)])
         const replayTelemetry = freshRows('stored-replay', Date.now())
