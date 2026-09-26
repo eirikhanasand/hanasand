@@ -41,7 +41,7 @@ test('system dashboard focuses operator triage while preserving live controls', 
 
     expect(page).toContain('data-system-summary-disclosure')
     expect(page).toContain('data-system-summary-metrics')
-    expect(page).not.toContain("Related operations")
+    expect(page).not.toContain('Related operations')
     expect(page).toContain('data-system-container-logs-disclosure')
     expect(page).toContain('data-system-container-log-tail')
     expect(page).toContain('See more')
