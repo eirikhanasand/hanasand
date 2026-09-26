@@ -7,7 +7,7 @@ import { auditQuery, param, readAuditPage, type AuditEvent, type AuditPage, type
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import config from '@/config'
-import { AlertTriangle, ArrowUp, ClipboardList, Clock3, Maximize2, Minimize2, Search, X } from 'lucide-react'
+import { AlertTriangle, ArrowUp, ClipboardList, Clock3, ListFilter, Maximize2, Minimize2, Search, X } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 
 export default function AuditTimeline({ initialAudit, filters }: { initialAudit: AuditPage, filters: AuditSearchParams }) {
@@ -17,6 +17,7 @@ export default function AuditTimeline({ initialAudit, filters }: { initialAudit:
     const [error, setError] = useState(false)
     const [searchError, setSearchError] = useState(initialAudit.error || '')
     const [searchOpen, setSearchOpen] = useState(!!(param(filters, 'q') || param(filters, 'hql')))
+    const [filtersOpen, setFiltersOpen] = useState(false)
     const [mode, setMode] = useState(param(filters, 'hql') ? 'hql' : 'q')
     const [search, setSearch] = useState(param(filters, 'hql') || param(filters, 'q'))
     const [fullscreen, setFullscreen] = useState(false)
@@ -145,6 +146,7 @@ export default function AuditTimeline({ initialAudit, filters }: { initialAudit:
                 <div className='flex items-center gap-2'>
                     {showScrollTop && <button type='button' aria-label='Back to top of timeline' title='Back to top' onClick={() => { scrollRoot.current?.scrollTo({ top: 0, behavior: 'instant' }); setShowScrollTop(false) }} className='inline-flex h-8 w-8 items-center justify-center rounded-md border border-ui-border hover:bg-ui-panel'><ArrowUp className='h-4 w-4' /></button>}
                     <button type='button' aria-label='Search timeline (Cmd J)' aria-keyshortcuts='Meta+J Control+J' aria-expanded={searchOpen} onClick={() => { setSearchOpen(value => !value); requestAnimationFrame(() => searchInput.current?.focus()) }} className='inline-flex h-8 items-center gap-2 rounded-md border border-ui-border px-2 text-xs hover:bg-ui-panel'><Search className='h-4 w-4' /><span>Search</span><kbd className='hidden text-ui-muted sm:inline'>⌘J</kbd></button>
+                    <button type='button' aria-label='Toggle audit filters' title={filtersOpen ? 'Hide filters' : 'Show filters'} aria-expanded={filtersOpen} aria-controls='audit-filters' onClick={() => setFiltersOpen(value => !value)} className={`inline-flex h-8 w-8 items-center justify-center rounded-md border border-ui-border hover:bg-ui-panel ${filtersOpen ? 'bg-ui-panel text-ui-primary' : ''}`}><ListFilter className='h-4 w-4' aria-hidden /></button>
                     <button ref={fullscreenButton} type='button' aria-label={fullscreen ? 'Minimize timeline' : 'Fullscreen timeline'} title={fullscreen ? 'Minimize (Esc)' : 'Fullscreen'} onClick={toggleFullscreen} className='inline-flex h-8 items-center gap-2 rounded-md border border-ui-border px-2 text-xs hover:bg-ui-panel'>{fullscreen ? <Minimize2 className='h-4 w-4' /> : <Maximize2 className='h-4 w-4' />}<span className='hidden sm:inline'>{fullscreen ? 'Minimize' : 'Fullscreen'}</span></button>
                 </div>
             </div>
@@ -159,7 +161,7 @@ export default function AuditTimeline({ initialAudit, filters }: { initialAudit:
                 {mode === 'hql' && <details className='mt-2 text-xs text-ui-muted'><summary className='cursor-pointer'>HQL syntax</summary><p className='mt-2'>Hanasand Query Language. Table: AuditEvents. Fields: TimeGenerated, Service, Actor, Action, Target, Result, Description.</p><p className='mt-1'>Operators: where, project, order by, take (1–500), summarize count() by. Conditions: ==, !=, &gt;, &gt;=, &lt;, &lt;=, contains, has, startswith, endswith, in, and, or, not, parentheses and ago(24h). Put where before order by and take last. Default limit: 100. Existing filters still apply.</p></details>}
             </div>}
             {searchError && <p role='alert' className='shrink-0 border-b border-ui-border px-3 py-2 text-sm text-ui-danger'>{searchError}</p>}
-            <div ref={scrollRoot} onScroll={updateScrollTopButton} data-testid='audit-scroll' aria-busy={loading} className={fullscreen ? 'min-h-0 flex-1 overflow-auto' : 'max-h-[calc(100vh-18rem)] min-h-72 overflow-auto'}>
+            <div ref={scrollRoot} onScroll={updateScrollTopButton} data-testid='audit-scroll' aria-busy={loading} className={fullscreen ? 'min-h-0 flex-1 overflow-auto' : `min-h-72 overflow-auto ${filtersOpen ? 'max-h-[calc(100vh-18rem)]' : 'max-h-[calc(100vh-13rem)]'}`}>
                 {queryResult ? <table className='min-w-full border-separate border-spacing-0 text-xs'>
                     <thead className='sticky top-0 z-10 bg-ui-panel text-left text-ui-muted'><tr>{queryResult.columns.map(column => <th key={column} className='border-b border-ui-border px-3 py-2'>{column === 'TimeGenerated' ? 'Time' : column}</th>)}</tr></thead>
                     <tbody>{queryResult.rows.map((row, index) => <tr key={index} className='align-top hover:bg-ui-raised'>{row.map((value, cell) => <td key={cell} className='border-b border-ui-border px-3 py-1.5'>{queryResult.columns[cell] === 'TimeGenerated' && value ? compactTime(String(value)) : String(value ?? '—')}</td>)}</tr>)}{!queryResult.rows.length && <tr><td colSpan={queryResult.columns.length} className='p-8 text-center text-ui-muted'>No audit events match this query.</td></tr>}</tbody>
@@ -206,22 +208,24 @@ export default function AuditTimeline({ initialAudit, filters }: { initialAudit:
                     <Metric title='Last action' value={lastEvent ? shortTime(lastEvent.happenedAt) : '—'} icon={<Clock3 className='h-4 w-4' />} />
                 </div>}
 
-                <DashboardPanel className='p-3'>
-                    <form className='grid gap-2 sm:grid-cols-2 lg:grid-cols-8' action='/management/audit'>
-                        <input type='hidden' name='q' value={param(activeFilters, 'q')} />
-                        <input type='hidden' name='hql' value={param(activeFilters, 'hql')} />
-                        <input aria-label='Service' className='h-9 rounded-md border border-ui-border bg-ui-raised px-3 text-sm text-ui-text' name='service' defaultValue={param(filters, 'service')} placeholder='All services' />
-                        <input className='h-9 rounded-md border border-ui-border bg-ui-raised px-3 text-sm text-ui-text' name='actor' defaultValue={param(filters, 'actor')} placeholder='Actor' />
-                        <input className='h-9 rounded-md border border-ui-border bg-ui-raised px-3 text-sm text-ui-text' name='action' defaultValue={param(filters, 'action')} placeholder='Action' />
-                        <input className='h-9 rounded-md border border-ui-border bg-ui-raised px-3 text-sm text-ui-text' name='target' defaultValue={param(filters, 'target')} placeholder='Target' />
-                        <select className='h-9 rounded-md border border-ui-border bg-ui-raised px-3 text-sm text-ui-text' name='outcome' defaultValue={param(filters, 'outcome')}>
-                            <option value=''>Any result</option><option value='success'>Success</option><option value='denied'>Denied</option><option value='failed'>Failed</option>
-                        </select>
-                        <input className='h-9 rounded-md border border-ui-border bg-ui-raised px-3 text-sm text-ui-text' name='from' defaultValue={param(filters, 'from')} placeholder='From (ISO time)' />
-                        <input className='h-9 rounded-md border border-ui-border bg-ui-raised px-3 text-sm text-ui-text' name='to' defaultValue={param(filters, 'to')} placeholder='To (ISO time)' />
-                        <div className='flex gap-2'><button className='h-9 flex-1 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas' type='submit'>Filter</button><Link className='grid h-9 place-items-center rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text' href='/management/audit'>Clear</Link></div>
-                    </form>
-                </DashboardPanel>
+                <div id='audit-filters' hidden={!filtersOpen}>
+                    <DashboardPanel className='p-3'>
+                        <form className='grid gap-2 sm:grid-cols-2 lg:grid-cols-8' action='/management/audit'>
+                            <input type='hidden' name='q' value={param(activeFilters, 'q')} />
+                            <input type='hidden' name='hql' value={param(activeFilters, 'hql')} />
+                            <input aria-label='Service' className='h-9 rounded-md border border-ui-border bg-ui-raised px-3 text-sm text-ui-text' name='service' defaultValue={param(filters, 'service')} placeholder='All services' />
+                            <input className='h-9 rounded-md border border-ui-border bg-ui-raised px-3 text-sm text-ui-text' name='actor' defaultValue={param(filters, 'actor')} placeholder='Actor' />
+                            <input className='h-9 rounded-md border border-ui-border bg-ui-raised px-3 text-sm text-ui-text' name='action' defaultValue={param(filters, 'action')} placeholder='Action' />
+                            <input className='h-9 rounded-md border border-ui-border bg-ui-raised px-3 text-sm text-ui-text' name='target' defaultValue={param(filters, 'target')} placeholder='Target' />
+                            <select className='h-9 rounded-md border border-ui-border bg-ui-raised px-3 text-sm text-ui-text' name='outcome' defaultValue={param(filters, 'outcome')}>
+                                <option value=''>Any result</option><option value='success'>Success</option><option value='denied'>Denied</option><option value='failed'>Failed</option>
+                            </select>
+                            <input className='h-9 rounded-md border border-ui-border bg-ui-raised px-3 text-sm text-ui-text' name='from' defaultValue={param(filters, 'from')} placeholder='From (ISO time)' />
+                            <input className='h-9 rounded-md border border-ui-border bg-ui-raised px-3 text-sm text-ui-text' name='to' defaultValue={param(filters, 'to')} placeholder='To (ISO time)' />
+                            <div className='flex gap-2'><button className='h-9 flex-1 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas' type='submit'>Filter</button><Link className='grid h-9 place-items-center rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text' href='/management/audit'>Clear</Link></div>
+                        </form>
+                    </DashboardPanel>
+                </div>
 
             </div>
             {fullscreen && dialog.current ? createPortal(timeline, dialog.current) : timeline}
