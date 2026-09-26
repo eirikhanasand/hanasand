@@ -83,7 +83,8 @@ test('timeline pages return only display rows; cursor batches skip counts and su
     expect(first.body.detail).toBeUndefined()
     expect(first.body.pagination.total).toBe(125)
     expect(JSON.parse(decodeURIComponent(first.body.pagination.nextCursor))).toEqual({ createdAt: '2026-09-20T00:00:00.000Z', id: 2 })
-    expect(queries[1].sql).not.toContain('e.context')
+    expect(queries[1].sql).toContain("'targetName', CASE WHEN jsonb_typeof(e.context->'targetName') = 'string'")
+    expect(queries[1].sql).not.toContain('e.context::text')
     expect(queries[1].sql).not.toContain('e.user_agent')
     queries.length = 0
     eventRows = [eventRows[2]]
