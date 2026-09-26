@@ -14,7 +14,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     const params = await props.params
     const profileId = params.id[0]
     const section = params.id[1] || 'profile'
-    const sections = ["profile", "security", "sessions", "certificates", "support"]
+    const sections = ['profile', 'security', 'sessions', 'certificates', 'support']
     if (params.id.length > 2 || !sections.includes(section)) notFound()
     const Cookies = await cookies()
     const name = Cookies.get('name')?.value
