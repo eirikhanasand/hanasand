@@ -7,6 +7,7 @@ test('historical message candidate filtering leaves unsupported expressions for 
     let index = 6
     const bind = () => `$${++index}`
     expect(messageCandidatePredicate([{ path: 'message', operator: 'regex', value: '^(runc .*|journalctl .*)$' }], 'message', bind)).toContain('~* $7')
+    expect(messageCandidatePredicate([{ path: 'message', operator: 'regex', value: '^(journalctl --no-pager.*|runc .*|wget -qO- http://localhost:3000.*)$' }], 'message', bind)).toContain('~* $8')
     expect(messageCandidatePredicate([{ path: 'message', operator: 'regex', value: '(?=runc)runc' }], 'message', bind)).toBe('TRUE')
 })
 const scanRulePreview: typeof scan = (org, canReadLogs, input, query) => scan(org, canReadLogs, input,

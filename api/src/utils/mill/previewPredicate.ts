@@ -1,7 +1,7 @@
 import type { MillCondition } from './conditions.ts'
 
 function regexCandidate(expression: string): string | null {
-    const token = /(?:[A-Za-z0-9 _:/@,=-]|[.^$*+?()|]|\{\d+(?:,\d*)?\}|\[\^?[A-Za-z0-9 _:/@,=.-]+\]|\\[dDwWsSbB]|\\[.^$*+?()|{}[\]\\])/gy
+    const token = /(?:[A-Za-z0-9 _:/@,=\-]|[.^$*+?()|]|\{\d+(?:,\d*)?\}|\[\^?[A-Za-z0-9 _:/@,=.-]+\]|\\[dDwWsSbB]|\\[.^$*+?()|{}[\]\\])/gy
     let offset = 0, pattern = ''
     if (expression.includes('(?')) return null
     while (offset < expression.length) {
