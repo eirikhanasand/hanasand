@@ -64,7 +64,7 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
     const selected = useSearchParams().get('sheet')
     const [validationError, setValidationError] = useState('')
     const sheets = identifiedSheets(document.title, document.body)
-    const sheetUrlValue = (sheet: Sheet) => sheet.name?.trim().toLowerCase() === 'code' ? 'code' : sheet.id
+    const sheetUrlValue = (sheet: Sheet) => sheet.name?.trim().toLowerCase() === 'code' ? 'code' : sheet.id || ''
     const selectedSheet = sheets.find(sheet => sheet.id === selected || sheetUrlValue(sheet) === selected)
     const active = Math.max(0, selectedSheet ? sheets.indexOf(selectedSheet) : 0)
     function selectSheet(id: string, replace = false) {
