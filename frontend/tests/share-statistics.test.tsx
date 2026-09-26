@@ -27,9 +27,10 @@ test('populated shares show line totals and line counts in rows', async () => {
     const share: Share = { id: 'code', alias: 'Code', path: 'code.ts', content: 'one two\n\nthree\n', wordCount: 99, estimatedMinutes: 1, timestamp: '2026-09-19T10:00:00Z', git: null, locked: false, owner: 'test', parent: '' }
     shares = [share, { ...share, id: 'note', content: 'single line', locked: true }]
     const html = renderToStaticMarkup(await Shares())
-    expect(html).toContain('Share statistics')
-    expect(html).toContain('total lines shared')
-    expect(html).toMatch(/4<\/div><p[^>]*>total lines shared/)
+    expect(html).toContain('aria-label="Show share analytics"')
+    expect(html).toContain('aria-expanded="false"')
+    expect(html).not.toContain('Share statistics')
+    expect(html).not.toContain('total lines shared')
     expect(html).toContain('3 lines')
     expect(html).toContain('1 line')
     expect(html).not.toContain('words')
