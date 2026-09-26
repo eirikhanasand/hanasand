@@ -28,6 +28,7 @@ export default function PlanSheet(props: SheetEditorProps) {
     const [expanded, setExpanded] = useState<number | null>(null)
     const [sprintFilter, setSprintFilter] = useState('')
     const hasRowDetails = fields.notes >= 0 || fields.details >= 0 || fields.subgoals >= 0
+    const hasPlanControls = index >= 0 && (fields.hours >= 0 || fields.status >= 0 || fields.sprint >= 0)
     const taskRows = cells.slice(1).map((row, i) => ({ row, index: i + 1 })).filter(({ row }) => fields.task < 0 || !/^(?:total|summary)$/i.test(row[fields.task]?.trim() ?? ''))
     const sprints = fields.sprint < 0 ? [] : [...new Set(taskRows.map(({ row }) => row[fields.sprint].trim()).filter(Boolean))].sort()
     const tasks = taskRows.filter(item => !sprintFilter || fields.sprint >= 0 && item.row[fields.sprint] === sprintFilter)
@@ -96,7 +97,7 @@ export default function PlanSheet(props: SheetEditorProps) {
         })
     }
 
-    return <SheetEditor {...props} customTable={customTable} beforeContent={<section className='grid gap-4' aria-label='Plan controls'>
+    return <SheetEditor {...props} customTable={customTable} beforeContent={hasPlanControls && <section className='grid gap-4' aria-label='Plan controls'>
         <div className='grid gap-3 rounded-xl border border-ui-border bg-ui-raised p-3 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center lg:justify-between lg:p-4' aria-label='Plan summary'>
             {fields.hours >= 0 && <div><span className='block text-xs text-ui-muted'>Estimated hours</span><strong>{hours.toLocaleString()} h</strong></div>}
             {fields.hours >= 0 && fields.status >= 0 && <div><span className='block text-xs text-ui-muted'>Completed hours</span><strong>{completedHours.toLocaleString()} h</strong></div>}
