@@ -30,11 +30,12 @@ response = { ok: true, json: async () => ({ organizations: [
 organizationId = 'second'
 const populatedPage = await Page()
 const populatedHtml = await new Response(await renderToReadableStream(populatedPage)).text()
-assert(populatedHtml.includes('lg:grid-cols-[18rem_minmax(0,1fr)]'))
+assert(populatedHtml.includes('data-org-switcher="true"'), 'Populated organizations must render the organization switcher')
+assert(populatedHtml.includes('<option value="second" selected="">Selected organization</option>'), 'The requested organization must be selected on the server')
 assert(populatedHtml.includes('aria-controls="org-create-primary"'))
 assert(!populatedHtml.includes('data-org-create-primary'))
 assert(populatedHtml.includes('Selected organization'))
-assert(populatedHtml.includes('aria-current="true"'), 'The requested organization must be selected on the server')
+
 assert(!populatedHtml.includes('Pilot measurement'))
 assert(!populatedHtml.includes('data-org-settings-disclosure'), 'General settings belongs on its own page')
 assert(populatedHtml.includes('/organizations/settings'))
