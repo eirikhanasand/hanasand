@@ -13,6 +13,7 @@ export default function useSupportLive(refresh: () => Promise<void | boolean>, g
         let disposed = false, running = false, pending = false, attempts = 0
         let socket: WebSocket | undefined
         let retry: ReturnType<typeof setTimeout> | undefined
+        let reconnectNotice: ReturnType<typeof setTimeout> | undefined
         let ready = false, connecting = false, available = true
         const sync = async () => {
             pending = true
@@ -28,7 +29,7 @@ export default function useSupportLive(refresh: () => Promise<void | boolean>, g
         const reconnect = () => {
             if (disposed || retry) return
             ready = false
-            setConnection('reconnecting')
+            if (!reconnectNotice) reconnectNotice = setTimeout(() => { reconnectNotice = undefined; if (!disposed && !ready) setConnection('reconnecting') }, 10_000)
             retry = setTimeout(() => { retry = undefined; void connect() }, Math.min(15000, 1000 * 2 ** Math.min(attempts++, 4)))
         }
         async function connect() {
@@ -53,7 +54,7 @@ export default function useSupportLive(refresh: () => Promise<void | boolean>, g
                 next.onmessage = event => {
                     try {
                         const message = JSON.parse(event.data)
-                        if (message.type === 'ready') { ready = true; attempts = 0; clearTimeout(deadline); setConnection('connected'); void sync() }
+                        if (message.type === 'ready') { ready = true; attempts = 0; clearTimeout(deadline); clearTimeout(reconnectNotice); reconnectNotice = undefined; setConnection('connected'); void sync() }
                         else if (message.type === 'changed') void sync()
                     } catch { /* Ignore malformed events. */ }
                 }
@@ -68,7 +69,7 @@ export default function useSupportLive(refresh: () => Promise<void | boolean>, g
         const fallback = setInterval(() => { if (!ready) void sync().then(() => { if (available && !socket && !retry) void connect() }) }, 4000)
         window.addEventListener('online', online)
         document.addEventListener('visibilitychange', visible)
-        return () => { disposed = true; clearTimeout(retry); clearInterval(fallback); socket?.close(); window.removeEventListener('online', online); document.removeEventListener('visibilitychange', visible) }
+        return () => { disposed = true; clearTimeout(retry); clearTimeout(reconnectNotice); clearInterval(fallback); socket?.close(); window.removeEventListener('online', online); document.removeEventListener('visibilitychange', visible) }
     }, [guest, enabled])
     return connection
 }

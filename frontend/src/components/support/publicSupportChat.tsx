@@ -8,10 +8,10 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 're
 
 type Message = { id: string; body: string; sender_kind: 'user' | 'assistant' | 'support' | 'system'; sender_name: string; request_id?: string }
 type Ticket = { id: string; subject: string; reply_count: number }
-type Conversation = Feedback & { id?: string; tickets?: Ticket[]; agent_name?: string; channel: 'ai' | 'human'; status: string; pending: boolean; messages: Message[]; error?: string; accepted?: boolean }
+export type PublicSupportConversation = Feedback & { id?: string; tickets?: Ticket[]; agent_name?: string; channel: 'ai' | 'human'; status: string; pending: boolean; messages: Message[]; error?: string; accepted?: boolean }
 type Submission = { requestId: string; message: string; handoff?: boolean; conversationId?: string }
 const emptyTickets: Ticket[] = []
-const empty: Conversation = { channel: 'ai', status: 'open', pending: false, messages: [] }
+const empty: PublicSupportConversation = { channel: 'ai', status: 'open', pending: false, messages: [] }
 
 // Render only same-site links from the assistant, never HTML or arbitrary model URLs.
 function MessageBody({ text }: { text: string }) {
@@ -21,15 +21,15 @@ function MessageBody({ text }: { text: string }) {
     })}</p>
 }
 
-export default function PublicSupportChat({ active = true, onUnreadChange }: { active?: boolean; onUnreadChange?: (count: number) => void }) {
-    const [selectedId, setSelectedId] = useState('')
-    const selection = useRef('')
+export default function PublicSupportChat({ active = true, onUnreadChange, initialConversation, initialSelectedId = '' }: { active?: boolean; onUnreadChange?: (count: number) => void; initialConversation?: PublicSupportConversation; initialSelectedId?: string }) {
+    const [selectedId, setSelectedId] = useState(initialConversation?.id || initialSelectedId)
+    const selection = useRef(initialConversation?.id || initialSelectedId)
     const restoredSelection = useRef(false)
     const realtime = useRef(false)
     const drafts = useRef<Record<string, string>>({})
-    const [conversation, setConversation] = useState<Conversation>(empty)
+    const [conversation, setConversation] = useState<PublicSupportConversation>(initialConversation || empty)
     const [input, setInput] = useState('')
-    const [loading, setLoading] = useState(true)
+    const [loading, setLoading] = useState(!initialConversation)
     const [pendingMessages, setPendingMessages] = useState<Record<string, Submission>>({})
     const [transfers, setTransfers] = useState<Record<string, boolean>>({})
     const sending = Boolean(pendingMessages[selectedId])
@@ -40,6 +40,7 @@ export default function PublicSupportChat({ active = true, onUnreadChange }: { a
     const [retry, setRetry] = useState<Submission | null>(null)
     const log = useRef<HTMLDivElement>(null)
     const mounted = useRef(true)
+    const serverConversation = useRef(Boolean(initialConversation))
     const revision = useRef(0)
     const inFlight = useRef(new Map<string, string>())
     const failures = useRef<Record<string, { message: string; submission: Submission }>>({})
@@ -75,7 +76,9 @@ export default function PublicSupportChat({ active = true, onUnreadChange }: { a
 
     useEffect(() => {
         mounted.current = true
-        try { selection.current = localStorage.getItem('hanasand-support-selected') || ''; restoredSelection.current = Boolean(selection.current); setSelectedId(selection.current) } catch { /* Use the newest conversation. */ }
+        if (!serverConversation.current) {
+            try { selection.current = localStorage.getItem('hanasand-support-selected') || ''; restoredSelection.current = Boolean(selection.current); setSelectedId(selection.current) } catch { /* Use the newest conversation. */ }
+        }
         return () => { mounted.current = false }
     }, [])
     useEffect(() => { if (selectedId) try { localStorage.setItem('hanasand-support-selected', selectedId) } catch { /* Selection is still available in this tab. */ } }, [selectedId])
@@ -112,7 +115,7 @@ export default function PublicSupportChat({ active = true, onUnreadChange }: { a
         setError('')
         try {
             const response = await fetch('/api/support/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(submission) })
-            const payload = await response.json() as Conversation
+            const payload = await response.json() as PublicSupportConversation
             if (!response.ok) throw new Error(payload.error || 'We could not send your message. Please try again.')
             if (!mounted.current) return
             // Fetch current state after the write so a concurrent handoff cannot be overwritten by an older reply.
@@ -169,13 +172,8 @@ export default function PublicSupportChat({ active = true, onUnreadChange }: { a
         : conversation.messages
     return (
         <section aria-label='Support chat' className='grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto]'>
-            {!legacy ? <div className='flex min-w-0 items-center gap-3 border-b border-ui-border px-5 py-3'>
+            {!legacy ? <div className='flex min-w-0 items-center justify-between border-b border-ui-border px-5 py-3'>
                 <h1 className='text-sm font-semibold text-ui-text'>Support</h1>
-                {tickets.length ? <select aria-label='Conversation' value={selectedId} onChange={event => void selectChat(event.target.value)} className='min-w-0 flex-1 rounded-lg border border-ui-border bg-ui-panel px-2 py-1.5 text-xs text-ui-text'>
-                    {!tickets.some(ticket => ticket.id === selectedId) ? <option value={selectedId}>New chat</option> : null}
-                    {tickets.map(ticket => <option key={ticket.id} value={ticket.id}>{ticket.subject}{unread[ticket.id] ? ` (${unread[ticket.id]} unread)` : ''}</option>)}
-                </select> : null}
-                {Object.values(unread).some(count => count > 0) ? <span role='status' aria-label='Unread replies in other chats' className='rounded-full bg-ui-primary px-2 py-0.5 text-xs text-ui-canvas'>{Object.values(unread).reduce((sum, count) => sum + count, 0)}</span> : null}
                 <button type='button' onClick={() => void selectChat(crypto.randomUUID())} className='shrink-0 rounded-lg bg-ui-primary px-3.5 py-2 text-xs font-semibold text-ui-canvas transition hover:opacity-90 disabled:opacity-50'>New chat</button>
             </div> : <div />}
             <div ref={log} role='log' aria-label='Messages' className='min-h-0 overflow-y-auto overscroll-contain px-5 py-5'>
@@ -193,10 +191,10 @@ export default function PublicSupportChat({ active = true, onUnreadChange }: { a
             </div>
             <div className='min-w-0 border-t border-ui-border bg-ui-panel px-4 pb-3 pt-3'>
                 {error ? <div role='alert' className='mb-3 text-xs leading-5 text-ui-danger'>{error}{retry ? <button type='button' disabled={sending || transferring} className='ml-2 font-semibold underline disabled:opacity-50' onClick={() => void submit(retry)}>Retry</button> : null}</div> : null}
-                {!error && (refreshError || connection === 'reconnecting') ? <p role='status' className='mb-2 text-xs text-ui-muted'>{refreshError || 'Reconnecting…'}</p> : null}
+                {!error && connection === 'reconnecting' ? <p role='status' className='mb-2 text-xs text-ui-muted'>{refreshError || 'Reconnecting…'}</p> : null}
                 {!error && unanswered ? <button type='button' onClick={() => void submit(unanswered)} className='mb-2 text-xs font-medium text-ui-primary hover:underline'>Retry AI answer</button> : null}
                 {resolved ? <SupportFeedback key={`${selectedId}:${conversation.resolution_version}`} feedback={conversation} submit={sendFeedback} /> : <><form onSubmit={send} className='flex min-w-0 items-end gap-2 rounded-2xl border border-ui-border bg-ui-canvas p-2 focus-within:border-ui-primary focus-within:ring-2 focus-within:ring-ui-primary/10'>
-                    <textarea aria-label='Message' rows={2} maxLength={4000} value={input} onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (!loading && !busy) send(event) } }} placeholder={human ? 'Message the support team…' : 'Ask a question…'} className='min-h-12 min-w-0 flex-1 resize-none bg-transparent px-2 py-1 text-sm leading-6 text-ui-text outline-none placeholder:text-ui-muted' />
+                    <textarea aria-label='Message' rows={Math.min(6, Math.max(1, input.split('\n').length))} maxLength={4000} value={input} onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.nativeEvent.isComposing) { event.preventDefault(); if (!loading && !busy) send(event) } }} placeholder={human ? 'Message the support team…' : 'Ask a question…'} className='min-h-9 min-w-0 flex-1 resize-none bg-transparent px-2 py-1 text-sm leading-5 text-ui-text outline-none placeholder:text-ui-muted' />
                     <button type='submit' disabled={loading || busy || !input.trim()} aria-label='Send message' className='grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-ui-primary text-ui-canvas transition hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary disabled:opacity-40'>{sending ? <LoaderCircle className='h-4 w-4 animate-spin' /> : <ArrowUp className='h-4 w-4' />}</button>
                 </form>
                 {human ? <div className='mt-3 flex min-h-7 items-center justify-center'><p className='flex items-center gap-1.5 text-xs text-ui-muted'><UserRound className='h-3.5 w-3.5' />{agentName ? `Speaking with ${agentName}` : 'Waiting for support.'}</p></div> : null}</>}
@@ -205,10 +203,10 @@ export default function PublicSupportChat({ active = true, onUnreadChange }: { a
     )
 }
 
-export function PublicSupportPanel() {
+export function PublicSupportPanel({ initialConversation, initialSelectedId }: { initialConversation?: PublicSupportConversation; initialSelectedId?: string }) {
     return (
         <section className='mx-auto grid h-[min(42rem,calc(100dvh-10rem))] min-h-96 w-full max-w-4xl grid-rows-[minmax(0,1fr)] overflow-hidden rounded-2xl border border-ui-border bg-ui-panel shadow-sm shadow-ui-canvas/10 dark:shadow-ui-canvas/20' aria-label='Guest support'>
-            <PublicSupportChat />
+            <PublicSupportChat initialConversation={initialConversation} initialSelectedId={initialSelectedId} />
         </section>
     )
 }

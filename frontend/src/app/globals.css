@@ -265,6 +265,11 @@ button:not(:disabled),
   mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.96), transparent 86%);
 }
 
+.support-page {
+  min-height: calc(90.5vh - 1rem);
+  align-content: center;
+}
+
 body:has(.support-page) .site-atmosphere::before {
   display: none;
 }

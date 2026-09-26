@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import config from '@/config'
 
 const cookieName = 'hanasand_support_session'
+const renderCookieName = 'hanasand_support_render_session'
+const selectedCookieName = 'hanasand_support_render_conversation'
+const supportIdPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i
 
 async function handler(req: NextRequest) {
     // The browser never receives the bearer capability outside its HttpOnly cookie.
@@ -31,7 +34,14 @@ async function handler(req: NextRequest) {
         result = NextResponse.json({ error: 'Support is temporarily unavailable. Please try again.' }, { status: 503 })
     }
     result.headers.set('Cache-Control', 'no-store')
-    result.cookies.set(cookieName, session, { httpOnly: true, secure: req.nextUrl.protocol === 'https:' || req.nextUrl.hostname.endsWith('hanasand.com'), sameSite: 'lax', path: '/api/support', maxAge: 60 * 60 * 24 * 30 })
+    const cookieOptions = { httpOnly: true, secure: req.nextUrl.protocol === 'https:' || req.nextUrl.hostname.endsWith('hanasand.com'), sameSite: 'lax' as const, maxAge: 60 * 60 * 24 * 30 }
+    result.cookies.set(cookieName, session, { ...cookieOptions, path: '/api/support' })
+    result.cookies.set(renderCookieName, session, { ...cookieOptions, path: '/support' })
+    if (req.method === 'GET') {
+        const selected = req.nextUrl.searchParams.get('conversationId')
+        if (selected && supportIdPattern.test(selected)) result.cookies.set(selectedCookieName, selected, { ...cookieOptions, path: '/support' })
+        else if (!selected) result.cookies.set(selectedCookieName, '', { ...cookieOptions, path: '/support', maxAge: 0 })
+    }
     return result
 }
 
