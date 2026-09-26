@@ -191,7 +191,6 @@ function DependencyMap({ items, selected, onSelect }: { items: CodeItem[], selec
             </svg>}
         </div>
         {!summary && Math.max(dependencies.length, dependents.length) > limit && <button className='code-more' onClick={() => setLimit(value => value + 24)}>Show more connections ({Math.max(0, dependencies.length - limit) + Math.max(0, dependents.length - limit)} hidden)</button>}
-        <p className='code-caption'>Connections read from source. Counts include transitive dependencies. Scroll to move around; pinch or use + and − to zoom. Use the collapse button to switch to the overview. Unresolved references are listed with each item.</p>
     </section>
 }
 function SourceDetail({ item, onReview, onSelect, byId, canReview }: { canReview: boolean, item: CodeItem, onReview: (event: ReviewEvent) => void, onSelect: (id: string) => void, byId: Map<string, CodeItem> }) {
