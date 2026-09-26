@@ -232,6 +232,7 @@ async function ensureDomainPrincipal() {
             quota: 0,
             name: mailConfig.domain,
             description: 'Hanasand mail domain',
+            catchAllAddress: `support@${mailConfig.domain}`,
             secrets: [],
             emails: [],
             urls: [],
@@ -243,6 +244,10 @@ async function ensureDomainPrincipal() {
             disabledPermissions: [],
             externalMembers: [],
         })
+    } else {
+        await patchPrincipal(domain.name, [
+            { action: 'set', field: 'catchAllAddress', value: `support@${mailConfig.domain}` },
+        ])
     }
 }
 

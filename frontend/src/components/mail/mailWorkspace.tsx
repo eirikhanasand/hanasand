@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
     Archive,
     ArrowLeft,
-    Clock3,
     CornerUpLeft,
     FolderInput,
     Forward,
@@ -20,6 +19,7 @@ import {
     ShieldAlert,
     Star,
     Trash2,
+    X,
 } from 'lucide-react'
 import {
     createFilter,
@@ -91,6 +91,8 @@ export default function MailWorkspace({ mailboxUser }: Props) {
     const [sidebarCompact, setSidebarCompact] = useState(false)
     const [adminDrawerOpen, setAdminDrawerOpen] = useState(false)
     const [query, setQuery] = useState('')
+    const [searchOpen, setSearchOpen] = useState(false)
+    const searchInput = useRef<HTMLInputElement>(null)
     const [lastSuccessAt, setLastSuccessAt] = useState<number | null>(null)
     const [now, setNow] = useState(() => Date.now())
     const selection = useRef<{ user: string | null, mailbox: string | null, message: string | null }>({ user: mailboxUser || null, mailbox: null, message: null })
@@ -105,6 +107,21 @@ export default function MailWorkspace({ mailboxUser }: Props) {
     const [archiving, setArchiving] = useState(false)
     const archivingRef = useRef(false)
     const [mailFilter, setMailFilter] = useState<MailListFilter>('all')
+
+    useEffect(() => {
+        if (searchOpen) searchInput.current?.focus()
+    }, [searchOpen])
+
+    useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'j') {
+                event.preventDefault()
+                setSearchOpen(true)
+            }
+        }
+        window.addEventListener('keydown', onKeyDown)
+        return () => window.removeEventListener('keydown', onKeyDown)
+    }, [])
 
     const load = useCallback(async (params: {
         mailboxId?: string | null
@@ -312,7 +329,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
         [selectedMessage, overview?.mailboxUser, mailTheme]
     )
 
-    const unreadCount = overview?.mailboxes.reduce((sum, mailbox) => sum + (mailbox.unreadEmails || 0), 0) ?? 0
+    const unreadCount = overview?.accessibleAccounts.find(account => account.id === overview.actor.id)?.unreadCount ?? 0
     const showStaleWarning = Boolean(lastSuccessAt && now - lastSuccessAt > STALE_AFTER_MS)
 
     return (
@@ -320,7 +337,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
             <DashboardPanel className='flex shrink-0 flex-wrap items-center gap-2 p-2.5 sm:p-3' id='mail-toolbar'>
                 <div className='flex min-w-0 flex-1 flex-wrap items-center gap-2'>
                     <div className='mr-auto min-w-0'>
-                        <p className='text-[10px] uppercase tracking-[0.24em] text-ui-muted'>Workspace</p>
+                        <p className='text-[10px] tracking-normal text-ui-muted'>Workspace</p>
                         <p className='truncate text-[11px] text-ui-muted'>{overview?.mailboxAddress || 'Communication'}</p>
                     </div>
                     <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-ui-muted' data-mail-counts>
@@ -330,22 +347,32 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                     </div>
                     <MailSyncStatus lastSuccessAt={lastSuccessAt} now={now} issue={backgroundIssue || error} />
 
-                    <div className='flex min-w-0 basis-full items-center gap-2 sm:basis-auto sm:flex-1 sm:min-w-64 sm:max-w-md'>
-                        <div className='relative min-w-0 flex-1'>
-                            <Search className='pointer-events-none absolute left-2.5 top-2 h-3.5 w-3.5 text-ui-muted' />
-                            <input
-                                value={query}
-                                onChange={event => setQuery(event.target.value)}
-                                placeholder='Search this mailbox'
-                                aria-label='Search this mailbox'
-                                className={`${subtleInput} w-full pl-8`}
-                            />
-                        </div>
+                    <div className='flex min-w-0 items-center gap-2'>
+                        {searchOpen ? (
+                            <div className='relative w-48 sm:w-60'>
+                                <Search className='pointer-events-none absolute left-2.5 top-2 h-3.5 w-3.5 text-ui-muted' />
+                                <input
+                                    ref={searchInput}
+                                    value={query}
+                                    onChange={event => setQuery(event.target.value)}
+                                    onKeyDown={event => { if (event.key === 'Escape') { setQuery(''); setSearchOpen(false) } }}
+                                    placeholder='Search this mailbox'
+                                    aria-label='Search this mailbox'
+                                    className={`${subtleInput} w-full pl-8 pr-8`}
+                                />
+                                <button type='button' aria-label='Close search' title='Close search' className='absolute right-2 top-2 text-ui-muted hover:text-ui-text' onClick={() => { setQuery(''); setSearchOpen(false) }}><X className='h-3.5 w-3.5' /></button>
+                            </div>
+                        ) : (
+                            <button type='button' onClick={() => setSearchOpen(true)} aria-label='Search this mailbox (Cmd J)' title='Search this mailbox (Cmd J)' className='inline-flex h-8 items-center gap-1.5 rounded-md border border-ui-border bg-ui-raised px-2 text-[11px] text-ui-muted hover:border-ui-primary/50 hover:text-ui-text'>
+                                <Search className='h-3.5 w-3.5' />
+                                <span>Cmd J</span>
+                            </button>
+                        )}
                         <button
                             type='button'
                             data-testid='mail-compose-button'
                             disabled={!overview || loading || overview.actor.canSend === false}
-                            className={`${toolbarButton} shrink-0`}
+                            className='inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-ui-primary px-3 text-xs font-semibold text-ui-canvas shadow-sm transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45'
                             onClick={() => setComposer({ ...emptyComposer, open: true })}
                         >
                             <MailPlus className='h-3.5 w-3.5' />
@@ -378,8 +405,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                     <div className='relative z-10'>
                         <div className='flex items-center justify-between pb-2'>
                             <div className='min-w-0'>
-                                <p className='text-[10px] uppercase tracking-[0.28em] text-ui-muted'>Folders</p>
-                                {!sidebarCompact && <p className='mt-1 truncate text-[11px] text-ui-muted'>{overview?.mailboxAddress || 'Mailbox'}</p>}
+                                <p className='text-[10px] tracking-normal text-ui-muted'>Folders</p>
                             </div>
                             <div className='flex items-center gap-1'>
                                 <button
@@ -409,7 +435,8 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                         </div>
 
                         <nav aria-label='Mailboxes' className='mb-3 grid min-w-0 grid-cols-1 gap-1 border-b border-ui-border pb-3'>
-                            {overview && [...overview.accessibleAccounts]
+                            {overview && overview.accessibleAccounts
+                                .filter(account => !['admin', 'administrator'].includes(account.id.toLowerCase()) && account.name.toLowerCase() !== 'administrator')
                                 .sort((a, b) => Number(b.id === overview.actor.id) - Number(a.id === overview.actor.id) || Number(Boolean(b.shared)) - Number(Boolean(a.shared)))
                                 .map(account => (
                                     <button key={account.id} type='button' disabled={composer.open}
@@ -457,7 +484,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 </aside>
 
                 {!readingMessage && <section data-mail-message-list className={`${dashboardPanelClass} min-w-0 p-2.5 xl:min-h-0 xl:overflow-y-auto`}>
-                    <div className='flex items-center gap-2 px-1 pb-2 text-[10px] uppercase tracking-[0.24em] text-ui-muted'>
+                    <div className='flex items-center gap-2 px-1 pb-2 text-[10px] tracking-normal text-ui-muted'>
                         <span>{overview?.mailboxes.find(mailbox => mailbox.id === selectedMailboxId)?.name || 'Mailbox'}</span>
                         <span className='text-ui-muted'>•</span>
                         <span>{filteredMessages.length}</span>
@@ -574,7 +601,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
 
                             {!!selectedMessage.attachments.length && (
                                 <div className='rounded-lg border border-ui-border bg-ui-raised p-3'>
-                                    <div className='mb-2 text-[11px] font-medium uppercase tracking-[0.22em] text-ui-muted'>Attachments</div>
+                                    <div className='mb-2 text-[11px] font-medium tracking-normal text-ui-muted'>Attachments</div>
                                     <div className='grid gap-2 lg:grid-cols-2'>
                                         {selectedMessage.attachments.map(attachment => (
                                             <AttachmentPreview key={attachment.blobId} attachment={attachment} mailboxUser={overview.mailboxUser} />
@@ -640,7 +667,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                     <aside className='flex h-full w-full max-w-xl flex-col overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-xl'>
                         <div className='flex items-start justify-between gap-3 border-b border-ui-border p-4'>
                             <div>
-                                <p className='text-[10px] uppercase tracking-[0.28em] text-ui-muted'>Mailbox admin</p>
+                                <p className='text-[10px] tracking-normal text-ui-muted'>Mailbox admin</p>
                                 <h3 className='mt-1 text-lg font-semibold text-ui-text'>{overview.mailboxAddress}</h3>
                                 <p className='mt-1 text-xs text-ui-muted'>Rules, delivery health, and client settings stay here so the mail stream stays focused.</p>
                             </div>
@@ -814,7 +841,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                     <div className='w-full max-w-md rounded-lg border border-ui-border bg-ui-panel p-5 shadow-xl'>
                         <div className='flex items-center justify-between gap-3'>
                             <div>
-                                <p className='text-[10px] uppercase tracking-[0.28em] text-ui-muted'>Mailbox</p>
+                                <p className='text-[10px] tracking-normal text-ui-muted'>Mailbox</p>
                                 <h3 className='mt-1 text-lg font-semibold text-ui-text'>Create folder</h3>
                             </div>
                             <button className={iconButton} onClick={() => { setMailboxModalOpen(false); setMailboxDraft('') }}>
@@ -871,13 +898,15 @@ function MailSyncStatus({
     issue?: string
     full?: boolean
 }) {
-    const intervalSeconds = POLL_INTERVAL_MS / 1000
-    const label = lastSuccessAt ? `updated ${formatRelativeTime(lastSuccessAt, now)} ago` : 'waiting for first sync'
-    const tone = issue ? 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning' : 'border-ui-border bg-ui-raised text-ui-muted'
+    const stale = Boolean(issue || lastSuccessAt && now - lastSuccessAt > STALE_AFTER_MS)
+    if (!stale || !lastSuccessAt) return null
+    const updated = new Date(lastSuccessAt)
+    const today = new Date(now)
+    const time = `${String(updated.getHours()).padStart(2, '0')}:${String(updated.getMinutes()).padStart(2, '0')}`
+    const date = updated.toDateString() === today.toDateString() ? '' : ` · ${String(updated.getDate()).padStart(2, '0')}:${String(updated.getMonth() + 1).padStart(2, '0')}`
     return (
-        <div className={`${full ? 'mb-3 flex' : 'hidden sm:flex'} min-w-0 items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] ${tone}`} data-mail-sync-status>
-            <Clock3 className='h-3.5 w-3.5 shrink-0' />
-            <span className='truncate'>{issue ? `Reconnecting; syncs every ${intervalSeconds}s, ${label}` : `Syncs every ${intervalSeconds}s · ${label}`}</span>
+        <div className={`${full ? 'mb-3 flex' : 'hidden sm:flex'} min-w-0 items-center rounded-md border border-ui-danger/40 bg-ui-danger/10 px-2 py-1 text-[11px] text-ui-danger`} data-mail-sync-status>
+            <span className='truncate'>Last updated {time}{date}</span>
         </div>
     )
 }

@@ -155,7 +155,7 @@ export function Composer({
             >
                 <div className='flex items-center justify-between gap-3 border-b border-ui-border pb-3'>
                     <div>
-                        <p className='text-[10px] uppercase tracking-[0.28em] text-ui-muted'>{state.mode}</p>
+                        <p className='text-[10px] tracking-normal text-ui-muted'>{state.mode}</p>
                         <h3 className='mt-1 text-base font-semibold text-ui-text'>Create message</h3>
                     </div>
                     <button type='button' className={toolbarButton} onClick={onClose}>Close</button>
