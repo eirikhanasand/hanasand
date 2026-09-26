@@ -107,7 +107,7 @@ export function MonitoringOverview({ alerts, dataHealth, organizationId, initial
                     </article>
                 })}</div>}
                 <Pages count={rows.length} page={currentPage} setPage={setPage} />
-                </>}
+            </>}
         </section>
         <Link className='text-sm font-normal text-ui-primary underline-offset-2 hover:underline' href={scopedHref('/findings/actors')}>Browse monitored actors</Link>
     </div>
