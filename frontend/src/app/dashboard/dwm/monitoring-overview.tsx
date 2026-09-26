@@ -51,16 +51,14 @@ export function MonitoringOverview({ alerts, dataHealth, organizationId, initial
     const currentPage = Math.min(page, Math.max(0, Math.ceil(rows.length / pageSize) - 1))
     const scopedHref = (path: string) => organizationId ? `${path}?organizationId=${encodeURIComponent(organizationId)}` : path
     return <div className='grid min-w-0 gap-4' data-dwm-overview>
-        <header className='flex flex-wrap items-start justify-between gap-3'>
-            <h1 className='text-xl font-semibold text-ui-text'>Findings</h1>
-            <button onClick={onRefresh} className={control}>Refresh</button>
-        </header>
         <section className={panel}>
+            <LoadState state={dataHealth.alerts.state} subject='Findings' onRetry={onRefresh} />
+            {actionMessage && <p role={actionMessage.ok ? 'status' : 'alert'} className={`p-4 text-sm ${actionMessage.ok ? 'text-ui-text' : 'text-ui-danger'}`}>{actionMessage.text}</p>}
+            {dataHealth.alerts.state === 'live' && alerts.length === 0 ? <div className='grid min-h-36 place-items-center p-4'>
+                <p className='text-center text-base font-semibold text-white'>No recent findings</p>
+            </div> : <>
             <header className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border p-4'>
-                <div>
-                    <h2 className='font-semibold text-ui-text'>Recent findings</h2>
-                    {dataHealth.alerts.state === 'live' && <p className='mt-1 text-sm text-ui-muted'>{alerts.length} findings</p>}
-                </div>
+                <h2 className='font-semibold text-ui-text'>Recent findings</h2>
                 <div className='flex flex-wrap gap-2'>
                     <input
                         aria-label='Search findings'
@@ -78,10 +76,9 @@ export function MonitoringOverview({ alerts, dataHealth, organizationId, initial
                         <option value='all'>All findings</option>
                         <option value='review'>Needs review</option>
                     </select>
+                    <button onClick={onRefresh} className={control}>Refresh</button>
                 </div>
             </header>
-            <LoadState state={dataHealth.alerts.state} subject='Findings' onRetry={onRefresh} />
-            {actionMessage && <p role={actionMessage.ok ? 'status' : 'alert'} className={`p-4 text-sm ${actionMessage.ok ? 'text-ui-text' : 'text-ui-danger'}`}>{actionMessage.text}</p>}
             {dataHealth.alerts.state === 'live' && alerts.length > 0 && !rows.length && <p className='p-6 text-sm text-ui-muted'>No findings match this filter.</p>}
             {dataHealth.alerts.state === 'live' && <div className='divide-y divide-ui-border'>{rows.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(alert => {
                 const href = caseHref(alert)
@@ -110,6 +107,7 @@ export function MonitoringOverview({ alerts, dataHealth, organizationId, initial
                 </article>
             })}</div>}
             <Pages count={rows.length} page={currentPage} setPage={setPage} />
+            </>}
         </section>
         <Link className='text-sm font-normal text-ui-primary underline-offset-2 hover:underline' href={scopedHref('/findings/actors')}>Browse monitored actors</Link>
     </div>
