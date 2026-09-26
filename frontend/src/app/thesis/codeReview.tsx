@@ -299,7 +299,7 @@ export default function CodeReview({ canReview, toolbar, onLocked }: { canReview
                 <select aria-label='Sort code inventory' value={order} onChange={event => setOrder(event.target.value)}><option value='priority'>Priority, then alphabetical</option><option value='alphabetical'>Alphabetical</option></select>
                 <select aria-label='Review filter' value={status} onChange={event => { setStatus(event.target.value); setLimit(100) }}><option value='all'>All review states</option><option value='unreviewed'>Not reviewed</option><option value='changed'>Needs new review</option><option value='approved'>Approved</option></select>
             </div>
-            <p className='code-caption'>{scoped.filter(node => reviewStatus(node) === 'approved').length} of {scoped.length} items approved. Red: unreviewed or overdue. Yellow: changed, reviewed within 14 days. Green: approved and unchanged.</p>
+            <p className='code-caption'>{scoped.filter(node => reviewPriority(node) > 0).length}/{scoped.length} files reviewed.</p>
             <div className='code-columns'>
                 <aside aria-label='Alphabetical code inventory'>{kinds.map(kind => {
                     const entries = filtered.filter(node => node.kind === kind)

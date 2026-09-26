@@ -64,17 +64,23 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
     const selected = useSearchParams().get('sheet')
     const [validationError, setValidationError] = useState('')
     const sheets = identifiedSheets(document.title, document.body)
-    const active = Math.max(0, sheets.findIndex(sheet => sheet.id === selected))
+    const sheetUrlValue = (sheet: Sheet) => sheet.name.trim().toLowerCase() === 'code' ? 'code' : sheet.id
+    const selectedSheet = sheets.find(sheet => sheet.id === selected || sheetUrlValue(sheet) === selected)
+    const active = Math.max(0, selectedSheet ? sheets.indexOf(selectedSheet) : 0)
     function selectSheet(id: string, replace = false) {
+        const sheet = sheets.find(item => item.id === id)
+        const value = sheet ? sheetUrlValue(sheet) : id
         const url = new URL(window.location.href)
-        if (url.searchParams.get('sheet') === id) return
-        url.searchParams.set('sheet', id)
+        if (url.searchParams.get('sheet') === value) return
+        url.searchParams.set('sheet', value)
         if (replace) window.history.replaceState(null, '', url)
         else window.history.pushState(null, '', url)
     }
     useEffect(() => {
         // History updates can lag behind document edits; do not replace a newer selection.
-        if (ready && selected && selected === new URL(window.location.href).searchParams.get('sheet') && !sheets.some(sheet => sheet.id === selected)) selectSheet(sheets[0].id, true)
+        if (!ready || !selected || selected !== new URL(window.location.href).searchParams.get('sheet')) return
+        if (!selectedSheet) selectSheet(sheets[0].id, true)
+        else if (selected !== sheetUrlValue(selectedSheet)) selectSheet(selectedSheet.id, true)
     }, [ready, selected, document.body])
     const settings = sheets[active].settings || {}
     const codeEnabled = settings.codeReview ?? sheets[active].name.toLowerCase() === 'code'
