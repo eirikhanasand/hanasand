@@ -169,19 +169,20 @@ export default function PublicSupportChat({ active = true, onUnreadChange }: { a
         : conversation.messages
     return (
         <section aria-label='Support chat' className='grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto]'>
-            {!legacy ? <div className='flex min-w-0 items-center gap-2 border-b border-ui-border px-4 py-2'>
+            {!legacy ? <div className='flex min-w-0 items-center gap-3 border-b border-ui-border px-5 py-3'>
+                <h1 className='text-sm font-semibold text-ui-text'>Support</h1>
                 <select aria-label='Conversation' value={selectedId} onChange={event => void selectChat(event.target.value)} className='min-w-0 flex-1 rounded-lg border border-ui-border bg-ui-panel px-2 py-1.5 text-xs text-ui-text'>
                     {!tickets.some(ticket => ticket.id === selectedId) ? <option value={selectedId}>New chat</option> : null}
                     {tickets.map(ticket => <option key={ticket.id} value={ticket.id}>{ticket.subject}{unread[ticket.id] ? ` (${unread[ticket.id]} unread)` : ''}</option>)}
                 </select>
                 {Object.values(unread).some(count => count > 0) ? <span role='status' aria-label='Unread replies in other chats' className='rounded-full bg-ui-primary px-2 py-0.5 text-xs text-ui-canvas'>{Object.values(unread).reduce((sum, count) => sum + count, 0)}</span> : null}
-                <button type='button' onClick={() => void selectChat(crypto.randomUUID())} className='shrink-0 rounded-lg px-2 py-1.5 text-xs font-medium text-ui-primary hover:bg-ui-raised disabled:opacity-50'>New chat</button>
+                <button type='button' onClick={() => void selectChat(crypto.randomUUID())} className='shrink-0 rounded-lg bg-ui-primary px-3.5 py-2 text-xs font-semibold text-ui-canvas transition hover:opacity-90 disabled:opacity-50'>New chat</button>
             </div> : <div />}
             <div ref={log} role='log' aria-label='Messages' className='min-h-0 overflow-y-auto overscroll-contain px-5 py-5'>
                 {!visibleMessages.length ? <div className='flex min-h-full flex-col justify-center pb-3'>
                     <div className='mb-5 grid h-11 w-11 place-items-center rounded-2xl bg-ui-primary/10 text-ui-primary'><Sparkles className='h-5 w-5' aria-hidden='true' /></div>
-                    <h3 className='text-xl font-semibold tracking-tight text-ui-text'>How can we help?</h3>
-                    <p className='mt-2 max-w-64 text-sm leading-6 text-ui-muted'>Ask Hanasand AI, or talk to a member of our team.</p>
+                    <h2 className='text-xl font-semibold tracking-tight text-ui-text'>What can we help with?</h2>
+                    <p className='mt-2 max-w-64 text-sm leading-6 text-ui-muted'>Describe your question and we’ll point you in the right direction.</p>
                     <div className='mt-6 flex flex-wrap gap-2'>{['Account help', 'Billing question', 'Using Hanasand'].map(topic => <button key={topic} type='button' disabled={loading || sending} onClick={() => setInput(topic)} className='rounded-full border border-ui-border px-3 py-2 text-xs text-ui-text transition hover:border-ui-primary hover:bg-ui-primary/5 disabled:opacity-50'>{topic}</button>)}</div>
                 </div> : <div className='grid gap-4'>{visibleMessages.map(message => message.sender_kind === 'system'
                     ? <p key={message.id} className='px-2 py-1 text-center text-xs leading-5 text-ui-muted'>{message.body}</p>
@@ -199,9 +200,7 @@ export default function PublicSupportChat({ active = true, onUnreadChange }: { a
                     <textarea aria-label='Message' rows={2} maxLength={4000} value={input} onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (!loading && !busy) send(event) } }} placeholder={human ? 'Message the support team…' : 'Ask a question…'} className='min-h-12 min-w-0 flex-1 resize-none bg-transparent px-2 py-1 text-sm leading-6 text-ui-text outline-none placeholder:text-ui-muted' />
                     <button type='submit' disabled={loading || busy || !input.trim()} aria-label='Send message' className='grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-ui-primary text-ui-canvas transition hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary disabled:opacity-40'>{sending ? <LoaderCircle className='h-4 w-4 animate-spin' /> : <ArrowUp className='h-4 w-4' />}</button>
                 </form>
-                <div className='mt-3 flex min-h-7 items-center justify-center'>
-                    {human ? <p className='flex items-center gap-1.5 text-xs text-ui-muted'><UserRound className='h-3.5 w-3.5' />{agentName ? `Speaking with ${agentName}` : 'Waiting for support.'}</p> : <button type='button' disabled={loading || transferring} onClick={() => void submit({ requestId: crypto.randomUUID(), message: 'I\'d like to speak with a human.', handoff: true })} className='inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-ui-muted transition hover:bg-ui-raised hover:text-ui-text disabled:opacity-50'><UserRound className='h-3.5 w-3.5' />{transferring ? 'Connecting…' : 'Talk to a human'}</button>}
-                </div></>}
+                {human ? <div className='mt-3 flex min-h-7 items-center justify-center'><p className='flex items-center gap-1.5 text-xs text-ui-muted'><UserRound className='h-3.5 w-3.5' />{agentName ? `Speaking with ${agentName}` : 'Waiting for support.'}</p></div> : null}</>}
             </div>
         </section>
     )
@@ -209,11 +208,7 @@ export default function PublicSupportChat({ active = true, onUnreadChange }: { a
 
 export function PublicSupportPanel() {
     return (
-        <section className='mx-auto grid h-[calc(100dvh-9rem)] min-h-96 w-full max-w-2xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-2xl border border-ui-border bg-ui-panel shadow-sm' aria-label='Guest support'>
-            <header className='flex items-center gap-3 border-b border-ui-border px-5 py-4'>
-                <span className='grid h-9 w-9 place-items-center rounded-xl bg-ui-primary text-ui-canvas'><Sparkles className='h-4 w-4' aria-hidden='true' /></span>
-                <div><h1 className='text-sm font-semibold text-ui-text'>Hanasand AI</h1><p className='mt-0.5 text-xs text-ui-muted'>Support</p></div>
-            </header>
+        <section className='mx-auto grid h-[min(42rem,calc(100dvh-10rem))] min-h-96 w-full max-w-4xl grid-rows-[minmax(0,1fr)] overflow-hidden rounded-2xl border border-ui-border bg-ui-panel shadow-sm shadow-ui-canvas/10 dark:shadow-ui-canvas/20' aria-label='Guest support'>
             <PublicSupportChat />
         </section>
     )

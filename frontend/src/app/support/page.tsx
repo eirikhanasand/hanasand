@@ -16,7 +16,7 @@ export default async function SupportPage() {
     const cookieStore = await cookies()
     const hasSession = Boolean(cookieStore.get('access_token')?.value && cookieStore.get('id')?.value)
     return (
-        <DashboardPage>
+        <DashboardPage className='support-page'>
             {hasSession ? <SupportChat embedded /> : <PublicSupportPanel />}
         </DashboardPage>
     )
