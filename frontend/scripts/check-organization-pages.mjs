@@ -132,9 +132,22 @@ try {
     await expect(page.getByText('Pilot measurement', { exact: true })).toHaveCount(0)
     await expect(page.locator('#privacy, #settings, #members, #watchlists')).toHaveCount(0)
     const createButton = page.getByRole('button', { name: 'Create organization', exact: true })
-    const refreshButton = page.getByRole('button', { name: 'Refresh', exact: true })
-    assert(await createButton.evaluate((element) => element.parentElement.contains([...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'Refresh'))))
+    const refreshButton = page.getByRole('button', { name: 'Refresh organizations', exact: true })
+    assert(await createButton.evaluate((element) => element.parentElement.contains(document.querySelector('[data-org-switcher]'))))
     await expect(refreshButton).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Workspaces', exact: true })).toHaveCount(0)
+    await expect(page.locator('[data-org-page-title]')).toHaveText('Overview')
+    await expect(page.locator('[data-org-page-header]')).not.toContainText('Organizations')
+    await expect(page.locator('[data-org-switcher]')).toHaveValue('hanasand')
+    await expect(page.locator('[data-org-count]')).toHaveText('4/4')
+    await page.keyboard.press('Meta+j')
+    const organizationSearch = page.getByRole('dialog', { name: 'Search organizations' }).getByRole('textbox', { name: 'Search organizations' })
+    await expect(organizationSearch).toBeFocused()
+    await organizationSearch.fill('norsk tipping')
+    await expect(page.locator('[data-org-search-result]')).toHaveCount(1)
+    await expect(page.locator('[data-org-search-result]')).toContainText('Research - Norsk Tipping')
+    await page.keyboard.press('Escape')
+    await expect(page.locator('[data-org-search-dialog]')).toHaveCount(0)
     await createButton.click()
     const createForm = page.locator('#org-create-primary')
     await expect(createForm.getByLabel('Name', { exact: true })).toBeFocused()
@@ -146,18 +159,8 @@ try {
     for (const width of [390, 768, 1024, 1440]) {
         await page.setViewportSize({ width, height: 1000 })
         assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Overflow at ${width}`)
-        const research = page.getByRole('button', { name: /^Research - Norsk Tipping Reader/ })
-        await expect(research).toBeVisible()
-        assert(await research.evaluate(button => {
-            const bounds = button.getBoundingClientRect()
-            const panel = button.closest('section').getBoundingClientRect()
-            const badge = button.firstElementChild.querySelector('span')
-            const badgeBounds = badge.getBoundingClientRect()
-            return bounds.right <= panel.right && button.scrollWidth <= button.clientWidth
-                && badgeBounds.right <= bounds.right && badgeBounds.height <= 18
-                && Number.parseFloat(getComputedStyle(badge).fontSize) <= 10
-        }), `Workspace name and compact role must fit at ${width}`)
-        if (width === 1440 || width === 390) await page.screenshot({ path: `/tmp/organization-sidebar-${width}.png`, fullPage: true })
+        await expect(page.locator('[data-org-switcher]')).toBeVisible()
+        if (width === 1440 || width === 390) await page.screenshot({ path: `/tmp/organization-header-${width}.png`, fullPage: true })
     }
     await page.getByRole('combobox', { name: 'Org', exact: true }).selectOption('research-mnemonic')
     await nav.getByRole('link', { name: 'Destinations', exact: true }).click()
@@ -191,7 +194,7 @@ try {
     await expect(name).toBeDisabled()
     console.log('Verified Reader settings')
     settingsError = true
-    await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+    await page.getByRole('button', { name: 'Refresh organizations', exact: true }).click()
     await expect(page.getByText(/Organization service is temporarily unavailable/)).toBeVisible()
     settingsError = false
 

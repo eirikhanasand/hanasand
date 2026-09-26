@@ -7,7 +7,7 @@ import { cleanWorkspaceUrl, workspaceShareUrl } from '@/utils/organizations/work
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Archive, BellRing, Building2, CheckCircle2, CircleAlert, Copy, ExternalLink, KeyRound, Loader2, Pause, Pencil, Play, RefreshCw, Settings, ShieldCheck, Trash2, UserPlus, Users, Webhook } from 'lucide-react'
+import { Archive, BellRing, Building2, CheckCircle2, CircleAlert, Copy, ExternalLink, KeyRound, Loader2, Pause, Pencil, Play, RefreshCw, Search, Settings, ShieldCheck, Trash2, UserPlus, Users, Webhook } from 'lucide-react'
 
 type OrganizationRole = 'owner' | 'admin' | 'editor' | 'reader' | 'member' | 'viewer' | 'support'
 type OrganizationStatus = 'active' | 'archived' | 'deleted' | string
@@ -484,15 +484,6 @@ function trimActivityRows(rows: ActivityItem[]) {
     })
 }
 
-function organizationWorkspaceMeta(organization: OrganizationSummary) {
-    const parts = [
-        sanitizeOrganizationDisplayCopy(organization.status || organization.slug || organization.id),
-        organization.status || 'active',
-        organization.memberCount !== undefined ? `${organization.memberCount} member${organization.memberCount === 1 ? '' : 's'}` : undefined,
-    ].filter(Boolean)
-    return parts.join(' · ') || organizationDisplayId(organization)
-}
-
 function organizationSearchText(organization: OrganizationSummary) {
     return [
         organization.id,
@@ -645,6 +636,23 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
     const createNameRef = useRef<HTMLInputElement>(null)
     useEffect(() => { if (createFormOpen) createNameRef.current?.focus() }, [createFormOpen])
     const [workspaceQuery, setWorkspaceQuery] = useState('')
+    const [organizationSearchOpen, setOrganizationSearchOpen] = useState(false)
+    const organizationSearchRef = useRef<HTMLInputElement>(null)
+    useEffect(() => {
+        if (organizationSearchOpen) organizationSearchRef.current?.focus()
+    }, [organizationSearchOpen])
+    useEffect(() => {
+        const onKeyDown = (event: globalThis.KeyboardEvent) => {
+            if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'j') {
+                event.preventDefault()
+                setOrganizationSearchOpen(true)
+            } else if (event.key === 'Escape') {
+                setOrganizationSearchOpen(false)
+            }
+        }
+        document.addEventListener('keydown', onKeyDown)
+        return () => document.removeEventListener('keydown', onKeyDown)
+    }, [])
     const [createFirstWatchlist, setCreateFirstWatchlist] = useState({ kind: 'domain' as WatchlistKind, value: '', notes: '' })
     const [createInviteEmails, setCreateInviteEmails] = useState('')
     const [createInviteRole, setCreateInviteRole] = useState<OrganizationRole>('reader')
@@ -1404,28 +1412,47 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
 
     return (
         <section className='min-h-full overflow-x-hidden bg-ui-canvas text-ui-text dark:bg-ui-canvas dark:text-ui-text'>
-            <div className='mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8'>
-                <header className='flex flex-col gap-4 border-b border-ui-border pb-5 dark:border-ui-border lg:flex-row lg:items-end lg:justify-between'>
+            <div className='mx-auto flex w-full min-w-0 flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8'>
+                <header className='flex flex-col gap-4 border-b border-ui-border pb-5 dark:border-ui-border sm:flex-row sm:items-center sm:justify-between' data-org-page-header='true'>
                     <div className='max-w-3xl'>
-                        <div className='mb-2 inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.08em] text-ui-primary dark:text-ui-primary'>
-                            <Building2 className='h-4 w-4' />
-                            Organizations
-                        </div>
-                        <h1 className='text-2xl font-semibold tracking-tight text-ui-text'>{organizationPages.find(item => item.id === activePage)?.label}</h1>
+                        <h1 className='text-2xl font-semibold tracking-tight text-ui-text' data-org-page-title='true'>{organizationPages.find(item => item.id === activePage)?.label}</h1>
                     </div>
-                    <div className='flex flex-wrap items-center gap-2'>
+                    <div className='relative flex flex-wrap items-center gap-2'>
+                        {organizations.length > 0 && <>
+                            <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1.5 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted' data-org-count='true'>{organizations.length}/{organizations.length}</span>
+                            <button type='button' onClick={() => setOrganizationSearchOpen(open => !open)} aria-expanded={organizationSearchOpen} aria-label='Search organizations (⌘J)' title='Search organizations · ⌘J' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-medium text-ui-muted hover:bg-ui-raised dark:border-ui-border dark:bg-ui-raised dark:hover:bg-ui-panel' data-org-search-trigger='true'>
+                                <Search className='h-4 w-4' /><span className='hidden sm:inline'>Search</span><kbd className='rounded border border-ui-border bg-ui-canvas px-1.5 py-0.5 text-[11px] dark:border-ui-border dark:bg-ui-canvas'>⌘J</kbd>
+                            </button>
+                        </>}
                         <button type='button' className={primaryButtonClass} aria-expanded={createFormOpen || organizations.length === 0} aria-controls='org-create-primary' onClick={() => organizations.length === 0 ? createNameRef.current?.focus() : setCreateFormOpen(current => !current)}>
                             <Building2 className='h-4 w-4' />Create organization
                         </button>
+                        {organizations.length > 0 && <>
+                            <label className='sr-only' htmlFor='organization-switcher'>Switch organization</label>
+                            <select id='organization-switcher' aria-label='Switch organization' value={selectedOrganization?.id || ''} onChange={event => selectOrganization(event.target.value)} className='h-9 max-w-44 rounded-md border border-ui-border bg-ui-panel px-2 text-sm font-medium text-ui-text dark:border-ui-border dark:bg-ui-raised' data-org-switcher='true'>
+                                {organizations.map(organization => <option key={organization.id} value={organization.id}>{organizationDisplayName(organization)}</option>)}
+                            </select>
+                        </>}
                         <button
                             type='button'
                             onClick={() => void loadOrganizations(selectedOrganization?.id)}
-                            className='inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-4 text-sm font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-60 dark:border-ui-border dark:bg-ui-raised dark:text-ui-text dark:hover:bg-ui-raised'
+                            className='inline-flex h-9 w-9 items-center justify-center rounded-md border border-ui-border bg-ui-panel text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-60 dark:border-ui-border dark:bg-ui-raised dark:text-ui-text dark:hover:bg-ui-raised'
+                            aria-label='Refresh organizations'
+                            title='Refresh organizations'
                             disabled={Boolean(busy || loading)}
                         >
                             {busy === 'load-org' || loading ? <Loader2 className='h-4 w-4 animate-spin' /> : <RefreshCw className='h-4 w-4' />}
-                            Refresh
                         </button>
+                        {organizationSearchOpen && <div className='absolute right-0 top-full z-30 mt-2 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-xl dark:border-ui-border dark:bg-ui-panel' role='dialog' aria-label='Search organizations' data-org-search-dialog='true'>
+                            <label className='flex items-center gap-2 border-b border-ui-border px-3 dark:border-ui-border'>
+                                <Search className='h-4 w-4 shrink-0 text-ui-muted' />
+                                <input ref={organizationSearchRef} value={workspaceQuery} onChange={event => setWorkspaceQuery(event.target.value)} className='h-11 min-w-0 flex-1 bg-transparent text-sm text-ui-text outline-none placeholder:text-ui-muted' placeholder='Search organizations' aria-label='Search organizations' />
+                                <kbd className='rounded border border-ui-border px-1.5 py-0.5 text-[11px] text-ui-muted'>ESC</kbd>
+                            </label>
+                            <div className='max-h-80 overflow-y-auto p-1'>
+                                {visibleOrganizations.length ? visibleOrganizations.map(organization => <button type='button' key={organization.id} onClick={() => { selectOrganization(organization.id); setOrganizationSearchOpen(false); setWorkspaceQuery('') }} aria-current={selectedOrganization?.id === organization.id ? 'true' : undefined} className='flex w-full items-center justify-between gap-3 rounded-md px-3 py-2.5 text-left text-sm hover:bg-ui-raised dark:hover:bg-ui-raised' data-org-search-result='true'><span className='truncate font-medium'>{organizationDisplayName(organization)}</span><span className='shrink-0 text-xs text-ui-muted'>{organizationRoleLabel(organization.role || 'reader')}</span></button>) : <p className='px-3 py-4 text-sm text-ui-muted'>No matching organizations.</p>}
+                            </div>
+                        </div>}
                     </div>
                 </header>
 
@@ -1439,119 +1466,66 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
 
                 {(createFormOpen || organizations.length === 0) && createOrganizationPanel}
 
-                <div className={organizations.length === 0 ? 'grid gap-5' : 'grid gap-5 lg:grid-cols-[18rem_minmax(0,1fr)]'}>
-                    <aside className={`${organizations.length === 0 ? 'hidden' : activePage === 'overview' ? 'flex' : 'hidden lg:flex'} min-w-0 flex-col gap-4`}>
-
-                        {(loading || organizations.length > 0) && (
-                            <section className='rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
-                                <div className='flex items-center justify-between gap-2 px-2 py-2'>
-                                    <h2 className='text-sm font-semibold text-ui-text dark:text-ui-text'>Workspaces</h2>
-                                    {organizations.length > 0 && (
-                                        <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-[11px] font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted' data-org-workspace-count='true'>
-                                            {visibleOrganizations.length}/{organizations.length}
-                                        </span>
-                                    )}
-                                </div>
-                                {organizations.length > 1 && (
-                                    <label className='mb-2 grid gap-1 px-2 text-xs font-semibold text-ui-muted dark:text-ui-muted' data-org-workspace-filter='true'>
-                                        Find workspace
-                                        <input
-                                            value={workspaceQuery}
-                                            disabled={Boolean(loading)}
-                                            onChange={event => setWorkspaceQuery(event.target.value)}
-                                            className={inputClass}
-                                            placeholder='Name, status, role'
-                                        />
-                                    </label>
-                                )}
-                                <div className='grid gap-1'>
-                                    {loading && <SkeletonRows count={3} />}
-                                    {!loading && organizations.length > 0 && visibleOrganizations.length === 0 && (
-                                        <p className='px-2 py-3 text-sm text-ui-muted dark:text-ui-muted' data-org-workspace-filter-empty='true'>
-                                            No matching workspaces.
-                                        </p>
-                                    )}
-                                    {visibleOrganizations.map(organization => (
-                                        <button
-                                            type='button'
-                                            key={organization.id}
-                                            onClick={() => selectOrganization(organization.id)}
-                                            aria-current={selectedOrganization?.id === organization.id ? 'true' : undefined}
-                                            className={`grid min-w-0 gap-1 rounded-lg px-3 py-3 text-left transition ${selectedOrganization?.id === organization.id ? 'bg-ui-primary/10 text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary' : 'hover:bg-ui-raised dark:hover:bg-ui-panel/6'}`}
-                                        >
-                                            <span className='min-w-0 wrap-break-word text-sm font-semibold'>
-                                                {organizationDisplayName(organization)}{' '}
-                                                <RoleBadge role={organization.role || 'reader'} compact />
-                                            </span>
-                                            <span className='truncate text-xs text-ui-muted dark:text-ui-muted'>{organizationWorkspaceMeta(organization)}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                            </section>
-                        )}
-                    </aside>
-
-                    {(selectedOrganization || organizations.length > 0 || (!loading && organizations.length === 0)) && <main className='min-w-0'>
-                        {selectedOrganization ? (
-                            <div className='grid min-w-0 content-start gap-5'>
-                                <WorkspaceSummary organization={selectedOrganization} activeWatchlists={activeWatchlists.length} pausedWatchlists={pausedWatchlists.length} archivedWatchlists={archivedWatchlists.length} memberCount={activeMembers.length} inviteCount={pendingInvites.length} webhookCount={configuredDestinationCount} />
-                                <WorkspaceSectionNav activePage={activePage} />
-                                {busy === 'load-org' ? <SkeletonRows count={3} /> : <>
-                                    {activePage === 'overview' && <WorkspaceHealthStrip organization={selectedOrganization} bundle={bundle} />}
-                                    {activePage === 'settings' && <SettingsPanel settingsDraft={settingsDraft} setSettingsDraft={setSettingsDraft} settingsDirty={settingsDirty} canManage={canManage} busy={busy} rowMessage={rowMessages.settings} onSave={() => void saveSettings()} onReset={() => setSettingsDraft(bundle.settings || {})} />}
-                                    {activePage === 'team' && canManage && <InvitePanel emails={inviteEmails} setEmails={setInviteEmails} role={inviteRole} setRole={setInviteRole} invites={bundle.invites} members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} onInvite={() => void sendInvite()} onInviteAction={(invite, action) => void inviteAction(invite, action)} onCopyInvite={invite => void copyInvite(invite)} />}
-                                    {activePage === 'team' && <MemberPanel members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} onRoleChange={(member, role) => void changeMemberRole(member, role)} onRemove={member => void removeMember(member)} />}
-                                    {activePage === 'watchlists' && <WatchlistPanel
-                                        watchlists={bundle.watchlists}
-                                        activeTerms={bundle.alertTerms}
-                                        members={bundle.members}
-                                        canManage={canEdit}
-                                        canCleanup={canManage}
-                                        busy={busy}
-                                        draft={watchlistDraft}
-                                        setDraft={setWatchlistDraft}
-                                        suggestions={watchlistSuggestions}
-                                        editing={editingWatchlist}
-                                        setEditing={setEditingWatchlist}
-                                        onCreate={() => void createWatchlist()}
-                                        onSave={item => void saveWatchlistEdit(item)}
-                                        onAction={(item, action) => void watchlistAction(item, action)}
-                                        onDelete={item => void deleteWatchlist(item)}
-                                        organization={selectedOrganization}
-                                        alerts={bundle.alerts}
-                                        deliveries={bundle.deliveries}
-                                        onCleanup={() => void cleanupWatchlists()}
-                                        onRefreshAlerts={() => void refreshOrganizationAlerts()}
-                                        onRequestFreshCollection={() => void requestFreshCollection()}
-                                        onRefreshCollectionStatus={() => void refreshCollectionStatus()}
-                                        collectionRequest={collectionRequest}
-                                        rowMessages={rowMessages}
-                                        draftDuplicate={watchlistDraftDuplicate}
-                                        selectedSubject={selectedActivitySubject}
-                                        onSelectSubject={selectActivitySubject}
-                                    />}
-                                    {activePage === 'destinations' && <DestinationPanel destinations={bundle.webhooks} deliveries={bundle.deliveries} canManage={canEdit} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} createDraft={destinationCreateDraft} setCreateDraft={setDestinationCreateDraft} editing={editingDestinations} setEditing={setEditingDestinations} onSelectSubject={selectActivitySubject} onCreate={() => void createSavedDestination()} onTest={destination => void testSavedDestination(destination)} onUpdate={(destination, draft) => void updateSavedDestination(destination, draft)} onRotateSigningSecret={destination => void rotateDestinationSigningSecret(destination)} onDelete={destination => void deleteSavedDestination(destination)} signingSecret={newWebhookSigningSecret} onClearSigningSecret={() => setNewWebhookSigningSecret('')} />}
-                                    {activePage === 'api-keys' && (canManage ? <MillApiKeyPanel apiKeys={bundle.apiKeys} secret={newApiKeySecret} canManage={canManage} busy={busy} rowMessage={rowMessages['mill-api-key']} onCreate={() => void createMillApiKey()} onRevoke={key => void revokeMillApiKey(key)} onClearSecret={() => setNewApiKeySecret('')} /> : <p className='rounded-lg border border-ui-border bg-ui-panel p-4 text-sm text-ui-muted'>Only this organization’s owners and admins can manage API keys.</p>)}
-                                    {activePage === 'privacy' && <PrivacyLifecyclePanel organization={selectedOrganization} privacy={bundle.privacy} retentionDays={Number(bundle.settings?.retentionDays || 365)} canManage={canManage} busy={busy} rowMessage={rowMessages.privacy} onRun={() => void runRetention()} onExport={() => void exportPrivacyData()} onDelete={(confirmation, currentPassword) => void requestPrivacyDeletion(confirmation, currentPassword)} />}
-                                    {activePage === 'delivery' && <DeliveryHistoryPanel
-                                        organization={selectedOrganization}
-                                        deliveries={bundle.deliveries}
-                                        destinations={bundle.webhooks}
-                                        selectedSubject={selectedActivitySubject}
-                                        canManage={canEdit}
-                                        busy={busy}
-                                        rowMessages={rowMessages}
-                                        onReplay={delivery => void replayDelivery(delivery)}
-                                    />}
-                                    {activePage === 'alerts' && <ScopePanel alertTerms={bundle.alertTerms} alerts={bundle.alerts} cases={bundle.cases} deliveries={bundle.deliveries} members={bundle.members} watchlists={bundle.watchlists} webhooks={bundle.webhooks} alertCaseVisibility={bundle.alertCaseVisibility} organizationId={selectedOrganization.id} />}
-                                    {activePage === 'activity' && <ActivityPanel organization={selectedOrganization} bundle={bundle} activity={activityRows} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} />}
-                                </>}
-                            </div>
-                        ) : (
-                            <EmptyWorkspacePreview />
-                        )}
-                    </main>}
-                </div>
+                {(selectedOrganization || organizations.length > 0 || (!loading && organizations.length === 0)) && <main className='min-w-0'>
+                    {selectedOrganization ? (
+                        <div className='grid min-w-0 content-start gap-5'>
+                            <WorkspaceSummary organization={selectedOrganization} activeWatchlists={activeWatchlists.length} pausedWatchlists={pausedWatchlists.length} archivedWatchlists={archivedWatchlists.length} memberCount={activeMembers.length} inviteCount={pendingInvites.length} webhookCount={configuredDestinationCount} />
+                            <WorkspaceSectionNav activePage={activePage} />
+                            {busy === 'load-org' ? <SkeletonRows count={3} /> : <>
+                                {activePage === 'overview' && <WorkspaceHealthStrip organization={selectedOrganization} bundle={bundle} />}
+                                {activePage === 'settings' && <SettingsPanel settingsDraft={settingsDraft} setSettingsDraft={setSettingsDraft} settingsDirty={settingsDirty} canManage={canManage} busy={busy} rowMessage={rowMessages.settings} onSave={() => void saveSettings()} onReset={() => setSettingsDraft(bundle.settings || {})} />}
+                                {activePage === 'team' && canManage && <InvitePanel emails={inviteEmails} setEmails={setInviteEmails} role={inviteRole} setRole={setInviteRole} invites={bundle.invites} members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} onInvite={() => void sendInvite()} onInviteAction={(invite, action) => void inviteAction(invite, action)} onCopyInvite={invite => void copyInvite(invite)} />}
+                                {activePage === 'team' && <MemberPanel members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} onRoleChange={(member, role) => void changeMemberRole(member, role)} onRemove={member => void removeMember(member)} />}
+                                {activePage === 'watchlists' && <WatchlistPanel
+                                    watchlists={bundle.watchlists}
+                                    activeTerms={bundle.alertTerms}
+                                    members={bundle.members}
+                                    canManage={canEdit}
+                                    canCleanup={canManage}
+                                    busy={busy}
+                                    draft={watchlistDraft}
+                                    setDraft={setWatchlistDraft}
+                                    suggestions={watchlistSuggestions}
+                                    editing={editingWatchlist}
+                                    setEditing={setEditingWatchlist}
+                                    onCreate={() => void createWatchlist()}
+                                    onSave={item => void saveWatchlistEdit(item)}
+                                    onAction={(item, action) => void watchlistAction(item, action)}
+                                    onDelete={item => void deleteWatchlist(item)}
+                                    organization={selectedOrganization}
+                                    alerts={bundle.alerts}
+                                    deliveries={bundle.deliveries}
+                                    onCleanup={() => void cleanupWatchlists()}
+                                    onRefreshAlerts={() => void refreshOrganizationAlerts()}
+                                    onRequestFreshCollection={() => void requestFreshCollection()}
+                                    onRefreshCollectionStatus={() => void refreshCollectionStatus()}
+                                    collectionRequest={collectionRequest}
+                                    rowMessages={rowMessages}
+                                    draftDuplicate={watchlistDraftDuplicate}
+                                    selectedSubject={selectedActivitySubject}
+                                    onSelectSubject={selectActivitySubject}
+                                />}
+                                {activePage === 'destinations' && <DestinationPanel destinations={bundle.webhooks} deliveries={bundle.deliveries} canManage={canEdit} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} createDraft={destinationCreateDraft} setCreateDraft={setDestinationCreateDraft} editing={editingDestinations} setEditing={setEditingDestinations} onSelectSubject={selectActivitySubject} onCreate={() => void createSavedDestination()} onTest={destination => void testSavedDestination(destination)} onUpdate={(destination, draft) => void updateSavedDestination(destination, draft)} onRotateSigningSecret={destination => void rotateDestinationSigningSecret(destination)} onDelete={destination => void deleteSavedDestination(destination)} signingSecret={newWebhookSigningSecret} onClearSigningSecret={() => setNewWebhookSigningSecret('')} />}
+                                {activePage === 'api-keys' && (canManage ? <MillApiKeyPanel apiKeys={bundle.apiKeys} secret={newApiKeySecret} canManage={canManage} busy={busy} rowMessage={rowMessages['mill-api-key']} onCreate={() => void createMillApiKey()} onRevoke={key => void revokeMillApiKey(key)} onClearSecret={() => setNewApiKeySecret('')} /> : <p className='rounded-lg border border-ui-border bg-ui-panel p-4 text-sm text-ui-muted'>Only this organization’s owners and admins can manage API keys.</p>)}
+                                {activePage === 'privacy' && <PrivacyLifecyclePanel organization={selectedOrganization} privacy={bundle.privacy} retentionDays={Number(bundle.settings?.retentionDays || 365)} canManage={canManage} busy={busy} rowMessage={rowMessages.privacy} onRun={() => void runRetention()} onExport={() => void exportPrivacyData()} onDelete={(confirmation, currentPassword) => void requestPrivacyDeletion(confirmation, currentPassword)} />}
+                                {activePage === 'delivery' && <DeliveryHistoryPanel
+                                    organization={selectedOrganization}
+                                    deliveries={bundle.deliveries}
+                                    destinations={bundle.webhooks}
+                                    selectedSubject={selectedActivitySubject}
+                                    canManage={canEdit}
+                                    busy={busy}
+                                    rowMessages={rowMessages}
+                                    onReplay={delivery => void replayDelivery(delivery)}
+                                />}
+                                {activePage === 'alerts' && <ScopePanel alertTerms={bundle.alertTerms} alerts={bundle.alerts} cases={bundle.cases} deliveries={bundle.deliveries} members={bundle.members} watchlists={bundle.watchlists} webhooks={bundle.webhooks} alertCaseVisibility={bundle.alertCaseVisibility} organizationId={selectedOrganization.id} />}
+                                {activePage === 'activity' && <ActivityPanel organization={selectedOrganization} bundle={bundle} activity={activityRows} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} />}
+                            </>}
+                        </div>
+                    ) : (
+                        <EmptyWorkspacePreview />
+                    )}
+                </main>}
             </div>
         </section>
     )
@@ -1664,7 +1638,7 @@ function WorkspaceSummary({ organization, activeWatchlists, pausedWatchlists, ar
         { id: 'role', icon: <ShieldCheck className='h-4 w-4' />, label: 'Role', value: organizationRoleLabel(organization.role || 'reader'), detail: organization.status || 'active' },
         { id: 'members', icon: <Users className='h-4 w-4' />, label: 'Members', value: String(memberCount ?? organization.memberCount ?? organization.activeMemberCount ?? 0), detail: `${inviteCount ?? organization.pendingInviteCount ?? 0} pending` },
         { id: 'watchlists', icon: <BellRing className='h-4 w-4' />, label: 'Watchlists', value: String(activeWatchlists ?? organization.sharedWatchlistCount ?? 0), detail: `${pausedWatchlists} paused · ${archivedWatchlists} archived` },
-        { id: 'destinations', icon: <Webhook className='h-4 w-4' />, label: 'Destinations', value: String(webhookCount), detail: 'Workspace routes' },
+        { id: 'destinations', icon: <Webhook className='h-4 w-4' />, label: 'Destinations', value: String(webhookCount), detail: 'Routes' },
     ]
     return (
         <section className='flex min-w-0 flex-col gap-3 rounded-lg border border-ui-border bg-ui-panel p-3 shadow-sm dark:border-ui-border dark:bg-ui-panel xl:flex-row xl:items-center xl:justify-between' data-org-workspace-summary='true'>

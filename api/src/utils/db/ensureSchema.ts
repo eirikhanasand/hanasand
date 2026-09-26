@@ -500,6 +500,9 @@ async function applySchema() {
     await ensureColumn(run, 'service_logs', 'source_event_id', 'ALTER TABLE service_logs ADD COLUMN IF NOT EXISTS source_event_id TEXT')
     await ensureIndex(run, 'idx_service_logs_source_event_id', 'CREATE UNIQUE INDEX IF NOT EXISTS idx_service_logs_source_event_id ON service_logs(source_event_id)')
     await ensureIndex(run, 'idx_service_logs_service_level', 'CREATE INDEX IF NOT EXISTS idx_service_logs_service_level ON service_logs(service, level, created_at DESC)')
+    // The organization privacy summary counts matching logs; without these indexes every load scans the full log table.
+    await ensureIndex(run, 'idx_service_logs_organization_id', 'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_service_logs_organization_id ON service_logs((metadata->>\'organizationId\'))')
+    await ensureIndex(run, 'idx_service_logs_tenant_id', 'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_service_logs_tenant_id ON service_logs((metadata->>\'tenantId\'))')
     await run(`
         CREATE TABLE IF NOT EXISTS host_update_snapshots (
             host TEXT PRIMARY KEY,
