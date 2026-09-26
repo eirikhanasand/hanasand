@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, ArrowUpDown, AlertTriangle, PanelRightClose, PanelRightOpen, Check, Clock3, Filter, Play, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import {
@@ -45,7 +46,8 @@ const defaultDraft = (): AutomationPayload => ({
     notifyWarnings: false,
 })
 
-export default function AutomationsClient({ setup, initial, mode = 'health' }: { setup?: 'dwm', initial: InitialAutomationData, mode?: 'health' | 'cron' }) {
+export default function AutomationsClient({ setup, initial, mode = 'health', systemJobCount }: { setup?: 'dwm', initial: InitialAutomationData, mode?: 'health' | 'cron', systemJobCount?: number }) {
+    const router = useRouter()
     const [automations, setAutomations] = useState<AgentAutomation[]>(initial.automations)
     const [canManageSystem, setCanManageSystem] = useState(Boolean(initial.canManageSystem))
     const scope = mode === 'cron' ? 'personal' as const : undefined
@@ -189,7 +191,7 @@ export default function AutomationsClient({ setup, initial, mode = 'health' }: {
     }
 
     if (!automations.length && loadError) return <ErrorNotice message={loadError} actionLabel={busy ? 'Retrying…' : 'Try again'} onAction={() => void load()} />
-    if (!automations.length && !editing) return <div className='grid min-h-64 place-items-center rounded-xl border border-ui-border bg-ui-panel p-6 text-center'><div><h2 className='text-xl font-semibold text-ui-text'>{mode === 'cron' ? 'No jobs yet' : 'No health checks yet'}</h2><p className='mt-2 text-sm text-ui-muted'>{mode === 'cron' ? 'Got something to keep an eye on? Schedule it here.' : 'Add your first check to start monitoring a service.'}</p><button type='button' onClick={beginCreate} className='mt-4 rounded-lg bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas'>{mode === 'cron' ? 'Create job' : 'Create health check'}</button></div></div>
+    if (!automations.length && !editing) return <div className='grid min-h-64 place-items-center rounded-xl border border-ui-border bg-ui-panel p-6 text-center'><div><h2 className='text-xl font-semibold text-ui-text'>{mode === 'cron' ? 'No jobs yet' : 'No health checks yet'}</h2>{mode === 'cron' && systemJobCount ? <button type='button' onClick={() => router.push('/automation/cron?scope=system')} className='mt-2 text-sm font-semibold text-ui-primary hover:underline'>System jobs ({systemJobCount})</button> : <p className='mt-2 text-sm text-ui-muted'>{mode === 'cron' ? 'Got something to keep an eye on? Schedule it here.' : 'Add your first check to start monitoring a service.'}</p>}<button type='button' onClick={beginCreate} className='mt-4 min-w-40 rounded-lg bg-ui-primary px-6 py-2 text-sm font-semibold text-white'>{mode === 'cron' ? 'Create job' : 'Create health check'}</button></div></div>
 
     return (
         <div className='grid gap-4'>
@@ -197,7 +199,7 @@ export default function AutomationsClient({ setup, initial, mode = 'health' }: {
             <div className={`grid gap-4 ${detailsOpen ? 'xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.72fr)]' : ''}`}>
                 <section className='rounded-xl border border-ui-border bg-ui-panel shadow-sm'>
                     <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border p-4'>
-                        <div><h2 className='text-lg font-semibold text-ui-text'>{mode === 'cron' ? 'Personal jobs' : 'Health checks'}</h2><p className='mt-1 text-sm text-ui-muted'>{automations.length} {mode === 'cron' ? `job${automations.length === 1 ? '' : 's'}` : `check${automations.length === 1 ? '' : 's'}`}</p></div>
+                        <div><h2 className='text-lg font-semibold text-ui-text'>{mode === 'cron' ? 'Personal' : 'Health checks'}</h2><p className='mt-1 text-sm text-ui-muted'>{automations.length} {mode === 'cron' ? `job${automations.length === 1 ? '' : 's'}` : `check${automations.length === 1 ? '' : 's'}`}</p></div>
                         <button type='button' aria-label={detailsOpen ? 'Collapse check details' : 'Expand check details'} title={detailsOpen ? 'Collapse check details' : 'Expand check details'} aria-expanded={detailsOpen} aria-controls='health-check-details' onClick={() => setDetailsOpen(!detailsOpen)} className='ml-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded p-0 text-ui-muted hover:bg-ui-raised focus-visible:outline-2 focus-visible:outline-ui-primary'>{detailsOpen ? <PanelRightClose className='h-5 w-5' /> : <PanelRightOpen className='h-5 w-5' />}</button>
                         <div className='flex w-fit max-w-full flex-nowrap items-center gap-2'>
                             {searchOpen && <input ref={searchInput} id='health-check-search' aria-label='Find a case or monitor' className={`${inputClass} min-w-0 max-w-56 flex-1`} type='search' placeholder='HA-123 or monitor name' value={caseSearch} onChange={event => setCaseSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); closeSearch() } }} />}

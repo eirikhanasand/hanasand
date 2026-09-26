@@ -5,6 +5,7 @@ import type { AgentAutomation, AgentAutomationRun, MonitoringIssue } from './cli
 
 export type InitialAutomationData = {
     canManageSystem?: boolean
+    systemJobCount?: number
     automations: AgentAutomation[]
     detail?: { automation: AgentAutomation, runs: AgentAutomationRun[], issues?: MonitoringIssue[], total: number, nextPage: number | null }
     error?: string
@@ -25,12 +26,21 @@ export async function loadAutomations(selectedId?: string, scope?: 'personal'): 
     }
     try {
         const { automations, canManageSystem } = await request<{ automations: AgentAutomation[], canManageSystem?: boolean }>(scope ? '?scope=personal' : '')
-        if (!automations.length) return { automations, canManageSystem }
+        let systemJobCount: number | undefined
+        if (canManageSystem) {
+            try {
+                const inventory = await fetch(`${config.url.api}/system/cron`, { headers, cache: 'no-store', signal: AbortSignal.timeout(12000) })
+                if (inventory.ok) systemJobCount = ((await inventory.json()) as { jobs?: unknown[] }).jobs?.length ?? 0
+            } catch {
+                // The personal jobs page remains available if the separate system inventory is offline.
+            }
+        }
+        if (!automations.length) return { automations, canManageSystem, systemJobCount }
         try {
             const detail = await request<NonNullable<InitialAutomationData['detail']>>(`/${encodeURIComponent(automations.find(item => item.id === selectedId)?.id || automations[0].id)}`)
-            return { automations, canManageSystem, detail }
+            return { automations, canManageSystem, systemJobCount, detail }
         } catch {
-            return { automations, canManageSystem, error: 'Unable to load recent checks. Please try again.' }
+            return { automations, canManageSystem, systemJobCount, error: 'Unable to load recent checks. Please try again.' }
         }
     } catch {
         return { automations: [], error: 'Unable to load automations. Please try again.' }
