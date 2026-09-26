@@ -1,4 +1,5 @@
-import fetchArticle from '@/utils/articles/fetchArticle'
+import staticArticles from '@/utils/articles/staticArticles.json'
+import { replaceDraftArticle } from '@/utils/articles/fallbackArticles'
 import { redirect } from 'next/navigation'
 import MarkdownRender from '../markdown/markdown'
 import Link from 'next/link'
@@ -6,7 +7,8 @@ import prettyDate from '@/utils/date/prettyDate'
 import { ArrowLeft, CalendarDays, Clock3 } from 'lucide-react'
 
 export default async function Article({ id }: { id: string }) {
-    const article = await fetchArticle(id.endsWith('.md') ? id : `${id}.md`)
+    const match = staticArticles.find((item) => item.id.replace(/\.md$/, '') === id.replace(/\.md$/, ''))
+    const article = match ? replaceDraftArticle(match) : null
     if (id === 'featured' || id === 'main') {
         redirect('/articles')
     }

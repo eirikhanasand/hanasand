@@ -1,9 +1,11 @@
 import Image from 'next/image'
 import Link from 'next/link'
+import { Suspense } from 'react'
 import './animate.css'
-import fetchArticles from '@/utils/articles/fetchArticles'
+import staticArticles from '@/utils/articles/staticArticles.json'
+import { replaceDraftArticle } from '@/utils/articles/fallbackArticles'
 import prettyDate from '@/utils/date/prettyDate'
-import ArticleNotification from './articleNotification'
+import ArticleNotificationFromSearchParams from './articleNotificationFromSearchParams'
 import { BookOpen, FileText } from 'lucide-react'
 
 type ArticleProps = {
@@ -31,19 +33,21 @@ export default async function Articles({
     max,
     includeRecentTitle = true,
     backfill = true,
-    error,
-    errorPath
 }: ArticlesProps) {
-    const response = await fetchArticles<typeof recent>(recent, backfill)
-    const articles = normalizeArticles(Array.isArray(response) ? response : recent ? response.recent : response.articles)
-    const allArticles = normalizeArticles(Array.isArray(response) ? articles : response.articles)
-    const displayed = max ? allArticles.slice(max) : allArticles
-    const message = error && error === '404' ? `The article '${errorPath}' does not exist.` : error
-    const hasAnyArticles = articles.length > 0 || displayed.length > 0
+    const allArticles = normalizeArticles(staticArticles.map(replaceDraftArticle))
+    const articles = recent
+        ? allArticles.filter((article) => Date.now() - new Date(article.created).getTime() < 1209600000)
+        : allArticles
+    const olderArticles = recent ? allArticles.filter((article) => !articles.includes(article)) : []
+    const recentArticles = backfill && articles.length < 4
+        ? [...articles, ...olderArticles.slice(0, 4 - articles.length)]
+        : articles
+    const displayed = max ? olderArticles.slice(max) : olderArticles
+    const hasAnyArticles = recentArticles.length > 0 || displayed.length > 0
 
     return (
         <section className='mx-auto grid w-full max-w-7xl gap-8 bg-ui-canvas px-4 py-12 text-ui-text md:px-8 md:py-16'>
-            {message && <ArticleNotification message={message} />}
+            <Suspense fallback={null}><ArticleNotificationFromSearchParams /></Suspense>
             <div className='grid gap-3'>
                 <div className='flex items-center gap-3'>
                     <span className='grid h-10 w-10 place-items-center rounded-lg border border-ui-border bg-ui-panel text-ui-primary shadow-sm shadow-ui-canvas/20'>
@@ -55,7 +59,7 @@ export default async function Articles({
                     Project notes, product context, and preserved writing from the personal Hanasand notebook.
                 </p>
             </div>
-            <Recent recent={articles} max={max} includeTitle={includeRecentTitle} emptyMessage={hasAnyArticles ? 'No recent articles right now.' : 'No articles published.'} />
+            <Recent recent={recentArticles} max={max} includeTitle={includeRecentTitle} emptyMessage={hasAnyArticles ? 'No recent articles right now.' : 'No articles published.'} />
             {recent && displayed.length > 0 && <All recent={displayed} max={max} includeTitle={includeRecentTitle} />}
         </section>
     )
@@ -100,7 +104,7 @@ function Article({ article }: ArticleProps) {
     return (
         <Link
             className='group h-full rounded-lg outline-none focus-visible:ring-4 focus-visible:ring-ui-primary/35'
-            href={`/articles/${id}`}
+            href={`/articles/${id.replace(/\.md$/, '')}`}
         >
             <article className='grid h-full overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm shadow-ui-canvas/20 transition hover:border-ui-border'>
                 {metadata.image ? (

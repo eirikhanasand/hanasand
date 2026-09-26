@@ -1,6 +1,9 @@
 import type { Metadata } from 'next'
 import article from '@/components/articles/article'
 import { buildRouteMetadata, humanizeSlug } from '../../seo'
+import staticArticles from '@/utils/articles/staticArticles.json'
+
+export const dynamic = 'force-static'
 
 type PageProps = {
     params: Promise<{ id: string }>
@@ -16,6 +19,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
         path: `/articles/${id}`,
         keywords: ['article', 'hanasand article', title.toLowerCase()],
     })
+}
+
+export function generateStaticParams() {
+    return staticArticles.map((article) => ({ id: article.id.replace(/\.md$/, '') }))
 }
 
 export default async function page({ params }: PageProps) {

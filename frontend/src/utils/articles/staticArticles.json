@@ -1,0 +1,88 @@
+[
+  {
+    "id": "bot.md",
+    "title": "How to create a scalable Discord bot specific to your needs?",
+    "size": 475,
+    "created": "2025-05-12T04:00:48+02:00",
+    "modified": "2025-05-12T06:10:16+02:00",
+    "content": "# How to create a scalable Discord bot specific to your needs?\n\nComing soon <3",
+    "metadata": {
+      "image": "/images/assets/city.jpg",
+      "description": "This article details how to create a custom, reliable Discord bot that you can use for role management, mirror game servers, create documentation pages on your wiki solutions, one click Infrastructure As Code deployment in multiple environments, and other things you might use a Discord Bot for. (It even updates itself without downtime!)",
+      "wordCount": 15,
+      "estimatedMinutes": 1
+    }
+  },
+  {
+    "id": "cache.md",
+    "title": "How to set up performant low latency caching?",
+    "size": 385,
+    "created": "2025-05-12T04:00:48+02:00",
+    "modified": "2025-05-13T06:07:54+02:00",
+    "content": "# How to set up performant low latency caching?\n\nComing soon <3",
+    "metadata": {
+      "image": "/images/assets/art.png",
+      "description": "I use NextJS, and even though its more than enough most of the time, sometimes NextJS' caching just doesnt cut it. This is a simple approach to a < 5ms cache setup that allows to be easily extended and modified to your needs, without complex logic or abstractions.",
+      "wordCount": 12,
+      "estimatedMinutes": 1
+    }
+  },
+  {
+    "id": "event.md",
+    "title": "How to create a event management React Native Application?",
+    "size": 474,
+    "created": "2025-05-12T04:00:48+02:00",
+    "modified": "2025-05-12T05:41:44+02:00",
+    "content": "# How to create a event management React Native Application?\n\nComing soon <3",
+    "metadata": {
+      "image": "/images/assets/project.jpg",
+      "description": "Maybe your organization hosts a lot of events? Football, running, bowling or any other social initiatives in your organization will quickly pile up and become difficult to keep track of. Thats why I created a simple application with notifications, dates and everything else you need to keep track of whats going on in your organization.",
+      "wordCount": 13,
+      "estimatedMinutes": 1
+    }
+  },
+  {
+    "id": "lsm.md",
+    "title": "Library Safety Manager",
+    "size": 588,
+    "created": "2025-05-12T06:10:23+02:00",
+    "modified": "2025-05-12T07:41:34+02:00",
+    "content": "# Library Safety Manager\nLibrary Safety Manager Open Source Plugin For Artifactory. Allow and block packages for JFrog Artifactory to prevent download of malicious or vulnerable code.\n\nSorry, the full thesis is finished but not published yet. It will be published in a month.",
+    "metadata": {
+      "image": "/images/assets/abstract.jpg",
+      "description": "Have you ever thought about blocking vulnerable dependencies proactively instead of retrospectively? If not, no worries, I got you! This article gives a brief overview of the application, and links to the full thesis detailing the entire application.",
+      "wordCount": 44,
+      "estimatedMinutes": 1
+    }
+  },
+  {
+    "id": "readme.md",
+    "title": "👋 Hey, I’m Eirik Hanasand",
+    "size": 2570,
+    "created": "2025-10-12T14:38:30+02:00",
+    "modified": "2025-10-12T14:38:30+02:00",
+    "content": "# 👋 Hey, I’m Eirik Hanasand\n\nI’m a **software engineer and security-minded developer** passionate about building tools that make development safer, faster, and more enjoyable. I love exploring the intersection of **software engineering, cybersecurity, and design** — where clean code meets practical impact. (Sorry for making GPT write this 😂, I would need more than 48 hours in a day to get everything I wanted done. I will write it meself at some point. Remember that this is a personal website, and only supposed to be half serious 🍹)\n\n---\n\n## 🧠 What Drives Me\n\nI’m motivated by curiosity and craftsmanship. Whether I’m hardening an API, improving a CI pipeline, or designing a React interface, I aim for **clarity, simplicity, and security by default**.\n\nI believe software should help people — and it should do so **without getting in their way**.\n\n---\n\n## 🧰 What I Build\n\nSome projects I’ve worked on recently:\n\n- 🧩 **Library Safety Manager (LSM)** — an Artifactory extension that scans packages for vulnerabilities and malware using the OSV database.  \n- 📱 **Event Management App** — a React Native app to simplify event coordination.  \n- 🤖 **Discord Bot for Infrastructure Automation** — combining IaC principles with developer community tools.  \n- 🌐 **Open Source Libraries** — small UI utilities, SSR/theming experiments in Next.js, and other contributions on [GitHub](https://github.com/eirikhanasand).\n\n---\n\n## 🛡️ My Focus Areas\n\n- Secure development & supply-chain protection  \n- JavaScript / TypeScript, React, and Next.js  \n- DevOps & automation (CI/CD, IaC)  \n- Developer experience (DX) and open-source tooling  \n\n---\n\n## 🌱 Currently Exploring\n\n- Software supply-chain security research  \n- Smarter mobile-web integrations for events and collaboration  \n- Writing technical deep-dives on security and performance  \n- Building small, opinionated tools to make developers’ lives easier  \n\n---\n\n## ✉️ Let’s Connect\n\nIf you’re working on something interesting — especially around **developer tools, app security, or automation** — I’d love to connect or collaborate.\n\n- **GitHub:** [github.com/eirikhanasand](https://github.com/eirikhanasand)  \n- **Website:** [hanasand.com](https://hanasand.com)",
+    "metadata": {
+      "quoteIcon": "/images/assets/chatgpt.png",
+      "quote": "Write a Readme.md (about me) for a about page article on my website. Please check https://github.com/eirikhanasand for inspiration. Look at my projects and interests, and use what you know about me based on all my previous queries.",
+      "image": "",
+      "description": "",
+      "wordCount": 322,
+      "estimatedMinutes": 5
+    }
+  },
+  {
+    "id": "theme.md",
+    "title": "How to create server side themes for NextJS?",
+    "size": 407,
+    "created": "2025-05-12T04:00:48+02:00",
+    "modified": "2025-05-12T05:41:44+02:00",
+    "content": "# How to create server side themes for NextJS?\n\nComing soon <3",
+    "metadata": {
+      "image": "/images/assets/abstract.jpg",
+      "description": "In this article I explain how to setup proper ssr themes for NextJS without FODT (Flash Of Default Theme) and other common problems when dealing with themes. It also integrates well with custom themes and does not rely on any library at all (although I use tailwind for preference).",
+      "wordCount": 12,
+      "estimatedMinutes": 1
+    }
+  }
+]

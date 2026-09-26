@@ -10,6 +10,7 @@ FROM deps AS builder
 WORKDIR /workspace/frontend
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+ENV HANASAND_REPO_ROOT=/repository
 
 # The deploy test index intentionally checks a few cross-package contracts
 # before building. Keep the Docker build context at the repository root so

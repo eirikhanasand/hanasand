@@ -1,7 +1,6 @@
-import { ARTICLES_DIR, ensureRepo } from '#utils/git/git.ts'
+import { ARTICLES_DIR } from '#utils/git/git.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import fileExists from '#utils/git/fileExists.ts'
-import ensureRepositoryUpToDate from '#utils/git/ensureRepositoryUpToDate.ts'
 import { readdir, stat, readFile } from 'fs/promises'
 import matter from 'gray-matter'
 import { join } from 'path'
@@ -27,15 +26,6 @@ export default async function getArticles(req: FastifyRequest<{
     const sortBy = req.query.sortBy
     const organizationId = requestedContentOrganization(req)
     if (!await requireContentOrganization(req, res, organizationId)) return
-    try {
-        await ensureRepo()
-        void ensureRepositoryUpToDate().catch(error => {
-            req.log.warn({ error }, 'Failed to refresh articles repository')
-        })
-    } catch (error) {
-        req.log.warn({ error }, 'Articles repository is unavailable; serving empty article feed')
-    }
-
     if (!(await fileExists(ARTICLES_DIR))) {
         return res.send(emptyArticlesResponse(Boolean(recent)))
     }
@@ -121,10 +111,7 @@ export async function getArticle(req: FastifyRequest<{ Params: { id: string } }>
     const id = Id.endsWith('.md') ? Id : `${Id}.md`
     const filePath = join(ARTICLES_DIR, id)
     if (!(await fileExists(filePath))) {
-        await ensureRepositoryUpToDate()
-        if (!(await fileExists(filePath))) {
-            return res.status(404).send({ error: 'Article does not exist' })
-        }
+        return res.status(404).send({ error: 'Article does not exist' })
     }
 
     const stats = await stat(filePath)

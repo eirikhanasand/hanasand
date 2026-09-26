@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import Articles from '@/components/articles/articles'
 import { buildRouteMetadata } from '../seo'
 
+export const dynamic = 'force-static'
+
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Articles',
     description: 'Browse articles, notes, and longer-form writing published on Hanasand.',
@@ -9,18 +11,10 @@ export const metadata: Metadata = buildRouteMetadata({
     keywords: ['articles', 'blog', 'hanasand writing'],
 })
 
-export default async function Page({
-    searchParams,
-}: {
-    searchParams: Promise<{ [key: string]: string | string[] | undefined }>
-}) {
-    const params = await searchParams
-    const error = Array.isArray(params.error) ? params.error[0] : params.error
-    const errorPath = Array.isArray(params.path) ? params.path[0] : params.path
-
+export default function Page() {
     return (
         <div className='h-full grid relative'>
-            <Articles recent error={error} errorPath={errorPath} backfill={false} />
+            <Articles recent backfill={false} />
         </div>
     )
 }
