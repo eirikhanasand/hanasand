@@ -17,6 +17,22 @@ function regexCandidate(expression: string): string | null {
     return pattern
 }
 
+// Only narrow raw replay pages when the message comparison is representable in
+// PostgreSQL. The full rule still runs on every returned candidate.
+export function messageCandidatePredicate(conditions: MillCondition[], column: string, bind: (value: string) => string) {
+    const ascii = `${column} !~ '[^\\x00-\\x7F]'`
+    const predicates = conditions.filter(condition => condition.path === 'message').flatMap(condition => {
+        if (condition.operator === 'regex') {
+            const pattern = regexCandidate(condition.value)
+            return pattern === null ? [] : [`(NOT (${ascii}) OR ${column} COLLATE "C" ${condition.caseSensitive ? '~' : '~*'} ${bind(pattern)})`]
+        }
+        const expected = bind(condition.caseSensitive ? condition.value : condition.value.toLowerCase())
+        const actual = condition.caseSensitive ? column : `lower(${column} COLLATE "C")`
+        return [`(NOT (${ascii}) OR ${condition.operator === 'equals' ? `${actual} = ${expected}` : `strpos(${actual}, ${expected}) > 0`})`]
+    })
+    return predicates.length ? predicates.join(' AND ') : 'TRUE'
+}
+
 // These are candidate predicates, not a second rule engine. Keep the runtime
 // recheck: JavaScript number formatting and Unicode folding differ from SQL.
 export function previewPredicate(conditions: MillCondition[], params: (string | boolean | null | string[])[]) {

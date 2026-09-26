@@ -7,6 +7,7 @@ import { loadLogRetentionRules, retentionStoreMatches } from './customRetention.
 import { eligibleCustomDrop } from './dropEligibility.ts'
 import { collectMillEventFindings, loadConfiguredMillRules, normalizeMillEvent } from '../../handlers/mill.ts'
 import { matchRulePage } from './rulePreview.ts'
+import { messageCandidatePredicate } from './previewPredicate.ts'
 import type { MillCondition } from './conditions.ts'
 import { builtinReprocessable, reprocessBuiltinPage } from './builtinReprocess.ts'
 
@@ -16,7 +17,7 @@ export type ReprocessJob = { id: string, organization_id: string, rule_id: strin
     removed_events: string, removed_sources: string, error: string | null }
 type Rule = { rule_id: string, version: string, source: string, enabled: boolean, definition: { stage: string, action: string, conditions: MillCondition[] } }
 type Item = { id: string, key: string | null, event: Record<string, unknown>, original?: Record<string, unknown> }
-const size = 200
+const size = 1000
 
 
 export function reprocessableRule(rule: Rule | undefined): rule is Rule {
@@ -53,25 +54,31 @@ export async function processRuleReprocessJob() {
             const cursor = { ...job.cursor }
             let items: Item[], scanned: number
             if (cursor.phase === 0) {
+                const params: (string | number | null)[] = [job.organization_id, job.until_time, job.from_time, cursor.time || null, cursor.id || '', size]
+                const candidate = messageCandidatePredicate(rule.definition.conditions, 'normalized->>\'message\'', value => { params.push(value); return `$${params.length}` })
                 const rows = (await query(`SELECT id,log_key,source_vendor,source_product,normalized,original,event_timestamp::text AS time FROM mill_events
                     WHERE organization_id=$1 AND event_timestamp<=$2::timestamptz AND received_at<=$2::timestamptz
                     AND ($3::timestamptz IS NULL OR event_timestamp>=$3::timestamptz)
-                    AND ($4::timestamptz IS NULL OR (event_timestamp,id)<($4::timestamptz,$5::text))
+                    AND ($4::timestamptz IS NULL OR (event_timestamp,id)<($4::timestamptz,$5::text)) AND ${candidate}
                     ORDER BY event_timestamp DESC,id DESC LIMIT $6 FOR UPDATE`,
-                [job.organization_id, job.until_time, job.from_time, cursor.time || null, cursor.id || '', size])).rows
+                params)).rows
                 scanned = rows.length
                 items = rows.map(row => ({ id: row.id, key: row.log_key,
                     event: { ...row.normalized, source_vendor: row.source_vendor, source_product: row.source_product }, original: row.original }))
                 if (rows.length) Object.assign(cursor, { time: rows.at(-1).time, id: rows.at(-1).id })
             } else {
                 const source = cursor.phase === 1 ? 'service_logs' : 'traffic_events'
+                const params: (string | number | null)[] = [cursor.phase === 1 ? cursor.serviceEnd : cursor.trafficEnd,
+                    job.until_time, job.from_time, cursor.time || null, cursor.id || '0', size]
+                const candidate = cursor.phase === 1
+                    ? messageCandidatePredicate(rule.definition.conditions, 'message', value => { params.push(value); return `$${params.length}` }) : 'TRUE'
                 // Use the existing time index: a short selected window must not walk the entire raw archive.
                 const rows = (await query(`SELECT *,created_at::text AS cursor_time FROM ${source}
                     WHERE id<=$1::bigint AND created_at<=$2::timestamptz
                     AND ($3::timestamptz IS NULL OR created_at>=$3::timestamptz)
-                    AND ($4::timestamptz IS NULL OR (created_at,id)<($4::timestamptz,$5::bigint))
+                    AND ($4::timestamptz IS NULL OR (created_at,id)<($4::timestamptz,$5::bigint)) AND ${candidate}
                     ORDER BY created_at DESC,id DESC LIMIT $6 FOR UPDATE`,
-                [cursor.phase === 1 ? cursor.serviceEnd : cursor.trafficEnd, job.until_time, job.from_time, cursor.time || null, cursor.id || '0', size])).rows
+                params)).rows
                 scanned = rows.length
                 const platform = (await query(`SELECT id FROM organizations WHERE status='active' AND
                     (id=$1 OR ($1::text IS NULL AND lower(name)='hanasand')) ORDER BY created_at LIMIT 1`, [process.env.PLATFORM_LOG_ORGANIZATION_ID || null])).rows[0]?.id
