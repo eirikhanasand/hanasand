@@ -44,10 +44,12 @@ const nextConfig = {
             { source: '/cases/MON-:number', destination: '/cases/HA-:number', permanent: true },
             { source: '/dashboard/cases/MON-:number', destination: '/cases/HA-:number', permanent: true },
             { source: '/dwm/cases/:path*', destination: '/cases/:path*', permanent: true },
+            { source: '/dwm', destination: '/findings', permanent: true },
+            { source: '/dwm/:path*', destination: '/findings/:path*', permanent: true },
             { source: '/dashboard/dwm/cases/:path*', destination: '/cases/:path*', permanent: true },
             {
                 source: '/solutions/dwm',
-                destination: '/dwm',
+                destination: '/findings',
                 permanent: true,
             },
             {

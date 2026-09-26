@@ -13,7 +13,7 @@ export default function isPublicProductPath(path: string | null | undefined) {
 
     return pathname === '/'
         || pathname === '/pricing'
-        || pathname === '/dwm'
+        || pathname === '/findings'
         || pathname === '/browser'
         || pathname.startsWith('/browser/')
         || pathname === '/browser-sandbox'

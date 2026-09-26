@@ -11,7 +11,7 @@ export const publicRoutes = [
     '/pwned',
     '/pricing',
     '/privacy',
-    '/dwm',
+    '/findings',
     '/browser',
     '/browser/report',
     '/browser-sandbox',

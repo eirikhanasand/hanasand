@@ -17,11 +17,11 @@ export default async function DashboardDwmPage({
     const [params, cookieStore] = await Promise.all([searchParams, cookies()])
     const identityId = cookieStore.get('id')?.value
     const token = cookieStore.get('access_token')?.value
-    if (!identityId || !token) redirect('/login?path=%2Fdwm')
+    if (!identityId || !token) redirect('/login?path=%2Ffindings')
 
     if (firstParam(params?.panel) === 'actions') {
         const sharedOrg = firstParam(params?.org) || firstParam(params?.organizationId) || firstParam(params?.orgId)
-        redirect(sharedOrg ? `/dwm/actions?org=${encodeURIComponent(sharedOrg)}` : '/dwm/actions')
+        redirect(sharedOrg ? `/findings/actions?org=${encodeURIComponent(sharedOrg)}` : '/findings/actions')
     }
 
     const organizationId = await activeOrganizationId()
