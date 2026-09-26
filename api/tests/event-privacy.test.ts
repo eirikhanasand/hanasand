@@ -2,7 +2,7 @@ import { beforeEach, expect, mock, test } from 'bun:test'
 let systemAdmin = false, member = true, audited: unknown[] = []
 const events = [
     { id: 'collected', organization_id: 'org-a', ingestion_id: 'logs', normalized: { message: 'private host command' }, event_timestamp: '2026-09-19T00:00:00Z', event_type: 'application', action: 'log', outcome: 'unknown' },
-    { id: 'imported', organization_id: 'org-a', ingestion_id: 'event_import', normalized: { message: 'organization supplied event' }, event_timestamp: '2026-09-19T00:00:00Z', event_type: 'application', action: 'log', outcome: 'unknown' },
+    { id: 'imported', organization_id: 'org-a', ingestion_id: 'event_import', normalized: { message: 'organization supplied event' }, event_timestamp: '2026-09-19T00:00:00Z', event_type: 'application', action: 'log', outcome: 'unknown', parser_version: 'mill.v1' },
 ]
 const query = async (sql: string, p: any[] = []): Promise<any> => {
     if (sql.includes('JOIN organization_members')) return { rows: member && p[0] === 'org-a' ? [{ role: 'member' }] : [] }
@@ -29,6 +29,7 @@ beforeEach(() => { systemAdmin = false; member = true; audited = [] })
 test('ordinary organization members can list imports but cannot read collected platform logs', async () => {
     const result = await getEvents(request(), response() as any)
     expect(result.events.map((row: any) => row.id)).toEqual(['imported'])
+    expect(result.events[0].parser_version).toBe('event.v1')
     expect(JSON.stringify(result)).not.toContain('private host command')
     systemAdmin = true
     expect((await getEvents(request(), response() as any)).events).toHaveLength(2)

@@ -37,6 +37,11 @@ type EventBody = { source?: Record<string, unknown>, events?: unknown }
 type RuleDefinition = { match: 'all', conditions: Condition[], storeScope?: 'custom_drop' | 'all', protection?: EventProtectionPolicy, failureConditions?: Condition[], parameters?: Record<string, number>, stage?: 'analyze' | 'match' | 'detect', action?: 'drop' | 'keep' }
 type Rule = { id: string, detectionLogic?: string, recordId?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'owned' | 'open_source', sourceReference?: string, definition?: RuleDefinition }
 
+function normalizeParserVersion(value: unknown) {
+    const version = String(value || 'event.v1')
+    return version === 'mill.v1' ? 'event.v1' : version
+}
+
 export const BUILTIN_RULES: Rule[] = [
     applicationErrorRule,
     eventProtectionRule,
@@ -229,7 +234,10 @@ export async function getEvents(req: FastifyRequest, res: FastifyReply) {
         ORDER BY event_timestamp DESC, received_at DESC
         LIMIT $2
     `, [access.organizationId, limit, canReadLogs])
-    return res.send({ organizationId: access.organizationId, events: result.rows })
+    return res.send({ organizationId: access.organizationId, events: result.rows.map(row => ({
+        ...row,
+        parser_version: normalizeParserVersion(row.parser_version),
+    })) })
 }
 
 export async function postRulePreview(req: FastifyRequest, res: FastifyReply) {
@@ -266,7 +274,7 @@ export async function postEventAction(req: FastifyRequest<{ Params: { id: string
         userId: row.user_id ? String(row.user_id) : null, userEmail: row.user_email ? String(row.user_email) : null,
         sourceIp: row.source_ip ? String(row.source_ip) : null, sourceCountry: row.source_country ? String(row.source_country) : null,
         sourceCity: row.source_city ? String(row.source_city) : null, deviceId: row.device_id ? String(row.device_id) : null,
-        sourceVendor: String(row.source_vendor), sourceProduct: String(row.source_product), parserVersion: String(row.parser_version || 'event.v1'),
+        sourceVendor: String(row.source_vendor), sourceProduct: String(row.source_product), parserVersion: normalizeParserVersion(row.parser_version),
         normalized: object(row.normalized), original: object(row.original),
     }
     await createFindings(access.organizationId, String(row.id), event, await loadConfiguredRules(access.organizationId))
