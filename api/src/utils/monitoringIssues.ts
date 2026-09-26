@@ -1,6 +1,6 @@
 import { attachDiskDiagnostics } from './monitoringDiskDiagnostics.ts'
 import { monitoringAlertReady } from './monitoringAlertPolicy.ts'
-import { correlationKey, isIntelHealthCheck, monitoringScope, monitoringTransportTarget } from './monitoringCorrelation.ts'
+import { correlationKey, isIntelHealthCheck, monitoringScope, monitoringTargetIdentity, monitoringTransportTarget } from './monitoringCorrelation.ts'
 import { monitoringCaseDiscordAlert } from './alerts/monitoringCase.ts'
 import { isHostThresholdMessage } from './hostCheckMessage.ts'
 import { createHash } from 'node:crypto'
@@ -11,21 +11,22 @@ import { deliverDiscordWebhookFile, redactSecretBearingText } from './alerts/dis
 export const isServiceStatusCheck = (automation: Pick<AutomationRow, 'target_url'>) => /^https:\/\/(?:api\.)?hanasand\.com\/api\/status\?/.test(automation.target_url || '')
 
 export function monitoringIssueFingerprint(automation: Pick<AutomationRow, 'target_url' | 'monitoring_type' | 'json_rule'>, kind: string, message: string) {
+    const targetUrl = monitoringTargetIdentity(automation.target_url)
     // A job keeps its case when the blocker changes, including after recovery.
-    if (automation.target_url?.startsWith('system:cron:')) return createHash('sha256').update(automation.target_url).digest('hex')
+    if (targetUrl?.startsWith('system:cron:')) return createHash('sha256').update(targetUrl).digest('hex')
     // Synthetic service checks report changing ages, counts and affected sources.
     // Those details update the case; they do not identify a new incident.
-    if (isServiceStatusCheck(automation)) return createHash('sha256').update(JSON.stringify([automation.monitoring_type, automation.target_url, kind])).digest('hex')
+    if (isServiceStatusCheck(automation)) return createHash('sha256').update(JSON.stringify([automation.monitoring_type, targetUrl, kind])).digest('hex')
     const endpoint = monitoringTransportTarget(automation, message)
     if (endpoint) return createHash('sha256').update(JSON.stringify(['transport', endpoint, kind])).digest('hex')
     // Group changing durations and retry counts, but retain HTTP codes and error details.
     // TI health and connection failures describe the same check. Keep its rule
     // in the identity so separate checks of the same source remain separate.
-    const reason = automation.monitoring_type === 'json' && (isIntelHealthCheck(automation) || automation.target_url === 'system:recovery' || message.startsWith('JSON threshold exceeded:') || automation.target_url === 'system:metrics' && isHostThresholdMessage(message))
+    const reason = automation.monitoring_type === 'json' && (isIntelHealthCheck(automation) || targetUrl === 'system:recovery' || message.startsWith('JSON threshold exceeded:') || automation.target_url === 'system:metrics' && isHostThresholdMessage(message))
         ? JSON.stringify(automation.json_rule) : redactSecretBearingText(message)
             .replace(/ Failed after \d+ attempts?\.$/, '')
             .replace(/\b\d+(?:\.\d+)?\s*(?:milliseconds?|ms|seconds?|minutes?|hours?|days?)\b/gi, '<duration>')
-    return createHash('sha256').update(JSON.stringify([automation.monitoring_type, automation.target_url, kind, reason])).digest('hex')
+    return createHash('sha256').update(JSON.stringify([automation.monitoring_type, targetUrl, kind, reason])).digest('hex')
 }
 
 export async function claimMonitoringNotification(automation: AutomationRow, issue: string, destination: string) {

@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import { recoveryChecks, recoveryCheckMessage } from '../src/utils/recoveryMonitoring.ts'
 import { monitoringIssueFingerprint } from '../src/utils/monitoringIssues.ts'
+import { correlationKey } from '../src/utils/monitoringCorrelation.ts'
 import { needsSystemAutomationAccess, automationReadScope } from '../src/utils/automationAccess.ts'
 
 const now = Date.now()
@@ -35,6 +36,19 @@ test('changing failure detail keeps the same case and cooldown', () => {
     expect(monitoringIssueFingerprint(monitor, 'failure', 'OVH replica is not up to date.'))
         .toBe(monitoringIssueFingerprint(monitor, 'failure', 'WAL replication lost. Restore the replica from a backup.'))
     expect(monitoringIssueFingerprint(monitor, 'failure', 'unavailable')).not.toBe(monitoringIssueFingerprint({ ...monitor, json_rule: { ...rule, path: 'backup.failed' } }, 'failure', 'unavailable'))
+})
+
+test('legacy resilience endpoint keeps replica issue identity after the recovery rename', async () => {
+    const legacy = { target_url: 'system:resilience', monitoring_type: 'json' as const, json_rule: rule }
+    const current = { ...legacy, target_url: 'system:recovery' }
+    const message = 'OVH replica is not up to date.'
+    const oldFingerprint = monitoringIssueFingerprint(legacy, 'failure', message)
+    const newFingerprint = monitoringIssueFingerprint(current, 'failure', message)
+    expect(newFingerprint).toBe(oldFingerprint)
+    const query = async () => ({ rows: [{ relation: null }] })
+    const oldKey = await correlationKey(query as any, legacy as any, oldFingerprint, 'failure', message)
+    const newKey = await correlationKey(query as any, current as any, newFingerprint, 'failure', message)
+    expect(newKey).toBe(oldKey)
 })
 
 test('recovery monitoring is restricted to administrators', () => {
