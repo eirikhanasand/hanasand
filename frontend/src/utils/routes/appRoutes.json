@@ -84,10 +84,6 @@
     "/content/article"
   ],
   [
-    "/dashboard/content",
-    "/content"
-  ],
-  [
     "/dashboard/scanner",
     "/scanner"
   ],

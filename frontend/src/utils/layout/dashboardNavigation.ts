@@ -96,7 +96,6 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
                 link('Uploads', '/upload'),
                 link('Shares', '/shares'),
             ]),
-            link('Content Management', '/content', canManageContent),
         ]),
         group('Communication', [
             link('Mail', '/mail'),
