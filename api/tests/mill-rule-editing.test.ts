@@ -41,6 +41,7 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
         return { rows: sql.includes('INTERVAL \'1 minute\'') ? result.filter(row => row.outcome === 'failure' && Date.parse(row.event_timestamp) >= Date.parse(p[3]) - p[4] * 60000) : result.slice(0, p[4]) }
     }
     if (sql.includes('INSERT INTO mill_findings')) { findings.push(...JSON.parse(p[0]).map((item: any) => ({ organizationId: item.organization_id, ruleId: item.rule_id, severity: item.severity, evidence: item.evidence }))); return { rows: [] } }
+    if (sql.includes('INSERT INTO log_analyze_receipts')) return { rows: [] }
     throw new Error(`Unexpected query: ${sql}`)
 }
 mock.module('#db', () => ({ default: query, withTransaction: async (work: any) => {
@@ -316,7 +317,7 @@ test('rule library exposes collector totals and organization-scoped detection hi
     expect(hits('mongodb.cashflow_connections.v1')).toBe(42)
     expect(hits(builtin)).toBe(1)
     expect(hits('auth.impossible_travel.v1')).toBe(0)
-    expect(hits('custom.retention.v1')).toBeNull()
+    expect(hits('custom.retention.v1')).toBe(0)
     for (const id of ['http.routine_access.v1', 'mongodb.cashflow_connections.v1', builtin, 'auth.impossible_travel.v1', 'custom.retention.v1']) {
         const detail = await getMillRule(request(id.replace(/\.v\d+$/, '')), reply() as any)
         expect(detail.triggerCount).toBe(hits(id))
@@ -412,7 +413,7 @@ test('compact list returns only selected category and displayed data, keeps deta
     expect(rule).not.toHaveProperty('evidence')
     expect(rule).not.toHaveProperty('detectionLogic')
     expect(rule).not.toHaveProperty('sourceReference')
-    expect(rule.hitCount).toBeNull()
+    expect(rule.hitCount).toBe(0)
     const detailed = await getMillRule(request(rule.id), reply() as any)
     expect(detailed.rule.definition.conditions[0].value).toBe('not-for-list')
     const invalid = reply()

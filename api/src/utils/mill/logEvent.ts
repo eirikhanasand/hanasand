@@ -23,7 +23,7 @@ export function normalizeLogEvent(log: LogInput, rules?: Parameters<typeof class
     const source = object(metadata.source || structured.source)
     return {
         ...(['routine-group-analyzer', 'postgres-session-analyzer'].includes(log.service) && log.source_event_id ? { source_event_id: log.source_event_id } : {}),
-        schema_version: 'logs.v1', timestamp: new Date(log.created_at).toISOString(),
+        schema_version: 'logs.v1', source_vendor: 'Hanasand', source_product: 'Logs', timestamp: new Date(log.created_at).toISOString(),
         event_type: mongo ? 'database' : process ? 'process' : authentication ? 'authentication' : String(metadata.event_type || structured.event_type || 'application'),
         action: mongo ? mongo.name : process ? 'exec' : String(metadata.action || structured.action || (signin ? 'login' : 'log')),
         outcome: mongo ? mongo.success ? 'success' : 'failure' : String(metadata.outcome || structured.outcome || (signin ? log.message.includes('Accepted ') ? 'success' : 'failure' : ['error', 'fatal'].includes(log.level) ? 'failure' : 'unknown')),

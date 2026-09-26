@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { MILL_RULES, adaptVendorEvent, compileSigmaDocument, matchesMillRule, normalizeMillConditions, normalizeMillEvent, validateMillEventFields } from '../src/handlers/mill.ts'
+import { MILL_RULES, adaptVendorEvent, collectMillEventFindings, compileSigmaDocument, matchesMillRule, normalizeMillConditions, normalizeMillEvent, validateMillEventFields } from '../src/handlers/mill.ts'
 
 describe('Mill detection catalog', () => {
     test('keeps rule identifiers unique and explanations evidence-backed', () => {
@@ -25,6 +25,15 @@ describe('Mill detection catalog', () => {
         expect(normalized.error).toBeUndefined()
         expect(matchesMillRule({ event_type: 'authentication', source: { product: 'customer-identity' } }, normalized.conditions)).toBe(true)
         expect(matchesMillRule({ event_type: 'file', source: { product: 'customer-identity' } }, normalized.conditions)).toBe(false)
+    })
+
+    test('evaluates newly created Detection rules before Match rules after Analyze retention', () => {
+        const event = normalizeMillEvent({ timestamp: '2026-09-26T10:00:00Z', event_type: 'application', action: 'log', severity: 'low', message: 'routine' }, { vendor: 'Hanasand', product: 'Logs' })
+        const rules = ['match', 'detect'].map(stage => ({ id: `custom.${stage}.v1`, version: '1', name: stage, family: 'Custom',
+            severity: 'low', explanation: 'A matching event', evidence: [], source: 'owned' as const, enabled: true,
+            definition: { match: 'all' as const, stage: stage as 'match' | 'detect', action: 'keep' as const,
+                conditions: [{ path: 'message', operator: 'equals' as const, value: 'routine' }] } }))
+        expect(collectMillEventFindings('org', 'event', event, rules).findings.map(finding => finding[1])).toEqual(['custom.detect.v1', 'custom.match.v1'])
     })
 
     test('normalizes Azure, Defender, and EVE-compatible records into one event model', () => {

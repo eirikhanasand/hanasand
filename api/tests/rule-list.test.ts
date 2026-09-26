@@ -40,3 +40,11 @@ test('hits count only requested rules and never read event metadata', async () =
     expect(await loadRuleHits('org-a', [], query as any)).toEqual(new Map())
     expect(calls).toHaveLength(1)
 })
+test('custom Analyze Drop hits come from receipts', async () => {
+    const query = async (_sql: string, values: unknown[]) => {
+        expect(values[1]).toEqual([])
+        expect(values[2]).toEqual(['custom.drop.v1'])
+        return { rows: [{ rule_id: 'custom.drop.v1', hits: '4' }] }
+    }
+    expect((await loadRuleHits('org-a', [{ id: 'custom.drop.v1', source: 'owned', definition: { stage: 'analyze', action: 'drop' } }], query as any)).get('custom.drop.v1')).toBe(4)
+})

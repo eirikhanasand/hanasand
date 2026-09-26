@@ -33,11 +33,12 @@ const aggregateTables = new Map([
     [modelDiscoveryRuleId, ['log_model_probe_receipts', 'count(*)']], [readinessAuditRuleId, ['log_readiness_audit_receipts', 'count(*)']],
 ])
 const receiptRules = new Set([ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, sshTransportRuleId, cdnRefreshRuleId, cdnDeliveryRuleId])
-export async function loadRuleHits(organizationId: string, rules: Pick<Rule, 'id'>[], query: typeof run) {
+export async function loadRuleHits(organizationId: string, rules: Pick<Rule, 'id' | 'source' | 'definition'>[], query: typeof run) {
     const ids = rules.map(rule => rule.id)
     if (!ids.length) return new Map<string, number>()
-    const findingIds = ids.filter(id => !aggregateTables.has(id) && !receiptRules.has(id))
-    const receiptIds = ids.filter(id => receiptRules.has(id))
+    const customDropIds = new Set(rules.filter(rule => rule.source === 'owned' && rule.definition?.stage === 'analyze' && rule.definition.action === 'drop').map(rule => rule.id))
+    const findingIds = ids.filter(id => !aggregateTables.has(id) && !receiptRules.has(id) && !customDropIds.has(id))
+    const receiptIds = ids.filter(id => receiptRules.has(id) || customDropIds.has(id))
     const parameters: (string | string[])[] = [organizationId, findingIds, receiptIds]
     const statements = [
         'SELECT rule_id, count(*)::text AS hits FROM mill_findings WHERE organization_id=$1 AND rule_id=ANY($2::text[]) GROUP BY rule_id',

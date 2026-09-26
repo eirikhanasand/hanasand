@@ -30,6 +30,8 @@ try {
         assert.ok(definition); await query(definition)
     }
     await query('ALTER TABLE service_logs ADD COLUMN source_event_id text UNIQUE; ALTER TABLE mill_events ADD COLUMN log_key text UNIQUE')
+    await query(`CREATE TABLE log_analyze_receipts(key text PRIMARY KEY,organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        rule_id text NOT NULL,rule_version text NOT NULL,created_at timestamptz NOT NULL DEFAULT NOW())`)
     for (const statement of (await import('../src/utils/db/logDimensionsSchema.ts')).logDimensionsSchema) await query(statement)
     for (const statement of (await import('../src/utils/db/logCountsSchema.ts')).logCountsSchema) await query(statement)
     await (await import('../src/utils/db/ruleReprocessSchema.ts')).default()
@@ -77,6 +79,7 @@ try {
     for (let i = 0; i < 10 && await processRuleReprocessJob(); i++) { /* bounded pages */ }
     const done = (await getMillRuleReprocess(request(), reply() as any)).jobs[0]
     assert.equal(done.status, 'completed'); assert.equal(done.removed_events, '2'); assert.equal(done.removed_sources, '2')
+    assert.equal((await query('SELECT count(*) FROM log_analyze_receipts WHERE rule_id=\'custom.test.v1\'')).rows[0].count, '3', 'historical drops count indexed, raw, and native events')
     assert.deepEqual((await query('SELECT id FROM mill_events ORDER BY id')).rows.map(row => row.id), ['auth', 'failure', 'finding', 'high', 'other', 'preserve'])
     assert.equal((await query('SELECT count(*) FROM service_logs')).rows[0].count, '6', 'retained evidence keeps raw originals too')
     assert.equal((await query('SELECT count(*) FROM mill_log_dimensions')).rows[0].count, '6')

@@ -1,5 +1,5 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
-let reads = 0, writes: unknown[][] = [], failed = false
+let reads = 0, writes: unknown[][] = [], receipts: unknown[][] = [], failed = false
 let rules: any[] = []
 const query = async (sql: string, params: any[] = []): Promise<any> => {
     if (sql.includes('FROM mill_rules r')) {
@@ -8,16 +8,36 @@ const query = async (sql: string, params: any[] = []): Promise<any> => {
         return { rows: rules.filter(rule => rule.organizationId === (params[0] || 'platform')) }
     }
     if (sql.includes('INSERT INTO service_logs')) { writes.push(params); return { rows: [] } }
+    if (sql.includes('INSERT INTO log_analyze_receipts')) { receipts.push(params); return { rows: [] } }
     throw new Error('Unexpected query')
 }
 mock.module('#db', () => ({ default: query, withTransaction: async (work: any) => work(query) }))
 mock.module('../src/utils/mill/analyzeLog.ts', () => ({ analyzeMongoPing: async () => false, analyzeAccess: async () => false }))
 const { default: recordLog, recordLogBatch } = await import('../src/utils/logs/recordLog.ts')
 const { customRetentionAction } = await import('../src/utils/mill/customRetention.ts')
+const { normalizeLogEvent } = await import('../src/utils/mill/logEvent.ts')
 const { authenticationAuditStoreRule, eventProtectionDefinition } = await import('../src/utils/mill/eventProtection.ts')
 const drop = { source: 'owned', enabled: true, organizationId: 'org-a', definition: { stage: 'analyze', action: 'drop', conditions: [{ path: 'event_type', operator: 'equals', value: 'application' }] } }
 const entry = { service: 'example', level: 'info' as const, message: 'heartbeat', metadata: { organizationId: 'org-a' } }
-beforeEach(() => { reads = 0; writes = []; failed = false; rules = [structuredClone(drop)] })
+beforeEach(() => { reads = 0; writes = []; receipts = []; failed = false; rules = [structuredClone(drop)] })
+test('new Analyze Drop rules match the same source fields in live logs and record hits', async () => {
+    rules = [{ ...drop, id: 'custom.process.v1', version: '1', organization_id: 'org-a', definition: { ...drop.definition, conditions: [
+        { path: 'source_vendor', operator: 'equals', value: 'Hanasand' },
+        { path: 'source_product', operator: 'equals', value: 'Logs' },
+        { path: 'event_type', operator: 'equals', value: 'process' },
+        { path: 'action', operator: 'equals', value: 'exec' },
+        { path: 'message', operator: 'regex', value: '^runc .*' },
+    ] } }]
+    const process = { service: 'audit', host: 'inspur', level: 'info' as const, message: 'runc init',
+        sourceEventId: 'a'.repeat(64), metadata: { organizationId: 'org-a', process: { executable: '/runc' } } }
+    expect(normalizeLogEvent({ ...process, id: process.sourceEventId, created_at: new Date() }).source_vendor).toBe('Hanasand')
+    await recordLog(process)
+    await recordLog(process)
+    expect(writes).toHaveLength(0)
+    expect(receipts).toHaveLength(2)
+    expect(JSON.parse(receipts[0][0] as string)[0]).toMatchObject({ organization_id: 'org-a', rule_id: 'custom.process.v1' })
+    expect(receipts[0][0]).toBe(receipts[1][0])
+})
 test('new matching service logs never reach storage; unmatched tenants and disabled rules retain logs', async () => {
     await recordLog(entry)
     expect(writes).toHaveLength(0)

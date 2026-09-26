@@ -9,7 +9,7 @@ import { analyzeCollectorExecution } from '../mill/analyzeCollectorLog.ts'
 import { analyzeProxy } from '../mill/analyzeProxy.ts'
 import run from '#db'
 import { analyzePostgresBatch } from '../mill/analyzePostgresBatch.ts'
-import { customRetentionAction, loadLogRetentionRules } from '../mill/customRetention.ts'
+import { customRetentionAction, loadLogRetentionRules, recordCustomDropReceipts } from '../mill/customRetention.ts'
 import { normalizeLogEvent } from '../mill/logEvent.ts'
 import { redactLogText, redactLogValue } from './redact.ts'
 import { verifiedAccessFromLog } from '../mill/analyzeAccess.ts'
@@ -73,8 +73,9 @@ async function prepareLog({
     if (classification) { level = classification.level; metadata = classification.metadata }
     const redactedMessage = redactLogText(message)
     const redactedMetadata = redactLogValue(metadata) as Record<string, unknown>
-    const retentionAction = Object.hasOwn(metadata, 'unrecognized_ingest_fields') ? 'keep' : customRetentionAction(normalizeLogEvent({ id: sourceEventId || '', service, host, level,
-        message: redactedMessage, metadata: redactedMetadata, created_at: timestamp || new Date() }, retention.get(scopeId || '')), retention.get(scopeId || '')!)
+    const normalized = normalizeLogEvent({ id: sourceEventId || '', service, host, level,
+        message: redactedMessage, metadata: redactedMetadata, created_at: timestamp || new Date() }, retention.get(scopeId || ''))
+    const retentionAction = Object.hasOwn(metadata, 'unrecognized_ingest_fields') ? 'keep' : customRetentionAction(normalized, retention.get(scopeId || '')!)
     // Explicit Store exceptions must win before any built-in analyzer can drop.
     if (retentionAction !== 'keep') {
         if (await analyzeModelDiscovery({ service, host, level, message, metadata, sourceEventId, timestamp }, query === run ? undefined : query)) return
@@ -87,7 +88,10 @@ async function prepareLog({
     }
     message = redactedMessage
     metadata = redactedMetadata
-    if (retentionAction === 'drop') return
+    if (retentionAction === 'drop') {
+        await recordCustomDropReceipts(normalized, retention.get(scopeId || '')!, sourceEventId, scopeId || undefined, query)
+        return
+    }
     if (retentionAction !== 'keep' && await analyzeIngestion({ service, host, level, message, metadata, sourceEventId, timestamp }, query === run ? undefined : query)) return
     if (retentionAction !== 'keep' && await analyzeProxy({ service, host, level, message, metadata, sourceEventId, timestamp }, query === run ? undefined : query)) return
     if (!scopeId && isOrganizationRequest(metadata)) {

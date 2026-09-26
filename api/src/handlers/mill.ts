@@ -29,7 +29,7 @@ import { mongoRule, mongoRuleId, mongoDefinition } from '#utils/mill/analyzeMong
 import { accessRule, accessRuleId, accessDefinition } from '#utils/mill/analyzeAccess.ts'
 
 import { matchesMillRule, type MillCondition } from '#utils/mill/conditions.ts'
-import { customRetentionAction } from '#utils/mill/customRetention.ts'
+import { customRetentionAction, recordCustomDropReceipts } from '#utils/mill/customRetention.ts'
 export { matchesMillRule } from '#utils/mill/conditions.ts'
 
 type MillEvent = Record<string, unknown>
@@ -178,7 +178,13 @@ export async function ingestMill(req: FastifyRequest, res: FastifyReply) {
         return res.status(400).send({ error: { code: 'invalid_mill_event_fields', message: 'Correct the invalid event fields and try again.', fields: missingTimestamps } })
     }
     const receivedCount = normalizedEvents.length
-    normalizedEvents = normalizedEvents.filter(({ normalized }) => customRetentionAction(normalized.normalized, configuredRules) !== 'drop')
+    const retainedEvents = [] as typeof normalizedEvents
+    for (const item of normalizedEvents) {
+        if (customRetentionAction(item.normalized.normalized, configuredRules) === 'drop')
+            await recordCustomDropReceipts(item.normalized.normalized, configuredRules, item.eventId, key.organizationId)
+        else retainedEvents.push(item)
+    }
+    normalizedEvents = retainedEvents
     const droppedCount = receivedCount - normalizedEvents.length
     for (let offset = 0; offset < normalizedEvents.length; offset += 50) {
         await Promise.all(normalizedEvents.slice(offset, offset + 50).map(async ({ normalized, eventId }) => {
@@ -282,7 +288,7 @@ export async function getMillRules(req: FastifyRequest, res: FastifyReply) {
     const rules = configured.filter(rule => !query.category || ruleCategory(rule) === query.category)
     const hits = query.view === 'definitions' ? new Map<string, number>() : await loadRuleHits(access.organizationId, rules, run)
     return res.send({ organizationId: access.organizationId, rules: rules.map(rule => ({ ...(compact ? listRule(rule) : rule),
-        hitCount: rule.source === 'owned' && rule.definition?.stage === 'analyze' ? null : hits.get(rule.id) ?? 0,
+        hitCount: rule.source === 'owned' && rule.definition?.stage === 'analyze' && rule.definition.action !== 'drop' ? null : hits.get(rule.id) ?? 0,
     })), canManageRetention: retentionRole.valid })
 }
 
@@ -410,7 +416,7 @@ export async function getMillRule(req: FastifyRequest<{ Params: { id: string }, 
         AND (object_id = $2 OR object_id = $3 OR context->>'ruleId' = $2)
         ORDER BY created_at DESC, id DESC LIMIT 51 OFFSET $4`, [access.organizationId, rule.id, rule.recordId || rule.id, offset])
     const hits = await loadRuleHits(access.organizationId, [rule], run)
-    const hitCount = rule.source === 'owned' && rule.definition?.stage === 'analyze' ? null : hits.get(rule.id) ?? 0
+    const hitCount = rule.source === 'owned' && rule.definition?.stage === 'analyze' && rule.definition.action !== 'drop' ? null : hits.get(rule.id) ?? 0
     const canEdit = !isHistorical && canManageMillRules(access.role) && (!([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') || (await hasRole(req, res, 'system_admin')).valid)
     return res.send({ organizationId: access.organizationId, canEdit, isHistorical, currentVersion: rule.version, rule: displayedRule, triggerCount: hitCount, audit: audit.rows.slice(0, 50), nextOffset: audit.rows.length > 50 ? offset + 50 : null })
 }
@@ -524,20 +530,32 @@ export async function loadConfiguredMillRules(organizationId: string, query: typ
     return [...builtIns, ...custom].map(rule => rule.definition?.action === 'drop' ? { ...rule, severity: 'low' } : rule)
 }
 
+function enabledMillRules(event: NormalizedEvent, rules: MillRule[]) {
+    return new Set(rules.filter(rule => rule.enabled !== false && (rule.source !== 'hanasand'
+        || matchesMillRule(event.normalized, rule.definition?.conditions || []))).map(rule => rule.id))
+}
+
 export function collectMillEventFindings(organizationId: string, eventId: string, event: NormalizedEvent, rules: MillRule[], includeRetained = true) {
-    const findings: Parameters<typeof persistFinding>[] = []
+    const detectionFindings: Parameters<typeof persistFinding>[] = []
+    const matchFindings: Parameters<typeof persistFinding>[] = []
     const insertFinding = (org: string, id: string, severity: string, summary: string, eventIds: string[], evidence: MillEvent) => {
         const configured = rules.find(rule => rule.id === id)
-        findings.push([org, id, configured?.severity || severity, summary, eventIds, { ...evidence, ruleVersion: configured?.version || '1', ruleName: configured?.name, ruleExplanation: configured?.explanation, detectionDefinition: configured?.definition }])
+        const destination = configured && ruleCategory(configured) === 'match' ? matchFindings : detectionFindings
+        destination.push([org, id, configured?.severity || severity, summary, eventIds, { ...evidence, ruleVersion: configured?.version || '1', ruleName: configured?.name, ruleExplanation: configured?.explanation, detectionDefinition: configured?.definition }])
     }
-    const enabled = new Set(rules.filter(rule => rule.enabled !== false && (rule.source !== 'hanasand' || matchesMillRule(event.normalized, rule.definition?.conditions || []))).map(rule => rule.id))
+    const enabled = enabledMillRules(event, rules)
     for (const rule of matchSecurityRules(event.normalized).filter(rule => enabled.has(rule.id))) {
         insertFinding(organizationId, rule.id, rule.severity, rule.name, [eventId], { process: event.normalized.process, host: event.normalized.host, user: event.normalized.user, eventId })
     }
-    for (const rule of rules.filter(rule => (rule.source === 'owned' || rule.source === 'open_source') && rule.enabled !== false && rule.definition?.stage !== 'analyze')) {
+    for (const rule of rules.filter(rule => rule.source === 'owned' && rule.enabled !== false && rule.definition?.stage === 'detect')) {
         if (rule.definition && matchesMillRule(event.normalized, rule.definition.conditions)) {
             insertFinding(organizationId, rule.id, rule.severity, rule.name, [eventId], { ruleId: rule.id, matchedConditions: rule.definition.conditions, eventId })
         }
+    }
+    for (const rule of rules.filter(rule => (rule.source === 'owned' || rule.source === 'open_source') && rule.enabled !== false
+        && rule.definition?.stage !== 'analyze' && rule.definition?.stage !== 'detect')) {
+        if (rule.definition && matchesMillRule(event.normalized, rule.definition.conditions))
+            insertFinding(organizationId, rule.id, rule.severity, rule.name, [eventId], { ruleId: rule.id, matchedConditions: rule.definition.conditions, eventId })
     }
     if (enabled.has('network.signature_alert.v1') && event.eventType === 'network' && (event.action === 'alert' || stringValue(event.normalized.signature_id) || stringValue(event.normalized.signature))) {
         insertFinding(organizationId, 'network.signature_alert.v1', 'high', `Network signature matched: ${stringValue(event.normalized.signature) || stringValue(event.normalized.signature_id) || 'unlabelled signature'}`, [eventId], { signatureId: stringValue(event.normalized.signature_id), signature: stringValue(event.normalized.signature), protocol: stringValue(object(event.normalized.protocol).name || event.normalized.proto || object(event.normalized.flow).proto), sourceIp: event.sourceIp, destinationIp: stringValue(event.normalized.dest_ip || event.normalized.destip), eventId })
@@ -557,17 +575,23 @@ export function collectMillEventFindings(organizationId: string, eventId: string
         created_at: event.timestamp, metadata: object(event.normalized.metadata), source_event_id: String(event.normalized.source_event_id || '') })) {
         const originalEvent = normalizeMillEvent(normalizeLogEvent(original), { vendor: 'Hanasand', product: 'Logs' })
         for (const finding of collectMillEventFindings(organizationId, eventId, originalEvent, rules, false).findings) {
-            const existing = findings.find(item => item[1] === finding[1])
+            const group = rules.find(rule => rule.id === finding[1] && ruleCategory(rule) === 'match') ? matchFindings : detectionFindings
+            const existing = group.find(item => item[1] === finding[1])
             if (existing) existing[5].retainedOriginals = [...(existing[5].retainedOriginals as unknown[] || []), originalEvent.normalized]
-            else { finding[5].retainedOriginals = [originalEvent.normalized]; findings.push(finding) }
+            else { finding[5].retainedOriginals = [originalEvent.normalized]; group.push(finding) }
         }
     }
-    return { enabled, findings }
+    return { enabled, detectionFindings, matchFindings, findings: [...detectionFindings, ...matchFindings] }
 }
 
 export async function createMillFindings(organizationId: string, eventId: string, event: NormalizedEvent, rules: MillRule[]) {
-    const { enabled, findings } = collectMillEventFindings(organizationId, eventId, event, rules)
-    await persistMillEventFindings(findings)
+    await createAuthFindings(organizationId, eventId, event, rules, enabledMillRules(event, rules))
+    const { detectionFindings, matchFindings } = collectMillEventFindings(organizationId, eventId, event, rules)
+    await persistMillEventFindings(detectionFindings)
+    await persistMillEventFindings(matchFindings)
+}
+
+async function createAuthFindings(organizationId: string, eventId: string, event: NormalizedEvent, rules: MillRule[], enabled: Set<string>) {
     const insertFinding = async (org: string, id: string, severity: string, summary: string, eventIds: string[], evidence: MillEvent) => {
         const configured = rules.find(rule => rule.id === id)
         await persistFinding(org, id, configured?.severity || severity, summary, eventIds, { ...evidence, ruleVersion: configured?.version || '1', ruleName: configured?.name, ruleExplanation: configured?.explanation, detectionDefinition: configured?.definition })
@@ -706,7 +730,7 @@ export function normalizeMillEvent(event: MillEvent, source: Record<string, unkn
         sourceVendor: vendor,
         sourceProduct: product,
         parserVersion,
-        normalized: redact({ ...adapted, timestamp }),
+        normalized: redact({ ...adapted, source_vendor: vendor, source_product: product, timestamp }),
         original: redact(event),
     }
 }

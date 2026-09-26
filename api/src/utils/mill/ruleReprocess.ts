@@ -1,4 +1,5 @@
 import { canonicalReplayKeys } from './replayEvidence.ts'
+import { createHash } from 'node:crypto'
 import run, { withTransaction } from '#db'
 import { normalizeLogEvent, type LogInput } from './logEvent.ts'
 import { storedSourceLog } from './storedSources.ts'
@@ -52,14 +53,15 @@ export async function processRuleReprocessJob() {
             const cursor = { ...job.cursor }
             let items: Item[], scanned: number
             if (cursor.phase === 0) {
-                const rows = (await query(`SELECT id,log_key,normalized,original,event_timestamp::text AS time FROM mill_events
+                const rows = (await query(`SELECT id,log_key,source_vendor,source_product,normalized,original,event_timestamp::text AS time FROM mill_events
                     WHERE organization_id=$1 AND event_timestamp<=$2::timestamptz AND received_at<=$2::timestamptz
                     AND ($3::timestamptz IS NULL OR event_timestamp>=$3::timestamptz)
                     AND ($4::timestamptz IS NULL OR (event_timestamp,id)<($4::timestamptz,$5::text))
                     ORDER BY event_timestamp DESC,id DESC LIMIT $6 FOR UPDATE`,
                 [job.organization_id, job.until_time, job.from_time, cursor.time || null, cursor.id || '', size])).rows
                 scanned = rows.length
-                items = rows.map(row => ({ id: row.id, key: row.log_key, event: row.normalized, original: row.original }))
+                items = rows.map(row => ({ id: row.id, key: row.log_key,
+                    event: { ...row.normalized, source_vendor: row.source_vendor, source_product: row.source_product }, original: row.original }))
                 if (rows.length) Object.assign(cursor, { time: rows.at(-1).time, id: rows.at(-1).id })
             } else {
                 const source = cursor.phase === 1 ? 'service_logs' : 'traffic_events'
@@ -114,7 +116,8 @@ export async function reprocessRuleItems(items: Item[], job: Pick<ReprocessJob, 
     const detectors = await loadConfiguredMillRules(job.organization_id, query)
     const protectedEvent = (event: Record<string, unknown>) => !eligibleCustomDrop(event)
         || Boolean((event.metadata as Record<string, unknown>)?.unrecognized_ingest_fields)
-        || collectMillEventFindings(job.organization_id, '', normalizeMillEvent(event, {}), detectors).findings.length > 0
+        || collectMillEventFindings(job.organization_id, '', normalizeMillEvent(event,
+            { vendor: event.source_vendor, product: event.source_product }), detectors).findings.length > 0
     const keeps = storageRules.filter(r => r.definition?.action === 'keep' && !r.definition.protection && r.definition.conditions?.length)
     const kept = new Set<number>()
     for (const keep of keeps) for (const index of await matchRulePage(matches.map(item => item.event), keep.definition!.conditions!)) kept.add(index)
@@ -123,8 +126,9 @@ export async function reprocessRuleItems(items: Item[], job: Pick<ReprocessJob, 
     let safe = matches.filter((item, index) => !kept.has(index) && !retentionStoreMatches({ ...item.event, retained_original: item.original }, storageRules) && !protectedEvent({ ...item.event, retained_original: item.original })
         && !/^service:(?:login_events|system_events):/.test(item.key || ''))
     const keys = safe.flatMap(item => item.key ? [item.key] : [])
-    const evidence = (await query(`SELECT id,log_key,organization_id,normalized,original FROM mill_events
+    const evidence = (await query(`SELECT id,log_key,organization_id,source_vendor,source_product,normalized,original FROM mill_events
         WHERE id=ANY($1::text[]) OR log_key=ANY($2::text[]) FOR UPDATE`, [safe.map(item => item.id), keys])).rows
+        .map(row => ({ ...row, normalized: { ...row.normalized, source_vendor: row.source_vendor, source_product: row.source_product } }))
     const findingIds = new Set((await query('SELECT event_ids FROM mill_findings WHERE event_ids && $1::text[]', [evidence.map(row => row.id)])).rows.flatMap(row => row.event_ids))
     for (const keep of keeps) for (const index of await matchRulePage(evidence.map(row => row.normalized), keep.definition!.conditions!)) findingIds.add(evidence[index].id)
     safe = safe.filter(item => !evidence.some(row => (row.id === item.id || (item.key && row.log_key === item.key))
@@ -153,5 +157,10 @@ export async function reprocessRuleItems(items: Item[], job: Pick<ReprocessJob, 
     let sources = 0
     if (serviceIds.size) sources += (await query('DELETE FROM service_logs WHERE id=ANY($1::bigint[]) RETURNING id', [[...serviceIds]])).rowCount || 0
     if (trafficIds.size) sources += (await query('DELETE FROM traffic_events WHERE id=ANY($1::bigint[]) RETURNING id', [[...trafficIds]])).rowCount || 0
+    if (safe.length) await query(`INSERT INTO log_analyze_receipts(key,organization_id,rule_id,rule_version)
+        SELECT entry.key,$1,$2,$3 FROM jsonb_to_recordset($4::jsonb) AS entry(key text) ON CONFLICT DO NOTHING`,
+    [job.organization_id, rule.rule_id, rule.version, JSON.stringify(safe.map(item => ({
+        key: createHash('sha256').update(`custom:${rule.rule_id}:${item.key || item.id}`).digest('hex'),
+    })))])
     return { matched: matches.length, protected: matches.length - safe.length, removedEvents: removed.rowCount || 0, removedSources: sources }
 }
