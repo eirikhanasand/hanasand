@@ -7,19 +7,22 @@ import './globals.css'
 
 export default function GlobalError({ reset }: { error: Error & { digest?: string }, reset: () => void }) {
     return (
-        <html lang='en'>
-            <body className='min-h-screen bg-ui-canvas text-ui-text'>
+        <html lang='en' className='dark'>
+            <head>
+                <script dangerouslySetInnerHTML={{ __html: 'document.documentElement.className = document.cookie.split("; ").some(cookie => cookie === "theme=light") ? "light" : "dark"' }} />
+            </head>
+            <body className='min-h-screen bg-ui-canvas text-ui-primary dark:text-ui-text'>
                 <main className='min-h-screen px-4 py-6 sm:px-8 sm:py-10'>
                     <div className='mx-auto flex min-h-[calc(100vh-3rem)] max-w-5xl flex-col'>
                         <BrandLogo />
                         <section className='my-auto grid gap-8 py-16 md:grid-cols-[auto_minmax(0,1fr)] md:items-center md:gap-12'>
-                            <div className='grid h-20 w-20 place-items-center rounded-2xl border border-ui-danger/30 bg-ui-danger/10 text-ui-danger'>
+                            <div className='grid h-20 w-20 place-items-center rounded-2xl border border-ui-primary/30 bg-ui-primary/10 text-ui-primary'>
                                 <AlertTriangle className='h-9 w-9' />
                             </div>
                             <div className='max-w-2xl'>
                                 <p className='text-sm font-semibold uppercase tracking-[0.16em] text-ui-primary'>Hanasand workspace</p>
                                 <h1 className='mt-3 text-4xl font-semibold tracking-tight md:text-6xl'>Something went wrong.</h1>
-                                <p className='mt-4 text-base leading-7 text-ui-muted md:text-lg'>
+                                <p className='mt-4 text-base leading-7 text-ui-primary dark:text-ui-muted md:text-lg'>
                                     This page hit an unexpected problem. Try again, or use one of the links below to continue working in Hanasand.
                                 </p>
                                 <div className='mt-7 flex flex-wrap gap-3'>
@@ -35,10 +38,10 @@ export default function GlobalError({ reset }: { error: Error & { digest?: strin
                             </div>
                         </section>
                         <nav aria-label='Recovery navigation' className='flex flex-wrap gap-x-5 gap-y-3 border-t border-ui-border pt-5 text-sm font-semibold'>
-                            <Link href='/' className='inline-flex items-center gap-1 text-ui-muted hover:text-ui-text'><ArrowLeft className='h-4 w-4' />Home</Link>
-                            <Link href='/ti' className='inline-flex items-center gap-1 text-ui-muted hover:text-ui-text'><Search className='h-4 w-4' />Threat search</Link>
-                            <Link href='/dwm' className='text-ui-muted hover:text-ui-text'>Dark web monitoring</Link>
-                            <Link href='/support' className='text-ui-muted hover:text-ui-text'>Support</Link>
+                            <Link href='/' className='inline-flex items-center gap-1 text-ui-primary dark:text-ui-muted hover:text-ui-primary'><ArrowLeft className='h-4 w-4' />Home</Link>
+                            <Link href='/ti' className='inline-flex items-center gap-1 text-ui-primary dark:text-ui-muted hover:text-ui-primary'><Search className='h-4 w-4' />Threat search</Link>
+                            <Link href='/dwm' className='text-ui-primary dark:text-ui-muted hover:text-ui-primary'>Dark web monitoring</Link>
+                            <Link href='/support' className='text-ui-primary dark:text-ui-muted hover:text-ui-primary'>Support</Link>
                         </nav>
                     </div>
                 </main>
