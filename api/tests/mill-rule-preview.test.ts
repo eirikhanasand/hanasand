@@ -1,7 +1,14 @@
 import { expect, mock, test } from 'bun:test'
 import { eventProtectionDefinition } from '../src/utils/mill/eventProtection.ts'
+import { messageCandidatePredicate } from '../src/utils/mill/previewPredicate.ts'
 mock.module('#db', () => ({ default: async () => ({ rows: [] }) }))
 const { scanRulePreview: scan, validPreviewWindow } = await import('../src/utils/mill/rulePreview.ts')
+test('historical message candidate filtering leaves unsupported expressions for the full matcher', () => {
+    let index = 6
+    const bind = () => `$${++index}`
+    expect(messageCandidatePredicate([{ path: 'message', operator: 'regex', value: '^(runc .*|journalctl .*)$' }], 'message', bind)).toContain('~* $7')
+    expect(messageCandidatePredicate([{ path: 'message', operator: 'regex', value: '(?=runc)runc' }], 'message', bind)).toBe('TRUE')
+})
 const scanRulePreview: typeof scan = (org, canReadLogs, input, query) => scan(org, canReadLogs, input,
     (async (sql: string, params: any) => sql.includes('FROM mill_rules')
         ? { rows: [{ enabled: true, definition: eventProtectionDefinition }] } : query!(sql, params)) as any)
