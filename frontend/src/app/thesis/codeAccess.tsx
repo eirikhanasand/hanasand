@@ -1,34 +1,27 @@
 'use client'
-
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
-import AccessCodePanel from '@/components/accessCodePanel'
+import { useCallback, useEffect, useState } from 'react'
 import CodeReview from './codeReview'
-
+type AccessState = 'checking' | 'member' | 'signed-out' | 'not-member' | 'error'
 export default function CodeAccess({ canEdit, toolbar }: { canEdit: boolean, toolbar: HTMLElement | null }) {
-    const [unlocked, setUnlocked] = useState(canEdit)
-    const [code, setCode] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState('')
-    const lock = useCallback(() => setUnlocked(false), [])
-    useEffect(() => {
-        if (canEdit) return
-        let stopped = false
-        fetch('/api/thesis/code/access', { cache: 'no-store' }).then(response => response.json()).then(result => {
-            if (!stopped) setUnlocked(result.authenticated === true)
-        }).catch(() => { if (!stopped) setError('Could not check access. Enter the code to try again.') })
-        return () => { stopped = true }
-    }, [canEdit])
-    async function login(event: FormEvent<HTMLFormElement>) {
-        event.preventDefault()
-        setBusy(true); setError('')
+    const [state, setState] = useState<AccessState>('checking')
+    const checkAccess = useCallback(async(signal?: AbortSignal) => {
         try {
-            const response = await fetch('/api/thesis/code/access', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) })
+            const response = await fetch('/api/thesis/code/access', { cache: 'no-store', signal })
             const result = await response.json()
-            if (!response.ok) throw new Error(result.error || 'Could not unlock code.')
-            setCode(''); setUnlocked(true)
-        } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not unlock code.') }
-        finally { setBusy(false) }
-    }
-    return unlocked ? <CodeReview canReview={canEdit} toolbar={toolbar} onLocked={lock} /> : <div className='code-access'>
-        {error && <p role='alert' className='mt-4 text-sm text-ui-danger'>{error}</p>}
-        <AccessCodePanel code={code} onChange={setCode} busy={busy} onSubmit={login} />
-    </div>
+            if (signal?.aborted) return
+            if (response.status === 401) setState('signed-out')
+            else if (!response.ok) setState('error')
+            else setState(result.authenticated ? 'member' : 'not-member')
+        } catch { if (!signal?.aborted) setState('error') }
+    }, [])
+    useEffect(() => {
+        const controller = new AbortController()
+        void checkAccess(controller.signal)
+        return () => controller.abort()
+    }, [checkAccess])
+    if (state === 'member') return <CodeReview canReview={canEdit} toolbar={toolbar} onLocked={() => { setState('checking'); void checkAccess() }} />
+    if (state === 'checking') return <p className='code-access' role='status'>Checking Hanasand organization membership…</p>
+    if (state === 'signed-out') return <p className='code-access'>Sign in with a Hanasand account that belongs to the Hanasand organization to view source code. <a href='/login' className='underline'>Sign in</a>.</p>
+    if (state === 'not-member') return <p className='code-access'>Membership in the Hanasand organization is required to view source code.</p>
+    return <div className='code-access'><p role='alert'>Organization membership could not be checked.</p><button type='button' onClick={() => { setState('checking'); void checkAccess() }}>Retry</button></div>
 }
