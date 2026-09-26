@@ -11,7 +11,7 @@ import { navigateTable, type PendingTable } from './tableNavigation'
 import markdownSpacing from './markdownSpacing'
 import './workspace.css'
 
-export const sheetButton = 'min-h-11 rounded-lg border border-ui-border px-3 py-2 text-sm hover:bg-ui-raised disabled:opacity-40'
+export const sheetButton = 'min-h-11 rounded-lg border border-ui-border px-3 py-2 text-sm text-ui-text hover:bg-ui-raised disabled:opacity-40'
 export function RenderMarkdown({ text }: { text: string }) {
     return <div className='thesis-markdown'><Markdown remarkPlugins={[remarkGfm, markdownSpacing]}>{text}</Markdown></div>
 }
