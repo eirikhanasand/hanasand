@@ -580,9 +580,18 @@ export async function getSystemEvents(req: FastifyRequest, res: FastifyReply) {
 
     const result = await run(`
         SELECT ${timelineOnly ? `
-            e.id, e.created_at, e.event_type, e.service, e.source,
+            e.id, e.created_at, e.event_type, e.severity, e.service, e.source,
             e.actor_id, actor.name AS actor_name, e.object_id, e.object_type,
-            target_user.name AS target_name, e.outcome, e.reason
+            target_user.name AS target_name, e.organization_id, organization.name AS organization_name,
+            e.subject_id, e.request_id, e.outcome, e.reason,
+            jsonb_strip_nulls(jsonb_build_object(
+                'name', CASE WHEN jsonb_typeof(e.context->'name') = 'string' THEN e.context->'name' END,
+                'targetName', CASE WHEN jsonb_typeof(e.context->'targetName') = 'string' THEN e.context->'targetName' END,
+                'targetId', CASE WHEN jsonb_typeof(e.context->'targetId') = 'string' THEN e.context->'targetId' END,
+                'targetSource', CASE WHEN jsonb_typeof(e.context->'targetSource') = 'string' THEN e.context->'targetSource' END
+            )) AS context,
+            e.ip, acknowledgement.acknowledged_at, acknowledgement.acknowledged_by,
+            acknowledged_actor.name AS acknowledged_by_name
         ` : `
             e.id,
             e.event_type,
@@ -617,8 +626,8 @@ export async function getSystemEvents(req: FastifyRequest, res: FastifyReply) {
         LEFT JOIN users actor ON actor.id = e.actor_id
         LEFT JOIN users target_user ON target_user.id = e.object_id
         LEFT JOIN organizations organization ON organization.id = e.organization_id
-        ${timelineOnly ? '' : `LEFT JOIN system_event_acknowledgments acknowledgement ON acknowledgement.event_id = e.id
-        LEFT JOIN users acknowledged_actor ON acknowledged_actor.id = acknowledgement.acknowledged_by`}
+        LEFT JOIN system_event_acknowledgments acknowledgement ON acknowledgement.event_id = e.id
+        LEFT JOIN users acknowledged_actor ON acknowledged_actor.id = acknowledgement.acknowledged_by
         ${where.length ? `WHERE ${where.join('\n          AND ')}` : ''}
         ORDER BY e.created_at DESC, e.id DESC
         LIMIT ${add(limit + 1)} OFFSET ${add((page - 1) * limit)}

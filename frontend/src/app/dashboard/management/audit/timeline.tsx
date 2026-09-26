@@ -1,13 +1,13 @@
 'use client'
 
-import { memo, useMemo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useMemo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { getCookie } from '@/utils/cookies/cookies'
 import { auditQuery, param, readAuditPage, type AuditEvent, type AuditPage, type AuditSearchParams } from './data'
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import config from '@/config'
-import { AlertTriangle, ArrowUp, ClipboardList, Clock3, ListFilter, Maximize2, Minimize2, Search, X } from 'lucide-react'
+import { AlertTriangle, ArrowUp, Bell, ChartNoAxesCombined, ClipboardList, Clock3, ListFilter, Maximize2, Minimize2, Search, X } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 
 export default function AuditTimeline({ initialAudit, filters }: { initialAudit: AuditPage, filters: AuditSearchParams }) {
@@ -18,6 +18,10 @@ export default function AuditTimeline({ initialAudit, filters }: { initialAudit:
     const [searchError, setSearchError] = useState(initialAudit.error || '')
     const [searchOpen, setSearchOpen] = useState(!!(param(filters, 'q') || param(filters, 'hql')))
     const [filtersOpen, setFiltersOpen] = useState(false)
+    const [analyticsOpen, setAnalyticsOpen] = useState(false)
+    const [openEvent, setOpenEvent] = useState<number | null>(null)
+    const [pendingEvent, setPendingEvent] = useState<number | null>(null)
+    const [acknowledgmentError, setAcknowledgmentError] = useState<{ id: number, message: string } | null>(null)
     const [mode, setMode] = useState(param(filters, 'hql') ? 'hql' : 'q')
     const [search, setSearch] = useState(param(filters, 'hql') || param(filters, 'q'))
     const [fullscreen, setFullscreen] = useState(false)
@@ -134,6 +138,23 @@ export default function AuditTimeline({ initialAudit, filters }: { initialAudit:
         return () => window.removeEventListener('keydown', onKeyDown)
     }, [fullscreen])
     const failedCount = useMemo(() => sortedEvents.filter(isFailed).length, [sortedEvents])
+    const reviewEvents = sortedEvents.filter(event => !event.acknowledgedAt && isFailed(event))
+    async function acknowledge(event: AuditEvent) {
+        if (pendingEvent !== null) return
+        setPendingEvent(event.id)
+        setAcknowledgmentError(null)
+        try {
+            const response = await fetch(config.url.api + '/admin/audit-events/' + event.id + '/acknowledgment', {
+                method: event.acknowledgedAt ? 'DELETE' : 'POST',
+                headers: { Authorization: 'Bearer ' + (getCookie('access_token') || ''), id: getCookie('id') || '' },
+            })
+            const result = await response.json()
+            if (!response.ok) throw new Error(typeof result.error === 'string' ? result.error : 'Could not save acknowledgment.')
+            setAudit(current => ({ ...current, events: current.events.map(item => item.id === event.id ? { ...item, acknowledgedAt: result.acknowledged_at || null, acknowledgedBy: result.acknowledged_by || null } : item) }))
+        } catch (cause) {
+            setAcknowledgmentError({ id: event.id, message: cause instanceof Error ? cause.message : 'Could not save acknowledgment.' })
+        } finally { setPendingEvent(null) }
+    }
     const lastEvent = sortedEvents[0]
 
     const timeline = (
@@ -146,6 +167,8 @@ export default function AuditTimeline({ initialAudit, filters }: { initialAudit:
                 <div className='flex items-center gap-2'>
                     {showScrollTop && <button type='button' aria-label='Back to top of timeline' title='Back to top' onClick={() => { scrollRoot.current?.scrollTo({ top: 0, behavior: 'instant' }); setShowScrollTop(false) }} className='inline-flex h-8 w-8 items-center justify-center rounded-md border border-ui-border hover:bg-ui-panel'><ArrowUp className='h-4 w-4' /></button>}
                     <button type='button' aria-label='Search timeline (Cmd J)' aria-keyshortcuts='Meta+J Control+J' aria-expanded={searchOpen} onClick={() => { setSearchOpen(value => !value); requestAnimationFrame(() => searchInput.current?.focus()) }} className='inline-flex h-8 items-center gap-2 rounded-md border border-ui-border px-2 text-xs hover:bg-ui-panel'><Search className='h-4 w-4' /><span>Search</span><kbd className='hidden text-ui-muted sm:inline'>⌘J</kbd></button>
+                    <details className='relative'><summary aria-label='Audit alerts' className='relative grid h-8 w-8 cursor-pointer list-none place-items-center rounded-md border border-ui-border hover:bg-ui-panel'><Bell className='h-4 w-4' />{reviewEvents.length > 0 && <span className='absolute -right-1 -top-1 rounded-full bg-ui-danger px-1 text-[10px] text-white'>{reviewEvents.length}</span>}</summary><div className='absolute right-0 z-20 mt-2 max-h-80 w-80 overflow-auto rounded-md border border-ui-border bg-ui-panel p-2 shadow-lg'><h3 className='px-2 py-1 text-xs font-semibold'>Alerts</h3>{reviewEvents.length ? reviewEvents.map(event => <button key={event.id} type='button' onClick={() => { setOpenEvent(event.id); scrollRoot.current?.querySelector('#event-' + event.id)?.scrollIntoView({ block: 'nearest' }) }} className='block w-full rounded px-2 py-2 text-left text-xs hover:bg-ui-raised'><strong>{event.action}</strong><span className='block text-ui-danger'>{event.result} · {event.service}</span><span className='block truncate text-ui-muted'>{event.target} · {event.detail}</span></button>) : <p className='px-2 py-2 text-xs text-ui-muted'>No unacknowledged errors.</p>}</div></details>
+                    <button type='button' aria-label='Analytics' title='Analytics' aria-expanded={analyticsOpen} onClick={() => setAnalyticsOpen(value => !value)} className={'inline-flex h-8 items-center gap-1 rounded-md border border-ui-border px-2 text-xs ' + (failedCount ? 'text-ui-danger' : '')}><ChartNoAxesCombined className='h-4 w-4' />{failedCount > 0 && <span className='rounded-full bg-ui-danger px-1.5 text-[10px] text-white'>{failedCount}</span>}</button>
                     <button type='button' aria-label='Toggle audit filters' title={filtersOpen ? 'Hide filters' : 'Show filters'} aria-expanded={filtersOpen} aria-controls='audit-filters' onClick={() => setFiltersOpen(value => !value)} className={`inline-flex h-8 w-8 items-center justify-center rounded-md border border-ui-border hover:bg-ui-panel ${filtersOpen ? 'bg-ui-panel text-ui-primary' : ''}`}><ListFilter className='h-4 w-4' aria-hidden /></button>
                     <button ref={fullscreenButton} type='button' aria-label={fullscreen ? 'Minimize timeline' : 'Fullscreen timeline'} title={fullscreen ? 'Minimize (Esc)' : 'Fullscreen'} onClick={toggleFullscreen} className='inline-flex h-8 items-center gap-2 rounded-md border border-ui-border px-2 text-xs hover:bg-ui-panel'>{fullscreen ? <Minimize2 className='h-4 w-4' /> : <Maximize2 className='h-4 w-4' />}<span className='hidden sm:inline'>{fullscreen ? 'Minimize' : 'Fullscreen'}</span></button>
                 </div>
@@ -178,7 +201,7 @@ export default function AuditTimeline({ initialAudit, filters }: { initialAudit:
                         </tr>
                     </thead>
                     <tbody className='bg-ui-panel'>
-                        {sortedEvents.map(event => <AuditRow key={event.id} event={event} />)}
+                        {sortedEvents.map(event => <AuditRows key={event.id} event={event} open={openEvent === event.id} pending={pendingEvent === event.id} acknowledgmentError={acknowledgmentError?.id === event.id ? acknowledgmentError.message : ''} toggle={() => setOpenEvent(openEvent === event.id ? null : event.id)} acknowledge={() => void acknowledge(event)} />)}
                         {!sortedEvents.length && !searchError ? (
                             <tr>
                                 <td colSpan={7} className='px-4 py-8 text-center text-sm text-ui-muted'>{audit.available ? 'No audit events match these filters.' : 'Audit storage is unavailable. The result is not being treated as an empty log.'}</td>
@@ -202,7 +225,7 @@ export default function AuditTimeline({ initialAudit, filters }: { initialAudit:
                     description='Audit events across all services, including account access, infrastructure, and threat intelligence.'
                 />
 
-                {!queryResult && <div className='grid gap-2 sm:grid-cols-3'>
+                {!queryResult && analyticsOpen && <div className='grid gap-2 sm:grid-cols-3'>
                     <Metric title='Events' value={`${sortedEvents.length}/${audit.total ?? '—'}`} icon={<ClipboardList className='h-4 w-4' />} />
                     <Metric title='Failures' value={`${failedCount}`} tone={failedCount ? 'bad' : 'ok'} icon={<AlertTriangle className='h-4 w-4' />} />
                     <Metric title='Last action' value={lastEvent ? shortTime(lastEvent.happenedAt) : '—'} icon={<Clock3 className='h-4 w-4' />} />
@@ -272,20 +295,15 @@ function isFailed(event: AuditEvent) {
     return !['ok', 'ready', 'success', 'completed', 'published'].includes(event.result.toLowerCase())
 }
 
-const AuditRow = memo(function AuditRow({ event }: { event: AuditEvent }) {
-    return (
-        <tr id={`event-${event.id}`} className='align-top transition hover:bg-ui-raised'>
-            <td className='whitespace-nowrap border-b border-ui-border px-3 py-1.5 text-ui-muted'>{compactTime(event.happenedAt)}</td>
-            <td className='border-b border-ui-border px-3 py-1.5 text-ui-text'>{event.service}</td>
-            <td className='max-w-28 border-b border-ui-border px-3 py-1.5 font-mono text-ui-text'>{event.actor}</td>
-            <td className='whitespace-nowrap border-b border-ui-border px-3 py-1.5 font-mono font-semibold text-ui-primary'>{event.action}</td>
-            <td className='max-w-44 border-b border-ui-border px-3 py-1.5 font-mono text-ui-text'>
-                {event.target}
-            </td>
-            <td className='whitespace-nowrap border-b border-ui-border px-3 py-1.5'><StatusPill label={event.result} tone={isFailed(event) ? 'bad' : 'ok'} /></td>
-            <td className='max-w-[34rem] border-b border-ui-border px-3 py-1.5 text-ui-muted'>
-                <span className='line-clamp-2'>{event.detail}</span>
-            </td>
-        </tr>
-    )
-})
+function AuditRows({ event, open, pending, acknowledgmentError, toggle, acknowledge }: { event: AuditEvent, open: boolean, pending: boolean, acknowledgmentError: string, toggle: () => void, acknowledge: () => void }) {
+    return <>
+        <tr id={'event-' + event.id} className='align-top hover:bg-ui-raised'><td colSpan={7} className='border-b border-ui-border p-0'>
+            <button type='button' onClick={toggle} aria-expanded={open} className='grid w-full grid-cols-[minmax(8rem,1fr)_minmax(5rem,.7fr)_minmax(6rem,1fr)_minmax(7rem,1fr)_minmax(7rem,1fr)_auto] gap-3 px-3 py-2 text-left focus-visible:outline-2 focus-visible:outline-ui-primary'>
+                <span>{compactTime(event.happenedAt)}</span><span>{event.service}</span><span>{event.actor}</span><span>{event.action}</span><span>{event.target}</span><span><StatusPill label={event.result} tone={isFailed(event) ? 'bad' : 'ok'} /></span><span className='col-span-full text-ui-muted'>{event.detail}</span>
+            </button>
+        </td></tr>
+        {open && <tr><td colSpan={7} className='border-b border-ui-border bg-ui-raised/50 px-4 py-3'><dl className='grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4'>
+            <div><dt>Actor ID</dt><dd>{event.actorId}</dd></div><div><dt>Target</dt><dd>{event.targetName || event.target}</dd></div><div><dt>Organization</dt><dd>{event.organization}</dd></div><div><dt>Entity</dt><dd>{event.entity}</dd></div><div><dt>Request</dt><dd>{event.request}</dd></div><div><dt>Source</dt><dd>{event.source}/{event.service}</dd></div><div><dt>IP</dt><dd>{event.ip}</dd></div><div><dt>Details</dt><dd>{event.detail}</dd></div>
+        </dl><button type='button' disabled={pending} onClick={acknowledge} className='mt-3 rounded-md border border-ui-border px-3 py-1.5 text-xs font-semibold disabled:opacity-50'>{pending ? 'Saving…' : event.acknowledgedAt ? 'Mark unread' : 'Acknowledge'}</button>{event.acknowledgedAt && <span className='ml-3 text-xs text-ui-muted'>Acknowledged by {event.acknowledgedByName || event.acknowledgedBy || 'an administrator'}</span>}{acknowledgmentError && <p role='alert' className='mt-2 text-xs text-ui-danger'>{acknowledgmentError}</p>}</td></tr>}
+    </>
+}

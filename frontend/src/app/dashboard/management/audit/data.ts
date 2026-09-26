@@ -9,6 +9,17 @@ export type AuditEvent = {
     target: string
     result: string
     detail: string
+    severity: string
+    source: string
+    actorId: string
+    targetName: string
+    organization: string
+    entity: string
+    request: string
+    ip: string
+    acknowledgedAt: string | null
+    acknowledgedBy: string | null
+    acknowledgedByName: string | null
 }
 
 export type AuditPage = {
@@ -47,6 +58,13 @@ export function readAuditPage(payload: { events: Array<Record<string, unknown>>,
             service: String(event.service || event.source || '—'), action: String(event.event_type || ''),
             target: String(event.target_name || event.object_id || event.object_type || '—'),
             result: String(event.outcome || ''), detail: String(event.reason || event.service || ''),
+            severity: String(event.severity || 'info'), source: String(event.source || ''),
+            actorId: String(event.actor_id || ''), targetName: String(event.target_name || ''),
+            organization: String(event.organization_name || event.organization_id || ''),
+            entity: String(event.subject_id || ''), request: String(event.request_id || ''),
+            ip: String(event.ip || ''), acknowledgedAt: typeof event.acknowledged_at === 'string' ? event.acknowledged_at : null,
+            acknowledgedBy: typeof event.acknowledged_by === 'string' ? event.acknowledged_by : null,
+            acknowledgedByName: typeof event.acknowledged_by_name === 'string' ? event.acknowledged_by_name : null,
         })),
         nextCursor: payload.pagination.nextCursor || null,
         total: payload.pagination.total ?? null,

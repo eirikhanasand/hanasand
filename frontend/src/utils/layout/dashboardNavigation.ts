@@ -101,7 +101,6 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
         group('Communication', [
             link('Mail', '/mail'),
             link('Support Chats', '/support'),
-            link('Helpdesk', '/helpdesk', isAdmin),
         ]),
         group('Organization', [
             link('Overview', '/organizations'),
