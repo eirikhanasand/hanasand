@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowUp, LoaderCircle, Sparkles, UserRound } from 'lucide-react'
+import { ArrowUp, LoaderCircle, UserRound } from 'lucide-react'
 import SupportFeedback, { type Feedback } from './supportFeedback'
 import useSupportLive from './useSupportLive'
 import useSupportUnread from './useSupportUnread'
@@ -171,19 +171,18 @@ export default function PublicSupportChat({ active = true, onUnreadChange }: { a
         <section aria-label='Support chat' className='grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto]'>
             {!legacy ? <div className='flex min-w-0 items-center gap-3 border-b border-ui-border px-5 py-3'>
                 <h1 className='text-sm font-semibold text-ui-text'>Support</h1>
-                <select aria-label='Conversation' value={selectedId} onChange={event => void selectChat(event.target.value)} className='min-w-0 flex-1 rounded-lg border border-ui-border bg-ui-panel px-2 py-1.5 text-xs text-ui-text'>
+                {tickets.length ? <select aria-label='Conversation' value={selectedId} onChange={event => void selectChat(event.target.value)} className='min-w-0 flex-1 rounded-lg border border-ui-border bg-ui-panel px-2 py-1.5 text-xs text-ui-text'>
                     {!tickets.some(ticket => ticket.id === selectedId) ? <option value={selectedId}>New chat</option> : null}
                     {tickets.map(ticket => <option key={ticket.id} value={ticket.id}>{ticket.subject}{unread[ticket.id] ? ` (${unread[ticket.id]} unread)` : ''}</option>)}
-                </select>
+                </select> : null}
                 {Object.values(unread).some(count => count > 0) ? <span role='status' aria-label='Unread replies in other chats' className='rounded-full bg-ui-primary px-2 py-0.5 text-xs text-ui-canvas'>{Object.values(unread).reduce((sum, count) => sum + count, 0)}</span> : null}
                 <button type='button' onClick={() => void selectChat(crypto.randomUUID())} className='shrink-0 rounded-lg bg-ui-primary px-3.5 py-2 text-xs font-semibold text-ui-canvas transition hover:opacity-90 disabled:opacity-50'>New chat</button>
             </div> : <div />}
             <div ref={log} role='log' aria-label='Messages' className='min-h-0 overflow-y-auto overscroll-contain px-5 py-5'>
-                {!visibleMessages.length ? <div className='flex min-h-full flex-col justify-center pb-3'>
-                    <div className='mb-5 grid h-11 w-11 place-items-center rounded-2xl bg-ui-primary/10 text-ui-primary'><Sparkles className='h-5 w-5' aria-hidden='true' /></div>
+                {!visibleMessages.length ? <div className='flex min-h-full flex-col items-center justify-center pb-3 text-center'>
                     <h2 className='text-xl font-semibold tracking-tight text-ui-text'>What can we help with?</h2>
-                    <p className='mt-2 max-w-64 text-sm leading-6 text-ui-muted'>Describe your question and we’ll point you in the right direction.</p>
-                    <div className='mt-6 flex flex-wrap gap-2'>{['Account help', 'Billing question', 'Using Hanasand'].map(topic => <button key={topic} type='button' disabled={loading || sending} onClick={() => setInput(topic)} className='rounded-full border border-ui-border px-3 py-2 text-xs text-ui-text transition hover:border-ui-primary hover:bg-ui-primary/5 disabled:opacity-50'>{topic}</button>)}</div>
+                    <p className='mt-2 max-w-sm text-sm leading-6 text-ui-muted'>Describe your question and we’ll point you in the right direction.</p>
+                    <div className='mt-6 flex flex-wrap justify-center gap-2'>{['Account help', 'Billing question', 'Using Hanasand'].map(topic => <button key={topic} type='button' disabled={loading || sending} onClick={() => setInput(topic)} className='rounded-full border border-ui-border px-3 py-2 text-xs text-ui-text transition hover:border-ui-primary hover:bg-ui-primary/5 disabled:opacity-50'>{topic}</button>)}</div>
                 </div> : <div className='grid gap-4'>{visibleMessages.map(message => message.sender_kind === 'system'
                     ? <p key={message.id} className='px-2 py-1 text-center text-xs leading-5 text-ui-muted'>{message.body}</p>
                     : <div key={message.id} className={`min-w-0 max-w-[92%] ${message.sender_kind === 'user' ? 'justify-self-end' : 'justify-self-start'}`}>
