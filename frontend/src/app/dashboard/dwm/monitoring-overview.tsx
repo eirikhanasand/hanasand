@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from '@/components/organizations/workspaceLink'
-import type { DwmActorOverview, DwmProductSnapshot } from '@/utils/dwm/product'
+import type { DwmActorOverview } from '@/utils/dwm/product'
 import { customerAlertSummary, safeEvidenceExcerpt } from '@/utils/dwm/display'
 import type { DwmDataHealth, PortalAlert } from './findings'
 
@@ -34,8 +34,7 @@ function Pages({ count, page, setPage }: { count: number, page: number, setPage:
     </nav>
 }
 
-export function MonitoringOverview({ snapshot, alerts, dataHealth, organizationId, initialAlertId, actionMessage, onRefresh, caseHref }: {
-    snapshot: DwmProductSnapshot
+export function MonitoringOverview({ alerts, dataHealth, organizationId, initialAlertId, actionMessage, onRefresh, caseHref }: {
     alerts: PortalAlert[]
     dataHealth: DwmDataHealth
     organizationId?: string
@@ -47,7 +46,6 @@ export function MonitoringOverview({ snapshot, alerts, dataHealth, organizationI
     const [filter, setFilter] = useState('all')
     const [query, setQuery] = useState('')
     const [page, setPage] = useState(0)
-    const pending = alerts.filter(needsReview).length
     const rows = alerts.filter(alert => (filter === 'all' || needsReview(alert)) && [alert.company, alert.actor, alert.matchedTerm.value].some(value => value?.toLowerCase().includes(query.toLowerCase())))
         .sort((a, b) => (Date.parse(b.lastSeenAt || b.firstSeenAt) || 0) - (Date.parse(a.lastSeenAt || a.firstSeenAt) || 0))
     const currentPage = Math.min(page, Math.max(0, Math.ceil(rows.length / pageSize) - 1))
@@ -61,7 +59,7 @@ export function MonitoringOverview({ snapshot, alerts, dataHealth, organizationI
             <header className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border p-4'>
                 <div>
                     <h2 className='font-semibold text-ui-text'>Recent findings</h2>
-                    {dataHealth.alerts.state === 'live' && <p className='mt-1 text-sm text-ui-muted'>{alerts.length} findings · {pending} needing review</p>}
+                    {dataHealth.alerts.state === 'live' && <p className='mt-1 text-sm text-ui-muted'>{alerts.length} findings</p>}
                 </div>
                 <div className='flex flex-wrap gap-2'>
                     <input
@@ -84,7 +82,7 @@ export function MonitoringOverview({ snapshot, alerts, dataHealth, organizationI
             </header>
             <LoadState state={dataHealth.alerts.state} subject='Findings' onRetry={onRefresh} />
             {actionMessage && <p role={actionMessage.ok ? 'status' : 'alert'} className={`p-4 text-sm ${actionMessage.ok ? 'text-ui-text' : 'text-ui-danger'}`}>{actionMessage.text}</p>}
-            {dataHealth.alerts.state === 'live' && !rows.length && <p className='p-6 text-sm text-ui-muted'>{alerts.length ? 'No findings match this filter.' : snapshot.watchlist.length ? 'No findings yet.' : 'No findings yet.'}</p>}
+            {dataHealth.alerts.state === 'live' && alerts.length > 0 && !rows.length && <p className='p-6 text-sm text-ui-muted'>No findings match this filter.</p>}
             {dataHealth.alerts.state === 'live' && <div className='divide-y divide-ui-border'>{rows.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(alert => {
                 const href = caseHref(alert)
                 const evidence = alert.evidence || []
@@ -113,7 +111,7 @@ export function MonitoringOverview({ snapshot, alerts, dataHealth, organizationI
             })}</div>}
             <Pages count={rows.length} page={currentPage} setPage={setPage} />
         </section>
-        <Link className={link} href={scopedHref('/dwm/actors')}>Browse monitored actors</Link>
+        <Link className='text-sm font-normal text-ui-primary underline-offset-2 hover:underline' href={scopedHref('/findings/actors')}>Browse monitored actors</Link>
     </div>
 }
 

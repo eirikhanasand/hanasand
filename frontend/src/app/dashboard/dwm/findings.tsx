@@ -385,7 +385,7 @@ export function Findings({
     }
 
     if (view === 'overview') {
-        return <MonitoringOverview snapshot={snapshot} alerts={alerts} dataHealth={dataHealth}
+        return <MonitoringOverview alerts={alerts} dataHealth={dataHealth}
             organizationId={organizationId} initialAlertId={initialAlertId} actionMessage={actionMessage}
             onRefresh={() => setRefreshVersion(version => version + 1)}
             caseHref={alert => { const id = alertCaseId(alert); return id ? caseDetailHref(id, alert.id, alertOrganizationId(alert, organizationId), 'alert_queue') : undefined }} />
