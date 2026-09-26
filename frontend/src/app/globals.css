@@ -349,7 +349,7 @@ body:has(.support-page) .site-atmosphere::before {
 
 @media (min-width: 1024px) {
   .dashboard-sidebar-sticky {
-    margin-top: 1rem;
+    margin-top: 1.25rem;
     max-height: calc(100dvh - 6rem);
   }
 }
