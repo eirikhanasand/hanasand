@@ -3,7 +3,7 @@ import { mailPermissions, MailAccessDenied, sharedMailAccess, sharedMailboxes } 
 import { mailConfig } from './config.ts'
 import { encryptMailSecret, generateMailSecret, tryDecryptMailSecret } from './crypto.ts'
 import { addressForUser, addressesForUser, mailboxLocalPartForUser } from './helpers.ts'
-import { type AdminPatch, createPrincipal, ensureSetting, findPrincipalByName, patchPrincipal } from './stalwartAdmin.ts'
+import { type AdminPatch, createPrincipal, ensureSetting, findPrincipalByName, patchPrincipal, setDomainCatchAllAddress } from './stalwartAdmin.ts'
 
 type UserRow = {
     id: string
@@ -225,6 +225,7 @@ function getStoredMailSecret(account: MailAccountRow) {
 }
 
 async function ensureDomainPrincipal() {
+    const catchAllAddress = `support@${mailConfig.domain}`
     const domain = await findPrincipalByName(mailConfig.domain, 'domain')
     if (!domain) {
         await createPrincipal({
@@ -232,7 +233,7 @@ async function ensureDomainPrincipal() {
             quota: 0,
             name: mailConfig.domain,
             description: 'Hanasand mail domain',
-            catchAllAddress: `support@${mailConfig.domain}`,
+            catchAllAddress,
             secrets: [],
             emails: [],
             urls: [],
@@ -244,10 +245,8 @@ async function ensureDomainPrincipal() {
             disabledPermissions: [],
             externalMembers: [],
         })
-    } else {
-        await patchPrincipal(domain.name, [
-            { action: 'set', field: 'catchAllAddress', value: `support@${mailConfig.domain}` },
-        ])
+    } else if (domain.catchAllAddress !== catchAllAddress) {
+        await setDomainCatchAllAddress(mailConfig.domain, catchAllAddress)
     }
 }
 

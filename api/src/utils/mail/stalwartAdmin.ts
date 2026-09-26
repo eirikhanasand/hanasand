@@ -14,6 +14,7 @@ export type PrincipalRecord = {
     secrets?: string[]
     roles?: string[]
     domainId?: string
+    catchAllAddress?: string
     raw?: Record<string, unknown>
 }
 
@@ -115,6 +116,15 @@ export async function createPrincipal(body: Record<string, unknown>) {
         return (await createAccountPrincipal(body))?.id || null
     }
     throw new Error(`Unsupported Stalwart principal type: ${String(body.type || 'unknown')}`)
+}
+
+export async function setDomainCatchAllAddress(domainName: string, address: string) {
+    const domain = await findDomainPrincipalByName(domainName)
+    if (!domain) throw new Error(`Mail domain ${domainName} was not found.`)
+    if (domain.catchAllAddress === address) return
+    await jmapAdminCall('x:Domain/set', {
+        update: { [String(domain.id)]: { catchAllAddress: address } },
+    })
 }
 
 export async function patchPrincipal(principalName: string, patches: AdminPatch[]) {
@@ -238,7 +248,7 @@ async function adminFetch(path: string, init: RequestInit = {}) {
 }
 
 async function listDomainPrincipals() {
-    return (await queryObjects<Record<string, unknown>>('x:Domain', {}, ['id', 'name', 'description']))
+    return (await queryObjects<Record<string, unknown>>('x:Domain', {}, ['id', 'name', 'description', 'catchAllAddress']))
         .map(toDomainPrincipal)
 }
 
@@ -248,7 +258,7 @@ async function listAccountPrincipals() {
 }
 
 async function findDomainPrincipalByName(name: string) {
-    const records = await queryObjects<Record<string, unknown>>('x:Domain', { name }, ['id', 'name', 'description'])
+    const records = await queryObjects<Record<string, unknown>>('x:Domain', { name }, ['id', 'name', 'description', 'catchAllAddress'])
     const record = records.find(item => item.name === name)
     return record ? toDomainPrincipal(record) : null
 }
@@ -270,6 +280,7 @@ async function createDomainPrincipal(body: Record<string, unknown>) {
                 dnsManagement: { '@type': 'Manual' },
                 name: String(body.name),
                 description: body.description || null,
+                catchAllAddress: body.catchAllAddress || `support@${mailConfig.domain}`,
                 subAddressing: { '@type': 'Enabled' },
             },
         },
@@ -418,6 +429,7 @@ function toDomainPrincipal(record: Record<string, unknown>): PrincipalRecord {
         name: String(record.name || ''),
         type: 'domain',
         description: typeof record.description === 'string' ? record.description : undefined,
+        catchAllAddress: typeof record.catchAllAddress === 'string' ? record.catchAllAddress : undefined,
         raw: record,
     }
 }
