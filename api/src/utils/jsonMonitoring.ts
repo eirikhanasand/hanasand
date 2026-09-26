@@ -45,7 +45,17 @@ export function evaluateJsonRule(payload: unknown, rule: JsonRule) {
 
 async function fetchJson(source: JsonSource) {
     if (source.target_url === 'system:recovery') return { payload: readRecoveryChecks(), certificate: { status: 'not_applicable' as const, subject: null, issuer: null, expiresAt: null } }
-    if (['system:ti-collection', 'system:ti-enrichment'].includes(source.target_url || '')) return { payload: await getIntelOperationsHealth(), certificate: { status: 'not_applicable' as const, subject: null, issuer: null, expiresAt: null } }
+    if (['system:ti-collection', 'system:ti-enrichment'].includes(source.target_url || '')) {
+        const health = await getIntelOperationsHealth()
+        // An idle enrichment worker is healthy when it is running and has no
+        // recorded error. A quiet hour means there was no work to enrich; it
+        // does not prove the worker is broken.
+        const enrichment = health.enrichment
+        const payload = source.target_url === 'system:ti-enrichment' && enrichment.workerRunning && enrichment.error == null
+            ? { ...health, enrichment: { ...enrichment, critical: false } }
+            : health
+        return { payload, certificate: { status: 'not_applicable' as const, subject: null, issuer: null, expiresAt: null } }
+    }
     if (source.target_url === 'system:ti-delivery') return { payload: await getDeliverySummary(), certificate: { status: 'not_applicable' as const, subject: null, issuer: null, expiresAt: null } }
     if (source.target_url === 'system:metrics') {
         const result = await getStats()
