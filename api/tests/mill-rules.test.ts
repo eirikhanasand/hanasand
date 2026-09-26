@@ -42,6 +42,8 @@ describe('Mill detection catalog', () => {
         expect(azure.outcome).toBe('success')
         expect(azure.userEmail).toBe('analyst@example.com')
         expect(azure.parserVersion).toBe('mill.azure-entra.v1')
+        expect(azure.normalized.source_vendor).toBe('Microsoft')
+        expect(azure.normalized.source_product).toBe('Entra ID')
         const defender = normalizeMillEvent({ Timestamp: '2026-08-03T08:01:00Z', ResultType: 'Failure', AccountName: 'analyst', IpAddress: '203.0.113.11', DeviceId: 'device-1' }, { vendor: 'Microsoft', product: 'Defender for Endpoint' })
         expect(defender.outcome).toBe('failure')
         expect(defender.deviceId).toBe('device-1')

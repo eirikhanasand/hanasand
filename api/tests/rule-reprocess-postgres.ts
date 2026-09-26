@@ -85,6 +85,21 @@ try {
     assert.equal((await query('SELECT count(*) FROM mill_log_dimensions')).rows[0].count, '6')
     assert.equal((await query('SELECT sum(event_count)::text AS total FROM mill_log_counts WHERE bucket_seconds=60')).rows[0].total, '6', 'search counters follow actual deletion')
     assert.equal((await query('SELECT count(*) FROM system_events WHERE event_type=\'mill.rule.reprocessed\'')).rows[0].count, '1')
+    // Older indexed events kept source fields in columns only; replay must see
+    // the same selector fields that new events expose in normalized JSON.
+    await add('source-fields')
+    await query(`UPDATE mill_events SET source_vendor='Hanasand',source_product='Logs',
+        normalized=normalized-'source_vendor'-'source_product' WHERE id='source-fields'`)
+    await query('UPDATE mill_rules SET definition=$1 WHERE id=\'rule\'', [JSON.stringify({ ...definition, conditions: [
+        { path: 'source_vendor', operator: 'equals', value: 'Hanasand' },
+        { path: 'source_product', operator: 'equals', value: 'Logs' },
+        { path: 'message', operator: 'equals', value: 'routine source-fields' },
+    ] })])
+    await postMillRuleReprocess(request(body), reply() as any)
+    for (let i = 0; i < 10 && await processRuleReprocessJob(); i++) { /* indexed and raw copies */ }
+    assert.equal((await query('SELECT count(*) FROM mill_events WHERE id=\'source-fields\'')).rows[0].count, '0')
+    assert.equal((await query('SELECT count(*) FROM service_logs WHERE message=\'routine source-fields\'')).rows[0].count, '0')
+    await query('UPDATE mill_rules SET definition=$1 WHERE id=\'rule\'', [JSON.stringify(definition)])
     // Original evidence is checked for safety, not injected into preview's selector input.
     await query('INSERT INTO mill_events(id,ingestion_id,organization_id,event_timestamp,normalized,original) VALUES(\'selector-only\',\'mill-test\',\'platform\',NOW()-interval \'1 minute\',$1,$2)',
         [JSON.stringify({ severity: 'low', message: 'ordinary' }), JSON.stringify({ message: 'routine selector' })])

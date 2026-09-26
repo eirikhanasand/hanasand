@@ -288,7 +288,7 @@ export async function getMillRules(req: FastifyRequest, res: FastifyReply) {
     const rules = configured.filter(rule => !query.category || ruleCategory(rule) === query.category)
     const hits = query.view === 'definitions' ? new Map<string, number>() : await loadRuleHits(access.organizationId, rules, run)
     return res.send({ organizationId: access.organizationId, rules: rules.map(rule => ({ ...(compact ? listRule(rule) : rule),
-        hitCount: rule.source === 'owned' && rule.definition?.stage === 'analyze' && rule.definition.action !== 'drop' ? null : hits.get(rule.id) ?? 0,
+        hitCount: rule.definition?.stage === 'analyze' && rule.definition.action === 'keep' ? null : hits.get(rule.id) ?? 0,
     })), canManageRetention: retentionRole.valid })
 }
 
@@ -416,7 +416,7 @@ export async function getMillRule(req: FastifyRequest<{ Params: { id: string }, 
         AND (object_id = $2 OR object_id = $3 OR context->>'ruleId' = $2)
         ORDER BY created_at DESC, id DESC LIMIT 51 OFFSET $4`, [access.organizationId, rule.id, rule.recordId || rule.id, offset])
     const hits = await loadRuleHits(access.organizationId, [rule], run)
-    const hitCount = rule.source === 'owned' && rule.definition?.stage === 'analyze' && rule.definition.action !== 'drop' ? null : hits.get(rule.id) ?? 0
+    const hitCount = rule.definition?.stage === 'analyze' && rule.definition.action === 'keep' ? null : hits.get(rule.id) ?? 0
     const canEdit = !isHistorical && canManageMillRules(access.role) && (!([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') || (await hasRole(req, res, 'system_admin')).valid)
     return res.send({ organizationId: access.organizationId, canEdit, isHistorical, currentVersion: rule.version, rule: displayedRule, triggerCount: hitCount, audit: audit.rows.slice(0, 50), nextOffset: audit.rows.length > 50 ? offset + 50 : null })
 }
