@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Activity, ArrowRight, CheckCircle2, Database, HardDrive, Server, TriangleAlert } from 'lucide-react'
+import { Activity, ArrowRight, CheckCircle2, Database, HardDrive, Server, TriangleAlert, Watch } from 'lucide-react'
 
 type Service = { id: string; name: string; activeInstance: string | null; activeSite: string | null; activeEndpoint: string | null; status: string; instances: { id: string; site: string; healthy: boolean }[] }
 type Site = { fresh: boolean; compute?: { diskFreeBytes?: number; memoryAvailableBytes?: number; memoryTotalBytes?: number }; database?: { receiverStatus?: string; replayAt?: string } }
@@ -47,7 +47,7 @@ export default function RecoveryPanel() {
     return <section aria-label='Overview' className='min-w-0 space-y-3 rounded-xl border border-ui-border bg-ui-panel p-4 text-ui-text shadow-sm sm:p-5 [overflow-wrap:anywhere]'>
         <div className='flex flex-wrap items-center justify-between gap-2'>
             <h2 className='flex items-center gap-2 text-lg font-semibold'><Activity className='h-5 w-5 text-ui-primary' aria-hidden />Overview</h2>
-            <div className='flex flex-wrap items-center gap-2 text-xs text-ui-muted' aria-label='Recovery order: Inspur, Inspur Backup, OVHCloud'><span>Inspur</span><ArrowRight className='h-3 w-3' aria-hidden /><span>Inspur Backup</span><ArrowRight className='h-3 w-3' aria-hidden /><span>OVHCloud</span>{state?.updatedAt && <span className='ml-3'>Updated <StatusTime value={state.updatedAt} /></span>}</div>
+            <div className='flex flex-wrap items-center gap-2 text-xs text-ui-muted' aria-label='Recovery order: Inspur, Inspur Backup, OVHCloud'><span>Inspur</span><ArrowRight className='h-3 w-3' aria-hidden /><span>Inspur Backup</span><ArrowRight className='h-3 w-3' aria-hidden /><span>OVHCloud</span>{state?.updatedAt && <UpdatedTime value={state.updatedAt} />}</div>
         </div>
         {!state ? <p>Loading service status…</p> : <>
             <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${normal ? 'border-ui-success/25 bg-ui-success/5 text-ui-success' : 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'}`} role='status'>
@@ -85,6 +85,17 @@ function InstanceStatus({ service }: { service: Service }) {
 
 function availableGiB(bytes?: number) {
     return typeof bytes === 'number' && Number.isFinite(bytes) ? `${Math.round(bytes / 1024 ** 3)} GB` : 'Unknown'
+}
+
+function UpdatedTime({ value }: { value: string }) {
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return <span className='ml-3'>Updated {value}</span>
+
+    const now = new Date()
+    const sameDay = date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate()
+    const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+    const label = sameDay ? time : `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')} ${time}`
+    return <span className='ml-3 inline-flex items-center gap-1' aria-label={`Updated ${date.toLocaleString()}`}><Watch className='h-3.5 w-3.5' aria-hidden /><time dateTime={value} title={date.toLocaleString()}>{label}</time></span>
 }
 
 function StatusTime({ value }: { value: string }) {
