@@ -405,14 +405,14 @@ export default function SystemDashboard({
                     <div className='flex flex-wrap items-center justify-between gap-3'>
                         <div>
                             <h2 className='text-base font-semibold text-ui-text'>Docker containers</h2>
-                            <p className='mt-1 text-sm text-ui-muted'>{containers.length} reporting, {unavailableStats} streaming partial resource stats.</p>
+                            <p className='mt-1 text-sm text-ui-muted'>{containers.length} containers</p>
                         </div>
                         <LinkButton href='/logs' icon={<TerminalSquare className='h-4 w-4' />} label='Open Logs' />
                     </div>
                     {containers.length ? (
-                        <div className='mt-4 overflow-x-auto'>
+                        <div className='mt-4 max-h-[20rem] overflow-auto'>
                             <table className='min-w-[40rem] text-left text-sm xl:min-w-full'>
-                                <thead className='border-b border-ui-border text-xs uppercase text-ui-muted'>
+                                <thead className='sticky top-0 z-10 border-b border-ui-border bg-ui-panel text-xs uppercase text-ui-muted'>
                                     <tr>
                                         <th className='py-2 pr-3 font-semibold'>Container</th>
                                         <th className='px-3 py-2 font-semibold'>Health</th>
