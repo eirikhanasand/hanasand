@@ -47,7 +47,7 @@ export default function RecoveryPanel() {
     return <section aria-label='Overview' className='min-w-0 space-y-3 rounded-xl border border-ui-border bg-ui-panel p-4 text-ui-text shadow-sm sm:p-5 [overflow-wrap:anywhere]'>
         <div className='flex flex-wrap items-center justify-between gap-2'>
             <h2 className='flex items-center gap-2 text-lg font-semibold'><Activity className='h-5 w-5 text-ui-primary' aria-hidden />Overview</h2>
-            <div className='flex flex-wrap items-center gap-2 text-xs text-ui-muted' aria-label='Recovery order: Inspur, Inspur Backup, OVHCloud'><span>Inspur</span><ArrowRight className='h-3 w-3' aria-hidden /><span>Inspur Backup</span><ArrowRight className='h-3 w-3' aria-hidden /><span>OVHCloud</span>{state?.updatedAt && <UpdatedTime value={state.updatedAt} />}</div>
+            <div className='flex flex-wrap items-center gap-2 text-xs text-ui-muted' aria-label='Recovery order: Inspur, Inspur Backup, OVHCloud'><span>Inspur</span><ArrowRight className='h-3 w-3' aria-hidden /><span>Inspur Backup</span><ArrowRight className='h-3 w-3' aria-hidden /><span>OVHCloud</span>{state?.updatedAt && <UpdatedTime value={state.updatedAt} />}<div id='system-overview-actions' className='flex items-center gap-2' /></div>
         </div>
         {!state ? <p>Loading service status…</p> : <>
             <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${normal ? 'border-ui-success/25 bg-ui-success/5 text-ui-success' : 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'}`} role='status'>

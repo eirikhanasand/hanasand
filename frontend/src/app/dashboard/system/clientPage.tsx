@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import {
     Activity,
@@ -40,7 +41,6 @@ import {
     formatDateTime,
     formatDuration,
     formatPercent,
-    isFresh,
     containerDisplayName,
     normalizeDockerTelemetry,
     normalizeSystemTelemetry,
@@ -86,8 +86,8 @@ export default function SystemDashboard({
     const [systemSnapshot, setSystemSnapshot] = useState<SystemSnapshot | null>(initialSystemTelemetry.system)
     const [systemUnavailableReason, setSystemUnavailableReason] = useState(initialSystemTelemetry.unavailable_reason || '')
     const [dockerTelemetry, setDockerTelemetry] = useState<DockerTelemetryResponse>(() => normalizeDockerTelemetry(initialDockerTelemetry))
-    const [lastUpdated, setLastUpdated] = useState(dockerTelemetry.generated_at || new Date().toISOString())
     const [autoRefresh, setAutoRefresh] = useState(true)
+    const [overviewActionsTarget, setOverviewActionsTarget] = useState<HTMLElement | null>(null)
     const [refreshing, setRefreshing] = useState(false)
     const [selectedContainerId, setSelectedContainerId] = useState<string>(dockerTelemetry.containers[0]?.id || '')
     const [restartContainer, setRestartContainer] = useState<DockerContainer | null>(null)
@@ -96,6 +96,10 @@ export default function SystemDashboard({
     const [logsReason, setLogsReason] = useState('')
     const [logsLoading, setLogsLoading] = useState(false)
     const logsAbortController = useRef<AbortController | null>(null)
+
+    useEffect(() => {
+        setOverviewActionsTarget(document.getElementById('system-overview-actions'))
+    }, [])
 
     const containers = useMemo(
         () => dockerTelemetry.containers.filter((container): container is DockerContainer => Boolean(container) && !['exited', 'dead', 'removing'].includes((container.state || container.status || '').toLowerCase())),
@@ -108,7 +112,6 @@ export default function SystemDashboard({
     const normalizedMetrics = Array.isArray(vmMetrics) ? vmMetrics.filter((metric): metric is VMMetrics => Boolean(metric)) : []
     const runningVms = normalizedVms.filter((vm) => (vm.status ?? '').toLowerCase() === 'running').length
     const stoppedVms = normalizedVms.filter((vm) => (vm.status ?? '').toLowerCase() === 'stopped').length
-    const telemetryFresh = isFresh(lastUpdated, 10000)
     const unhealthyContainers = containers.filter((container) => {
         const tone = containerHealth(container).tone
         return tone === 'bad' || tone === 'warn'
@@ -218,7 +221,6 @@ export default function SystemDashboard({
 
     const refreshAll = useCallback(async () => {
         setRefreshing(true)
-        let refreshedAt = new Date().toISOString()
         try {
             const [metricsResponse, dockerResponse] = await Promise.all([
                 fetch(`${config.url.api}/metrics`, {
@@ -249,8 +251,6 @@ export default function SystemDashboard({
                 const raw = await dockerResponse.json()
                 const telemetry = normalizeDockerTelemetry(raw)
                 setDockerTelemetry(telemetry)
-                refreshedAt = telemetry.generated_at || refreshedAt
-                setLastUpdated(refreshedAt)
                 if (!selectedContainerId && telemetry.containers[0]?.id) {
                     setSelectedContainerId(telemetry.containers[0].id)
                 }
@@ -262,7 +262,6 @@ export default function SystemDashboard({
                     unavailable_reason: dockerUnavailableReason,
                     generated_at: new Date().toISOString(),
                 }))
-                setLastUpdated(new Date().toISOString())
             }
 
         } catch (error) {
@@ -290,7 +289,6 @@ export default function SystemDashboard({
                         setSystemSnapshot(system.system)
                         setSystemUnavailableReason(system.unavailable_reason || '')
                         setDockerTelemetry(docker)
-                        setLastUpdated(docker.generated_at || new Date().toISOString())
                     } else if (message.type === 'error') setSystemUnavailableReason(message.message)
                 } catch { setSystemUnavailableReason('Unable to read system telemetry.') }
             }
@@ -345,6 +343,10 @@ export default function SystemDashboard({
 
     return (
         <div className='relative grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4'>
+            {overviewActionsTarget ? createPortal(<div className='flex items-center gap-2'>
+                <button type='button' onClick={() => void refreshAll()} aria-label={refreshing ? 'Refreshing system telemetry' : 'Refresh system telemetry'} title='Refresh system telemetry' className='inline-flex h-8 items-center gap-1.5 rounded-md border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text shadow-sm transition hover:border-ui-primary/35 hover:bg-ui-raised'><RefreshCcw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />Refresh</button>
+                <button type='button' onClick={() => setAutoRefresh((value) => !value)} aria-pressed={autoRefresh} aria-label={`Auto refresh ${autoRefresh ? 'on' : 'off'}`} title={`Auto refresh ${autoRefresh ? 'on' : 'off'}`} className={`inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold shadow-sm transition ${autoRefresh ? 'border-ui-primary/35 bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-panel text-ui-text hover:bg-ui-raised'}`}>{autoRefresh ? <PauseCircle className='h-3.5 w-3.5' /> : <PlayCircle className='h-3.5 w-3.5' />}Auto</button>
+            </div>, overviewActionsTarget) : null}
             <div className='max-w-3xl'>
                 <ErrorNotice compact variant='info' message={message as string | null} />
             </div>
@@ -366,47 +368,10 @@ export default function SystemDashboard({
                 onConfirm={() => void handleStopAll()}
             />
 
-            <DashboardPanel className='p-4' id='system-telemetry'>
-                <div className='flex flex-wrap items-start justify-between gap-3'>
-                    <div>
-                        <div className='flex flex-wrap items-center gap-2'>
-                            <StatusBadge fresh={telemetryFresh} />
-                        </div>
-                        {dockerTelemetry.unavailable_reason && (
-                            <p className='mt-2 rounded-md border border-ui-warning/35 bg-ui-warning/10 px-3 py-2 text-sm text-ui-warning'>
-                                Docker telemetry degraded: {dockerTelemetry.unavailable_reason}
-                            </p>
-                        )}
-                        {systemUnavailableReason && (
-                            <p className='mt-2 rounded-md border border-ui-warning/35 bg-ui-warning/10 px-3 py-2 text-sm text-ui-warning'>
-                                Host telemetry degraded: {systemUnavailableReason}
-                            </p>
-                        )}
-                    </div>
-                    <div className='flex flex-wrap items-center gap-2'>
-                        <button
-                            type='button'
-                            onClick={() => void refreshAll()}
-                            className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text shadow-sm transition hover:border-ui-primary/35 hover:bg-ui-raised'
-                        >
-                            <RefreshCcw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                            {refreshing ? 'Refreshing' : 'Refresh'}
-                        </button>
-                        <button
-                            type='button'
-                            onClick={() => setAutoRefresh((value) => !value)}
-                            className={`inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-semibold shadow-sm transition ${
-                                autoRefresh ? 'border-ui-primary/35 bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-panel text-ui-text hover:bg-ui-raised'
-                            }`}
-                        >
-                            {autoRefresh ? <PauseCircle className='h-4 w-4' /> : <PlayCircle className='h-4 w-4' />}
-                            Auto
-                        </button>
-
-                    </div>
-                </div>
-            </DashboardPanel>
-
+            <div id='system-telemetry' className='space-y-2'>
+                {dockerTelemetry.unavailable_reason ? <p className='rounded-md border border-ui-warning/35 bg-ui-warning/10 px-3 py-2 text-sm text-ui-warning'>Docker telemetry degraded: {dockerTelemetry.unavailable_reason}</p> : null}
+                {systemUnavailableReason ? <p className='rounded-md border border-ui-warning/35 bg-ui-warning/10 px-3 py-2 text-sm text-ui-warning'>Host telemetry degraded: {systemUnavailableReason}</p> : null}
+            </div>
             <DashboardPanel className='grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center' data-system-primary-triage>
                 <div className='min-w-0'>
                     <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-ui-muted'>
@@ -776,17 +741,6 @@ function HealthPill({ health }: { health: ReturnType<typeof containerHealth> }) 
         <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${tone}`}>
             {health.tone === 'ok' ? <CheckCircle2 className='h-3.5 w-3.5' /> : health.tone === 'bad' ? <AlertTriangle className='h-3.5 w-3.5' /> : <Clock3 className='h-3.5 w-3.5' />}
             {health.label}
-        </span>
-    )
-}
-
-function StatusBadge({ fresh }: { fresh: boolean }) {
-    return (
-        <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
-            fresh ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'
-        }`}>
-            {fresh ? <CheckCircle2 className='h-3.5 w-3.5' /> : <AlertTriangle className='h-3.5 w-3.5' />}
-            {fresh ? 'Fresh' : 'Stale'}
         </span>
     )
 }
