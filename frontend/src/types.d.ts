@@ -173,7 +173,7 @@ type User = {
     deactivated_by?: string | null
 }
 
-type UserWithRole = User & HighestRole
+type UserWithRole = User & HighestRole & { role_ids?: string[] }
 
 type Thought = {
     id: string
