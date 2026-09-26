@@ -90,9 +90,9 @@ export default function UsersList({ users, roles }: { users: UserWithRole[], rol
                         <button
                             type='button'
                             onClick={() => setShowReserved((value) => !value)}
-                            className='h-9 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text hover:bg-ui-panel'
+                            className={`h-9 rounded-lg border border-ui-border px-3 text-sm font-normal text-ui-text hover:bg-ui-panel ${showReserved ? 'bg-ui-panel' : 'bg-ui-raised'}`}
                         >
-                            {showReserved ? 'Hide reserved' : 'Show reserved'}
+                            Reserved
                         </button>
                     )}
                 </div>
