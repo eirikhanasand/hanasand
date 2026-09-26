@@ -645,7 +645,7 @@ function ContainerDetails({
                 <div className='flex items-center justify-between gap-2 px-3 py-2 text-sm font-semibold text-ui-text'>
                     <span>Recent logs</span>
                     <Link href={`/logs?service=${encodeURIComponent(container.name)}`} className='inline-flex items-center gap-1 text-xs font-semibold text-ui-primary hover:underline'>
-                        Open full logs
+                        See more
                         <ExternalLink className='h-3.5 w-3.5' />
                     </Link>
                 </div>
