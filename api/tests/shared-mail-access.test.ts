@@ -10,7 +10,7 @@ mock.module('../src/utils/db.ts', () => ({ default: async (sql: string, params: 
 } }))
 mock.module('../src/utils/mail/config.ts', () => ({ requireMailAdminConfig: () => { throw new Error('unused') }, mailConfig: { privilegedMailboxUsers: new Set(), domain: 'example.test', systemSenderLocalPart: 'noreply', userAliases: new Map() } }))
 mock.module('../src/utils/mail/crypto.ts', () => ({ tryDecryptMailSecret: () => 'test-secret', encryptMailSecret: () => 'encrypted', generateMailSecret: () => 'test-secret' }))
-mock.module('../src/utils/mail/stalwartAdmin.ts', () => ({ createPrincipal: () => { throw new Error('Unexpected provisioning') }, findPrincipalByName: () => null, patchPrincipal: () => {}, ensureSetting: () => {} }))
+mock.module('../src/utils/mail/stalwartAdmin.ts', () => ({ createPrincipal: () => { throw new Error('Unexpected provisioning') }, findPrincipalByName: () => null, patchPrincipal: () => {}, setDomainCatchAllAddress: () => {}, ensureSetting: () => {} }))
 mock.module('../src/utils/mail/system.ts', () => ({ systemSenderAccess: () => ({ username: 'noreply', address: 'noreply@example.test', password: 'test-secret' }) }))
 const { getMailAccess, listAccessibleMailAccounts } = await import('../src/utils/mail/accounts.ts')
 
