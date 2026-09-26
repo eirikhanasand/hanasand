@@ -4,7 +4,7 @@ import { authenticationAuditStoreRule, eventProtectionDefinition, eventProtectio
 export async function ensureEventProtectionRule(query: typeof run, organizationId: string | null = null) {
     for (const rule of [{ ...eventProtectionRule, definition: { ...eventProtectionDefinition, parameters: {} }, source: 'hanasand' },
         { ...authenticationAuditStoreRule, source: 'owned' }]) await query(`WITH installed AS (
-        INSERT INTO mill_rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
+        INSERT INTO rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
         SELECT gen_random_uuid()::text,id,$2,'1',$3,$4,$5,$6,$7::jsonb,$8,true
         FROM organizations WHERE ($1::text IS NULL OR id=$1)
         ON CONFLICT(organization_id,rule_id) DO NOTHING RETURNING *)
@@ -14,9 +14,9 @@ export async function ensureEventProtectionRule(query: typeof run, organizationI
         FROM installed`, [organizationId, rule.id, rule.name, rule.family, rule.severity, rule.explanation, JSON.stringify(rule.definition), rule.source])
     const legacyDefinition = Object.fromEntries(Object.entries(authenticationAuditStoreRule.definition).filter(([key]) => key !== 'storeScope'))
     await query(`WITH previous AS MATERIALIZED (
-        SELECT * FROM mill_rules WHERE rule_id=$2 AND source='owned' AND definition=$3::jsonb
+        SELECT * FROM rules WHERE rule_id=$2 AND source='owned' AND definition=$3::jsonb
         AND ($1::text IS NULL OR organization_id=$1) AND version ~ '^[0-9]{1,9}$' FOR UPDATE),
-        changed AS (UPDATE mill_rules r SET definition=$4::jsonb,version=(r.version::bigint+1)::text,updated_at=NOW()
+        changed AS (UPDATE rules r SET definition=$4::jsonb,version=(r.version::bigint+1)::text,updated_at=NOW()
             FROM previous p WHERE r.id=p.id RETURNING r.*)
         INSERT INTO system_events(event_type,source,object_type,object_id,organization_id,context)
         SELECT 'mill.rule.updated','mill','mill_rule',c.rule_id,c.organization_id,
@@ -27,7 +27,7 @@ export async function ensureEventProtectionRule(query: typeof run, organizationI
 }
 
 export async function ensureAnalysisPolicySchema(query: typeof run = run) {
-    await query(`CREATE TABLE IF NOT EXISTS mill_analysis_policy_migrations (
+    await query(`CREATE TABLE IF NOT EXISTS analysis_policy_migrations (
         organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
         rule_id TEXT NOT NULL, PRIMARY KEY(organization_id,rule_id))`)
 }
@@ -37,14 +37,14 @@ export async function migrateAnalysisPolicy(ruleId: string, definition: { condit
     // Earlier built-ins prohibited conditions. Migrate only that legacy shape;
     // never replace edited policy or the user's enabled/Store choice.
     await query(`WITH previous AS MATERIALIZED (
-        SELECT r.* FROM mill_rules r WHERE rule_id=$1 AND source='hanasand'
-        AND NOT EXISTS(SELECT 1 FROM mill_analysis_policy_migrations m WHERE m.organization_id=r.organization_id AND m.rule_id=r.rule_id)
+        SELECT r.* FROM rules r WHERE rule_id=$1 AND source='hanasand'
+        AND NOT EXISTS(SELECT 1 FROM analysis_policy_migrations m WHERE m.organization_id=r.organization_id AND m.rule_id=r.rule_id)
         AND version ~ '^[0-9]{1,9}$' FOR UPDATE),
-        changed AS (UPDATE mill_rules r SET definition=r.definition || jsonb_build_object(
+        changed AS (UPDATE rules r SET definition=r.definition || jsonb_build_object(
             'conditions',$2::jsonb,'parameters',$3::jsonb || COALESCE(r.definition->'parameters','{}'::jsonb)),
             version=(r.version::bigint+1)::text,updated_at=NOW()
             FROM previous p WHERE r.id=p.id AND p.definition->'conditions'='[]'::jsonb RETURNING r.*),
-        applied AS (INSERT INTO mill_analysis_policy_migrations(organization_id,rule_id)
+        applied AS (INSERT INTO analysis_policy_migrations(organization_id,rule_id)
             SELECT organization_id,rule_id FROM previous ON CONFLICT DO NOTHING)
         INSERT INTO system_events(event_type,source,object_type,object_id,organization_id,context)
         SELECT 'mill.rule.updated','mill','mill_rule',c.rule_id,c.organization_id,

@@ -16,7 +16,7 @@ test('ingestion drops with a receipt only when the platform rule is active', asy
                 expect(params[0]).toBeNull()
                 return { rows: [] }
             }
-            if (sql.includes('FROM mill_rules')) {
+            if (sql.includes('FROM rules')) {
                 expect(params[1]).toBe(mongoRuleId)
                 expect(sql).toContain('r.enabled AND r.definition->>\'stage\'=\'analyze\' AND r.definition->>\'action\'=\'drop\'')
                 return { rows: active ? [{ organization_id: 'platform', version: '1', definition: mongoDefinition }] : [] }
@@ -31,7 +31,7 @@ test('ingestion drops with a receipt only when the platform rule is active', asy
 })
 test('receipt failures propagate so the collector cannot acknowledge a lost event', async () => {
     const query: any = async (sql: string) => {
-        if (sql.includes('FROM mill_rules')) return { rows: [{ organization_id: 'platform', version: '1', definition: mongoDefinition }] }
+        if (sql.includes('FROM rules')) return { rows: [{ organization_id: 'platform', version: '1', definition: mongoDefinition }] }
         throw new Error('receipt unavailable')
     }
     await expect(recordLog(log, query)).rejects.toThrow('receipt unavailable')
@@ -57,7 +57,7 @@ test('replayed ping receipts do not inflate retained metadata counts', async () 
     const statements: string[] = []
     const query: any = async (sql: string) => {
         statements.push(sql)
-        return sql.includes('FROM mill_rules') ? { rows: [{ organization_id: 'platform', version: '1', definition: mongoDefinition }] } : { rows: [], rowCount: 0 }
+        return sql.includes('FROM rules') ? { rows: [{ organization_id: 'platform', version: '1', definition: mongoDefinition }] } : { rows: [], rowCount: 0 }
     }
     await recordLog(log, query)
     expect(statements.some(sql => sql.includes('INSERT INTO log_mongo_ping_counts'))).toBe(false)

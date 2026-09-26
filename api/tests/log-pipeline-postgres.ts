@@ -30,16 +30,16 @@ try {
     await query('CREATE TEMP TABLE users (id text PRIMARY KEY)')
     await query('INSERT INTO organizations (id, status, name) VALUES (\'fixture\', \'active\', \'Hanasand\'), (\'other\', \'active\', \'Other\')')
     const schema = readFileSync(new URL('../src/utils/db/ensureSchema.ts', import.meta.url), 'utf8')
-    for (const table of ['service_logs', 'mill_events', 'mill_findings', 'mill_rules', 'login_events', 'traffic_events', 'system_events']) {
+    for (const table of ['service_logs', 'events', 'findings', 'rules', 'login_events', 'traffic_events', 'system_events']) {
         const definition = schema.match(new RegExp('CREATE TABLE IF NOT EXISTS ' + table + ' \\([\\s\\S]*?\\n        \\)'))?.[0]
         assert.ok(definition, `Actual schema for ${table} must be found`)
         await query(definition.replace('CREATE TABLE IF NOT EXISTS', 'CREATE TEMP TABLE'))
     }
     await query('ALTER TABLE service_logs ADD COLUMN source_event_id text UNIQUE')
-    await query('ALTER TABLE mill_events ADD COLUMN log_key text UNIQUE')
-    await query('ALTER TABLE mill_findings ADD COLUMN case_id text')
-    await query('ALTER TABLE mill_findings ADD COLUMN case_delivery_attempted_at timestamptz')
-    await query(`INSERT INTO mill_events (id, ingestion_id, organization_id, event_timestamp, normalized)
+    await query('ALTER TABLE events ADD COLUMN log_key text UNIQUE')
+    await query('ALTER TABLE findings ADD COLUMN case_id text')
+    await query('ALTER TABLE findings ADD COLUMN case_delivery_attempted_at timestamptz')
+    await query(`INSERT INTO events (id, ingestion_id, organization_id, event_timestamp, normalized)
         VALUES ('legacy-a', 'logs', 'fixture', NOW(), '{"severity":"low","service":"legacy","log_type":"ApplicationLogs"}'),
             ('legacy-z', 'logs', 'fixture', NOW()-INTERVAL '25 hours', '{"severity":"high","service":null}')`)
     const { logDimensionsSchema } = await import('../src/utils/db/logDimensionsSchema.ts')
@@ -61,34 +61,34 @@ try {
     }))
     const detectionUpdates: Array<{ sql: string, values: unknown[] }> = []
     queryObserver = async (sql, values) => {
-        if (sql.startsWith('UPDATE mill_events e SET normalized')) detectionUpdates.push({ sql, values })
+        if (sql.startsWith('UPDATE events e SET normalized')) detectionUpdates.push({ sql, values })
     }
     await processLogBatch(rows, 'fixture', rules)
     queryObserver = undefined
     assert.equal(detectionUpdates.length, 0, 'Stateless detections must finish without a second event/index write')
-    const restricted = await query('SELECT COUNT(*)::int AS count FROM mill_findings WHERE evidence->>\'restrictedLog\' IS DISTINCT FROM \'true\'')
+    const restricted = await query('SELECT COUNT(*)::int AS count FROM findings WHERE evidence->>\'restrictedLog\' IS DISTINCT FROM \'true\'')
     assert.equal(restricted.rows[0].count, 0, 'Every collected-log finding must carry the durable administrator-only flag')
     for (const rule of securityRules) {
         for (const positive of [true, false]) {
-            const { rows: [row] } = await query('SELECT * FROM mill_events WHERE log_key = $1', [`service:${rule.id}-${positive}`])
+            const { rows: [row] } = await query('SELECT * FROM events WHERE log_key = $1', [`service:${rule.id}-${positive}`])
             assert.equal(row.processing_status, 'processed')
             assert.equal(row.normalized.level, 'info')
             assert.equal(row.normalized.detections.some((match: { rule_id: string }) => match.rule_id === rule.id), positive, `${rule.id} ${positive}`)
         }
     }
     const cleanWrites: string[] = []
-    queryObserver = async sql => { if (/^(INSERT INTO mill_events|UPDATE mill_events)/.test(sql.trim())) cleanWrites.push(sql) }
+    queryObserver = async sql => { if (/^(INSERT INTO events|UPDATE events)/.test(sql.trim())) cleanWrites.push(sql) }
     await processLogBatch([{ id: 'single-write-http', service: 'http-traffic', host: 'fixture.test', level: 'info',
         message: 'GET /help → 200', created_at: new Date(time).toISOString(), metadata: { category: 'http' } }], 'fixture', rules)
     queryObserver = undefined
     assert.equal(cleanWrites.length, 1, 'Clean stateless events finish in one durable write')
-    const clean = (await query('SELECT normalized, processing_status FROM mill_events WHERE log_key=\'service:single-write-http\'')).rows[0]
+    const clean = (await query('SELECT normalized, processing_status FROM events WHERE log_key=\'service:single-write-http\'')).rows[0]
     assert.equal(clean.processing_status, 'processed')
     assert.equal(clean.normalized.rules_checked, rules.length)
     assert.deepEqual(clean.normalized.detections, [])
-    const projectionLock = (await query('SELECT xmax::text FROM mill_log_dimensions WHERE event_id=(SELECT id FROM mill_events WHERE log_key=\'service:single-write-http\')')).rows[0].xmax
-    await query('UPDATE mill_events SET normalized=normalized||jsonb_build_object(\'evaluated_at\',clock_timestamp()) WHERE log_key=\'service:single-write-http\'')
-    assert.equal((await query('SELECT xmax::text FROM mill_log_dimensions WHERE event_id=(SELECT id FROM mill_events WHERE log_key=\'service:single-write-http\')')).rows[0].xmax,
+    const projectionLock = (await query('SELECT xmax::text FROM log_dimensions WHERE event_id=(SELECT id FROM events WHERE log_key=\'service:single-write-http\')')).rows[0].xmax
+    await query('UPDATE events SET normalized=normalized||jsonb_build_object(\'evaluated_at\',clock_timestamp()) WHERE log_key=\'service:single-write-http\'')
+    assert.equal((await query('SELECT xmax::text FROM log_dimensions WHERE event_id=(SELECT id FROM events WHERE log_key=\'service:single-write-http\')')).rows[0].xmax,
         projectionLock, 'An evidence-only update must not lock or rewrite the unchanged reporting projection')
 
     // Enable real rollback for this failure fixture. The broader cursor suite
@@ -98,27 +98,27 @@ try {
     const atomicId = createHash('sha256').update(`service:${atomicLog.id}`).digest('hex')
     await query(`CREATE FUNCTION pg_temp.reject_atomic_finding() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
         IF NEW.event_ids @> ARRAY['${atomicId}'] THEN RAISE EXCEPTION 'injected finding failure'; END IF; RETURN NEW; END $$`)
-    await query('CREATE TRIGGER reject_atomic_finding BEFORE INSERT ON mill_findings FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_atomic_finding()')
+    await query('CREATE TRIGGER reject_atomic_finding BEFORE INSERT ON findings FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_atomic_finding()')
     await assert.rejects(processLogBatch([atomicLog], 'fixture', rules), /injected finding failure/)
-    assert.equal((await query('SELECT count(*)::int AS count FROM mill_events WHERE id=$1', [atomicId])).rows[0].count, 0,
+    assert.equal((await query('SELECT count(*)::int AS count FROM events WHERE id=$1', [atomicId])).rows[0].count, 0,
         'A failed finding write must not publish a processed event')
-    assert.equal((await query('SELECT count(*)::int AS count FROM mill_findings WHERE event_ids @> ARRAY[$1]', [atomicId])).rows[0].count, 0)
-    await query('DROP TRIGGER reject_atomic_finding ON mill_findings')
+    assert.equal((await query('SELECT count(*)::int AS count FROM findings WHERE event_ids @> ARRAY[$1]', [atomicId])).rows[0].count, 0)
+    await query('DROP TRIGGER reject_atomic_finding ON findings')
     await processLogBatch([atomicLog], 'fixture', rules)
-    const retriedAtomic = (await query('SELECT processing_status,normalized FROM mill_events WHERE id=$1', [atomicId])).rows[0]
+    const retriedAtomic = (await query('SELECT processing_status,normalized FROM events WHERE id=$1', [atomicId])).rows[0]
     assert.equal(retriedAtomic.processing_status, 'processed')
     assert.ok(retriedAtomic.normalized.detections.length)
     assert.ok(retriedAtomic.normalized.detections.every((finding: any) => finding.evidence.restrictedLog === true))
 
     atomicTransactions = false
-    const before = Number((await query('SELECT count(*) AS count FROM mill_findings')).rows[0].count)
+    const before = Number((await query('SELECT count(*) AS count FROM findings')).rows[0].count)
     await processLogBatch(rows, 'fixture', rules)
-    assert.equal(Number((await query('SELECT count(*) AS count FROM mill_findings')).rows[0].count), before, 'Retry must not duplicate findings')
+    assert.equal(Number((await query('SELECT count(*) AS count FROM findings')).rows[0].count), before, 'Retry must not duplicate findings')
 
     const auth = (id: string, user: string, outcome: string, second: number) => ({ id, service: 'sshd', host: 'fixture-host', level: 'info',
         message: `${outcome === 'success' ? 'Accepted' : 'Failed'} password for ${user} from 192.0.2.10 port 22 ssh2`,
         created_at: new Date(time + second * 1000).toISOString(), metadata: {} })
-    queryObserver = async (sql, values) => { if (sql.startsWith('UPDATE mill_events e SET normalized')) detectionUpdates.push({ sql, values }) }
+    queryObserver = async (sql, values) => { if (sql.startsWith('UPDATE events e SET normalized')) detectionUpdates.push({ sql, values }) }
     await processLogBatch([auth('failed-a', 'alice', 'failure', 1), auth('failed-b', 'alice', 'failure', 2),
         auth('failed-c', 'alice', 'failure', 3), auth('success-a', 'alice', 'success', 4),
         auth('spray-b', 'bob', 'failure', 5), auth('spray-c', 'charlie', 'failure', 6)], 'fixture', rules)
@@ -128,26 +128,26 @@ try {
     assert.equal((await query(detectionUpdate.sql, detectionUpdate.values)).rowCount, 0,
         'Identical authentication detection updates must not rewrite events or their indexes')
     for (const id of ['auth.brute_force_success.v1', 'auth.password_spray.v1']) {
-        assert.ok((await query('SELECT 1 FROM mill_findings WHERE rule_id = $1', [id])).rowCount, `${id} real SQL correlation`)
+        assert.ok((await query('SELECT 1 FROM findings WHERE rule_id = $1', [id])).rowCount, `${id} real SQL correlation`)
     }
-    const { rows: [authRow] } = await query('SELECT source_ip, normalized FROM mill_events WHERE log_key = \'service:success-a\'')
+    const { rows: [authRow] } = await query('SELECT source_ip, normalized FROM events WHERE log_key = \'service:success-a\'')
     assert.equal(authRow.source_ip, '192.0.2.10')
     assert.equal(authRow.normalized.severity, 'high')
 
     await processLogBatch([auth('late-success', 'late-user', 'success', 30)], 'fixture', rules)
     const lateFailures = [auth('late-failure-a', 'late-user', 'failure', 21), auth('late-failure-b', 'late-user', 'failure', 22), auth('late-failure-c', 'late-user', 'failure', 23)]
     await processLogBatch(lateFailures, 'fixture', rules)
-    const { rows: [lateSuccess] } = await query('SELECT normalized FROM mill_events WHERE log_key = \'service:late-success\'')
+    const { rows: [lateSuccess] } = await query('SELECT normalized FROM events WHERE log_key = \'service:late-success\'')
     assert.equal(lateSuccess.normalized.severity, 'high', 'Late historical failures must update the previously processed success')
     assert.ok(lateSuccess.normalized.detections.some((finding: {rule_id: string}) => finding.rule_id === 'auth.brute_force_success.v1'))
-    const lateCount = Number((await query('SELECT count(*) AS count FROM mill_findings')).rows[0].count)
+    const lateCount = Number((await query('SELECT count(*) AS count FROM findings')).rows[0].count)
     await processLogBatch(lateFailures, 'fixture', rules)
-    assert.equal(Number((await query('SELECT count(*) AS count FROM mill_findings')).rows[0].count), lateCount)
+    assert.equal(Number((await query('SELECT count(*) AS count FROM findings')).rows[0].count), lateCount)
 
     // Original non-process rules run against persisted native Mill events too.
     async function native(id: string, content: Record<string, unknown>, second: number) {
         const event = normalizeMillEvent({ ...content, timestamp: new Date(time + second * 1000).toISOString() }, {})
-        await query(`INSERT INTO mill_events (id, ingestion_id, organization_id, event_timestamp, event_type, action, outcome,
+        await query(`INSERT INTO events (id, ingestion_id, organization_id, event_timestamp, event_type, action, outcome,
             user_id, source_ip, source_country, normalized) VALUES ($1, 'fixture', 'fixture', $2, $3, $4, $5, $6, $7, $8, $9)`,
         [id, event.timestamp, event.eventType, event.action, event.outcome, event.userId, event.sourceIp, event.sourceCountry, JSON.stringify(event.normalized)])
         await createMillFindings('fixture', id, event, rules)
@@ -160,11 +160,11 @@ try {
     await native('vulnerability', { event_type: 'vulnerability', cve: 'CVE-2026-12345', asset: { id: 'fixture-host', version: '1' } }, 4)
     // Pre-storage Analyze rules have their own threshold/retention integration
     // check; a single stored fixture must not trigger their aggregate alert.
-    for (const rule of MILL_RULES.filter(rule => millDefaultDefinition(rule.id).stage !== 'analyze')) assert.ok((await query('SELECT 1 FROM mill_findings WHERE rule_id = $1', [rule.id])).rowCount, `Persisted finding for ${rule.id}`)
+    for (const rule of MILL_RULES.filter(rule => millDefaultDefinition(rule.id).stage !== 'analyze')) assert.ok((await query('SELECT 1 FROM findings WHERE rule_id = $1', [rule.id])).rowCount, `Persisted finding for ${rule.id}`)
     for (const text of ['ProcessLogs | where Executable endswith "whoami"', 'SigninLogs | where Severity == "high"',
         'Logs | where RuleId == "process.recon.whoami.v1"', 'Logs | where Message contains "whoami"']) {
         const compiled = compileLogQuery(text)
-        const result = await query(`SELECT id FROM mill_events WHERE ${compiled.where.join(' AND ')} ORDER BY ${compiled.order} LIMIT ${compiled.limit}`, compiled.params)
+        const result = await query(`SELECT id FROM events WHERE ${compiled.where.join(' AND ')} ORDER BY ${compiled.order} LIMIT ${compiled.limit}`, compiled.params)
         assert.ok(result.rowCount, `KQL returned stored events: ${text}`)
     }
     await query('CREATE TEMP TABLE log_processing_cursors (name text PRIMARY KEY, last_id bigint DEFAULT 0, recent_id bigint, updated_at timestamptz DEFAULT NOW(), last_error text)')
@@ -179,7 +179,7 @@ try {
     const { processAdditionalLogSources } = await import('../src/utils/mill/storedSources.ts')
     await processAdditionalLogSources(logs => processLogBatch(logs, 'fixture', rules))
     for (const [source, type, severity] of [['login_events', 'SigninLogs', 'low'], ['traffic_events', 'HttpLogs', 'high'], ['system_events', 'SystemLogs', 'critical']]) {
-        const { rows: [event] } = await query('SELECT normalized FROM mill_events WHERE log_key = $1', [`service:${source}:1`])
+        const { rows: [event] } = await query('SELECT normalized FROM events WHERE log_key = $1', [`service:${source}:1`])
         assert.equal(event.normalized.log_type, type)
         assert.equal(event.normalized.severity, severity)
     }
@@ -200,7 +200,7 @@ try {
             afterWatermarkId = (await client.query(insertCommand, [commandMetadata])).rows[0].id
         }
         if (sql.includes('SELECT * FROM service_logs') && String(values[0]) === '0' && String(values[1]) === liveId) {
-            const priority = await client.query('SELECT processing_status, normalized FROM mill_events WHERE log_key = $1', [`service:${liveId}`])
+            const priority = await client.query('SELECT processing_status, normalized FROM events WHERE log_key = $1', [`service:${liveId}`])
             assert.equal(priority.rows[0]?.processing_status, 'processed', 'Live command completes before older FIFO logs are read')
             assert.equal(priority.rows[0].normalized.severity, 'high')
             observedPriorityBeforeFifo = true
@@ -215,17 +215,17 @@ try {
         const firstCursor = (await query('SELECT last_id, recent_id FROM log_processing_cursors WHERE name = \'service_logs\'')).rows[0]
         assert.equal(String(firstCursor.recent_id), '1000', 'Priority cannot jump the FIFO checkpoint')
         assert.equal(String(firstCursor.last_id), '0')
-        assert.equal((await query('SELECT processing_status FROM mill_events WHERE log_key = $1', [`service:${afterWatermarkId}`])).rows[0]?.processing_status, 'processed',
+        assert.equal((await query('SELECT processing_status FROM events WHERE log_key = $1', [`service:${afterWatermarkId}`])).rows[0]?.processing_status, 'processed',
             'A visible insertion after the watermark is processed without moving the FIFO cursor past that watermark')
         await processStoredLogs()
-        const findingCount = (await query('SELECT count(*)::int AS count FROM mill_findings')).rows[0].count
+        const findingCount = (await query('SELECT count(*)::int AS count FROM findings')).rows[0].count
         await processStoredLogs()
-        assert.equal((await query('SELECT count(*)::int AS count FROM mill_findings')).rows[0].count, findingCount,
+        assert.equal((await query('SELECT count(*)::int AS count FROM findings')).rows[0].count, findingCount,
             'Later FIFO and historical overlap must not duplicate priority findings')
         assert.equal((await query(`SELECT count(*)::int AS count FROM service_logs s
-            JOIN mill_events e ON e.log_key = 'service:' || s.id::text WHERE e.processing_status = 'processed'`)).rows[0].count, 1103,
+            JOIN events e ON e.log_key = 'service:' || s.id::text WHERE e.processing_status = 'processed'`)).rows[0].count, 1103,
         'Priority and both cursors together preserve every old and live event')
-        const commandEvents = await query('SELECT normalized FROM mill_events WHERE log_key = ANY($1::text[])', [[`service:${liveId}`, `service:${afterWatermarkId}`]])
+        const commandEvents = await query('SELECT normalized FROM events WHERE log_key = ANY($1::text[])', [[`service:${liveId}`, `service:${afterWatermarkId}`]])
         assert.equal(commandEvents.rowCount, 2)
         assert.ok(commandEvents.rows.every(event => event.normalized.detections.some((finding: { rule_id: string }) => finding.rule_id === 'process.recon.whoami.v1')))
     } finally {
@@ -285,26 +285,26 @@ try {
     })
     assert.equal(queuePages, 2)
     for (const id of [delayedCommand, structuredCommand]) {
-        const row = (await query('SELECT normalized, processing_status FROM mill_events WHERE log_key=$1', [`service:${id}`])).rows[0]
+        const row = (await query('SELECT normalized, processing_status FROM events WHERE log_key=$1', [`service:${id}`])).rows[0]
         assert.equal(row?.processing_status, 'processed')
         assert.equal(row.normalized.severity, 'high')
         assert.equal(row.normalized.rules_checked, rules.filter(rule => rule.enabled !== false).length)
     }
     assert.equal((await readPendingProcessLogs()).count, 2000, 'Later arrivals remain queued without displacing older admitted work')
     await recoverProcessLogs(logs => processLogBatch(logs, 'fixture', rules))
-    assert.equal((await query('SELECT 1 FROM mill_events WHERE log_key=$1', [`service:${oldCommand}`])).rowCount, 0, 'Recovery page stays bounded')
+    assert.equal((await query('SELECT 1 FROM events WHERE log_key=$1', [`service:${oldCommand}`])).rowCount, 0, 'Recovery page stays bounded')
     assert.ok(BigInt((await query('SELECT recent_id FROM log_processing_cursors WHERE name=\'process_logs_recovery\'')).rows[0].recent_id) < BigInt(snapshot))
     const durableRecoveryId = (await query('SELECT recent_id FROM log_processing_cursors WHERE name=\'process_logs_recovery\'')).rows[0].recent_id
     for (const statement of logProcessQueueSchema) await query(statement.replace('CREATE TABLE IF NOT EXISTS', 'CREATE TEMP TABLE IF NOT EXISTS'))
     assert.equal((await query('SELECT recent_id FROM log_processing_cursors WHERE name=\'process_logs_recovery\'')).rows[0].recent_id, durableRecoveryId, 'Restart/redeploy preserves recovery progress')
     await recoverProcessLogs(logs => processLogBatch(logs, 'fixture', rules))
-    const recoveredCommand = (await query('SELECT normalized, processing_status FROM mill_events WHERE log_key=$1', [`service:${oldCommand}`])).rows[0]
+    const recoveredCommand = (await query('SELECT normalized, processing_status FROM events WHERE log_key=$1', [`service:${oldCommand}`])).rows[0]
     assert.equal(recoveredCommand?.processing_status, 'processed', 'Aged pre-upgrade command recovers automatically despite newer arrivals')
     assert.equal(recoveredCommand.normalized.severity, 'high')
     assert.equal(recoveredCommand.normalized.rules_checked, rules.filter(rule => rule.enabled !== false).length)
-    const finalFindingCount = (await query('SELECT COUNT(*)::int AS count FROM mill_findings')).rows[0].count
+    const finalFindingCount = (await query('SELECT COUNT(*)::int AS count FROM findings')).rows[0].count
     await recoverProcessLogs(logs => processLogBatch(logs, 'fixture', rules))
-    assert.equal((await query('SELECT COUNT(*)::int AS count FROM mill_findings')).rows[0].count, finalFindingCount)
+    assert.equal((await query('SELECT COUNT(*)::int AS count FROM findings')).rows[0].count, finalFindingCount)
     await query('INSERT INTO organizations (id, status, name) VALUES (\'archived-priority\', \'active\', \'Archived fixture\')')
     const retryMetadata = { ...commandMetadata, organizationId: 'archived-priority', user: { id: 'private-user', email: 'private@example.test' } }
     const archivedLog = (await query(`INSERT INTO service_logs (service, host, level, message, metadata)
@@ -314,7 +314,7 @@ try {
     queryObserver = undefined
     await query('UPDATE organizations SET status=\'inactive\' WHERE id=\'archived-priority\'')
     await processStoredLogs()
-    const reassignedRetry = (await query('SELECT * FROM mill_events WHERE log_key=$1', [`service:${archivedLog.id}`])).rows[0]
+    const reassignedRetry = (await query('SELECT * FROM events WHERE log_key=$1', [`service:${archivedLog.id}`])).rows[0]
     assert.equal(reassignedRetry.processing_status, 'processed')
     assert.equal(reassignedRetry.organization_id, 'fixture')
     assert.equal(reassignedRetry.user_id, 'private-user')
@@ -364,7 +364,7 @@ try {
             assert.equal(state.last_id, ids[99], `${source} history advances by exactly100 acknowledged rows`)
             assert.equal(state.recent_id, ids[349], `${source} forward cursor advances exactly100 rows without jumping the remaining151`)
             const keys = ids.map(id => `service:${source==='service_logs'?'':source+':'}${id}`)
-            assert.equal((await query('SELECT COUNT(*)::int AS count FROM mill_events WHERE log_key=ANY($1::text[]) AND processing_status=\'processed\'', [keys])).rows[0].count,source === 'service_logs' ? 201 : 200,
+            assert.equal((await query('SELECT COUNT(*)::int AS count FROM events WHERE log_key=ANY($1::text[]) AND processing_status=\'processed\'', [keys])).rows[0].count,source === 'service_logs' ? 201 : 200,
                 `${source} has100 historical rows and100 forward rows; service event-time priority also checks the newest row`)
         }
         assert.equal((await query('SELECT COUNT(*)::int AS count FROM log_process_queue WHERE log_id=$1', [delayedReceipt])).rows[0].count,0, 'The aged command is acknowledged without changing the fixed allocation for this tick')
@@ -386,12 +386,12 @@ try {
             assert.equal(state.recent_id, ids[449], `${source} forward work stays capped while the command queue is clear`)
         }
         const recoveryKeys = recoveryIds.map(id => `service:${id}`)
-        assert.equal((await query('SELECT COUNT(*)::int AS count FROM mill_events WHERE log_key=ANY($1::text[]) AND processing_status=\'processed\'', [recoveryKeys])).rows[0].count,100)
+        assert.equal((await query('SELECT COUNT(*)::int AS count FROM events WHERE log_key=ANY($1::text[]) AND processing_status=\'processed\'', [recoveryKeys])).rows[0].count,100)
         assert.equal((await query('SELECT recent_id::text FROM log_processing_cursors WHERE name=\'process_logs_recovery\'')).rows[0].recent_id,recoveryIds[150],
             'The recovery cap preserves the first unprocessed ID for the next page')
         delete process.env.LOG_CATCHUP_BATCH_LIMIT
         await processStoredLogs() // Clearing the operator control restores full capacity.
-        const recovered = await query('SELECT normalized FROM mill_events WHERE log_key=ANY($1::text[]) AND processing_status=\'processed\'', [recoveryKeys])
+        const recovered = await query('SELECT normalized FROM events WHERE log_key=ANY($1::text[]) AND processing_status=\'processed\'', [recoveryKeys])
         assert.equal(recovered.rowCount,251, 'Recovery resumes without losing any capped remainder')
         const enabledRules = (await loadConfiguredMillRules('fixture')).filter(rule => rule.enabled !== false).length
         assert.ok(enabledRules > 0)
@@ -401,7 +401,7 @@ try {
             assert.equal(state.last_id, ids[249], `${source} finishes its fixed historical range without rechecking forward rows`)
             assert.ok(BigInt(state.recent_id) >= BigInt(ids[500]), `${source} resumes full forward capacity`)
             const keys = ids.map(id => `service:${source==='service_logs'?'':source+':'}${id}`)
-            assert.equal((await query('SELECT COUNT(*)::int AS count FROM mill_events WHERE log_key=ANY($1::text[]) AND processing_status=\'processed\'', [keys])).rows[0].count,501, `${source} retains complete coverage through cursor overlap`)
+            assert.equal((await query('SELECT COUNT(*)::int AS count FROM events WHERE log_key=ANY($1::text[]) AND processing_status=\'processed\'', [keys])).rows[0].count,501, `${source} retains complete coverage through cursor overlap`)
         }
     } finally {
         queryObserver=undefined
@@ -410,53 +410,53 @@ try {
         await query('ROLLBACK TO SAVEPOINT historical_throttle')
     }
     console.log('PostgreSQL adaptive scheduling passed: indexed aged queue, four100-row forward/history pages, newest-event priority retained, operator recovery100 cap with exact cursors, complete coverage and defaults restored.')
-    assert.equal((await query('SELECT ready FROM mill_log_dimensions_state')).rows[0].ready, true)
+    assert.equal((await query('SELECT ready FROM log_dimensions_state')).rows[0].ready, true)
     async function assertProjectionParity() {
         const differences = await query(`WITH source AS (
             SELECT id AS event_id, organization_id, event_timestamp, normalized->>'severity' AS severity,
                 normalized->>'service' AS service, normalized->>'log_type' AS log_type
-            FROM mill_events WHERE ingestion_id='logs' AND processing_status='processed')
-            (SELECT * FROM source EXCEPT SELECT * FROM mill_log_dimensions)
-            UNION ALL (SELECT * FROM mill_log_dimensions EXCEPT SELECT * FROM source)`)
+            FROM events WHERE ingestion_id='logs' AND processing_status='processed')
+            (SELECT * FROM source EXCEPT SELECT * FROM log_dimensions)
+            UNION ALL (SELECT * FROM log_dimensions EXCEPT SELECT * FROM source)`)
         assert.equal(differences.rowCount, 0, 'Compact projection must match every currently processed collected event')
     }
     await assertProjectionParity() // Includes late-auth severity changes, replay and all configured detections.
-    await query('UPDATE mill_log_dimensions_state SET ready=FALSE,last_event_id=\'\'')
+    await query('UPDATE log_dimensions_state SET ready=FALSE,last_event_id=\'\'')
     assert.deepEqual(await backfillLogDimensions(1), { processed: 1, ready: false })
-    assert.equal((await query('SELECT ready FROM mill_log_dimensions_state')).rows[0].ready, false, 'Partial backfill is never reported as ready')
+    assert.equal((await query('SELECT ready FROM log_dimensions_state')).rows[0].ready, false, 'Partial backfill is never reported as ready')
     while (!(await backfillLogDimensions(1000)).ready) { /* bounded resumable initialization */ }
     await assertProjectionParity()
-    const inserted = `INSERT INTO mill_events (id, ingestion_id, organization_id, event_timestamp, normalized)
+    const inserted = `INSERT INTO events (id, ingestion_id, organization_id, event_timestamp, normalized)
         VALUES ('!after-cursor', 'logs', 'other', NOW(), '{"severity":"low","service":"temporary","log_type":"ApplicationLogs"}')`
     await query(inserted)
     await assertProjectionParity() // New IDs below the completed cursor are maintained by the trigger.
-    await query(`UPDATE mill_events SET normalized=normalized || '{"severity":"critical","service":null}',
+    await query(`UPDATE events SET normalized=normalized || '{"severity":"critical","service":null}',
         organization_id='fixture',event_timestamp=NOW()-INTERVAL '2 hours' WHERE id='!after-cursor'`)
     await assertProjectionParity()
-    await query('UPDATE mill_events SET processing_status=\'pending\' WHERE id=\'!after-cursor\'')
+    await query('UPDATE events SET processing_status=\'pending\' WHERE id=\'!after-cursor\'')
     await assertProjectionParity()
-    await query('UPDATE mill_events SET processing_status=\'processed\',ingestion_id=\'native\' WHERE id=\'!after-cursor\'')
+    await query('UPDATE events SET processing_status=\'processed\',ingestion_id=\'native\' WHERE id=\'!after-cursor\'')
     await assertProjectionParity()
-    await query('UPDATE mill_events SET ingestion_id=\'logs\',id=\'!renamed\' WHERE id=\'!after-cursor\'')
+    await query('UPDATE events SET ingestion_id=\'logs\',id=\'!renamed\' WHERE id=\'!after-cursor\'')
     await assertProjectionParity()
     await query('SAVEPOINT projection_retry')
-    await query('UPDATE mill_events SET normalized=\'{}\'::jsonb WHERE id=\'!renamed\'')
+    await query('UPDATE events SET normalized=\'{}\'::jsonb WHERE id=\'!renamed\'')
     await assertProjectionParity()
     await query('ROLLBACK TO SAVEPOINT projection_retry')
     await assertProjectionParity()
-    await query('WITH removed AS (DELETE FROM mill_events WHERE id=\'!renamed\' RETURNING id) SELECT * FROM removed')
+    await query('WITH removed AS (DELETE FROM events WHERE id=\'!renamed\' RETURNING id) SELECT * FROM removed')
     await assertProjectionParity()
     await query('INSERT INTO organizations (id,status,name) VALUES (\'projection-delete\',\'active\',\'Fixture\')')
-    await query(`INSERT INTO mill_events (id,ingestion_id,organization_id,event_timestamp,normalized)
+    await query(`INSERT INTO events (id,ingestion_id,organization_id,event_timestamp,normalized)
         VALUES ('!delete-org','logs','projection-delete',NOW(),'{"severity":"critical","service":"private"}')`)
     await query('UPDATE organizations SET status=\'archived\' WHERE id=\'projection-delete\'')
     for (const kql of ['Logs', 'ApplicationLogs | where Severity != "critical"', 'Logs | where Service == "private"', 'Logs | where TimeGenerated > ago(1h)']) {
         const compiled = compileLogQuery(kql)
         const predicates = ['ingestion_id = \'logs\'', 'processing_status = \'processed\'', 'event_timestamp >= NOW()-INTERVAL \'24 hours\'',
-            ...compiled.where, 'EXISTS (SELECT 1 FROM organizations o WHERE o.id=mill_events.organization_id AND o.status=\'active\')']
+            ...compiled.where, 'EXISTS (SELECT 1 FROM organizations o WHERE o.id=events.organization_id AND o.status=\'active\')']
         const original = await query(`SELECT normalized->>'severity' AS severity, normalized->>'service' AS service, COUNT(*)::int AS count
-            FROM mill_events WHERE ${predicates.join(' AND ')} GROUP BY 1,2 ORDER BY 1,2`, compiled.params)
-        const compact = await query(`SELECT severity,service,COUNT(*)::int AS count FROM mill_log_dimensions mill_events
+            FROM events WHERE ${predicates.join(' AND ')} GROUP BY 1,2 ORDER BY 1,2`, compiled.params)
+        const compact = await query(`SELECT severity,service,COUNT(*)::int AS count FROM log_dimensions events
             WHERE ${dimensionLogWhere(predicates)!.join(' AND ')} GROUP BY 1,2 ORDER BY 1,2`, compiled.params)
         assert.deepEqual(compact.rows, original.rows, `Exact projected counters, including active organizations: ${kql}`)
         assert.deepEqual(foldLogCounts(compact.rows), foldLogCounts(original.rows))
@@ -464,8 +464,8 @@ try {
     await query('DELETE FROM organizations WHERE id=\'projection-delete\'')
     await assertProjectionParity()
     await query('SAVEPOINT projection_truncate')
-    await query('TRUNCATE mill_events CASCADE')
-    assert.equal((await query('SELECT COUNT(*)::int AS count FROM mill_log_dimensions')).rows[0].count, 0)
+    await query('TRUNCATE events CASCADE')
+    assert.equal((await query('SELECT COUNT(*)::int AS count FROM log_dimensions')).rows[0].count, 0)
     await query('ROLLBACK TO SAVEPOINT projection_truncate')
     await assertProjectionParity()
     console.log('PostgreSQL projection verification passed: exact counter parity, bounded readiness, trigger updates, rollback, late correlation and cascading deletion.')
@@ -473,19 +473,19 @@ try {
     await processLogBatch(Array.from({ length: 5000 }, (_, index) => ({ id: `volume-${index}`, service: 'fixture', host: 'fixture', level: 'info', message: 'Ordinary service log', created_at: new Date().toISOString() })), 'fixture', rules)
     console.log(`Ordinary-event throughput: ${Math.round(5000000 / (performance.now() - started))} events/second`)
     const deliverySource = readFileSync(new URL('../src/utils/millCases.ts', import.meta.url), 'utf8')
-    const claimSql = deliverySource.match(/await run\(`(UPDATE mill_findings[\s\S]*?RETURNING \*)`\)/)?.[1]
+    const claimSql = deliverySource.match(/await run\(`(UPDATE findings[\s\S]*?RETURNING \*)`\)/)?.[1]
     assert.ok(claimSql, 'Actual case-delivery claim SQL must be found')
     const claimed = await query(claimSql)
     assert.ok(claimed.rowCount, 'Ordinary organization findings remain eligible for shared cases')
     assert.ok(claimed.rows.every(row => row.evidence.restrictedLog === false), 'Restricted collected-log evidence must never be claimed for shared cases')
-    const other = await query('SELECT count(*)::int AS count FROM mill_findings WHERE organization_id = \'other\'')
+    const other = await query('SELECT count(*)::int AS count FROM findings WHERE organization_id = \'other\'')
     assert.equal(other.rows[0].count, 0, 'No findings in another organization')
     // Apply the committed standby SELECT block to isolated temporary relations.
     // Authentication is mocked; the actual handlers and SQL run under an unprivileged role.
     const permissions = readFileSync(new URL('../../scripts/recovery/standby-permissions.sql', import.meta.url), 'utf8')
     const logsGrant = permissions.match(/-- Administrator-only Logs pages[^\n]*\n(GRANT SELECT[\s\S]*?;)/)?.[1]
     assert.ok(logsGrant, 'The explicit standby Logs grant must exist')
-    const logTables = ['service_logs', 'traffic_events', 'mill_events', 'log_processing_cursors', 'log_catchup_progress', 'log_process_queue', 'mill_log_dimensions', 'mill_log_dimensions_state', 'mill_log_counts', 'mill_log_counts_state']
+    const logTables = ['service_logs', 'traffic_events', 'events', 'log_processing_cursors', 'log_catchup_progress', 'log_process_queue', 'log_dimensions', 'log_dimensions_state', 'log_counts', 'log_counts_state']
     assert.deepEqual([...logsGrant.matchAll(/public\.(\w+)/g)].map(match => match[1]), logTables)
     const navigationGrant = permissions.match(/-- Organization selector[^\n]*\n(GRANT SELECT[\s\S]*?;)/)?.[1]
     assert.ok(navigationGrant, 'The explicit standby organization/Traffic read grant must exist')
@@ -532,7 +532,7 @@ try {
     await query(navigationGrant.replaceAll('public.', 'pg_temp.').replace('hanasand_standby_app', reader))
     await query(logsGrant.replaceAll('public.', 'pg_temp.').replace('hanasand_standby_app', reader))
     await query('UPDATE organizations SET status=\'archived\' WHERE id=\'other\'')
-    await query(`INSERT INTO mill_events (id, ingestion_id, organization_id, event_timestamp, processing_status, normalized)
+    await query(`INSERT INTO events (id, ingestion_id, organization_id, event_timestamp, processing_status, normalized)
         VALUES ('permission-active','logs','fixture',NOW(),'processed','{"severity":"high","service":"standby-fixture","log_type":"ProcessLogs","message":"standby permission fixture"}'),
             ('permission-inactive','logs','other',NOW(),'processed','{"severity":"critical","service":"standby-fixture","log_type":"ProcessLogs","message":"standby permission fixture"}')`)
     await query(`INSERT INTO service_logs (service,level,message,metadata) VALUES ('standby-fixture','error','standby permission fixture',
@@ -603,13 +603,13 @@ try {
                 has_table_privilege(current_user,$1,'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS writable`, [`pg_temp.${table}`])).rows[0]
             assert.deepEqual(privileges, { readable: true, writable: false }, table)
         }
-        for (const table of ['mill_findings', 'mill_rules', 'system_events', 'traffic_history', 'traffic_history_state']) {
+        for (const table of ['findings', 'rules', 'system_events', 'traffic_history', 'traffic_history_state']) {
             assert.equal((await query('SELECT has_table_privilege(current_user,$1,\'SELECT\') AS allowed', [`pg_temp.${table}`])).rows[0].allowed, false, 'No unrelated table access')
         }
         assert.equal((await query('SELECT has_schema_privilege(current_user,$1,\'CREATE\') AS allowed', ['public'])).rows[0].allowed, false)
         const flags = (await query('SELECT rolsuper,rolcreaterole,rolcreatedb,rolreplication,rolbypassrls FROM pg_roles WHERE rolname=current_user')).rows[0]
         assert.ok(Object.values(flags).every(value => value === false))
-        for (const sql of ['UPDATE mill_events SET normalized=\'{}\' WHERE FALSE', 'DELETE FROM service_logs WHERE FALSE', 'DELETE FROM organization_invites WHERE FALSE', 'UPDATE traffic_history_state SET covered_before=NOW() WHERE FALSE', 'CREATE TABLE public.forbidden_logs_ddl (id int)']) {
+        for (const sql of ['UPDATE events SET normalized=\'{}\' WHERE FALSE', 'DELETE FROM service_logs WHERE FALSE', 'DELETE FROM organization_invites WHERE FALSE', 'UPDATE traffic_history_state SET covered_before=NOW() WHERE FALSE', 'CREATE TABLE public.forbidden_logs_ddl (id int)']) {
             await query('SAVEPOINT denied_log_write')
             await assert.rejects(query(sql), { code: '42501' })
             await query('ROLLBACK TO SAVEPOINT denied_log_write')
@@ -622,16 +622,16 @@ try {
     console.log('PostgreSQL standby permissions passed: exact SELECT grants, actual organization/Traffic/Logs/search/counters/errors readers, active organization filtering, 401/403 before reads, no added writes or DDL.')
     await query('INSERT INTO organizations(id,status,name) VALUES (\'deleted-scope\',\'deleted\',\'Deleted fixture\')')
     const replayIds = (await query('INSERT INTO service_logs(service,level,message,metadata) VALUES (\'fixture\',\'info\',\'Unknown org original\', \'{"organizationId":"missing-scope"}\'), (\'fixture\',\'info\',\'Deleted org original\', \'{"organizationId":"deleted-scope"}\') RETURNING id::text')).rows.map(row => row.id)
-    for (const id of replayIds) await query('INSERT INTO mill_events(id,ingestion_id,organization_id,log_key,processing_status,normalized,event_timestamp) VALUES($1,\'logs\',\'fixture\',$2,\'skipped\',$3,NOW())', [
+    for (const id of replayIds) await query('INSERT INTO events(id,ingestion_id,organization_id,log_key,processing_status,normalized,event_timestamp) VALUES($1,\'logs\',\'fixture\',$2,\'skipped\',$3,NOW())', [
         (await import('node:crypto')).createHash('sha256').update('service:'+id).digest('hex'), 'service:'+id, { processing_reason: 'Organization is missing or inactive' }])
     const { recoverUnassignedLogs } = await import('../src/utils/mill/recoverUnassignedLogs.ts')
     await recoverUnassignedLogs(logs => processLogBatch(logs, 'fixture', rules))
     await recoverUnassignedLogs(logs => processLogBatch(logs, 'fixture', rules))
-    const replayed = (await query('SELECT processing_status,organization_id,normalized FROM mill_events WHERE log_key=$1', ['service:'+replayIds[0]])).rows[0]
+    const replayed = (await query('SELECT processing_status,organization_id,normalized FROM events WHERE log_key=$1', ['service:'+replayIds[0]])).rows[0]
     assert.equal(replayed.processing_status,'processed')
     assert.equal(replayed.organization_id,'fixture')
     assert.equal(replayed.normalized.message,'Unknown org original')
-    assert.equal((await query('SELECT processing_status FROM mill_events WHERE log_key=$1', ['service:'+replayIds[1]])).rows[0].processing_status,'processed')
+    assert.equal((await query('SELECT processing_status FROM events WHERE log_key=$1', ['service:'+replayIds[1]])).rows[0].processing_status,'processed')
     for (const cursorColumn of ['last_id', 'recent_id']) {
         const acknowledgedHistory = (await query(`INSERT INTO service_logs(service,level,message,metadata,created_at)
         SELECT 'history-fixture','info','Historical acknowledgement '||n,'{}'::jsonb,NOW()-INTERVAL '2 days'
@@ -652,7 +652,7 @@ try {
             if (previousHistoryLimit === undefined) delete process.env.LOG_CATCHUP_BATCH_LIMIT
             else process.env.LOG_CATCHUP_BATCH_LIMIT = previousHistoryLimit
         }
-        assert.equal(Number((await query('SELECT count(*) FROM mill_events WHERE log_key=ANY($1::text[]) AND processing_status=\'processed\'',
+        assert.equal(Number((await query('SELECT count(*) FROM events WHERE log_key=ANY($1::text[]) AND processing_status=\'processed\'',
             [acknowledgedHistory.map(row => 'service:'+row.id)])).rows[0].count), 500)
         console.log(`PostgreSQL ${cursorColumn} scan passed: pending holes processed in order at cap1, acknowledged rows skipped, complete durable coverage.`)
     }

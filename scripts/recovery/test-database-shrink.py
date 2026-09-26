@@ -96,7 +96,7 @@ class ShrinkTests(unittest.TestCase):
             return subprocess.run([binary + 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-h', '127.0.0.1', '-p', port, '-d', database],
                                   input=script, text=True, capture_output=True, check=True).stdout
         try:
-            query("CREATE TABLE mill_rule_reprocess_jobs(status text); CREATE TABLE traffic_events(id int, evidence text); ALTER TABLE traffic_events ALTER COLUMN evidence SET STORAGE PLAIN; INSERT INTO traffic_events SELECT n,repeat(md5(n::text),32) FROM generate_series(1,10000) n; DELETE FROM traffic_events WHERE id>100;")
+            query("CREATE TABLE rule_reprocess_jobs(status text); CREATE TABLE traffic_events(id int, evidence text); ALTER TABLE traffic_events ALTER COLUMN evidence SET STORAGE PLAIN; INSERT INTO traffic_events SELECT n,repeat(md5(n::text),32) FROM generate_series(1,10000) n; DELETE FROM traffic_events WHERE id>100;")
             with patch.object(shrink, 'THRESHOLD', 0):
                 rows = [json.loads(line) for line in query(shrink.vacuum_script('traffic_events')).splitlines() if line.startswith('{')]
             self.assertEqual(len(rows), 2)

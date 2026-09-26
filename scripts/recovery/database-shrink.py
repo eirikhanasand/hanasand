@@ -13,7 +13,7 @@ THRESHOLD = 20_000_000_000
 MIN_FREE = 5 * 1024 ** 3
 COOLDOWN = 3600
 TABLE_COOLDOWN = 6 * 3600
-TABLES = ('traffic_events', 'mill_log_dimensions', 'service_logs', 'mill_events')
+TABLES = ('traffic_events', 'log_dimensions', 'service_logs', 'events')
 STATE = Path('/home/hanasand/hanasand/ops/runtime/database-shrink/status.json')
 DEPLOY_LOCK = Path('/tmp/hanasand-frontend-deploy.lock')
 BUSY_SQL = """EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid <> pg_backend_pid()
@@ -22,13 +22,13 @@ BUSY_SQL = """EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid <> pg_backend_pid
   OR EXISTS (SELECT 1 FROM pg_stat_progress_create_index)
   OR EXISTS (SELECT 1 FROM pg_stat_progress_vacuum)
   OR EXISTS (SELECT 1 FROM pg_stat_progress_cluster)
-  OR EXISTS (SELECT 1 FROM mill_rule_reprocess_jobs WHERE status IN ('queued','running'))"""
+  OR EXISTS (SELECT 1 FROM rule_reprocess_jobs WHERE status IN ('queued','running'))"""
 INVENTORY_SQL = """SELECT json_build_object('database_bytes',pg_database_size(current_database()),
   'replica',pg_is_in_recovery(), 'busy', (""" + BUSY_SQL + """),
   'tables',(SELECT json_agg(json_build_object('name',c.relname,'bytes',pg_total_relation_size(c.oid)))
   FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
   WHERE n.nspname='public' AND c.relkind='r'
-    AND c.relname IN ('traffic_events','mill_log_dimensions','service_logs','mill_events')));"""
+    AND c.relname IN ('traffic_events','log_dimensions','service_logs','events')));"""
 
 
 def sql(script, timeout=40):

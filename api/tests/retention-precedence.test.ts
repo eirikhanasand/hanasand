@@ -3,7 +3,7 @@ import { eventProtectionDefinition } from '../src/utils/mill/eventProtection.ts'
 
 let rules: any[] = [], calls: string[] = [], writes: string[] = [], eligible = '', failLookup = false
 const query: any = async (sql: string) => {
-    if (sql.includes('FROM mill_rules r')) {
+    if (sql.includes('FROM rules r')) {
         if (failLookup) throw new Error('Rule lookup unavailable')
         return { rows: rules }
     }

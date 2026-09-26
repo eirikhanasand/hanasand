@@ -26,7 +26,7 @@ test('dashboard uses one exact compact grouping scan after complete backfill', a
     expect(response.json().services).toEqual([{ service: 'api', count: 10 }])
     const groups = statements.filter(sql => sql.includes('GROUP BY'))
     expect(groups).toHaveLength(1)
-    expect(groups[0]).toContain('FROM mill_log_dimensions mill_events')
+    expect(groups[0]).toContain('FROM log_dimensions events')
     expect(groups[0]).toContain('o.status = \'active\'')
     expect(groups[0]).toContain('severity IN (\'high\', \'critical\')')
     expect(groups[0]).toContain('service = $2')
@@ -35,14 +35,14 @@ test('dashboard uses one exact compact grouping scan after complete backfill', a
 test('incomplete backfill retains exact original-table counters', async () => {
     ready = false
     expect((await app.inject('/logs/search?stats=1')).statusCode).toBe(200)
-    expect(statements.some(sql => sql.includes('FROM mill_log_dimensions mill_events'))).toBe(false)
+    expect(statements.some(sql => sql.includes('FROM log_dimensions events'))).toBe(false)
     expect(statements.find(sql => sql.includes('GROUP BY'))).toContain('normalized->>\'severity\'')
 })
 test('basic JSON search and arbitrary KQL predicates keep the full-data fallback', async () => {
     for (const suffix of ['search=needle', 'kql=' + encodeURIComponent('Logs | where UserId == "alice"'), 'kql=' + encodeURIComponent('Logs | where RuleId == "process.recon.whoami.v1"')]) {
         statements = []
         expect((await app.inject('/logs/search?stats=1&' + suffix)).statusCode).toBe(200)
-        expect(statements.some(sql => sql.includes('FROM mill_log_dimensions mill_events'))).toBe(false)
+        expect(statements.some(sql => sql.includes('FROM log_dimensions events'))).toBe(false)
         expect(statements.filter(sql => sql.includes('GROUP BY'))).toHaveLength(1)
     }
 })
@@ -108,10 +108,10 @@ test('HQL and legacy KQL links compile to the same parameterized query', async (
 test('ordinary dashboard filters sum maintained buckets plus exact boundary rows', async () => {
     expect((await app.inject('/logs/search?stats=1&service=api')).statusCode).toBe(200)
     const grouped = statements.find(sql => sql.includes('GROUP BY'))
-    expect(grouped).toContain('FROM mill_log_counts mill_events')
+    expect(grouped).toContain('FROM log_counts events')
     expect(grouped).toContain('bucket_seconds = 3600')
     expect(grouped).toContain('bucket_seconds = 60')
-    expect(grouped).toContain('FROM mill_log_dimensions mill_events')
+    expect(grouped).toContain('FROM log_dimensions events')
     expect(grouped).toContain('INTERVAL \'1 minute\'')
 })
 
@@ -119,6 +119,6 @@ test('unready rollups preserve exact compact counts', async () => {
     rollupsReady = false
     expect((await app.inject('/logs/search?stats=1&service=api')).statusCode).toBe(200)
     const grouped = statements.find(sql => sql.includes('GROUP BY'))
-    expect(grouped).toContain('FROM mill_log_dimensions mill_events')
-    expect(grouped).not.toContain('FROM mill_log_counts ')
+    expect(grouped).toContain('FROM log_dimensions events')
+    expect(grouped).not.toContain('FROM log_counts ')
 })

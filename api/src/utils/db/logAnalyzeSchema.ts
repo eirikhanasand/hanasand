@@ -52,7 +52,7 @@ export default async function ensureLogAnalyzeSchema() {
     // user's later Keep/Disable choice. The first version is included in history.
     for (const [rule, definition] of [[ingestionRule, ingestionDefinition], [cdnRefreshRule, cdnRefreshDefinition], [cdnDeliveryRule, cdnDeliveryDefinition], [modelDiscoveryRule, modelDiscoveryDefinition], [readinessAuditRule, readinessAuditDefinition], [telemetryRule, telemetryDefinition], [sshWindowRule, sshWindowDefinition], [sshTransportRule, sshTransportDefinition], [collectorRule, collectorDefinition], [proxyRule, proxyDefinition], [postgresRule, postgresDefinition], [accessRule, accessDefinition], [mongoRule, mongoDefinition], [mongoReconRule, mongoReconDefinition]] as const) {
         await run(`WITH installed AS (
-        INSERT INTO mill_rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
+        INSERT INTO rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
         SELECT gen_random_uuid()::text,o.id,$2,'1',$3,$6,$7,$4,$5::jsonb,$8,$9
         FROM organizations o WHERE o.status='active' AND (o.id=$1 OR ($1::text IS NULL AND lower(o.name)='hanasand'))
         ORDER BY o.created_at LIMIT 1 ON CONFLICT(organization_id,rule_id) DO NOTHING RETURNING *)

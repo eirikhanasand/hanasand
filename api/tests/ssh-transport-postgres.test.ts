@@ -24,7 +24,7 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('SSH transport ingestion pre
         await query('CREATE TABLE organizations(id text PRIMARY KEY,name text,status text,created_at timestamptz DEFAULT NOW(),audit_safe_metadata jsonb DEFAULT \'{}\')')
         await query('INSERT INTO organizations(id,name,status) VALUES(\'platform\',\'Hanasand\',\'active\')')
         const schema = readFileSync(new URL('../src/utils/db/ensureSchema.ts', import.meta.url), 'utf8')
-        for (const table of ['service_logs', 'mill_rules', 'system_events']) {
+        for (const table of ['service_logs', 'rules', 'system_events']) {
             const definition = schema.match(new RegExp('CREATE TABLE IF NOT EXISTS ' + table + ' \\([\\s\\S]*?\\n        \\)'))?.[0]
             if (!definition) throw new Error(`Missing schema ${table}`)
             await query(definition)
@@ -43,7 +43,7 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('SSH transport ingestion pre
         await ingest(disabled)
         expect(await rawCount(disabled)).toBe(4)
         expect(await receiptCount()).toBe(0)
-        await query('UPDATE mill_rules SET enabled=true WHERE rule_id=$1', [sshTransportRuleId])
+        await query('UPDATE rules SET enabled=true WHERE rule_id=$1', [sshTransportRuleId])
         const logs = fresh('valid')
         await Promise.all([ingest(logs), ingest(logs)])
         const canonical = (await query('SELECT * FROM service_logs WHERE service=$1', ['routine-group-analyzer'])).rows
@@ -56,11 +56,11 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('SSH transport ingestion pre
         expect(findings).toHaveLength(1)
         expect((findings[0][5].retainedOriginals as any[]).map(row => row.message)).toEqual(logs.map(row => row.message))
         for (const [label, definition] of [['store', { match: 'all', stage: 'analyze', action: 'keep', conditions: detector.definition.conditions }], ['detect', detector.definition]] as const) {
-            await query('INSERT INTO mill_rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled) VALUES($1,\'platform\',$1,\'1\',\'SSH override\',\'System\',\'high\',\'test\',$2,\'owned\',true)', [label, JSON.stringify(definition)])
+            await query('INSERT INTO rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled) VALUES($1,\'platform\',$1,\'1\',\'SSH override\',\'System\',\'high\',\'test\',$2,\'owned\',true)', [label, JSON.stringify(definition)])
             const rows = fresh(label + '-override')
             await ingest(rows)
             expect(await rawCount(rows)).toBe(4)
-            await query('DELETE FROM mill_rules WHERE id=$1', [label])
+            await query('DELETE FROM rules WHERE id=$1', [label])
         }
         for (const [label, mutate] of [
             ['slow', (rows: any[]) => { rows[0].timestamp = new Date(Date.now() - 10000).toISOString() }],
@@ -75,16 +75,16 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('SSH transport ingestion pre
             expect(await rawCount(rows)).toBe(4)
         }
         expect(await receiptCount()).toBe(4)
-        await query('UPDATE mill_rules SET definition=$2 WHERE rule_id=$1', [sshTransportRuleId, JSON.stringify({ ...sshTransportDefinition, conditions: [{ path: 'host', operator: 'equals', value: 'other' }] })])
+        await query('UPDATE rules SET definition=$2 WHERE rule_id=$1', [sshTransportRuleId, JSON.stringify({ ...sshTransportDefinition, conditions: [{ path: 'host', operator: 'equals', value: 'other' }] })])
         await ingest(logs)
         expect(await rawCount(logs)).toBe(4)
         for (const action of ['keep', 'drop']) {
-            await query('UPDATE mill_rules SET enabled=$2,definition=$3 WHERE rule_id=$1', [sshTransportRuleId, action === 'keep', JSON.stringify({ ...sshTransportDefinition, action })])
+            await query('UPDATE rules SET enabled=$2,definition=$3 WHERE rule_id=$1', [sshTransportRuleId, action === 'keep', JSON.stringify({ ...sshTransportDefinition, action })])
             const rows = fresh('disabled-or-store-' + action)
             await ingest(rows)
             expect(await rawCount(rows)).toBe(4)
         }
-        await query('UPDATE mill_rules SET enabled=true,definition=$2 WHERE rule_id=$1', [sshTransportRuleId, JSON.stringify(sshTransportDefinition)])
+        await query('UPDATE rules SET enabled=true,definition=$2 WHERE rule_id=$1', [sshTransportRuleId, JSON.stringify(sshTransportDefinition)])
         const rollback = fresh('rollback-input')
         await expect(tx(async q => { await recordLogBatch(rollback as any, q as any); throw new Error('abort') })).rejects.toThrow('abort')
         expect(await receiptCount()).toBe(4)

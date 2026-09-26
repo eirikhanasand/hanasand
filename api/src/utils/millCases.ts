@@ -12,10 +12,10 @@ export async function deliverMillCases() {
     // never in cases shared with ordinary organization members. The durable flag
     // preserves that boundary even after linked events expire through retention.
     // The claim is atomic across worker replicas. Expired claims recover after a crash.
-    const pending = await run(`UPDATE mill_findings SET case_delivery_attempted_at = NOW()
-        WHERE id IN (SELECT finding.id FROM mill_findings finding WHERE case_id IS NULL
+    const pending = await run(`UPDATE findings SET case_delivery_attempted_at = NOW()
+        WHERE id IN (SELECT finding.id FROM findings finding WHERE case_id IS NULL
             AND finding.evidence->>'restrictedLog' IS DISTINCT FROM 'true'
-            AND NOT EXISTS (SELECT 1 FROM mill_events event WHERE event.organization_id = finding.organization_id
+            AND NOT EXISTS (SELECT 1 FROM events event WHERE event.organization_id = finding.organization_id
                 AND event.id = ANY(finding.event_ids) AND event.ingestion_id = 'logs')
             AND rule_id <> 'scanner.hanasand_validation.v1'
             AND (case_delivery_attempted_at IS NULL OR case_delivery_attempted_at < NOW() - INTERVAL '5 minutes')
@@ -25,7 +25,7 @@ export async function deliverMillCases() {
     for (const finding of pending.rows) {
         try {
             const events = await run(`SELECT id, event_timestamp, source_vendor, source_product, event_type, action, outcome, normalized
-                FROM mill_events WHERE organization_id = $1 AND id = ANY($2::text[]) ORDER BY event_timestamp, id`, [finding.organization_id, finding.event_ids])
+                FROM events WHERE organization_id = $1 AND id = ANY($2::text[]) ORDER BY event_timestamp, id`, [finding.organization_id, finding.event_ids])
             const response = await fetch(`${base}/v1/cases/security-detections`, {
                 method: 'POST', headers: { 'content-type': 'application/json', 'x-hanasand-service-token': token, 'x-organization-id': finding.organization_id },
                 signal: AbortSignal.timeout(10000),
@@ -39,7 +39,7 @@ export async function deliverMillCases() {
             })
             const payload = await response.json().catch(() => null) as { case?: { id?: string } } | null
             if (!response.ok || !payload?.case?.id) throw new Error(`Case delivery returned HTTP ${response.status}.`)
-            await run('UPDATE mill_findings SET case_id = $2 WHERE id = $1', [finding.id, payload.case.id])
+            await run('UPDATE findings SET case_id = $2 WHERE id = $1', [finding.id, payload.case.id])
         } catch (error) {
             failed++
             console.error('Security case delivery failed; queued for retry.', finding.id, error instanceof Error ? error.message : 'Unknown error')

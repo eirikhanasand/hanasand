@@ -41,7 +41,7 @@ test('only committed matching safe evidence permits a receipt and count', async 
         if (mode === 'tampered') evidence.metadata.proxy = null
         const query: any = async (sql: string, args: any[]) => {
             statements.push(sql)
-            if (sql.includes('FROM mill_rules')) return { rows: mode === 'disabled' ? [] : [{ organization_id: 'platform', definition: proxyDefinition }] }
+            if (sql.includes('FROM rules')) return { rows: mode === 'disabled' ? [] : [{ organization_id: 'platform', definition: proxyDefinition }] }
             if (sql.startsWith('SELECT original')) return { rows: [] }
             if (sql.includes('FROM log_proxy_requests')) return { rows: mode === 'missing' ? [] : [evidence] }
             if (sql.includes('INSERT INTO log_proxy_receipts')) {
@@ -59,7 +59,7 @@ test('retry does not inflate counts or hide modified content under an existing I
     const queries: string[] = []
     const query: any = async (sql: string) => {
         queries.push(sql)
-        return { rows: sql.includes('FROM mill_rules') ? [{ organization_id: 'platform', definition: proxyDefinition }] : [{ original: log }] }
+        return { rows: sql.includes('FROM rules') ? [{ organization_id: 'platform', definition: proxyDefinition }] : [{ original: log }] }
     }
     expect(await analyzeProxy(log, query)).toBe(true)
     expect(await analyzeProxy({ ...log, timestamp: '2026-09-24T00:00:01Z' }, query)).toBe(false)
@@ -67,7 +67,7 @@ test('retry does not inflate counts or hide modified content under an existing I
 })
 test('storage failure prevents acknowledgment; Keep and configured selectors are supported', async () => {
     const query: any = async (sql: string) => {
-        if (sql.includes('FROM mill_rules')) return { rows: [{ organization_id: 'platform', definition: proxyDefinition }] }
+        if (sql.includes('FROM rules')) return { rows: [{ organization_id: 'platform', definition: proxyDefinition }] }
         throw new Error('database unavailable')
     }
     await expect(analyzeProxy(log, query)).rejects.toThrow('database unavailable')
@@ -79,7 +79,7 @@ test('storage failure prevents acknowledgment; Keep and configured selectors are
 test('an existing detector protects originals even on receipt replay', async () => {
     const query: any = async (sql: string) => {
         if (sql.includes('r.definition->>\'stage\'')) return { rows: [{ organization_id: 'platform', definition: proxyDefinition }] }
-        if (sql.includes('FROM mill_rules')) return { rows: [{ rule_id: 'custom.proxy-port', version: '1', source: 'owned', enabled: true, severity: 'high', name: 'Review proxy source', definition: { match: 'all', conditions: [{ path: 'service', operator: 'equals', value: 'hanasand-proxy-1' }] } }] }
+        if (sql.includes('FROM rules')) return { rows: [{ rule_id: 'custom.proxy-port', version: '1', source: 'owned', enabled: true, severity: 'high', name: 'Review proxy source', definition: { match: 'all', conditions: [{ path: 'service', operator: 'equals', value: 'hanasand-proxy-1' }] } }] }
         throw new Error('A matching detector must prevent any receipt lookup or write')
     }
     expect(await analyzeProxy(log, query)).toBe(false)

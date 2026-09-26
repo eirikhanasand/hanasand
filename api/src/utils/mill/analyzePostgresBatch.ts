@@ -9,7 +9,7 @@ import { completedPostgresSessions, postgresReceipt, postgresRuleId, postgresSes
 export async function analyzePostgresBatch<T extends PostgresLog>(entries: T[], query: typeof run, options: { historicalReplay?: boolean } = {}): Promise<T[]> {
     const sessions = completedPostgresSessions(entries)
     if (!sessions.length) return entries
-    const result = await query(`SELECT r.organization_id,r.version,r.definition FROM mill_rules r JOIN organizations o ON o.id=r.organization_id
+    const result = await query(`SELECT r.organization_id,r.version,r.definition FROM rules r JOIN organizations o ON o.id=r.organization_id
         WHERE o.status='active' AND (o.id=$1 OR ($1::text IS NULL AND lower(o.name)='hanasand')) AND r.rule_id=$2
         AND r.enabled AND r.definition->>'stage'='analyze' AND r.definition->>'action'='drop'
         ORDER BY o.created_at LIMIT 1 FOR SHARE OF r,o`, [process.env.PLATFORM_LOG_ORGANIZATION_ID || null, postgresRuleId])

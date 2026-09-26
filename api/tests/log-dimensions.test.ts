@@ -4,9 +4,9 @@ let queries: string[], cursor: string, lastError: string | null
 const query = async (sql: string, params: any[] = []): Promise<any> => {
     queries.push(sql)
     if (sql.startsWith('SELECT last_event_id')) return { rows: locked ? [] : [{ ready, last_event_id: cursor, last_error: lastError }] }
-    if (sql.includes('FROM mill_events WHERE id >')) return { rows: complete ? [] : [{ id: 'b', ingestion_id: 'logs', processing_status: 'processed' }] }
-    if (sql.startsWith('INSERT INTO mill_log_dimensions') && fail) throw new Error('Projection write failed')
-    if (sql.startsWith('UPDATE mill_log_dimensions_state SET last_event_id')) { cursor = params[0]; ready = params[1] }
+    if (sql.includes('FROM events WHERE id >')) return { rows: complete ? [] : [{ id: 'b', ingestion_id: 'logs', processing_status: 'processed' }] }
+    if (sql.startsWith('INSERT INTO log_dimensions') && fail) throw new Error('Projection write failed')
+    if (sql.startsWith('UPDATE log_dimensions_state SET last_event_id')) { cursor = params[0]; ready = params[1] }
     return { rows: [] }
 }
 mock.module('#db', () => ({ withTransaction: async (work: any) => work(query) }))
@@ -19,14 +19,14 @@ test('projection backfill is bounded, source-locked, and ready only after the fi
     expect(queries.some(sql => sql.includes('event_timestamp::text AS event_timestamp'))).toBe(true)
     complete = true
     expect(await backfillLogDimensions(1)).toEqual({ processed: 0, ready: true })
-    expect(queries).toContain('ANALYZE mill_log_dimensions')
+    expect(queries).toContain('ANALYZE log_dimensions')
 })
 test('failed projection persistence leaves the checkpoint unchanged for retry', async () => {
     fail = true
     await expect(backfillLogDimensions(1)).rejects.toThrow('Projection write failed')
     expect(cursor).toBe('')
     expect(ready).toBe(false)
-    expect(queries).toContain('UPDATE mill_log_dimensions_state SET last_error = $1 WHERE id = TRUE')
+    expect(queries).toContain('UPDATE log_dimensions_state SET last_error = $1 WHERE id = TRUE')
     fail = false
     await backfillLogDimensions(1)
     expect(cursor).toBe('b')
@@ -40,7 +40,7 @@ test('another backfill owner and completed initialization both avoid duplicate w
     expect(queries).toHaveLength(1)
 })
 test('only exact supported dimensions use the compact predicate', () => {
-    const active = 'EXISTS (SELECT 1 FROM organizations o WHERE o.id = mill_events.organization_id AND o.status = \'active\')'
+    const active = 'EXISTS (SELECT 1 FROM organizations o WHERE o.id = events.organization_id AND o.status = \'active\')'
     expect(dimensionLogWhere(['ingestion_id = \'logs\'', 'processing_status = \'processed\'', 'normalized->>\'log_type\' = $1', 'normalized->>\'severity\' IN (\'high\', \'critical\')', 'normalized->>\'service\' = $2', active]))
         .toEqual(['log_type = $1', 'severity IN (\'high\', \'critical\')', 'service = $2', active])
     for (const predicate of ['normalized->>\'message\' = $1', 'strpos(lower(normalized::text), $1) > 0', 'user_id = $1', 'normalized->\'detections\' IS NOT NULL']) expect(dimensionLogWhere([predicate])).toBeNull()
@@ -66,5 +66,5 @@ test('a successful ready check clears a stale connection failure without rebuild
     ready = true; lastError = 'timeout exceeded when trying to connect'
     expect(await backfillLogDimensions()).toEqual({ processed: 0, ready: true })
     expect(queries).toHaveLength(2)
-    expect(queries[1]).toBe('UPDATE mill_log_dimensions_state SET last_error = NULL WHERE id = TRUE')
+    expect(queries[1]).toBe('UPDATE log_dimensions_state SET last_error = NULL WHERE id = TRUE')
 })

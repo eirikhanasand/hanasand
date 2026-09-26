@@ -5,7 +5,7 @@ import { storedSourceLog } from './storedSources.ts'
 // Revisit old exclusion markers using the original retained log, not the
 // sanitized marker. Finding keys and processing status make retries idempotent.
 export async function recoverUnassignedLogs(process: (logs: LogInput[]) => Promise<void>) {
-    const markers = (await run(`SELECT log_key FROM mill_events
+    const markers = (await run(`SELECT log_key FROM events
         WHERE ingestion_id='logs' AND processing_status='skipped'
           AND normalized->>'processing_reason'='Organization is missing or inactive'
         ORDER BY normalized->>'organization_retry_at' NULLS FIRST, id LIMIT 100`)).rows
@@ -18,6 +18,6 @@ export async function recoverUnassignedLogs(process: (logs: LogInput[]) => Promi
         const logs: LogInput[] = source === 'service_logs' ? rows : rows.map(row => storedSourceLog(source, row))
         await process(logs)
     }
-    await run(`UPDATE mill_events SET normalized=normalized || jsonb_build_object('organization_retry_at', clock_timestamp())
+    await run(`UPDATE events SET normalized=normalized || jsonb_build_object('organization_retry_at', clock_timestamp())
         WHERE log_key=ANY($1::text[]) AND processing_status='skipped'`, [markers.map(row => row.log_key)])
 }

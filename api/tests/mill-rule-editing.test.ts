@@ -7,8 +7,8 @@ let rows: any[] = [], audits: any[] = [], findings: any[] = [], events: any[] = 
 const query = async (sql: string, p: any[] = []): Promise<any> => {
     if (sql.includes('FROM organizations')) return { rows: p[0] === 'org-a' ? [{ role }] : [] }
     if (sql.includes('pg_advisory_xact_lock')) return { rows: [] }
-    if (sql.includes('FROM mill_rules')) return { rows: rows.filter(row => row.organization_id === p[0] && (!sql.includes('rule_id = $2') || row.rule_id === p[1])) }
-    if (sql.includes('INSERT INTO mill_rules')) {
+    if (sql.includes('FROM rules')) return { rows: rows.filter(row => row.organization_id === p[0] && (!sql.includes('rule_id = $2') || row.rule_id === p[1])) }
+    if (sql.includes('INSERT INTO rules')) {
         const row = { id: p[0], organization_id: p[1], rule_id: p[2], version: p[3], name: p[4], family: p[5], severity: p[6], explanation: p[7], definition: JSON.parse(p[8]), source: p[9], source_reference: p[10], enabled: p[11] }
         rows = [...rows.filter(old => old.id !== row.id), row]
         return { rows: [row] }
@@ -18,7 +18,7 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
         audits.push({ id: String(audits.length), event_type: p[0], actor_id: p[4], object_type: p[5], object_id: p[6], organization_id: p[7], context: JSON.parse(p[12]), created_at: '2026-09-14T12:00:00Z' })
         return { rows: [] }
     }
-    if (sql.includes('AS hits FROM mill_findings')) {
+    if (sql.includes('AS hits FROM findings')) {
         expect(p[0]).toBe('org-a')
         const totals = new Map<string, number>()
         for (const finding of findings.filter(row => row.organizationId === p[0] && p[1].includes(row.ruleId))) totals.set(finding.ruleId, (totals.get(finding.ruleId) || 0) + 1)
@@ -27,20 +27,20 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
         if (p.includes('mongodb.cashflow_connections.v1')) result.push({ rule_id: 'mongodb.cashflow_connections.v1', hits: '42' })
         return { rows: result }
     }
-    if (sql.includes('SELECT count(*)::text AS count FROM mill_findings')) return { rows: [{ count: String(findings.filter(row => row.organizationId === p[0] && row.ruleId === p[1]).length) }] }
+    if (sql.includes('SELECT count(*)::text AS count FROM findings')) return { rows: [{ count: String(findings.filter(row => row.organizationId === p[0] && row.ruleId === p[1]).length) }] }
     if (sql.includes('context->\'after\'->>\'version\'')) return { rows: audits.filter(row => row.organization_id === p[0] && row.object_id === p[1] && (row.context.after?.version === p[3] || row.context.before?.version === p[3])).slice(-1) }
     if (sql.includes('FROM system_events')) return { rows: audits.filter(row => row.organization_id === p[0] && (row.object_id === p[1] || row.object_id === p[2])).slice(p[3], p[3] + 51) }
-    if (sql.includes('INSERT INTO mill_events')) {
+    if (sql.includes('INSERT INTO events')) {
         events.push({ id: p[0], organization_id: p[2], event_timestamp: p[5], event_type: p[6], action: p[7], outcome: p[8], user_id: p[9], source_ip: p[11], normalized: JSON.parse(p[15]) })
         return { rows: [] }
     }
-    if (sql.includes('UPDATE mill_events')) return { rows: [] }
-    if (sql.trimStart().startsWith('SELECT') && sql.includes('FROM mill_events')) {
+    if (sql.includes('UPDATE events')) return { rows: [] }
+    if (sql.trimStart().startsWith('SELECT') && sql.includes('FROM events')) {
         const result = events.filter(row => row.organization_id === p[0] && (sql.includes('source_ip = $2') ? row.source_ip === p[1] : row.user_id === p[1]) && row.id !== p[2] && row.event_type === 'authentication' && row.action === 'login' && Date.parse(row.event_timestamp) <= Date.parse(p[3]))
             .sort((a, b) => Date.parse(b.event_timestamp) - Date.parse(a.event_timestamp))
         return { rows: sql.includes('INTERVAL \'1 minute\'') ? result.filter(row => row.outcome === 'failure' && Date.parse(row.event_timestamp) >= Date.parse(p[3]) - p[4] * 60000) : result.slice(0, p[4]) }
     }
-    if (sql.includes('INSERT INTO mill_findings')) { findings.push(...JSON.parse(p[0]).map((item: any) => ({ organizationId: item.organization_id, ruleId: item.rule_id, severity: item.severity, evidence: item.evidence }))); return { rows: [] } }
+    if (sql.includes('INSERT INTO findings')) { findings.push(...JSON.parse(p[0]).map((item: any) => ({ organizationId: item.organization_id, ruleId: item.rule_id, severity: item.severity, evidence: item.evidence }))); return { rows: [] } }
     if (sql.includes('INSERT INTO log_analyze_receipts')) return { rows: [] }
     throw new Error(`Unexpected query: ${sql}`)
 }

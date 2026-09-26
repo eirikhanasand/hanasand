@@ -29,7 +29,7 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real readiness ingestion ke
         await query('CREATE TABLE organizations(id text PRIMARY KEY,name text,status text,created_at timestamptz DEFAULT NOW(),audit_safe_metadata jsonb DEFAULT \'{}\')')
         await query('INSERT INTO organizations(id,name,status) VALUES(\'platform\',\'Hanasand\',\'active\')')
         const schema = readFileSync(new URL('../src/utils/db/ensureSchema.ts', import.meta.url), 'utf8')
-        for (const table of ['service_logs', 'mill_rules', 'system_events']) {
+        for (const table of ['service_logs', 'rules', 'system_events']) {
             const definition = schema.match(new RegExp('CREATE TABLE IF NOT EXISTS ' + table + ' \\([\\s\\S]*?\\n        \\)'))?.[0]
             if (!definition) throw new Error(`Missing schema ${table}`)
             await query(definition)
@@ -39,7 +39,7 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real readiness ingestion ke
         const { recordLogBatch } = await import('../src/utils/logs/recordLog.ts')
         await install()
         configure()
-        await query('UPDATE mill_rules SET enabled=true WHERE rule_id=$1', [readinessAuditRuleId])
+        await query('UPDATE rules SET enabled=true WHERE rule_id=$1', [readinessAuditRuleId])
         let serial = 0
         const entry = () => { const { logs, fact } = fixture(serial++); return signed(logs,fact) }
         const ingest = (logs: ReturnType<typeof entry>) => transaction(tx => recordLogBatch(logs as any, tx as any))
@@ -86,11 +86,11 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real readiness ingestion ke
         await retained(duplicate)
         expect(await count('log_analyze_receipts')).toBe(0)
         for (const mode of ['disable', 'keep', 'custom-keep']) {
-            if (mode === 'disable') await query('UPDATE mill_rules SET enabled=false WHERE rule_id=$1', [readinessAuditRuleId])
-            if (mode === 'keep') await query('UPDATE mill_rules SET enabled=true,definition=jsonb_set(definition,\'{action}\',\'"keep"\') WHERE rule_id=$1', [readinessAuditRuleId])
+            if (mode === 'disable') await query('UPDATE rules SET enabled=false WHERE rule_id=$1', [readinessAuditRuleId])
+            if (mode === 'keep') await query('UPDATE rules SET enabled=true,definition=jsonb_set(definition,\'{action}\',\'"keep"\') WHERE rule_id=$1', [readinessAuditRuleId])
             if (mode === 'custom-keep') {
-                await query('UPDATE mill_rules SET enabled=true,definition=$2::jsonb WHERE rule_id=$1', [readinessAuditRuleId, JSON.stringify(readinessAuditDefinition)])
-                await query(`INSERT INTO mill_rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
+                await query('UPDATE rules SET enabled=true,definition=$2::jsonb WHERE rule_id=$1', [readinessAuditRuleId, JSON.stringify(readinessAuditDefinition)])
+                await query(`INSERT INTO rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
                     VALUES('keep','platform','custom.readiness_keep','1','Keep Readiness','Custom','low','Keep Readiness evidence',$1::jsonb,'owned',true)`,
                 [JSON.stringify({ match: 'all', stage: 'analyze', action: 'keep', conditions: [{ path: 'process.executable', operator: 'equals', value: '/usr/lib/postgresql/15/bin/pg_isready' }] })])
             }
@@ -100,8 +100,8 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real readiness ingestion ke
             await retained(protectedChain)
             expect(await count('log_analyze_receipts')).toBe(0)
         }
-        await query('DELETE FROM mill_rules WHERE id=\'keep\'')
-        await query(`INSERT INTO mill_rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
+        await query('DELETE FROM rules WHERE id=\'keep\'')
+        await query(`INSERT INTO rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
             VALUES('detect','platform','custom.readiness_detection','1','Detect Readiness','Custom','high','Protect Readiness evidence',$1::jsonb,'owned',true)`,
         [JSON.stringify({ match: 'all', stage: 'detect', action: 'keep', conditions: [{ path: 'process.executable', operator: 'equals', value: '/usr/lib/postgresql/15/bin/pg_isready' }] })])
         const detected = entry()
@@ -109,7 +109,7 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real readiness ingestion ke
         await ingest(good)
         await retained(detected); await retained(good)
         expect(await count('log_analyze_receipts')).toBe(0)
-        await query('DELETE FROM mill_rules WHERE id=\'detect\'')
+        await query('DELETE FROM rules WHERE id=\'detect\'')
         const clean = entry()
         await ingest(clean)
         expect(await count('log_analyze_receipts')).toBe(0)
@@ -124,7 +124,7 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real readiness ingestion ke
             { ...readinessAuditDefinition, parameters:undefined },
         ]
         for(const policy of policies) {
-            await query('UPDATE mill_rules SET definition=$2::jsonb WHERE rule_id=$1',[readinessAuditRuleId,JSON.stringify(policy)])
+            await query('UPDATE rules SET definition=$2::jsonb WHERE rule_id=$1',[readinessAuditRuleId,JSON.stringify(policy)])
             const newlyProtected=entry()
             await ingest(newlyProtected); await retained(newlyProtected)
             // Delete only this disposable test's indexed replay, so every policy must independently retain it again.
@@ -133,7 +133,7 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real readiness ingestion ke
             expect(await count('log_readiness_audit_receipts')).toBe(3)
             expect(await count('log_analyze_receipts')).toBe(0)
         }
-        await query('UPDATE mill_rules SET definition=$2::jsonb WHERE rule_id=$1',[readinessAuditRuleId,JSON.stringify(readinessAuditDefinition)])
+        await query('UPDATE rules SET definition=$2::jsonb WHERE rule_id=$1',[readinessAuditRuleId,JSON.stringify(readinessAuditDefinition)])
         const allowedAgain=entry()
         await ingest(allowedAgain)
         expect(await count('log_readiness_audit_receipts')).toBe(4)

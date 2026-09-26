@@ -37,15 +37,15 @@ const records = Array.from({ length: count }, (_, i) => {
 })
 const percentile = (values: number[], p: number) => [...values].sort((a, b) => a - b)[Math.max(0, Math.ceil(values.length * p) - 1)] || 0
 async function setup(optimized: boolean, ginKB: number) {
-    await q('TRUNCATE mill_events, mill_findings CASCADE')
+    await q('TRUNCATE events, findings CASCADE')
     for (const statement of logDimensionsSchema) await q(statement)
     for (const statement of logCountsSchema) await q(statement)
     if (!optimized) {
         for (const definition of catalog.functions) await q(definition)
-        await q(`CREATE OR REPLACE TRIGGER mill_log_dimensions_update AFTER UPDATE ON mill_events
-            REFERENCING NEW TABLE AS changed_events FOR EACH STATEMENT EXECUTE FUNCTION sync_mill_log_dimensions()`)
+        await q(`CREATE OR REPLACE TRIGGER log_dimensions_update AFTER UPDATE ON events
+            REFERENCING NEW TABLE AS changed_events FOR EACH STATEMENT EXECUTE FUNCTION sync_log_dimensions()`)
     }
-    await q(`ALTER INDEX idx_mill_logs_phrase_trgm SET (gin_pending_list_limit=${ginKB})`)
+    await q(`ALTER INDEX idx_logs_phrase_trgm SET (gin_pending_list_limit=${ginKB})`)
     await q('CHECKPOINT')
 }
 try {
@@ -55,11 +55,11 @@ try {
     await q('CREATE TABLE organizations (id text PRIMARY KEY, status text, audit_safe_metadata jsonb DEFAULT \'{}\', name text, created_at timestamptz DEFAULT NOW())')
     await q('CREATE TABLE users (id text PRIMARY KEY)')
     await q('INSERT INTO organizations(id,status,name) VALUES (\'benchmark\',\'active\',\'Benchmark\')')
-    for (const table of ['mill_events', 'mill_findings', 'mill_rules']) {
+    for (const table of ['events', 'findings', 'rules']) {
         const definition = schema.match(new RegExp('CREATE TABLE IF NOT EXISTS ' + table + ' \\([\\s\\S]*?\\n        \\)'))?.[0]
         assert.ok(definition); await q(definition)
     }
-    await q('ALTER TABLE mill_events ADD COLUMN log_key text')
+    await q('ALTER TABLE events ADD COLUMN log_key text')
     for (const statement of logDimensionsSchema) await q(statement)
     for (const statement of logCountsSchema) await q(statement)
     for (const { name, definition } of catalog.indexes) {
@@ -94,7 +94,7 @@ try {
             const searcher = (async () => {
                 while (!stopped) {
                     const start = performance.now()
-                    try { await reader.query(`SELECT id FROM mill_events WHERE ingestion_id='logs' AND processing_status='processed'
+                    try { await reader.query(`SELECT id FROM events WHERE ingestion_id='logs' AND processing_status='processed'
                         AND ${basicLogSearchPredicate('$1')} ORDER BY event_timestamp DESC,id DESC LIMIT 200`, ['whoami']) }
                     catch (error) { searchError = error; break }
                     searchMs.push(performance.now() - start)
@@ -112,7 +112,7 @@ try {
                     freshMs.push(performance.now() - began)
                 }
                 // Include deferred index cleanup and data writes, not just acceptance.
-                await q('SELECT gin_clean_pending_list(\'idx_mill_logs_phrase_trgm\')')
+                await q('SELECT gin_clean_pending_list(\'idx_logs_phrase_trgm\')')
                 await q('CHECKPOINT')
             } finally { stopped = true; await searcher }
             if (searchError) throw searchError
@@ -121,12 +121,12 @@ try {
             const writerDelta = Object.fromEntries(Object.keys(writerBefore).map(key => [key, Number(writerAfter[key]) - Number(writerBefore[key])]))
             const walBytes = Number((await q('SELECT pg_wal_lsn_diff(pg_current_wal_lsn(),$1) AS bytes', [initial])).rows[0].bytes)
             const total = count + Math.ceil(count / scenario.batch)
-            assert.equal(Number((await q('SELECT count(*) FROM mill_events WHERE processing_status=\'processed\'')).rows[0].count), total)
-            assert.equal(Number((await q('SELECT count(*) FROM mill_log_dimensions')).rows[0].count), total)
-            assert.equal(Number((await q('SELECT sum(event_count) FROM mill_log_counts WHERE bucket_seconds=3600')).rows[0].sum), total)
+            assert.equal(Number((await q('SELECT count(*) FROM events WHERE processing_status=\'processed\'')).rows[0].count), total)
+            assert.equal(Number((await q('SELECT count(*) FROM log_dimensions')).rows[0].count), total)
+            assert.equal(Number((await q('SELECT sum(event_count) FROM log_counts WHERE bucket_seconds=3600')).rows[0].sum), total)
             const updateStart = performance.now(), updateWal = (await q('SELECT pg_current_wal_lsn() AS lsn')).rows[0].lsn
-            const updateRows = (await q('UPDATE mill_events SET normalized=normalized||jsonb_build_object(\'evaluated_at\',\'2026-09-20T00:00:00Z\') WHERE id IN (SELECT id FROM mill_events ORDER BY id LIMIT 1000)')).rowCount!
-            await q('SELECT gin_clean_pending_list(\'idx_mill_logs_phrase_trgm\')')
+            const updateRows = (await q('UPDATE events SET normalized=normalized||jsonb_build_object(\'evaluated_at\',\'2026-09-20T00:00:00Z\') WHERE id IN (SELECT id FROM events ORDER BY id LIMIT 1000)')).rowCount!
+            await q('SELECT gin_clean_pending_list(\'idx_logs_phrase_trgm\')')
             await q('CHECKPOINT')
             const updateMs = performance.now() - updateStart
             const updateWalBytes = Number((await q('SELECT pg_wal_lsn_diff(pg_current_wal_lsn(),$1) AS bytes', [updateWal])).rows[0].bytes)

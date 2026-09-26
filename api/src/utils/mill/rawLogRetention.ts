@@ -6,7 +6,7 @@ export const RAW_LOG_RETENTION_JOB_ID = 'api-raw-log-retention'
 // raw records whose detection processing is pending, skipped, failed or absent.
 export const rawLogRetentionSql = `WITH eligible AS MATERIALIZED (
     SELECT s.id FROM service_logs s
-    JOIN mill_events e ON e.log_key = 'service:' || s.id::text
+    JOIN events e ON e.log_key = 'service:' || s.id::text
     WHERE s.created_at < NOW() - INTERVAL '7 days'
       AND e.ingestion_id = 'logs' AND e.processing_status = 'processed'
     ORDER BY s.created_at, s.id LIMIT 5000
@@ -41,7 +41,7 @@ export async function retainTrafficLogs() {
         if (!lock.rows[0].acquired) return { deleted: 0 }
         const { rows: [result] } = await query(`WITH eligible AS MATERIALIZED (
             SELECT t.id FROM traffic_events t
-            JOIN mill_events e ON e.log_key = 'service:traffic_events:' || t.id::text
+            JOIN events e ON e.log_key = 'service:traffic_events:' || t.id::text
             WHERE t.created_at < date_trunc('hour', NOW() - INTERVAL '7 days')
               AND t.created_at < (SELECT covered_before FROM traffic_history_state WHERE singleton)
               AND e.ingestion_id = 'logs' AND e.processing_status = 'processed'

@@ -11,7 +11,7 @@ import { completedSshWindows, completedTelemetryCycles, routineEvidence, routine
 export async function analyzeRoutineGroupBatch<T extends RoutineLog>(entries: T[], query: typeof run, options?: { historicalReplay?: { ruleId: string } }): Promise<T[]> {
     const selected = options?.historicalReplay?.ruleId
     const transport = entries.some(log => log.service === 'sshd') && (!selected || selected === sshTransportRuleId)
-        ? await query(`SELECT r.definition FROM mill_rules r JOIN organizations o ON o.id=r.organization_id
+        ? await query(`SELECT r.definition FROM rules r JOIN organizations o ON o.id=r.organization_id
             WHERE o.status='active' AND (o.id=$1 OR ($1::text IS NULL AND lower(o.name)='hanasand'))
             AND r.rule_id=$2 AND r.enabled AND r.definition->>'stage'='analyze' AND r.definition->>'action'='drop'
             ORDER BY o.created_at LIMIT 1 FOR SHARE OF r,o`, [process.env.PLATFORM_LOG_ORGANIZATION_ID || null, sshTransportRuleId]) : null
@@ -26,7 +26,7 @@ export async function analyzeRoutineGroupBatch<T extends RoutineLog>(entries: T[
     const configured = new Map<string, Awaited<ReturnType<typeof loadConfiguredMillRules>>>()
     for (const group of groups) {
         if (group.context.some(log => customRetentionAction(normalizeLogEvent({ ...log, service: log.service!, id: log.sourceEventId!, created_at: log.timestamp! }), retention) === 'keep')) continue
-        const result = await query(`SELECT r.organization_id,r.version,r.definition FROM mill_rules r JOIN organizations o ON o.id=r.organization_id
+        const result = await query(`SELECT r.organization_id,r.version,r.definition FROM rules r JOIN organizations o ON o.id=r.organization_id
             WHERE o.status='active' AND (o.id=$1 OR ($1::text IS NULL AND lower(o.name)='hanasand')) AND r.rule_id=$2
             AND r.enabled AND r.definition->>'stage'='analyze' AND r.definition->>'action'='drop'
             ORDER BY o.created_at LIMIT 1 FOR SHARE OF r,o`, [process.env.PLATFORM_LOG_ORGANIZATION_ID || null, group.ruleId])

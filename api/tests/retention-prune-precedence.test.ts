@@ -10,7 +10,7 @@ test('historical pruning honors Store without deleting evidence or incrementing 
     for (const enabled of [true, false]) {
         const writes: string[] = []
         const query: any = async (sql: string, params: unknown[]) => {
-            if (sql.includes('FROM mill_rules r')) {
+            if (sql.includes('FROM rules r')) {
                 expect(params[0]).toBe('platform')
                 return { rows: [{ source: 'owned', enabled, definition: { stage: 'analyze', action: 'keep', conditions: [{ path: 'service', operator: 'equals', value: 'cdn' }] } }] }
             }

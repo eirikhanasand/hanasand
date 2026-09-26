@@ -19,7 +19,7 @@ export async function scanRulePreview(organizationId: string, canReadLogs: boole
         AND ($5::timestamptz IS NULL OR (event_timestamp,id) < ($5::timestamptz,$6::text)) AND ${filter}`
     const rules = input.action === 'drop' ? await loadLogRetentionRules(organizationId, query) : []
     const result = await query(`SELECT id, event_timestamp::text AS timestamp, normalized${input.action === 'drop' ? ', original' : ''}
-        FROM mill_events WHERE ${scope} ${input.action === 'drop' ? 'AND normalized->>\'severity\' = \'low\'' : ''}
+        FROM events WHERE ${scope} ${input.action === 'drop' ? 'AND normalized->>\'severity\' = \'low\'' : ''}
         ORDER BY event_timestamp DESC, id DESC LIMIT 2000`, params)
     const eligible = result.rows.filter(row => input.action !== 'drop' || eligibleCustomDrop(row.normalized || {})
         && !retentionStoreMatches(row.normalized || {}, rules) && !retentionStoreMatches(row.original || {}, rules)) as PreviewEvent[]

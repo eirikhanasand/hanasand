@@ -10,7 +10,7 @@ test('only enabled Drop rules admit receipts; suspicious or incomplete events ne
         const query: any = async (sql: string, params: unknown[]) => {
             statements.push(sql)
             if (sql.includes('WHERE organization_id = $1') || sql.includes('r.source=\'owned\'')) return { rows: [] }
-            if (sql.includes('FROM mill_rules')) {
+            if (sql.includes('FROM rules')) {
                 expect(sql).toContain('r.enabled AND r.definition->>\'stage\'=\'analyze\' AND r.definition->>\'action\'=\'drop\'')
                 expect(params[1]).toBe(cdnRefreshRuleId)
                 return { rows: enabled ? [{ organization_id: 'platform', version: '1', definition: cdnRefreshDefinition }] : [] }
@@ -29,7 +29,7 @@ test('receipt failure prevents acknowledgement; replay uses stable idempotent re
     const params: unknown[][] = []
     const query: any = async (sql: string, values: unknown[]) => {
         if (sql.includes('WHERE organization_id = $1') || sql.includes('r.source=\'owned\'')) return { rows: [] }
-        if (sql.includes('FROM mill_rules')) return { rows: [{ organization_id: 'platform', version: '1', definition: cdnRefreshDefinition }] }
+        if (sql.includes('FROM rules')) return { rows: [{ organization_id: 'platform', version: '1', definition: cdnRefreshDefinition }] }
         expect(sql).toContain('ON CONFLICT DO NOTHING')
         params.push(values)
         return { rows: [], rowCount: params.length === 1 ? 1 : 0 }
@@ -39,7 +39,7 @@ test('receipt failure prevents acknowledgement; replay uses stable idempotent re
     expect(params[0]).toEqual(params[1])
     const failing: any = async (sql: string) => {
         if (sql.includes('WHERE organization_id = $1') || sql.includes('r.source=\'owned\'')) return { rows: [] }
-        if (sql.includes('FROM mill_rules')) return { rows: [{ organization_id: 'platform', version: '1', definition: cdnRefreshDefinition }] }
+        if (sql.includes('FROM rules')) return { rows: [{ organization_id: 'platform', version: '1', definition: cdnRefreshDefinition }] }
         throw new Error('receipt failed')
     }
     await expect(analyzeCdnRefresh(fixture(), failing)).rejects.toThrow('receipt failed')

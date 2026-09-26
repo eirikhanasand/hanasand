@@ -46,7 +46,7 @@ test('ingestion retains readiness audit evidence and suspicious variants with bu
     let stored: unknown[][] = []
     const query: any = async (sql: string, params: any[] = []) => {
         if (sql.includes('r.source=\'owned\'')) return { rows: [] }
-        if (sql.includes('FROM mill_rules')) return { rows: [{ organization_id: 'platform', version: '1', enabled: true,
+        if (sql.includes('FROM rules')) return { rows: [{ organization_id: 'platform', version: '1', enabled: true,
             definition: { stage: 'analyze', action: 'drop', parameters: {} } }] }
         if (sql.includes('INSERT INTO service_logs')) { stored = JSON.parse(params[0]); return { rows: [], rowCount: rows.length } }
         writes.push(sql)

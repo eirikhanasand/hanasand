@@ -13,13 +13,13 @@ const organizationId = process.argv[2]
 if (!organizationId || !(await run('SELECT id FROM organizations WHERE id=$1 AND status=\'active\'', [organizationId])).rows.length) throw new Error('An active organization ID is required.')
 // Keep the receipt existence check indexed during large historical replays.
 await run('CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_log_proxy_receipts_connection ON log_proxy_receipts(connection_id)')
-await run('SELECT gin_clean_pending_list(\'idx_mill_findings_event_ids\'::regclass)')
+await run('SELECT gin_clean_pending_list(\'idx_findings_event_ids\'::regclass)')
 const ruleId = 'http.self_ingestion_success.v1'
 const conditions = [ ['http.path','/api/logs/ingest'], ['http.method','POST'], ['http.status_code','201'], ['source.ip','128.39.142.218'], ['severity','low'] ]
     .map(([path,value]) => ({path,value,operator:'equals' as const,caseSensitive:true}))
 const definition = {match:'all',stage:'analyze',action:'drop',conditions:[...conditions,{path:'service',operator:'regex',value:'^(hanasand-api(-[1-4])?|http-traffic)$',caseSensitive:true}]}
 await withTransaction(async query => {
-    const saved = (await query('SELECT * FROM mill_rules WHERE organization_id=$1 AND rule_id=$2 FOR UPDATE',[organizationId,eventProtectionRuleId])).rows[0]
+    const saved = (await query('SELECT * FROM rules WHERE organization_id=$1 AND rule_id=$2 FOR UPDATE',[organizationId,eventProtectionRuleId])).rows[0]
     const before = saved?.definition || eventProtectionDefinition
     const policy = normalizeEventProtection(before.protection)
     if (!policy.protection) throw new Error(policy.error)
@@ -30,25 +30,25 @@ await withTransaction(async query => {
     })}
     const after = {...before,protection}
     if (!isDeepStrictEqual(after,before)) {
-        await query(`INSERT INTO mill_rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
+        await query(`INSERT INTO rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
             VALUES($1,$2,$3,'2',$4,'Security','low',$5,$6::jsonb,'hanasand',true)
-            ON CONFLICT(organization_id,rule_id) DO UPDATE SET definition=EXCLUDED.definition,version=(mill_rules.version::int+1)::text,updated_at=NOW()`,
+            ON CONFLICT(organization_id,rule_id) DO UPDATE SET definition=EXCLUDED.definition,version=(rules.version::int+1)::text,updated_at=NOW()`,
         [randomUUID(),organizationId,eventProtectionRuleId,eventProtectionRule.name,eventProtectionRule.explanation,JSON.stringify(after)])
         await query(`INSERT INTO system_events(event_type,source,object_type,object_id,organization_id,context)
             VALUES('mill.rule.updated','maintenance','mill_rule',$1,$2,$3::jsonb)`,[eventProtectionRuleId,organizationId,JSON.stringify({ruleId:eventProtectionRuleId,before:{definition:before},after:{definition:after},reason:'Allow expected POST transport flags only for successful self-ingestion responses.'})])
     }
-    const inserted = await query(`INSERT INTO mill_rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
+    const inserted = await query(`INSERT INTO rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
         VALUES($1,$2,$3,'1','Successful self-ingestion responses','HTTP','low',$4,$5::jsonb,'owned',true)
         ON CONFLICT(organization_id,rule_id) DO NOTHING RETURNING id`,[randomUUID(),organizationId,ruleId,'Drop low-severity POST /api/logs/ingest 201 response records from 128.39.142.218. Keep the uploaded events, failures and detected activity.',JSON.stringify(definition)])
     if (inserted.rows.length) await query(`INSERT INTO system_events(event_type,source,object_type,object_id,organization_id,context)
         VALUES('mill.rule.created','maintenance','mill_rule',$1,$2,$3::jsonb)`,[ruleId,organizationId,JSON.stringify({ruleId,after:{severity:'low',enabled:true,definition}})])
 })
-const rule = (await run('SELECT * FROM mill_rules WHERE organization_id=$1 AND rule_id=$2',[organizationId,ruleId])).rows[0]
+const rule = (await run('SELECT * FROM rules WHERE organization_id=$1 AND rule_id=$2',[organizationId,ruleId])).rows[0]
 if (!rule?.enabled || rule.definition.action!=='drop' || !isDeepStrictEqual(rule.definition.conditions,definition.conditions)) throw new Error('Saved drop rule differs from the requested rule.')
 // Select likely matches once, then re-evaluate every source, finding and Store
 // policy under the same locks used by the normal reprocessing worker.
 const services = ['hanasand-api', 'hanasand-api-1', 'hanasand-api-2', 'hanasand-api-3', 'hanasand-api-4', 'http-traffic']
-const events = (await run(`SELECT id,log_key AS key,event_timestamp AS time FROM mill_events WHERE organization_id=$1 AND ingestion_id='logs' AND processing_status='processed' AND normalized->>'service'=ANY($2::text[])
+const events = (await run(`SELECT id,log_key AS key,event_timestamp AS time FROM events WHERE organization_id=$1 AND ingestion_id='logs' AND processing_status='processed' AND normalized->>'service'=ANY($2::text[])
     AND normalized->'http'->>'path'='/api/logs/ingest' AND normalized->'source'->>'ip'='128.39.142.218'
     AND normalized->'http'->>'status_code'='201' AND normalized->>'severity'='low'`,[organizationId,services])).rows
 const sources = (await run(`SELECT id,created_at AS time FROM service_logs WHERE service=ANY($1::text[]) AND level IN ('info','debug') AND (
@@ -76,10 +76,10 @@ for (let offset=0;offset<unique.length;offset+=1000) {
         // audit flushes all earlier deletes before this command reports success.
         await query('SET LOCAL synchronous_commit=off')
         for (const lock of ['mill:service-logs','mill:live-service-logs']) await query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[lock])
-        const currentRule=(await query('SELECT * FROM mill_rules WHERE organization_id=$1 AND rule_id=$2 FOR SHARE',[organizationId,ruleId])).rows[0]
+        const currentRule=(await query('SELECT * FROM rules WHERE organization_id=$1 AND rule_id=$2 FOR SHARE',[organizationId,ruleId])).rows[0]
         if (!currentRule?.enabled || currentRule.version!==rule.version) throw new Error('Rule changed during replay.')
         const items: Parameters<typeof reprocessRuleItems>[0]=[]
-        const present=(await query('SELECT id,log_key AS key,normalized AS event,original FROM mill_events WHERE organization_id=$1 AND log_key=ANY($2::text[]) FOR UPDATE',[organizationId,batch.map(row=>row.key)])).rows
+        const present=(await query('SELECT id,log_key AS key,normalized AS event,original FROM events WHERE organization_id=$1 AND log_key=ANY($2::text[]) FOR UPDATE',[organizationId,batch.map(row=>row.key)])).rows
         items.push(...present)
         const keys=new Set(present.map(row=>row.key))
         const remaining=batch.filter(row=>!keys.has(row.key))
@@ -103,8 +103,8 @@ for (let offset=0;offset<unique.length;offset+=1000) {
         const result=await reprocessRuleItems(items,{organization_id:organizationId},currentRule,async (sql,values)=>{
             // Bulk-remove the reporting rows before the FK cascade so their
             // statement-level count trigger runs once, rather than once per event.
-            if(sql.startsWith('DELETE FROM mill_events WHERE organization_id=')) await query(`DELETE FROM mill_log_dimensions d
-                USING mill_events e WHERE d.event_id=e.id AND e.organization_id=$1 AND e.id=ANY($2::text[])`,values)
+            if(sql.startsWith('DELETE FROM events WHERE organization_id=')) await query(`DELETE FROM log_dimensions d
+                USING events e WHERE d.event_id=e.id AND e.organization_id=$1 AND e.id=ANY($2::text[])`,values)
             return query(sql,values)
         })
         if(unused.length) await query(`INSERT INTO log_proxy_requests(connection_id,service_log_id,connection,access)

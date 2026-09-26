@@ -52,9 +52,9 @@ export async function reprocessBuiltinPage(job: ReprocessJob, query: typeof run)
         AND created_at<=$3::timestamptz AND ($4::timestamptz IS NULL OR created_at>=$4::timestamptz)
         ORDER BY id DESC LIMIT $5 FOR UPDATE`, [job.cursor.id || null, job.cursor.serviceEnd, job.until_time, job.from_time, limit])).rows as LogInput[]
     const keys = rows.map(row => `service:${row.id}`)
-    const projections = (await query(`SELECT id,log_key,organization_id,normalized,original FROM mill_events
+    const projections = (await query(`SELECT id,log_key,organization_id,normalized,original FROM events
         WHERE log_key=ANY($1::text[]) FOR UPDATE`, [keys])).rows
-    const findings = new Set((await query('SELECT event_ids FROM mill_findings WHERE event_ids && $1::text[]', [projections.map(row => row.id)])).rows.flatMap(row => row.event_ids))
+    const findings = new Set((await query('SELECT event_ids FROM findings WHERE event_ids && $1::text[]', [projections.map(row => row.id)])).rows.flatMap(row => row.event_ids))
     const canonical = await canonicalReplayKeys(keys, query)
     const retention = await loadLogRetentionRules(job.organization_id, query)
     const { loadConfiguredMillRules, collectMillEventFindings, normalizeMillEvent } = await import('../../handlers/mill.ts')
@@ -99,10 +99,10 @@ export async function reprocessBuiltinPage(job: ReprocessJob, query: typeof run)
         for (const row of rows) if (row.source_event_id && dropped.has(row.source_event_id)) removed.push(String(row.id))
     }
     const removedKeys = removed.map(id => `service:${id}`)
-    const events = await query('DELETE FROM mill_events WHERE organization_id=$1 AND log_key=ANY($2::text[]) RETURNING id', [job.organization_id, removedKeys])
+    const events = await query('DELETE FROM events WHERE organization_id=$1 AND log_key=ANY($2::text[]) RETURNING id', [job.organization_id, removedKeys])
     const sources = await query('DELETE FROM service_logs WHERE id=ANY($1::bigint[]) RETURNING id', [removed])
     const done = rows.length < limit
-    await query(`UPDATE mill_rule_reprocess_jobs SET status=$2,cursor=$3::jsonb,scanned=scanned+$4,
+    await query(`UPDATE rule_reprocess_jobs SET status=$2,cursor=$3::jsonb,scanned=scanned+$4,
         matched=matched+$5,protected=protected+$6,removed_events=removed_events+$7,removed_sources=removed_sources+$8,
         error=NULL,updated_at=NOW() WHERE id=$1`, [job.id, done ? 'completed' : 'running',
         JSON.stringify({ ...job.cursor, id: String(rows.at(-1)?.id || job.cursor.id || '0') }), rows.length, removed.length,
@@ -110,6 +110,6 @@ export async function reprocessBuiltinPage(job: ReprocessJob, query: typeof run)
     if (done) await query(`INSERT INTO system_events(event_type,source,object_type,object_id,organization_id,context)
         SELECT 'mill.rule.reprocessed','mill','mill_rule',rule_id,organization_id,
             jsonb_build_object('jobId',id,'version',rule_version,'scanned',scanned,'matched',matched,'protected',protected,'removedEvents',removed_events,'removedSources',removed_sources)
-        FROM mill_rule_reprocess_jobs WHERE id=$1`, [job.id])
+        FROM rule_reprocess_jobs WHERE id=$1`, [job.id])
     return true
 }

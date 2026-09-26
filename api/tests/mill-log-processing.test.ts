@@ -1,18 +1,18 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
 let stored: Record<string, any> = {}, findings: any[] = [], fail = false, findingWrites = 0, eventUpdates = 0
 const query = async (sql: string, p: any[] = []): Promise<any> => {
-    if (sql.includes('SELECT log_key FROM mill_events')) return { rows: Object.values(stored)
+    if (sql.includes('SELECT log_key FROM events')) return { rows: Object.values(stored)
         .filter(row => p[0].includes(row.log_key) && row.processing_status === 'processed').map(row => ({ log_key: row.log_key })) }
-    if (sql.includes('INSERT INTO mill_events')) { for (const item of JSON.parse(p[0])) stored[item.id] ||= { id: item.id, log_key: item.key, processing_status: item.processing_status, normalized: item.normalized }; return { rows: JSON.parse(p[0]).map((item: any) => ({ id: item.id })) } }
-    if (sql.includes('SELECT id FROM mill_events')) return { rows: Object.values(stored).filter(row => row.processing_status !== 'processed') }
-    if (sql.includes('INSERT INTO mill_findings')) {
+    if (sql.includes('INSERT INTO events')) { for (const item of JSON.parse(p[0])) stored[item.id] ||= { id: item.id, log_key: item.key, processing_status: item.processing_status, normalized: item.normalized }; return { rows: JSON.parse(p[0]).map((item: any) => ({ id: item.id })) } }
+    if (sql.includes('SELECT id FROM events')) return { rows: Object.values(stored).filter(row => row.processing_status !== 'processed') }
+    if (sql.includes('INSERT INTO findings')) {
         findingWrites++
         if (fail) throw new Error('Storage temporarily failed')
         for (const item of JSON.parse(p[0])) if (!findings.some(row => row.key === item.finding_key)) findings.push({ ...item, key: item.finding_key })
         return { rows: [] }
     }
     if (sql.includes('SELECT rule_id, severity')) return { rows: findings }
-    if (sql.includes('UPDATE mill_events')) { eventUpdates++; for (const item of JSON.parse(p[0])) { stored[item.id].normalized = {...stored[item.id].normalized,...item.result};stored[item.id].processing_status='processed' }return { rows: [] } }
+    if (sql.includes('UPDATE events')) { eventUpdates++; for (const item of JSON.parse(p[0])) { stored[item.id].normalized = {...stored[item.id].normalized,...item.result};stored[item.id].processing_status='processed' }return { rows: [] } }
     throw new Error('Unexpected SQL '+sql)
 }
 mock.module('#db',()=>({ default:query, withTransaction: async(work: any)=>{ const before=structuredClone({stored,findings});try{return await work(query)}catch(error){stored=before.stored;findings=before.findings;throw error} } }))

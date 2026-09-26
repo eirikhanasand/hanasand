@@ -11,9 +11,9 @@ function database(options: { enabled?: boolean, existing?: boolean, fail?: strin
     let recent: any[] = [], dropped = 0
     const query: any = async (sql: string, params: any[] = []) => {
         if (options.fail && sql.includes(options.fail)) throw new Error('write failed')
-        if (sql.includes('FROM mill_rules') && !sql.includes('JOIN organizations')) return { rows: options.customKeep || options.detector ? [{ rule_id: 'fixture-protection', source: 'owned', enabled: true,
+        if (sql.includes('FROM rules') && !sql.includes('JOIN organizations')) return { rows: options.customKeep || options.detector ? [{ rule_id: 'fixture-protection', source: 'owned', enabled: true,
             definition: { stage: options.detector ? 'detect' : 'analyze', action: 'keep', conditions: [{ path: 'service', operator: 'equals', value: 'hanasand_database' }] } }] : [] }
-        if (sql.includes('FROM mill_rules')) return { rows: options.enabled === false ? [] : [{ organization_id: 'platform', version: '1', definition: options.definition || postgresDefinition }] }
+        if (sql.includes('FROM rules')) return { rows: options.enabled === false ? [] : [{ organization_id: 'platform', version: '1', definition: options.definition || postgresDefinition }] }
         if (sql.startsWith('SELECT key')) return { rows: params[2].filter((key: string) => receipts.has(key)).map((key: string) => ({ key })) }
         if (sql.startsWith('SELECT recent')) return { rows: [{ recent }] }
         if (sql.startsWith('UPDATE log_postgres_session_state SET recent')) recent = JSON.parse(params[1])

@@ -14,9 +14,9 @@ export async function ensureIndex(query: typeof run, index: string, statement: s
     if (!existing) await query(statement)
 }
 
-export async function ensureMillSourceConstraint(query: typeof run) {
-    const existing = (await query('SELECT pg_get_constraintdef(oid) AS definition,convalidated FROM pg_constraint WHERE conrelid=to_regclass(\'mill_rules\') AND conname=\'mill_rules_source_check\'')).rows[0]
+export async function ensureRuleSourceConstraint(query: typeof run) {
+    const existing = (await query('SELECT pg_get_constraintdef(oid) AS definition,convalidated FROM pg_constraint WHERE conrelid=to_regclass(\'rules\') AND conname=\'rules_source_check\'')).rows[0]
     const expected = 'CHECK ((source = ANY (ARRAY[\'owned\'::text, \'open_source\'::text, \'hanasand\'::text])))'
     if (existing?.convalidated && existing.definition === expected) return
-    await query('ALTER TABLE mill_rules DROP CONSTRAINT IF EXISTS mill_rules_source_check; ALTER TABLE mill_rules ADD CONSTRAINT mill_rules_source_check CHECK (source IN (\'owned\', \'open_source\', \'hanasand\'))')
+    await query('ALTER TABLE rules DROP CONSTRAINT IF EXISTS rules_source_check; ALTER TABLE rules ADD CONSTRAINT rules_source_check CHECK (source IN (\'owned\', \'open_source\', \'hanasand\'))')
 }

@@ -24,7 +24,7 @@ export async function searchLogPage(query: typeof queryOnce, input: Input) {
     const where = input.where.map(clause => clause.replaceAll('NOW()', snapshot))
     where.push(`event_timestamp <= ${snapshot}`)
     if (cursor) where.push(`(event_timestamp, id) < (${bind(cursor.time)}::timestamptz, ${bind(cursor.id)}::text)`)
-    const select = (clauses: string[]) => `SELECT id, normalized, event_timestamp, organization_id, event_timestamp::text AS cursor_time FROM mill_events WHERE ${clauses.join(' AND ')} ORDER BY ${input.order} LIMIT ${input.limit + 1}`
+    const select = (clauses: string[]) => `SELECT id, normalized, event_timestamp, organization_id, event_timestamp::text AS cursor_time FROM events WHERE ${clauses.join(' AND ')} ORDER BY ${input.order} LIMIT ${input.limit + 1}`
     // Common phrases can match tens of thousands of events. A full page from
     // the newest fifteen minutes is already the correct page for the entire range.
     // Otherwise fall back to the complete search, never a partial result set.

@@ -5,16 +5,16 @@ import { withTransaction } from '#db'
 export async function backfillLogDimensions(limit = 5000) {
     if (!Number.isInteger(limit) || limit < 1 || limit > 10000) throw new Error('Projection batch must contain 1–10000 events.')
     try { return await withTransaction(async query => {
-        const state = (await query('SELECT last_event_id, ready, last_error FROM mill_log_dimensions_state WHERE id = TRUE FOR UPDATE SKIP LOCKED')).rows[0]
+        const state = (await query('SELECT last_event_id, ready, last_error FROM log_dimensions_state WHERE id = TRUE FOR UPDATE SKIP LOCKED')).rows[0]
         if (!state) return { processed: 0, ready: false }
         if (state.ready) {
-            if (state.last_error) await query('UPDATE mill_log_dimensions_state SET last_error = NULL WHERE id = TRUE')
+            if (state.last_error) await query('UPDATE log_dimensions_state SET last_error = NULL WHERE id = TRUE')
             return { processed: 0, ready: true }
         }
         const batch = await query(`SELECT id, organization_id, event_timestamp::text AS event_timestamp, ingestion_id, processing_status,
             normalized->>'severity' AS severity, normalized->>'service' AS service, normalized->>'log_type' AS log_type
-            FROM mill_events WHERE id > $1 ORDER BY id LIMIT $2 FOR SHARE`, [state.last_event_id, limit])
-        await query(`INSERT INTO mill_log_dimensions (event_id, organization_id, event_timestamp, severity, service, log_type)
+            FROM events WHERE id > $1 ORDER BY id LIMIT $2 FOR SHARE`, [state.last_event_id, limit])
+        await query(`INSERT INTO log_dimensions (event_id, organization_id, event_timestamp, severity, service, log_type)
             SELECT id, organization_id, event_timestamp, severity, service, log_type
             FROM jsonb_to_recordset($1::jsonb) AS e(id text, organization_id text, event_timestamp timestamptz,
                 ingestion_id text, processing_status text, severity text, service text, log_type text)
@@ -23,11 +23,11 @@ export async function backfillLogDimensions(limit = 5000) {
                 event_timestamp = EXCLUDED.event_timestamp, severity = EXCLUDED.severity,
                 service = EXCLUDED.service, log_type = EXCLUDED.log_type`, [JSON.stringify(batch.rows)])
         const ready = batch.rows.length < limit
-        if (ready) await query('ANALYZE mill_log_dimensions')
-        await query('UPDATE mill_log_dimensions_state SET last_event_id = $1, ready = $2, last_error = NULL WHERE id = TRUE', [batch.rows.at(-1)?.id || state.last_event_id, ready])
+        if (ready) await query('ANALYZE log_dimensions')
+        await query('UPDATE log_dimensions_state SET last_event_id = $1, ready = $2, last_error = NULL WHERE id = TRUE', [batch.rows.at(-1)?.id || state.last_event_id, ready])
         return { processed: batch.rows.length, ready }
     }) } catch (error) {
-        await withTransaction(query => query('UPDATE mill_log_dimensions_state SET last_error = $1 WHERE id = TRUE',
+        await withTransaction(query => query('UPDATE log_dimensions_state SET last_error = $1 WHERE id = TRUE',
             [(error instanceof Error ? error.message : 'Counter backfill failed').slice(0, 500)])).catch(() => {})
         throw error
     }

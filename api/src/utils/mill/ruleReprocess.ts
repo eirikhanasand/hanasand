@@ -30,7 +30,7 @@ export async function processRuleReprocessJob() {
     try {
         return await withTransaction(async query => {
             await query('SET LOCAL statement_timeout=\'10s\'')
-            const pending = await query('SELECT EXISTS(SELECT 1 FROM mill_rule_reprocess_jobs WHERE status IN (\'queued\',\'running\')) AS pending')
+            const pending = await query('SELECT EXISTS(SELECT 1 FROM rule_reprocess_jobs WHERE status IN (\'queued\',\'running\')) AS pending')
             if (!pending.rows[0].pending) return false
             await query('SET LOCAL lock_timeout=\'5s\'')
             // Join the bounded lock queue: repeatedly probing two busy workers
@@ -40,14 +40,14 @@ export async function processRuleReprocessJob() {
             // Hold both worker locks so a fresh batch cannot recreate deleted rows.
             await query('SELECT pg_advisory_xact_lock(hashtextextended(\'mill:live-service-logs\',0))')
             await query('SET LOCAL lock_timeout=\'1s\'')
-            const job = (await query(`SELECT * FROM mill_rule_reprocess_jobs WHERE status IN ('queued','running')
+            const job = (await query(`SELECT * FROM rule_reprocess_jobs WHERE status IN ('queued','running')
                 ORDER BY updated_at,id LIMIT 1 FOR UPDATE SKIP LOCKED`)).rows[0] as ReprocessJob | undefined
             if (!job) return false
             jobId = job.id
-            const rule = (await query(`SELECT r.* FROM mill_rules r JOIN organizations o ON o.id=r.organization_id
+            const rule = (await query(`SELECT r.* FROM rules r JOIN organizations o ON o.id=r.organization_id
                 WHERE r.organization_id=$1 AND r.rule_id=$2 AND o.status='active' FOR SHARE OF r,o`, [job.organization_id, job.rule_id])).rows[0] as Rule | undefined
             if (!reprocessableRule(rule) || rule.version !== job.rule_version) {
-                await query('UPDATE mill_rule_reprocess_jobs SET status=\'cancelled\',error=\'The rule changed or was disabled. Start a new run to use its current version.\',updated_at=NOW() WHERE id=$1', [job.id])
+                await query('UPDATE rule_reprocess_jobs SET status=\'cancelled\',error=\'The rule changed or was disabled. Start a new run to use its current version.\',updated_at=NOW() WHERE id=$1', [job.id])
                 return true
             }
             if (rule.source === 'hanasand') return reprocessBuiltinPage(job, query)
@@ -56,7 +56,7 @@ export async function processRuleReprocessJob() {
             if (cursor.phase === 0) {
                 const params: (string | number | null)[] = [job.organization_id, job.until_time, job.from_time, cursor.time || null, cursor.id || '', size]
                 const candidate = messageCandidatePredicate(rule.definition.conditions, 'normalized->>\'message\'', value => { params.push(value); return `$${params.length}` })
-                const rows = (await query(`SELECT id,log_key,source_vendor,source_product,normalized,original,event_timestamp::text AS time FROM mill_events
+                const rows = (await query(`SELECT id,log_key,source_vendor,source_product,normalized,original,event_timestamp::text AS time FROM events
                     WHERE organization_id=$1 AND event_timestamp<=$2::timestamptz AND received_at<=$2::timestamptz
                     AND ($3::timestamptz IS NULL OR event_timestamp>=$3::timestamptz)
                     AND ($4::timestamptz IS NULL OR (event_timestamp,id)<($4::timestamptz,$5::text)) AND ${candidate}
@@ -95,13 +95,13 @@ export async function processRuleReprocessJob() {
             const result = await reprocessRuleItems(items, job, rule, query)
             if (scanned < size) { cursor.phase++; delete cursor.time; delete cursor.id }
             const done = cursor.phase > 2
-            await query(`UPDATE mill_rule_reprocess_jobs SET status=$2,cursor=$3::jsonb,scanned=scanned+$4,
+            await query(`UPDATE rule_reprocess_jobs SET status=$2,cursor=$3::jsonb,scanned=scanned+$4,
                 matched=matched+$5,protected=protected+$6,removed_events=removed_events+$7,removed_sources=removed_sources+$8,
                 error=NULL,updated_at=NOW() WHERE id=$1`, [job.id, done ? 'completed' : 'running', JSON.stringify(cursor), scanned, result.matched, result.protected, result.removedEvents, result.removedSources])
             if (done) await query(`INSERT INTO system_events(event_type,source,object_type,object_id,organization_id,context)
                 SELECT 'mill.rule.reprocessed','mill','mill_rule',rule_id,organization_id,
                     jsonb_build_object('jobId',id,'version',rule_version,'scanned',scanned,'matched',matched,'protected',protected,'removedEvents',removed_events,'removedSources',removed_sources)
-                FROM mill_rule_reprocess_jobs WHERE id=$1`, [job.id])
+                FROM rule_reprocess_jobs WHERE id=$1`, [job.id])
             return true
         })
     } catch (error) {
@@ -110,7 +110,7 @@ export async function processRuleReprocessJob() {
             throw error
         }
         // A failed page rolls back its deletes and cursor together. Retry creates a new explicit run.
-        await run('UPDATE mill_rule_reprocess_jobs SET status=\'failed\',error=$2,updated_at=NOW() WHERE id=$1 AND status IN (\'queued\',\'running\')',
+        await run('UPDATE rule_reprocess_jobs SET status=\'failed\',error=$2,updated_at=NOW() WHERE id=$1 AND status IN (\'queued\',\'running\')',
             [jobId, error instanceof Error ? error.message.slice(0, 500) : 'Reprocessing failed.'])
         return false
     }
@@ -133,10 +133,10 @@ export async function reprocessRuleItems(items: Item[], job: Pick<ReprocessJob, 
     let safe = matches.filter((item, index) => !kept.has(index) && !retentionStoreMatches({ ...item.event, retained_original: item.original }, storageRules) && !protectedEvent({ ...item.event, retained_original: item.original })
         && !/^service:(?:login_events|system_events):/.test(item.key || ''))
     const keys = safe.flatMap(item => item.key ? [item.key] : [])
-    const evidence = (await query(`SELECT id,log_key,organization_id,source_vendor,source_product,normalized,original FROM mill_events
+    const evidence = (await query(`SELECT id,log_key,organization_id,source_vendor,source_product,normalized,original FROM events
         WHERE id=ANY($1::text[]) OR log_key=ANY($2::text[]) FOR UPDATE`, [safe.map(item => item.id), keys])).rows
         .map(row => ({ ...row, normalized: { ...row.normalized, source_vendor: row.source_vendor, source_product: row.source_product } }))
-    const findingIds = new Set((await query('SELECT event_ids FROM mill_findings WHERE event_ids && $1::text[]', [evidence.map(row => row.id)])).rows.flatMap(row => row.event_ids))
+    const findingIds = new Set((await query('SELECT event_ids FROM findings WHERE event_ids && $1::text[]', [evidence.map(row => row.id)])).rows.flatMap(row => row.event_ids))
     for (const keep of keeps) for (const index of await matchRulePage(evidence.map(row => row.normalized), keep.definition!.conditions!)) findingIds.add(evidence[index].id)
     safe = safe.filter(item => !evidence.some(row => (row.id === item.id || (item.key && row.log_key === item.key))
         && (row.organization_id !== job.organization_id || findingIds.has(row.id) || retentionStoreMatches({ ...row.normalized, original: row.original }, storageRules) || protectedEvent({ ...row.normalized, original: row.original }))))
@@ -160,7 +160,7 @@ export async function reprocessRuleItems(items: Item[], job: Pick<ReprocessJob, 
         if (/^service:traffic_events:\d+$/.test(item.key || '')) trafficIds.add(item.key!.split(':')[2])
     }
     // Deleting both copies in one transaction prevents catch-up from resurrecting a dropped event.
-    const removed = await query('DELETE FROM mill_events WHERE organization_id=$1 AND id=ANY($2::text[]) RETURNING id', [job.organization_id, ids])
+    const removed = await query('DELETE FROM events WHERE organization_id=$1 AND id=ANY($2::text[]) RETURNING id', [job.organization_id, ids])
     let sources = 0
     if (serviceIds.size) sources += (await query('DELETE FROM service_logs WHERE id=ANY($1::bigint[]) RETURNING id', [[...serviceIds]])).rowCount || 0
     if (trafficIds.size) sources += (await query('DELETE FROM traffic_events WHERE id=ANY($1::bigint[]) RETURNING id', [[...trafficIds]])).rowCount || 0

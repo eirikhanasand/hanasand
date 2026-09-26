@@ -17,7 +17,7 @@ const sampleExpression=`jsonb_build_object('schema','log.v1','log_type',CASE WHE
     'metadata',jsonb_build_object('request_id',md5((n+100000)::text),'trace_id',md5((n+200000)::text),
         'fixture_text',repeat(md5((n+300000)::text),6)),
     'rules_checked',105,'detections','[]'::jsonb)`
-const base='ingestion_id=\'logs\' AND processing_status=\'processed\' AND event_timestamp>=NOW()-INTERVAL \'24 hours\' AND EXISTS (SELECT 1 FROM organizations o WHERE o.id=mill_events.organization_id AND o.status=\'active\')'
+const base='ingestion_id=\'logs\' AND processing_status=\'processed\' AND event_timestamp>=NOW()-INTERVAL \'24 hours\' AND EXISTS (SELECT 1 FROM organizations o WHERE o.id=events.organization_id AND o.status=\'active\')'
 const filters='normalized->>\'log_type\'=\'ProcessLogs\' AND normalized->>\'severity\' IN (\'high\',\'critical\')'
 const original='strpos(lower(normalized::text),lower($1::text))>0'
 const indexed=basicLogSearchPredicate('$1')
@@ -75,56 +75,56 @@ try {
     const fieldParityCases=await verifyFieldSearches()
     await q('CREATE TEMP TABLE organizations(id text PRIMARY KEY,status text)')
     await q('INSERT INTO organizations VALUES (\'active\',\'active\'),(\'inactive\',\'archived\')')
-    await q('CREATE TEMP TABLE mill_events(id text PRIMARY KEY,organization_id text NOT NULL,ingestion_id text NOT NULL,processing_status text NOT NULL,event_timestamp timestamptz NOT NULL,normalized jsonb NOT NULL)')
-    await q(`INSERT INTO mill_events SELECT 'background-'||n,'active','logs','processed',NOW()-INTERVAL '1 hour',${sampleExpression} FROM generate_series(1,100000) n`)
+    await q('CREATE TEMP TABLE events(id text PRIMARY KEY,organization_id text NOT NULL,ingestion_id text NOT NULL,processing_status text NOT NULL,event_timestamp timestamptz NOT NULL,normalized jsonb NOT NULL)')
+    await q(`INSERT INTO events SELECT 'background-'||n,'active','logs','processed',NOW()-INTERVAL '1 hour',${sampleExpression} FROM generate_series(1,100000) n`)
     const special=['whoami','WHOAMI','docker logs','docker0logs','docker  logs','%', '_', '!', '\\', 'a','xy','needle\' OR 1=1 --','İ','σ','Σ','😀','line\nbreak','path\\whoami','100%_done!', 'x'.repeat(5000), '😀'.repeat(2000)]
     let ordinal=0
     for (const text of special) for (const scope of ['visible','inactive','pending','direct','old','low','http']) {
         const id='special-'+String(++ordinal).padStart(4,'0')
-        await q('INSERT INTO mill_events VALUES($1,$2,$3,$4,NOW()-$5*INTERVAL \'1 hour\',$6::jsonb)',[id,scope==='inactive'?'inactive':'active',scope==='direct'?'native':'logs',scope==='pending'?'pending':'processed',scope==='old'?48:1,
+        await q('INSERT INTO events VALUES($1,$2,$3,$4,NOW()-$5*INTERVAL \'1 hour\',$6::jsonb)',[id,scope==='inactive'?'inactive':'active',scope==='direct'?'native':'logs',scope==='pending'?'pending':'processed',scope==='old'?48:1,
             JSON.stringify({log_type:scope==='http'?'HttpLogs':'ProcessLogs',severity:scope==='low'?'low':'high',service:'fixture-service',message:'synthetic',metadata:{deep:{reference:text}},process:{executable:text}})])
     }
-    await q(`INSERT INTO mill_events SELECT 'command-match-'||n,'active','logs','processed',NOW()-INTERVAL '1 hour',
+    await q(`INSERT INTO events SELECT 'command-match-'||n,'active','logs','processed',NOW()-INTERVAL '1 hour',
         jsonb_build_object('log_type','ProcessLogs','severity','high','process',jsonb_build_object('command_line','whoami'))
         FROM generate_series(1,5) n`)
-    await q('CREATE INDEX idx_mill_logs_type_time ON mill_events((normalized->>\'log_type\'),event_timestamp DESC) WHERE ingestion_id=\'logs\'')
-    await q('CREATE INDEX idx_mill_logs_severity_time ON mill_events((normalized->>\'severity\'),event_timestamp DESC) WHERE ingestion_id=\'logs\'')
-    await q('CREATE INDEX idx_mill_logs_browse_time ON mill_events(event_timestamp DESC,id DESC) WHERE ingestion_id=\'logs\' AND processing_status=\'processed\'')
+    await q('CREATE INDEX idx_logs_type_time ON events((normalized->>\'log_type\'),event_timestamp DESC) WHERE ingestion_id=\'logs\'')
+    await q('CREATE INDEX idx_logs_severity_time ON events((normalized->>\'severity\'),event_timestamp DESC) WHERE ingestion_id=\'logs\'')
+    await q('CREATE INDEX idx_logs_browse_time ON events(event_timestamp DESC,id DESC) WHERE ingestion_id=\'logs\' AND processing_status=\'processed\'')
     const started=performance.now()
-    await q(`CREATE INDEX idx_mill_logs_phrase_trgm ON mill_events USING GIN ((${logPhraseSearchExpression}) gin_trgm_ops) WHERE ingestion_id='logs' AND processing_status='processed'`)
+    await q(`CREATE INDEX idx_logs_phrase_trgm ON events USING GIN ((${logPhraseSearchExpression}) gin_trgm_ops) WHERE ingestion_id='logs' AND processing_status='processed'`)
     const indexBuildMs=Math.round(performance.now()-started)
-    await q('ANALYZE mill_events')
-    const shape=(await q('SELECT COUNT(*)::int AS rows,ROUND(AVG(octet_length(normalized::text)))::int AS average_json_bytes,pg_relation_size(\'idx_mill_logs_phrase_trgm\')::text AS index_bytes FROM mill_events')).rows[0]
+    await q('ANALYZE events')
+    const shape=(await q('SELECT COUNT(*)::int AS rows,ROUND(AVG(octet_length(normalized::text)))::int AS average_json_bytes,pg_relation_size(\'idx_logs_phrase_trgm\')::text AS index_bytes FROM events')).rows[0]
     const searches=['',...special,'message','log_type','n','zz','nonexistent-fixture-marker-7821','\\n','whoami%','100%_']
     for (const search of searches) {
-        const parity=await q(`WITH expected AS (SELECT id FROM mill_events WHERE ${base} AND ${original}),actual AS (SELECT id FROM mill_events WHERE ${base} AND ${indexed}),
+        const parity=await q(`WITH expected AS (SELECT id FROM events WHERE ${base} AND ${original}),actual AS (SELECT id FROM events WHERE ${base} AND ${indexed}),
             differences AS ((SELECT id FROM expected EXCEPT SELECT id FROM actual) UNION ALL(SELECT id FROM actual EXCEPT SELECT id FROM expected))
             SELECT (SELECT COUNT(*)::int FROM expected) AS expected,(SELECT COUNT(*)::int FROM actual) AS actual,(SELECT COUNT(*)::int FROM differences) AS differences`,[search])
         assert.equal(parity.rows[0].differences,0,`Complete result parity for ${JSON.stringify(search.slice(0,40))}`)
         assert.equal(parity.rows[0].actual,parity.rows[0].expected)
     }
-    const exactCounts=await q(`WITH expected AS (SELECT normalized->>'severity' AS severity,normalized->>'service' AS service,COUNT(*)::int AS count FROM mill_events WHERE ${base} AND ${filters} AND ${original} GROUP BY 1,2),
-        actual AS(SELECT normalized->>'severity' AS severity,normalized->>'service' AS service,COUNT(*)::int AS count FROM mill_events WHERE ${base} AND ${filters} AND ${indexed} GROUP BY 1,2),
+    const exactCounts=await q(`WITH expected AS (SELECT normalized->>'severity' AS severity,normalized->>'service' AS service,COUNT(*)::int AS count FROM events WHERE ${base} AND ${filters} AND ${original} GROUP BY 1,2),
+        actual AS(SELECT normalized->>'severity' AS severity,normalized->>'service' AS service,COUNT(*)::int AS count FROM events WHERE ${base} AND ${filters} AND ${indexed} GROUP BY 1,2),
         differences AS((SELECT * FROM expected EXCEPT SELECT * FROM actual) UNION ALL(SELECT * FROM actual EXCEPT SELECT * FROM expected)) SELECT COUNT(*)::int AS differences FROM differences`,['whoami'])
     assert.equal(exactCounts.rows[0].differences,0,'Exact counts must retain active-org/time/type/severity scope')
-    const plan=(await q(`EXPLAIN (ANALYZE,FORMAT JSON,TIMING OFF) SELECT id,normalized,event_timestamp,organization_id FROM mill_events WHERE ${base} AND ${filters} AND ${indexed} ORDER BY event_timestamp DESC,id DESC LIMIT 200`,['whoami'])).rows[0]['QUERY PLAN']
+    const plan=(await q(`EXPLAIN (ANALYZE,FORMAT JSON,TIMING OFF) SELECT id,normalized,event_timestamp,organization_id FROM events WHERE ${base} AND ${filters} AND ${indexed} ORDER BY event_timestamp DESC,id DESC LIMIT 200`,['whoami'])).rows[0]['QUERY PLAN']
     const used=nodes(plan).filter(node=>node['Index Name']).map(node=>node['Index Name'])
     console.log(JSON.stringify({phase:'natural_combined_plan',used_indexes:used,execution_ms:plan[0]['Execution Time'],plan}))
-    assert.ok(used.includes('idx_mill_logs_phrase_trgm'),'Natural combined Realtime query must use the phrase trigram index')
+    assert.ok(used.includes('idx_logs_phrase_trgm'),'Natural combined Realtime query must use the phrase trigram index')
     assert.ok(plan[0]['Execution Time'] < 8000,'Combined Realtime search must finish within its normal eight-second timeout')
     const fieldPlans=[]
     for(const operator of ['contains','has','startswith','endswith']) {
         const compiled=compileLogQuery(`ProcessLogs | where CommandLine ${operator} "whoami" | take 100`)
-        const sql=`SELECT id,normalized,event_timestamp,organization_id FROM mill_events WHERE ${base} AND ${compiled.where.join(' AND ')} ORDER BY ${compiled.order} LIMIT ${compiled.limit}`
+        const sql=`SELECT id,normalized,event_timestamp,organization_id FROM events WHERE ${base} AND ${compiled.where.join(' AND ')} ORDER BY ${compiled.order} LIMIT ${compiled.limit}`
         const rows=(await q(sql,compiled.params)).rows
         assert.deepEqual(rows.map(row=>row.id),['command-match-5','command-match-4','command-match-3','command-match-2','command-match-1'])
         const plan=(await q(`EXPLAIN (ANALYZE,FORMAT JSON,TIMING OFF) ${sql}`,compiled.params)).rows[0]['QUERY PLAN']
-        assert.ok(nodes(plan).some(node=>node['Index Name']==='idx_mill_logs_phrase_trgm'),`Natural sparse CommandLine ${operator} query must use the phrase GIN index`)
+        assert.ok(nodes(plan).some(node=>node['Index Name']==='idx_logs_phrase_trgm'),`Natural sparse CommandLine ${operator} query must use the phrase GIN index`)
         assert.ok(plan[0]['Execution Time']<8000,`CommandLine ${operator} must finish within its normal eight-second timeout`)
         fieldPlans.push({operator,matched_rows:rows.length,limit:compiled.limit,execution_ms:plan[0]['Execution Time']})
     }
-    await q('CREATE TEMP TABLE baseline_writes (LIKE mill_events INCLUDING DEFAULTS INCLUDING CONSTRAINTS)')
-    await q('CREATE TEMP TABLE indexed_writes (LIKE mill_events INCLUDING DEFAULTS INCLUDING CONSTRAINTS)')
+    await q('CREATE TEMP TABLE baseline_writes (LIKE events INCLUDING DEFAULTS INCLUDING CONSTRAINTS)')
+    await q('CREATE TEMP TABLE indexed_writes (LIKE events INCLUDING DEFAULTS INCLUDING CONSTRAINTS)')
     await q(`CREATE INDEX fixture_write_trgm ON indexed_writes USING GIN((${logPhraseSearchExpression}) gin_trgm_ops) WHERE ingestion_id='logs' AND processing_status='processed'`)
     const timings: Record<string,number>={}
     for (const table of ['baseline_writes','indexed_writes']) {

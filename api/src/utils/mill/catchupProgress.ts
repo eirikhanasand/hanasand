@@ -42,7 +42,7 @@ async function sampleProgress() {
             const recovery = cursors.find(row => row.name === 'process_logs_recovery')
             if (recovery?.recent_id && BigInt(recovery.recent_id) > 0n) {
                 parts.push(`SELECT COUNT(*) AS count FROM service_logs s WHERE id <= ${bind(recovery.recent_id)} AND ${processLogPredicate()}
-                    AND NOT EXISTS (SELECT 1 FROM mill_events e WHERE e.log_key = 'service:' || s.id::text AND e.processing_status IN ('processed', 'skipped'))
+                    AND NOT EXISTS (SELECT 1 FROM events e WHERE e.log_key = 'service:' || s.id::text AND e.processing_status IN ('processed', 'skipped'))
                     AND id <= COALESCE((SELECT last_id FROM log_processing_cursors WHERE name = 'service_logs'), 0)`)
             }
             const remaining = parts.length ? Number((await query('SELECT SUM(count)::text AS count FROM (' + parts.join(' UNION ALL ') + ') counts', params)).rows[0].count) : 0

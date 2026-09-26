@@ -41,7 +41,7 @@ export async function loadRuleHits(organizationId: string, rules: Pick<Rule, 'id
     const receiptIds = ids.filter(id => receiptRules.has(id) || customDropIds.has(id))
     const parameters: (string | string[])[] = [organizationId, findingIds, receiptIds]
     const statements = [
-        'SELECT rule_id, count(*)::text AS hits FROM mill_findings WHERE organization_id=$1 AND rule_id=ANY($2::text[]) GROUP BY rule_id',
+        'SELECT rule_id, count(*)::text AS hits FROM findings WHERE organization_id=$1 AND rule_id=ANY($2::text[]) GROUP BY rule_id',
         'SELECT rule_id, count(*)::text AS hits FROM log_analyze_receipts WHERE organization_id=$1 AND rule_id=ANY($3::text[]) GROUP BY rule_id',
     ]
     for (const id of ids) {

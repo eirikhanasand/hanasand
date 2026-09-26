@@ -37,9 +37,9 @@ export async function searchLogs(req: FastifyRequest, res: FastifyReply) {
         const result = await withLogSearchTransaction(async query => {
             await query('SET LOCAL statement_timeout = \'8s\'')
             const result = paginate ? await searchLogPage(query, { where, params, order: compiled.order, limit: compiled.limit, cursor: input.cursor, recentFirst: Boolean(input.search) }) : compiled.summarize
-                ? await query(`SELECT ${compiled.fields[compiled.summarize]} AS value, COUNT(*)::int AS count FROM mill_events WHERE ${where.join(' AND ')} GROUP BY 1 ORDER BY count DESC LIMIT ${compiled.limit}`, params)
-                : await query(`SELECT id, normalized, event_timestamp, organization_id FROM mill_events WHERE ${where.join(' AND ')} ORDER BY ${compiled.order} LIMIT ${compiled.limit}`, params)
-            const status = await query('SELECT name, updated_at, last_error, last_id, recent_id, history_end_id, (SELECT COUNT(*)::int FROM mill_events WHERE ingestion_id = \'logs\' AND processing_status = \'skipped\') AS skipped_events FROM log_processing_cursors ORDER BY name')
+                ? await query(`SELECT ${compiled.fields[compiled.summarize]} AS value, COUNT(*)::int AS count FROM events WHERE ${where.join(' AND ')} GROUP BY 1 ORDER BY count DESC LIMIT ${compiled.limit}`, params)
+                : await query(`SELECT id, normalized, event_timestamp, organization_id FROM events WHERE ${where.join(' AND ')} ORDER BY ${compiled.order} LIMIT ${compiled.limit}`, params)
+            const status = await query('SELECT name, updated_at, last_error, last_id, recent_id, history_end_id, (SELECT COUNT(*)::int FROM events WHERE ingestion_id = \'logs\' AND processing_status = \'skipped\') AS skipped_events FROM log_processing_cursors ORDER BY name')
             const progress = (await query('SELECT payload, last_error FROM log_catchup_progress WHERE id = TRUE')).rows[0]
             const catchup = typeof progress?.payload?.remaining === 'number' ? { ...progress.payload, last_error: progress.last_error } : null
             const pendingCommands = await readPendingProcessLogs(query)
@@ -47,13 +47,13 @@ export async function searchLogs(req: FastifyRequest, res: FastifyReply) {
             let countersLastError: string | null = null
             if (input.stats === '1') {
                 const compact = dimensionLogWhere(where)
-                const projection = (await query('SELECT ready, last_error, (SELECT ready FROM mill_log_counts_state WHERE id = TRUE) AS counts_ready FROM mill_log_dimensions_state WHERE id = TRUE')).rows[0]
+                const projection = (await query('SELECT ready, last_error, (SELECT ready FROM log_counts_state WHERE id = TRUE) AS counts_ready FROM log_dimensions_state WHERE id = TRUE')).rows[0]
                 const ready = compact && projection?.ready
                 countersLastError = projection?.last_error || null
                 const rollup = ready && projection?.counts_ready ? rollupLogCountsSql(compact!, timeWhere) : null
                 const grouped = rollup ? await query(rollup, params) : ready
-                    ? await query(`SELECT severity, service, COUNT(*)::int AS count FROM mill_log_dimensions mill_events WHERE ${compact!.join(' AND ')} GROUP BY 1, 2`, params)
-                    : await query(`SELECT normalized->>'severity' AS severity, normalized->>'service' AS service, COUNT(*)::int AS count FROM mill_events WHERE ${where.join(' AND ')} GROUP BY 1, 2`, params)
+                    ? await query(`SELECT severity, service, COUNT(*)::int AS count FROM log_dimensions events WHERE ${compact!.join(' AND ')} GROUP BY 1, 2`, params)
+                    : await query(`SELECT normalized->>'severity' AS severity, normalized->>'service' AS service, COUNT(*)::int AS count FROM events WHERE ${where.join(' AND ')} GROUP BY 1, 2`, params)
                 counts = foldLogCounts(grouped.rows)
             }
             const primary = status.rows.find(row => row.name === 'service_logs')

@@ -23,13 +23,13 @@ try {
     await query('CREATE TABLE users(id text PRIMARY KEY)')
     await query('INSERT INTO organizations(id,name,status) VALUES(\'platform\',\'Hanasand\',\'active\'),(\'customer\',\'Customer\',\'active\')')
     const schema = readFileSync(new URL('../src/utils/db/ensureSchema.ts', import.meta.url), 'utf8')
-    for (const table of ['service_logs', 'mill_events', 'mill_findings', 'mill_rules', 'traffic_events', 'system_events']) {
+    for (const table of ['service_logs', 'events', 'findings', 'rules', 'traffic_events', 'system_events']) {
         const definition = schema.match(new RegExp('CREATE TABLE IF NOT EXISTS ' + table + ' \\([\\s\\S]*?\\n        \\)'))?.[0]
         assert.ok(definition)
         await query(definition)
     }
     await query('ALTER TABLE service_logs ADD COLUMN source_event_id text UNIQUE')
-    await query('ALTER TABLE mill_events ADD COLUMN log_key text UNIQUE')
+    await query('ALTER TABLE events ADD COLUMN log_key text UNIQUE')
     const { default: schemaInstall } = await import('../src/utils/db/logAnalyzeSchema.ts')
     const { analyzeAccess } = await import('../src/utils/mill/analyzeLog.ts')
     const { accessDefinition, inspectAccess } = await import('../src/utils/mill/analyzeAccess.ts')
@@ -37,14 +37,14 @@ try {
     const { pruneAccessLogs } = await import('../src/utils/mill/pruneAccessLogs.ts')
     const { storedSourceLog } = await import('../src/utils/mill/storedSources.ts')
     await schemaInstall()
-    assert.equal((await query('SELECT organization_id FROM mill_rules')).rows[0].organization_id, 'platform')
+    assert.equal((await query('SELECT organization_id FROM rules')).rows[0].organization_id, 'platform')
     const sample = { key: 'http-api:first', ip: '192.0.2.1', path: '/public', method: 'GET', status: 200,
         timestamp: new Date().toISOString(), inspection: inspectAccess({ url: '/public', headers: {} }) }
     await Promise.all(Array.from({ length: 50 }, (_, i) => analyzeAccess({ ...sample, key: `http-api:${i}` })))
-    assert.equal((await query('SELECT count(*) FROM mill_findings')).rows[0].count, '0')
+    assert.equal((await query('SELECT count(*) FROM findings')).rows[0].count, '0')
     await analyzeAccess({ ...sample, key: 'http-api:51' })
-    assert.equal((await query('SELECT count(*) FROM mill_findings')).rows[0].count, '1')
-    const finding = (await query('SELECT * FROM mill_findings')).rows[0]
+    assert.equal((await query('SELECT count(*) FROM findings')).rows[0].count, '1')
+    const finding = (await query('SELECT * FROM findings')).rows[0]
     assert.equal(finding.summary, 'Possible DDoS activity')
     assert.equal(finding.severity, 'high')
     assert.equal(finding.evidence.restrictedLog, true)
@@ -54,14 +54,14 @@ try {
     const now = Date.now(), boundary = Math.floor(now / 60000) * 60000
     await query('UPDATE log_access_windows SET recent=$1::double precision[],alerted_at=NULL WHERE ip=\'192.0.2.1\'', [`{${Array.from({ length: 25 }, (_, i) => Math.max(now - 59000, boundary - 1000) + i).join(',')}}`])
     for (let i = 0; i < 26; i++) await analyzeAccess({ ...sample, key: `http-api:rolling-${i}`, timestamp: new Date().toISOString() })
-    assert.equal((await query('SELECT count(*) FROM mill_findings')).rows[0].count, '2')
-    await query('UPDATE mill_rules SET enabled=FALSE WHERE organization_id=\'platform\' AND rule_id=\'http.routine_access.v1\'')
+    assert.equal((await query('SELECT count(*) FROM findings')).rows[0].count, '2')
+    await query('UPDATE rules SET enabled=FALSE WHERE organization_id=\'platform\' AND rule_id=\'http.routine_access.v1\'')
     assert.equal(await analyzeAccess({ ...sample, key: 'disabled' }), false)
     await schemaInstall()
-    assert.equal((await query('SELECT enabled FROM mill_rules WHERE rule_id=\'http.routine_access.v1\'')).rows[0].enabled, false, 'Restart cannot undo Disable')
-    await query('UPDATE mill_rules SET enabled=TRUE,definition=jsonb_set(definition,\'{action}\',\'"keep"\') WHERE rule_id=\'http.routine_access.v1\'')
+    assert.equal((await query('SELECT enabled FROM rules WHERE rule_id=\'http.routine_access.v1\'')).rows[0].enabled, false, 'Restart cannot undo Disable')
+    await query('UPDATE rules SET enabled=TRUE,definition=jsonb_set(definition,\'{action}\',\'"keep"\') WHERE rule_id=\'http.routine_access.v1\'')
     assert.equal(await analyzeAccess({ ...sample, key: 'keep' }), false)
-    await query('UPDATE mill_rules SET definition=$1::jsonb WHERE rule_id=\'http.routine_access.v1\'', [JSON.stringify(accessDefinition)])
+    await query('UPDATE rules SET definition=$1::jsonb WHERE rule_id=\'http.routine_access.v1\'', [JSON.stringify(accessDefinition)])
     const metadata = { structured: { msg: 'http_access', access: { ...sample, key: 'http-api:collector' } } }
     await recordLog({ service: 'cdn', level: 'info', message: 'http_access', metadata })
     assert.equal((await query('SELECT count(*) FROM service_logs')).rows[0].count, '0', 'Drop happens before raw storage')
@@ -83,12 +83,12 @@ try {
     assert.equal((await query('SELECT count(*) FROM log_analyze_receipts')).rows[0].count, beforeRollback)
     const old = (await query('INSERT INTO traffic_events(domain,path,method,status,ip,created_at) VALUES(\'test\',\'/public\',\'GET\',200,\'192.0.2.2\',NOW()-INTERVAL \'1 day\'),(\'test\',\'/public\',\'GET\',200,\'192.0.2.3\',NOW()-INTERVAL \'1 day\') RETURNING *')).rows
     const logs = old.map(row => storedSourceLog('traffic_events', row))
-    await query('INSERT INTO mill_events(id,ingestion_id,organization_id,event_timestamp,log_key) VALUES(\'protected\',\'logs\',\'platform\',NOW(),$1)', [`service:${logs[1].id}`])
-    await query('INSERT INTO mill_findings(id,organization_id,finding_key,rule_id,summary,event_ids) VALUES(\'protected-finding\',\'platform\',\'protected-finding\',\'existing\',\'Existing finding\',\'{protected}\')')
+    await query('INSERT INTO events(id,ingestion_id,organization_id,event_timestamp,log_key) VALUES(\'protected\',\'logs\',\'platform\',NOW(),$1)', [`service:${logs[1].id}`])
+    await query('INSERT INTO findings(id,organization_id,finding_key,rule_id,summary,event_ids) VALUES(\'protected-finding\',\'platform\',\'protected-finding\',\'existing\',\'Existing finding\',\'{protected}\')')
     const removed = await pruneAccessLogs(logs, 'platform')
     assert.deepEqual([...removed], [], 'Missing boundary inspection must retain old records')
     assert.equal((await query('SELECT count(*) FROM traffic_events')).rows[0].count, '2')
-    assert.equal((await query('SELECT count(*) FROM mill_findings')).rows[0].count, '3', 'Historical cleanup creates no new alert and preserves old findings')
+    assert.equal((await query('SELECT count(*) FROM findings')).rows[0].count, '3', 'Historical cleanup creates no new alert and preserves old findings')
     await pruneAccessLogs(logs, 'platform')
     assert.equal((await query('SELECT sum(amount) AS count FROM log_access_counts WHERE ip=\'192.0.2.2\'')).rows[0].count, null)
     logs[0].metadata = { ...logs[0].metadata, structured: { access: { inspection: inspectAccess({ url: '/public', headers: {} }) } } }
@@ -97,7 +97,7 @@ try {
     assert.equal((await query('SELECT sum(amount) AS count FROM log_access_counts WHERE ip=\'192.0.2.2\'')).rows[0].count, '1')
     const changed = structuredClone(accessDefinition)
     changed.conditions.find(condition => condition.path === 'status')!.value = '201'
-    await query('UPDATE mill_rules SET definition=$1::jsonb WHERE rule_id=\'http.routine_access.v1\'', [JSON.stringify(changed)])
+    await query('UPDATE rules SET definition=$1::jsonb WHERE rule_id=\'http.routine_access.v1\'', [JSON.stringify(changed)])
     assert.equal(await analyzeAccess({ ...sample, key: 'saved-200' }), false, 'Saved criteria stop old matches before receipts')
     assert.equal(await analyzeAccess({ ...sample, key: 'saved-201', status: 201 }), true, 'Saved criteria allow the new successful status')
     const existing = await query('SELECT * FROM traffic_events ORDER BY id LIMIT 1')

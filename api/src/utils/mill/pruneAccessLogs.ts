@@ -39,8 +39,8 @@ export async function pruneAccessLogs(logs: LogInput[], organizationId: string, 
     if (!entries.length) return new Set()
     // Lock existing evidence before checking findings. Never remove evidence that
     // already produced a detection, regardless of its current finding status.
-    const evidence = await query('SELECT id,log_key,normalized FROM mill_events WHERE log_key=ANY($1::text[]) FOR UPDATE', [entries.map(e => e.key)])
-    const findings = await query('SELECT event_ids FROM mill_findings WHERE event_ids && $1::text[]', [evidence.rows.map(row => row.id)])
+    const evidence = await query('SELECT id,log_key,normalized FROM events WHERE log_key=ANY($1::text[]) FOR UPDATE', [entries.map(e => e.key)])
+    const findings = await query('SELECT event_ids FROM findings WHERE event_ids && $1::text[]', [evidence.rows.map(row => row.id)])
     const protectedIds = new Set(findings.rows.flatMap(row => row.event_ids))
     const protectedKeys = new Set(evidence.rows.filter(row => protectedIds.has(row.id) || ['medium', 'high', 'critical'].includes(row.normalized?.severity)
         || row.normalized?.detections?.length).map(row => row.log_key))
@@ -53,7 +53,7 @@ export async function pruneAccessLogs(logs: LogInput[], organizationId: string, 
         SELECT $2,r.ip::inet,(r.timestamp AT TIME ZONE 'UTC')::date,count(*) FROM records r JOIN added a ON a.key=r.receipt GROUP BY r.ip,(r.timestamp AT TIME ZONE 'UTC')::date
         ORDER BY r.ip,(r.timestamp AT TIME ZONE 'UTC')::date
         ON CONFLICT(organization_id,ip,day) DO UPDATE SET amount=log_access_counts.amount+EXCLUDED.amount`, [JSON.stringify(safe), organizationId, accessRuleId, rule.version || '1'])
-    await query('DELETE FROM mill_events WHERE log_key=ANY($1::text[])', [safe.map(e => e.key)])
+    await query('DELETE FROM events WHERE log_key=ANY($1::text[])', [safe.map(e => e.key)])
     const trafficIds = safe.filter(e => /^traffic_events:\d+$/.test(e.id)).map(e => e.id.split(':')[1])
     const serviceIds = safe.filter(e => /^\d+$/.test(e.id)).map(e => e.id)
     if (trafficIds.length) await query('DELETE FROM traffic_events WHERE id=ANY($1::bigint[])', [trafficIds])

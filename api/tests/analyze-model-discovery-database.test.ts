@@ -31,7 +31,7 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real ingestion preserves su
         await query('CREATE TABLE organizations(id text PRIMARY KEY,name text,status text,created_at timestamptz DEFAULT NOW(),audit_safe_metadata jsonb DEFAULT \'{}\')')
         await query('INSERT INTO organizations(id,name,status) VALUES(\'platform\',\'Hanasand\',\'active\')')
         const schema = readFileSync(new URL('../src/utils/db/ensureSchema.ts', import.meta.url), 'utf8')
-        for (const table of ['service_logs', 'mill_rules', 'system_events']) {
+        for (const table of ['service_logs', 'rules', 'system_events']) {
             const definition = schema.match(new RegExp('CREATE TABLE IF NOT EXISTS ' + table + ' \\([\\s\\S]*?\\n        \\)'))?.[0]
             if (!definition) throw new Error(`Missing schema ${table}`)
             await query(definition)
@@ -40,7 +40,7 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real ingestion preserves su
         const { default: install } = await import('../src/utils/db/logAnalyzeSchema.ts')
         const { recordLogBatch } = await import('../src/utils/logs/recordLog.ts')
         await install()
-        await query('UPDATE mill_rules SET enabled=true,definition=$2::jsonb WHERE rule_id=$1', [modelDiscoveryRuleId, JSON.stringify(modelDiscoveryDefinition)])
+        await query('UPDATE rules SET enabled=true,definition=$2::jsonb WHERE rule_id=$1', [modelDiscoveryRuleId, JSON.stringify(modelDiscoveryDefinition)])
         let serial = 1
         const entry = () => ({ ...modelFixture(serial++), level: 'info' as const })
         const ingest = (log: ReturnType<typeof entry>) => transaction(tx => recordLogBatch([log], tx as any))
@@ -74,29 +74,29 @@ test.skipIf(!process.env.POSTGRES_FILTER_TEST_PORT)('real ingestion preserves su
         // Saved policy edits apply to fresh input and already acknowledged originals.
         for (const policy of [{ ...modelDiscoveryDefinition, conditions: [{ path: 'host', operator: 'equals', value: 'another-host' }] },
             { ...modelDiscoveryDefinition, parameters: { ...modelDiscoveryDefinition.parameters, maxDurationMs: 1 } }]) {
-            await query('UPDATE mill_rules SET definition=$2::jsonb WHERE rule_id=$1', [modelDiscoveryRuleId, JSON.stringify(policy)])
+            await query('UPDATE rules SET definition=$2::jsonb WHERE rule_id=$1', [modelDiscoveryRuleId, JSON.stringify(policy)])
             const retained = entry(); await ingest(retained); await ingest(good)
             for (const log of [retained, good]) expect(Number((await query('SELECT count(*) n FROM service_logs WHERE source_event_id=$1', [log.sourceEventId])).rows[0].n)).toBe(1)
             expect(await count('log_model_probe_receipts')).toBe(2)
         }
-        await query('UPDATE mill_rules SET definition=$2::jsonb WHERE rule_id=$1', [modelDiscoveryRuleId, JSON.stringify(modelDiscoveryDefinition)])
+        await query('UPDATE rules SET definition=$2::jsonb WHERE rule_id=$1', [modelDiscoveryRuleId, JSON.stringify(modelDiscoveryDefinition)])
         for (const mode of ['disable', 'keep', 'custom-keep', 'missing-key']) {
-            if (mode === 'disable') await query('UPDATE mill_rules SET enabled=false WHERE rule_id=$1', [modelDiscoveryRuleId])
-            if (mode === 'keep') await query('UPDATE mill_rules SET enabled=true,definition=jsonb_set(definition,\'{action}\',\'"keep"\') WHERE rule_id=$1', [modelDiscoveryRuleId])
+            if (mode === 'disable') await query('UPDATE rules SET enabled=false WHERE rule_id=$1', [modelDiscoveryRuleId])
+            if (mode === 'keep') await query('UPDATE rules SET enabled=true,definition=jsonb_set(definition,\'{action}\',\'"keep"\') WHERE rule_id=$1', [modelDiscoveryRuleId])
             if (mode === 'custom-keep') {
-                await query('UPDATE mill_rules SET enabled=true,definition=$2::jsonb WHERE rule_id=$1', [modelDiscoveryRuleId, JSON.stringify(modelDiscoveryDefinition)])
-                await query(`INSERT INTO mill_rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
+                await query('UPDATE rules SET enabled=true,definition=$2::jsonb WHERE rule_id=$1', [modelDiscoveryRuleId, JSON.stringify(modelDiscoveryDefinition)])
+                await query(`INSERT INTO rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
                     VALUES('keep','platform','custom.model_keep','1','Keep model','Custom','low','Keep evidence',$1::jsonb,'owned',true)`,
                 [JSON.stringify({ match: 'all', stage: 'analyze', action: 'keep', conditions: [{ path: 'service', operator: 'equals', value: good.service }] })])
             }
-            if (mode === 'missing-key') { await query('DELETE FROM mill_rules WHERE id=\'keep\''); delete process.env.MODEL_PROBE_PROOF_KEY }
+            if (mode === 'missing-key') { await query('DELETE FROM rules WHERE id=\'keep\''); delete process.env.MODEL_PROBE_PROOF_KEY }
             await install()
             const retained = entry(); await ingest(retained)
             expect(Number((await query('SELECT count(*) n FROM service_logs WHERE source_event_id=$1', [retained.sourceEventId])).rows[0].n)).toBe(1)
             expect(await count('log_model_probe_receipts')).toBe(2)
         }
         process.env.MODEL_PROBE_PROOF_KEY = testKey
-        await query(`INSERT INTO mill_rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
+        await query(`INSERT INTO rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
             VALUES('detect','platform','custom.model_detection','1','Detect model','Custom','high','Protect evidence',$1::jsonb,'owned',true)`,
         [JSON.stringify({ match: 'all', stage: 'detect', action: 'keep', conditions: [{ path: 'service', operator: 'equals', value: good.service }] })])
         const detected = entry(); await ingest(detected); await ingest(aborted)

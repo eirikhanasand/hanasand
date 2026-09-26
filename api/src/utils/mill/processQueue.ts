@@ -28,7 +28,7 @@ export async function processQueuedLogs(process: Process, delayed = false, limit
 // The durable event status remains the authority, including after a retry.
 export async function acknowledgeProcessedLogs(ids: string[]) {
     if (!ids.length) return
-    await run(`DELETE FROM log_process_queue q USING mill_events e
+    await run(`DELETE FROM log_process_queue q USING events e
         WHERE q.log_id = ANY($1::bigint[]) AND e.log_key = 'service:' || q.log_id::text
           AND e.processing_status IN ('processed', 'skipped')`, [ids])
 }
@@ -41,7 +41,7 @@ export async function recoverProcessLogs(process: Process, limit = 1000) {
     const candidates = await run(`SELECT id FROM service_logs WHERE id <= $1 AND ${processLogPredicate()}
         ORDER BY id DESC LIMIT 10000`, [cursor.recent_id])
     const batch = candidates.rows.length ? await run(`SELECT s.* FROM service_logs s WHERE s.id = ANY($1::bigint[])
-        AND NOT EXISTS (SELECT 1 FROM mill_events e WHERE e.log_key = 'service:' || s.id::text
+        AND NOT EXISTS (SELECT 1 FROM events e WHERE e.log_key = 'service:' || s.id::text
             AND e.processing_status IN ('processed', 'skipped')) ORDER BY s.id DESC LIMIT $2`,
     [candidates.rows.map(row => row.id), limit]) : { rows: [] }
     await process(batch.rows)

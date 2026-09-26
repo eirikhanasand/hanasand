@@ -11,7 +11,7 @@ test('historical message candidate filtering leaves unsupported expressions for 
     expect(messageCandidatePredicate([{ path: 'message', operator: 'regex', value: '(?=runc)runc' }], 'message', bind)).toBe('TRUE')
 })
 const scanRulePreview: typeof scan = (org, canReadLogs, input, query) => scan(org, canReadLogs, input,
-    (async (sql: string, params: any) => sql.includes('FROM mill_rules')
+    (async (sql: string, params: any) => sql.includes('FROM rules')
         ? { rows: [{ enabled: true, definition: eventProtectionDefinition }] } : query!(sql, params)) as any)
 const input = { from: '2026-09-01T00:00:00Z', until: '2026-09-02T00:00:00Z', action: 'drop' as const, conditions: [{ path: 'http.status_code', operator: 'equals' as const, value: '200' }] }
 const row = (id: number, severity = 'low', status = 200) => ({ id: String(id), timestamp: '2026-09-01 12:00:00.123456+00', normalized: { severity, http: { status_code: status }, service: `service-${id % 7}`, message: 'x'.repeat(1000) } })

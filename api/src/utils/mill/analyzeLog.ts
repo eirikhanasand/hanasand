@@ -7,7 +7,7 @@ import { accessDefinition, accessRuleId, eligibleAccess, type AccessEvent } from
 
 export async function platformAccessRule(query: typeof run = run) {
     const result = await query(`SELECT o.id AS organization_id, r.enabled, r.version, r.definition, r.created_at, r.severity FROM organizations o
-        LEFT JOIN mill_rules r ON r.organization_id=o.id AND r.rule_id=$2
+        LEFT JOIN rules r ON r.organization_id=o.id AND r.rule_id=$2
         WHERE o.status='active' AND (o.id=$1 OR ($1::text IS NULL AND lower(o.name)='hanasand'))
         ORDER BY o.created_at LIMIT 1`, [process.env.PLATFORM_LOG_ORGANIZATION_ID || null, accessRuleId])
     return result.rows[0] as { organization_id: string, enabled?: boolean, version?: string, definition?: typeof accessDefinition, created_at?: Date, severity?: string } | undefined
@@ -50,9 +50,9 @@ export async function analyzeAccess(event: AccessEvent, query?: typeof run, hist
         const normalized = { schema_version: 'logs.v1', event_type: 'network', action: 'alert', log_type: 'HttpLogs', severity,
             service: 'access-analyzer', message: summary, source: { ip }, evidence,
             detections: [{ rule_id: accessRuleId, severity, summary, event_ids: [id], evidence }] }
-        await query(`INSERT INTO mill_events(id,ingestion_id,organization_id,event_timestamp,event_type,action,outcome,source_ip,normalized,processing_status)
+        await query(`INSERT INTO events(id,ingestion_id,organization_id,event_timestamp,event_type,action,outcome,source_ip,normalized,processing_status)
             VALUES($1,'logs',$2,NOW(),'network','alert','unknown',$3,$4::jsonb,'processed')`, [id, rule.organization_id, ip, JSON.stringify(normalized)])
-        await query(`INSERT INTO mill_findings(id,organization_id,finding_key,rule_id,severity,summary,evidence,event_ids)
+        await query(`INSERT INTO findings(id,organization_id,finding_key,rule_id,severity,summary,evidence,event_ids)
             VALUES($1,$2,$1,$3,$7,$4,$5::jsonb,$6::text[])`, [findingId, rule.organization_id, accessRuleId, summary, JSON.stringify(evidence), [id], severity])
     }
     return true
@@ -63,7 +63,7 @@ export async function analyzeMongoPing(log: MongoLog, query?: typeof run): Promi
     const inspected = eligibleMongoPing(log, { conditions: [] })
     if (!inspected) return false
     if (!query) return withTransaction(tx => analyzeMongoPing(log, tx))
-    const result = await query(`SELECT r.organization_id, r.version, r.definition FROM mill_rules r
+    const result = await query(`SELECT r.organization_id, r.version, r.definition FROM rules r
         JOIN organizations o ON o.id=r.organization_id
         WHERE o.status='active' AND (o.id=$1 OR ($1::text IS NULL AND lower(o.name)='hanasand'))
           AND r.rule_id=$2 AND r.enabled AND r.definition->>'stage'='analyze' AND r.definition->>'action'='drop'

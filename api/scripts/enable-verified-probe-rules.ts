@@ -24,7 +24,7 @@ const enabled = await withTransaction(async query => {
     const result: { ruleId: string, version: string }[] = []
     for (const { rule, definition } of selected) {
         await query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`mill-rule:${organizationId}:${rule.id}`])
-        const current = await query('SELECT * FROM mill_rules WHERE organization_id=$1 AND rule_id=$2 FOR UPDATE', [organizationId, rule.id])
+        const current = await query('SELECT * FROM rules WHERE organization_id=$1 AND rule_id=$2 FOR UPDATE', [organizationId, rule.id])
         const row = current.rows[0]
         if (!row || row.source !== 'hanasand') throw new Error('Expected installed platform probe rule.')
         const before = { name: row.name, explanation: row.explanation, severity: row.severity, enabled: row.enabled, definition: row.definition, version: String(row.version) }
@@ -34,7 +34,7 @@ const enabled = await withTransaction(async query => {
             result.push({ ruleId: rule.id, version: before.version })
             continue
         }
-        await query(`UPDATE mill_rules SET name=$3,explanation=$4,severity='low',enabled=true,definition=$5::jsonb,version=$6,updated_at=NOW()
+        await query(`UPDATE rules SET name=$3,explanation=$4,severity='low',enabled=true,definition=$5::jsonb,version=$6,updated_at=NOW()
             WHERE organization_id=$1 AND rule_id=$2`, [organizationId, rule.id, after.name, after.explanation, JSON.stringify(after.definition), after.version])
         await query(`INSERT INTO system_events(event_type,source,object_type,object_id,organization_id,context)
             VALUES('mill.rule.updated','mill','mill_rule',$1,$2,$3::jsonb)`, [rule.id, organizationId,

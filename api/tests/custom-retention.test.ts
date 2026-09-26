@@ -2,7 +2,7 @@ import { beforeEach, expect, mock, test } from 'bun:test'
 let reads = 0, writes: unknown[][] = [], receipts: unknown[][] = [], failed = false
 let rules: any[] = []
 const query = async (sql: string, params: any[] = []): Promise<any> => {
-    if (sql.includes('FROM mill_rules r')) {
+    if (sql.includes('FROM rules r')) {
         reads++
         if (failed) throw new Error('Rule lookup unavailable')
         return { rows: rules.filter(rule => rule.organizationId === (params[0] || 'platform')) }

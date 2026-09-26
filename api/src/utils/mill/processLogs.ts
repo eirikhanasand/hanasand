@@ -29,7 +29,7 @@ export async function processLogBatch(logs: LogInput[], organizationId: string, 
     }
     // Priority delivery and retry can overlap the historical cursor. Read the
     // acknowledgement before normalization instead of locking completed rows again.
-    const completed = await run('SELECT log_key FROM mill_events WHERE log_key = ANY($1::text[]) AND processing_status = \'processed\'', [logs.map(log => `service:${log.id}`)])
+    const completed = await run('SELECT log_key FROM events WHERE log_key = ANY($1::text[]) AND processing_status = \'processed\'', [logs.map(log => `service:${log.id}`)])
     const completedKeys = new Set(completed.rows.map(row => row.log_key))
     const prepared = logs.filter(log => !completedKeys.has(`service:${log.id}`)).map(log => {
         const key = `service:${log.id}`
@@ -51,7 +51,7 @@ export async function processLogBatch(logs: LogInput[], organizationId: string, 
         if (stateless.length) {
             // Preserve findings from a previously interrupted attempt. New stateless
             // results and their event become visible together at commit.
-            const existing = await query('SELECT rule_id, severity, summary, evidence, event_ids FROM mill_findings WHERE organization_id = $1 AND event_ids && $2::text[]', [organizationId, stateless.map(item => item.id)])
+            const existing = await query('SELECT rule_id, severity, summary, evidence, event_ids FROM findings WHERE organization_id = $1 AND event_ids && $2::text[]', [organizationId, stateless.map(item => item.id)])
             for (const item of stateless) {
                 const detections = new Map(item.findings.map(([, rule_id, severity, summary, event_ids, evidence]) =>
                     [`${rule_id}:${event_ids.slice().sort().join(',')}`, { rule_id, severity, summary, event_ids, evidence: { ...evidence, restrictedLog: true } }]))
@@ -62,7 +62,7 @@ export async function processLogBatch(logs: LogInput[], organizationId: string, 
                 Object.assign(item.event.normalized, { detections: [...detections.values()], severity })
             }
         }
-        const written = await query(`INSERT INTO mill_events (id, ingestion_id, organization_id, source_vendor, source_product, event_timestamp,
+        const written = await query(`INSERT INTO events (id, ingestion_id, organization_id, source_vendor, source_product, event_timestamp,
         event_type, action, outcome, user_id, user_email, source_ip, source_country, source_city, device_id, parser_version, normalized, original, processing_status, log_key)
         SELECT item.id, 'logs', $2, 'Hanasand', 'Logs', item.timestamp::timestamptz, item.event_type,
             item.action, item.outcome, item.user_id, item.user_email, item.source_ip, item.source_country, item.source_city, item.device_id, item.parser_version, item.normalized, jsonb_build_object('service_log_id', item.log_id), item.processing_status, item.key
@@ -73,12 +73,12 @@ export async function processLogBatch(logs: LogInput[], organizationId: string, 
             user_id=EXCLUDED.user_id, user_email=EXCLUDED.user_email, source_ip=EXCLUDED.source_ip, source_country=EXCLUDED.source_country,
             source_city=EXCLUDED.source_city, device_id=EXCLUDED.device_id, parser_version=EXCLUDED.parser_version,
             normalized=EXCLUDED.normalized, original=EXCLUDED.original, processing_status=EXCLUDED.processing_status
-        WHERE mill_events.ingestion_id='logs' AND (mill_events.processing_status='pending'
-          OR (mill_events.processing_status='skipped' AND mill_events.normalized->>'processing_reason'='Organization is missing or inactive')) RETURNING id `, [JSON.stringify(prepared.map(({ id, key, event, logId, complete }) => ({ id, key, processing_status: complete ? 'processed' : 'pending', timestamp: event.timestamp, event_type: event.eventType, action: event.action, outcome: event.outcome, user_id: event.userId, user_email: event.userEmail, source_ip: event.sourceIp, source_country: event.sourceCountry, source_city: event.sourceCity, device_id: event.deviceId, parser_version: event.parserVersion, normalized: event.normalized, log_id: logId }))), organizationId])
+        WHERE events.ingestion_id='logs' AND (events.processing_status='pending'
+          OR (events.processing_status='skipped' AND events.normalized->>'processing_reason'='Organization is missing or inactive')) RETURNING id `, [JSON.stringify(prepared.map(({ id, key, event, logId, complete }) => ({ id, key, processing_status: complete ? 'processed' : 'pending', timestamp: event.timestamp, event_type: event.eventType, action: event.action, outcome: event.outcome, user_id: event.userId, user_email: event.userEmail, source_ip: event.sourceIp, source_country: event.sourceCountry, source_city: event.sourceCity, device_id: event.deviceId, parser_version: event.parserVersion, normalized: event.normalized, log_id: logId }))), organizationId])
         const writtenIds = new Set(written.rows.map(row => row.id))
         await persistMillEventFindings(stateless.filter(item => writtenIds.has(item.id)).flatMap(item => item.findings), query)
     })
-    const pending = await run('SELECT id FROM mill_events WHERE id = ANY($1::text[]) AND organization_id = $2 AND processing_status <> \'processed\'', [prepared.map(item => item.id), organizationId])
+    const pending = await run('SELECT id FROM events WHERE id = ANY($1::text[]) AND organization_id = $2 AND processing_status <> \'processed\'', [prepared.map(item => item.id), organizationId])
     const pendingIds = new Set(pending.rows.map(row => row.id))
     const work = prepared.filter(item => pendingIds.has(item.id))
     if (!work.length) return
@@ -91,7 +91,7 @@ export async function processLogBatch(logs: LogInput[], organizationId: string, 
         const changed = auth.map(({ event }) => ({ timestamp: event.timestamp, user_id: event.userId, source_ip: event.sourceIp }))
         for (let offset = 0; ; offset += 500) {
             const later = await run(`WITH changed AS (SELECT * FROM jsonb_to_recordset($1::jsonb) AS item(timestamp timestamptz, user_id text, source_ip text))
-                SELECT e.id, e.normalized FROM mill_events e
+                SELECT e.id, e.normalized FROM events e
                 WHERE e.organization_id = $2 AND e.ingestion_id = 'logs' AND e.processing_status = 'processed'
                   AND e.event_type = 'authentication' AND e.action = 'login'
                   AND e.event_timestamp > (SELECT MIN(timestamp) FROM changed)
@@ -111,7 +111,7 @@ export async function processLogBatch(logs: LogInput[], organizationId: string, 
         if (event.eventType === 'authentication') await createMillFindings(organizationId, id, event, rules)
     }
     if (!work.length) return
-    const matches = await run('SELECT rule_id, severity, summary, evidence, event_ids FROM mill_findings WHERE organization_id = $1 AND event_ids && $2::text[]', [organizationId, work.map(item => item.id)])
+    const matches = await run('SELECT rule_id, severity, summary, evidence, event_ids FROM findings WHERE organization_id = $1 AND event_ids && $2::text[]', [organizationId, work.map(item => item.id)])
     const byEvent = new Map<string, typeof matches.rows>()
     for (const finding of matches.rows) for (const id of finding.event_ids) byEvent.set(id, [...(byEvent.get(id) || []), finding])
     const updates = work.map(({ id, event }) => {
@@ -124,14 +124,14 @@ export async function processLogBatch(logs: LogInput[], organizationId: string, 
     // another batch. Refresh their evidence too so searches cannot leave them low.
     const relatedIds = [...byEvent.keys()].filter(id => !work.some(item => item.id === id))
     if (relatedIds.length) {
-        const related = await run('SELECT id, normalized FROM mill_events WHERE organization_id = $1 AND id = ANY($2::text[]) AND ingestion_id = \'logs\' AND processing_status = \'processed\'', [organizationId, relatedIds])
+        const related = await run('SELECT id, normalized FROM events WHERE organization_id = $1 AND id = ANY($2::text[]) AND ingestion_id = \'logs\' AND processing_status = \'processed\'', [organizationId, relatedIds])
         for (const row of related.rows) {
             const detections = [...new Map([...(row.normalized.detections || []), ...(byEvent.get(row.id) || [])].map(finding => [`${finding.rule_id}:${[...finding.event_ids].sort().join(',')}`, finding])).values()]
             const severity = detections.reduce((value, finding) => severityOrder.indexOf(finding.severity) > severityOrder.indexOf(value) ? finding.severity : value, row.normalized.severity || 'low')
             updates.push({ id: row.id, result: { severity, detections, evaluated_at: row.normalized.evaluated_at, rules_checked: row.normalized.rules_checked } })
         }
     }
-    await run(`UPDATE mill_events e SET normalized = e.normalized || item.result, processing_status = 'processed'
+    await run(`UPDATE events e SET normalized = e.normalized || item.result, processing_status = 'processed'
         FROM jsonb_to_recordset($1::jsonb) AS item(id text, result jsonb) WHERE e.id = item.id
         AND (e.processing_status IS DISTINCT FROM 'processed' OR e.normalized IS DISTINCT FROM e.normalized || item.result)`, [JSON.stringify(updates)])
 }
@@ -184,7 +184,7 @@ export async function processLiveLogs() {
 async function freshLogs(): Promise<LogInput[]> {
     return (await run(`SELECT s.* FROM service_logs s
         WHERE s.created_at >= statement_timestamp() - INTERVAL '10 seconds'
-          AND NOT EXISTS (SELECT 1 FROM mill_events e WHERE e.log_key = 'service:' || s.id::text
+          AND NOT EXISTS (SELECT 1 FROM events e WHERE e.log_key = 'service:' || s.id::text
             AND e.processing_status IN ('processed', 'skipped'))
         ORDER BY s.created_at ASC, s.id ASC LIMIT 200`)).rows
 }
@@ -249,7 +249,7 @@ export async function processStoredLogs() {
             const processPage = async (after: string, until: string, pageLimit = catchupLimit) => {
                 const candidates = await run('SELECT id FROM service_logs WHERE id > $1 AND id <= $2 ORDER BY id LIMIT 10000', [after, until])
                 const batch = candidates.rows.length ? await run(`SELECT * FROM service_logs s WHERE id > $1 AND id <= $2 AND id = ANY($4::bigint[])
-                    AND NOT EXISTS (SELECT 1 FROM mill_events e WHERE e.log_key = 'service:' || s.id::text AND e.processing_status = 'processed')
+                    AND NOT EXISTS (SELECT 1 FROM events e WHERE e.log_key = 'service:' || s.id::text AND e.processing_status = 'processed')
                     ORDER BY id LIMIT $3`, [after, until, pageLimit, candidates.rows.map(row => row.id)]) : { rows: [] }
                 await processScopes(batch.rows)
                 const lastId = batch.rows.length === pageLimit ? batch.rows.at(-1)!.id : candidates.rows.at(-1)?.id || until
@@ -266,14 +266,14 @@ export async function processStoredLogs() {
             await processFresh()
             // Direct Mill ingestion is also pending until findings are durable.
             // Recover requests that stopped after persistence or during evaluation.
-            const pending = await run(`SELECT e.* FROM mill_events e JOIN organizations o ON o.id = e.organization_id
+            const pending = await run(`SELECT e.* FROM events e JOIN organizations o ON o.id = e.organization_id
                 WHERE e.ingestion_id <> 'logs' AND e.processing_status = 'pending' AND o.status = 'active'
                 ORDER BY e.event_timestamp, e.id LIMIT 100`)
             for (const row of pending.rows) {
                 advanced = true
                 if (!configured.has(row.organization_id)) configured.set(row.organization_id, await loadConfiguredMillRules(row.organization_id))
                 await createMillFindings(row.organization_id, row.id, normalizeMillEvent(row.normalized, { vendor: row.source_vendor, product: row.source_product }), configured.get(row.organization_id)!)
-                await run('UPDATE mill_events SET processing_status = \'processed\' WHERE id = $1 AND organization_id = $2', [row.id, row.organization_id])
+                await run('UPDATE events SET processing_status = \'processed\' WHERE id = $1 AND organization_id = $2', [row.id, row.organization_id])
             }
             if (cursor.history_end_id !== null) {
                 // Already acknowledged rows need no wide JSON reads or evaluation.

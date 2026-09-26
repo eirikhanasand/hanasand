@@ -6,8 +6,8 @@ const events = [
 ]
 const query = async (sql: string, p: any[] = []): Promise<any> => {
     if (sql.includes('JOIN organization_members')) return { rows: member && p[0] === 'org-a' ? [{ role: 'member' }] : [] }
-    if (sql.includes('FROM mill_rules')) return { rows: [] }
-    if (sql.includes('FROM mill_events')) {
+    if (sql.includes('FROM rules')) return { rows: [] }
+    if (sql.includes('FROM events')) {
         if (sql.includes('WHERE id = $1')) return { rows: events.filter(row => row.id === p[0] && row.organization_id === p[1]) }
         if (sql.includes('event_timestamp::text AS timestamp')) {
             expect(sql).toContain('($2::boolean OR ingestion_id <> \'logs\')')

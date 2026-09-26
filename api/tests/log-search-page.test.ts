@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import type { queryOnce } from '../src/utils/db.ts'
 import { searchLogPage } from '../src/utils/logs/searchPage.ts'
 
-const input = { where: ['ingestion_id = \'logs\'', 'processing_status = \'processed\'', 'event_timestamp >= NOW() - $1 * INTERVAL \'1 hour\'', 'strpos(lower(normalized::text), lower($2)) > 0', 'EXISTS (SELECT 1 FROM organizations o WHERE o.id = mill_events.organization_id AND o.status = \'active\')'], params: [24, 'docker logs'], order: 'event_timestamp DESC, id DESC', limit: 2 }
+const input = { where: ['ingestion_id = \'logs\'', 'processing_status = \'processed\'', 'event_timestamp >= NOW() - $1 * INTERVAL \'1 hour\'', 'strpos(lower(normalized::text), lower($2)) > 0', 'EXISTS (SELECT 1 FROM organizations o WHERE o.id = events.organization_id AND o.status = \'active\')'], params: [24, 'docker logs'], order: 'event_timestamp DESC, id DESC', limit: 2 }
 test('pages preserve full filters, fixed time range and microsecond timestamp/id ties', async () => {
     const calls: Array<{ sql: string, params: unknown[] }> = []
     const rows = ['c', 'b', 'a'].map(id => ({ id, normalized: {}, cursor_time: '2026-09-20 00:00:00.123456+00' }))

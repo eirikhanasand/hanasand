@@ -38,23 +38,23 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
         const processed = new Set(Object.values(stored).filter(event => event.processing_status === 'processed').map(event => event.key))
         return { rows: (p[1] === watermark ? fresh : backlog).filter(row => BigInt(row.id) > BigInt(p[0]) && BigInt(row.id) <= BigInt(p[1]) && (!p[3] || !processed.has(`service:${row.id}`))).slice(0, p[2] || 1000) }
     }
-    if (sql.startsWith('SELECT log_key FROM mill_events')) return { rows: Object.values(stored)
+    if (sql.startsWith('SELECT log_key FROM events')) return { rows: Object.values(stored)
         .filter(row => p[0].includes(row.key) && row.processing_status === 'processed').map(row => ({ log_key: row.key })) }
-    if (sql.includes('INSERT INTO mill_events')) {
+    if (sql.includes('INSERT INTO events')) {
         for (const item of JSON.parse(p[0])) {
             if (!stored[item.id] || stored[item.id].processing_status === 'pending' || stored[item.id].processing_status === 'skipped' && stored[item.id].normalized.processing_reason === 'Organization is missing or inactive')
                 stored[item.id] = { ...item, organization_id: p[1] }
         }
         return { rows: JSON.parse(p[0]).map((item: any) => ({ id: item.id })) }
     }
-    if (sql.includes('SELECT id FROM mill_events')) return { rows: Object.values(stored).filter(row => p[0].includes(row.id) && row.processing_status !== 'processed') }
+    if (sql.includes('SELECT id FROM events')) return { rows: Object.values(stored).filter(row => p[0].includes(row.id) && row.processing_status !== 'processed') }
     if (sql.includes('SELECT rule_id, severity')) return { rows: [] }
-    if (sql.includes('SELECT e.* FROM mill_events')) return { rows: pending }
-    if (sql.includes('UPDATE mill_events e SET')) {
+    if (sql.includes('SELECT e.* FROM events')) return { rows: pending }
+    if (sql.includes('UPDATE events e SET')) {
         for (const item of JSON.parse(p[0])) { stored[item.id].processing_status = 'processed'; stored[item.id].normalized = { ...stored[item.id].normalized, ...item.result } }
         return { rows: [] }
     }
-    if (sql.includes('UPDATE mill_events SET')) { pending = pending.filter(row => row.id !== p[0]); return { rows: [] } }
+    if (sql.includes('UPDATE events SET')) { pending = pending.filter(row => row.id !== p[0]); return { rows: [] } }
     throw new Error(sql)
 }
 mock.module('../src/utils/mill/catchupProgress.ts', () => ({ refreshLogCatchupProgress: async () => {} }))
@@ -65,7 +65,7 @@ mock.module('#db', () => ({ default: query, withTransaction: async (work: any) =
     const eventsBefore = new Map<string, any>(), statements: string[] = []
     const scopedQuery = async (sql: string, p: any[] = []) => {
         statements.push(sql)
-        if (sql.includes('INSERT INTO mill_events')) for (const item of JSON.parse(p[0])) if (!eventsBefore.has(item.id)) eventsBefore.set(item.id, structuredClone(stored[item.id]))
+        if (sql.includes('INSERT INTO events')) for (const item of JSON.parse(p[0])) if (!eventsBefore.has(item.id)) eventsBefore.set(item.id, structuredClone(stored[item.id]))
         return transactionQuery(sql, p)
     }
     transactions.push(statements); transactionQueries.push(scopedQuery)
@@ -142,8 +142,8 @@ test('cursor updates share the lock transaction while event writes remain indepe
     await processStoredLogs()
     expect(additionalCursorQuery).toBe(transactionQueries[0])
     expect(transactions[0]).toEqual(statements.filter(sql => sql.includes('log_processing_cursors') || sql.includes('pg_try_advisory_xact_lock')))
-    expect(transactions[0].some(sql => sql.includes('mill_events') || sql.includes('SELECT * FROM service_logs'))).toBe(false)
-    expect(transactions.slice(1).some(sqls => sqls.some(sql => sql.includes('INSERT INTO mill_events')))).toBe(true)
+    expect(transactions[0].some(sql => sql.includes('events') || sql.includes('SELECT * FROM service_logs'))).toBe(false)
+    expect(transactions.slice(1).some(sqls => sqls.some(sql => sql.includes('INSERT INTO events')))).toBe(true)
 })
 test('later failure rolls back cursor positions but retry reuses already durable findings', async () => {
     failHistory = true
@@ -392,6 +392,6 @@ test('a live burst is committed together while historical pages still yield', as
     priority = Array.from({ length: 200 }, (_, i) => ({ ...makeLog(String(2001 + i)), created_at: new Date().toISOString() }))
     expect(await processLiveLogs()).toBe(true)
     expect(checked).toHaveLength(200)
-    expect(statements.filter(sql => sql.includes('INSERT INTO mill_events'))).toHaveLength(1)
+    expect(statements.filter(sql => sql.includes('INSERT INTO events'))).toHaveLength(1)
     expect(statements.filter(sql => sql.includes('mill:log-batch'))).toHaveLength(1)
 })

@@ -189,7 +189,7 @@ export async function ingestMill(req: FastifyRequest, res: FastifyReply) {
     for (let offset = 0; offset < normalizedEvents.length; offset += 50) {
         await Promise.all(normalizedEvents.slice(offset, offset + 50).map(async ({ normalized, eventId }) => {
             await run(`
-            INSERT INTO mill_events (
+            INSERT INTO events (
                 id, ingestion_id, organization_id, source_vendor, source_product, event_timestamp,
                 event_type, action, outcome, user_id, user_email, source_ip, source_country,
                 source_city, device_id, normalized, original, parser_version, processing_status
@@ -207,7 +207,7 @@ export async function ingestMill(req: FastifyRequest, res: FastifyReply) {
     // Persist the complete batch before correlating it, including out-of-order payloads.
     for (const { normalized, eventId } of normalizedEvents.sort((a, b) => Date.parse(a.normalized.timestamp) - Date.parse(b.normalized.timestamp))) {
         await createMillFindings(key.organizationId, eventId, normalized, configuredRules)
-        await run('UPDATE mill_events SET processing_status = \'processed\' WHERE id = $1 AND organization_id = $2', [eventId, key.organizationId])
+        await run('UPDATE events SET processing_status = \'processed\' WHERE id = $1 AND organization_id = $2', [eventId, key.organizationId])
     }
 
     return res.status(202).send({ accepted: true, ingestion_id: ingestionId, accepted_events: receivedCount, stored_events: accepted.length, dropped_events: droppedCount, rejected_events: 0 })
@@ -224,7 +224,7 @@ export async function getMillEvents(req: FastifyRequest, res: FastifyReply) {
         SELECT id, ingestion_id, source_vendor, source_product, event_timestamp, received_at,
                event_type, action, outcome, user_id, user_email, source_ip, source_country,
                source_city, device_id, normalized, original, parser_version, processing_status
-        FROM mill_events
+        FROM events
         WHERE organization_id = $1 AND ($3::boolean OR ingestion_id <> 'logs')
         ORDER BY event_timestamp DESC, received_at DESC
         LIMIT $2
@@ -254,7 +254,7 @@ export async function postMillEventAction(req: FastifyRequest<{ Params: { id: st
         SELECT id, ingestion_id, event_timestamp, event_type, action, outcome, user_id, user_email,
                source_ip, source_country, source_city, device_id, source_vendor, source_product,
                normalized, original, parser_version
-        FROM mill_events
+        FROM events
         WHERE id = $1 AND organization_id = $2
     `, [req.params.id, access.organizationId])
     const row = result.rows[0]
@@ -467,7 +467,7 @@ async function saveMillRule(req: FastifyRequest, access: { organizationId: strin
     return withTransaction(async query => {
         // Serialize edits even when a built-in rule has no organization override yet.
         await query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`mill-rule:${access.organizationId}:${rule.id}`])
-        const existing = await query('SELECT * FROM mill_rules WHERE organization_id = $1 AND rule_id = $2 FOR UPDATE', [access.organizationId, rule.id])
+        const existing = await query('SELECT * FROM rules WHERE organization_id = $1 AND rule_id = $2 FOR UPDATE', [access.organizationId, rule.id])
         const row = existing.rows[0]
         const builtin = MILL_RULES.find(item => item.id === rule.id)
         const version = String(row?.version || builtin?.version || '0')
@@ -475,7 +475,7 @@ async function saveMillRule(req: FastifyRequest, access: { organizationId: strin
         const before = row ? { name: row.name, explanation: row.explanation, severity: row.severity, enabled: row.enabled, definition: builtin ? builtinDefinition(builtin, row.definition) : row.definition, version } : builtin ? { name: builtin.name, explanation: builtin.explanation, severity: builtin.severity, enabled: true, definition: millDefaultDefinition(builtin.id), version } : null
         const after = { name: rule.name, explanation: rule.explanation, severity: rule.severity, enabled: preserveEnabled && row ? Boolean(row.enabled) : rule.enabled !== false, definition: rule.definition || {}, version: String(Number(version) + 1) }
         if (action === 'mill.rule.updated' && before && ['name', 'explanation', 'severity', 'enabled', 'definition'].every(key => JSON.stringify(before[key as keyof typeof before]) === JSON.stringify(after[key as keyof typeof after]))) return { ...rule, version, recordId: row?.id }
-        const result = await query(`INSERT INTO mill_rules (id, organization_id, rule_id, version, name, family, severity, explanation, definition, source, source_reference, enabled, created_by)
+        const result = await query(`INSERT INTO rules (id, organization_id, rule_id, version, name, family, severity, explanation, definition, source, source_reference, enabled, created_by)
             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13)
             ON CONFLICT (organization_id, rule_id) DO UPDATE SET version=EXCLUDED.version, name=EXCLUDED.name, family=EXCLUDED.family, severity=EXCLUDED.severity, explanation=EXCLUDED.explanation, definition=EXCLUDED.definition, source=EXCLUDED.source, source_reference=EXCLUDED.source_reference, enabled=EXCLUDED.enabled, updated_at=NOW()
             RETURNING id`, [row?.id || randomUUID(), access.organizationId, rule.id, after.version, rule.name, rule.family, rule.severity, rule.explanation, JSON.stringify(after.definition), rule.source || 'owned', rule.sourceReference || null, after.enabled, access.userId])
@@ -513,7 +513,7 @@ export async function loadConfiguredMillRules(organizationId: string, query: typ
     const result = await query(`
         SELECT id, rule_id, version, name, family, severity, explanation,
             ${summary ? 'jsonb_build_object(\'stage\', definition->\'stage\', \'action\', definition->\'action\') AS definition, NULL AS source_reference' : 'definition, source_reference'}, source, enabled
-        FROM mill_rules
+        FROM rules
         WHERE organization_id = $1
         ORDER BY created_at ASC
     `, [organizationId])
@@ -602,7 +602,7 @@ async function createAuthFindings(organizationId: string, eventId: string, event
     if (enabled.has('auth.brute_force_success.v1') && event.userId && event.outcome === 'success') {
         const { windowMinutes, minimumCount } = parameters('auth.brute_force_success.v1')
         // Query the actual window, rather than truncating to the last 30 events.
-        const failures = await run(`SELECT id, normalized FROM mill_events
+        const failures = await run(`SELECT id, normalized FROM events
             WHERE organization_id = $1 AND user_id = $2 AND id <> $3
               AND event_type = 'authentication' AND action = 'login' AND outcome = 'failure'
               AND event_timestamp BETWEEN ($4::timestamptz - $5 * INTERVAL '1 minute') AND $4::timestamptz
@@ -616,7 +616,7 @@ async function createAuthFindings(organizationId: string, eventId: string, event
     const historyLimit = Math.max(...['auth.new_country.v1', 'auth.new_device.v1', 'auth.impossible_travel.v1'].map(id => parameters(id).historyLimit))
     const previous = await run(`
         SELECT id, event_timestamp, outcome, source_country, normalized
-        FROM mill_events
+        FROM events
         WHERE organization_id = $1 AND user_id = $2 AND id <> $3
           AND event_type = 'authentication' AND action = 'login' AND event_timestamp <= $4::timestamptz
         ORDER BY event_timestamp DESC
@@ -628,7 +628,7 @@ async function createAuthFindings(organizationId: string, eventId: string, event
         // Bound imported source text in the index; exact equality remains authoritative.
         const spray = await run(`
             SELECT id, user_id, event_timestamp, normalized
-            FROM mill_events
+            FROM events
             WHERE organization_id = $1 AND source_ip = $2 AND outcome = 'failure' AND id <> $3
               AND md5(source_ip) = md5($2::text)
               AND event_type = 'authentication' AND action = 'login'
@@ -678,10 +678,10 @@ export async function persistMillEventFindings(findings: Parameters<typeof persi
             finding_key: `${organizationId}:${ruleId}:${eventIds.slice().sort().join(',')}`,
             rule_id: ruleId, severity, summary, event_ids: eventIds, evidence,
         }))
-        await query(`INSERT INTO mill_findings (id, organization_id, finding_key, rule_id, severity, status, summary, evidence, event_ids, first_observed, last_observed)
+        await query(`INSERT INTO findings (id, organization_id, finding_key, rule_id, severity, status, summary, evidence, event_ids, first_observed, last_observed)
             SELECT item.id, item.organization_id, item.finding_key, item.rule_id, item.severity, 'new', item.summary,
                 item.evidence || jsonb_build_object('restrictedLog', EXISTS (
-                    SELECT 1 FROM mill_events e WHERE e.organization_id = item.organization_id
+                    SELECT 1 FROM events e WHERE e.organization_id = item.organization_id
                         AND e.id = ANY(item.event_ids) AND e.ingestion_id = 'logs')),
                 item.event_ids, NOW(), NOW()
             FROM jsonb_to_recordset($1::jsonb) AS item(id text, organization_id text, finding_key text,

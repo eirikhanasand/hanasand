@@ -427,7 +427,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_one_active_org ON api_keys(organi
 CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(key_prefix);
 CREATE INDEX IF NOT EXISTS idx_api_key_scopes_key_route ON api_key_scopes(api_key_id, method, route);
 
-CREATE TABLE IF NOT EXISTS mill_events (
+CREATE TABLE IF NOT EXISTS events (
     id TEXT PRIMARY KEY,
     ingestion_id TEXT NOT NULL,
     organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -450,10 +450,10 @@ CREATE TABLE IF NOT EXISTS mill_events (
     processing_status TEXT NOT NULL DEFAULT 'processed',
     UNIQUE (organization_id, ingestion_id, id)
 );
-CREATE INDEX IF NOT EXISTS idx_mill_events_org_time ON mill_events(organization_id, event_timestamp DESC);
-CREATE INDEX IF NOT EXISTS idx_mill_events_org_user_time ON mill_events(organization_id, user_id, event_timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_events_org_time ON events(organization_id, event_timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_events_org_user_time ON events(organization_id, user_id, event_timestamp DESC);
 
-CREATE TABLE IF NOT EXISTS mill_rules (
+CREATE TABLE IF NOT EXISTS rules (
     id TEXT PRIMARY KEY,
     organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     rule_id TEXT NOT NULL,
@@ -472,9 +472,9 @@ CREATE TABLE IF NOT EXISTS mill_rules (
     UNIQUE (organization_id, rule_id),
     CHECK (severity IN ('low', 'medium', 'high', 'critical'))
 );
-CREATE INDEX IF NOT EXISTS idx_mill_rules_org_enabled ON mill_rules(organization_id, enabled, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_rules_org_enabled ON rules(organization_id, enabled, updated_at DESC);
 
-CREATE TABLE IF NOT EXISTS mill_findings (
+CREATE TABLE IF NOT EXISTS findings (
     id TEXT PRIMARY KEY,
     organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     finding_key TEXT NOT NULL UNIQUE,
@@ -491,7 +491,7 @@ CREATE TABLE IF NOT EXISTS mill_findings (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_mill_findings_org_status ON mill_findings(organization_id, status, last_observed DESC);
+CREATE INDEX IF NOT EXISTS idx_findings_org_status ON findings(organization_id, status, last_observed DESC);
 
 -- Certificates
 CREATE TABLE IF NOT EXISTS certificates (
