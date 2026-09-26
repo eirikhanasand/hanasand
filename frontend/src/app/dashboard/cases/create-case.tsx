@@ -35,7 +35,7 @@ export function CreateCase({ organizationId }: { organizationId?: string }) {
         finally { setBusy(false) }
     }
     return <>
-        <button type='button' onClick={open} className='inline-flex items-center gap-2 rounded-lg bg-ui-primary px-3 py-2 text-sm font-medium text-white'><Plus aria-hidden='true' className='h-4 w-4' />Create case</button>
+        <button type='button' onClick={open} className='inline-flex items-center gap-2 rounded-lg bg-ui-primary/90 px-3 py-2 text-sm font-medium text-white'><Plus aria-hidden='true' className='h-4 w-4' />Create case</button>
         <dialog ref={dialog} aria-labelledby='create-case-title' onCancel={event => { if (busy) event.preventDefault() }} className='m-auto w-[90vw] max-w-lg rounded-lg border border-ui-border bg-ui-panel p-5 text-ui-text backdrop:bg-black/50'>
             <form onSubmit={create} className='grid gap-4'>
                 <h2 id='create-case-title' className='text-lg font-semibold'>Create case</h2>

@@ -3,7 +3,7 @@
 import Link from '@/components/organizations/workspaceLink'
 import { CreateCase } from './create-case'
 import { Filter, RefreshCw } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 export type CaseResolution = { id?: string, type: 'human' | 'ai' | 'automation' | 'unknown', actor?: string, at?: string, note?: string, confirmedBy?: string, confirmedAt?: string }
 
@@ -31,6 +31,8 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
     const [review, setReview] = useState('all')
     const [filtersOpen, setFiltersOpen] = useState(false)
     const [cursor, setCursor] = useState<string | null>(null)
+    const loadMoreSentinel = useRef<HTMLDivElement>(null)
+    const loadingMore = useRef(false)
     useEffect(() => {
         const controller = new AbortController()
         const sources = page > 1 ? ['intelligence'] as const : ['intelligence', 'monitoring'] as const
@@ -64,6 +66,20 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
         }
         return () => controller.abort()
     }, [organizationId, revision, page, cursor])
+    useEffect(() => { if (!loading) loadingMore.current = false }, [loading])
+    useEffect(() => {
+        const sentinel = loadMoreSentinel.current
+        if (!sentinel || !nextCursor || loading) return
+        const observer = new IntersectionObserver(entries => {
+            if (entries.some(entry => entry.isIntersecting) && !loadingMore.current) {
+                loadingMore.current = true
+                setCursor(nextCursor)
+                setPage(current => current + 1)
+            }
+        }, { rootMargin: '800px 0px' })
+        observer.observe(sentinel)
+        return () => observer.disconnect()
+    }, [nextCursor, loading])
     const visible = rows.filter(row => {
         const active = !['resolved', 'closed', 'suppressed', 'false_positive'].includes(row.status)
         if (status !== 'all' && (status === 'active' ? !active : row.status !== status)) return false
@@ -73,13 +89,13 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
         if (resolutionType !== 'all' && row.resolution?.type !== resolutionType) return false
         if (review === 'confirmed' && !row.resolution?.confirmedAt) return false
         if (review === 'pending' && (!['ai', 'automation'].includes(row.resolution?.type || '') || row.resolution?.confirmedAt)) return false
-        return [row.id, row.title, row.summary, row.actor, row.victimName, row.company, row.source, row.assignedOwner, row.organizationId].filter(Boolean).join(' ').toLowerCase().includes(query.trim().toLowerCase())
+        return [row.id, row.title, row.summary, row.actor, row.victimName, row.company, row.source, row.assignedOwner].filter(Boolean).join(' ').toLowerCase().includes(query.trim().toLowerCase())
     })
     return <section className='min-w-0 rounded-lg border border-ui-border bg-ui-panel'>
         <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border p-4'>
             <div>
                 <h1 className='text-lg font-semibold text-ui-text'>Cases</h1>
-                {(!loading || rows.length > 0) && <p className='mt-1 text-xs text-ui-muted'>{visible.length} matching · {rows.length} cases loaded{nextCursor ? ' · More cases available below' : ''}</p>}
+                {(!loading || rows.length > 0) && <p className='mt-1 text-xs text-ui-muted'>{visible.length}/{rows.length} cases</p>}
             </div>
             <div className='flex items-center gap-2'><CreateCase organizationId={organizationId} />
                 <button type='button' aria-label={filtersOpen ? 'Hide filters' : 'Show filters'} aria-expanded={filtersOpen} title={filtersOpen ? 'Hide filters' : 'Show filters'} className='inline-flex h-8 w-8 items-center justify-center rounded text-ui-primary hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary' onClick={() => setFiltersOpen(value => !value)}>
@@ -105,12 +121,14 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
             {!visible.length ? <p className='p-4 text-ui-muted'>{Object.values(warnings).some(Boolean) ? 'No cases could be displayed from the available sources.' : rows.length ? 'No cases match the current filters.' : 'No cases yet.'}</p> : <div className='overflow-x-auto'><table className='w-full text-left text-sm'>
                 <thead className='border-y border-ui-border bg-ui-raised text-ui-muted'><tr>{['Case', 'Severity', 'Status', 'Owner', 'Updated'].map(label => <th key={label} scope='col' className='p-4'>{label}</th>)}</tr></thead>
                 <tbody className='divide-y divide-ui-border'>{visible.map(row => <tr key={row.caseId || row.id} className='text-ui-text'>
-                    <td className='p-4'><Link className='font-semibold text-ui-primary hover:underline' href={`/cases/${encodeURIComponent(row.caseId || row.id)}${row.organizationId || organizationId ? `?organizationId=${encodeURIComponent(row.organizationId || organizationId!)}` : ''}`}>{row.title || row.id}</Link>{[row.actor, row.victimName || row.company, row.organizationId].filter(Boolean).map(value => <p className='mt-1 text-xs text-ui-muted' key={value}>{value}</p>)}{row.summary && <p className='mt-1 max-w-xl wrap-break-word text-xs text-ui-muted'>{row.summary}</p>}</td>
+                    <td className='p-4'><Link className='font-semibold text-ui-primary hover:underline' href={`/cases/${encodeURIComponent(row.caseId || row.id)}${row.organizationId || organizationId ? `?organizationId=${encodeURIComponent(row.organizationId || organizationId!)}` : ''}`}>{row.title || row.id}</Link>{[row.actor, row.victimName || row.company].filter(Boolean).map(value => <p className='mt-1 text-xs text-ui-muted' key={value}>{value}</p>)}{row.summary && <p className='mt-1 max-w-xl wrap-break-word text-xs text-ui-muted'>{row.summary}</p>}</td>
                     <td className='p-4'>{row.severity || row.priority || '—'}</td>
                     <td className='p-4'>{row.status.replaceAll('_', ' ')}{row.resolution && <p className='mt-1 text-xs text-ui-muted'>{row.resolution.type === 'ai' ? 'AI resolved' : row.resolution.type === 'automation' ? 'Automatically recovered' : row.resolution.type === 'unknown' ? 'Resolver not recorded' : `Resolved by ${row.resolution.actor || 'human'}`}{['ai', 'automation'].includes(row.resolution.type) && (row.resolution.confirmedAt ? ' · Human confirmed' : ' · Needs human review')}</p>}</td><td className='p-4'>{row.assignedOwner || 'Unassigned'}</td><td className='p-4'>{row.updatedAt || row.createdAt ? new Date(row.updatedAt || row.createdAt!).toLocaleString() : '—'}</td>
                 </tr>)}</tbody>
             </table></div>}
-            {nextCursor && <button disabled={loading} className='p-4 text-ui-primary disabled:opacity-50' onClick={() => { setCursor(nextCursor); setPage(current => current + 1) }}>Load more cases</button>}
+            {nextCursor && <button disabled={loading} className='p-4 text-ui-primary disabled:opacity-50' onClick={() => { if (!loadingMore.current) { loadingMore.current = true; setCursor(nextCursor); setPage(current => current + 1) } }}>Load more cases</button>}
+            <div ref={loadMoreSentinel} aria-hidden='true' className='h-px' />
+            {!loading && !nextCursor && rows.length > 0 && <p className='px-4 py-2 text-xs text-ui-muted/70'>No more cases</p>}
         </>}
     </section>
 }
