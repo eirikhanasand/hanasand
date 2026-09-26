@@ -1,5 +1,4 @@
 import ProfileIdentity from '@/components/profile/profileIdentity'
-import Link from 'next/link'
 import { redirect, notFound } from 'next/navigation'
 import Certificates from '@/components/profile/certificates'
 import AccountActions from '@/components/profile/accountActions'
@@ -15,8 +14,8 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     const params = await props.params
     const profileId = params.id[0]
     const section = params.id[1] || 'profile'
-    const sections = [{ id: 'profile', label: 'Profile' }, { id: 'security', label: 'Security' }, { id: 'sessions', label: 'Sessions' }, { id: 'certificates', label: 'Certificates' }, { id: 'support', label: 'Support tickets' }]
-    if (params.id.length > 2 || !sections.some(item => item.id === section)) notFound()
+    const sections = ["profile", "security", "sessions", "certificates", "support"]
+    if (params.id.length > 2 || !sections.includes(section)) notFound()
     const Cookies = await cookies()
     const name = Cookies.get('name')?.value
     const userId = Cookies.get('id')?.value
@@ -49,10 +48,6 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
                 {profile?.active === false && <p className='mt-2 text-sm text-ui-muted'>Inactive account</p>}
                 {!profile && !isSelf && <p role='status' className='mt-2 text-sm text-ui-muted'>Profile details are unavailable. Please try again.</p>}
             </DashboardPanel>
-            <nav aria-label='Account pages' className='flex flex-wrap gap-1 border-b border-ui-border pb-3'>
-                {sections.map(item => <Link key={item.id} href={`/profile/${encodeURIComponent(username)}${item.id === 'profile' ? '' : `/${item.id}`}`} aria-current={section === item.id ? 'page' : undefined}
-                    className={`rounded-md px-3 py-2 text-sm font-medium hover:bg-ui-raised ${section === item.id ? 'bg-ui-primary/10 text-ui-primary' : 'text-ui-muted'}`}>{item.label}</Link>)}
-            </nav>
             {section === 'sessions' && <SessionsPanel isSelf />}
             {section === 'certificates' && <Certificates certificates={certificates} />}
             {section === 'support' && <SupportTickets />}
