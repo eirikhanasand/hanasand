@@ -4,16 +4,13 @@ import Link from 'next/link'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import {
-    Activity,
     AlertTriangle,
     CheckCircle2,
     Clock3,
     Copy,
     Cpu,
-    Database,
     ExternalLink,
     HardDrive,
-    Mail,
     MemoryStick,
     PauseCircle,
     PlayCircle,
@@ -21,7 +18,6 @@ import {
     ServerCog,
     StopCircle,
     TerminalSquare,
-    Workflow,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import ErrorNotice from '@/components/error/errorNotice'
@@ -64,13 +60,6 @@ type SystemSummary = {
     tone?: 'ok' | 'warn' | 'bad'
 }
 
-const relatedLinks = [
-    { href: '/logs', label: 'Logs', icon: <TerminalSquare className='h-4 w-4' /> },
-    { href: '/automation/cron', label: 'Cron Jobs', icon: <Workflow className='h-4 w-4' /> },
-    { href: '/db', label: 'Database', icon: <Database className='h-4 w-4' /> },
-    { href: '/mail', label: 'Mail', icon: <Mail className='h-4 w-4' /> },
-    { href: '/system/ai', label: 'AI Metrics', icon: <Activity className='h-4 w-4' /> },
-]
 
 export default function SystemDashboard({
     id,
@@ -454,15 +443,6 @@ export default function SystemDashboard({
                 />
             </section>
 
-            <details className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-system-related-disclosure>
-                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
-                    <span>Related operations</span>
-                    <span className='text-xs font-medium text-ui-muted'>{relatedLinks.length} linked consoles</span>
-                </summary>
-                <div className='flex flex-wrap gap-2 border-t border-ui-border p-3' data-system-related-links>
-                    {relatedLinks.map((link) => <LinkButton key={link.href} {...link} />)}
-                </div>
-            </details>
 
             <DashboardPanel className='p-4' id='system-vms' data-system-vms>
                 <div className='flex flex-wrap items-center justify-between gap-3'>

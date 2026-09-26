@@ -41,8 +41,7 @@ test('system dashboard focuses operator triage while preserving live controls', 
 
     expect(page).toContain('data-system-summary-disclosure')
     expect(page).toContain('data-system-summary-metrics')
-    expect(page).toContain('data-system-related-disclosure')
-    expect(page).toContain('data-system-related-links')
+    expect(page).not.toContain("Related operations")
     expect(page).toContain('data-system-container-logs-disclosure')
     expect(page).toContain('data-system-container-log-tail')
     expect(page).toContain('See more')
@@ -54,6 +53,5 @@ test('system dashboard focuses operator triage while preserving live controls', 
     expect(page.indexOf('data-system-vm-danger-actions')).toBeLessThan(page.indexOf('data-system-stop-all-vms'))
     expect(page).toContain('href={`/logs?service=${encodeURIComponent(container.name)}`')
     expect(page.indexOf('data-system-summary-disclosure')).toBeLessThan(page.indexOf('data-system-summary-metrics'))
-    expect(page.indexOf('data-system-related-disclosure')).toBeLessThan(page.indexOf('data-system-related-links'))
     expect(page).not.toContain(' returned ${status}')
 })
