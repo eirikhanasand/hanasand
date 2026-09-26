@@ -1,308 +1,153 @@
 import type { Metadata } from 'next'
+import './homepage.css'
+import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowRight, Building2, ChevronRight, ExternalLink, Search, ShieldCheck, Waypoints } from 'lucide-react'
+import { ArrowRight, Search } from 'lucide-react'
 import LogoutClient from '@/components/logout/logoutClient'
-import Marquee from '@/components/shared/marquee'
 import { exposureQueueFallback } from './exposureQueue'
 import { buildRouteMetadata } from './seo'
 import { homepageFaqs } from './faqData'
 import HomeExposureQueueClient from './homeExposureQueueClient'
 
-// The live activity panel hydrates independently through its cached public API.
-// Keep the marketing shell cacheable so a scraper response can never block /.
 export const revalidate = 5
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Hanasand Threat Intelligence',
-    description: 'Monitor company exposure, source changes, and risk signals with live threat intelligence built for security teams.',
+    description: 'See company and vendor exposure as it surfaces, with clear source context and live activity.',
     path: '/',
     keywords: ['hanasand', 'threat intelligence', 'ransomware monitoring', 'dark web monitoring', 'company exposure alerts'],
 })
 
-const examples = [
-    {
-        title: 'Company exposure monitor',
-        slug: 'Watches companies and suppliers',
-        detail: 'Enter the companies, domains, vendors, brands, or executives you care about. Hanasand watches for new mentions and notifies you.',
-        badge: 'Live alerts',
-        action: 'Recent attacks',
-        icon: Building2,
-    },
-    {
-        title: 'Alerts',
-        slug: 'Explains what happened',
-        detail: 'Each result says who posted the claim, which company was named, what data was mentioned, how confident the match is, and what to do next.',
-        badge: 'Source details',
-        action: 'See the details',
-        icon: Waypoints,
-    },
-    {
-        title: 'Dark web search',
-        slug: 'Searches leak and extortion records',
-        detail: 'Search company names, domains, vendor names, group names, source notes, risk signals, and timing from monitored public records.',
-        badge: 'Search results',
-        action: 'Find a company or group',
-        icon: ShieldCheck,
-    },
+const consoleActions = [
+    { label: 'Monitor companies', detail: 'Companies, vendors, domains', href: '/organizations' },
+    { label: 'Review alerts', detail: 'Exposure mentions and next steps', href: '/dwm' },
+    { label: 'Search intelligence', detail: 'Groups, sources, and activity', href: '/ti' },
+    { label: 'Route notifications', detail: 'Email, webhooks, and API', href: '/automation?setup=dwm' },
 ]
 
 const solutions = [
-    {
-        title: 'Threat Monitoring',
-        detail: 'Ransomware and exposure notifications for watched companies and vendors.',
-        href: '/ti',
-    },
-    {
-        title: 'Browser',
-        detail: 'Short-lived isolated Regular and Tor browser workspaces with capture, profiles, and source tracking.',
-        href: '/browser',
-    },
-    {
-        title: 'Trust and Procurement',
-        detail: 'Security review, DPA, subprocessors, SLA notes, and current certification boundaries.',
-        href: '/trust',
-    },
-    {
-        title: 'Shared Reports',
-        detail: 'Package exposure findings into customer-ready review links and follow-up steps.',
-        href: '/contact?intent=reports',
-    },
-]
-
-const stats = [
-    ['Alert target', 'Company, vendor, domain, and brand mentions'],
-    ['What gets sent', 'Group, company, data mentioned, source, time, review status'],
-    ['Based on', 'New and changed leak-site posts'],
-    ['Where it goes', 'Email, webhooks, and API'],
-]
-
-const workflowShortcuts = [
-    { label: 'Watch companies', href: '/organizations', detail: 'Companies, vendors, domains' },
-    { label: 'Catch breaches', href: '/dwm', detail: 'New exposure mentions' },
-    { label: 'Review alerts', href: '/dwm', detail: 'Details, severity, next step' },
-    { label: 'Send alerts', href: '/automation?setup=dwm', detail: 'Email, webhooks, and API' },
-]
-
-const operatorPaths = [
-    {
-        label: 'Monitor companies',
-        state: 'Watchlists',
-        value: 'Create terms for companies, vendors, domains, executives, and brands.',
-        href: '/organizations',
-    },
-    {
-        label: 'Review alerts',
-        state: 'Review',
-        value: 'Review what was found, where it came from, how recent it is, and what to do next.',
-        href: '/dwm',
-    },
-    {
-        label: 'Search groups',
-        state: 'Threat intelligence',
-        value: 'Look up group activity, sources, and related companies.',
-        href: '/ti/apt29',
-    },
-    {
-        label: 'Send notifications',
-        state: 'Delivery',
-        value: 'Send reviewed alerts by email, webhook, or API.',
-        href: '/automation?setup=dwm',
-    },
-]
-
-const customerSteps = [
-    {
-        title: 'Tell us what to watch',
-        detail: 'Add company names, domains, subsidiaries, vendors, brands, executives, or portfolio companies.',
-    },
-    {
-        title: 'We check',
-        detail: 'Hanasand checks leak and extortion sites, Telegram groups, advisories, and dark web forums.',
-    },
-    {
-        title: 'You get notified',
-        detail: 'Each alert tells you what was found, where it came from, how serious it is, and what to do next.',
-    },
-    {
-        title: 'You decide what happens next',
-        detail: 'Send alerts to your team by email, webhook, or your existing tools.',
-    },
+    { title: 'Threat monitoring', href: '/ti' },
+    { title: 'Isolated browser', href: '/browser' },
+    { title: 'Trust center', href: '/trust' },
+    { title: 'Shared reports', href: '/contact?intent=reports' },
 ]
 
 export default function Page() {
     const exposureQueue = exposureQueueFallback('checking', 10)
 
     return (
-        <main className='min-h-full bg-transparent text-ui-text'>
+        <main className='home-page min-h-full text-ui-text'>
             <LogoutClient logoutServer={false} />
 
-            <section className='border-b border-ui-border bg-transparent'>
-                <div className='mx-auto grid w-full max-w-7xl content-start gap-10 px-4 pb-12 pt-16 md:px-8 md:pt-24 lg:pt-28'>
-                    <div className='mx-auto grid max-w-5xl justify-items-center gap-6 text-center'>
-                        <Link href='/ti' className='landing-primary-action inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold shadow-sm transition'>
-                            <span className='landing-inner-pill rounded-full px-2 py-0.5 text-xs'>New</span>
-                            Monitor a company or vendor
+            <section className='home-hero relative isolate overflow-hidden'>
+                <div className='home-hero-art' aria-hidden='true'>
+                    <Image src='/lantern-hero.png' alt='' fill priority sizes='(max-width: 768px) 100vw, 68vw' className='object-cover object-center' />
+                </div>
+                <div className='home-hero-glow' aria-hidden='true' />
+                <div className='home-wrap relative grid min-h-[680px] content-center gap-10 px-5 py-20 md:min-h-[760px] md:px-10 lg:grid-cols-[1.1fr_0.9fr] lg:gap-0 lg:px-16'>
+                    <div className='home-hero-copy relative z-10 grid content-center justify-items-start gap-8'>
+                        <Link href='/ti' className='home-monitor-link inline-flex min-h-14 items-center gap-3 rounded-full border px-5 py-3 text-sm font-semibold transition'>
+                            <span>Monitor a company or vendor</span>
                             <ArrowRight className='h-4 w-4' />
                         </Link>
-
-                        <div className='grid gap-4'>
-                            <h1 className='text-5xl font-semibold tracking-normal text-ui-text md:text-7xl'>
-                                Find your company in leaks before customers do
+                        <div className='grid max-w-4xl gap-6'>
+                            <h1 className='max-w-4xl text-[clamp(3.4rem,7.5vw,7.4rem)] font-medium leading-[0.94] tracking-[-0.065em]'>
+                                See what surfaces <span className='home-heading-muted'>before it reaches you.</span>
                             </h1>
-                            <p className='mx-auto max-w-3xl text-lg leading-8 text-ui-muted md:text-xl'>
-                                Give Hanasand the names and domains to watch. We return a clear alert with what happened, why it matters, severity, and the next step.
+                            <p className='max-w-xl text-base leading-7 text-ui-muted md:text-lg md:leading-8'>
+                                Company and vendor exposure, with the source and context your team needs to act.
                             </p>
                         </div>
-
-                        <form action='/ti' className='landing-search-bar grid w-full max-w-3xl gap-0 overflow-hidden rounded-lg border border-ui-border bg-ui-panel p-0 shadow-md md:grid-cols-[1fr_auto]'>
-                            <label className='landing-search-field flex min-w-0 items-center gap-3 px-4'>
-                                <Search className='h-5 w-5 shrink-0 text-ui-muted' />
-                                <input
-                                    name='q'
-                                    aria-label='Search threat intelligence'
-                                    placeholder='Search a company, vendor, domain, or group'
-                                    className='landing-search-input h-14 min-w-0 flex-1 bg-transparent text-base font-medium text-ui-text outline-none placeholder:text-ui-muted'
-                                />
-                            </label>
-                            <button type='submit' className='landing-search-button inline-flex h-14 items-center justify-center gap-2 px-5 text-sm font-semibold transition'>
-                                Search intelligence
-                                <ChevronRight className='h-4 w-4' />
-                            </button>
+                        <form action='/ti' className='home-search flex w-full max-w-xl items-center gap-3 rounded-full border px-4 py-1.5'>
+                            <Search className='h-4 w-4 shrink-0 text-ui-muted' />
+                            <input name='q' aria-label='Search threat intelligence' placeholder='Search a company, vendor, or domain' className='h-11 min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/45' />
+                            <button type='submit' className='home-search-button rounded-full px-4 py-2 text-sm font-semibold transition'>Search</button>
                         </form>
-
-                        <div className='grid w-full max-w-5xl gap-2 sm:grid-cols-2 lg:grid-cols-4' aria-label='Operator shortcuts'>
-                            {workflowShortcuts.map(item => (
-                                <Link
-                                    key={item.href}
-                                    href={item.href}
-                                    className='landing-surface-border landing-surface-border-hover grid min-w-0 gap-1 rounded-lg border border-ui-border bg-ui-panel px-3 py-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-ui-primary'
-                                >
-                                    <span className='flex min-w-0 items-center justify-between gap-2 text-sm font-semibold text-ui-text'>
-                                        <Marquee text={item.label} className='min-w-0 flex-1' innerClassName='font-semibold text-ui-text' />
-                                        <ArrowRight className='h-4 w-4 shrink-0 text-ui-primary' />
-                                    </span>
-                                    <span className='text-xs leading-5 text-ui-muted'>{item.detail}</span>
-                                </Link>
-                            ))}
-                        </div>
-
                     </div>
-
-                    <div className='landing-surface-border grid overflow-hidden rounded-xl border border-ui-border bg-ui-panel shadow-sm' id='sample-alert' data-home-workflow-panel='true'>
-                        <div className='landing-surface-divider grid gap-3 border-b p-5 md:grid-cols-[0.8fr_1.2fr] md:items-end' data-home-workflow-panel-header='true'>
-                            <div>
-                                <p className='text-sm font-semibold uppercase text-ui-primary'>Alert flow</p>
-                                <h2 className='mt-2 text-2xl font-semibold text-ui-text'>From watchlist to alert.</h2>
-                            </div>
-                            <p className='text-sm leading-6 text-ui-muted'>
-                                A threat actor is a criminal group or seller. A source is where the mention appeared. A webhook is just an automatic delivery to your existing tools.
-                            </p>
-                        </div>
-                        <div className='grid gap-0 md:grid-cols-4'>
-                            {customerSteps.map((step, index) => (
-                                <div key={step.title} className='landing-surface-divider grid gap-3 border-b p-5 last:border-b-0 md:border-b-0 md:border-r md:last:border-r-0' data-home-workflow-step='true'>
-                                    <span className='grid h-9 w-9 place-items-center rounded-full bg-ui-primary/10 text-sm font-semibold text-ui-primary'>{index + 1}</span>
-                                    <h3 className='text-base font-semibold text-ui-text'>{step.title}</h3>
-                                    <p className='text-sm leading-6 text-ui-muted'>{step.detail}</p>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className='grid gap-4 lg:grid-cols-3'>
-                        {examples.map((item) => {
-                            const Icon = item.icon
-                            return (
-                                <Link key={item.slug} href='/ti' className='landing-surface-border landing-surface-border-hover group overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm transition hover:-translate-y-0.5 hover:border-ui-primary hover:shadow-md' data-home-example-card='true'>
-                                    <div className='grid gap-4 p-5'>
-                                        <div className='flex items-start justify-between gap-3'>
-                                            <div className='grid h-12 w-12 place-items-center rounded-lg border border-ui-border bg-ui-raised text-ui-primary'>
-                                                <Icon className='h-5 w-5' />
-                                            </div>
-                                            <span className='landing-status-pill rounded-full border px-2.5 py-1 text-xs font-semibold'>{item.badge}</span>
-                                        </div>
-                                        <div className='grid gap-1'>
-                                            <h2 className='text-lg font-semibold text-ui-text'>{item.title}</h2>
-                                            <p className='text-sm font-medium text-ui-muted'>{item.slug}</p>
-                                        </div>
-                                        <p className='min-h-16 text-sm leading-6 text-ui-muted'>{item.detail}</p>
-                                    </div>
-                                    <div className='landing-surface-divider flex items-center justify-between border-t bg-ui-raised px-5 py-3 text-sm' data-home-example-card-footer='true'>
-                                        <span className='font-medium text-ui-text'>{item.action}</span>
-                                        <span className='landing-text-action inline-flex items-center gap-1 font-semibold'>Open <ExternalLink className='landing-action-icon h-3.5 w-3.5' /></span>
-                                    </div>
-                                </Link>
-                            )
-                        })}
-                    </div>
-
-                    <HomeOperatorPaths />
+                    <div className='hidden lg:block' aria-hidden='true' />
+                </div>
+                <div className='home-hero-caption home-wrap relative px-5 pb-6 text-xs tracking-[0.14em] text-white/50 md:px-10 lg:px-16'>
+                    EXTERNAL EXPOSURE · CONTINUOUSLY MONITORED
                 </div>
             </section>
 
-            <section className='border-b border-ui-border bg-ui-panel'>
-                <div className='mx-auto grid max-w-7xl gap-8 px-4 py-14 md:px-8 lg:grid-cols-[0.82fr_1.18fr] lg:py-18'>
-                    <div className='grid content-start gap-5'>
-                        <p className='text-sm font-semibold uppercase text-ui-primary'>How monitoring works</p>
-                        <h2 className='text-3xl font-semibold text-ui-text md:text-4xl'>Find the company mention before it becomes a screenshot</h2>
-                        <p className='text-base leading-7 text-ui-muted'>
-                            Each alert is built for the first triage decision: who posted it, which company was named, what data was mentioned, when it appeared, and what to do next.
-                        </p>
+            <section className='home-section home-activity' aria-labelledby='latest-activity-title'>
+                <div className='home-wrap grid gap-8 px-5 py-20 md:px-10 md:py-28 lg:px-16'>
+                    <div className='flex flex-wrap items-end justify-between gap-5'>
                         <div className='grid gap-3'>
-                            {stats.map(([label, value]) => (
-                                <div key={label} className='grid grid-cols-[10rem_1fr] gap-4 border-b border-ui-border py-3 text-sm'>
-                                    <span className='text-ui-muted'>{label}</span>
-                                    <span className='font-semibold text-ui-text'>{value}</span>
-                                </div>
-                            ))}
+                            <p className='home-eyebrow'>Live intelligence</p>
+                            <h2 id='latest-activity-title' className='text-3xl font-medium tracking-[-0.04em] md:text-5xl'>Latest activity</h2>
                         </div>
+                        <Link href='/activity' className='home-text-link inline-flex items-center gap-2 text-sm font-semibold'>
+                            Open activity <ArrowRight className='h-4 w-4' />
+                        </Link>
                     </div>
-
                     <HomeExposureQueueClient initialQueue={exposureQueue} />
                 </div>
             </section>
 
-            <section className='bg-ui-canvas'>
-                <div className='mx-auto grid max-w-7xl gap-8 px-4 py-14 md:px-8'>
-                    <div className='grid gap-6'>
-                        <div className='flex flex-col gap-3 md:flex-row md:items-end md:justify-between'>
-                            <h2 className='text-sm font-semibold uppercase text-ui-primary'>FAQ</h2>
-                            <Link href='/faq' className='inline-flex w-fit items-center gap-2 rounded-lg border border-ui-border px-4 py-2.5 text-sm font-semibold text-ui-primary transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20'>
-                                View all FAQ
-                                <ArrowRight className='h-4 w-4' />
-                            </Link>
-                        </div>
-                        <div className='grid gap-3 md:grid-cols-2 lg:grid-cols-3'>
-                            {homepageFaqs.map(item => (
-                                <article key={item.question} className='landing-surface-border rounded-lg border border-ui-border bg-ui-panel p-5 shadow-sm'>
-                                    <h3 className='text-base font-semibold text-ui-text'>{item.question}</h3>
-                                    <p className='mt-2 text-sm leading-6 text-ui-muted'>{item.answer}</p>
-                                </article>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className='flex flex-col gap-3 md:flex-row md:items-end md:justify-between'>
-                        <div className='grid gap-2'>
-                            <p className='text-sm font-semibold uppercase text-ui-primary'>Solutions</p>
-                            <h2 className='text-3xl font-semibold text-ui-text'>Monitoring and response tools in one place.</h2>
-                        </div>
-                        <Link href='/dashboard' className='landing-primary-action inline-flex w-fit items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold shadow-sm transition'>
-                            Go to Dashboard
-                            <ArrowRight className='h-4 w-4' />
+            <section className='home-section home-console' aria-labelledby='console-title'>
+                <div className='home-wrap grid gap-8 px-5 py-16 md:grid-cols-[0.7fr_1.3fr] md:gap-16 md:px-10 md:py-24 lg:px-16'>
+                    <div className='grid content-start gap-4'>
+                        <p className='home-eyebrow'>Hanasand console</p>
+                        <h2 id='console-title' className='text-3xl font-medium tracking-[-0.04em] md:text-4xl'>Go straight to work.</h2>
+                        <Link href='/dashboard' className='home-text-link mt-2 inline-flex w-fit items-center gap-2 text-sm font-semibold'>
+                            Go to dashboard <ArrowRight className='h-4 w-4' />
                         </Link>
                     </div>
-
-                    <div className='grid gap-4 md:grid-cols-2 lg:grid-cols-4'>
-                        {solutions.map((solution) => (
-                            <Link key={solution.title} href={solution.href} className='landing-surface-border landing-surface-border-hover grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-ui-primary' data-home-solution-card='true'>
-                                <div className='flex items-center justify-between gap-3'>
-                                    <h3 className='text-base font-semibold text-ui-text'>{solution.title}</h3>
-                                    <ArrowRight className='landing-action-icon h-4 w-4' />
-                                </div>
-                                <p className='text-sm leading-6 text-ui-muted'>{solution.detail}</p>
+                    <nav aria-label='Console actions' className='home-action-list grid sm:grid-cols-2'>
+                        {consoleActions.map((item, index) => (
+                            <Link key={item.href} href={item.href} className='home-action group flex min-h-24 items-center justify-between gap-4 border-b px-1 py-5'>
+                                <span className='flex items-start gap-4'>
+                                    <span className='home-action-index pt-0.5 text-xs tabular-nums'>{String(index + 1).padStart(2, '0')}</span>
+                                    <span className='grid gap-1'>
+                                        <span className='text-base font-semibold'>{item.label}</span>
+                                        <span className='text-sm text-ui-muted'>{item.detail}</span>
+                                    </span>
+                                </span>
+                                <ArrowRight className='h-4 w-4 shrink-0 text-white/45 transition group-hover:translate-x-1 group-hover:text-white' />
                             </Link>
                         ))}
+                    </nav>
+                </div>
+            </section>
+
+            <section className='home-section home-faq' aria-labelledby='faq-title'>
+                <div className='home-wrap grid gap-10 px-5 py-20 md:grid-cols-[0.7fr_1.3fr] md:gap-16 md:px-10 md:py-28 lg:px-16'>
+                    <div className='grid content-start gap-4'>
+                        <p className='home-eyebrow'>FAQ</p>
+                        <h2 id='faq-title' className='text-3xl font-medium tracking-[-0.04em] md:text-4xl'>A few useful answers.</h2>
+                        <Link href='/faq' className='home-text-link mt-2 inline-flex w-fit items-center gap-2 text-sm font-semibold'>All FAQs <ArrowRight className='h-4 w-4' /></Link>
+                    </div>
+                    <div className='home-faq-list'>
+                        {homepageFaqs.slice(0, 3).map(item => <FaqItem key={item.question} item={item} />)}
+                        <details className='home-faq-more'>
+                            <summary>See 7 more questions <span aria-hidden='true'>+</span></summary>
+                            <div className='home-faq-list home-faq-expanded'>
+                                {homepageFaqs.slice(3, 10).map(item => <FaqItem key={item.question} item={item} />)}
+                            </div>
+                        </details>
+                    </div>
+                </div>
+            </section>
+
+            <section className='home-solutions' aria-labelledby='solutions-title'>
+                <div className='home-wrap grid gap-8 px-5 py-14 md:grid-cols-[0.7fr_1.3fr] md:items-end md:px-10 lg:px-16'>
+                    <div className='grid gap-3'>
+                        <p className='home-eyebrow'>Solutions</p>
+                        <h2 id='solutions-title' className='text-2xl font-medium tracking-[-0.035em] md:text-3xl'>Tools for the next step.</h2>
+                    </div>
+                    <div className='home-solution-links grid sm:grid-cols-2'>
+                        {solutions.map(item => (
+                            <Link key={item.href} href={item.href} className='home-solution-link flex items-center justify-between gap-3 border-b py-4 text-sm font-medium'>
+                                {item.title}<ArrowRight className='h-4 w-4 shrink-0 text-white/45' />
+                            </Link>
+                        ))}
+                    </div>
+                    <div className='md:col-start-2'>
+                        <Link href='/dashboard' className='home-dashboard-link inline-flex items-center gap-3 rounded-full px-5 py-3 text-sm font-semibold transition'>
+                            Go to dashboard <ArrowRight className='h-4 w-4' />
+                        </Link>
                     </div>
                 </div>
             </section>
@@ -310,53 +155,11 @@ export default function Page() {
     )
 }
 
-function HomeOperatorPaths() {
+function FaqItem({ item }: { item: (typeof homepageFaqs)[number] }) {
     return (
-        <section
-            className='landing-surface-border overflow-hidden rounded-xl border border-ui-border bg-ui-panel/95 shadow-sm backdrop-blur'
-            data-home-operator-paths='true'
-        >
-            <div className='landing-surface-divider grid gap-2 border-b px-4 py-4 md:grid-cols-[1fr_auto] md:items-end' data-home-operator-paths-header='true'>
-                <div>
-                    <p className='text-xs font-semibold uppercase text-ui-primary'>Operator paths</p>
-                    <h2 className='mt-1 text-xl font-semibold text-ui-text'>Console actions</h2>
-                </div>
-                <Link
-                    href='/dashboard'
-                    className='inline-flex min-h-10 w-fit items-center gap-2 rounded-lg border border-ui-border px-3 py-2 text-sm font-semibold text-ui-primary transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20'
-                >
-                    Inspect console
-                    <ArrowRight className='h-4 w-4' />
-                </Link>
-            </div>
-            <div>
-                <div className='landing-surface-divider hidden grid-cols-[1.1fr_8rem_1.5fr_8rem] gap-3 border-b px-4 py-2 text-[0.68rem] font-semibold uppercase text-ui-muted md:grid' data-home-workflow-coverage-table-header='true'>
-                    <span>Use case</span>
-                    <span>State</span>
-                    <span>Customer value</span>
-                    <span className='text-right'>Action</span>
-                </div>
-                <div className='divide-y landing-surface-divider'>
-                    {operatorPaths.map(item => (
-                        <div
-                            key={item.href}
-                            className='grid gap-3 px-4 py-4 text-sm md:grid-cols-[1.1fr_8rem_1.5fr_8rem] md:items-center md:py-3'
-                            data-home-operator-path={item.href}
-                        >
-                            <div className='min-w-0'>
-                                <p className='wrap-break-word font-semibold text-ui-text'>{item.label}</p>
-                            </div>
-                            <span className='w-fit rounded-full border border-ui-primary/30 bg-ui-primary/10 px-2.5 py-1 text-xs font-semibold text-ui-primary'>
-                                {item.state}
-                            </span>
-                            <p className='min-w-0 wrap-break-word text-ui-muted'>{item.value}</p>
-                            <Link href={item.href} className='inline-flex min-h-9 min-w-20 w-fit items-center justify-center px-3 py-2 text-sm font-semibold text-ui-primary hover:text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/20 md:justify-self-end'>
-                                Open
-                            </Link>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        </section>
+        <details className='home-faq-item'>
+            <summary>{item.question}<span aria-hidden='true'>+</span></summary>
+            <p>{item.answer}</p>
+        </details>
     )
 }

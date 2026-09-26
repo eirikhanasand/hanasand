@@ -81,6 +81,6 @@ export const faqs = [
     },
 ] as const
 
-export const homepageFaqs = faqs.slice(0, 6)
+export const homepageFaqs = faqs.slice(0, 10)
 
 export const faqCategories = ['Basics', 'Monitoring', 'Alerts', 'Routing', 'Trust'] as const
