@@ -21,14 +21,27 @@ export default async function recordTraffic(req: FastifyRequest, res: FastifyRep
     let proxyRecorded = false
     try {
         if (persist) proxyRecorded = await recordProxyRequest(req, res)
-        const retentionAction = persist ? customRetentionAction(normalizeLogEvent({ id: access.key, created_at: access.timestamp,
-            service: 'http-traffic', host: req.hostname, level: res.statusCode >= 400 ? 'error' : 'info', message: `${req.method} ${path} → ${res.statusCode}`,
-            metadata: { access, category: 'http', action: 'request', outcome: res.statusCode >= 400 ? 'failure' : 'success', path, method: req.method, status_code: res.statusCode, source: { ip: access.ip } },
-        }), await loadLogRetentionRules(null)) : undefined
-        if (!proxyRecorded && persist && retentionAction !== 'keep' && await analyzeAccess(access)) return
-        if (retentionAction === 'drop') return
     } catch (error) {
-        // If analysis fails, retain the request; never silently lose evidence.
+        req.log.warn({ error }, 'Proxy request logging failed; checking retention before fallback')
+    }
+    let retentionAction: ReturnType<typeof customRetentionAction>
+    if (persist) {
+        try {
+            retentionAction = customRetentionAction(normalizeLogEvent({ id: access.key, created_at: access.timestamp,
+                service: 'http-traffic', host: req.hostname, level: res.statusCode >= 400 ? 'error' : 'info', message: `${req.method} ${path} → ${res.statusCode}`,
+                metadata: { access, category: 'http', action: 'request', outcome: res.statusCode >= 400 ? 'failure' : 'success', path, method: req.method, status_code: res.statusCode, source: { ip: access.ip } },
+            }), await loadLogRetentionRules(null))
+        } catch (error) {
+            // A failed rule lookup cannot be treated as permission to store a Drop match.
+            req.log.warn({ error }, 'Access retention check failed; not persisting request')
+            return
+        }
+        if (retentionAction === 'drop') return
+    }
+    try {
+        if (!proxyRecorded && persist && retentionAction !== 'keep' && await analyzeAccess(access)) return
+    } catch (error) {
+        // Access analysis is separate from custom retention; keep evidence when only analysis fails.
         req.log.warn({ error }, 'Access analysis failed; retaining request')
     }
     if (!proxyRecorded) req.log.info({ access, req: { method: req.method, url: redactLogText(req.url), remoteAddress: req.ip,

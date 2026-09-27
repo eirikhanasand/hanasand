@@ -55,10 +55,10 @@ test('Store preserves direct HTTP traffic before the access analyzer', async () 
     expect(calls).toEqual([])
     expect(writes).toHaveLength(1)
 })
-test('failed exception lookup retains direct traffic and leaves collector ingestion retryable', async () => {
+test('failed retention lookup prevents the traffic fallback and leaves collector ingestion retryable', async () => {
     eligible = 'http'; failLookup = true
     await recordTraffic(request(), response)
-    expect(writes).toHaveLength(1)
+    expect(writes).toHaveLength(0)
     await expect(recordLog(entry)).rejects.toThrow('Rule lookup unavailable')
     expect(calls).toEqual([])
 })
