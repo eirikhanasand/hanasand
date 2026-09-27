@@ -33,6 +33,9 @@ const maxConnections = Number(DB_MAX_CONN) || (DB_POOL_HOST ? 1000 : 20)
 // Bound the number of requests waiting inside node-postgres. Without this,
 // bursts can turn into an unbounded in-process queue while the database is slow.
 const maxWaitingConnections = Math.max(8, Math.min(64, maxConnections * 2))
+// Schema setup and session-scoped advisory locks bypass transaction pooling.
+// Reserve those clients inside the configured total instead of adding a second budget.
+const directConnections = DB_POOL_HOST ? Math.min(8, maxConnections) : 0
 // Reserve worker capacity without increasing its total connection budget.
 // Event holds cursor and batch locks while committing evidence on another client.
 const eventConnections = process.env.API_HTTP_ONLY !== '1' && process.env.AUTH_SERVICE_ONLY !== '1'
@@ -50,7 +53,7 @@ const poolOptions = {
     application_name: process.env.AUTH_SERVICE_ONLY === '1'
         ? 'hanasand-auth'
         : httpOnlyApi ? 'hanasand-api-http' : 'hanasand-api',
-    max: maxConnections - eventConnections,
+    max: maxConnections - eventConnections - directConnections,
     // Do not pin API sessions behind HAProxy's reloadable DB listener. The
     // short idle window leaves room for sessions released just after a reload.
     min: 0,
@@ -67,7 +70,7 @@ const pool = new Pool(poolOptions)
 const eventPool = eventConnections ? new Pool({ ...poolOptions, max: eventConnections }) : pool
 // Schema startup uses session-scoped SET/RESET and CREATE INDEX CONCURRENTLY.
 // Keep that small, infrequent path on PostgreSQL directly when traffic uses PgBouncer.
-const directPool = DB_POOL_HOST ? new Pool({ ...poolOptions, host: DB_HOST, port: Number(DB_PORT) || 5432, max: 8 }) : pool
+const directPool = DB_POOL_HOST ? new Pool({ ...poolOptions, host: DB_HOST, port: Number(DB_PORT) || 5432, max: directConnections }) : pool
 
 export function withEventDatabase<T>(work: () => Promise<T>): Promise<T> {
     return eventWork.run(true, work)
