@@ -2,6 +2,8 @@ import { readFile, readdir } from 'node:fs/promises'
 
 const css = await readFile(new URL('../src/app/globals.css', import.meta.url), 'utf8')
 const routeFrame = await readFile(new URL('../src/components/layout/routeFrame.tsx', import.meta.url), 'utf8')
+const dashboardUi = await readFile(new URL('../src/components/dashboard/ui.tsx', import.meta.url), 'utf8')
+const casesPage = await readFile(new URL('../src/app/dashboard/cases/page.tsx', import.meta.url), 'utf8')
 const appSource = new URL('../src/app/', import.meta.url)
 const desktopBlock = css.match(/@media \(min-width: 1024px\)\s*\{([\s\S]*?)\n\}/)?.[1] || ''
 
@@ -21,11 +23,15 @@ const stalePageHeights = pages.filter(({ path, source }) => path.endsWith('/glob
     ? false
     : source.includes('calc(100vh-4.5rem)') || /(?:^|\s)(?:min-h-screen|h-screen)(?:\s|$)/.test(source))
 if (stalePageHeights.length) {
-    throw new Error(`Page heights must honor the shared 16px bottom gutter: ${stalePageHeights.map(({ path }) => path).join(', ')}`)
+    throw new Error(`Pages must size content within the shared route frame: ${stalePageHeights.map(({ path }) => path).join(', ')}`)
 }
 
-if (!routeFrame.includes('mt-18 h-[calc(100dvh-5.5rem)]')) {
-    throw new Error('The shared page frame must leave a 16px bottom gutter.')
+if (!routeFrame.includes('mt-18 h-[calc(100dvh-4.5rem)]') || !routeFrame.includes('bg-ui-canvas')) {
+    throw new Error('The shared page frame must fill the viewport below the header with its canvas background.')
+}
+
+if (!dashboardUi.includes('px-2 py-4') || casesPage.includes('paddingBottom: 0')) {
+    throw new Error('The Cases page must keep its 16px bottom padding inside the full-height frame.')
 }
 
 if (!desktopBlock.includes('margin-top: 1rem') || !desktopBlock.includes('max-height: calc(100dvh - 6.5rem)')) {

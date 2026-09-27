@@ -13,8 +13,8 @@ assert.doesNotMatch(markup, /Exact match found/)
 assert.match(markup, /This password has been breached 1 time\./)
 assert.doesNotMatch(markup, /Privacy check:|Next action:|Rotate the underlying secret/)
 assert.doesNotMatch(markup, /password123|all_in_one_sorted|byte\s+\d+/i)
-assert.match(markup, /bg-ui-danger\/10/)
-assert.match(markup, /text-ui-danger/)
+assert.match(markup, /bg-ui-raised\/10/)
+assert.match(markup, /text-ui-text/)
 const pluralMarkup = renderToStaticMarkup(React.createElement(PwnedSearch, {
     breached: true,
     breachCount: 23,
