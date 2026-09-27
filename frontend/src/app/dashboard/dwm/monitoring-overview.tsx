@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Loader2 } from 'lucide-react'
 import Link from '@/components/organizations/workspaceLink'
 import type { DwmActorOverview } from '@/utils/dwm/product'
 import { customerAlertSummary, safeEvidenceExcerpt } from '@/utils/dwm/display'
@@ -50,12 +51,17 @@ export function MonitoringOverview({ alerts, dataHealth, organizationId, initial
         .sort((a, b) => (Date.parse(b.lastSeenAt || b.firstSeenAt) || 0) - (Date.parse(a.lastSeenAt || a.firstSeenAt) || 0))
     const currentPage = Math.min(page, Math.max(0, Math.ceil(rows.length / pageSize) - 1))
     const scopedHref = (path: string) => organizationId ? `${path}?organizationId=${encodeURIComponent(organizationId)}` : path
+    if (dataHealth.alerts.state === 'fallback' || dataHealth.alerts.state === 'missing') {
+        return <main role='status' className='grid min-h-[70vh] place-items-center rounded-lg border border-ui-border bg-ui-canvas text-ui-text'>
+            <div className='flex items-center gap-3 text-sm font-semibold'><Loader2 className='h-4 w-4 animate-spin' />Loading findings</div>
+        </main>
+    }
     return <div className='grid min-w-0 gap-4' data-dwm-overview>
         <section className={panel}>
             <LoadState state={dataHealth.alerts.state} subject='Findings' onRetry={onRefresh} />
             {actionMessage && <p role={actionMessage.ok ? 'status' : 'alert'} className={`p-4 text-sm ${actionMessage.ok ? 'text-ui-text' : 'text-ui-danger'}`}>{actionMessage.text}</p>}
             <header className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border p-4'>
-                <div className='min-w-0 flex-1 text-center'>
+                <div className='flex min-w-0 flex-1 items-center text-left'>
                     {dataHealth.alerts.state === 'live' && alerts.length === 0 ? <p className='font-semibold text-white'>No recent findings</p> : <>
                         <h2 className='font-semibold text-ui-text'>Recent findings</h2>
                         {dataHealth.alerts.state === 'live' && <p className='mt-1 text-sm text-ui-muted'>{alerts.length} findings</p>}
