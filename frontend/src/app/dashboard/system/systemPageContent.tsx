@@ -32,10 +32,6 @@ export default async function SystemPageContent({ section }: { section: SystemSe
     return (
         <DashboardPage className='h-full min-w-0 grid-cols-[minmax(0,1fr)] max-xl:[overflow-wrap:anywhere] max-xl:[&_*]:min-w-0'>
             <DashboardHeader title='System' description={sectionDescriptions[section]} />
-            {section === 'overview' ? <>
-                <RecoveryPanel />
-                <DockerStoragePanel />
-            </> : null}
             <SystemDashboard
                 id={id}
                 token={token}
@@ -45,6 +41,10 @@ export default async function SystemPageContent({ section }: { section: SystemSe
                 vmMetrics={vmMetrics}
                 section={section}
             />
+            {section === 'overview' ? <>
+                <RecoveryPanel />
+                <DockerStoragePanel />
+            </> : null}
         </DashboardPage>
     )
 }
