@@ -11,15 +11,16 @@ mock.module('../src/components/thoughts/dashboardThought', () => ({ default: () 
 const { default: Articles } = await import('../src/app/dashboard/articles/page')
 const { default: Thoughts } = await import('../src/app/dashboard/thoughts/page')
 
-const year = new Date().getFullYear()
-for (const articleYear of [year - 1, year, year + 1]) {
+for (const articleYear of [2025, new Date().getFullYear(), 2027]) {
     articles = [{ id: 'article', title: 'Example article', content: 'Example', created: `${articleYear}-10-12T12:38:00`, metadata: { wordCount: 810, estimatedMinutes: 4 } }]
     const html = renderToStaticMarkup(await Articles())
-    assert.equal(html.includes(String(articleYear)), articleYear !== year, 'Only dates outside the current year should display their year')
-    assert(html.includes('810 words'))
+    assert(html.includes('aria-label="Show article analytics"'))
+    assert(html.includes('aria-expanded="false"'))
+    assert(!html.includes('id="article-analytics"'))
+    assert(!html.includes('810 words'))
     assert(!html.includes('indexed'))
     assert(!html.includes('new drafts and deletes'))
-    assert(html.includes('>articles</p>'))
+    assert(html.includes('>1 Article</span>'))
 }
 articles = []
 assert(renderToStaticMarkup(await Articles()).includes('Publish your first article'))
