@@ -28,7 +28,11 @@ for (const entries of [[], [{ id: 'thought', title: 'Why?', created_at: '2025-10
     const html = renderToStaticMarkup(await Thoughts())
     assert(!html.includes('href="/notes"'))
     assert(!/notebook|real note|research note/i.test(html))
-    assert.equal(html.includes('philosophical question'), entries.length > 0)
-    if (!entries.length) assert(html.includes('href="/content/thoughts/create"'))
+    if (!entries.length) {
+        assert(!html.includes('Share a short philosophical question to give visitors something to think about.'))
+        assert(!html.includes('Create your first thought</a>'))
+        assert(html.includes('href="/content/thoughts/create"'))
+        assert(html.includes('text-white'))
+    }
 }
 console.log('Content pages: conditional years, concise article labels and distinct thoughts copy pass.')
