@@ -12,6 +12,7 @@ import { getMonitoringCases, updateMonitoringCase } from './handlers/monitoringC
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify'
 import indexHandler from './handlers/index.ts'
 import getUser from './handlers/user/get.ts'
+import { getProfileStats } from './handlers/profileStats.ts'
 import postUser from './handlers/user/post.ts'
 import postPwned from './handlers/pwned/post.ts'
 import getRole from './handlers/roles/get.ts'
@@ -298,6 +299,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/service-accounts', postServiceAccount)
     fastify.patch('/service-accounts/:id', patchServiceAccount)
     fastify.delete('/service-accounts/:id', deleteServiceAccount)
+    fastify.get('/user/:id/profile-stats', getProfileStats)
     fastify.get('/user/:id', getUser)
     fastify.get('/user/full/:id', authorizedUserHandler)
     fastify.post('/user', postUser)

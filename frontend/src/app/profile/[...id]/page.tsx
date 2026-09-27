@@ -1,4 +1,6 @@
 import ProfileIdentity from '@/components/profile/profileIdentity'
+import ProfileOverview from '@/components/profile/profileOverview'
+import getProfileStats from '@/utils/profile/getProfileStats'
 import { redirect, notFound } from 'next/navigation'
 import Certificates from '@/components/profile/certificates'
 import AccountActions from '@/components/profile/accountActions'
@@ -36,18 +38,21 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     if (!isSelf) return <DashboardPage><PublicProfile key={username} profile={profile} username={username} /></DashboardPage>
 
     const displayName = profile?.name || (isSelf ? name : null) || profileId
+    const stats = section === 'profile' ? await getProfileStats(userId, token) : null
     const certificates = isSelf && section === 'certificates' ? await getCertificates(userId, token, userId) : null
 
     return (
         <DashboardPage>
-            <DashboardPanel className='relative p-4'>
-                <h1 className='wrap-break-word pr-10 text-xl font-semibold text-ui-text'>{displayName}</h1>
-                <p className='mt-1 break-all pr-10 text-sm text-ui-muted'>@{username}</p>
-                {profile?.email && <p className='mt-2 break-all text-sm text-ui-muted'>{profile.email}</p>}
-                {isSelf && section === 'profile' && <ProfileIdentity displayName={displayName} username={username} />}
-                {profile?.active === false && <p className='mt-2 text-sm text-ui-muted'>Inactive account</p>}
-                {!profile && !isSelf && <p role='status' className='mt-2 text-sm text-ui-muted'>Profile details are unavailable. Please try again.</p>}
-            </DashboardPanel>
+            {section === 'profile' ? (
+                <DashboardPanel className='relative p-4'>
+                    <h1 className='wrap-break-word pr-10 text-xl font-semibold text-ui-text'>{displayName}</h1>
+                    <p className='mt-1 break-all pr-10 text-sm text-ui-muted'>@{username}</p>
+                    {profile?.email && <p className='mt-2 break-all text-sm text-ui-muted'>{profile.email}</p>}
+                    <ProfileIdentity displayName={displayName} username={username} />
+                    {profile?.active === false && <p className='mt-2 text-sm text-ui-muted'>Inactive account</p>}
+                </DashboardPanel>
+            ) : <p className='px-1 text-xs text-ui-muted'>@{username}</p>}
+            {section === 'profile' && <ProfileOverview stats={stats} />}
             {section === 'sessions' && <SessionsPanel isSelf />}
             {section === 'certificates' && <Certificates certificates={certificates} />}
             {section === 'support' && <SupportTickets />}
