@@ -56,7 +56,7 @@ function LoginActivity({ loginDays }: { loginDays: ProfileStats['loginDays'] }) 
                                 const label = count
                                     ? `${count} sign-in${count === 1 ? '' : 's'} on ${dayLabel.format(date)}`
                                     : `No sign-ins on ${dayLabel.format(date)}`
-                                const cellClass = 'h-[10px] w-[10px] rounded-[2px] ' + levels[level]
+                                const cellClass = 'h-2.5 w-2.5 rounded-xs ' + levels[level]
                                 if (future) return <span key={key} aria-hidden='true' className={cellClass + ' opacity-0'} />
                                 return (
                                     <button
