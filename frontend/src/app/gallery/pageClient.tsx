@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { getUserFiles, UserUpload } from '@/utils/files/getUserFiles'
 import config from '@/config'
+import Button from '@/components/misc/button'
 
 const pageSize = 30
 export default function GalleryPageClient() {
@@ -25,11 +26,10 @@ export default function GalleryPageClient() {
         return () => { current = false }
     }, [page, retry])
     const button = 'inline-flex items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm font-semibold hover:border-ui-primary disabled:opacity-40'
-    const uploadButton = 'inline-flex items-center justify-center gap-2 rounded-lg bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-on-primary hover:opacity-90'
     return <section className='mx-auto grid w-full max-w-7xl gap-6 p-4 text-ui-text md:p-6'>
         <header className='flex flex-wrap items-center justify-between gap-4'>
             <div><h1 className='text-2xl font-semibold'>Gallery</h1></div>
-            <Link href='/upload' className={uploadButton}><Upload size={16} />Upload</Link>
+            <Button path='/upload' variant='secondary' size='md' text='Upload' icon={<Upload size={16} />} />
         </header>
         {loading ? <div role='status' className='flex justify-center gap-2 py-16 text-ui-muted'><LoaderCircle className='animate-spin' />Loading your files…</div>
             : error ? <div role='alert' className='rounded-lg border border-ui-border bg-ui-panel p-6'><p>{error}</p><button className={button + ' mt-3'} onClick={() => setRetry(retry + 1)}>Try again</button></div>

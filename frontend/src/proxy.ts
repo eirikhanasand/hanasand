@@ -324,7 +324,7 @@ function authServiceUnavailable(req: NextRequest) {
 <meta name="robots" content="noindex"><meta http-equiv="refresh" content="3">
 <title>Reconnecting your session · Hanasand</title>
 <style>
-            :root{color-scheme:${dark ? 'dark' : 'light'};--ui-canvas:${dark ? '#070707' : '#f5f5f5'};--ui-panel:${dark ? '#101010' : '#ffffff'};--ui-border:${dark ? '#383838' : '#d4d4d4'};--ui-text:${dark ? '#f5f7fb' : '#171a21'};--ui-muted:${dark ? '#999999' : '#4d4d4d'};--ui-primary:${dark ? '#8fb2ff' : '#3056d3'};--ui-on-primary:${dark ? '#101010' : '#ffffff'}}
+            :root{color-scheme:${dark ? 'dark' : 'light'};--ui-canvas:${dark ? '#070707' : '#f5f5f5'};--ui-panel:${dark ? '#101010' : '#ffffff'};--ui-border:${dark ? '#383838' : '#d4d4d4'};--ui-text:${dark ? '#f5f7fb' : '#171a21'};--ui-muted:${dark ? '#999999' : '#4d4d4d'};--ui-primary:${dark ? '#f5f7fb' : '#22252b'};--ui-loader:#8b0000;--ui-on-primary:${dark ? '#101010' : '#ffffff'}}
             body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--ui-canvas);color:var(--ui-text);font:16px/1.6 system-ui,sans-serif}
             main{max-width:28rem;margin:1.5rem;padding:2rem;border:1px solid var(--ui-border);border-radius:12px;background:var(--ui-panel)}
             h1{font-size:1.5rem;line-height:1.3}p{color:var(--ui-muted)}

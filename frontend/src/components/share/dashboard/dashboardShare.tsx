@@ -40,7 +40,7 @@ export default function DashboardShare({ share }: { share: Share }) {
                     </p>
                 </div>
                 <div className='flex shrink-0 items-center gap-1.5'>
-                    <Link href={`/s/${share.id}`} className='rounded-lg border border-ui-border bg-ui-panel px-2.5 py-1.5 text-xs font-semibold text-ui-on-primary hover:bg-ui-raised dark:border-ui-primary/35 dark:bg-ui-primary/10 dark:text-ui-on-primary dark:hover:border-ui-primary/35 dark:hover:bg-ui-primary/10'>
+                    <Link href={`/s/${share.id}`} className='rounded-lg border border-ui-border bg-ui-panel px-2.5 py-1.5 text-xs font-semibold text-ui-text hover:bg-ui-raised'>
                         Open
                     </Link>
                     <button type='button' onClick={() => void handleDelete()} aria-label={`Delete share ${share.alias || share.path || share.id}`} className='inline-flex h-8 w-8 items-center justify-center rounded-lg border border-ui-danger bg-ui-raised text-ui-text hover:bg-ui-raised dark:border-ui-danger/35 dark:bg-ui-raised/10 dark:text-ui-text dark:hover:bg-ui-raised/15'>

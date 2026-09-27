@@ -207,7 +207,7 @@ export default function PublicSupportChat({ active = true, onUnreadChange, onRes
                 {!visibleMessages.length ? <div className='flex min-h-full flex-col items-center justify-center pb-3 text-center'>
                     <h2 className='text-xl font-semibold tracking-tight text-ui-text'>What can we help with?</h2>
                     <p className='mt-2 max-w-sm text-sm leading-6 text-ui-muted'>Describe your question and we’ll point you in the right direction.</p>
-                    <div className='mt-6 flex flex-wrap justify-center gap-2'>{['Account help', 'Billing question', 'Using Hanasand'].map(topic => <button key={topic} type='button' disabled={loading || sending} onClick={() => setInput(topic)} className='rounded-full border border-ui-border px-3 py-2 text-xs text-ui-on-primary transition hover:border-ui-primary hover:bg-ui-primary/5 disabled:opacity-50'>{topic}</button>)}</div>
+                    <div className='mt-6 flex flex-wrap justify-center gap-2'>{['Account help', 'Billing question', 'Using Hanasand'].map(topic => <button key={topic} type='button' disabled={loading || sending} onClick={() => setInput(topic)} className='rounded-full border border-ui-border px-3 py-2 text-xs text-ui-text transition hover:border-ui-primary hover:bg-ui-primary/5 disabled:opacity-50'>{topic}</button>)}</div>
                 </div> : <div className='grid gap-4'>{visibleMessages.map(message => message.sender_kind === 'system'
                     ? <p key={message.id} className='px-2 py-1 text-center text-xs leading-5 text-ui-muted'>{message.body}</p>
                     : <div key={message.id} className={`min-w-0 max-w-[92%] ${message.sender_kind === 'user' ? 'justify-self-end' : 'justify-self-start'}`}>

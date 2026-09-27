@@ -250,7 +250,7 @@ export default function CronJobsClient() {
 function LoadingState({ message, onRetry }: { message: string, onRetry: () => void }) {
     return <div className='grid min-h-80 place-items-center rounded-xl border border-ui-border bg-ui-panel p-8 text-center'>
         <div role='status' aria-live='polite'>
-            {message ? <AlertTriangle className='mx-auto h-8 w-8 text-ui-text' /> : <RefreshCcw className='mx-auto h-8 w-8 animate-spin text-ui-primary' />}
+            {message ? <AlertTriangle className='mx-auto h-8 w-8 text-ui-text' /> : <RefreshCcw className='mx-auto h-8 w-8 animate-spin text-ui-loader' />}
             <p className='mt-3 text-sm font-semibold text-ui-text'>{message ? 'Unable to load scheduled work' : 'Loading scheduled work'}</p>
             <p className='mt-1 text-sm text-ui-muted'>{message || 'Collecting the latest job inventory.'}</p>
             {message ? <button type='button' onClick={onRetry} className='mt-4 inline-flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text hover:border-ui-primary'><RefreshCcw className='h-4 w-4' />Try again</button> : null}

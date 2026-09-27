@@ -41,7 +41,7 @@ export default async function Shares() {
                         </div>
                         <div className='flex items-center gap-2'>
                             {shareRows.length > 0 && <ShareAnalyticsToggle />}
-                            <Link prefetch={false} href='/s' className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-sm font-semibold text-ui-on-primary transition hover:border-ui-primary/35 hover:bg-ui-primary/10'>
+                            <Link prefetch={false} href='/s' className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10'>
                                 <Plus className='h-4 w-4' />
                                 <span>Create</span>
                             </Link>

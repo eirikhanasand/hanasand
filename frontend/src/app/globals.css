@@ -11,7 +11,8 @@
   --ui-border: #383838;
   --ui-text: #f5f7fb;
   --ui-muted: #999999;
-  --ui-primary: #8fb2ff;
+  --ui-primary: #f5f7fb;
+  --ui-loader: #8b0000;
   --ui-success: #7de0a2;
   --ui-warning: #ffd879;
   --ui-danger: #ffb8b0;
@@ -31,7 +32,7 @@
   --ui-backdrop: rgba(0, 0, 0, 0.6);
   --ui-scrim: rgba(0, 0, 0, 0.3);
   --ui-ambient-success: rgba(125, 224, 162, 0.06);
-  --ui-selection: rgba(143, 178, 255, 0.24);
+  --ui-selection: color-mix(in srgb, var(--ui-primary) 24%, transparent);
   --font-sans: 'Manrope', 'Aptos', sans-serif;
   --color-ui-canvas: var(--ui-canvas);
   --color-ui-panel: var(--ui-panel);
@@ -40,6 +41,7 @@
   --color-ui-text: var(--ui-text);
   --color-ui-muted: var(--ui-muted);
   --color-ui-primary: var(--ui-primary);
+  --color-ui-loader: var(--ui-loader);
   --color-ui-success: var(--ui-success);
   --color-ui-warning: var(--ui-warning);
   --color-ui-danger: var(--ui-danger);
@@ -138,7 +140,7 @@
   --page-wash-top: #0b0b0b;
   --page-wash-bottom: #050505;
   --dot-grid: rgba(255, 255, 255, 0.16);
-  --ambient-primary: rgba(48, 86, 211, 0.105);
+  --ambient-primary: color-mix(in srgb, var(--ui-primary) 10.5%, transparent);
   --ambient-secondary: rgba(255, 255, 255, 0.008);
   --ambient-neutral: rgba(255, 255, 255, 0.035);
   --panel-border: rgba(247, 248, 242, 0.10);
@@ -160,7 +162,7 @@
   --ui-border: #d4d4d4;
   --ui-text: #171a21;
   --ui-muted: #4d4d4d;
-  --ui-primary: #3056d3;
+  --ui-primary: #22252b;
   --ui-success: #147a3b;
   --ui-warning: #8a5a00;
   --ui-danger: #b42318;
@@ -176,7 +178,7 @@
   --ui-backdrop: rgba(0, 0, 0, 0.5);
   --ui-scrim: rgba(0, 0, 0, 0.3);
   --ui-ambient-success: rgba(20, 163, 90, 0.06);
-  --ui-selection: rgba(48, 86, 211, 0.18);
+  --ui-selection: color-mix(in srgb, var(--ui-primary) 18%, transparent);
   --background: #f5f5f5;
   --foreground: #171a21;
   --color-background: #f5f5f5;
@@ -191,7 +193,7 @@
   --page-wash-top: #ffffff;
   --page-wash-bottom: #eeeeee;
   --dot-grid: rgba(20, 20, 20, 0.18);
-  --ambient-primary: rgba(48, 86, 211, 0.044);
+  --ambient-primary: color-mix(in srgb, var(--ui-primary) 4.4%, transparent);
   --ambient-secondary: rgba(80, 80, 80, 0.02);
   --ambient-neutral: rgba(22, 26, 33, 0.026);
   --panel-border: rgba(24, 24, 24, 0.12);
@@ -404,7 +406,7 @@ body:has(.support-page) .site-atmosphere::before {
 .site-loading-icon {
   width: 2rem;
   height: 2rem;
-  color: var(--ui-primary);
+  color: var(--ui-loader);
   animation: site-loading-spin 0.9s linear infinite;
 }
 
