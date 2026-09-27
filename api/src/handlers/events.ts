@@ -225,7 +225,13 @@ export async function getEvents(req: FastifyRequest, res: FastifyReply) {
     const query = req.query as { organizationId?: string, limit?: string }
     if (query.organizationId !== access.organizationId) return res.status(403).send({ error: 'Organization access denied.' })
     const limit = Math.min(Math.max(Number(query.limit || 100), 1), 500)
-    const canReadLogs = (await hasRole(req, res, 'system_admin')).valid
+    // The organization access check already resolved the effective user. Keep
+    // the role check on that identity even when the proxy omitted the legacy
+    // id header, and stop if the role helper had to send an auth response.
+    if (!req.headers.id) req.headers.id = access.userId
+    const role = await hasRole(req, res, 'system_admin')
+    if (res.sent) return
+    const canReadLogs = role.valid
     const result = await run(`
         SELECT id, ingestion_id, source_vendor, source_product, event_timestamp, received_at,
                event_type, action, outcome, user_id, user_email, source_ip, source_country,
@@ -247,7 +253,13 @@ export async function postRulePreview(req: FastifyRequest, res: FastifyReply) {
     const body = (req.body || {}) as Record<string, unknown>
     const normalized = normalizeConditions(body.conditions)
     if (normalized.error || !normalized.conditions.length || !validPreviewWindow(body)) return res.status(400).send({ error: normalized.error || 'Choose a valid preview range and rule.' })
-    const canReadLogs = (await hasRole(req, res, 'system_admin')).valid
+    // Reuse the identity resolved by organizationAccess when the proxy omitted
+    // the legacy id header. hasRole may send an auth response, so stop before
+    // the preview handler tries to send a second response.
+    if (!req.headers.id) req.headers.id = access.userId
+    const role = await hasRole(req, res, 'system_admin')
+    if (res.sent) return
+    const canReadLogs = role.valid
     try { return res.send(await scanRulePreview(access.organizationId, canReadLogs, { ...body, conditions: normalized.conditions })) }
     catch (error) {
         if (error instanceof PreviewRegexTimeout) return res.status(400).send({ error: error.message })
@@ -550,7 +562,11 @@ async function saveRule(req: FastifyRequest, access: { organizationId: string, u
 }
 
 export async function organizationAccess(req: FastifyRequest, res: FastifyReply) {
-    const { valid, id: userId } = await tokenWrapper(req, res)
+    const auth = await tokenWrapper(req, res)
+    // tokenWrapper may have already sent the authoritative auth failure.
+    // Do not append a second response from the organization boundary.
+    if (res.sent) return null
+    const { valid, id: userId } = auth
     if (!valid || !userId) {
         res.status(401).send({ error: 'Unauthorized.' })
         return null
