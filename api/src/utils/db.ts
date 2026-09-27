@@ -28,6 +28,9 @@ export function withSchemaLockTimeout<T>(work: () => Promise<T>): Promise<T> {
 
 const eventWork = new AsyncLocalStorage<boolean>()
 const maxConnections = Number(DB_MAX_CONN) || 20
+// Bound the number of requests waiting inside node-postgres. Without this,
+// bursts can turn into an unbounded in-process queue while the database is slow.
+const maxWaitingConnections = Math.max(8, Math.min(64, maxConnections * 2))
 // Reserve worker capacity without increasing its total connection budget.
 // Event holds cursor and batch locks while committing evidence on another client.
 const eventConnections = process.env.API_HTTP_ONLY !== '1' && process.env.AUTH_SERVICE_ONLY !== '1'
@@ -60,6 +63,13 @@ export function withEventDatabase<T>(work: () => Promise<T>): Promise<T> {
 
 function activePool() { return eventWork.getStore() ? eventPool : pool }
 
+function connectDatabase(connectionPool: pg.Pool) {
+    if (connectionPool.waitingCount >= maxWaitingConnections) {
+        throw Object.assign(new Error('Database is temporarily busy. Try again shortly.'), { statusCode: 503, code: 'DB_QUEUE_FULL' })
+    }
+    return connectionPool.connect()
+}
+
 // Checked-out clients can emit transport errors between queries, outside the pool's idle handler.
 for (const connectionPool of new Set([pool, eventPool])) {
     connectionPool.on('connect', client => client.on('error', error => console.error('Database connection failed:', error.message)))
@@ -91,12 +101,12 @@ export default async function run(query: string, params?: SQLParamType, name?: s
 ;(run as typeof run & { primaryDatabaseRunner?: boolean }).primaryDatabaseRunner = true
 
 export async function queryOnce(query: string, params?: SQLParamType, name?: string) {
-    const client = await activePool().connect().catch(error => {
+    const client = await connectDatabase(activePool()).catch(error => {
         // No query has been submitted yet: one retry can survive a brief pool
         // shortage without replaying writes or extending authentication retries.
         if (process.env.API_HTTP_ONLY === '1' && process.env.AUTH_SERVICE_ONLY !== '1'
             && (isTransientDatabaseError(error) || error?.message === 'timeout exceeded when trying to connect')) {
-            return activePool().connect()
+            return connectDatabase(activePool())
         }
         throw error
     })
@@ -140,7 +150,7 @@ export async function queryOnce(query: string, params?: SQLParamType, name?: str
 }
 
 export async function withDatabaseAdvisoryLock<T>(key: string, work: () => Promise<T>): Promise<T> {
-    const client = await activePool().connect()
+    const client = await connectDatabase(activePool())
     try {
         await client.query('SELECT pg_advisory_lock(hashtextextended($1, 0))', [key])
         return await work()
@@ -151,7 +161,7 @@ export async function withDatabaseAdvisoryLock<T>(key: string, work: () => Promi
 }
 
 export async function withTransaction<T>(work: (query: typeof queryOnce) => Promise<T>) {
-    const client = await activePool().connect()
+    const client = await connectDatabase(activePool())
     const schema = schemaWork.getStore()
     let expired = false
     let timer: ReturnType<typeof setTimeout> | undefined
