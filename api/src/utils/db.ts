@@ -35,6 +35,10 @@ const maxWaitingConnections = Math.max(8, Math.min(64, maxConnections * 2))
 // Event holds cursor and batch locks while committing evidence on another client.
 const eventConnections = process.env.API_HTTP_ONLY !== '1' && process.env.AUTH_SERVICE_ONLY !== '1'
     && maxConnections >= 12 ? 8 : 0
+const httpOnlyApi = process.env.API_HTTP_ONLY === '1' && process.env.AUTH_SERVICE_ONLY !== '1'
+const configuredIdleTimeout = Number(DB_IDLE_TIMEOUT_MS) || (
+    process.env.AUTH_SERVICE_ONLY === '1' ? 5000 : 120_000
+)
 const poolOptions = {
     user: DB_USER || 'hanasand',
     host: DB_HOST,
@@ -42,14 +46,12 @@ const poolOptions = {
     password: DB_PASSWORD,
     port: Number(DB_PORT) || 5432,
     max: maxConnections - eventConnections,
-    // Keep one API connection between ten-second polls; burst connections still
-    // expire normally and authentication/worker pools retain their own policy.
-    min: process.env.API_HTTP_ONLY === '1' && process.env.AUTH_SERVICE_ONLY !== '1' ? 1 : 0,
-    // Retain API and worker burst connections between polls, avoiding repeated
-    // database authentications under load. Authentication keeps its own policy.
-    idleTimeoutMillis: Number(DB_IDLE_TIMEOUT_MS) || (
-        process.env.AUTH_SERVICE_ONLY === '1' ? 5000 : 120_000
-    ),
+    // Do not pin API sessions behind HAProxy's reloadable DB listener. Expire
+    // idle API sessions before the proxy's 65-second graceful-drain deadline.
+    min: 0,
+    idleTimeoutMillis: httpOnlyApi
+        ? Math.min(Math.max(configuredIdleTimeout, 1), 45_000)
+        : configuredIdleTimeout,
     connectionTimeoutMillis: Number(DB_TIMEOUT_MS) || 3000,
     statement_timeout: (process.env.AUTH_SERVICE_ONLY === '1' || process.env.API_HTTP_ONLY === '1') ? 5000 : undefined,
     keepAlive: true
