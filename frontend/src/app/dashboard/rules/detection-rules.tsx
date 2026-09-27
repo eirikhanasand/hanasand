@@ -126,6 +126,8 @@ export default function DetectionRules({ category, initial }: { category: RuleCa
             <div className='flex flex-wrap items-center justify-between gap-4'>
                 <div><h1 className='text-2xl font-semibold'>{ruleCategories[category].label}</h1></div>
                 <RulePageActions
+                    category={category}
+                    organizationId={organizationId}
                     showCreate={showCreate}
                     showImports={showImports}
                     onToggleCreate={() => { setShowCreate(open => !open); setShowImports(false) }}
