@@ -128,9 +128,9 @@ export default function DetectionRules({ category, initial }: { category: RuleCa
                 <div><h1 className='text-2xl font-semibold'>{ruleCategories[category].label}</h1></div>
                 <div className='flex max-w-full flex-wrap items-center gap-3'>
 
-                    <button type='button' aria-expanded={showCreate} aria-controls='event-rule-create' onClick={() => { setShowCreate(open => !open); setShowImports(false) }} className='rounded-lg px-4 py-2 text-sm font-semibold text-ui-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary'>Create</button>
-                    <button type='button' aria-expanded={showImports} aria-controls='event-rule-imports' onClick={() => { setShowImports(open => !open); setShowCreate(false) }} className='rounded-lg px-4 py-2 text-sm font-semibold text-ui-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary'>Import</button>
-                    <Link href='/cases' className='rounded-lg px-4 py-2 text-sm font-semibold text-ui-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary'>Cases</Link>
+                    <button type='button' aria-expanded={showCreate} aria-controls='event-rule-create' onClick={() => { setShowCreate(open => !open); setShowImports(false) }} className='rounded-lg px-4 py-2 text-sm font-semibold text-[#60a5fa] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#60a5fa]'>Create</button>
+                    <button type='button' aria-expanded={showImports} aria-controls='event-rule-imports' onClick={() => { setShowImports(open => !open); setShowCreate(false) }} className='rounded-lg px-4 py-2 text-sm font-semibold text-[#60a5fa] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#60a5fa]'>Import</button>
+                    <Link href='/cases' className='rounded-lg px-4 py-2 text-sm font-semibold text-[#60a5fa] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#60a5fa]'>Cases</Link>
                 </div>
             </div>
             {error && <div role='alert' className='rounded-lg border border-red-400/40 bg-red-500/10 p-3 text-sm text-red-200'>{error}</div>}
