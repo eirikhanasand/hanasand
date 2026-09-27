@@ -190,9 +190,12 @@ export default function PublicSupportChat({ active = true, onUnreadChange, onRes
         : conversation.messages
     return (
         <section aria-label='Support chat' className='grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto]'>
-            {!legacy ? <div className='flex min-w-0 items-center justify-between border-b border-ui-border bg-ui-raised px-5 py-3'>
+            {!legacy ? <div className='flex min-w-0 items-center justify-between gap-3 border-b border-ui-border bg-ui-raised px-5 py-3'>
                 <h1 className='text-sm font-semibold text-ui-text'>Support</h1>
-                <button type='button' onClick={startNewChat} className='shrink-0 rounded-lg border border-ui-border bg-ui-panel px-3.5 py-2 text-xs font-semibold text-ui-text transition-colors hover:bg-ui-canvas'>New chat</button>
+                <div className='flex shrink-0 items-center gap-2'>
+                    <button type='button' onClick={startNewChat} className='rounded-lg border border-ui-border bg-ui-panel px-3.5 py-2 text-xs font-semibold text-ui-text transition-colors hover:bg-ui-canvas'>New chat</button>
+                    {conversation.id ? <button type='button' disabled={closing || sending || transferring} onClick={() => void endConversation()} className='rounded-lg border border-ui-danger/30 bg-ui-danger/5 px-3.5 py-2 text-xs font-semibold text-ui-danger transition-colors hover:border-ui-danger/50 hover:bg-ui-danger/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-danger disabled:opacity-50'>{closing ? <span className='inline-flex items-center gap-1.5'><LoaderCircle className='h-3.5 w-3.5 animate-spin' aria-hidden='true' />Ending…</span> : 'End conversation'}</button> : null}
+                </div>
             </div> : <div />}
             <div ref={log} role='log' aria-label='Messages' className='min-h-0 overflow-y-auto overscroll-contain px-5 py-5'>
                 {!visibleMessages.length ? <div className='flex min-h-full flex-col items-center justify-center pb-3 text-center'>
@@ -215,7 +218,6 @@ export default function PublicSupportChat({ active = true, onUnreadChange, onRes
                     <textarea aria-label='Message' rows={Math.min(6, Math.max(1, input.split('\n').length))} maxLength={4000} value={input} onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.nativeEvent.isComposing) { event.preventDefault(); if (!loading && !busy) send(event) } }} placeholder={human ? 'Message the support team…' : 'Ask a question…'} className='min-h-9 min-w-0 flex-1 resize-none bg-transparent px-2 py-1 text-sm leading-5 text-ui-text outline-none placeholder:text-ui-muted' />
                     <button type='submit' disabled={loading || busy || !input.trim()} aria-label='Send message' className='grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-ui-primary text-ui-canvas transition hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary disabled:opacity-40'>{sending ? <LoaderCircle className='h-4 w-4 animate-spin' /> : <ArrowUp className='h-4 w-4' />}</button>
                 </form>
-                {conversation.id && !sending && !transferring ? <button type='button' disabled={closing} onClick={() => void endConversation()} className='mt-2 rounded-md px-2 py-1 text-xs font-medium text-ui-muted transition-colors hover:bg-ui-panel hover:text-ui-danger focus-visible:outline-2 focus-visible:outline-ui-primary disabled:opacity-50'>{closing ? 'Ending conversation...' : 'End conversation'}</button> : null}
                 {human ? <div className='mt-3 flex min-h-7 items-center justify-center'><p className='flex items-center gap-1.5 text-xs text-ui-muted'><UserRound className='h-3.5 w-3.5' />{agentName ? `Speaking with ${agentName}` : 'Waiting for support.'}</p></div> : null}
             </div>
         </section>

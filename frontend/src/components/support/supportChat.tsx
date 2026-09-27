@@ -5,7 +5,7 @@ import SupportFeedback, { SupportStars, type Feedback } from './supportFeedback'
 import useSupportLive from './useSupportLive'
 import useSupportUnread from './useSupportUnread'
 import { PublicSupportPanel } from './publicSupportChat'
-import { MessageCircle, Send } from 'lucide-react'
+import { Loader2, MessageCircle, Send } from 'lucide-react'
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { getCookie } from '@/utils/cookies/cookies'
 
@@ -14,23 +14,25 @@ type Message = { id: string; sender_id: string | null; sender_kind?: string; sen
 
 const fieldClass = 'min-w-0 rounded-lg border border-ui-border bg-ui-canvas px-3 py-2 text-sm text-ui-text outline-none placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
 
-export default function SupportChat({ embedded = false }: { embedded?: boolean }) {
-    const [tickets, setTickets] = useState<Ticket[]>([])
-    const [selectedId, setSelectedId] = useState('')
+type InitialChat = { tickets: Ticket[]; role: 'user' | 'support'; selectedId: string; messages: Message[]; realtime: boolean }
+
+export default function SupportChat({ embedded = false, initialChat }: { embedded?: boolean; initialChat?: InitialChat }) {
+    const [tickets, setTickets] = useState<Ticket[]>(initialChat?.tickets || [])
+    const [selectedId, setSelectedId] = useState(initialChat?.selectedId || '')
     const selectedRef = useRef('')
     const messageRevision = useRef(0)
     const ticketRevision = useRef(0)
-    const realtime = useRef(false)
+    const realtime = useRef(initialChat?.realtime || false)
     selectedRef.current = selectedId
     const creating = useRef(false)
     const drafts = useRef<Record<string, string>>({})
     const log = useRef<HTMLDivElement>(null)
-    const [messages, setMessages] = useState<Message[]>([])
+    const [messages, setMessages] = useState<Message[]>(initialChat?.messages || [])
     const [input, setInput] = useState('')
     const [subject, setSubject] = useState('')
-    const [role, setRole] = useState<'user' | 'support'>('user')
+    const [role, setRole] = useState<'user' | 'support'>(initialChat?.role || 'user')
     const [error, setError] = useState('')
-    const [loading, setLoading] = useState(true)
+    const [loading, setLoading] = useState(!initialChat)
     const [syncedId, setSyncedId] = useState('')
     const [signedOut, setSignedOut] = useState(false)
     const [sending, setSending] = useState(false)
@@ -71,11 +73,12 @@ export default function SupportChat({ embedded = false }: { embedded?: boolean }
     }, [])
     useEffect(() => {
         const controller = new AbortController()
-        setMessages([]); setSyncedId('')
+        if (initialChat?.selectedId !== selectedId) setMessages([])
+        setSyncedId('')
         const refresh = () => { void loadMessages(selectedId, controller.signal).then(() => { if (!controller.signal.aborted) { setError(''); setSyncedId(selectedId) } }).catch(error => { if (!controller.signal.aborted) setError(error.message) }) }
         refresh()
         return () => { controller.abort() }
-    }, [loadMessages, selectedId])
+    }, [initialChat?.selectedId, loadMessages, selectedId])
 
     const connection = useSupportLive(async () => {
         const id = selectedRef.current
@@ -154,11 +157,12 @@ export default function SupportChat({ embedded = false }: { embedded?: boolean }
     }
 
     if (signedOut) return <PublicSupportPanel />
+    if (embedded && loading) return <section aria-label='Support chat' aria-busy='true' className='grid min-h-0 min-w-0 place-items-center'><Loader2 className='site-loading-icon' aria-hidden='true' /></section>
 
     const displayedTickets = tickets.map(ticket => ticket.id === statusChange?.id ? { ...ticket, status: statusChange.status, ...(statusChange.status === 'closed' ? { feedback_rating: null, feedback_comment: null } : {}) } : ticket)
     const selected = displayedTickets.find(ticket => ticket.id === selectedId)
     const shell = embedded
-        ? 'grid h-[calc(100dvh-7rem)] min-h-[30rem] min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm lg:grid-cols-[18rem_minmax(0,1fr)] lg:grid-rows-1'
+        ? 'grid h-[calc(100dvh-6.5rem)] min-h-[30rem] min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm lg:grid-cols-[18rem_minmax(0,1fr)] lg:grid-rows-1'
         : 'grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-ui-panel'
     const headingClass = 'flex min-h-20 flex-col justify-center gap-1 border-b border-ui-border px-4 py-3'
     return (
@@ -166,8 +170,8 @@ export default function SupportChat({ embedded = false }: { embedded?: boolean }
             {embedded ? (
                 <aside className='flex min-h-0 min-w-0 flex-col border-b border-ui-border bg-ui-raised lg:border-b-0 lg:border-r'>
                     <div className={headingClass}>
-                        <h1 className='text-sm font-semibold text-ui-text'>{role === 'support' ? 'Support queue' : 'Your support chats'}</h1>
-                        <p className='text-xs text-ui-muted'>{role === 'support' ? 'Customer conversations.' : 'Conversations with the support team.'}</p>
+                        <h1 className={`text-sm font-semibold text-ui-text ${role === 'support' ? '-translate-y-2.5' : ''}`}>{role === 'support' ? 'Support' : 'Your support chats'}</h1>
+                        {role !== 'support' ? <p className='text-xs text-ui-muted'>Conversations with the support team.</p> : null}
                     </div>
                     {role !== 'support' ? <button type='button' onClick={() => selectChat('')} className='mx-4 mb-2 rounded-lg border border-ui-border px-3 py-2 text-xs font-medium text-ui-primary hover:bg-ui-panel'>New chat</button> : null}
                     <div className='max-h-36 overflow-y-auto p-2 lg:max-h-none lg:flex-1'>
@@ -179,7 +183,7 @@ export default function SupportChat({ embedded = false }: { embedded?: boolean }
                                 <span className='truncate text-xs text-ui-muted'>{ticket.last_message || 'No messages yet'}</span>
                             </button>
                         ))}
-                        {!tickets.length ? <p className='p-2 text-xs text-ui-muted'>{loading ? 'Loading conversations…' : 'No support chats yet.'}</p> : null}
+                        {!tickets.length && !loading ? <p className='p-2 text-xs text-ui-muted'>No support chats yet.</p> : null}
                     </div>
                 </aside>
             ) : (
@@ -197,7 +201,7 @@ export default function SupportChat({ embedded = false }: { embedded?: boolean }
                 </header>
                 <div ref={log} role='log' aria-label='Messages' className='min-h-0 overflow-y-auto p-4'>
                     {role === 'support' && selected?.feedback_rating ? <section aria-label='Customer feedback' className='mb-4 grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3'><h3 className='text-xs font-semibold text-ui-text'>Customer feedback</h3><SupportStars rating={selected.feedback_rating} />{selected.feedback_comment ? <p className='whitespace-pre-wrap text-sm text-ui-text [overflow-wrap:anywhere]'>{selected.feedback_comment}</p> : null}</section> : null}
-                    {messages.length ? <div className='grid gap-3'>{messages.map(message => message.sender_kind === 'system' ? <p key={message.id} className='px-3 py-1 text-center text-xs leading-5 text-ui-muted'>{message.body}</p> : <div key={message.id} className={`min-w-0 max-w-[90%] rounded-lg px-3 py-2 text-sm text-ui-text ${message.sender_id === userId ? 'justify-self-end bg-ui-primary/10' : 'justify-self-start bg-ui-raised'}`}><p className='text-xs font-semibold text-ui-muted'>{message.sender_name}</p><p className='mt-1 whitespace-pre-wrap [overflow-wrap:anywhere]'>{message.body}</p></div>)}</div> : <div className='grid h-full content-center justify-items-center gap-3 text-center text-sm text-ui-muted'><MessageCircle aria-hidden='true' className='h-8 w-8 text-ui-muted' /><p>{loading ? 'Loading conversations…' : role === 'support' ? 'Select a customer chat to read and reply.' : 'Your conversation starts here.'}</p></div>}
+                    {messages.length ? <div className='grid gap-3'>{messages.map(message => message.sender_kind === 'system' ? <p key={message.id} className='px-3 py-1 text-center text-xs leading-5 text-ui-muted'>{message.body}</p> : <div key={message.id} className={`min-w-0 max-w-[90%] rounded-lg px-3 py-2 text-sm text-ui-text ${message.sender_id === userId ? 'justify-self-end bg-ui-primary/10' : 'justify-self-start bg-ui-raised'}`}><p className='text-xs font-semibold text-ui-muted'>{message.sender_name}</p><p className='mt-1 whitespace-pre-wrap [overflow-wrap:anywhere]'>{message.body}</p></div>)}</div> : <div className='grid h-full content-center justify-items-center gap-3 text-center text-sm text-ui-muted'><MessageCircle aria-hidden='true' className='h-8 w-8 text-ui-muted' /><p>{role === 'support' ? 'Select a customer chat to read and reply.' : 'Your conversation starts here.'}</p></div>}
                 </div>
                 <div className='border-t border-ui-border p-4'>
                     {!error && connection === 'reconnecting' ? <p role='status' className='mb-2 text-xs text-ui-muted'>Reconnecting…</p> : null}
