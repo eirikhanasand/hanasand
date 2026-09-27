@@ -9,7 +9,7 @@ if (!['api', 'auth', 'frontend'].includes(kind) || ports.length !== 2 || !ports.
     throw new Error('Expected api|auth|frontend, image, source container, and two valid ports')
 }
 
-function inspect(...names) { return JSON.parse(execFileSync('docker', ['inspect', ...names], { encoding: 'utf8' })) }
+function inspect(...names) { return JSON.parse(execFileSync('docker', ['inspect', ...names], { maxBuffer: 16 * 1024 * 1024, encoding: 'utf8' })) }
 function loadObject(file, allowed, label, minimumLength = 1) {
     if (!existsSync(file)) return {}
     const value = JSON.parse(readFileSync(file, 'utf8'))
