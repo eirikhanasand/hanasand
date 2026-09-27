@@ -284,7 +284,7 @@ function AutomationRow({ automation, selected, onClick }: { automation: AgentAut
 function historyBars(automation: AgentAutomation) {
     const history = automation.history || []
     if (!history.length) return <span className='text-xs text-ui-muted'>No checks</span>
-    return <span className='flex gap-0.5'>{history.map(run => <span key={run.id} title={`${formatDate(run.started_at)}: ${run.warning ? 'warning' : run.status}`} className={`h-4 w-1 rounded-sm ${run.status === 'failed' ? 'bg-ui-danger' : run.warning ? 'bg-ui-warning' : run.status === 'completed' ? 'bg-ui-success' : 'bg-ui-muted/40'}`} />)}</span>
+    return <span className='flex gap-0.5'>{history.map(run => <span key={run.id} title={`${formatDate(run.started_at)}: ${run.warning ? 'warning' : run.status}`} className={`h-4 w-1 rounded-sm ${run.status === 'failed' ? 'bg-[#ef4444]' : run.warning ? 'bg-ui-warning' : run.status === 'completed' ? 'bg-ui-success' : 'bg-ui-muted/40'}`} />)}</span>
 }
 
 function uptimeLabel(automation: AgentAutomation) {
