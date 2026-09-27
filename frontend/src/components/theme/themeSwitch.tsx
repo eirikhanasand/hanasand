@@ -13,11 +13,12 @@ export default function ThemeSwitch() {
             setTheme(savedTheme)
             document.documentElement.classList.remove('dark', 'light')
             document.documentElement.classList.add(savedTheme)
-            return
+        } else {
+            document.documentElement.classList.remove('dark', 'light')
+            document.documentElement.classList.add(theme)
         }
 
-        document.documentElement.classList.remove('dark', 'light')
-        document.documentElement.classList.add(theme)
+        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', (savedTheme ?? theme) === 'light' ? '#f5f5f5' : '#070707')
     }, [theme])
 
     function toggleTheme() {

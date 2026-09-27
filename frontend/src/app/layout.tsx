@@ -14,7 +14,7 @@ import { RecoveryBanner } from '@/components/system/recovery'
 import RouteFrame from '@/components/layout/routeFrame'
 import MobileNavigation from '@/components/layout/mobileNavigation'
 export { default as metadata } from './metadata'
-export { default as viewport } from './metadata'
+export { viewport } from './metadata'
 
 export default async function layout({ children }: { children: ReactNode }) {
     const Cookies = await cookies()
