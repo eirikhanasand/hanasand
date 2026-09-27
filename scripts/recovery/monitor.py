@@ -22,6 +22,7 @@ ROOT = pathlib.Path(os.environ.get('RECOVERY_ROOT', '/home/ubuntu/hanasand-recov
 CONFIG = ROOT / 'config.json'
 STATE = ROOT / 'status' / 'state.json'
 LOCK = threading.Lock()
+STATUS_CACHE = {}
 
 
 def atomic_json(path, value):
@@ -320,6 +321,7 @@ def run_monitor():
                 # The API collects these observations into HA cases and owns delivery.
                 current['notificationHealth'] = 'case_monitoring'
                 atomic_json(STATE, current)
+                STATUS_CACHE.clear()
         except Exception as error:
             # Do not log webhook URLs, response bodies or credentials.
             print(f'Recovery sample failed: {type(error).__name__}', flush=True)
@@ -340,12 +342,28 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split('?')[0] not in ('/status', '/health', '/public-status'):
             self.send_error(404)
             return
+        path = self.path.split('?')[0]
         with LOCK:
-            state = public_state(read_json(STATE, {'mode': 'unknown', 'readOnly': True, 'services': []}), include_host=self.path.split('?')[0] != '/public-status')
-        if self.path.split('?')[0] == '/status':
-            state['hostMetrics'] = read_json(ROOT / 'host-metrics.json', None)
-        body = json.dumps(state).encode()
-        self.send_response(200 if state.get('updatedAt') and not state.get('stale') else 503)
+            try:
+                state_mtime = STATE.stat().st_mtime_ns
+            except OSError:
+                state_mtime = 0
+            try:
+                host_metrics_mtime = (ROOT / 'host-metrics.json').stat().st_mtime_ns if path == '/status' else 0
+            except OSError:
+                host_metrics_mtime = 0
+            signature = (state_mtime, host_metrics_mtime)
+            cached = STATUS_CACHE.get(path)
+            if cached and cached[0] == signature and time.time() - cached[1] <= 60:
+                body, status = cached[2], cached[3]
+            else:
+                state = public_state(read_json(STATE, {'mode': 'unknown', 'readOnly': True, 'services': []}), include_host=path != '/public-status')
+                if path == '/status':
+                    state['hostMetrics'] = read_json(ROOT / 'host-metrics.json', None)
+                body = json.dumps(state, separators=(',', ':')).encode()
+                status = 200 if state.get('updatedAt') and not state.get('stale') else 503
+                STATUS_CACHE[path] = (signature, time.time(), body, status)
+        self.send_response(status)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Cache-Control', 'no-store')
         self.end_headers()
