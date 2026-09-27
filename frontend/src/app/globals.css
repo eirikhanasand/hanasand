@@ -749,17 +749,7 @@ body:has(.support-page) .site-atmosphere::before {
 }
 
 .eh {
-  background: conic-gradient(
-      var(--ui-danger),
-      var(--ui-warning),
-      var(--ui-success),
-      var(--ui-primary),
-      var(--ui-warning),
-      var(--ui-danger));
-  background-clip: text;
-  color: transparent;
-  background-size: 200vw 200vh;
-  animation: rgb 20s infinite linear;
+  color: var(--ui-primary);
   text-align: center;
   font-weight: bold;
 }
