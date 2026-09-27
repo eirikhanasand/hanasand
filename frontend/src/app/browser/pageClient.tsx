@@ -1498,7 +1498,7 @@ export default function BrowserPageClient({ initialData, resultId, resultRunId }
                                             {!streamHasFrame ? <div className='pointer-events-none absolute inset-0 bg-ui-canvas'>
                                                 {activeViewportImage ? <img src={activeViewportImage} alt='Live browser sandbox frame' className='absolute inset-0 h-full w-full object-contain' /> : null}
                                                 <div role='status' aria-label={streamNeedsGesture ? 'Tap to resume browser stream' : 'Connecting browser stream'} className='absolute inset-0 grid place-content-center justify-items-center gap-2'>
-                                                    <LoaderCircle className='size-8 animate-spin text-ui-primary' />
+                                                    <LoaderCircle className='size-8 animate-spin text-ui-loader' />
                                                     {streamNeedsGesture ? <span className='rounded bg-ui-panel px-2 py-1 text-sm text-ui-text'>Tap to resume</span> : null}
                                                 </div>
                                             </div> : null}
@@ -1559,7 +1559,7 @@ function BrowserLoading({ stage, elapsed, target, queuePosition, onCancel }: { s
                     <span className='font-mono text-xs tabular-nums text-ui-muted' aria-label='Elapsed time'>{formatRunDuration(elapsed)}</span>
                 </div>
                 <div className='flex items-center gap-3' role='status' aria-live='polite'>
-                    <LoaderCircle className='size-5 shrink-0 text-ui-primary motion-safe:animate-spin' aria-hidden='true' />
+                    <LoaderCircle className='size-5 shrink-0 text-ui-loader motion-safe:animate-spin' aria-hidden='true' />
                     <h1 className='text-xl font-semibold tracking-tight'>{queuePosition ? `Waiting for a browser · #${queuePosition}` : labels[stage]}</h1>
                 </div>
                 <p className='mt-3 truncate font-mono text-xs text-ui-muted' title={target}>{target}</p>

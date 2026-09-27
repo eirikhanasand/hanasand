@@ -223,7 +223,7 @@ export default function WorkspaceSearchPanel({
                 <span>
                     {loading ? 'Indexing workspace...' : `${resultCount} results in ${results.length} files`}
                 </span>
-                {loading ? <Loader2 className='h-4 w-4 animate-spin text-ui-primary' /> : <Files className='h-4 w-4' />}
+                {loading ? <Loader2 className='h-4 w-4 animate-spin text-ui-loader' /> : <Files className='h-4 w-4' />}
             </div>
 
             <div className='min-h-0 flex-1 overflow-auto p-2'>

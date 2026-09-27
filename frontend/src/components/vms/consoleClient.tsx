@@ -231,7 +231,7 @@ export default function VmConsole({ name }: { name: string }) {
             {bootError && <p className='text-ui-muted'>{bootError}</p>}
             <pre ref={bootPanel} onScroll={event => { const el = event.currentTarget; followBoot.current = el.scrollHeight - el.scrollTop - el.clientHeight < 4 }} className='mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-xs' aria-label='VM restart log'>{bootLog || 'Waiting for boot output…'}</pre>
         </details>}
-        {opening && <div role='status' className='flex items-center gap-3 rounded-lg border border-ui-primary/25 bg-ui-primary/5 px-4 py-3 text-sm text-ui-primary'><LoaderCircle className='h-5 w-5 animate-spin' aria-hidden />{status}</div>}
+        {opening && <div role='status' className='flex items-center gap-3 rounded-lg border border-ui-primary/25 bg-ui-primary/5 px-4 py-3 text-sm text-ui-primary'><LoaderCircle className='h-5 w-5 animate-spin text-ui-loader' aria-hidden />{status}</div>}
         <div ref={container} aria-label={`${name} terminal`} className='min-h-0 min-w-0 flex-1 overflow-hidden rounded-lg border border-ui-border bg-ui-canvas p-2' />
     </section>
 }

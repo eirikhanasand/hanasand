@@ -106,7 +106,7 @@ export default function ReferencePanel({
                         className='mt-1 w-full bg-transparent text-sm font-semibold text-ui-text outline-none placeholder:text-ui-muted'
                     />
                 </div>
-                {loading ? <Loader2 className='h-4 w-4 animate-spin text-ui-primary' /> : <SearchCode className='h-4 w-4 text-ui-muted' />}
+                {loading ? <Loader2 className='h-4 w-4 animate-spin text-ui-loader' /> : <SearchCode className='h-4 w-4 text-ui-muted' />}
             </header>
 
             <div className='border-b border-ui-border bg-ui-raised px-3 py-2'>

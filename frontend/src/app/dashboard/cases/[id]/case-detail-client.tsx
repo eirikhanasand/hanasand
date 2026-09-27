@@ -467,7 +467,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
     if (state.loading && !state.detail) {
         return (
             <main className='grid min-h-[70vh] place-items-center rounded-lg border border-ui-border bg-ui-canvas text-ui-text'>
-                <div className='flex items-center gap-3 text-sm font-semibold'><Loader2 className='h-4 w-4 animate-spin' />Loading case</div>
+                <div className='flex items-center gap-3 text-sm font-semibold'><Loader2 className='h-4 w-4 animate-spin text-ui-loader' />Loading case</div>
             </main>
         )
     }

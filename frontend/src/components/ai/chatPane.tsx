@@ -334,7 +334,7 @@ function ToolMessage({
     return (
         <div className='space-y-2'>
             <div className='inline-flex items-center gap-2 rounded-full bg-ui-primary/10 px-3 py-1 text-xs font-medium text-ui-primary'>
-                {state === 'running' ? <LoaderCircle className='h-3.5 w-3.5 animate-spin text-ui-primary' /> : <Sparkles className='h-3.5 w-3.5 text-ui-primary' />}
+                {state === 'running' ? <LoaderCircle className='h-3.5 w-3.5 animate-spin text-ui-loader' /> : <Sparkles className='h-3.5 w-3.5 text-ui-primary' />}
                 {state === 'running' ? 'Working...' : state === 'error' ? 'Tool error' : 'Tool complete'}
             </div>
             {browserSummary ? <BrowserVerificationCard summary={browserSummary} /> : null}

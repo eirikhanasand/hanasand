@@ -90,7 +90,7 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
         <Link href={`/rules/${getRuleCategory(data?.rule || { id })}?organizationId=${encodeURIComponent(organizationId)}`} className='inline-flex w-fit items-center gap-2 rounded-md text-sm font-medium text-ui-muted hover:text-ui-primary'><ArrowLeft size={16} aria-hidden='true' />{ruleCategories[getRuleCategory(data?.rule || { id })].label}</Link>
         {error && <div role='alert' className='rounded-lg border border-ui-danger/40 bg-ui-raised p-4 text-ui-text'>{error} {data && <button type='button' disabled={busy} onClick={() => void reload()} className='ml-3 underline hover:text-ui-primary'>Reload rule</button>}</div>}
         {status && <p role='status'>{status}</p>}
-        {!draft && !error && <div role='status' aria-label='Loading rule' className='flex justify-center py-12 text-ui-primary'><LoaderCircle aria-hidden className='h-6 w-6 animate-spin motion-reduce:animate-none' /></div>}
+        {!draft && !error && <div role='status' aria-label='Loading rule' className='flex justify-center py-12'><LoaderCircle aria-hidden className='site-loading-icon h-6 w-6 motion-reduce:animate-none' /></div>}
         {draft && data && <>
             <DashboardPanel className='overflow-hidden'>
                 <header className='grid min-w-0 gap-3 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center'>
