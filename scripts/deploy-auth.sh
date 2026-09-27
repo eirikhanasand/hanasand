@@ -72,7 +72,7 @@ done
 } > "$upstream.tmp"
 mv "$upstream.tmp" "$upstream"
 # Install a scoped include once; unrelated API routes continue to use the monolith.
-/home/hanasand/.bun/bin/bun -e 'import {readFileSync,writeFileSync} from "node:fs"; const p=process.argv[1], marker="    server_name api.hanasand.com;", include="    include snippets/auth-routes.conf;"; let s=readFileSync(p,"utf8"); if(!s.includes(include)){if(s.split(marker).length!==2) throw new Error("Cannot identify API virtual host safely"); writeFileSync(p,s.replace(marker,marker+"\n"+include));}' "$main"
+/usr/local/bin/bun -e 'import {readFileSync,writeFileSync} from "node:fs"; const p=process.argv[1], marker="    server_name api.hanasand.com;", include="    include snippets/auth-routes.conf;"; let s=readFileSync(p,"utf8"); if(!s.includes(include)){if(s.split(marker).length!==2) throw new Error("Cannot identify API virtual host safely"); writeFileSync(p,s.replace(marker,marker+"\n"+include));}' "$main"
 cp scripts/nginx-auth-proxy.conf /home/hanasand/openresty/nginx/snippets/auth-proxy.conf
 cp scripts/nginx-auth-routes.conf /home/hanasand/openresty/nginx/snippets/auth-routes.conf
 docker exec openresty nginx -t
