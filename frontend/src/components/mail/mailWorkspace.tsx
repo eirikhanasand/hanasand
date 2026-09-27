@@ -60,7 +60,7 @@ type Props = {
 type MailListFilter = 'all' | 'unread' | 'starred' | 'attachments'
 
 const POLL_INTERVAL_MS = 10_000
-const STALE_AFTER_MS = 5 * 60_000
+const STALE_AFTER_MS = 60_000
 
 export default function MailWorkspace({ mailboxUser }: Props) {
     const [overview, setOverview] = useState<MailOverview | null>(null)
@@ -94,6 +94,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
     const [searchOpen, setSearchOpen] = useState(false)
     const searchInput = useRef<HTMLInputElement>(null)
     const [lastSuccessAt, setLastSuccessAt] = useState<number | null>(null)
+    const [unreachableSince, setUnreachableSince] = useState<number | null>(null)
     const [now, setNow] = useState(() => Date.now())
     const selection = useRef<{ user: string | null, mailbox: string | null, message: string | null }>({ user: mailboxUser || null, mailbox: null, message: null })
     const requestVersion = useRef(0)
@@ -170,6 +171,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
             selection.current = { user: next.mailboxUser, mailbox: next.selectedMailboxId, message: nextSelectedMessageId }
             setSelectedMessageId(nextSelectedMessageId)
             setBackgroundIssue('')
+            setUnreachableSince(null)
             setLastSuccessAt(Date.now())
         } catch (cause) {
             if (version !== requestVersion.current) return
@@ -178,6 +180,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 ? 'Mail is reconnecting. The rest of the console is still ready.'
                 : rawMessage || 'Unable to load the mailbox.'
             if (silent) {
+                setUnreachableSince(current => current ?? Date.now())
                 setBackgroundIssue(message)
             } else {
                 setError(message)
@@ -330,7 +333,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
     )
 
     const unreadCount = overview?.accessibleAccounts.find(account => account.id === overview.actor.id)?.unreadCount ?? 0
-    const showStaleWarning = Boolean(lastSuccessAt && now - lastSuccessAt > STALE_AFTER_MS)
+    const showUnreachableWarning = Boolean(unreachableSince && now - unreachableSince >= STALE_AFTER_MS)
 
     return (
         <DashboardPage className='xl:flex xl:h-full xl:min-h-0 xl:flex-col'>
@@ -343,9 +346,8 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                     <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-ui-muted' data-mail-counts>
                         <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1'>{unreadCount} unread</span>
                         <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1'>{filteredMessages.length} visible</span>
-                        {showStaleWarning && <span className='rounded-md border border-ui-danger/35 bg-ui-danger/10 px-2 py-1 text-ui-danger'>stale</span>}
                     </div>
-                    <MailSyncStatus lastSuccessAt={lastSuccessAt} now={now} issue={backgroundIssue || error} />
+                    <MailSyncStatus lastSuccessAt={lastSuccessAt} unreachableSince={unreachableSince} now={now} />
 
                     <div className='flex min-w-0 items-center gap-2'>
                         {searchOpen ? (
@@ -393,7 +395,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 />
             )}
 
-            {showStaleWarning && backgroundIssue && (
+            {showUnreachableWarning && backgroundIssue && (
                 <ErrorNotice compact message={`Background sync paused. Last successful update was ${formatRelativeTime(lastSuccessAt!, now)} ago.`} />
             )}
 
@@ -783,7 +785,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                     </div>
                                     {overview.health && (
                                         <div className='mt-3'>
-                                            <MailSyncStatus lastSuccessAt={lastSuccessAt} now={now} issue={backgroundIssue} full />
+                                            <MailSyncStatus lastSuccessAt={lastSuccessAt} unreachableSince={unreachableSince} now={now} full />
                                             <div className='flex flex-wrap items-center justify-between gap-2 text-[11px] text-ui-muted'>
                                                 <span className='inline-flex items-center gap-1.5'>
                                                     <Radar className='h-3.5 w-3.5' />
@@ -890,20 +892,19 @@ export default function MailWorkspace({ mailboxUser }: Props) {
 function MailSyncStatus({
     lastSuccessAt,
     now,
-    issue,
+    unreachableSince,
     full = false,
 }: {
     lastSuccessAt: number | null
     now: number
-    issue?: string
+    unreachableSince: number | null
     full?: boolean
 }) {
-    const stale = Boolean(issue || lastSuccessAt && now - lastSuccessAt > STALE_AFTER_MS)
-    if (!stale || !lastSuccessAt) return null
-    const updated = new Date(lastSuccessAt)
+    if (!unreachableSince || now - unreachableSince < STALE_AFTER_MS) return null
+    const updated = lastSuccessAt ? new Date(lastSuccessAt) : null
     const today = new Date(now)
-    const time = `${String(updated.getHours()).padStart(2, '0')}:${String(updated.getMinutes()).padStart(2, '0')}`
-    const date = updated.toDateString() === today.toDateString() ? '' : ` · ${String(updated.getDate()).padStart(2, '0')}:${String(updated.getMonth() + 1).padStart(2, '0')}`
+    const time = updated ? `${String(updated.getHours()).padStart(2, '0')}:${String(updated.getMinutes()).padStart(2, '0')}` : '--:--'
+    const date = updated && updated.toDateString() !== today.toDateString() ? ` · ${String(updated.getDate()).padStart(2, '0')}:${String(updated.getMonth() + 1).padStart(2, '0')}` : ''
     return (
         <div className={`${full ? 'mb-3 flex' : 'hidden sm:flex'} min-w-0 items-center rounded-md border border-ui-danger/40 bg-ui-danger/10 px-2 py-1 text-[11px] text-ui-danger`} data-mail-sync-status>
             <span className='truncate'>Last updated {time}{date}</span>

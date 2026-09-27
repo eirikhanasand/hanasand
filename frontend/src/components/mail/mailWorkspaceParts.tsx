@@ -194,7 +194,7 @@ export function Composer({
                     </div>
                     <input
                         data-testid='mail-compose-subject'
-                        className={`${subtleInput} w-full`}
+                        className={`${subtleInput} w-full text-white`}
                         placeholder='Subject'
                         value={state.subject}
                         onChange={(event) => patch({ subject: event.target.value })}
@@ -309,7 +309,7 @@ function RecipientField({
         <div className='relative'>
             <input
                 data-testid={testId}
-                className={`${subtleInput} w-full`}
+                className={`${subtleInput} w-full text-white`}
                 placeholder={placeholder}
                 value={value}
                 onFocus={onFocus}
