@@ -2,14 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import { Activity } from 'lucide-react'
-import { getCookie } from '@/utils/cookies/cookies'
 
-export default function DatabaseConnection({ initialStatus, initialCheckedAt }: { initialStatus: 'healthy' | 'unavailable', initialCheckedAt: string }) {
+export default function DatabaseConnection({ initialStatus, initialCheckedAt, serviceAccount }: { initialStatus: 'healthy' | 'unavailable', initialCheckedAt: string, serviceAccount: boolean }) {
     const [status, setStatus] = useState<'checking' | 'connected' | 'unavailable'>('checking')
     const [checked, setChecked] = useState<number | null>(null)
     const [now, setNow] = useState(0)
     useEffect(() => {
-        const serviceAccount = (getCookie('id') || '').startsWith('svc_')
         if (serviceAccount) {
             const checkedAt = Date.parse(initialCheckedAt)
             setStatus(initialStatus === 'healthy' ? 'connected' : 'unavailable')

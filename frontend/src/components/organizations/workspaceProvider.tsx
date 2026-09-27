@@ -7,8 +7,8 @@ import { cleanWorkspaceUrl, organizationFromParams, type Workspace } from '@/uti
 import WorkspaceSwitchNotice, { type WorkspaceSwitchNoticeState } from './workspaceSwitchNotice'
 
 type Organization = { id: string, name?: string, slug?: string, role?: string, lifecycleStatus?: string }
-type Context = { organizationId: string, organizationName: string, organizations: Organization[], loading: boolean, unavailable: boolean, switching: boolean, canSwitchOrganization: boolean, switchOrganization: (id: string) => Promise<void> }
-const WorkspaceContext = createContext<Context>({ organizationId: '', organizationName: '', organizations: [], loading: true, unavailable: false, switching: false, canSwitchOrganization: true, switchOrganization: async () => {} })
+type Context = { organizationId: string, organizationName: string, organizations: Organization[], loading: boolean, unavailable: boolean, switching: boolean, serviceAccount: boolean, canSwitchOrganization: boolean, switchOrganization: (id: string) => Promise<void> }
+const WorkspaceContext = createContext<Context>({ organizationId: '', organizationName: '', organizations: [], loading: true, unavailable: false, switching: false, serviceAccount: false, canSwitchOrganization: true, switchOrganization: async () => {} })
 export const useWorkspace = () => useContext(WorkspaceContext)
 export default function WorkspaceProvider({ initial, enabled: authenticated, serviceAccount = false, children }: { initial: Workspace | null, enabled: boolean, serviceAccount?: boolean, children: ReactNode }) {
     const params = useSearchParams()
@@ -117,7 +117,7 @@ export default function WorkspaceProvider({ initial, enabled: authenticated, ser
         window.addEventListener('focus', refresh)
         return () => { channel?.close(); window.removeEventListener('focus', refresh) }
     }, [enabled, organizationId, switching, requested, serviceAccount])
-    return <WorkspaceContext.Provider value={{ organizationId, organizationName: initial?.name || '', organizations, loading, unavailable: Boolean(organizationError), switching, canSwitchOrganization: !serviceAccount, switchOrganization }}>
+    return <WorkspaceContext.Provider value={{ organizationId, organizationName: initial?.name || '', organizations, loading, unavailable: Boolean(organizationError), switching, serviceAccount, canSwitchOrganization: !serviceAccount, switchOrganization }}>
         {enabled && notice && <WorkspaceSwitchNotice notice={notice} onDismiss={() => setNotice(null)} />}
         {enabled && !serviceAccount && (switching && linkedSwitch.current || requested && requested !== organizationId) ? <main className='fixed inset-0 z-[1200] flex min-h-dvh flex-col overflow-auto bg-ui-canvas text-ui-text'>
             <header className='flex h-20 shrink-0 items-center border-b border-ui-border bg-ui-panel px-6 sm:px-10'><BrandLogo /></header>

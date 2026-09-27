@@ -6,6 +6,7 @@ import { dashboardPanelClass } from '@/components/dashboard/ui'
 import type { DatabaseOverview, DatabaseQueryResult } from '@/utils/db/internal'
 import { databaseRowsAction, databaseSqlAction } from './actions'
 import DatabaseConnection from './databaseConnection'
+import { useWorkspace } from '@/components/organizations/workspaceProvider'
 
 type TableOption = {
     schema: string
@@ -14,6 +15,7 @@ type TableOption = {
 }
 
 export default function DatabaseWorkbench({ overview, children }: { overview: DatabaseOverview, children?: ReactNode }) {
+    const { serviceAccount } = useWorkspace()
     const tables = useMemo<TableOption[]>(() => overview.clusters.flatMap(cluster =>
         cluster.databases.flatMap(database => (database.tables || []).map(table => ({
             schema: table.schema,
@@ -69,7 +71,7 @@ export default function DatabaseWorkbench({ overview, children }: { overview: Da
         <>
             <div className='flex flex-wrap items-center justify-end gap-3'>
                 <h1 className='mr-auto text-xl font-semibold text-ui-text'>Databases</h1>
-                <DatabaseConnection initialStatus={overview.status} initialCheckedAt={overview.generatedAt} />
+                <DatabaseConnection initialStatus={overview.status} initialCheckedAt={overview.generatedAt} serviceAccount={serviceAccount} />
                 <button type='button' aria-label='Search' title='Search (⌘ J)' disabled={overview.status === 'unavailable'} aria-expanded={open} aria-controls='database-workbench-content' onClick={() => setOpen(value => !value)} className='inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-ui-primary hover:bg-ui-primary/10 focus-visible:outline-ui-primary disabled:opacity-50'>
                     <Search aria-hidden className='h-4 w-4' /><kbd className='text-xs'>⌘ J</kbd>
                 </button>
