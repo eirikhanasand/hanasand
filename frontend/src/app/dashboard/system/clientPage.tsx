@@ -490,7 +490,7 @@ export default function SystemDashboard({
                         <button
                             type='button'
                             onClick={() => setStopAllVmsOpen(true)}
-                            className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-danger/35 bg-ui-danger/10 px-3 text-sm font-semibold text-ui-danger transition hover:bg-ui-danger/15'
+                            className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-danger/35 bg-ui-raised/10 px-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised/15'
                             data-system-stop-all-vms
                         >
                             <StopCircle className='h-4 w-4' />
@@ -666,7 +666,7 @@ function VmTableRow({ vm, metrics }: { vm: VM, metrics?: VMMetrics }) {
 
 function SummaryCard({ item }: { item: SystemSummary }) {
     const tone = item.tone === 'bad'
-        ? 'text-ui-danger'
+        ? 'text-ui-text'
         : item.tone === 'warn'
             ? 'text-ui-warning'
             : item.tone === 'ok'
@@ -714,7 +714,7 @@ function HealthPill({ health }: { health: ReturnType<typeof containerHealth> }) 
         : health.tone === 'warn'
             ? 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'
             : health.tone === 'bad'
-                ? 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'
+                ? 'border-ui-danger/35 bg-ui-raised/10 text-ui-text'
                 : 'border-ui-border bg-ui-raised text-ui-text'
 
     return (
@@ -777,7 +777,7 @@ function formatLogTime(value: string) {
 }
 
 function logLevelClass(level: RuntimeLog['level']) {
-    if (level === 'error' || level === 'fatal') return 'text-ui-danger'
+    if (level === 'error' || level === 'fatal') return 'text-ui-text'
     if (level === 'warn') return 'text-ui-warning'
     if (level === 'debug') return 'text-ui-primary'
     return 'text-ui-success'

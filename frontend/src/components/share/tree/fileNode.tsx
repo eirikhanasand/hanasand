@@ -334,7 +334,7 @@ function NodeActions({
             <button type='button' aria-label='Duplicate item' disabled={busy} onClick={(event) => { event.preventDefault(); event.stopPropagation(); onDuplicate() }} className={buttonClass}>
                 <Copy className='h-3.5 w-3.5' />
             </button>
-            <button type='button' aria-label='Delete item' disabled={busy} onClick={(event) => { event.preventDefault(); event.stopPropagation(); onDelete() }} className={`${buttonClass} hover:text-ui-danger`}>
+            <button type='button' aria-label='Delete item' disabled={busy} onClick={(event) => { event.preventDefault(); event.stopPropagation(); onDelete() }} className={`${buttonClass} hover:text-ui-text`}>
                 <Trash2 className='h-3.5 w-3.5' />
             </button>
         </div>

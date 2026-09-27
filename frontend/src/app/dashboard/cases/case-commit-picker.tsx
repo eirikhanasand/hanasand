@@ -104,7 +104,7 @@ export function CaseCommitPicker({ caseId, query, repositories, open, revision, 
                 {loading && !commits.length && <p role='status' className='text-sm text-ui-muted'>Loading commits…</p>}
                 {!loading && !error && !commits.length && <p role='status' className='text-sm text-ui-muted'>{search.trim() ? 'No matching commits.' : 'No commits available for this repository.'}</p>}
                 {loading && visible >= commits.length && commits.length > 0 && <p role='status' className='text-sm text-ui-muted'>Loading more commits…</p>}
-                {error && <p role='alert' className='text-sm text-ui-danger'>{error} <button className='underline' onClick={() => setRetry(value => value + 1)}>Retry</button></p>}
+                {error && <p role='alert' className='text-sm text-ui-text'>{error} <button className='underline' onClick={() => setRetry(value => value + 1)}>Retry</button></p>}
             </> : <p className='text-sm text-ui-muted'>Connect a repository to browse its commits.</p>}
         </div>
     </div>

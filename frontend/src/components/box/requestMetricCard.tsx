@@ -14,7 +14,7 @@ export default function RequestMetricCard({
     const toneClass = tone === 'good'
         ? 'text-ui-success'
         : tone === 'bad'
-            ? 'text-ui-danger'
+            ? 'text-ui-text'
             : 'text-ui-text'
 
     return (

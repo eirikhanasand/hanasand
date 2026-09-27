@@ -159,7 +159,7 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
                         <span>{reasonLength}/10</span>
                     </div>
                     {impersonationReasonError ? (
-                        <p className='rounded-md border border-ui-danger/30 bg-ui-danger/10 px-2 py-1 text-xs font-semibold text-ui-danger'>
+                        <p className='rounded-md border border-ui-danger/30 bg-ui-raised/10 px-2 py-1 text-xs font-semibold text-ui-text'>
                             {impersonationReasonError}
                         </p>
                     ) : null}

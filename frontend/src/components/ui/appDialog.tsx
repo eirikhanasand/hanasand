@@ -36,7 +36,7 @@ export function AppConfirmDialog({
 }: AppConfirmDialogProps) {
     if (!open) return null
     const toneClass = tone === 'danger'
-        ? 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger hover:bg-ui-danger/15'
+        ? 'border-ui-danger/35 bg-ui-raised/10 text-ui-text hover:bg-ui-raised/15'
         : 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning hover:bg-ui-warning/15'
 
     return (

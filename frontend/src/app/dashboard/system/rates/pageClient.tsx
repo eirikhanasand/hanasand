@@ -896,7 +896,7 @@ function ApiKeyCard({
                     <button
                         type='button'
                         onClick={() => deleteKey(apiKey.id)}
-                        className='inline-flex items-center gap-2 rounded-lg border border-ui-danger/30 bg-ui-danger/10 px-3 py-2 text-sm text-ui-danger transition-colors hover:bg-ui-danger/15'
+                        className='inline-flex items-center gap-2 rounded-lg border border-ui-danger/30 bg-ui-raised/10 px-3 py-2 text-sm text-ui-text transition-colors hover:bg-ui-raised/15'
                     >
                         <Trash2 className='h-4 w-4' />
                         Delete
@@ -1420,7 +1420,7 @@ function RemoveButton({ onClick }: { onClick: () => void }) {
         <button
             type='button'
             onClick={onClick}
-            className='inline-flex items-center justify-center rounded-lg border border-ui-danger/30 bg-ui-danger/10 px-3 py-2 text-ui-danger transition-colors hover:bg-ui-danger/15'
+            className='inline-flex items-center justify-center rounded-lg border border-ui-danger/30 bg-ui-raised/10 px-3 py-2 text-ui-text transition-colors hover:bg-ui-raised/15'
         >
             <Trash2 className='h-4 w-4' />
         </button>

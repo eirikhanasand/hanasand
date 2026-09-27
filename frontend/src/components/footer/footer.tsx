@@ -133,7 +133,7 @@ function footerStatusCopy(status: ServiceStatus['overall'] | 'unknown') {
         return { label: 'All services running', dotClass: 'bg-ui-success' }
     }
     if (status === 'down') {
-        return { label: 'Service interruption', dotClass: 'bg-ui-danger' }
+        return { label: 'Service interruption', dotClass: 'bg-ui-raised' }
     }
     if (status === 'degraded') {
         return { label: 'Status degraded', dotClass: 'bg-ui-warning' }

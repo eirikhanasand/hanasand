@@ -11,10 +11,10 @@ export default function DashboardDwmError({ error, reset }: { error: Error & { d
                 title='Dark web cases'
                 description='The page could not show the current attacks and evidence.'
             />
-            <section className='rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-5'>
+            <section className='rounded-lg border border-ui-danger/30 bg-ui-raised/10 p-5'>
                 <div className='flex flex-col gap-4 md:flex-row md:items-start md:justify-between'>
                     <div className='flex gap-3'>
-                        <span className='flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-ui-danger/25 bg-ui-danger/10 text-ui-danger'>
+                        <span className='flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-ui-danger/25 bg-ui-raised/10 text-ui-text'>
                             <AlertTriangle className='h-5 w-5' />
                         </span>
                         <div>
@@ -22,7 +22,7 @@ export default function DashboardDwmError({ error, reset }: { error: Error & { d
                             <p className='mt-2 max-w-2xl text-sm leading-6 text-ui-muted'>
                                 Retry the page after the dark web API or dashboard bundle is healthy. Case actions are not attempted from this error state.
                             </p>
-                            <p className='mt-3 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 font-mono text-xs text-ui-danger'>
+                            <p className='mt-3 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 font-mono text-xs text-ui-text'>
                                 {error.message || error.digest || 'Unknown dashboard render error'}
                             </p>
                         </div>

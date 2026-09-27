@@ -48,8 +48,8 @@ export function SeverityPill({ severity, count, compact }: {
 }
 
 const severityTone: Record<SeverityLevel, string> = {
-    critical: 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger',
-    high: 'border-ui-danger/25 bg-ui-danger/10 text-ui-danger',
+    critical: 'border-ui-danger/30 bg-ui-raised/10 text-ui-text',
+    high: 'border-ui-danger/25 bg-ui-raised/10 text-ui-text',
     medium: 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning',
     low: 'border-ui-success/30 bg-ui-success/10 text-ui-success',
     unknown: 'border-ui-border bg-ui-panel text-ui-muted',

@@ -936,7 +936,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
     return (
         <div className='grid gap-3'>
             {message && (
-                <p className={`rounded-lg border px-3 py-2 text-sm ${message.ok ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'}`}>
+                <p className={`rounded-lg border px-3 py-2 text-sm ${message.ok ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-danger/35 bg-ui-raised/10 text-ui-text'}`}>
                     {message.text}
                 </p>
             )}
@@ -1199,7 +1199,7 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries,
                             </button>
                         </div>
                     </div>
-                    {inviteBlockedReason && <p className='mt-2 text-xs leading-5 text-ui-danger'>{inviteBlockedReason}</p>}
+                    {inviteBlockedReason && <p className='mt-2 text-xs leading-5 text-ui-text'>{inviteBlockedReason}</p>}
                     {orgContext?.pendingInvites.length ? (
                         <div className='mt-3 grid gap-1'>
                             {orgContext.pendingInvites.slice(0, 4).map(invite => (
@@ -2456,8 +2456,8 @@ function BackedInspection({ item, caseDetail, alertDetail, actionDeliveries, org
 
 function InspectionNotice({ tone, title, body }: { tone: 'neutral' | 'blocked', title: string, body: string }) {
     return (
-        <div className={`rounded-lg border p-3 ${tone === 'blocked' ? 'border-ui-danger/35 bg-ui-danger/10' : 'border-ui-border bg-ui-raised'}`}>
-            <h4 className={`text-sm font-semibold ${tone === 'blocked' ? 'text-ui-danger' : 'text-ui-text'}`}>{title}</h4>
+        <div className={`rounded-lg border p-3 ${tone === 'blocked' ? 'border-ui-danger/35 bg-ui-raised/10' : 'border-ui-border bg-ui-raised'}`}>
+            <h4 className={`text-sm font-semibold ${tone === 'blocked' ? 'text-ui-text' : 'text-ui-text'}`}>{title}</h4>
             <p className='mt-1 text-xs leading-5 text-ui-muted'>{body}</p>
         </div>
     )
@@ -2499,7 +2499,7 @@ function DeliveryEvidenceRows({ deliveries, selected, orgContext }: { deliveries
                                 {'httpStatus' in delivery && delivery.httpStatus !== undefined && <p><span className='font-semibold text-ui-muted'>HTTP:</span> {delivery.httpStatus}</p>}
                             </div>
                             <p className='mt-2 break-all font-mono text-[11px] text-ui-muted'>{delivery.endpointHash} · {delivery.payloadHash}</p>
-                            {delivery.error && <p className='mt-2 text-xs font-semibold text-ui-danger'>{safeWorkbenchDetail(delivery.error)}</p>}
+                            {delivery.error && <p className='mt-2 text-xs font-semibold text-ui-text'>{safeWorkbenchDetail(delivery.error)}</p>}
                         </div>
                     )
                 })}
@@ -2584,7 +2584,7 @@ function AlertWorkflowReadiness({ detail }: { detail: AlertDetailPayload }) {
             {readiness?.blockers?.length ? (
                 <div className='mt-3 grid gap-2'>
                     {readiness.blockers.slice(0, 3).map(blocker => (
-                        <p key={`${blocker.code}:${blocker.field}`} className='rounded-md border border-ui-danger/35 bg-ui-danger/10 px-2 py-1 text-xs text-ui-danger'>
+                        <p key={`${blocker.code}:${blocker.field}`} className='rounded-md border border-ui-danger/35 bg-ui-raised/10 px-2 py-1 text-xs text-ui-text'>
                             {label(blocker.code || 'workflow issue')}{blocker.detail ? `: ${blocker.detail}` : ''}
                         </p>
                     ))}
@@ -2736,9 +2736,9 @@ function CaseActionRail({ item, note, owner, effectiveStatus, busyAction, caseDe
 
     if (!hasBackedCase) {
         return (
-            <div className='grid gap-2 rounded-lg border border-ui-danger/35 bg-ui-danger/10 p-3'>
+            <div className='grid gap-2 rounded-lg border border-ui-danger/35 bg-ui-raised/10 p-3'>
                 <div>
-                    <p className='text-xs font-semibold uppercase text-ui-danger'>{hasBackedAlertWorkflow ? 'Backed alert workflow' : 'Session-local triage'}</p>
+                    <p className='text-xs font-semibold uppercase text-ui-text'>{hasBackedAlertWorkflow ? 'Backed alert workflow' : 'Session-local triage'}</p>
                     <p className='mt-1 text-xs leading-5 text-ui-muted'>
                         {hasBackedAlertWorkflow
                             ? 'Updates the persisted alert and refreshes detail. Case actions unlock when a case is linked.'
@@ -3085,13 +3085,13 @@ function CaseContinuityPanel({ item, decision, caseDetail, actionMessage, orgCon
                             <ContinuityEvent key={event.id} title={label(event.action)} detail={event.note || 'No rationale'} at={event.at} />
                         ))}
                         {caseRecord?.lastDecision && <p className='rounded-lg border border-ui-border bg-ui-panel p-2 text-xs leading-5 text-ui-muted'>Last decision: {caseRecord.lastDecision}</p>}
-                        {decision?.status && <p className='rounded-lg border border-ui-danger/35 bg-ui-danger/10 p-2 text-xs leading-5 text-ui-muted'>Session-local: {label(decision.status)}{decision.reason ? ` · ${decision.reason}` : ''}</p>}
+                        {decision?.status && <p className='rounded-lg border border-ui-danger/35 bg-ui-raised/10 p-2 text-xs leading-5 text-ui-muted'>Session-local: {label(decision.status)}{decision.reason ? ` · ${decision.reason}` : ''}</p>}
                         {!noteEvents.length && !caseRecord?.lastDecision && !decision?.status && <p className='text-xs leading-5 text-ui-muted'>Rationale timeline is watching for the first analyst note or decision.</p>}
                     </div>
                 </ContinuityBlock>
                 <div className='grid gap-3'>
                     <ContinuityBlock title='Action outcome'>
-                        <p className={`text-xs leading-5 ${actionMessage ? actionMessage.ok ? 'text-ui-success' : 'text-ui-danger' : 'text-ui-muted'}`}>
+                        <p className={`text-xs leading-5 ${actionMessage ? actionMessage.ok ? 'text-ui-success' : 'text-ui-text' : 'text-ui-muted'}`}>
                             {actionMessage?.text || 'Console actions stream here.'}
                         </p>
                         <p className='mt-2 text-xs text-ui-muted'>Refresh: {refreshText}</p>
@@ -3863,8 +3863,8 @@ function queueSummary(cases: WorkbenchCase[]) {
 }
 
 function severityClass(severity: string) {
-    if (severity === 'critical') return 'rounded-full bg-ui-danger/10 px-2 py-0.5 text-xs font-semibold text-ui-danger'
-    if (severity === 'high') return 'rounded-full bg-ui-danger/10 px-2 py-0.5 text-xs font-semibold text-ui-danger'
+    if (severity === 'critical') return 'rounded-full bg-ui-raised/10 px-2 py-0.5 text-xs font-semibold text-ui-text'
+    if (severity === 'high') return 'rounded-full bg-ui-raised/10 px-2 py-0.5 text-xs font-semibold text-ui-text'
     if (severity === 'medium') return 'rounded-full bg-ui-raised px-2 py-0.5 text-xs font-semibold text-ui-primary'
     return 'rounded-full bg-ui-primary/10 px-2 py-0.5 text-xs font-semibold text-ui-muted'
 }

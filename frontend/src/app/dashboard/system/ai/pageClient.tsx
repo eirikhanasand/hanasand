@@ -288,7 +288,7 @@ export default function GPT_Page() {
 function AIContainerHealth({ containers, error }: { containers: DockerContainer[], error: string | null }) {
     return (
         <div className='rounded-lg border border-ui-border bg-ui-raised p-4' data-ai-container-health>
-            {error ? <p className='mb-3 text-sm text-ui-danger' role='alert'>{error}</p> : null}
+            {error ? <p className='mb-3 text-sm text-ui-text' role='alert'>{error}</p> : null}
             <div className='grid gap-2 md:grid-cols-2'>
                 {containers.length ? containers.map((container) => {
                     const health = containerHealth(container)
@@ -316,7 +316,7 @@ function isAiContainer(container: DockerContainer) {
 function healthToneClass(tone: ReturnType<typeof containerHealth>['tone']) {
     if (tone === 'ok') return 'border-ui-success/30 bg-ui-success/10 text-ui-success'
     if (tone === 'warn') return 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'
-    if (tone === 'bad') return 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'
+    if (tone === 'bad') return 'border-ui-danger/30 bg-ui-raised/10 text-ui-text'
     return 'border-ui-border bg-ui-raised text-ui-muted'
 }
 

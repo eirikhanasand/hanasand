@@ -18,7 +18,7 @@ code.hljs {
 .hljs-type,
 .hljs-variable.language_ {
     /* prettylights-syntax-keyword */
-    color: var(--ui-danger)
+    color: var(--ui-text)
 }
 .hljs-title,
 .hljs-title.class_,
@@ -94,8 +94,8 @@ code.hljs {
 }
 .hljs-deletion {
     /* prettylights-syntax-markup-deleted */
-    color: var(--ui-danger);
-    background-color: color-mix(in srgb, var(--ui-danger) 14%, transparent)
+    color: var(--ui-text);
+    background-color: color-mix(in srgb, var(--ui-raised) 80%, transparent)
 }
 .hljs-char.escape_,
 .hljs-link,

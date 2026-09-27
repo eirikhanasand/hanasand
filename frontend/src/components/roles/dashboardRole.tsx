@@ -25,7 +25,7 @@ export default function DashboardRole({ role, editable, disabled, onEdit, onDele
                 </span>
                 {editable && <>
                     <button type='button' disabled={disabled} aria-label={`Edit ${role.name}`} title='Edit role' onClick={onEdit} className='inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded p-2 text-ui-muted hover:bg-ui-raised hover:text-ui-text disabled:opacity-50'><Pencil className='h-4 w-4' /></button>
-                    {role.id !== 'administrator' && <button type='button' disabled={disabled} aria-label={`Delete ${role.name}`} title='Delete role' onClick={onDelete} className='inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded p-2 text-ui-muted hover:bg-ui-raised hover:text-ui-danger disabled:opacity-50'><Trash2 className='h-4 w-4' /></button>}
+                    {role.id !== 'administrator' && <button type='button' disabled={disabled} aria-label={`Delete ${role.name}`} title='Delete role' onClick={onDelete} className='inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded p-2 text-ui-muted hover:bg-ui-raised hover:text-ui-text disabled:opacity-50'><Trash2 className='h-4 w-4' /></button>}
                 </>}
             </div>
         </div>

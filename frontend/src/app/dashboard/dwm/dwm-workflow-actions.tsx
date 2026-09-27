@@ -695,7 +695,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                     </div>
                 </div>
                 {result ? (
-                    <div data-dwm-workflow-result className={`rounded-lg border px-3 py-2 text-sm leading-5 ${result.ok ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'}`}>
+                    <div data-dwm-workflow-result className={`rounded-lg border px-3 py-2 text-sm leading-5 ${result.ok ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : 'border-ui-danger/30 bg-ui-raised/10 text-ui-text'}`}>
                         <p className='font-semibold'>{result.ok ? 'Workflow updated' : 'Action blocked'}</p>
                         <p className='mt-1 text-xs leading-5'>{result.message}</p>
                         {result.actionHref && result.actionLabel ? (
@@ -945,7 +945,7 @@ function RouteQueueCard({ action }: { action: RouteQueueAction }) {
         : action.tone === 'warn'
             ? 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'
             : action.tone === 'bad'
-                ? 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'
+                ? 'border-ui-danger/30 bg-ui-raised/10 text-ui-text'
                 : 'border-ui-border bg-ui-panel text-ui-muted'
     return (
         <article className='grid min-h-36 min-w-0 gap-3 rounded-lg border border-ui-border bg-ui-panel p-3'>
@@ -1036,7 +1036,7 @@ function RouteStateCard({ label, value, detail, tone }: { label: string, value: 
         : tone === 'warn'
             ? 'text-ui-warning'
             : tone === 'bad'
-                ? 'text-ui-danger'
+                ? 'text-ui-text'
                 : 'text-ui-primary'
     return (
         <div className='min-w-0 rounded-lg border border-ui-border bg-ui-raised px-3 py-2'>

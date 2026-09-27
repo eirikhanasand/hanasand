@@ -71,6 +71,6 @@ export default function ConditionBuilder({ conditions, onChange, options = field
                 if (error) throw new Error(error)
                 onChange(parsed); onEditingJson?.(false); setJson(null); setJsonError('')
             } catch (cause) { setJsonError(cause instanceof Error ? cause.message : 'Invalid JSON.') }
-        }}>Apply JSON</button>{jsonError && <p role='alert' className='text-sm text-ui-danger'>{jsonError}</p>}</div>}
+        }}>Apply JSON</button>{jsonError && <p role='alert' className='text-sm text-ui-text'>{jsonError}</p>}</div>}
     </div>
 }

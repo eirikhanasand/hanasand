@@ -395,7 +395,7 @@ export default function WebhookDeliveryConsole({ organization, initialDestinatio
                     </details>
 
                     {(message || error) ? (
-                        <div className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-sm ${error ? 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger' : 'border-ui-success/30 bg-ui-success/10 text-ui-success'}`}>
+                        <div className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-sm ${error ? 'border-ui-danger/30 bg-ui-raised/10 text-ui-text' : 'border-ui-success/30 bg-ui-success/10 text-ui-success'}`}>
                             {error ? <AlertTriangle className='mt-0.5 h-4 w-4 shrink-0' /> : <CheckCircle2 className='mt-0.5 h-4 w-4 shrink-0' />}
                             <span>{error || message}</span>
                         </div>
@@ -540,7 +540,7 @@ function formatTimestamp(value?: string) {
 function statusPill(status: string) {
     const normalized = status.toLowerCase()
     if (['active', 'delivered', 'dry_run', 'sent'].includes(normalized)) return 'inline-flex items-center rounded-full border border-ui-success/30 bg-ui-success/10 px-2 py-0.5 text-[11px] font-semibold text-ui-success'
-    if (['failed', 'error'].includes(normalized)) return 'inline-flex items-center rounded-full border border-ui-danger/30 bg-ui-danger/10 px-2 py-0.5 text-[11px] font-semibold text-ui-danger'
+    if (['failed', 'error'].includes(normalized)) return 'inline-flex items-center rounded-full border border-ui-danger/30 bg-ui-raised/10 px-2 py-0.5 text-[11px] font-semibold text-ui-text'
     return 'inline-flex items-center rounded-full border border-ui-warning/30 bg-ui-warning/10 px-2 py-0.5 text-[11px] font-semibold text-ui-warning'
 }
 

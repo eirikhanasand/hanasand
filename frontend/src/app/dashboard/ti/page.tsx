@@ -389,7 +389,7 @@ function StatusPill({ label, tone }: { label: string, tone: 'neutral' | 'ok' | '
 function toneClass(tone: 'neutral' | 'ok' | 'watch' | 'bad') {
     if (tone === 'ok') return { bg: 'bg-ui-success/10 border border-ui-success/35', text: 'text-ui-success' }
     if (tone === 'watch') return { bg: 'bg-ui-warning/10 border border-ui-warning/35', text: 'text-ui-warning' }
-    if (tone === 'bad') return { bg: 'bg-ui-danger/10 border border-ui-danger/35', text: 'text-ui-danger' }
+    if (tone === 'bad') return { bg: 'bg-ui-raised/10 border border-ui-danger/35', text: 'text-ui-text' }
     return { bg: 'bg-ui-panel border border-ui-border', text: 'text-ui-primary' }
 }
 

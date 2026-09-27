@@ -355,7 +355,7 @@ export default function NewRequest({
                 <div className='flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-ui-border bg-ui-canvas/16 px-3 py-2 text-[11px] text-ui-text/50'>
                     <span className='inline-flex min-w-0 items-center gap-1.5'>
                         <span>Status</span>
-                        <strong className={`truncate font-semibold ${response?.ok ? 'text-ui-success' : response?.error ? 'text-ui-danger' : 'text-ui-text/82'}`}>{responseStatus}</strong>
+                        <strong className={`truncate font-semibold ${response?.ok ? 'text-ui-success' : response?.error ? 'text-ui-text' : 'text-ui-text/82'}`}>{responseStatus}</strong>
                     </span>
                     <span className='inline-flex min-w-0 items-center gap-1.5'>
                         <span>Source</span>
@@ -477,7 +477,7 @@ export default function NewRequest({
                             <div key={index} className='grid gap-2 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)_36px]'>
                                 <input value={header.key} onChange={(e) => updateHeader(index, 'key', e.target.value)} placeholder='Header' className='min-w-0 rounded-lg border border-ui-border bg-ui-panel/[0.025] px-3 py-2 text-sm outline-none' />
                                 <input value={header.value} onChange={(e) => updateHeader(index, 'value', e.target.value)} placeholder='Value' className='min-w-0 rounded-lg border border-ui-border bg-ui-panel/[0.025] px-3 py-2 text-sm outline-none' />
-                                <button type='button' onClick={() => setHeaders((prev) => normalizeHeaderRows(prev).length === 1 ? [{ key: '', value: '' }] : normalizeHeaderRows(prev).filter((_, rowIndex) => rowIndex !== index))} className='grid cursor-pointer place-items-center rounded-lg text-ui-danger/70 hover:bg-ui-danger/10 hover:text-ui-danger'>
+                                <button type='button' onClick={() => setHeaders((prev) => normalizeHeaderRows(prev).length === 1 ? [{ key: '', value: '' }] : normalizeHeaderRows(prev).filter((_, rowIndex) => rowIndex !== index))} className='grid cursor-pointer place-items-center rounded-lg text-ui-text/70 hover:bg-ui-raised/10 hover:text-ui-text'>
                                     <Trash2 className='h-4 w-4' />
                                 </button>
                             </div>
@@ -504,7 +504,7 @@ export default function NewRequest({
                             <div key={index} className='grid gap-2 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)_36px]'>
                                 <input value={variable.key} onChange={(e) => updateVariable(index, 'key', e.target.value)} placeholder='baseUrl' className='min-w-0 rounded-lg border border-ui-border bg-ui-panel/[0.025] px-3 py-2 text-sm outline-none' />
                                 <input value={variable.value} onChange={(e) => updateVariable(index, 'value', e.target.value)} placeholder='https://api.example.com' className='min-w-0 rounded-lg border border-ui-border bg-ui-panel/[0.025] px-3 py-2 text-sm outline-none' />
-                                <button type='button' onClick={() => setAndSaveVariables(normalizedVariables.length === 1 ? [{ key: '', value: '' }] : normalizedVariables.filter((_, rowIndex) => rowIndex !== index))} className='grid cursor-pointer place-items-center rounded-lg text-ui-danger/70 hover:bg-ui-danger/10 hover:text-ui-danger'>
+                                <button type='button' onClick={() => setAndSaveVariables(normalizedVariables.length === 1 ? [{ key: '', value: '' }] : normalizedVariables.filter((_, rowIndex) => rowIndex !== index))} className='grid cursor-pointer place-items-center rounded-lg text-ui-text/70 hover:bg-ui-raised/10 hover:text-ui-text'>
                                     <Trash2 className='h-4 w-4' />
                                 </button>
                             </div>

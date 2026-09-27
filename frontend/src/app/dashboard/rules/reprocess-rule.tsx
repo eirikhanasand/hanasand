@@ -57,7 +57,7 @@ export default function ReprocessRule({ rule, organizationId, disabled }: { rule
             <button type='button' disabled={disabled || running || busy || rule.enabled === false || rule.definition?.action !== 'drop'}
                 onClick={() => { setOpen(!open); setConfirmed(false); setPreviewReady(false) }} className='rounded-lg border border-ui-border px-3 py-2 text-sm disabled:opacity-50'>Reprocess existing logs</button></div>
         {disabled && <p className='text-xs text-ui-muted'>Save your changes before reprocessing.</p>}
-        {error && <p role='alert' className='text-sm text-red-400'>{error}<button type='button' onClick={() => { setError(''); setRefresh(value => value + 1) }} className='ml-2 underline'>Refresh</button></p>}
+        {error && <p role='alert' className='text-sm text-ui-text'>{error}<button type='button' onClick={() => { setError(''); setRefresh(value => value + 1) }} className='ml-2 underline'>Refresh</button></p>}
         {open && <div className='grid gap-4'>
             <label className='flex flex-wrap items-center gap-3 text-sm'>Time range<select aria-label='Reprocess time range' value={range} onChange={event => { setRange(event.target.value); setPreviewReady(false); setConfirmed(false) }} className='rounded-lg border border-ui-border bg-ui-canvas px-3 py-2'><option value='1'>Last hour</option><option value='24'>Last 24 hours</option><option value='168'>Last 7 days</option><option value='all'>All stored logs</option></select></label>
             <RulePreview key={`${rule.version}:${range}`} organizationId={organizationId} conditions={rule.definition?.conditions || []} action='drop' range={range} onReady={ready} />

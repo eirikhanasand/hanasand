@@ -295,7 +295,7 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
                                 </div>
                             </form>
                             <div className='grid gap-2 border-t border-ui-border pt-3'>
-                                {socialError && <p role='alert' className='text-sm text-ui-danger'>{socialError}</p>}
+                                {socialError && <p role='alert' className='text-sm text-ui-text'>{socialError}</p>}
                                 <SocialSignIn redirectPath={redirectPath} />
                                 <button
                                     type='button'
@@ -325,7 +325,7 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
                             method='post'
                         >
                             <input type='hidden' name='redirectPath' value={redirectPath} />
-                            {signupSendError && <p role='alert' className='text-sm text-red-600'>{signupSendError}</p>}
+                            {signupSendError && <p role='alert' className='text-sm text-ui-text'>{signupSendError}</p>}
                             <label className='grid gap-1.5' htmlFor='login-signup-username'>
                                 <span className='text-xs font-semibold text-ui-muted'>Username</span>
                                 <input
@@ -404,7 +404,7 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
                     {mode === 'verify-signup' && <div className='grid gap-4'>
                         <h2 className='text-xl font-semibold'>Check your email</h2>
                         {signupNotice && <p role='status' className='text-sm text-ui-muted'>{signupNotice}</p>}
-                        {signupSendError && <p role='alert' className='text-sm text-red-600'>{signupSendError}</p>}
+                        {signupSendError && <p role='alert' className='text-sm text-ui-text'>{signupSendError}</p>}
                         <p className='text-sm text-ui-muted'>Enter the six digit code sent to {signupEmail}. Expires in 10 minutes.</p>
                         <VerificationCodeInput value={signupCode} setValue={setSignupCode} disabled={busy} onComplete={code => submitSignup(code)} />
                         <div className='flex flex-wrap gap-2'>

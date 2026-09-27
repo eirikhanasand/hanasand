@@ -52,7 +52,7 @@ export default function SupportAssistant({ force = false, internal = false }: { 
                     aria-label='Open support assistant'
                 >
                     <MessageCircle className='h-6 w-6' />
-                    {unread > 0 ? <span role='status' aria-label={`${unread} unread support ${unread === 1 ? 'reply' : 'replies'}`} className='absolute -right-0.5 -top-0.5 grid h-6 min-w-6 place-items-center rounded-full border-2 border-ui-panel bg-ui-danger px-1 text-[11px] font-semibold text-white'>{unread > 9 ? '9+' : unread}</span> : null}
+                    {unread > 0 ? <span role='status' aria-label={`${unread} unread support ${unread === 1 ? 'reply' : 'replies'}`} className='absolute -right-0.5 -top-0.5 grid h-6 min-w-6 place-items-center rounded-full border-2 border-ui-panel bg-ui-raised px-1 text-[11px] font-semibold text-ui-text'>{unread > 9 ? '9+' : unread}</span> : null}
                 </button>
             ) : null}
         </div>

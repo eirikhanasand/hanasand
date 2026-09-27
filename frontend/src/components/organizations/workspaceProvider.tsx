@@ -120,7 +120,7 @@ export default function WorkspaceProvider({ initial, enabled: authenticated, chi
             <div className='flex flex-1 items-center justify-center px-6 py-12'>
                 <section aria-busy={!error} className='w-full max-w-md rounded-2xl border border-ui-border bg-ui-panel p-8 text-center shadow-sm sm:p-10'>
                     <div className='mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-ui-border bg-ui-canvas'>
-                        {error ? <TriangleAlert aria-hidden className='h-6 w-6 text-ui-danger' /> : <Building2 aria-hidden className='h-6 w-6 text-ui-primary' />}
+                        {error ? <TriangleAlert aria-hidden className='h-6 w-6 text-ui-text' /> : <Building2 aria-hidden className='h-6 w-6 text-ui-primary' />}
                     </div>
                     <h1 className='text-xl font-semibold tracking-tight'>{error ? 'Could not switch workspace' : 'Switching workspace'}</h1>
                     {error ? <><p role='alert' className='mt-3 text-sm leading-6 text-ui-muted'>{error}</p><div className='mt-7 flex flex-col gap-3'>
@@ -129,7 +129,7 @@ export default function WorkspaceProvider({ initial, enabled: authenticated, chi
                     </div></> : <><p className='mt-3 text-sm leading-6 text-ui-muted'>Loading your workspace. This should only take a moment.</p><div role='status' className='mt-7 flex items-center justify-center gap-2 text-sm text-ui-muted'><LoaderCircle aria-hidden className='h-4 w-4 animate-spin motion-reduce:animate-none' />Switching organization…</div></>}
                 </section>
             </div>
-        </main> : <><Fragment key={organizationId}>{children}</Fragment>{enabled && (error || organizationError) && <div role='alert' className='fixed bottom-4 right-4 z-[1100] max-w-sm rounded-lg border border-ui-border bg-ui-panel p-3 text-sm text-ui-danger'>{error || organizationError}{organizationError && <button type='button' onClick={() => setListAttempt(current => current + 1)} className='ml-3 rounded px-2 py-1 font-semibold text-ui-text hover:bg-ui-raised focus-visible:outline-ui-primary'>Retry organizations</button>}</div>}</>}
+        </main> : <><Fragment key={organizationId}>{children}</Fragment>{enabled && (error || organizationError) && <div role='alert' className='fixed bottom-4 right-4 z-[1100] max-w-sm rounded-lg border border-ui-border bg-ui-panel p-3 text-sm text-ui-text'>{error || organizationError}{organizationError && <button type='button' onClick={() => setListAttempt(current => current + 1)} className='ml-3 rounded px-2 py-1 font-semibold text-ui-text hover:bg-ui-raised focus-visible:outline-ui-primary'>Retry organizations</button>}</div>}</>}
     </WorkspaceContext.Provider>
 }
 export function OrganizationSwitcher() {

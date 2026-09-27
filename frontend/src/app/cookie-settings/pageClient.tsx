@@ -150,7 +150,7 @@ export default function CookieSettingsClient() {
                         <button
                             type='button'
                             onClick={clearProductStorage}
-                            className='inline-flex h-10 items-center gap-2 rounded-md border border-ui-danger bg-ui-panel px-3 text-sm font-semibold text-ui-danger transition hover:bg-ui-raised'
+                            className='inline-flex h-10 items-center gap-2 rounded-md border border-ui-danger bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised'
                         >
                             <Trash2 className='h-4 w-4' />
                             Clear local tokens

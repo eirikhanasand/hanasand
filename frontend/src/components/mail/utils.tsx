@@ -119,8 +119,8 @@ export async function runAction(
 export function iconForMailbox(role?: string) {
     if (role === 'inbox') return <Inbox className='h-3.5 w-3.5 text-ui-primary' />
     if (role === 'archive') return <Archive className='h-3.5 w-3.5 text-ui-success' />
-    if (role === 'junk') return <ShieldAlert className='h-3.5 w-3.5 text-ui-danger' />
-    if (role === 'trash') return <Trash2 className='h-3.5 w-3.5 text-ui-danger' />
+    if (role === 'junk') return <ShieldAlert className='h-3.5 w-3.5 text-ui-text' />
+    if (role === 'trash') return <Trash2 className='h-3.5 w-3.5 text-ui-text' />
     return <Mail className='h-3.5 w-3.5 text-ui-muted' />
 }
 

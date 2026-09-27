@@ -31,6 +31,6 @@ export default function ReportExport({ report, markdown }: { report: object; mar
     return <div className='relative'>
         <button type='button' aria-expanded={open} disabled={busy} onClick={() => setOpen(value => !value)} className='flex items-center gap-2 ui-button ui-button-secondary px-3 py-2 text-sm'><Download className='h-4 w-4' />Export<ChevronDown className='h-4 w-4' /></button>
         {open ? <div aria-label='Export formats' className='absolute right-0 z-20 mt-1 grid min-w-36 rounded-md border border-ui-border bg-ui-panel p-1 shadow-lg' onKeyDown={event => { if (event.key === 'Escape') setOpen(false) }}>{(['markdown', 'json', 'pdf'] as const).map(format => <button key={format} type='button' disabled={busy} onClick={() => void download(format)} className='rounded px-3 py-2 text-left text-sm hover:bg-ui-raised'>{format === 'markdown' ? 'Markdown' : format.toUpperCase()}</button>)}</div> : null}
-        {error ? <p role='alert' className='mt-2 text-xs text-ui-danger'>{error}</p> : null}
+        {error ? <p role='alert' className='mt-2 text-xs text-ui-text'>{error}</p> : null}
     </div>
 }

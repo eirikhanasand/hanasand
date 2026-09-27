@@ -60,7 +60,7 @@ export function MonitoringOverview({ alerts, dataHealth, organizationId, initial
     return <div className='grid min-w-0 gap-y-4' data-dwm-overview>
         <section className={panel}>
             <LoadState state={dataHealth.alerts.state} subject='Findings' onRetry={onRefresh} />
-            {actionMessage && <p role={actionMessage.ok ? 'status' : 'alert'} className={`p-4 text-sm ${actionMessage.ok ? 'text-ui-text' : 'text-ui-danger'}`}>{actionMessage.text}</p>}
+            {actionMessage && <p role={actionMessage.ok ? 'status' : 'alert'} className={`p-4 text-sm ${actionMessage.ok ? 'text-ui-text' : 'text-ui-text'}`}>{actionMessage.text}</p>}
             <header className={'flex flex-wrap items-center justify-between gap-3 p-4 ' + (empty ? '' : 'border-b border-ui-border')}>
                 <div className='flex min-w-0 flex-1 items-center text-left'>
                     {empty ? <p className='font-semibold text-white'>No recent findings</p> : <>

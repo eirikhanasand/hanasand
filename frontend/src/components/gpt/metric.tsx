@@ -9,7 +9,7 @@ export default function Metric({ metric, label, size = 'md' }: MetricProps) {
         ? 'border-ui-success/30 bg-ui-success/10 text-ui-success'
         : metric < 75
             ? 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'
-            : 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'
+            : 'border-ui-danger/30 bg-ui-raised/10 text-ui-text'
     const textSize = size === 'lg' ? 'text-2xl' : 'text-sm'
 
     return (

@@ -70,7 +70,7 @@ function formatTime(value: string | null) {
 }
 
 function logTone(level: 'info' | 'warn' | 'error') {
-    if (level === 'error') return 'border-ui-danger/20 bg-ui-danger/10 text-ui-danger'
+    if (level === 'error') return 'border-ui-danger/20 bg-ui-raised/10 text-ui-text'
     if (level === 'warn') return 'border-ui-warning/20 bg-ui-warning/10 text-ui-warning'
     return 'border-ui-primary/20 bg-ui-primary/10 text-ui-primary'
 }

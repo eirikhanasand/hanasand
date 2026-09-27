@@ -159,14 +159,14 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
 
     return (
         <main className='mx-auto grid max-w-5xl gap-6 pb-8'>
-            <section className={`rounded-md px-5 py-4 text-white ${overall === 'up' ? 'bg-green-600' : overall === 'degraded' ? 'bg-amber-500' : overall === 'unknown' ? 'bg-slate-600' : 'bg-red-600'}`}>
+            <section className={`rounded-md border-l-2 bg-ui-raised px-5 py-4 text-ui-text ${overall === 'up' ? 'border-green-500' : overall === 'degraded' ? 'border-amber-500' : overall === 'unknown' ? 'border-ui-border' : 'border-ui-danger'}`}>
                 <div className='flex flex-wrap items-center justify-between gap-3'>
                     <div className='flex items-center gap-3'>
                         {overall === 'up' ? <CheckCircle className='h-5 w-5' /> : <AlertCircle className='h-5 w-5' />}
                         <h1 className='text-lg font-medium'>{headline}</h1>
                     </div>
                     <div className='flex flex-wrap items-center gap-3'>
-                        <Link href='/status/incidents' className='inline-flex h-9 items-center rounded-md bg-white/15 px-3 text-sm font-semibold text-white transition hover:bg-white/25'>
+                        <Link href='/status/incidents' className='inline-flex h-9 items-center rounded-md border border-ui-border bg-ui-canvas px-3 text-sm font-semibold text-ui-text transition hover:bg-ui-panel'>
                             Incident history
                         </Link>
                         <span className='text-sm font-medium'>{monitoringUnavailable ? 'Showing last verified results' : 'Live monitoring'}</span>
@@ -264,7 +264,7 @@ function barClass(status: ServiceStatus['checks'][number]['status']) {
 function statusPillClass(status: ServiceStatus['checks'][number]['status']) {
     if (status === 'up') return 'bg-green-600 text-white'
     if (status === 'degraded') return 'bg-amber-100 text-amber-800'
-    return status === 'unknown' ? 'bg-slate-200 text-slate-800' : 'bg-red-100 text-red-800'
+    return status === 'unknown' ? 'bg-slate-200 text-slate-800' : 'border border-ui-danger/40 bg-ui-raised text-ui-text'
 }
 
 function historyDaysFor(status: ServiceStatus, check: ServiceStatus['checks'][number]) {

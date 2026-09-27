@@ -12,10 +12,10 @@ export default function ImpersonationError({ reset }: { error: Error & { digest?
                 title='Helpdesk operations'
                 description='The Helpdesk could not be loaded.'
             />
-            <section className='rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-5'>
+            <section className='rounded-lg border border-ui-danger/30 bg-ui-raised/10 p-5'>
                 <div className='flex flex-col gap-4 md:flex-row md:items-start md:justify-between'>
                     <div className='flex gap-3'>
-                        <span className='grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-ui-danger/25 bg-ui-danger/10 text-ui-danger'>
+                        <span className='grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-ui-danger/25 bg-ui-raised/10 text-ui-text'>
                             <AlertTriangle className='h-5 w-5' />
                         </span>
                         <div>

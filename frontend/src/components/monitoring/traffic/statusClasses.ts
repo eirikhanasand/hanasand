@@ -1,6 +1,6 @@
 export default function statusClasses(status: number) {
     if (status >= 400) {
-        return 'bg-ui-danger/10 text-ui-danger'
+        return 'bg-ui-raised/10 text-ui-text'
     }
 
     if (status >= 300) {

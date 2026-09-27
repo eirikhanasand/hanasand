@@ -146,7 +146,7 @@ function LeftSide({
                 </button>}
                 {test.errors.length > 0 && <button
                     onClick={() => setShowErrors(prev => !prev)}
-                    className='flex w-full min-w-0 items-center gap-2 rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-2 text-left text-ui-danger transition hover:bg-ui-danger/15'
+                    className='flex w-full min-w-0 items-center gap-2 rounded-lg border border-ui-danger/30 bg-ui-raised/10 p-2 text-left text-ui-text transition hover:bg-ui-raised/15'
                 >
                     <Bug className='h-4 w-4 shrink-0' />
                     <span className='min-w-0 wrap-break-word text-sm'>{showErrors ? 'Hide' : 'Show'} ({test.errors.length}) errors</span>

@@ -52,7 +52,7 @@ export default async function TiRunsPage(props: { searchParams?: Promise<Record<
                 <LiveFact title='Next feed due' value={nextRun ? relativeUntil(nextRun.nextRunAt) : nextSource ? relativeUntil(nextSource.nextRunAt) : 'No upcoming source'} detail={nextRun?.sourceName || nextSource?.name || 'No active feed is queued'} url={nextRun?.sourceUrl || nextSource?.url} tone={(nextRun || nextSource) && isOverdue((nextRun || nextSource)!.nextRunAt) ? 'watch' : 'neutral'} />
             </section>
 
-            {runUnavailable ? <DashboardPanel className='border-ui-danger/35 bg-ui-danger/5 p-4'><p className='font-semibold text-ui-danger'>Collection history unavailable</p><p className='mt-1 text-sm text-ui-muted'>The collector status is available, but its run history could not be read. This is not the same as zero runs.</p></DashboardPanel> : null}
+            {runUnavailable ? <DashboardPanel className='border-ui-danger/35 bg-ui-raised/5 p-4'><p className='font-semibold text-ui-text'>Collection history unavailable</p><p className='mt-1 text-sm text-ui-muted'>The collector status is available, but its run history could not be read. This is not the same as zero runs.</p></DashboardPanel> : null}
 
             {runs.length ? <details data-ti-runs-summary-disclosure className='group overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
                 <summary className='flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 [&::-webkit-details-marker]:hidden'>
@@ -266,7 +266,7 @@ function QueuePill({ label, count }: { label: string, count: number }) {
 function statusClass(status: string) {
     const base = 'inline-flex w-fit self-start whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-semibold capitalize leading-5'
     if (status === 'completed') return `${base} border-ui-success/35 bg-ui-success/10 text-ui-success`
-    if (status === 'failed') return `${base} border-ui-danger/35 bg-ui-danger/10 text-ui-danger`
+    if (status === 'failed') return `${base} border-ui-danger/35 bg-ui-raised/10 text-ui-text`
     return `${base} border-ui-border bg-ui-panel text-ui-primary`
 }
 

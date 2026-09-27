@@ -80,7 +80,7 @@ const applicationEndpoints: ApplicationEndpoint[] = [
 
 export default async function ApiDocsPage() {
     const contract = await loadContract()
-    if (!contract) return <DashboardPage><DashboardHeader eyebrow='Developer tools' title='API docs' description='The API contract could not be loaded.' /><DashboardPanel className='p-4 text-sm text-ui-danger'>The live API contract is temporarily unavailable. Try again shortly.</DashboardPanel></DashboardPage>
+    if (!contract) return <DashboardPage><DashboardHeader eyebrow='Developer tools' title='API docs' description='The API contract could not be loaded.' /><DashboardPanel className='p-4 text-sm text-ui-text'>The live API contract is temporarily unavailable. Try again shortly.</DashboardPanel></DashboardPage>
 
     const server = contract.servers?.[0]?.url || 'https://api.hanasand.com/api/v1'
     const operations = Object.entries(contract.paths).flatMap(([path, methods]) => Object.entries(methods).map(([method, operation]) => ({ path, method: method.toUpperCase(), operation: operation as Operation }))).sort((a, b) => a.path.localeCompare(b.path) || a.method.localeCompare(b.method))

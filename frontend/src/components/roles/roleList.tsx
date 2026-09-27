@@ -166,7 +166,7 @@ export default function RoleList({ roles, users, canManage, highestPriority }: {
                 <p>Delete “{removing.name}”? This also removes it from all assigned users.</p>
                 <div className='flex justify-end gap-2'>
                     <button type='button' autoFocus disabled={pending} onClick={() => { setRemoving(null); setError('') }} className='min-h-11 rounded px-3 py-2 text-ui-muted'>Cancel</button>
-                    <button type='button' disabled={pending} onClick={() => void save('DELETE', removing.id)} className='min-h-11 rounded px-3 py-2 text-ui-danger'>{pending ? 'Deleting…' : 'Delete role'}</button>
+                    <button type='button' disabled={pending} onClick={() => void save('DELETE', removing.id)} className='min-h-11 rounded px-3 py-2 text-ui-text'>{pending ? 'Deleting…' : 'Delete role'}</button>
                 </div>
             </div>}
             {error && <ErrorNotice compact message={error} />}
@@ -194,7 +194,7 @@ export default function RoleList({ roles, users, canManage, highestPriority }: {
                                     <td className='px-3 py-2.5 text-sm tabular-nums text-ui-muted'>{role.priority}</td>
                                     <td className='px-3 py-2.5 text-right'>{editing && canManage && highestPriority <= role.priority && <div className='flex justify-end gap-1'>
                                         <button type='button' disabled={pending} aria-label={`Edit ${role.name}`} title='Edit role' onClick={() => openForm(role)} className='inline-flex min-h-11 min-w-11 items-center justify-center rounded p-2 text-ui-muted hover:bg-ui-raised hover:text-ui-text disabled:opacity-50'><Pencil className='h-4 w-4' /></button>
-                                        {role.id !== 'administrator' && <button type='button' disabled={pending} aria-label={`Delete ${role.name}`} title='Delete role' onClick={() => { setRemoving(role); setForm(null); setError('') }} className='inline-flex min-h-11 min-w-11 items-center justify-center rounded p-2 text-ui-muted hover:bg-ui-raised hover:text-ui-danger disabled:opacity-50'><Trash2 className='h-4 w-4' /></button>}
+                                        {role.id !== 'administrator' && <button type='button' disabled={pending} aria-label={`Delete ${role.name}`} title='Delete role' onClick={() => { setRemoving(role); setForm(null); setError('') }} className='inline-flex min-h-11 min-w-11 items-center justify-center rounded p-2 text-ui-muted hover:bg-ui-raised hover:text-ui-text disabled:opacity-50'><Trash2 className='h-4 w-4' /></button>}
                                     </div>}</td>
                                 </tr>
                                 {isOpen && <tr className='border-b border-ui-border/70 bg-ui-raised/30'><td colSpan={4} className='px-3 py-3'>
@@ -231,7 +231,7 @@ export default function RoleList({ roles, users, canManage, highestPriority }: {
                                                     <tbody>{filteredMembers.slice(0, visibleMembers).map(user => <tr key={user.id} className='border-t border-ui-border/70 hover:bg-ui-raised/60'>
                                                         <td className='px-3 py-2.5 text-ui-text'>{user.name}</td>
                                                         <td className='px-3 py-2.5 text-ui-muted'>{user.username || '—'}</td>
-                                                        <td className='px-3 py-1.5 text-right'>{canChange && <button type='button' disabled={pending || changingMember !== null} aria-label={`Remove ${user.name} from ${role.name}`} title='Remove from group' onClick={() => void changeMembership(role, user)} className='inline-flex min-h-10 min-w-10 items-center justify-center rounded-md text-ui-muted hover:bg-ui-raised hover:text-ui-danger disabled:opacity-50'><Minus className='h-4 w-4' /></button>}</td>
+                                                        <td className='px-3 py-1.5 text-right'>{canChange && <button type='button' disabled={pending || changingMember !== null} aria-label={`Remove ${user.name} from ${role.name}`} title='Remove from group' onClick={() => void changeMembership(role, user)} className='inline-flex min-h-10 min-w-10 items-center justify-center rounded-md text-ui-muted hover:bg-ui-raised hover:text-ui-text disabled:opacity-50'><Minus className='h-4 w-4' /></button>}</td>
                                                     </tr>)}
                                                     {!filteredMembers.length && <tr><td colSpan={3} className='px-3 py-5 text-center text-sm text-ui-muted'>No users in this group</td></tr>}
                                                     </tbody>

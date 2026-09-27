@@ -13,7 +13,7 @@ type RecentRequestProps = {
 export default function RecentRequest({ req, active, onClick, onRun, onDelete }: RecentRequestProps) {
     const color = requestColor(req.method)
     const statusColor = req.error
-        ? 'text-ui-danger'
+        ? 'text-ui-text'
         : req.status && req.status < 400
             ? 'text-ui-success'
             : 'text-ui-warning'
@@ -71,7 +71,7 @@ export default function RecentRequest({ req, active, onClick, onRun, onDelete }:
                             onDelete()
                         }
                     }}
-                    className='grid h-6 w-6 place-items-center rounded-full text-ui-muted hover:bg-ui-danger/10 hover:text-ui-danger'
+                    className='grid h-6 w-6 place-items-center rounded-full text-ui-muted hover:bg-ui-raised/10 hover:text-ui-text'
                     aria-label={`Delete ${req.method} ${req.url}`}
                 >
                     <Trash2 className='h-3 w-3' />

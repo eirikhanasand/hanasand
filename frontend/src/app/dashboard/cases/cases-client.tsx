@@ -117,7 +117,7 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
             <button type='button' className='px-2 py-2 text-sm text-ui-primary' onClick={() => { setQuery(''); setStatus('active'); setSeverity('all'); setSource('all'); setOwner('all'); setResolutionType('all'); setReview('all') }}>Reset filters</button>
             <input aria-label='Search cases' placeholder='Search cases' value={query} onChange={event => setQuery(event.target.value)} className='w-44 min-w-0 max-w-full rounded border border-ui-border bg-ui-canvas p-2 text-sm text-ui-text' />
         </div>}
-        {Object.values(warnings).filter(Boolean).map(warning => <p role='alert' key={warning} className='px-4 pb-3 text-sm text-ui-danger'>{warning}</p>)}
+        {Object.values(warnings).filter(Boolean).map(warning => <p role='alert' key={warning} className='px-4 pb-3 text-sm text-ui-text'>{warning}</p>)}
         {loading && rows.length > 0 && <p role='status' className='px-4 pb-3 text-sm text-ui-muted'>Updating cases…</p>}
         {loading && rows.length === 0 && <div role='status' aria-label='Loading cases' aria-busy='true' className='grid min-h-0 flex-1 place-items-center'><Loader2 className='site-loading-icon' aria-hidden='true' /></div>}
         {(!loading || rows.length > 0) && (!visible.length ? <p className='p-4 text-ui-muted'>{Object.values(warnings).some(Boolean) ? 'No cases could be displayed from the available sources.' : rows.length ? 'No cases match the current filters.' : 'No cases yet.'}</p> : <div ref={scrollContainer} className='min-h-0 flex-1 overflow-auto overscroll-contain'>

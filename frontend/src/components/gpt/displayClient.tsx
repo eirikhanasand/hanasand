@@ -152,7 +152,7 @@ function StatPill({ label, value, icon }: { label: string, value: string, icon: 
 
 function ModelStat({ title, value, highlight }: { title: string, value: string, highlight?: string }) {
     const highlightClass = highlight === 'error'
-        ? 'text-ui-danger'
+        ? 'text-ui-text'
         : highlight === 'generating'
             ? 'text-ui-success'
             : highlight === 'preparing'

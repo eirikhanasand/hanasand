@@ -43,7 +43,7 @@ export default function DashboardProject({ project }: { project: Project }) {
                         <ExternalLink className='h-3.5 w-3.5' />
                         Open
                     </Link>
-                    <button type='button' onClick={() => void handleDelete()} aria-label={`Delete project ${project.alias}`} className='inline-flex h-8 w-8 items-center justify-center rounded-md border border-ui-danger/35 bg-ui-danger/10 text-ui-danger hover:bg-ui-danger/15'>
+                    <button type='button' onClick={() => void handleDelete()} aria-label={`Delete project ${project.alias}`} className='inline-flex h-8 w-8 items-center justify-center rounded-md border border-ui-danger/35 bg-ui-raised/10 text-ui-text hover:bg-ui-raised/15'>
                         <Trash2 className='h-4 w-4' />
                     </button>
                 </div>

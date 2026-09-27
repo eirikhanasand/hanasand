@@ -9,5 +9,5 @@ export default async function CasesPage() {
     const cookieStore = await cookies()
     if (!cookieStore.get('id')?.value || !cookieStore.get('access_token')?.value) redirect('/login?path=%2Fcases')
     const organizationId = await activeOrganizationId()
-    return <DashboardPage style={{ paddingBottom: 0 }} className='h-full min-h-0 grid-rows-[minmax(0,1fr)]'><CasesClient key={organizationId || 'personal'} organizationId={organizationId} /></DashboardPage>
+    return <DashboardPage className='h-full min-h-0 grid-rows-[minmax(0,1fr)]'><CasesClient key={organizationId || 'personal'} organizationId={organizationId} /></DashboardPage>
 }

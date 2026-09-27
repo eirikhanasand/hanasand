@@ -35,7 +35,7 @@ export default function NewFile({
     const treeHasFile = tree.some((entry) => entry.name === newFileName)
 
     const outline = treeHasFile
-        ? `rounded-md border border-ui-danger ${blink && 'bg-ui-danger/10'}`
+        ? `rounded-md border border-ui-danger ${blink && 'bg-ui-raised/10'}`
         : lowercaseTreeHasFile
             ? 'rounded-md border border-ui-warning'
             : 'border border-transparent'

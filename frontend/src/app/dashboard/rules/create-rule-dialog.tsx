@@ -87,7 +87,7 @@ export default function CreateRuleDialog({ category, organizationId, canManage, 
                 <p className='text-xs text-ui-muted'>{!permitted ? stage === 'analyze' ? 'System administrator access is required for retention rules.' : 'Owner or admin access is required.' : action === 'drop' ? 'Matching Low events will not be stored.' : ''}</p>
                 <button type='submit' disabled={busy || !permitted || editingJson || readyPreview !== previewKey || Boolean(invalid) || name.trim().length < 2 || explanation.trim().length < 10} className='rounded-md bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas disabled:opacity-50'>{busy ? 'Creating…' : 'Create rule'}</button>
             </footer>
-            {conditions.some(condition => condition.operator === 'regex' && condition.value) && invalid && <p role='alert' className='text-sm text-red-400'>{invalid}</p>}
+            {conditions.some(condition => condition.operator === 'regex' && condition.value) && invalid && <p role='alert' className='text-sm text-ui-text'>{invalid}</p>}
         </form>
     </dialog>
 }

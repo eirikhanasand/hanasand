@@ -49,7 +49,7 @@ export default function SocialSignIn({ link = false, redirectPath = '/dashboard'
                 </div>
             })}
         </div>
-        {error && <p role='alert' className='mt-2 text-sm text-ui-danger'>{error}</p>}
+        {error && <p role='alert' className='mt-2 text-sm text-ui-text'>{error}</p>}
         {notice && <p role='status' className='mt-2 text-sm text-ui-text'>{notice}</p>}
     </div>
 }

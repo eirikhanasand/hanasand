@@ -201,7 +201,7 @@ function MiniButton({
     onClick: (event: React.MouseEvent<HTMLButtonElement>) => void
 }) {
     return (
-        <button type='button' aria-label={label} onClick={onClick} className={`grid h-8 w-8 place-items-center rounded-lg transition-colors ${danger ? 'text-ui-danger hover:bg-ui-danger/10' : 'text-ui-muted hover:bg-ui-raised hover:text-ui-text'}`}>
+        <button type='button' aria-label={label} onClick={onClick} className={`grid h-8 w-8 place-items-center rounded-lg transition-colors ${danger ? 'text-ui-text hover:bg-ui-raised/10' : 'text-ui-muted hover:bg-ui-raised hover:text-ui-text'}`}>
             {icon}
         </button>
     )

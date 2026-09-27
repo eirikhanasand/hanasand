@@ -138,5 +138,5 @@ function Metric({ label, value }: { label: string, value: string }) {
 }
 
 function StatusPill({ label, tone }: { label: string, tone: 'ok' | 'bad' }) {
-    return <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${tone === 'ok' ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'}`}>{label}</span>
+    return <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${tone === 'ok' ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-danger/35 bg-ui-raised/10 text-ui-text'}`}>{label}</span>
 }

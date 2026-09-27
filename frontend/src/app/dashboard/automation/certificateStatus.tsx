@@ -9,7 +9,7 @@ export default function CertificateStatus({ automation }: { automation: AgentAut
     const id = useId()
     const { applies, status, label } = healthCheckCertificate(automation)
     const Icon = status === 'not_applicable' ? Info : status === 'valid' ? ShieldCheck : status ? ShieldX : Clock3
-    const color = status === 'valid' ? 'text-ui-success' : status === 'invalid' ? 'text-ui-danger' : status === 'expiring' ? 'text-ui-warning' : 'text-ui-muted'
+    const color = status === 'valid' ? 'text-ui-success' : status === 'invalid' ? 'text-ui-text' : status === 'expiring' ? 'text-ui-warning' : 'text-ui-muted'
     const explanation = automation.targetUrl === 'system:metrics' ? 'This check reads a local host snapshot. It makes no TLS connection, so no certificate is needed.' : automation.monitoringType === 'ssh' || automation.monitoringType === 'tcp' && /:22$/.test(automation.targetUrl || '')
         ? 'This check tests SSH connectivity. SSH uses host keys, not HTTPS certificates; this check does not validate those keys.'
         : automation.actionType !== 'agent_prompt'

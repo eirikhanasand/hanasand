@@ -3765,8 +3765,8 @@ export function decisionStepStatusClass(status: DecisionStep['status']) {
 }
 
 export function severityClass(severity: AnalystWorkItem['severity']) {
-    if (severity === 'critical') return 'border border-ui-danger/35 bg-ui-danger/10 text-ui-danger dark:border-ui-danger/35 dark:bg-ui-danger/10 dark:text-ui-danger'
-    if (severity === 'high') return 'border border-ui-warning/35 bg-ui-danger/10 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'
+    if (severity === 'critical') return 'border border-ui-danger/35 bg-ui-raised/10 text-ui-text dark:border-ui-danger/35 dark:bg-ui-raised/10 dark:text-ui-text'
+    if (severity === 'high') return 'border border-ui-warning/35 bg-ui-raised/10 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'
     if (severity === 'medium') return 'border border-ui-warning/35 bg-ui-warning/10 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'
     return 'border border-ui-success/35 bg-ui-success/10 text-ui-success dark:border-ui-success/35 dark:bg-ui-success/10 dark:text-ui-success'
 }

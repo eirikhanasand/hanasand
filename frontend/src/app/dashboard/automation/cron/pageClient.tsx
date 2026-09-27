@@ -106,7 +106,7 @@ export default function CronJobsClient() {
                 <div className='grid gap-3 lg:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.75fr)]'>
                     <section className='grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3' aria-labelledby='cron-attention-heading'>
                         <div className='flex items-center gap-2'>
-                            <AlertTriangle className={`h-4 w-4 ${attentionJobs.length ? 'text-ui-danger' : 'text-ui-success'}`} />
+                            <AlertTriangle className={`h-4 w-4 ${attentionJobs.length ? 'text-ui-text' : 'text-ui-success'}`} />
                             <h3 id='cron-attention-heading' className='text-sm font-semibold text-ui-text'>Needs attention</h3>
                             <span className='ml-auto text-xs font-semibold text-ui-muted'>{attentionJobs.length}</span>
                         </div>
@@ -250,7 +250,7 @@ export default function CronJobsClient() {
 function LoadingState({ message, onRetry }: { message: string, onRetry: () => void }) {
     return <div className='grid min-h-80 place-items-center rounded-xl border border-ui-border bg-ui-panel p-8 text-center'>
         <div role='status' aria-live='polite'>
-            {message ? <AlertTriangle className='mx-auto h-8 w-8 text-ui-danger' /> : <RefreshCcw className='mx-auto h-8 w-8 animate-spin text-ui-primary' />}
+            {message ? <AlertTriangle className='mx-auto h-8 w-8 text-ui-text' /> : <RefreshCcw className='mx-auto h-8 w-8 animate-spin text-ui-primary' />}
             <p className='mt-3 text-sm font-semibold text-ui-text'>{message ? 'Unable to load scheduled work' : 'Loading scheduled work'}</p>
             <p className='mt-1 text-sm text-ui-muted'>{message || 'Collecting the latest job inventory.'}</p>
             {message ? <button type='button' onClick={onRetry} className='mt-4 inline-flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text hover:border-ui-primary'><RefreshCcw className='h-4 w-4' />Try again</button> : null}
@@ -273,7 +273,7 @@ function needsAttention(job: ManagedCronJob) {
 
 function StatusPill({ job }: { job: ManagedCronJob }) {
     const tone = job.status === 'failed' || job.status === 'blocked'
-        ? 'border-ui-danger bg-ui-danger/15 text-ui-danger'
+        ? 'border-ui-danger bg-ui-raised/15 text-ui-text'
         : job.status === 'running'
             ? 'border-ui-primary bg-ui-primary/15 text-ui-primary'
             : job.enabled
@@ -287,7 +287,7 @@ function CostPill({ job }: { job: ManagedCronJob }) {
     const tone = daily === null
         ? 'border-ui-border bg-ui-raised text-ui-muted'
         : daily >= 1
-            ? 'border-ui-danger bg-ui-danger/15 text-ui-danger'
+            ? 'border-ui-danger bg-ui-raised/15 text-ui-text'
             : daily >= 0.25
                 ? 'border-ui-warning bg-ui-warning/15 text-ui-warning'
                 : 'border-ui-success bg-ui-success/15 text-ui-success'

@@ -197,7 +197,7 @@ export default function AIPageClient({
                         ) : null}
 
                         {!ai.statusNotice && (ai.runtimeState.lastFailure || ai.runtimeState.lastToolRun) ? (
-                            <div className={`pointer-events-auto rounded-lg border px-4 py-3 text-sm shadow-md backdrop-blur-xl ${ai.runtimeState.lastFailure ? 'border-ui-danger/30 bg-ui-panel/95 text-ui-danger' : 'border-ui-border bg-ui-panel/95 text-ui-muted'}`}>
+                            <div className={`pointer-events-auto rounded-lg border px-4 py-3 text-sm shadow-md backdrop-blur-xl ${ai.runtimeState.lastFailure ? 'border-ui-danger/30 bg-ui-panel/95 text-ui-text' : 'border-ui-border bg-ui-panel/95 text-ui-muted'}`}>
                                 {ai.runtimeState.lastFailure?.message || ai.runtimeState.lastToolRun?.detail || runtimeStateSummary(ai.runtimeState)}
                             </div>
                         ) : null}

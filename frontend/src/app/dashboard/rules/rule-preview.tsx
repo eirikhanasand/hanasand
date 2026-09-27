@@ -107,7 +107,7 @@ export default function RulePreview({ organizationId, conditions, action, range,
         </div>}
         {loading && <p role='status' className='text-xs text-ui-muted'>Loading more matches…</p>}
         {complete && !events.length && <p className='text-sm text-ui-muted'>No matching events in this range.</p>}
-        {error && <p role='alert' className='text-sm text-red-400'>{error}<button type='button' onClick={() => complete ? void prefetch() : setAttempt(attempt + 1)} className='ml-2 underline'>Retry</button></p>}
+        {error && <p role='alert' className='text-sm text-ui-text'>{error}<button type='button' onClick={() => complete ? void prefetch() : setAttempt(attempt + 1)} className='ml-2 underline'>Retry</button></p>}
         {count > 10_000 && <div className='mt-2 overflow-hidden rounded-xl border border-ui-border bg-ui-raised'>
             <div className='flex items-start gap-3 p-4 sm:p-5'>
                 <span className='flex size-9 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-amber-500'><CircleAlert size={20} aria-hidden='true' /></span>

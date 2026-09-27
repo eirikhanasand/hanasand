@@ -68,7 +68,7 @@ function LiveScanner({ data, scanStatus }: { data: GetVulnerabilities | null, sc
                     {scanStatus.logs.slice(-4).reverse().map(log => (
                         <div key={`${log.at}-${log.message}`} className='grid grid-cols-[8rem_4rem_minmax(0,1fr)] gap-3 border-b border-ui-border px-3 py-1.5 text-xs last:border-b-0'>
                             <span className='font-mono text-ui-muted'>{shortTime(log.at)}</span>
-                            <span className={log.level === 'error' ? 'font-semibold text-ui-danger' : log.level === 'warn' ? 'font-semibold text-ui-warning' : 'font-semibold text-ui-primary'}>{log.level}</span>
+                            <span className={log.level === 'error' ? 'font-semibold text-ui-text' : log.level === 'warn' ? 'font-semibold text-ui-warning' : 'font-semibold text-ui-primary'}>{log.level}</span>
                             <span className='line-clamp-1 text-ui-muted'><TerminalSquare className='mr-1 inline h-3.5 w-3.5' />{log.message}</span>
                         </div>
                     ))}
@@ -93,13 +93,13 @@ function LiveFact({ icon, label, value, detail, tone }: { icon: ReactNode, label
 
 function toneClass(tone: 'ok' | 'watch' | 'bad') {
     if (tone === 'ok') return 'border-ui-success/35 bg-ui-success/10 text-ui-success'
-    if (tone === 'bad') return 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'
+    if (tone === 'bad') return 'border-ui-danger/35 bg-ui-raised/10 text-ui-text'
     return 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'
 }
 
 function toneText(tone: 'ok' | 'watch' | 'bad') {
     if (tone === 'ok') return 'text-ui-success'
-    if (tone === 'bad') return 'text-ui-danger'
+    if (tone === 'bad') return 'text-ui-text'
     return 'text-ui-warning'
 }
 

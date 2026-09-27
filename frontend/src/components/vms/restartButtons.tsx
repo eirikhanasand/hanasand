@@ -81,7 +81,7 @@ export default function RestartButtons({ vm, forceVisible = false, onUpdated }: 
                 {isRunning && <button type='button' aria-label={`Restart ${vm.name}`} title='Restart VM' onClick={handleRestart} disabled={disabled} className={`${vmActionStyle} w-9 text-ui-primary`}>
                     <RefreshCcw className='w-4 h-4' />
                 </button>}
-                {isRunning && <button type='button' aria-label={`Stop ${vm.name}`} title='Stop VM' onClick={handleStop} disabled={disabled} className={`${vmActionStyle} w-9 text-ui-danger`}>
+                {isRunning && <button type='button' aria-label={`Stop ${vm.name}`} title='Stop VM' onClick={handleStop} disabled={disabled} className={`${vmActionStyle} w-9 text-ui-text`}>
                     <StopCircle className='w-4 h-4' />
                 </button>}
             </div>

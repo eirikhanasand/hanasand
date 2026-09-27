@@ -1421,7 +1421,7 @@ export default function BrowserPageClient({ initialData, resultId, resultRunId }
                                     {shareStatus === 'saving' ? 'Saving' : shareStatus === 'copied' ? 'Copied' : 'Share'}
                                 </button>
                                 {runIsActive ? (
-                                    <button type='button' onClick={stopRun} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-danger/35 bg-ui-danger/10 px-3 text-sm font-semibold text-ui-danger'>
+                                    <button type='button' onClick={stopRun} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-danger/35 bg-ui-raised/10 px-3 text-sm font-semibold text-ui-text'>
                                         <Square className='h-4 w-4' />
                                         Stop
                                     </button>
@@ -1442,7 +1442,7 @@ export default function BrowserPageClient({ initialData, resultId, resultRunId }
                                     void action?.then(() => { if (typeof navigator.share !== 'function') setShareStatus('copied') }).catch(() => setShareError('Select and copy the report link above.'))
                                 }}>{typeof navigator !== 'undefined' && typeof navigator.share === 'function' ? 'Share link' : 'Copy link'}</button>
                             </div> : null}
-                            {shareError ? <p role='alert' className='text-sm text-ui-danger'>{shareError}</p> : null}
+                            {shareError ? <p role='alert' className='text-sm text-ui-text'>{shareError}</p> : null}
                             {runIsActive ? <div data-browser-status className='sm:self-end' title={sessionState === 'queued' ? queueCopy(capacity) : undefined}><BrowserRunMetrics metrics={runMetrics} /></div> : null}
                         </div>
                     </div>
@@ -1720,7 +1720,7 @@ function ProfileToolEditor({
                         <span className='font-semibold text-ui-text'>{tool.name}</span>
                         <span className='min-w-0 truncate font-mono text-xs text-ui-muted'>{tool.url}</span>
                         {!locked ? (
-                            <button type='button' onClick={() => onRemoveTool(tool.id)} className='grid h-8 w-8 place-items-center rounded-md border border-ui-border text-ui-muted hover:text-ui-danger' aria-label={`Remove ${tool.name}`}>
+                            <button type='button' onClick={() => onRemoveTool(tool.id)} className='grid h-8 w-8 place-items-center rounded-md border border-ui-border text-ui-muted hover:text-ui-text' aria-label={`Remove ${tool.name}`}>
                                 <Trash2 className='h-3.5 w-3.5' />
                             </button>
                         ) : null}
@@ -1763,7 +1763,7 @@ function ProfilePicker({ paid, profiles, selectedProfileId, onSelect, onDelete }
                             <button
                                 type='button'
                                 onClick={() => onDelete(profile.id)}
-                                className='grid h-9 w-8 place-items-center border-l border-ui-border text-ui-muted hover:text-ui-danger'
+                                className='grid h-9 w-8 place-items-center border-l border-ui-border text-ui-muted hover:text-ui-text'
                                 aria-label={`Delete ${profile.name}`}
                             >
                                 <Trash2 className='h-3.5 w-3.5' />
@@ -1994,7 +1994,7 @@ function EvidenceWorkspace({
                         const analysis = capture?.toolAnalysis
                         if (tool.id === 'webcrack' && !capture?.deobfuscatedCode && !capture?.webcrackLoad?.loaded && !capture?.webcrackLoad?.sampleBytes) return null
                         return (
-                            <EvidencePanel key={tool.id} title={tool.name} status={analysis?.vendorFlagged !== undefined ? <span className={analysis.vendorFlagged >= 10 ? 'text-ui-danger' : analysis.vendorFlagged > 0 ? 'text-ui-warning' : 'text-ui-success'}>{virusTotalVendorLabel(analysis)}</span> : analysis?.alertCount !== undefined ? <span className={analysis.alertCount > 0 ? 'text-ui-warning' : 'text-ui-success'}>{analysis.alertCount}</span> : providerStatus(capture, analysis)}>
+                            <EvidencePanel key={tool.id} title={tool.name} status={analysis?.vendorFlagged !== undefined ? <span className={analysis.vendorFlagged >= 10 ? 'text-ui-text' : analysis.vendorFlagged > 0 ? 'text-ui-warning' : 'text-ui-success'}>{virusTotalVendorLabel(analysis)}</span> : analysis?.alertCount !== undefined ? <span className={analysis.alertCount > 0 ? 'text-ui-warning' : 'text-ui-success'}>{analysis.alertCount}</span> : providerStatus(capture, analysis)}>
                                 {capture ? (
                                     <ProviderReportDetails tool={tool} capture={capture} compact />
                                 ) : (
@@ -2021,7 +2021,7 @@ function EvidenceWorkspace({
                     )}
                 </EvidencePanel> : null}
 
-                <EvidencePanel title='Network / requests' status={<><span>{latestNetwork?.requestCount || 0}</span>{suspiciousNetworkIndicators > 0 ? <span className='text-ui-warning' aria-label={`${suspiciousNetworkIndicators} suspicious indicators`}>{suspiciousNetworkIndicators}</span> : null}{confirmedNetworkIndicators > 0 ? <span className='text-ui-danger' aria-label={`${confirmedNetworkIndicators} indicators with 10 or more VirusTotal detections`}>{confirmedNetworkIndicators}</span> : null}</>}>
+                <EvidencePanel title='Network / requests' status={<><span>{latestNetwork?.requestCount || 0}</span>{suspiciousNetworkIndicators > 0 ? <span className='text-ui-warning' aria-label={`${suspiciousNetworkIndicators} suspicious indicators`}>{suspiciousNetworkIndicators}</span> : null}{confirmedNetworkIndicators > 0 ? <span className='text-ui-text' aria-label={`${confirmedNetworkIndicators} indicators with 10 or more VirusTotal detections`}>{confirmedNetworkIndicators}</span> : null}</>}>
                     {latestNetwork ? (
                         <div className='grid gap-2 text-xs text-ui-muted'>
                             <p>{latestNetwork.requestCount || 0} requests · {latestNetwork.responseCount || 0} responses · {latestNetwork.failedCount || 0} blocked/failed</p>
@@ -2054,7 +2054,7 @@ function EvidenceWorkspace({
                                                     <td className='border-b border-ui-border/60 px-2 py-1'>{request.durationMs !== undefined ? `${request.durationMs}ms` : ''}</td>
                                                     <td className='border-b border-ui-border/60 px-2 py-1 font-mono text-ui-muted'>{networkPeerLabel(request)}</td>
                                                     <td className='max-w-48 truncate border-b border-ui-border/60 px-2 py-1 font-mono text-ui-muted'>{request.initiator || ''}</td>
-                                                    <td className='max-w-48 truncate border-b border-ui-border/60 px-2 py-1 text-ui-danger'>{request.failure || ''}</td>
+                                                    <td className='max-w-48 truncate border-b border-ui-border/60 px-2 py-1 text-ui-text'>{request.failure || ''}</td>
                                                     <td className='max-w-[28rem] truncate border-b border-ui-border/60 px-2 py-1 font-mono text-ui-text'>{request.url}</td>
                                                 </tr>
                                             ))}
@@ -2126,7 +2126,7 @@ function DownloadsPanel({ downloads, runIsActive }: { downloads: NonNullable<San
                     <div key={file.id || `${file.at}-${index}`} className='grid min-w-0 gap-2 rounded-md border border-ui-border p-3'>
                         <div className='flex flex-wrap items-center justify-between gap-2'>
                             <span className='break-all text-sm font-semibold'>{file.fileName || 'Downloaded file'}</span>
-                            <span className={`text-xs font-semibold ${file.virusTotal?.flagged ? 'text-ui-danger' : 'text-ui-muted'}`}>
+                            <span className={`text-xs font-semibold ${file.virusTotal?.flagged ? 'text-ui-text' : 'text-ui-muted'}`}>
                                 {file.virusTotal?.total ? `VirusTotal ${file.virusTotal.flagged || 0}/${file.virusTotal.total} detections` : file.virusTotal?.status === 'checking' && !runIsActive ? 'Lookup interrupted — no verdict' : file.virusTotal?.detail || file.virusTotal?.status || file.hashStatus || 'Downloading…'}
                             </span>
                         </div>
@@ -2225,7 +2225,7 @@ function CaptureTimeline({ captures: allCaptures }: { captures: Capture[] }) {
                             <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-muted'>{capture.kind}</span>
                         </div>
                         {capture.image ? <img src={capture.image} alt={`${capture.label} screenshot`} className='max-h-64 w-full rounded border border-ui-border object-contain' /> : null}
-                        {capture.frameQuality ? <p className={`text-[11px] font-semibold ${capture.frameQuality.looksBlank ? 'text-ui-danger' : 'text-ui-success'}`}>{capture.frameQuality.looksBlank ? 'Blank-looking frame' : 'Rendered frame'} · {capture.frameQuality.visibleTextLength || 0} chars · {capture.frameQuality.elementCount || 0} elements</p> : null}
+                        {capture.frameQuality ? <p className={`text-[11px] font-semibold ${capture.frameQuality.looksBlank ? 'text-ui-text' : 'text-ui-success'}`}>{capture.frameQuality.looksBlank ? 'Blank-looking frame' : 'Rendered frame'} · {capture.frameQuality.visibleTextLength || 0} chars · {capture.frameQuality.elementCount || 0} elements</p> : null}
                         <SourceCodeDisclosure evidence={capture.evidence} />
                         {cleanEvidenceExcerpt(capture.evidence?.textExcerpt) ? <p className='line-clamp-3 text-xs leading-5 text-ui-muted'>{cleanEvidenceExcerpt(capture.evidence?.textExcerpt)}</p> : null}
                         {meaningfulReasons(capture.evidence?.reasons).length ? (
@@ -2267,7 +2267,7 @@ function ProviderViewportEvidence({ tool, capture }: { tool: SandboxTool; captur
 
 function ProviderReportDetails({ tool, capture, compact = false }: { tool: SandboxTool; capture: Capture; compact?: boolean }) {
     const analysis = capture.toolAnalysis
-    if (tool.id === 'webcrack') return capture.deobfuscatedCode ? <pre className='max-h-[40rem] overflow-auto whitespace-pre-wrap break-all rounded-md border border-ui-border bg-ui-canvas p-3 font-mono text-xs text-ui-text'>{capture.deobfuscatedCode}</pre> : capture.error ? <p className='text-xs text-ui-danger'>{capture.error}</p> : null
+    if (tool.id === 'webcrack') return capture.deobfuscatedCode ? <pre className='max-h-[40rem] overflow-auto whitespace-pre-wrap break-all rounded-md border border-ui-border bg-ui-canvas p-3 font-mono text-xs text-ui-text'>{capture.deobfuscatedCode}</pre> : capture.error ? <p className='text-xs text-ui-text'>{capture.error}</p> : null
     const commentCount = analysis?.communityCommentCount
     const communityComments = analysis?.communityComments || capture.evidence?.communityComments || []
     const facts = [
@@ -2290,7 +2290,7 @@ function ProviderReportDetails({ tool, capture, compact = false }: { tool: Sandb
                     <div className='flex max-w-full flex-wrap justify-end gap-2'>
                         {facts.map((fact) => Array.isArray(fact)
                             ? <div key={fact[0]} className='min-w-24 rounded-md border border-ui-border bg-ui-canvas px-2 py-1.5'><p className='text-[10px] font-semibold uppercase text-ui-muted'>{fact[0]}</p><p className='mt-0.5 font-semibold text-ui-text'>{fact[1]}</p></div>
-                            : <p key={fact} className='text-ui-danger'>{fact}</p>)}
+                            : <p key={fact} className='text-ui-text'>{fact}</p>)}
                     </div>
                 ) : null}
             </div>

@@ -271,10 +271,10 @@ export default function TrafficMap({
                                 ? 'border-ui-border bg-ui-raised text-ui-muted'
                                 : isOperational
                                     ? 'border-ui-success/30 bg-ui-success/10 text-ui-success'
-                                    : 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'
+                                    : 'border-ui-danger/30 bg-ui-raised/10 text-ui-text'
                         }`}
                     >
-                        <span className={`h-2 w-2 rounded-full ${isConnecting ? 'animate-pulse bg-ui-muted' : isOperational ? 'bg-ui-success' : 'bg-ui-danger'}`} />
+                        <span className={`h-2 w-2 rounded-full ${isConnecting ? 'animate-pulse bg-ui-muted' : isOperational ? 'bg-ui-success' : 'bg-ui-raised'}`} />
                         {status}
                     </div>
                 </div>

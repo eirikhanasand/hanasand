@@ -199,7 +199,7 @@ export default function Terminal({
                         <span className='font-semibold text-ui-text'>Browser terminal</span>
                         <span>{isConnected
                             ? <Wifi className='h-3.5 w-3.5 text-ui-success' />
-                            : <WifiOff className='h-3.5 w-3.5 text-ui-danger' />
+                            : <WifiOff className='h-3.5 w-3.5 text-ui-text' />
                         }</span>
                         <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${lifecycleTone(lifecycle)}`}>
                             {lifecycleLabel(lifecycle)}
@@ -318,7 +318,7 @@ function lifecycleTone(lifecycle: TerminalLifecycle) {
             return 'border-ui-border bg-ui-raised text-ui-muted'
         case 'shutting_down':
         case 'error':
-            return 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'
+            return 'border-ui-danger/35 bg-ui-raised/10 text-ui-text'
         case 'closed':
         default:
             return 'border-ui-border bg-ui-raised text-ui-muted'

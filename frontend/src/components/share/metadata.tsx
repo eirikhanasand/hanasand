@@ -194,7 +194,7 @@ export default function Metadata({
                 </SidebarTooltip>
                 <SidebarTooltip label='Copy file' side='left'>
                     <button type='button' aria-label='Copy current file contents' onClick={() => copy({ text: editingContent, setDidCopy })} className={baseButtonStyle}>
-                        <Copy height={20} width={20} className={didCopy === true ? 'text-ui-success' : didCopy === false ? 'text-ui-text' : 'text-ui-danger'} />
+                        <Copy height={20} width={20} className={didCopy === true ? 'text-ui-success' : didCopy === false ? 'text-ui-text' : 'text-ui-text'} />
                     </button>
                 </SidebarTooltip>
                 <SidebarTooltip label={share?.locked ? 'Unlock' : 'Lock'} side='left'>

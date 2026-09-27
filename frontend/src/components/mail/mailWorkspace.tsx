@@ -559,7 +559,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                         ))}
                         <div ref={nextPageTrigger}>
                             {overview?.nextCursor && <button type='button' className={toolbarButton} disabled={loadingMore} onClick={() => void loadMore()}>{loadingMore ? 'Loading older messages…' : 'Load older messages'}</button>}
-                            {pageError && <p role='alert' className='mt-2 text-xs text-ui-danger'>{pageError}</p>}
+                            {pageError && <p role='alert' className='mt-2 text-xs text-ui-text'>{pageError}</p>}
                         </div>
                         {!filteredMessages.length && !loading && (
                             <div className='rounded-lg border border-dashed border-ui-border px-3 py-4 text-xs text-ui-muted'>
@@ -747,7 +747,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                                             </p>
                                                         </div>
                                                         <button
-                                                            className='text-[11px] text-ui-danger hover:underline'
+                                                            className='text-[11px] text-ui-text hover:underline'
                                                             onClick={async () => {
                                                                 try {
                                                                     await deleteFilter(rule.id, overview.mailboxUser)
@@ -777,7 +777,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                                 ? 'bg-ui-success/15 text-ui-success'
                                                 : overview.health?.status === 'warning'
                                                     ? 'bg-ui-warning/15 text-ui-warning'
-                                                    : 'bg-ui-danger/15 text-ui-danger'
+                                                    : 'bg-ui-raised/15 text-ui-text'
                                         }`}
                                         >
                                             {overview.health?.status || 'unknown'}
@@ -805,7 +805,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                                                     ? 'bg-ui-success/15 text-ui-success'
                                                                     : check.status === 'warning'
                                                                         ? 'bg-ui-warning/15 text-ui-warning'
-                                                                        : 'bg-ui-danger/15 text-ui-danger'
+                                                                        : 'bg-ui-raised/15 text-ui-text'
                                                             }`}
                                                             >
                                                                 {check.status}
@@ -906,7 +906,7 @@ function MailSyncStatus({
     const time = updated ? `${String(updated.getHours()).padStart(2, '0')}:${String(updated.getMinutes()).padStart(2, '0')}` : '--:--'
     const date = updated && updated.toDateString() !== today.toDateString() ? ` · ${String(updated.getDate()).padStart(2, '0')}:${String(updated.getMonth() + 1).padStart(2, '0')}` : ''
     return (
-        <div className={`${full ? 'mb-3 flex' : 'hidden sm:flex'} min-w-0 items-center rounded-md border border-ui-danger/40 bg-ui-danger/10 px-2 py-1 text-[11px] text-ui-danger`} data-mail-sync-status>
+        <div className={`${full ? 'mb-3 flex' : 'hidden sm:flex'} min-w-0 items-center rounded-md border border-ui-danger/40 bg-ui-raised/10 px-2 py-1 text-[11px] text-ui-text`} data-mail-sync-status>
             <span className='truncate'>Last updated {time}{date}</span>
         </div>
     )

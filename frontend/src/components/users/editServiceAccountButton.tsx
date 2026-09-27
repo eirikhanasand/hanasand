@@ -26,7 +26,7 @@ export default function EditServiceAccountButton({ name, description, onSave }: 
                 <h2 className='text-lg font-semibold'>Edit service account</h2>
                 <label className='grid gap-1 text-sm'>Name<input ref={input} value={draftName} onChange={event => setDraftName(event.target.value)} required maxLength={100} disabled={pending} className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2' /></label>
                 <div className='grid gap-1 text-sm'><label htmlFor={descriptionId}>Description</label><textarea id={descriptionId} value={draftDescription} onChange={event => setDraftDescription(event.target.value)} maxLength={2000} rows={5} disabled={pending} placeholder='What does this account do?' className='resize-y rounded-lg border border-ui-border bg-ui-raised px-3 py-2' /></div>
-                {error && <p role='alert' className='text-sm text-ui-danger'>{error}</p>}
+                {error && <p role='alert' className='text-sm text-ui-text'>{error}</p>}
                 <div className='flex justify-end gap-2'>
                     <button type='button' disabled={pending} onClick={() => dialog.current?.close()} className='rounded-lg border border-ui-border px-4 py-2 text-sm disabled:opacity-50'>Cancel</button>
                     <button disabled={pending || !draftName.trim()} className='ui-button ui-button-primary px-4 py-2 text-sm disabled:opacity-50'>{pending ? 'Saving…' : 'Save changes'}</button>

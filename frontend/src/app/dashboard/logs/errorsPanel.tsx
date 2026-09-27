@@ -55,7 +55,7 @@ export default function ErrorsPanel({
                                         {event.error_code || 'uncategorized'}
                                     </button>
                                     <div className='flex items-center gap-2'>
-                                        <span className={`rounded-md border px-2 py-0.5 text-xs font-semibold ${event.status_code >= 500 ? 'border-ui-danger bg-ui-danger/15 text-ui-danger' : 'border-ui-warning bg-ui-warning/15 text-ui-warning'}`}>
+                                        <span className={`rounded-md border px-2 py-0.5 text-xs font-semibold ${event.status_code >= 500 ? 'border-ui-danger bg-ui-raised/15 text-ui-text' : 'border-ui-warning bg-ui-warning/15 text-ui-warning'}`}>
                                             {event.status_code || 'unreported'}
                                         </span>
                                         <button type='button' aria-label='Copy error JSON' onClick={() => onCopy(event)} className='rounded-md p-1.5 text-ui-muted hover:text-ui-primary'><Copy size={16} aria-hidden /></button>

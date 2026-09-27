@@ -16,12 +16,12 @@ const variants = {
     error: {
         icon: AlertCircle,
         accent: 'bg-ui-danger',
-        iconTone: 'text-ui-danger',
-        shell: 'border-ui-danger bg-ui-panel text-ui-danger',
-        title: 'text-ui-danger',
-        body: 'text-ui-danger',
-        button: 'border-ui-danger bg-ui-raised text-ui-danger hover:bg-ui-panel',
-        secondary: 'text-ui-danger hover:bg-ui-raised',
+        iconTone: 'text-ui-text',
+        shell: 'border-ui-danger bg-ui-panel text-ui-text',
+        title: 'text-ui-text',
+        body: 'text-ui-text',
+        button: 'border-ui-danger bg-ui-raised text-ui-text hover:bg-ui-panel',
+        secondary: 'text-ui-text hover:bg-ui-raised',
     },
     info: {
         icon: Info,

@@ -474,10 +474,10 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
 
     if (state.error || !state.detail || !caseRecord) {
         return (
-            <main className='rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-5 text-ui-danger'>
-                <Link href={`/cases${queryString({ organizationId })}`} className='inline-flex items-center gap-2 text-xs font-semibold text-ui-danger'><ArrowLeft className='h-4 w-4' />Back to cases</Link>
+            <main className='rounded-lg border border-ui-danger/30 bg-ui-raised/10 p-5 text-ui-text'>
+                <Link href={`/cases${queryString({ organizationId })}`} className='inline-flex items-center gap-2 text-xs font-semibold text-ui-text'><ArrowLeft className='h-4 w-4' />Back to cases</Link>
                 <h1 className='mt-4 text-xl font-semibold'>Case unavailable</h1>
-                <p className='mt-2 max-w-2xl text-sm leading-6 text-ui-danger'>{state.error || 'The case could not be found for this organization.'}</p>
+                <p className='mt-2 max-w-2xl text-sm leading-6 text-ui-text'>{state.error || 'The case could not be found for this organization.'}</p>
             </main>
         )
     }
@@ -648,13 +648,13 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                             <button type='button' onClick={notifyCustomer} disabled={readOnly || busy !== null} className='mt-2 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-primary/15 disabled:cursor-not-allowed disabled:opacity-60'>
                                 {busy === 'notify' ? <Loader2 className='h-4 w-4 animate-spin' /> : <BellRing className='h-4 w-4' />}Notify dry run
                             </button>
-                            {message ? <p className={`mt-3 rounded-lg border px-3 py-2 text-xs font-semibold ${message.ok ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'}`}>{message.text}</p> : null}
+                            {message ? <p className={`mt-3 rounded-lg border px-3 py-2 text-xs font-semibold ${message.ok ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : 'border-ui-danger/30 bg-ui-raised/10 text-ui-text'}`}>{message.text}</p> : null}
                         </section>
 
                         <CollapsiblePanel title='Third-party report delivery' action={state.detail.deliveryContext?.retryable ? 'retryable' : latestDelivery?.status || 'pending'} defaultOpen>
-                            {state.deliveryError ? <p className='mb-3 rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-2 text-xs text-ui-danger'>{state.deliveryError}</p> : null}
+                            {state.deliveryError ? <p className='mb-3 rounded-lg border border-ui-danger/30 bg-ui-raised/10 p-2 text-xs text-ui-text'>{state.deliveryError}</p> : null}
                             {state.receiverError ? <p className='mb-3 rounded-lg border border-ui-warning/30 bg-ui-warning/10 p-2 text-xs text-ui-warning'>{state.receiverError}</p> : null}
-                            {state.destinationError ? <p className='mb-3 rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-2 text-xs text-ui-danger'>{state.destinationError}</p> : null}
+                            {state.destinationError ? <p className='mb-3 rounded-lg border border-ui-danger/30 bg-ui-raised/10 p-2 text-xs text-ui-text'>{state.destinationError}</p> : null}
                             <label className='mb-3 grid gap-1 text-xs font-semibold text-ui-muted'>
                                 External receiver
                                 <select value={selectedDestinationId} onChange={event => setSelectedDestinationId(event.target.value)} disabled={readOnly || busy !== null || latestDeliveryRetryable} className='h-9 rounded-lg border border-ui-border bg-ui-canvas px-3 text-xs font-semibold text-ui-text disabled:cursor-not-allowed disabled:opacity-60'>
@@ -679,7 +679,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                                         <KeyValue label='Case link' value='case linked' />
                                     </div>
                                     <KeyValue label='Hanasand receiver receipt' value={latestReceiverReceipt ? `stored ${relativeTime(latestReceiverReceipt.receivedAt || latestReceiverReceipt.persistedAt)}` : 'not recorded'} />
-                                    {latestDelivery.error ? <p className='rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-2 text-ui-danger'>{latestDelivery.error}</p> : null}
+                                    {latestDelivery.error ? <p className='rounded-lg border border-ui-danger/30 bg-ui-raised/10 p-2 text-ui-text'>{latestDelivery.error}</p> : null}
                                 </div>
                             ) : <EmptyLine text='No webhook delivery attempt is attached to this case.' />}
                             <div className='mt-3 grid gap-2 sm:grid-cols-2'>
@@ -1110,7 +1110,7 @@ function CasePill({ label, value, tone }: { label: string, value: string, tone: 
 }
 
 function StatusDot({ state }: { state: 'ready' | 'action' | 'blocked' }) {
-    const toneClass = state === 'ready' ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : state === 'action' ? 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning' : 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'
+    const toneClass = state === 'ready' ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : state === 'action' ? 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning' : 'border-ui-danger/30 bg-ui-raised/10 text-ui-text'
     return <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${toneClass}`}>{state}</span>
 }
 

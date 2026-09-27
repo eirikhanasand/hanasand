@@ -174,7 +174,7 @@ export default function NotesClient() {
                     </div>
                     <div className='flex gap-2'>
                         {selected && (
-                            <button onClick={() => void remove()} className='inline-flex h-8 items-center gap-2 rounded-md border border-ui-danger bg-ui-raised px-3 text-xs font-semibold text-ui-danger transition hover:bg-ui-panel'>
+                            <button onClick={() => void remove()} className='inline-flex h-8 items-center gap-2 rounded-md border border-ui-danger bg-ui-raised px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-panel'>
                                 <Trash2 className='h-3.5 w-3.5' />
                                 Delete
                             </button>

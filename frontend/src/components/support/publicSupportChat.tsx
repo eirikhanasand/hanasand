@@ -217,7 +217,7 @@ export default function PublicSupportChat({ active = true, onUnreadChange, onRes
                 {busy && !human ? <p role='status' className='mt-4 flex items-center gap-2 text-xs text-ui-muted'><LoaderCircle className='h-3.5 w-3.5 animate-spin' aria-hidden='true' />Hanasand AI is thinking…</p> : null}
             </div>
             <div className='min-w-0 border-t border-ui-border bg-ui-raised px-4 pb-3 pt-3'>
-                {error ? <div role='alert' className='mb-3 text-xs leading-5 text-ui-danger'>{error}{retry ? <button type='button' disabled={sending || transferring} className='ml-2 font-semibold underline disabled:opacity-50' onClick={() => void submit(retry)}>Retry</button> : null}</div> : null}
+                {error ? <div role='alert' className='mb-3 text-xs leading-5 text-ui-text'>{error}{retry ? <button type='button' disabled={sending || transferring} className='ml-2 font-semibold underline disabled:opacity-50' onClick={() => void submit(retry)}>Retry</button> : null}</div> : null}
                 {!error && connection === 'reconnecting' ? <p role='status' className='mb-2 text-xs text-ui-muted'>{refreshError || 'Reconnecting…'}</p> : null}
                 {!error && unanswered ? <button type='button' onClick={() => void submit(unanswered)} className='mb-2 text-xs font-medium text-ui-primary hover:underline'>Retry AI answer</button> : null}
                 <form onSubmit={send} className='flex min-w-0 items-end gap-2 rounded-2xl border border-ui-border bg-ui-panel p-2 focus-within:border-ui-primary focus-within:ring-2 focus-within:ring-ui-primary/10'>

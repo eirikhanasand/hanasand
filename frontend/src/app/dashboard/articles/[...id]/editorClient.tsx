@@ -39,7 +39,7 @@ export default function EditorClient({ article }: { article: Article }) {
                 <button
                     type='button'
                     onClick={handleDelete}
-                    className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-danger/40 bg-ui-danger/10 px-3.5 text-sm font-medium text-ui-danger transition hover:bg-ui-danger/15'
+                    className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-danger/40 bg-ui-raised/10 px-3.5 text-sm font-medium text-ui-text transition hover:bg-ui-raised/15'
                 >
                     <Trash className='h-4 w-4' />
                     Delete

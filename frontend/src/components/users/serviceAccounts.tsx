@@ -63,7 +63,7 @@ export default function ServiceAccounts() {
         .sort((a, b) => (sort === 'asc' ? 1 : -1) * (a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }) || a.id.localeCompare(b.id)))
 
     return <div className='grid gap-5'>
-        {error && <p role='alert' className='text-ui-danger'>{error}</p>}
+        {error && <p role='alert' className='text-ui-text'>{error}</p>}
         {!ready && !error && <p>Loading service accounts…</p>}
         {ready && <>
             <div className='flex flex-wrap items-center gap-3'>
@@ -101,7 +101,7 @@ export default function ServiceAccounts() {
                     <fieldset disabled={pending} className='grid gap-1 rounded-lg border border-ui-border p-3'><legend className='px-1 text-sm font-semibold'>Allowed endpoints</legend>
                         {endpoints.map(endpoint => { const id = `${endpoint.method} ${endpoint.route}`; return <label key={id} className='flex items-start gap-3 rounded-md px-2 py-2 text-sm transition hover:bg-ui-primary/5'><input className='mt-0.5 accent-ui-primary' type='checkbox' checked={selected.includes(id)} onChange={event => setSelected(current => event.target.checked ? [...current, id] : current.filter(value => value !== id))} /><span className='grid min-w-0 gap-0.5 sm:flex sm:flex-wrap sm:items-baseline sm:gap-x-2'>{endpoint.label} <code className='break-all text-xs text-ui-muted'>{endpoint.method} {endpoint.route}</code></span></label> })}
                     </fieldset>
-                    {createError && <p role='alert' className='text-sm text-ui-danger'>{createError}</p>}
+                    {createError && <p role='alert' className='text-sm text-ui-text'>{createError}</p>}
                     <div className='flex flex-wrap justify-end gap-2 border-t border-ui-border pt-4'>
                         <button type='button' disabled={pending} onClick={() => dialog.current?.close()} className='rounded-lg border border-ui-border px-4 py-2 text-sm hover:bg-ui-raised disabled:opacity-50'>Cancel</button>
                         <button disabled={pending || !selected.length || !name.trim()} className='ui-button ui-button-primary px-4 py-2 text-sm disabled:opacity-50'>{pending ? 'Creating…' : 'Create service account'}</button>

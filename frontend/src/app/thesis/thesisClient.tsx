@@ -241,7 +241,7 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
                     </>} />
                 {ready && codeEnabled && <CodeAccess canEdit={canEdit} toolbar={codeToolbar} />}
             </div>
-            {validationError && <p role='alert' className='text-sm text-ui-danger'>{validationError}</p>}
+            {validationError && <p role='alert' className='text-sm text-ui-text'>{validationError}</p>}
             <nav className='thesis-tabs' hidden={footerVisible} aria-label='Sheet navigation'>
                 <div role='tablist' aria-label='Thesis sheets' className='flex'>
                     {sheets.map(({ id, name }, index) => <div key={id} role='presentation' className='thesis-tab' data-active={active === index}><button id={`tab-${index}`} role='tab' disabled={!ready} aria-selected={active === index} aria-controls={`sheet-${index}`} tabIndex={active === index ? 0 : -1}
@@ -269,17 +269,17 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
                         {sheetDialog.kind === 'add' ? 'Sheet name' : 'Confirm sheet name'}
                         <input autoFocus value={sheetName} onChange={event => setSheetName(event.target.value)} maxLength={sheetDialog.kind === 'add' ? 100 : undefined} autoComplete='off' aria-describedby={sheetDialog.kind === 'delete' ? 'sheet-name-instruction' : undefined} className='w-full rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-ui-text outline-none focus:border-ui-primary focus:ring-4 focus:ring-ui-primary/15' />
                     </label>
-                    {sheetDialog.kind === 'delete' && (!deleteTarget || sheets.length === 1) && <p role='alert' className='text-sm text-ui-danger'>This sheet can no longer be deleted. Close this dialog and check the current sheets.</p>}
-                    {dialogError && <p role='alert' className='text-sm text-ui-danger'>{dialogError}</p>}
+                    {sheetDialog.kind === 'delete' && (!deleteTarget || sheets.length === 1) && <p role='alert' className='text-sm text-ui-text'>This sheet can no longer be deleted. Close this dialog and check the current sheets.</p>}
+                    {dialogError && <p role='alert' className='text-sm text-ui-text'>{dialogError}</p>}
                     <div className='flex justify-between gap-3 pt-2'>
                         <button type='button' onClick={closeSheetDialog} className='rounded-md border border-ui-border bg-ui-raised px-4 py-2 text-sm font-semibold text-ui-muted hover:text-ui-text'>Cancel</button>
-                        <button type='submit' disabled={sheetDialog.kind === 'add' ? !sheetName.trim() : !deleteTarget || sheets.length === 1 || sheetName !== sheetDialog.name} className={`rounded-md px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40 ${sheetDialog.kind === 'delete' ? 'bg-ui-danger text-white' : 'bg-ui-primary text-ui-canvas'}`}>{sheetDialog.kind === 'add' ? 'Create sheet' : 'Delete'}</button>
+                        <button type='submit' disabled={sheetDialog.kind === 'add' ? !sheetName.trim() : !deleteTarget || sheets.length === 1 || sheetName !== sheetDialog.name} className={`rounded-md px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40 ${sheetDialog.kind === 'delete' ? 'bg-ui-raised text-ui-text' : 'bg-ui-primary text-ui-canvas'}`}>{sheetDialog.kind === 'add' ? 'Create sheet' : 'Delete'}</button>
                     </div>
                 </form>
             </dialog>}
             {canEdit ? (
                 <>
-                    {thesis.error && <p role='alert' className='text-sm text-ui-danger'>{thesis.error}</p>}
+                    {thesis.error && <p role='alert' className='text-sm text-ui-text'>{thesis.error}</p>}
                     {thesis.conflict && (
                         <div className='flex flex-wrap gap-3'>
                             <button type='button' onClick={() => thesis.resolve(true)} className='rounded-lg border border-ui-border px-3 py-2'>Use my draft</button>
@@ -329,7 +329,7 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
                             {more && <button type='button' disabled={busy} onClick={() => loadHistory(true)}>Older versions</button>}
                         </section>
                     )}
-                    {historyError && <p role='alert' className='text-sm text-ui-danger'>{historyError}</p>}
+                    {historyError && <p role='alert' className='text-sm text-ui-text'>{historyError}</p>}
                 </>
             ) : null}
         </section>

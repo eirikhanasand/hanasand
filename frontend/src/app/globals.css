@@ -35,51 +35,6 @@
   --color-red-800: #490404;
   --color-red-900: #330303;
   --color-red-950: #1f0202;
-  --color-blue-50: var(--color-red-50);
-  --color-blue-100: var(--color-red-100);
-  --color-blue-200: var(--color-red-200);
-  --color-blue-300: var(--color-red-300);
-  --color-blue-400: var(--color-red-400);
-  --color-blue-500: var(--color-red-500);
-  --color-blue-600: var(--color-red-600);
-  --color-blue-700: var(--color-red-700);
-  --color-blue-800: var(--color-red-800);
-  --color-blue-900: var(--color-red-900);
-  --color-blue-950: var(--color-red-950);
-  --color-indigo-50: var(--color-red-50);
-  --color-indigo-100: var(--color-red-100);
-  --color-indigo-200: var(--color-red-200);
-  --color-indigo-300: var(--color-red-300);
-  --color-indigo-400: var(--color-red-400);
-  --color-indigo-500: var(--color-red-500);
-  --color-indigo-600: var(--color-red-600);
-  --color-indigo-700: var(--color-red-700);
-  --color-indigo-800: var(--color-red-800);
-  --color-indigo-900: var(--color-red-900);
-  --color-indigo-950: var(--color-red-950);
-  --color-purple-50: var(--color-red-50);
-  --color-purple-100: var(--color-red-100);
-  --color-purple-200: var(--color-red-200);
-  --color-purple-300: var(--color-red-300);
-  --color-purple-400: var(--color-red-400);
-  --color-purple-500: var(--color-red-500);
-  --color-purple-600: var(--color-red-600);
-  --color-purple-700: var(--color-red-700);
-  --color-purple-800: var(--color-red-800);
-  --color-purple-900: var(--color-red-900);
-  --color-purple-950: var(--color-red-950);
-  --color-violet-50: var(--color-red-50);
-  --color-violet-100: var(--color-red-100);
-  --color-violet-200: var(--color-red-200);
-  --color-violet-300: var(--color-red-300);
-  --color-violet-400: var(--color-red-400);
-  --color-violet-500: var(--color-red-500);
-  --color-violet-600: var(--color-red-600);
-  --color-violet-700: var(--color-red-700);
-  --color-violet-800: var(--color-red-800);
-  --color-violet-900: var(--color-red-900);
-  --color-violet-950: var(--color-red-950);
-
 }
 
 @layer components {
@@ -111,7 +66,7 @@
   .ui-button-sm { min-height: 2rem; padding: 0.375rem 0.625rem; font-size: 0.75rem; }
   .ui-button-md { min-height: 2.5rem; padding: 0.5rem 1rem; font-size: 0.875rem; }
   .ui-button-lg { min-height: 3rem; padding: 0.75rem 1.25rem; font-size: 1rem; }
-  .ui-button-primary { border-color: var(--ui-primary); background: var(--ui-primary); color: #fff; }
+  .ui-button-primary { border-color: var(--ui-primary); background: var(--ui-primary); color: var(--ui-canvas); }
   .ui-button-primary:hover:not(:disabled) { opacity: 0.9; }
   .ui-button-secondary { border-color: var(--ui-border); background: var(--ui-raised); color: var(--ui-text); }
   .ui-button-secondary:hover:not(:disabled) { border-color: var(--ui-primary); }
@@ -119,8 +74,8 @@
   .ui-button-outline:hover:not(:disabled) { background: var(--ui-raised); }
   .ui-button-ghost { background: transparent; color: var(--ui-muted); }
   .ui-button-ghost:hover:not(:disabled) { background: var(--ui-raised); color: var(--ui-text); }
-  .ui-button-danger { border-color: color-mix(in srgb, var(--ui-danger) 40%, transparent); background: color-mix(in srgb, var(--ui-danger) 12%, transparent); color: var(--ui-danger); }
-  .ui-button-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--ui-danger) 18%, transparent); }
+  .ui-button-danger { border-color: color-mix(in srgb, var(--ui-danger) 40%, transparent); background: var(--ui-raised); color: var(--ui-text); }
+  .ui-button-danger:hover:not(:disabled) { background: var(--ui-panel); }
 
   .ui-card { border: 1px solid var(--card-border); border-radius: 1rem; background: var(--panel-surface); }
   .ui-field { border: 1px solid var(--ui-border); border-radius: 0.625rem; background: var(--ui-panel); color: var(--ui-text); }
@@ -144,10 +99,10 @@
   --ui-border: #383838;
   --ui-text: #f5f7fb;
   --ui-muted: #999;
-  --ui-primary: #780606;
+  --ui-primary: #8fb2ff;
   --ui-success: #7de0a2;
   --ui-warning: #ffd879;
-  --ui-danger: #780606;
+  --ui-danger: #ffb8b0;
   --background: #070707;
   --foreground: #f1f3ee;
   --color-background: #070707;
@@ -162,7 +117,7 @@
   --page-wash-top: #0b0b0b;
   --page-wash-bottom: #050505;
   --dot-grid: rgba(255, 255, 255, 0.16);
-  --ambient-primary: rgba(120, 6, 6, 0.09);
+  --ambient-primary: rgba(48, 86, 211, 0.105);
   --ambient-secondary: rgba(255, 255, 255, 0.008);
   --ambient-neutral: rgba(255, 255, 255, 0.035);
   --panel-border: rgba(247, 248, 242, 0.10);
@@ -184,10 +139,10 @@
   --ui-border: #d4d4d4;
   --ui-text: #171a21;
   --ui-muted: #4d4d4d;
-  --ui-primary: #780606;
+  --ui-primary: #3056d3;
   --ui-success: #147a3b;
   --ui-warning: #8a5a00;
-  --ui-danger: #780606;
+  --ui-danger: #b42318;
   --background: #f5f5f5;
   --foreground: #171a21;
   --color-background: #f5f5f5;
@@ -202,7 +157,7 @@
   --page-wash-top: #ffffff;
   --page-wash-bottom: #eeeeee;
   --dot-grid: rgba(20, 20, 20, 0.18);
-  --ambient-primary: rgba(120, 6, 6, 0.04);
+  --ambient-primary: rgba(48, 86, 211, 0.044);
   --ambient-secondary: rgba(80, 80, 80, 0.02);
   --ambient-neutral: rgba(22, 26, 33, 0.026);
   --panel-border: rgba(24, 24, 24, 0.12);

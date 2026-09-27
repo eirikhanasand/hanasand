@@ -76,7 +76,7 @@ export default function BackupPage({ backups, files, loadError = '' }: BackupPag
                         {service?.currentOperation ? stageLabel(service.currentOperation.stage) : isPending ? 'Running backup…' : 'Run verified backup'}
                     </button>
                 </div>
-                {visibleError && <p role='alert' className='mt-4 rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-3 text-sm text-ui-danger'>{visibleError}</p>}
+                {visibleError && <p role='alert' className='mt-4 rounded-lg border border-ui-danger/30 bg-ui-raised/10 p-3 text-sm text-ui-text'>{visibleError}</p>}
                 {message && <p role='status' className='mt-4 rounded-lg border border-ui-success/30 bg-ui-success/10 p-3 text-sm text-ui-success'>{message}</p>}
             </section>
 
@@ -169,7 +169,7 @@ function Evidence({ label, value, detail, mono = false }: { label: string, value
 
 function Status({ value }: { value: string }) {
     const normalized = value.toLowerCase()
-    const color = normalized === 'succeeded' || normalized === 'healthy' ? 'text-ui-success' : normalized === 'failed' || normalized === 'interrupted' || normalized === 'unavailable' ? 'text-ui-danger' : 'text-ui-warning'
+    const color = normalized === 'succeeded' || normalized === 'healthy' ? 'text-ui-success' : normalized === 'failed' || normalized === 'interrupted' || normalized === 'unavailable' ? 'text-ui-text' : 'text-ui-warning'
     return <span className={`rounded-full border border-current/25 px-2 py-1 text-xs font-semibold capitalize ${color}`}>{value.replaceAll('_', ' ')}</span>
 }
 

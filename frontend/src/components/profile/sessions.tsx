@@ -66,7 +66,7 @@ export default function SessionsPanel({ isSelf }: { isSelf: boolean }) {
                 </button>
             </div>
             <p className='mt-2 text-xs text-ui-muted'>Each session is a sign-in. Multiple sessions can belong to the same device.</p>
-            {error && <p role='alert' className='mt-3 text-sm text-ui-danger'>{error} <button onClick={refresh} className='cursor-pointer underline'>Retry</button></p>}
+            {error && <p role='alert' className='mt-3 text-sm text-ui-text'>{error} <button onClick={refresh} className='cursor-pointer underline'>Retry</button></p>}
             <div className='mt-4 grid gap-2'>
                 {sessions.map(session => {
                     const device = sessionDevice(session.user_agent, Boolean(session.ip))
@@ -85,7 +85,7 @@ export default function SessionsPanel({ isSelf }: { isSelf: boolean }) {
                                 <p className='mt-1 text-xs text-ui-muted'>Approximate location: {session.private_ip ? 'Not available for private IPs' : location || 'Unavailable'}</p>
                                 <p className='mt-1 text-xs text-ui-muted'>Signed in {formatDate(session.created_at)} · Last active {formatDate(session.last_seen_at)}</p>
                             </div>
-                            <button disabled={busy} onClick={() => revoke(session.token_id)} aria-label={`Revoke ${device.label} session`} className='h-8 cursor-pointer rounded-lg border border-ui-danger/40 bg-ui-danger/10 px-3 text-xs font-semibold text-ui-danger hover:bg-ui-danger/15 disabled:opacity-50'>
+                            <button disabled={busy} onClick={() => revoke(session.token_id)} aria-label={`Revoke ${device.label} session`} className='h-8 cursor-pointer rounded-lg border border-ui-danger/40 bg-ui-raised/10 px-3 text-xs font-semibold text-ui-text hover:bg-ui-raised/15 disabled:opacity-50'>
                                 <LogOut className='mr-2 inline h-4 w-4' />Revoke
                             </button>
                         </div>

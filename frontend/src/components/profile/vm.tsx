@@ -79,7 +79,7 @@ export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
                             <span className={`rounded-md px-2 py-0.5 text-[0.68rem] font-medium uppercase tracking-[0.08em] ${status === 'Running'
                                 ? 'border border-ui-success/35 bg-ui-success/10 text-ui-success'
                                 : status === 'Stopped'
-                                    ? 'border border-ui-danger/35 bg-ui-danger/10 text-ui-danger'
+                                    ? 'border border-ui-danger/35 bg-ui-raised/10 text-ui-text'
                                     : 'border border-ui-warning/35 bg-ui-warning/10 text-ui-warning'
                             }`}>{status}</span>
                         </div>
@@ -122,7 +122,7 @@ export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
                         {deleted && <div className='max-w-sm rounded-lg border border-ui-warning/35 bg-ui-warning/10 p-3 text-sm'>
                             <p>{expired ? 'Recovery period ended. Permanent deletion is pending.' : `Restore before ${new Date(vm.delete_after!).toLocaleString()}.`}</p>
                             <p className='mt-1 text-ui-muted'>{vm.deletion_error ? 'Dashboard access is blocked. The host is retrying the shutdown.' : 'The VM is disabled while scheduled for deletion.'}</p>
-                            {vm.deletion_error && <p role='alert' className='mt-2 text-ui-danger'>The host operation failed: {vm.deletion_error}</p>}
+                            {vm.deletion_error && <p role='alert' className='mt-2 text-ui-text'>The host operation failed: {vm.deletion_error}</p>}
                             <button type='button' disabled={busy || expired} onClick={() => void handleRestore()} className={`${vmActionStyle} mt-3 px-3 text-ui-primary`}>{busy ? 'Restoring…' : 'Restore VM'}</button>
                         </div>}
                         {!deleted && <details data-vm-danger-actions>
@@ -133,7 +133,7 @@ export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
                                 <button
                                     type='button'
                                     onClick={() => { setDeleteError(''); setConfirmingDelete(true) }}
-                                    className={`${vmActionStyle} px-3 text-ui-danger`}
+                                    className={`${vmActionStyle} px-3 text-ui-text`}
                                 >
                                     <Trash2 className='h-4 w-4' />
                                     Delete VM

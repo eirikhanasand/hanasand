@@ -26,7 +26,7 @@ export default async function OpenApiPage() {
             </Link>
         </header>
         <DashboardPanel className='min-w-0 overflow-hidden'>
-            {document ? <pre className='overflow-x-auto p-4 text-xs leading-6 text-ui-text' aria-label='OpenAPI specification'><code>{JSON.stringify(document, null, 2)}</code></pre> : <p role='alert' className='p-4 text-sm text-ui-danger'>The OpenAPI document is temporarily unavailable. Reload this page to try again.</p>}
+            {document ? <pre className='overflow-x-auto p-4 text-xs leading-6 text-ui-text' aria-label='OpenAPI specification'><code>{JSON.stringify(document, null, 2)}</code></pre> : <p role='alert' className='p-4 text-sm text-ui-text'>The OpenAPI document is temporarily unavailable. Reload this page to try again.</p>}
         </DashboardPanel>
     </DashboardPage>
 }

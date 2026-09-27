@@ -183,7 +183,7 @@ function StatCard({ title, value, accent = 'slate', icon, outline }: StatCardPro
         blue: 'from-ui-primary/15 to-ui-primary/5 border-ui-primary/25 text-ui-primary',
         emerald: 'from-ui-success/15 to-ui-success/5 border-ui-success/25 text-ui-success',
         amber: 'from-ui-warning/15 to-ui-warning/5 border-ui-warning/25 text-ui-warning',
-        rose: 'from-ui-danger/15 to-ui-danger/5 border-ui-danger/25 text-ui-danger',
+        rose: 'from-ui-danger/15 to-ui-danger/5 border-ui-danger/25 text-ui-text',
         violet: 'from-ui-primary/15 to-ui-primary/5 border-ui-primary/25 text-ui-primary',
         cyan: 'from-ui-primary/15 to-ui-primary/5 border-ui-primary/25 text-ui-primary',
         slate: 'from-ui-raised to-ui-panel border-ui-border text-ui-muted',

@@ -108,7 +108,7 @@ export default function TestContent({ test, showLogs, showErrors }: TestContentP
                                             <XAxis dataKey='time' stroke='var(--ui-muted)' tick={{ fontSize: 11 }} />
                                             <YAxis stroke='var(--ui-muted)' tick={{ fontSize: 11 }} />
                                             <Tooltip contentStyle={tooltipStyle} />
-                                            <Bar dataKey='count' fill='var(--ui-danger)' radius={[4, 4, 0, 0]} />
+                                            <Bar dataKey='count' fill='var(--ui-primary)' radius={[4, 4, 0, 0]} />
                                         </BarChart>
                                     </ResponsiveContainer>
                                 </ChartPanel>
@@ -159,7 +159,7 @@ function MetricCard({ label, value, tone = 'default', emphasis = false }: { labe
     const toneClass = tone === 'success'
         ? 'border-ui-success bg-ui-success/15 text-ui-success'
         : tone === 'danger'
-            ? 'border-ui-danger bg-ui-danger/15 text-ui-danger'
+            ? 'border-ui-danger bg-ui-raised/15 text-ui-text'
             : 'border-ui-border bg-ui-raised text-ui-text'
 
     return (
@@ -181,8 +181,8 @@ function ChartPanel({ title, children }: { title: string, children: ReactNode })
 
 function LogPanel({ title, empty, children, hasContent, danger = false }: { title: string, empty: string, children: ReactNode, hasContent: boolean, danger?: boolean }) {
     return (
-        <section className={`grid min-h-64 min-w-0 grid-rows-[auto_minmax(0,1fr)] gap-2 rounded-lg border p-3 ${danger ? 'border-ui-danger bg-ui-danger/15' : 'border-ui-border bg-ui-raised'}`}>
-            <h2 className={`text-sm font-semibold ${danger ? 'text-ui-danger' : 'text-ui-text'}`}>{title}</h2>
+        <section className={`grid min-h-64 min-w-0 grid-rows-[auto_minmax(0,1fr)] gap-2 rounded-lg border p-3 ${danger ? 'border-ui-danger bg-ui-raised/15' : 'border-ui-border bg-ui-raised'}`}>
+            <h2 className={`text-sm font-semibold ${danger ? 'text-ui-text' : 'text-ui-text'}`}>{title}</h2>
             <div className='min-h-0 min-w-0'>
                 {hasContent ? children : <div className='grid h-full place-items-center rounded-md border border-dashed border-ui-border bg-ui-panel p-4 text-center text-sm text-ui-muted'>{empty}</div>}
             </div>

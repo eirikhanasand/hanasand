@@ -168,7 +168,7 @@ export default function LoadTestingOperations() {
                                     ))}
                                 </div>
                             </details>
-                            {error ? <p className='text-sm text-ui-danger'>{error}</p> : null}
+                            {error ? <p className='text-sm text-ui-text'>{error}</p> : null}
                         </form>
                     </div>
                     <aside className='grid content-start gap-3 border-t border-ui-border bg-ui-raised p-4 lg:border-l lg:border-t-0'>
@@ -297,7 +297,7 @@ function isValidServiceUrl(value: string) {
 
 function SnapshotRow({ icon, label, value, tone }: { icon: ReactNode, label: string, value: string, tone: 'neutral' | 'ok' | 'watch' | 'bad' }) {
     const toneClass = tone === 'bad'
-        ? 'text-ui-danger'
+        ? 'text-ui-text'
         : tone === 'watch'
             ? 'text-ui-warning'
             : tone === 'ok'

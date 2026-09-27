@@ -37,7 +37,7 @@ function auditTargetName(event: AdminAuditEvent) {
 }
 
 function severityClass(severity: AdminAuditEvent['severity']) {
-    if (severity === 'critical') return 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'
+    if (severity === 'critical') return 'border-ui-danger/35 bg-ui-raised/10 text-ui-text'
     if (severity === 'warning') return 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'
     if (severity === 'notice') return 'border-ui-primary/35 bg-ui-primary/10 text-ui-primary'
     return 'border-ui-border bg-ui-raised text-ui-muted'
@@ -45,7 +45,7 @@ function severityClass(severity: AdminAuditEvent['severity']) {
 
 function outcomeClass(outcome: AdminAuditEvent['outcome']) {
     if (outcome === 'success') return 'border-ui-success/35 bg-ui-success/10 text-ui-success'
-    if (outcome === 'denied') return 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'
+    if (outcome === 'denied') return 'border-ui-danger/35 bg-ui-raised/10 text-ui-text'
     return 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'
 }
 
@@ -155,7 +155,7 @@ export default function AuditTimeline({ events: initialEvents, params, responseE
                                     <summary aria-label={`Notifications: ${reviewEvents.length} event${reviewEvents.length === 1 ? '' : 's'} to review`} className='flex h-9 cursor-pointer list-none items-center justify-center rounded-lg border border-ui-border bg-ui-raised px-3 text-ui-text transition hover:border-ui-primary hover:bg-ui-panel [&::-webkit-details-marker]:hidden'>
                                         <span className='relative inline-flex'>
                                             <Bell size={24} aria-hidden='true' />
-                                            {reviewEvents.length ? <span aria-hidden='true' className='absolute -right-1.5 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold leading-none text-white'>{reviewEvents.length}</span> : null}
+                                            {reviewEvents.length ? <span aria-hidden='true' className='absolute -right-1.5 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full border border-ui-danger/40 bg-ui-raised px-1 text-[10px] font-semibold leading-none text-ui-text'>{reviewEvents.length}</span> : null}
                                         </span>
                                     </summary>
                                     <div className='absolute right-0 z-20 mt-2 w-80 max-w-[calc(100vw-3rem)] rounded-lg border border-ui-border bg-ui-panel p-3 shadow-lg' aria-label='Audit notifications'>
@@ -279,7 +279,7 @@ export default function AuditTimeline({ events: initialEvents, params, responseE
                                                     {pendingEvent === event.id ? 'Saving…' : event.acknowledged_at ? 'Mark unread' : 'Acknowledge'}
                                                 </button>
                                                 {event.acknowledged_at ? <span className='text-xs text-ui-muted'>Acknowledged by {event.acknowledged_by_name || event.acknowledged_by || 'an administrator'} · <time dateTime={event.acknowledged_at} suppressHydrationWarning>{formatTime(event.acknowledged_at)}</time></span> : null}
-                                                {acknowledgmentError?.id === event.id ? <p role='alert' className='text-sm text-ui-danger'>{acknowledgmentError.message}</p> : null}
+                                                {acknowledgmentError?.id === event.id ? <p role='alert' className='text-sm text-ui-text'>{acknowledgmentError.message}</p> : null}
                                             </div> : null}
                                         </div>
                                     </article>

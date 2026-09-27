@@ -49,7 +49,7 @@ export default function AddToOrganization({ vm, onAdded }: { vm: VM; onAdded?: (
                 {!organizations.length && <option value=''>{busy ? 'Loading organizations…' : 'No organizations available'}</option>}
                 {organizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}
             </select></label>
-            {error && <p role='alert' className='text-sm text-ui-danger'>{error}</p>}
+            {error && <p role='alert' className='text-sm text-ui-text'>{error}</p>}
             <button disabled={busy || !selected} className='h-9 rounded-md bg-ui-primary px-4 font-semibold text-ui-canvas disabled:opacity-50'>{busy ? 'Please wait…' : 'Add VM'}</button>
         </form>}
     </div>

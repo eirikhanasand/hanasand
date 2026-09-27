@@ -35,7 +35,7 @@ export function CreateCase({ organizationId }: { organizationId?: string }) {
         finally { setBusy(false) }
     }
     return <>
-        <button type='button' onClick={open} className='inline-flex items-center gap-2 rounded-lg bg-ui-canvas px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-ui-raised'><Plus aria-hidden='true' className='h-4 w-4' />Create case</button>
+        <button type='button' onClick={open} className='inline-flex items-center gap-2 rounded-lg bg-ui-canvas px-3 py-2 text-sm font-medium text-ui-text transition-colors hover:bg-ui-raised'><Plus aria-hidden='true' className='h-4 w-4' />Create case</button>
         <dialog ref={dialog} aria-labelledby='create-case-title' onCancel={event => { if (busy) event.preventDefault() }} className='m-auto w-[90vw] max-w-lg rounded-lg border border-ui-border bg-ui-panel p-5 text-ui-text backdrop:bg-black/50'>
             <form onSubmit={create} className='grid gap-4'>
                 <h2 id='create-case-title' className='text-lg font-semibold'>Create case</h2>
@@ -43,7 +43,7 @@ export function CreateCase({ organizationId }: { organizationId?: string }) {
                 <label className='grid gap-1 text-sm'>Title<input autoFocus required maxLength={200} className={control} value={title} disabled={busy} onChange={event => setTitle(event.target.value)} /></label>
                 <label className='grid gap-1 text-sm'>Description<textarea maxLength={5000} rows={4} className={control} value={summary} disabled={busy} onChange={event => setSummary(event.target.value)} /></label>
                 <label className='grid gap-1 text-sm'>Severity<select aria-label='Severity' className={control} value={priority} disabled={busy} onChange={event => setPriority(event.target.value)}><option value='low'>Low</option><option value='medium'>Medium</option><option value='high'>High</option><option value='critical'>Critical</option></select></label>
-                {error && <p role='alert' className='text-sm text-ui-danger'>{error}</p>}
+                {error && <p role='alert' className='text-sm text-ui-text'>{error}</p>}
                 <div className='flex justify-end gap-2'><button type='button' className='rounded-lg border border-ui-border px-3 py-2 text-sm' disabled={busy} onClick={() => dialog.current?.close()}>Cancel</button><button type='submit' disabled={busy || !title.trim()} className='rounded-lg bg-ui-primary px-3 py-2 text-sm font-medium text-white disabled:opacity-50'>{busy ? 'Creating…' : 'Create case'}</button></div>
             </form>
         </dialog>

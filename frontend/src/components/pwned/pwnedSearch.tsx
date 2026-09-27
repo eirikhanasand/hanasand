@@ -12,7 +12,7 @@ export default function PwnedSearch({ breached, breachCount, files = [] }: Pwned
     return (
         <>
             {breached ? (
-                <div className='grid gap-3 rounded-lg border border-ui-danger bg-ui-danger/10 p-3 text-sm text-ui-danger'>
+                <div className='grid gap-3 rounded-lg border border-ui-danger bg-ui-raised/10 p-3 text-sm text-ui-text'>
                     <div className='flex items-start gap-3'>
                         <ShieldAlert className='mt-0.5 h-4 w-4 shrink-0' />
                         <div className='grid gap-1'>

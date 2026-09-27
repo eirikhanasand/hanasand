@@ -54,7 +54,7 @@ export default function PwnedPageClient() {
                 <div className='flex items-start justify-between gap-4'>
                     <div className='grid gap-1'>
                         <div className='flex items-center gap-2 text-lg font-semibold text-ui-text'>
-                            <Eye className={`h-5 w-5 ${didSearch ? breached ? 'text-ui-danger' : 'text-ui-success' : 'text-ui-primary'}`} />
+                            <Eye className={`h-5 w-5 ${didSearch ? breached ? 'text-ui-text' : 'text-ui-success' : 'text-ui-primary'}`} />
                             {didSearch ? 'Result' : 'Check password'}
                         </div>
                         <p className='text-sm leading-6 text-ui-muted'>
@@ -64,7 +64,7 @@ export default function PwnedPageClient() {
                         </p>
                     </div>
                     {didSearch ? (
-                        <div className={`grid h-10 w-10 place-items-center rounded-lg border ${breached ? 'border-ui-danger bg-ui-danger/10 text-ui-danger' : 'border-ui-success bg-ui-success/10 text-ui-success'}`}>
+                        <div className={`grid h-10 w-10 place-items-center rounded-lg border ${breached ? 'border-ui-danger bg-ui-raised/10 text-ui-text' : 'border-ui-success bg-ui-success/10 text-ui-success'}`}>
                             {breached ? <ShieldX className='h-4 w-4' /> : <ShieldCheck className='h-4 w-4' />}
                         </div>
                     ) : null}

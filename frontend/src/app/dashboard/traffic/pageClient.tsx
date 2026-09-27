@@ -271,7 +271,7 @@ export default function TrafficDashboard({
                                             <button onClick={() => editBlock(entry)} className='hidden cursor-pointer text-ui-muted hover:text-ui-primary group-hover:block'>
                                                 <Pencil className='w-4 h-4' />
                                             </button>
-                                            <button onClick={() => setDeletingBlockId(entry.id)} className='hidden cursor-pointer text-ui-muted hover:text-ui-danger group-hover:block'>
+                                            <button onClick={() => setDeletingBlockId(entry.id)} className='hidden cursor-pointer text-ui-muted hover:text-ui-text group-hover:block'>
                                                 <X className='w-5 h-5' />
                                             </button>
                                             <div className='block group-hover:hidden w-5' />

@@ -40,7 +40,7 @@ export function ActorBusinessModelEvidence({ model, sources, caseStudies, state 
             {state === 'loading' ? (
                 <p className='mt-3 border-l-2 border-ui-primary pl-3 text-sm text-ui-muted dark:text-ui-muted'>Searching retained claims and evidence.</p>
             ) : state === 'error' ? (
-                <p role='alert' className='mt-3 border-l-2 border-ui-danger pl-3 text-sm text-ui-danger'>{error || 'Business-model evidence is temporarily unavailable.'}</p>
+                <p role='alert' className='mt-3 border-l-2 border-ui-danger pl-3 text-sm text-ui-text'>{error || 'Business-model evidence is temporarily unavailable.'}</p>
             ) : observationCount ? (
                 <>
                     <div className='mt-4 grid min-w-0 gap-x-6 gap-y-5 lg:grid-cols-2'>

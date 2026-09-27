@@ -64,7 +64,7 @@ function colorMap(value?: string, map?: Map) {
 
 function Color(input: string | undefined) {
     switch (input) {
-        case 'red':         return 'border border-ui-danger/30 bg-ui-danger/10 text-ui-danger'
+        case 'red':         return 'border border-ui-danger/30 bg-ui-raised/10 text-ui-text'
         case 'green':       return 'border border-ui-success/30 bg-ui-success/10 text-ui-success'
         case 'yellow':      return 'border border-ui-warning/30 bg-ui-warning/10 text-ui-warning'
         case 'orange':      return 'border border-ui-warning/30 bg-ui-warning/10 text-ui-warning'

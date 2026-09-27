@@ -153,7 +153,7 @@ export default function ChatPane({
                         {!activeConversation?.messages.length ? (
                             <EmptyComposerState tooltip={emptyTooltip} hasReadyModel={hasReadyModel} isAuthenticated={isAuthenticated} />
                         ) : activeConversation.messages.map((message) => (
-                            <article key={message.id} className={`max-w-3xl rounded-lg border px-4 py-3 ${message.role === 'user' ? 'ml-auto border-ui-border bg-ui-panel text-ui-text shadow-sm' : message.error ? 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger' : message.role === 'tool' ? 'border-ui-border bg-ui-raised text-ui-muted' : 'border-transparent bg-transparent text-ui-text'}`}>
+                            <article key={message.id} className={`max-w-3xl rounded-lg border px-4 py-3 ${message.role === 'user' ? 'ml-auto border-ui-border bg-ui-panel text-ui-text shadow-sm' : message.error ? 'border-ui-danger/30 bg-ui-raised/10 text-ui-text' : message.role === 'tool' ? 'border-ui-border bg-ui-raised text-ui-muted' : 'border-transparent bg-transparent text-ui-text'}`}>
                                 {message.role === 'tool' || message.role === 'assistant' ? (
                                     <div className='mb-2 flex items-center justify-between gap-3 text-[10px] font-semibold uppercase text-ui-muted'>
                                         <span>{message.role === 'tool' ? toolLabel(message) : message.role}</span>
@@ -484,7 +484,7 @@ function DiffArtifact({ content }: { content: string }) {
             {lines.map((line, index) => (
                 <div
                     key={`${line}-${index}`}
-                    className={`whitespace-pre-wrap break-all rounded px-2 ${line.startsWith('+') ? 'bg-ui-success/10 text-ui-success' : line.startsWith('-') ? 'bg-ui-danger/10 text-ui-danger' : 'text-ui-muted'}`}
+                    className={`whitespace-pre-wrap break-all rounded px-2 ${line.startsWith('+') ? 'bg-ui-success/10 text-ui-success' : line.startsWith('-') ? 'bg-ui-raised/10 text-ui-text' : 'text-ui-muted'}`}
                 >
                     {line || ' '}
                 </div>

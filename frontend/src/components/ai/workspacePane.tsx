@@ -272,7 +272,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                                             type='button'
                                             onClick={() => void onRemoveCollaborator(collaborator.userId)}
                                             disabled={collaboratorPending}
-                                            className='rounded-lg bg-ui-panel px-2 py-1 text-[10px] text-ui-muted outline outline-ui-border transition-colors hover:text-ui-danger disabled:opacity-60'
+                                            className='rounded-lg bg-ui-panel px-2 py-1 text-[10px] text-ui-muted outline outline-ui-border transition-colors hover:text-ui-text disabled:opacity-60'
                                         >
                                             {collaborator.userId === currentUserId ? 'Leave' : 'Remove'}
                                         </button>
@@ -613,7 +613,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                                     Attach
                                 </button>
                                 {repo.credential?.hasCredential ? (
-                                    <button type='button' onClick={() => void onRevokeRepoCredential(repo.id)} className='rounded-lg bg-ui-panel px-2.5 py-1.5 text-xs text-ui-muted outline outline-ui-border hover:text-ui-danger'>
+                                    <button type='button' onClick={() => void onRevokeRepoCredential(repo.id)} className='rounded-lg bg-ui-panel px-2.5 py-1.5 text-xs text-ui-muted outline outline-ui-border hover:text-ui-text'>
                                         Revoke
                                     </button>
                                 ) : null}

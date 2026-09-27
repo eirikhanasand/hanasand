@@ -49,7 +49,7 @@ export default function BrowserHistory({ clientId }: { clientId: string }) {
                 </a>)}
                 {!loading && !error && !runs.length ? <p className='text-sm text-ui-muted'>No previous runs.</p> : null}
                 {loading ? <p role='status' className='text-sm text-ui-muted'>Loading…</p> : null}
-                {error ? <div role='alert' className='text-sm text-ui-danger'>{error} <button type='button' onClick={() => void load(runs.length ? nextOffset ?? 0 : 0)} className='underline'>Try again</button></div> : null}
+                {error ? <div role='alert' className='text-sm text-ui-text'>{error} <button type='button' onClick={() => void load(runs.length ? nextOffset ?? 0 : 0)} className='underline'>Try again</button></div> : null}
                 {nextOffset !== null && !loading && !error ? <button type='button' onClick={() => void load(nextOffset)} className='rounded-md border border-ui-border px-3 py-2 text-sm hover:border-ui-primary'>Load more</button> : null}
             </div>
         </dialog>

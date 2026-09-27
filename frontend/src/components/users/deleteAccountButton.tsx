@@ -27,7 +27,7 @@ export default function DeleteAccountButton({ name, onDelete, label, alwaysConfi
 
     return <>
         <button type='button' aria-label={`Delete ${name}`} disabled={pending}
-            className={`${label ? 'flex w-full items-center gap-2 px-3 py-2 text-left' : 'grid h-8 w-8 shrink-0 place-items-center'} rounded-lg text-ui-danger hover:bg-ui-danger/10 disabled:opacity-50`}
+            className={`${label ? 'flex w-full items-center gap-2 px-3 py-2 text-left' : 'grid h-8 w-8 shrink-0 place-items-center'} rounded-lg text-ui-text hover:bg-ui-raised/10 disabled:opacity-50`}
             onClick={(event) => {
                 event.stopPropagation()
                 let direct = false
@@ -43,10 +43,10 @@ export default function DeleteAccountButton({ name, onDelete, label, alwaysConfi
             <h2 className='font-semibold'>Delete {name}?</h2>
             <p className='mt-2 text-sm text-ui-muted'>This account will lose access.</p>
             {!alwaysConfirm && <label className='my-4 flex items-center gap-2 text-sm'><input type='checkbox' checked={skip} disabled={pending} onChange={event => setSkip(event.target.checked)} />Don’t ask again for this session</label>}
-            {error && <p role='alert' className='mb-3 text-sm text-ui-danger'>{error}</p>}
+            {error && <p role='alert' className='mb-3 text-sm text-ui-text'>{error}</p>}
             <div className='mt-4 flex justify-end gap-2'>
                 <button type='button' autoFocus disabled={pending} onClick={() => dialog.current?.close()} className='rounded-lg border border-ui-border px-3 py-2'>Cancel</button>
-                <button type='button' disabled={pending} onClick={() => void remove()} className='rounded-lg bg-ui-danger px-3 py-2 text-white'>{pending ? 'Deleting…' : 'Delete'}</button>
+                <button type='button' disabled={pending} onClick={() => void remove()} className='rounded-lg border border-ui-danger/40 bg-ui-raised px-3 py-2 text-ui-text'>{pending ? 'Deleting…' : 'Delete'}</button>
             </div>
         </dialog>
     </>

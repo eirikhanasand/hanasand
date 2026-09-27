@@ -119,7 +119,7 @@ export default function DeliveryClient({ scopeId }: { scopeId: string }) {
             <select aria-label='Filter by type' className={`${field} sm:w-40`} value={kind} onChange={event => setKind(event.target.value)}><option value=''>All types</option><option value='discord'>Discord</option><option value='webhook'>Webhook</option></select>
             <select aria-label='Filter by status' className={`${field} sm:w-40`} value={status} onChange={event => setStatus(event.target.value)}><option value=''>All statuses</option><option value='active'>Active</option><option value='paused'>Paused</option></select>
         </div>
-        {loadError ? <div role='alert' className='flex flex-wrap items-center gap-3 p-4 text-sm text-ui-danger'>{loadError}<button className={button} onClick={() => setVersion(value => value + 1)}>Retry</button></div> : <>
+        {loadError ? <div role='alert' className='flex flex-wrap items-center gap-3 p-4 text-sm text-ui-text'>{loadError}<button className={button} onClick={() => setVersion(value => value + 1)}>Retry</button></div> : <>
             <div className='overflow-x-auto' aria-busy={loading}>
                 <table className='w-full min-w-[44rem] text-left text-sm'>
                     <thead className='bg-ui-raised text-xs text-ui-muted'><tr>{['Name', 'Type', 'Destination', 'Status', 'Last test', 'Actions'].map(label => <th key={label} scope='col' className='px-4 py-3 font-semibold'>{label}</th>)}</tr></thead>
@@ -135,7 +135,7 @@ export default function DeliveryClient({ scopeId }: { scopeId: string }) {
                                     <button type='button' className={button} disabled={!canManage || Boolean(busy) || destination.status !== 'active'} aria-label={`Test ${destination.name}`} title='Send an example message' onClick={() => void test(destination)}>{busy === destination.id ? <LoaderCircle aria-hidden='true' className='h-4 w-4 animate-spin' /> : <Send aria-hidden='true' className='h-4 w-4' />}Test</button>
                                     {canManage && <><button type='button' className={button} disabled={Boolean(busy)} aria-label={`Edit ${destination.name}`} onClick={() => openForm(destination)}>Edit</button><button type='button' className={button} disabled={Boolean(busy)} aria-label={`Remove ${destination.name}`} onClick={() => void remove(destination)}>Remove</button></>}
                                 </div>
-                                {results[destination.id] && <p role={results[destination.id].ok ? 'status' : 'alert'} className={`mt-2 max-w-sm text-xs ${results[destination.id].ok ? 'text-ui-success' : 'text-ui-danger'}`}>{results[destination.id].message}</p>}
+                                {results[destination.id] && <p role={results[destination.id].ok ? 'status' : 'alert'} className={`mt-2 max-w-sm text-xs ${results[destination.id].ok ? 'text-ui-success' : 'text-ui-text'}`}>{results[destination.id].message}</p>}
                             </td>
                         </tr>)}
                         {!visible.length && <tr><td colSpan={6} className='px-4 py-10 text-center text-ui-muted'>{loading ? 'Loading destinations…' : destinations.length ? 'No destinations match these filters.' : 'No delivery destinations yet.'}</td></tr>}
@@ -150,7 +150,7 @@ export default function DeliveryClient({ scopeId }: { scopeId: string }) {
                 <label className='grid gap-1 text-sm font-medium'>Name<input autoFocus required maxLength={120} className={field} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} /></label>
                 <label className='grid gap-1 text-sm font-medium'>Type<select className={field} value={draft.kind} onChange={event => setDraft({ ...draft, kind: event.target.value as Draft['kind'] })}><option value='discord'>Discord</option><option value='webhook'>Webhook</option></select></label>
                 <label className='grid gap-1 text-sm font-medium'>Webhook URL<input required={!draft.id} type='url' pattern='https://.*' autoComplete='off' maxLength={2048} className={field} placeholder={draft.id ? 'Leave blank to keep the current URL' : 'https://discord.com/api/webhooks/…'} value={draft.url} onChange={event => setDraft({ ...draft, url: event.target.value })} /></label>
-                {formError && <p role='alert' className='text-sm text-ui-danger'>{formError}</p>}
+                {formError && <p role='alert' className='text-sm text-ui-text'>{formError}</p>}
                 <div className='flex justify-end gap-2'><button type='button' className={button} disabled={busy === 'save'} onClick={() => setDraft(null)}>Cancel</button><button type='submit' className={button} disabled={busy === 'save' || !draft.name.trim()}>{busy === 'save' && <LoaderCircle aria-hidden='true' className='h-4 w-4 animate-spin' />}Save destination</button></div>
             </form>}
         </dialog>

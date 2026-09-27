@@ -138,7 +138,7 @@ const operationTabs: Array<{ id: SupportOperation, label: string, detail: string
 function Message({ value, tone = 'neutral' }: { value: string, tone?: 'neutral' | 'error' | 'success' }) {
     if (!value) return null
     const toneClass = tone === 'error'
-        ? 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'
+        ? 'border-ui-danger/30 bg-ui-raised/10 text-ui-text'
         : tone === 'success'
             ? 'border-ui-success/30 bg-ui-success/10 text-ui-success'
             : 'border-ui-border bg-ui-canvas text-ui-muted'

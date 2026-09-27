@@ -352,7 +352,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
                         <span className='hidden sm:inline'>Save</span>
                     </button> : null}
                 </div>
-                {error && !hasUsableResult ? <p className='text-sm text-ui-danger'>{error}</p> : null}
+                {error && !hasUsableResult ? <p className='text-sm text-ui-text'>{error}</p> : null}
             </form>
 
             {savedSearches.length || savedSearchError ? <section aria-label='Saved searches' className='grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-3 shadow-sm'>
@@ -366,10 +366,10 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
                 <div className='flex flex-wrap gap-2'>
                     {savedSearches.map(item => <div key={`${item.query}:${item.savedAt}`} className='inline-flex max-w-full items-center gap-1 rounded-md border border-ui-border bg-ui-canvas pl-3 text-sm dark:border-ui-border dark:bg-ui-canvas'>
                         <button type='button' onClick={() => void executeSearch(item.query)} className='max-w-56 truncate py-2 font-medium text-ui-text hover:text-ui-primary' title={`Open ${item.query}`}>{item.query}</button>
-                        <button type='button' onClick={() => removeSavedSearch(item.query)} aria-label={`Remove saved search ${item.query}`} className='rounded p-2 text-ui-muted transition hover:bg-ui-raised hover:text-ui-danger'><Trash2 className='h-3.5 w-3.5' /></button>
+                        <button type='button' onClick={() => removeSavedSearch(item.query)} aria-label={`Remove saved search ${item.query}`} className='rounded p-2 text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'><Trash2 className='h-3.5 w-3.5' /></button>
                     </div>)}
                 </div>
-                {savedSearchError ? <p role='alert' className='text-xs leading-5 text-ui-danger'>{savedSearchError}</p> : null}
+                {savedSearchError ? <p role='alert' className='text-xs leading-5 text-ui-text'>{savedSearchError}</p> : null}
             </section> : null}
 
             {busy ? <SearchLoading query={query} /> : visible ? <Results result={visible} error={error} /> : <EmptyState />}
@@ -1964,7 +1964,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                             <span className={bridge.sourceRequired ? 'rounded-md bg-ui-warning/10 px-2 py-1 text-[11px] font-semibold text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning' : 'rounded-md bg-ui-success/10 px-2 py-1 text-[11px] font-semibold text-ui-success dark:bg-ui-success/10 dark:text-ui-success'}>
                                 {bridge.sourceRequired ? 'source required' : 'source attached'}
                             </span>
-                            <span className={bridge.stale ? 'rounded-md bg-ui-danger/10 px-2 py-1 text-[11px] font-semibold text-ui-danger dark:bg-ui-danger/10 dark:text-ui-danger' : 'rounded-md bg-ui-success/10 px-2 py-1 text-[11px] font-semibold text-ui-success dark:bg-ui-success/10 dark:text-ui-success'}>
+                            <span className={bridge.stale ? 'rounded-md bg-ui-raised/10 px-2 py-1 text-[11px] font-semibold text-ui-text dark:bg-ui-raised/10 dark:text-ui-text' : 'rounded-md bg-ui-success/10 px-2 py-1 text-[11px] font-semibold text-ui-success dark:bg-ui-success/10 dark:text-ui-success'}>
                                 {bridge.stale ? 'stale' : 'fresh enough'}
                             </span>
                         </div>
@@ -3568,7 +3568,7 @@ function handoffMissingLabel(values: string[]) {
 function sourceRequestCaptureClass(ready: boolean) {
     return ready
         ? 'max-w-full wrap-break-word rounded-md bg-ui-success/10 px-1.5 py-0.5 text-[10px] font-semibold text-ui-success dark:bg-ui-success/10 dark:text-ui-success'
-        : 'max-w-full wrap-break-word rounded-md bg-ui-danger/10 px-1.5 py-0.5 text-[10px] font-semibold text-ui-danger dark:bg-ui-danger/10 dark:text-ui-danger'
+        : 'max-w-full wrap-break-word rounded-md bg-ui-raised/10 px-1.5 py-0.5 text-[10px] font-semibold text-ui-text dark:bg-ui-raised/10 dark:text-ui-text'
 }
 
 function sourceRequestFamilyLabel(value: string) {
@@ -5750,7 +5750,7 @@ function ThreatActorMap({ actor, result, onSelectCountry, compact = false }: { a
                 <div className='grid gap-3 border-t border-ui-border bg-ui-panel px-4 py-3 dark:border-ui-border dark:bg-ui-panel'>
                     <div className='flex flex-wrap gap-3 text-xs'>
                         <span className='inline-flex items-center gap-1.5 text-ui-muted dark:text-ui-muted'><span className='h-2.5 w-2.5 rounded-full bg-ui-primary' />Origin</span>
-                        <span className='inline-flex items-center gap-1.5 text-ui-muted dark:text-ui-muted'><span className='h-2.5 w-2.5 rounded-full bg-ui-danger' />Target</span>
+                        <span className='inline-flex items-center gap-1.5 text-ui-muted dark:text-ui-muted'><span className='h-2.5 w-2.5 rounded-full bg-ui-raised' />Target</span>
                     </div>
                     <div className='grid gap-2 sm:grid-cols-2'>
                         {geo.points.map(point => (
@@ -5836,7 +5836,7 @@ function MapPointActionRow({ point, active, onFocus }: { point: ReturnType<typeo
             <button type='button' onClick={onFocus} className='grid min-h-9 w-full min-w-0 items-center gap-1 rounded-md text-left focus:outline-none focus:ring-2 focus:ring-ui-primary/35'>
                 <span className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
                     <span className='min-w-0 wrap-break-word font-semibold text-ui-text dark:text-ui-text'>{point.label}</span>
-                    <span className={point.role === 'operator' ? 'whitespace-nowrap text-ui-primary dark:text-ui-primary' : 'whitespace-nowrap text-ui-danger dark:text-ui-danger'}>{point.role === 'operator' ? 'Origin' : 'Target'}</span>
+                    <span className={point.role === 'operator' ? 'whitespace-nowrap text-ui-primary dark:text-ui-primary' : 'whitespace-nowrap text-ui-text dark:text-ui-text'}>{point.role === 'operator' ? 'Origin' : 'Target'}</span>
                 </span>
             </button>
             <p className='mt-1 leading-5 text-ui-muted dark:text-ui-muted'>{displayRequirementText(point.detail)}</p>

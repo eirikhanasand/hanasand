@@ -37,7 +37,7 @@ export default function Certificate({ certificate, update }: { certificate: Cert
 
     return (
         <>
-            <div onClick={handleClick} className={`group w-full cursor-pointer overflow-hidden rounded-lg border border-ui-border bg-ui-raised p-3 transition ${keys['shift'] ? 'select-none hover:border-ui-danger hover:bg-ui-danger/10' : 'hover:border-ui-primary hover:bg-ui-panel'}`}>
+            <div onClick={handleClick} className={`group w-full cursor-pointer overflow-hidden rounded-lg border border-ui-border bg-ui-raised p-3 transition ${keys['shift'] ? 'select-none hover:border-ui-danger hover:bg-ui-raised/10' : 'hover:border-ui-primary hover:bg-ui-panel'}`}>
                 <div className='flex w-full items-center'>
                     <div className='min-w-0 flex-1'>
                         <div className='flex min-w-0 items-center gap-2'>
@@ -75,7 +75,7 @@ export default function Certificate({ certificate, update }: { certificate: Cert
                             )}
                         </div>
                     </div>
-                    {keys['shift'] && <Trash2 className='hidden w-5 h-5 text-ui-danger group-hover:block group-hover:min-w-fit' />}
+                    {keys['shift'] && <Trash2 className='hidden w-5 h-5 text-ui-text group-hover:block group-hover:min-w-fit' />}
                 </div>
             </div>
             <div className='absolute top-2 right-2 z-1200'>

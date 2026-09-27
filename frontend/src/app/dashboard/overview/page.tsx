@@ -117,7 +117,7 @@ async function ServiceHealth() {
                             </div>
                             <div className='text-right'>
                                 <div className='font-semibold text-ui-text'>{check.latency_ms}ms</div>
-                                <div className={`text-xs ${check.status === 'up' ? 'text-ui-success' : check.status === 'degraded' ? 'text-ui-warning' : 'text-ui-danger'}`}>
+                                <div className={`text-xs ${check.status === 'up' ? 'text-ui-success' : check.status === 'degraded' ? 'text-ui-warning' : 'text-ui-text'}`}>
                                     {check.status}
                                 </div>
                             </div>

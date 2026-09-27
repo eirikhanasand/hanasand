@@ -40,11 +40,11 @@ function GPT_ConnectionCard({ isConnected }: { isConnected: boolean }) {
         <div className='flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3'>
             <div className='flex items-center gap-2 text-ui-muted'>
                 <span className='text-xs font-medium uppercase tracking-[0.18em]'>Socket</span>
-                {isConnected ? <Wifi className='h-4 w-4 text-ui-success' /> : <WifiOff className='h-4 w-4 text-ui-danger' />}
+                {isConnected ? <Wifi className='h-4 w-4 text-ui-success' /> : <WifiOff className='h-4 w-4 text-ui-text' />}
             </div>
             <div
                 className={`text-[10px] font-semibold uppercase tracking-[0.18em]
-                    ${isConnected ? 'text-ui-success' : 'text-ui-danger'}`}
+                    ${isConnected ? 'text-ui-success' : 'text-ui-text'}`}
             >
                 {isConnected ? 'Connected' : 'Reconnecting'}
             </div>

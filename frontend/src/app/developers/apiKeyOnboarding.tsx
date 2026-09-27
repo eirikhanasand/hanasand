@@ -178,7 +178,7 @@ export default function ApiKeyOnboarding({ server }: { server: string }) {
                         </div>
                     </div>
                 ) : null}
-                {state === 'error' ? <StateLine icon={<ShieldCheck className='h-4 w-4 text-ui-danger' />} text={message || 'API access onboarding is temporarily unavailable.'} /> : null}
+                {state === 'error' ? <StateLine icon={<ShieldCheck className='h-4 w-4 text-ui-text' />} text={message || 'API access onboarding is temporarily unavailable.'} /> : null}
 
                 {state === 'ready' ? (
                     <div className='grid gap-4 lg:grid-cols-3'>
@@ -208,7 +208,7 @@ export default function ApiKeyOnboarding({ server }: { server: string }) {
                                         <p className='mt-1 font-mono text-xs text-ui-muted'>hsk_{activeKey.keyPrefix}_…</p>
                                         <p className='mt-2 text-xs text-ui-muted'>{activeKey.scopes.length} read scopes · expires {formatDate(activeKey.expiresAt)} · last used {formatDate(activeKey.lastUsedAt)}</p>
                                     </div>
-                                    <button type='button' onClick={() => void revokeApiKey(activeKey.id)} disabled={busy === activeKey.id} className='inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-ui-danger/40 px-3 font-semibold text-ui-danger disabled:opacity-60'><Trash2 className='h-4 w-4' />{confirmRevoke === activeKey.id ? 'Confirm revoke' : 'Revoke key'}</button>
+                                    <button type='button' onClick={() => void revokeApiKey(activeKey.id)} disabled={busy === activeKey.id} className='inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-ui-danger/40 px-3 font-semibold text-ui-text disabled:opacity-60'><Trash2 className='h-4 w-4' />{confirmRevoke === activeKey.id ? 'Confirm revoke' : 'Revoke key'}</button>
                                 </div>
                             ) : (
                                 <form id='create-api-key-form' className='mt-4 grid gap-3' onSubmit={createApiKey}>

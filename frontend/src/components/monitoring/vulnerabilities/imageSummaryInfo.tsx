@@ -18,7 +18,7 @@ export default function ImageSummaryInfo({ image }: { image: ImageVulnerabilityR
                     </span>
                 </div>
                 {image.scanError && (
-                    <div className='mt-1 truncate rounded-md border border-ui-danger/35 bg-ui-danger/10 px-2 py-1 text-xs text-ui-danger'>
+                    <div className='mt-1 truncate rounded-md border border-ui-danger/35 bg-ui-raised/10 px-2 py-1 text-xs text-ui-text'>
                         {image.scanError}
                     </div>
                 )}

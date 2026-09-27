@@ -205,8 +205,8 @@ export default function SupportChat({ embedded = false, initialChat }: { embedde
                 </div>
                 <div className='border-t border-ui-border p-4'>
                     {!error && connection === 'reconnecting' ? <p role='status' className='mb-2 text-xs text-ui-muted'>Reconnecting…</p> : null}
-                    {error ? <p role='alert' className='mb-3 text-sm text-ui-danger'>{error}</p> : null}
-                    {statusError?.id === selectedId ? <p role='alert' className='mb-3 text-sm text-ui-danger'>{statusError.message}</p> : null}
+                    {error ? <p role='alert' className='mb-3 text-sm text-ui-text'>{error}</p> : null}
+                    {statusError?.id === selectedId ? <p role='alert' className='mb-3 text-sm text-ui-text'>{statusError.message}</p> : null}
                     {selected?.status === 'closed' ? role === 'support' ? <p className='text-xs text-ui-muted'>Chat resolved. Reopen it to continue the conversation.</p> : <SupportFeedback key={`${selectedId}:${selected.resolution_version}`} feedback={selected} submit={sendFeedback} /> : role !== 'support' || selectedId ? (
                         <form onSubmit={send} className='grid min-w-0 gap-3'>
                             {!selectedId ? <input aria-label='Subject' maxLength={160} value={subject} onChange={event => setSubject(event.target.value)} placeholder='Subject' className={`h-10 ${fieldClass}`} /> : null}

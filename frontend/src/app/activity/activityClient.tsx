@@ -176,7 +176,7 @@ export default function ActivityClient({ initialQueue }: Props) {
                     </div>
                 </div>
             </section>
-            {error ? <p className='border-t border-ui-danger/35 bg-ui-danger/10 px-4 py-2 text-xs font-semibold text-ui-danger'>{error}</p> : null}
+            {error ? <p className='border-t border-ui-danger/35 bg-ui-raised/10 px-4 py-2 text-xs font-semibold text-ui-text'>{error}</p> : null}
         </main>
     )
 }

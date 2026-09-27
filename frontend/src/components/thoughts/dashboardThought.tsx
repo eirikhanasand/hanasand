@@ -34,13 +34,13 @@ export default function DashboardThought({ thought }: { thought: Thought }) {
             <button
                 type='button'
                 onClick={handleClick}
-                className={`flex min-w-0 cursor-pointer items-center justify-between gap-3 rounded-lg p-2 text-left transition ${keys['shift'] ? 'border border-ui-danger/40 bg-ui-danger/10 text-ui-danger hover:bg-ui-danger/15' : 'text-ui-text hover:bg-ui-raised'}`}
+                className={`flex min-w-0 cursor-pointer items-center justify-between gap-3 rounded-lg p-2 text-left transition ${keys['shift'] ? 'border border-ui-danger/40 bg-ui-raised/10 text-ui-text hover:bg-ui-raised/15' : 'text-ui-text hover:bg-ui-raised'}`}
             >
                 <span className='flex min-w-0 items-center gap-2'>
                     <BrainCircuit className='h-4 w-4 shrink-0 text-ui-primary' />
                     <span className='min-w-0 truncate text-sm'>{thought.title || thought.id}</span>
                 </span>
-                {keys['shift'] && <Trash2 className='h-4 w-4 shrink-0 text-ui-danger' />}
+                {keys['shift'] && <Trash2 className='h-4 w-4 shrink-0 text-ui-text' />}
             </button>
             <ErrorNotice compact variant='success' message={deleted ? `Deleted thought ${thought.id}.` : null} />
             <ErrorNotice compact message={error as string | null} />

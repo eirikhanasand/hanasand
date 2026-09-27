@@ -442,7 +442,7 @@ function CaseOverview({ organizationId, state, alerts, operations, isAdmin }: { 
                 </div>}
 
                 {state.status === 'loading' && <div className='flex min-h-56 items-center justify-center px-4 py-16 text-sm text-ui-muted'>Loading cases…</div>}
-                {state.status === 'error' && <div className='flex min-h-56 items-center justify-center px-4 py-16 text-sm text-ui-danger'>{state.error || 'Cases unavailable.'}</div>}
+                {state.status === 'error' && <div className='flex min-h-56 items-center justify-center px-4 py-16 text-sm text-ui-text'>{state.error || 'Cases unavailable.'}</div>}
                 {state.status === 'ready' && !state.rows.length && (
                     <div className='flex min-h-56 flex-col items-center justify-center gap-1 px-4 py-16 text-center text-ui-muted' data-dwm-cases-empty='true'>
                         <p className='font-semibold text-ui-text'>No cases.</p>
@@ -1378,7 +1378,7 @@ function WorkflowSpineStep({ step, index }: { step: WorkflowStepModel, index: nu
         ? 'border-ui-success/35 bg-ui-success/10 text-ui-success'
         : step.state === 'action'
             ? 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'
-            : 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'
+            : 'border-ui-danger/35 bg-ui-raised/10 text-ui-text'
     const body = (
         <div className='min-h-34 rounded-lg border border-ui-border bg-ui-panel p-3'>
             <div className='flex items-center justify-between gap-2'>
@@ -1805,7 +1805,7 @@ function DeliveryCaseActivityRail({ alert, deliveries, timeline, workflowContext
                     <ActionStatus label='Replay count' value={`${alert.replayCount ?? 0}`} />
                     <ActionStatus label='Destination' value={workflowContext.webhookDestinationIds.length ? `${workflowContext.webhookDestinationIds.length} destination${workflowContext.webhookDestinationIds.length === 1 ? '' : 's'}` : workflowContext.hasWebhookRoute ? 'delivery available' : 'checking delivery'} tone={workflowContext.hasWebhookRoute ? 'neutral' : 'warn'} />
                 </div>
-                {failedDelivery?.error && <p className='rounded-lg border border-ui-danger/35 bg-ui-danger/10 px-3 py-2 text-xs text-ui-danger'>{safeTimelineDetail(failedDelivery.error)}</p>}
+                {failedDelivery?.error && <p className='rounded-lg border border-ui-danger/35 bg-ui-raised/10 px-3 py-2 text-xs text-ui-text'>{safeTimelineDetail(failedDelivery.error)}</p>}
                 <div className='overflow-hidden rounded-lg border border-ui-border'>
                     <table className='w-full text-left text-xs'>
                         <thead className='bg-ui-raised text-[10px] uppercase text-ui-muted'>
@@ -1975,7 +1975,7 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
                     </details>
                 ) : null}
                 {actionMessage && (
-                    <p className={`justify-self-start rounded-lg border px-3 py-2 text-xs font-semibold xl:justify-self-end ${actionMessage.ok ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'}`}>
+                    <p className={`justify-self-start rounded-lg border px-3 py-2 text-xs font-semibold xl:justify-self-end ${actionMessage.ok ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-danger/35 bg-ui-raised/10 text-ui-text'}`}>
                         {actionMessage.text}
                     </p>
                 )}
@@ -2078,7 +2078,7 @@ function NoCaseWorkspace({ latestCaptures, workflowActions, watchTermCount, data
                         <p className='text-[10px] font-semibold uppercase text-ui-primary'>Exposure operations</p>
                         <h3 className='mt-1 text-base font-semibold text-ui-text'>Monitoring for matching events</h3>
                     </div>
-                    <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${hasError ? 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger' : allLive && watchTermCount ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'}`}>{monitoringLabel}</span>
+                    <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${hasError ? 'border-ui-danger/35 bg-ui-raised/10 text-ui-text' : allLive && watchTermCount ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'}`}>{monitoringLabel}</span>
                 </div>
                 <div className='overflow-x-auto'>
                     <table className='w-full min-w-190 text-left text-xs'>
@@ -2286,7 +2286,7 @@ function DeliveryPanel({ alert, deliveries, busyAction, onTest, onSend }: { aler
                                 <a href={deliveryOrgHref} className='inline-flex h-7 items-center rounded-lg border border-ui-border bg-ui-panel px-2 text-ui-text transition hover:bg-ui-canvas'>Manage destination</a>
                                 {caseHref ? <a href={caseHref} className='inline-flex h-7 items-center rounded-lg border border-ui-border bg-ui-panel px-2 text-ui-text transition hover:bg-ui-canvas'>Open case trail</a> : null}
                             </div>
-                            {(delivery.error || delivery.errorClass) && <p className='rounded-lg border border-ui-danger/35 bg-ui-danger/10 px-2 py-1.5 text-xs text-ui-danger'>{delivery.error ? safeTimelineDetail(delivery.error) : stateLabel(delivery.errorClass || 'delivery failed')}</p>}
+                            {(delivery.error || delivery.errorClass) && <p className='rounded-lg border border-ui-danger/35 bg-ui-raised/10 px-2 py-1.5 text-xs text-ui-text'>{delivery.error ? safeTimelineDetail(delivery.error) : stateLabel(delivery.errorClass || 'delivery failed')}</p>}
                         </div>
                     )
                 })}
@@ -2316,7 +2316,7 @@ function DeliveryFact({ label, value, tone = 'neutral' }: { label: string, value
         : tone === 'warn'
             ? 'text-ui-warning'
             : tone === 'bad'
-                ? 'text-ui-danger'
+                ? 'text-ui-text'
                 : 'text-ui-text'
     return (
         <div className='min-w-0'>
@@ -2342,7 +2342,7 @@ const queueFilters: Array<{ id: QueueFilter, label: string }> = [
 
 function CaseMetric({ label, value, detail, tone = 'neutral' }: { label: string, value: string, detail: string, tone?: 'neutral' | 'warn' | 'bad' }) {
     const toneClass = tone === 'bad'
-        ? 'text-ui-danger'
+        ? 'text-ui-text'
         : tone === 'warn'
             ? 'text-ui-warning'
             : 'text-ui-primary'
@@ -2818,20 +2818,20 @@ function caseDetailHref(caseId: string, alertId?: string, organizationId?: strin
 }
 
 function severityClass(severity: string) {
-    if (severity === 'critical') return 'rounded-full bg-ui-danger/10 px-2 py-0.5 text-xs font-semibold text-ui-danger'
+    if (severity === 'critical') return 'rounded-full bg-ui-raised/10 px-2 py-0.5 text-xs font-semibold text-ui-text'
     if (severity === 'high') return 'rounded-full bg-ui-warning/10 px-2 py-0.5 text-xs font-semibold text-ui-warning'
     return 'rounded-full bg-ui-primary/10 px-2 py-0.5 text-xs font-semibold text-ui-primary'
 }
 
 function deliveryClass(status: string) {
     if (status === 'delivered') return 'rounded-full bg-ui-success/10 px-2 py-0.5 text-xs font-semibold text-ui-success'
-    if (status === 'failed') return 'rounded-full bg-ui-danger/10 px-2 py-0.5 text-xs font-semibold text-ui-danger'
+    if (status === 'failed') return 'rounded-full bg-ui-raised/10 px-2 py-0.5 text-xs font-semibold text-ui-text'
     return 'rounded-full bg-ui-primary/10 px-2 py-0.5 text-xs font-semibold text-ui-primary'
 }
 
 function reviewStateClass(state?: string) {
     if (state === 'escalated') return 'rounded-full bg-ui-warning/10 px-2 py-0.5 text-xs font-semibold text-ui-warning'
-    if (state === 'suppressed' || state === 'false_positive') return 'rounded-full bg-ui-danger/10 px-2 py-0.5 text-xs font-semibold text-ui-danger'
+    if (state === 'suppressed' || state === 'false_positive') return 'rounded-full bg-ui-raised/10 px-2 py-0.5 text-xs font-semibold text-ui-text'
     if (state === 'reviewed' || state === 'resolved') return 'rounded-full bg-ui-success/10 px-2 py-0.5 text-xs font-semibold text-ui-success'
     return 'rounded-full bg-ui-primary/10 px-2 py-0.5 text-xs font-semibold text-ui-primary'
 }

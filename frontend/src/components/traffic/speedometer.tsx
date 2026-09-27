@@ -5,7 +5,7 @@ export default function Speedometer({ name, tps }: { name: string, tps: number }
     function getColor(value: number) {
         if (value < 40) return 'var(--ui-success)'
         if (value < 70) return 'var(--ui-warning)'
-        return 'var(--ui-danger)'
+        return 'var(--ui-text)'
     }
 
     const activeColor = getColor(tps)

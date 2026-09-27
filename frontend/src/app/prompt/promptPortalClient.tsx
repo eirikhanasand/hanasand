@@ -129,7 +129,7 @@ export default function PromptPortalClient({ initialState = emptyState }: { init
                     </div>
                 </header>
 
-                {error ? <p className='rounded-lg border border-ui-danger/30 bg-ui-danger/10 px-3 py-2 text-sm font-semibold text-ui-danger'>{error}</p> : null}
+                {error ? <p className='rounded-lg border border-ui-danger/30 bg-ui-raised/10 px-3 py-2 text-sm font-semibold text-ui-text'>{error}</p> : null}
 
                 {!state.authenticated ? (
                     <AccessCodePanel code={code} onChange={setCode} busy={busy} onSubmit={login} />

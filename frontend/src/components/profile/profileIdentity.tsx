@@ -61,7 +61,7 @@ export default function ProfileIdentity({ displayName, username }: { displayName
                 </label>
             </div>
             <button type='submit' disabled={busy || (name === displayName && handle === username)} className='w-fit rounded-lg bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas disabled:opacity-50'>{busy ? 'Saving…' : 'Save profile'}</button>
-            {error && <p role='alert' className='text-sm text-ui-danger'>{error}</p>}
+            {error && <p role='alert' className='text-sm text-ui-text'>{error}</p>}
         </form>
         {notice && <p role='status' className='mt-3 text-sm text-ui-muted'>{notice}</p>}
     </>

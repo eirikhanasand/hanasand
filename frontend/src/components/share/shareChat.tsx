@@ -558,7 +558,7 @@ export default function ShareChat({
                         projectState.tone === 'success'
                             ? 'border-ui-success/15 bg-ui-success/10'
                             : projectState.tone === 'danger'
-                                ? 'border-ui-danger/15 bg-ui-danger/12'
+                                ? 'border-ui-danger/15 bg-ui-raised/12'
                                 : projectState.tone === 'attention'
                                     ? 'border-ui-warning/15 bg-ui-warning/12'
                                     : 'border-ui-border bg-ui-panel/[0.035]'
@@ -854,7 +854,7 @@ function ChangeSummaryCard({ change }: { change: PendingShareChange }) {
                     <span className='flex flex-wrap items-center gap-1.5 font-medium text-ui-text/68'>
                         <span>{summary.totalLines} line{summary.totalLines === 1 ? '' : 's'}</span>
                         <span className='rounded-full border border-ui-success/10 px-1.5 py-0.5 text-ui-success/62'>+{summary.added}</span>
-                        <span className='rounded-full border border-ui-danger/10 px-1.5 py-0.5 text-ui-danger/62'>-{summary.removed}</span>
+                        <span className='rounded-full border border-ui-danger/10 px-1.5 py-0.5 text-ui-text/62'>-{summary.removed}</span>
                     </span>
                 </div>
                 <div className='rounded-lg border border-ui-border bg-ui-panel/[0.035] px-2 py-1.5'>
@@ -882,7 +882,7 @@ function ChangeSummaryCard({ change }: { change: PendingShareChange }) {
                 <summary className='cursor-pointer text-xs font-medium text-ui-text/58'>Advanced details</summary>
                 <div className='mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-ui-text/52'>
                     <span className='rounded-full border border-ui-success/10 px-2 py-0.5 text-ui-success/62'>Added {summary.added}</span>
-                    <span className='rounded-full border border-ui-danger/10 px-2 py-0.5 text-ui-danger/62'>Removed {summary.removed}</span>
+                    <span className='rounded-full border border-ui-danger/10 px-2 py-0.5 text-ui-text/62'>Removed {summary.removed}</span>
                     <span className='truncate text-ui-text/42'>Advanced path: {change.path} ({summary.action.toLowerCase()})</span>
                 </div>
                 {advancedOpen ? (
@@ -930,7 +930,7 @@ function ReviewEvidencePanel({ evidence, lastRun }: { evidence: BrowserEvidence 
                 </div>
                 <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] ${
                     issues.length
-                        ? 'border-ui-danger/15 text-ui-danger/70'
+                        ? 'border-ui-danger/15 text-ui-text/70'
                         : evidence
                             ? 'border-ui-success/15 text-ui-success/62'
                             : 'border-ui-border text-ui-text/45'
@@ -1359,7 +1359,7 @@ function BrowserEvidenceCard({ evidence }: { evidence: BrowserEvidence }) {
                 </details>
             </div>
             {issues.length ? (
-                <div className='border-t border-ui-border px-3 py-2 text-xs text-ui-danger/78'>
+                <div className='border-t border-ui-border px-3 py-2 text-xs text-ui-text/78'>
                     <p className='font-medium'>Page issues: {issues.length}.</p>
                     <p className='mt-1 whitespace-pre-wrap'>{issues.slice(0, 3).join('\n')}</p>
                 </div>

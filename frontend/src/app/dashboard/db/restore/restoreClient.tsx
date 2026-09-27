@@ -95,7 +95,7 @@ export default function RestoreClient({ backups, service, loadError = '' }: { ba
                     <ShieldCheck className='h-4 w-4' />
                     {activeDrill ? stageLabel(activeDrill.stage) : isPending ? 'Starting isolated drill…' : 'Run isolated restore drill'}
                 </button>
-                {visibleError && <p role='alert' className='mt-4 rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-3 text-sm text-ui-danger'>{visibleError}</p>}
+                {visibleError && <p role='alert' className='mt-4 rounded-lg border border-ui-danger/30 bg-ui-raised/10 p-3 text-sm text-ui-text'>{visibleError}</p>}
                 {message && <p role='status' className='mt-4 rounded-lg border border-ui-success/30 bg-ui-success/10 p-3 text-sm text-ui-success'>{message}</p>}
             </section>
 
@@ -125,7 +125,7 @@ function DrillEvidence({ operation }: { operation: BackupOperation }) {
                 {['verifying_archive', 'creating_isolated_database', 'restoring', 'checking_integrity', 'removing_isolated_database'].map(stage => <li key={stage} className={`rounded-lg border p-2 ${operation.stage === stage ? 'border-ui-primary bg-ui-primary/10 text-ui-primary' : 'border-ui-border text-ui-muted'}`}>{stageLabel(stage)}</li>)}
             </ol>
             {operation.status === 'succeeded' && <p className='mt-4 text-sm text-ui-success'>{integrityLabel(operation)} Target removed: {operation.targetRemoved ? 'yes' : 'no'}.</p>}
-            {operation.error && <p className='mt-4 text-sm text-ui-danger'>{operation.error}</p>}
+            {operation.error && <p className='mt-4 text-sm text-ui-text'>{operation.error}</p>}
         </section>
     )
 }

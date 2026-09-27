@@ -30,7 +30,7 @@ export default async function TiActivityPage({ searchParams }: { searchParams?: 
                     <h1 className='border-b border-ui-border px-4 py-3 text-lg font-semibold text-ui-text'>Latest activity</h1>
                     <div className='flex min-h-56 flex-col items-center justify-center gap-2 px-4 py-16 text-center text-ui-muted' data-ti-activity-state={unavailable ? 'error' : failed ? 'attention' : 'empty'}>
                         <Activity className='mb-2 h-6 w-6' aria-hidden='true' />
-                        <p className={`font-semibold ${unavailable || failed ? 'text-ui-danger' : 'text-ui-text'}`} role={unavailable || failed ? 'alert' : undefined}>{unavailable ? 'Activity is temporarily unavailable.' : failed ? 'The latest profile update failed.' : 'Welcome to activity'}</p>
+                        <p className={`font-semibold ${unavailable || failed ? 'text-ui-text' : 'text-ui-text'}`} role={unavailable || failed ? 'alert' : undefined}>{unavailable ? 'Activity is temporarily unavailable.' : failed ? 'The latest profile update failed.' : 'Welcome to activity'}</p>
                         <p className='max-w-md text-sm leading-6'>{unavailable ? 'We could not load the latest observations. Try again to check for updates.' : failed ? 'No observations are available yet. Try again to check whether profile updates have recovered.' : 'No observations yet. This page shows recorded actor profile changes and their linked evidence.'}</p>
                         <form action='/ti/activity' method='get'><button type='submit' className='mt-3 rounded-md border border-ui-border px-3 py-2 text-sm font-semibold text-ui-text hover:border-ui-primary'>{unavailable || failed ? 'Try again' : 'Check for updates'}</button></form>
                     </div>
@@ -126,7 +126,7 @@ export default async function TiActivityPage({ searchParams }: { searchParams?: 
                     <h2 className='text-base font-semibold text-ui-text'>Monitoring status</h2>
                     <div className='mt-3 grid gap-2'>
                         {[...badEvents, ...watchEvents].slice(0, 6).map(event => <AttentionRow key={event.id} event={event} />)}
-                        {worker.lastError ? <p role='alert' className='text-sm text-ui-danger'>The latest profile update failed. Check again for recovery.</p> : null}
+                        {worker.lastError ? <p role='alert' className='text-sm text-ui-text'>The latest profile update failed. Check again for recovery.</p> : null}
                         {!worker.lastError && !badEvents.length && !watchEvents.length ? <p className='rounded-md border border-dashed border-ui-border bg-ui-raised p-3 text-sm text-ui-muted'>No monitoring issues in the latest observations.</p> : null}
                     </div>
                 </DashboardPanel>
@@ -195,7 +195,7 @@ function StatusPill({ label, tone }: { label: string, tone: 'neutral' | 'ok' | '
 function toneClass(tone: 'neutral' | 'ok' | 'watch' | 'bad') {
     if (tone === 'ok') return { bg: 'border border-ui-success bg-ui-raised', text: 'text-ui-success' }
     if (tone === 'watch') return { bg: 'border border-ui-warning bg-ui-raised', text: 'text-ui-warning' }
-    if (tone === 'bad') return { bg: 'border border-ui-danger bg-ui-raised', text: 'text-ui-danger' }
+    if (tone === 'bad') return { bg: 'border border-ui-danger bg-ui-raised', text: 'text-ui-text' }
     return { bg: 'border border-ui-primary bg-ui-raised', text: 'text-ui-primary' }
 }
 

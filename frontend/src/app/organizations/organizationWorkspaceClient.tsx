@@ -1365,7 +1365,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
                     className={inputClass}
                     placeholder='Acme Security'
                 />
-                {createNameInUse && <span className='text-xs font-semibold text-ui-danger dark:text-ui-danger'>Organization already exists.</span>}
+                {createNameInUse && <span className='text-xs font-semibold text-ui-text dark:text-ui-text'>Organization already exists.</span>}
                 {!createNameInUse && normalizedCreateName && <span className='text-xs font-semibold text-ui-muted dark:text-ui-muted'>Slug: {slugifyOrganizationName(normalizedCreateName)}</span>}
             </label>
             <div className='grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas' data-org-create-first-watchlist='true'>
@@ -1382,7 +1382,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
                 <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
                     First invites
                     <textarea value={createInviteEmails} disabled={Boolean(busy)} onChange={event => setCreateInviteEmails(event.target.value)} className={`${inputClass} min-h-20 resize-y`} placeholder='analyst@company.com, admin@company.com' />
-                    {createInviteInvalidEmails.length > 0 && <span className='text-xs font-semibold text-ui-danger dark:text-ui-danger'>Invalid: {createInviteInvalidEmails[0]}</span>}
+                    {createInviteInvalidEmails.length > 0 && <span className='text-xs font-semibold text-ui-text dark:text-ui-text'>Invalid: {createInviteInvalidEmails[0]}</span>}
                     {createInviteInvalidEmails.length === 0 && createInviteParsedEmails.length > 0 && <span className='text-xs font-semibold text-ui-muted dark:text-ui-muted'>{createInviteParsedEmails.length} recipient{createInviteParsedEmails.length === 1 ? '' : 's'}</span>}
                 </label>
                 <SelectField label='Invite role' value={createInviteRole} options={roleOptions} disabled={Boolean(busy)} onChange={value => setCreateInviteRole(value as OrganizationRole)} />
@@ -1605,7 +1605,7 @@ function WorkspaceHealthStrip({ organization, bundle }: { organization: Organiza
                             <span className='mt-0.5 block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{row.value}</span>
                         </span>
                         <span className='min-w-0 truncate text-xs text-ui-muted dark:text-ui-muted'>{row.detail}</span>
-                        <ArrowRight aria-hidden='true' className='h-4 w-4 text-ui-danger transition-transform group-hover:translate-x-0.5' />
+                        <ArrowRight aria-hidden='true' className='h-4 w-4 text-ui-text transition-transform group-hover:translate-x-0.5' />
                     </Link>
                 ))}
             </div>
@@ -1739,7 +1739,7 @@ function SettingsPanel({ settingsDraft, setSettingsDraft, settingsDirty, canMana
                 <SelectField label='Alert visibility' value={settingsDraft.alertVisibilityPolicy || 'members'} options={alertPolicies} disabled={!canManage} onChange={value => setSettingsDraft({ ...settingsDraft, alertVisibilityPolicy: value })} />
                 <SelectField label='Lifecycle' value={settingsDraft.lifecycleStatus || 'active'} options={lifecycleStatuses} disabled={!canManage} onChange={value => setSettingsDraft({ ...settingsDraft, lifecycleStatus: value })} />
                 <Field label='Retention days' type='number' value={String(settingsDraft.retentionDays || 365)} disabled={!canManage} onChange={value => setSettingsDraft({ ...settingsDraft, retentionDays: Number(value) || 365 })} />
-                {canManage && settingsDirty && validationMessage && <p className='rounded-md bg-ui-danger/10 px-3 py-2 text-xs font-semibold text-ui-danger dark:bg-ui-danger/10 dark:text-ui-danger md:col-span-2'>{validationMessage}</p>}
+                {canManage && settingsDirty && validationMessage && <p className='rounded-md bg-ui-raised/10 px-3 py-2 text-xs font-semibold text-ui-text dark:bg-ui-raised/10 dark:text-ui-text md:col-span-2'>{validationMessage}</p>}
             </div>
             <div className='flex flex-wrap items-center justify-end gap-2 border-t border-ui-border px-4 py-3 dark:border-ui-border'>
                 {saving && <InlineBusy label='Saving settings' marker='data-org-settings-busy' />}
@@ -1819,7 +1819,7 @@ export function PrivacyLifecyclePanel({ organization, privacy, retentionDays, ca
                     <button type='button' className={secondaryButtonClass} disabled={!canManage || !serverCanManage || Boolean(busy)} onClick={onRun}>
                         {running ? <Loader2 className='h-4 w-4 animate-spin' /> : <RefreshCw className='h-4 w-4' />} Run purge now
                     </button>
-                    <button type='button' className='inline-flex items-center justify-center gap-2 rounded-md bg-ui-danger px-3 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50' disabled={!canManage || !serverCanManage || !serverCanDelete || !deletionConfirmed || !currentPassword || Boolean(busy)} onClick={() => { onDelete(confirmation, currentPassword); setCurrentPassword('') }}>
+                    <button type='button' className='inline-flex items-center justify-center gap-2 rounded-md border border-ui-danger/40 bg-ui-raised px-3 py-2 text-sm font-semibold text-ui-text transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50' disabled={!canManage || !serverCanManage || !serverCanDelete || !deletionConfirmed || !currentPassword || Boolean(busy)} onClick={() => { onDelete(confirmation, currentPassword); setCurrentPassword('') }}>
                         {deleting ? <Loader2 className='h-4 w-4 animate-spin' /> : <Trash2 className='h-4 w-4' />} Request deletion
                     </button>
                 </div>
@@ -1830,7 +1830,7 @@ export function PrivacyLifecyclePanel({ organization, privacy, retentionDays, ca
 }
 
 function PrivacyMetric({ label, value, tone }: { label: string, value: number, tone?: 'protected' | 'failed' }) {
-    const valueClass = tone === 'failed' ? 'text-ui-danger' : tone === 'protected' ? 'text-ui-warning' : 'text-ui-text'
+    const valueClass = tone === 'failed' ? 'text-ui-text' : tone === 'protected' ? 'text-ui-warning' : 'text-ui-text'
     return <div className='rounded-md border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas'><p className='text-xs font-semibold text-ui-muted dark:text-ui-muted'>{label}</p><p className={`mt-1 text-2xl font-semibold ${valueClass}`}>{value}</p></div>
 }
 
@@ -1874,7 +1874,7 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, members, canMa
                 <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
                     Emails
                     <textarea value={emails} disabled={!canManage} onChange={event => setEmails(event.target.value)} className={`${inputClass} min-h-24 resize-y`} placeholder='analyst@company.com, admin@company.com' />
-                    {invalidEmails.length > 0 && <span className='text-xs font-semibold text-ui-danger dark:text-ui-danger'>Invalid: {invalidEmails.slice(0, 2).join(', ')}{invalidEmails.length > 2 ? ` +${invalidEmails.length - 2}` : ''}</span>}
+                    {invalidEmails.length > 0 && <span className='text-xs font-semibold text-ui-text dark:text-ui-text'>Invalid: {invalidEmails.slice(0, 2).join(', ')}{invalidEmails.length > 2 ? ` +${invalidEmails.length - 2}` : ''}</span>}
                     {invalidEmails.length === 0 && inviteConflicts.length > 0 && <span className='text-xs font-semibold text-ui-warning dark:text-ui-warning' data-org-invite-conflicts='true'>Already in this workspace: {inviteConflicts.slice(0, 2).join(', ')}{inviteConflicts.length > 2 ? ` +${inviteConflicts.length - 2}` : ''}</span>}
                     {invalidEmails.length === 0 && inviteConflicts.length === 0 && parsedEmails.length > 0 && <span className='text-xs font-semibold text-ui-muted dark:text-ui-muted'>{parsedEmails.length} recipient{parsedEmails.length === 1 ? '' : 's'}</span>}
                 </label>
@@ -2252,7 +2252,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                             <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
                                 Name
                                 <input value={createDraft.name} disabled={Boolean(busy)} onChange={event => setCreateDraft({ ...createDraft, name: event.target.value })} className={inputClass} placeholder='Security alerts' />
-                                {createNameDuplicate && <span className='text-xs font-semibold text-ui-danger dark:text-ui-danger'>Name already in use.</span>}
+                                {createNameDuplicate && <span className='text-xs font-semibold text-ui-text dark:text-ui-text'>Name already in use.</span>}
                             </label>
                             <SelectField label='Type' value={createDraft.kind} options={destinationKinds} disabled={Boolean(busy)} onChange={value => setCreateDraft({ ...createDraft, kind: value as DestinationCreateDraft['kind'] })} />
                         </div>
@@ -2260,7 +2260,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                             <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
                                 URL
                                 <input value={createDraft.url} disabled={Boolean(busy)} onChange={event => setCreateDraft({ ...createDraft, url: event.target.value })} className={inputClass} placeholder='https://discord.com/api/webhooks/...' />
-                                {createUrlInvalid && <span className='text-xs font-semibold text-ui-danger dark:text-ui-danger'>Use a valid HTTPS URL.</span>}
+                                {createUrlInvalid && <span className='text-xs font-semibold text-ui-text dark:text-ui-text'>Use a valid HTTPS URL.</span>}
                             </label>
                             <button type='button' className={primaryButtonClass} disabled={!createUrl || createUrlInvalid || createNameDuplicate || Boolean(busy)} onClick={onCreate}>
                                 <CheckCircle2 className='h-4 w-4' />
@@ -2363,14 +2363,14 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                                     <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
                                         Name
                                         <input value={draft.name} disabled={!canManage || Boolean(busy)} onChange={event => setEditing(current => ({ ...current, [destination.id]: { ...draft, name: event.target.value } }))} className={inputClass} />
-                                        {draftNameDuplicate && <span className='text-xs font-semibold text-ui-danger dark:text-ui-danger'>Name already in use.</span>}
+                                        {draftNameDuplicate && <span className='text-xs font-semibold text-ui-text dark:text-ui-text'>Name already in use.</span>}
                                     </label>
                                     <SelectField label='Type' value={draft.kind} options={destinationKinds} disabled={!canManage || Boolean(busy)} onChange={value => setEditing(current => ({ ...current, [destination.id]: { ...draft, kind: value as DestinationEditDraft['kind'] } }))} />
                                     <SelectField label='Status' value={draft.status} options={['active', 'paused']} disabled={!canManage || Boolean(busy)} onChange={value => setEditing(current => ({ ...current, [destination.id]: { ...draft, status: value } }))} />
                                     <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted md:col-span-3'>
                                         Rotate URL
                                         <input value={draft.url} disabled={!canManage || Boolean(busy)} onChange={event => setEditing(current => ({ ...current, [destination.id]: { ...draft, url: event.target.value } }))} className={inputClass} placeholder='Leave blank to keep the stored redacted endpoint' />
-                                        {draftUrlInvalid && <span className='text-xs font-semibold text-ui-danger dark:text-ui-danger'>Use a valid HTTPS URL.</span>}
+                                        {draftUrlInvalid && <span className='text-xs font-semibold text-ui-text dark:text-ui-text'>Use a valid HTTPS URL.</span>}
                                     </label>
                                     {!draftUrlInvalid && !draftNameDuplicate && !draftChanged && <p className='rounded-md bg-ui-raised px-3 py-2 text-xs font-semibold text-ui-muted dark:bg-ui-canvas dark:text-ui-muted md:col-span-3'>Destination settings are current.</p>}
                                     <div className='flex flex-wrap gap-2 md:col-span-3' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
@@ -2511,7 +2511,7 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, canCleanu
                 <span className='font-semibold capitalize text-ui-text dark:text-ui-text'>Fresh collection: {collectionRequest.status}</span>
                 <span className='text-ui-muted dark:text-ui-muted'>{collectionRequest.captureCount || 0} captures · {collectionRequest.alertCount || 0} alerts</span>
                 {['queued', 'running'].includes(collectionRequest.status) && <button type='button' className='font-semibold text-ui-primary hover:underline' disabled={Boolean(busy)} onClick={onRefreshCollectionStatus}>Check status</button>}
-                {collectionRequest.errors?.[0] && <span className='text-ui-danger dark:text-ui-danger'>{collectionRequest.errors[0]}</span>}
+                {collectionRequest.errors?.[0] && <span className='text-ui-text dark:text-ui-text'>{collectionRequest.errors[0]}</span>}
             </div>}
             <div className='mt-2'><RowStatus message={rowMessages['watchlists-cleanup']} /></div>
             <details id='org-watchlist-create' className='mt-4 overflow-hidden rounded-lg border border-ui-border bg-ui-raised dark:border-ui-border dark:bg-ui-canvas' data-org-watchlist-starter='true' data-org-watchlist-add-disclosure='true' open={watchlists.length === 0 ? true : undefined}>
@@ -3186,7 +3186,7 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
                             data-org-activity-row='true'
                         >
                             <div className='flex items-start gap-2'>
-                                {item.ok ? <CheckCircle2 className='mt-0.5 h-4 w-4 shrink-0 text-ui-success' /> : <CircleAlert className='mt-0.5 h-4 w-4 shrink-0 text-ui-danger' />}
+                                {item.ok ? <CheckCircle2 className='mt-0.5 h-4 w-4 shrink-0 text-ui-success' /> : <CircleAlert className='mt-0.5 h-4 w-4 shrink-0 text-ui-text' />}
                                 <div className='min-w-0 flex-1'>
                                     <div className='flex flex-wrap items-center gap-2'>
                                         <p className='truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(item.title) || item.title}</p>
@@ -3330,14 +3330,14 @@ function StatusPill({ status }: { status: string }) {
         : normalized === 'paused' || normalized.includes('retry') || normalized === 'skipped'
             ? 'bg-ui-warning/10 text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'
             : normalized === 'failed' || normalized.includes('failed') || normalized === 'disabled'
-                ? 'bg-ui-danger/10 text-ui-danger dark:bg-ui-danger/10 dark:text-ui-danger'
+                ? 'bg-ui-raised/10 text-ui-text dark:bg-ui-raised/10 dark:text-ui-text'
                 : 'bg-ui-raised text-ui-muted dark:bg-ui-raised dark:text-ui-muted'
     return <span className={`rounded-md px-2 py-1 text-xs font-semibold ${tone}`}>{status}</span>
 }
 
 function StatusBanner({ tone, text }: { tone: 'error' | 'warning' | 'success', text: string }) {
     const classes = tone === 'error'
-        ? 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger dark:border-ui-danger/35 dark:bg-ui-danger/10 dark:text-ui-danger'
+        ? 'border-ui-danger/35 bg-ui-raised/10 text-ui-text dark:border-ui-danger/35 dark:bg-ui-raised/10 dark:text-ui-text'
         : tone === 'warning'
             ? 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'
             : 'border-ui-success/35 bg-ui-success/10 text-ui-success dark:border-ui-success/35 dark:bg-ui-success/10 dark:text-ui-success'
@@ -3354,7 +3354,7 @@ function RowStatus({ message }: { message?: RowMessage }) {
     if (!message) return null
     const tone = message.ok
         ? 'bg-ui-success/10 text-ui-success dark:bg-ui-success/10 dark:text-ui-success'
-        : 'bg-ui-danger/10 text-ui-danger dark:bg-ui-danger/10 dark:text-ui-danger'
+        : 'bg-ui-raised/10 text-ui-text dark:bg-ui-raised/10 dark:text-ui-text'
     return <span className={`inline-flex max-w-full truncate rounded-md px-2 py-1 text-[11px] font-semibold ${tone}`} role={message.ok ? 'status' : 'alert'} aria-live={message.ok ? 'polite' : 'assertive'}>{sanitizeOrganizationDisplayCopy(message.text) || message.text}</span>
 }
 
@@ -4626,5 +4626,5 @@ const compactSelectClass = 'h-9 rounded-lg border border-ui-border bg-ui-panel p
 const primaryButtonClass = 'inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-55 dark:bg-ui-raised dark:text-ui-text dark:hover:bg-ui-panel'
 const secondaryButtonClass = 'inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-55 dark:border-ui-border dark:bg-ui-raised dark:text-ui-text dark:hover:bg-ui-raised'
 const iconButtonClass = 'grid h-10 w-10 place-items-center rounded-lg border border-ui-border bg-ui-panel text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-55 dark:border-ui-border dark:bg-ui-raised dark:text-ui-text dark:hover:bg-ui-raised'
-const iconDangerButtonClass = 'grid h-10 w-10 place-items-center rounded-lg border border-ui-danger/35 bg-ui-danger/10 text-ui-danger transition hover:bg-ui-danger/10 disabled:cursor-not-allowed disabled:opacity-55 dark:border-ui-danger/35 dark:bg-ui-danger/10 dark:text-ui-danger dark:hover:bg-ui-danger/10'
-const dangerConfirmButtonClass = 'inline-flex h-10 min-w-28 items-center justify-center gap-2 rounded-lg border border-ui-danger/35 bg-ui-danger/10 px-3 text-sm font-semibold text-ui-danger transition hover:bg-ui-danger/10 disabled:cursor-not-allowed disabled:opacity-55 dark:border-ui-danger/35 dark:bg-ui-danger/10 dark:text-ui-danger dark:hover:bg-ui-danger/10'
+const iconDangerButtonClass = 'grid h-10 w-10 place-items-center rounded-lg border border-ui-danger/35 bg-ui-raised/10 text-ui-text transition hover:bg-ui-raised/10 disabled:cursor-not-allowed disabled:opacity-55 dark:border-ui-danger/35 dark:bg-ui-raised/10 dark:text-ui-text dark:hover:bg-ui-raised/10'
+const dangerConfirmButtonClass = 'inline-flex h-10 min-w-28 items-center justify-center gap-2 rounded-lg border border-ui-danger/35 bg-ui-raised/10 px-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised/10 disabled:cursor-not-allowed disabled:opacity-55 dark:border-ui-danger/35 dark:bg-ui-raised/10 dark:text-ui-text dark:hover:bg-ui-raised/10'

@@ -92,12 +92,12 @@ function StatusPill({ status, surface }: { status: string, surface: RecentScansP
         ? normalized === 'done'
             ? 'border-ui-success/35 bg-ui-success/10 text-ui-success'
             : normalized === 'error' || normalized === 'failed'
-                ? 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'
+                ? 'border-ui-danger/35 bg-ui-raised/10 text-ui-text'
                 : 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'
         : normalized === 'done'
             ? 'border-ui-success/35 bg-ui-success/10 text-ui-success'
             : normalized === 'error' || normalized === 'failed'
-                ? 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'
+                ? 'border-ui-danger/35 bg-ui-raised/10 text-ui-text'
                 : 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'
 
     return (
@@ -140,10 +140,10 @@ function ScanStats({ scan, surface }: { scan: Test, surface: RecentScansProps['s
                 <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 ${surface === 'premium'
                     ? delta >= 0
                         ? 'border-ui-success/35 bg-ui-success/10 text-ui-success'
-                        : 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'
+                        : 'border-ui-danger/35 bg-ui-raised/10 text-ui-text'
                     : delta >= 0
                         ? 'border-ui-success/35 bg-ui-success/10 text-ui-success'
-                        : 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'
+                        : 'border-ui-danger/35 bg-ui-raised/10 text-ui-text'
                 }`}>
                     {delta >= 0 ? <TrendingUp className='h-3 w-3' /> : <TrendingDown className='h-3 w-3' />}
                     {delta >= 0 ? 'faster' : 'slower'} {Math.abs(Math.round(delta))}ms

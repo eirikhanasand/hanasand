@@ -161,7 +161,7 @@ export default function TimelinessClient() {
                         <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                     </button>
                 </div>
-                {error ? <div role='alert' className='flex items-start gap-2 border-b border-ui-danger/30 bg-ui-danger/10 px-3 py-2 text-xs text-ui-danger'><AlertTriangle className='mt-0.5 h-4 w-4 shrink-0' />{error}</div> : null}
+                {error ? <div role='alert' className='flex items-start gap-2 border-b border-ui-danger/30 bg-ui-raised/10 px-3 py-2 text-xs text-ui-text'><AlertTriangle className='mt-0.5 h-4 w-4 shrink-0' />{error}</div> : null}
                 <div className='grid grid-cols-2 divide-x divide-y divide-ui-border sm:grid-cols-4 lg:grid-cols-6'>
                     <Summary label='Retained' value={coverage?.recordCount ?? '—'} />
                     <Summary label='Needs report' value={coverage?.unresolvedReferenceCount ?? '—'} attention />
@@ -212,7 +212,7 @@ function QueueRow({ item, active, onClick }: { item: Item, active: boolean, onCl
             {item.reportRecovery?.reason ? <p className='mt-1'>{item.reportRecovery.reason}</p> : null}
             {item.reportRecovery?.nextAttemptAt && item.reportRecovery.status !== 'running' ? <p className='mt-1'>Next attempt: {date(item.reportRecovery.nextAttemptAt)}</p> : null}
         </div> : null}
-        {item.timestampAnomalies.length ? <span className='truncate text-[10px] text-ui-danger'>{item.timestampAnomalies.join(', ')}</span> : null}
+        {item.timestampAnomalies.length ? <span className='truncate text-[10px] text-ui-text'>{item.timestampAnomalies.join(', ')}</span> : null}
     </button>
 }
 
@@ -229,7 +229,7 @@ function RecordDetail({ item, form, setForm, saving, onSubmit }: { item: Item, f
             {item.reportRecovery?.nextAttemptAt && item.reportRecovery.status !== 'running' ? <p className='mt-1'>Next attempt: {date(item.reportRecovery.nextAttemptAt)}</p> : null}
         </div> : null}
         {item.summary ? <div className='border-b border-ui-border p-3 text-xs leading-relaxed text-ui-text'><p className='whitespace-pre-line'>{item.summary}</p>{item.sources?.filter(source => source.url && /^https:\/\//.test(source.url)).map(source => <a key={source.url} href={source.url} target='_blank' rel='noopener noreferrer' className='mr-3 mt-2 inline-block text-ui-primary underline'>{source.title || source.url}</a>)}</div> : null}
-        {item.timestampAnomalies.length ? <div className='border-b border-ui-danger/30 bg-ui-danger/10 px-3 py-2 text-xs text-ui-danger'><strong>Ordering/source anomaly:</strong> {item.timestampAnomalies.join(', ')}</div> : null}
+        {item.timestampAnomalies.length ? <div className='border-b border-ui-danger/30 bg-ui-raised/10 px-3 py-2 text-xs text-ui-text'><strong>Ordering/source anomaly:</strong> {item.timestampAnomalies.join(', ')}</div> : null}
         <div className='grid lg:grid-cols-[minmax(0,1fr)_21rem]'>
             <section className='min-w-0 border-b border-ui-border p-3 lg:border-b-0 lg:border-r'>
                 <h3 className='text-xs font-semibold text-ui-text'>Persisted event path</h3>
@@ -272,9 +272,9 @@ function QualityPanel({ quality }: { quality?: Snapshot['quality'] }) {
                 <dl className='mt-2 grid grid-cols-2 gap-2'>
                     {importantFields.map(field => <div key={field.name} className='rounded-md border border-ui-border bg-ui-raised p-2'><dt className='truncate text-[10px] text-ui-muted'>{label(field.name)}</dt><dd className='mt-1 text-xs font-semibold text-ui-text'>{percent(field.coverage)} <span className='font-normal text-ui-muted'>({field.missingCount} missing)</span></dd></div>)}
                 </dl>
-                <div className='mt-2 space-y-1'>{quality?.issues.map(issue => <p key={issue.name} className='flex justify-between gap-2 text-[10px] text-ui-danger'><span className='truncate'>{issue.name}</span><strong>{issue.count}</strong></p>)}{!quality?.issues.length ? <p className='text-[10px] text-ui-muted'>No excluded timestamp anomalies in this scope.</p> : null}</div>
+                <div className='mt-2 space-y-1'>{quality?.issues.map(issue => <p key={issue.name} className='flex justify-between gap-2 text-[10px] text-ui-text'><span className='truncate'>{issue.name}</span><strong>{issue.count}</strong></p>)}{!quality?.issues.length ? <p className='text-[10px] text-ui-muted'>No excluded timestamp anomalies in this scope.</p> : null}</div>
             </section>
-            <section className='min-w-0 p-3'><h3 className='text-[10px] font-semibold uppercase text-ui-muted'>Real source classes</h3><div className='mt-2 overflow-x-auto'><table className='w-full text-left text-[11px]'><thead className='text-ui-muted'><tr><th className='pb-1 font-medium'>Class</th><th className='pb-1 text-right font-medium'>Records</th><th className='pb-1 text-right font-medium'>No observed</th><th className='pb-1 text-right font-medium'>No report</th><th className='pb-1 text-right font-medium'>No publication</th><th className='pb-1 text-right font-medium'>No collection</th><th className='pb-1 text-right font-medium'>No processing</th><th className='pb-1 text-right font-medium'>No review</th><th className='pb-1 text-right font-medium'>Issues</th></tr></thead><tbody>{quality?.bySourceClass.map(group => <tr key={group.name} className='border-t border-ui-border'><td className='max-w-44 truncate py-1.5 text-ui-text'>{group.name}</td><td className='py-1.5 text-right text-ui-muted'>{group.recordCount}</td><td className='py-1.5 text-right text-ui-text'>{group.missing.observed ?? 0}</td><td className='py-1.5 text-right text-ui-text'>{group.missing.first_report ?? 0}</td><td className='py-1.5 text-right text-ui-text'>{group.missing.publication ?? 0}</td><td className='py-1.5 text-right text-ui-text'>{group.missing.collection ?? 0}</td><td className='py-1.5 text-right text-ui-text'>{group.missing.processing ?? 0}</td><td className='py-1.5 text-right text-ui-text'>{group.missing.reviewed ?? 0}</td><td className='py-1.5 text-right text-ui-danger'>{Object.values(group.issues).reduce((sum, count) => sum + count, 0)}</td></tr>)}</tbody></table>{!quality?.bySourceClass.length ? <p className='py-4 text-center text-ui-muted'>No retained source classes in this scope.</p> : null}</div></section>
+            <section className='min-w-0 p-3'><h3 className='text-[10px] font-semibold uppercase text-ui-muted'>Real source classes</h3><div className='mt-2 overflow-x-auto'><table className='w-full text-left text-[11px]'><thead className='text-ui-muted'><tr><th className='pb-1 font-medium'>Class</th><th className='pb-1 text-right font-medium'>Records</th><th className='pb-1 text-right font-medium'>No observed</th><th className='pb-1 text-right font-medium'>No report</th><th className='pb-1 text-right font-medium'>No publication</th><th className='pb-1 text-right font-medium'>No collection</th><th className='pb-1 text-right font-medium'>No processing</th><th className='pb-1 text-right font-medium'>No review</th><th className='pb-1 text-right font-medium'>Issues</th></tr></thead><tbody>{quality?.bySourceClass.map(group => <tr key={group.name} className='border-t border-ui-border'><td className='max-w-44 truncate py-1.5 text-ui-text'>{group.name}</td><td className='py-1.5 text-right text-ui-muted'>{group.recordCount}</td><td className='py-1.5 text-right text-ui-text'>{group.missing.observed ?? 0}</td><td className='py-1.5 text-right text-ui-text'>{group.missing.first_report ?? 0}</td><td className='py-1.5 text-right text-ui-text'>{group.missing.publication ?? 0}</td><td className='py-1.5 text-right text-ui-text'>{group.missing.collection ?? 0}</td><td className='py-1.5 text-right text-ui-text'>{group.missing.processing ?? 0}</td><td className='py-1.5 text-right text-ui-text'>{group.missing.reviewed ?? 0}</td><td className='py-1.5 text-right text-ui-text'>{Object.values(group.issues).reduce((sum, count) => sum + count, 0)}</td></tr>)}</tbody></table>{!quality?.bySourceClass.length ? <p className='py-4 text-center text-ui-muted'>No retained source classes in this scope.</p> : null}</div></section>
         </div>
     </DashboardPanel>
 }
@@ -297,7 +297,7 @@ function MetricTable({ title, rows }: { title: string, rows: Array<{ name: strin
 function Status({ status }: { status: QueueStatus }) {
     const bad = status === 'anomaly'
     const good = status === 'complete'
-    return <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase ${bad ? 'border-ui-danger/40 bg-ui-danger/10 text-ui-danger' : good ? 'border-ui-success/40 bg-ui-success/10 text-ui-success' : 'border-ui-warning/40 bg-ui-warning/10 text-ui-warning'}`}>{label(status)}</span>
+    return <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase ${bad ? 'border-ui-danger/40 bg-ui-raised/10 text-ui-text' : good ? 'border-ui-success/40 bg-ui-success/10 text-ui-success' : 'border-ui-warning/40 bg-ui-warning/10 text-ui-warning'}`}>{label(status)}</span>
 }
 
 function Summary({ label: name, value, attention = false }: { label: string, value: string | number, attention?: boolean }) {

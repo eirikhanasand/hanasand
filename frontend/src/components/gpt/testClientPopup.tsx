@@ -111,7 +111,7 @@ export default function TestClientPopup({
                                             message.role === 'user'
                                                 ? 'ml-auto border-ui-primary/20 bg-ui-primary/12 text-ui-text/90'
                                                 : message.error
-                                                    ? 'border-ui-danger/20 bg-ui-danger/10 text-ui-danger'
+                                                    ? 'border-ui-danger/20 bg-ui-raised/10 text-ui-text'
                                                     : 'bg-ui-canvas/20 text-ui-text/90 outline outline-ui-border'
                                         }`}
                                     >
@@ -174,7 +174,7 @@ function StatCard({ title, value, error = false }: { title: string, value: strin
     return (
         <div
             className={`rounded-lg border p-3 ${
-                error ? 'border-ui-danger/20 bg-ui-danger/10' : 'bg-ui-canvas/20 outline outline-ui-border'
+                error ? 'border-ui-danger/20 bg-ui-raised/10' : 'bg-ui-canvas/20 outline outline-ui-border'
             }`}
         >
             <div className='text-[10px] uppercase tracking-[0.18em] text-ui-text/35'>{title}</div>

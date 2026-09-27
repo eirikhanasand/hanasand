@@ -31,8 +31,8 @@ export default function Info({ share, isConnected, participants }: HeaderProps) 
     const readText = `${share.estimatedMinutes} ${share.estimatedMinutes === 1 ? 'minute' : 'minutes'}`
     const lineCount = share.content.split(/\r?\n/).length
     const lineText = `${lineCount} ${lineCount === 1 ? 'line' : 'lines'}`
-    const copyColorLink = didCopy === 'link' ? 'text-ui-success' : didCopy === null ? '' : didCopy === 'error-link' ? 'text-ui-danger' : ''
-    const copyColorAlias = didCopy === 'alias' ? 'text-ui-success' : didCopy === null ? '' : didCopy === 'error-alias' ? 'text-ui-danger' : ''
+    const copyColorLink = didCopy === 'link' ? 'text-ui-success' : didCopy === null ? '' : didCopy === 'error-link' ? 'text-ui-text' : ''
+    const copyColorAlias = didCopy === 'alias' ? 'text-ui-success' : didCopy === null ? '' : didCopy === 'error-alias' ? 'text-ui-text' : ''
 
     return (
         <div className='flex items-center justify-between rounded-lg p-2'>

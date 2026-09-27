@@ -103,7 +103,7 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
                 </div>}
             </div>
             <p role='status' className='sr-only'>{busy ? 'Saving…' : notice}</p>
-            {error && <div role='alert' className='text-sm text-ui-danger'>{error} <button className='underline' disabled={busy} onClick={() => setRevision(value => value + 1)}>Retry</button></div>}
+            {error && <div role='alert' className='text-sm text-ui-text'>{error} <button className='underline' disabled={busy} onClick={() => setRevision(value => value + 1)}>Retry</button></div>}
         </header>
         {item?.diskDiagnostics && <section aria-label='Disk usage diagnostics' className='border-b border-ui-border p-5 sm:p-6'>
             <h2 className='font-semibold'>Largest directories</h2>
@@ -165,7 +165,7 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
                         <h3 className='text-sm font-medium'>Delivery history</h3>
                         {item.notifications.length ? item.notifications.map((notification, index) => <article className='grid gap-2 rounded-lg bg-ui-canvas p-3 text-sm' key={notification.messageId || index}>
                             <p>{notification.deliveredAt ? `Delivered ${date(notification.deliveredAt)}` : 'Delivery pending'}</p>
-                            {notification.error && <p className='text-ui-danger'>{notification.error}</p>}
+                            {notification.error && <p className='text-ui-text'>{notification.error}</p>}
                             {notification.message ? <div className='grid gap-3 [overflow-wrap:anywhere]'>
                                 {notification.message.content && <NotificationText text={notification.message.content} />}
                                 {notification.message.embeds?.map((embed, embedIndex) => <div key={embedIndex} className='grid gap-2 border-l-2 border-ui-border pl-3'>

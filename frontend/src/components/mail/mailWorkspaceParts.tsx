@@ -234,7 +234,7 @@ export function Composer({
                                         </div>
                                         <button
                                             type='button'
-                                            className='text-[10px] text-ui-danger hover:underline'
+                                            className='text-[10px] text-ui-text hover:underline'
                                             onClick={() => patch({ attachments: state.attachments.filter((_, current) => current !== index) })}
                                         >
                                             Remove

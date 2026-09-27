@@ -59,7 +59,7 @@ export default function DockerStoragePanel() {
                 {busy ? <RefreshCcw className='h-4 w-4 animate-spin' aria-hidden /> : <Trash2 className='h-4 w-4' aria-hidden />}{submitting ? 'Starting cleanup…' : state?.running ? progress : busy ? 'Queued…' : 'Clear unused storage'}
             </button>
         </div>
-        {error && <p role='alert' className='text-sm text-ui-danger'>{error} <button className='underline' onClick={() => void load()}>Retry</button></p>}
+        {error && <p role='alert' className='text-sm text-ui-text'>{error} <button className='underline' onClick={() => void load()}>Retry</button></p>}
         {!state ? !error && <p className='text-sm text-ui-muted'>Loading storage…</p> : <>
             {state.running && <p role='status' className='text-sm tabular-nums text-ui-muted'>{typeof state.freedBytes === 'number' ? `${bytes(state.freedBytes)} freed so far (estimated)` : 'Measuring reclaimed space…'}{state.progressAt && Date.now() - Date.parse(state.progressAt) > 5000 ? ' · Waiting for an updated measurement…' : ''}</p>}
             <div className='grid gap-3 sm:grid-cols-3'>
@@ -67,7 +67,7 @@ export default function DockerStoragePanel() {
                 <div className='rounded-lg border border-ui-border bg-ui-raised/50 p-3'><p className='text-xs text-ui-muted'>Nightly cleanup</p><p className='mt-1 font-semibold'>{state.schedule} · {state.timezone}</p><p className='text-xs text-ui-muted'>Keeps up to {bytes(state.cacheBudgetBytes)} of unused build cache</p></div>
                 <div className='rounded-lg border border-ui-border bg-ui-raised/50 p-3'><p className='text-xs text-ui-muted'>Last successful cleanup</p><p className='mt-1 text-sm font-semibold'>{state.lastSuccessAt ? <time dateTime={state.lastSuccessAt}>{date(state.lastSuccessAt)}</time> : 'Not cleared yet'}</p>{state.lastSuccessAt && <p className='text-xs text-ui-muted'>Disk space increased by {bytes(state.lastFreedBytes || 0)}</p>}</div>
             </div>
-            {state.error && <p role='alert' className='text-sm text-ui-danger'>Cleanup needs attention: {state.error}</p>}
+            {state.error && <p role='alert' className='text-sm text-ui-text'>Cleanup needs attention: {state.error}</p>}
             {state.stale && <p role='status' className='text-sm text-ui-warning'>Storage figures are out of date.</p>}
             <details className='rounded-lg border border-ui-border'>
                 <summary className='cursor-pointer px-3 py-2 text-sm font-semibold'>Unused images ({state.unusedImages.length})</summary>

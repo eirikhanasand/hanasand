@@ -111,14 +111,14 @@ function TrafficLane({ title, icon, value, detail, footer, tone }: {
 function toneText(tone: 'neutral' | 'ok' | 'watch' | 'bad') {
     if (tone === 'ok') return 'text-ui-success'
     if (tone === 'watch') return 'text-ui-warning'
-    if (tone === 'bad') return 'text-ui-danger'
+    if (tone === 'bad') return 'text-ui-text'
     return 'text-ui-primary'
 }
 
 function toneDot(tone: 'neutral' | 'ok' | 'watch' | 'bad') {
     if (tone === 'ok') return 'bg-ui-success shadow-sm'
     if (tone === 'watch') return 'bg-ui-warning shadow-sm'
-    if (tone === 'bad') return 'bg-ui-danger shadow-sm'
+    if (tone === 'bad') return 'bg-ui-raised shadow-sm'
     return 'bg-ui-primary shadow-sm'
 }
 

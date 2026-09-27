@@ -174,14 +174,14 @@ export default function AccountActions({ isSelf }: { isSelf: boolean }) {
                         <LogOut className='h-4 w-4' />
                         Log out
                     </button>
-                    <button onClick={() => setConfirmDelete(true)} className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-danger/40 bg-ui-danger/10 px-3 text-sm font-semibold text-ui-danger hover:bg-ui-danger/15'>
+                    <button onClick={() => setConfirmDelete(true)} className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-danger/40 bg-ui-raised/10 px-3 text-sm font-semibold text-ui-text hover:bg-ui-raised/15'>
                         <Trash2 className='h-4 w-4' />
                         Delete account
                     </button>
                 </div>
             </div>
             <SocialSignIn link />
-            {message && <p className='mt-3 text-sm text-ui-danger'>{message}</p>}
+            {message && <p className='mt-3 text-sm text-ui-text'>{message}</p>}
             <div className='mt-4 grid gap-2'>
                 {passkeys.map(passkey => (
                     <div key={passkey.credentialId} className='flex min-w-0 flex-col gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 sm:flex-row sm:items-center sm:justify-between'>
@@ -220,7 +220,7 @@ export default function AccountActions({ isSelf }: { isSelf: boolean }) {
                                 <Pencil className='h-3.5 w-3.5' />
                                 Rename
                             </button>
-                            <button disabled={busy} onClick={() => void removePasskey(passkey.credentialId)} className='h-8 rounded-lg border border-ui-danger/40 bg-ui-danger/10 px-3 text-xs font-semibold text-ui-danger hover:bg-ui-danger/15 disabled:opacity-60'>
+                            <button disabled={busy} onClick={() => void removePasskey(passkey.credentialId)} className='h-8 rounded-lg border border-ui-danger/40 bg-ui-raised/10 px-3 text-xs font-semibold text-ui-text hover:bg-ui-raised/15 disabled:opacity-60'>
                                 Remove
                             </button>
                         </div>
@@ -240,7 +240,7 @@ export default function AccountActions({ isSelf }: { isSelf: boolean }) {
                         </div>
                         <div className='flex justify-end gap-2'>
                             <button onClick={() => setConfirmDelete(false)} className='h-9 rounded-lg px-3 text-sm font-semibold text-ui-muted hover:bg-ui-raised'>Cancel</button>
-                            <button disabled={busy} onClick={() => void deleteAccount()} className='h-9 rounded-lg bg-ui-danger px-4 text-sm font-bold text-ui-canvas hover:bg-ui-danger disabled:opacity-60'>
+                            <button disabled={busy} onClick={() => void deleteAccount()} className='h-9 rounded-lg bg-ui-raised px-4 text-sm font-bold text-ui-canvas hover:bg-ui-raised disabled:opacity-60'>
                                 {busy ? 'Scheduling' : 'Delete'}
                             </button>
                         </div>
