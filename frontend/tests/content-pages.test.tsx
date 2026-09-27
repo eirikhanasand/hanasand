@@ -33,7 +33,7 @@ for (const entries of [[], [{ id: 'thought', title: 'Why?', created_at: '2025-10
         assert(!html.includes('Share a short philosophical question to give visitors something to think about.'))
         assert(!html.includes('Create your first thought</a>'))
         assert(html.includes('href="/content/thoughts/create"'))
-        assert(html.includes('text-white'))
+        assert(html.includes('text-ui-on-primary'))
     }
 }
 console.log('Content pages: conditional years, concise article labels and distinct thoughts copy pass.')
