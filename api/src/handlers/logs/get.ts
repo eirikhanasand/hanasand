@@ -16,7 +16,8 @@ export async function getLogServices(req: FastifyRequest, res: FastifyReply) {
 }
 
 export function loadLogServices() {
-    return cachedLogQuery('services', 60_000, queryLogServices)
+    // Exact per-service counts scan the full raw log table, so refresh this snapshot less often.
+    return cachedLogQuery('services', 240_000, queryLogServices)
 }
 
 async function queryLogServices() {
