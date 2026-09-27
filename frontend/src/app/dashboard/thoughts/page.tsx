@@ -32,11 +32,10 @@ export default async function Page() {
                         <BrainCircuit className='h-6 w-6' />
                     </div>
                     <h2 className='mt-4 text-xl font-semibold text-ui-text'>Create your first thought</h2>
-                    <p className='mt-2 text-sm leading-6 text-ui-muted'>Share a short philosophical question to give visitors something to think about.</p>
                     <div className='mt-5 flex justify-center gap-2'>
-                        <Link href='/content/thoughts/create' className='inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas'>
+                        <Link href='/content/thoughts/create' className='inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-white'>
                             <Plus className='h-4 w-4' />
-                            Create your first thought
+                            Create
                         </Link>
                     </div>
                 </div>
