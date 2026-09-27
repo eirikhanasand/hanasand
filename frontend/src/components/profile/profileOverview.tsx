@@ -49,7 +49,11 @@ function LoginActivity({ loginDays }: { loginDays: ProfileStats['loginDays'] }) 
             <div className='flex flex-wrap items-end justify-between gap-x-4 gap-y-1'>
                 <div>
                     <h2 className='text-base font-semibold text-ui-text'>Login activity</h2>
-                    <p className='mt-1 text-sm text-ui-muted'>{activeDays} active days  |  {totalLogins} sign-ins in the past year</p>
+                    <div className='mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm'>
+                        <span className='text-ui-muted'>{activeDays} active days</span>
+                        <span aria-hidden='true' className='h-4 border-l border-ui-border' />
+                        <span className='text-ui-primary'>{totalLogins} sign-ins in the past year</span>
+                    </div>
                 </div>
             </div>
             <div className='mt-4 pb-1' ref={gridRef}>
