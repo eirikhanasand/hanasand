@@ -12,7 +12,7 @@ test('list projection excludes definitions and evidence, preserves displayed fie
 })
 test('category honors custom stages and historical built-in IDs', () => {
     expect(ruleCategory({ id: 'auth.new_country.v2', source: 'hanasand' })).toBe('detection')
-    expect(ruleCategory({ id: 'auth.impossible_travel.v1', source: 'hanasand' })).toBe('analysis')
+    expect(ruleCategory({ id: 'auth.impossible_travel.v1', source: 'hanasand' })).toBe('detection')
     expect(ruleCategory({ id: 'network.signature_alert.v1', source: 'hanasand' })).toBe('match')
     expect(ruleCategory({ id: 'custom.test.v1', source: 'owned' })).toBe('match')
     expect(ruleCategory({ id: 'imported.test.v1', source: 'open_source' })).toBe('match')
