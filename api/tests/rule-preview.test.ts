@@ -21,7 +21,8 @@ test('preview uses runtime selectors and excludes higher and unknown severities 
         expect(sql).toContain('received_at <= $3::timestamptz')
         expect(sql).not.toContain('($4::timestamptz IS NULL OR event_timestamp >= $4::timestamptz)')
         expect(sql).not.toContain('($5::timestamptz IS NULL OR (event_timestamp,id)')
-        expect(params.slice(0, 6)).toEqual(['org-a', false, input.until, input.from, null, ''])
+        expect(params.slice(0, 4)).toEqual(['org-a', false, input.until, input.from])
+        expect(params).not.toContain(null)
         expect(sql).toContain('jsonb_typeof')
         expect(params).toContainEqual(['http', 'status_code'])
         return { rows: [row(1), row(2, 'high'), row(3, 'unknown'), row(4, 'low', 404)] }
