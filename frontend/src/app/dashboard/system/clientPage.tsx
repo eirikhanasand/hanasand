@@ -354,8 +354,8 @@ export default function SystemDashboard({
 
     return (
         <div className='relative grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4'>
-            {overviewStatisticsTarget ? createPortal(
-                <details open={statisticsVisible} onToggle={(event) => setStatisticsVisible(event.currentTarget.open)} className='min-w-0 overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-system-summary-disclosure>
+            {overviewStatisticsTarget && statisticsVisible ? createPortal(
+                <details open onToggle={(event) => setStatisticsVisible(event.currentTarget.open)} className='min-w-0 overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-system-summary-disclosure>
                     <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
                         <span>Statistics</span>
                     </summary>
