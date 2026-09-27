@@ -17,7 +17,7 @@ record_result() {
   docker volume rm "$stage_volume" >/dev/null || backup_exit=1
   rmdir "$backups/$stamp" || true
  fi
- /usr/local/bin/bun /home/hanasand/hanasand/scripts/recovery/backup-helper.ts result "$root/backup-job-status.json" "$backup_exit"
+ /home/hanasand/.local/bin/bun /home/hanasand/hanasand/scripts/recovery/backup-helper.ts result "$root/backup-job-status.json" "$backup_exit"
  exit "$backup_exit"
 }
 trap record_result EXIT
@@ -61,5 +61,5 @@ docker run --rm --network host --cpus .5 --memory 128m --entrypoint sh \
 # RAM staging leaves the existing verified local copy intact. The new verified
 # archive is durable on OVH before this script releases its temporary staging.
 if ! "$memory_stage"; then
-/usr/local/bin/bun /home/hanasand/hanasand/scripts/recovery/backup-helper.ts retain "$backups" "$stamp"
+/home/hanasand/.local/bin/bun /home/hanasand/hanasand/scripts/recovery/backup-helper.ts retain "$backups" "$stamp"
 fi

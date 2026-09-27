@@ -14,7 +14,7 @@ trap cleanup EXIT
 docker run --rm --network none -v "$backup:/backup:ro" "$image" cat /backup/backup_manifest > "$manifest"
 # Size the isolated restore from the manifest; the database has outgrown the
 # former fixed 96 GiB filesystem. Leave room for WAL replay and 64 GiB for the host.
-restore_gib=$(/usr/local/bin/bun /home/hanasand/hanasand/scripts/recovery/backup-helper.ts size "$manifest")
+restore_gib=$(/home/hanasand/.local/bin/bun /home/hanasand/hanasand/scripts/recovery/backup-helper.ts size "$manifest")
 memory_gib=$((restore_gib + 32))
 available_kib=$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo)
 test "${available_kib:-0}" -ge "$(((memory_gib + 64) * 1048576))" || { printf 'Backup verification needs %s GiB of available memory.\n' "$((memory_gib + 64))" >&2; exit 1; }
@@ -41,6 +41,6 @@ docker run --rm --name "$name" --network none --cpus 2 --memory "${memory_gib}g"
 '
 checksums=$(docker run --rm --network none -v "$backup:/backup:ro" "$image" sh -ec 'cd /backup; sha256sum base.tar.gz pg_wal.tar.gz backup_manifest')
 proof=$(mktemp)
-/usr/local/bin/bun /home/hanasand/hanasand/scripts/recovery/backup-helper.ts proof "$checksums" > "$proof"
+/home/hanasand/.local/bin/bun /home/hanasand/hanasand/scripts/recovery/backup-helper.ts proof "$checksums" > "$proof"
 docker run --rm --network none -v "$backup:/backup" -v "$proof:/proof:ro" "$image" cp -p /proof /backup/verification.json
 printf 'Backup manifest, WAL recovery and isolated read/write restore passed.\n'

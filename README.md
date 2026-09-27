@@ -121,6 +121,8 @@ The collector has its own `bun run test` and `bun run check` commands in `ti/scr
 
 ## Production deployment
 
+Host TypeScript utilities require Bun 1.3.13; install it for the host account with `scripts/install-typescript-runtime.sh` before enabling their systemd units.
+
 Use `ssh inspur` and work from `/home/hanasand/hanasand`. Deploy only the changed component.
 
 ```sh

@@ -112,7 +112,8 @@ export function installCertificateRefresh(revision: string) {
     const repo = path.join(homedir(), 'hanasand')
     run(['git', '-C', repo, 'cat-file', '-e', `${revision}:services/mail-relay/setup.ts`], { ignore: true })
     const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`
-    const command = `git -C ${quote(repo)} show ${revision}:services/mail-relay/setup.ts | /usr/local/bin/bun - ovh --refresh-tls`
+    const bun = path.join(homedir(), '.local/bin/bun')
+    const command = `git -C ${quote(repo)} show ${revision}:services/mail-relay/setup.ts | ${quote(bun)} - ovh --refresh-tls`
     const line = `17 * * * * /usr/bin/flock -n ${quote(path.join(ROOT, 'renewal.lock'))} /bin/bash -o pipefail -c ${quote(command)} 2>&1 | /usr/bin/logger -t hanasand-mail-relay-tls # hanasand-mail-relay-renewal`
     const current = spawnSync('crontab', ['-l'], { encoding: 'utf8' })
     if (current.status && !current.stderr.includes('no crontab')) throw new Error('Could not read existing crontab')
