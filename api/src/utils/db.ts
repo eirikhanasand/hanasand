@@ -46,11 +46,11 @@ const poolOptions = {
     password: DB_PASSWORD,
     port: Number(DB_PORT) || 5432,
     max: maxConnections - eventConnections,
-    // Do not pin API sessions behind HAProxy's reloadable DB listener. Expire
-    // idle API sessions before the proxy's 65-second graceful-drain deadline.
+    // Do not pin API sessions behind HAProxy's reloadable DB listener. The
+    // short idle window leaves room for sessions released just after a reload.
     min: 0,
     idleTimeoutMillis: httpOnlyApi
-        ? Math.min(Math.max(configuredIdleTimeout, 1), 45_000)
+        ? Math.min(Math.max(configuredIdleTimeout, 1), 15_000)
         : configuredIdleTimeout,
     connectionTimeoutMillis: Number(DB_TIMEOUT_MS) || 3000,
     statement_timeout: (process.env.AUTH_SERVICE_ONLY === '1' || process.env.API_HTTP_ONLY === '1') ? 5000 : undefined,

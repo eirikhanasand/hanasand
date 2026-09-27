@@ -23,7 +23,7 @@ const { default: config } = await import('../src/constants.ts')
 const previous = { api: process.env.API_HTTP_ONLY, auth: process.env.AUTH_SERVICE_ONLY }
 try {
     for (const role of [
-        { name: 'api', api: '1', auth: '0', min: 0, idle: 45000 },
+        { name: 'api', api: '1', auth: '0', min: 0, idle: 15000 },
         { name: 'auth', api: '0', auth: '1', min: 0, idle: 5000 },
         { name: 'worker', api: '0', auth: '0', min: 0, idle: 120000 },
     ]) {
@@ -37,9 +37,9 @@ try {
         assert.equal(created.length, role.name === 'worker' && budget >= 12 ? 2 : 1, 'Only the scheduled worker reserves Event capacity')
         const configuredIdleTimeout = Number(config.DB_IDLE_TIMEOUT_MS) || role.idle
         const expectedIdleTimeout = role.name === 'api'
-            ? Math.min(configuredIdleTimeout, 45000)
+            ? Math.min(configuredIdleTimeout, 15000)
             : configuredIdleTimeout
-        assert.equal(pool.options!.idleTimeoutMillis, expectedIdleTimeout, 'Expire API sessions before proxy drain; preserve other pool defaults')
+        assert.equal(pool.options!.idleTimeoutMillis, expectedIdleTimeout, 'Expire API sessions before proxy hard-stop; preserve other pool defaults')
     }
     process.env.API_HTTP_ONLY = '1'; process.env.AUTH_SERVICE_ONLY = '0'
     attempts = queries = 0; connectionFailures = 1; queryFails = false
