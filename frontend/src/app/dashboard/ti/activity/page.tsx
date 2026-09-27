@@ -49,7 +49,7 @@ export default async function TiActivityPage({ searchParams }: { searchParams?: 
 
             <form method='get' action='/ti/activity' className='flex gap-2'>
                 <input name='q' defaultValue={q} aria-label='Search activity' placeholder='Search actors or feeds' maxLength={100} className='min-w-0 flex-1 rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-sm text-ui-text' />
-                <button className='rounded-md bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas'>Search</button>
+                <button className='rounded-md bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-on-primary'>Search</button>
                 {q ? <Link href='/ti/activity' className='px-3 py-2 text-sm text-ui-primary'>Clear</Link> : null}
             </form>
 

@@ -30,7 +30,7 @@ export default function DashboardDwmError({ error, reset }: { error: Error & { d
                     <button
                         type='button'
                         onClick={reset}
-                        className='inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'
+                        className='inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary transition hover:opacity-90'
                     >
                         <RefreshCcw className='h-4 w-4' />
                         Retry

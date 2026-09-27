@@ -360,7 +360,7 @@ export function Findings({
                         <div className='grid gap-2 px-4 py-8 text-center'>
                             <h2 className='text-base font-semibold text-ui-text'>Create your first watchlist</h2>
                             <p className='mx-auto max-w-md text-sm leading-6 text-ui-muted'>Add a company, domain, vendor, brand, or product to start monitoring.</p>
-                            <div><Link href='/organizations/watchlists' className='inline-flex min-h-9 items-center rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>Create watchlist</Link></div>
+                            <div><Link href='/organizations/watchlists' className='inline-flex min-h-9 items-center rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary transition hover:opacity-90'>Create watchlist</Link></div>
                         </div>
                     ) : <div className='p-3'>{workflowActions}</div>}
                 </section>
@@ -875,7 +875,7 @@ function PublicTiDwmIntake({ handoff, tenantId, organizationId, activeSourceCoun
                     ))}
                 </div>
                 <div className='grid min-w-0 grid-cols-2 gap-2 xl:w-40 xl:grid-cols-1'>
-                    <a href={casesHref} className='inline-flex h-9 items-center justify-center rounded-lg bg-ui-primary px-3 text-xs font-semibold text-ui-canvas transition hover:opacity-90'>
+                    <a href={casesHref} className='inline-flex h-9 items-center justify-center rounded-lg bg-ui-primary px-3 text-xs font-semibold text-ui-on-primary transition hover:opacity-90'>
                         Review case
                     </a>
                     <a href={orgHref} className='inline-flex h-9 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-canvas'>
@@ -1389,7 +1389,7 @@ function WorkflowSpineStep({ step, index }: { step: WorkflowStepModel, index: nu
             <p className='mt-1 truncate text-sm font-semibold text-ui-text' title={step.value}>{step.value}</p>
             <p className='mt-1 line-clamp-2 text-xs leading-5 text-ui-muted'>{step.detail}</p>
             {step.action ? (
-                <button type='button' disabled={step.action.busy} onClick={(event) => { event.preventDefault(); step.action?.onClick() }} className='mt-3 inline-flex h-8 items-center rounded-lg border border-ui-primary bg-ui-primary/10 px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-primary/15 disabled:cursor-not-allowed disabled:opacity-60'>
+                <button type='button' disabled={step.action.busy} onClick={(event) => { event.preventDefault(); step.action?.onClick() }} className='mt-3 inline-flex h-8 items-center rounded-lg border border-ui-primary bg-ui-primary/10 px-3 text-xs font-semibold text-ui-on-primary transition hover:bg-ui-primary/15 disabled:cursor-not-allowed disabled:opacity-60'>
                     {step.action.busy ? 'Opening' : step.action.label}
                 </button>
             ) : null}
@@ -2204,7 +2204,7 @@ function DeliveryPanel({ alert, deliveries, busyAction, onTest, onSend }: { aler
             <section className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-6 text-center'>
                 <h2 className='text-base font-semibold text-ui-text'>Create an organization to set up integrations</h2>
                 <p className='mx-auto max-w-md text-sm leading-6 text-ui-muted'>Send events and case updates to the tools your organization already uses.</p>
-                <div><Link href='/organizations' className='inline-flex min-h-9 items-center rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>Create organization</Link></div>
+                <div><Link href='/organizations' className='inline-flex min-h-9 items-center rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary transition hover:opacity-90'>Create organization</Link></div>
                 <div className='grid gap-2 text-left sm:grid-cols-3'>
                     {['Slack', 'Microsoft Teams', 'Webhook'].map(preset => <Link key={preset} href='/organizations' className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-xs font-semibold text-ui-muted'>{preset}<span className='mt-1 block font-normal'>Available after setup</span></Link>)}
                 </div>
@@ -2223,7 +2223,7 @@ function DeliveryPanel({ alert, deliveries, busyAction, onTest, onSend }: { aler
                         {testBusy ? <Loader2 className='h-4 w-4 animate-spin' /> : <RotateCcw className='h-4 w-4' />}
                         Test
                     </button>
-                    <button type='button' disabled={!alert || testBusy || sendBusy} onClick={() => alert ? void onSend(alert.id) : undefined} className='inline-flex min-h-8 items-center justify-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-primary/15 disabled:cursor-not-allowed disabled:opacity-60'>
+                    <button type='button' disabled={!alert || testBusy || sendBusy} onClick={() => alert ? void onSend(alert.id) : undefined} className='inline-flex min-h-8 items-center justify-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-xs font-semibold text-ui-on-primary transition hover:bg-ui-primary/15 disabled:cursor-not-allowed disabled:opacity-60'>
                         {sendBusy ? <Loader2 className='h-4 w-4 animate-spin' /> : latestDelivery?.status === 'failed' ? <RotateCcw className='h-4 w-4' /> : <Send className='h-4 w-4' />}
                         {latestDelivery?.status === 'failed' ? 'Retry' : 'Send'}
                     </button>
@@ -2529,7 +2529,7 @@ function CaseButton({ busy, disabled = false, disabledReason, icon, onClick, chi
 
 function CaseLink({ href, children }: { href: string, children: string }) {
     return (
-        <a href={href} className='inline-flex h-9 min-w-0 items-center justify-center gap-2 rounded-lg border border-ui-primary bg-ui-primary/10 px-2.5 text-xs font-semibold text-ui-text transition hover:bg-ui-primary/15 focus:outline-none focus:ring-2 focus:ring-ui-primary/30 sm:px-3'>
+        <a href={href} className='inline-flex h-9 min-w-0 items-center justify-center gap-2 rounded-lg border border-ui-primary bg-ui-primary/10 px-2.5 text-xs font-semibold text-ui-on-primary transition hover:bg-ui-primary/15 focus:outline-none focus:ring-2 focus:ring-ui-primary/30 sm:px-3'>
             <FolderOpen className='h-4 w-4' />
             {children}
         </a>

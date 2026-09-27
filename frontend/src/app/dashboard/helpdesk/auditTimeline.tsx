@@ -149,7 +149,7 @@ export default function AuditTimeline({ events: initialEvents, params, responseE
                             <div className='grid grid-cols-[minmax(0,1fr)_auto_auto] gap-2 md:grid-cols-[minmax(0,1fr)_auto_auto_auto] md:items-center'>
                                 <label className='sr-only' htmlFor='audit-search'>Search audit events</label>
                                 <input id='audit-search' className={`${fieldClass} col-span-3 md:col-span-1`} name='q' defaultValue={primarySearch} placeholder='Search audit events' />
-                                <button className='h-9 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90' type='submit'>Search</button>
+                                <button className='h-9 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary transition hover:opacity-90' type='submit'>Search</button>
                                 <Link className={quietButtonClass} href='/helpdesk'>Clear</Link>
                                 <details className='relative' ref={notificationPanel} onKeyDown={event => { if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus() } }}>
                                     <summary aria-label={`Notifications: ${reviewEvents.length} event${reviewEvents.length === 1 ? '' : 's'} to review`} className='flex h-9 cursor-pointer list-none items-center justify-center rounded-lg border border-ui-border bg-ui-raised px-3 text-ui-text transition hover:border-ui-primary hover:bg-ui-panel [&::-webkit-details-marker]:hidden'>

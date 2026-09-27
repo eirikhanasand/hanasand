@@ -1303,7 +1303,7 @@ export default function BrowserPageClient({ initialData, resultId, resultRunId }
                                     disabled={!formReady}
                                     className='col-span-2 h-12 min-w-0 rounded-md border border-ui-border bg-ui-canvas px-3 font-mono text-sm text-ui-text outline-none transition focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20 md:col-span-1'
                                 />
-                                <button type='submit' disabled={!formReady || !normalizedTarget} className='inline-flex h-12 items-center justify-center gap-2 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'>
+                                <button type='submit' disabled={!formReady || !normalizedTarget} className='inline-flex h-12 items-center justify-center gap-2 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'>
                                     <Play className='h-4 w-4' />
                                     Start
                                 </button>
@@ -1385,10 +1385,10 @@ export default function BrowserPageClient({ initialData, resultId, resultRunId }
     }
 
     return (
-        <main className='relative min-h-[calc(100vh-5.5rem)] overflow-x-hidden bg-ui-canvas text-ui-text'>
+        <main className='relative min-h-app-viewport overflow-x-hidden bg-ui-canvas text-ui-text'>
             {loadingBrowser ? <BrowserLoading stage={startupStage} elapsed={runStartedAt ? Math.max(0, Math.floor((clockNow - runStartedAt) / 1000)) : 0} target={normalizedTarget} queuePosition={capacity?.queuePosition} onCancel={stopRun} /> : null}
             {/* Keep the stream mounted and sized so it can deliver its first frame. */}
-            <section data-browser-workspace inert={loadingBrowser} aria-hidden={loadingBrowser || undefined} className={`grid min-w-0 min-h-[calc(100vh-5.5rem)] grid-cols-1 grid-rows-[auto_minmax(0,1fr)] ${loadingBrowser ? 'pointer-events-none absolute inset-x-0 top-0 opacity-0' : ''}`}>
+            <section data-browser-workspace inert={loadingBrowser} aria-hidden={loadingBrowser || undefined} className={`grid min-w-0 min-h-app-viewport grid-cols-1 grid-rows-[auto_minmax(0,1fr)] ${loadingBrowser ? 'pointer-events-none absolute inset-x-0 top-0 opacity-0' : ''}`}>
                 <header className='sticky top-0 z-40 border-b border-ui-border bg-ui-panel px-4 py-3'>
                     <div className='mx-auto flex max-w-[96rem] flex-wrap items-start justify-between gap-3'>
                         <div className='min-w-0 flex-1 basis-72'>
@@ -2251,7 +2251,7 @@ function ProviderViewportEvidence({ tool, capture }: { tool: SandboxTool; captur
     if (capture.image && !capture.deobfuscatedCode) {
         return (
             <div className='h-full w-full min-w-0 overflow-auto bg-ui-canvas'>
-                <img src={capture.image} alt={`${tool.name} provider screenshot`} className='block w-full min-w-0 bg-white' />
+                <img src={capture.image} alt={`${tool.name} provider screenshot`} className='block w-full min-w-0 bg-ui-panel' />
                 <div className='border-t border-ui-border bg-ui-panel/95 p-3'>
                     <ProviderReportDetails tool={tool} capture={capture} compact />
                 </div>

@@ -38,7 +38,7 @@ function PlanCard({ plan }: { plan: typeof commercialAccessPlans[number] }) {
                 <p className='mt-2 min-h-12 text-sm leading-5 text-ui-muted'>{plan.summary}</p>
                 <p className='mt-4 text-base font-normal normal-case text-ui-text'>{plan.priceNok} kr / month</p>
                 <p className='mt-1 text-sm font-semibold text-ui-primary'>{plan.quota}</p>
-                <Link href={`/api/billing/checkout?plan=${plan.id}`} className={`mt-4 inline-flex h-10 w-full items-center justify-center rounded-md px-3 text-sm font-semibold transition ${highlighted ? 'bg-ui-primary text-ui-canvas hover:opacity-90' : 'border border-ui-border bg-ui-raised text-ui-text hover:border-ui-primary'}`}>
+                <Link href={`/api/billing/checkout?plan=${plan.id}`} className={`mt-4 inline-flex h-10 w-full items-center justify-center rounded-md px-3 text-sm font-semibold transition ${highlighted ? 'bg-ui-primary text-ui-on-primary hover:opacity-90' : 'border border-ui-border bg-ui-raised text-ui-text hover:border-ui-primary'}`}>
                     Buy now
                 </Link>
                 <div className='mt-4 border-t border-ui-border pt-3'>

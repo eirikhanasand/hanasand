@@ -68,7 +68,7 @@ function ActionLink({ href, icon, label }: { href: string, icon: ReactNode, labe
     return (
         <Link
             href={href}
-            className='inline-flex items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-sm font-semibold text-ui-text shadow-sm transition hover:border-ui-primary/35 hover:bg-ui-primary/10'
+            className='inline-flex items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-sm font-semibold text-ui-on-primary shadow-sm transition hover:border-ui-primary/35 hover:bg-ui-primary/10'
         >
             {icon}
             {label}

@@ -546,7 +546,7 @@ function ActorReferences({ citations, references, activeCitation }: { citations:
                 <tbody>
                     {actorReferences.map((reference, index) => {
                         const number = index + 1
-                        return <tr key={reference.name} id={`ti-reference-${number}`} aria-current={activeCitation === number ? 'location' : undefined} className={`border-b border-ui-border last:border-b-0 transition-colors dark:border-ui-border ${activeCitation === number ? 'bg-ui-primary/15 text-ui-text ring-1 ring-inset ring-ui-primary/45 dark:bg-ui-primary/15 dark:text-ui-text' : ''}`}>
+                        return <tr key={reference.name} id={`ti-reference-${number}`} aria-current={activeCitation === number ? 'location' : undefined} className={`border-b border-ui-border last:border-b-0 transition-colors dark:border-ui-border ${activeCitation === number ? 'bg-ui-primary/15 text-ui-on-primary ring-1 ring-inset ring-ui-primary/45 dark:bg-ui-primary/15 dark:text-ui-on-primary' : ''}`}>
                             <td className='whitespace-nowrap px-3 py-2 align-top font-normal text-ui-muted dark:text-ui-muted'>{number}.</td>
                             <td className='min-w-72 px-3 py-2 align-top'>{reference.url ? <a href={reference.url} target='_blank' rel='noopener noreferrer' className='text-ui-text hover:text-ui-primary hover:underline dark:text-ui-text'>{reference.name}</a> : <span className='text-ui-text dark:text-ui-text'>{reference.name}</span>}</td>
                             <td className='min-w-48 px-3 py-2 align-top'>{reference.author}</td>
@@ -895,7 +895,7 @@ function SecondaryAnalysisTabs({ active, onSelect }: { active: SecondaryAnalysis
                             role='tab'
                             aria-selected={selected}
                             onClick={() => onSelect(view.id)}
-                            className={`grid min-h-10 min-w-0 content-center rounded-md border px-2 py-1.5 text-left text-xs transition focus:outline-none focus:ring-2 focus:ring-ui-primary/35 ${selected ? 'border-ui-primary/35 bg-ui-primary/10 text-ui-text dark:border-ui-primary/40 dark:bg-ui-primary/15 dark:text-ui-text' : 'border-ui-border bg-ui-panel text-ui-muted hover:bg-ui-raised dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted dark:hover:bg-ui-raised'}`}
+                            className={`grid min-h-10 min-w-0 content-center rounded-md border px-2 py-1.5 text-left text-xs transition focus:outline-none focus:ring-2 focus:ring-ui-primary/35 ${selected ? 'border-ui-primary/35 bg-ui-primary/10 text-ui-on-primary dark:border-ui-primary/40 dark:bg-ui-primary/15 dark:text-ui-on-primary' : 'border-ui-border bg-ui-panel text-ui-muted hover:bg-ui-raised dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted dark:hover:bg-ui-raised'}`}
                         >
                             <span className='wrap-break-word font-semibold'>{view.label}</span>
                             <span className='hidden wrap-break-word text-[11px] md:block'>{view.detail}</span>
@@ -2101,7 +2101,7 @@ function SelectedEvidenceContextTable({ drilldown }: { drilldown: SelectedSource
             </div>
             <div className='grid gap-2 p-2 md:hidden'>
                 {rows.map(row => (
-                    <div key={`mobile-${row.rowId}`} className='rounded-lg border border-ui-border bg-white p-3 dark:border-ui-border dark:bg-ui-panel'>
+                    <div key={`mobile-${row.rowId}`} className='rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border'>
                         <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                             <div className='min-w-0'>
                                 <p className='wrap-break-word text-xs font-semibold text-ui-text dark:text-ui-text'>{row.sourceName}</p>
@@ -5397,12 +5397,12 @@ function EmptyState() {
         <section data-ti-empty-workspace='true' className='grid justify-items-center gap-4 text-center'>
             <div className='flex flex-wrap justify-center gap-2'>
                 {launchItems.map(item => (
-                    <Link key={item.href} href={item.href} className='inline-flex h-9 items-center gap-2 rounded-full border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10 focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'>
+                    <Link key={item.href} href={item.href} className='inline-flex h-9 items-center gap-2 rounded-full border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-on-primary transition hover:border-ui-primary/35 hover:bg-ui-primary/10 focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-on-primary dark:hover:bg-ui-raised'>
                         <span className='text-ui-primary dark:text-ui-primary'>{item.icon}</span>
                         {item.label}
                     </Link>
                 ))}
-                <button type='button' onClick={() => setShowSearchHelp(true)} className='inline-flex h-9 items-center gap-2 rounded-full border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10 focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised' aria-haspopup='dialog'>
+                <button type='button' onClick={() => setShowSearchHelp(true)} className='inline-flex h-9 items-center gap-2 rounded-full border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-on-primary transition hover:border-ui-primary/35 hover:bg-ui-primary/10 focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-on-primary dark:hover:bg-ui-raised' aria-haspopup='dialog'>
                     <HelpCircle className='h-4 w-4 text-ui-primary dark:text-ui-primary' />
                     Search help
                 </button>
@@ -5511,7 +5511,7 @@ function InfoTip({ label }: { label: string }) {
             <span
                 tabIndex={0}
                 aria-label={label}
-                className='inline-flex h-6 w-6 cursor-help items-center justify-center rounded-full text-ui-muted transition hover:bg-ui-primary/10 hover:text-ui-primary focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:text-ui-muted dark:hover:bg-ui-raised dark:hover:text-ui-text'
+                className='inline-flex h-6 w-6 cursor-help items-center justify-center rounded-full text-ui-muted transition hover:bg-ui-primary/10 hover:text-ui-primary focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:text-ui-muted dark:hover:bg-ui-raised dark:hover:text-ui-on-primary'
             >
                 <HelpCircle className='h-3.5 w-3.5' />
             </span>

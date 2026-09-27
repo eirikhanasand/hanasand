@@ -85,7 +85,7 @@ export default function CreateRuleDialog({ category, organizationId, canManage, 
             {!invalid && !editingJson && <RulePreview key={previewKey} organizationId={organizationId} conditions={conditions} action={action} range={range} onReady={previewReady} />}
             <footer className='flex flex-wrap items-center justify-between gap-3 border-t border-ui-border pt-4'>
                 <p className='text-xs text-ui-muted'>{!permitted ? stage === 'analyze' ? 'System administrator access is required for retention rules.' : 'Owner or admin access is required.' : action === 'drop' ? 'Matching Low events will not be stored.' : ''}</p>
-                <button type='submit' disabled={busy || !permitted || editingJson || readyPreview !== previewKey || Boolean(invalid) || name.trim().length < 2 || explanation.trim().length < 10} className='rounded-md bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas disabled:opacity-50'>{busy ? 'Creating…' : 'Create rule'}</button>
+                <button type='submit' disabled={busy || !permitted || editingJson || readyPreview !== previewKey || Boolean(invalid) || name.trim().length < 2 || explanation.trim().length < 10} className='rounded-md bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-on-primary disabled:opacity-50'>{busy ? 'Creating…' : 'Create rule'}</button>
             </footer>
             {conditions.some(condition => condition.operator === 'regex' && condition.value) && invalid && <p role='alert' className='text-sm text-ui-text'>{invalid}</p>}
         </form>

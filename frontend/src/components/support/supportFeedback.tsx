@@ -29,7 +29,7 @@ export default function SupportFeedback({ feedback, submit }: { feedback: Feedba
         <div role='group' aria-label='Rate your support experience' className='flex gap-1'>{[1, 2, 3, 4, 5].map(star => <button key={star} type='button' aria-label={`${star} ${star === 1 ? 'star' : 'stars'}`} aria-pressed={rating === star} disabled={saving} onClick={() => setRating(star)} className='rounded-lg p-2 text-ui-warning hover:bg-ui-raised focus-visible:outline-2 focus-visible:outline-ui-primary disabled:opacity-50'><Star aria-hidden='true' className={`h-6 w-6 ${star <= rating ? 'fill-current' : ''}`} /></button>)}</div>
         {rating > 0 && rating <= 3 ? <label className='grid gap-1.5 text-xs text-ui-muted'>What could we improve? (optional)<textarea aria-label='Feedback' rows={3} maxLength={2000} disabled={saving} value={comment} onChange={event => setComment(event.target.value)} className='min-w-0 resize-none rounded-lg border border-ui-border bg-ui-canvas px-3 py-2 text-sm text-ui-text outline-none focus:border-ui-primary' /></label> : null}
         {error ? <p role='alert' className='text-xs text-ui-text'>{error}</p> : null}
-        <button type='submit' disabled={!rating || saving} className='w-fit rounded-lg bg-ui-primary px-3 py-2 text-xs font-semibold text-ui-canvas disabled:opacity-50'>{saving ? 'Saving…' : 'Send feedback'}</button>
+        <button type='submit' disabled={!rating || saving} className='w-fit rounded-lg bg-ui-primary px-3 py-2 text-xs font-semibold text-ui-on-primary disabled:opacity-50'>{saving ? 'Saving…' : 'Send feedback'}</button>
     </form>
 }
 
@@ -104,7 +104,7 @@ export function GuestSupportFeedback({ feedback, submit, submitCloseFeedback, on
             {error ? <p role='alert' className='text-xs text-ui-text'>{error}</p> : null}
             <div className='flex w-full items-center justify-between gap-3'>
                 <button type='button' onClick={onNewChat} className='rounded-lg px-3 py-2 text-sm text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Start a new chat</button>
-                <button type='submit' disabled={!rating || saving} className='rounded-lg bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:opacity-50'>{saving ? 'Saving...' : 'Send feedback'}</button>
+                <button type='submit' disabled={!rating || saving} className='rounded-lg bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-on-primary transition hover:opacity-90 disabled:opacity-50'>{saving ? 'Saving...' : 'Send feedback'}</button>
             </div>
         </form>}
     </div>

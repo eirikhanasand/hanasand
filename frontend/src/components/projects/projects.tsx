@@ -7,6 +7,7 @@ import { redirect } from 'next/navigation'
 import { DashboardPanel } from '@/components/dashboard/ui'
 import prettyDate from '@/utils/date/prettyDate'
 import type { ReactNode } from 'react'
+import Button from '@/components/misc/button'
 
 export default async function Projects() {
     const Cookies = await cookies()
@@ -34,7 +35,7 @@ export default async function Projects() {
                         <WorkspaceMetric icon={<Clock3 className='h-4 w-4' />} label='Latest update' value={activeProject ? prettyDate(activeProject.last_updated) : 'Listening'} />
                         <WorkspaceMetric icon={<Users className='h-4 w-4' />} label='Editors' value={String(editorCount)} />
                     </div>
-                    <Link href='/s' className='inline-flex h-9 w-fit items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10'>
+                    <Link href='/s' className='inline-flex h-9 w-fit items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-on-primary transition hover:border-ui-primary/35 hover:bg-ui-primary/10'>
                         <Plus className='h-4 w-4' />
                         <span>Create workspace</span>
                     </Link>
@@ -77,7 +78,7 @@ function WorkspaceWelcome() {
                     <h2 className='text-2xl font-semibold text-ui-text'>Projects</h2>
                     <p className='mt-2 text-sm leading-6 text-ui-muted'>Create your first project now.</p>
                 </div>
-                <Link href='/s' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-white transition hover:opacity-90'><Plus className='h-4 w-4' />Create</Link>
+                <Button path='/s' size='lg' text='Create' icon={<Plus className='h-4 w-4' />} />
             </div>
         </section>
     )

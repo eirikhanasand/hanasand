@@ -73,7 +73,7 @@ export default function TestClientPopup({
                     <button
                         type='button'
                         onClick={onClose}
-                        className='rounded-lg p-2 text-ui-text/35 transition-colors hover:bg-ui-primary/12 hover:text-ui-primary'
+                        className='rounded-lg p-2 text-ui-on-primary/35 transition-colors hover:bg-ui-primary/12 hover:text-ui-primary'
                     >
                         <X className='h-5 w-5' />
                     </button>
@@ -109,7 +109,7 @@ export default function TestClientPopup({
                                         key={message.id}
                                         className={`max-w-3xl rounded-lg border px-4 py-3 ${
                                             message.role === 'user'
-                                                ? 'ml-auto border-ui-primary/20 bg-ui-primary/12 text-ui-text/90'
+                                                ? 'ml-auto border-ui-primary/20 bg-ui-primary/12 text-ui-on-primary/90'
                                                 : message.error
                                                     ? 'border-ui-danger/20 bg-ui-raised/10 text-ui-text'
                                                     : 'bg-ui-canvas/20 text-ui-text/90 outline outline-ui-border'

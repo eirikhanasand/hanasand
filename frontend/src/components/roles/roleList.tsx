@@ -159,7 +159,7 @@ export default function RoleList({ roles, users, canManage, highestPriority }: {
                 <RoleIconPicker key={form === 'new' ? 'new' : form.id} value={icon} role={{ id: form === 'new' ? undefined : form.id, name }} onChange={setIcon} disabled={pending} />
                 <div className='flex justify-end gap-2 sm:col-span-2'>
                     <button type='button' disabled={pending} onClick={() => { setForm(null); setError('') }} className='min-h-11 rounded px-3 py-2 text-sm text-ui-muted'>Cancel</button>
-                    <button type='submit' disabled={pending || !name.trim()} className='min-h-11 rounded bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas disabled:opacity-50'>{pending ? 'Saving…' : form === 'new' ? 'Create role' : 'Save'}</button>
+                    <button type='submit' disabled={pending || !name.trim()} className='min-h-11 rounded bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-on-primary disabled:opacity-50'>{pending ? 'Saving…' : form === 'new' ? 'Create role' : 'Save'}</button>
                 </div>
             </form>}
             {removing && <div role='alertdialog' aria-label={`Delete ${removing.name}?`} className='grid gap-2 rounded-lg border border-ui-border p-3 text-sm text-ui-text'>

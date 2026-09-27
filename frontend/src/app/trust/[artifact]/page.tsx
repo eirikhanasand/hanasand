@@ -38,7 +38,7 @@ export default async function TrustArtifactPage({ params }: Props) {
     if (!artifact) notFound()
 
     return (
-        <main className='min-h-[calc(100vh-5.5rem)] bg-ui-canvas text-ui-text'>
+        <main className='min-h-app-viewport bg-ui-canvas text-ui-text'>
             <section className='border-b border-ui-border bg-ui-panel'>
                 <div className='mx-auto grid max-w-6xl gap-6 px-4 py-12 md:px-8 md:py-16'>
                     <Link href='/trust' className='inline-flex w-fit items-center gap-2 text-sm font-semibold text-ui-primary transition hover:text-ui-text'>
@@ -132,7 +132,7 @@ export default async function TrustArtifactPage({ params }: Props) {
                             ))}
                         </ul>
                     </div>
-                    <Link href='/contact?intent=procurement' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
+                    <Link href='/contact?intent=procurement' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary transition hover:opacity-90'>
                         Request review docs
                         <ArrowRight className='h-4 w-4' />
                     </Link>

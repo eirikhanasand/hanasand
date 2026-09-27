@@ -164,7 +164,7 @@ export default function PreviewFlow({
                     type='button'
                     disabled={!runtime.canRun}
                     onClick={openPreview}
-                    className='inline-flex h-8 items-center gap-2 rounded-lg bg-ui-primary px-3 text-[11px] font-bold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-ui-raised disabled:text-ui-muted'
+                    className='inline-flex h-8 items-center gap-2 rounded-lg bg-ui-primary px-3 text-[11px] font-bold text-ui-on-primary transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-ui-raised disabled:text-ui-muted'
                 >
                     <Play className='h-3.5 w-3.5 fill-current' />
                     Preview

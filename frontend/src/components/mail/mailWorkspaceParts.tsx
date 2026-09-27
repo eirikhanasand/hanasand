@@ -250,7 +250,7 @@ export function Composer({
                     <p className='text-[11px] text-ui-muted'>Sending as {mailboxAddress}</p>
                     <div className='flex items-center gap-2'>
                         <button type='button' className={toolbarButton} onClick={onClose}>Cancel</button>
-                        <button data-testid='mail-compose-send' type='submit' className='inline-flex h-8 items-center gap-1.5 rounded-lg bg-ui-primary px-3 text-[11px] font-medium text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45' disabled={submitting}>
+                        <button data-testid='mail-compose-send' type='submit' className='inline-flex h-8 items-center gap-1.5 rounded-lg bg-ui-primary px-3 text-[11px] font-medium text-ui-on-primary transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45' disabled={submitting}>
                             <Send className='h-3.5 w-3.5' />
                             {submitting ? 'Sending…' : 'Send'}
                         </button>

@@ -32,7 +32,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
                     title='VM detail unavailable'
                     description={`The console could not load "${id}". The machine may have been deleted, renamed, or the VM API may be reconnecting.`}
                     actions={(
-                        <Link href='/vms' className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
+                        <Link href='/vms' className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary transition hover:opacity-90'>
                             <ArrowLeft className='h-4 w-4' />
                             Back to VMs
                         </Link>

@@ -70,7 +70,7 @@ const trustPractices = [
 
 export default function TrustPage() {
     return (
-        <main className='min-h-[calc(100vh-5.5rem)] bg-ui-canvas text-ui-text'>
+        <main className='min-h-app-viewport bg-ui-canvas text-ui-text'>
             <section className='border-b border-ui-border bg-ui-panel'>
                 <div className='mx-auto grid max-w-7xl gap-10 px-4 py-14 md:px-8 md:py-20 lg:grid-cols-[minmax(0,0.9fr)_minmax(25rem,0.72fr)] lg:items-center'>
                     <div className='grid gap-5'>
@@ -124,7 +124,7 @@ export default function TrustPage() {
                     <div className='grid gap-3 sm:grid-cols-2'>
                         {trustPractices.map(([title, detail]) => (
                             <div key={title} className='flex gap-3 rounded-lg border border-ui-border bg-ui-panel p-4'>
-                                <span className='mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-ui-success shadow-[0_0_14px_rgba(49,196,141,0.55)]' />
+                                <span className='mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-ui-success ui-glow-success' />
                                 <div>
                                     <h3 className='text-sm font-semibold'>{title}</h3>
                                     <p className='mt-1 text-sm leading-6 text-ui-muted'>{detail}</p>
@@ -182,7 +182,7 @@ export default function TrustPage() {
                         <h2 className='mt-2 max-w-3xl text-3xl font-semibold'>See how Hanasand turns public intelligence into useful alerts.</h2>
                     </div>
                     <div className='flex flex-wrap gap-3 lg:justify-end'>
-                        <Link href='/dwm' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
+                        <Link href='/dwm' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary transition hover:opacity-90'>
                             See Hanasand in action
                             <ArrowRight className='h-4 w-4' />
                         </Link>

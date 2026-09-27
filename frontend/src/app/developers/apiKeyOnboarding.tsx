@@ -173,7 +173,7 @@ export default function ApiKeyOnboarding({ server }: { server: string }) {
                     <div className='grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-5 md:grid-cols-[1fr_auto] md:items-center'>
                         <div><h3 className='font-semibold'>Sign in to create a real key</h3><p className='mt-1 text-sm leading-6 text-ui-muted'>New accounts continue back here, create an organization, and can issue the first key without a sales ticket.</p></div>
                         <div className='flex flex-wrap gap-2'>
-                            <Link href='/register?path=%2Fdevelopers%23api-access' className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas'>Create account<Plus className='h-4 w-4' /></Link>
+                            <Link href='/register?path=%2Fdevelopers%23api-access' className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary'>Create account<Plus className='h-4 w-4' /></Link>
                             <Link href='/login?path=%2Fdevelopers%23api-access' className='inline-flex h-10 items-center rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold'>Log in</Link>
                         </div>
                     </div>
@@ -194,7 +194,7 @@ export default function ApiKeyOnboarding({ server }: { server: string }) {
                             ) : (
                                 <form id='create-api-organization-form' className='mt-4 grid gap-3' onSubmit={createOrganization}>
                                     <label className='grid gap-2 text-sm font-semibold'>Organization name<input name='organizationName' minLength={2} maxLength={120} required className='h-11 rounded-lg border border-ui-border bg-ui-canvas px-3 font-normal' placeholder='Example Security Team' /></label>
-                                    <button disabled={busy === 'organization'} className='inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas disabled:opacity-60'>{busy === 'organization' ? 'Creating' : 'Create organization'}<Plus className='h-4 w-4' /></button>
+                                    <button disabled={busy === 'organization'} className='inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary disabled:opacity-60'>{busy === 'organization' ? 'Creating' : 'Create organization'}<Plus className='h-4 w-4' /></button>
                                 </form>
                             )}
                         </article>
@@ -213,7 +213,7 @@ export default function ApiKeyOnboarding({ server }: { server: string }) {
                             ) : (
                                 <form id='create-api-key-form' className='mt-4 grid gap-3' onSubmit={createApiKey}>
                                     <label className='grid gap-2 text-sm font-semibold'>Key name<input name='keyName' minLength={2} maxLength={80} required className='h-11 rounded-lg border border-ui-border bg-ui-canvas px-3 font-normal' defaultValue='Developer API' /></label>
-                                    <button disabled={busy === 'key'} className='inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas disabled:opacity-60'>{busy === 'key' ? 'Creating' : 'Create API key'}<KeyRound className='h-4 w-4' /></button>
+                                    <button disabled={busy === 'key'} className='inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary disabled:opacity-60'>{busy === 'key' ? 'Creating' : 'Create API key'}<KeyRound className='h-4 w-4' /></button>
                                 </form>
                             )}
                         </article>

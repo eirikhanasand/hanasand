@@ -216,7 +216,7 @@ export default function AuditTimeline({ initialAudit, filters }: { initialAudit:
                 <form className='flex flex-wrap items-center gap-2' onSubmit={event => { event.preventDefault(); void loadEvents({ ...activeFilters, q: undefined, hql: undefined, [mode]: search.trim() }) }}>
                     <select aria-label='Search mode' value={mode} onChange={event => { setMode(event.target.value); setSearch(''); searchInput.current?.focus() }} className='h-9 rounded-md border border-ui-border bg-ui-raised px-2 text-sm'><option value='q'>Free text</option><option value='hql'>HQL</option></select>
                     <input ref={searchInput} autoFocus type='search' aria-label={mode === 'hql' ? 'HQL query' : 'Search audit events'} value={search} onChange={event => setSearch(event.target.value)} placeholder={mode === 'hql' ? 'AuditEvents | where Result == "failed" | take 100' : 'Search all audit events…'} maxLength={mode === 'hql' ? 8000 : 1000} spellCheck={mode !== 'hql'} className={`h-9 min-w-32 flex-1 rounded-md border border-ui-border bg-ui-raised px-3 text-sm ${mode === 'hql' ? 'font-mono' : ''}`} />
-                    <button type='submit' disabled={loading} className='h-9 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas disabled:opacity-50'>{loading ? 'Searching…' : 'Search'}</button>
+                    <button type='submit' disabled={loading} className='h-9 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-on-primary disabled:opacity-50'>{loading ? 'Searching…' : 'Search'}</button>
                     {(param(activeFilters, 'q') || param(activeFilters, 'hql')) && <button type='button' onClick={() => { setSearch(''); void loadEvents({ ...activeFilters, q: undefined, hql: undefined }) }} className='h-9 px-2 text-sm text-ui-muted'>Clear search</button>}
                     <button type='button' aria-label='Close search' onClick={() => setSearchOpen(false)} className='grid h-9 w-9 place-items-center rounded-md hover:bg-ui-raised'><X className='h-4 w-4' /></button>
                 </form>
@@ -284,7 +284,7 @@ export default function AuditTimeline({ initialAudit, filters }: { initialAudit:
                             </select>
                             <input className='h-9 rounded-md border border-ui-border bg-ui-raised px-3 text-sm text-ui-text' name='from' defaultValue={param(filters, 'from')} placeholder='From (ISO time)' />
                             <input className='h-9 rounded-md border border-ui-border bg-ui-raised px-3 text-sm text-ui-text' name='to' defaultValue={param(filters, 'to')} placeholder='To (ISO time)' />
-                            <div className='flex gap-2'><button className='h-9 flex-1 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas' type='submit'>Filter</button><Link className='grid h-9 place-items-center rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text' href='/management/audit'>Clear</Link></div>
+                            <div className='flex gap-2'><button className='h-9 flex-1 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-on-primary' type='submit'>Filter</button><Link className='grid h-9 place-items-center rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text' href='/management/audit'>Clear</Link></div>
                         </form>
                     </DashboardPanel>
                 </div>

@@ -123,7 +123,7 @@ export default function LoadTestingOperations() {
                                 <button
                                     type='submit'
                                     disabled={!canStart || isStarting}
-                                    className='inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-lg bg-ui-primary px-5 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:border disabled:border-ui-border disabled:bg-ui-raised disabled:text-ui-muted'
+                                    className='inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-lg bg-ui-primary px-5 text-sm font-semibold text-ui-on-primary transition hover:opacity-90 disabled:cursor-not-allowed disabled:border disabled:border-ui-border disabled:bg-ui-raised disabled:text-ui-muted'
                                 >
                                     <Search className='h-4 w-4' />
                                     {isStarting ? 'Starting' : 'Start check'}
@@ -249,7 +249,7 @@ export default function LoadTestingOperations() {
                                     key={view}
                                     type='button'
                                     onClick={() => setHistoryView(view)}
-                                    className={`h-8 rounded-md px-3 text-xs font-semibold transition ${historyView === view ? 'bg-ui-primary text-ui-canvas' : 'text-ui-muted hover:bg-ui-raised'}`}
+                                    className={`h-8 rounded-md px-3 text-xs font-semibold transition ${historyView === view ? 'bg-ui-primary text-ui-on-primary' : 'text-ui-muted hover:bg-ui-raised'}`}
                                 >
                                     {view === 'mine' ? 'My checks' : 'Global'}
                                 </button>

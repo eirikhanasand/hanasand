@@ -416,7 +416,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
             >
                 <div className='flex gap-2'>
                     <input value={importInput} onChange={(event) => onImportInputChange(event.target.value)} placeholder='owner/repo, URL, or repo#branch:path' className='min-w-0 flex-1 rounded-lg bg-ui-panel px-3 py-2 text-sm text-ui-text outline outline-ui-border placeholder:text-ui-muted' />
-                    <button type='button' onClick={() => void onImportRepo()} disabled={importPending} className='rounded-lg bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas transition-opacity disabled:opacity-60'>
+                    <button type='button' onClick={() => void onImportRepo()} disabled={importPending} className='rounded-lg bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-on-primary transition-opacity disabled:opacity-60'>
                         {importPending ? 'Importing' : 'Import'}
                     </button>
                 </div>
@@ -441,7 +441,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 subtitle='Create a Docker-ready Next.js workspace.'
             >
                 <input value={starterName} onChange={(event) => setStarterName(event.target.value)} placeholder='Project name' className='rounded-lg bg-ui-panel px-3 py-2 text-sm text-ui-text outline outline-ui-border placeholder:text-ui-muted' />
-                <button type='button' onClick={() => void onScaffoldStarter('nextjs_docker', starterName)} className='rounded-lg bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas transition-opacity hover:opacity-90'>
+                <button type='button' onClick={() => void onScaffoldStarter('nextjs_docker', starterName)} className='rounded-lg bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-on-primary transition-opacity hover:opacity-90'>
                     Create workspace
                 </button>
             </Panel>
@@ -542,7 +542,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                     type='button'
                     onClick={() => void onStartDeployment({ vmName: deployVmName, port: deployPort, healthPath: deployHealthPath, accessPolicy: deployAccessPolicy, environment: deployEnvironment })}
                     disabled={deployPending}
-                    className='rounded-lg bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas transition-opacity hover:opacity-90 disabled:opacity-60'
+                    className='rounded-lg bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-on-primary transition-opacity hover:opacity-90 disabled:opacity-60'
                 >
                     {deployPending ? 'Checking launch target...' : 'Run launch check'}
                 </button>
@@ -625,7 +625,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                         {repo.id === activeRepoId && repo.files.length ? (
                             <div className='mt-3 max-h-36 space-y-1 overflow-y-auto pr-1'>
                                 {repo.files.slice(0, 80).map((file) => (
-                                    <button key={file.path} type='button' onClick={() => void onSelectRepoFile(file.path)} className={`block w-full rounded-lg px-2 py-1.5 text-left text-xs outline ${selectedRepoFilePath === file.path ? 'bg-ui-primary/12 text-ui-text outline-ui-primary/18' : 'bg-ui-raised text-ui-muted outline-transparent hover:outline-ui-border'}`}>
+                                    <button key={file.path} type='button' onClick={() => void onSelectRepoFile(file.path)} className={`block w-full rounded-lg px-2 py-1.5 text-left text-xs outline ${selectedRepoFilePath === file.path ? 'bg-ui-primary/12 text-ui-on-primary outline-ui-primary/18' : 'bg-ui-raised text-ui-muted outline-transparent hover:outline-ui-border'}`}>
                                         <div className='flex items-center justify-between gap-3'>
                                             <span className='truncate'>{file.path}</span>
                                             <PathBadge path={file.path} selected={selectedRepoFilePath === file.path} recentPaths={recentPaths} lastChangedPath={lastChangedPath} />
@@ -672,7 +672,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                                 key={path}
                                 type='button'
                                 onClick={() => void onSelectShareFile(path)}
-                                className={`block w-full rounded-lg px-2 py-1.5 text-left text-xs outline ${selectedPath === path ? 'bg-ui-primary/12 text-ui-text outline-ui-primary/18' : 'bg-ui-raised text-ui-muted outline-transparent hover:outline-ui-border'}`}
+                                className={`block w-full rounded-lg px-2 py-1.5 text-left text-xs outline ${selectedPath === path ? 'bg-ui-primary/12 text-ui-on-primary outline-ui-primary/18' : 'bg-ui-raised text-ui-muted outline-transparent hover:outline-ui-border'}`}
                             >
                                 <div className='flex items-center justify-between gap-3'>
                                     <span className='truncate'>{path}</span>

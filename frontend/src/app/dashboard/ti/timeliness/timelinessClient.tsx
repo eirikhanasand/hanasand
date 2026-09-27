@@ -248,7 +248,7 @@ function RecordDetail({ item, form, setForm, saving, onSubmit }: { item: Item, f
                 <Field label='Public reference URL'><input required type='url' value={form.referenceUrl} onChange={event => setForm({ ...form, referenceUrl: event.target.value })} placeholder='https://…' className={inputClass} /></Field>
                 <Field label='Source-field path'><input required value={form.evidencePath} onChange={event => setForm({ ...form, evidencePath: event.target.value })} placeholder='article.time[datetime]' className={inputClass} /></Field>
                 <Field label='Reference title (optional)'><input value={form.referenceTitle} onChange={event => setForm({ ...form, referenceTitle: event.target.value })} className={inputClass} /></Field>
-                <button type='submit' disabled={saving} className='inline-flex h-9 items-center justify-center gap-2 rounded-md bg-ui-primary px-3 text-xs font-semibold text-ui-canvas hover:opacity-90 disabled:opacity-50'>{saving ? <LoaderCircle className='h-4 w-4 animate-spin' /> : <Send className='h-4 w-4' />}Record evidence</button>
+                <button type='submit' disabled={saving} className='inline-flex h-9 items-center justify-center gap-2 rounded-md bg-ui-primary px-3 text-xs font-semibold text-ui-on-primary hover:opacity-90 disabled:opacity-50'>{saving ? <LoaderCircle className='h-4 w-4 animate-spin' /> : <Send className='h-4 w-4' />}Record evidence</button>
             </form>
         </div>
     </DashboardPanel>

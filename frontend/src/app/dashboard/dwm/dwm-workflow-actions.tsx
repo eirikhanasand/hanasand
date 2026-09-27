@@ -767,7 +767,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                         className='mt-3 min-h-28 w-full resize-y rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                     />
                     <div className='mt-3 flex flex-wrap gap-2'>
-                        <button disabled={busy || Boolean(watchlistDisabledReason)} title={watchlistDisabledReason || undefined} className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'>
+                        <button disabled={busy || Boolean(watchlistDisabledReason)} title={watchlistDisabledReason || undefined} className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'>
                             {busyAction === 'watchlist' ? <Loader2 className='h-4 w-4 animate-spin' /> : <RefreshCw className='h-4 w-4' />}
                             Save and check events
                         </button>
@@ -816,7 +816,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                         className='mt-3 h-10 w-full rounded-lg border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                     />
                     <div className='mt-3 flex flex-wrap gap-2'>
-                        <button disabled={busy || Boolean(claimDisabledReason)} title={claimDisabledReason || undefined} className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'>
+                        <button disabled={busy || Boolean(claimDisabledReason)} title={claimDisabledReason || undefined} className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'>
                             {busyAction === 'claim' ? <Loader2 className='h-4 w-4 animate-spin' /> : <Plus className='h-4 w-4' />}
                             Fetch and rebuild
                         </button>
@@ -839,7 +839,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                             placeholder='@channel or https://t.me/channel'
                             className='h-10 min-w-0 flex-1 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                         />
-                        <button disabled={busy || Boolean(sourceDisabledReason)} title={sourceDisabledReason || undefined} className='inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'>
+                        <button disabled={busy || Boolean(sourceDisabledReason)} title={sourceDisabledReason || undefined} className='inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'>
                             {busyAction === 'source' ? <Loader2 className='h-4 w-4 animate-spin' /> : <Send className='h-4 w-4' />}
                             Submit source
                         </button>
@@ -994,7 +994,7 @@ function RouteRunSummary({ route, organizationId }: { route: WorkflowRouteSummar
                 </div>
                 <div className='flex flex-wrap gap-2'>
                     {route.caseHref ? (
-                        <Link href={route.caseHref} className='inline-flex h-8 items-center rounded-lg border border-ui-primary bg-ui-primary/10 px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-primary/15 focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
+                        <Link href={route.caseHref} className='inline-flex h-8 items-center rounded-lg border border-ui-primary bg-ui-primary/10 px-3 text-xs font-semibold text-ui-on-primary transition hover:bg-ui-primary/15 focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
                             Open case
                         </Link>
                     ) : null}

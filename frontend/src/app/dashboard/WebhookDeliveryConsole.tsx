@@ -271,7 +271,7 @@ export default function WebhookDeliveryConsole({ organization, initialDestinatio
                                 Endpoint URL
                                 <input className={inputClass} value={draft.url} onChange={event => setDraft(current => ({ ...current, url: event.target.value }))} placeholder={editingId ? 'Leave blank to keep existing endpoint' : 'https://discord.com/api/webhooks/...'} disabled={!canUseActions || Boolean(busy)} />
                             </label>
-                            <button type='submit' className='mt-3 inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-ui-primary px-3 text-xs font-semibold text-ui-canvas transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ui-primary/20 disabled:cursor-not-allowed disabled:opacity-60' disabled={!canUseActions || busy === 'save-destination' || !draft.name.trim() || (!editingId && !draft.url.trim())}>
+                            <button type='submit' className='mt-3 inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-ui-primary px-3 text-xs font-semibold text-ui-on-primary transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ui-primary/20 disabled:cursor-not-allowed disabled:opacity-60' disabled={!canUseActions || busy === 'save-destination' || !draft.name.trim() || (!editingId && !draft.url.trim())}>
                                 {busy === 'save-destination' ? <Loader2 className='h-4 w-4 animate-spin' /> : <CheckCircle2 className='h-4 w-4' />}
                                 {editingId ? 'Save destination' : 'Create destination'}
                             </button>

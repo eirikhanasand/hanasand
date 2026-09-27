@@ -76,7 +76,7 @@ export default function ServiceAccounts() {
                     <option value='asc'>Name: A–Z</option>
                     <option value='desc'>Name: Z–A</option>
                 </select>
-                <button type='button' onClick={() => { setCreateError(''); dialog.current?.showModal(); nameInput.current?.focus() }} className='ml-auto inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary'><Plus className='h-4 w-4' aria-hidden='true' />Add service account</button>
+                <button type='button' onClick={() => { setCreateError(''); dialog.current?.showModal(); nameInput.current?.focus() }} className='ml-auto inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary transition hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary'><Plus className='h-4 w-4' aria-hidden='true' />Add service account</button>
             </div>
             <p role='status' className='text-sm text-ui-muted'>{visibleAccounts.length} of {activeAccounts.length} service accounts</p>
             <dialog ref={dialog} aria-labelledby='create-service-account-title' aria-describedby='create-service-account-description' onCancel={event => { if (pending) event.preventDefault() }} className='m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-xl overflow-y-auto rounded-2xl border border-ui-border bg-ui-panel p-5 text-ui-text shadow-2xl backdrop:bg-ui-backdrop backdrop:backdrop-blur-sm sm:p-6'>
@@ -120,11 +120,11 @@ export default function ServiceAccounts() {
                 <div className='flex flex-wrap items-center justify-between gap-3'>
                     <p className='text-sm text-ui-muted'>Send it in the <code className='font-medium text-ui-text'>X-API-Key</code> request header.</p>
                     <div className='flex flex-wrap items-center gap-2'>
-                        <button type='button' className='inline-flex items-center gap-2 rounded-lg bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas transition hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary' onClick={async () => {
+                        <button type='button' className='inline-flex items-center gap-2 rounded-lg bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-on-primary transition hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary' onClick={async () => {
                             try { await navigator.clipboard.writeText(secret); setCopied(true); setCopyError('') }
                             catch { setCopyError('Could not copy automatically. Select the key above and copy it.'); setCopied(false) }
                         }}>{copied ? <Check className='h-4 w-4' aria-hidden='true' /> : <Copy className='h-4 w-4' aria-hidden='true' />}<span aria-live='polite'>{copied ? 'Copied' : 'Copy key'}</span></button>
-                        <button type='button' className='rounded-lg border border-ui-primary/25 px-3 py-2 text-sm font-medium text-ui-text transition hover:bg-ui-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary' onClick={() => { setSecret(''); setCopied(false); setCopyError('') }}>Dismiss key</button>
+                        <button type='button' className='rounded-lg border border-ui-primary/25 px-3 py-2 text-sm font-medium text-ui-on-primary transition hover:bg-ui-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary' onClick={() => { setSecret(''); setCopied(false); setCopyError('') }}>Dismiss key</button>
                     </div>
                 </div>
                 {copyError && <p role='alert' className='text-sm text-ui-text'>{copyError}</p>}

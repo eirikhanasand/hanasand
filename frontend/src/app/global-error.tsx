@@ -26,7 +26,7 @@ export default function GlobalError({ reset }: { error: Error & { digest?: strin
                                     This page hit an unexpected problem. Try again, or use one of the links below to continue working in Hanasand.
                                 </p>
                                 <div className='mt-7 flex flex-wrap gap-3'>
-                                    <button type='button' onClick={reset} className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
+                                    <button type='button' onClick={reset} className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary transition hover:opacity-90'>
                                         <RefreshCcw className='h-4 w-4' />
                                         Try again
                                     </button>

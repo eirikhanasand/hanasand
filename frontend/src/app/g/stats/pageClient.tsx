@@ -46,7 +46,7 @@ export default function LinkStatsPageClient() {
     }
 
     return (
-        <section className='grid min-h-[calc(100vh-5.5rem)] w-full place-items-center bg-ui-canvas px-4 py-10 text-ui-text md:px-10'>
+        <section className='grid min-h-app-viewport w-full place-items-center bg-ui-canvas px-4 py-10 text-ui-text md:px-10'>
             <div className='grid w-full max-w-md gap-3'>
                 <div className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-md'>
                     <div className='grid gap-4'>

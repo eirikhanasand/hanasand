@@ -469,7 +469,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                     }}
                                     className={`flex min-w-0 w-full items-center justify-between rounded-lg border px-2.5 py-2 text-left text-xs transition ${
                                         selectedMailboxId === mailbox.id
-                                            ? 'border-ui-primary bg-ui-primary/10 text-ui-text'
+                                            ? 'border-ui-primary bg-ui-primary/10 text-ui-on-primary'
                                             : 'border-transparent text-ui-muted hover:border-ui-border hover:bg-ui-raised hover:text-ui-text'
                                     }`}
                                     title={mailbox.name}
@@ -862,7 +862,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                     Cancel
                                 </button>
                                 <button
-                                    className='inline-flex items-center justify-center rounded-lg bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'
+                                    className='inline-flex items-center justify-center rounded-lg bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-on-primary transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'
                                     disabled={!mailboxDraft.trim() || creatingMailbox}
                                     onClick={async () => {
                                         setCreatingMailbox(true)

@@ -92,7 +92,7 @@ export default async function DarkwebIndexPage({ searchParams }: DarkwebIndexPag
     const records = search?.rows ?? []
 
     return (
-        <main className='min-h-[90.5vh] w-full bg-ui-canvas px-4 py-8 text-ui-text md:px-8'>
+        <main className='min-h-app-viewport w-full bg-ui-canvas px-4 py-8 text-ui-text md:px-8'>
             <div className='mx-auto grid w-full max-w-7xl gap-6'>
                 <section className='grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-5 shadow-sm lg:grid-cols-[1.2fr_0.8fr]'>
                     <div className='grid gap-3'>
@@ -137,7 +137,7 @@ export default async function DarkwebIndexPage({ searchParams }: DarkwebIndexPag
                         <Input label='Network' name='network' defaultValue={network} placeholder='tor, i2p, clear web' />
                         <Input label='Review type' name='legalTriage' defaultValue={legalTriage} placeholder='approved, review' />
                         <Input label='Status' name='reviewState' defaultValue={reviewState} placeholder='ready, watching' />
-                        <button className='inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
+                        <button className='inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary transition hover:opacity-90'>
                             <Filter className='h-4 w-4' />
                             Find
                         </button>

@@ -115,7 +115,7 @@ export default function RulePreview({ organizationId, conditions, action, range,
             </div>
             <label className={`relative flex cursor-pointer items-center gap-3 border-t border-ui-border px-4 py-4 transition-colors sm:px-5 ${acknowledged ? 'bg-ui-primary/10' : 'hover:bg-ui-primary/5'}`}>
                 <input type='checkbox' className='peer absolute z-10 size-5 cursor-pointer opacity-0' checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)} />
-                <span aria-hidden='true' className={`flex size-5 shrink-0 items-center justify-center rounded-md border transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-ui-primary peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-ui-raised ${acknowledged ? 'border-ui-primary bg-ui-primary text-ui-canvas' : 'border-ui-muted bg-ui-canvas'}`}><Check size={14} strokeWidth={3} className={acknowledged ? 'opacity-100' : 'opacity-0'} /></span>
+                <span aria-hidden='true' className={`flex size-5 shrink-0 items-center justify-center rounded-md border transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-ui-primary peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-ui-raised ${acknowledged ? 'border-ui-primary bg-ui-primary text-ui-on-primary' : 'border-ui-muted bg-ui-canvas'}`}><Check size={14} strokeWidth={3} className={acknowledged ? 'opacity-100' : 'opacity-0'} /></span>
                 <span className='text-sm font-medium'>Yes, I intend to match this many events.</span>
             </label>
         </div>}

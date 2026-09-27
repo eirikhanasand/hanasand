@@ -355,7 +355,7 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
                         type='button'
                         onClick={() => void syncRepository('import')}
                         disabled={!isSignedIn || Boolean(pending)}
-                        className='inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-ui-primary px-2 text-xs font-semibold text-ui-canvas transition-opacity hover:opacity-90 disabled:opacity-55'
+                        className='inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-ui-primary px-2 text-xs font-semibold text-ui-on-primary transition-opacity hover:opacity-90 disabled:opacity-55'
                     >
                         {pending === 'import' ? <LoaderCircle className='h-3.5 w-3.5 animate-spin' /> : <GitBranch className='h-3.5 w-3.5' />}
                         Load
@@ -433,7 +433,7 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
                                         onClick={() => togglePath(file.path)}
                                         className='flex min-h-8 w-full items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-2 text-left text-[11px] text-ui-muted transition-colors hover:border-ui-primary hover:text-ui-text'
                                     >
-                                        <span className={`grid h-4 w-4 shrink-0 place-items-center rounded border ${selectedPaths.has(file.path) ? 'border-ui-primary bg-ui-primary text-ui-canvas' : 'border-ui-border'}`}>
+                                        <span className={`grid h-4 w-4 shrink-0 place-items-center rounded border ${selectedPaths.has(file.path) ? 'border-ui-primary bg-ui-primary text-ui-on-primary' : 'border-ui-border'}`}>
                                             {selectedPaths.has(file.path) ? <Check className='h-3 w-3' /> : null}
                                         </span>
                                         <span className='shrink-0 font-mono text-[10px] text-ui-muted'>{file.index}{file.workingTree}</span>
@@ -478,7 +478,7 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
                             type='button'
                             onClick={() => void pushGitWorkspace()}
                             disabled={!isSignedIn || Boolean(pending)}
-                            className='inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-ui-primary px-2 text-[11px] font-semibold text-ui-canvas transition-opacity hover:opacity-90 disabled:opacity-55'
+                            className='inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-ui-primary px-2 text-[11px] font-semibold text-ui-on-primary transition-opacity hover:opacity-90 disabled:opacity-55'
                         >
                             {pending === 'push' ? <LoaderCircle className='h-3.5 w-3.5 animate-spin' /> : <SendHorizontal className='h-3.5 w-3.5' />}
                             Push

@@ -141,7 +141,7 @@ function MetricSection({ title, icon, items }: { title: string, icon: ReactNode,
 function StatPill({ label, value, icon }: { label: string, value: string, icon: ReactNode }) {
     return (
         <span
-            className='inline-flex items-center gap-2 rounded-full bg-ui-primary/12 px-3 py-1 text-sm font-semibold text-ui-text/90 outline outline-ui-primary/20'
+            className='inline-flex items-center gap-2 rounded-full bg-ui-primary/12 px-3 py-1 text-sm font-semibold text-ui-on-primary/90 outline outline-ui-primary/20'
         >
             {icon}
             <span className='text-[10px] uppercase tracking-[0.18em] text-ui-text/35'>{label}</span>

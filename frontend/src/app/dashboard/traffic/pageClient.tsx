@@ -143,7 +143,7 @@ export default function TrafficDashboard({
                 </div>
                 <button
                     type='button'
-                    className='inline-flex h-9 w-fit self-center items-center justify-center gap-2 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ui-primary/40'
+                    className='inline-flex h-9 w-fit self-center items-center justify-center gap-2 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ui-primary/40'
                     onClick={() => setShowBlockModal(true)}
                     data-traffic-primary-action
                 >
@@ -358,7 +358,7 @@ export default function TrafficDashboard({
                                 <input type='checkbox' name='is_tor' checked={form.is_tor || false} onChange={handleChange} /> Tor
                             </label>
 
-                            <button type='submit' className='mt-1 h-9 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
+                            <button type='submit' className='mt-1 h-9 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary transition hover:opacity-90'>
                                 {editingBlock ? 'Update' : 'Create'}
                             </button>
                         </form>

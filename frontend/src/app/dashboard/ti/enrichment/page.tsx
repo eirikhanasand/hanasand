@@ -50,7 +50,7 @@ export default async function TiEnrichmentPage() {
                     <Users className='mx-auto h-8 w-8 text-ui-primary' />
                     <h2 className='mt-3 text-lg font-semibold text-ui-text'>No actor profiles yet</h2>
                     <p className='mx-auto mt-1 max-w-md text-sm leading-6 text-ui-muted'>Actor profiles appear automatically when collected public intelligence identifies a named actor or group. Start with the feed inventory to see what is connected.</p>
-                    <Link href='/ti/sources' className='mt-5 inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas hover:opacity-90'>
+                    <Link href='/ti/sources' className='mt-5 inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-on-primary hover:opacity-90'>
                         Open feed inventory
                         <ArrowRight className='h-4 w-4' />
                     </Link>

@@ -16,14 +16,14 @@ export default function DwmOverviewPanel({ organizationId, state }: { organizati
             : '/dwm/watchlists'
         return <section className='grid min-h-[26rem] place-items-center rounded-lg border border-ui-border bg-ui-panel p-6 text-center shadow-sm' aria-label={scopeLabel}>
             <div className='grid max-w-md justify-items-center gap-4'>
-                <span className='grid h-14 w-14 place-items-center rounded-2xl border border-ui-primary/30 bg-ui-primary/10 text-ui-primary shadow-[0_0_28px_rgba(157,180,255,0.14)]'>
+                <span className='grid h-14 w-14 place-items-center rounded-2xl border border-ui-primary/30 bg-ui-primary/10 text-ui-primary ui-glow-primary-soft'>
                     <Radar className='h-7 w-7' />
                 </span>
                 <div>
                     <h2 className='mt-2 text-2xl font-semibold text-ui-text'>Welcome to Hanasand</h2>
                     <p className='mt-2 text-sm leading-6 text-ui-muted'>Create your first watchlist to start monitoring companies, domains, brands, and vendors.</p>
                 </div>
-                <Link href={watchlistHref} className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
+                <Link href={watchlistHref} className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary transition hover:opacity-90'>
                     Create watchlist
                     <ArrowRight className='h-4 w-4' />
                 </Link>

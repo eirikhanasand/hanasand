@@ -19,7 +19,7 @@ export default async function Page() {
                 title='Articles'
                 description='Published articles and drafts.'
                 actions={
-                    <Link href='/content/articles/create' className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-text transition hover:opacity-90'>
+                    <Link href='/content/articles/create' className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary transition hover:opacity-90'>
                         <Plus className='h-4 w-4' />
                         Create article
                     </Link>
@@ -33,7 +33,7 @@ export default async function Page() {
                     </div>
                     <h2 className='mt-4 text-xl font-semibold text-ui-text'>Publish your first article</h2>
                     <p className='mt-2 text-sm leading-6 text-ui-muted'>Turn research into a clear public update and start the editorial queue.</p>
-                    <Link href='/content/articles/create' className='mt-5 inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas'>
+                    <Link href='/content/articles/create' className='mt-5 inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-on-primary'>
                         <Plus className='h-4 w-4' />
                         Create your first article
                     </Link>
@@ -72,10 +72,10 @@ export default async function Page() {
 
 function EditorialMetric({ icon, label, value, detail, tone }: { icon: ReactNode, label: string, value: string, detail?: string, tone: 'ok' | 'watch' | 'neutral' }) {
     const dot = tone === 'ok'
-        ? 'bg-ui-success shadow-[0_0_14px_rgba(49,196,141,0.65)]'
+        ? 'bg-ui-success ui-glow-success'
         : tone === 'watch'
-            ? 'bg-ui-warning shadow-[0_0_14px_rgba(246,180,95,0.45)]'
-            : 'bg-ui-primary shadow-[0_0_14px_rgba(157,180,255,0.45)]'
+            ? 'bg-ui-warning ui-glow-warning'
+            : 'bg-ui-primary ui-glow-primary'
     const text = tone === 'ok' ? 'text-ui-success' : tone === 'watch' ? 'text-ui-warning' : 'text-ui-primary'
 
     return (

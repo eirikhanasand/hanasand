@@ -78,7 +78,7 @@ export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
 
             <form id={createFormId} onSubmit={create} className={showCreate ? 'flex flex-wrap items-end gap-2' : 'hidden'}>
                 <label className='grid gap-1 text-sm text-ui-muted'>VM name<input ref={nameInput} value={name} onChange={event => setName(event.target.value)} required pattern='[a-z][a-z0-9-]{0,61}[a-z0-9]' minLength={2} maxLength={63} title='2–63 lowercase letters, numbers or hyphens, starting with a letter' disabled={creating} className='h-10 rounded-lg border border-ui-border bg-ui-raised px-3 text-ui-text' /></label>
-                <button disabled={creating} className='h-10 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas disabled:opacity-50'>{creating ? 'Creating VM…' : 'Create VM'}</button>
+                <button disabled={creating} className='h-10 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary disabled:opacity-50'>{creating ? 'Creating VM…' : 'Create VM'}</button>
                 {message && <p role='status' className='w-full text-sm text-ui-muted'>{message}</p>}
             </form>
             {vms.length > 0 ? (

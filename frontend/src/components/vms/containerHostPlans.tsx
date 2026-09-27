@@ -49,7 +49,7 @@ export default function ContainerHostPlans() {
                 <p className='text-sm text-ui-muted'>{plan.summary}</p>
                 <p className='text-xl font-semibold text-ui-text'>{plan.priceNok} NOK <span className='text-sm font-normal text-ui-muted'>/ month per container</span></p>
                 <button type='button' disabled={!selected || !!buying || active} onClick={() => buy(plan.id)}
-                    className='h-10 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas disabled:opacity-50'>
+                    className='h-10 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary disabled:opacity-50'>
                     {active ? 'Already purchased' : buying === plan.id ? 'Opening checkout…' : 'Buy for ' + (selected || 'a container')}
                 </button>
             </article>

@@ -308,7 +308,7 @@ function HighlightedPreview({ preview, query, caseSensitive }: { preview: string
     return (
         <span className='block truncate font-mono text-ui-muted'>
             {preview.slice(0, index)}
-            <mark className='rounded bg-ui-primary/20 px-0.5 text-ui-text'>{preview.slice(index, index + query.length)}</mark>
+            <mark className='rounded bg-ui-primary/20 px-0.5 text-ui-on-primary'>{preview.slice(index, index + query.length)}</mark>
             {preview.slice(index + query.length)}
         </span>
     )

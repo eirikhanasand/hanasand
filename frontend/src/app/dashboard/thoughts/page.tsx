@@ -19,7 +19,7 @@ export default async function Page() {
                 title='Thoughts'
                 description='Short philosophical questions for the public site.'
                 actions={
-                    <Link href='/content/thoughts/create' className='flex h-9 items-center gap-2 rounded-lg bg-ui-primary px-3.5 text-sm font-medium text-ui-text transition hover:opacity-90'>
+                    <Link href='/content/thoughts/create' className='flex h-9 items-center gap-2 rounded-lg bg-ui-primary px-3.5 text-sm font-medium text-ui-on-primary transition hover:opacity-90'>
                         <Plus className='h-4 w-4' />
                         <span>Create</span>
                     </Link>
@@ -54,7 +54,7 @@ export default async function Page() {
                         <h2 className='text-base font-semibold text-ui-text'>Thoughts</h2>
                         <p className='mt-1 text-sm text-ui-muted'>Recent philosophical questions.</p>
                     </div>
-                    <span className='rounded-full border border-ui-primary/35 bg-ui-primary/10 px-3 py-1 text-xs font-semibold text-ui-text'>
+                    <span className='rounded-full border border-ui-primary/35 bg-ui-primary/10 px-3 py-1 text-xs font-semibold text-ui-on-primary'>
                         {thoughts.length} rows
                     </span>
                 </div>
@@ -72,10 +72,10 @@ export default async function Page() {
 
 function NotebookMetric({ icon, label, value, detail, tone }: { icon: ReactNode, label: string, value: string, detail: string, tone: 'ok' | 'watch' | 'neutral' }) {
     const dot = tone === 'ok'
-        ? 'bg-ui-success shadow-[0_0_14px_rgba(49,196,141,0.65)]'
+        ? 'bg-ui-success ui-glow-success'
         : tone === 'watch'
-            ? 'bg-ui-warning shadow-[0_0_14px_rgba(246,180,95,0.45)]'
-            : 'bg-ui-primary shadow-[0_0_14px_rgba(157,180,255,0.45)]'
+            ? 'bg-ui-warning ui-glow-warning'
+            : 'bg-ui-primary ui-glow-primary'
     const text = tone === 'ok' ? 'text-ui-success' : tone === 'watch' ? 'text-ui-warning' : 'text-ui-primary'
 
     return (

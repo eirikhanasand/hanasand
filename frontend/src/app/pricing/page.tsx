@@ -14,7 +14,7 @@ export const metadata: Metadata = buildRouteMetadata({
 
 export default function PricingPage() {
     return (
-        <main className='min-h-[calc(100vh-5.5rem)] bg-ui-canvas px-4 py-14 text-ui-text md:px-8'>
+        <main className='min-h-app-viewport bg-ui-canvas px-4 py-14 text-ui-text md:px-8'>
             <div className='mx-auto grid max-w-7xl gap-8'>
                 <header className='mx-auto grid max-w-3xl gap-3 text-center'>
                     <p className='text-sm font-semibold uppercase text-ui-primary'>Pricing</p>
@@ -30,7 +30,7 @@ export default function PricingPage() {
                                 <p className='mt-2 min-h-12 text-sm leading-5 text-ui-muted'>{plan.summary}</p>
                                 <p className='mt-4 text-base font-normal normal-case'>{plan.priceNok} kr / month</p>
                                 <p className='mt-1 text-sm font-semibold text-ui-primary'>{plan.quota}</p>
-                                <Link href={`/api/billing/checkout?plan=${plan.id}`} className={`mt-4 inline-flex h-10 w-full items-center justify-center rounded-md px-3 text-sm font-semibold ${plan.id === 'monitoring' ? 'bg-ui-primary text-ui-canvas' : 'border border-ui-border bg-ui-raised text-ui-text'}`}>Buy now</Link>
+                                <Link href={`/api/billing/checkout?plan=${plan.id}`} className={`mt-4 inline-flex h-10 w-full items-center justify-center rounded-md px-3 text-sm font-semibold ${plan.id === 'monitoring' ? 'bg-ui-primary text-ui-on-primary' : 'border border-ui-border bg-ui-raised text-ui-text'}`}>Buy now</Link>
                                 <div className='mt-4 border-t border-ui-border pt-3'>
                                     <p className='text-sm font-semibold'>What's included</p>
                                     <ul className='mt-3 grid gap-2 text-sm text-ui-muted'>

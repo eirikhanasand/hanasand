@@ -645,7 +645,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                                     </ul>
                                 </div>
                             ) : null}
-                            <button type='button' onClick={notifyCustomer} disabled={readOnly || busy !== null} className='mt-2 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-primary/15 disabled:cursor-not-allowed disabled:opacity-60'>
+                            <button type='button' onClick={notifyCustomer} disabled={readOnly || busy !== null} className='mt-2 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-xs font-semibold text-ui-on-primary transition hover:bg-ui-primary/15 disabled:cursor-not-allowed disabled:opacity-60'>
                                 {busy === 'notify' ? <Loader2 className='h-4 w-4 animate-spin' /> : <BellRing className='h-4 w-4' />}Notify dry run
                             </button>
                             {message ? <p className={`mt-3 rounded-lg border px-3 py-2 text-xs font-semibold ${message.ok ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : 'border-ui-danger/30 bg-ui-raised/10 text-ui-text'}`}>{message.text}</p> : null}
@@ -690,7 +690,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                                 <button type='button' onClick={() => sendWebhook(true)} disabled={webhookActionDisabled} title={webhookBlockedReason || undefined} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-canvas px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-60'>
                                     {busy === 'webhook-test' ? <Loader2 className='h-4 w-4 animate-spin' /> : <RotateCcw className='h-4 w-4' />}Test STIX report
                                 </button>
-                                <button type='button' onClick={() => sendWebhook(false)} disabled={webhookActionDisabled} title={webhookBlockedReason || undefined} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-primary/15 disabled:cursor-not-allowed disabled:opacity-60'>
+                                <button type='button' onClick={() => sendWebhook(false)} disabled={webhookActionDisabled} title={webhookBlockedReason || undefined} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-xs font-semibold text-ui-on-primary transition hover:bg-ui-primary/15 disabled:cursor-not-allowed disabled:opacity-60'>
                                     {busy === 'webhook-send' ? <Loader2 className='h-4 w-4 animate-spin' /> : latestDeliveryRetryable ? <RotateCcw className='h-4 w-4' /> : <Send className='h-4 w-4' />}{latestDeliveryRetryable ? 'Retry exact report' : 'Send STIX report'}
                                 </button>
                             </div>

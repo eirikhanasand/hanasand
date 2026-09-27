@@ -14,7 +14,7 @@ export default function RoleIconPicker({ value, role, onChange, disabled }: { va
     function close() { setOpen(false); trigger.current?.focus() }
     return <div className='grid min-w-0 gap-2 sm:col-span-2'>
         <span className='text-xs text-ui-muted'>Role icon</span>
-        <button ref={trigger} type='button' disabled={disabled} aria-label='Choose role icon' aria-expanded={open} aria-controls='role-icon-catalog' onClick={() => setOpen(!open)} className='flex min-h-11 w-full items-center gap-3 rounded-lg border border-ui-primary/25 bg-ui-primary/10 px-3 py-2 text-left text-sm text-ui-text disabled:opacity-50'>
+        <button ref={trigger} type='button' disabled={disabled} aria-label='Choose role icon' aria-expanded={open} aria-controls='role-icon-catalog' onClick={() => setOpen(!open)} className='flex min-h-11 w-full items-center gap-3 rounded-lg border border-ui-primary/25 bg-ui-primary/10 px-3 py-2 text-left text-sm text-ui-on-primary disabled:opacity-50'>
             <span className='text-ui-primary'><RoleIcon role={{ ...role, icon: value }} /></span>
             <span className='min-w-0 flex-1'>{roleIcons.find(preset => preset.id === selected)?.label}<span className='ml-2 text-xs text-ui-muted'>{value ? '' : 'Automatic'}</span></span>
             <ChevronDown className='h-4 w-4 shrink-0' aria-hidden='true' />

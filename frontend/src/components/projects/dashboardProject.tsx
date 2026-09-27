@@ -39,7 +39,7 @@ export default function DashboardProject({ project }: { project: Project }) {
                 <span className='text-xs text-ui-muted'>{project.editors?.length || 0} editor{project.editors?.length === 1 ? '' : 's'}</span>
                 <span className='text-xs text-ui-muted'>{prettyDate(project.last_updated)}</span>
                 <div className='flex shrink-0 items-center gap-1.5 justify-self-end'>
-                    <Link href={`/p/${project.alias}`} className='inline-flex h-8 items-center gap-1.5 rounded-md border border-ui-border bg-ui-raised px-2.5 text-xs font-semibold text-ui-text hover:border-ui-primary/35 hover:bg-ui-primary/10'>
+                    <Link href={`/p/${project.alias}`} className='inline-flex h-8 items-center gap-1.5 rounded-md border border-ui-border bg-ui-raised px-2.5 text-xs font-semibold text-ui-on-primary hover:border-ui-primary/35 hover:bg-ui-primary/10'>
                         <ExternalLink className='h-3.5 w-3.5' />
                         Open
                     </Link>

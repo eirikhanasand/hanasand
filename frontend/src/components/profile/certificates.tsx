@@ -158,7 +158,7 @@ export default function Certificates({ certificates: serverCertificates }: { cer
                                 </button>
                                 <button
                                     type='submit'
-                                    className='h-9 cursor-pointer rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'
+                                    className='h-9 cursor-pointer rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary transition hover:opacity-90'
                                 >
                                     Create
                                 </button>

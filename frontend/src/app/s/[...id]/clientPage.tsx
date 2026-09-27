@@ -236,7 +236,7 @@ export default function ClientPage({
                         aria-label={hydrated ? chatOpen ? 'Back to workspace editor' : 'Open workspace assistant' : 'Setting up workspace assistant'}
                         disabled={!hydrated}
                         onClick={() => setChatOpen(prev => !prev)}
-                        className='inline-flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-muted transition hover:border-ui-primary/35 hover:bg-ui-primary/10 hover:text-ui-text disabled:cursor-not-allowed disabled:opacity-45'
+                        className='inline-flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-muted transition hover:border-ui-primary/35 hover:bg-ui-primary/10 hover:text-ui-on-primary disabled:cursor-not-allowed disabled:opacity-45'
                     >
                         {chatOpen ? <Code2 className='h-4 w-4' /> : <MessageSquare className='h-4 w-4' />}
                         {chatOpen ? 'Back to editor' : 'Assistant'}
@@ -424,7 +424,7 @@ function CollaborationStatus({
                     </span>
                 ) : null}
                 {notice && !conflict ? (
-                    <button type='button' onClick={onDismissNotice} className='rounded-lg border border-ui-border bg-ui-raised px-2 py-1 text-[11px] text-ui-muted transition hover:bg-ui-primary/10 hover:text-ui-text'>
+                    <button type='button' onClick={onDismissNotice} className='rounded-lg border border-ui-border bg-ui-raised px-2 py-1 text-[11px] text-ui-muted transition hover:bg-ui-primary/10 hover:text-ui-on-primary'>
                         {notice}
                     </button>
                 ) : null}

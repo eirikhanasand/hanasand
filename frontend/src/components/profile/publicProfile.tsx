@@ -54,7 +54,7 @@ export default function PublicProfile({ profile, username }: { profile: User | n
                         <LinkIcon aria-hidden='true' className='mt-0.5 size-4 shrink-0' />
                         <span className='break-all'>hanasand.com/profile/{username}</span>
                     </a>
-                    <button type='button' onClick={copyProfile} className='inline-flex min-h-10 shrink-0 items-center justify-center gap-2 self-start rounded-lg border border-ui-border bg-ui-raised px-4 py-2 text-sm font-medium text-ui-text transition-colors hover:border-ui-primary/40 hover:bg-ui-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary'>
+                    <button type='button' onClick={copyProfile} className='inline-flex min-h-10 shrink-0 items-center justify-center gap-2 self-start rounded-lg border border-ui-border bg-ui-raised px-4 py-2 text-sm font-medium text-ui-on-primary transition-colors hover:border-ui-primary/40 hover:bg-ui-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary'>
                         {copied ? <Check aria-hidden='true' className='size-4 text-ui-success' /> : <Copy aria-hidden='true' className='size-4' />}
                         {copied ? 'Link copied' : 'Copy profile link'}
                     </button>

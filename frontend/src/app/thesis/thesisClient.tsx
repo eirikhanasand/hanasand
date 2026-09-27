@@ -273,7 +273,7 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
                     {dialogError && <p role='alert' className='text-sm text-ui-text'>{dialogError}</p>}
                     <div className='flex justify-between gap-3 pt-2'>
                         <button type='button' onClick={closeSheetDialog} className='rounded-md border border-ui-border bg-ui-raised px-4 py-2 text-sm font-semibold text-ui-muted hover:text-ui-text'>Cancel</button>
-                        <button type='submit' disabled={sheetDialog.kind === 'add' ? !sheetName.trim() : !deleteTarget || sheets.length === 1 || sheetName !== sheetDialog.name} className={`rounded-md px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40 ${sheetDialog.kind === 'delete' ? 'bg-ui-raised text-ui-text' : 'bg-ui-primary text-ui-canvas'}`}>{sheetDialog.kind === 'add' ? 'Create sheet' : 'Delete'}</button>
+                        <button type='submit' disabled={sheetDialog.kind === 'add' ? !sheetName.trim() : !deleteTarget || sheets.length === 1 || sheetName !== sheetDialog.name} className={`rounded-md px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40 ${sheetDialog.kind === 'delete' ? 'bg-ui-raised text-ui-text' : 'bg-ui-primary text-ui-on-primary'}`}>{sheetDialog.kind === 'add' ? 'Create sheet' : 'Delete'}</button>
                     </div>
                 </form>
             </dialog>}

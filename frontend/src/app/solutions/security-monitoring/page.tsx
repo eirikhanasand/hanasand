@@ -12,7 +12,7 @@ export const metadata: Metadata = buildRouteMetadata({
 
 export default function EventSolutionPage() {
     return (
-        <main className='min-h-[calc(100vh-5.5rem)] bg-ui-canvas text-ui-text'>
+        <main className='min-h-app-viewport bg-ui-canvas text-ui-text'>
             <section className='border-b border-ui-border bg-ui-panel'>
                 <div className='mx-auto grid max-w-7xl gap-8 px-4 py-16 md:px-8 md:py-24'>
                     <div className='grid max-w-4xl gap-5'>

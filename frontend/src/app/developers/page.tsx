@@ -44,7 +44,7 @@ if (error) throw new Error(error.error.message)`
     const errorRows = Object.entries(contract.components?.responses ?? {}).filter(([name]) => ['BadRequest', 'Unauthorized', 'Forbidden', 'RateLimited', 'InternalError', 'Unavailable'].includes(name))
 
     return (
-        <main className='min-h-[calc(100vh-5.5rem)] bg-ui-canvas text-ui-text'>
+        <main className='min-h-app-viewport bg-ui-canvas text-ui-text'>
             <section className='border-b border-ui-border bg-ui-panel'>
                 <div className='mx-auto flex max-w-7xl flex-col gap-4 px-4 py-6 md:px-8 lg:flex-row lg:items-center lg:justify-between'>
                     <div className='min-w-0'>
@@ -128,5 +128,5 @@ async function loadContract(): Promise<OpenApiDocument | null> {
 }
 
 function Unavailable() {
-    return <main className='min-h-[calc(100vh-5.5rem)] bg-ui-canvas px-4 py-16 text-ui-text'><div className='mx-auto max-w-3xl rounded-lg border border-ui-border bg-ui-panel p-8'><FileJson className='h-6 w-6 text-ui-warning' /><h1 className='mt-4 text-3xl font-semibold'>API reference unavailable</h1><p className='mt-3 text-ui-muted'>The live API contract could not be loaded. No cached or handwritten reference is being shown.</p></div></main>
+    return <main className='min-h-app-viewport bg-ui-canvas px-4 py-16 text-ui-text'><div className='mx-auto max-w-3xl rounded-lg border border-ui-border bg-ui-panel p-8'><FileJson className='h-6 w-6 text-ui-warning' /><h1 className='mt-4 text-3xl font-semibold'>API reference unavailable</h1><p className='mt-3 text-ui-muted'>The live API contract could not be loaded. No cached or handwritten reference is being shown.</p></div></main>
 }

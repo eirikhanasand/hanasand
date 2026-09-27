@@ -89,10 +89,10 @@ export default function CronJobsClient() {
                     </div>
                     <div className='flex items-center gap-2'>
                         <div className='flex rounded-lg border border-ui-border bg-ui-raised p-1'>
-                            <button onClick={() => setDensity(true)} aria-label='Compact density' title='Compact density' aria-pressed={compact} className={`grid h-8 w-8 place-items-center rounded-md transition ${compact ? 'bg-ui-primary text-ui-canvas' : 'text-ui-muted hover:bg-ui-panel hover:text-ui-text'}`}>
+                            <button onClick={() => setDensity(true)} aria-label='Compact density' title='Compact density' aria-pressed={compact} className={`grid h-8 w-8 place-items-center rounded-md transition ${compact ? 'bg-ui-primary text-ui-on-primary' : 'text-ui-muted hover:bg-ui-panel hover:text-ui-text'}`}>
                                 <Minimize2 className='h-4 w-4' />
                             </button>
-                            <button onClick={() => setDensity(false)} aria-label='Spacious density' title='Spacious density' aria-pressed={!compact} className={`grid h-8 w-8 place-items-center rounded-md transition ${!compact ? 'bg-ui-primary text-ui-canvas' : 'text-ui-muted hover:bg-ui-panel hover:text-ui-text'}`}>
+                            <button onClick={() => setDensity(false)} aria-label='Spacious density' title='Spacious density' aria-pressed={!compact} className={`grid h-8 w-8 place-items-center rounded-md transition ${!compact ? 'bg-ui-primary text-ui-on-primary' : 'text-ui-muted hover:bg-ui-panel hover:text-ui-text'}`}>
                                 <Maximize2 className='h-4 w-4' />
                             </button>
                         </div>
@@ -132,7 +132,7 @@ export default function CronJobsClient() {
                         {runnableJobs[0] ? (
                             <div className='grid gap-2'>
                                 <p className='text-sm text-ui-muted'>{runnableJobs[0].name} can be run manually without changing the schedule.</p>
-                                <button onClick={() => void save(runnableJobs[0], { action: 'run_now' })} disabled={busy === runnableJobs[0].id} className='inline-flex h-9 w-fit items-center gap-2 rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-canvas hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'>
+                                <button onClick={() => void save(runnableJobs[0], { action: 'run_now' })} disabled={busy === runnableJobs[0].id} className='inline-flex h-9 w-fit items-center gap-2 rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-on-primary hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'>
                                     <PlayCircle className='h-4 w-4' />
                                     {busy === runnableJobs[0].id ? 'Starting' : 'Run selected job'}
                                 </button>

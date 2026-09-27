@@ -116,7 +116,7 @@ export default function PromptPortalClient({ initialState = emptyState }: { init
     }
 
     return (
-        <main className='min-h-[calc(100vh-5.5rem)] bg-ui-canvas px-4 py-6 text-ui-text md:px-8'>
+        <main className='min-h-app-viewport bg-ui-canvas px-4 py-6 text-ui-text md:px-8'>
             <div className='mx-auto grid max-w-6xl gap-4'>
                 <header className='flex flex-col gap-3 border-b border-ui-border pb-4 md:flex-row md:items-end md:justify-between'>
                     <div>
@@ -272,7 +272,7 @@ function PromptItem({
 }
 
 const plainButton = 'inline-flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-muted hover:text-ui-text disabled:cursor-not-allowed disabled:opacity-60'
-const selectedButton = 'inline-flex h-9 items-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-sm font-semibold text-ui-text disabled:cursor-not-allowed disabled:opacity-60'
+const selectedButton = 'inline-flex h-9 items-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-sm font-semibold text-ui-on-primary disabled:cursor-not-allowed disabled:opacity-60'
 const iconButton = 'inline-flex h-7 w-7 items-center justify-center rounded-lg border border-ui-border bg-ui-panel text-ui-muted hover:text-ui-text disabled:cursor-not-allowed disabled:opacity-35'
 
 function comparePromptItems(a: PortalItem, b: PortalItem) {

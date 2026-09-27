@@ -121,7 +121,7 @@ type InspectionMember = InspectionUserMember | InspectionOrganizationMembership
 
 const inputClass = 'h-9 min-w-0 rounded-md border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
 const textAreaClass = 'min-h-20 rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
-const primaryButton = 'h-9 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-55'
+const primaryButton = 'h-9 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-on-primary transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-55'
 const secondaryButton = 'h-9 rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-55'
 const minimumAuditReasonMessage = 'Add a specific audit reason with at least 10 characters before continuing.'
 const operationTabs: Array<{ id: SupportOperation, label: string, detail: string }> = [

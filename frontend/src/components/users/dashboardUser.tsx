@@ -173,7 +173,7 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
                             Cancel
                         </button>
                         <button
-                            className='h-8 rounded-md bg-ui-primary px-3 text-xs font-bold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-55'
+                            className='h-8 rounded-md bg-ui-primary px-3 text-xs font-bold text-ui-on-primary transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-55'
                             disabled={impersonationPending}
                             type='submit'
                         >

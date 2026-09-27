@@ -23,7 +23,7 @@ type LoginPageProps = {
 }
 
 const authInputClass = 'h-10 rounded-lg border border-ui-border bg-ui-panel px-3.5 text-sm font-medium text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-4 focus:ring-ui-primary/20'
-const authPrimaryButtonClass = 'group inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:border disabled:border-ui-border disabled:bg-ui-raised disabled:text-ui-muted'
+const authPrimaryButtonClass = 'group inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary transition hover:opacity-90 disabled:cursor-not-allowed disabled:border disabled:border-ui-border disabled:bg-ui-raised disabled:text-ui-muted'
 const authGhostButtonClass = 'inline-flex h-9 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text disabled:cursor-not-allowed disabled:text-ui-muted/60'
 
 
@@ -223,7 +223,7 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
     }, [redirectPath, router, serverExpired, serverInternal, socialError])
 
     return (
-        <section className='grid min-h-[calc(100vh-5.5rem)] w-full place-items-center bg-ui-canvas px-4 py-10 text-ui-text md:px-10'>
+        <section className='grid min-h-app-viewport w-full place-items-center bg-ui-canvas px-4 py-10 text-ui-text md:px-10'>
             <div className='grid w-full max-w-98 gap-4'>
                 <div className='grid justify-items-center gap-2 pb-3 text-center'>
                     <h1 className='text-[42px] font-semibold leading-none tracking-normal text-ui-primary'>Hanasand</h1>

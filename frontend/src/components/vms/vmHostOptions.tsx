@@ -152,7 +152,7 @@ function FeatureToggle({
             </span>
             {premium ? <span className={`h-5 w-9 rounded-full p-0.5 transition ${enabled ? 'bg-ui-success/70' : 'bg-ui-border'}`}>
                 <span className={`block h-4 w-4 rounded-full bg-ui-panel transition ${enabled ? 'translate-x-4' : ''}`} />
-            </span> : <span className='rounded-md bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas'>{loading ? 'Please wait…' : 'Buy'}</span>}
+            </span> : <span className='rounded-md bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-on-primary'>{loading ? 'Please wait…' : 'Buy'}</span>}
         </button>
     )
 }

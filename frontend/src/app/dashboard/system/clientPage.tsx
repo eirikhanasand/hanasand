@@ -373,7 +373,7 @@ export default function SystemDashboard({
                 </div>
                 <a
                     href={primaryHref}
-                    className='inline-flex min-h-10 w-full items-center justify-center rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ui-primary/35 sm:w-auto'
+                    className='inline-flex min-h-10 w-full items-center justify-center rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ui-primary/35 sm:w-auto'
                     data-system-primary-action
                 >
                     {primaryActionLabel}

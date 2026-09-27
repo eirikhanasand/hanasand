@@ -3,7 +3,7 @@ import RandomThought from '../thoughts/randomThought'
 
 export default function Content({ logout }: { logout: boolean }) {
     return (
-        <div className='h-[90.5vh] relative grid grid-cols place-items-center'>
+        <div className='h-app-viewport relative grid grid-cols place-items-center'>
             {!logout && <RandomThought />}
             <ImageWithOverlay path='/about' image='/images/assets/selfie.jpeg' />
             <div className='absolute animate-bounce bottom-2'>

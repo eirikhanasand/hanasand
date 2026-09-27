@@ -69,7 +69,7 @@ export default function ResetPasswordPage({ userId, initialResetToken = '', rest
     const missingResetSession = tokenLoaded && (!userId || !resetToken)
 
     return (
-        <section className='grid min-h-[calc(100vh-5.5rem)] w-full place-items-center bg-ui-canvas px-4 py-10 text-ui-text md:px-10'>
+        <section className='grid min-h-app-viewport w-full place-items-center bg-ui-canvas px-4 py-10 text-ui-text md:px-10'>
             <div className='grid w-full max-w-98 gap-4'>
                 <div className='grid justify-items-center gap-2 pb-2 text-center'>
                     <h1 className='text-[40px] font-semibold leading-none tracking-normal text-ui-text'>Hanasand</h1>

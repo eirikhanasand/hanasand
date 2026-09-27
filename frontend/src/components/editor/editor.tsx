@@ -181,7 +181,7 @@ export function EditorWithoutLogic({
             </div>
             {edited && !hideSave && !hideSaveButton && <div className='mt-2'>
                 <button
-                    className='text-md h-[4vh] rounded-lg bg-ui-primary px-8 font-semibold text-ui-canvas shadow-sm'
+                    className='text-md h-[4vh] rounded-lg bg-ui-primary px-8 font-semibold text-ui-on-primary shadow-sm'
                     onClick={handleSave}
                 >
                     Save

@@ -5,6 +5,7 @@
   --background: #070707;
   --foreground: #f1f3ee;
   --ui-canvas: #070707;
+  --ui-header-height: 4.5rem;
   --ui-panel: #101010;
   --ui-raised: #191919;
   --ui-border: #383838;
@@ -14,6 +15,10 @@
   --ui-success: #7de0a2;
   --ui-warning: #ffd879;
   --ui-danger: #ffb8b0;
+  --ui-success-glow: color-mix(in srgb, var(--ui-success) 65%, transparent);
+  --ui-warning-glow: color-mix(in srgb, var(--ui-warning) 45%, transparent);
+  --ui-primary-glow: color-mix(in srgb, var(--ui-primary) 45%, transparent);
+  --ui-primary-glow-soft: color-mix(in srgb, var(--ui-primary) 14%, transparent);
   --ui-on-primary: #101010;
   --ui-overlay-soft: color-mix(in srgb, var(--ui-canvas) 68%, transparent);
   --ui-overlay: color-mix(in srgb, var(--ui-canvas) 88%, transparent);
@@ -97,6 +102,16 @@
   .ui-card { border: 1px solid var(--card-border); border-radius: 1rem; background: var(--panel-surface); }
   .ui-field { border: 1px solid var(--ui-border); border-radius: 0.625rem; background: var(--ui-panel); color: var(--ui-text); }
   .ui-field:focus-visible { outline: 2px solid color-mix(in srgb, var(--ui-primary) 55%, transparent); outline-offset: 1px; }
+}
+
+@layer utilities {
+  .min-h-app-viewport { min-height: calc(100dvh - var(--ui-header-height)); }
+  .h-app-viewport { height: calc(100dvh - var(--ui-header-height)); }
+  .max-h-app-viewport { max-height: calc(100dvh - var(--ui-header-height)); }
+  .ui-glow-success { box-shadow: 0 0 14px var(--ui-success-glow); }
+  .ui-glow-warning { box-shadow: 0 0 14px var(--ui-warning-glow); }
+  .ui-glow-primary { box-shadow: 0 0 14px var(--ui-primary-glow); }
+  .ui-glow-primary-soft { box-shadow: 0 0 28px var(--ui-primary-glow-soft); }
 }
 
 @utility noscroll {
@@ -344,7 +359,7 @@ button:not(:disabled),
 }
 
 .support-page {
-  min-height: calc(90.5vh - 1rem);
+  min-height: calc(100dvh - var(--ui-header-height));
   align-content: center;
 }
 

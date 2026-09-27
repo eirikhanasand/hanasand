@@ -41,7 +41,7 @@ export default async function Shares() {
                         </div>
                         <div className='flex items-center gap-2'>
                             {shareRows.length > 0 && <ShareAnalyticsToggle />}
-                            <Link prefetch={false} href='/s' className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10'>
+                            <Link prefetch={false} href='/s' className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-sm font-semibold text-ui-on-primary transition hover:border-ui-primary/35 hover:bg-ui-primary/10'>
                                 <Plus className='h-4 w-4' />
                                 <span>Create</span>
                             </Link>
@@ -59,7 +59,7 @@ export default async function Shares() {
                                         </div>
                                         <h3 className='mt-3 text-lg font-semibold text-ui-text'>Create your first share</h3>
                                         <p className='mt-2 text-sm leading-6 text-ui-muted'>Share a note, article, or workspace with a controlled link.</p>
-                                        <Link prefetch={false} href='/s' className='mt-4 inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas'>
+                                        <Link prefetch={false} href='/s' className='mt-4 inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-on-primary'>
                                             <Plus className='h-4 w-4' />
                                             Create
                                         </Link>
@@ -80,10 +80,10 @@ export default async function Shares() {
 
 function ShareMetric({ icon, label, value, detail, tone }: { icon: ReactNode, label: string, value: string, detail: string, tone: 'ok' | 'watch' | 'neutral' }) {
     const dot = tone === 'ok'
-        ? 'bg-ui-success shadow-[0_0_14px_rgba(49,196,141,0.65)]'
+        ? 'bg-ui-success ui-glow-success'
         : tone === 'watch'
-            ? 'bg-ui-warning shadow-[0_0_14px_rgba(246,180,95,0.45)]'
-            : 'bg-ui-primary shadow-[0_0_14px_rgba(157,180,255,0.45)]'
+            ? 'bg-ui-warning ui-glow-warning'
+            : 'bg-ui-primary ui-glow-primary'
     const text = tone === 'ok' ? 'text-ui-success' : tone === 'watch' ? 'text-ui-warning' : 'text-ui-primary'
 
     return (

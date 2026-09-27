@@ -2543,7 +2543,7 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, canCleanu
                                 type='button'
                                 disabled={!canManage || Boolean(busy)}
                                 onClick={() => setDraft({ kind: template.kind, value: '', notes: template.notes })}
-                                className='inline-flex min-h-9 items-center rounded-md border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10 disabled:cursor-not-allowed disabled:opacity-55 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'
+                                className='inline-flex min-h-9 items-center rounded-md border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-on-primary transition hover:border-ui-primary/35 hover:bg-ui-primary/10 disabled:cursor-not-allowed disabled:opacity-55 dark:border-ui-border dark:bg-ui-panel dark:text-ui-on-primary dark:hover:bg-ui-raised'
                             >
                                 {template.label}
                             </button>

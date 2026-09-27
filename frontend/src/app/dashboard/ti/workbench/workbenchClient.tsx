@@ -974,7 +974,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                                         key={item}
                                         type='button'
                                         onClick={() => setFilter(item)}
-                                        className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition ${filter === item ? 'border-ui-primary/35 bg-ui-primary/10 text-ui-text' : 'border-ui-border bg-ui-raised text-ui-muted hover:border-ui-border hover:bg-ui-primary/10'}`}
+                                        className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition ${filter === item ? 'border-ui-primary/35 bg-ui-primary/10 text-ui-on-primary' : 'border-ui-border bg-ui-raised text-ui-muted hover:border-ui-border hover:bg-ui-primary/10'}`}
                                     >
                                         {item === 'all' ? <Filter className='h-3.5 w-3.5' /> : null}
                                         {label(item)}
@@ -1095,7 +1095,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                                 </div>
                                 <div className='grid gap-2 border-t border-ui-border p-3'>
                                     {selected?.relatedLinks.map(link => (
-                                        <Link key={link.href} href={link.href} className='inline-flex h-9 items-center justify-between gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text transition hover:border-ui-border hover:bg-ui-primary/10'>
+                                        <Link key={link.href} href={link.href} className='inline-flex h-9 items-center justify-between gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-on-primary transition hover:border-ui-border hover:bg-ui-primary/10'>
                                             {link.label}
                                             <ExternalLink className='h-3.5 w-3.5' />
                                         </Link>
@@ -2319,7 +2319,7 @@ function EmptyWorkspace() {
                 <h2 className='text-lg font-semibold text-ui-text'>No cases to review</h2>
                 <p className='mt-2 text-sm leading-6 text-ui-muted'>Create watched terms, review source coverage, or run collection to produce the first actionable case.</p>
                 <div className='mt-4 flex flex-wrap gap-2'>
-                    <Link href='/dwm' className='inline-flex h-9 items-center rounded-lg bg-ui-primary px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-primary'>Open dark web cases</Link>
+                    <Link href='/dwm' className='inline-flex h-9 items-center rounded-lg bg-ui-primary px-3 text-xs font-semibold text-ui-on-primary transition hover:bg-ui-primary'>Open dark web cases</Link>
                     <Link href='/ti/sources' className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised'>Review sources</Link>
                     <Link href='/automation?setup=dwm' className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised'>Configure delivery</Link>
                 </div>
@@ -2336,7 +2336,7 @@ function AttackWelcome() {
                 <h2 className='mt-5 text-2xl font-semibold text-ui-text'>Attack monitoring is ready</h2>
                 <p className='mt-3 text-sm leading-6 text-ui-muted'>Actionable cases are created when monitored sources produce a relevant exposure. Start with the source inventory or open the dark web case workspace to configure monitoring.</p>
                 <div className='mt-5 flex flex-wrap justify-center gap-2'>
-                    <Link href='/dwm' className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas'>Open dark web cases</Link>
+                    <Link href='/dwm' className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary'>Open dark web cases</Link>
                     <Link href='/ti/sources' className='inline-flex h-10 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:bg-ui-panel'>Browse sources</Link>
                 </div>
             </div>

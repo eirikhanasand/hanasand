@@ -4,17 +4,5 @@
 }
 
 .animate:hover {
-  background: conic-gradient(
-        crimson,
-        coral,
-        gold,
-        yellow,
-        limegreen,
-        cyan,
-        purple,
-        coral,
-        crimson
-  );
-  background-size: 200% 200%;
-  animation: rgb 20s linear infinite;
+  background: color-mix(in srgb, var(--ui-primary) 24%, transparent);
 }

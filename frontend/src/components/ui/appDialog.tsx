@@ -102,7 +102,7 @@ export function AppPromptDialog({
                     <button type='button' onClick={onCancel} className='inline-flex h-9 items-center rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text hover:bg-ui-raised'>
                         Cancel
                     </button>
-                    <button type='submit' className='inline-flex h-9 items-center rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas hover:opacity-90'>
+                    <button type='submit' className='inline-flex h-9 items-center rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-on-primary hover:opacity-90'>
                         {confirmLabel}
                     </button>
                 </div>

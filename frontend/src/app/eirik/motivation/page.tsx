@@ -17,7 +17,7 @@ export default function MotivationPage() {
     const wallQuotes = shuffledQuotes.concat(shuffledQuotes).concat(shuffledQuotes)
 
     return (
-        <main className='relative max-h-[calc(100vh-5.5rem)] min-h-[calc(100vh-5.5rem)] w-full overflow-hidden bg-ui-canvas text-ui-text'>
+        <main className='relative max-h-app-viewport min-h-app-viewport w-full overflow-hidden bg-ui-canvas text-ui-text'>
             <div className='pointer-events-none absolute inset-x-0 top-0 z-10 h-32 bg-gradient-to-b from-ui-canvas via-ui-canvas/90 to-transparent' />
             <div className='pointer-events-none absolute inset-x-0 bottom-0 z-10 h-32 bg-gradient-to-t from-ui-canvas via-ui-canvas/90 to-transparent' />
 

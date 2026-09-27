@@ -218,7 +218,7 @@ export default function Terminal({
                             aria-label='Reconnect browser terminal'
                             title='Reconnect terminal'
                             onClick={reconnect}
-                            className='grid h-7 w-7 place-items-center rounded-md text-ui-muted transition hover:bg-ui-primary/10 hover:text-ui-text'
+                            className='grid h-7 w-7 place-items-center rounded-md text-ui-muted transition hover:bg-ui-primary/10 hover:text-ui-on-primary'
                         >
                             <RefreshCw size={14} />
                         </button>
@@ -227,7 +227,7 @@ export default function Terminal({
                             aria-label='Restart browser terminal'
                             title='Restart terminal'
                             onClick={restart}
-                            className='grid h-7 w-7 place-items-center rounded-md text-ui-muted transition hover:bg-ui-primary/10 hover:text-ui-text'
+                            className='grid h-7 w-7 place-items-center rounded-md text-ui-muted transition hover:bg-ui-primary/10 hover:text-ui-on-primary'
                         >
                             <Power size={14} />
                         </button>
@@ -235,7 +235,7 @@ export default function Terminal({
                             type='button'
                             aria-label='Close terminal panel'
                             onClick={() => setOpen(false)}
-                            className='grid h-7 w-7 place-items-center rounded-md text-ui-muted transition hover:bg-ui-primary/10 hover:text-ui-text'
+                            className='grid h-7 w-7 place-items-center rounded-md text-ui-muted transition hover:bg-ui-primary/10 hover:text-ui-on-primary'
                         >
                             <ChevronDown size={16} />
                         </button>

@@ -93,7 +93,7 @@ export default function ReferencePanel({
                     type='button'
                     aria-label='Clear symbol reference search'
                     onClick={() => setClickedWord(null)}
-                    className='grid h-8 w-8 place-items-center rounded-lg text-ui-muted transition hover:bg-ui-primary/10 hover:text-ui-text'
+                    className='grid h-8 w-8 place-items-center rounded-lg text-ui-muted transition hover:bg-ui-primary/10 hover:text-ui-on-primary'
                 >
                     {token ? <ArrowLeft className='h-4 w-4' /> : <Braces className='h-4 w-4' />}
                 </button>
