@@ -3,7 +3,8 @@ import config from '@/config'
 
 export const dynamic = 'force-dynamic'
 export async function GET(request: NextRequest) {
-    const token = request.cookies.get('access_token')?.value
+    const rawToken = request.cookies.get('access_token')?.value
+    const token = rawToken ? safeDecode(rawToken) : undefined
     const id = request.cookies.get('id')?.value
     if (!token || !id) return NextResponse.json({ ok: false }, { status: 401 })
     try {
@@ -11,5 +12,13 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(await response.json(), { status: response.status, headers: { 'Cache-Control': 'no-store' } })
     } catch {
         return NextResponse.json({ ok: false }, { status: 503, headers: { 'Cache-Control': 'no-store' } })
+    }
+}
+
+function safeDecode(value: string) {
+    try {
+        return decodeURIComponent(value)
+    } catch {
+        return value
     }
 }
