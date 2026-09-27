@@ -12,7 +12,7 @@ const { default: Articles } = await import('../src/app/dashboard/articles/page')
 const { default: Thoughts } = await import('../src/app/dashboard/thoughts/page')
 
 for (const articleYear of [2025, new Date().getFullYear(), 2027]) {
-    articles = [{ id: 'article', title: 'Example article', content: 'Example', created: `${articleYear}-10-12T12:38:00`, metadata: { wordCount: 810, estimatedMinutes: 4 } }]
+    articles = [{ id: 'article', title: 'Example article', content: 'Example', created: `${articleYear}-10-12T12:38:00`, metadata: { wordCount: 810, estimatedMinutes: 4, author: 'Ada', category: 'Research', pageVisits: 42 } }]
     const html = renderToStaticMarkup(await Articles())
     assert(html.includes('aria-label="Show article analytics"'))
     assert(html.includes('aria-expanded="false"'))
@@ -21,6 +21,13 @@ for (const articleYear of [2025, new Date().getFullYear(), 2027]) {
     assert(!html.includes('indexed'))
     assert(!html.includes('new drafts and deletes'))
     assert(html.includes('>1 Article</span>'))
+    assert(html.includes('<table'))
+    for (const label of ['Title', 'Author', 'Publish date', 'Page visits', 'Category']) assert(html.includes(label))
+    for (const label of ['Filter by title', 'Filter by author', 'Filter by publish date', 'Filter by minimum page visits', 'Filter by category']) assert(html.includes(label))
+    assert(html.includes('Ada'))
+    assert(html.includes('Research'))
+    assert(html.includes('42'))
+    assert(!html.includes('Editorial queue'))
 }
 articles = []
 assert(renderToStaticMarkup(await Articles()).includes('Publish your first article'))
