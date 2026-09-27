@@ -24,9 +24,9 @@ export default function RouteFrame({ children, serverPath, token, sidebar, banne
     const isAppSurface = showSidebar || isDashboard || isLoggedInTi || (!isPublicProduct && (isShare || pathname.startsWith('/ai') || isDashboard || isProfile || isOrganizations))
 
     return (
-        <div data-route-frame className={`enterprise-theme relative z-10 mt-18 flex h-[calc(100dvh-4.5rem)] w-full flex-col bg-ui-canvas ${isBrowserLanding || showSidebar ? 'overflow-hidden overscroll-none' : 'overflow-auto'}`}>
+        <div data-route-frame className={`enterprise-theme relative z-10 mt-18 h-[calc(100dvh-4.5rem)] w-full bg-ui-canvas grid grid-rows-[auto_minmax(0,1fr)] ${isBrowserLanding || showSidebar ? 'overflow-hidden overscroll-none' : 'overflow-auto'}`}>
             {banner}
-            <main className={`min-h-0 w-full flex-1 ${isAppSurface || isBrowserLanding ? 'h-full' : isPublicProduct ? 'min-h-full' : 'min-h-app-viewport pt-3 md:pt-0'}`}>
+            <main className={`min-h-0 w-full ${isAppSurface || isBrowserLanding ? 'h-full' : isPublicProduct ? 'min-h-full' : 'min-h-app-viewport pt-3 md:pt-0'}`}>
                 {showSidebar ? (
                     <div className='h-full min-h-0 bg-ui-canvas px-2 text-ui-text'>
                         <div className='grid h-full min-h-0 grid-rows-[minmax(0,1fr)] gap-2 lg:grid-cols-[auto_minmax(0,1fr)]'>
