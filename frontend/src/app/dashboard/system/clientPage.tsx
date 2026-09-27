@@ -50,6 +50,7 @@ type SystemDashboardProps = {
     dockerTelemetry: DockerTelemetryResponse
     vms: VM[]
     vmMetrics: VMMetrics[]
+    section: 'overview' | 'virtual-machines' | 'containers'
 }
 
 type SystemSummary = {
@@ -68,6 +69,7 @@ export default function SystemDashboard({
     dockerTelemetry: initialDockerTelemetry,
     vms,
     vmMetrics,
+    section,
 }: SystemDashboardProps) {
     const router = useRouter()
     const { condition: message, setCondition: setMessage } = useClearStateAfter()
@@ -107,12 +109,12 @@ export default function SystemDashboard({
     })
     const telemetryBlocked = Boolean(dockerTelemetry.unavailable_reason || (systemUnavailableReason))
     const primaryHref = telemetryBlocked
-        ? '#system-telemetry'
+        ? '/system#system-telemetry'
         : unhealthyContainers.length
-            ? '#system-containers'
+            ? '/system/containers#system-containers'
             : normalizedVms.length
-                ? '#system-vms'
-                : '#system-containers'
+                ? '/system/virtual-machines#system-vms'
+                : '/system/containers#system-containers'
     const primaryTitle = telemetryBlocked
         ? 'Recover telemetry first'
         : unhealthyContainers.length
@@ -357,11 +359,21 @@ export default function SystemDashboard({
                 onConfirm={() => void handleStopAll()}
             />
 
-            <div id='system-telemetry' className='space-y-2'>
-                {dockerTelemetry.unavailable_reason ? <p className='rounded-md border border-ui-warning/35 bg-ui-warning/10 px-3 py-2 text-sm text-ui-warning'>Docker telemetry degraded: {dockerTelemetry.unavailable_reason}</p> : null}
-                {systemUnavailableReason ? <p className='rounded-md border border-ui-warning/35 bg-ui-warning/10 px-3 py-2 text-sm text-ui-warning'>Host telemetry degraded: {systemUnavailableReason}</p> : null}
-            </div>
-            <DashboardPanel className='grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center' data-system-primary-triage>
+            {section === 'overview' ? <>
+                <div id='system-telemetry' className='space-y-2'>
+                    {dockerTelemetry.unavailable_reason ? <p className='rounded-md border border-ui-warning/35 bg-ui-warning/10 px-3 py-2 text-sm text-ui-warning'>Docker telemetry degraded: {dockerTelemetry.unavailable_reason}</p> : null}
+                    {systemUnavailableReason ? <p className='rounded-md border border-ui-warning/35 bg-ui-warning/10 px-3 py-2 text-sm text-ui-warning'>Host telemetry degraded: {systemUnavailableReason}</p> : null}
+                </div>
+                <details className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-system-summary-disclosure>
+                    <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                        <span>Host, container, and VM counters</span>
+                    </summary>
+                    <section className='grid gap-3 border-t border-ui-border p-3 sm:grid-cols-2 xl:grid-cols-4' data-system-summary-metrics>
+                        {summary.map((item) => <SummaryCard key={item.label} item={item} />)}
+                    </section>
+                </details>
+            </> : null}
+            {section === 'virtual-machines' ? <DashboardPanel className='grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center' data-system-primary-triage>
                 <div className='min-w-0'>
                     <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-ui-muted'>
                         <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1'>Recommended next</span>
@@ -378,18 +390,9 @@ export default function SystemDashboard({
                 >
                     {primaryActionLabel}
                 </a>
-            </DashboardPanel>
+            </DashboardPanel> : null}
 
-            <details className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-system-summary-disclosure>
-                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
-                    <span>Host, container, and VM counters</span>
-                </summary>
-                <section className='grid gap-3 border-t border-ui-border p-3 sm:grid-cols-2 xl:grid-cols-4' data-system-summary-metrics>
-                    {summary.map((item) => <SummaryCard key={item.label} item={item} />)}
-                </section>
-            </details>
-
-            <section className='grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(22rem,0.65fr)]' id='system-containers' data-system-containers>
+            {section === 'containers' ? <section className='grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(22rem,0.65fr)]' id='system-containers' data-system-containers>
                 <DashboardPanel className='p-4'>
                     <div className='flex flex-wrap items-center justify-between gap-3'>
                         <div>
@@ -441,10 +444,9 @@ export default function SystemDashboard({
                     onCopy={() => selectedContainer ? void copyContainer(selectedContainer) : undefined}
                     onRestart={() => selectedContainer ? setRestartContainer(selectedContainer) : undefined}
                 />
-            </section>
+            </section> : null}
 
-
-            <DashboardPanel className='p-4' id='system-vms' data-system-vms>
+            {section === 'virtual-machines' ? <DashboardPanel className='p-4' id='system-vms' data-system-vms>
                 <div className='flex flex-wrap items-center justify-between gap-3'>
                     <div>
                         <h2 className='text-base font-semibold text-ui-text'>Virtual machines</h2>
@@ -498,7 +500,7 @@ export default function SystemDashboard({
                         </button>
                     </div>
                 </details>
-            </DashboardPanel>
+            </DashboardPanel> : null}
         </div>
     )
 }

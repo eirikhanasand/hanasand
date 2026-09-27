@@ -63,7 +63,11 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
             ]),
         ]),
         group('Infrastructure', [
-            link('System Overview', '/system'),
+            group('System', [
+                link('Overview', '/system'),
+                link('Virtual machines', '/system/virtual-machines', hasVMs),
+                link('Containers', '/system/containers'),
+            ]),
             group('Compute', [
                 link('Virtual Machines', '/vms', hasVMs),
                 link('Host Updates', '/system/updates', isAdmin),
