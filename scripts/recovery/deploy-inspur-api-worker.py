@@ -65,7 +65,7 @@ def apply(target,env):
 def ready(expected):
     for _ in range(90):
         try:
-            with urllib.request.urlopen('http://127.0.0.1:8080/ready',timeout=3) as response:
+            with urllib.request.urlopen('http://127.0.0.1:8080/health',timeout=3) as response:
                 state=json.load(response)
                 if state.get('ok') and state.get('release')==expected:return
         except Exception:pass

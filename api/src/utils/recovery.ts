@@ -30,7 +30,7 @@ export function recoveryRequestAllowed(method: string, path: string) {
     if (process.env.SUPPORT_INTERNAL_SERVICE === '1' && /^\/api\/(support(?:\/|$)|ws\/support$)/.test(path)) return true
     const publicRead = ['GET', 'HEAD'].includes(method) && ['/api/system/updates', '/api/status'].includes(path)
     const activeSupport = /^\/api\/(support(?:\/|$)|ws\/support$)/.test(path) && supportFailoverActive()
-    if (process.env.RECOVERY_ESSENTIAL_ONLY === '1' && !publicRead && !activeSupport && !/^\/(ready$|api\/(health$|auth\/|user(?:\/|$)|organizations(?:\/|$)|ti\/search$|v1\/ti\/search(?:\/batch)?$))/.test(path)) return false
+    if (process.env.RECOVERY_ESSENTIAL_ONLY === '1' && !publicRead && !activeSupport && !/^\/(health$|ready$|api\/(health$|auth\/|user(?:\/|$)|organizations(?:\/|$)|ti\/search$|v1\/ti\/search(?:\/batch)?$))/.test(path)) return false
     if (activeSupport || !recoveryReadOnly()) return true
     const query = method === 'POST' && ['/api/ti/search', '/api/v1/ti/search', '/api/v1/ti/search/batch'].includes(path)
     return query || (['GET', 'HEAD', 'OPTIONS'].includes(method) && !/\/auth\/logout\/|\/restart\//.test(path))

@@ -45,7 +45,7 @@ for kind, failure in ((kind, failure) for kind in ('frontend', 'api', 'auth') fo
         return json.dumps({'ok': False, 'count': 0 if corrupt else 44, 'source': 'compact-index'}).encode()
     def urlopen(request, **kwargs):
         url = request if isinstance(request, str) else request.full_url
-        if url.endswith('/ready'):
+        if url.endswith(('/ready', '/health')):
             return Response(json.dumps({'ok': True, 'release': release}).encode())
         corrupt = ('19301' in url and failure == 'candidate') or ('19300' in url and failure == 'serving')
         return Response(b'incorrect' if corrupt else b'PWNPRF02' + (2).to_bytes(4, 'little'))

@@ -63,7 +63,7 @@ print('Recovery priority, unavailable state, red failover and partial green fail
 # DNS decision checks are isolated; provider credentials and live records are never used here.
 import dns
 import time
-record = {'id': 1, 'host': 'api', 'type': 'A', 'data': '192.0.2.1', 'ttl': 60, 'checkPath': '/ready'}
+record = {'id': 1, 'host': 'api', 'type': 'A', 'data': '192.0.2.1', 'ttl': 60, 'checkPath': '/health'}
 config = {'enabled': True, 'domainId': 1, 'primaryIp': '192.0.2.1', 'standbyIp': '192.0.2.2', 'records': [record]}
 def fake_api(_config, path, payload=None):
     assert path == '/domains/1/dns/1'

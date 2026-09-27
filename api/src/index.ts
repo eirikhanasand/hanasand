@@ -50,7 +50,7 @@ fastify.addHook('onRequest', async (req, reply) => {
         return reply.code(503).header('Retry-After', '30').send({ code: 'recovery_read_only', error: 'Recovery mode: viewing existing cases, alerts and intelligence is available. Changes and new processing are temporarily paused.' })
     }
 })
-fastify.get('/ready', async (_req, reply) => {
+fastify.get('/health', async (_req, reply) => {
     try {
         const result = await queryOnce('SELECT pg_is_in_recovery() AS replica')
         return { ok: true, service: 'api', site: process.env.RECOVERY_SITE || 'unknown', release: process.env.HANASAND_RELEASE_COMMIT || 'unknown', readOnly: result.rows[0].replica, recovery: recoveryState().mode || 'normal' }

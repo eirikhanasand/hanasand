@@ -68,7 +68,7 @@ def check(port, target):
     base = f'http://127.0.0.1:{port}'
     for attempt in range(20):
         try:
-            path = '/api/recovery/ready' if kind == 'frontend' else '/ready'
+            path = '/api/recovery/ready' if kind == 'frontend' else ('/health' if kind == 'api' else '/ready')
             with urllib.request.urlopen(base + path, timeout=5) as response:
                 status = json.load(response)
                 if response.status == 200 and status.get('ok') and status.get('release') == release:

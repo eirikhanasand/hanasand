@@ -33,7 +33,7 @@ try {
     const count = async (table: string) => Number((await query(`SELECT count(*) n FROM ${table}`)).rows[0].n)
     async function fixture(headers: Record<string, string> = {}) {
         const connection = randomUUID(), timestamp = new Date().toISOString()
-        const req: any = { id: randomUUID(), method: 'GET', url: '/ready', ip: '192.0.2.1', body: undefined,
+        const req: any = { id: randomUUID(), method: 'GET', url: '/health', ip: '192.0.2.1', body: undefined,
             raw: { socket: { remoteAddress: '127.0.0.1' } }, headers: { host: 'api.hanasand.com', ...headers,
                 [proxyHeader]: `${connection}|hanasand-proxy-1|127.0.0.1|41000|127.0.0.1|18080|api` } }
         const log = { service: 'hanasand-proxy-1', host: 'inspur', level: 'info' as const, timestamp, sourceEventId: randomUUID().replaceAll('-', '').repeat(2),
@@ -52,7 +52,7 @@ try {
     assert.deepEqual((await query('SELECT original FROM log_proxy_receipts')).rows[0].original, safe.log)
     // Repeated requests on the same connection remain distinct and do not replace first evidence.
     const first = (await query('SELECT service_log_id FROM log_proxy_requests')).rows[0].service_log_id
-    await recordProxyRequest({ ...safe.req, id: randomUUID(), url: '/ready', headers: { ...safe.req.headers, authorization: 'Bearer secret-value' } }, { statusCode: 200 } as any)
+    await recordProxyRequest({ ...safe.req, id: randomUUID(), url: '/health', headers: { ...safe.req.headers, authorization: 'Bearer secret-value' } }, { statusCode: 200 } as any)
     assert.equal(await count('service_logs'), 2)
     assert.equal(await recordProxyRequest({ ...safe.req, id: randomUUID(), url: '/api/organizations' }, { statusCode: 200 } as any), false, 'Protected requests use the existing logging path')
     assert.equal(await count('service_logs'), 2)
@@ -62,7 +62,7 @@ try {
         const f = await fixture(mode === 'unsafe-header' ? { 'x-unexpected': 'suspicious' } : {})
         if (mode === 'body') { f.req.body = { unexpected: true }; f.req.headers['content-length'] = '19' }
         if (mode === 'protected') f.req.url = '/admin'
-        if (mode === 'query') f.req.url = '/ready?q=1'
+        if (mode === 'query') f.req.url = '/health?q=1'
         if (mode === 'foreign-socket') f.req.raw.socket.remoteAddress = '192.0.2.25'
         if (mode !== 'unmatched') await recordProxyRequest(f.req, { statusCode: mode === 'error' ? 500 : 200 } as any)
         if (mode === 'disabled') await query('UPDATE rules SET enabled=false WHERE rule_id=$1', [proxyRuleId])

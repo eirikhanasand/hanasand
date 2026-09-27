@@ -8,7 +8,7 @@ const header = `${id}|hanasand-proxy-1|127.0.0.1|41000|127.0.0.1|18080|api`
 const log = { service: 'hanasand-proxy-1', host: 'inspur', level: 'info', timestamp: '2026-09-24T00:00:00.000Z', sourceEventId: 'a'.repeat(64),
     message: `Connect from 127.0.0.1:41000 to 127.0.0.1:18080 (api/HTTP) correlation=${id} proxy=hanasand-proxy-1`,
     metadata: { collector: 'docker', stream: 'stdout', container_id: '123456abcdef' } }
-const access = { key: 'http-api:request', timestamp: '2026-09-24T00:00:00.010Z', method: 'GET', path: '/ready', status: 200, ip: '192.0.2.1',
+const access = { key: 'http-api:request', timestamp: '2026-09-24T00:00:00.010Z', method: 'GET', path: '/health', status: 200, ip: '192.0.2.1',
     inspection: { version: 1, bodyEmpty: true, headersSafe: true, pathSafe: true } }
 function proof(): any {
     const connection = proxyConnection(header)
