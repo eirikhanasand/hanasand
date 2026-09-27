@@ -2,7 +2,7 @@ import crypto from 'node:crypto'
 import run from '#db'
 
 const IV_LENGTH = 12
-const keySourceEnvNames = ['AI_REPO_SECRET_KEY', 'MAIL_SERVICE_KEY', 'VM_API_TOKEN', 'DB_PASSWORD'] as const
+const keySourceEnvNames = ['AI_REPO_SECRET_KEY', 'VM_API_TOKEN', 'MAIL_SERVICE_KEY', 'DB_PASSWORD'] as const
 
 type RepoCredentialRow = {
     github_token_encrypted: string | null
