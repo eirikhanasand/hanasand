@@ -54,9 +54,9 @@ mock.module('#db', () => ({ default: query, withTransaction: async (work: any) =
 mock.module('#utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid, id: 'editor' }) }))
 mock.module('#utils/auth/hasRole.ts', () => ({ default: async () => ({ valid: systemAdmin }) }))
 mock.module('#utils/auth/apiKeys.ts', () => ({ validateApiKey: async () => ({ organizationId: 'org-a', apiKey: { scopes: [] } }), matchApiKeyScope: () => true }))
-const { defaultRuleDefinition, normalizeBuiltinDefinition, postRulePreview, getRules, getRule, putRule, postRuleAction, postRule, postRulePack, ingestEvent } = await import('../src/handlers/events.ts')
+const { defaultRuleDefinition, normalizeBuiltinDefinition, postRulePreview, getRules, getRule, getRuleHitCounts, getRuleHitCount, putRule, postRuleAction, postRule, postRulePack, ingestEvent } = await import('../src/handlers/events.ts')
 const builtin = 'network.signature_alert.v1'
-const reply = () => ({ statusCode: 200, status(code: number) { this.statusCode = code; return this }, send(body: any) { return body } })
+const reply = () => ({ statusCode: 200, status(code: number) { this.statusCode = code; return this }, header() { return this }, send(body: any) { return body } })
 const request = (id = builtin.replace(/\.v\d+$/, ''), body: any = {}, organizationId = 'org-a') => ({ params: { id }, query: { organizationId }, body, ip: '127.0.0.1', headers: { authorization: 'Bearer test-key' }, id: 'request-test' }) as any
 const edit = { version: '1', name: 'Custom network alert', explanation: 'An important signature matched a network event.', severity: 'critical', enabled: true }
 const network = { source: {}, events: [{ timestamp: '2026-09-14T12:00:00Z', event_type: 'network', action: 'alert', signature: 'Test signature' }] }
@@ -325,6 +325,12 @@ test('rule library exposes collector totals and organization-scoped detection hi
         const detail = await getRule(request(id.replace(/\.v\d+$/, '')), reply() as any)
         expect(detail.triggerCount).toBe(hits(id))
     }
+    const liveCounts = await getRuleHitCounts(request(), reply() as any)
+    expect(liveCounts.hitCounts[builtin]).toBe(1)
+    expect(liveCounts.hitCounts['http.routine_access.v1']).toBe(12345)
+    expect(liveCounts.hitCounts['custom.retention.v1']).toBe(0)
+    const liveDetailCount = await getRuleHitCount(request(builtin), reply() as any)
+    expect(liveDetailCount.triggerCount).toBe(1)
     const denied = reply()
     await getRules(request('', {}, 'other-org'), denied as any)
     expect(denied.statusCode).toBe(403)

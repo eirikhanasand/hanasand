@@ -8,6 +8,7 @@ import { ArrowLeft, Activity, History, LoaderCircle, SlidersHorizontal } from 'l
 import SignatureEditor from './signature-editor'
 import ReprocessRule from '../reprocess-rule'
 import { getRuleCategory, ruleCategories } from '../rule-categories'
+import { useSmoothedCount } from '../use-smoothed-count'
 
 type Audit = { id: string, event_type: string, actor_id: string | null, created_at: string, context: { before?: Record<string, unknown> | null, after?: Record<string, unknown>, action?: string } }
 type Payload = { isHistorical?: boolean, currentVersion?: string, triggerCount: number | null, rule: Rule, canEdit: boolean, audit: Audit[], nextOffset: number | null }
@@ -19,6 +20,7 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
     const [error, setError] = useState('')
     const [status, setStatus] = useState('')
     const [busy, setBusy] = useState(false)
+    const displayedHitCount = useSmoothedCount(data?.triggerCount, 3_000)
     const endpoint = `/api/backend/rules/${encodeURIComponent(id)}?organizationId=${encodeURIComponent(organizationId)}`
     useEffect(() => {
         let active = true
@@ -26,6 +28,27 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
         requestJson<Payload>(endpoint).then(payload => { if (active) { setData(payload); setDraft(payload.rule); canonicalize(payload) } }).catch(cause => { if (active) setError(cause.message) })
         return () => { active = false }
     }, [endpoint, organizationId])
+
+    useEffect(() => {
+        if (!organizationId || !data) return
+        let active = true
+        let pending = false
+        const refreshHitCount = async () => {
+            if (pending || document.visibilityState !== 'visible') return
+            pending = true
+            try {
+                const payload = await requestJson<{ triggerCount: number | null }>(`/api/backend/rules/${encodeURIComponent(id)}/hits?organizationId=${encodeURIComponent(organizationId)}`, { cache: 'no-store' })
+                if (active) setData(previous => previous ? { ...previous, triggerCount: payload.triggerCount } : previous)
+            } catch {
+                // Retain the last count and retry on the next interval.
+            } finally {
+                pending = false
+            }
+        }
+        void refreshHitCount()
+        const interval = window.setInterval(() => void refreshHitCount(), 3_000)
+        return () => { active = false; window.clearInterval(interval) }
+    }, [id, organizationId, Boolean(data)])
 
     function canonicalize(payload: Payload) {
         if (payload.isHistorical) return
@@ -80,7 +103,7 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
                     </div>
                     <dl className='flex items-center gap-2 border-t border-ui-border pt-2 sm:min-w-32 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-4'>
                         <Activity size={20} className='text-ui-primary' aria-hidden='true' />
-                        <div><dt className='text-xs font-medium text-ui-muted'>Hits</dt><dd className='mt-1 text-xl font-semibold leading-none tabular-nums text-ui-text' title='Recorded rule hits for this organization, using the same total as the rule list.'>{data.triggerCount?.toLocaleString('en-US') ?? 'Unavailable'}</dd></div>
+                        <div><dt className='text-xs font-medium text-ui-muted'>Hits</dt><dd className='mt-1 text-xl font-semibold leading-none tabular-nums text-ui-text' title='Recorded rule hits for this organization, using the same total as the rule list.'>{displayedHitCount?.toLocaleString('en-US') ?? 'Unavailable'}</dd></div>
                     </dl>
                 </header>
             </DashboardPanel>

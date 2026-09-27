@@ -314,6 +314,38 @@ export async function getRules(req: FastifyRequest, res: FastifyReply) {
     })), canManageRetention: retentionRole.valid })
 }
 
+export async function getRuleHitCounts(req: FastifyRequest, res: FastifyReply) {
+    const access = await organizationAccess(req, res)
+    if (!access) return
+    const query = req.query as { organizationId?: string }
+    if (query.organizationId !== access.organizationId) return res.status(403).send({ error: 'Organization access denied.' })
+    const rules = (await loadConfiguredRules(access.organizationId, run, true)).filter(rule => !internalRetentionRuleIds.has(rule.id))
+    try {
+        const hits = await loadRuleHits(access.organizationId, rules, run, { cache: false })
+        return res.header('Cache-Control', 'no-store').send({ organizationId: access.organizationId, hitCounts: Object.fromEntries(rules.map(rule => [rule.id,
+            rule.definition?.stage === 'analyze' && rule.definition.action === 'keep' ? null : hits.get(rule.id) ?? 0,
+        ])) })
+    } catch (error) {
+        if (error instanceof ReadAdmissionError) return res.header('Retry-After', '2').status(503).send({ error: error.message })
+        throw error
+    }
+}
+
+export async function getRuleHitCount(req: FastifyRequest<{ Params: { id: string }, Querystring: { organizationId?: string } }>, res: FastifyReply) {
+    const access = await organizationAccess(req, res)
+    if (!access) return
+    const rule = (await loadConfiguredRules(access.organizationId, run, true)).find(rule => ruleSlug(rule.id) === ruleSlug(req.params.id) || rule.recordId === req.params.id)
+    if (!rule || internalRetentionRuleIds.has(rule.id)) return res.status(404).send({ error: 'Rule not found.' })
+    try {
+        const hits = await loadRuleHits(access.organizationId, [rule], run, { cache: false })
+        const triggerCount = rule.definition?.stage === 'analyze' && rule.definition.action === 'keep' ? null : hits.get(rule.id) ?? 0
+        return res.header('Cache-Control', 'no-store').send({ organizationId: access.organizationId, triggerCount })
+    } catch (error) {
+        if (error instanceof ReadAdmissionError) return res.header('Retry-After', '2').status(503).send({ error: error.message })
+        throw error
+    }
+}
+
 export async function postRule(req: FastifyRequest, res: FastifyReply) {
     const access = await organizationAccess(req, res)
     if (!access) return

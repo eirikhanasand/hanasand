@@ -219,7 +219,7 @@ import { getCommercialContactRequests, postCommercialContactRequest } from './ha
 import { getOrganizationPrivacy, postOrganizationPrivacy } from './handlers/organizationPrivacy.ts'
 import { deleteSavedSearch, getSavedSearches, postSavedSearch } from './handlers/ti/savedSearches.ts'
 import { getAptUpdates } from './handlers/aptUpdates.ts'
-import { postRulePreview, getEvents, getRule, putRule, getRules, postEventAction, postRule, postRuleAction, postRulePack, postEventSigmaPack } from './handlers/events.ts'
+import { postRulePreview, getEvents, getRule, putRule, getRules, getRuleHitCounts, getRuleHitCount, postEventAction, postRule, postRuleAction, postRulePack, postEventSigmaPack } from './handlers/events.ts'
 import { getRuleReprocess, postRuleReprocess } from './handlers/ruleReprocess.ts'
 import { createBillingPortal, getBillingSubscription, receiveStripeWebhook } from './handlers/billing.ts'
 
@@ -618,6 +618,8 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/events', getEvents)
     fastify.post('/events/:id/actions', postEventAction)
     fastify.get('/rules', getRules)
+    fastify.get('/rules/hits', getRuleHitCounts)
+    fastify.get('/rules/:id/hits', getRuleHitCount)
     fastify.get('/rules/:id', getRule)
     fastify.put('/rules/:id', putRule)
     fastify.post('/rules', postRule)

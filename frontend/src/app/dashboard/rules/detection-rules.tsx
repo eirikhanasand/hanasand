@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react'
 import { getRuleCategory, ruleCategories, type RuleCategory } from './rule-categories'
 import { DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import SortIndicator from '@/components/dashboard/sort-indicator'
+import { useSmoothedCount } from './use-smoothed-count'
 
 export type Rule = { id: string, hitCount?: number | null, detectionLogic?: string, recordId?: string, rule_id?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'owned' | 'open_source', sourceReference?: string, definition?: { stage?: 'analyze' | 'match' | 'detect', action?: 'drop' | 'keep', storeScope?: 'all' | 'custom_drop', match?: 'all', parameters?: Record<string, number>, protection?: Record<string, unknown>, failureConditions?: Array<{ path: string, operator: string, value: string, caseSensitive?: boolean }>, conditions?: Array<{ path: string, operator: string, value: string, caseSensitive?: boolean }> } }
 
@@ -56,6 +57,30 @@ export default function DetectionRules({ category, initial }: { category: RuleCa
         }
         return () => { loadRequest.current++ }
     }, [organizationId, category, initial])
+
+    useEffect(() => {
+        if (!organizationId) return
+        let active = true
+        let pending = false
+        const refreshHits = async () => {
+            if (pending || document.visibilityState !== 'visible') return
+            pending = true
+            try {
+                const payload = await requestJson<{ hitCounts?: Record<string, number | null> }>(`/api/backend/rules/hits?organizationId=${encodeURIComponent(organizationId)}`, { cache: 'no-store' })
+                if (!active || latestOrganization.current !== organizationId || !payload.hitCounts) return
+                setRules(current => current.map(rule => Object.hasOwn(payload.hitCounts!, rule.id)
+                    ? { ...rule, hitCount: payload.hitCounts![rule.id] }
+                    : rule))
+            } catch {
+                // Keep the last displayed counts and retry on the next polling interval.
+            } finally {
+                pending = false
+            }
+        }
+        void refreshHits()
+        const interval = window.setInterval(() => void refreshHits(), 10_000)
+        return () => { active = false; window.clearInterval(interval) }
+    }, [organizationId])
 
     async function loadEvent(id: string) {
         latestOrganization.current = id
@@ -194,7 +219,7 @@ export default function DetectionRules({ category, initial }: { category: RuleCa
                                 <td className='px-3 py-2 text-xs capitalize'>{rule.severity}</td>
                                 <td className='px-3 py-2 text-xs'>{rule.enabled === false ? 'Disabled' : 'Enabled'}</td>
                                 <td className='px-3 py-2 text-xs text-ui-muted'>{rule.source === 'open_source' ? 'Imported rule' : rule.source === 'owned' ? 'Custom rule' : 'Hanasand rule'}</td>
-                                <td className='px-3 py-2 text-xs tabular-nums'>{rule.hitCount?.toLocaleString('en-US') ?? '—'}</td>
+                                <td className='px-3 py-2 text-xs tabular-nums'><AnimatedHits value={rule.hitCount} /></td>
                                 {category === 'analysis' && <td className='px-3 py-2 text-xs'>{rule.definition?.action === 'drop' ? 'Drop' : 'Store'}</td>}
                                 <td className='px-2 py-2'><button type='button' aria-label={`${rule.enabled === false ? 'Enable' : 'Disable'} ${rule.name}`} className='rounded-md border border-ui-border px-2 py-2 text-xs font-semibold disabled:opacity-50' disabled={!canManageRules} onClick={() => void toggleRule(rule)}>{rule.enabled === false ? 'Enable' : 'Disable'}</button></td>
                             </tr>)}
@@ -209,3 +234,8 @@ export default function DetectionRules({ category, initial }: { category: RuleCa
 
 export async function requestJson<T>(url: string, init: RequestInit = {}) { const response = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json', ...(init.headers || {}) } }); const payload = await response.json().catch(() => ({})); if (!response.ok) throw new Error(payload?.error?.message || payload?.error || `Request failed (${response.status})`); return payload as T }
 function errorMessage(error: unknown) { return error instanceof Error ? error.message : 'Event could not load this workspace.' }
+
+function AnimatedHits({ value }: { value?: number | null }) {
+    const count = useSmoothedCount(value, 10_000)
+    return <>{count?.toLocaleString('en-US') ?? '—'}</>
+}

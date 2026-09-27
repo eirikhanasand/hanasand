@@ -36,8 +36,8 @@ const aggregateTables = new Map([
     [postgresRuleId, ['log_postgres_session_state', 'sum(dropped_records)']], [proxyRuleId, ['log_proxy_counts', 'sum(amount)']],
     [modelDiscoveryRuleId, ['log_model_probe_receipts', 'count(*)']], [readinessAuditRuleId, ['log_readiness_audit_receipts', 'count(*)']],
 ])
-export async function loadRuleHits(organizationId: string, rules: Pick<Rule, 'id' | 'source' | 'definition'>[], query: typeof run) {
-    if (process.env.NODE_ENV !== 'test' && (query as typeof run & { primaryDatabaseRunner?: boolean }).primaryDatabaseRunner) {
+export async function loadRuleHits(organizationId: string, rules: Pick<Rule, 'id' | 'source' | 'definition'>[], query: typeof run, options: { cache?: boolean } = {}) {
+    if (options.cache !== false && process.env.NODE_ENV !== 'test' && (query as typeof run & { primaryDatabaseRunner?: boolean }).primaryDatabaseRunner) {
         const key = `rule-hits:${organizationId}:${rules.map(rule => `${rule.id}:${rule.source || ''}:${rule.definition?.stage || ''}:${rule.definition?.action || ''}`).join(',')}`
         return cachedRead(key, 5000, () => loadRuleHitsUncached(organizationId, rules, query))
     }
