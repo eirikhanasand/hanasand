@@ -35,6 +35,7 @@ original=json.loads(subprocess.check_output(['docker','inspect','hanasand_api'])
 settings=dict(value.split('=',1) for value in original['Config']['Env'])
 settings.update(support_settings(worker=True))
 settings.update(probe_verification_settings())
+settings['HANASAND_APP_UPDATE_DIR']='/srv/hanasand/app-updates'
 settings['DB_BACKUP_WORKER_SOCKET']='/var/lib/hanasand/backups/database/.worker.sock'
 # Collectors receive a credential that authenticates only log ingestion.
 log_ingest_file = Path('/home/hanasand/hanasand/ops/runtime/log-ingest.json')
