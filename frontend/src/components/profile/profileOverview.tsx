@@ -20,6 +20,7 @@ function LoginActivity({ loginDays }: { loginDays: ProfileStats['loginDays'] }) 
     const activeDays = loginDays.length
     const totalLogins = loginDays.reduce((total, item) => total + item.logins, 0)
     const levels = ['bg-ui-raised', 'bg-ui-primary/25', 'bg-ui-primary/45', 'bg-ui-primary/70', 'bg-ui-primary']
+    const gridTemplateColumns = 'repeat(' + weekCount + ', 10px)'
     const monthLabels = weeks.map(week => {
         const firstOfMonth = week.find(date => date.getUTCDate() === 1)
         return firstOfMonth ? monthLabel.format(firstOfMonth) : ''
@@ -35,19 +36,19 @@ function LoginActivity({ loginDays }: { loginDays: ProfileStats['loginDays'] }) 
             </div>
             <div className='mt-4 overflow-x-auto pb-1'>
                 <div
-                    role='img'
+                    role='group'
                     aria-label={`Login activity over the past year: ${activeDays} days with sign-ins.`}
                     className='min-w-[720px]'
                 >
-                    <div className='mb-2 grid h-4 gap-[3px] pl-8 text-[10px] text-ui-muted' style={{ gridTemplateColumns: `repeat(${weekCount}, minmax(0, 1fr))` }}>
+                    <div className='mb-2 grid h-4 gap-[3px] pl-8 text-[10px] text-ui-muted' style={{ gridTemplateColumns }}>
                         {monthLabels.map((month, index) => <span key={index}>{month}</span>)}
                     </div>
                     <div className='flex gap-2'>
-                        <div aria-hidden='true' className='grid grid-rows-7 gap-[3px] text-[9px] leading-[10px] text-ui-muted'>
+                        <div aria-hidden='true' className='grid w-6 shrink-0 grid-rows-7 gap-[3px] text-[9px] leading-[10px] text-ui-muted'>
                             <span>Sun</span><span></span><span>Tue</span><span></span><span>Thu</span><span></span><span>Sat</span>
                         </div>
-                        <div className='grid grid-flow-col grid-rows-7 gap-[3px]' style={{ gridTemplateColumns: `repeat(${weekCount}, 10px)` }}>
-                            {weeks.flat().map((date, index) => {
+                        <div className='grid grid-flow-col grid-rows-7 gap-[3px]' style={{ gridTemplateColumns }}>
+                            {weeks.flat().map(date => {
                                 const key = dateKey(date)
                                 const count = activity.get(key) || 0
                                 const level = count === 0 ? 0 : count === 1 ? 1 : count <= 3 ? 2 : count <= 6 ? 3 : 4
@@ -55,12 +56,15 @@ function LoginActivity({ loginDays }: { loginDays: ProfileStats['loginDays'] }) 
                                 const label = count
                                     ? `${count} sign-in${count === 1 ? '' : 's'} on ${dayLabel.format(date)}`
                                     : `No sign-ins on ${dayLabel.format(date)}`
+                                const cellClass = 'h-[10px] w-[10px] rounded-[2px] ' + levels[level]
+                                if (future) return <span key={key} aria-hidden='true' className={cellClass + ' opacity-0'} />
                                 return (
-                                    <span
-                                        key={index}
-                                        title={future ? undefined : label}
-                                        aria-hidden='true'
-                                        className={`h-[10px] w-[10px] rounded-[2px] ${levels[level]} ${future ? 'opacity-0' : ''}`}
+                                    <button
+                                        key={key}
+                                        type='button'
+                                        title={label}
+                                        aria-label={label}
+                                        className={cellClass + ' cursor-default border-0 p-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ui-primary'}
                                     />
                                 )
                             })}

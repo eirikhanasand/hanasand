@@ -52,8 +52,8 @@ export function MonitoringOverview({ alerts, dataHealth, organizationId, initial
     const currentPage = Math.min(page, Math.max(0, Math.ceil(rows.length / pageSize) - 1))
     const scopedHref = (path: string) => organizationId ? `${path}?organizationId=${encodeURIComponent(organizationId)}` : path
     if (dataHealth.alerts.state === 'fallback' || dataHealth.alerts.state === 'missing') {
-        return <main role='status' className='grid min-h-[70vh] place-items-center rounded-lg border border-ui-border bg-ui-canvas text-ui-text'>
-            <div className='flex items-center gap-3 text-sm font-semibold'><Loader2 className='h-4 w-4 animate-spin' />Loading findings</div>
+        return <main role='status' aria-label='Loading' aria-busy='true' className='site-loading-screen'>
+            <Loader2 className='site-loading-icon' aria-hidden='true' />
         </main>
     }
     return <div className='grid min-w-0 gap-4' data-dwm-overview>

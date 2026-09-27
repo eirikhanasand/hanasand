@@ -340,7 +340,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
             <DashboardPanel className='flex shrink-0 flex-wrap items-center gap-2 p-2.5 sm:p-3' id='mail-toolbar'>
                 <div className='flex min-w-0 flex-1 flex-wrap items-center gap-2'>
                     <div className='mr-auto min-w-0'>
-                        <p className='text-[10px] tracking-normal text-ui-muted'>Workspace</p>
+                        <p className='text-[10px] tracking-normal text-ui-muted'>Mailbox</p>
                         <p className='truncate text-[11px] text-ui-muted'>{overview?.mailboxAddress || 'Communication'}</p>
                     </div>
                     <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-ui-muted' data-mail-counts>
@@ -563,7 +563,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                         </div>
                         {!filteredMessages.length && !loading && (
                             <div className='rounded-lg border border-dashed border-ui-border px-3 py-4 text-xs text-ui-muted'>
-                                {query || mailFilter !== 'all' ? 'No messages match the current view.' : 'No recent messages.'}
+                                {query || mailFilter !== 'all' ? 'No messages match the current view.' : 'The inbox is empty.'}
                             </div>
                         )}
                     </div>
