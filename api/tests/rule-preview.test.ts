@@ -21,7 +21,8 @@ test('preview uses runtime selectors and excludes higher and unknown severities 
         expect(sql).toContain('received_at <= $3::timestamptz')
         expect(sql).not.toContain('($4::timestamptz IS NULL OR event_timestamp >= $4::timestamptz)')
         expect(sql).not.toContain('($5::timestamptz IS NULL OR (event_timestamp,id)')
-        expect(params.slice(0, 6)).toEqual(['org-a', false, input.until, input.from, null, ''])
+        expect(params.slice(0, 4)).toEqual(['org-a', false, input.until, input.from])
+        expect(params).not.toContain(null)
         expect(sql).toContain('jsonb_typeof')
         expect(params).toContainEqual(['http', 'status_code'])
         return { rows: [row(1), row(2, 'high'), row(3, 'unknown'), row(4, 'low', 404)] }
@@ -31,6 +32,15 @@ test('preview uses runtime selectors and excludes higher and unknown severities 
     expect(page.events.map(event => event.id)).toEqual(['1'])
     expect(page.events[0].normalized.message).toHaveLength(500)
     expect(page.cursor).toBeNull()
+})
+test('preview narrows scalar event conditions before reading event JSON', async () => {
+    let sql = ''
+    let params: unknown[] = []
+    await scanRulePreview('org-a', true, { ...input, action: 'keep', conditions: [{ path: 'event_type', operator: 'equals', value: 'authentication' }] }, (async (query: string, values: unknown[]) => {
+        sql = query; params = values; return { rows: [] }
+    }) as any)
+    expect(sql).toContain('lower(event_type COLLATE "C")')
+    expect(params).toContain('authentication')
 })
 test('complete count is independent of bounded random sample; cursors preserve microseconds', async () => {
     const query = async () => ({ rows: Array.from({ length: 2000 }, (_, index) => row(index)) })

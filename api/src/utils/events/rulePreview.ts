@@ -20,15 +20,18 @@ export async function scanRulePreview(organizationId: string, canReadLogs: boole
 }
 
 async function scanRulePreviewUncached(organizationId: string, canReadLogs: boolean, input: PreviewRequest, query = run) {
-    const params: (string | boolean | null | string[])[] = [organizationId, canReadLogs, input.until, input.from, input.cursor?.time || null, input.cursor?.id || '']
+    const params: (string | boolean | string[])[] = [organizationId, canReadLogs, input.until]
+    const fromParameter = input.from ? `$${params.push(input.from)}` : null
+    const cursorTimeParameter = input.cursor ? `$${params.push(input.cursor.time)}` : null
+    const cursorIdParameter = input.cursor ? `$${params.push(input.cursor.id)}` : null
     const filter = previewPredicate(input.conditions, params)
     const scope = [
         'organization_id=$1',
         '($2::boolean OR ingestion_id <> \'logs\')',
         'event_timestamp <= $3::timestamptz',
         'received_at <= $3::timestamptz',
-        ...(input.from ? ['event_timestamp >= $4::timestamptz'] : []),
-        ...(input.cursor ? ['(event_timestamp,id) < ($5::timestamptz,$6::text)'] : []),
+        ...(fromParameter ? [`event_timestamp >= ${fromParameter}::timestamptz`] : []),
+        ...(cursorTimeParameter && cursorIdParameter ? [`(event_timestamp,id) < (${cursorTimeParameter}::timestamptz,${cursorIdParameter}::text)`] : []),
         filter,
     ].join(' AND ')
     const rules = input.action === 'drop' ? await loadLogRetentionRules(organizationId, query) : []

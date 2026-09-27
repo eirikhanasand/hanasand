@@ -3,7 +3,7 @@ import { processRuleReprocessJob } from '#utils/events/ruleReprocess.ts'
 import { startLogProcessor } from '#utils/events/processor.ts'
 import { startBackgroundAnalytics } from './utils/backgroundAnalytics.ts'
 import { recoveryRequestAllowed, recoveryState, recoveryReadOnly } from './utils/recovery.ts'
-import { queryOnce, closeDatabase, withEventDatabase } from './utils/db.ts'
+import { queryOnce, closeDatabase, withEventDatabase, isTransientDatabaseError } from './utils/db.ts'
 import Fastify from 'fastify'
 import apiRoutes from './routes.ts'
 import cors from '@fastify/cors'
@@ -143,7 +143,15 @@ if (!browserWorkerOnly) {
             },
         }).catch(error => fastify.log.error(error, 'Failed to persist production monitor signal'))
     })
-    fastify.addHook('onError', async (req, _res, error) => {
+    fastify.addHook('onError', async (req, res, error) => {
+        if (!res.sent && ((error as { code?: string }).code === 'DB_QUEUE_FULL' || isTransientDatabaseError(error))) {
+            const preview = req.url.split('?')[0] === '/api/rules/preview'
+            const message = preview
+                ? 'Preview is temporarily busy. Try again shortly.'
+                : 'Database is temporarily busy. Try again shortly.'
+            res.header('retry-after', '1').status(503).send({ error: message })
+            return
+        }
         if (recoveryReadOnly() || process.env.RECOVERY_ESSENTIAL_ONLY === '1') return
         await recordLog({
             level: 'error',

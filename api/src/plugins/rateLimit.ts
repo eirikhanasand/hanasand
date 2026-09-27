@@ -51,6 +51,14 @@ export default fp(async function rateLimitPlugin(fastify: FastifyInstance) {
         const enforce = async () => {
             try { return await enforceRateLimit(req, res) }
             catch (error) {
+                if ((error as { code?: string }).code === 'DB_QUEUE_FULL') {
+                    const message = normalizeRequestPath(req) === '/api/rules/preview'
+                        ? 'Preview is temporarily busy. Try again shortly.'
+                        : 'Database is temporarily busy. Try again shortly.'
+                    res.header('retry-after', '1')
+                    res.status(503).send({ error: message })
+                    return false
+                }
                 if (!isTransientDatabaseError(error) && (error as { code?: string }).code !== '25006') throw error
                 await new Promise(resolve => setTimeout(resolve, 100))
                 return enforceRateLimit(req, res, (error as { code?: string }).code === '25006')
