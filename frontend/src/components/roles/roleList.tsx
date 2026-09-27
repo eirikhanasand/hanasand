@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronDown, ChevronRight, Pencil, Plus, Search, Shield, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, Minus, Pencil, Plus, Search, Shield, Trash2 } from 'lucide-react'
 import { DashboardPanel } from '@/components/dashboard/ui'
 import ErrorNotice from '@/components/error/errorNotice'
 import config from '@/config'
@@ -25,6 +25,10 @@ export default function RoleList({ roles, users, canManage, highestPriority }: {
     const [expanded, setExpanded] = useState<string | null>(null)
     const [search, setSearch] = useState('')
     const [showReserved, setShowReserved] = useState(false)
+    const [addingTo, setAddingTo] = useState<string | null>(null)
+    const [userSearch, setUserSearch] = useState('')
+    const [visibleMembers, setVisibleMembers] = useState(30)
+    const [visibleCandidates, setVisibleCandidates] = useState(30)
     const [form, setForm] = useState<Role | 'new' | null>(null)
     const [removing, setRemoving] = useState<Role | null>(null)
     const [name, setName] = useState('')
@@ -35,6 +39,13 @@ export default function RoleList({ roles, users, canManage, highestPriority }: {
     const [pending, setPending] = useState(false)
     const [changingMember, setChangingMember] = useState<string | null>(null)
     const [error, setError] = useState('')
+
+    useEffect(() => {
+        setAddingTo(null)
+        setUserSearch('')
+        setVisibleMembers(30)
+        setVisibleCandidates(30)
+    }, [expanded])
 
     function openForm(role: Role | 'new') {
         setNotice('')
@@ -187,18 +198,47 @@ export default function RoleList({ roles, users, canManage, highestPriority }: {
                                     </div>}</td>
                                 </tr>
                                 {isOpen && <tr className='border-b border-ui-border/70 bg-ui-raised/30'><td colSpan={4} className='px-3 py-3'>
-                                    <div className='grid gap-1 sm:grid-cols-2 lg:grid-cols-3'>
-                                        {visibleUsers.map(user => {
-                                            const active = memberships.get(user.id)?.has(role.id) || false
-                                            const key = `${user.id}:${role.id}`
-                                            return <label key={user.id} className='flex min-h-11 items-center gap-3 rounded-md px-2 text-sm text-ui-text hover:bg-ui-panel'>
-                                                <input type='checkbox' checked={active} disabled={!canChange || pending || changingMember !== null} onChange={() => void changeMembership(role, user)} className='h-4 w-4 accent-ui-primary disabled:opacity-50' aria-label={`${active ? 'Remove' : 'Assign'} ${role.name} ${active ? 'from' : 'to'} ${user.name}`} />
-                                                <span className='min-w-0 flex-1 truncate'>{user.name}<span className='ml-2 text-xs text-ui-muted'>{user.username && user.username !== user.name ? user.username : ''}</span></span>
-                                                {changingMember === key && <span className='text-xs text-ui-muted'>Saving</span>}
-                                            </label>
-                                        })}
-                                    </div>
-                                    {!visibleUsers.length && <p className='px-2 py-3 text-sm text-ui-muted'>No matching users</p>}
+                                    {(() => {
+                                        const members = visibleUsers.filter(user => memberships.get(user.id)?.has(role.id))
+                                        const filteredMembers = query && !roleMatchesQuery ? members.filter(user => matchingUsers.some(match => match.id === user.id)) : members
+                                        const candidates = listedUsers.filter(user => !memberships.get(user.id)?.has(role.id) && (!userSearch.trim() || `${user.name} ${user.username || ''}`.toLowerCase().includes(userSearch.trim().toLowerCase())))
+                                        return <div className='grid gap-2'>
+                                            <div className='flex min-h-10 items-center justify-between gap-3'>
+                                                <span className='text-xs font-semibold uppercase tracking-wide text-ui-muted'>Members</span>
+                                                {canChange && <button type='button' disabled={pending} aria-label={`${addingTo === role.id ? 'Close' : 'Add'} users ${addingTo === role.id ? 'for' : 'to'} ${role.name}`} aria-expanded={addingTo === role.id} onClick={() => { setAddingTo(addingTo === role.id ? null : role.id); setUserSearch(''); setVisibleCandidates(30) }} className='inline-flex min-h-10 min-w-10 items-center justify-center rounded-md text-ui-muted hover:bg-ui-panel hover:text-ui-text disabled:opacity-50'><Plus className={`h-4 w-4 transition-transform ${addingTo === role.id ? 'rotate-45' : ''}`} /></button>}
+                                            </div>
+                                            {addingTo === role.id && <div className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
+                                                <label className='flex min-h-11 items-center gap-2 border-b border-ui-border px-3 text-ui-muted'>
+                                                    <Search className='h-4 w-4 shrink-0' aria-hidden='true' />
+                                                    <input autoFocus aria-label={`Find users to add to ${role.name}`} placeholder='Find a user' value={userSearch} onChange={event => { setUserSearch(event.target.value); setVisibleCandidates(30) }} className='min-w-0 flex-1 bg-transparent text-sm text-ui-text outline-none placeholder:text-ui-muted' />
+                                                </label>
+                                                <div role='region' aria-label={`Users available for ${role.name}`} onScroll={event => { const element = event.currentTarget; if (element.scrollTop + element.clientHeight >= element.scrollHeight - 32 && visibleCandidates < candidates.length) setVisibleCandidates(count => count + 30) }} className='max-h-64 overflow-y-auto overscroll-contain'>
+                                                    <table className='w-full border-collapse text-left text-sm'>
+                                                        <thead className='sticky top-0 bg-ui-panel text-[0.68rem] font-bold uppercase tracking-wide text-ui-muted'><tr><th className='px-3 py-2'>User</th><th className='px-3 py-2'>Username</th><th className='w-12 px-3 py-2'><span className='sr-only'>Add user</span></th></tr></thead>
+                                                        <tbody>{candidates.slice(0, visibleCandidates).map(user => <tr key={user.id} className='border-t border-ui-border/70 hover:bg-ui-raised/60'>
+                                                            <td className='px-3 py-2.5 text-ui-text'>{user.name}</td>
+                                                            <td className='px-3 py-2.5 text-ui-muted'>{user.username || '—'}</td>
+                                                            <td className='px-3 py-1.5 text-right'><button type='button' disabled={!canChange || pending || changingMember !== null} aria-label={`Add ${user.name} to ${role.name}`} title='Add to group' onClick={() => void changeMembership(role, user)} className='inline-flex min-h-10 min-w-10 items-center justify-center rounded-md text-ui-muted hover:bg-ui-raised hover:text-ui-text disabled:opacity-50'><Plus className='h-4 w-4' /></button></td>
+                                                        </tr>)}
+                                                        {!candidates.length && <tr><td colSpan={3} className='px-3 py-5 text-center text-sm text-ui-muted'>No users found</td></tr>}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>}
+                                            <div role='region' aria-label={`Members of ${role.name}`} onScroll={event => { const element = event.currentTarget; if (element.scrollTop + element.clientHeight >= element.scrollHeight - 32 && visibleMembers < filteredMembers.length) setVisibleMembers(count => count + 30) }} className='max-h-72 overflow-auto overscroll-contain rounded-lg border border-ui-border'>
+                                                <table className='w-full border-collapse text-left text-sm'>
+                                                    <thead className='sticky top-0 bg-ui-panel text-[0.68rem] font-bold uppercase tracking-wide text-ui-muted'><tr><th className='px-3 py-2'>User</th><th className='px-3 py-2'>Username</th><th className='w-12 px-3 py-2'><span className='sr-only'>Remove user</span></th></tr></thead>
+                                                    <tbody>{filteredMembers.slice(0, visibleMembers).map(user => <tr key={user.id} className='border-t border-ui-border/70 hover:bg-ui-raised/60'>
+                                                        <td className='px-3 py-2.5 text-ui-text'>{user.name}</td>
+                                                        <td className='px-3 py-2.5 text-ui-muted'>{user.username || '—'}</td>
+                                                        <td className='px-3 py-1.5 text-right'>{canChange && <button type='button' disabled={pending || changingMember !== null} aria-label={`Remove ${user.name} from ${role.name}`} title='Remove from group' onClick={() => void changeMembership(role, user)} className='inline-flex min-h-10 min-w-10 items-center justify-center rounded-md text-ui-muted hover:bg-ui-raised hover:text-ui-danger disabled:opacity-50'><Minus className='h-4 w-4' /></button>}</td>
+                                                    </tr>)}
+                                                    {!filteredMembers.length && <tr><td colSpan={3} className='px-3 py-5 text-center text-sm text-ui-muted'>No users in this group</td></tr>}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    })()}
                                 </td></tr>}
                             </Fragment>
                         })}
