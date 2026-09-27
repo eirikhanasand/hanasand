@@ -21,6 +21,7 @@ mock.module('../src/components/articles/articleNotificationFromSearchParams', ()
 const { default: Articles } = await import('../src/components/articles/articles')
 
 let html = renderToStaticMarkup(await Articles({ recent: true, backfill: false }))
+assert(html.includes('Articles about my projects, technology, and work.'))
 assert(!html.includes('Recently published'))
 assert(!html.includes('No recent articles right now.'))
 assert(html.includes('All articles'))

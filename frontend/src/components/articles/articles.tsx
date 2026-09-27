@@ -54,7 +54,7 @@ export default async function Articles({
                     <h1 className='text-3xl font-semibold tracking-normal text-ui-text md:text-4xl'>Articles</h1>
                 </div>
                 <p className='max-w-2xl text-base leading-7 text-ui-muted'>
-                    Project notes, product context, and preserved writing from the personal Hanasand notebook.
+                    Articles about my projects, technology, and work.
                 </p>
             </div>
             {recentArticles.length > 0 && <Recent recent={recentArticles} max={max} includeTitle={includeRecentTitle} />}
