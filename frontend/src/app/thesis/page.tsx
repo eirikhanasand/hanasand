@@ -8,13 +8,14 @@ import ThesisClient from './thesisClient'
 export const metadata = { title: 'Thesis | Hanasand' }
 export const dynamic = 'force-dynamic'
 
-export default async function ThesisPage() {
-    const cookieStore = await cookies()
+export default async function ThesisPage({ searchParams }: { searchParams: Promise<{ sheet?: string | string[] }> }) {
+    const [{ sheet }, cookieStore] = await Promise.all([searchParams, cookies()])
+    const redirectPath = '/content/thesis' + (typeof sheet === 'string' ? '?sheet=' + encodeURIComponent(sheet) : '')
     const token = cookieStore.get('access_token')?.value
     const id = cookieStore.get('id')?.value
-    if (!token || !id) redirect('/login?path=%2Fcontent%2Fthesis')
+    if (!token || !id) redirect('/login?path=' + encodeURIComponent(redirectPath))
     const session = await tokenIsValid(token, id)
-    if (session.state === 'invalid') redirect('/logout?path=/login%3Fpath%3D/content/thesis%26expired=true')
+    if (session.state === 'invalid') redirect('/logout?path=' + encodeURIComponent('/login?path=' + redirectPath + '&expired=true'))
     if (!session.valid) throw new Error('Your session could not be checked. Please try again.')
     let member: boolean
     try { member = await isHanasandOrganizationMember(token, id) }
