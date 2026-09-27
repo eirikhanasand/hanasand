@@ -33,7 +33,7 @@ export async function closeVisitorSupportConversation(id: string, visitor: strin
             WHERE id=$1 RETURNING id, status, resolution_version, feedback_rating, feedback_comment, updated_at`, [id])).rows[0]
         const message = (await query(`INSERT INTO support_messages(id,ticket_id,sender_kind,event,body)
             VALUES($1,$2,'system','resolved',$3) RETURNING id, sender_id, sender_kind, body, created_at`,
-            [randomUUID(), id, 'This conversation was ended. How satisfied were you with our support?'])).rows[0]
+        [randomUUID(), id, 'This conversation was ended. How satisfied were you with our support?'])).rows[0]
         return { ticket: changed, message: { ...message, sender_name: 'Support' } }
     })
 }
