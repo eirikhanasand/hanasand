@@ -44,8 +44,12 @@ export default async function getArticles(req: FastifyRequest<{
 
         if (stats.isFile()) {
             const fileContent = await readFile(filePath, 'utf-8')
-            const created = await createdAt(filePath)
-            const updated = await updatedAt(filePath)
+            // The workspace dashboard only needs usable timestamps. Resolving
+            // history per file spawns three Git processes and can time out for
+            // larger workspaces; public feeds retain their commit dates.
+            const workspace = req.query.workspace === 'true'
+            const created = workspace ? stats.birthtime.toISOString() : await createdAt(filePath)
+            const updated = workspace ? stats.mtime.toISOString() : await updatedAt(filePath)
             const parsed = matter(fileContent)
             const content = parsed.content.trim()
             const readTime = estimateReadingTime(content)

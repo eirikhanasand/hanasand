@@ -8,6 +8,7 @@ let legacyAdmin = false
 let shareOrganization: string | null = 'hanasand'
 let writes: Array<{ sql: string, params: unknown[] }> = []
 let queries: Array<{ sql: string, params: unknown[] }> = []
+let gitTimestampCalls = 0
 const share = () => ({ id: 'code', path: 'code', content: 'hello', owner: 'anonymous', organization_id: shareOrganization, parent: '', alias: 'code', type: 'file', locked: false })
 mock.module('../src/utils/db.ts', () => ({ default: async (sql: string, params: unknown[] = []) => {
     queries.push({ sql, params })
@@ -31,9 +32,9 @@ mock.module('../src/utils/auth/session.ts', () => ({ validateSession: async () =
 mock.module('../src/utils/git/git.ts', () => ({ ARTICLES_DIR: '/article-fixture', ensureRepo: async () => {} }))
 mock.module('../src/utils/git/ensureRepositoryUpToDate.ts', () => ({ default: async () => {} }))
 mock.module('../src/utils/git/fileExists.ts', () => ({ default: async () => true }))
-mock.module('../src/utils/git/createdAt.ts', () => ({ default: async () => '2025-01-01' }))
-mock.module('../src/utils/git/updatedAt.ts', () => ({ default: async () => '2025-01-01' }))
-mock.module('fs/promises', () => ({ readdir: async () => ['example.md'], stat: async () => ({ size: 10, isFile: () => true }), readFile: async () => '# Example' }))
+mock.module('../src/utils/git/createdAt.ts', () => ({ default: async () => { gitTimestampCalls++; return '2025-01-01' } }))
+mock.module('../src/utils/git/updatedAt.ts', () => ({ default: async () => { gitTimestampCalls++; return '2025-01-01' } }))
+mock.module('fs/promises', () => ({ readdir: async () => ['example.md'], stat: async () => ({ size: 10, birthtime: new Date('2025-02-01'), mtime: new Date('2025-03-01'), isFile: () => true }), readFile: async () => '# Example' }))
 
 const shares = await import('../src/handlers/share.ts')
 const notes = await import('../src/handlers/notes.ts')
@@ -56,7 +57,7 @@ app.get('/thoughts', getThoughts)
 app.get('/articles', getArticles)
 app.get('/article/:id', getArticle)
 const headers = { authorization: 'Bearer test-session', id: 'member', 'x-organization-id': 'hanasand' }
-beforeEach(() => { user = 'member'; role = 'editor'; active = true; legacyAdmin = false; shareOrganization = 'hanasand'; writes = []; queries = [] })
+beforeEach(() => { user = 'member'; role = 'editor'; active = true; legacyAdmin = false; shareOrganization = 'hanasand'; writes = []; queries = []; gitTimestampCalls = 0 })
 
 test('public shares, articles and thoughts stay readable without a session', async () => {
     user = null
@@ -83,6 +84,12 @@ test('personal lists explicitly exclude organization content', async () => {
     expect(queries.at(-1)?.sql).toContain('organization_id IS NULL AND owner = $1')
     const response = await app.inject({ url: '/articles?workspace=true' })
     expect(response.json()).toEqual([])
+})
+test('workspace article lists use filesystem timestamps without spawning Git history lookups', async () => {
+    const response = await app.inject({ url: '/articles?workspace=true', headers })
+    expect(response.statusCode).toBe(200)
+    expect(response.json()[0]).toMatchObject({ created: '2025-02-01T00:00:00.000Z', modified: '2025-03-01T00:00:00.000Z' })
+    expect(gitTimestampCalls).toBe(0)
 })
 test('organization share writes and locks reject readers, anonymous users and stale membership', async () => {
     for (const state of ['reader', 'anonymous', 'removed']) {
