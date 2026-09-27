@@ -8,6 +8,7 @@ export const THRESHOLD = 20_000_000_000
 export const MIN_FREE = 5 * 1024 ** 3
 export const COOLDOWN = 3600
 export const TABLE_COOLDOWN = 6 * 3600
+export const timeoutMilliseconds = (seconds: number) => seconds * 1000
 export const TABLES = ['traffic_events', 'log_dimensions', 'service_logs', 'events'] as const
 export const STATE = '/home/hanasand/hanasand/ops/runtime/database-shrink/status.json'
 export const DEPLOY_LOCK = '/tmp/hanasand-frontend-deploy.lock'
@@ -27,7 +28,7 @@ export const INVENTORY_SQL = `SELECT json_build_object('database_bytes',pg_datab
 
 export function sql(script: string, timeout = 40) {
     const result = spawnSync('docker', ['exec', '-i', '-e', 'PGOPTIONS=-c application_name=hanasand_database_shrink -c statement_timeout=30000 -c lock_timeout=500 -c vacuum_cost_delay=10 -c vacuum_cost_limit=100',
-        'hanasand_database', 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'hanasand', '-d', 'hanasand'], { input: script, encoding: 'utf8', timeout })
+        'hanasand_database', 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'hanasand', '-d', 'hanasand'], { input: script, encoding: 'utf8', timeout: timeoutMilliseconds(timeout) })
     if (result.status !== 0) throw new Error(result.stderr || `psql failed (${result.status})`)
     return result.stdout.split(/\r?\n/).filter(line => line.startsWith('{')).map(line => JSON.parse(line))
 }

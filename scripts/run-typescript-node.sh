@@ -1,12 +1,8 @@
 #!/usr/bin/env sh
 set -eu
 
-script=$1
+script=${1:?TypeScript script path required}
 shift
-node_bin=$(command -v node)
-temporary=$(mktemp "${TMPDIR:-/tmp}/hanasand-ts.XXXXXX")
-mv "$temporary" "$temporary.mjs"
-temporary=$temporary.mjs
-trap 'rm -f "$temporary"' EXIT
-cat -- "$script" > "$temporary"
-HANASAND_TYPESCRIPT_ENTRYPOINT=$script "$node_bin" --jitless "$temporary" "$@"
+bun_bin=${BUN_BIN:-/home/hanasand/.local/bin/bun}
+test -x "$bun_bin" || { printf 'Bun is not installed at %s. Run scripts/install-typescript-runtime.sh.\n' "$bun_bin" >&2; exit 1; }
+exec "$bun_bin" "$script" "$@"

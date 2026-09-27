@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { attempt, MIN_FREE, selectTable, THRESHOLD, vacuumScript } from './database-shrink.ts'
+import { attempt, MIN_FREE, selectTable, THRESHOLD, timeoutMilliseconds, vacuumScript } from './database-shrink.ts'
 
 const inventory = (extra = {}) => ({ database_bytes: THRESHOLD + 1, replica: false, busy: false,
     tables: [{ name: 'traffic_events', bytes: 100 }, { name: 'service_logs', bytes: 200 }], ...extra })
@@ -37,6 +37,7 @@ describe('bounded database shrink', () => {
     })
 
     test('failure records cooldown without claiming savings and SQL cannot select unregistered tables', () => {
+        expect(timeoutMilliseconds(40)).toBe(40_000)
         const root = mkdtempSync(path.join(os.tmpdir(), 'db-shrink-'))
         try {
             const file = path.join(root, 'status.json')
