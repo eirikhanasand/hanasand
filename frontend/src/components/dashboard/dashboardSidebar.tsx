@@ -60,6 +60,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
         const refresh = async () => {
             try {
                 const id = getCookie('impersonating_id') || access.id
+                if (id.startsWith('svc_')) { setHasVMs(false); return }
                 const response = await fetch(`/api/backend/vms/${encodeURIComponent(id)}`, { cache: 'no-store', signal: controller.signal })
                 if (!response.ok) return
                 const vms = await response.json()

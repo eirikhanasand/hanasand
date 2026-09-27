@@ -2,12 +2,20 @@
 
 import { useEffect, useState } from 'react'
 import { Activity } from 'lucide-react'
+import { getCookie } from '@/utils/cookies/cookies'
 
-export default function DatabaseConnection() {
+export default function DatabaseConnection({ initialStatus, initialCheckedAt }: { initialStatus: 'healthy' | 'unavailable', initialCheckedAt: string }) {
     const [status, setStatus] = useState<'checking' | 'connected' | 'unavailable'>('checking')
     const [checked, setChecked] = useState<number | null>(null)
     const [now, setNow] = useState(0)
     useEffect(() => {
+        const serviceAccount = (getCookie('id') || '').startsWith('svc_')
+        if (serviceAccount) {
+            const checkedAt = Date.parse(initialCheckedAt)
+            setStatus(initialStatus === 'healthy' ? 'connected' : 'unavailable')
+            if (Number.isFinite(checkedAt)) { setChecked(checkedAt); setNow(checkedAt) }
+            return
+        }
         let pending = false
         const controller = new AbortController()
         async function check() {
@@ -23,7 +31,7 @@ export default function DatabaseConnection() {
         const polling = setInterval(() => void check(), 5000)
         const clock = setInterval(() => setNow(Date.now()), 1000)
         return () => { controller.abort(); clearInterval(polling); clearInterval(clock) }
-    }, [])
+    }, [initialCheckedAt, initialStatus])
     const age = checked ? Math.max(0, now - checked) : 0
     return <div className='flex flex-wrap items-center gap-2 text-xs' aria-label='Database connection'>
         <span role='status' className={`inline-flex items-center gap-1.5 ${status === 'connected' && age <= 10000 ? 'text-ui-success' : status === 'checking' ? 'text-ui-muted' : 'text-ui-warning'}`}><Activity aria-hidden className='h-3.5 w-3.5' />{status === 'checking' ? 'Checking…' : status === 'connected' && age <= 10000 ? 'Connected' : 'Unavailable'}</span>
