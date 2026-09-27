@@ -13,10 +13,15 @@ export type PreviewRequest = { from: string | null, until: string, cursor?: Curs
 export async function scanRulePreview(organizationId: string, canReadLogs: boolean, input: PreviewRequest, query = run) {
     const params: (string | boolean | null | string[])[] = [organizationId, canReadLogs, input.until, input.from, input.cursor?.time || null, input.cursor?.id || '']
     const filter = previewPredicate(input.conditions, params)
-    const scope = `organization_id=$1 AND ($2::boolean OR ingestion_id <> 'logs')
-        AND event_timestamp <= $3::timestamptz AND received_at <= $3::timestamptz
-        AND ($4::timestamptz IS NULL OR event_timestamp >= $4::timestamptz)
-        AND ($5::timestamptz IS NULL OR (event_timestamp,id) < ($5::timestamptz,$6::text)) AND ${filter}`
+    const scope = [
+        'organization_id=$1',
+        '($2::boolean OR ingestion_id <> \'logs\')',
+        'event_timestamp <= $3::timestamptz',
+        'received_at <= $3::timestamptz',
+        ...(input.from ? ['event_timestamp >= $4::timestamptz'] : []),
+        ...(input.cursor ? ['(event_timestamp,id) < ($5::timestamptz,$6::text)'] : []),
+        filter,
+    ].join(' AND ')
     const rules = input.action === 'drop' ? await loadLogRetentionRules(organizationId, query) : []
     const result = await query(`SELECT id, event_timestamp::text AS timestamp, normalized${input.action === 'drop' ? ', original' : ''}
         FROM events WHERE ${scope} ${input.action === 'drop' ? 'AND normalized->>\'severity\' = \'low\'' : ''}

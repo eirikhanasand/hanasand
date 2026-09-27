@@ -19,6 +19,8 @@ test('preview uses runtime selectors and excludes higher and unknown severities 
     const query = async (sql: string, params: unknown[]) => {
         expect(sql).toContain('organization_id=$1 AND ($2::boolean OR ingestion_id <> \'logs\')')
         expect(sql).toContain('received_at <= $3::timestamptz')
+        expect(sql).not.toContain('($4::timestamptz IS NULL OR event_timestamp >= $4::timestamptz)')
+        expect(sql).not.toContain('($5::timestamptz IS NULL OR (event_timestamp,id)')
         expect(params.slice(0, 6)).toEqual(['org-a', false, input.until, input.from, null, ''])
         expect(sql).toContain('jsonb_typeof')
         expect(params).toContainEqual(['http', 'status_code'])

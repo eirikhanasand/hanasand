@@ -250,6 +250,12 @@ export async function postRulePreview(req: FastifyRequest, res: FastifyReply) {
     try { return res.send(await scanRulePreview(access.organizationId, canReadLogs, { ...body, conditions: normalized.conditions })) }
     catch (error) {
         if (error instanceof PreviewRegexTimeout) return res.status(400).send({ error: error.message })
+        const code = (error as { code?: string })?.code
+        const message = (error as Error)?.message?.toLowerCase() || ''
+        if (code === '57014') return res.header('Retry-After', '2').status(503).send({ error: 'Preview took too long to check. Narrow the time range or try again shortly.' })
+        if (code === '53300' || code === '55P03' || code === '57P03' || code?.startsWith('08')
+            || message.includes('connection timeout') || message.includes('timeout exceeded when trying to connect') || message.includes('timeout expired'))
+            return res.header('Retry-After', '2').status(503).send({ error: 'Preview is temporarily busy. Try again shortly.' })
         throw error
     }
 }
