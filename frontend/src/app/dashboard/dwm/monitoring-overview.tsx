@@ -56,13 +56,14 @@ export function MonitoringOverview({ alerts, dataHealth, organizationId, initial
             <Loader2 className='site-loading-icon' aria-hidden='true' />
         </main>
     }
-    return <div className='grid min-w-0 gap-4' data-dwm-overview>
+    const empty = dataHealth.alerts.state === 'live' && alerts.length === 0
+    return <div className='grid min-w-0 gap-y-4' data-dwm-overview>
         <section className={panel}>
             <LoadState state={dataHealth.alerts.state} subject='Findings' onRetry={onRefresh} />
             {actionMessage && <p role={actionMessage.ok ? 'status' : 'alert'} className={`p-4 text-sm ${actionMessage.ok ? 'text-ui-text' : 'text-ui-danger'}`}>{actionMessage.text}</p>}
-            <header className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border p-4'>
+            <header className={'flex flex-wrap items-center justify-between gap-3 p-4 ' + (empty ? '' : 'border-b border-ui-border')}>
                 <div className='flex min-w-0 flex-1 items-center text-left'>
-                    {dataHealth.alerts.state === 'live' && alerts.length === 0 ? <p className='font-semibold text-white'>No recent findings</p> : <>
+                    {empty ? <p className='font-semibold text-white'>No recent findings</p> : <>
                         <h2 className='font-semibold text-ui-text'>Recent findings</h2>
                         {dataHealth.alerts.state === 'live' && <p className='mt-1 text-sm text-ui-muted'>{alerts.length} findings</p>}
                     </>}
