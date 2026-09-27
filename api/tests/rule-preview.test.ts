@@ -33,6 +33,15 @@ test('preview uses runtime selectors and excludes higher and unknown severities 
     expect(page.events[0].normalized.message).toHaveLength(500)
     expect(page.cursor).toBeNull()
 })
+test('preview narrows scalar event conditions before reading event JSON', async () => {
+    let sql = ''
+    let params: unknown[] = []
+    await scanRulePreview('org-a', true, { ...input, action: 'keep', conditions: [{ path: 'event_type', operator: 'equals', value: 'authentication' }] }, (async (query: string, values: unknown[]) => {
+        sql = query; params = values; return { rows: [] }
+    }) as any)
+    expect(sql).toContain('lower(event_type COLLATE "C")')
+    expect(params).toContain('authentication')
+})
 test('complete count is independent of bounded random sample; cursors preserve microseconds', async () => {
     const query = async () => ({ rows: Array.from({ length: 2000 }, (_, index) => row(index)) })
     const page = await scanRulePreview('org-a', true, { ...input, sample: true }, query as any)

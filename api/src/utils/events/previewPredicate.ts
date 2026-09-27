@@ -17,6 +17,29 @@ function regexCandidate(expression: string): string | null {
     return pattern
 }
 
+const scalarColumns: Record<string, string> = {
+    event_type: 'event_type',
+    action: 'action',
+    outcome: 'outcome',
+    'user.id': 'user_id',
+    'user.email': 'user_email',
+    'source.ip': 'source_ip',
+    'source.country': 'source_country',
+    'source.city': 'source_city',
+    'device.id': 'device_id',
+}
+
+function scalarCandidatePredicate(condition: Condition, column: string, bind: (value: string) => string) {
+    const ascii = `${column} !~ '[^\\x00-\\x7F]'`
+    const prefix = `${column} IS NULL OR NOT (${ascii}) OR `
+    const actual = condition.caseSensitive ? column : `lower(${column} COLLATE "C")`
+    const expected = bind(condition.caseSensitive ? condition.value : condition.value.toLowerCase())
+    if (condition.operator === 'equals') return `(${prefix}${actual} = ${expected})`
+    if (condition.operator === 'contains') return `(${prefix}strpos(${actual}, ${expected}) > 0)`
+    const expression = regexCandidate(condition.value)
+    return expression === null ? null : `(${prefix}${column} COLLATE "C" ~* ${bind(expression)})`
+}
+
 // Only narrow raw replay pages when the message comparison is representable in
 // PostgreSQL. The full rule still runs on every returned candidate.
 export function messageCandidatePredicate(conditions: Condition[], column: string, bind: (value: string) => string) {
@@ -42,6 +65,11 @@ export function previewPredicate(conditions: Condition[], params: (string | bool
         const parts = condition.path.split('.')
         const path = bind(parts), json = `(normalized #> ${path}::text[])`, text = `(normalized #>> ${path}::text[])`
         predicates.push(`jsonb_typeof(${json}) IN ('string', 'number', 'boolean')`)
+        const scalar = scalarColumns[condition.path]
+        if (scalar) {
+            const scalarPredicate = scalarCandidatePredicate(condition, scalar, bind)
+            if (scalarPredicate) predicates.push(scalarPredicate)
+        }
         // Array subscripts accepted by #> are not paths accepted by getPath.
         for (let depth = 1; depth < parts.length; depth++) predicates.push(`jsonb_typeof(normalized #> ${bind(parts.slice(0, depth))}::text[]) = 'object'`)
         const ascii = `${text} !~ '[^\\x00-\\x7F]'`
