@@ -49,7 +49,7 @@ code.hljs {
 .hljs-built_in,
 .hljs-symbol {
     /* prettylights-syntax-variable */
-    color: var(--ui-warning)
+    color: var(--ui-warning-text)
 }
 .hljs-comment,
 .hljs-code,
@@ -75,7 +75,7 @@ code.hljs {
 }
 .hljs-bullet {
     /* prettylights-syntax-markup-list */
-    color: var(--ui-warning)
+    color: var(--ui-warning-text)
 }
 .hljs-emphasis {
     /* prettylights-syntax-markup-italic */

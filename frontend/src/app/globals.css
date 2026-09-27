@@ -15,7 +15,8 @@
   --ui-primary: #f5f7fb;
   --ui-loader: #8b0000;
   --ui-success: #7de0a2;
-  --ui-warning: #ffd879;
+  --ui-warning: #8b0000;
+  --ui-warning-text: var(--ui-text);
   --ui-danger: #ffb8b0;
   --ui-success-glow: color-mix(in srgb, var(--ui-success) 65%, transparent);
   --ui-warning-glow: color-mix(in srgb, var(--ui-warning) 45%, transparent);
@@ -164,7 +165,8 @@
   --ui-muted: #4d4d4d;
   --ui-primary: #22252b;
   --ui-success: #147a3b;
-  --ui-warning: #8a5a00;
+  --ui-warning: #8b0000;
+  --ui-warning-text: var(--ui-text);
   --ui-danger: #b42318;
   --ui-on-primary: #ffffff;
   --ui-overlay-soft: color-mix(in srgb, var(--ui-canvas) 68%, transparent);
@@ -834,6 +836,12 @@ body[data-public-ti-route="true"] [data-nextjs-toast] {
 body[data-public-ti-route="true"] [data-testid="theme-switch"] {
   min-width: 4rem !important;
 }
+
+/* Red warning surfaces keep warning copy at the theme's readable text color. */
+html body .text-ui-warning { color: var(--ui-warning-text) !important; }
+html body .text-ui-warning\/68 { color: color-mix(in srgb, var(--ui-warning-text) 68%, transparent) !important; }
+html body .text-ui-warning\/72 { color: color-mix(in srgb, var(--ui-warning-text) 72%, transparent) !important; }
+html body .text-ui-warning\/80 { color: color-mix(in srgb, var(--ui-warning-text) 80%, transparent) !important; }
 
 /* Keep ordinary action controls consistent across pages. Pill controls opt in with rounded-full. */
 html body :is(button, input[type='button'], input[type='submit'], input[type='reset'], [role='button'], .ui-button):not(.rounded-full) {

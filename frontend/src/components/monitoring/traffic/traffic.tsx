@@ -18,7 +18,7 @@ type TrafficDashboardProps = {
 type StatCardProps = {
     title: string
     value: string | number
-    accent?: 'primary' | 'emerald' | 'amber' | 'rose' | 'violet' | 'cyan' | 'slate'
+    accent?: 'primary' | 'emerald' | 'blood-red' | 'rose' | 'violet' | 'cyan' | 'slate'
     outline?: string
     icon: React.ReactNode
 }
@@ -64,7 +64,7 @@ export default function TrafficDashboard({ metrics, records, selectedDomain }: T
                             {
                                 title: 'Total Requests',
                                 value: totalRequests,
-                                accent: 'amber',
+                                accent: 'blood-red',
                                 outline: 'outline outline-ui-warning/20',
                                 icon: <Activity className='w-5 h-5 stroke-ui-warning' />
                             },
@@ -78,7 +78,7 @@ export default function TrafficDashboard({ metrics, records, selectedDomain }: T
                             {
                                 title: 'Error Rate',
                                 value: errorRate ? `${errorRate}%` : 'clear',
-                                accent: 'amber',
+                                accent: 'blood-red',
                                 outline: 'outline outline-ui-warning/25',
                                 icon: <AlertTriangle className='w-5 h-5 stroke-ui-warning' />
                             },
@@ -182,7 +182,7 @@ function StatCard({ title, value, accent = 'slate', icon, outline }: StatCardPro
     const accentMap = {
         primary: 'from-ui-primary/15 to-ui-primary/5 border-ui-primary/25 text-ui-primary',
         emerald: 'from-ui-success/15 to-ui-success/5 border-ui-success/25 text-ui-success',
-        amber: 'from-ui-warning/15 to-ui-warning/5 border-ui-warning/25 text-ui-warning',
+        'blood-red': 'from-ui-warning/15 to-ui-warning/5 border-ui-warning/25 text-ui-warning',
         rose: 'from-ui-danger/15 to-ui-danger/5 border-ui-danger/25 text-ui-text',
         violet: 'from-ui-primary/15 to-ui-primary/5 border-ui-primary/25 text-ui-primary',
         cyan: 'from-ui-primary/15 to-ui-primary/5 border-ui-primary/25 text-ui-primary',
