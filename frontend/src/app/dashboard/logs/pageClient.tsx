@@ -40,7 +40,6 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
     const [data, setData] = useState<Result | null>(initialData && view === 'realtime' && !initialData.summarize ? { ...initialData, rows: realtimeEvents(initialData.rows) } : initialData)
     const [error, setError] = useState(initialError)
     const [busy, setBusy] = useState(false)
-    const [paused, setPaused] = useState(false)
     const [expanded, setExpanded] = useState<Record<string, boolean>>({})
     const [copied, setCopied] = useState('')
     const [errors, setErrors] = useState(initialErrors)
@@ -50,8 +49,6 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
     const filterButton = useRef<HTMLButtonElement>(null)
     const [filtersOpen, setFiltersOpen] = useState(false)
     const loadMore = useRef<(cursor: string) => void>(() => {})
-    const editing = useRef(false)
-    const pausedUpdates = useRef(false)
     const queryIdentity = useRef(JSON.stringify([view, service, search, table, advanced, appliedHql, hours, severity]))
     useEffect(() => {
         if (view === 'errors') return
@@ -67,15 +64,6 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
     useEffect(() => {
         if (filtersOpen) filterPanel.current?.querySelector<HTMLInputElement | HTMLTextAreaElement>('input[type="search"]:enabled, textarea')?.focus()
     }, [filtersOpen])
-    useEffect(() => {
-        const finishSelection = () => { editing.current = false }
-        window.addEventListener('pointerup', finishSelection)
-        window.addEventListener('pointercancel', finishSelection)
-        return () => {
-            window.removeEventListener('pointerup', finishSelection)
-            window.removeEventListener('pointercancel', finishSelection)
-        }
-    }, [])
     useEffect(() => {
         if (!copied) return
         const timeout = setTimeout(() => setCopied(''), 3000)
@@ -100,8 +88,8 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
         const controller = new AbortController()
         let inFlight = false
         let browsingPages = false
-        async function load(manual = false, cursor?: string) {
-            if (inFlight || (!manual && (pausedUpdates.current || editing.current))) return
+        async function load(cursor?: string) {
+            if (inFlight) return
             inFlight = true; setBusy(true)
             const params = logSearchParams({ view, hours, advanced, appliedHql, table, search, service, severity })
             if (cursor) params.set('cursor', cursor)
@@ -109,7 +97,7 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
                 const response = await fetch(view === 'errors' ? '/api/backend/logs/errors?limit=150' : `/api/backend/logs/search?${params}`, { signal: controller.signal, cache: 'no-store' })
                 const body = await response.json().catch(() => ({}))
                 if (!response.ok) throw new Error(body.error || 'Could not search logs.')
-                if (!controller.signal.aborted && (manual || !pausedUpdates.current)) {
+                if (!controller.signal.aborted) {
                     if (view === 'errors') setErrors(body)
                     else setData(previous => {
                         if (cursor && previous) {
@@ -123,21 +111,14 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
                     if (cursor) { browsingPages = true; setPaged(true) }
                     setError('')
                 }
-            } catch (cause) { if (!controller.signal.aborted && (manual || !pausedUpdates.current)) setError(cause instanceof Error ? cause.message : 'Could not load logs.') }
+            } catch (cause) { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Could not load logs.') }
             finally { if (!controller.signal.aborted) setBusy(false); inFlight = false }
         }
-        // Pause freezes automatic updates; explicit filters, retries and Resume
-        // still load once even while an event's text is selected.
-        const debounce = initialData && sameQuery && refresh === 0 ? undefined : setTimeout(() => void load(true), 250)
-        loadMore.current = cursor => void load(true, cursor)
+        const debounce = initialData && sameQuery && refresh === 0 ? undefined : setTimeout(() => void load(), 250)
+        loadMore.current = cursor => void load(cursor)
         const interval = view !== 'errors' ? setInterval(() => void load(), view === 'search' ? 10_000 : 5000) : undefined
         return () => { controller.abort(); clearTimeout(debounce); clearInterval(interval); loadMore.current = () => {} }
     }, [view, service, search, table, advanced, appliedHql, hours, severity, refresh, initialData])
-    function togglePaused() {
-        pausedUpdates.current = !pausedUpdates.current
-        setPaused(pausedUpdates.current)
-        if (!pausedUpdates.current) setRefresh(value => value + 1)
-    }
     async function copy(event: Event | ErrorEvent) {
         try { await navigator.clipboard.writeText(JSON.stringify('normalized' in event ? event.normalized : event, null, 2)); setCopied(event.id) }
         catch { setCopied(''); setError('Copy failed. Select the event text and copy it manually.') }
@@ -151,7 +132,7 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
     return <div className='grid min-w-0 gap-4'>
         <header className='flex flex-wrap items-center justify-between gap-3'>
             <div><h1 className='text-2xl font-semibold'>{view === 'dashboard' ? 'Logs' : view === 'realtime' ? 'Realtime' : view === 'errors' ? 'Errors' : 'Search logs'}</h1>{view === 'errors' && <p className='mt-1 text-sm text-ui-muted'>Application errors, response codes, and request details.</p>}</div>
-            <nav aria-label='Log pages' className='flex flex-wrap items-center gap-2'>{[['Dashboard', '/logs'], ['Realtime', '/logs/realtime'], ['Search', '/logs/search'], ['Errors', '/logs/errors'], ['Traffic', '/traffic']].filter(([, href]) => (view !== 'realtime' || href !== '/logs/realtime') && (view !== 'dashboard' || href !== '/logs')).map(([label, href]) => <Link key={href} href={href} aria-current={pathname === href || pathname === `/dashboard${href}` ? 'page' : undefined} className={`${fieldClass} ${pathname === href ? 'font-semibold text-ui-primary' : ''}`}>{label}</Link>)}{view !== 'errors' && <button ref={filterButton} type='button' onClick={() => setFiltersOpen(open => !open)} aria-label='Filter logs' aria-expanded={filtersOpen} aria-controls='log-filters' aria-keyshortcuts='Meta+J Control+J' title='Filter logs (⌘J)' className={`${fieldClass} relative inline-flex items-center justify-center ${activeFilters ? 'border-ui-primary text-ui-primary' : ''}`}><ListFilter size={18} aria-hidden />{!!activeFilters && <span className='absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-ui-primary text-[10px] font-semibold text-ui-canvas'>{activeFilters}<span className='sr-only'> active filters</span></span>}</button>}{view === 'realtime' && <button type='button' onClick={togglePaused} className={`${fieldClass} h-11 shrink-0`}>{paused ? 'Resume' : 'Pause'}</button>}</nav>
+            <nav aria-label='Log pages' className='flex flex-wrap items-center gap-2'>{[['Dashboard', '/logs'], ['Realtime', '/logs/realtime'], ['Search', '/logs/search'], ['Errors', '/logs/errors'], ['Traffic', '/traffic']].filter(([, href]) => (view !== 'realtime' || href !== '/logs/realtime') && (view !== 'dashboard' || href !== '/logs')).map(([label, href]) => <Link key={href} href={href} aria-current={pathname === href || pathname === `/dashboard${href}` ? 'page' : undefined} className={`${fieldClass} ${pathname === href ? 'font-semibold text-ui-primary' : ''}`}>{label}</Link>)}{view !== 'errors' && <button ref={filterButton} type='button' onClick={() => setFiltersOpen(open => !open)} aria-label='Filter logs' aria-expanded={filtersOpen} aria-controls='log-filters' aria-keyshortcuts='Meta+J Control+J' title='Filter logs (⌘J)' className={`${fieldClass} relative inline-flex items-center justify-center ${activeFilters ? 'border-ui-primary text-ui-primary' : ''}`}><ListFilter size={18} aria-hidden />{!!activeFilters && <span className='absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-ui-primary text-[10px] font-semibold text-ui-canvas'>{activeFilters}<span className='sr-only'> active filters</span></span>}</button>}</nav>
         </header>
         {error && <div role='alert' className='flex flex-wrap items-center justify-between gap-2 rounded-lg border border-ui-danger p-3 text-sm text-ui-text'><span>{error}</span><button type='button' className={fieldClass} onClick={() => setRefresh(value => value + 1)}>Retry</button></div>}
         {view === 'errors' ? <><div className='flex items-center justify-between gap-3 text-xs text-ui-muted'><span role='status'>{busy ? 'Refreshing…' : copied ? 'Event copied' : 'Recent application errors'}</span><button type='button' className={fieldClass} disabled={busy} onClick={() => setRefresh(value => value + 1)}>Refresh errors</button></div><ErrorsPanel events={errors} expanded={expanded} onToggle={toggle} onCopy={event => void copy(event)} /></> : <>
@@ -186,8 +167,8 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
                 <section className='grid gap-3 sm:grid-cols-5' aria-label='Events by severity' data-logs-metrics>{['low','medium','high','critical'].map(value => <Link key={value} href={`/logs/search?${new URLSearchParams({ hours, ...(service !== 'all' ? { service } : {}), ...(advanced && appliedHql ? { hql: appliedHql } : { table, search }), severity: value })}`} className={`${dashboardPanelClass} p-4`} data-logs-metric-card><p className='text-sm capitalize text-ui-muted'>{value}</p><p className='mt-2 text-2xl font-semibold tabular-nums'>{data ? (data.counts.find(item => item.severity === value)?.count || 0).toLocaleString('en-US') : '—'}</p></Link>)}<Link href='/logs/errors' className={`${dashboardPanelClass} p-4`} data-logs-metric-card><p className='text-sm text-ui-muted'>Errors</p><p className='mt-2 text-2xl font-semibold tabular-nums'>{errors.summary.total.toLocaleString('en-US')}</p></Link></section>
                 <details open className={`${dashboardPanelClass} group overflow-hidden`}><summary className='flex cursor-pointer list-none items-center justify-between border-b border-ui-border bg-ui-raised px-4 py-3 text-sm font-semibold [&::-webkit-details-marker]:hidden'>Most active<ChevronDown size={18} aria-hidden className='-rotate-90 text-ui-muted transition-transform group-open:rotate-0' /></summary><div className='p-4'><dl className='grid gap-2'>{data?.services.map(item => <div key={item.service} className='flex justify-between gap-3 text-sm'><dt>{item.service}</dt><dd>{item.count.toLocaleString('en-US')}</dd></div>)}</dl></div></details>
             </> : <section className={`${dashboardPanelClass} min-w-0 overflow-hidden`} aria-label='Log events'>
-                <div className='flex flex-wrap justify-between gap-2 border-b border-ui-border p-3 text-xs text-ui-muted'><span>{data?.rows.length || 0} results{data && data.rows.length === data.limit && (view !== 'search' || advanced) ? ` · limited to ${data.limit}; narrow your search or use take up to 500` : ''}</span><span role='status'>{busy ? 'Searching…' : paused ? 'Paused' : view === 'realtime' ? 'Updates every 5 seconds' : 'Results'}{copied ? ' · Event copied' : ''}</span></div>
-                <EventFeed rows={data?.rows || []}>{data?.summarize ? <table className='w-full text-left text-sm'><thead><tr><th className='p-3'>{data.summarize}</th><th className='p-3'>Count</th></tr></thead><tbody>{(data.rows as unknown as Array<{value: string,count: number}>).map(row => <tr key={row.value}><td className='p-3'>{row.value}</td><td className='p-3'>{row.count}</td></tr>)}</tbody></table> : data?.rows.map(event => <article key={event.id} className='select-text border-b border-ui-border p-4 last:border-b-0' onPointerDown={() => { editing.current = true }} onPointerUp={() => { editing.current = false }} onPointerLeave={() => { editing.current = false }}>
+                <div className='flex flex-wrap justify-between gap-2 border-b border-ui-border p-3 text-xs text-ui-muted'><span>{data?.rows.length || 0} results{data && data.rows.length === data.limit && (view !== 'search' || advanced) ? ` · limited to ${data.limit}; narrow your search or use take up to 500` : ''}</span><span role='status'>{busy ? 'Searching…' : view === 'realtime' ? 'Updates every 5 seconds' : 'Results'}{copied ? ' · Event copied' : ''}</span></div>
+                <EventFeed rows={data?.rows || []}>{data?.summarize ? <table className='w-full text-left text-sm'><thead><tr><th className='p-3'>{data.summarize}</th><th className='p-3'>Count</th></tr></thead><tbody>{(data.rows as unknown as Array<{value: string,count: number}>).map(row => <tr key={row.value}><td className='p-3'>{row.value}</td><td className='p-3'>{row.count}</td></tr>)}</tbody></table> : data?.rows.map(event => <article key={event.id} className='select-text border-b border-ui-border p-4 last:border-b-0'>
                     <div className='flex flex-wrap items-start justify-between gap-3'>
                         <button type='button' onClick={() => toggle(event.id)} aria-expanded={!!expanded[event.id]} aria-controls={`log-details-${event.id}`} className='flex min-w-0 flex-wrap items-center gap-2 break-all text-left text-sm font-semibold'><ChevronDown size={16} aria-hidden className={expanded[event.id] ? '' : '-rotate-90'} />{event.normalized.service}<span className='font-normal text-ui-muted'>{event.normalized.host}</span></button>
                         <div className='flex items-center gap-2'><span className={`rounded-md px-2 py-1 text-xs font-semibold capitalize ${colors[event.normalized.severity]}`}>{event.normalized.severity}</span><button type='button' aria-label='Copy event JSON' onClick={() => void copy(event)} className='rounded-md p-1.5 text-ui-muted hover:text-ui-primary'><Copy size={16} /></button></div>

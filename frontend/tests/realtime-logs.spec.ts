@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { event, openLogs, result } from './fixtures/logs-browser'
 
-test('paused realtime allows manual search and retry while suppressing periodic updates', async ({ page }) => {
+test('realtime continues polling while search filters and retries are used', async ({ page }) => {
     await page.clock.install()
     const requests: URL[] = []
     let fail = false
@@ -13,10 +13,10 @@ test('paused realtime allows manual search and retry while suppressing periodic 
     await openLogs(page)
     await page.clock.runFor(300)
     await expect(page.locator('article')).toContainText('initial')
-    await page.getByRole('button', { name: 'Pause', exact: true }).click()
-    const pausedCount = requests.length
+    await expect(page.getByRole('button', { name: 'Pause', exact: true })).toHaveCount(0)
+    const initialCount = requests.length
     await page.clock.runFor(5000)
-    expect(requests).toHaveLength(pausedCount)
+    await expect.poll(() => requests.length).toBe(initialCount + 1)
 
     await page.getByRole('button', { name: 'Filter logs', exact: true }).click()
     const search = page.getByRole('searchbox', { name: 'Search logs' })
@@ -27,7 +27,7 @@ test('paused realtime allows manual search and retry while suppressing periodic 
     expect(requests.at(-1)!.searchParams.get('severity')).toBe('high,critical')
     const filteredCount = requests.length
     await page.clock.runFor(10000)
-    expect(requests).toHaveLength(filteredCount)
+    await expect.poll(() => requests.length).toBe(filteredCount + 2)
 
     fail = true
     await search.fill('bloodhound')
@@ -37,42 +37,31 @@ test('paused realtime allows manual search and retry while suppressing periodic 
     await page.getByRole('button', { name: 'Retry', exact: true }).click()
     await page.clock.runFor(300)
     await expect(page.locator('article')).toContainText('bloodhound')
-    await expect(page.getByRole('button', { name: 'Resume', exact: true })).toBeVisible()
-
-    const beforeResume = requests.length
-    await page.getByRole('button', { name: 'Resume', exact: true }).click()
-    await search.focus()
-    await page.clock.runFor(300)
-    await expect.poll(() => requests.length).toBe(beforeResume + 1)
+    await expect(page.getByRole('button', { name: 'Pause', exact: true })).toHaveCount(0)
     await expect(page.getByRole('status').filter({ hasText: 'Updates every 5 seconds' })).toBeVisible()
+    const beforePoll = requests.length
     await page.clock.runFor(5000)
-    await expect.poll(() => requests.length).toBe(beforeResume + 2)
-    await search.fill('filter-started-before-pause')
-    await page.getByRole('button', { name: 'Pause', exact: true }).click()
+    await expect.poll(() => requests.length).toBe(beforePoll + 1)
+    await search.fill('filter-keeps-polling')
     await page.clock.runFor(300)
-    await expect(page.locator('article')).toContainText('filter-started-before-pause')
+    await expect(page.locator('article')).toContainText('filter-keeps-polling')
 })
 
-test('event selection suppresses polls until pointer release or cancellation outside the row', async ({ page }) => {
+test('realtime polling continues during event text selection', async ({ page }) => {
     await page.clock.install()
     let requests = 0
     await page.route('**/api/backend/logs/search?*', route => { requests++; return route.fulfill({ json: result() }) })
     await openLogs(page)
     await page.clock.runFor(300)
     const row = page.locator('article')
-    for (const finish of ['pointerup', 'pointercancel']) {
-        await row.dispatchEvent('pointerdown')
-        const heldCount = requests
-        await page.clock.runFor(5000)
-        expect(requests).toBe(heldCount)
-        await page.evaluate(type => window.dispatchEvent(new PointerEvent(type)), finish)
-        await page.clock.runFor(5000)
-        await expect.poll(() => requests).toBe(heldCount + 1)
-        await expect(page.getByRole('status').filter({ hasText: 'Updates every 5 seconds' })).toBeVisible()
-    }
+    await row.dispatchEvent('pointerdown')
+    const beforePoll = requests
+    await page.clock.runFor(5000)
+    await expect.poll(() => requests).toBe(beforePoll + 1)
+    await expect(page.getByRole('status').filter({ hasText: 'Updates every 5 seconds' })).toBeVisible()
 })
 
-test('pausing also ignores an automatic response already in flight', async ({ page }) => {
+test('an automatic response already in flight updates the feed', async ({ page }) => {
     await page.clock.install()
     let requests = 0
     let release: (() => void) | undefined
@@ -86,11 +75,11 @@ test('pausing also ignores an automatic response already in flight', async ({ pa
     await expect(page.locator('article')).toContainText('poll-1')
     await page.clock.runFor(5000)
     await expect.poll(() => Boolean(release)).toBe(true)
-    await page.getByRole('button', { name: 'Pause', exact: true }).click()
     release!()
-    await expect(page.getByRole('status').filter({ hasText: 'Paused' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Pause', exact: true })).toHaveCount(0)
     await expect(page.locator('article')).toHaveCount(1)
-    await expect(page.locator('article')).toContainText('poll-1')
+    await expect(page.locator('article')).toContainText('poll-2')
+    await expect(page.getByRole('status').filter({ hasText: 'Updates every 5 seconds' })).toBeVisible()
 })
 
 test('retains logs and reading position across overlapping polls and failures', async ({ page }) => {
@@ -124,15 +113,12 @@ test('retains logs and reading position across overlapping polls and failures', 
     await expect(rows).toHaveCount(35)
     await expect(page.getByRole('alert')).toContainText('Could not search logs.')
     fail = false
-    await page.getByRole('button', { name: 'Pause', exact: true }).click()
-    const pausedRequestCount = requests.length
+    const retryCount = requests.length
     await page.clock.runFor(5000)
-    expect(requests).toHaveLength(pausedRequestCount)
+    await expect.poll(() => requests.length).toBe(retryCount + 1)
     await expect(rows).toHaveCount(35)
     await expect(reading.getByRole('button', { expanded: true })).toBeVisible()
-    await page.getByRole('button', { name: 'Resume', exact: true }).click()
-    await page.clock.runFor(300)
-    await expect(page.getByRole('alert')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Pause', exact: true })).toHaveCount(0)
 })
 
 test('event text remains selectable and copies full evidence without navigating', async ({ page }) => {
