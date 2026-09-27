@@ -15,7 +15,9 @@ test('database observations create scoped case events for failures, warnings and
     expect(new Set(outcomes.map(args => (args[0] as { id: string }).id)).size).toBe(1)
     expect(writes[0].sql).toContain('organization_id IS NOT NULL')
     expect(writes[0].sql).toContain('notification_destinations, NULL')
+    expect(writes[0].sql).toContain("'active', 'agent_prompt'")
     expect(writes.filter(w => w.sql.includes('INSERT INTO agent_automation_runs'))).toHaveLength(3)
+    expect(writes.filter(w => w.sql.includes("SET status = 'active', next_run_at = NULL"))).toHaveLength(3)
 })
 
 test('missing monitoring owner is a visible error, not a silently dropped case', async () => {

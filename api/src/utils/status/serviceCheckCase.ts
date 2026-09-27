@@ -9,11 +9,12 @@ export async function recordServiceCheckCase(service: string, checkName: string,
     const publicSearch = service === 'threat-intelligence' && checkName === 'Public search'
     const automationId = publicSearch ? 'monitor-public-search' : `monitor-service-${createHash('sha256').update(JSON.stringify([service, result.checkId || checkName])).digest('hex').slice(0, 24)}`
     // These checks are driven by real monitor results, not a second polling schedule.
+    // Keep them active for the health dashboard while leaving next_run_at empty.
     if (!publicSearch) await query(`INSERT INTO agent_automations
         (id, owner_id, organization_id, name, prompt, target_url, monitoring_type, schedule_kind, interval_minutes,
          status, action_type, notify_on, notify_warnings, model_name, notification_destinations, next_run_at)
         SELECT $1, owner_id, organization_id, $2, $3, $4, 'fetch', 'interval', 1,
-            'paused', 'agent_prompt', 'failure', true, model_name, notification_destinations, NULL
+            'active', 'agent_prompt', 'failure', true, model_name, notification_destinations, NULL
         FROM agent_automations WHERE name = 'Hanasand API' AND status <> 'archived' AND organization_id IS NOT NULL
         ORDER BY created_at LIMIT 1 ON CONFLICT (id) DO NOTHING`,
     [automationId, checkName, `Production health check: ${service} / ${checkName}`, service === 'scheduled-jobs' && result.checkId
@@ -31,7 +32,8 @@ export async function recordServiceCheckCase(service: string, checkName: string,
     `, [id, automation.id, automation.owner_id, failed ? 'failed' : 'completed', warning, failed ? null : result.message, failed ? result.message : null, result.checkedAt, result.latencyMs])
     await record(automation, id, failed ? 'failure' : warning ? 'warning' : null, result.message)
     await query(`
-        UPDATE agent_automations SET last_run_at = $2, last_completed_at = $2, last_status = $3,
+        UPDATE agent_automations SET status = 'active', next_run_at = NULL, paused_reason = NULL,
+            last_run_at = $2, last_completed_at = $2, last_status = $3,
             last_result = $4, last_error = $5, updated_at = NOW(),
             run_count = (SELECT COUNT(*) FROM agent_automation_runs WHERE automation_id = $1)
         WHERE id = $1 AND (last_completed_at IS NULL OR last_completed_at <= $2)
