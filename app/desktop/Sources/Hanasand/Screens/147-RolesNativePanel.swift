@@ -90,9 +90,12 @@ struct RolesNativePanel: View {
 
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 12) {
-                    FeatureCard(title: "Roles", value: "\(model.roles.count)", icon: "person.badge.key")
-                    FeatureCard(title: "Highest priority", value: "\(model.roles.compactMap { $0.priority }.max() ?? 0)", icon: "arrow.up.circle")
+                    Label("\(model.roles.count) roles", systemImage: "person.badge.key")
+                    Text("·")
+                    Text("Highest priority \(model.roles.compactMap { $0.priority }.max() ?? 0)")
                 }
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(theme.textSecondary)
 
                 HStack(spacing: 10) {
                     SearchFieldRow(placeholder: "Filter roles by name, id, or description", text: $searchText)

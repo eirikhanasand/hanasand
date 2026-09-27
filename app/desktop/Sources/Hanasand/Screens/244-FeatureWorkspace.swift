@@ -20,34 +20,28 @@ struct FeatureWorkspace<Content: View>: View {
         VStack(spacing: 0) {
             TopBar()
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    VStack(alignment: .leading, spacing: 5) {
+                VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text(title)
-                            .font(.system(size: 27, weight: .black))
+                            .font(.system(size: 24, weight: .semibold))
                             .foregroundStyle(theme.text)
                         if !subtitle.isEmpty {
                             Text(subtitle)
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(theme.textTertiary)
+                                .font(.system(size: 13, weight: .regular))
+                                .foregroundStyle(theme.textSecondary)
                                 .lineLimit(2)
                                 .textSelection(.enabled)
                         }
                     }
                     content
                 }
-                .frame(maxWidth: 980, alignment: .leading)
-                .padding(.horizontal, 34)
-                .padding(.top, 38)
-                .padding(.bottom, 44)
+                .frame(maxWidth: 1040, alignment: .leading)
+                .padding(.horizontal, 28)
+                .padding(.top, 28)
+                .padding(.bottom, 32)
                 .frame(maxWidth: .infinity)
             }
         }
-        .background(
-            ZStack {
-                theme.background
-                RadialGradient(colors: [theme.accent.opacity(theme.isLight ? 0.08 : 0.16), .clear], center: .topLeading, startRadius: 40, endRadius: 720)
-                RadialGradient(colors: [theme.green.opacity(theme.isLight ? 0.05 : 0.10), .clear], center: .bottomTrailing, startRadius: 60, endRadius: 760)
-            }
-        )
+        .background(theme.background)
     }
 }

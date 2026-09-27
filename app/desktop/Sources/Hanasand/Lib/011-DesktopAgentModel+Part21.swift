@@ -33,20 +33,31 @@ extension DesktopAgentModel {
     }
 
     func loadNativeDashboardData() async {
-        guard let path = selectedDashboardPath else { return }
+        let loadID = UUID()
+        nativeDashboardLoadID = loadID
+        guard let path = selectedDashboardPath else {
+            isLoadingNativeDashboard = false
+            return
+        }
         if path == "/traffic" {
-            await loadHanasandTrafficMetrics()
+            await loadHanasandTrafficMetrics(loadID: loadID)
             return
         }
         guard let endpoint = nativeEndpoint(for: path) else {
+            guard nativeDashboardLoadID == loadID, selectedDashboardPath == path else { return }
             nativeDashboardStatus = "Native controls"
             nativeDashboardPayload = nativeFallbackDescription(for: path)
+            isLoadingNativeDashboard = false
             return
         }
 
         isLoadingNativeDashboard = true
         nativeDashboardStatus = "Loading \(endpoint.label)"
-        defer { isLoadingNativeDashboard = false }
+        defer {
+            if nativeDashboardLoadID == loadID {
+                isLoadingNativeDashboard = false
+            }
+        }
 
         do {
             let text = try await requestPrettyText(
@@ -54,6 +65,7 @@ extension DesktopAgentModel {
                 authenticated: endpoint.authenticated,
                 userAgent: endpoint.userAgent
             )
+            guard !Task.isCancelled, nativeDashboardLoadID == loadID, selectedDashboardPath == path else { return }
             nativeDashboardStatus = "Loaded \(endpoint.label)"
             nativeDashboardPayload = text.isEmpty ? "No data returned." : String(text.prefix(24_000))
             updateTypedDashboardState(from: text, path: path)
@@ -67,6 +79,7 @@ extension DesktopAgentModel {
                 await loadSelectedUserRoles()
             }
         } catch {
+            guard !Task.isCancelled, nativeDashboardLoadID == loadID, selectedDashboardPath == path else { return }
             nativeDashboardStatus = error.localizedDescription
             nativeDashboardPayload = "Could not load \(endpoint.label): \(error.localizedDescription)"
         }

@@ -26,53 +26,50 @@ extension IDEWorkspace {
                     ProgressView()
                         .scaleEffect(0.55)
                 }
-                BrowserAgentButton(title: "Copy cwd", icon: "doc.on.doc") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(model.terminal.cwd, forType: .string)
-                }
-                BrowserAgentButton(title: "Reveal cwd", icon: "folder") {
-                    NSWorkspace.shared.open(URL(fileURLWithPath: model.terminal.cwd, isDirectory: true))
-                }
-                BrowserAgentButton(title: terminalAutoScroll ? "Auto" : "Manual", icon: "arrow.down.to.line") {
-                    terminalAutoScroll.toggle()
-                }
-                BrowserAgentButton(title: "Copy", icon: "doc.on.doc") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(model.terminal.output, forType: .string)
-                }
                 BrowserAgentButton(title: "Stop", icon: "stop.fill") {
                     model.terminal.stop()
-                }
-                BrowserAgentButton(title: "Clear", icon: "trash") {
-                    model.terminal.clear()
-                }
-                BrowserAgentButton(title: "Prev", icon: "chevron.up") {
-                    model.terminal.previousHistory()
-                }
-                BrowserAgentButton(title: "Next", icon: "chevron.down") {
-                    model.terminal.nextHistory()
                 }
                 BrowserAgentButton(title: "Run", icon: "play.fill") {
                     model.terminal.run()
                 }
+                Menu {
+                    Section("Quick commands") {
+                        ForEach(model.quickCommands) { quickCommand in
+                            Button {
+                                model.terminal.run(quickCommand.command)
+                            } label: {
+                                Label(quickCommand.title, systemImage: quickCommand.icon)
+                            }
+                        }
+                    }
+                    Section("Terminal") {
+                        Button("Copy working directory") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(model.terminal.cwd, forType: .string)
+                        }
+                        Button("Reveal working directory") {
+                            NSWorkspace.shared.open(URL(fileURLWithPath: model.terminal.cwd, isDirectory: true))
+                        }
+                        Button(terminalAutoScroll ? "Disable auto-scroll" : "Enable auto-scroll") {
+                            terminalAutoScroll.toggle()
+                        }
+                        Button("Copy output") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(model.terminal.output, forType: .string)
+                        }
+                        Button("Clear output") { model.terminal.clear() }
+                        Button("Previous command") { model.terminal.previousHistory() }
+                        Button("Next command") { model.terminal.nextHistory() }
+                    }
+                } label: {
+                    Label("More", systemImage: "ellipsis")
+                }
+                .menuStyle(.borderlessButton)
             }
             .foregroundStyle(theme.text)
             .padding(.horizontal, 12)
             .frame(height: 34)
             .background(theme.commandBar)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(model.quickCommands) { quickCommand in
-                        BrowserAgentButton(title: quickCommand.title, icon: quickCommand.icon) {
-                            model.terminal.run(quickCommand.command)
-                        }
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-            }
-            .background(theme.backgroundElevated)
 
             ScrollViewReader { proxy in
                 ScrollView {

@@ -125,6 +125,17 @@ final class BrowserWorkspaceModel: ObservableObject {
     }
 
     func open(_ request: BrowserOpenRequest) {
+        if let externalURL = BrowserTargetResolver.externalURL(from: request.url) {
+            NSWorkspace.shared.open(externalURL)
+            return
+        }
+        guard let url = URL(string: request.url),
+              let scheme = url.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              url.host != nil else {
+            selectedTab?.statusText = "Only HTTP and HTTPS pages can open in the workspace."
+            return
+        }
         if let researchIndex = groups.firstIndex(where: { $0.id == "research" }) {
             selectedGroupID = groups[researchIndex].id
         }

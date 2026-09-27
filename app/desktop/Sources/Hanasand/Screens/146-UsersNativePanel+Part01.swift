@@ -18,11 +18,13 @@ extension UsersNativePanel {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 12) {
-                FeatureCard(title: "Users", value: "\(model.users.count)", icon: "person.2")
-                FeatureCard(title: "Active", value: "\(model.users.filter { $0.active != false }.count)", icon: "checkmark.circle")
-                FeatureCard(title: "Inactive", value: "\(model.users.filter { $0.active == false }.count)", icon: "person.crop.circle.badge.xmark")
+            HStack(spacing: 14) {
+                Label("\(model.users.count) users", systemImage: "person.2")
+                Label("\(model.users.filter { $0.active != false }.count) active", systemImage: "checkmark.circle")
+                Label("\(model.users.filter { $0.active == false }.count) inactive", systemImage: "person.crop.circle.badge.xmark")
             }
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(theme.textSecondary)
             SearchFieldRow(placeholder: "Filter users by name, id, or role", text: $searchText)
 
             if model.users.isEmpty {
@@ -49,10 +51,13 @@ extension UsersNativePanel {
                                         .lineLimit(1)
                                 }
                             }
-                            CompactInfoCard(title: "Role", lines: [
-                                user.roleLabel,
-                                "Priority: \(user.highestRolePriority.map(String.init) ?? "unknown")",
-                            ])
+                            HStack(spacing: 6) {
+                                Text(user.roleLabel)
+                                Text("·")
+                                Text("Priority \(user.highestRolePriority.map(String.init) ?? "unknown")")
+                            }
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(theme.textSecondary)
                             HStack {
                                 Button("Open profile") {
                                     model.openUserProfile(user)

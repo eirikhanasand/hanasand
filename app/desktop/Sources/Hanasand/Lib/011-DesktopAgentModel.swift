@@ -75,6 +75,7 @@ final class DesktopAgentModel: ObservableObject {
     @Published var isCheckingServerReachability = false; @Published var isRunningServerAction = false; @Published var serverActionStatus = "No server action running"; @Published var selectedDashboardPath: String?
 
     @Published var selectedDashboardTitle = "Dashboard"; @Published var nativeDashboardPayload = "Select a dashboard card to load native data."; @Published var nativeDashboardStatus = "Ready"; @Published var isLoadingNativeDashboard = false
+    var nativeDashboardLoadID = UUID()
 
     @Published var backupServices: [DashboardBackupService] = []; @Published var backupFiles: [DashboardBackupFile] = []; @Published var notes: [DashboardNote] = []; @Published var selectedNoteID = ""
 
@@ -153,12 +154,24 @@ final class DesktopAgentModel: ObservableObject {
     init() {
         let saved = UserDefaults.standard.string(forKey: Self.appearancePreferenceKey)
         appearancePreference = AppearancePreference(rawValue: saved ?? "") ?? .system
+        var restoredSettings: HanasandDesktopSettings
         if let data = UserDefaults.standard.data(forKey: Self.settingsKey),
            let decoded = try? JSONDecoder().decode(HanasandDesktopSettings.self, from: data) {
-            settings = decoded
+            restoredSettings = decoded
         } else {
-            settings = HanasandDesktopSettings()
+            restoredSettings = HanasandDesktopSettings()
         }
+        do {
+            if let token = try DesktopCredentialStore.read(.authToken) {
+                restoredSettings.authToken = token
+            }
+            if let token = try DesktopCredentialStore.read(.impersonationToken) {
+                restoredSettings.impersonationToken = token
+            }
+        } catch {
+            // Keep legacy UserDefaults values in memory and retry migration on the next save.
+        }
+        settings = restoredSettings
         if let apiBaseURL = ProcessInfo.processInfo.environment["HANASAND_DESKTOP_API_BASE_URL"],
            !apiBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             settings.apiBaseURL = apiBaseURL
@@ -191,6 +204,7 @@ final class DesktopAgentModel: ObservableObject {
             selectedDashboardPath = initialDashboardPath
             selectedDashboardTitle = ProcessInfo.processInfo.environment["HANASAND_DESKTOP_INITIAL_DASHBOARD_TITLE"] ?? "Dashboard"
         }
+        saveSettings()
     }
 
     var quickAppActions: [DesktopAction] {

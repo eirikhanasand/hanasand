@@ -109,7 +109,16 @@ extension DesktopAgentModel {
     }
 
     func saveSettings() {
-        guard let data = try? JSONEncoder().encode(settings) else { return }
+        do {
+            try DesktopCredentialStore.write(settings.authToken, for: .authToken)
+            try DesktopCredentialStore.write(settings.impersonationToken, for: .impersonationToken)
+        } catch {
+            return
+        }
+        var persistedSettings = settings
+        persistedSettings.authToken = ""
+        persistedSettings.impersonationToken = ""
+        guard let data = try? JSONEncoder().encode(persistedSettings) else { return }
         UserDefaults.standard.set(data, forKey: Self.settingsKey)
     }
 

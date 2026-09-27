@@ -87,11 +87,14 @@ extension MailNativePanel {
     var headerBar: some View {
         NativeGroupPanel(title: "Mail", subtitle: model.mailSummary) {
             HStack(spacing: 12) {
-                FeatureCard(title: "Messages", value: "\(overview?.messages.count ?? 0)", icon: "envelope")
-                FeatureCard(title: "Unread", value: "\(overview?.messages.filter { $0.isRead != true }.count ?? 0)", icon: "envelope.badge")
-                FeatureCard(title: "Selected", value: "\(model.selectedMailMessageIDs.count)", icon: "checkmark.circle")
-                FeatureCard(title: "Status", value: overview?.health?.status.capitalized ?? "Offline", icon: connectionIcon)
+                Label("\(overview?.messages.count ?? 0) messages", systemImage: "envelope")
+                Label("\(overview?.messages.filter { $0.isRead != true }.count ?? 0) unread", systemImage: "envelope.badge")
+                Label("\(model.selectedMailMessageIDs.count) selected", systemImage: "checkmark.circle")
+                Label(overview?.health?.status.capitalized ?? "Offline", systemImage: connectionIcon)
+                    .foregroundStyle(overview?.health?.status.lowercased() == "healthy" ? theme.green : theme.textSecondary)
             }
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(theme.textSecondary)
 
             HStack(spacing: 10) {
                 SearchFieldRow(placeholder: "Search mail", text: $searchText)

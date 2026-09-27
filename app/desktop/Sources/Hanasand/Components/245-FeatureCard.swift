@@ -17,33 +17,32 @@ struct FeatureCard: View {
     let icon: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .center, spacing: 10) {
             Image(systemName: icon)
-                .font(.system(size: 15, weight: .black))
-                .foregroundStyle(theme.accent)
-                .frame(width: 34, height: 34)
-                .background(theme.accentSoft)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            VStack(alignment: .leading, spacing: 5) {
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(theme.textSecondary)
+                .frame(width: 26, height: 26)
+            VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.system(size: 10, weight: .black))
+                    .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(theme.textTertiary)
                     .textCase(.uppercase)
                 Text(value)
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(theme.text)
                     .lineLimit(1)
                     .textSelection(.enabled)
             }
             Spacer(minLength: 0)
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, minHeight: 76, alignment: .topLeading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, minHeight: 62, alignment: .leading)
         .background(theme.card)
         .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(theme.divider.opacity(0.95), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(theme.divider.opacity(0.7), lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }

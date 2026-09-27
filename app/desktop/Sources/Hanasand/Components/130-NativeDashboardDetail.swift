@@ -15,13 +15,15 @@ struct NativeDashboardDetail: View {
     @Environment(\.desktopTheme) var theme
 
     var body: some View {
-        FeatureWorkspace(title: model.selectedDashboardTitle, subtitle: model.nativeDashboardStatus) {
-            HStack(spacing: 10) {
-                ActionButton(title: "Back", icon: "chevron.left") {
+        FeatureWorkspace(title: model.selectedDashboardTitle, subtitle: statusSubtitle) {
+            HStack(spacing: 8) {
+                detailToolbarButton(title: "Back", icon: "chevron.left") {
                     model.closeNativeDashboardPage()
                 }
-                ActionButton(title: "Refresh", icon: "arrow.clockwise") {
-                    Task { await model.loadNativeDashboardData() }
+                if !hasPanelRefresh {
+                    detailToolbarButton(title: "Refresh", icon: "arrow.clockwise") {
+                        Task { await model.loadNativeDashboardData() }
+                    }
                 }
                 if model.isLoadingNativeDashboard {
                     ProgressView()
@@ -29,17 +31,31 @@ struct NativeDashboardDetail: View {
                 }
             }
 
-            HStack(spacing: 12) {
-                FeatureCard(title: "Surface", value: model.selectedDashboardPath ?? "dashboard", icon: "rectangle.3.group")
-                FeatureCard(title: "Mode", value: "Native desktop", icon: "macwindow")
-                FeatureCard(title: "Auth", value: model.nativeDashboardStatus.localizedCaseInsensitiveContains("401") ? "Rejected" : "Settings/env", icon: "key")
-            }
-
             nativeDashboardBody
         }
         .task(id: model.selectedDashboardPath) {
             await model.loadNativeDashboardData()
         }
+    }
+
+    private var hasPanelRefresh: Bool {
+        ["/dashboard/automations", "/dashboard/automation", "/system/cron"].contains(model.selectedDashboardPath ?? "")
+    }
+
+    private var statusSubtitle: String {
+        ["Ready", "Native controls"].contains(model.nativeDashboardStatus) ? "" : model.nativeDashboardStatus
+    }
+
+    private func detailToolbarButton(title: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(theme.textSecondary)
+                .padding(.horizontal, 10)
+                .frame(height: 30)
+                .background(theme.card, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -51,6 +67,10 @@ struct NativeDashboardDetail: View {
             LinksNativePanel()
         case "/dashboard/tests":
             RecentTestsNativePanel()
+        case "/dashboard/automations", "/dashboard/automation":
+            AutomationsNativePanel()
+        case "/system/cron":
+            SystemCronNativePanel()
         case "/mail":
             MailNativePanel()
         case "/system":

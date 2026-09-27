@@ -6,6 +6,7 @@ import Darwin
 import Foundation
 import Network
 import PDFKit
+import Security
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
@@ -36,8 +37,21 @@ struct AppUpdateClient {
     }
 
     func download(manifest: AppUpdateManifest) async throws -> URL {
+        guard let expectedChecksum = manifest.sha256,
+              expectedChecksum.count == 64,
+              expectedChecksum.allSatisfy({ $0.isHexDigit }) else {
+            throw UpdateError.invalidChecksum
+        }
+        guard manifest.downloadURL.scheme?.lowercased() == "https" else {
+            throw UpdateError.invalidURL
+        }
         let (temporaryURL, response) = try await session.download(from: manifest.downloadURL)
+        defer { try? FileManager.default.removeItem(at: temporaryURL) }
         try validate(response: response)
+        let actual = try sha256(for: temporaryURL)
+        guard actual.caseInsensitiveCompare(expectedChecksum) == .orderedSame else {
+            throw UpdateError.checksumMismatch
+        }
 
         let support = try FileManager.default.url(
             for: .applicationSupportDirectory,
@@ -54,13 +68,6 @@ struct AppUpdateClient {
             try FileManager.default.removeItem(at: destination)
         }
         try FileManager.default.moveItem(at: temporaryURL, to: destination)
-
-        if let expected = manifest.sha256 {
-            let actual = try sha256(for: destination)
-            guard actual.caseInsensitiveCompare(expected) == .orderedSame else {
-                throw UpdateError.checksumMismatch
-            }
-        }
 
         return destination
     }
@@ -94,6 +101,18 @@ struct AppUpdateClient {
             guard currentApp.pathExtension.lowercased() == "app" else {
                 throw UpdateError.unsupportedBundleLocation
             }
+            guard let currentBundleID = Bundle.main.bundleIdentifier,
+                  let updatedBundleID = Bundle(url: newApp)?.bundleIdentifier,
+                  updatedBundleID == currentBundleID else {
+                throw UpdateError.bundleIdentifierMismatch
+            }
+            guard let currentTeamID = try Self.signedTeamIdentifier(for: currentApp, validateSignature: false),
+                  let updatedTeamID = try Self.signedTeamIdentifier(for: newApp, validateSignature: true) else {
+                throw UpdateError.signatureValidationFailed
+            }
+            guard updatedTeamID == currentTeamID else {
+                throw UpdateError.teamIdentifierMismatch
+            }
 
             let destination = currentApp.deletingLastPathComponent().appendingPathComponent(currentApp.lastPathComponent)
             if fileManager.fileExists(atPath: destination.path) {
@@ -114,8 +133,13 @@ struct AppUpdateClient {
     }
 
     func sha256(for url: URL) throws -> String {
-        let data = try Data(contentsOf: url)
-        let digest = SHA256.hash(data: data)
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        var hasher = SHA256()
+        while let chunk = try handle.read(upToCount: 1_048_576), !chunk.isEmpty {
+            hasher.update(data: chunk)
+        }
+        let digest = hasher.finalize()
         return digest.map { String(format: "%02x", $0) }.joined()
     }
 
@@ -155,5 +179,25 @@ struct AppUpdateClient {
         guard process.terminationStatus == 0 else {
             throw UpdateError.installFailed("\(URL(fileURLWithPath: executable).lastPathComponent) exited with \(process.terminationStatus)")
         }
+    }
+
+    static func signedTeamIdentifier(for appURL: URL, validateSignature: Bool) throws -> String? {
+        var staticCode: SecStaticCode?
+        guard SecStaticCodeCreateWithPath(appURL as CFURL, [], &staticCode) == errSecSuccess,
+              let staticCode else {
+            throw UpdateError.signatureValidationFailed
+        }
+        if validateSignature {
+            guard SecStaticCodeCheckValidity(staticCode, SecCSFlags(rawValue: kSecCSStrictValidate), nil) == errSecSuccess else {
+                throw UpdateError.signatureValidationFailed
+            }
+        }
+
+        var information: CFDictionary?
+        guard SecCodeCopySigningInformation(staticCode, SecCSFlags(rawValue: kSecCSSigningInformation), &information) == errSecSuccess,
+              let information = information as? [String: Any] else {
+            throw UpdateError.signatureValidationFailed
+        }
+        return information[kSecCodeInfoTeamIdentifier as String] as? String
     }
 }

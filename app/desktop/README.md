@@ -26,12 +26,16 @@ The app starts a local agent on `http://127.0.0.1:45731` and keeps the status vi
 HANASAND_APP_VERSION=0.1.2 app/desktop/scripts/package-update.sh
 ```
 
-The script builds a release `.app`, signs it with `HANASAND_CODESIGN_IDENTITY` when set, otherwise auto-selects the first local `Apple Development` signing identity, and verifies the result before writing the archive. Stable signing keeps macOS privacy permissions such as Screen Recording attached across updates. Ad-hoc update packages are refused by default; set `HANASAND_ALLOW_ADHOC_SIGNING=1` only for throwaway local builds. It writes `dist/Hanasand-<version>-macos.zip` plus `dist/manifest.json`.
-The API auto-discovers updates from the update directory, so deploy the zip and manifest together:
+The script builds a release `.app`, signs it with `HANASAND_CODESIGN_IDENTITY` when set, otherwise auto-selects the first local `Apple Development` signing identity, and verifies the result before writing the archive. Stable signing keeps macOS privacy permissions such as Screen Recording attached across updates. Ad-hoc update packages are refused by default; set `HANASAND_ALLOW_ADHOC_SIGNING=1` only for throwaway local builds. It writes `Hanasand-<version>-macos.zip` plus `manifest.json` to `app/desktop/dist` by default. Set `HANASAND_APP_OUTPUT_DIR` to write into another directory, for example:
 
 ```sh
-cp dist/Hanasand-<version>-macos.zip dist/latest-macos.zip
-rsync -az dist/latest-macos.zip dist/manifest.json ubuntu@hanasand:/srv/hanasand/app-updates/
+HANASAND_APP_VERSION=0.1.2 HANASAND_APP_OUTPUT_DIR=/tmp/hanasand-desktop-0.1.2 app/desktop/scripts/package-update.sh
+```
+
+The API reads the exact archive filename from `manifest.json`, so upload that versioned archive and the manifest together without renaming the archive:
+
+```sh
+rsync -az dist/Hanasand-0.1.2-macos.zip dist/manifest.json ubuntu@hanasand:/srv/hanasand/app-updates/
 ```
 
 ## Run the macOS Update Runner

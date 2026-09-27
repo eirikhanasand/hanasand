@@ -12,15 +12,20 @@ import WebKit
 
 extension DesktopAgentModel {
 
-    func loadHanasandTrafficMetrics() async {
+    func loadHanasandTrafficMetrics(loadID: UUID) async {
         isLoadingNativeDashboard = true
         nativeDashboardStatus = "Loading traffic metrics"
-        defer { isLoadingNativeDashboard = false }
+        defer {
+            if nativeDashboardLoadID == loadID {
+                isLoadingNativeDashboard = false
+            }
+        }
 
         do {
             let summaryURL = trafficSummaryURL(metric: "domain")
             let summary: [HanasandTrafficSummaryMetric] = try await requestJSON(summaryURL)
             let liveDomains = (try? await requestJSON(trafficTPSURL()) as [HanasandTrafficDomainTPS]) ?? []
+            guard !Task.isCancelled, nativeDashboardLoadID == loadID, selectedDashboardPath == "/traffic" else { return }
             let byLiveName = Dictionary(uniqueKeysWithValues: liveDomains.map { ($0.name, $0) })
             let topDomains = summary
                 .filter { !$0.value.isEmpty }
@@ -48,6 +53,7 @@ extension DesktopAgentModel {
             nativeDashboardStatus = "Loaded traffic metrics"
             nativeDashboardPayload = trafficPayload(total: total, domains: domains)
         } catch {
+            guard !Task.isCancelled, nativeDashboardLoadID == loadID, selectedDashboardPath == "/traffic" else { return }
             nativeDashboardStatus = error.localizedDescription
             nativeDashboardPayload = "Could not load Hanasand traffic metrics: \(error.localizedDescription)"
         }

@@ -16,14 +16,14 @@ struct DashboardSectionHeader: View {
     let subtitle: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 3) {
             Text(title)
-                .font(.system(size: 15, weight: .bold))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(theme.text)
             Text(subtitle)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 12, weight: .regular))
                 .foregroundStyle(theme.textTertiary)
         }
-        .padding(.top, 4)
+        .padding(.top, 2)
     }
 }

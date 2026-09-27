@@ -17,7 +17,7 @@ extension IDEWorkspace {
             TopBar()
             HStack(spacing: 0) {
                 ideNavigator
-                    .frame(width: 300)
+                    .frame(width: 272)
                 Divider()
                     .background(theme.divider)
                 VStack(spacing: 0) {
@@ -28,7 +28,7 @@ extension IDEWorkspace {
                 Divider()
                     .background(theme.divider)
                 ideToolRail
-                    .frame(width: toolsExpanded ? 340 : 56)
+                    .frame(width: toolsExpanded ? 288 : 40)
             }
         }
         .background(theme.background)

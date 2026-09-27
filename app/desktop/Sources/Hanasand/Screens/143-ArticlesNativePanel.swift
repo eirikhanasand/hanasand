@@ -86,9 +86,12 @@ struct ArticlesNativePanel: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 12) {
-                    FeatureCard(title: "Articles", value: "\(model.articles.count)", icon: "text.alignleft")
-                    FeatureCard(title: "Source", value: "Git", icon: "chevron.left.forwardslash.chevron.right")
+                    Label("\(model.articles.count) articles", systemImage: "text.alignleft")
+                    Text("·")
+                    Text("Source: Git")
                 }
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(theme.textSecondary)
                 HStack {
                     Text(model.articles.isEmpty ? "No articles loaded yet." : "Published articles")
                         .font(.system(size: 12, weight: .semibold))

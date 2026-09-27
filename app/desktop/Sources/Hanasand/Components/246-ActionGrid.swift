@@ -14,11 +14,11 @@ struct ActionGrid: View {
     let actions: [DesktopAction]
 
     let columns = [
-        GridItem(.adaptive(minimum: 210), spacing: 10, alignment: .top),
+        GridItem(.adaptive(minimum: 220), spacing: 12, alignment: .top),
     ]
 
     var body: some View {
-        LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
             ForEach(actions) { action in
                 ActionCard(action: action)
             }

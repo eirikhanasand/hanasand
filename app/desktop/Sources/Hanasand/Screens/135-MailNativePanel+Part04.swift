@@ -58,14 +58,16 @@ extension MailNativePanel {
                         }
                     }
 
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 210), spacing: 10)], spacing: 10) {
-                        CompactInfoCard(title: "To", lines: message.to.isEmpty ? ["No recipient listed"] : message.to.map(\.displayName))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("To  \(message.to.isEmpty ? "No recipient listed" : message.to.map(\.displayName).joined(separator: ", "))")
                         if let cc = message.cc, !cc.isEmpty {
-                            CompactInfoCard(title: "Cc", lines: cc.map(\.displayName))
+                            Text("Cc  \(cc.map(\.displayName).joined(separator: ", "))")
                         }
-                        CompactInfoCard(title: "Date", lines: [message.dateLabel])
-                        CompactInfoCard(title: "Thread", lines: [message.threadId ?? message.id])
+                        Text("\(message.dateLabel)  ·  Thread \(message.threadId ?? message.id)")
                     }
+                    .font(.system(size: 10, weight: .regular))
+                    .foregroundStyle(theme.textTertiary)
+                    .textSelection(.enabled)
 
                     if message.hasHTMLBody {
                         MailHTMLBodyView(html: message.renderedHTML(mailboxUser: overview.mailboxUser, apiBaseURL: model.settings.apiBaseURL.normalizedBaseURL))

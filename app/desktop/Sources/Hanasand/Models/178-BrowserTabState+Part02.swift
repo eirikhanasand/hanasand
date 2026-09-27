@@ -81,6 +81,30 @@ extension BrowserTabState {
         isLoading = true
     }
 
+    func webView(
+        _ webView: WKWebView,
+        decidePolicyFor navigationAction: WKNavigationAction,
+        decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+    ) {
+        guard navigationAction.targetFrame?.isMainFrame != false else {
+            decisionHandler(.allow)
+            return
+        }
+        guard let url = navigationAction.request.url,
+              let scheme = url.scheme?.lowercased() else {
+            decisionHandler(.cancel)
+            return
+        }
+        if ["http", "https"].contains(scheme), url.host != nil {
+            decisionHandler(.allow)
+            return
+        }
+        if let externalURL = BrowserTargetResolver.externalURL(from: url.absoluteString) {
+            NSWorkspace.shared.open(externalURL)
+        }
+        decisionHandler(.cancel)
+    }
+
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
         updateNavigationState(webView)
     }
@@ -120,7 +144,8 @@ extension BrowserTabState {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
-        if let url = URL(string: trimmed), url.scheme != nil {
+        if let url = URL(string: trimmed), let scheme = url.scheme?.lowercased() {
+            guard ["http", "https"].contains(scheme), url.host != nil else { return nil }
             return url
         }
 

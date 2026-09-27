@@ -15,27 +15,6 @@ extension IDEWorkspace {
     var editorPane: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Text(model.selectedFile?.title ?? "editor")
-                    .font(.system(size: 12, weight: .bold))
-                ForEach(model.currentFileRunCommands.dropFirst().prefix(2)) { command in
-                    BrowserAgentButton(title: command.title, icon: command.icon) {
-                        model.terminal.run(command.command)
-                        model.showTerminal = true
-                    }
-                }
-                Spacer()
-                Image(systemName: "circle.fill")
-                    .font(.system(size: 7))
-                    .foregroundStyle(theme.accent)
-                Text(model.selectedFileModeLabel)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(theme.textTertiary)
-            }
-            .padding(.horizontal, 14)
-            .frame(height: 36)
-            .background(theme.backgroundElevated)
-
-            HStack(spacing: 8) {
                 BrowserAgentField(
                     title: "Find",
                     text: $model.editorFindText,

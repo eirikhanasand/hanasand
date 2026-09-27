@@ -22,20 +22,17 @@ struct ProfileNativePanel: View {
     var body: some View {
         if let profile = model.profile {
             VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 12) {
-                    FeatureCard(title: "User", value: profile.displayName, icon: "person.crop.circle")
-                    FeatureCard(title: "Status", value: profile.active == false ? "Inactive" : "Active", icon: profile.active == false ? "person.crop.circle.badge.xmark" : "checkmark.circle")
-                    FeatureCard(title: "Roles", value: "\(profile.roles?.count ?? 0)", icon: "person.badge.key")
-                    FeatureCard(title: "Sessions", value: "\(model.profileSessions.filter { $0.revokedAt == nil }.count)", icon: "desktopcomputer")
-                    FeatureCard(title: "Certificates", value: "\(model.profileCertificates.count)", icon: "lock.shield")
-                }
-
                 NativeGroupPanel(title: "Account", subtitle: profile.id) {
-                    CompactInfoCard(title: "Identity", lines: [
-                        "Name: \(profile.displayName)",
-                        "ID: \(profile.id)",
-                        "Avatar: \(profile.avatar ?? "none")",
-                    ])
+                    HStack(spacing: 8) {
+                        Image(systemName: profile.active == false ? "person.crop.circle.badge.xmark" : "person.crop.circle")
+                            .foregroundStyle(profile.active == false ? theme.danger : theme.accent)
+                        Text(profile.displayName).font(.system(size: 13, weight: .semibold)).foregroundStyle(theme.text)
+                        Text(profile.active == false ? "Inactive" : "Active").font(.system(size: 11, weight: .medium)).foregroundStyle(theme.textTertiary)
+                    }
+                    Text("ID  \(profile.id)  ·  Avatar  \(profile.avatar ?? "none")")
+                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                        .foregroundStyle(theme.textTertiary)
+                        .textSelection(.enabled)
                     HStack(spacing: 10) {
                         ActionButton(title: "Log out", icon: "rectangle.portrait.and.arrow.right") {
                             confirmLogout = true

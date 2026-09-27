@@ -30,8 +30,14 @@ enum BrowserTargetResolver {
             return shortcut
         }
 
-        if let url = URL(string: target), url.scheme != nil {
-            return (url.absoluteString, title(from: url, fallback: target))
+        if let url = URL(string: target), let scheme = url.scheme?.lowercased() {
+            if ["http", "https"].contains(scheme), url.host != nil {
+                return (url.absoluteString, title(from: url, fallback: target))
+            }
+            if let externalURL = externalURL(from: target) {
+                return (externalURL.absoluteString, title(from: externalURL, fallback: target))
+            }
+            return searchResult(for: target)
         }
 
         if target.contains("."),
@@ -39,6 +45,24 @@ enum BrowserTargetResolver {
             return (url.absoluteString, title(from: url, fallback: target))
         }
 
+        return searchResult(for: target)
+    }
+
+    static func externalURL(from rawTarget: String) -> URL? {
+        guard let url = URL(string: rawTarget.trimmingCharacters(in: .whitespacesAndNewlines)),
+              let scheme = url.scheme?.lowercased() else { return nil }
+        switch scheme {
+        case "mailto":
+            return url.path.isEmpty ? nil : url
+        case "tel":
+            let number = url.path.filter { $0.isNumber || "+().-".contains($0) }
+            return number.isEmpty ? nil : url
+        default:
+            return nil
+        }
+    }
+
+    private static func searchResult(for target: String) -> (url: String, title: String) {
         var components = URLComponents(string: "https://duckduckgo.com/")
         components?.queryItems = [URLQueryItem(name: "q", value: target)]
         let url = components?.url?.absoluteString ?? "https://duckduckgo.com"

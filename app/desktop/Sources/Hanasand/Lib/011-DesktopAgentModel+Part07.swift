@@ -109,6 +109,9 @@ extension DesktopAgentModel {
         } else if command == "open_dashboard_automations" {
             openNativeDashboard(path: "/dashboard/automations", label: "Automations")
             append(meta: "Dashboard", body: "Opened Automations panel.", kind: .command)
+        } else if command == "open_dashboard_cron" {
+            openNativeDashboard(path: "/system/cron", label: "Cron Jobs")
+            append(meta: "Dashboard", body: "Opened Cron Jobs panel.", kind: .command)
         } else if command == "open_dashboard_articles" {
             openNativeDashboard(path: "/content/articles", label: "Articles")
             append(meta: "Dashboard", body: "Opened native Articles panel.", kind: .command)

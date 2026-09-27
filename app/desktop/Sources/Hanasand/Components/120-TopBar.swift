@@ -18,31 +18,11 @@ struct TopBar: View {
     var body: some View {
         HStack(spacing: 12) {
             Text(model.selectedSection == .command ? model.selectedProject : model.selectedSection.title)
-                .font(.system(size: 13, weight: .black))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(theme.text)
-            Text("Desktop")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(theme.textTertiary)
-            Button {
-                model.recordCommand("open_section_dashboard")
-            } label: {
-                Image(systemName: "ellipsis")
-                    .foregroundStyle(.secondary)
-                    .frame(width: 24, height: 24)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Open Dashboard")
-            .accessibilityLabel("Open Dashboard")
             Spacer()
             AgentStatusPill(status: model.status)
             UpdateStatusPill(status: model.updateStatus)
-            TopBarIconButton(icon: "sparkles", label: "Chat", active: model.selectedSection == .command) {
-                model.recordCommand("open_section_command")
-            }
-            TopBarIconButton(icon: "folder", label: "IDE", active: model.selectedSection == .ide) {
-                model.recordCommand("open_section_ide")
-            }
             if model.selectedSection == .command {
                 TopBarIconButton(
                     icon: model.aiRightRailMode == .hidden ? "sidebar.right" : "eye.slash",
@@ -52,12 +32,24 @@ struct TopBar: View {
                     model.toggleAIRightRailFromHeader()
                 }
             }
-            TopBarIconButton(icon: "gearshape", label: "Settings", active: model.selectedSection == .settings) {
-                model.recordCommand("open_section_settings")
+            Menu {
+                Button("Settings", systemImage: "gearshape") {
+                    model.recordCommand("open_section_settings")
+                }
+                Divider()
+                Button("Log out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
+                    confirmLogout = true
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(theme.textSecondary)
+                    .frame(width: 30, height: 30)
+                    .background(theme.card, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
-            TopBarIconButton(icon: "rectangle.portrait.and.arrow.right", label: "Log out", active: false) {
-                confirmLogout = true
-            }
+            .menuStyle(.borderlessButton)
+            .help("More options")
+            .accessibilityLabel("More options")
         }
         .font(.system(size: 14, weight: .semibold))
         .foregroundStyle(theme.textSecondary)

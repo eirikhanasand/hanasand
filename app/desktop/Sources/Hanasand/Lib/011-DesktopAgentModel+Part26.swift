@@ -56,6 +56,8 @@ extension DesktopAgentModel {
                 return
             }
 
+            try DesktopCredentialStore.write(token, for: .authToken)
+            try DesktopCredentialStore.write("", for: .impersonationToken)
             settings.authToken = token
             settings.userID = decoded?.id ?? username
             settings.impersonationToken = ""
@@ -95,6 +97,8 @@ extension DesktopAgentModel {
             }
 
             clearPendingDeletionState()
+            try DesktopCredentialStore.write(token, for: .authToken)
+            try DesktopCredentialStore.write("", for: .impersonationToken)
             settings.authToken = token
             settings.userID = decoded?.id ?? userID
             settings.impersonationToken = ""
@@ -133,6 +137,15 @@ extension DesktopAgentModel {
             } catch {
                 append(meta: "Logout revoke failed", body: error.localizedDescription, kind: .error)
             }
+        }
+
+        do {
+            try DesktopCredentialStore.write("", for: .authToken)
+            try DesktopCredentialStore.write("", for: .impersonationToken)
+        } catch {
+            loginStatus = "Unable to securely clear the Hanasand session. Try logging out again."
+            append(meta: "Logout cleanup failed", body: error.localizedDescription, kind: .error)
+            return
         }
 
         clearLocalHanasandSession()

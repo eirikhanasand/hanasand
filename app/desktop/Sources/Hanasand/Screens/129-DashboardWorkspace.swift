@@ -16,12 +16,12 @@ struct DashboardWorkspace: View {
 
     var body: some View {
         if model.selectedDashboardPath == nil {
-            FeatureWorkspace(title: "Dashboard", subtitle: "Native Hanasand controls and API previews.") {
-                DashboardSectionHeader(title: "Workspace", subtitle: "Open native panels where implemented, with API-backed previews for the rest.")
+            FeatureWorkspace(title: "Dashboard", subtitle: "") {
+                DashboardSectionHeader(title: "Workspace", subtitle: "")
                 ActionGrid(actions: model.dashboardActions)
-                DashboardSectionHeader(title: "Administration", subtitle: "API-backed operational views.")
+                DashboardSectionHeader(title: "Administration", subtitle: "")
                 ActionGrid(actions: model.adminActions)
-                DashboardSectionHeader(title: "Web and external", subtitle: "These intentionally leave the app or use hosted flows.")
+                DashboardSectionHeader(title: "Shortcuts", subtitle: "")
                 ActionGrid(actions: model.quickAppActions)
             }
         } else {

@@ -14,6 +14,10 @@ enum UpdateError: LocalizedError {
     case invalidURL
     case httpStatus(Int)
     case checksumMismatch
+    case invalidChecksum
+    case signatureValidationFailed
+    case bundleIdentifierMismatch
+    case teamIdentifierMismatch
     case unsupportedPackage
     case invalidPackage
     case unsupportedBundleLocation
@@ -27,6 +31,14 @@ enum UpdateError: LocalizedError {
             return "The Hanasand app update endpoint returned HTTP \(status)."
         case .checksumMismatch:
             return "The downloaded update did not match the API checksum."
+        case .invalidChecksum:
+            return "The app update manifest does not contain a valid SHA-256 checksum."
+        case .signatureValidationFailed:
+            return "The downloaded app has an invalid code signature."
+        case .bundleIdentifierMismatch:
+            return "The downloaded app is not the same Hanasand app as this installation."
+        case .teamIdentifierMismatch:
+            return "The downloaded app was not signed by the same Apple Developer team as this installation."
         case .unsupportedPackage:
             return "The downloaded update package is not a zip archive."
         case .invalidPackage:

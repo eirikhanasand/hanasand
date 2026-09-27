@@ -6,7 +6,11 @@ VERSION="${HANASAND_APP_VERSION:-$(git -C "$ROOT_DIR/../.." rev-parse --short HE
 CHANNEL="${HANASAND_APP_CHANNEL:-stable}"
 RELEASED_AT="${HANASAND_APP_RELEASED_AT:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}"
 RELEASE_NOTES="${HANASAND_APP_RELEASE_NOTES:-Desktop app update from commit $(git -C "$ROOT_DIR/../.." rev-parse --short HEAD).}"
-DIST_DIR="${ROOT_DIR}/dist"
+DIST_DIR="${HANASAND_APP_OUTPUT_DIR:-${ROOT_DIR}/dist}"
+if [[ "${DIST_DIR}" != /* ]]; then
+  DIST_DIR="${PWD}/${DIST_DIR}"
+fi
+BUILD_DIR="${ROOT_DIR}/.build/release"
 APP_DIR="${DIST_DIR}/Hanasand.app"
 PACKAGE_PATH="${DIST_DIR}/Hanasand-${VERSION}-macos.zip"
 ICON_FILE="${ROOT_DIR}/Resources/Hanasand.icns"

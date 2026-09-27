@@ -367,6 +367,8 @@ run_dashboard_smoke() {
   run_step "25-vulnerabilities" "open_dashboard_vulnerabilities"
   run_step "26-rate-limits" "open_dashboard_rate_limits"
   run_step "27-traffic" "open_dashboard_traffic"
+  run_step "28-automations" "open_dashboard_automations"
+  run_step "29-cron" "open_dashboard_cron"
 }
 
 assert_dashboard_smoke_covers_loopback_commands() {

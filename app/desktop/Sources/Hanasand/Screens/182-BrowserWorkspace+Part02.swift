@@ -30,7 +30,7 @@ extension BrowserWorkspace {
                 ),
                 isFocused: $addressFocused
             ) {
-                browser.load(browser.address)
+                openAddress(browser.address, in: browser)
             }
             BrowserIconButton(systemName: "house") {
                 browser.load(model.settings.websiteBaseURL)
@@ -57,6 +57,15 @@ extension BrowserWorkspace {
                 .fill(theme.divider)
                 .frame(height: 1)
         }
+    }
+
+    func openAddress(_ rawValue: String, in browser: BrowserTabState) {
+        if let externalURL = BrowserTargetResolver.externalURL(from: rawValue) {
+            NSWorkspace.shared.open(externalURL)
+            browser.statusText = "Opened externally"
+            return
+        }
+        browser.load(rawValue)
     }
 
     func consumeBrowserOpenRequest() {

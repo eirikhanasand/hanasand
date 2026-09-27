@@ -97,6 +97,7 @@ extension DesktopAgentModel {
                     body: body,
                     authenticated: true
                 )
+                try DesktopCredentialStore.write(response.token, for: .impersonationToken)
                 settings.impersonationToken = response.token
                 settings.impersonatingUserID = response.session.target.id
                 settings.impersonatingUserName = response.session.target.name ?? user.displayName
@@ -125,6 +126,13 @@ extension DesktopAgentModel {
                 request.setValue(token, forHTTPHeaderField: "x-impersonation-token")
                 _ = try? await URLSession.shared.data(for: request)
             }
+        }
+        do {
+            try DesktopCredentialStore.write("", for: .impersonationToken)
+        } catch {
+            nativeDashboardStatus = "Unable to clear the impersonation session from Keychain."
+            append(meta: "Impersonation cleanup failed", body: error.localizedDescription, kind: .error)
+            return
         }
         settings.impersonationToken = ""
         settings.impersonatingUserID = ""

@@ -30,6 +30,13 @@ extension IDEWorkspace {
                             model.formatCurrent()
                             model.autosaveCurrent()
                         }
+                        BrowserAgentButton(title: "Preview", icon: "play.rectangle") {
+                            if let file = model.selectedFile {
+                                model.preview(file, settings: appModel.settings)
+                                model.showPreview = true
+                                model.persistWorkspaceState()
+                            }
+                        }
                         BrowserAgentButton(title: model.autosaveEnabled ? "Autosave on" : "Autosave off", icon: "externaldrive.badge.checkmark") {
                             model.autosaveEnabled.toggle()
                             model.persistWorkspaceState()
@@ -118,9 +125,16 @@ extension IDEWorkspace {
                 }
 
                 toolsSection("Problems") {
-                    Text(model.problemsSummary)
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(theme.textTertiary)
+                    HStack {
+                        Text(model.problemsSummary)
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(theme.textTertiary)
+                        Spacer()
+                        Button("Scan") { model.scanProblemMarkers() }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(theme.accent)
+                    }
                     ForEach(model.problemMarkers.prefix(6)) { marker in
                         IDEProblemRow(marker: marker) {
                             model.openProblemMarker(marker)

@@ -48,28 +48,6 @@ struct DesktopAction: Identifiable {
         }
     }
 
-    var badgeLabel: String {
-        switch kind {
-        case .route:
-            return "Native"
-        case .url:
-            return "Web"
-        case .task:
-            return "Action"
-        }
-    }
-
-    var footerLabel: String {
-        switch kind {
-        case .route(let path):
-            return path
-        case .url:
-            return "Opens outside app"
-        case .task:
-            return "Runs in app"
-        }
-    }
-
     var trailingIcon: String {
         switch kind {
         case .route:
@@ -81,10 +59,4 @@ struct DesktopAction: Identifiable {
         }
     }
 
-    var isNativeRoute: Bool {
-        if case .route = kind {
-            return true
-        }
-        return false
-    }
 }
