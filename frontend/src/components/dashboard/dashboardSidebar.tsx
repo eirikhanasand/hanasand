@@ -33,7 +33,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
     const storageKey = `dashboard-navigation:v1:${access.id}`
     const [preferences, setPreferences] = useState<Preferences>(initialPreferences)
     const [query, setQuery] = useState('')
-    const [preview, setPreview] = useState<{ section: NavigationItem, top: number, maxHeight: number } | null>(null)
+    const [preview, setPreview] = useState<{ section: NavigationItem, anchorTop: number, top: number, maxHeight: number } | null>(null)
     const previewCloseTimer = useRef<number | null>(null)
     const previewPanel = useRef<HTMLDivElement | null>(null)
     const mode = useSyncExternalStore(
@@ -184,7 +184,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
             const minTop = previewMinTop()
             const maxHeight = previewMaxHeight()
             const panelHeight = Math.min(previewPanel.current?.scrollHeight ?? maxHeight, maxHeight)
-            const top = Math.max(minTop, Math.min(preview.top, window.innerHeight - 16 - panelHeight))
+            const top = Math.max(minTop, Math.min(preview.anchorTop, window.innerHeight - 16 - panelHeight))
             setPreview(current => current && (current.top !== top || current.maxHeight !== maxHeight)
                 ? { ...current, top, maxHeight }
                 : current)
@@ -192,12 +192,12 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
         updateBounds()
         window.addEventListener('resize', updateBounds)
         return () => window.removeEventListener('resize', updateBounds)
-    }, [preview])
+    }, [preview, preferences.expanded])
 
     function showPreview(section: NavigationItem, element: HTMLElement) {
         if (previewCloseTimer.current !== null) window.clearTimeout(previewCloseTimer.current)
         const bounds = element.getBoundingClientRect()
-        setPreview({ section, top: Math.max(previewMinTop(), bounds.top), maxHeight: previewMaxHeight() })
+        setPreview({ section, anchorTop: bounds.top, top: Math.max(previewMinTop(), bounds.top), maxHeight: previewMaxHeight() })
     }
 
     function deferPreviewClose() {
