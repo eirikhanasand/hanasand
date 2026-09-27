@@ -121,14 +121,14 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
         {loading && rows.length > 0 && <p role='status' className='px-4 pb-3 text-sm text-ui-muted'>Updating cases…</p>}
         {loading && rows.length === 0 && <div role='status' aria-label='Loading cases' aria-busy='true' className='grid min-h-0 flex-1 place-items-center'><Loader2 className='site-loading-icon' aria-hidden='true' /></div>}
         {(!loading || rows.length > 0) && (!visible.length ? <p className='p-4 text-ui-muted'>{Object.values(warnings).some(Boolean) ? 'No cases could be displayed from the available sources.' : rows.length ? 'No cases match the current filters.' : 'No cases yet.'}</p> : <div ref={scrollContainer} className='min-h-0 flex-1 overflow-auto overscroll-contain'>
-            <div className='overflow-x-auto'><table className='w-full text-left text-sm'>
+            <table className='min-w-[48rem] w-full text-left text-sm'>
                 <thead className='sticky top-0 z-10 border-y border-ui-border bg-ui-raised text-ui-muted'><tr>{['Case', 'Severity', 'Status', 'Owner', 'Updated'].map(label => <th key={label} scope='col' className='p-4'>{label}</th>)}</tr></thead>
                 <tbody className='divide-y divide-ui-border'>{visible.map(row => <tr key={row.caseId || row.id} className='text-ui-text'>
                     <td className='p-4'><Link className='font-semibold text-ui-primary hover:underline' href={`/cases/${encodeURIComponent(row.caseId || row.id)}${row.organizationId || organizationId ? `?organizationId=${encodeURIComponent(row.organizationId || organizationId!)}` : ''}`}>{row.title || row.id}</Link>{[row.actor, row.victimName || row.company].filter(Boolean).map(value => <p className='mt-1 text-xs text-ui-muted' key={value}>{value}</p>)}{row.summary && <p className='mt-1 max-w-xl wrap-break-word text-xs text-ui-muted'>{row.summary}</p>}</td>
                     <td className='p-4'>{row.severity || row.priority || '—'}</td>
                     <td className='p-4'>{row.status.replaceAll('_', ' ')}{row.resolution && <p className='mt-1 text-xs text-ui-muted'>{row.resolution.type === 'ai' ? 'AI resolved' : row.resolution.type === 'automation' ? 'Automatically recovered' : row.resolution.type === 'unknown' ? 'Resolver not recorded' : `Resolved by ${row.resolution.actor || 'human'}`}{['ai', 'automation'].includes(row.resolution.type) && (row.resolution.confirmedAt ? ' · Human confirmed' : ' · Needs human review')}</p>}</td><td className='p-4'>{row.assignedOwner || 'Unassigned'}</td><td className='p-4'>{row.updatedAt || row.createdAt ? new Date(row.updatedAt || row.createdAt!).toLocaleString() : '—'}</td>
                 </tr>)}</tbody>
-            </table></div>
+            </table>
             {nextCursor && <button disabled={loading} className='p-4 text-ui-primary disabled:opacity-50' onClick={() => { if (!loadingMore.current) { loadingMore.current = true; setCursor(nextCursor); setPage(current => current + 1) } }}>Load more cases</button>}
             <div ref={loadMoreSentinel} aria-hidden='true' className='h-px' />
             {!loading && !nextCursor && rows.length > 0 && <p className='px-4 py-2 text-xs text-ui-muted/70'>No more cases</p>}
