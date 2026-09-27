@@ -15,7 +15,7 @@ async function owner(req: FastifyRequest) {
 export async function getThesis(req: FastifyRequest, res: FastifyReply) {
     try {
         const { id, token } = thesisCredentials(req)
-        if (!await thesisMember(id, token)) return res.status(token ? 403 : 401).send({ error: 'Hanasand organization membership is required.' })
+        if (!await thesisMember(id, token)) return res.status(403).send({ error: 'Hanasand organization membership is required.' })
         return res.header('Cache-Control', 'no-store').send(await readThesis())
     } catch (error) {
         req.log.error(error)
@@ -26,7 +26,7 @@ export async function getThesis(req: FastifyRequest, res: FastifyReply) {
 export async function putThesis(req: FastifyRequest, res: FastifyReply) {
     try {
         const { id, token } = thesisCredentials(req)
-        if (!await thesisMember(id, token)) return res.status(token ? 403 : 401).send({ error: 'Hanasand organization membership is required.' })
+        if (!await thesisMember(id, token)) return res.status(403).send({ error: 'Hanasand organization membership is required.' })
         if (!await owner(req)) return res.status(403).send({ error: 'Only eirikhanasand can edit the thesis.' })
         if (!validThesis(req.body)) return res.status(400).send({ error: 'Invalid thesis title, content or revision. Reload the editor if it was open before this update.' })
         const result = await saveThesis(req.body)
@@ -40,7 +40,7 @@ export async function putThesis(req: FastifyRequest, res: FastifyReply) {
 export async function getThesisHistory(req: FastifyRequest, res: FastifyReply) {
     try {
         const { id, token } = thesisCredentials(req)
-        if (!await thesisMember(id, token)) return res.status(token ? 403 : 401).send({ error: 'Hanasand organization membership is required.' })
+        if (!await thesisMember(id, token)) return res.status(403).send({ error: 'Hanasand organization membership is required.' })
         if (!await owner(req)) return res.status(403).send({ error: 'Only eirikhanasand can view thesis history.' })
         const { revision } = req.params as { revision?: string }
         if (revision !== undefined) {
