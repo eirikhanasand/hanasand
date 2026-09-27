@@ -6,7 +6,7 @@ import { previewPredicate } from './previewPredicate.ts'
 import { loadLogRetentionRules, retentionStoreMatches } from './customRetention.ts'
 import { cachedRead } from '../readCache.ts'
 
-export type PreviewEvent = { id: string, timestamp: string, normalized: Record<string, unknown>, rank: number }
+export type PreviewEvent = { id: string, timestamp: string, normalized: Record<string, unknown>, rank: number, bytes?: number }
 type Cursor = { time: string, id: string }
 export type PreviewRequest = { from: string | null, until: string, cursor?: Cursor | null, action: 'drop' | 'keep', sample?: boolean, conditions: Condition[] }
 
@@ -32,7 +32,7 @@ async function scanRulePreviewUncached(organizationId: string, canReadLogs: bool
         filter,
     ].join(' AND ')
     const rules = input.action === 'drop' ? await loadLogRetentionRules(organizationId, query) : []
-    const result = await query(`SELECT id, event_timestamp::text AS timestamp, normalized${input.action === 'drop' ? ', original' : ''}
+    const result = await query(`SELECT id, event_timestamp::text AS timestamp, normalized, pg_column_size(events)::bigint AS bytes${input.action === 'drop' ? ', original' : ''}
         FROM events WHERE ${scope} ${input.action === 'drop' ? 'AND normalized->>\'severity\' = \'low\'' : ''}
         ORDER BY event_timestamp DESC, id DESC LIMIT 2000`, params)
     const eligible = result.rows.filter(row => input.action !== 'drop' || eligibleCustomDrop(row.normalized || {})
@@ -40,12 +40,13 @@ async function scanRulePreviewUncached(organizationId: string, canReadLogs: bool
     const matches = input.conditions.some(condition => condition.operator === 'regex')
         ? (await matchRegexPage(eligible, input.conditions)).map(index => eligible[index])
         : eligible.filter(row => matchesRule(row.normalized, input.conditions))
+    const bytes = matches.reduce((total, row) => total + Number(row.bytes || 0), 0)
     const events = matches.map(row => ({ id: row.id, timestamp: row.timestamp, rank: Math.random(), normalized: Object.fromEntries(Object.entries(row.normalized)
         .filter(([key]) => ['event_type', 'severity', 'service', 'host', 'action', 'outcome', 'http', 'source', 'user', 'device', 'message'].includes(key) || input.conditions.some(condition => condition.path.split('.')[0] === key))
         .map(([key, value]) => [key, typeof value === 'string' ? value.slice(0, 500) : value])) }))
     if (input.sample) events.sort((a, b) => a.rank - b.rank)
     const last = result.rows.at(-1)
-    return { scanned: result.rows.length, count: matches.length, events: input.sample ? events.slice(0, 100) : events, cursor: result.rows.length === 2000 && last ? { time: last.timestamp, id: last.id } : null }
+    return { scanned: result.rows.length, count: matches.length, bytes, events: input.sample ? events.slice(0, 100) : events, cursor: result.rows.length === 2000 && last ? { time: last.timestamp, id: last.id } : null }
 }
 
 export function validPreviewWindow(input: Record<string, unknown>): input is Record<string, unknown> & PreviewRequest {

@@ -5,6 +5,7 @@ import hasRole from '#utils/auth/hasRole.ts'
 import { roleCanEditOrganization } from '#utils/organizationRoles.ts'
 import { reprocessableRule } from '#utils/events/ruleReprocess.ts'
 import { organizationAccess, ruleSlug } from './events.ts'
+import { scanRulePreview } from '#utils/events/rulePreview.ts'
 
 type Request = FastifyRequest<{ Params: { id: string }, Querystring: { organizationId?: string },
     Body: { version?: string, from?: string | null, confirm?: boolean, action?: string, jobId?: string } }>
@@ -24,7 +25,23 @@ export async function getRuleReprocess(req: Request, res: FastifyReply) {
     if (!scope) return
     const jobs = await run(`SELECT ${columns} FROM rule_reprocess_jobs WHERE organization_id=$1
         AND regexp_replace(rule_id,'\\.v[0-9]+$','')=$2 ORDER BY created_at DESC LIMIT 10`, [scope.organizationId, ruleSlug(req.params.id)])
-    return res.send({ jobs: jobs.rows })
+    const rule = (await run(`SELECT definition,enabled,version,source,rule_id FROM rules WHERE organization_id=$1
+        AND regexp_replace(rule_id,'\\.v[0-9]+$','')=$2 ORDER BY version DESC LIMIT 1`, [scope.organizationId, ruleSlug(req.params.id)])).rows[0]
+    let existing: { count: number, bytes: number } | null = null
+    if (!jobs.rows.some(row => ['queued', 'running'].includes(row.status)) && rule?.enabled !== false && rule?.definition?.stage === 'analyze' && rule?.definition?.action === 'drop' && rule?.definition?.conditions?.length) {
+        try {
+            let cursor: { time: string, id: string } | null = null, count = 0, bytes = 0
+            do {
+                const page = await scanRulePreview(scope.organizationId, true, { from: null, until: new Date().toISOString(), cursor, action: 'drop', sample: true, conditions: rule.definition.conditions })
+                count += page.count; bytes += page.bytes
+                cursor = page.cursor
+            } while (cursor)
+            existing = { count, bytes }
+        } catch {
+            // A busy database should not make the rule detail page fail.
+        }
+    }
+    return res.send({ jobs: jobs.rows, existing })
 }
 
 export async function postRuleReprocess(req: Request, res: FastifyReply) {

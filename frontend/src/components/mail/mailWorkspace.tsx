@@ -336,7 +336,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
     const showUnreachableWarning = Boolean(unreachableSince && now - unreachableSince >= STALE_AFTER_MS)
 
     return (
-        <DashboardPage className='!gap-4 !p-4 xl:flex xl:h-full xl:min-h-0 xl:flex-col'>
+        <DashboardPage className='!gap-4 !px-2 !py-4 xl:flex xl:h-full xl:min-h-0 xl:flex-col'>
             <DashboardPanel className='flex shrink-0 flex-wrap items-center gap-2 p-2.5 sm:p-3' id='mail-toolbar'>
                 <div className='flex min-w-0 flex-1 flex-wrap items-center gap-2'>
                     <div className='mr-auto flex h-8 min-w-0 flex-col justify-center'>
