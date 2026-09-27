@@ -249,7 +249,7 @@ export async function getEvents(req: FastifyRequest, res: FastifyReply) {
 
 export async function postRulePreview(req: FastifyRequest, res: FastifyReply) {
     const access = await organizationAccess(req, res)
-    if (!access) return
+    if (!access) return res
     const body = (req.body || {}) as Record<string, unknown>
     const normalized = normalizeConditions(body.conditions)
     if (normalized.error || !normalized.conditions.length || !validPreviewWindow(body)) return res.status(400).send({ error: normalized.error || 'Choose a valid preview range and rule.' })
@@ -258,7 +258,7 @@ export async function postRulePreview(req: FastifyRequest, res: FastifyReply) {
     // the preview handler tries to send a second response.
     if (!req.headers.id) req.headers.id = access.userId
     const role = await hasRole(req, res, 'system_admin')
-    if (res.sent) return
+    if (res.sent) return res
     const canReadLogs = role.valid
     try { return res.send(await scanRulePreview(access.organizationId, canReadLogs, { ...body, conditions: normalized.conditions })) }
     catch (error) {
@@ -268,7 +268,8 @@ export async function postRulePreview(req: FastifyRequest, res: FastifyReply) {
         if (code === '57014') return res.header('Retry-After', '2').status(503).send({ error: 'Preview took too long to check. Narrow the time range or try again shortly.' })
         if (code === '53300' || code === '55P03' || code === '57P03' || code?.startsWith('08')
             || message.includes('connection timeout') || message.includes('timeout exceeded when trying to connect') || message.includes('timeout expired')
-            || message.includes('connection terminated') || message.includes('connection refused') || message.includes('connection reset'))
+            || message.includes('connection terminated') || message.includes('connection refused') || message.includes('connection reset')
+            || code === 'DB_QUEUE_FULL' || message.includes('database is temporarily busy'))
             return res.header('Retry-After', '2').status(503).send({ error: 'Preview is temporarily busy. Try again shortly.' })
         if (error instanceof ReadAdmissionError) return res.header('Retry-After', '2').status(503).send({ error: error.message })
         throw error
