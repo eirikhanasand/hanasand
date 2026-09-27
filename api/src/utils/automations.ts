@@ -559,7 +559,7 @@ export async function runMonitoringCheck(automation: AutomationRow) {
     if (!automation.target_url) throw new Error('Monitoring is missing the URL to check.')
     const target = ['tcp', 'ssh', 'json'].includes(automation.monitoring_type) ? null : new URL(automation.target_url)
     const tlsTarget = automation.monitoring_type === 'json' ? null : certificateTarget(automation)
-    let certificate: Awaited<ReturnType<typeof checkCertificate>> | { status: 'not_applicable', subject: null, issuer: null, expiresAt: null } | null = tlsTarget ? null : { status: 'not_applicable', subject: null, issuer: null, expiresAt: null }
+    let certificate: Awaited<ReturnType<typeof checkCertificate>> | { status: 'not_applicable' | 'invalid', subject: null, issuer: null, expiresAt: null } | null = tlsTarget ? null : /^http:/i.test(automation.target_url) ? { status: 'invalid', subject: null, issuer: null, expiresAt: null } : { status: 'not_applicable', subject: null, issuer: null, expiresAt: null }
     let lastError: unknown
     for (let attempt = 0; attempt <= automation.retry_count; attempt += 1) {
         if (attempt) await retryDelay(attempt * 1000)
@@ -568,6 +568,7 @@ export async function runMonitoringCheck(automation: AutomationRow) {
             if (automation.monitoring_type === 'json') return await runJsonCheck(automation, attempt)
             if (tlsTarget) {
                 certificate = await checkCertificate(tlsTarget, automation.timeout_seconds * 1000)
+                    .catch(() => ({ status: 'invalid' as const, subject: null, issuer: null, expiresAt: null }))
                 if (certificate.status === 'invalid') throw new MonitoringResponseError(`TLS certificate validation failed for ${tlsTarget.hostname}.`)
             }
             const timeoutMs = automation.timeout_seconds * 1000 - (Date.now() - startedAt)

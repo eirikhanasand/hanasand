@@ -1,8 +1,21 @@
 import run from '#db'
 import { createHash } from 'node:crypto'
+import { certificateTarget, checkCertificate } from '../automations.ts'
 import type { AutomationRow } from '../automations.ts'
 import { recordMonitoringOutcome } from '../monitoringIssues.ts'
 import type { MonitorStatus } from './monitorPolicy.ts'
+
+type CertificateSnapshot = Awaited<ReturnType<typeof checkCertificate>>
+const certificateSnapshots = new Map<string, { expiresAt: number, value: Promise<CertificateSnapshot> }>()
+
+function monitorCertificate(target: URL) {
+    const now = Date.now()
+    const cached = certificateSnapshots.get(target.origin)
+    if (cached && cached.expiresAt > now) return cached.value
+    const value = checkCertificate(target, 5_000).catch(() => ({ status: 'invalid' as const, subject: null, issuer: null, expiresAt: null }))
+    certificateSnapshots.set(target.origin, { expiresAt: now + 60_000, value })
+    return value
+}
 
 // Reuse the synthetic result itself so a recovery between polling ticks cannot hide a failure.
 export async function recordServiceCheckCase(service: string, checkName: string, result: { status: MonitorStatus, checkedAt: string, latencyMs: number, message: string, checkId?: string }, query = run, record = recordMonitoringOutcome) {
@@ -22,6 +35,13 @@ export async function recordServiceCheckCase(service: string, checkName: string,
         : `https://hanasand.com/api/status?service=${encodeURIComponent(service)}&check=${encodeURIComponent(checkName)}`])
     const automation = (await query('SELECT * FROM agent_automations WHERE id = $1', [automationId])).rows[0] as AutomationRow | undefined
     if (!automation) throw new Error(`Case monitoring is not configured for ${service} / ${checkName}.`)
+    const tlsTarget = certificateTarget(automation)
+    // Public API monitor rows are updated from synthetic results, not scheduled
+    // agent runs, so collect their HTTPS certificate alongside each observation.
+    // A TLS failure is a certificate failure but must not suppress the health result.
+    const certificate = tlsTarget
+        ? await monitorCertificate(tlsTarget)
+        : /^http:/i.test(automation.target_url || '') ? { status: 'invalid' as const, subject: null, issuer: null, expiresAt: null } : null
     const id = `${publicSearch ? 'public-search' : automationId}:${result.checkedAt}`
     const failed = result.status === 'down'
     const warning = result.status === 'degraded'
@@ -35,7 +55,11 @@ export async function recordServiceCheckCase(service: string, checkName: string,
         UPDATE agent_automations SET status = 'active', next_run_at = NULL, paused_reason = NULL,
             last_run_at = $2, last_completed_at = $2, last_status = $3,
             last_result = $4, last_error = $5, updated_at = NOW(),
+            certificate_status = COALESCE($6, certificate_status),
+            certificate_subject = CASE WHEN $6 IS NULL THEN certificate_subject ELSE $7 END,
+            certificate_issuer = CASE WHEN $6 IS NULL THEN certificate_issuer ELSE $8 END,
+            certificate_expires_at = CASE WHEN $6 IS NULL THEN certificate_expires_at ELSE $9 END,
             run_count = (SELECT COUNT(*) FROM agent_automation_runs WHERE automation_id = $1)
         WHERE id = $1 AND (last_completed_at IS NULL OR last_completed_at <= $2)
-    `, [automation.id, result.checkedAt, failed ? 'failed' : warning ? 'warning' : 'completed', failed ? null : result.message, failed ? result.message : null])
+    `, [automation.id, result.checkedAt, failed ? 'failed' : warning ? 'warning' : 'completed', failed ? null : result.message, failed ? result.message : null, certificate?.status ?? null, certificate?.subject ?? null, certificate?.issuer ?? null, certificate?.expiresAt ?? null])
 }

@@ -37,6 +37,6 @@ test('sorting uses the same visible status, certificate and tag labels', () => {
     assert.equal(healthCheckCertificate(monitor('Host', { targetUrl: 'system:metrics', certificateStatus: 'valid' })).label, 'N/A')
     assert.equal(healthCheckCertificate(monitor('TCP', { targetUrl: 'example.test:443', monitoringType: 'tcp', certificateStatus: 'valid' })).label, 'Valid')
     assert.equal(healthCheckCertificate(monitor('Pending', { certificateStatus: 'not_applicable' })).label, 'Pending')
-    assert.equal(healthCheckCertificate(monitor('API health', { id: 'monitor-service-example', targetUrl: 'https://hanasand.com/api/status?service=core' })).label, 'N/A')
-    assert.equal(healthCheckCertificate(monitor('Public Search', { id: 'monitor-public-search', targetUrl: 'https://api.hanasand.com/api/status' })).label, 'N/A')
+    assert.equal(healthCheckCertificate(monitor('API health', { id: 'monitor-service-example', targetUrl: 'https://hanasand.com/api/status?service=core', certificateStatus: 'valid' })).label, 'Valid')
+    assert.equal(healthCheckCertificate(monitor('Public Search', { id: 'monitor-public-search', actionType: 'system_alert', targetUrl: 'https://api.hanasand.com/api/status', certificateStatus: 'valid' })).label, 'Valid')
 })

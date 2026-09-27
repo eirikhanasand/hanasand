@@ -63,15 +63,17 @@ async function fetchJson(source: JsonSource) {
     }
     const startedAt = Date.now()
     const tls = certificateTarget({ target_url: source.target_url, monitoring_type: 'json' })
-    const certificate = tls ? await checkCertificate(tls, source.timeout_seconds * 1000) : { status: 'not_applicable' as const, subject: null, issuer: null, expiresAt: null }
-    if (certificate.status === 'invalid') throw Object.assign(new MonitoringResponseError(`TLS certificate validation failed for ${tls!.hostname}.`), { certificate })
+    const certificate = tls ? await checkCertificate(tls, source.timeout_seconds * 1000)
+        .catch(() => ({ status: 'invalid' as const, subject: null, issuer: null, expiresAt: null }))
+        : /^http:/i.test(source.target_url || '') ? { status: 'invalid' as const, subject: null, issuer: null, expiresAt: null } : { status: 'not_applicable' as const, subject: null, issuer: null, expiresAt: null }
+    if (tls && certificate.status === 'invalid') throw Object.assign(new MonitoringResponseError(`TLS certificate validation failed for ${tls.hostname}.`), { certificate })
     const timeoutMs = source.timeout_seconds * 1000 - (Date.now() - startedAt)
-    if (timeoutMs <= 0) throw new DOMException('Monitoring request timed out.', 'TimeoutError')
-    const response = await publicMonitoringRequest(source.target_url!, {
-        followRedirects: source.follow_redirects, userAgent: source.user_agent,
-        timeoutMs, readBody: true,
-    })
+    if (timeoutMs <= 0) throw Object.assign(new MonitoringResponseError('Monitoring request timed out.'), { certificate })
     try {
+        const response = await publicMonitoringRequest(source.target_url!, {
+            followRedirects: source.follow_redirects, userAgent: source.user_agent,
+            timeoutMs, readBody: true,
+        })
         if (response.status < 200 || response.status >= 300) throw new Error(`JSON source returned HTTP ${response.status}.`)
         return { payload: JSON.parse(response.body) as unknown, certificate }
     } catch (error) {

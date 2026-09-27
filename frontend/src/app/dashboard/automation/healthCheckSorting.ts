@@ -22,11 +22,8 @@ export function healthCheckTag(automation: AgentAutomation): string {
 }
 
 export function healthCheckCertificate(automation: AgentAutomation) {
-    // These rows mirror checks performed by the production synthetic monitor.
-    // TLS is handled by the site's dedicated checks, not by each mirrored row.
-    const syntheticMonitor = automation.id === 'monitor-public-search' || automation.id.startsWith('monitor-service-')
     const socketTls = automation.monitoringType === 'tcp' && /:443$/.test(automation.targetUrl || '')
-    const applies = !syntheticMonitor && automation.actionType === 'agent_prompt' && (socketTls || automation.monitoringType !== 'ssh' && automation.monitoringType !== 'tcp' && /^https:/i.test(automation.targetUrl || ''))
+    const applies = socketTls || /^https?:/i.test(automation.targetUrl || '')
     const status = applies ? automation.certificateStatus === 'not_applicable' ? null : automation.certificateStatus : 'not_applicable'
     const label = status === 'not_applicable' ? 'N/A' : status === 'valid' ? 'Valid' : status === 'invalid' ? 'Invalid' : status === 'expiring' ? 'Expiring' : 'Pending'
     return { applies, status, label }

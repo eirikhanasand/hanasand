@@ -16,14 +16,15 @@ export default function CertificateStatus({ automation }: { automation: AgentAut
             ? 'This automation does not check a TLS connection, so a website certificate is not needed.'
             : automation.monitoringType === 'tcp'
                 ? 'This is a plain TCP connectivity check. It does not inspect TLS certificates. TCP checks on port 443 also validate TLS.'
-                : 'This target uses HTTP without TLS, so there is no certificate to inspect. This does not mean the connection is encrypted.'
+                : 'This target does not use HTTPS, so it has no certificate to inspect.'
+    const details = !applies ? explanation : status === 'valid' ? 'The TLS certificate is trusted, matches the hostname and is within its validity period.' : status === 'expiring' ? 'The TLS certificate is trusted but expires within 30 days.' : status === 'invalid' ? /^http:/i.test(automation.targetUrl || '') ? 'This public URL uses HTTP, so it has no TLS certificate. Use HTTPS to secure it.' : 'The TLS certificate failed validation. Check its hostname, expiry date and issuing authority.' : 'Certificate verification has not completed yet. The next scheduled check will update this status.'
     return <div className='relative z-10'>
         <button type='button' popoverTarget={id} aria-label={`Certificate: ${label} — ${automation.name}`} className={`inline-flex items-center gap-1 rounded px-1 py-1 text-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary ${color}`}>
             <Icon aria-hidden='true' className='h-4 w-4 shrink-0' />{label}
         </button>
         <div id={id} popover='auto' className='m-auto w-[min(22rem,calc(100vw-2rem))] rounded-lg border border-ui-border bg-ui-raised p-4 text-sm text-ui-text shadow-lg'>
             <p className='font-semibold'>{automation.name} · {status === 'not_applicable' ? 'Certificate not applicable' : `Certificate: ${label}`}</p>
-            <p className='mt-2 leading-6 text-ui-muted'>{!applies ? explanation : status === 'valid' ? 'The TLS certificate is trusted, matches the hostname and is within its validity period.' : status === 'expiring' ? 'The TLS certificate is trusted but expires within 30 days.' : status === 'invalid' ? 'The TLS certificate failed validation. Check its hostname, expiry date and issuing authority.' : 'Certificate verification has not completed yet. The next scheduled check will update this status.'}</p>
+            <p className='mt-2 leading-6 text-ui-muted'>{details}</p>
             {applies && automation.certificateSubject && <p className='mt-2 wrap-break-word'>Issued to: {automation.certificateSubject}</p>}
             {applies && automation.certificateIssuer && <p className='mt-1 wrap-break-word'>Issuer: {automation.certificateIssuer}</p>}
             {applies && automation.certificateExpiresAt && <p className='mt-1'>Expires: {new Date(automation.certificateExpiresAt).toLocaleString()}</p>}
