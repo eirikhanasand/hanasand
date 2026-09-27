@@ -14,8 +14,9 @@ export function customRetentionAction(event: Record<string, unknown>, rules: Ret
 
 export function matchingCustomDropRules(event: Record<string, unknown>, rules: RetentionRule[]) {
     if (!eligibleCustomDrop(event) || retentionStoreMatches(event, rules)) return []
-    return rules.filter(rule => rule.source === 'owned' && rule.enabled !== false && rule.definition?.stage === 'analyze'
+    const match = rules.find(rule => rule.source === 'owned' && rule.enabled !== false && rule.definition?.stage === 'analyze'
         && rule.definition.action === 'drop' && rule.definition.conditions?.length && matchesRule(event, rule.definition.conditions))
+    return match ? [match] : []
 }
 
 export async function recordCustomDropReceipts(event: Record<string, unknown>, rules: RetentionRule[], identity: string | undefined, organizationId?: string, query: typeof run = run) {

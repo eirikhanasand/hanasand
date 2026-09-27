@@ -47,6 +47,18 @@ test('new matching service logs never reach storage; unmatched tenants and disab
     await recordLog(entry)
     expect(writes).toHaveLength(2)
 })
+test('the first matching Drop rule short-circuits later Drop rules', async () => {
+    const first = { ...drop, id: 'custom.first.v1', version: '1', organization_id: 'org-a' }
+    const second = { ...drop, id: 'custom.second.v1', version: '1', organization_id: 'org-a', definition: {
+        ...drop.definition,
+        conditions: [{ get path() { throw new Error('later Drop rule was evaluated') }, operator: 'equals' as const, value: 'must-not-be-evaluated' }],
+    } }
+    rules = [first, second]
+    await recordLog(entry)
+    expect(writes).toHaveLength(0)
+    expect(receipts).toHaveLength(1)
+    expect(JSON.parse(receipts[0][0] as string)[0]).toMatchObject({ rule_id: 'custom.first.v1' })
+})
 test('Store exceptions take precedence and a batch reads rules only once per tenant', async () => {
     rules.push({ ...drop, definition: { ...drop.definition, action: 'keep' } })
     await recordLogBatch([entry, entry, { ...entry, metadata: { organizationId: 'org-b' } }], query)
