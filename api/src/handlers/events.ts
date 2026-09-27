@@ -254,7 +254,8 @@ export async function postRulePreview(req: FastifyRequest, res: FastifyReply) {
         const message = (error as Error)?.message?.toLowerCase() || ''
         if (code === '57014') return res.header('Retry-After', '2').status(503).send({ error: 'Preview took too long to check. Narrow the time range or try again shortly.' })
         if (code === '53300' || code === '55P03' || code === '57P03' || code?.startsWith('08')
-            || message.includes('connection timeout') || message.includes('timeout exceeded when trying to connect') || message.includes('timeout expired'))
+            || message.includes('connection timeout') || message.includes('timeout exceeded when trying to connect') || message.includes('timeout expired')
+            || message.includes('connection terminated') || message.includes('connection refused') || message.includes('connection reset'))
             return res.header('Retry-After', '2').status(503).send({ error: 'Preview is temporarily busy. Try again shortly.' })
         throw error
     }
