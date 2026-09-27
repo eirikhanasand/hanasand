@@ -7,7 +7,7 @@ import SheetEditor, { sheetButton } from './sheetEditor'
 import TimetableSheet from './timetableSheet'
 import PlanSheet from './planSheet'
 import type { ActivityLog } from './timetableData'
-import CodeAccess from './codeAccess'
+import CodeReview from './codeReview'
 import type { Sheet, SheetSettings } from './workspace'
 import { identifiedSheets, writeSheets, sheetChanges } from './workspace'
 import type { ThesisDocument } from '@/utils/thesis'
@@ -206,7 +206,7 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
     }
 
     return (
-        <section className='mx-auto grid w-full max-w-6xl gap-6 px-4 pb-32 text-ui-text md:px-8' aria-label='Thesis document'
+        <section className='mx-auto grid w-full max-w-6xl gap-6 px-4 pt-3 pb-32 text-ui-text md:px-8' aria-label='Thesis document'
             onKeyDownCapture={event => {
                 if (!canEdit || event.nativeEvent.isComposing || (event.target as HTMLElement).closest('dialog, .code-workspace, .code-access, .thesis-timetable input, .thesis-timetable textarea, .thesis-timetable select, .thesis-timetable-controls')) return
                 if (!(event.metaKey || event.ctrlKey) || event.altKey) return
@@ -239,7 +239,7 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
                             </button>}
                         </>}
                     </>} />
-                {ready && codeEnabled && <CodeAccess canEdit={canEdit} toolbar={codeToolbar} />}
+                {ready && codeEnabled && <CodeReview canReview={canEdit} toolbar={codeToolbar} />}
             </div>
             {validationError && <p role='alert' className='text-sm text-ui-text'>{validationError}</p>}
             <nav className='thesis-tabs' hidden={footerVisible} aria-label='Sheet navigation'>

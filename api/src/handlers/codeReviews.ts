@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import { queryOnce } from '#db'
 import { validateSession } from '#utils/auth/session.ts'
 import hasInternalToken from '#utils/auth/internalToken.ts'
+import { thesisMember } from '#utils/thesisAccess.ts'
 
 let schema: Promise<unknown> | undefined
 async function prepare() {
@@ -22,7 +23,13 @@ async function owner(req: FastifyRequest) {
 }
 export async function getCodeReviews(req: FastifyRequest, res: FastifyReply) {
     try {
-        if (!hasInternalToken(req) && !await owner(req)) return res.status(403).send({ error: 'Code access is required to read reviews.' })
+        const internal = hasInternalToken(req)
+        if (!internal) {
+            const id = typeof req.headers.id === 'string' ? req.headers.id : ''
+            const token = req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : ''
+            if (!await thesisMember(id, token)) return res.status(token ? 403 : 401).send({ error: 'Hanasand organization membership is required.' })
+            if (!await owner(req)) return res.status(403).send({ error: 'Code access is required to read reviews.' })
+        }
         const { id, before } = req.query as { id?: string, before?: string }
         if ((id !== undefined && (typeof id !== 'string' || !id || id.length > 2000)) || (before !== undefined && (!id || typeof before !== 'string' || !/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(before)))) return res.status(400).send({ error: 'Invalid review history request.' })
         await prepare()
@@ -36,6 +43,9 @@ export async function getCodeReviews(req: FastifyRequest, res: FastifyReply) {
 }
 export async function postCodeReview(req: FastifyRequest, res: FastifyReply) {
     try {
+        const id = typeof req.headers.id === 'string' ? req.headers.id : ''
+        const token = req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : ''
+        if (!await thesisMember(id, token)) return res.status(token ? 403 : 401).send({ error: 'Hanasand organization membership is required.' })
         if (!await owner(req)) return res.status(403).send({ error: 'Only the owner can approve source code.' })
         const input = req.body as Record<string, unknown> | null
         if (!input || typeof input.id !== 'string' || !input.id || input.id.length > 2000 || typeof input.approved !== 'boolean' ||

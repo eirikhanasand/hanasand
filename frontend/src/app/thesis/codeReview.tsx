@@ -250,7 +250,7 @@ function SourceDetail({ item, onReview, onSelect, byId, canReview }: { canReview
         <details><summary>All source files used by this item ({sourceDependencies.length})</summary><ul className='code-links'>{sourceDependencies.map(node => <li key={node.id}><button onClick={() => onSelect(node.id)}><ItemIcon item={node} /><span>{node.title}</span><StatusIcon item={node} /></button></li>)}</ul></details>
     </article>
 }
-export default function CodeReview({ canReview, toolbar, onLocked }: { canReview: boolean, toolbar: HTMLElement | null, onLocked: () => void }) {
+export default function CodeReview({ canReview, toolbar }: { canReview: boolean, toolbar: HTMLElement | null }) {
     const [data, setData] = useState<CodeInventory | null>(null), [error, setError] = useState(''), [loading, setLoading] = useState(false)
     const [clock, setClock] = useState(0)
     const [order, setOrder] = useState('priority')
@@ -265,14 +265,14 @@ export default function CodeReview({ canReview, toolbar, onLocked }: { canReview
                 setData(current => current?.sync && (current.sync.phase !== 'ready' || current.sync.error || current.sync.warning) ? { ...current, sync: { phase: 'ready' } } : current)
                 return
             }
-            if (response.status === 403) { setData(null); version.current = ''; onLocked(); return }
+            if (response.status === 403) { setData(null); version.current = ''; setError('Hanasand organization membership is required to view this thesis.'); return }
             const result = await response.json()
             if (!response.ok) throw new Error(result.error)
             version.current = result.hash + ':' + (result.revision || '')
             setData(result)
         } catch (cause) { setError(cause instanceof Error ? cause.message : 'The inventory could not be loaded.') }
         finally { setLoading(false) }
-    }, [onLocked])
+    }, [])
     useEffect(() => {
         let stopped = false
         async function poll() { await load(true); if (!stopped) timer = setTimeout(poll, 3000) }

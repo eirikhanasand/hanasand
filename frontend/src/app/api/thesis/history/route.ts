@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { canEditThesis } from '@/utils/thesis'
 import config from '@/config'
+import requireApiSession from '@/utils/proxy/requireApiSession'
+import { isHanasandOrganizationMember } from '@/utils/organizations/hanasandMembership'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
-    const token = request.cookies.get('access_token')?.value
-    const id = request.cookies.get('id')?.value
+    const access = await requireApiSession(request)
+    if ('response' in access) return access.response
+    const { token, id } = access.identity
+    try { if (!await isHanasandOrganizationMember(token, id)) return NextResponse.json({ error: 'Hanasand organization membership is required.' }, { status: 403 }) } catch { return NextResponse.json({ error: 'Organization membership could not be checked.' }, { status: 503 }) }
     if (!await canEditThesis(token, id)) return NextResponse.json({ error: 'Only eirikhanasand can view thesis history.' }, { status: 403 })
     const revision = request.nextUrl.searchParams.get('revision')
     const before = request.nextUrl.searchParams.get('before')

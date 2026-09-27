@@ -18,14 +18,13 @@ export function validThesis(value: unknown): value is ThesisDocument {
         && Number.isSafeInteger(document.revision) && document.revision >= 0
 }
 
-export async function readThesis(): Promise<ThesisDocument> {
-    const response = await fetch(`${config.url.api}/thesis`, { cache: 'no-store', signal: AbortSignal.timeout(10000) })
+export async function readThesis(token: string, id: string): Promise<ThesisDocument> {
+    const response = await fetch(`${config.url.api}/thesis`, { headers: { Authorization: `Bearer ${token}`, id }, cache: 'no-store', signal: AbortSignal.timeout(10000) })
     if (!response.ok) throw new Error('The thesis could not be loaded.')
     const document = await response.json()
     if (!validThesis(document)) throw new Error('Invalid saved thesis')
     return document
 }
-
 export async function writeThesis(document: ThesisDocument, token: string, id: string) {
     return fetch(`${config.url.api}/thesis`, {
         method: 'PUT',

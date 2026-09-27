@@ -10,6 +10,7 @@ import registerSupportStream from '../handlers/supportStream.ts'
 import registerSystemStream from '../handlers/metrics/systemStream.ts'
 import registerVmConsole from '../handlers/vms/console.ts'
 import { subscribeThesis } from '#utils/thesis.ts'
+import { thesisCredentials, thesisMember } from '#utils/thesisAccess.ts'
 import WebSocket from 'ws'
 import type { RawData } from 'ws'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
@@ -70,7 +71,13 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
     registerSystemStream(fastify)
     registerSupportStream(fastify)
 
-    fastify.get('/api/ws/thesis', { websocket: true }, socket => subscribeThesis(socket))
+    fastify.get('/api/ws/thesis', { websocket: true }, (socket, request) => {
+        const credentials = thesisCredentials(request)
+        void thesisMember(credentials.id, credentials.token).then(member => {
+            if (!member) socket.close(1008, 'Hanasand organization membership is required.')
+            else subscribeThesis(socket)
+        }).catch(() => socket.close(1011))
+    })
     registerBrowserStreamRoute(fastify)
     if (process.env.NODE_ENV === 'production' && process.env.BROWSER_SANDBOX_EGRESS_FIREWALL_READY === '1') {
         const maintain = () => {
