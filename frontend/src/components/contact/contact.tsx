@@ -116,49 +116,7 @@ export default function Contact({ plan = '', intent = '' }: { plan?: string; int
     return (
         <section className='min-h-app-viewport bg-ui-canvas px-4 py-12 text-ui-text md:px-8 md:py-18'>
             <div className='mx-auto grid max-w-6xl gap-8 lg:grid-cols-[0.82fr_1.18fr] lg:items-start'>
-                <div className='grid gap-6'>
-                    <div className='grid gap-4'>
-                        <p className='text-sm font-semibold uppercase text-ui-primary'>{contactIntent.eyebrow}</p>
-                        <h1 className='text-4xl font-semibold tracking-normal md:text-5xl'>{contactIntent.heading}</h1>
-                        <p className='max-w-xl text-base leading-7 text-ui-muted'>
-                            {contactIntent.detail}
-                        </p>
-                    </div>
-
-                    <div className='grid gap-3'>
-                        <ContactPoint icon={<ShieldCheck className='h-4.5 w-4.5' />} title='Threat monitoring' detail='Company and supplier exposure alerts from recent actor activity.' />
-                        <ContactPoint icon={<Building2 className='h-4.5 w-4.5' />} title='Buyer fit' detail='Best for teams that need fast notification, clean fields, and reviewable context.' />
-                        <ContactPoint icon={<MessageSquareText className='h-4.5 w-4.5' />} title='Procurement review' detail='Request DPA, subprocessor details, SLA notes, security questionnaire, and identity requirements.' />
-                        <ContactPoint icon={<Mail className='h-4.5 w-4.5' />} title='Direct email' detail='contact@hanasand.com' />
-                    </div>
-
-                    <div className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm'>
-                        <p className='text-sm font-semibold uppercase text-ui-primary'>What happens next</p>
-                        <div className='grid gap-3'>
-                            {intakeSteps.map(([title, detail]) => (
-                                <div key={title} className='grid gap-1 rounded-lg border border-ui-border bg-ui-raised p-3'>
-                                    <span className='text-sm font-semibold text-ui-text'>{title}</span>
-                                    <span className='text-sm leading-6 text-ui-muted'>{detail}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm'>
-                        <div className='border-b border-ui-border bg-ui-raised px-4 py-3'>
-                            <p className='text-sm font-semibold uppercase text-ui-primary'>Security review</p>
-                            <p className='mt-1 text-sm leading-6 text-ui-muted'>A good request should leave with a concrete pilot shape, not a generic sales thread.</p>
-                        </div>
-                        <div className='divide-y divide-ui-border'>
-                            {reviewRows.map(([label, detail]) => (
-                                <div key={label} className='grid gap-1 px-4 py-3 text-sm sm:grid-cols-[8rem_1fr] sm:gap-4'>
-                                    <span className='font-semibold text-ui-text'>{label}</span>
-                                    <span className='leading-6 text-ui-muted'>{detail}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
+                <ContactOverview intent={contactIntent} />
 
                 <form className='grid gap-5 rounded-lg border border-ui-border bg-ui-panel p-5 shadow-lg md:p-7' onSubmit={formik.handleSubmit} title={contactIntent.eyebrow}>
                     <div className='grid gap-1'>
@@ -300,6 +258,52 @@ export default function Contact({ plan = '', intent = '' }: { plan?: string; int
                 </form>
             </div>
         </section>
+    )
+}
+
+function ContactOverview({ intent }: { intent: ContactIntent }) {
+    return (
+        <div className='grid gap-6'>
+            <div className='grid gap-4'>
+                <p className='text-sm font-semibold uppercase text-ui-primary'>{intent.eyebrow}</p>
+                <h1 className='text-4xl font-semibold tracking-normal md:text-5xl'>{intent.heading}</h1>
+                <p className='max-w-xl text-base leading-7 text-ui-muted'>{intent.detail}</p>
+            </div>
+
+            <div className='grid gap-3'>
+                <ContactPoint icon={<ShieldCheck className='h-4.5 w-4.5' />} title='Threat monitoring' detail='Company and supplier exposure alerts from recent actor activity.' />
+                <ContactPoint icon={<Building2 className='h-4.5 w-4.5' />} title='Buyer fit' detail='Best for teams that need fast notification, clean fields, and reviewable context.' />
+                <ContactPoint icon={<MessageSquareText className='h-4.5 w-4.5' />} title='Procurement review' detail='Request DPA, subprocessor details, SLA notes, security questionnaire, and identity requirements.' />
+                <ContactPoint icon={<Mail className='h-4.5 w-4.5' />} title='Direct email' detail='contact@hanasand.com' />
+            </div>
+
+            <div className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm'>
+                <p className='text-sm font-semibold uppercase text-ui-primary'>What happens next</p>
+                <div className='grid gap-3'>
+                    {intakeSteps.map(([title, detail]) => (
+                        <div key={title} className='grid gap-1 rounded-lg border border-ui-border bg-ui-raised p-3'>
+                            <span className='text-sm font-semibold text-ui-text'>{title}</span>
+                            <span className='text-sm leading-6 text-ui-muted'>{detail}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <div className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm'>
+                <div className='border-b border-ui-border bg-ui-raised px-4 py-3'>
+                    <p className='text-sm font-semibold uppercase text-ui-primary'>Security review</p>
+                    <p className='mt-1 text-sm leading-6 text-ui-muted'>A good request should leave with a concrete pilot shape, not a generic sales thread.</p>
+                </div>
+                <div className='divide-y divide-ui-border'>
+                    {reviewRows.map(([label, detail]) => (
+                        <div key={label} className='grid gap-1 px-4 py-3 text-sm sm:grid-cols-[8rem_1fr] sm:gap-4'>
+                            <span className='font-semibold text-ui-text'>{label}</span>
+                            <span className='leading-6 text-ui-muted'>{detail}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
     )
 }
 
