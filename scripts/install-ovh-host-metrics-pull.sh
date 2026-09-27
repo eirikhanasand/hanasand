@@ -13,7 +13,7 @@ ExecStart=/usr/local/bin/hanasand-run-ts /usr/local/lib/hanasand/pull-ovh-host-m
 TimeoutStartSec=10
 NoNewPrivileges=true
 ProtectSystem=strict
-ProtectHome=true
+ProtectHome=read-only
 PrivateTmp=true
 ReadWritePaths=/var/lib/hanasand/metrics
 UNIT
