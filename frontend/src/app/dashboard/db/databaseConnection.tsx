@@ -29,7 +29,7 @@ export default function DatabaseConnection({ initialStatus, initialCheckedAt, se
         const polling = setInterval(() => void check(), 5000)
         const clock = setInterval(() => setNow(Date.now()), 1000)
         return () => { controller.abort(); clearInterval(polling); clearInterval(clock) }
-    }, [initialCheckedAt, initialStatus])
+    }, [initialCheckedAt, initialStatus, serviceAccount])
     const age = checked ? Math.max(0, now - checked) : 0
     return <div className='flex flex-wrap items-center gap-2 text-xs' aria-label='Database connection'>
         <span role='status' className={`inline-flex items-center gap-1.5 ${status === 'connected' && age <= 10000 ? 'text-ui-success' : status === 'checking' ? 'text-ui-muted' : 'text-ui-warning'}`}><Activity aria-hidden className='h-3.5 w-3.5' />{status === 'checking' ? 'Checking…' : status === 'connected' && age <= 10000 ? 'Connected' : 'Unavailable'}</span>
