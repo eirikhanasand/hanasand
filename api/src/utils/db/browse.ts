@@ -8,6 +8,12 @@ export type BrowseInput = { instance: string, database: string, mode: 'contents'
 type Cursor = { target: string, values?: unknown[], scan?: string, index?: number, offset?: number }
 type RedisConnection = { sendCommand(args: string[]): Promise<unknown>, type(key: string): Promise<string>, getRange(key: string, start: number, end: number): Promise<string | null>, destroy(): void }
 type Connection = { pg?: Pool, mongo?: MongoClient, redis?: RedisConnection, used: number }
+
+export function normalizeLegacyEventRows(rows: Record<string, unknown>[], columns: string[]) {
+    if (!columns.includes('parser_version')) return rows
+    return rows.map(row => row.parser_version === 'mill.v1' ? { ...row, parser_version: 'event.v1' } : row)
+}
+
 const connections = new Map<string, Promise<Connection>>()
 const expiry = setInterval(() => {
     for (const [key, pending] of connections) void pending.then(async connection => {
@@ -97,7 +103,11 @@ export async function browseDatabase(input: BrowseInput) {
         }
         const primary = await connection.pg.query<{ name: string }>('SELECT a.attname AS name FROM pg_index i JOIN pg_attribute a ON a.attrelid=i.indrelid AND a.attnum=ANY(i.indkey) WHERE i.indrelid=$1::regclass AND i.indisprimary ORDER BY array_position(i.indkey,a.attnum)', [name])
         const keys = primary.rows.map(row => row.name)
-        if (!keys.length) return browseHeap(connection.pg, input, cursor, name, table.columns, started)
+        if (!keys.length) {
+            const result = await browseHeap(connection.pg, input, cursor, name, table.columns, started)
+            if ('rows' in result) result.rows = normalizeLegacyEventRows(result.rows, table.columns)
+            return result
+        }
         // A physical cursor avoids growing OFFSET scans for tables without a key.
         // Qualify keys so ORDER BY uses indexed source values, not the text
         // aliases in the preview projection (which would sort the whole table).
@@ -113,7 +123,7 @@ export async function browseDatabase(input: BrowseInput) {
         const rows = result.rows.slice(0, 5)
         const nextCursor = result.rows.length > 5 ? encode({ ...cursor, values: rows.at(-1)![cursorColumn] }) : null
         for (const row of rows) delete row[cursorColumn]
-        return { rows, fields: table.columns, nextCursor, elapsedMs: performance.now() - started }
+        return { rows: normalizeLegacyEventRows(rows, table.columns), fields: table.columns, nextCursor, elapsedMs: performance.now() - started }
     }
     if (connection.mongo) {
         if (!database.tables?.some(item => item.name === input.table)) throw new Error('Unknown collection')
