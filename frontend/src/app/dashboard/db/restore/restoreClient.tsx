@@ -46,7 +46,7 @@ export default function RestoreClient({ backups, service, loadError = '' }: { ba
     const visibleError = error || loadError
 
     return (
-        <main className='mx-auto grid w-full max-w-6xl gap-4 p-4 sm:p-6' data-restore-operator-console>
+        <main className='grid w-full gap-4 px-2 py-4' data-restore-operator-console>
             <section className='rounded-xl border border-ui-border bg-ui-panel p-4 sm:p-5'>
                 <div className='flex items-center gap-2'>
                     <DatabaseZap className='h-5 w-5 text-ui-primary' />

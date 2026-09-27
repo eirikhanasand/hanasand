@@ -122,7 +122,7 @@ export default function DetectionRules({ category, initial }: { category: RuleCa
     function clearFilters() { setTitleFilter(''); setTextFilter(''); setEnabledFilter('all'); setSeverityFilter('all') }
 
     return (
-        <DashboardPage className='!gap-6 !p-4 lg:!p-6'>
+        <DashboardPage className='!gap-6 !px-2 !py-4'>
             <div className='flex flex-wrap items-center justify-between gap-4'>
                 <div><p className='text-sm text-ui-muted'>Security tools</p><h1 className='mt-1 text-2xl font-semibold'>{ruleCategories[category].label}</h1></div>
                 <div className='flex max-w-full flex-wrap items-center gap-3'>

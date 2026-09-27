@@ -25,7 +25,7 @@ export default async function LogsPage({ searchParams, view = 'dashboard' }: Log
     ])
 
     return (
-        <DashboardPage className='gap-4 p-4 sm:p-5 lg:p-6'>
+        <DashboardPage className='gap-4 px-2 py-4'>
             <main className='grid gap-5' data-logs-dashboard>
                 <LogsPageClient
                     initialData={dashboard.data}

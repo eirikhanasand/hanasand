@@ -55,7 +55,7 @@ export default function BackupPage({ backups, files, loadError = '' }: BackupPag
     const visibleError = error || loadError || service?.error || ''
 
     return (
-        <main className='mx-auto grid w-full max-w-7xl gap-4 p-4 sm:p-6' data-backup-operator-console>
+        <main className='grid w-full gap-4 px-2 py-4' data-backup-operator-console>
             <section className='rounded-xl border border-ui-border bg-ui-panel p-4 sm:p-5' data-backup-primary-flow>
                 <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
                     <div>

@@ -21,7 +21,7 @@ type DashboardPanelProps = {
 export const dashboardPanelClass = 'rounded-lg border border-ui-border bg-ui-panel shadow-sm shadow-ui-canvas/10 dark:shadow-ui-canvas/20'
 
 export function DashboardPage({ children, className = '' }: DashboardPageProps) {
-    return <div className={`grid min-h-full w-full content-start gap-3 p-2 text-ui-text sm:gap-4 sm:p-4 ${className}`.trim()}>{children}</div>
+    return <div className={`grid min-h-full w-full content-start gap-3 px-2 py-4 text-ui-text sm:gap-4 ${className}`.trim()}>{children}</div>
 }
 
 export function DashboardHeader(props: DashboardHeaderProps) {
