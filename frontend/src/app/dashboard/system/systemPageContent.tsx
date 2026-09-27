@@ -33,7 +33,7 @@ export default async function SystemPageContent({ section }: { section: SystemSe
         <DashboardPage className='h-full min-w-0 grid-cols-[minmax(0,1fr)] max-xl:[overflow-wrap:anywhere] max-xl:[&_*]:min-w-0'>
             <DashboardHeader title='System' description={sectionDescriptions[section]} />
             {section === 'overview' ? <>
-                <div id='system-overview-statistics-target' className='contents' />
+                <div id='system-overview-statistics-target' className='min-w-0' />
                 <RecoveryPanel />
                 <DockerStoragePanel />
             </> : null}
