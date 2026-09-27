@@ -74,10 +74,10 @@ function WorkspaceWelcome() {
         <section className='grid min-h-[26rem] place-items-center rounded-lg border border-ui-border bg-ui-panel p-6 text-center shadow-sm'>
             <div className='grid max-w-md justify-items-center gap-4'>
                 <div>
-                    <h2 className='text-2xl font-semibold text-ui-text'>Welcome to Workspaces</h2>
-                    <p className='mt-2 text-sm leading-6 text-ui-muted'>Create a workspace to gather files and collaborate with editors.</p>
+                    <h2 className='text-2xl font-semibold text-ui-text'>Projects</h2>
+                    <p className='mt-2 text-sm leading-6 text-ui-muted'>Create your first project now.</p>
                 </div>
-                <Link href='/s' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'><Plus className='h-4 w-4' />Create workspace</Link>
+                <Link href='/s' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-white transition hover:opacity-90'><Plus className='h-4 w-4' />Create</Link>
             </div>
         </section>
     )
