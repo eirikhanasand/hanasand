@@ -41,21 +41,20 @@ const recoveryLinks = [
 
 export default function NotFound() {
     return (
-        <main className='min-h-[calc(100vh-4.5rem)] bg-ui-canvas px-4 py-10 text-ui-text md:px-8'>
+        <main className='min-h-[calc(100vh-4.5rem)] bg-white px-4 py-10 text-black md:px-8'>
             <SupportAssistant force />
             <section className='mx-auto grid max-w-6xl gap-8 py-8 md:py-14'>
                 <div className='grid max-w-3xl gap-4'>
-                    <p className='text-sm font-semibold uppercase text-ui-primary'>Page not found</p>
-                    <h1 className='text-4xl font-semibold tracking-normal md:text-6xl'>This page is not available.</h1>
-                    <p className='text-base leading-7 text-ui-muted md:text-lg'>
-                        The link may have moved, or the route may belong to a private workspace.
+                    <h1 className='text-4xl font-semibold tracking-normal text-black md:text-6xl'>This page does not exist</h1>
+                    <p className='text-base leading-7 text-black md:text-lg'>
+                        The link may have moved, or it is private.
                     </p>
                     <div className='flex flex-wrap gap-3'>
-                        <Link href='/ti' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
-                            Open intelligence search
+                        <Link href='/ti' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-black transition hover:opacity-90'>
+                            Search threat intelligence
                             <ArrowRight className='h-4 w-4' />
                         </Link>
-                        <Link href='/contact?intent=dwm' className='inline-flex h-11 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
+                        <Link href='/contact?intent=dwm' className='inline-flex h-11 items-center gap-2 rounded-lg border border-ui-border bg-white px-4 text-sm font-semibold text-black transition hover:border-ui-primary'>
                             Contact sales
                         </Link>
                     </div>
@@ -65,16 +64,16 @@ export default function NotFound() {
                     {recoveryLinks.map((item) => {
                         const Icon = item.icon
                         return (
-                            <Link key={item.href} href={item.href} className='group grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-ui-primary hover:shadow-md'>
-                                <span className='grid h-11 w-11 place-items-center rounded-lg border border-ui-border bg-ui-raised text-ui-primary'>
+                            <Link key={item.href} href={item.href} className='group grid gap-4 rounded-lg border border-ui-border bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-ui-primary hover:shadow-md'>
+                                <span className='grid h-11 w-11 place-items-center rounded-lg border border-ui-border bg-gray-100 text-black'>
                                     <Icon className='h-5 w-5' />
                                 </span>
                                 <span className='grid gap-2'>
-                                    <span className='flex items-center justify-between gap-3 text-base font-semibold text-ui-text'>
+                                    <span className='flex items-center justify-between gap-3 text-base font-semibold text-black'>
                                         {item.title}
-                                        <ArrowRight className='h-4 w-4 shrink-0 text-ui-muted transition group-hover:text-ui-primary' />
+                                        <ArrowRight className='h-4 w-4 shrink-0 text-black transition' />
                                     </span>
-                                    <span className='text-sm leading-6 text-ui-muted'>{item.body}</span>
+                                    <span className='text-sm leading-6 text-black'>{item.body}</span>
                                 </span>
                             </Link>
                         )
