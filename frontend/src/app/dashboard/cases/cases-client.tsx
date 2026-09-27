@@ -31,6 +31,7 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
     const [review, setReview] = useState('all')
     const [filtersOpen, setFiltersOpen] = useState(false)
     const [cursor, setCursor] = useState<string | null>(null)
+    const scrollContainer = useRef<HTMLDivElement>(null)
     const loadMoreSentinel = useRef<HTMLDivElement>(null)
     const loadingMore = useRef(false)
     useEffect(() => {
@@ -69,17 +70,18 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
     useEffect(() => { if (!loading) loadingMore.current = false }, [loading])
     useEffect(() => {
         const sentinel = loadMoreSentinel.current
-        if (!sentinel || !nextCursor || loading) return
+        const root = scrollContainer.current
+        if (!sentinel || !root || !nextCursor || loading) return
         const observer = new IntersectionObserver(entries => {
             if (entries.some(entry => entry.isIntersecting) && !loadingMore.current) {
                 loadingMore.current = true
                 setCursor(nextCursor)
                 setPage(current => current + 1)
             }
-        }, { rootMargin: '800px 0px' })
+        }, { root, rootMargin: '800px 0px' })
         observer.observe(sentinel)
         return () => observer.disconnect()
-    }, [nextCursor, loading])
+    }, [nextCursor, loading, rows.length])
     const visible = rows.filter(row => {
         const active = !['resolved', 'closed', 'suppressed', 'false_positive'].includes(row.status)
         if (status !== 'all' && (status === 'active' ? !active : row.status !== status)) return false
@@ -91,7 +93,7 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
         if (review === 'pending' && (!['ai', 'automation'].includes(row.resolution?.type || '') || row.resolution?.confirmedAt)) return false
         return [row.id, row.title, row.summary, row.actor, row.victimName, row.company, row.source, row.assignedOwner].filter(Boolean).join(' ').toLowerCase().includes(query.trim().toLowerCase())
     })
-    return <section className='min-w-0 rounded-lg border border-ui-border bg-ui-panel'>
+    return <section className='flex h-full min-h-0 min-w-0 flex-col rounded-lg border border-ui-border bg-ui-panel'>
         <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border p-4'>
             <div>
                 <h1 className='text-lg font-semibold text-ui-text'>Cases</h1>
@@ -117,20 +119,20 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
         </div>}
         {Object.values(warnings).filter(Boolean).map(warning => <p role='alert' key={warning} className='px-4 pb-3 text-sm text-ui-danger'>{warning}</p>)}
         {loading && rows.length > 0 && <p role='status' className='px-4 pb-3 text-sm text-ui-muted'>Updating cases…</p>}
-        {loading && rows.length === 0 && <div role='status' aria-label='Loading cases' aria-busy='true' className='grid min-h-[50vh] place-items-center'><Loader2 className='site-loading-icon' aria-hidden='true' /></div>}
-        {(!loading || rows.length > 0) && <>
-            {!visible.length ? <p className='p-4 text-ui-muted'>{Object.values(warnings).some(Boolean) ? 'No cases could be displayed from the available sources.' : rows.length ? 'No cases match the current filters.' : 'No cases yet.'}</p> : <div className='overflow-x-auto'><table className='w-full text-left text-sm'>
-                <thead className='border-y border-ui-border bg-ui-raised text-ui-muted'><tr>{['Case', 'Severity', 'Status', 'Owner', 'Updated'].map(label => <th key={label} scope='col' className='p-4'>{label}</th>)}</tr></thead>
+        {loading && rows.length === 0 && <div role='status' aria-label='Loading cases' aria-busy='true' className='grid min-h-0 flex-1 place-items-center'><Loader2 className='site-loading-icon' aria-hidden='true' /></div>}
+        {(!loading || rows.length > 0) && (!visible.length ? <p className='p-4 text-ui-muted'>{Object.values(warnings).some(Boolean) ? 'No cases could be displayed from the available sources.' : rows.length ? 'No cases match the current filters.' : 'No cases yet.'}</p> : <div ref={scrollContainer} className='min-h-0 flex-1 overflow-auto overscroll-contain'>
+            <div className='overflow-x-auto'><table className='w-full text-left text-sm'>
+                <thead className='sticky top-0 z-10 border-y border-ui-border bg-ui-raised text-ui-muted'><tr>{['Case', 'Severity', 'Status', 'Owner', 'Updated'].map(label => <th key={label} scope='col' className='p-4'>{label}</th>)}</tr></thead>
                 <tbody className='divide-y divide-ui-border'>{visible.map(row => <tr key={row.caseId || row.id} className='text-ui-text'>
                     <td className='p-4'><Link className='font-semibold text-ui-primary hover:underline' href={`/cases/${encodeURIComponent(row.caseId || row.id)}${row.organizationId || organizationId ? `?organizationId=${encodeURIComponent(row.organizationId || organizationId!)}` : ''}`}>{row.title || row.id}</Link>{[row.actor, row.victimName || row.company].filter(Boolean).map(value => <p className='mt-1 text-xs text-ui-muted' key={value}>{value}</p>)}{row.summary && <p className='mt-1 max-w-xl wrap-break-word text-xs text-ui-muted'>{row.summary}</p>}</td>
                     <td className='p-4'>{row.severity || row.priority || '—'}</td>
                     <td className='p-4'>{row.status.replaceAll('_', ' ')}{row.resolution && <p className='mt-1 text-xs text-ui-muted'>{row.resolution.type === 'ai' ? 'AI resolved' : row.resolution.type === 'automation' ? 'Automatically recovered' : row.resolution.type === 'unknown' ? 'Resolver not recorded' : `Resolved by ${row.resolution.actor || 'human'}`}{['ai', 'automation'].includes(row.resolution.type) && (row.resolution.confirmedAt ? ' · Human confirmed' : ' · Needs human review')}</p>}</td><td className='p-4'>{row.assignedOwner || 'Unassigned'}</td><td className='p-4'>{row.updatedAt || row.createdAt ? new Date(row.updatedAt || row.createdAt!).toLocaleString() : '—'}</td>
                 </tr>)}</tbody>
-            </table></div>}
+            </table></div>
             {nextCursor && <button disabled={loading} className='p-4 text-ui-primary disabled:opacity-50' onClick={() => { if (!loadingMore.current) { loadingMore.current = true; setCursor(nextCursor); setPage(current => current + 1) } }}>Load more cases</button>}
             <div ref={loadMoreSentinel} aria-hidden='true' className='h-px' />
             {!loading && !nextCursor && rows.length > 0 && <p className='px-4 py-2 text-xs text-ui-muted/70'>No more cases</p>}
-        </>}
+        </div>)}
     </section>
 }
 
