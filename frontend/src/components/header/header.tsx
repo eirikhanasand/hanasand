@@ -37,7 +37,7 @@ const resourceItems = [
     { title: 'Trust Center', detail: 'Security, DPA, SLA, subprocessors, and enterprise review path.', href: '/trust', icon: ShieldCheck },
     { title: 'Status', detail: 'Service health and current uptime.', href: '/status', icon: ActivityIcon },
     { title: 'Service Checks', detail: 'Permitted endpoint checks for URLs you control.', href: '/test', icon: Gauge },
-    { title: 'Hash Exposure Lookup', detail: 'Check a SHA-1 hash through a prefix-only exposure lookup.', href: '/pwned', icon: LockKeyhole },
+    { title: 'Hash lookup', detail: 'Check a SHA-1 hash through a prefix-only exposure lookup.', href: '/pwned', icon: LockKeyhole },
     { title: 'About Hanasand', detail: 'Product notes, ownership, and current Hanasand direction.', href: '/about', icon: BookOpen },
 ]
 

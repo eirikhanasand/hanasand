@@ -99,7 +99,7 @@ export default function Footer() {
                                             href={link.href}
                                             className='inline-flex w-fit items-center gap-2 py-1.5 text-sm font-medium text-ui-muted transition-colors hover:text-ui-text'
                                         >
-                                            {Icon ? <Icon className='h-3.5 w-3.5 text-[#df5148]' /> : null}
+                                            {Icon ? <Icon className='h-3.5 w-3.5 text-[#780606]' /> : null}
                                             {link.label}
                                         </Link>
                                     )

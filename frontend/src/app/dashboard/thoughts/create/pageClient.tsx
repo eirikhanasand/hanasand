@@ -59,7 +59,7 @@ export default function CreateClient() {
                 <button
                     type='button'
                     onClick={handleCreate}
-                    className='inline-flex h-9 items-center gap-2 rounded-lg bg-ui-primary px-3.5 text-sm font-medium text-ui-text transition hover:opacity-90'
+                    className='ui-button ui-button-primary h-9 px-3.5 text-sm'
                 >
                     <Plus className='h-4 w-4' />
                     Create

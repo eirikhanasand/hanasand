@@ -30,7 +30,7 @@ export default function AccessCodePanel({ code, onChange, busy, onSubmit }: {
                     ))}
                 </button>
             </label>
-            <button disabled={busy || code.length !== 6} className='inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas disabled:cursor-not-allowed disabled:opacity-60'>
+            <button disabled={busy || code.length !== 6} className='ui-button ui-button-primary h-10 px-4 text-sm disabled:cursor-not-allowed'>
                 <LockKeyhole className='h-4 w-4' />
                 Unlock
             </button>

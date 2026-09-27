@@ -21,7 +21,7 @@ export default async function layout({ children }: { children: ReactNode }) {
     const Headers = await headers()
     const token = Boolean(Cookies.get('access_token')?.value) || false
     const themeCookie = Cookies.get('theme')?.value
-    const theme = themeCookie === 'dark' ? 'dark' : 'light'
+    const theme = themeCookie === 'light' ? 'light' : 'dark'
     const path = Headers.get('x-current-path') || ''
     const id = Cookies.get('id')?.value || ''
     const roles = parseCookie<Array<Role | string>>(Cookies.get('roles')?.value, [])

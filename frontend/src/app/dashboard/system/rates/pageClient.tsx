@@ -590,7 +590,7 @@ export default function RateLimitsPageClient({
                             <button
                                 type='button'
                                 onClick={addOverride}
-                                className='inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-muted transition-colors hover:bg-ui-raised'
+                                className='ui-button ui-button-ghost px-3 py-2 text-sm'
                             >
                                 <Plus className='h-4 w-4' />
                                 Add override
@@ -707,7 +707,7 @@ export default function RateLimitsPageClient({
                             <button
                                 type='button'
                                 onClick={addScopeToDraft}
-                                className='inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-muted transition-colors hover:bg-ui-raised'
+                                className='ui-button ui-button-ghost px-3 py-2 text-sm'
                             >
                                 <Plus className='h-4 w-4' />
                                 Add route
@@ -733,7 +733,7 @@ export default function RateLimitsPageClient({
                                     <button
                                         type='button'
                                         onClick={addScopeToDraft}
-                                        className='mt-3 inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-muted transition-colors hover:bg-ui-raised'
+                                        className='mt-3 ui-button ui-button-ghost px-3 py-2 text-sm'
                                     >
                                         <Plus className='h-4 w-4' />
                                         Add first route
@@ -761,7 +761,7 @@ export default function RateLimitsPageClient({
                                 <button
                                     type='button'
                                     onClick={() => navigator.clipboard.writeText(issuedSecret)}
-                                    className='inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-muted transition-colors hover:bg-ui-raised'
+                                    className='ui-button ui-button-ghost px-3 py-2 text-sm'
                                 >
                                     <Copy className='h-4 w-4' />
                                     Copy `{issuedSecret}`
@@ -946,7 +946,7 @@ function ApiKeyCard({
                         <button
                             type='button'
                             onClick={() => addScopeToKey(apiKey.id)}
-                            className='inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-muted transition-colors hover:bg-ui-raised'
+                            className='ui-button ui-button-ghost px-3 py-2 text-sm'
                         >
                             <Plus className='h-4 w-4' />
                             Add route

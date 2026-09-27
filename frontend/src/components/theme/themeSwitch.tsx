@@ -5,7 +5,7 @@ import { getCookie, setCookie } from '@/utils/cookies/cookies'
 import './toggle.css'
 
 export default function ThemeSwitch() {
-    const [theme, setTheme] = useState<'dark' | 'light'>('light')
+    const [theme, setTheme] = useState<'dark' | 'light'>('dark')
 
     useEffect(() => {
         const savedTheme = normalizeTheme(getCookie('theme'))
