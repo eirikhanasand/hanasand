@@ -28,7 +28,7 @@ for (const entries of [[], [{ id: 'thought', title: 'Why?', created_at: '2025-10
     const html = renderToStaticMarkup(await Thoughts())
     assert(!html.includes('href="/notes"'))
     assert(!/notebook|real note|research note/i.test(html))
-    assert(html.includes('philosophical question'))
+    assert.equal(html.includes('philosophical question'), entries.length > 0)
     if (!entries.length) assert(html.includes('href="/content/thoughts/create"'))
 }
 console.log('Content pages: conditional years, concise article labels and distinct thoughts copy pass.')
