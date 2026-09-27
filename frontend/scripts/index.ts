@@ -27,6 +27,7 @@ const tasks: TestTask[] = [
     { id: 'helpdesk-render', title: 'Helpdesk audit rendering and focus filters', command: [bun, 'tests/helpdesk-render.test.tsx'] },
     { id: 'share-statistics', title: 'Share line counts and empty statistics', command: [bun, 'test', 'tests/share-statistics.test.tsx'] },
     { id: 'content-pages', title: 'Article dates and thoughts copy', command: [bun, 'tests/content-pages.test.tsx'] },
+    { id: 'public-articles-recent', title: 'Public articles hide empty recent sections', command: [bun, 'tests/public-articles-recent.test.tsx'] },
     { id: 'workspace-organization-browser', title: 'Global organization switcher and shared links', command: [bun, 'scripts/check-workspace-organization.mjs'], requires: 'playwright' },
     { id: 'workspace-organization', title: 'Shared organization scope and cookie authorization', command: [bun, 'test', 'tests/workspace-organization.test.ts'] },
     { id: 'incident-updates', title: 'Meaningful incident timeline updates', command: [bun, 'test', 'scripts/check-incident-updates.test.mjs'] },

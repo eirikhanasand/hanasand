@@ -6,7 +6,7 @@ import staticArticles from '@/utils/articles/staticArticles.json'
 import { replaceDraftArticle } from '@/utils/articles/fallbackArticles'
 import prettyDate from '@/utils/date/prettyDate'
 import ArticleNotificationFromSearchParams from './articleNotificationFromSearchParams'
-import { BookOpen, FileText } from 'lucide-react'
+import { BookOpen } from 'lucide-react'
 
 type ArticleProps = {
     article: Article
@@ -25,7 +25,6 @@ type RecentProps = {
     recent: Article[]
     max?: number
     includeTitle?: boolean
-    emptyMessage?: string
 }
 
 export default async function Articles({
@@ -43,7 +42,6 @@ export default async function Articles({
         ? [...articles, ...olderArticles.slice(0, 4 - articles.length)]
         : articles
     const displayed = max ? olderArticles.slice(max) : olderArticles
-    const hasAnyArticles = recentArticles.length > 0 || displayed.length > 0
 
     return (
         <section className='mx-auto grid w-full max-w-7xl gap-8 bg-ui-canvas px-4 py-12 text-ui-text md:px-8 md:py-16'>
@@ -59,19 +57,18 @@ export default async function Articles({
                     Project notes, product context, and preserved writing from the personal Hanasand notebook.
                 </p>
             </div>
-            <Recent recent={recentArticles} max={max} includeTitle={includeRecentTitle} emptyMessage={hasAnyArticles ? 'No recent articles right now.' : 'No articles published.'} />
+            {recentArticles.length > 0 && <Recent recent={recentArticles} max={max} includeTitle={includeRecentTitle} />}
             {recent && displayed.length > 0 && <All recent={displayed} max={max} includeTitle={includeRecentTitle} />}
         </section>
     )
 }
 
-function Recent({ recent, max, includeTitle = true, emptyMessage = 'No articles published.' }: RecentProps) {
+function Recent({ recent, max, includeTitle = true }: RecentProps) {
     const displayed = max ? recent.slice(0, max) : recent
 
     return (
         <div className='grid gap-3'>
             {includeTitle && <h2 className='text-xs font-semibold uppercase text-ui-primary'>Recently published</h2>}
-            {displayed.length === 0 ? <EmptyArticles message={emptyMessage} /> : null}
             <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-3'>
                 {displayed.map((article) => <Article
                     key={article.title}
@@ -156,17 +153,4 @@ function normalizeArticles(value: unknown): Article[] {
             },
         } as Article]
     })
-}
-
-function EmptyArticles({ message }: { message: string }) {
-    return (
-        <div className='grid min-h-48 place-items-center rounded-lg border border-dashed border-ui-border bg-ui-panel p-6 text-center'>
-            <div className='grid gap-3'>
-                <div className='mx-auto grid h-11 w-11 place-items-center rounded-lg border border-ui-border bg-ui-raised'>
-                    <FileText className='h-5 w-5 text-ui-primary' />
-                </div>
-                <p className='text-sm text-ui-muted'>{message}</p>
-            </div>
-        </div>
-    )
 }
