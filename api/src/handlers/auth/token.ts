@@ -1,6 +1,16 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { validateSession } from '#utils/auth/session.ts'
 
+function isTransientDatabaseError(error: unknown) {
+    const value = error as { code?: string, message?: string }
+    const code = value?.code || ''
+    const message = value?.message?.toLowerCase() || ''
+    return ['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN', '08000', '08001', '08003', '08006', '53300', '57P03'].includes(code)
+        || message.includes('connection terminated')
+        || message.includes('connection timeout')
+        || message.includes('timeout expired')
+}
+
 /**
  * Tests if a token is valid for a user
  *
@@ -41,7 +51,7 @@ export default async function tokenHandler(req: FastifyRequest, res: FastifyRepl
         })
     } catch (error) {
         console.error(`Database error: ${JSON.stringify(error)}`)
-        if ((error as { code?: string }).code === 'DB_QUEUE_FULL') return res.header('retry-after', '1').status(503).send({ error: 'Authentication is temporarily busy. Try again shortly.' })
+        if ((error as { code?: string }).code === 'DB_QUEUE_FULL' || isTransientDatabaseError(error)) return res.header('retry-after', '1').status(503).send({ error: 'Authentication is temporarily busy. Try again shortly.' })
         return res.status(500).send({ error: 'Internal Server Error' })
     }
 }

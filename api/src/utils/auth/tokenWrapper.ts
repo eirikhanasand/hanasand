@@ -31,6 +31,16 @@ function headerValue(value: string | string[] | undefined) {
     return Array.isArray(value) ? value[0] : value
 }
 
+function isTransientDatabaseError(error: unknown) {
+    const value = error as { code?: string, message?: string }
+    const code = value?.code || ''
+    const message = value?.message?.toLowerCase() || ''
+    return ['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN', '08000', '08001', '08003', '08006', '53300', '57P03'].includes(code)
+        || message.includes('connection terminated')
+        || message.includes('connection timeout')
+        || message.includes('timeout expired')
+}
+
 function hashImpersonationToken(token: string) {
     return crypto.createHash('sha256').update(token).digest('hex')
 }
@@ -305,7 +315,7 @@ export default async function tokenWrapper(req: FastifyRequest, res: FastifyRepl
     } catch (error) {
         res.log.error(error)
         const code = (error as { code?: string }).code
-        if (code === 'DB_QUEUE_FULL') {
+        if (code === 'DB_QUEUE_FULL' || isTransientDatabaseError(error)) {
             const preview = req.url.split('?')[0] === '/api/rules/preview'
             const message = preview
                 ? 'Preview is temporarily busy. Try again shortly.'

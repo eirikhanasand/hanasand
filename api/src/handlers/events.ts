@@ -248,20 +248,22 @@ export async function getEvents(req: FastifyRequest, res: FastifyReply) {
 }
 
 export async function postRulePreview(req: FastifyRequest, res: FastifyReply) {
-    const access = await organizationAccess(req, res)
-    if (!access) return res
-    const body = (req.body || {}) as Record<string, unknown>
-    const normalized = normalizeConditions(body.conditions)
-    if (normalized.error || !normalized.conditions.length || !validPreviewWindow(body)) return res.status(400).send({ error: normalized.error || 'Choose a valid preview range and rule.' })
-    // Reuse the identity resolved by organizationAccess when the proxy omitted
-    // the legacy id header. hasRole may send an auth response, so stop before
-    // the preview handler tries to send a second response.
-    if (!req.headers.id) req.headers.id = access.userId
-    const role = await hasRole(req, res, 'system_admin')
-    if (res.sent) return res
-    const canReadLogs = role.valid
-    try { return res.send(await scanRulePreview(access.organizationId, canReadLogs, { ...body, conditions: normalized.conditions })) }
-    catch (error) {
+    try {
+        const access = await organizationAccess(req, res)
+        if (!access) return res
+        const body = (req.body || {}) as Record<string, unknown>
+        const normalized = normalizeConditions(body.conditions)
+        if (normalized.error || !normalized.conditions.length || !validPreviewWindow(body)) return res.status(400).send({ error: normalized.error || 'Choose a valid preview range and rule.' })
+        // Reuse the identity resolved by organizationAccess when the proxy omitted
+        // the legacy id header. hasRole may send an auth response, so stop before
+        // the preview handler tries to send a second response.
+        if (!req.headers.id) req.headers.id = access.userId
+        const role = await hasRole(req, res, 'system_admin')
+        if (res.sent) return res
+        const canReadLogs = role.valid
+        return res.send(await scanRulePreview(access.organizationId, canReadLogs, { ...body, conditions: normalized.conditions }))
+    } catch (error) {
+        if (res.sent) return res
         if (error instanceof PreviewRegexTimeout) return res.status(400).send({ error: error.message })
         const code = (error as { code?: string })?.code
         const message = (error as Error)?.message?.toLowerCase() || ''
@@ -272,7 +274,8 @@ export async function postRulePreview(req: FastifyRequest, res: FastifyReply) {
             || code === 'DB_QUEUE_FULL' || message.includes('database is temporarily busy'))
             return res.header('Retry-After', '2').status(503).send({ error: 'Preview is temporarily busy. Try again shortly.' })
         if (error instanceof ReadAdmissionError) return res.header('Retry-After', '2').status(503).send({ error: error.message })
-        throw error
+        req.log.error({ error }, 'Rule preview failed')
+        return res.header('Retry-After', '2').status(503).send({ error: 'Preview is temporarily unavailable. Try again shortly.' })
     }
 }
 
