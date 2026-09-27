@@ -143,7 +143,15 @@ if (!browserWorkerOnly) {
             },
         }).catch(error => fastify.log.error(error, 'Failed to persist production monitor signal'))
     })
-    fastify.addHook('onError', async (req, _res, error) => {
+    fastify.addHook('onError', async (req, res, error) => {
+        if (!res.sent && (error as { code?: string }).code === 'DB_QUEUE_FULL') {
+            const preview = req.url.split('?')[0] === '/api/rules/preview'
+            const message = preview
+                ? 'Preview is temporarily busy. Try again shortly.'
+                : 'Database is temporarily busy. Try again shortly.'
+            res.header('retry-after', '1').status(503).send({ error: message })
+            return
+        }
         if (recoveryReadOnly() || process.env.RECOVERY_ESSENTIAL_ONLY === '1') return
         await recordLog({
             level: 'error',

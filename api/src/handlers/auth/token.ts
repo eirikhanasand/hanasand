@@ -41,6 +41,7 @@ export default async function tokenHandler(req: FastifyRequest, res: FastifyRepl
         })
     } catch (error) {
         console.error(`Database error: ${JSON.stringify(error)}`)
+        if ((error as { code?: string }).code === 'DB_QUEUE_FULL') return res.header('retry-after', '1').status(503).send({ error: 'Authentication is temporarily busy. Try again shortly.' })
         return res.status(500).send({ error: 'Internal Server Error' })
     }
 }

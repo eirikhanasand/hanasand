@@ -304,6 +304,19 @@ export default async function tokenWrapper(req: FastifyRequest, res: FastifyRepl
         return { valid: true, id: effectiveId, authenticatedId: session.user.id, impersonating }
     } catch (error) {
         res.log.error(error)
+        const code = (error as { code?: string }).code
+        if (code === 'DB_QUEUE_FULL') {
+            const preview = req.url.split('?')[0] === '/api/rules/preview'
+            const message = preview
+                ? 'Preview is temporarily busy. Try again shortly.'
+                : 'Database is temporarily busy. Try again shortly.'
+            res.header('retry-after', '1').status(503).send({
+                valid: false,
+                id,
+                error: message,
+            })
+            return { valid: false, id, error: message }
+        }
         res.status(500).send({
             valid: false,
             id,
