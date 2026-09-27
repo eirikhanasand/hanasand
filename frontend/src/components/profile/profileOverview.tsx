@@ -1,3 +1,6 @@
+'use client'
+
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { BookOpen, Boxes, Building2, Server, Share2 } from 'lucide-react'
 import type { ProfileStats } from '@/utils/profile/getProfileStats'
@@ -8,19 +11,34 @@ const dayLabel = new Intl.DateTimeFormat('en', { weekday: 'long', month: 'short'
 const monthLabel = new Intl.DateTimeFormat('en', { month: 'short', timeZone: 'UTC' })
 
 function LoginActivity({ loginDays }: { loginDays: ProfileStats['loginDays'] }) {
+    const gridRef = useRef<HTMLDivElement>(null)
+    const [weekCount, setWeekCount] = useState(53)
     const today = new Date()
     const end = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()))
-    const start = new Date(end.getTime() - 364 * DAY_MS)
-    const gridStart = new Date(start.getTime() - start.getUTCDay() * DAY_MS)
-    const weekCount = Math.ceil((end.getTime() - gridStart.getTime() + DAY_MS) / (7 * DAY_MS))
-    const weeks = Array.from({ length: weekCount }, (_, week) =>
-        Array.from({ length: 7 }, (_, weekday) => new Date(gridStart.getTime() + (week * 7 + weekday) * DAY_MS))
-    )
+
+    useEffect(() => {
+        const grid = gridRef.current
+        if (!grid) return
+        const observer = new ResizeObserver(([entry]) => {
+            const availableWidth = entry.contentRect.width - 32
+            setWeekCount(Math.max(1, Math.floor((availableWidth + 3) / 13)))
+        })
+        observer.observe(grid)
+        return () => observer.disconnect()
+    }, [])
+
+    const lastWeekStart = new Date(end.getTime() - end.getUTCDay() * DAY_MS)
+    const gridStart = new Date(lastWeekStart.getTime() - (weekCount - 1) * 7 * DAY_MS)
+    const dayCount = Math.floor((end.getTime() - gridStart.getTime()) / DAY_MS) + 1
+    const dates = Array.from({ length: dayCount }, (_, index) => new Date(gridStart.getTime() + index * DAY_MS))
+    const weeks = Array.from({ length: weekCount }, (_, week) => dates.slice(week * 7, week * 7 + 7))
     const activity = new Map(loginDays.map(item => [item.day, item.logins]))
-    const activeDays = loginDays.length
-    const totalLogins = loginDays.reduce((total, item) => total + item.logins, 0)
+    const yearAgo = new Date(end.getTime() - 364 * DAY_MS)
+    const recentDays = loginDays.filter(item => item.day >= dateKey(yearAgo) && item.day <= dateKey(end))
+    const activeDays = recentDays.length
+    const totalLogins = recentDays.reduce((total, item) => total + item.logins, 0)
     const levels = ['bg-ui-raised', 'bg-ui-primary/25', 'bg-ui-primary/45', 'bg-ui-primary/70', 'bg-ui-primary']
-    const gridTemplateColumns = 'repeat(' + weekCount + ', 10px)'
+    const gridTemplateColumns = `repeat(${weekCount}, 10px)`
     const monthLabels = weeks.map(week => {
         const firstOfMonth = week.find(date => date.getUTCDate() === 1)
         return firstOfMonth ? monthLabel.format(firstOfMonth) : ''
@@ -34,11 +52,11 @@ function LoginActivity({ loginDays }: { loginDays: ProfileStats['loginDays'] }) 
                     <p className='mt-1 text-sm text-ui-muted'>{activeDays} active days  |  {totalLogins} sign-ins in the past year</p>
                 </div>
             </div>
-            <div className='mt-4 overflow-x-auto pb-1'>
+            <div className='mt-4 pb-1' ref={gridRef}>
                 <div
                     role='group'
-                    aria-label={`Login activity over the past year: ${activeDays} days with sign-ins.`}
-                    className='min-w-[720px]'
+                    aria-label={`Login activity from ${dayLabel.format(gridStart)} through ${dayLabel.format(end)}: ${dates.filter(date => activity.has(dateKey(date))).length} days with sign-ins.`}
+                    className='w-full'
                 >
                     <div className='mb-2 grid h-4 gap-[3px] pl-8 text-[10px] text-ui-muted' style={{ gridTemplateColumns }}>
                         {monthLabels.map((month, index) => <span key={index}>{month}</span>)}
@@ -52,12 +70,10 @@ function LoginActivity({ loginDays }: { loginDays: ProfileStats['loginDays'] }) 
                                 const key = dateKey(date)
                                 const count = activity.get(key) || 0
                                 const level = count === 0 ? 0 : count === 1 ? 1 : count <= 3 ? 2 : count <= 6 ? 3 : 4
-                                const future = date > end
                                 const label = count
                                     ? `${count} sign-in${count === 1 ? '' : 's'} on ${dayLabel.format(date)}`
                                     : `No sign-ins on ${dayLabel.format(date)}`
                                 const cellClass = 'h-2.5 w-2.5 rounded-xs ' + levels[level]
-                                if (future) return <span key={key} aria-hidden='true' className={cellClass + ' opacity-0'} />
                                 return (
                                     <button
                                         key={key}

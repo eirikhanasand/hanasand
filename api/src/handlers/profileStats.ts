@@ -20,7 +20,7 @@ export async function getProfileStats(req: FastifyRequest<{ Params: { id: string
             run(`
                 SELECT TO_CHAR(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day, COUNT(*)::int AS logins
                 FROM login_events
-                WHERE user_id = $1 AND status = 'success' AND created_at >= NOW() - INTERVAL '365 days'
+                WHERE user_id = $1 AND status = 'success'
                 GROUP BY day
                 ORDER BY day
             `, [auth.id]),
