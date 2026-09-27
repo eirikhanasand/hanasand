@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { Check, CircleAlert } from 'lucide-react'
+import { CircleAlert } from 'lucide-react'
 import { requestJson } from './detection-rules'
 import type { Condition } from './condition-builder'
 
@@ -63,7 +63,7 @@ export default function RulePreview({ organizationId, conditions, action, range,
         return () => { clearTimeout(timer); abort.abort() }
         // The parent remounts this snapshot when the organization, rule or range changes.
     }, [attempt])
-    useEffect(() => { onReady(!error && !limited && (complete && count <= 10_000 || count > 10_000 && acknowledged)) }, [complete, count, acknowledged, error, limited, onReady])
+    useEffect(() => { onReady(!error && complete && (!limited || acknowledged)) }, [complete, acknowledged, error, limited, onReady])
     async function prefetch() {
         if (busy.current || !more || !rows.current.length || controller.current.signal.aborted) return
         const abort = controller.current
@@ -106,16 +106,15 @@ export default function RulePreview({ organizationId, conditions, action, range,
         {limited && <p role='status' className='text-sm text-ui-muted'>This preview is intentionally capped to protect the database. Narrow the time range or add a condition to verify the complete total before creating the rule.</p>}
         {complete && !events.length && <p className='text-sm text-ui-muted'>No matching events in this range.</p>}
         {error && <p role='alert' className='text-sm text-ui-text'>{error}<button type='button' onClick={() => complete ? void prefetch() : setAttempt(attempt + 1)} className='ml-2 underline'>Retry</button></p>}
-        {count > 10_000 && <div className='mt-2 overflow-hidden rounded-xl border border-ui-warning/30 bg-ui-raised'>
+        {limited && <div className='mt-2 overflow-hidden rounded-xl border border-ui-warning/30 bg-ui-raised'>
             <div className='flex items-start gap-3 p-4 sm:p-5'>
                 <span className='flex size-9 shrink-0 items-center justify-center rounded-full bg-ui-warning/10 text-ui-warning'><CircleAlert size={20} aria-hidden='true' /></span>
-                <div className='grid gap-1'><p className='text-sm font-semibold'>This rule matches {complete ? '' : 'at least '}{count.toLocaleString()} events</p><p className='text-sm text-ui-muted'>Very many events match this rule. Is this intended?</p></div>
+                <p className='text-sm font-semibold'>This rule will match more than 2000 events. Are you sure?</p>
             </div>
-            <label className={`relative flex cursor-pointer items-center gap-3 border-t border-ui-border px-4 py-4 transition-colors sm:px-5 ${acknowledged ? 'bg-ui-primary/10' : 'hover:bg-ui-primary/5'}`}>
-                <input type='checkbox' className='peer absolute z-10 size-5 cursor-pointer opacity-0' checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)} />
-                <span aria-hidden='true' className={`flex size-5 shrink-0 items-center justify-center rounded-md border transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-ui-primary peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-ui-raised ${acknowledged ? 'border-ui-primary bg-ui-primary text-ui-on-primary' : 'border-ui-muted bg-ui-canvas'}`}><Check size={14} strokeWidth={3} className={acknowledged ? 'opacity-100' : 'opacity-0'} /></span>
-                <span className='text-sm font-medium'>Yes, I intend to match this many events.</span>
-            </label>
+            <div className='flex gap-2 border-t border-ui-border px-4 py-4 sm:px-5'>
+                <button type='button' className='rounded-md bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-on-primary' aria-pressed={acknowledged} onClick={() => setAcknowledged(true)}>Yes</button>
+                <button type='button' className='rounded-md border border-ui-border px-3 py-2 text-sm font-semibold text-ui-text' aria-pressed={!acknowledged} onClick={() => setAcknowledged(false)}>No</button>
+            </div>
         </div>}
     </section>
 }
