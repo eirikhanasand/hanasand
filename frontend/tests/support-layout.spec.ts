@@ -48,7 +48,7 @@ test('an empty staff queue has no composer', async ({ page, baseURL }) => {
 })
 
 
-test('public support places end conversation beside new chat', async ({ page }) => {
+test('public support places close conversation beside new chat', async ({ page }) => {
     const messages: { id: string; sender_kind: string; sender_name: string; body: string }[] = []
     await page.route('**/api/support/chat*', async route => {
         if (route.request().method() === 'POST') {
@@ -63,12 +63,39 @@ test('public support places end conversation beside new chat', async ({ page }) 
     await page.getByLabel('Message', { exact: true }).fill('Help with my account')
     await page.getByRole('button', { name: 'Send message' }).click()
     const newChat = page.getByRole('button', { name: 'New chat', exact: true })
-    const endChat = page.getByRole('button', { name: 'End conversation', exact: true })
-    await expect(endChat).toBeVisible()
+    const closeChat = page.getByRole('button', { name: 'Close conversation', exact: true })
+    await expect(closeChat).toBeVisible()
     const newChatBox = (await newChat.boundingBox())!
-    const endChatBox = (await endChat.boundingBox())!
-    expect(Math.abs(newChatBox.y - endChatBox.y)).toBeLessThan(2)
-    expect(newChatBox.x + newChatBox.width).toBeLessThanOrEqual(endChatBox.x)
+    const closeChatBox = (await closeChat.boundingBox())!
+    expect(Math.abs(newChatBox.y - closeChatBox.y)).toBeLessThan(2)
+    expect(newChatBox.x + newChatBox.width).toBeLessThanOrEqual(closeChatBox.x)
+})
+
+test('an unanswered conversation asks whether the customer found what they needed', async ({ page }) => {
+    const feedback: Record<string, unknown>[] = []
+    let closed = false
+    await page.route('**/api/support/chat*', async route => {
+        if (route.request().method() === 'POST') {
+            const body = route.request().postDataJSON()
+            if (body.action === 'resolve') { closed = true; return route.fulfill({ json: { ...supportSnapshot([]), status: 'closed', resolution_version: 1, has_response: false } }) }
+            if (body.action === 'close-feedback') { feedback.push(body); return route.fulfill({ json: { ok: true } }) }
+        }
+        await route.fulfill({ json: { ...supportSnapshot([]), status: closed ? 'closed' : 'open', resolution_version: closed ? 1 : 0, has_response: false, close_feedback_found: feedback.find(item => item.action === 'close-feedback')?.foundWhatLookingFor ?? null } })
+    })
+    await mockSupportLive(page)
+    await page.goto('/support')
+    await page.getByRole('button', { name: 'Close conversation' }).click()
+    await page.getByRole('button', { name: 'No', exact: true }).click()
+    await expect(page.getByLabel('Reason', { exact: true })).toBeVisible()
+    await page.getByLabel('Reason', { exact: true }).fill('I needed billing help.')
+    await page.getByRole('button', { name: 'Submit', exact: true }).click()
+    await expect(page.getByText('Thank you for letting us know.')).toBeVisible()
+    expect(feedback).toHaveLength(2)
+    expect(feedback[0]).toMatchObject({ action: 'close-feedback', foundWhatLookingFor: false })
+    expect(feedback[1]).toMatchObject({ action: 'close-feedback', foundWhatLookingFor: false, reason: 'I needed billing help.' })
+    await page.reload()
+    await expect(page.getByText('Thank you for letting us know.')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'No', exact: true })).toHaveCount(0)
 })
 
 

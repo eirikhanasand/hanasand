@@ -4,7 +4,7 @@ import { Star } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { flushSync } from 'react-dom'
 
-export type Feedback = { feedback_rating?: number | null; feedback_comment?: string | null; resolution_version?: number }
+export type Feedback = { feedback_rating?: number | null; feedback_comment?: string | null; resolution_version?: number; has_response?: boolean; close_feedback_found?: boolean | null }
 
 export function SupportStars({ rating }: { rating: number }) {
     return <span aria-label={`${rating} out of 5 stars`} className='inline-flex items-center gap-0.5 text-amber-500'>{[1, 2, 3, 4, 5].map(star => <Star key={star} aria-hidden='true' className={`h-3.5 w-3.5 ${star <= rating ? 'fill-current' : 'opacity-30'}`} />)}</span>
@@ -33,12 +33,17 @@ export default function SupportFeedback({ feedback, submit }: { feedback: Feedba
     </form>
 }
 
-export function GuestSupportFeedback({ feedback, submit, onNewChat }: { feedback: Feedback; submit: (rating: number, comment: string) => Promise<void>; onNewChat: () => void }) {
+export function GuestSupportFeedback({ feedback, submit, submitCloseFeedback, onNewChat }: { feedback: Feedback; submit: (rating: number, comment: string) => Promise<void>; submitCloseFeedback: (foundWhatLookingFor: boolean, reason?: string) => Promise<void>; onNewChat: () => void }) {
     const [rating, setRating] = useState(0)
     const [comment, setComment] = useState('')
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState('')
     const [sent, setSent] = useState(false)
+    const [closeStep, setCloseStep] = useState<'question' | 'reason' | 'done'>(feedback.has_response === false && feedback.close_feedback_found == null ? 'question' : 'done')
+    const [questionLeaving, setQuestionLeaving] = useState(false)
+    const [closeReason, setCloseReason] = useState('')
+    const [closeSaving, setCloseSaving] = useState(false)
+    const [closeError, setCloseError] = useState('')
     const displayedRating = feedback.feedback_rating || (sent ? rating : 0)
     async function save(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
@@ -51,6 +56,41 @@ export function GuestSupportFeedback({ feedback, submit, onNewChat }: { feedback
             setError(cause instanceof Error ? cause.message : 'Could not save your feedback. Please try again.')
         } finally { setSaving(false) }
     }
+    async function answerCloseQuestion(found: boolean) {
+        if (closeSaving) return
+        setCloseSaving(true); setCloseError('')
+        try {
+            await submitCloseFeedback(found)
+            if (found) setCloseStep('done')
+            else {
+                setQuestionLeaving(true)
+                window.setTimeout(() => { setCloseStep('reason'); setQuestionLeaving(false) }, 220)
+            }
+        } catch (cause) {
+            setCloseError(cause instanceof Error ? cause.message : 'Could not save your answer. Please try again.')
+        } finally { setCloseSaving(false) }
+    }
+    async function saveCloseReason(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault()
+        if (!closeReason.trim()) { setCloseStep('done'); return }
+        setCloseSaving(true); setCloseError('')
+        try { await submitCloseFeedback(false, closeReason.trim()); setCloseStep('done') }
+        catch (cause) { setCloseError(cause instanceof Error ? cause.message : 'Could not save your reason. Please try again.') }
+        finally { setCloseSaving(false) }
+    }
+    if (feedback.has_response === false) return <div className='animate-[support-panel-enter_280ms_cubic-bezier(0.22,1,0.36,1)_both]'>
+        {closeStep === 'question' ? <div className={`grid justify-items-center gap-4 text-center transition-all duration-200 ${questionLeaving ? 'translate-y-1 opacity-0' : 'translate-y-0 opacity-100'}`}>
+            <h2 className='text-lg font-semibold tracking-tight text-ui-text'>Did you find what you were looking for?</h2>
+            <div className='flex gap-3'><button type='button' disabled={closeSaving} onClick={() => void answerCloseQuestion(true)} className='rounded-lg border border-ui-border bg-ui-raised px-5 py-2 text-sm font-medium text-ui-text transition hover:bg-ui-panel disabled:opacity-50'>Yes</button><button type='button' disabled={closeSaving} onClick={() => void answerCloseQuestion(false)} className='rounded-lg border border-ui-border bg-ui-raised px-5 py-2 text-sm font-medium text-ui-text transition hover:bg-ui-panel disabled:opacity-50'>No</button></div>
+            {closeSaving ? <p role='status' className='text-xs text-ui-muted'>Saving…</p> : null}
+            {closeError ? <p role='alert' className='text-xs text-ui-danger'>{closeError}</p> : null}
+        </div> : closeStep === 'reason' ? <form className='grid justify-items-center gap-3 text-center animate-[support-panel-enter_220ms_ease-out_both]' onSubmit={saveCloseReason}>
+            <h2 className='text-lg font-semibold tracking-tight text-ui-text'>What were you looking for?</h2>
+            <label className='grid w-full gap-1.5 text-left text-xs text-ui-muted'>Your reason (optional)<textarea aria-label='Reason' rows={4} maxLength={2000} disabled={closeSaving} value={closeReason} onChange={event => setCloseReason(event.target.value)} className='min-w-0 resize-y rounded-xl border border-ui-border bg-ui-canvas px-3 py-2 text-sm text-ui-text outline-none focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/10' /></label>
+            {closeError ? <p role='alert' className='text-xs text-ui-danger'>{closeError}</p> : null}
+            <div className='flex w-full items-center justify-between gap-3'><button type='button' disabled={closeSaving} onClick={() => setCloseStep('done')} className='rounded-lg px-3 py-2 text-sm text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Skip</button><button type='submit' disabled={closeSaving} className='rounded-lg border border-ui-border bg-ui-raised px-4 py-2 text-sm font-medium text-ui-text transition hover:bg-ui-panel disabled:opacity-50'>{closeSaving ? 'Saving…' : 'Submit'}</button></div>
+        </form> : <div className='grid justify-items-center gap-3 text-center'><p className='text-base font-semibold text-ui-text'>{feedback.close_feedback_found === true ? 'Thanks for letting us know you found what you needed.' : 'Thank you for letting us know.'}</p><button type='button' onClick={onNewChat} className='rounded-lg border border-ui-border bg-ui-raised px-4 py-2 text-sm font-medium text-ui-text transition hover:bg-ui-panel'>Start a new chat</button></div>}
+    </div>
     return <div className='animate-[support-panel-enter_280ms_cubic-bezier(0.22,1,0.36,1)_both]'>
         {displayedRating ? <div className='grid justify-items-center gap-3 text-center'>
             <p className='text-base font-semibold text-ui-text'>Thank you for your feedback.</p>

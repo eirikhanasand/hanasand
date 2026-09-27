@@ -23,13 +23,16 @@ export async function readSupportConversation(hash: string, conversationId?: str
         FROM support_tickets t WHERE COALESCE(t.visitor_session_hash, t.visitor_token_hash)=$1 ORDER BY t.updated_at DESC, t.id`, [hash])).rows
     const ticket = conversationId ? tickets.find(ticket => ticket.id === conversationId) : tickets[0]
     if (!ticket) return { id: null, channel: 'ai', status: 'open', pending: false, messages: [], tickets }
-    const messages = await queryOnce(`SELECT m.id, m.body, m.sender_kind, m.request_id, m.created_at,
+    const messages = await queryOnce(`SELECT m.id, m.body, m.sender_kind, m.event, m.request_id, m.created_at,
         CASE WHEN m.sender_kind = 'assistant' THEN 'Hanasand AI'
              WHEN m.sender_kind = 'support' THEN COALESCE(u.name, 'Support team')
              WHEN m.sender_kind = 'system' THEN 'Support' ELSE 'You' END AS sender_name
         FROM support_messages m LEFT JOIN users u ON u.id = m.sender_id
         WHERE m.ticket_id = $1 ORDER BY m.created_at, m.id`, [ticket.id])
-    return { ...ticket, messages: messages.rows, tickets }
+    const closeAnswer = messages.rows.find(message => message.event === 'feedback' && message.body === 'Customer found what they were looking for.')
+        ? true
+        : messages.rows.find(message => message.event === 'feedback' && message.body === 'Customer did not find what they were looking for.') ? false : null
+    return { ...ticket, has_response: messages.rows.some(message => ['assistant', 'support'].includes(message.sender_kind)), close_feedback_found: closeAnswer, messages: messages.rows, tickets }
 }
 
 async function transfer(query: typeof queryOnce, ticketId: string) {

@@ -33,8 +33,34 @@ export async function closeVisitorSupportConversation(id: string, visitor: strin
             WHERE id=$1 RETURNING id, status, resolution_version, feedback_rating, feedback_comment, updated_at`, [id])).rows[0]
         const message = (await query(`INSERT INTO support_messages(id,ticket_id,sender_kind,event,body)
             VALUES($1,$2,'system','resolved',$3) RETURNING id, sender_id, sender_kind, body, created_at`,
-        [randomUUID(), id, 'This conversation was ended. How satisfied were you with our support?'])).rows[0]
+        [randomUUID(), id, 'This conversation was closed.'])).rows[0]
         return { ticket: changed, message: { ...message, sender_name: 'Support' } }
+    })
+}
+
+export async function saveVisitorCloseFeedback(id: string, visitor: string, version: unknown, foundWhatLookingFor: unknown, reason?: unknown) {
+    if (!Number.isInteger(version) || Number(version) < 0 || typeof foundWhatLookingFor !== 'boolean'
+        || (reason !== undefined && (typeof reason !== 'string' || reason.length > 2000))) {
+        throw new SupportStateError('Please choose yes or no and keep your reason under 2,000 characters.', 400)
+    }
+    const text = typeof reason === 'string' ? reason.trim() : ''
+    return withTransaction(async query => {
+        const ticket = (await query(`SELECT * FROM support_tickets WHERE id=$1 AND
+            COALESCE(visitor_session_hash,visitor_token_hash)=$2 FOR UPDATE`, [id, visitor])).rows[0]
+        if (!ticket) throw new SupportStateError('Support chat not found.', 404)
+        if (ticket.status !== 'closed' || ticket.resolution_version !== version) throw new SupportStateError('This chat has changed. Refresh it before leaving feedback.')
+        const existing = (await query(`SELECT body FROM support_messages WHERE ticket_id=$1 AND sender_kind='system' AND event='feedback'
+            AND body IN ('Customer found what they were looking for.','Customer did not find what they were looking for.')`, [id])).rows[0]
+        const answer = foundWhatLookingFor ? 'Customer found what they were looking for.' : 'Customer did not find what they were looking for.'
+        if (existing && existing.body !== answer) throw new SupportStateError('Feedback has already been submitted for this resolution.')
+        if (!existing) await query(`INSERT INTO support_messages(id,ticket_id,sender_kind,event,body)
+            VALUES($1,$2,'system','feedback',$3)`, [randomUUID(), id, answer])
+        if (text) {
+            const reasonMessage = `Customer reason: ${text}`
+            const alreadySaved = (await query('SELECT 1 FROM support_messages WHERE ticket_id=$1 AND sender_kind=\'system\' AND event=\'feedback\' AND body=$2', [id, reasonMessage])).rowCount
+            if (!foundWhatLookingFor && !alreadySaved) await query(`INSERT INTO support_messages(id,ticket_id,sender_kind,event,body)
+                VALUES($1,$2,'system','feedback',$3)`, [randomUUID(), id, reasonMessage])
+        }
     })
 }
 

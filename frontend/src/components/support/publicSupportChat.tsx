@@ -149,7 +149,7 @@ export default function PublicSupportChat({ active = true, onUnreadChange, onRes
         if (!message || conversation.status === 'closed') return
         void submit(retry?.message === message ? retry : { requestId: crypto.randomUUID(), message })
     }
-    if (conversation.status === 'closed') return <section aria-label='Support feedback' className='grid justify-items-center gap-5 py-2'><GuestSupportFeedback key={`${selectedId}:${conversation.resolution_version}`} feedback={conversation} submit={sendFeedback} onNewChat={startNewChat} /></section>
+    if (conversation.status === 'closed') return <section aria-label='Support feedback' className='grid justify-items-center gap-5 py-2'><GuestSupportFeedback key={`${selectedId}:${conversation.resolution_version}`} feedback={conversation} submit={sendFeedback} submitCloseFeedback={sendCloseFeedback} onNewChat={startNewChat} /></section>
     function startNewChat() {
         onResolvedChange?.(false)
         void selectChat(crypto.randomUUID())
@@ -160,11 +160,11 @@ export default function PublicSupportChat({ active = true, onUnreadChange, onRes
         try {
             const response = await fetch('/api/support/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'resolve', conversationId: conversation.id }) })
             const payload = await response.json()
-            if (!response.ok) throw new Error(payload.error || 'Could not end this conversation.')
+            if (!response.ok) throw new Error(payload.error || 'Could not close this conversation.')
             revision.current += 1
             await refresh()
         } catch (cause) {
-            setError(cause instanceof Error ? cause.message : 'Could not end this conversation.')
+            setError(cause instanceof Error ? cause.message : 'Could not close this conversation.')
         } finally { setClosing(false) }
     }
     async function sendFeedback(rating: number, comment: string) {
@@ -178,6 +178,12 @@ export default function PublicSupportChat({ active = true, onUnreadChange, onRes
             setConversation(current => current.id === id && current.resolution_version === version && current.status === 'closed'
                 ? { ...current, feedback_rating: rating, feedback_comment: comment } : current)
         }
+    }
+    async function sendCloseFeedback(foundWhatLookingFor: boolean, reason?: string) {
+        const id = selectedId, version = conversation.resolution_version
+        const response = await fetch('/api/support/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'close-feedback', conversationId: id, resolutionVersion: version, foundWhatLookingFor, reason }) })
+        const payload = await response.json()
+        if (!response.ok) throw new Error(payload.error || 'Could not save your answer.')
     }
     const human = conversation.channel === 'human'
     const agentName = conversation.agent_name || conversation.messages.filter(message => message.sender_kind === 'support').at(-1)?.sender_name
@@ -194,7 +200,7 @@ export default function PublicSupportChat({ active = true, onUnreadChange, onRes
                 <h1 className='text-sm font-semibold text-ui-text'>Support</h1>
                 <div className='flex shrink-0 items-center gap-2'>
                     <button type='button' onClick={startNewChat} className='rounded-lg border border-ui-border bg-ui-panel px-3.5 py-2 text-xs font-semibold text-ui-text transition-colors hover:bg-ui-canvas'>New chat</button>
-                    {conversation.id ? <button type='button' disabled={closing || sending || transferring} onClick={() => void endConversation()} className='rounded-lg border border-ui-danger/30 bg-ui-danger/5 px-3.5 py-2 text-xs font-semibold text-ui-danger transition-colors hover:border-ui-danger/50 hover:bg-ui-danger/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-danger disabled:opacity-50'>{closing ? <span className='inline-flex items-center gap-1.5'><LoaderCircle className='h-3.5 w-3.5 animate-spin' aria-hidden='true' />Ending…</span> : 'End conversation'}</button> : null}
+                    {conversation.id ? <button type='button' disabled={closing || sending || transferring} onClick={() => void endConversation()} className='rounded-lg border border-ui-border bg-ui-panel px-3.5 py-2 text-xs font-semibold text-ui-text transition-colors hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary disabled:opacity-50'>{closing ? <span className='inline-flex items-center gap-1.5'><LoaderCircle className='h-3.5 w-3.5 animate-spin' aria-hidden='true' />Closing…</span> : 'Close conversation'}</button> : null}
                 </div>
             </div> : <div />}
             <div ref={log} role='log' aria-label='Messages' className='min-h-0 overflow-y-auto overscroll-contain px-5 py-5'>
