@@ -32,7 +32,7 @@ try {
         created.length = 0
         await import(`../src/utils/db.ts?pool-role=${role.name}`)
         assert.equal(pool.options!.min, role.min, role.name)
-        const budget = Number(config.DB_MAX_CONN) || 20
+        const budget = Number(config.DB_MAX_CONN) || 1000
         assert.equal(created.reduce((total, options) => total + options.max, 0), budget, 'Total connection limits must not grow')
         assert.equal(created.length, role.name === 'worker' && budget >= 12 ? 2 : 1, 'Only the scheduled worker reserves Event capacity')
         const configuredIdleTimeout = Number(config.DB_IDLE_TIMEOUT_MS) || role.idle

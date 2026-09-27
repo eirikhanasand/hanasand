@@ -4,13 +4,14 @@ set -eu
 destination=${1:-/var/lib/hanasand/metrics/host.json}
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 install -d -m 755 "$(dirname "$destination")" /var/lib/hanasand/metrics /usr/local/lib/hanasand
-install -m 755 "$script_dir/host-metrics.py" /usr/local/lib/hanasand/host-metrics.py
+install -m 644 "$script_dir/host-metrics.ts" /usr/local/lib/hanasand/host-metrics.ts
+install -m 755 "$script_dir/run-typescript-node.sh" /usr/local/bin/hanasand-run-ts
 cat > /etc/systemd/system/hanasand-host-metrics.service <<UNIT
 [Unit]
 Description=Collect Hanasand host telemetry
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/python3 /usr/local/lib/hanasand/host-metrics.py ${destination}
+ExecStart=/usr/local/bin/hanasand-run-ts /usr/local/lib/hanasand/host-metrics.ts ${destination}
 TimeoutStartSec=20
 NoNewPrivileges=true
 ProtectSystem=strict
@@ -33,13 +34,13 @@ systemctl enable --now hanasand-host-metrics.timer
 systemctl start hanasand-host-metrics.service
 
 # Directory scans are independent of the fast health telemetry timer.
-install -m 755 "$script_dir/disk-directories.py" /usr/local/lib/hanasand/disk-directories.py
+install -m 644 "$script_dir/disk-directories.ts" /usr/local/lib/hanasand/disk-directories.ts
 cat > /etc/systemd/system/hanasand-disk-directories.service <<UNIT
 [Unit]
 Description=Collect largest directories on high-usage filesystems
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/python3 /usr/local/lib/hanasand/disk-directories.py ${destination}
+ExecStart=/usr/local/bin/hanasand-run-ts /usr/local/lib/hanasand/disk-directories.ts ${destination}
 TimeoutStartSec=10min
 Nice=19
 IOSchedulingClass=idle

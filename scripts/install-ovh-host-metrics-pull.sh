@@ -2,13 +2,14 @@
 set -eu
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 install -d -m 755 /var/lib/hanasand/metrics /usr/local/lib/hanasand
-install -m 755 "$script_dir/pull-ovh-host-metrics.py" /usr/local/lib/hanasand/pull-ovh-host-metrics.py
+install -m 644 "$script_dir/pull-ovh-host-metrics.ts" /usr/local/lib/hanasand/pull-ovh-host-metrics.ts
+install -m 755 "$script_dir/run-typescript-node.sh" /usr/local/bin/hanasand-run-ts
 cat > /etc/systemd/system/hanasand-ovh-host-metrics.service <<'UNIT'
 [Unit]
 Description=Read OVH host telemetry through the existing private tunnel
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/python3 /usr/local/lib/hanasand/pull-ovh-host-metrics.py
+ExecStart=/usr/local/bin/hanasand-run-ts /usr/local/lib/hanasand/pull-ovh-host-metrics.ts
 TimeoutStartSec=10
 NoNewPrivileges=true
 ProtectSystem=strict

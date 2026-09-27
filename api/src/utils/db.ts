@@ -11,6 +11,8 @@ const {
     DB,
     DB_USER,
     DB_HOST,
+    DB_POOL_HOST,
+    DB_POOL_PORT,
     DB_PASSWORD,
     DB_PORT,
     DB_MAX_CONN,
@@ -27,7 +29,7 @@ export function withSchemaLockTimeout<T>(work: () => Promise<T>): Promise<T> {
 }
 
 const eventWork = new AsyncLocalStorage<boolean>()
-const maxConnections = Number(DB_MAX_CONN) || 20
+const maxConnections = Number(DB_MAX_CONN) || (DB_POOL_HOST ? 1000 : 20)
 // Bound the number of requests waiting inside node-postgres. Without this,
 // bursts can turn into an unbounded in-process queue while the database is slow.
 const maxWaitingConnections = Math.max(8, Math.min(64, maxConnections * 2))
@@ -41,10 +43,13 @@ const configuredIdleTimeout = Number(DB_IDLE_TIMEOUT_MS) || (
 )
 const poolOptions = {
     user: DB_USER || 'hanasand',
-    host: DB_HOST,
+    host: DB_POOL_HOST || DB_HOST,
     database: DB || 'hanasand',
     password: DB_PASSWORD,
-    port: Number(DB_PORT) || 5432,
+    port: Number(DB_POOL_PORT) || Number(DB_PORT) || 5432,
+    application_name: process.env.AUTH_SERVICE_ONLY === '1'
+        ? 'hanasand-auth'
+        : httpOnlyApi ? 'hanasand-api-http' : 'hanasand-api',
     max: maxConnections - eventConnections,
     // Do not pin API sessions behind HAProxy's reloadable DB listener. The
     // short idle window leaves room for sessions released just after a reload.
@@ -60,12 +65,18 @@ const poolOptions = {
 }
 const pool = new Pool(poolOptions)
 const eventPool = eventConnections ? new Pool({ ...poolOptions, max: eventConnections }) : pool
+// Schema startup uses session-scoped SET/RESET and CREATE INDEX CONCURRENTLY.
+// Keep that small, infrequent path on PostgreSQL directly when traffic uses PgBouncer.
+const directPool = DB_POOL_HOST ? new Pool({ ...poolOptions, host: DB_HOST, port: Number(DB_PORT) || 5432, max: 8 }) : pool
 
 export function withEventDatabase<T>(work: () => Promise<T>): Promise<T> {
     return eventWork.run(true, work)
 }
 
-function activePool() { return eventWork.getStore() ? eventPool : pool }
+function activePool() {
+    if (schemaWork.getStore()) return directPool
+    return eventWork.getStore() ? eventPool : pool
+}
 
 function connectDatabase(connectionPool: pg.Pool) {
     if (connectionPool.waitingCount >= maxWaitingConnections) {
@@ -75,13 +86,13 @@ function connectDatabase(connectionPool: pg.Pool) {
 }
 
 // Checked-out clients can emit transport errors between queries, outside the pool's idle handler.
-for (const connectionPool of new Set([pool, eventPool])) {
+for (const connectionPool of new Set([pool, eventPool, directPool])) {
     connectionPool.on('connect', client => client.on('error', error => console.error('Database connection failed:', error.message)))
     connectionPool.on('error', error => console.error('Idle database connection failed:', error.message))
 }
 
 export async function closeDatabase() {
-    await Promise.all([...new Set([pool, eventPool])].map(connectionPool => connectionPool.end()))
+    await Promise.all([...new Set([pool, eventPool, directPool])].map(connectionPool => connectionPool.end()))
 }
 
 export default async function run(query: string, params?: SQLParamType, name?: string) {
@@ -154,7 +165,9 @@ export async function queryOnce(query: string, params?: SQLParamType, name?: str
 }
 
 export async function withDatabaseAdvisoryLock<T>(key: string, work: () => Promise<T>): Promise<T> {
-    const client = await connectDatabase(activePool())
+    // A session advisory lock must keep using the same PostgreSQL backend until
+    // it is unlocked. Transaction pooling can assign a different backend per query.
+    const client = await connectDatabase(DB_POOL_HOST ? directPool : activePool())
     try {
         await client.query('SELECT pg_advisory_lock(hashtextextended($1, 0))', [key])
         return await work()

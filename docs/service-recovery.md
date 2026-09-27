@@ -10,7 +10,7 @@ Both public sites route conversations to the private OVH support service (`src/s
 
 Account authentication remains authoritative while reachable. Support keeps hashed, already-verified sessions for at most their existing expiry or 24 hours, whichever is sooner. Connection failure permits those sessions for support only, without extending expiry; a three-second retry interval avoids delaying every message. Invalid/revoked credentials remove the cached entry, and SQL permission or application errors cannot enable fallback. The migration seeds currently valid support-agent sessions. New sign-ins still require a writable authentication database. API-key or impersonation validation requires the main authentication database or its readable replica. AI inference uses the primary worker's private `/api/support/model` endpoint; if it is unavailable, the saved conversation enters the human queue.
 
-`scripts/recovery/support-store.py init <cached-postgres-image>` creates only the independent database and protected configuration. `start <commit>` deploys the private support API with rollback on failed readiness; `backup` creates a PostgreSQL custom-format snapshot and retains 48 hourly snapshots. The OVH system timer runs backups hourly, and a primary timer fetches the latest snapshot over SSH when available. Restore into a separate volume/database and verify it before replacing the canonical store. `support-migrate.py export` on Inspur streams conversations, referenced names, one-use tickets and hashed verified support sessions into `support-migrate.py import` on OVH. Route all public support traffic to the paused private service and drain the old HTTP instances before exporting; import refuses a nonempty destination. Run `support-store.py resume` only after counts and restored history match; `pause` stops support requests again without restarting the service. Secrets live in each site's protected `support.json`, never in the repository.
+`scripts/recovery/support-store.ts init <cached-postgres-image>` creates only the independent database and protected configuration. `start <commit>` deploys the private support API with rollback on failed readiness; `backup` creates a PostgreSQL custom-format snapshot and retains 48 hourly snapshots. The OVH system timer runs backups hourly, and a primary timer fetches the latest snapshot over SSH when available. Restore into a separate volume/database and verify it before replacing the canonical store. `support-migrate.ts export` on Inspur streams conversations, referenced names, one-use tickets and hashed verified support sessions into `support-migrate.ts import` on OVH. Route all public support traffic to the paused private service and drain the old HTTP instances before exporting; import refuses a nonempty destination. Run `support-store.ts resume` only after counts and restored history match; `pause` stops support requests again without restarting the service. Secrets live in each site's protected `support.json`, never in the repository.
 
 ## Database safety
 
@@ -36,7 +36,7 @@ The restored OVH replica also uses `max_wal_size=32GB` and `checkpoint_timeout=1
 
 For replacement replicas, use `scripts/recovery/database-replicas.yml` with profile `inspur` or `ovhcloud` after restoring and verifying the physical backup and replication credentials. Set `POSTGRES_REPLICA_IMAGE` to the primary's pinned image and `INSPUR_STANDBY_VOLUME` or `OVH_STANDBY_VOLUME` to the restored volume. The profile reapplies the respective cache, memory, swap, CPU and private-listener settings. It refuses a missing or unprepared volume instead of initializing a writable database. Do not run it over an existing container or restart a recovering replica simply to adopt this file. Secrets, replication credentials and verified backups must be recovered separately; Git does not contain them.
 
-The primary Compose worker uses `LOG_CATCHUP_BATCH_LIMIT=1000`, `LOG_CATCHUP_HISTORY_LIMIT=1000` and `LOG_CATCHUP_INTERVAL_MS=50` to continue draining pending work without an unnecessary five-second delay. Pass these environment variables to `deploy-inspur-api-worker.py` to change the preserved worker settings during a release; invalid values fail before deployment, and rollback restores the previous values. Fresh server setup gets these defaults automatically from Compose. This controls scheduling, not a guaranteed processing rate.
+The primary Compose worker uses `LOG_CATCHUP_BATCH_LIMIT=1000`, `LOG_CATCHUP_HISTORY_LIMIT=1000` and `LOG_CATCHUP_INTERVAL_MS=50` to continue draining pending work without an unnecessary five-second delay. Pass these environment variables to `deploy-inspur-api-worker.ts` to change the preserved worker settings during a release; invalid values fail before deployment, and rollback restores the previous values. Fresh server setup gets these defaults automatically from Compose. This controls scheduling, not a guaranteed processing rate.
 
 `LOG_CATCHUP_HISTORY_LIMIT` independently accepts 1–10000 historical records per page; without it, history retains `LOG_CATCHUP_BATCH_LIMIT`. The temporary trial file also accepts numeric `historyLimit`, which expires with the other overrides. Fresh/recovery page limits remain unchanged, fresh commands are serviced between enlarged history pages, and a delayed command queue reduces both historical and recent pages to at most 100. A historical database statement is not preemptible: increasing the limit can still delay a newly arrived command.
 
@@ -54,7 +54,7 @@ For a short measured trial without restarting the worker, atomically write JSON 
 
 The primary Compose definition reserves a maximum 2 GiB `/dev/shm` for parallel PostgreSQL queries, within its existing 96 GiB memory allowance. Docker's default 64 MiB caused `53100` shared-memory allocation failures. The setting was verified after the coordinated restart above. Future changes require container recreation while preserving the data volume and replication configuration; shared-memory allocation does not change PostgreSQL durability.
 
-OVH replication uses its own compressed SSH connection, `hanasand-tunnel-replication`, on the existing loopback port 18503. No SSH permissions or database connection settings change. After a restore's backup transfer finishes, run `isolated-tunnels.py split-replication` on Inspur; supply `--image` with an available tunnel image if the original image was removed. It refuses to interrupt a running backup, checks the image before stopping anything, keeps the legacy tunnel for rollback, and restores it if startup fails. Other forwards keep their existing settings; application queries remain on their separate, uncompressed connection. Verify that the replica catches up before treating it as recovered.
+OVH replication uses its own compressed SSH connection, `hanasand-tunnel-replication`, on the existing loopback port 18503. No SSH permissions or database connection settings change. After a restore's backup transfer finishes, run `isolated-tunnels.ts split-replication` on Inspur; supply `--image` with an available tunnel image if the original image was removed. It refuses to interrupt a running backup, checks the image before stopping anything, keeps the legacy tunnel for rollback, and restores it if startup fails. Other forwards keep their existing settings; application queries remain on their separate, uncompressed connection. Verify that the replica catches up before treating it as recovered.
 
 The replication connection has a two-CPU limit for compression and encryption. Its former half-CPU limit caused frequent throttling during recovery. Other connections keep their existing CPU limits. Measure transfer speed and replica replay under load; spare CPU alone does not prove that replication can keep up.
 
@@ -71,7 +71,7 @@ DNS recovery is a last resort after public readiness fails despite service-level
 ## Operations
 
 - `scripts/recovery/deploy-pair.sh frontend|api|auth` runs from `/home/hanasand/hanasand`. It builds an immutable revision image, starts two unused slots, verifies readiness, switches routing and drains old workers. `--no-build` requires the exact image already present.
-- `scripts/recovery/maintenance.py ROOT SERVICE maint|ready INSTANCE...` updates both routing processes and persists maintenance state. Always restore maintenance after a drill.
+- `scripts/run-typescript-node.sh scripts/recovery/maintenance.ts ROOT SERVICE maint|ready INSTANCE...` updates both routing processes and persists maintenance state. Always restore maintenance after a drill.
 - `scripts/recovery/backup.sh` takes a compressed backup from the local standby, checks it by restoring it, then sends it through a restricted SSH key. OVH retains fourteen backups. The receiver writes `backups/status.json` in its own directory. A failed job or no completed off-site backup within 36 hours updates the backup HA case. A lost replication slot updates the replica's separate case.
 - Backup verification runs in one isolated container with a 96 GiB temporary RAM filesystem, a 128 GiB memory limit, no swap and a 4 GiB database cache. It requires at least 192 GiB of available memory on Inspur and fails clearly if the backup outgrows the temporary filesystem. This keeps restore writes off the live database's disk; physical-disk throttles were removed after they delayed queued writes on the shared filesystem. Recovery can take up to two hours (`BACKUP_VERIFY_RECOVERY_TIMEOUT_SECONDS`). PostgreSQL waits for readiness and reports startup failure. A backup is verified only after its manifest, WAL replay and actual read/write check pass. The archive stays on disk; only the disposable verification copy uses RAM. These limits do not change the live databases.
 - `scripts/recovery/check-database-switch.sh` uses isolated temporary databases and leaves production databases untouched.
@@ -117,10 +117,10 @@ replication or one connection's retransmission stalls from blocking all service
 probes together. All forwarding listeners remain loopback-only, using the existing
 restricted key and host-key verification.
 
-Migration: run `isolated-tunnels.py authorize` as the existing OVH tunnel user,
+Migration: run `isolated-tunnels.ts authorize` as the existing OVH tunnel user,
 build `Dockerfile.tunnel` with a revision tag, then run
-`isolated-tunnels.py start --image REVISION_IMAGE` on Inspur. Verify the new listeners before running
-`isolated-tunnels.py configure --root SITE_ROOT` at each site and gracefully
+`isolated-tunnels.ts start --image REVISION_IMAGE` on Inspur. Verify the new listeners before running
+`isolated-tunnels.ts configure --root SITE_ROOT` at each site and gracefully
 reloading the proxies. The helper retains the previous configuration; it never
 stops the legacy tunnel. The later `split-replication` step moves only replication
 off that connection. Source service ports and the stable database
@@ -137,7 +137,7 @@ measured cross-site response variation; it does not make a failed response healt
 Case events identify the observing site and retain proxy check status/duration.
 Only the case sender notifies Discord, subject to its 24-hour limit; failover and
 recovery do not send separate messages. A route unavailable from OVH does not establish
-that the same service is down on Inspur. `check-routing-behavior.py` exercises a
+that the same service is down on Inspur. `check-routing-behavior.ts` exercises a
 three-second healthy response, sustained HTTP failure, and recovery using an
 isolated HAProxy instance; it does not stop production services.
 

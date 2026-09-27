@@ -27,7 +27,7 @@ Checks run every 30 seconds. HTTP 200 means ready; HTTP 503 means a dependency f
 
 ## Deploy from a pushed revision
 
-Fetch main on each host; build the health image directly from `git archive <revision>:services/mail-relay`. Execute setup from `git show <revision>:services/mail-relay/setup.py`, selecting `inspur` or `ovh` and `--image <built-image>`. Inspur additionally requires `--api-container <active-api-container>` so health checks use the live application’s sender credential, including configured password overrides. No working checkout replacement or file copying is needed. The Stalwart image is pinned and setup deliberately refuses unattended mail-server image upgrades.
+Fetch main on each host; build the health image directly from `git archive <revision>:services/mail-relay`. Execute setup with `git show <revision>:services/mail-relay/setup.ts | /home/hanasand/.bun/bin/bun - inspur|ovh --image <built-image>`. Inspur additionally requires `--api-container <active-api-container>` so health checks use the live application’s sender credential, including configured password overrides. No working checkout replacement or file copying is needed. The Stalwart image is pinned and setup deliberately refuses unattended mail-server image upgrades.
 
 Provision the restricted SSH key and remote SMTP credential locally before initial Inspur setup. Do not print credentials, DKIM generation responses, or message contents. Initial OVH DNS setup must authorize the outbound IP and publish the generated DKIM public key before activation; configure `auth.dkim.sign` to `['ovh-relay-rsa']` and reload `/api/reload`.
 
@@ -37,10 +37,10 @@ After deployment check both public APIs, both named jobs, and actual delivery lo
 
 ### Deploy gateway health routes
 
-After fetching the pushed revision on both hosts, run `git show <revision>:services/mail-relay/install-health-routes.py | python3 - <site> <nginx-config-root> <revision>`, with site `inspur` or `ovh`. Existing gateway configuration is backed up, syntax-checked and gracefully reloaded; validation failure restores the previous files. Mail servers and queues are not restarted.
+After fetching the pushed revision on both hosts, run `git show <revision>:services/mail-relay/install-health-routes.ts | /home/hanasand/.bun/bin/bun - <site> <nginx-config-root> <revision>`, with site `inspur` or `ovh`. Existing gateway configuration is backed up, syntax-checked and gracefully reloaded; validation failure restores the previous files. Mail servers and queues are not restarted.
 
 Verify both health URLs against **both gateway IPs** using `curl --resolve api.hanasand.com:443:<gateway-IP>`. Check the `X-Mail-Relay-Health-Release` response header and fresh relay checks. The OVH application API may still reject nonessential routes during recovery; relay health must work independently of it. Authentication, queue, outbound-connectivity and stale-sample failures must continue returning 503.
 
 ### Incoming sender validation
 
-After fetching the pushed revision on Inspur, run `git show <revision>:services/mail-relay/enforce-sender-auth.py | python3 -`. This reloads sender authentication without restarting mail or changing routing. Unauthenticated SMTP enforces published DMARC reject policies, including `hanasand.com`; authenticated submission keeps its existing sender ownership checks. Configuration failures restore the previous DMARC settings.
+After fetching the pushed revision on Inspur, run `git show <revision>:services/mail-relay/enforce-sender-auth.ts | /home/hanasand/.bun/bin/bun -`. This reloads sender authentication without restarting mail or changing routing. Unauthenticated SMTP enforces published DMARC reject policies, including `hanasand.com`; authenticated submission keeps its existing sender ownership checks. Configuration failures restore the previous DMARC settings.

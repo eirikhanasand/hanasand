@@ -7,7 +7,7 @@ as_root() {
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 as_root install -d -m 750 -o 1000 -g 1000 /var/lib/hanasand/docker-storage
 as_root install -d -m 755 /usr/local/lib/hanasand
-as_root install -m 755 "$script_dir/docker-storage.py" /usr/local/lib/hanasand/docker-storage.py
+as_root install -m 755 "$script_dir/docker-storage.ts" /usr/local/lib/hanasand/docker-storage.ts
 for mode in refresh cleanup; do
  extra=''
  if test "$mode" = cleanup; then extra=' --clear'; fi
@@ -19,7 +19,7 @@ After=docker.service
 Type=oneshot
 User=hanasand
 SupplementaryGroups=docker
-ExecStart=/usr/bin/python3 /usr/local/lib/hanasand/docker-storage.py$extra
+ExecStart=/home/hanasand/.bun/bin/bun /usr/local/lib/hanasand/docker-storage.ts$extra
 TimeoutStartSec=2h
 Nice=10
 IOSchedulingClass=idle

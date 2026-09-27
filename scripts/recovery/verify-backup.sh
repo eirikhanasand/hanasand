@@ -14,14 +14,7 @@ trap cleanup EXIT
 docker run --rm --network none -v "$backup:/backup:ro" "$image" cat /backup/backup_manifest > "$manifest"
 # Size the isolated restore from the manifest; the database has outgrown the
 # former fixed 96 GiB filesystem. Leave room for WAL replay and 64 GiB for the host.
-restore_gib=$(python3 - "$manifest" <<'SIZE'
-import json,math,sys
-with open(sys.argv[1]) as file: manifest=json.load(file)
-sizes=[int(entry['Size']) for entry in manifest['Files']]
-assert sizes and all(size>=0 for size in sizes)
-print(max(96,math.ceil(sum(sizes)*1.2/(1024**3))))
-SIZE
-)
+restore_gib=$(/home/hanasand/.bun/bin/bun /home/hanasand/hanasand/scripts/recovery/backup-helper.ts size "$manifest")
 memory_gib=$((restore_gib + 32))
 available_kib=$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo)
 test "${available_kib:-0}" -ge "$(((memory_gib + 64) * 1048576))" || { printf 'Backup verification needs %s GiB of available memory.\n' "$((memory_gib + 64))" >&2; exit 1; }
@@ -47,12 +40,7 @@ docker run --rm --name "$name" --network none --cpus 2 --memory "${memory_gib}g"
  gosu postgres pg_ctl -D /verify -w -t 120 -m fast stop
 '
 checksums=$(docker run --rm --network none -v "$backup:/backup:ro" "$image" sh -ec 'cd /backup; sha256sum base.tar.gz pg_wal.tar.gz backup_manifest')
-python3 - "$checksums" > "$proof" <<'JSON'
-import datetime,json,sys
-checksums={name:digest for digest,name in (line.split() for line in sys.argv[1].splitlines())}
-assert set(checksums)=={'base.tar.gz','pg_wal.tar.gz','backup_manifest'}
-assert all(len(digest)==64 and all(c in '0123456789abcdef' for c in digest) for digest in checksums.values())
-print(json.dumps(dict(backup=datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ'),verifiedAt=datetime.datetime.now(datetime.timezone.utc).isoformat(),restoreVerified=True,checksums=checksums)))
-JSON
+proof=$(mktemp)
+/home/hanasand/.bun/bin/bun /home/hanasand/hanasand/scripts/recovery/backup-helper.ts proof "$checksums" > "$proof"
 docker run --rm --network none -v "$backup:/backup" -v "$proof:/proof:ro" "$image" cp -p /proof /backup/verification.json
 printf 'Backup manifest, WAL recovery and isolated read/write restore passed.\n'
