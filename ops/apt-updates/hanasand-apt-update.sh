@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+APT_HELPER=${HANASAND_APT_HELPER:-/usr/local/lib/hanasand/apt-update-helper.ts}
+run_helper() { /usr/local/bin/hanasand-run-ts "$APT_HELPER" "$@"; }
+
 STATE_DIR=${HANASAND_APT_STATE_DIR:-/var/lib/hanasand/apt-updates}
 STATUS_FILE="$STATE_DIR/status.json"
 TRACK_FILE="$STATE_DIR/packages.tsv"
@@ -24,18 +27,7 @@ last_status='{}'
 if [[ -s "$STATUS_FILE" ]]; then last_status=$(cat "$STATUS_FILE"); fi
 
 if ! apt-get update -qq; then
-  /usr/bin/python3 - "$tmp_status" "$last_status" "$now_iso" "$run_id" <<'PY'
-import json, sys
-out, old, now, run_id = sys.argv[1:]
-data = json.loads(old)
-data.update({'schema_version': 1, 'host': 'hanasand', 'run_id': run_id,
-             'checked_at': now, 'status': 'failed',
-             'last_error': 'apt-get update failed; no packages were installed.',
-             'installed_packages': [],
-             'policy': {'non_security_delay_hours': 72, 'security_install': 'immediate',
-                        'allowed_origin': 'Ubuntu noble/noble-updates/noble-security'}})
-json.dump(data, open(out, 'w'), indent=2); open(out, 'a').write('\n')
-PY
+  run_helper failed-refresh "$tmp_status" "$last_status" "$now_iso" "$run_id"
   mv "$tmp_status" "$STATUS_FILE"; chmod 0644 "$STATUS_FILE"; log 'apt metadata refresh failed'; exit 1
 fi
 
@@ -44,55 +36,10 @@ trap 'rm -f "$tmp_status" "$sim"' EXIT
 apt-get -s -o Debug::NoLocking=true upgrade >"$sim"
 
 plan=$(mktemp "$STATE_DIR/plan.XXXXXX")
-/usr/bin/python3 - "$TRACK_FILE" "$sim" "$plan" "$now" <<'PY'
-import json, re, subprocess, sys
-from pathlib import Path
+run_helper plan "$TRACK_FILE" "$sim" "$plan" "$now"
 
-track, sim, plan, now = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3]), int(sys.argv[4])
-old = {}
-for line in track.read_text().splitlines():
-    parts = line.split('\t')
-    if len(parts) >= 5:
-        old[(parts[0], parts[1])] = {'first_seen': int(parts[2]), 'security': parts[3] == 'security', 'origin': parts[4]}
-
-updates = []
-def installed_at(package):
-    path = f'/var/lib/dpkg/info/{package}.list'
-    try:
-        result = subprocess.run(['stat', '-c', '%Y', path], capture_output=True, text=True, check=True)
-        return int(result.stdout.strip())
-    except (OSError, ValueError, subprocess.CalledProcessError):
-        return now
-for line in sim.read_text(errors='replace').splitlines():
-    # Ubuntu 24.04 emits: Inst pkg [installed] (candidate Ubuntu:24.04/noble-updates [amd64])
-    match = re.match(r'^Inst\s+(\S+)(?:\s+\[[^\]]+\])?\s+\((\S+)\s+([^\s\[]+)(?:\s+\[[^\]]+\])?\)', line)
-    if not match:
-        continue
-    package, version, repo = match.groups()
-    origin = repo.split(':', 1)[0]
-    security = 'noble-security' in repo.lower() and origin.lower() == 'ubuntu'
-    key = (package, version)
-    prior = old.get(key)
-    updates.append({'package': package, 'version': version, 'repo': repo, 'origin': origin.strip(),
-                    'security': security, 'first_seen': prior['first_seen'] if prior else now,
-                    'installed_at': installed_at(package)})
-
-track.write_text(''.join(f"{u['package']}\t{u['version']}\t{u['first_seen']}\t{'security' if u['security'] else 'regular'}\t{u['origin']}\n" for u in updates))
-json.dump({'updates': updates}, plan.open('w'), indent=2); plan.open('a').write('\n')
-PY
-
-security_packages=$(/usr/bin/python3 - "$plan" "$now" <<'PY'
-import json, sys
-data = json.load(open(sys.argv[1])); now = int(sys.argv[2])
-print(' '.join(u['package'] for u in data['updates'] if u['security'] and u['origin'].lower() == 'ubuntu'))
-PY
-)
-regular_packages=$(/usr/bin/python3 - "$plan" "$now" <<'PY'
-import json, sys
-data = json.load(open(sys.argv[1])); now = int(sys.argv[2])
-print(' '.join(u['package'] for u in data['updates'] if not u['security'] and now - u['installed_at'] >= 72 * 60 * 60 and u['origin'].lower() == 'ubuntu'))
-PY
-)
+security_packages=$(run_helper packages "$plan" "$now" security)
+regular_packages=$(run_helper packages "$plan" "$now" regular)
 
 installed=()
 failure_messages=()
@@ -118,41 +65,7 @@ if ((${#failure_messages[@]})); then
   error_text=${error_text%|}
 fi
 
-/usr/bin/python3 - "$tmp_status" "$plan" "$last_status" "$now_iso" "$run_id" "${installed[*]:-}" "$error_text" <<'PY'
-import json, subprocess, sys
-out, plan_path, old_text, now, run_id, installed_text, errors_text = sys.argv[1:]
-plan = json.load(open(plan_path))
-old = json.loads(old_text)
-installed = installed_text.split() if installed_text else []
-errors = errors_text.split('|') if errors_text else []
-def candidate_is_installed(update):
-    try:
-        result = subprocess.run(
-            ['dpkg-query', '-W', '-f=${Status}\t${Version}', update['package']],
-            capture_output=True, text=True, check=True,
-        )
-        return result.stdout.strip() == f"install ok installed\t{update['version']}"
-    except (OSError, subprocess.CalledProcessError):
-        return False
-
-installed_updates = [{'package': u['package'], 'version': u['version']} for u in plan['updates'] if candidate_is_installed(u)]
-installed_names = {u['package'] for u in installed_updates}
-remaining = [u for u in plan['updates'] if u['package'] not in installed_names]
-failure_details = [error.removeprefix('Failed to install ') for error in errors]
-data = {
-  'schema_version': 1, 'host': 'hanasand', 'run_id': run_id, 'checked_at': now,
-  'status': 'failed' if errors else ('pending' if remaining else 'ok'),
-  'last_error': f"Failed to install {' and '.join(failure_details)}" if failure_details else None,
-  'pending_updates': remaining,
-  'installed_packages': installed_updates,
-  'last_updated_packages': installed or old.get('last_updated_packages', []),
-  'last_update_at': now if installed else old.get('last_update_at'),
-  'policy': {'non_security_delay_hours': 72, 'security_install': 'immediate',
-             'allowed_origin': 'Ubuntu noble/noble-updates/noble-security',
-             'repository_verification': 'APT Release-file signatures and Ubuntu origin allowlist'},
-}
-json.dump(data, open(out, 'w'), indent=2); open(out, 'a').write('\n')
-PY
+run_helper collect-status "$tmp_status" "$plan" "$last_status" "$now_iso" "$run_id" "${installed[*]:-}" "$error_text"
 mv "$tmp_status" "$STATUS_FILE"
 chmod 0644 "$STATUS_FILE"
 log "completed: installed=${installed[*]:-none} pending=$(grep -c . "$TRACK_FILE" || true) errors=${failure_messages[*]:-none}"

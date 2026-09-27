@@ -7,7 +7,7 @@ staged=$(mktemp -d "$root/proxy/.routing.XXXXXX")
 cleanup() { rm -rf "$staged"; }
 trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
-python3 "$root/render_proxy.py" "$root/config.json" "$staged/haproxy.cfg" "$staged/haproxy-secondary.cfg"
+"$root/run-typescript-node.sh" "$root/render_proxy.ts" "$root/config.json" "$staged/haproxy.cfg" "$staged/haproxy-secondary.cfg"
 chmod 755 "$staged"
 chmod 644 "$staged"/*.cfg
 for index in 0 1; do

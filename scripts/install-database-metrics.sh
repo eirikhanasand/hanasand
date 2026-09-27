@@ -2,14 +2,15 @@
 set -eu
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 sudo -n install -d -m 755 /var/lib/hanasand/metrics /usr/local/lib/hanasand
-sudo -n install -m 755 "$script_dir/database-metrics.py" /usr/local/lib/hanasand/database-metrics.py
-sudo -n install -m 755 "$script_dir/database-redis-writes.py" /usr/local/lib/hanasand/database-redis-writes.py
+sudo -n install -m 644 "$script_dir/database-metrics.ts" /usr/local/lib/hanasand/database-metrics.ts
+sudo -n install -m 644 "$script_dir/database-redis-writes.ts" /usr/local/lib/hanasand/database-redis-writes.ts
+sudo -n install -m 755 "$script_dir/run-typescript-node.sh" /usr/local/bin/hanasand-run-ts
 sudo -n tee /etc/systemd/system/hanasand-database-redis-writes.service > /dev/null <<'UNIT'
 [Unit]
 Description=Observe Redis write timestamps without retaining values
 After=docker.service
 [Service]
-ExecStart=/usr/bin/python3 /usr/local/lib/hanasand/database-redis-writes.py
+ExecStart=/usr/local/bin/hanasand-run-ts /usr/local/lib/hanasand/database-redis-writes.ts
 Restart=always
 RestartSec=10
 MemoryMax=192M
@@ -27,7 +28,7 @@ Description=Collect database sizes and disk growth
 After=docker.service
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/python3 /usr/local/lib/hanasand/database-metrics.py
+ExecStart=/usr/local/bin/hanasand-run-ts /usr/local/lib/hanasand/database-metrics.ts
 TimeoutStartSec=90
 Nice=10
 NoNewPrivileges=true

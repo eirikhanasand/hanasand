@@ -43,7 +43,7 @@ COPY --from=session-geo /app/geoip /app/geoip
 # Build-time tests import the runtime constants module, but Docker builds do
 # not receive the compose env_file. Keep placeholders scoped to this check so
 # browser-worker containers do not inherit fake app credentials.
-RUN --mount=from=database_schema,target=/db DB_PASSWORD=build-test DB_HOST=localhost VM_API_TOKEN=build-test bun run test
+RUN --mount=from=database_schema,target=/db DB_PASSWORD=build-test DB_HOST=localhost DB_POOL_HOST=localhost DB_POOL_PORT=18505 DB_MAX_CONN=1000 VM_API_TOKEN=build-test bun run test
 RUN bun run lint
 
 RUN chmod +x /app/entrypoint.sh
@@ -72,24 +72,24 @@ COPY . .
 COPY browser-worker/supervisor.conf /etc/supervisor/conf.d/browser-worker.conf
 COPY browser-worker/start.sh /usr/local/bin/hanasand-browser-worker
 COPY browser-worker/reconnect-watchdog.js /opt/gst-web/reconnect-watchdog.js
-COPY browser-worker/patch-stream-input.py /tmp/patch-stream-input.py
+COPY browser-worker/patch-stream-input.ts /tmp/patch-stream-input.ts
 COPY browser-worker/touch-input.js /tmp/touch-input.js
 COPY browser-worker/wheel-input.js /tmp/wheel-input.js
-COPY browser-worker/patch-stream-controls.py /tmp/patch-stream-controls.py
-COPY browser-worker/patch-stream-playback.py /tmp/patch-stream-playback.py
-COPY browser-worker/patch-stream-framerate.py /tmp/patch-stream-framerate.py
-COPY browser-worker/patch-stream-h264.py /tmp/patch-stream-h264.py
-COPY browser-worker/patch-stream-receiver.py /tmp/patch-stream-receiver.py
-COPY browser-worker/patch-stream-packets.py /tmp/patch-stream-packets.py
-COPY browser-worker/patch-stream-signalling.py /tmp/patch-stream-signalling.py
-RUN python3 /tmp/patch-stream-input.py \
-    && python3 /tmp/patch-stream-playback.py \
-    && python3 /tmp/patch-stream-framerate.py \
-    && python3 /tmp/patch-stream-h264.py \
-    && python3 /tmp/patch-stream-receiver.py \
-    && python3 /tmp/patch-stream-packets.py \
-    && python3 /tmp/patch-stream-signalling.py \
-    && python3 /tmp/patch-stream-controls.py \
+COPY browser-worker/patch-stream-controls.ts /tmp/patch-stream-controls.ts
+COPY browser-worker/patch-stream-playback.ts /tmp/patch-stream-playback.ts
+COPY browser-worker/patch-stream-framerate.ts /tmp/patch-stream-framerate.ts
+COPY browser-worker/patch-stream-h264.ts /tmp/patch-stream-h264.ts
+COPY browser-worker/patch-stream-receiver.ts /tmp/patch-stream-receiver.ts
+COPY browser-worker/patch-stream-packets.ts /tmp/patch-stream-packets.ts
+COPY browser-worker/patch-stream-signalling.ts /tmp/patch-stream-signalling.ts
+RUN bun /tmp/patch-stream-input.ts \
+    && bun /tmp/patch-stream-playback.ts \
+    && bun /tmp/patch-stream-framerate.ts \
+    && bun /tmp/patch-stream-h264.ts \
+    && bun /tmp/patch-stream-receiver.ts \
+    && bun /tmp/patch-stream-packets.ts \
+    && bun /tmp/patch-stream-signalling.ts \
+    && bun /tmp/patch-stream-controls.ts \
     && chmod +x /usr/local/bin/hanasand-browser-worker \
     && sed -i 's/selkies-gstreamer-resize 1920x1080/selkies-gstreamer-resize "${BROWSER_STREAM_RESOLUTION:-1280x720}"/' /etc/entrypoint.sh \
     && sed -i '/\.scale {/,/}/s/height: 100%;/height: 100%;\n      object-fit: contain;/' /opt/gst-web/index.html \
@@ -98,7 +98,7 @@ RUN python3 /tmp/patch-stream-input.py \
 
 RUN BROWSER_STREAM_ASSET_DIR=/opt/gst-web bun test tests/browser-stream-watchdog.test.ts \
     && bun scripts/check-browser-player-image.ts
-RUN GSTREAMER_PATH=/opt/gstreamer bash -c '. /opt/gstreamer/gst-env && python3 browser-worker/check-stream-h264.py'
+RUN GSTREAMER_PATH=/opt/gstreamer bash -c '. /opt/gstreamer/gst-env && bun browser-worker/check-stream-h264.ts'
 
 ENV CHROMIUM_BIN=/usr/bin/google-chrome-stable \
     BROWSER_STREAM_RESOLUTION=1280x720 \

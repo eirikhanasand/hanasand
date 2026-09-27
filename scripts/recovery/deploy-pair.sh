@@ -33,18 +33,19 @@ if test "$kind" = api; then
  fi
 fi
 if test "$kind" = frontend; then sh scripts/recovery/deploy-code-indexer.sh; fi
-old_ports=$(python3 - "$root/config.json" "$kind" <<'JSON'
-import json,sys
-s=next(s for s in json.load(open(sys.argv[1]))['services'] if s['id']==sys.argv[2])
-print(' '.join(i['address'].rsplit(':',1)[1] for i in s['instances'] if i['site']=='inspur'))
-JSON
+old_ports=$(node - "$root/config.json" "$kind" <<'JS'
+const fs = require('node:fs');
+const [file, kind] = process.argv.slice(2);
+const service = JSON.parse(fs.readFileSync(file, 'utf8')).services.find(item => item.id === kind);
+process.stdout.write(service.instances.filter(item => item.site === 'inspur').map(item => item.address.split(':').at(-1)).join(' '));
+JS
 )
 case "$kind:$old_ports" in
  'frontend:3200 3300') ports='3000 3100';; frontend:*) ports='3200 3300';;
  'api:8082 8083') ports='20802 20803';; api:*) ports='8082 8083';;
  'auth:8181 8182') ports='8183 8184';; auth:*) ports='8181 8182';;
 esac
-pair_name() { python3 "$script_dir/container_names.py" "$kind" "$1"; }
+pair_name() { "$script_dir/../run-typescript-node.sh" "$script_dir/container_names.ts" "$kind" "$1"; }
 source=hanasand_api
 if test "$kind" = frontend; then source=$(pair_name "$(printf '%s' "$old_ports" | cut -d' ' -f1)"); fi
 # Only stale, stopped task-owned candidates may be removed to reuse an inactive slot.
@@ -55,14 +56,14 @@ for port in $ports; do
   docker rm "$name" >/dev/null
  fi
 done
-python3 "$script_dir/start-inspur-pair.py" "$kind" "$image" "$source" $ports
+"$script_dir/../run-typescript-node.sh" "$script_dir/start-inspur-pair.ts" "$kind" "$image" "$source" $ports
 path=/ready
 test "$kind" != frontend || path=/api/recovery/ready
 test "$kind" != api || path=/health
 for port in $ports; do
  ready=0
  for attempt in $(seq 1 60); do
-  if curl -fsS --max-time 5 "http://127.0.0.1:$port$path" | python3 -c 'import json,sys; s=json.load(sys.stdin);sys.exit(0 if s.get("ok") and s.get("release")==sys.argv[1] else 1)' "$release"; then ready=1; break; fi
+  if curl -fsS --max-time 5 "http://127.0.0.1:$port$path" | node -e 'let body="";process.stdin.setEncoding("utf8");process.stdin.on("data",chunk=>body+=chunk);process.stdin.on("end",()=>{try{const value=JSON.parse(body);process.exit(value.ok===true&&value.release===process.argv[1]?0:1)}catch{process.exit(1)}})' "$release"; then ready=1; break; fi
   sleep 2
  done
  test "$ready" = 1 || { echo 'Candidate failed readiness; serving pair retained' >&2; exit 1; }
@@ -71,13 +72,17 @@ backup=$(mktemp)
 cp "$root/config.json" "$backup"
 rollback() { cp "$backup" "$root/config.json"; sh scripts/recovery/start-routing.sh "$root" || true; }
 trap rollback EXIT HUP INT TERM
-python3 - "$root/config.json" "$kind" $ports <<'JSON'
-import json,pathlib,sys
-p=pathlib.Path(sys.argv[1]);c=json.loads(p.read_text());s=next(s for s in c['services'] if s['id']==sys.argv[2]);s['checkPath']='/api/recovery/ready' if s['id']=='frontend' else ('/health' if s['id']=='api' else '/ready')
-for item,port in zip([i for i in s['instances'] if i['site']=='inspur'],sys.argv[3:]):
- item.update(address='127.0.0.1:'+port,health='http://127.0.0.1:'+port+s['checkPath'],endpoint='inspur:'+port)
-p.write_text(json.dumps(c,indent=2))
-JSON
+node - "$root/config.json" "$kind" $ports <<'JS'
+const fs = require('node:fs');
+const [file, kind, ...ports] = process.argv.slice(2);
+const config = JSON.parse(fs.readFileSync(file, 'utf8'));
+const service = config.services.find(item => item.id === kind);
+service.checkPath = kind === 'frontend' ? '/api/recovery/ready' : kind === 'api' ? '/health' : '/ready';
+for (const [item, port] of service.instances.filter(value => value.site === 'inspur').map((item, index) => [item, ports[index]])) {
+  Object.assign(item, { address: `127.0.0.1:${port}`, health: `http://127.0.0.1:${port}${service.checkPath}`, endpoint: `inspur:${port}` });
+}
+fs.writeFileSync(file, JSON.stringify(config, null, 2));
+JS
 sh scripts/recovery/start-routing.sh "$root"
 trap - EXIT HUP INT TERM
 rm -f "$backup"

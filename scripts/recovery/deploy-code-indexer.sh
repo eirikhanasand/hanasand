@@ -29,13 +29,7 @@ docker run -d --name hanasand-code-indexer --restart unless-stopped --init --rea
  -v /home/hanasand/.ssh/id_ecdsa:/home/bun/.ssh/id_ecdsa:ro \
  -v /home/hanasand/.ssh/known_hosts:/home/bun/.ssh/known_hosts:ro "$image"
 for attempt in $(seq 1 60); do
- if python3 - "$root/published/status.json" <<'PY'
-import json,sys,time,datetime
-try:
- s=json.load(open(sys.argv[1])); age=time.time()-datetime.datetime.fromisoformat(s['checkedAt'].replace('Z','+00:00')).timestamp()
- sys.exit(0 if s['phase']=='ready' and age<15 else 1)
-except Exception:sys.exit(1)
-PY
+ if /home/hanasand/.local/bin/bun -e 'try { const s=await Bun.file(process.argv[1]).json(); process.exit(s.phase==="ready" && Date.now()-Date.parse(s.checkedAt)<15000 ? 0 : 1) } catch { process.exit(1) }' "$root/published/status.json"
  then exit 0; fi
  sleep 2
 done

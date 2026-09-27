@@ -17,11 +17,7 @@ record_result() {
   docker volume rm "$stage_volume" >/dev/null || backup_exit=1
   rmdir "$backups/$stamp" || true
  fi
- python3 - "$root/backup-job-status.json" "$backup_exit" <<'RESULT'
-import json,pathlib,sys,time
-p=pathlib.Path(sys.argv[1]);t=p.with_suffix('.tmp')
-t.write_text(json.dumps({'status':'verified' if sys.argv[2]=='0' else 'failed','at':time.time()}));t.replace(p)
-RESULT
+ /home/hanasand/.local/bin/bun /home/hanasand/hanasand/scripts/recovery/backup-helper.ts result "$root/backup-job-status.json" "$backup_exit"
  exit "$backup_exit"
 }
 trap record_result EXIT
@@ -65,10 +61,5 @@ docker run --rm --network host --cpus .5 --memory 128m --entrypoint sh \
 # RAM staging leaves the existing verified local copy intact. The new verified
 # archive is durable on OVH before this script releases its temporary staging.
 if ! "$memory_stage"; then
-python3 - "$backups" "$stamp" <<'RETENTION'
-import pathlib,shutil,sys
-root=pathlib.Path(sys.argv[1])
-for path in root.iterdir():
- if len(path.name)==16 and path.name != sys.argv[2] and (path/'data/verification.json').is_file(): shutil.rmtree(path)
-RETENTION
+/home/hanasand/.local/bin/bun /home/hanasand/hanasand/scripts/recovery/backup-helper.ts retain "$backups" "$stamp"
 fi

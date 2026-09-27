@@ -77,7 +77,7 @@ Generated projects include source, a README, environment examples, build command
 
 ### Host and JSON monitoring
 
-`GET https://api.hanasand.com/api/metrics` requires an authenticated session and includes numeric host telemetry under `host`. The host collector (`scripts/host-metrics.py`) samples every 15 seconds and writes an atomic file shared read-only with API workers. Install or update it on Inspur with `sudo sh scripts/install-host-metrics.sh`. After the API schema is ready, run `bun scripts/setup-host-monitoring.ts` in the API worker to add the six checks with the existing Discord destination. Re-running setup preserves configured checks. Snapshots older than 90 seconds are unavailable, never treated as healthy.
+`GET https://api.hanasand.com/api/metrics` requires an authenticated session and includes numeric host telemetry under `host`. The host collector (`scripts/host-metrics.ts`) samples every 15 seconds and writes an atomic file shared read-only with API workers. Install or update it on Inspur with `sudo sh scripts/install-host-metrics.sh`. After the API schema is ready, run `bun scripts/setup-host-monitoring.ts` in the API worker to add the six checks with the existing Discord destination. Re-running setup preserves configured checks. Snapshots older than 90 seconds are unavailable, never treated as healthy.
 
 Health checks support JSON fields, comparisons and maximum/minimum/average/first-value aggregation. Dot paths support array wildcards, for example `host.storage.*.usedPercent`. Checks for the same owner, URL and request options share one response per minute, including errors. PostgreSQL locking prevents duplicate fetches across workers. Responses are limited to 1 MiB; obsolete cache entries expire. The administrator-only `system:metrics` source reads the same host payload locally, without storing a session credential.
 
@@ -120,6 +120,8 @@ The old share-chat story suites were removed: minimum file counts, required docu
 The collector has its own `bun run test` and `bun run check` commands in `ti/scraper/`.
 
 ## Production deployment
+
+Host TypeScript utilities require Bun 1.3.13; install it for the host account with `scripts/install-typescript-runtime.sh` before enabling their systemd units.
 
 Use `ssh inspur` and work from `/home/hanasand/hanasand`. Deploy only the changed component.
 

@@ -72,17 +72,7 @@ done
 } > "$upstream.tmp"
 mv "$upstream.tmp" "$upstream"
 # Install a scoped include once; unrelated API routes continue to use the monolith.
-python3 - "$main" <<'PY'
-import pathlib, sys
-p = pathlib.Path(sys.argv[1])
-s = p.read_text()
-marker = '    server_name api.hanasand.com;'
-include = '    include snippets/auth-routes.conf;'
-if include not in s:
-    if s.count(marker) != 1: raise SystemExit('Cannot identify API virtual host safely')
-    s = s.replace(marker, marker + '\n' + include)
-    p.write_text(s)
-PY
+/home/hanasand/.local/bin/bun -e 'import {readFileSync,writeFileSync} from "node:fs"; const p=process.argv[1], marker="    server_name api.hanasand.com;", include="    include snippets/auth-routes.conf;"; let s=readFileSync(p,"utf8"); if(!s.includes(include)){if(s.split(marker).length!==2) throw new Error("Cannot identify API virtual host safely"); writeFileSync(p,s.replace(marker,marker+"\n"+include));}' "$main"
 cp scripts/nginx-auth-proxy.conf /home/hanasand/openresty/nginx/snippets/auth-proxy.conf
 cp scripts/nginx-auth-routes.conf /home/hanasand/openresty/nginx/snippets/auth-routes.conf
 docker exec openresty nginx -t

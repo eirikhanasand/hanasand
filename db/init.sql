@@ -24,6 +24,20 @@ END $$;
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+CREATE SCHEMA IF NOT EXISTS pgbouncer AUTHORIZATION hanasand;
+REVOKE ALL ON SCHEMA pgbouncer FROM PUBLIC;
+CREATE OR REPLACE FUNCTION pgbouncer.get_auth(p_username text)
+RETURNS TABLE(username text, password text)
+LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog
+AS $function$
+    SELECT rolname::text, rolpassword::text
+    FROM pg_catalog.pg_authid
+    WHERE rolname = p_username AND rolcanlogin
+$function$;
+REVOKE ALL ON FUNCTION pgbouncer.get_auth(text) FROM PUBLIC;
+GRANT USAGE ON SCHEMA pgbouncer TO hanasand;
+GRANT EXECUTE ON FUNCTION pgbouncer.get_auth(text) TO hanasand;
+
 -- User table
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
