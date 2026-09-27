@@ -336,16 +336,16 @@ export default function MailWorkspace({ mailboxUser }: Props) {
     const showUnreachableWarning = Boolean(unreachableSince && now - unreachableSince >= STALE_AFTER_MS)
 
     return (
-        <DashboardPage className='xl:flex xl:h-full xl:min-h-0 xl:flex-col'>
+        <DashboardPage className='!gap-4 !p-4 xl:flex xl:h-full xl:min-h-0 xl:flex-col'>
             <DashboardPanel className='flex shrink-0 flex-wrap items-center gap-2 p-2.5 sm:p-3' id='mail-toolbar'>
                 <div className='flex min-w-0 flex-1 flex-wrap items-center gap-2'>
-                    <div className='mr-auto min-w-0'>
-                        <p className='text-[10px] tracking-normal text-ui-muted'>Mailbox</p>
-                        <p className='truncate text-[11px] text-ui-muted'>{overview?.mailboxAddress || 'Communication'}</p>
+                    <div className='mr-auto flex h-8 min-w-0 flex-col justify-center'>
+                        <p className='text-xs leading-4 text-ui-muted'>Mailbox</p>
+                        <p className='truncate text-xs leading-4 text-ui-muted'>{overview?.mailboxAddress || 'Communication'}</p>
                     </div>
                     <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-ui-muted' data-mail-counts>
-                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1'>{unreadCount} unread</span>
-                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1'>{filteredMessages.length} visible</span>
+                        <span className='inline-flex h-8 items-center rounded-md border border-ui-border bg-ui-raised px-2'>{unreadCount} unread</span>
+                        <span className='inline-flex h-8 items-center rounded-md border border-ui-border bg-ui-raised px-2'>{filteredMessages.length} visible</span>
                     </div>
                     <MailSyncStatus lastSuccessAt={lastSuccessAt} unreachableSince={unreachableSince} now={now} />
 
@@ -374,7 +374,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                             type='button'
                             data-testid='mail-compose-button'
                             disabled={!overview || loading || overview.actor.canSend === false}
-                            className='inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-ui-primary px-3 text-xs font-semibold text-ui-canvas shadow-sm transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45'
+                            className='inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-ui-primary px-3 text-xs font-semibold text-white shadow-sm transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45'
                             onClick={() => setComposer({ ...emptyComposer, open: true })}
                         >
                             <MailPlus className='h-3.5 w-3.5' />
@@ -399,7 +399,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 <ErrorNotice compact message={`Background sync paused. Last successful update was ${formatRelativeTime(lastSuccessAt!, now)} ago.`} />
             )}
 
-            <div className={`grid min-w-0 grid-cols-1 gap-3 xl:min-h-0 xl:flex-1 ${sidebarCompact ? 'xl:grid-cols-[80px_minmax(0,1fr)]' : 'xl:grid-cols-[220px_minmax(0,1fr)]'}`}>
+            <div className={`grid min-w-0 grid-cols-1 gap-4 xl:min-h-0 xl:flex-1 ${sidebarCompact ? 'xl:grid-cols-[80px_minmax(0,1fr)]' : 'xl:grid-cols-[220px_minmax(0,1fr)]'}`}>
                 <aside
                     className={`${dashboardPanelClass} relative overflow-hidden p-3 xl:min-h-0 xl:overflow-y-auto`}
                 >
