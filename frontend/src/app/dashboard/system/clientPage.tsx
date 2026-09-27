@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import {
     AlertTriangle,
     CheckCircle2,
+    ChartNoAxesCombined,
     Clock3,
     Copy,
     Cpu,
@@ -78,6 +79,8 @@ export default function SystemDashboard({
     const [systemUnavailableReason, setSystemUnavailableReason] = useState(initialSystemTelemetry.unavailable_reason || '')
     const [dockerTelemetry, setDockerTelemetry] = useState<DockerTelemetryResponse>(() => normalizeDockerTelemetry(initialDockerTelemetry))
     const [autoRefresh, setAutoRefresh] = useState(true)
+    const [statisticsVisible, setStatisticsVisible] = useState(false)
+    const [statisticsPreferenceLoaded, setStatisticsPreferenceLoaded] = useState(false)
     const [overviewActionsTarget, setOverviewActionsTarget] = useState<HTMLElement | null>(null)
     const [refreshing, setRefreshing] = useState(false)
     const [selectedContainerId, setSelectedContainerId] = useState<string>(dockerTelemetry.containers[0]?.id || '')
@@ -90,7 +93,22 @@ export default function SystemDashboard({
 
     useEffect(() => {
         setOverviewActionsTarget(document.getElementById('system-overview-actions'))
+        try {
+            setStatisticsVisible(window.localStorage.getItem('system-overview-statistics-visible') === 'true')
+        } catch {
+            // Keep statistics hidden when browser storage is unavailable.
+        }
+        setStatisticsPreferenceLoaded(true)
     }, [])
+
+    useEffect(() => {
+        if (!statisticsPreferenceLoaded) return
+        try {
+            window.localStorage.setItem('system-overview-statistics-visible', String(statisticsVisible))
+        } catch {
+            // The toggle still works for this page view when browser storage is unavailable.
+        }
+    }, [statisticsPreferenceLoaded, statisticsVisible])
 
     const containers = useMemo(
         () => dockerTelemetry.containers.filter((container): container is DockerContainer => Boolean(container) && !['exited', 'dead', 'removing'].includes((container.state || container.status || '').toLowerCase())),
@@ -337,6 +355,7 @@ export default function SystemDashboard({
             {overviewActionsTarget ? createPortal(<div className='flex items-center gap-2'>
                 <button type='button' onClick={() => void refreshAll()} aria-label={refreshing ? 'Refreshing system telemetry' : 'Refresh system telemetry'} title='Refresh system telemetry' className='inline-flex h-8 items-center gap-1.5 rounded-md border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text shadow-sm transition hover:border-ui-primary/35 hover:bg-ui-raised'><RefreshCcw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />Refresh</button>
                 <button type='button' onClick={() => setAutoRefresh((value) => !value)} aria-pressed={autoRefresh} aria-label={`Auto refresh ${autoRefresh ? 'on' : 'off'}`} title={`Auto refresh ${autoRefresh ? 'on' : 'off'}`} className={`inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold shadow-sm transition ${autoRefresh ? 'border-ui-primary/35 bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-panel text-ui-text hover:bg-ui-raised'}`}>{autoRefresh ? <PauseCircle className='h-3.5 w-3.5' /> : <PlayCircle className='h-3.5 w-3.5' />}Auto</button>
+                <button type='button' onClick={() => setStatisticsVisible((visible) => !visible)} aria-pressed={statisticsVisible} aria-label={`${statisticsVisible ? 'Hide' : 'Show'} statistics`} title={`${statisticsVisible ? 'Hide' : 'Show'} statistics`} className={`inline-flex h-8 w-8 items-center justify-center rounded-md border shadow-sm transition ${statisticsVisible ? 'border-ui-primary/35 bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-panel text-ui-text hover:bg-ui-raised'}`}><ChartNoAxesCombined className='h-4 w-4' /></button>
             </div>, overviewActionsTarget) : null}
             <div className='max-w-3xl'>
                 <ErrorNotice compact variant='info' message={message as string | null} />
@@ -364,9 +383,9 @@ export default function SystemDashboard({
                     {dockerTelemetry.unavailable_reason ? <p className='rounded-md border border-ui-warning/35 bg-ui-warning/10 px-3 py-2 text-sm text-ui-warning'>Docker telemetry degraded: {dockerTelemetry.unavailable_reason}</p> : null}
                     {systemUnavailableReason ? <p className='rounded-md border border-ui-warning/35 bg-ui-warning/10 px-3 py-2 text-sm text-ui-warning'>Host telemetry degraded: {systemUnavailableReason}</p> : null}
                 </div>
-                <details className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-system-summary-disclosure>
+                <details open={statisticsVisible} onToggle={(event) => setStatisticsVisible(event.currentTarget.open)} className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-system-summary-disclosure>
                     <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
-                        <span>Host, container, and VM counters</span>
+                        <span>Statistics</span>
                     </summary>
                     <section className='grid gap-3 border-t border-ui-border p-3 sm:grid-cols-2 xl:grid-cols-4' data-system-summary-metrics>
                         {summary.map((item) => <SummaryCard key={item.label} item={item} />)}
