@@ -98,10 +98,10 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
                 {(!loading || rows.length > 0) && <p className='mt-1 text-xs text-ui-muted'>{visible.length}/{rows.length} cases</p>}
             </div>
             <div className='flex items-center gap-2'><CreateCase organizationId={organizationId} />
-                <button type='button' aria-label={filtersOpen ? 'Hide filters' : 'Show filters'} aria-expanded={filtersOpen} title={filtersOpen ? 'Hide filters' : 'Show filters'} className='inline-flex h-8 w-8 items-center justify-center rounded bg-ui-canvas text-ui-primary hover:bg-ui-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary' onClick={() => setFiltersOpen(value => !value)}>
+                <button type='button' aria-label={filtersOpen ? 'Hide filters' : 'Show filters'} aria-expanded={filtersOpen} title={filtersOpen ? 'Hide filters' : 'Show filters'} className='inline-flex h-8 w-8 items-center justify-center rounded text-white transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary' onClick={() => setFiltersOpen(value => !value)}>
                     <Filter className='h-4 w-4' aria-hidden='true' />
                 </button>
-                <button type='button' aria-label='Refresh cases' title='Refresh cases' className='inline-flex h-8 w-8 items-center justify-center rounded bg-ui-canvas text-ui-primary hover:bg-ui-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary' onClick={() => { setPage(1); setCursor(null); setRevision(value => value + 1) }}>
+                <button type='button' aria-label='Refresh cases' title='Refresh cases' className='inline-flex h-8 w-8 items-center justify-center rounded text-white transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary' onClick={() => { setPage(1); setCursor(null); setRevision(value => value + 1) }}>
                     <RefreshCw className='h-4 w-4' aria-hidden='true' />
                 </button></div>
         </div>
