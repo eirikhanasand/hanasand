@@ -74,7 +74,7 @@ function LoginActivity({ loginDays }: { loginDays: ProfileStats['loginDays'] }) 
             </div>
             <div aria-hidden='true' className='mt-3 flex items-center justify-end gap-1.5 text-[10px] text-ui-muted'>
                 <span>Less</span>
-                {levels.map((level, index) => <span key={index} className={`h-[10px] w-[10px] rounded-[2px] ${level}`} />)}
+                {levels.map((level, index) => <span key={index} className={`h-2.5 w-2.5 rounded-xs ${level}`} />)}
                 <span>More</span>
             </div>
         </section>
