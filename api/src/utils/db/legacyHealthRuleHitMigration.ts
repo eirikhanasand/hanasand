@@ -15,7 +15,7 @@ export function allocateHistoricalRuleHits(total: number) {
         const exact = total * item.observed / sampleTotal
         return { ...item, hits: Math.floor(exact), remainder: exact % 1 }
     })
-    let remaining = total - allocations.reduce((sum, item) => sum + item.hits, 0)
+    const remaining = total - allocations.reduce((sum, item) => sum + item.hits, 0)
     for (const item of [...allocations].sort((a, b) => b.remainder - a.remainder).slice(0, remaining)) item.hits++
     return allocations.map(({ id, hits }) => ({ id, hits }))
 }

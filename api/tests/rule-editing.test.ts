@@ -18,11 +18,14 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
         audits.push({ id: String(audits.length), event_type: p[0], actor_id: p[4], object_type: p[5], object_id: p[6], organization_id: p[7], context: JSON.parse(p[12]), created_at: '2026-09-14T12:00:00Z' })
         return { rows: [] }
     }
-    if (sql.includes('AS hits FROM findings')) {
+    if (sql.includes('FROM rule_hit_counts')) {
         expect(p[0]).toBe('org-a')
+        const findingIds = p[1] as string[]
+        const receiptIds = p[2] as string[]
         const totals = new Map<string, number>()
-        for (const finding of findings.filter(row => row.organizationId === p[0] && p[1].includes(row.ruleId))) totals.set(finding.ruleId, (totals.get(finding.ruleId) || 0) + 1)
+        for (const finding of findings.filter(row => row.organizationId === p[0] && findingIds.includes(row.ruleId))) totals.set(finding.ruleId, (totals.get(finding.ruleId) || 0) + 1)
         const result = [...totals].map(([rule_id, hits]) => ({ rule_id, hits: String(hits) }))
+        for (const rule_id of receiptIds) result.push({ rule_id, hits: '0' })
         if (p.includes('http.routine_access.v1')) result.push({ rule_id: 'http.routine_access.v1', hits: '12345' })
         if (p.includes('mongodb.cashflow_connections.v1')) result.push({ rule_id: 'mongodb.cashflow_connections.v1', hits: '42' })
         return { rows: result }
