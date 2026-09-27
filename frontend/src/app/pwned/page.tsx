@@ -15,7 +15,7 @@ export const metadata: Metadata = buildRouteMetadata({
 
 export default async function Page() {
     return (
-        <main className='grid min-h-[calc(100vh-4.5rem)] w-full place-items-center bg-ui-canvas px-4 py-10 text-ui-text md:px-10'>
+        <main className='grid min-h-[calc(100vh-5.5rem)] w-full place-items-center bg-ui-canvas px-4 py-10 text-ui-text md:px-10'>
             <div className='grid w-full max-w-5xl gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center'>
                 <div className='grid gap-4'>
                     <p className='text-sm font-semibold uppercase text-ui-primary'>Bloom exposure lookup</p>

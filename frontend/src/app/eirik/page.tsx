@@ -97,7 +97,7 @@ export default async function EirikPage() {
     const articles = await fetchArticles(false, false)
 
     return (
-        <main className='min-h-[calc(100vh-4.5rem)] bg-ui-canvas text-ui-text'>
+        <main className='min-h-[calc(100vh-5.5rem)] bg-ui-canvas text-ui-text'>
             <div className='mx-auto flex w-full max-w-7xl flex-col gap-10 px-4 py-12 md:px-8 md:py-16'>
                 <section className='grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center'>
                     <div>

@@ -116,7 +116,7 @@ export default function PromptPortalClient({ initialState = emptyState }: { init
     }
 
     return (
-        <main className='min-h-screen bg-ui-canvas px-4 py-6 text-ui-text md:px-8'>
+        <main className='min-h-[calc(100vh-5.5rem)] bg-ui-canvas px-4 py-6 text-ui-text md:px-8'>
             <div className='mx-auto grid max-w-6xl gap-4'>
                 <header className='flex flex-col gap-3 border-b border-ui-border pb-4 md:flex-row md:items-end md:justify-between'>
                     <div>

@@ -36,7 +36,7 @@ export default function MonitorClient({ initialRows }: { initialRows: MonitorRow
     }, [initialRows, query, sort])
 
     return (
-        <main className='flex h-[calc(100vh-4.5rem)] min-h-full flex-col bg-ui-canvas text-ui-text'>
+        <main className='flex h-[calc(100vh-5.5rem)] min-h-full flex-col bg-ui-canvas text-ui-text'>
             <section className='border-b border-ui-border bg-ui-panel px-4 py-4 md:px-6'>
                 <div className='flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between'>
                     <div>

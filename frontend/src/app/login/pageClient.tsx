@@ -223,7 +223,7 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
     }, [redirectPath, router, serverExpired, serverInternal, socialError])
 
     return (
-        <section className='grid min-h-[calc(100vh-4.5rem)] w-full place-items-center bg-ui-canvas px-4 py-10 text-ui-text md:px-10'>
+        <section className='grid min-h-[calc(100vh-5.5rem)] w-full place-items-center bg-ui-canvas px-4 py-10 text-ui-text md:px-10'>
             <div className='grid w-full max-w-98 gap-4'>
                 <div className='grid justify-items-center gap-2 pb-3 text-center'>
                     <h1 className='text-[42px] font-semibold leading-none tracking-normal text-ui-primary'>Hanasand</h1>

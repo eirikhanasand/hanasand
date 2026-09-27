@@ -23,7 +23,6 @@ export default async function AIWindowPage() {
             initialShares={initialShares}
             initialRuntimeState={workspace.runtimeState}
             isAuthenticated={Boolean(id && token)}
-            compact
             mode='workspace'
         />
     )

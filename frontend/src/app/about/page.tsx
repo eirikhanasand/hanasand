@@ -37,7 +37,7 @@ const focus = [
 
 export default function AboutPage() {
     return (
-        <main className='min-h-[calc(100vh-4.5rem)] bg-ui-canvas text-ui-text'>
+        <main className='min-h-[calc(100vh-5.5rem)] bg-ui-canvas text-ui-text'>
             <section className='border-b border-ui-border bg-ui-panel'>
                 <div className='mx-auto grid max-w-7xl gap-10 px-4 py-14 md:px-8 md:py-20 lg:grid-cols-[0.9fr_1.1fr] lg:items-center'>
                     <div className='grid gap-5'>

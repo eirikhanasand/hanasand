@@ -22,7 +22,7 @@ type Coverage = {
 
 export default async function CoveragePage() {
     const coverage = await loadCoverage()
-    return <main className='min-h-[calc(100vh-4.5rem)] bg-ui-canvas px-4 py-10 text-ui-text md:px-8'><div className='mx-auto grid max-w-6xl gap-8'><header className='grid gap-4 border-b border-ui-border pb-8'><p className='text-sm font-semibold uppercase text-ui-primary'>Public measurement</p><h1 className='text-3xl font-semibold'>Intelligence feed coverage</h1><p className='max-w-3xl text-lg leading-8 text-ui-muted'>Coverage is counted only when a feed repeatedly produces useful retained intelligence and passes the qualification rules.</p><p className='text-xs text-ui-muted'>{coverage ? `Generated ${new Date(coverage.generatedAt).toLocaleString()}` : 'Coverage data is unavailable right now.'}</p></header>{coverage ? <CoverageContent coverage={coverage} /> : <Unavailable />}</div></main>
+    return <main className='min-h-[calc(100vh-5.5rem)] bg-ui-canvas px-4 py-10 text-ui-text md:px-8'><div className='mx-auto grid max-w-6xl gap-8'><header className='grid gap-4 border-b border-ui-border pb-8'><p className='text-sm font-semibold uppercase text-ui-primary'>Public measurement</p><h1 className='text-3xl font-semibold'>Intelligence feed coverage</h1><p className='max-w-3xl text-lg leading-8 text-ui-muted'>Coverage is counted only when a feed repeatedly produces useful retained intelligence and passes the qualification rules.</p><p className='text-xs text-ui-muted'>{coverage ? `Generated ${new Date(coverage.generatedAt).toLocaleString()}` : 'Coverage data is unavailable right now.'}</p></header>{coverage ? <CoverageContent coverage={coverage} /> : <Unavailable />}</div></main>
 }
 
 function CoverageContent({ coverage }: { coverage: Coverage }) {

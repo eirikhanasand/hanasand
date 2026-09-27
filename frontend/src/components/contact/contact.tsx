@@ -114,7 +114,7 @@ export default function Contact({ plan = '', intent = '' }: { plan?: string; int
     const canSubmit = formik.isValid && formik.dirty && !submitting
 
     return (
-        <section className='min-h-[calc(100vh-4.5rem)] bg-ui-canvas px-4 py-12 text-ui-text md:px-8 md:py-18'>
+        <section className='min-h-[calc(100vh-5.5rem)] bg-ui-canvas px-4 py-12 text-ui-text md:px-8 md:py-18'>
             <div className='mx-auto grid max-w-6xl gap-8 lg:grid-cols-[0.82fr_1.18fr] lg:items-start'>
                 <div className='grid gap-6'>
                     <div className='grid gap-4'>

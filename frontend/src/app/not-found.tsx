@@ -41,7 +41,7 @@ const recoveryLinks = [
 
 export default function NotFound() {
     return (
-        <main className='min-h-[calc(100vh-4.5rem)] bg-white px-4 py-10 text-black md:px-8'>
+        <main className='min-h-[calc(100vh-5.5rem)] bg-white px-4 py-10 text-black md:px-8'>
             <SupportAssistant force />
             <section className='mx-auto grid max-w-6xl gap-8 py-8 md:py-14'>
                 <div className='grid max-w-3xl gap-4'>

@@ -68,7 +68,7 @@ export default function CookieSettingsClient() {
     }
 
     return (
-        <main className='min-h-[calc(100vh-4.5rem)] bg-ui-canvas text-ui-text'>
+        <main className='min-h-[calc(100vh-5.5rem)] bg-ui-canvas text-ui-text'>
             <section className='border-b border-ui-border bg-ui-panel'>
                 <div className='mx-auto grid max-w-5xl gap-4 px-4 py-14 md:px-8 md:py-18'>
                     <p className='text-sm font-semibold uppercase text-ui-primary'>Settings</p>

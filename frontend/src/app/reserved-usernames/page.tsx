@@ -13,7 +13,7 @@ export const metadata: Metadata = buildRouteMetadata({
 
 export default function ReservedUsernamesPage() {
     return (
-        <main className='min-h-[calc(100vh-4.5rem)] bg-ui-canvas px-4 py-10 text-ui-text md:px-8 md:py-14'>
+        <main className='min-h-[calc(100vh-5.5rem)] bg-ui-canvas px-4 py-10 text-ui-text md:px-8 md:py-14'>
             <section className='mx-auto grid max-w-5xl gap-5'>
                 <div className='rounded-lg border border-ui-border bg-ui-panel p-5 shadow-md md:p-7'>
                     <div className='flex items-center gap-2 text-ui-primary'>

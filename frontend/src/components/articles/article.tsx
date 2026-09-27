@@ -22,7 +22,7 @@ export default async function Article({ id }: { id: string }) {
     const body = article.content.replace(/^\s*# .*(\r?\n)+/, '')
 
     return (
-        <article className='mx-auto grid min-h-[calc(100vh-4.5rem)] w-full max-w-4xl gap-6 bg-ui-canvas px-4 py-12 text-ui-text md:px-10 md:py-16 lg:px-0'>
+        <article className='mx-auto grid min-h-[calc(100vh-5.5rem)] w-full max-w-4xl gap-6 bg-ui-canvas px-4 py-12 text-ui-text md:px-10 md:py-16 lg:px-0'>
             <div className='grid gap-5 rounded-lg border border-ui-border bg-ui-panel p-5 shadow-sm shadow-ui-canvas/20 md:p-7'>
                 <Link
                     href='/articles'

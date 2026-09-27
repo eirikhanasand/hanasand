@@ -12,7 +12,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     }
 
     return (
-        <div className='grid min-h-[calc(100vh-4.5rem)] w-full gap-3 overflow-x-hidden bg-ui-canvas p-3 text-ui-text sm:p-5 md:h-[calc(100vh-4.5rem)] md:grid-cols-[20rem_minmax(0,1fr)] md:p-6 xl:grid-cols-[22rem_minmax(0,1fr)] lg:p-8'>
+        <div className='grid min-h-[calc(100vh-5.5rem)] w-full gap-3 overflow-x-hidden bg-ui-canvas p-3 text-ui-text sm:p-5 md:h-[calc(100vh-5.5rem)] md:grid-cols-[20rem_minmax(0,1fr)] md:p-6 xl:grid-cols-[22rem_minmax(0,1fr)] lg:p-8'>
             <TestPageClient test={test} />
         </div>
     )

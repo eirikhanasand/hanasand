@@ -14,7 +14,7 @@ export const metadata: Metadata = buildRouteMetadata({
 
 export default function PricingPage() {
     return (
-        <main className='min-h-[calc(100vh-4.5rem)] bg-ui-canvas px-4 py-14 text-ui-text md:px-8'>
+        <main className='min-h-[calc(100vh-5.5rem)] bg-ui-canvas px-4 py-14 text-ui-text md:px-8'>
             <div className='mx-auto grid max-w-7xl gap-8'>
                 <header className='mx-auto grid max-w-3xl gap-3 text-center'>
                     <p className='text-sm font-semibold uppercase text-ui-primary'>Pricing</p>

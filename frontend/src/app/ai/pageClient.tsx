@@ -21,7 +21,6 @@ export default function AIPageClient({
     initialShares,
     initialRuntimeState,
     isAuthenticated,
-    compact = false,
     mode = 'landing',
     initialConversationId = null,
 }: {
@@ -34,7 +33,6 @@ export default function AIPageClient({
     initialShares: Share[]
     initialRuntimeState: AIRuntimeState | null
     isAuthenticated: boolean
-    compact?: boolean
     mode?: AIPageMode
     initialConversationId?: string | null
 }) {
@@ -64,7 +62,7 @@ export default function AIPageClient({
     }
 
     return (
-        <div className={`${compact ? 'h-screen' : 'h-full'} enterprise-console relative w-full overflow-hidden bg-ui-canvas text-ui-text`}>
+        <div className='h-full enterprise-console relative w-full overflow-hidden bg-ui-canvas text-ui-text'>
             <div className='flex h-full min-h-0 flex-col'>
                 {showHeader ? (
                     <div className='flex h-14 items-center justify-between border-b border-ui-border bg-ui-panel px-5'>

@@ -70,7 +70,7 @@ const trustPractices = [
 
 export default function TrustPage() {
     return (
-        <main className='min-h-[calc(100vh-4.5rem)] bg-ui-canvas text-ui-text'>
+        <main className='min-h-[calc(100vh-5.5rem)] bg-ui-canvas text-ui-text'>
             <section className='border-b border-ui-border bg-ui-panel'>
                 <div className='mx-auto grid max-w-7xl gap-10 px-4 py-14 md:px-8 md:py-20 lg:grid-cols-[minmax(0,0.9fr)_minmax(25rem,0.72fr)] lg:items-center'>
                     <div className='grid gap-5'>

@@ -95,11 +95,11 @@ export default function BrowserReportPageClient({ runId = '', token = '', result
     }, [endpoint, resultId])
 
     if (error) {
-        return <main className='min-h-[calc(100vh-4.5rem)] bg-ui-canvas p-6 text-ui-text'><div className='mx-auto max-w-3xl rounded-lg border border-ui-border bg-ui-panel p-6'>{error}</div></main>
+        return <main className='min-h-[calc(100vh-5.5rem)] bg-ui-canvas p-6 text-ui-text'><div className='mx-auto max-w-3xl rounded-lg border border-ui-border bg-ui-panel p-6'>{error}</div></main>
     }
 
     if (!report) {
-        return <main className='min-h-[calc(100vh-4.5rem)] bg-ui-canvas p-6 text-ui-muted'><div className='mx-auto max-w-3xl rounded-lg border border-ui-border bg-ui-panel p-6'>Loading browser report...</div></main>
+        return <main className='min-h-[calc(100vh-5.5rem)] bg-ui-canvas p-6 text-ui-muted'><div className='mx-auto max-w-3xl rounded-lg border border-ui-border bg-ui-panel p-6'>Loading browser report...</div></main>
     }
 
     const analystReport = report.analystReport || {}
