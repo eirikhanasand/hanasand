@@ -649,7 +649,7 @@ function ContainerDetails({
 }
 
 function VmTableRow({ vm, metrics }: { vm: VM, metrics?: VMMetrics }) {
-    const owner = vm.owner || vm.created_by || 'Unassigned'
+    const owner = vm.organization_name || vm.owner || vm.created_by || 'Unassigned'
     return (
         <tr className='text-ui-text'>
             <td className='py-3 pr-3 font-semibold text-ui-text'>{vm.name}</td>

@@ -16,7 +16,7 @@ export default function VMOverview({ boxStyle, boxTitleStyle, vm, details }: VMD
         <div className={boxStyle}>
             <h1 className={boxTitleStyle}>Overview</h1>
             <Field title='Name' value={vm.name} />
-            <Field title='Owner' value={vm.owner} />
+            <Field title='Owner' value={vm.organization_name || vm.owner} />
             <Field title='Created by' value={vm.created_by} />
             <Field title='Created at' value={vm.created} />
             <Field title='Type' value={vm.type} />
