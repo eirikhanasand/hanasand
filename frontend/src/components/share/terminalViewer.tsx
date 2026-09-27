@@ -77,7 +77,7 @@ export default function TerminalViewer({ open, share, chunks, status, sendInput,
         }
 
         const styles = getComputedStyle(document.documentElement)
-        const colorValue = (name: string, fallback: string) => styles.getPropertyValue(name).trim() || fallback
+        const colorValue = (name: string) => styles.getPropertyValue(name).trim()
         const term = new Terminal({
             cursorBlink: true,
             convertEol: false,
