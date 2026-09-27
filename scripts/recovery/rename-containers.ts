@@ -28,7 +28,7 @@ function rewrite(value) {
     if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, rewrite(item)]))
     return value
 }
-function dockerJson(args) { return JSON.parse(execFileSync('docker', args, { encoding: 'utf8' })) }
+function dockerJson(args) { return JSON.parse(execFileSync('docker', args, { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })) }
 function run(args) { execFileSync('docker', args, { stdio: 'inherit' }) }
 function save(pathname, value) { writeFileSync(pathname, value) }
 

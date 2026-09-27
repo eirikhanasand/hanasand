@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { engineFor, growth } from './database-metrics.ts'
+import { DOCKER_INSPECT_MAX_BUFFER, engineFor, growth } from './database-metrics.ts'
 
 describe('database storage metrics', () => {
     test('waits for enough history before estimating growth', () => {
+        expect(DOCKER_INSPECT_MAX_BUFFER).toBe(32 * 1024 * 1024)
         const result = growth([], 1000, 100, 1)
         expect(result.daily).toBeNull()
         expect(result.days).toBeNull()

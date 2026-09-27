@@ -18,7 +18,7 @@ export function save(file: string, value: unknown) {
 }
 
 function docker(pathname: string): any {
-    const result = spawnSync('curl', ['--silent', '--show-error', '--fail-with-body', '--unix-socket', '/var/run/docker.sock', `http://localhost/v1.45${pathname}`], { encoding: 'utf8', timeout: 600_000 })
+    const result = spawnSync('curl', ['--silent', '--show-error', '--fail-with-body', '--unix-socket', '/var/run/docker.sock', `http://localhost/v1.45${pathname}`], { encoding: 'utf8', timeout: 600_000, maxBuffer: 32 * 1024 * 1024 })
     if (result.status !== 0) throw new Error(`Docker inspection failed: ${result.stderr || result.stdout}`)
     return JSON.parse(result.stdout)
 }

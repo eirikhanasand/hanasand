@@ -5,8 +5,9 @@ import { statfsSync, statSync } from 'node:fs'
 import { readFile, rename, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 
+export const DOCKER_INSPECT_MAX_BUFFER = 32 * 1024 * 1024
 export function command(args, timeout = 15_000) {
-    return execFileSync(args[0], args.slice(1), { timeout, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+    return execFileSync(args[0], args.slice(1), { timeout, maxBuffer: DOCKER_INSPECT_MAX_BUFFER, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
 }
 
 export function engineFor(item) {
