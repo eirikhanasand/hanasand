@@ -654,7 +654,7 @@ function VmTableRow({ vm, metrics }: { vm: VM, metrics?: VMMetrics }) {
         <tr className='text-ui-text'>
             <td className='py-3 pr-3 font-semibold text-ui-text'>{vm.name}</td>
             <td className='px-3 py-3'>{owner}</td>
-            <td className='px-3 py-3'>{(vm.status || '').toLowerCase() === 'stopped' ? '0%' : metrics ? formatPercent(metrics.cpu_usage_percent) : 'Loading…'}</td>
+            <td className='px-3 py-3'>{(vm.status || '').toLowerCase() === 'offline' ? '—' : (vm.status || '').toLowerCase() === 'stopped' ? '0%' : metrics ? formatPercent(metrics.cpu_usage_percent) : 'Loading…'}</td>
             <td className='px-3 py-3'>{metrics ? `${metrics.ram_used_mb}/${metrics.ram_total_mb} MB` : vm.limits_memory || 'checking'}</td>
             <td className='px-3 py-3'>{vm.status || 'Checking'}</td>
             <td className='py-3 pl-3 text-right'>
