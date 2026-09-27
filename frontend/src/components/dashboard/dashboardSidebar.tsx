@@ -33,7 +33,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
     const storageKey = `dashboard-navigation:v1:${access.id}`
     const [preferences, setPreferences] = useState<Preferences>(initialPreferences)
     const [query, setQuery] = useState('')
-    const [preview, setPreview] = useState<{ section: NavigationItem, top: number } | null>(null)
+    const [preview, setPreview] = useState<{ section: NavigationItem, top: number, maxHeight: number } | null>(null)
     const previewCloseTimer = useRef<number | null>(null)
     const previewPanel = useRef<HTMLDivElement | null>(null)
     const mode = useSyncExternalStore(
@@ -169,16 +169,35 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
         return () => window.removeEventListener('keydown', closeOnEscape)
     }, [preview])
 
+    function previewMinTop() {
+        const headerBottom = document.querySelector<HTMLElement>('[data-site-header]')?.getBoundingClientRect().bottom ?? 72
+        return headerBottom + 16
+    }
+
+    function previewMaxHeight() {
+        return Math.max(0, window.innerHeight - previewMinTop() - 16)
+    }
+
     useLayoutEffect(() => {
         if (!preview || !previewPanel.current) return
-        const maxTop = Math.max(8, window.innerHeight - previewPanel.current.getBoundingClientRect().height - 8)
-        if (preview.top > maxTop) setPreview({ ...preview, top: maxTop })
+        const updateBounds = () => {
+            const minTop = previewMinTop()
+            const maxHeight = previewMaxHeight()
+            const panelHeight = Math.min(previewPanel.current?.scrollHeight ?? maxHeight, maxHeight)
+            const top = Math.max(minTop, Math.min(preview.top, window.innerHeight - 16 - panelHeight))
+            setPreview(current => current && (current.top !== top || current.maxHeight !== maxHeight)
+                ? { ...current, top, maxHeight }
+                : current)
+        }
+        updateBounds()
+        window.addEventListener('resize', updateBounds)
+        return () => window.removeEventListener('resize', updateBounds)
     }, [preview])
 
     function showPreview(section: NavigationItem, element: HTMLElement) {
         if (previewCloseTimer.current !== null) window.clearTimeout(previewCloseTimer.current)
         const bounds = element.getBoundingClientRect()
-        setPreview({ section, top: Math.max(8, Math.min(bounds.top, window.innerHeight - 240)) })
+        setPreview({ section, top: Math.max(previewMinTop(), bounds.top), maxHeight: previewMaxHeight() })
     }
 
     function deferPreviewClose() {
@@ -186,16 +205,31 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
         previewCloseTimer.current = window.setTimeout(() => setPreview(null), 140)
     }
 
-    function renderPreviewItems(items: NavigationItem[], depth = 0) {
-        return items.map(item => item.items
-            ? <div key={`${depth}-${item.label}`} className='py-1'>
-                <p className='px-3 py-1 text-xs font-semibold text-ui-muted'>{item.label}</p>
-                {renderPreviewItems(item.items, depth + 1)}
-            </div>
-            : item.href ? <Link key={item.href} href={item.href} onClick={() => setPreview(null)} aria-current={active?.href === item.href ? 'page' : undefined}
-                className={`block rounded-md px-3 py-2 text-sm leading-5 hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary ${depth ? 'ml-3' : ''} ${active?.href === item.href ? 'bg-ui-primary/10 font-semibold text-ui-primary' : 'text-ui-text'}`}>
+    function renderPreviewItems(items: NavigationItem[], ancestors: string[] = []) {
+        return items.map(item => {
+            const path = [...ancestors, item.label]
+            const key = path.join('/')
+            if (item.items) {
+                const expanded = isExpanded(key)
+                const controls = `${domId}-preview-${encodeURIComponent(key)}`
+                return <div key={key} className='py-0.5'>
+                    <button type='button' aria-expanded={expanded} aria-controls={controls} onClick={() => toggle(key)}
+                        className='flex min-h-9 w-full items-center gap-2 rounded-md py-1.5 pr-2 text-left text-sm font-medium text-ui-text hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary'
+                        style={{ paddingLeft: 12 + ancestors.length * 12 }}>
+                        <span className='min-w-0 flex-1'>{item.label}</span>
+                        <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${expanded ? '' : '-rotate-90'}`} />
+                    </button>
+                    <div id={controls} hidden={!expanded} className='border-l border-ui-border'>
+                        {renderPreviewItems(item.items, path)}
+                    </div>
+                </div>
+            }
+            return item.href ? <Link key={item.href} href={item.href} onClick={() => setPreview(null)} aria-current={active?.href === item.href ? 'page' : undefined}
+                className={`block rounded-md py-2 pr-3 text-sm leading-5 hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary ${active?.href === item.href ? 'bg-ui-primary/10 font-semibold text-ui-primary' : 'text-ui-text'}`}
+                style={{ paddingLeft: 12 + ancestors.length * 12 }}>
                 {item.label}
-            </Link> : null)
+            </Link> : null
+        })
     }
 
     return (
@@ -244,10 +278,10 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
                 <div ref={previewPanel} role='region' aria-label={`${preview.section.label} navigation`} onMouseEnter={() => {
                     if (previewCloseTimer.current !== null) window.clearTimeout(previewCloseTimer.current)
                 }} onMouseLeave={deferPreviewClose}
-                style={{ position: 'fixed', left: 80, top: preview.top, maxHeight: 'calc(100dvh - 16px)' }}
+                style={{ position: 'fixed', left: 80, top: preview.top, maxHeight: preview.maxHeight }}
                 className='z-[200] w-72 overflow-y-auto rounded-xl border border-ui-border bg-ui-panel p-2 text-ui-text shadow-xl shadow-black/20'>
                     <p className='px-3 py-2 text-sm font-semibold'>{preview.section.label}</p>
-                    {renderPreviewItems(preview.section.items || [])}
+                    {renderPreviewItems(preview.section.items || [], [preview.section.label])}
                 </div>, document.body,
             )}
             <nav aria-label='Workspace shortcuts' className='mt-2 grid gap-1 border-t border-ui-border pt-2 lg:hidden'>
