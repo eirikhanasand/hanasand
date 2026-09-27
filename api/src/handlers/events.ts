@@ -30,6 +30,7 @@ import { accessRule, accessRuleId, accessDefinition } from '#utils/events/analyz
 
 import { matchesRule, type Condition } from '#utils/events/conditions.ts'
 import { customRetentionAction, recordCustomDropReceipts } from '#utils/events/customRetention.ts'
+import { cachedRead, invalidateReadCache, ReadAdmissionError } from '#utils/readCache.ts'
 export { matchesRule } from '#utils/events/conditions.ts'
 
 type Event = Record<string, unknown>
@@ -257,6 +258,7 @@ export async function postRulePreview(req: FastifyRequest, res: FastifyReply) {
             || message.includes('connection timeout') || message.includes('timeout exceeded when trying to connect') || message.includes('timeout expired')
             || message.includes('connection terminated') || message.includes('connection refused') || message.includes('connection reset'))
             return res.header('Retry-After', '2').status(503).send({ error: 'Preview is temporarily busy. Try again shortly.' })
+        if (error instanceof ReadAdmissionError) return res.header('Retry-After', '2').status(503).send({ error: error.message })
         throw error
     }
 }
@@ -301,7 +303,12 @@ export async function getRules(req: FastifyRequest, res: FastifyReply) {
         canManageRules(access.role) ? hasRole(req, res, 'system_admin') : Promise.resolve({ valid: false }),
     ])
     const rules = configured.filter(rule => !query.category || ruleCategory(rule) === query.category)
-    const hits = query.view === 'definitions' ? new Map<string, number>() : await loadRuleHits(access.organizationId, rules, run)
+    let hits: Map<string, number>
+    try { hits = query.view === 'definitions' ? new Map<string, number>() : await loadRuleHits(access.organizationId, rules, run) }
+    catch (error) {
+        if (error instanceof ReadAdmissionError) return res.header('Retry-After', '2').status(503).send({ error: error.message })
+        throw error
+    }
     return res.send({ organizationId: access.organizationId, rules: rules.map(rule => ({ ...(compact ? listRule(rule) : rule),
         hitCount: rule.definition?.stage === 'analyze' && rule.definition.action === 'keep' ? null : hits.get(rule.id) ?? 0,
     })), canManageRetention: retentionRole.valid })
@@ -426,13 +433,19 @@ export async function getRule(req: FastifyRequest<{ Params: { id: string }, Quer
         displayedRule = { ...rule, ...snapshot, definition: rule.source === 'hanasand' ? builtinDefinition(rule, snapshot.definition) : snapshot.definition }
     }
     const offset = Math.max(0, Math.min(1000000, Number.parseInt(req.query.offset || '0', 10) || 0))
-    const [audit, hits] = await Promise.all([
-        run(`SELECT id, event_type, actor_id, created_at, context
-            FROM system_events WHERE organization_id = $1 AND object_type = 'event_rule'
-            AND (object_id = $2 OR object_id = $3 OR context->>'ruleId' = $2)
-            ORDER BY created_at DESC, id DESC LIMIT 51 OFFSET $4`, [access.organizationId, rule.id, rule.recordId || rule.id, offset]),
-        loadRuleHits(access.organizationId, [rule], run),
-    ])
+    let audit: { rows: any[] }, hits: Map<string, number>
+    try {
+        [audit, hits] = await Promise.all([
+            run(`SELECT id, event_type, actor_id, created_at, context
+                FROM system_events WHERE organization_id = $1 AND object_type = 'event_rule'
+                AND (object_id = $2 OR object_id = $3 OR context->>'ruleId' = $2)
+                ORDER BY created_at DESC, id DESC LIMIT 51 OFFSET $4`, [access.organizationId, rule.id, rule.recordId || rule.id, offset]),
+            loadRuleHits(access.organizationId, [rule], run),
+        ])
+    } catch (error) {
+        if (error instanceof ReadAdmissionError) return res.header('Retry-After', '2').status(503).send({ error: error.message })
+        throw error
+    }
     const hitCount = rule.definition?.stage === 'analyze' && rule.definition.action === 'keep' ? null : hits.get(rule.id) ?? 0
     const canEdit = !isHistorical && canManageRules(access.role) && (!([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') || (await hasRole(req, res, 'system_admin')).valid)
     return res.send({ organizationId: access.organizationId, canEdit, isHistorical, currentVersion: rule.version, rule: displayedRule, triggerCount: hitCount, audit: audit.rows.slice(0, 50), nextOffset: audit.rows.length > 50 ? offset + 50 : null })
@@ -481,7 +494,7 @@ class RuleConflict extends Error { constructor() { super('This rule changed sinc
 
 async function saveRule(req: FastifyRequest, access: { organizationId: string, userId: string }, rule: Rule, action: string, expectedVersion?: string, preserveEnabled = false) {
     if (rule.definition?.action === 'drop') rule = { ...rule, severity: 'low' }
-    return withTransaction(async query => {
+    const saved = await withTransaction(async query => {
         // Serialize edits even when a built-in rule has no organization override yet.
         await query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`event-rule:${access.organizationId}:${rule.id}`])
         const existing = await query('SELECT * FROM rules WHERE organization_id = $1 AND rule_id = $2 FOR UPDATE', [access.organizationId, rule.id])
@@ -499,6 +512,9 @@ async function saveRule(req: FastifyRequest, access: { organizationId: string, u
         await recordSystemEvent(req, { actionType: action, actorId: access.userId, organizationId: access.organizationId, source: 'event', targetType: 'event_rule', targetId: rule.id, context: { ruleId: rule.id, before, after } }, query)
         return { ...rule, version: after.version, enabled: after.enabled, recordId: result.rows[0].id }
     })
+    invalidateReadCache(`rules:${access.organizationId}:`)
+    invalidateReadCache(`rule-hits:${access.organizationId}:`)
+    return saved
 }
 
 export async function organizationAccess(req: FastifyRequest, res: FastifyReply) {
@@ -527,6 +543,13 @@ export async function organizationAccess(req: FastifyRequest, res: FastifyReply)
 }
 
 export async function loadConfiguredRules(organizationId: string, query: typeof run = run, summary = false): Promise<Rule[]> {
+    if (process.env.NODE_ENV !== 'test' && (query as typeof run & { primaryDatabaseRunner?: boolean }).primaryDatabaseRunner) {
+        return cachedRead(`rules:${organizationId}:${summary ? 'summary' : 'full'}`, 5000, () => loadConfiguredRulesUncached(organizationId, query, summary))
+    }
+    return loadConfiguredRulesUncached(organizationId, query, summary)
+}
+
+async function loadConfiguredRulesUncached(organizationId: string, query: typeof run, summary = false): Promise<Rule[]> {
     const result = await query(`
         SELECT id, rule_id, version, name, family, severity, explanation,
             ${summary ? 'jsonb_build_object(\'stage\', definition->\'stage\', \'action\', definition->\'action\') AS definition, NULL AS source_reference' : 'definition, source_reference'}, source, enabled

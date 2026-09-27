@@ -88,6 +88,8 @@ export default async function run(query: string, params?: SQLParamType, name?: s
     }
 }
 
+;(run as typeof run & { primaryDatabaseRunner?: boolean }).primaryDatabaseRunner = true
+
 export async function queryOnce(query: string, params?: SQLParamType, name?: string) {
     const client = await activePool().connect().catch(error => {
         // No query has been submitted yet: one retry can survive a brief pool

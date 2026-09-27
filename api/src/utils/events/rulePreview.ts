@@ -4,6 +4,7 @@ import { Worker } from 'node:worker_threads'
 import { matchesRule, type Condition } from './conditions.ts'
 import { previewPredicate } from './previewPredicate.ts'
 import { loadLogRetentionRules, retentionStoreMatches } from './customRetention.ts'
+import { cachedRead } from '../readCache.ts'
 
 export type PreviewEvent = { id: string, timestamp: string, normalized: Record<string, unknown>, rank: number }
 type Cursor = { time: string, id: string }
@@ -11,6 +12,14 @@ export type PreviewRequest = { from: string | null, until: string, cursor?: Curs
 
 // Page database-filtered candidates, then retain the authoritative runtime check.
 export async function scanRulePreview(organizationId: string, canReadLogs: boolean, input: PreviewRequest, query = run) {
+    if (process.env.NODE_ENV !== 'test' && (query as typeof run & { primaryDatabaseRunner?: boolean }).primaryDatabaseRunner && !input.sample) {
+        const key = `rule-preview:${organizationId}:${canReadLogs ? 'logs' : 'public'}:${JSON.stringify(input)}`
+        return cachedRead(key, 5000, () => scanRulePreviewUncached(organizationId, canReadLogs, input, query))
+    }
+    return scanRulePreviewUncached(organizationId, canReadLogs, input, query)
+}
+
+async function scanRulePreviewUncached(organizationId: string, canReadLogs: boolean, input: PreviewRequest, query = run) {
     const params: (string | boolean | null | string[])[] = [organizationId, canReadLogs, input.until, input.from, input.cursor?.time || null, input.cursor?.id || '']
     const filter = previewPredicate(input.conditions, params)
     const scope = [

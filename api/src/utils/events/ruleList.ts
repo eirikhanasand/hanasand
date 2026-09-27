@@ -2,6 +2,7 @@ import { cdnDeliveryRuleId } from './analyzeCdnDelivery.ts'
 import { sshTransportRuleId } from './analyzeSshTransport.ts'
 import { ingestionRuleId } from './analyzeIngestion.ts'
 import type run from '#db'
+import { cachedRead } from '../readCache.ts'
 import { accessRuleId } from './analyzeAccess.ts'
 import { mongoRuleId } from './analyzeMongo.ts'
 import { postgresRuleId } from './analyzePostgres.ts'
@@ -34,6 +35,14 @@ const aggregateTables = new Map([
     [modelDiscoveryRuleId, ['log_model_probe_receipts', 'count(*)']], [readinessAuditRuleId, ['log_readiness_audit_receipts', 'count(*)']],
 ])
 export async function loadRuleHits(organizationId: string, rules: Pick<Rule, 'id' | 'source' | 'definition'>[], query: typeof run) {
+    if (process.env.NODE_ENV !== 'test' && (query as typeof run & { primaryDatabaseRunner?: boolean }).primaryDatabaseRunner) {
+        const key = `rule-hits:${organizationId}:${rules.map(rule => `${rule.id}:${rule.source || ''}:${rule.definition?.stage || ''}:${rule.definition?.action || ''}`).join(',')}`
+        return cachedRead(key, 5000, () => loadRuleHitsUncached(organizationId, rules, query))
+    }
+    return loadRuleHitsUncached(organizationId, rules, query)
+}
+
+async function loadRuleHitsUncached(organizationId: string, rules: Pick<Rule, 'id' | 'source' | 'definition'>[], query: typeof run) {
     const ids = rules.map(rule => rule.id)
     if (!ids.length) return new Map<string, number>()
     const customDropIds = new Set(rules.filter(rule => rule.source === 'owned' && rule.definition?.stage === 'analyze' && rule.definition.action === 'drop').map(rule => rule.id))
