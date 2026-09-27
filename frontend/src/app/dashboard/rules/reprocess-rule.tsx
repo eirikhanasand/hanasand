@@ -5,12 +5,13 @@ import RulePreview from './rule-preview'
 
 type Job = { id: string, rule_version: string, status: string, scanned: string, matched: string, protected: string,
     removed_events: string, removed_sources: string, error: string | null, created_at: string, updated_at: string }
+type Existing = { count: number, bytes: number }
 const active = (job?: Job) => job && ['queued', 'running'].includes(job.status)
 const number = (value: string) => Number(value).toLocaleString()
 const removed = (value: string, noun: string) => `${number(value)} ${noun}${Number(value) === 1 ? '' : 's'} removed`
 
 export default function ReprocessRule({ rule, organizationId, disabled }: { rule: Rule, organizationId: string, disabled: boolean }) {
-    const [jobs, setJobs] = useState<Job[]>([]), [error, setError] = useState(''), [busy, setBusy] = useState(false)
+    const [jobs, setJobs] = useState<Job[]>([]), [existing, setExisting] = useState<Existing | null>(null), [loaded, setLoaded] = useState(false), [error, setError] = useState(''), [busy, setBusy] = useState(false)
     const [open, setOpen] = useState(false), [range, setRange] = useState('24'), [confirmed, setConfirmed] = useState(false)
     const [previewReady, setPreviewReady] = useState(false), [refresh, setRefresh] = useState(0)
     const ready = useCallback((value: boolean) => setPreviewReady(value), [])
@@ -22,9 +23,11 @@ export default function ReprocessRule({ rule, organizationId, disabled }: { rule
         let timer: ReturnType<typeof setTimeout>
         const load = async () => {
             try {
-                const result = await requestJson<{ jobs: Job[] }>(endpoint, { signal: controller.signal })
+                const result = await requestJson<{ jobs: Job[], existing: Existing | null }>(endpoint, { signal: controller.signal })
                 if (controller.signal.aborted) return
                 setJobs(result.jobs)
+                setExisting(result.existing)
+                setLoaded(true)
                 if (result.jobs.some(active)) timer = setTimeout(load, 10_000)
             } catch (cause) { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Could not load progress.') }
         }
@@ -52,10 +55,18 @@ export default function ReprocessRule({ rule, organizationId, disabled }: { rule
         } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not stop reprocessing.') }
         finally { setBusy(false) }
     }
+    if (!loaded || !existing?.count) return null
+    const formatBytes = (value: number) => {
+        if (value < 1024) return `${value} B`
+        const units = ['KB', 'MB', 'GB', 'TB']
+        let amount = value / 1024, unit = 0
+        while (amount >= 1024 && unit < units.length - 1) { amount /= 1024; unit++ }
+        return `${amount >= 10 ? Math.round(amount) : amount.toFixed(1)}${units[unit]}`
+    }
     return <section aria-label='Reprocess existing logs' className='grid gap-4 rounded-xl border border-ui-border bg-ui-panel p-5 sm:p-6'>
-        <div className='flex flex-wrap items-center justify-between gap-3'><h2 className='text-sm font-semibold'>Existing logs</h2>
+        <div className='flex flex-wrap items-center justify-between gap-3'><div><h2 className='text-sm font-semibold'>Existing logs</h2><p className='mt-1 text-sm text-ui-muted'>{existing.count.toLocaleString()} Matching logs in the database.</p><p className='text-xs text-ui-muted'>{formatBytes(existing.bytes)}</p></div>
             <button type='button' disabled={disabled || running || busy || rule.enabled === false || rule.definition?.action !== 'drop'}
-                onClick={() => { setOpen(!open); setConfirmed(false); setPreviewReady(false) }} className='rounded-lg border border-ui-border px-3 py-2 text-sm disabled:opacity-50'>Reprocess existing logs</button></div>
+                onClick={() => { setOpen(!open); setConfirmed(false); setPreviewReady(false) }} className='rounded-lg border border-ui-border px-3 py-2 text-sm disabled:opacity-50'>Reprocess</button></div>
         {disabled && <p className='text-xs text-ui-muted'>Save your changes before reprocessing.</p>}
         {error && <p role='alert' className='text-sm text-ui-text'>{error}<button type='button' onClick={() => { setError(''); setRefresh(value => value + 1) }} className='ml-2 underline'>Refresh</button></p>}
         {open && <div className='grid gap-4'>
