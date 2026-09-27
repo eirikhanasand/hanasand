@@ -1,5 +1,4 @@
-import { ArticleAnalyticsPanel, ArticleAnalyticsProvider, ArticleAnalyticsToggle } from '@/components/articles/dashboardAnalytics'
-import DashboardArticlesTable from '@/components/articles/dashboardArticlesTable'
+import DashboardArticle from '@/components/articles/dashboardArticle'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import fetchWorkspaceContent from '@/utils/organizations/fetchWorkspaceContent'
 import { Clock3, FileText, Plus, Radio, Timer } from 'lucide-react'
@@ -17,7 +16,7 @@ export default async function Page() {
             <DashboardHeader
                 eyebrow='Publishing'
                 title='Articles'
-                description='Published articles and drafts.'
+                description='Editorial queue, latest movement, and published research rows.'
                 actions={
                     <Link href='/content/articles/create' className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary transition hover:opacity-90'>
                         <Plus className='h-4 w-4' />
@@ -40,32 +39,31 @@ export default async function Page() {
                 </div>
             </DashboardPanel> : null}
 
-            {articles.length ? <ArticleAnalyticsProvider>
-                <ArticleAnalyticsPanel>
-                    <EditorialMetric icon={<FileText className='h-4 w-4' />} label='Published' value={String(articles.length)} detail='articles' tone={articles.length ? 'ok' : 'watch'} />
-                    <EditorialMetric icon={<Clock3 className='h-4 w-4' />} label='Latest edit' value={latest ? shortDate(latest.modified || latest.created) : 'Ready'} detail={latest?.title || 'Create the first article'} tone={latest ? 'ok' : 'neutral'} />
-                    <EditorialMetric icon={<Timer className='h-4 w-4' />} label='Reading time' value={totalMinutes ? `${totalMinutes} min` : 'Metering'} detail={`${totalWords.toLocaleString('en-US')} words`} tone='neutral' />
-                    <EditorialMetric icon={<Radio className='h-4 w-4' />} label='Publishing' value={articles.length ? 'Live' : 'Open'} tone={articles.length ? 'ok' : 'watch'} />
-                </ArticleAnalyticsPanel>
+            {articles.length ? <section className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
+                <EditorialMetric icon={<FileText className='h-4 w-4' />} label='Published' value={String(articles.length)} detail='articles' tone={articles.length ? 'ok' : 'watch'} />
+                <EditorialMetric icon={<Clock3 className='h-4 w-4' />} label='Latest edit' value={latest ? shortDate(latest.modified || latest.created) : 'Ready'} detail={latest?.title || 'Create the first article'} tone={latest ? 'ok' : 'neutral'} />
+                <EditorialMetric icon={<Timer className='h-4 w-4' />} label='Reading time' value={totalMinutes ? `${totalMinutes} min` : 'Metering'} detail={`${totalWords.toLocaleString('en-US')} words`} tone='neutral' />
+                <EditorialMetric icon={<Radio className='h-4 w-4' />} label='Publishing' value={articles.length ? 'Live' : 'Open'} tone={articles.length ? 'ok' : 'watch'} />
+            </section> : null}
 
-                <DashboardPanel className='overflow-hidden rounded-md border-ui-border bg-ui-raised/20 p-0'>
-                    <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border bg-ui-panel px-4 py-3'>
-                        <div>
-                            <h2 className='text-base font-semibold text-ui-text'>Articles</h2>
-                            <p className='mt-1 text-sm text-ui-muted'>{articles.length ? 'Published and draft articles.' : 'Create an article to get started.'}</p>
-                        </div>
-                        <div className='flex items-center gap-2'>
-                            <span className='rounded-md border border-ui-border bg-ui-raised px-3 py-1 text-xs font-semibold text-ui-muted'>
-                                {articles.length} {articles.length === 1 ? 'Article' : 'Articles'}
-                            </span>
-                            <ArticleAnalyticsToggle />
-                        </div>
+            {articles.length ? <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
+                <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border bg-ui-panel px-4 py-3'>
+                    <div>
+                        <h2 className='text-base font-semibold text-ui-text'>Editorial queue</h2>
+                        <p className='mt-1 text-sm text-ui-muted'>{articles.length ? 'Newest published and draft rows are streaming here.' : 'The writing queue is open.'}</p>
                     </div>
-                    {articles.length
-                        ? <DashboardArticlesTable articles={articles} />
-                        : <div className='p-4 text-sm text-ui-muted'>No articles yet. Create an article to get started.</div>}
-                </DashboardPanel>
-            </ArticleAnalyticsProvider> : null}
+                    <span className='rounded-full border border-ui-primary/35 bg-ui-primary/10 px-3 py-1 text-xs font-semibold text-ui-on-primary'>
+                        {articles.length} rows
+                    </span>
+                </div>
+                <div className='grid gap-1 p-3'>
+                    {articles.length ? articles.map((article) => <DashboardArticle key={article.id} article={article} />) : (
+                        <div className='rounded-lg border border-dashed border-ui-border bg-ui-canvas p-4 text-sm text-ui-muted'>
+                            Editorial queue is clear. Create an article to start the stream.
+                        </div>
+                    )}
+                </div>
+            </DashboardPanel> : null}
         </DashboardPage>
     )
 }

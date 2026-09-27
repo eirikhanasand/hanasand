@@ -6,28 +6,21 @@ import { renderToStaticMarkup } from 'react-dom/server'
 let articles: unknown[] = []
 let thoughts: unknown[] = []
 mock.module('../src/utils/organizations/fetchWorkspaceContent', () => ({ default: async (kind: string) => kind === 'articles' ? articles : thoughts }))
-mock.module('../src/components/articles/dashboardArticle', () => ({ default: () => null }))
+mock.module('../src/components/articles/dashboardArticle', () => ({ default: ({ article }: { article: { title: string } }) => article.title }))
 mock.module('../src/components/thoughts/dashboardThought', () => ({ default: () => null }))
 const { default: Articles } = await import('../src/app/dashboard/articles/page')
 const { default: Thoughts } = await import('../src/app/dashboard/thoughts/page')
 
 for (const articleYear of [2025, new Date().getFullYear(), 2027]) {
-    articles = [{ id: 'article', title: 'Example article', content: 'Example', created: `${articleYear}-10-12T12:38:00`, metadata: { wordCount: 810, estimatedMinutes: 4, author: 'Ada', category: 'Research', pageVisits: 42 } }]
+    articles = [{ id: 'article', title: 'Example article', content: 'Example', created: `${articleYear}-10-12T12:38:00`, metadata: { wordCount: 810, estimatedMinutes: 4 } }]
     const html = renderToStaticMarkup(await Articles())
-    assert(html.includes('aria-label="Show article analytics"'))
-    assert(html.includes('aria-expanded="false"'))
+    assert(html.includes('Editorial queue'))
+    assert(html.includes('Example article'))
     assert(!html.includes('id="article-analytics"'))
-    assert(!html.includes('810 words'))
+    assert(html.includes('810 words'))
     assert(!html.includes('indexed'))
     assert(!html.includes('new drafts and deletes'))
-    assert(html.includes('>1 Article</span>'))
-    assert(html.includes('<table'))
-    for (const label of ['Title', 'Author', 'Publish date', 'Page visits', 'Category']) assert(html.includes(label))
-    for (const label of ['Filter by title', 'Filter by author', 'Filter by publish date', 'Filter by minimum page visits', 'Filter by category']) assert(html.includes(label))
-    assert(html.includes('Ada'))
-    assert(html.includes('Research'))
-    assert(html.includes('42'))
-    assert(!html.includes('Editorial queue'))
+    assert(html.includes('>1 rows</span>'))
 }
 articles = []
 assert(renderToStaticMarkup(await Articles()).includes('Publish your first article'))
