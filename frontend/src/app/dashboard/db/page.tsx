@@ -1,9 +1,12 @@
+import { cookies } from 'next/headers'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import ErrorNotice from '@/components/error/errorNotice'
 import { getDatabaseOverview } from '@/utils/db/internal'
 import { DatabaseActions, DatabaseDashboard } from './databaseDashboard'
 
 export default async function DatabasePage() {
+    const id = (await cookies()).get('id')?.value || ''
+    const serviceAccount = id.startsWith('svc_')
     const overview = await getDatabaseOverview()
 
     if (typeof overview === 'string') {
@@ -17,7 +20,7 @@ export default async function DatabasePage() {
         )
     }
 
-    return <DatabaseDashboard overview={overview} />
+    return <DatabaseDashboard overview={overview} serviceAccount={serviceAccount} />
 }
 
 function operatorFetchError(message: string) {

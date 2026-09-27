@@ -9,7 +9,7 @@ import DatabaseInventory from './databaseInventory'
 import QueryCard from './queryCard'
 
 
-export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) {
+export function DatabaseDashboard({ overview, serviceAccount = false }: { overview: DatabaseOverview, serviceAccount?: boolean }) {
     const storage = overview.storage
     const fresh = Boolean(storage && !storage.stale)
     const disk = fresh ? storage?.disk : null
@@ -20,7 +20,7 @@ export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) 
 
     return <DashboardPage>
         <DatabaseRefresh />
-        <DatabaseWorkbench overview={overview}>
+        <DatabaseWorkbench overview={overview} serviceAccount={serviceAccount}>
             <section className='grid gap-3 sm:grid-cols-2 xl:grid-cols-4' aria-label='Storage health' data-db-monitor-metrics data-clusters={overview.clusterCount} data-databases={overview.databaseCount} data-storage-bytes={overview.totalSizeBytes}>
                 <MetricCard icon={<HardDrive />} label='Disk free' value={disk ? formatBytes(disk.availableBytes) : 'Unavailable'} detail={disk ? `${formatBytes(disk.totalBytes)} total · ${storage?.host}` : 'Storage measurements unavailable'} />
                 <MetricCard icon={<TrendingUp />} label='Growth / day' value={daily == null ? 'Measuring' : `${daily < 0 ? '−' : '+'}${formatBytes(Math.abs(daily))}`} detail={disk ? `Net disk change · ${Math.min(24, disk.sampleSeconds / 3600).toFixed(1)}h sampled` : 'No recent measurement'} />

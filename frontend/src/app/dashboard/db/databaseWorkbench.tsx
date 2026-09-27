@@ -6,7 +6,6 @@ import { dashboardPanelClass } from '@/components/dashboard/ui'
 import type { DatabaseOverview, DatabaseQueryResult } from '@/utils/db/internal'
 import { databaseRowsAction, databaseSqlAction } from './actions'
 import DatabaseConnection from './databaseConnection'
-import { useWorkspace } from '@/components/organizations/workspaceProvider'
 
 type TableOption = {
     schema: string
@@ -14,8 +13,7 @@ type TableOption = {
     database: string
 }
 
-export default function DatabaseWorkbench({ overview, children }: { overview: DatabaseOverview, children?: ReactNode }) {
-    const { serviceAccount } = useWorkspace()
+export default function DatabaseWorkbench({ overview, serviceAccount = false, children }: { overview: DatabaseOverview, serviceAccount?: boolean, children?: ReactNode }) {
     const tables = useMemo<TableOption[]>(() => overview.clusters.flatMap(cluster =>
         cluster.databases.flatMap(database => (database.tables || []).map(table => ({
             schema: table.schema,
