@@ -772,3 +772,12 @@ body[data-public-ti-route="true"] [data-testid="theme-switch"] {
   0%, 50% { opacity: 1; }
   50.1%, 100% { opacity: 0; }
 }
+
+.support-panel {
+  interpolate-size: allow-keywords;
+}
+
+@keyframes support-panel-enter {
+  from { opacity: 0; transform: translateY(0.5rem) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}

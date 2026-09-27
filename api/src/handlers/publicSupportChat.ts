@@ -1,4 +1,4 @@
-import { saveSupportFeedback, SupportStateError } from '#utils/support/lifecycle.ts'
+import { closeVisitorSupportConversation, saveSupportFeedback, SupportStateError } from '#utils/support/lifecycle.ts'
 import { randomBytes } from 'node:crypto'
 import { asksForHuman } from '#utils/support/assistant.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
@@ -19,6 +19,13 @@ export async function publicSupportChat(req: FastifyRequest<{ Body: ChatBody; Qu
             if (id && !supportIdPattern.test(id)) return res.status(400).send({ error: 'Invalid conversation.' })
             return res.send(await readSupportConversation(hash, id))
         }
+        if (req.body?.action === 'resolve') {
+            const { conversationId } = req.body
+            if (typeof conversationId !== 'string' || !supportIdPattern.test(conversationId)) return res.status(400).send({ error: 'Invalid conversation.' })
+            const quota = await consumeSharedRateLimitBucket({ key: `support-resolve:${hash}`, rule: { windowMs: 60_000, maxRequests: 10 } }, queryOnce)
+            if (!quota.allowed) return res.status(429).send({ error: 'Please wait before ending this conversation.' })
+            return res.send({ ok: true, ...await closeVisitorSupportConversation(conversationId, hash) })
+        }
         if (req.body?.action === 'connect') {
             const quota = await consumeSharedRateLimitBucket({ key: `support-connect:${hash}`, rule: { windowMs: 60_000, maxRequests: 30 } }, queryOnce)
             if (!quota.allowed) return res.status(429).send({ error: 'Please wait before reconnecting.' })
@@ -32,7 +39,7 @@ export async function publicSupportChat(req: FastifyRequest<{ Body: ChatBody; Qu
             if (typeof conversationId !== 'string' || !supportIdPattern.test(conversationId)) return res.status(400).send({ error: 'Invalid conversation.' })
             const quota = await consumeSharedRateLimitBucket({ key: `support-feedback:${hash}`, rule: { windowMs: 60_000, maxRequests: 20 } }, queryOnce)
             if (!quota.allowed) return res.status(429).send({ error: 'Please wait before submitting feedback again.' })
-            await saveSupportFeedback(conversationId, { visitor: hash }, rating, comment ?? '', resolutionVersion)
+            await saveSupportFeedback(conversationId, { visitor: hash }, rating, comment ?? '', resolutionVersion, 4)
             return res.send({ ok: true })
         }
         const { requestId, message, handoff, conversationId } = req.body || {}

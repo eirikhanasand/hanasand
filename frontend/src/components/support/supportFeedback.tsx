@@ -1,7 +1,7 @@
 'use client'
 
 import { Star } from 'lucide-react'
-import { useState } from 'react'
+import { useState, type FormEvent } from 'react'
 import { flushSync } from 'react-dom'
 
 export type Feedback = { feedback_rating?: number | null; feedback_comment?: string | null; resolution_version?: number }
@@ -31,4 +31,41 @@ export default function SupportFeedback({ feedback, submit }: { feedback: Feedba
         {error ? <p role='alert' className='text-xs text-ui-danger'>{error}</p> : null}
         <button type='submit' disabled={!rating || saving} className='w-fit rounded-lg bg-ui-primary px-3 py-2 text-xs font-semibold text-ui-canvas disabled:opacity-50'>{saving ? 'Saving…' : 'Send feedback'}</button>
     </form>
+}
+
+export function GuestSupportFeedback({ feedback, submit, onNewChat }: { feedback: Feedback; submit: (rating: number, comment: string) => Promise<void>; onNewChat: () => void }) {
+    const [rating, setRating] = useState(0)
+    const [comment, setComment] = useState('')
+    const [saving, setSaving] = useState(false)
+    const [error, setError] = useState('')
+    const [sent, setSent] = useState(false)
+    const displayedRating = feedback.feedback_rating || (sent ? rating : 0)
+    async function save(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault()
+        if (!rating || saving) return
+        setSaving(true); setError('')
+        try {
+            await submit(rating, rating <= 4 ? comment.trim() : '')
+            setSent(true)
+        } catch (cause) {
+            setError(cause instanceof Error ? cause.message : 'Could not save your feedback. Please try again.')
+        } finally { setSaving(false) }
+    }
+    return <div className='animate-[support-panel-enter_280ms_cubic-bezier(0.22,1,0.36,1)_both]'>
+        {displayedRating ? <div className='grid justify-items-center gap-3 text-center'>
+            <p className='text-base font-semibold text-ui-text'>Thank you for your feedback.</p>
+            <SupportStars rating={displayedRating} />
+            {feedback.feedback_comment || sent && comment.trim() ? <p className='max-w-sm whitespace-pre-wrap text-sm text-ui-muted [overflow-wrap:anywhere]'>{feedback.feedback_comment || comment.trim()}</p> : null}
+            <button type='button' onClick={onNewChat} className='mt-1 rounded-lg border border-ui-border bg-ui-raised px-4 py-2 text-sm font-medium text-ui-text transition hover:bg-ui-panel'>Start a new chat</button>
+        </div> : <form className='grid justify-items-center gap-3 text-center' onSubmit={save}>
+            <div><h2 className='text-lg font-semibold tracking-tight text-ui-text'>How satisfied were you with our support?</h2><p className='mt-1 text-sm text-ui-muted'>Your feedback helps us improve.</p></div>
+            <div role='group' aria-label='Rate your support experience' className='flex gap-1'>{[1, 2, 3, 4, 5].map(star => <button key={star} type='button' aria-label={`${star} ${star === 1 ? 'star' : 'stars'}`} aria-pressed={rating === star} disabled={saving} onClick={() => setRating(star)} className='rounded-lg p-2 text-amber-500 transition duration-150 hover:scale-110 hover:bg-ui-raised active:scale-95 focus-visible:outline-2 focus-visible:outline-ui-primary disabled:opacity-50'><Star aria-hidden='true' className={`h-7 w-7 transition-transform duration-150 ${star <= rating ? 'fill-current' : ''}`} /></button>)}</div>
+            {rating > 0 && rating <= 4 ? <label className='grid w-full gap-1.5 text-left text-xs text-ui-muted animate-[support-panel-enter_180ms_ease-out_both]'>What could we have done better? (optional)<textarea aria-label='Feedback' rows={4} maxLength={2000} disabled={saving} value={comment} onChange={event => setComment(event.target.value)} className='min-w-0 resize-y rounded-xl border border-ui-border bg-ui-canvas px-3 py-2 text-sm text-ui-text outline-none transition focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/10' /></label> : null}
+            {error ? <p role='alert' className='text-xs text-ui-danger'>{error}</p> : null}
+            <div className='flex w-full items-center justify-between gap-3'>
+                <button type='button' onClick={onNewChat} className='rounded-lg px-3 py-2 text-sm text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Start a new chat</button>
+                <button type='submit' disabled={!rating || saving} className='rounded-lg bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:opacity-50'>{saving ? 'Saving...' : 'Send feedback'}</button>
+            </div>
+        </form>}
+    </div>
 }

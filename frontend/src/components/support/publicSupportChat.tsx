@@ -1,7 +1,7 @@
 'use client'
 
 import { ArrowUp, LoaderCircle, UserRound } from 'lucide-react'
-import SupportFeedback, { type Feedback } from './supportFeedback'
+import { GuestSupportFeedback, type Feedback } from './supportFeedback'
 import useSupportLive from './useSupportLive'
 import useSupportUnread from './useSupportUnread'
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -21,7 +21,7 @@ function MessageBody({ text }: { text: string }) {
     })}</p>
 }
 
-export default function PublicSupportChat({ active = true, onUnreadChange, initialConversation, initialSelectedId = '' }: { active?: boolean; onUnreadChange?: (count: number) => void; initialConversation?: PublicSupportConversation; initialSelectedId?: string }) {
+export default function PublicSupportChat({ active = true, onUnreadChange, onResolvedChange, initialConversation, initialSelectedId = '' }: { active?: boolean; onUnreadChange?: (count: number) => void; onResolvedChange?: (resolved: boolean) => void; initialConversation?: PublicSupportConversation; initialSelectedId?: string }) {
     const [selectedId, setSelectedId] = useState(initialConversation?.id || initialSelectedId)
     const selection = useRef(initialConversation?.id || initialSelectedId)
     const restoredSelection = useRef(false)
@@ -37,6 +37,7 @@ export default function PublicSupportChat({ active = true, onUnreadChange, initi
     const outgoing = pendingMessages[selectedId] || null
     const [error, setError] = useState('')
     const [refreshError, setRefreshError] = useState('')
+    const [closing, setClosing] = useState(false)
     const [retry, setRetry] = useState<Submission | null>(null)
     const log = useRef<HTMLDivElement>(null)
     const mounted = useRef(true)
@@ -69,10 +70,10 @@ export default function PublicSupportChat({ active = true, onUnreadChange, initi
                     if (index >= 0) { read[readId] = index + 1; localStorage.setItem(key, JSON.stringify(read)) }
                 }
             } catch { /* Read markers are optional when browser storage is unavailable. */ }
-            setConversation(payload); setRefreshError(''); setLoading(false)
+            setConversation(payload); onResolvedChange?.(payload.status === 'closed'); setRefreshError(''); setLoading(false)
             if (!selection.current && payload.id) { selection.current = payload.id; setSelectedId(payload.id) }
         }
-    }, [])
+    }, [onResolvedChange])
 
     useEffect(() => {
         mounted.current = true
@@ -148,7 +149,24 @@ export default function PublicSupportChat({ active = true, onUnreadChange, initi
         if (!message || conversation.status === 'closed') return
         void submit(retry?.message === message ? retry : { requestId: crypto.randomUUID(), message })
     }
-    const resolved = conversation.status === 'closed'
+    if (conversation.status === 'closed') return <section aria-label='Support feedback' className='grid justify-items-center gap-5 py-2'><GuestSupportFeedback key={`${selectedId}:${conversation.resolution_version}`} feedback={conversation} submit={sendFeedback} onNewChat={startNewChat} /></section>
+    function startNewChat() {
+        onResolvedChange?.(false)
+        void selectChat(crypto.randomUUID())
+    }
+    async function endConversation() {
+        if (!conversation.id || closing) return
+        setClosing(true); setError('')
+        try {
+            const response = await fetch('/api/support/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'resolve', conversationId: conversation.id }) })
+            const payload = await response.json()
+            if (!response.ok) throw new Error(payload.error || 'Could not end this conversation.')
+            revision.current += 1
+            await refresh()
+        } catch (cause) {
+            setError(cause instanceof Error ? cause.message : 'Could not end this conversation.')
+        } finally { setClosing(false) }
+    }
     async function sendFeedback(rating: number, comment: string) {
         const id = selectedId, version = conversation.resolution_version
         revision.current += 1
@@ -172,9 +190,9 @@ export default function PublicSupportChat({ active = true, onUnreadChange, initi
         : conversation.messages
     return (
         <section aria-label='Support chat' className='grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto]'>
-            {!legacy ? <div className='flex min-w-0 items-center justify-between border-b border-ui-border px-5 py-3'>
+            {!legacy ? <div className='flex min-w-0 items-center justify-between border-b border-ui-border bg-ui-raised px-5 py-3'>
                 <h1 className='text-sm font-semibold text-ui-text'>Support</h1>
-                <button type='button' onClick={() => void selectChat(crypto.randomUUID())} className='shrink-0 rounded-lg bg-ui-primary px-3.5 py-2 text-xs font-semibold text-ui-canvas transition hover:opacity-90 disabled:opacity-50'>New chat</button>
+                <button type='button' onClick={startNewChat} className='shrink-0 rounded-lg border border-ui-border bg-ui-panel px-3.5 py-2 text-xs font-semibold text-ui-text transition-colors hover:bg-ui-canvas'>New chat</button>
             </div> : <div />}
             <div ref={log} role='log' aria-label='Messages' className='min-h-0 overflow-y-auto overscroll-contain px-5 py-5'>
                 {!visibleMessages.length ? <div className='flex min-h-full flex-col items-center justify-center pb-3 text-center'>
@@ -187,26 +205,28 @@ export default function PublicSupportChat({ active = true, onUnreadChange, initi
                         <p className={`mb-1.5 text-[11px] font-medium text-ui-muted ${message.sender_kind === 'user' ? 'text-right' : ''}`}>{message.sender_name}</p>
                         <div className={`rounded-2xl px-3.5 py-2.5 text-sm leading-6 ${message.sender_kind === 'user' ? 'rounded-tr-md bg-ui-primary text-ui-canvas' : 'rounded-tl-md bg-ui-raised text-ui-text'}`}><MessageBody text={message.body} /></div>
                     </div>)}</div>}
-                {busy && !human && !resolved ? <p role='status' className='mt-4 flex items-center gap-2 text-xs text-ui-muted'><LoaderCircle className='h-3.5 w-3.5 animate-spin' aria-hidden='true' />Hanasand AI is thinking…</p> : null}
+                {busy && !human ? <p role='status' className='mt-4 flex items-center gap-2 text-xs text-ui-muted'><LoaderCircle className='h-3.5 w-3.5 animate-spin' aria-hidden='true' />Hanasand AI is thinking…</p> : null}
             </div>
-            <div className='min-w-0 border-t border-ui-border bg-ui-panel px-4 pb-3 pt-3'>
+            <div className='min-w-0 border-t border-ui-border bg-ui-raised px-4 pb-3 pt-3'>
                 {error ? <div role='alert' className='mb-3 text-xs leading-5 text-ui-danger'>{error}{retry ? <button type='button' disabled={sending || transferring} className='ml-2 font-semibold underline disabled:opacity-50' onClick={() => void submit(retry)}>Retry</button> : null}</div> : null}
                 {!error && connection === 'reconnecting' ? <p role='status' className='mb-2 text-xs text-ui-muted'>{refreshError || 'Reconnecting…'}</p> : null}
                 {!error && unanswered ? <button type='button' onClick={() => void submit(unanswered)} className='mb-2 text-xs font-medium text-ui-primary hover:underline'>Retry AI answer</button> : null}
-                {resolved ? <SupportFeedback key={`${selectedId}:${conversation.resolution_version}`} feedback={conversation} submit={sendFeedback} /> : <><form onSubmit={send} className='flex min-w-0 items-end gap-2 rounded-2xl border border-ui-border bg-ui-canvas p-2 focus-within:border-ui-primary focus-within:ring-2 focus-within:ring-ui-primary/10'>
+                <form onSubmit={send} className='flex min-w-0 items-end gap-2 rounded-2xl border border-ui-border bg-ui-panel p-2 focus-within:border-ui-primary focus-within:ring-2 focus-within:ring-ui-primary/10'>
                     <textarea aria-label='Message' rows={Math.min(6, Math.max(1, input.split('\n').length))} maxLength={4000} value={input} onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.nativeEvent.isComposing) { event.preventDefault(); if (!loading && !busy) send(event) } }} placeholder={human ? 'Message the support team…' : 'Ask a question…'} className='min-h-9 min-w-0 flex-1 resize-none bg-transparent px-2 py-1 text-sm leading-5 text-ui-text outline-none placeholder:text-ui-muted' />
                     <button type='submit' disabled={loading || busy || !input.trim()} aria-label='Send message' className='grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-ui-primary text-ui-canvas transition hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary disabled:opacity-40'>{sending ? <LoaderCircle className='h-4 w-4 animate-spin' /> : <ArrowUp className='h-4 w-4' />}</button>
                 </form>
-                {human ? <div className='mt-3 flex min-h-7 items-center justify-center'><p className='flex items-center gap-1.5 text-xs text-ui-muted'><UserRound className='h-3.5 w-3.5' />{agentName ? `Speaking with ${agentName}` : 'Waiting for support.'}</p></div> : null}</>}
+                {conversation.id && !sending && !transferring ? <button type='button' disabled={closing} onClick={() => void endConversation()} className='mt-2 rounded-md px-2 py-1 text-xs font-medium text-ui-muted transition-colors hover:bg-ui-panel hover:text-ui-danger focus-visible:outline-2 focus-visible:outline-ui-primary disabled:opacity-50'>{closing ? 'Ending conversation...' : 'End conversation'}</button> : null}
+                {human ? <div className='mt-3 flex min-h-7 items-center justify-center'><p className='flex items-center gap-1.5 text-xs text-ui-muted'><UserRound className='h-3.5 w-3.5' />{agentName ? `Speaking with ${agentName}` : 'Waiting for support.'}</p></div> : null}
             </div>
         </section>
     )
 }
 
 export function PublicSupportPanel({ initialConversation, initialSelectedId }: { initialConversation?: PublicSupportConversation; initialSelectedId?: string }) {
+    const [resolved, setResolved] = useState(initialConversation?.status === 'closed')
     return (
-        <section className='mx-auto grid h-[min(42rem,calc(100dvh-10rem))] min-h-96 w-full max-w-4xl grid-rows-[minmax(0,1fr)] overflow-hidden rounded-2xl border border-ui-border bg-ui-panel shadow-sm shadow-ui-canvas/10 dark:shadow-ui-canvas/20' aria-label='Guest support'>
-            <PublicSupportChat initialConversation={initialConversation} initialSelectedId={initialSelectedId} />
+        <section className={`support-panel mx-auto grid w-full overflow-hidden rounded-2xl border border-ui-border bg-ui-panel shadow-sm shadow-ui-canvas/10 transition-[height,max-width,padding] duration-300 ease-out dark:shadow-ui-canvas/20 ${resolved ? 'max-w-lg p-6 sm:p-8' : 'h-[min(42rem,calc(100dvh-10rem))] min-h-96 max-w-4xl grid-rows-[minmax(0,1fr)]'}`} aria-label='Guest support'>
+            <PublicSupportChat initialConversation={initialConversation} initialSelectedId={initialSelectedId} onResolvedChange={setResolved} />
         </section>
     )
 }
