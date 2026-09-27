@@ -65,7 +65,7 @@ extension DesktopAgentModel {
             loginPassword = ""
             loginStatus = ""
             append(meta: "Login", body: "Signed in as \(settings.userID).", kind: .change)
-            await publishDesktopAgentPresence()
+            beginDesktopAgentPresence()
         } catch {
             loginStatus = error.localizedDescription
         }
@@ -104,7 +104,7 @@ extension DesktopAgentModel {
             loginPassword = ""
             loginStatus = ""
             append(meta: "Account restored", body: "Signed in as \(settings.userID).", kind: .change)
-            await publishDesktopAgentPresence()
+            beginDesktopAgentPresence()
         } catch {
             pendingDeletionStatus = error.localizedDescription
         }
@@ -141,6 +141,8 @@ extension DesktopAgentModel {
     }
 
     func clearLocalHanasandSession() {
+        desktopPresenceTask?.cancel()
+        desktopPresenceTask = nil
         settings.authToken = ""
         settings.userID = ""
         settings.impersonationToken = ""
