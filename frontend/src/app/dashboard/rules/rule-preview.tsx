@@ -28,7 +28,7 @@ export function diverseEvents(pool: Event[], count = 5) {
 }
 
 export default function RulePreview({ organizationId, conditions, action, range, onReady }: { organizationId: string, conditions: Condition[], action: string, range: string, onReady: (ready: boolean) => void }) {
-    const [count, setCount] = useState(0), [scanned, setScanned] = useState(0), [complete, setComplete] = useState(false)
+    const [count, setCount] = useState(0), [scanned, setScanned] = useState(0), [complete, setComplete] = useState(false), [limited, setLimited] = useState(false)
     const [events, setEvents] = useState<Event[]>([]), [error, setError] = useState(''), [acknowledged, setAcknowledged] = useState(false)
     const [attempt, setAttempt] = useState(0)
     const [offset, setOffset] = useState(0), [more, setMore] = useState(true), [loading, setLoading] = useState(false)
@@ -39,26 +39,23 @@ export default function RulePreview({ organizationId, conditions, action, range,
     const endpoint = `/api/backend/rules/preview?organizationId=${encodeURIComponent(organizationId)}`
     const read = (next: Cursor, sample: boolean) => requestJson<Page>(endpoint, { method: 'POST', signal: controller.current.signal, body: JSON.stringify({ ...window.current, conditions, action, cursor: next, sample }) })
     useEffect(() => {
-        setError(''); setCount(0); setScanned(0); setComplete(false); setAcknowledged(false); setMore(true); setOffset(0); setEvents([])
+        setError(''); setCount(0); setScanned(0); setComplete(false); setLimited(false); setAcknowledged(false); setMore(true); setOffset(0); setEvents([])
         browsing.current = false; rows.current = []; cursor.current = null; seen.current = new Set(); busy.current = false
         const abort = new AbortController()
         controller.current = abort
         const timer = setTimeout(async () => {
-            let next: Cursor = null, total = 0, inspected = 0, pool: Event[] = []
             try {
-                do {
-                    const page = await read(next, true)
-                    if (abort.signal.aborted) return
-                    total += page.count; inspected += page.scanned; next = page.cursor
-                    pool = [...pool, ...page.events].sort((a, b) => a.rank - b.rank).slice(0, 100)
-                    const sample = diverseEvents(pool)
-                    if (!browsing.current) {
-                        rows.current = [...sample, ...pool.filter(event => !sample.some(selected => selected.id === event.id))]
-                        seen.current = new Set(rows.current.map(event => event.id))
-                        setEvents(rows.current)
-                    }
-                    setCount(total); setScanned(inspected)
-                } while (next)
+                const page = await read(null, true)
+                if (abort.signal.aborted) return
+                const total = page.count, inspected = page.scanned, next = page.cursor
+                const pool = page.events.sort((a, b) => a.rank - b.rank).slice(0, 100)
+                const sample = diverseEvents(pool)
+                if (!browsing.current) {
+                    rows.current = [...sample, ...pool.filter(event => !sample.some(selected => selected.id === event.id))]
+                    seen.current = new Set(rows.current.map(event => event.id))
+                    setEvents(rows.current)
+                }
+                setCount(total); setScanned(inspected); setLimited(Boolean(next)); setMore(false)
                 seen.current = new Set(rows.current.map(event => event.id))
                 setComplete(true)
             } catch (cause) { if (!abort.signal.aborted) setError(cause instanceof Error ? cause.message : 'Preview could not be loaded.') }
@@ -66,7 +63,7 @@ export default function RulePreview({ organizationId, conditions, action, range,
         return () => { clearTimeout(timer); abort.abort() }
         // The parent remounts this snapshot when the organization, rule or range changes.
     }, [attempt])
-    useEffect(() => { onReady(!error && (complete && count <= 10_000 || count > 10_000 && acknowledged)) }, [complete, count, acknowledged, error, onReady])
+    useEffect(() => { onReady(!error && !limited && (complete && count <= 10_000 || count > 10_000 && acknowledged)) }, [complete, count, acknowledged, error, limited, onReady])
     async function prefetch() {
         if (busy.current || !more || !rows.current.length || controller.current.signal.aborted) return
         const abort = controller.current
@@ -86,11 +83,11 @@ export default function RulePreview({ organizationId, conditions, action, range,
         } catch (cause) { if (!abort.signal.aborted) setError(cause instanceof Error ? cause.message : 'More events could not be loaded.') }
         finally { if (controller.current === abort) { busy.current = false; if (!abort.signal.aborted) setLoading(false) } }
     }
-    useEffect(() => { if (complete) void prefetch() }, [complete])
+    useEffect(() => { if (complete && !limited) void prefetch() }, [complete, limited])
     const start = Math.max(0, offset - 1), visible = events.slice(start, start + 8)
     const paths = [...new Set(conditions.map(condition => condition.path))]
     return <section className='grid min-w-0 gap-3' aria-label='Matching events preview'>
-        <div className='flex flex-wrap items-center justify-between gap-2'><h3 className='font-semibold' aria-live='polite'>{complete ? '' : 'At least '}{new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(count)} matching events</h3><span className='text-xs text-ui-muted'>{complete ? `${count.toLocaleString()} matches · ${scanned.toLocaleString()} events checked` : `Checking events… ${scanned.toLocaleString()} checked`}</span></div>
+        <div className='flex flex-wrap items-center justify-between gap-2'><h3 className='font-semibold' aria-live='polite'>{limited || !complete ? 'At least ' : ''}{new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(count)} matching events</h3><span className='text-xs text-ui-muted'>{limited ? `Preview capped at ${scanned.toLocaleString()} events checked` : complete ? `${count.toLocaleString()} matches · ${scanned.toLocaleString()} events checked` : `Checking events… ${scanned.toLocaleString()} checked`}</span></div>
         {!!events.length && <div role='region' aria-label='Matching event rows' tabIndex={0} style={{ overflowAnchor: 'none' }} className='h-[360px] overflow-auto rounded-lg border border-ui-border' onScroll={event => {
             browsing.current = true
             const began = performance.now(), element = event.currentTarget
@@ -106,6 +103,7 @@ export default function RulePreview({ organizationId, conditions, action, range,
             </tbody></table>
         </div>}
         {loading && <p role='status' className='text-xs text-ui-muted'>Loading more matches…</p>}
+        {limited && <p role='status' className='text-sm text-ui-muted'>This preview is intentionally capped to protect the database. Narrow the time range or add a condition to verify the complete total before creating the rule.</p>}
         {complete && !events.length && <p className='text-sm text-ui-muted'>No matching events in this range.</p>}
         {error && <p role='alert' className='text-sm text-ui-text'>{error}<button type='button' onClick={() => complete ? void prefetch() : setAttempt(attempt + 1)} className='ml-2 underline'>Retry</button></p>}
         {count > 10_000 && <div className='mt-2 overflow-hidden rounded-xl border border-ui-warning/30 bg-ui-raised'>
