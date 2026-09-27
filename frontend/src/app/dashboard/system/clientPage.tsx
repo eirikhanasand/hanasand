@@ -82,6 +82,7 @@ export default function SystemDashboard({
     const [statisticsVisible, setStatisticsVisible] = useState(false)
     const [statisticsPreferenceLoaded, setStatisticsPreferenceLoaded] = useState(false)
     const [overviewActionsTarget, setOverviewActionsTarget] = useState<HTMLElement | null>(null)
+    const [overviewStatisticsTarget, setOverviewStatisticsTarget] = useState<HTMLElement | null>(null)
     const [refreshing, setRefreshing] = useState(false)
     const [selectedContainerId, setSelectedContainerId] = useState<string>(dockerTelemetry.containers[0]?.id || '')
     const [restartContainer, setRestartContainer] = useState<DockerContainer | null>(null)
@@ -93,6 +94,7 @@ export default function SystemDashboard({
 
     useEffect(() => {
         setOverviewActionsTarget(document.getElementById('system-overview-actions'))
+        setOverviewStatisticsTarget(document.getElementById('system-overview-statistics-target'))
         try {
             setStatisticsVisible(window.localStorage.getItem('system-overview-statistics-visible') === 'true')
         } catch {
@@ -352,6 +354,17 @@ export default function SystemDashboard({
 
     return (
         <div className='relative grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4'>
+            {overviewStatisticsTarget ? createPortal(
+                <details open={statisticsVisible} onToggle={(event) => setStatisticsVisible(event.currentTarget.open)} className='min-w-0 overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-system-summary-disclosure>
+                    <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                        <span>Statistics</span>
+                    </summary>
+                    <section className='grid gap-3 border-t border-ui-border p-3 sm:grid-cols-2 xl:grid-cols-4' data-system-summary-metrics>
+                        {summary.map((item) => <SummaryCard key={item.label} item={item} />)}
+                    </section>
+                </details>,
+                overviewStatisticsTarget
+            ) : null}
             {overviewActionsTarget ? createPortal(<div className='flex items-center gap-2'>
                 <button type='button' onClick={() => void refreshAll()} aria-label={refreshing ? 'Refreshing system telemetry' : 'Refresh system telemetry'} title='Refresh system telemetry' className='inline-flex h-8 items-center gap-1.5 rounded-md border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text shadow-sm transition hover:border-ui-primary/35 hover:bg-ui-raised'><RefreshCcw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />Refresh</button>
                 <button type='button' onClick={() => setAutoRefresh((value) => !value)} aria-pressed={autoRefresh} aria-label={`Auto refresh ${autoRefresh ? 'on' : 'off'}`} title={`Auto refresh ${autoRefresh ? 'on' : 'off'}`} className={`inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold shadow-sm transition ${autoRefresh ? 'border-ui-primary/35 bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-panel text-ui-text hover:bg-ui-raised'}`}>{autoRefresh ? <PauseCircle className='h-3.5 w-3.5' /> : <PlayCircle className='h-3.5 w-3.5' />}Auto</button>
@@ -383,14 +396,6 @@ export default function SystemDashboard({
                     {dockerTelemetry.unavailable_reason ? <p className='rounded-md border border-ui-warning/35 bg-ui-warning/10 px-3 py-2 text-sm text-ui-warning'>Docker telemetry degraded: {dockerTelemetry.unavailable_reason}</p> : null}
                     {systemUnavailableReason ? <p className='rounded-md border border-ui-warning/35 bg-ui-warning/10 px-3 py-2 text-sm text-ui-warning'>Host telemetry degraded: {systemUnavailableReason}</p> : null}
                 </div>
-                <details open={statisticsVisible} onToggle={(event) => setStatisticsVisible(event.currentTarget.open)} className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-system-summary-disclosure>
-                    <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
-                        <span>Statistics</span>
-                    </summary>
-                    <section className='grid gap-3 border-t border-ui-border p-3 sm:grid-cols-2 xl:grid-cols-4' data-system-summary-metrics>
-                        {summary.map((item) => <SummaryCard key={item.label} item={item} />)}
-                    </section>
-                </details>
             </> : null}
             {section === 'virtual-machines' ? <DashboardPanel className='grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center' data-system-primary-triage>
                 <div className='min-w-0'>
