@@ -52,6 +52,8 @@ const poolOptions = {
     idleTimeoutMillis: httpOnlyApi
         ? Math.min(Math.max(configuredIdleTimeout, 1), 15_000)
         : configuredIdleTimeout,
+    // Rotate sessions even under steady traffic so old HAProxy workers can drain.
+    maxLifetimeSeconds: httpOnlyApi ? 45 : undefined,
     connectionTimeoutMillis: Number(DB_TIMEOUT_MS) || 3000,
     statement_timeout: (process.env.AUTH_SERVICE_ONLY === '1' || process.env.API_HTTP_ONLY === '1') ? 5000 : undefined,
     keepAlive: true

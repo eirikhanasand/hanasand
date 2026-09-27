@@ -7,7 +7,7 @@ let attempts = 0, queries = 0, connectionFailures = 0
 let connectionError = new Error('timeout exceeded when trying to connect')
 let queryFails = true
 const client = Object.assign(new EventEmitter(), { query: async () => { queries++; if (queryFails) throw failure; return { rows: [{ ok: true }] } }, release: (error?: Error) => { releasedWith = error } })
-const pool: { current?: EventEmitter, options?: { min: number, max: number, idleTimeoutMillis: number } } = {}
+const pool: { current?: EventEmitter, options?: { min: number, max: number, idleTimeoutMillis: number, maxLifetimeSeconds?: number } } = {}
 const created: NonNullable<typeof pool.options>[] = []
 class Pool extends EventEmitter {
     constructor(options: NonNullable<typeof pool.options>) { super(); pool.current = this; pool.options = options; created.push(options) }
@@ -40,6 +40,7 @@ try {
             ? Math.min(configuredIdleTimeout, 15000)
             : configuredIdleTimeout
         assert.equal(pool.options!.idleTimeoutMillis, expectedIdleTimeout, 'Expire API sessions before proxy hard-stop; preserve other pool defaults')
+        assert.equal(pool.options!.maxLifetimeSeconds, role.name === 'api' ? 45 : undefined, 'Rotate API sessions during sustained traffic')
     }
     process.env.API_HTTP_ONLY = '1'; process.env.AUTH_SERVICE_ONLY = '0'
     attempts = queries = 0; connectionFailures = 1; queryFails = false
