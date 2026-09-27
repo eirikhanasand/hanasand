@@ -1,6 +1,6 @@
 export const ruleCategories = {
     match: { label: 'Match filter', description: 'Match event fields, signatures, and vulnerability records.' },
-    analysis: { label: 'Analyze filter', description: 'Control log retention and analyze activity.' },
+    analysis: { label: 'Analysis rules', description: 'Control log retention and analyze activity.' },
     detection: { label: 'Detection filter', description: 'Detect attack patterns across related events.' },
 } as const
 

@@ -124,12 +124,12 @@ export default function DetectionRules({ category, initial }: { category: RuleCa
     return (
         <DashboardPage className='!gap-6 !px-2 !py-4'>
             <div className='flex flex-wrap items-center justify-between gap-4'>
-                <div><p className='text-sm text-ui-muted'>Security tools</p><h1 className='mt-1 text-2xl font-semibold'>{ruleCategories[category].label}</h1></div>
+                <div><h1 className='text-2xl font-semibold'>{ruleCategories[category].label}</h1></div>
                 <div className='flex max-w-full flex-wrap items-center gap-3'>
 
-                    <button type='button' aria-expanded={showCreate} aria-controls='event-rule-create' onClick={() => { setShowCreate(open => !open); setShowImports(false) }} className='rounded-lg border border-ui-border px-4 py-2 text-sm font-semibold text-ui-primary hover:bg-ui-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary'>Create</button>
-                    <button type='button' aria-expanded={showImports} aria-controls='event-rule-imports' onClick={() => { setShowImports(open => !open); setShowCreate(false) }} className='rounded-lg bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary'>Import</button>
-                    <Link href='/cases' className='rounded-lg border border-ui-border px-4 py-2 text-sm font-semibold text-ui-primary hover:bg-ui-raised'>Cases</Link>
+                    <button type='button' aria-expanded={showCreate} aria-controls='event-rule-create' onClick={() => { setShowCreate(open => !open); setShowImports(false) }} className='rounded-lg px-4 py-2 text-sm font-semibold text-ui-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary'>Create</button>
+                    <button type='button' aria-expanded={showImports} aria-controls='event-rule-imports' onClick={() => { setShowImports(open => !open); setShowCreate(false) }} className='rounded-lg px-4 py-2 text-sm font-semibold text-ui-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary'>Import</button>
+                    <Link href='/cases' className='rounded-lg px-4 py-2 text-sm font-semibold text-ui-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary'>Cases</Link>
                 </div>
             </div>
             {error && <div role='alert' className='rounded-lg border border-red-400/40 bg-red-500/10 p-3 text-sm text-red-200'>{error}</div>}
