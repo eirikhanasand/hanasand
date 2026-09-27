@@ -23,6 +23,7 @@ export default function ThemeSwitch() {
     function toggleTheme() {
         const newTheme = theme === 'dark' ? 'light' : 'dark'
         setCookie('theme', newTheme)
+        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', newTheme === 'light' ? '#f5f5f5' : '#070707')
         setTheme(newTheme)
     }
 

@@ -1,4 +1,5 @@
 import type { Viewport, Metadata } from 'next'
+import { cookies } from 'next/headers'
 
 const title = 'Hanasand'
 const description = 'Dark web monitoring, company exposure alerts, and threat intelligence workflows from Hanasand.'
@@ -58,10 +59,11 @@ const metadata: Metadata = {
 
 export default metadata
 
-export const viewport: Viewport = {
-    colorScheme: 'light dark',
-    themeColor: [
-        { media: '(prefers-color-scheme: light)', color: 'rgb(255 255 255)' },
-        { media: '(prefers-color-scheme: dark)', color: 'rgb(14 21 32)' },
-    ],
+export async function viewport(): Promise<Viewport> {
+    const theme = (await cookies()).get('theme')?.value === 'light' ? 'light' : 'dark'
+    return {
+        colorScheme: theme,
+        themeColor: theme === 'light' ? '#f5f5f5' : '#070707',
+        viewportFit: 'cover',
+    }
 }
