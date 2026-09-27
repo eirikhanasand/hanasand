@@ -331,7 +331,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
                         <p className='mt-3 text-sm font-medium text-ui-primary dark:text-ui-primary'>Find current intelligence about any threat actor, company, domain, CVE, or malware family.</p>
                     </div>
                 ) : null}
-                <div className={`flex flex-col gap-3 ${visible ? 'md:flex-row md:items-end' : 'rounded-xl border border-ui-border bg-ui-panel p-3 shadow-[0_18px_50px_rgba(26,35,55,0.12)] dark:border-ui-border dark:bg-ui-panel'}`}>
+                <div className={`flex flex-col gap-3 ${visible ? 'md:flex-row md:items-end' : 'rounded-xl border border-ui-border bg-ui-panel p-3 shadow-[0_18px_50px_var(--ui-shadow)] dark:border-ui-border dark:bg-ui-panel'}`}>
                     <SearchSuggestions query={query} onChange={handleQueryChange} onSearch={value => void executeSearch(value)} saved={savedSearches.map(item => item.query)} compact={Boolean(visible)} />
                     <button
                         type='submit'

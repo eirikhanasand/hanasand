@@ -169,7 +169,7 @@ export default function RenderSite({
                     group fixed bottom-15 right-3 z-100 inline-flex max-w-[calc(100vw-1.5rem)]
                     cursor-pointer select-none items-center justify-center gap-2 rounded-full
                     border border-ui-border bg-ui-panel/90 px-3.5 py-2 text-sm text-ui-text
-                    shadow-[0_10px_30px_rgba(0,0,0,0.22)] backdrop-blur-md transition
+                    shadow-[0_10px_30px_var(--ui-shadow)] backdrop-blur-md transition
                     hover:border-ui-primary/35 hover:bg-ui-raised
                 '
             >

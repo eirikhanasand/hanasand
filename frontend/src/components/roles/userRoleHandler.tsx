@@ -91,7 +91,7 @@ function Role({ role, user, userRoles }: { role: Role, user: UserWithRole, userR
                     border border-ui-border
                     bg-ui-raised
                     backdrop-blur-md
-                    shadow-[0_4px_20px_rgba(0,0,0,0.25)]
+                    shadow-[0_4px_20px_var(--ui-shadow)]
                     cursor-pointer
                     transition-all
                     checked:border-ui-primary

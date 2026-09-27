@@ -18,7 +18,7 @@ type TrafficDashboardProps = {
 type StatCardProps = {
     title: string
     value: string | number
-    accent?: 'blue' | 'emerald' | 'amber' | 'rose' | 'violet' | 'cyan' | 'slate'
+    accent?: 'primary' | 'emerald' | 'amber' | 'rose' | 'violet' | 'cyan' | 'slate'
     outline?: string
     icon: React.ReactNode
 }
@@ -71,7 +71,7 @@ export default function TrafficDashboard({ metrics, records, selectedDomain }: T
                             {
                                 title: 'Avg Request Time',
                                 value: formatRequestTime(m),
-                                accent: 'blue',
+                                accent: 'primary',
                                 outline: 'outline outline-ui-primary/25',
                                 icon: <Clock className='w-5 h-5 stroke-ui-primary' />
                             },
@@ -180,7 +180,7 @@ export default function TrafficDashboard({ metrics, records, selectedDomain }: T
 
 function StatCard({ title, value, accent = 'slate', icon, outline }: StatCardProps) {
     const accentMap = {
-        blue: 'from-ui-primary/15 to-ui-primary/5 border-ui-primary/25 text-ui-primary',
+        primary: 'from-ui-primary/15 to-ui-primary/5 border-ui-primary/25 text-ui-primary',
         emerald: 'from-ui-success/15 to-ui-success/5 border-ui-success/25 text-ui-success',
         amber: 'from-ui-warning/15 to-ui-warning/5 border-ui-warning/25 text-ui-warning',
         rose: 'from-ui-danger/15 to-ui-danger/5 border-ui-danger/25 text-ui-text',

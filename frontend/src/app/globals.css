@@ -150,9 +150,8 @@
   --landing-surface-border: #292929;
   --landing-surface-border-hover: #444;
   --soft-shadow: rgba(0, 0, 0, 0.34);
-  --automation-cloud: #73a7d6;
-  --automation-cloud-detail: #6497c2;
-  --automation-cloud-ink: #17304a;
+  --automation-cloud: color-mix(in srgb, var(--ui-primary) 9%, var(--ui-panel));
+  --automation-cloud-detail: color-mix(in srgb, var(--ui-primary) 5%, var(--ui-panel));
 }
 
 .light {
@@ -203,9 +202,8 @@
   --landing-surface-border: #dedede;
   --landing-surface-border-hover: #c8c8c8;
   --soft-shadow: rgba(26, 26, 26, 0.12);
-  --automation-cloud: #b9dbf5;
-  --automation-cloud-detail: #a8cdeb;
-  --automation-cloud-ink: #17304a;
+  --automation-cloud: color-mix(in srgb, var(--ui-primary) 5%, var(--ui-panel));
+  --automation-cloud-detail: color-mix(in srgb, var(--ui-primary) 3%, var(--ui-panel));
 }
 
 /* Resolve utility colors within navigation instead of inheriting the page's palette. */
@@ -703,23 +701,6 @@ body:has(.support-page) .site-atmosphere::before {
   box-shadow:
     0 0 1em color-mix(in srgb, var(--ui-danger) 40%, transparent),
     0 0 3em color-mix(in srgb, var(--ui-danger) 30%, transparent);
-}
-
-.glow-blue {
-  box-shadow:
-    0 0 1em color-mix(in srgb, var(--ui-primary) 50%, transparent),
-    0 0 3em color-mix(in srgb, var(--ui-primary) 40%, transparent),
-    0 0 8em color-mix(in srgb, var(--ui-primary) 30%, transparent),
-    0 0 10em color-mix(in srgb, var(--ui-primary) 20%, transparent),
-    0 0 12em color-mix(in srgb, var(--ui-primary) 5%, transparent),
-    inset 0 0 1em color-mix(in srgb, var(--ui-primary) 30%, transparent),
-    inset 0 0 2em color-mix(in srgb, var(--ui-primary) 15%, transparent);
-}
-
-.glow-blue-small {
-  box-shadow:
-    0 0 1em color-mix(in srgb, var(--ui-primary) 40%, transparent),
-    0 0 3em color-mix(in srgb, var(--ui-primary) 30%, transparent);
 }
 
 .glow-green {

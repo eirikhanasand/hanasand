@@ -1490,7 +1490,7 @@ export default function BrowserPageClient({ initialData, resultId, resultRunId }
                                                 style={{ pointerEvents: streamHasFrame || streamNeedsGesture ? 'auto' : 'none' }}
                                                 tabIndex={(streamHasFrame || streamNeedsGesture) && activeTool?.id !== 'webcrack' ? 0 : -1}
                                                 title='Live WebRTC browser sandbox'
-                                                className='absolute inset-0 h-full w-full border-0 bg-black'
+                                                className='absolute inset-0 h-full w-full border-0 bg-ui-canvas'
                                                 allow='autoplay; clipboard-read; clipboard-write; fullscreen'
                                                 sandbox='allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-popups allow-downloads'
                                             />

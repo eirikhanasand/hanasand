@@ -258,8 +258,8 @@ function WelcomeState({ onCreate, compact = false }: { onCreate: () => void, com
             <div className='relative mb-3 h-72 w-[min(32rem,92%)]'>
                 <img src='/images/empty-states/automations-barn-draft.png' alt='A simple open barn with an empty interior' className='relative z-10 h-full w-full object-contain' />
             </div>
-            <h2 className='text-3xl font-semibold text-(--automation-cloud-ink)'>Create automation</h2>
-            <p className='mx-auto mt-3 max-w-lg text-base leading-7 text-(--automation-cloud-ink)/70'>Check that everything is working as it should, and get alerted if something is wrong.</p>
+            <h2 className='text-3xl font-semibold text-ui-text'>Create automation</h2>
+            <p className='mx-auto mt-3 max-w-lg text-base leading-7 text-ui-muted'>Check that everything is working as it should, and get alerted if something is wrong.</p>
             <button type='button' onClick={onCreate} className='mt-7 inline-flex h-11 min-w-32 items-center justify-center gap-2 rounded-lg bg-ui-primary px-5 text-sm font-semibold text-ui-on-primary shadow-lg hover:opacity-90'><Plus className='h-4 w-4' />Create</button>
         </div>
     </section>
@@ -284,7 +284,7 @@ function AutomationRow({ automation, selected, onClick }: { automation: AgentAut
 function historyBars(automation: AgentAutomation) {
     const history = automation.history || []
     if (!history.length) return <span className='text-xs text-ui-muted'>No checks</span>
-    return <span className='flex gap-0.5'>{history.map(run => <span key={run.id} title={`${formatDate(run.started_at)}: ${run.warning ? 'warning' : run.status}`} className={`h-4 w-1 rounded-sm ${run.status === 'failed' ? 'bg-[#ef4444]' : run.warning ? 'bg-ui-warning' : run.status === 'completed' ? 'bg-ui-success' : 'bg-ui-muted/40'}`} />)}</span>
+    return <span className='flex gap-0.5'>{history.map(run => <span key={run.id} title={`${formatDate(run.started_at)}: ${run.warning ? 'warning' : run.status}`} className={`h-4 w-1 rounded-sm ${run.status === 'failed' ? 'bg-ui-danger' : run.warning ? 'bg-ui-warning' : run.status === 'completed' ? 'bg-ui-success' : 'bg-ui-muted/40'}`} />)}</span>
 }
 
 function uptimeLabel(automation: AgentAutomation) {

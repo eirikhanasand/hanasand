@@ -17,7 +17,7 @@ type RecentScansProps = {
 export default function RecentScans({ title, readyMessage, scans, mine = false, className = '', listClassName = '', surface = 'default' }: RecentScansProps) {
     const premium = surface === 'premium'
     const sectionClass = premium
-        ? 'border-ui-border bg-ui-panel shadow-[0_18px_45px_rgba(16,24,40,0.08)]'
+        ? 'border-ui-border bg-ui-panel shadow-[0_18px_45px_var(--ui-shadow-soft)]'
         : 'border-ui-border bg-ui-panel shadow-sm'
     const titleClass = premium ? 'text-ui-text' : 'text-ui-text'
     const mutedClass = premium ? 'text-ui-muted' : 'text-ui-muted'
@@ -28,7 +28,7 @@ export default function RecentScans({ title, readyMessage, scans, mine = false, 
         ? 'border-ui-border bg-ui-panel text-ui-primary'
         : 'border-ui-border bg-ui-panel text-ui-primary'
     const itemClass = premium
-        ? 'border-ui-border bg-ui-panel hover:border-ui-border hover:bg-ui-raised hover:shadow-[0_12px_28px_rgba(16,24,40,0.08)]'
+        ? 'border-ui-border bg-ui-panel hover:border-ui-border hover:bg-ui-raised hover:shadow-[0_12px_28px_var(--ui-shadow-soft)]'
         : 'border-ui-border bg-ui-raised hover:border-ui-primary hover:bg-ui-panel hover:shadow-sm'
     const badgeClass = premium ? 'border-ui-border bg-ui-raised' : 'border-ui-border bg-ui-panel'
     return (

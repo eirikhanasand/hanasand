@@ -2,7 +2,7 @@ import prettyDate from '@/utils/date/prettyDate'
 import smallDate from '@/utils/date/smallDate'
 import { Bug, CloudCheck, Cpu, Info, MemoryStick, Pencil, RefreshCcw, StopCircle, TriangleAlert } from 'lucide-react'
 
-type Color = 'red' | 'green' | 'orange' | 'lightgreen' | 'blue' | 'yellow' | 'default' | 'none' | 'dynamic'
+type Color = 'red' | 'green' | 'orange' | 'lightgreen' | 'yellow' | 'default' | 'none' | 'dynamic'
 type Icon = 'ram' | 'cpu' | 'refresh' | 'error' | 'warning' | 'success' | 'pencil'
 type Map = Record<string, { color: Color, icon: Icon }>
 type TagProps = {
@@ -69,7 +69,6 @@ function Color(input: string | undefined) {
         case 'yellow':      return 'border border-ui-warning/30 bg-ui-warning/10 text-ui-warning'
         case 'orange':      return 'border border-ui-warning/30 bg-ui-warning/10 text-ui-warning'
         case 'lightgreen':  return 'border border-ui-success/30 bg-ui-success/10 text-ui-success'
-        case 'blue':        return 'border border-ui-primary/30 bg-ui-primary/10 text-ui-primary'
         default:            return 'border border-ui-primary/30 bg-ui-primary/10 text-ui-primary'
     }
 }

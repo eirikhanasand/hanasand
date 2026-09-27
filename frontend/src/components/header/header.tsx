@@ -74,7 +74,7 @@ function PublicDropdown({ label, items }: { label: string, items: NavigationItem
                 <ChevronDown className='h-4 w-4 text-ui-muted' />
             </button>
             <div className='invisible pointer-events-none absolute left-0 top-10 z-10 h-3 w-[23rem] group-hover:visible group-hover:pointer-events-auto group-focus-within:visible group-focus-within:pointer-events-auto' aria-hidden='true' />
-            <div className='invisible pointer-events-none absolute left-0 top-12 z-20 max-h-[calc(100dvh-6rem)] w-[23rem] overflow-y-auto translate-y-1 rounded-lg border border-ui-border bg-ui-panel p-2 opacity-0 shadow-[0_22px_70px_rgba(25,34,52,0.15)] transition group-hover:visible group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100 dark:shadow-[0_22px_70px_rgba(0,0,0,0.42)]'>
+            <div className='invisible pointer-events-none absolute left-0 top-12 z-20 max-h-[calc(100dvh-6rem)] w-[23rem] overflow-y-auto translate-y-1 rounded-lg border border-ui-border bg-ui-panel p-2 opacity-0 shadow-[0_22px_70px_var(--ui-shadow)] transition group-hover:visible group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100'>
                 <NavigationLinks items={items} />
             </div>
         </div>
@@ -104,7 +104,7 @@ function PublicMobileMenu({ token }: { token: boolean }) {
                 {open ? <X className='h-5 w-5' /> : <MenuIcon className='h-5 w-5' />}
             </button>
             {open && (
-                <nav id={menuId} aria-label='Mobile main navigation' className='fixed inset-x-3 top-20 z-30 max-h-[calc(100dvh-6rem)] overflow-y-auto rounded-lg border border-ui-border bg-ui-panel p-2 shadow-[0_22px_70px_rgba(25,34,52,0.16)] dark:shadow-[0_22px_70px_rgba(0,0,0,0.42)]'>
+                <nav id={menuId} aria-label='Mobile main navigation' className='fixed inset-x-3 top-20 z-30 max-h-[calc(100dvh-6rem)] overflow-y-auto rounded-lg border border-ui-border bg-ui-panel p-2 shadow-[0_22px_70px_var(--ui-shadow)]'>
                     {navigationGroups.map(({ label, items }) => (
                         <details key={label} name={menuId} className='group'>
                             <summary className='flex min-h-11 cursor-pointer list-none items-center justify-between rounded-lg px-3 text-sm font-semibold text-ui-text hover:bg-ui-raised [&::-webkit-details-marker]:hidden'>

@@ -72,7 +72,7 @@ function Unavailable() {
         <div>
             <RefreshCcw className='mx-auto h-8 w-8 text-ui-warning' />
             <h2 className='mt-4 text-xl font-semibold text-ui-text'>Source inventory is temporarily unavailable</h2>
-            <Link href='/ti/sources' className='mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ui-primary'>
+            <Link href='/ti/sources' className='ui-button ui-button-primary mt-5 min-h-11 gap-2 px-5 py-2.5 text-sm shadow-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ui-primary'>
                 <RefreshCcw aria-hidden='true' className='h-4 w-4' />
                 Retry
             </Link>

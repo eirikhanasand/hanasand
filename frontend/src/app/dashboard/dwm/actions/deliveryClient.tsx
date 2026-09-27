@@ -144,7 +144,7 @@ export default function DeliveryClient({ scopeId }: { scopeId: string }) {
             </div>
             {!loading && !canManage && <p className='border-t border-ui-border px-4 py-3 text-sm text-ui-muted'>Only workspace owners and admins can add or test destinations.</p>}
         </>}
-        <dialog ref={dialog} aria-labelledby='destination-form-title' className='m-auto w-[calc(100%-2rem)] max-w-lg rounded-xl border border-ui-border bg-ui-panel p-0 text-ui-text shadow-xl backdrop:bg-black/60' onCancel={event => { if (busy === 'save') event.preventDefault(); else setDraft(null) }} onClose={() => setDraft(null)}>
+        <dialog ref={dialog} aria-labelledby='destination-form-title' className='m-auto w-[calc(100%-2rem)] max-w-lg rounded-xl border border-ui-border bg-ui-panel p-0 text-ui-text shadow-xl backdrop:bg-ui-backdrop' onCancel={event => { if (busy === 'save') event.preventDefault(); else setDraft(null) }} onClose={() => setDraft(null)}>
             {draft && <form onSubmit={save} className='grid gap-4 p-5'>
                 <div className='flex items-center justify-between gap-3'><h2 id='destination-form-title' className='text-lg font-semibold'>{draft.id ? 'Edit destination' : 'Add destination'}</h2><button type='button' aria-label='Close' className={button} disabled={busy === 'save'} onClick={() => setDraft(null)}><X aria-hidden='true' className='h-4 w-4' /></button></div>
                 <label className='grid gap-1 text-sm font-medium'>Name<input autoFocus required maxLength={120} className={field} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} /></label>

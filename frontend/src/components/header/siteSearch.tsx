@@ -130,7 +130,7 @@ export default function SiteSearch({ token }: { token: boolean }) {
                 <div role='dialog' aria-modal='true' aria-label='Site search' onKeyDownCapture={event => {
                     if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); event.nativeEvent.stopImmediatePropagation(); setOpen(false) }
                 }} className='fixed inset-0 z-[1200] bg-ui-canvas/70 px-3 py-20 backdrop-blur' onMouseDown={() => setOpen(false)}>
-                    <div className='mx-auto max-w-3xl overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-[0_28px_90px_rgba(0,0,0,0.28)]' onMouseDown={event => event.stopPropagation()}>
+                    <div className='mx-auto max-w-3xl overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-[0_28px_90px_var(--ui-shadow)]' onMouseDown={event => event.stopPropagation()}>
                         <div className='flex h-16 items-center gap-3 border-b border-ui-border px-4'>
                             <Search className='h-5 w-5 text-ui-muted' />
                             <input

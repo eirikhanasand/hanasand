@@ -31,10 +31,10 @@ export default function VmRow({ vm, metrics }: { vm: VM; metrics?: VMMetrics }) 
             <h1>{status}</h1>
             <div className='flex max-w-full flex-wrap gap-1'>
                 <Tag color='orange' text={formatDescription(vm.config_image_description)} />
-                <Tag color='blue' text={type} />
-                <Tag color='blue' icon='pencil' text={String(accessUserCount)} />
+                <Tag color='default' text={type} />
+                <Tag color='default' icon='pencil' text={String(accessUserCount)} />
                 <Tag color='green' icon='refresh' text={lastChecked} />
-                <Tag color='blue' text={ipAddress} />
+                <Tag color='default' text={ipAddress} />
             </div>
             <div className='flex justify-end gap-2'>
                 <AddToOrganization vm={vm} />

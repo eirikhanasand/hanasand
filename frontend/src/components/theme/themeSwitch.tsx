@@ -18,13 +18,12 @@ export default function ThemeSwitch() {
             document.documentElement.classList.add(theme)
         }
 
-        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', (savedTheme ?? theme) === 'light' ? '#f5f5f5' : '#070707')
+        updateThemeColorMeta()
     }, [theme])
 
     function toggleTheme() {
         const newTheme = theme === 'dark' ? 'light' : 'dark'
         setCookie('theme', newTheme)
-        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', newTheme === 'light' ? '#f5f5f5' : '#070707')
         setTheme(newTheme)
     }
 
@@ -52,6 +51,11 @@ function normalizeTheme(value: string | null | undefined): 'dark' | 'light' | nu
     }
 
     return null
+}
+
+function updateThemeColorMeta() {
+    const canvas = getComputedStyle(document.documentElement).getPropertyValue('--ui-canvas').trim()
+    if (canvas) document.querySelector('meta[name="theme-color"]')?.setAttribute('content', canvas)
 }
 
 function ThemeIcon() {

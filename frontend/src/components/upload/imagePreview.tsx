@@ -9,7 +9,7 @@ export default function ImagePreview({file, url}: ImagePreviewProps) {
             <img
                 src={url}
                 alt='Preview'
-                className='max-h-[520px] w-auto max-w-full rounded-lg object-contain shadow-[0_18px_60px_rgba(0,0,0,0.24)]'
+                className='max-h-[520px] w-auto max-w-full rounded-lg object-contain shadow-[0_18px_60px_var(--ui-shadow)]'
             />
         )
     }
@@ -17,7 +17,7 @@ export default function ImagePreview({file, url}: ImagePreviewProps) {
         <video
             src={url}
             controls
-            className='max-h-[520px] w-auto max-w-full rounded-lg shadow-[0_18px_60px_rgba(0,0,0,0.24)]'
+            className='max-h-[520px] w-auto max-w-full rounded-lg shadow-[0_18px_60px_var(--ui-shadow)]'
         />
     )
 }
