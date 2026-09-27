@@ -133,7 +133,7 @@ export default function DetectionRules({ category, initial }: { category: RuleCa
                 />
             </div>
             {error && <div role='alert' className='rounded-lg border border-ui-danger/40 bg-ui-raised p-3 text-sm text-ui-text'>{error}</div>}
-            {status && <div role='status' className='rounded-lg border border-ui-primary/40 bg-ui-primary/10 p-3 text-sm text-ui-on-primary'>{status}</div>}
+            {status && <div role='status' className='rounded-lg border border-ui-primary/40 bg-ui-primary/10 p-3 text-sm text-ui-muted'>{status}</div>}
             {liveHitsUnavailable && <div role='status' className='rounded-lg border border-ui-warning/40 bg-ui-raised p-3 text-sm text-ui-text'>Live hit counts are temporarily unavailable. Retrying automatically.</div>}
             {showCreate && <CreateRuleDialog key={organizationId} category={category} organizationId={organizationId} canManage={canManageRules} canManageRetention={canManageRetention} rules={rules} onClose={() => setShowCreate(false)} onCreated={rule => {
                 setShowCreate(false); setStatus(`${rule.name} created.`); void loadEvent(organizationId)
