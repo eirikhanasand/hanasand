@@ -5,7 +5,8 @@ import { NAVIGATION_COOKIE, readNavigationPreferences, type NavigationPreference
 import { getCookie, setCookie } from '@/utils/cookies/cookies'
 import { usePathname } from 'next/navigation'
 import { AlarmClockCheck, ChevronDown, ChevronsUp, FolderKanban, NotebookText, PanelLeftClose, PanelLeftOpen, Pin, Search, Server, Settings2, ShieldCheck, House, ListFilter, Mail, CircleUserRound, Code2 } from 'lucide-react'
-import { useEffect, useId, useState, useSyncExternalStore } from 'react'
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
+import { createPortal } from 'react-dom'
 import { getDashboardViewMode, setDashboardViewMode } from '@/utils/layout/viewMode'
 import { getDashboardNavigation, navigationLinks, pinnedNavigation, type NavigationAccess, type NavigationItem } from '@/utils/layout/dashboardNavigation'
 import { useWorkspace } from '@/components/organizations/workspaceProvider'
@@ -32,6 +33,8 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
     const storageKey = `dashboard-navigation:v1:${access.id}`
     const [preferences, setPreferences] = useState<Preferences>(initialPreferences)
     const [query, setQuery] = useState('')
+    const [preview, setPreview] = useState<{ section: NavigationItem, top: number } | null>(null)
+    const previewCloseTimer = useRef<number | null>(null)
     const mode = useSyncExternalStore(
         (onChange) => {
             window.addEventListener('dashboard-view-mode', onChange)
@@ -156,6 +159,38 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
     const hasExpandedMenu = !search && (sections.some(section => section.items && isExpanded(section.label)) || (favorites.length > 0 && isExpanded('Pinned')))
     const matches = search ? links.filter(item => [...item.ancestors, item.label].join(' ').toLocaleLowerCase().includes(search)) : []
 
+    useEffect(() => {
+        if (!preview) return
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setPreview(null)
+        }
+        window.addEventListener('keydown', closeOnEscape)
+        return () => window.removeEventListener('keydown', closeOnEscape)
+    }, [preview])
+
+    function showPreview(section: NavigationItem, element: HTMLElement) {
+        if (previewCloseTimer.current !== null) window.clearTimeout(previewCloseTimer.current)
+        const bounds = element.getBoundingClientRect()
+        setPreview({ section, top: Math.max(8, Math.min(bounds.top, window.innerHeight - 240)) })
+    }
+
+    function deferPreviewClose() {
+        if (previewCloseTimer.current !== null) window.clearTimeout(previewCloseTimer.current)
+        previewCloseTimer.current = window.setTimeout(() => setPreview(null), 140)
+    }
+
+    function renderPreviewItems(items: NavigationItem[], depth = 0) {
+        return items.map(item => item.items
+            ? <div key={`${depth}-${item.label}`} className='py-1'>
+                <p className='px-3 py-1 text-xs font-semibold text-ui-muted'>{item.label}</p>
+                {renderPreviewItems(item.items, depth + 1)}
+            </div>
+            : item.href ? <Link key={item.href} href={item.href} onClick={() => setPreview(null)} aria-current={active?.href === item.href ? 'page' : undefined}
+                className={`block rounded-md px-3 py-2 text-sm leading-5 hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary ${depth ? 'ml-3' : ''} ${active?.href === item.href ? 'bg-ui-primary/10 font-semibold text-ui-primary' : 'text-ui-text'}`}>
+                {item.label}
+            </Link> : null)
+    }
+
     return (
         <aside aria-label='Dashboard sidebar' className={`site-chrome dashboard-sidebar-sticky noscroll min-h-0 w-full overflow-auto rounded-lg border border-ui-border bg-ui-panel text-ui-text p-2 shadow-sm shadow-ui-canvas/10 dark:shadow-ui-canvas/20 ${compact ? 'lg:w-16' : 'lg:w-58'}`}>
             <div className={`mb-2 flex items-center ${compact ? 'justify-center' : 'justify-between px-2'}`}>
@@ -176,13 +211,14 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
                 <input type='search' aria-label='Search navigation' placeholder='Find a page…' value={query} onChange={event => setQuery(event.target.value)}
                     className='h-10 w-full min-w-0 rounded-md border border-ui-border bg-ui-canvas pl-8 pr-2 text-sm text-ui-text placeholder:text-ui-muted focus-visible:outline-2 focus-visible:outline-ui-primary' />
             </div>}
-            <nav aria-label='Main navigation' className='grid gap-1'>
+            <nav aria-label='Main navigation' onMouseLeave={deferPreviewClose} className='grid gap-1'>
                 {compact ? sections.map(section => {
                     const Icon = sectionIcons[section.label] || FolderKanban
                     if (section.href) return <Link key={section.href} href={section.href} aria-label={section.label} title={section.label} aria-current={active?.href === section.href ? 'page' : undefined}
                         className='grid h-10 w-full place-items-center rounded-md text-ui-muted hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary'><Icon className='h-4 w-4' /></Link>
                     return <button key={section.label} type='button' aria-label={`Open ${section.label}`} title={section.label}
-                        onClick={() => { save({ ...preferences, expanded: { ...preferences.expanded, [section.label]: true } }); setDashboardViewMode('normal') }}
+                        onMouseEnter={event => showPreview(section, event.currentTarget)} onFocus={event => showPreview(section, event.currentTarget)}
+                        onClick={() => { save({ ...preferences, expanded: { ...preferences.expanded, [section.label]: true } }); setDashboardViewMode('normal'); setPreview(null) }}
                         className={`grid h-10 w-full place-items-center rounded-md hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary ${activePath.startsWith(section.label) ? 'bg-ui-primary/10 text-ui-primary' : 'text-ui-muted'}`}>
                         <Icon className='h-4 w-4' />
                     </button>
@@ -197,6 +233,16 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
                     {sections.map(section => section.items ? renderGroup(section) : section.href ? renderLink({ label: section.label, href: section.href }) : null)}
                 </>}
             </nav>
+            {compact && preview && typeof document !== 'undefined' && createPortal(
+                <div role='region' aria-label={`${preview.section.label} navigation`} onMouseEnter={() => {
+                    if (previewCloseTimer.current !== null) window.clearTimeout(previewCloseTimer.current)
+                }} onMouseLeave={deferPreviewClose}
+                style={{ position: 'fixed', left: 80, top: preview.top, maxHeight: 'calc(100dvh - 16px)' }}
+                className='z-[200] w-72 overflow-y-auto rounded-xl border border-ui-border bg-ui-panel p-2 text-ui-text shadow-xl shadow-black/20'>
+                    <p className='px-3 py-2 text-sm font-semibold'>{preview.section.label}</p>
+                    {renderPreviewItems(preview.section.items || [])}
+                </div>, document.body,
+            )}
             <nav aria-label='Workspace shortcuts' className='mt-2 grid gap-1 border-t border-ui-border pt-2 lg:hidden'>
                 {[['Workspace', '/s'], ['Workspace assistant', '/ai'], ['Status', '/status']].map(([label, href]) => (
                     <Link key={href} href={href} className='rounded-md px-2 py-2 text-sm text-ui-muted hover:bg-ui-canvas hover:text-ui-text'>{label}</Link>
