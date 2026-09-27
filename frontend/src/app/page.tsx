@@ -13,7 +13,7 @@ export const revalidate = 5
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Hanasand Threat Intelligence',
-    description: 'See company and vendor exposure as it surfaces, with clear source context and live activity.',
+    description: 'Know what is exposed before it is too late. Monitor companies and vendors with source links and context your team can act on.',
     path: '/',
     keywords: ['hanasand', 'threat intelligence', 'ransomware monitoring', 'dark web monitoring', 'company exposure alerts'],
 })
@@ -26,7 +26,7 @@ const consoleActions = [
 ]
 
 const solutions = [
-    { title: 'Threat monitoring', href: '/ti' },
+    { title: 'Monitoring', href: '/ti' },
     { title: 'Isolated browser', href: '/browser' },
     { title: 'Trust center', href: '/trust' },
     { title: 'Shared reports', href: '/contact?intent=reports' },
@@ -51,11 +51,11 @@ export default function Page() {
                             <ArrowRight className='h-4 w-4' />
                         </Link>
                         <div className='grid max-w-4xl gap-6'>
-                            <h1 className='max-w-4xl text-[clamp(3.2rem,6.5vw,6.6rem)] font-medium leading-[0.94] tracking-[-0.065em]'>
-                                Know what’s exposed <span className='home-heading-muted'>before it affects you.</span>
+                            <h1 className='max-w-4xl text-[clamp(2.8rem,5.4vw,5.4rem)] font-medium leading-[0.94] tracking-[-0.065em]'>
+                                Know what’s exposed <span className='home-heading-muted'>before it’s too late.</span>
                             </h1>
                             <p className='max-w-xl text-base leading-7 text-ui-muted md:text-lg md:leading-8'>
-                                Track companies and vendors with clear sources and context for your next move.
+                                Company monitoring done right. Track company and vendor mentions with source links and context your team can act on.
                             </p>
                         </div>
                         <form action='/ti' className='home-search flex w-full max-w-xl items-center gap-3 rounded-full border px-4 py-1.5'>

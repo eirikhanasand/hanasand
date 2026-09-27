@@ -48,10 +48,10 @@ export default function SupportAssistant({ force = false, internal = false }: { 
                     {...floating.handlers}
                     onClick={() => { if (!floating.wasDragged()) setOpenPath(pathname) }}
                     title='Drag to move, or use the arrow keys'
-                    className='relative grid h-16 w-16 touch-none select-none place-items-center rounded-full bg-ui-text text-ui-canvas shadow-[0_18px_50px_rgba(0,0,0,0.24)] cursor-grab active:cursor-grabbing'
+                    className='relative grid h-14 w-14 touch-none select-none place-items-center rounded-full bg-[rgba(64,64,64,0.62)] text-[#a6a6a6] shadow-[0_12px_36px_rgba(0,0,0,0.2)] backdrop-blur-sm transition-colors hover:bg-[rgba(72,72,72,0.94)] hover:text-[#d0d0d0] cursor-grab active:cursor-grabbing'
                     aria-label='Open support assistant'
                 >
-                    <MessageCircle className='h-7 w-7' />
+                    <MessageCircle className='h-6 w-6' />
                     {unread > 0 ? <span role='status' aria-label={`${unread} unread support ${unread === 1 ? 'reply' : 'replies'}`} className='absolute -right-0.5 -top-0.5 grid h-6 min-w-6 place-items-center rounded-full border-2 border-ui-panel bg-ui-danger px-1 text-[11px] font-semibold text-white'>{unread > 9 ? '9+' : unread}</span> : null}
                 </button>
             ) : null}

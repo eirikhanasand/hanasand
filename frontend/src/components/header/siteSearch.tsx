@@ -25,7 +25,7 @@ const publicRouteItems: SearchItem[] = [
     route('Pricing', 'Plans and subscription details', '/pricing'),
     route('Trust Center', 'Security, DPA, SLA, and subprocessors', '/trust'),
     route('Status', 'Service health and incidents', '/status'),
-    route('Hash exposure lookup', 'Prefix-only SHA-1 lookup', '/pwned'),
+    route('Hash lookup', 'Prefix-only SHA-1 lookup', '/pwned'),
     route('Support', 'Contact support', '/support'),
 ]
 

@@ -167,7 +167,7 @@ export default function PromptPortalClient({ initialState = emptyState }: { init
                                 </label>
                                 {files?.length ? <span className='text-xs font-semibold text-ui-muted'>{files.length} selected</span> : null}
                             </div>
-                            <button disabled={busy || state.readOnly || !prompt.trim()} className='inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas disabled:cursor-not-allowed disabled:opacity-60'>
+                            <button disabled={busy || state.readOnly || !prompt.trim()} className='ui-button ui-button-primary h-10 px-4 text-sm disabled:cursor-not-allowed'>
                                 <Send className='h-4 w-4' />
                                 Send
                             </button>

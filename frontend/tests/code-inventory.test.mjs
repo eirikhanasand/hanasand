@@ -47,6 +47,10 @@ test('native build files and shaders are included while credentials and output a
         for (const name of ['CMakeLists.txt', 'kernel.wgsl', 'source.metal', 'repoCredentials.ts', '.env', 'credentials.json']) fs.writeFileSync(path.join(root, name), 'source')
         fs.mkdirSync(path.join(root, 'CMakeFiles'))
         fs.writeFileSync(path.join(root, 'CMakeFiles', 'generated.c'), 'generated')
+        fs.mkdirSync(path.join(root, 'ops/runtime/releases/old-release/frontend/src/app'), { recursive: true })
+        fs.writeFileSync(path.join(root, 'ops/runtime/releases/old-release/frontend/src/app/page.tsx'), 'archived')
+        fs.mkdirSync(path.join(root, 'ops/runtime/source/frontend/src/app'), { recursive: true })
+        fs.writeFileSync(path.join(root, 'ops/runtime/source/frontend/src/app/page.tsx'), 'runtime snapshot')
         assert.deepEqual([...collectSources(root).keys()].sort(), ['CMakeLists.txt', 'kernel.wgsl', 'repoCredentials.ts', 'source.metal'])
     } finally { fs.rmSync(root, { recursive: true, force: true }) }
 })

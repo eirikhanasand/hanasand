@@ -104,7 +104,7 @@ export default function ServiceAccounts() {
                     {createError && <p role='alert' className='text-sm text-ui-danger'>{createError}</p>}
                     <div className='flex flex-wrap justify-end gap-2 border-t border-ui-border pt-4'>
                         <button type='button' disabled={pending} onClick={() => dialog.current?.close()} className='rounded-lg border border-ui-border px-4 py-2 text-sm hover:bg-ui-raised disabled:opacity-50'>Cancel</button>
-                        <button disabled={pending || !selected.length || !name.trim()} className='rounded-lg bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas disabled:opacity-50'>{pending ? 'Creating…' : 'Create service account'}</button>
+                        <button disabled={pending || !selected.length || !name.trim()} className='ui-button ui-button-primary px-4 py-2 text-sm disabled:opacity-50'>{pending ? 'Creating…' : 'Create service account'}</button>
                     </div>
                 </form>
             </dialog>

@@ -149,3 +149,9 @@ ti/scraper/.tmp
 
 # Exclude dependency contents even when source-file patterns re-include their parents.
 **/node_modules/**
+
+# Current source indexing does not need archived release checkouts.
+ops/runtime/releases
+ops/runtime/releases/**
+ops/runtime/source
+ops/runtime/source/**

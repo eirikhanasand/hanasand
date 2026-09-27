@@ -1029,7 +1029,7 @@ function ActorOperationsMatrix({
                         <button
                             type='button'
                             onClick={() => setShowAllOperations(true)}
-                            className='m-2 inline-flex min-h-9 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'
+                            className='ui-button ui-button-secondary m-2 min-h-9 px-3 text-xs'
                         >
                             Show {hiddenOperationCount} more details
                         </button>
@@ -1037,7 +1037,7 @@ function ActorOperationsMatrix({
                         <button
                             type='button'
                             onClick={() => setShowAllOperations(false)}
-                            className='m-2 inline-flex min-h-9 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'
+                            className='ui-button ui-button-secondary m-2 min-h-9 px-3 text-xs'
                         >
                             Show key details only
                         </button>
@@ -1060,7 +1060,7 @@ function ActorOperationsMatrix({
                                 <StripActionButton icon={<Send className='h-3.5 w-3.5' />} onClick={onEscalate}>Escalate</StripActionButton>
                             </div>
                             {selectedRow.artifactKind && selectedRow.artifactLookup ? (
-                                <button type='button' onClick={() => onSelectArtifactBy(selectedRow.artifactKind!, selectedRow.artifactLookup!)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-2 text-xs font-semibold text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
+                                <button type='button' onClick={() => onSelectArtifactBy(selectedRow.artifactKind!, selectedRow.artifactLookup!)} className='ui-button ui-button-secondary min-h-8 px-2 text-xs'>
                                     Open detail
                                 </button>
                             ) : null}
@@ -1178,10 +1178,10 @@ function SourceCoverageWorkbench({
                                         <td className='px-3 py-2'>
                                             <div className='flex min-w-0 flex-wrap gap-1.5'>
                                                 {row.evidenceItems[0] ? (
-                                                    <button type='button' onClick={() => onSelectEvidence(row.evidenceItems[0]!.id)} className='inline-flex min-h-8 items-center rounded-md border border-ui-border bg-ui-panel px-2 text-[11px] font-semibold text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>Open result</button>
+                                                    <button type='button' onClick={() => onSelectEvidence(row.evidenceItems[0]!.id)} className='ui-button ui-button-secondary min-h-8 px-2 text-[11px]'>Open result</button>
                                                 ) : null}
                                                 {row.queueFilter ? (
-                                                    <button type='button' onClick={() => onFilterSource(row.queueFilter!)} className='inline-flex min-h-8 items-center rounded-md border border-ui-border bg-ui-panel px-2 text-[11px] font-semibold text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>Filter</button>
+                                                    <button type='button' onClick={() => onFilterSource(row.queueFilter!)} className='ui-button ui-button-secondary min-h-8 px-2 text-[11px]'>Filter</button>
                                                 ) : null}
                                             </div>
                                         </td>
@@ -1194,7 +1194,7 @@ function SourceCoverageWorkbench({
                         <button
                             type='button'
                             onClick={() => setShowAllSources(true)}
-                            className='m-2 inline-flex min-h-9 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'
+                            className='ui-button ui-button-secondary m-2 min-h-9 px-3 text-xs'
                         >
                             Show {hiddenSourceCount} more sources
                         </button>
@@ -1202,7 +1202,7 @@ function SourceCoverageWorkbench({
                         <button
                             type='button'
                             onClick={() => setShowAllSources(false)}
-                            className='m-2 inline-flex min-h-9 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'
+                            className='ui-button ui-button-secondary m-2 min-h-9 px-3 text-xs'
                         >
                             Show key sources only
                         </button>
@@ -1850,7 +1850,7 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
                         <button
                             type='button'
                             onClick={() => setShowAllArtifacts(true)}
-                            className='m-2 inline-flex min-h-9 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'
+                            className='ui-button ui-button-secondary m-2 min-h-9 px-3 text-xs'
                         >
                             Show {hiddenArtifactCount} more details
                         </button>
@@ -1858,7 +1858,7 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
                         <button
                             type='button'
                             onClick={() => setShowAllArtifacts(false)}
-                            className='m-2 inline-flex min-h-9 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'
+                            className='ui-button ui-button-secondary m-2 min-h-9 px-3 text-xs'
                         >
                             Show key details only
                         </button>
@@ -1876,7 +1876,7 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
                                 {formatLabel(selectedArtifact.kind)} · {sourceBasisLabel(selectedArtifact.confidence)} · {selectedArtifact.watchlistTerms.length} watch · {selectedArtifact.enrichmentTasks.length} open questions
                             </p>
                             <div className='grid grid-cols-2 gap-1.5'>
-                                <button type='button' onClick={() => onSelectArtifact(selectedArtifact.id)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-2 text-xs font-semibold text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>Review</button>
+                                <button type='button' onClick={() => onSelectArtifact(selectedArtifact.id)} className='ui-button ui-button-secondary min-h-8 px-2 text-xs'>Review</button>
                                 <CopyPayloadButton label='Export' payload={artifactWorklistPayloadFor(selectedArtifact)} showLabel />
                             </div>
                             <div className='flex min-w-0 flex-wrap gap-1.5'>
@@ -2491,8 +2491,8 @@ function WatchlistRelevanceWorkbench({
                                         </td>
                                         <td className='px-3 py-2'>
                                             <div className='flex min-w-0 flex-wrap gap-1.5'>
-                                                {row.evidenceItems[0] ? <button type='button' onClick={() => onSelectEvidence(row.evidenceItems[0]!.id)} className='inline-flex min-h-8 items-center rounded-md border border-ui-border bg-ui-panel px-2 text-[11px] font-semibold text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>Open result</button> : null}
-                                                {row.artifactIds[0] ? <button type='button' onClick={() => onSelectArtifact(row.artifactIds[0]!)} className='inline-flex min-h-8 items-center rounded-md border border-ui-border bg-ui-panel px-2 text-[11px] font-semibold text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>Detail</button> : null}
+                                                {row.evidenceItems[0] ? <button type='button' onClick={() => onSelectEvidence(row.evidenceItems[0]!.id)} className='ui-button ui-button-secondary min-h-8 px-2 text-[11px]'>Open result</button> : null}
+                                                {row.artifactIds[0] ? <button type='button' onClick={() => onSelectArtifact(row.artifactIds[0]!)} className='ui-button ui-button-secondary min-h-8 px-2 text-[11px]'>Detail</button> : null}
                                                 <CopyPayloadButton label='Watchlist term request' payload={row.payload} />
                                             </div>
                                         </td>
@@ -2505,7 +2505,7 @@ function WatchlistRelevanceWorkbench({
                         <button
                             type='button'
                             onClick={() => setShowAllWatchlistRows(true)}
-                            className='m-2 inline-flex min-h-9 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'
+                            className='ui-button ui-button-secondary m-2 min-h-9 px-3 text-xs'
                         >
                             Show {hiddenWatchlistCount} more terms
                         </button>
@@ -2513,7 +2513,7 @@ function WatchlistRelevanceWorkbench({
                         <button
                             type='button'
                             onClick={() => setShowAllWatchlistRows(false)}
-                            className='m-2 inline-flex min-h-9 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'
+                            className='ui-button ui-button-secondary m-2 min-h-9 px-3 text-xs'
                         >
                             Show key terms only
                         </button>
@@ -2532,9 +2532,9 @@ function WatchlistRelevanceWorkbench({
                                 {selectedRow.evidenceItems.length} results · {selectedRow.artifactIds.length} details · {selectedRow.sourceCount} sources · {selectedRow.matched ? 'Matched' : publicStateLabel(selectedRow.state)}
                             </p>
                             <div className='grid grid-cols-2 gap-1.5'>
-                                <button type='button' onClick={onMarkRelevant} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-2 text-xs font-semibold text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>Watch</button>
-                                {selectedEvidence ? <button type='button' onClick={() => onSelectEvidence(selectedEvidence.id)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-2 text-xs font-semibold text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>Review result</button> : null}
-                                {selectedArtifact ? <button type='button' onClick={() => onSelectArtifact(selectedArtifact)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-2 text-xs font-semibold text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>Open detail</button> : null}
+                                <button type='button' onClick={onMarkRelevant} className='ui-button ui-button-secondary min-h-8 px-2 text-xs'>Watch</button>
+                                {selectedEvidence ? <button type='button' onClick={() => onSelectEvidence(selectedEvidence.id)} className='ui-button ui-button-secondary min-h-8 px-2 text-xs'>Review result</button> : null}
+                                {selectedArtifact ? <button type='button' onClick={() => onSelectArtifact(selectedArtifact)} className='ui-button ui-button-secondary min-h-8 px-2 text-xs'>Open detail</button> : null}
                                 <CopyPayloadButton label='Export' payload={selectedRow.payload} showLabel />
                             </div>
                             <div className='flex min-w-0 flex-wrap gap-1.5'>
@@ -2650,7 +2650,7 @@ function HandoffEvidenceMatrix({ actionability }: { actionability: TiActionabili
                     <span className={readyCount === rows.length ? decisionStepStatusClass('ready') : readyCount ? decisionStepStatusClass('review') : decisionStepStatusClass('blocked')}>
                         {readyCount}/{rows.length} linked
                     </span>
-                    <button type='button' onClick={() => setShowReviewPaths(value => !value)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-2.5 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'>
+                    <button type='button' onClick={() => setShowReviewPaths(value => !value)} className='ui-button ui-button-secondary min-h-8 px-2.5 text-[11px]'>
                         {showReviewPaths ? 'Hide rows' : 'Show rows'}
                     </button>
                 </div>
@@ -3227,7 +3227,7 @@ function ActionPayloadsPanel({ actionability }: { actionability: TiActionability
                     <span className={readyPayloadCount === payloads.length ? decisionStepStatusClass('ready') : decisionStepStatusClass('review')}>
                         {readyPayloadCount}/{payloads.length} available
                     </span>
-                    <button type='button' onClick={() => setShowPayloadDetails(value => !value)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-2.5 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'>
+                    <button type='button' onClick={() => setShowPayloadDetails(value => !value)} className='ui-button ui-button-secondary min-h-8 px-2.5 text-[11px]'>
                         {showPayloadDetails ? 'Hide action links' : 'Show action links'}
                     </button>
                     <CopyPayloadButton label='Action packages' payload={actionability.actionPayloads} />
@@ -3348,7 +3348,7 @@ function ReadinessBlockersPanel({ actionability }: { actionability: TiActionabil
                         {publicStateLabel(actionability.readiness.state)}
                     </span>
                     {actionability.readiness.blockers.length ? (
-                        <button type='button' onClick={() => setShowFollowUps(value => !value)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-2.5 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'>
+                        <button type='button' onClick={() => setShowFollowUps(value => !value)} className='ui-button ui-button-secondary min-h-8 px-2.5 text-[11px]'>
                             {showFollowUps ? 'Hide follow-ups' : `${actionability.readiness.blockers.length} follow-up${actionability.readiness.blockers.length === 1 ? '' : 's'}`}
                         </button>
                     ) : null}
@@ -3898,8 +3898,8 @@ function EnrichmentGapWorkbench({
                                         <td className='px-3 py-2'>
                                             <div className='flex min-w-0 flex-wrap gap-1.5'>
                                                 <span className={sourceHealthChipClass(row.state)}>{publicStateLabel(row.state)}</span>
-                                                {row.evidenceItems[0] ? <button type='button' onClick={() => onSelectEvidence(row.evidenceItems[0]!.id)} className='inline-flex min-h-8 items-center rounded-md border border-ui-border bg-ui-panel px-2 text-[11px] font-semibold text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>Open result</button> : null}
-                                                {row.artifactIds[0] ? <button type='button' onClick={() => onSelectArtifact(row.artifactIds[0]!)} className='inline-flex min-h-8 items-center rounded-md border border-ui-border bg-ui-panel px-2 text-[11px] font-semibold text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>Detail</button> : null}
+                                                {row.evidenceItems[0] ? <button type='button' onClick={() => onSelectEvidence(row.evidenceItems[0]!.id)} className='ui-button ui-button-secondary min-h-8 px-2 text-[11px]'>Open result</button> : null}
+                                                {row.artifactIds[0] ? <button type='button' onClick={() => onSelectArtifact(row.artifactIds[0]!)} className='ui-button ui-button-secondary min-h-8 px-2 text-[11px]'>Detail</button> : null}
                                             </div>
                                         </td>
                                     </tr>
@@ -3944,10 +3944,10 @@ function EnrichmentGapWorkbench({
                             </div>
                         ) : null}
                         <div className='mt-3 grid grid-cols-2 gap-1.5'>
-                            <button type='button' onClick={onReview} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-2 text-xs font-semibold text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>Review</button>
-                            <button type='button' onClick={onEscalate} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-2 text-xs font-semibold text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>Escalate</button>
-                            {selectedEvidence ? <button type='button' onClick={() => onSelectEvidence(selectedEvidence.id)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-2 text-xs font-semibold text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>Open result</button> : null}
-                            {selectedArtifact ? <button type='button' onClick={() => onSelectArtifact(selectedArtifact)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-2 text-xs font-semibold text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>Open detail</button> : null}
+                            <button type='button' onClick={onReview} className='ui-button ui-button-secondary min-h-8 px-2 text-xs'>Review</button>
+                            <button type='button' onClick={onEscalate} className='ui-button ui-button-secondary min-h-8 px-2 text-xs'>Escalate</button>
+                            {selectedEvidence ? <button type='button' onClick={() => onSelectEvidence(selectedEvidence.id)} className='ui-button ui-button-secondary min-h-8 px-2 text-xs'>Open result</button> : null}
+                            {selectedArtifact ? <button type='button' onClick={() => onSelectArtifact(selectedArtifact)} className='ui-button ui-button-secondary min-h-8 px-2 text-xs'>Open detail</button> : null}
                         </div>
                         <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                             {selectedRow.route ? <a href={selectedRow.route} className='inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg border border-ui-border bg-ui-panel px-2.5 py-1.5 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'><ExternalLink className='h-3.5 w-3.5' />Open action</a> : null}
@@ -4010,7 +4010,7 @@ function SourceHealthPanel({ queue, intake, coverage, consumerReadiness, payload
                         </span>
                         <CopyPayloadButton label='Source review' payload={{ ...queue, sourceEnrichmentIntake: intake, actorEnrichmentCoverage: coverage, actorEnrichmentConsumerReadiness: consumerReadiness, enrichmentPayload: payload }} />
                         {(consumerReadiness.rows.length || rows.length) ? (
-                            <button type='button' onClick={() => setShowSourceDetails(value => !value)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-2.5 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'>
+                            <button type='button' onClick={() => setShowSourceDetails(value => !value)} className='ui-button ui-button-secondary min-h-8 px-2.5 text-[11px]'>
                                 {showSourceDetails ? 'Hide source details' : 'Show source details'}
                             </button>
                         ) : null}

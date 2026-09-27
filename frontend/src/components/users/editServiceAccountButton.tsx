@@ -29,7 +29,7 @@ export default function EditServiceAccountButton({ name, description, onSave }: 
                 {error && <p role='alert' className='text-sm text-ui-danger'>{error}</p>}
                 <div className='flex justify-end gap-2'>
                     <button type='button' disabled={pending} onClick={() => dialog.current?.close()} className='rounded-lg border border-ui-border px-4 py-2 text-sm disabled:opacity-50'>Cancel</button>
-                    <button disabled={pending || !draftName.trim()} className='rounded-lg bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas disabled:opacity-50'>{pending ? 'Saving…' : 'Save changes'}</button>
+                    <button disabled={pending || !draftName.trim()} className='ui-button ui-button-primary px-4 py-2 text-sm disabled:opacity-50'>{pending ? 'Saving…' : 'Save changes'}</button>
                 </div>
             </form>
         </dialog>

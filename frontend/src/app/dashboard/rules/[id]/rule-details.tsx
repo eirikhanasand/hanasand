@@ -97,7 +97,7 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
                                 <label className='text-sm font-medium'>Severity<select disabled={draft.definition?.action === 'drop'} value={draft.definition?.action === 'drop' && !data.isHistorical ? 'low' : draft.severity} onChange={event => setDraft({ ...draft, severity: event.target.value })} className={fieldClass}>{['low', 'medium', 'high', 'critical'].map(value => <option key={value} value={value}>{value}</option>)}</select></label>
                                 <label className='text-sm font-medium sm:col-span-2'>Description<textarea required minLength={10} maxLength={500} value={draft.explanation} onChange={event => setDraft({ ...draft, explanation: event.target.value })} rows={3} className={fieldClass} /></label>
                                 <label className='flex items-center gap-2 text-sm font-medium sm:col-span-2'><input type='checkbox' checked={draft.enabled !== false} onChange={event => setDraft({ ...draft, enabled: event.target.checked })} />Enabled</label>
-                                {data.canEdit && <button type='submit' className='justify-self-start rounded-lg bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas disabled:opacity-50 sm:col-span-2'>{busy ? 'Saving…' : 'Save changes'}</button>}
+                                {data.canEdit && <button type='submit' className='justify-self-start ui-button ui-button-primary px-4 py-2 text-sm disabled:opacity-50 sm:col-span-2'>{busy ? 'Saving…' : 'Save changes'}</button>}
                             </fieldset>
                         </div>
                     </DashboardPanel>

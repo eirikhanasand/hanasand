@@ -118,7 +118,7 @@ export default function BrowserReportPageClient({ runId = '', token = '', result
                         <Link href='/browser' className='rounded-md border border-ui-border px-3 py-2 text-sm font-semibold text-ui-text hover:border-ui-primary'>Back to browser</Link>
                         <div className='flex flex-wrap items-center gap-2'>
                             <ReportStatistics metrics={{ ...report.status?.metrics, event: report.status?.metrics?.event || report.status?.run, capacity: report.status?.capacity }} />
-                            {onRerun && report.target ? <div className='flex flex-wrap gap-2'>{clientId ? <BrowserHistory clientId={clientId} /> : null}<button type='button' onClick={() => onRerun(report.target!, true)} className='rounded-md border border-ui-border px-3 py-2 text-sm font-semibold hover:border-ui-primary'>Quick run</button><button type='button' onClick={() => onRerun(report.target!)} className='rounded-md border border-ui-border px-3 py-2 text-sm font-semibold hover:border-ui-primary'>Run again</button></div> : null}
+                            {onRerun && report.target ? <div className='flex flex-wrap gap-2'>{clientId ? <BrowserHistory clientId={clientId} /> : null}<button type='button' onClick={() => onRerun(report.target!, true)} className='ui-button ui-button-secondary px-3 py-2 text-sm'>Quick run</button><button type='button' onClick={() => onRerun(report.target!)} className='ui-button ui-button-secondary px-3 py-2 text-sm'>Run again</button></div> : null}
                             <ReportExport report={report} markdown={markdown} />
                         </div>
                     </div>

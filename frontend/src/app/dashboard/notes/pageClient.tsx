@@ -99,16 +99,16 @@ export default function NotesClient() {
             <DashboardPanel className={`grid content-start gap-3 border-ui-border bg-ui-panel p-3 ${leftCollapsed ? 'xl:px-2' : ''}`}>
                 {leftCollapsed ? (
                     <div className='grid justify-items-center gap-2'>
-                        <button type='button' onClick={() => setLeftCollapsed(false)} aria-label='Open notes sidebar' title='Open notes sidebar' className='grid h-9 w-9 place-items-center rounded-md border border-ui-border bg-ui-raised text-ui-text hover:border-ui-primary'>
+                        <button type='button' onClick={() => setLeftCollapsed(false)} aria-label='Open notes sidebar' title='Open notes sidebar' className='ui-button ui-button-secondary h-9 w-9 p-0'>
                             <List className='h-4 w-4' />
                         </button>
                         <button type='button' onClick={() => { setSelectedId(''); setDraft(emptyDraft) }} aria-label='New note' title='New note' className='grid h-9 w-9 place-items-center rounded-md border border-ui-border bg-ui-raised text-ui-primary hover:border-ui-primary'>
                             <Plus className='h-4 w-4' />
                         </button>
-                        <button type='button' onClick={() => setLeftCollapsed(false)} aria-label='Search notes' title='Search notes' className='grid h-9 w-9 place-items-center rounded-md border border-ui-border bg-ui-raised text-ui-text hover:border-ui-primary'>
+                        <button type='button' onClick={() => setLeftCollapsed(false)} aria-label='Search notes' title='Search notes' className='ui-button ui-button-secondary h-9 w-9 p-0'>
                             <Search className='h-4 w-4' />
                         </button>
-                        <button type='button' onClick={() => setLeftCollapsed(false)} aria-label='Show note list' title='Show note list' className='grid h-9 w-9 place-items-center rounded-md border border-ui-border bg-ui-raised text-ui-text hover:border-ui-primary'>
+                        <button type='button' onClick={() => setLeftCollapsed(false)} aria-label='Show note list' title='Show note list' className='ui-button ui-button-secondary h-9 w-9 p-0'>
                             <StickyNote className='h-4 w-4' />
                         </button>
                     </div>
@@ -204,7 +204,7 @@ export default function NotesClient() {
 
             <DashboardPanel className={`grid content-start gap-3 border-ui-border bg-ui-panel p-3 ${rightCollapsed ? 'xl:px-2' : ''}`}>
                 {rightCollapsed ? (
-                    <button type='button' onClick={() => setRightCollapsed(false)} aria-label='Open note analytics' title='Open note analytics' className='grid h-9 w-9 place-items-center rounded-md border border-ui-border bg-ui-raised text-ui-text hover:border-ui-primary'>
+                    <button type='button' onClick={() => setRightCollapsed(false)} aria-label='Open note analytics' title='Open note analytics' className='ui-button ui-button-secondary h-9 w-9 p-0'>
                         <ChartNoAxesColumnIncreasing className='h-4 w-4' />
                     </button>
                 ) : (
