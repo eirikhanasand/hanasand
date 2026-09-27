@@ -486,7 +486,7 @@ export default function SystemDashboard({
                         <span className='text-xs font-medium text-ui-muted'>Stop all VMs</span>
                     </summary>
                     <div className='flex flex-wrap items-center justify-between gap-3 border-t border-ui-border p-3'>
-                        <p className='max-w-2xl text-sm leading-6 text-ui-muted'>Use this only for a planned maintenance window or emergency containment. Active VM sessions can be interrupted.</p>
+                        <p className='max-w-2xl text-sm leading-6 text-ui-muted'>Only use during emergencies.</p>
                         <button
                             type='button'
                             onClick={() => setStopAllVmsOpen(true)}
