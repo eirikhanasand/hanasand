@@ -7,10 +7,10 @@ import { cleanWorkspaceUrl, organizationFromParams, type Workspace } from '@/uti
 import WorkspaceSwitchNotice, { type WorkspaceSwitchNoticeState } from './workspaceSwitchNotice'
 
 type Organization = { id: string, name?: string, slug?: string, role?: string, lifecycleStatus?: string }
-type Context = { organizationId: string, organizationName: string, organizations: Organization[], loading: boolean, unavailable: boolean, switching: boolean, switchOrganization: (id: string) => Promise<void> }
-const WorkspaceContext = createContext<Context>({ organizationId: '', organizationName: '', organizations: [], loading: true, unavailable: false, switching: false, switchOrganization: async () => {} })
+type Context = { organizationId: string, organizationName: string, organizations: Organization[], loading: boolean, unavailable: boolean, switching: boolean, canSwitchOrganization: boolean, switchOrganization: (id: string) => Promise<void> }
+const WorkspaceContext = createContext<Context>({ organizationId: '', organizationName: '', organizations: [], loading: true, unavailable: false, switching: false, canSwitchOrganization: true, switchOrganization: async () => {} })
 export const useWorkspace = () => useContext(WorkspaceContext)
-export default function WorkspaceProvider({ initial, enabled: authenticated, children }: { initial: Workspace | null, enabled: boolean, children: ReactNode }) {
+export default function WorkspaceProvider({ initial, enabled: authenticated, serviceAccount = false, children }: { initial: Workspace | null, enabled: boolean, serviceAccount?: boolean, children: ReactNode }) {
     const params = useSearchParams()
     const pathname = usePathname()
     const router = useRouter()
@@ -29,7 +29,7 @@ export default function WorkspaceProvider({ initial, enabled: authenticated, chi
     const linkedSwitch = useRef(false)
     const organizationId = initial?.organizationId || ''
     const switchOrganization = useCallback(async (org: string) => {
-        if (inFlight.current) return
+        if (serviceAccount || inFlight.current) return
         inFlight.current = true
         setSwitching(true); setError('')
         setNotice({ name: organizations.find(item => item.id === org)?.name || (org ? 'Organization' : 'Personal workspace'), from: initial?.name || 'Personal workspace', complete: false })
@@ -42,9 +42,9 @@ export default function WorkspaceProvider({ initial, enabled: authenticated, chi
             window.history.replaceState(window.history.state, '', cleanWorkspaceUrl(window.location.href))
             router.refresh()
         } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not switch organization.'); setSwitching(false); setNotice(null); inFlight.current = false }
-    }, [router, organizations, initial?.name])
+    }, [router, organizations, initial?.name, serviceAccount])
     useEffect(() => {
-        if (!enabled) { setLoading(false); return }
+        if (!enabled || serviceAccount) { setLoading(false); setOrganizations([]); setOrganizationError(''); return }
         setLoading(true)
         setOrganizationError('')
         const controller = new AbortController()
@@ -74,15 +74,19 @@ export default function WorkspaceProvider({ initial, enabled: authenticated, chi
         }
         void load()
         return () => { controller.abort(); clearTimeout(retryTimer) }
-    }, [enabled, listAttempt])
+    }, [enabled, listAttempt, serviceAccount])
     useEffect(() => {
-        if (!enabled || !organizationError) return
+        if (!enabled || serviceAccount || !organizationError) return
         const retry = () => setListAttempt(current => current + 1)
         window.addEventListener('focus', retry)
         window.addEventListener('online', retry)
         return () => { window.removeEventListener('focus', retry); window.removeEventListener('online', retry) }
-    }, [enabled, organizationError])
+    }, [enabled, organizationError, serviceAccount])
     useEffect(() => {
+        if (serviceAccount) {
+            if (requested) window.history.replaceState(window.history.state, '', cleanWorkspaceUrl(window.location.href))
+            return
+        }
         if (!enabled || !requested) return
         const key = `${pathname}:${params.toString()}`
         if (attempted.current === key) return
@@ -90,7 +94,7 @@ export default function WorkspaceProvider({ initial, enabled: authenticated, chi
         if (requested === organizationId) { window.history.replaceState(window.history.state, '', cleanWorkspaceUrl(window.location.href)); return }
         linkedSwitch.current = true
         void switchOrganization(requested)
-    }, [enabled, requested, pathname, params, switchOrganization, organizationId])
+    }, [enabled, requested, pathname, params, switchOrganization, organizationId, serviceAccount])
     useEffect(() => {
         if (pendingWorkspace && organizationId === pendingWorkspace.organizationId) {
             setSwitching(false); setPendingWorkspace(null)
@@ -104,7 +108,7 @@ export default function WorkspaceProvider({ initial, enabled: authenticated, chi
         return () => clearTimeout(timer)
     }, [notice])
     useEffect(() => {
-        if (!enabled || switching || requested) return
+        if (!enabled || serviceAccount || switching || requested) return
         const refresh = () => { void fetch('/api/workspace-organization', { cache: 'no-store' }).then(response => response.ok ? response.json() : null).then(payload => {
             if (payload && (payload.workspace?.organizationId || '') !== organizationId) { setSwitching(true); window.location.reload() }
         }).catch(() => {}) }
@@ -112,10 +116,10 @@ export default function WorkspaceProvider({ initial, enabled: authenticated, chi
         if (channel) channel.onmessage = refresh
         window.addEventListener('focus', refresh)
         return () => { channel?.close(); window.removeEventListener('focus', refresh) }
-    }, [enabled, organizationId, switching, requested])
-    return <WorkspaceContext.Provider value={{ organizationId, organizationName: initial?.name || '', organizations, loading, unavailable: Boolean(organizationError), switching, switchOrganization }}>
+    }, [enabled, organizationId, switching, requested, serviceAccount])
+    return <WorkspaceContext.Provider value={{ organizationId, organizationName: initial?.name || '', organizations, loading, unavailable: Boolean(organizationError), switching, canSwitchOrganization: !serviceAccount, switchOrganization }}>
         {enabled && notice && <WorkspaceSwitchNotice notice={notice} onDismiss={() => setNotice(null)} />}
-        {enabled && (switching && linkedSwitch.current || requested && requested !== organizationId) ? <main className='fixed inset-0 z-[1200] flex min-h-dvh flex-col overflow-auto bg-ui-canvas text-ui-text'>
+        {enabled && !serviceAccount && (switching && linkedSwitch.current || requested && requested !== organizationId) ? <main className='fixed inset-0 z-[1200] flex min-h-dvh flex-col overflow-auto bg-ui-canvas text-ui-text'>
             <header className='flex h-20 shrink-0 items-center border-b border-ui-border bg-ui-panel px-6 sm:px-10'><BrandLogo /></header>
             <div className='flex flex-1 items-center justify-center px-6 py-12'>
                 <section aria-busy={!error} className='w-full max-w-md rounded-2xl border border-ui-border bg-ui-panel p-8 text-center shadow-sm sm:p-10'>
@@ -133,9 +137,9 @@ export default function WorkspaceProvider({ initial, enabled: authenticated, chi
     </WorkspaceContext.Provider>
 }
 export function OrganizationSwitcher() {
-    const { organizationId, organizationName, organizations, loading, unavailable, switching, switchOrganization } = useWorkspace()
+    const { organizationId, organizationName, organizations, loading, unavailable, switching, canSwitchOrganization, switchOrganization } = useWorkspace()
     return <label className='flex min-w-0 items-center gap-2 text-sm font-semibold text-ui-text'>
-        <select aria-label='Org' aria-busy={loading || switching} value={organizationId} disabled={loading || switching || unavailable} onChange={event => void switchOrganization(event.target.value)} className='h-10 min-w-0 max-w-20 rounded-lg border border-ui-border bg-ui-panel px-2 text-sm text-ui-text sm:max-w-48'>
+        <select aria-label='Org' aria-busy={loading || switching} value={organizationId} disabled={loading || switching || unavailable || !canSwitchOrganization} onChange={event => void switchOrganization(event.target.value)} className='h-10 min-w-0 max-w-20 rounded-lg border border-ui-border bg-ui-panel px-2 text-sm text-ui-text sm:max-w-48'>
             <option value=''>Personal workspace</option>
             {organizationId && !organizations.some(org => org.id === organizationId) && <option value={organizationId}>{loading || unavailable ? organizationName || 'Loading organization…' : 'Organization unavailable'}</option>}
             {organizations.map(org => <option key={org.id} value={org.id} disabled={org.lifecycleStatus !== 'active'}>{org.name || org.slug || org.id}</option>)}
