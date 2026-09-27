@@ -689,7 +689,6 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
     }
     const activeWatchlists = bundle.watchlists.filter(item => item.status.toLowerCase() === 'active')
     const pausedWatchlists = bundle.watchlists.filter(item => item.status.toLowerCase() === 'paused')
-    const archivedWatchlists = bundle.watchlists.filter(item => item.status.toLowerCase() === 'archived')
     const activeMembers = bundle.members.filter(member => member.status.toLowerCase() === 'active')
     const pendingInvites = bundle.invites.filter(invite => invite.status.toLowerCase() === 'pending')
     const configuredDestinationCount = organizationConfiguredDestinationCount(bundle)
@@ -1469,7 +1468,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
                 {(selectedOrganization || organizations.length > 0 || (!loading && organizations.length === 0)) && <main className='min-w-0'>
                     {selectedOrganization ? (
                         <div className='grid min-w-0 content-start gap-5'>
-                            <WorkspaceSummary organization={selectedOrganization} activeWatchlists={activeWatchlists.length} pausedWatchlists={pausedWatchlists.length} archivedWatchlists={archivedWatchlists.length} memberCount={activeMembers.length} inviteCount={pendingInvites.length} webhookCount={configuredDestinationCount} />
+                            <WorkspaceSummary organization={selectedOrganization} activeWatchlists={activeWatchlists.length} pausedWatchlists={pausedWatchlists.length} memberCount={activeMembers.length} inviteCount={pendingInvites.length} webhookCount={configuredDestinationCount} />
                             <WorkspaceSectionNav activePage={activePage} />
                             {busy === 'load-org' ? <SkeletonRows count={3} /> : <>
                                 {activePage === 'overview' && <WorkspaceHealthStrip organization={selectedOrganization} bundle={bundle} />}
@@ -1633,12 +1632,12 @@ function EmptyWorkspacePreview() {
     )
 }
 
-function WorkspaceSummary({ organization, activeWatchlists, pausedWatchlists, archivedWatchlists, memberCount, inviteCount, webhookCount }: { organization: OrganizationSummary, activeWatchlists: number, pausedWatchlists: number, archivedWatchlists: number, memberCount: number, inviteCount: number, webhookCount: number }) {
+function WorkspaceSummary({ organization, activeWatchlists, pausedWatchlists, memberCount, inviteCount, webhookCount }: { organization: OrganizationSummary, activeWatchlists: number, pausedWatchlists: number, memberCount: number, inviteCount: number, webhookCount: number }) {
     const rows = [
-        { id: 'role', icon: <ShieldCheck className='h-4 w-4' />, label: 'Role', value: organizationRoleLabel(organization.role || 'reader'), detail: organization.status || 'active' },
+        { id: 'role', icon: <ShieldCheck className='h-4 w-4' />, label: 'Role', value: organizationRoleLabel(organization.role || 'reader') },
         { id: 'members', icon: <Users className='h-4 w-4' />, label: 'Members', value: String(memberCount ?? organization.memberCount ?? organization.activeMemberCount ?? 0), detail: `${inviteCount ?? organization.pendingInviteCount ?? 0} pending` },
-        { id: 'watchlists', icon: <BellRing className='h-4 w-4' />, label: 'Watchlists', value: String(activeWatchlists ?? organization.sharedWatchlistCount ?? 0), detail: `${pausedWatchlists} paused · ${archivedWatchlists} archived` },
-        { id: 'destinations', icon: <Webhook className='h-4 w-4' />, label: 'Destinations', value: String(webhookCount), detail: 'Routes' },
+        { id: 'watchlists', icon: <BellRing className='h-4 w-4' />, label: 'Watchlists', value: String(activeWatchlists ?? organization.sharedWatchlistCount ?? 0), detail: `${pausedWatchlists} paused` },
+        { id: 'destinations', icon: <Webhook className='h-4 w-4' />, label: 'Destinations', value: String(webhookCount) },
     ]
     return (
         <section className='flex min-w-0 flex-col gap-3 rounded-lg border border-ui-border bg-ui-panel p-3 shadow-sm dark:border-ui-border dark:bg-ui-panel xl:flex-row xl:items-center xl:justify-between' data-org-workspace-summary='true'>
@@ -1648,13 +1647,13 @@ function WorkspaceSummary({ organization, activeWatchlists, pausedWatchlists, ar
                     <span className='truncate'>{organizationDisplayName(organization)}</span>
                 </p>
             </div>
-            <div className='hidden min-w-0 gap-2 sm:grid sm:grid-cols-2 xl:flex xl:flex-wrap xl:justify-end' data-org-summary-chip-list='true'>
+            <div className='hidden min-w-0 gap-2 sm:grid sm:grid-cols-2 xl:ml-6 xl:flex-1 xl:grid-cols-4' data-org-summary-chip-list='true'>
                 {rows.map(row => (
                     <span key={row.id} className='grid min-h-10 min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 border-l border-ui-border py-1 pl-2 dark:border-ui-border' data-org-summary-chip={row.id}>
                         <span className='shrink-0 text-ui-muted dark:text-ui-muted'>{row.icon}</span>
                         <span className='min-w-0'>
                             <span className='block truncate text-[11px] font-semibold uppercase tracking-[0.08em] text-ui-muted dark:text-ui-muted'>{row.label}</span>
-                            <span className='block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{row.value} <span className='font-medium text-ui-muted dark:text-ui-muted'>{row.detail}</span></span>
+                            <span className='block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{row.value}{row.detail && <> <span className='font-medium text-ui-muted dark:text-ui-muted'>{row.detail}</span></>}</span>
                         </span>
                     </span>
                 ))}
