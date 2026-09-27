@@ -22,11 +22,27 @@ export async function setSupportStatus(id: string, status: 'open' | 'closed', ag
     })
 }
 
-export async function saveSupportFeedback(id: string, owner: { visitor?: string; user?: string }, rating: unknown, comment: unknown, version: unknown) {
+export async function closeVisitorSupportConversation(id: string, visitor: string) {
+    return withTransaction(async query => {
+        const ticket = (await query(`SELECT id, status, resolution_version FROM support_tickets
+            WHERE id=$1 AND COALESCE(visitor_session_hash,visitor_token_hash)=$2 FOR UPDATE`, [id, visitor])).rows[0]
+        if (!ticket) throw new SupportStateError('Support chat not found.', 404)
+        if (ticket.status === 'closed') return { ticket }
+        const changed = (await query(`UPDATE support_tickets SET status='closed', updated_at=NOW(), ai_pending_id=NULL, ai_pending_at=NULL,
+            resolution_version=resolution_version+1, feedback_rating=NULL, feedback_comment=NULL
+            WHERE id=$1 RETURNING id, status, resolution_version, feedback_rating, feedback_comment, updated_at`, [id])).rows[0]
+        const message = (await query(`INSERT INTO support_messages(id,ticket_id,sender_kind,event,body)
+            VALUES($1,$2,'system','resolved',$3) RETURNING id, sender_id, sender_kind, body, created_at`,
+            [randomUUID(), id, 'This conversation was ended. How satisfied were you with our support?'])).rows[0]
+        return { ticket: changed, message: { ...message, sender_name: 'Support' } }
+    })
+}
+
+export async function saveSupportFeedback(id: string, owner: { visitor?: string; user?: string }, rating: unknown, comment: unknown, version: unknown, commentRatingThreshold = 3) {
     if (!Number.isInteger(rating) || Number(rating) < 1 || Number(rating) > 5 || typeof comment !== 'string' || comment.length > 2000 || !Number.isInteger(version) || Number(version) < 0) {
         throw new SupportStateError('Choose 1–5 stars and keep feedback under 2,000 characters.', 400)
     }
-    const text = Number(rating) <= 3 ? comment.trim() : ''
+    const text = Number(rating) <= commentRatingThreshold ? comment.trim() : ''
     return withTransaction(async query => {
         const ticket = (await query(`SELECT * FROM support_tickets WHERE id=$1 AND
             (($2::text IS NOT NULL AND COALESCE(visitor_session_hash,visitor_token_hash)=$2) OR ($3::text IS NOT NULL AND user_id=$3)) FOR UPDATE`, [id, owner.visitor || null, owner.user || null])).rows[0]
