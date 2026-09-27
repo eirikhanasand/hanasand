@@ -1,12 +1,24 @@
 import { matchesRule, type Condition } from './conditions.ts'
 type Scalar = string | number | boolean | null
 type Context = { path: string, operator: 'signal' | 'equals' | 'truthy', value?: Scalar }
-type Check = { keys: string[], operator: 'signal' | 'in' | 'numberAtLeast' | 'equals' | 'objectMismatch', values?: Scalar[], value?: Scalar, expected?: Record<string, Scalar>, whenAny?: Context[], unlessAll?: Condition[] }
+type Check = { keys: string[], operator: 'signal' | 'in' | 'numberAtLeast' | 'equals' | 'objectMismatch', values?: Scalar[], value?: Scalar, expected?: Record<string, Scalar>, whenAny?: Context[], unlessAll?: Condition[], unlessAny?: Condition[][] }
 export type EventProtectionPolicy = { appliesTo: 'custom_drop' | 'all', checks: Check[] }
 export const eventProtectionRuleId = 'security.event_evidence.v1'
 export const eventProtectionRule = { id: eventProtectionRuleId, version: '1', name: 'Protect evidence from custom Drop rules', family: 'Security', severity: 'low', enabled: true,
     explanation: 'Protect security findings, failure evidence and unsafe HTTP content from custom Drop rules. Verified lossless compaction keeps its complete canonical evidence.', evidence: ['matched evidence fields'] }
 const http: Context[] = [{ path: 'http', operator: 'truthy' }, { path: 'log_type', operator: 'equals', value: 'HttpLogs' }, { path: 'event_type', operator: 'equals', value: 'http' }]
+const selfIngestionException = (sourceIp: string): Condition[] => [
+    { path: 'http.path', operator: 'equals', value: '/api/logs/ingest' },
+    { path: 'http.method', operator: 'equals', value: 'POST' },
+    { path: 'http.status_code', operator: 'equals', value: '201' },
+    { path: 'source.ip', operator: 'equals', value: sourceIp },
+    { path: 'service', operator: 'equals', value: 'hanasand-api' },
+    { path: 'host', operator: 'equals', value: 'inspur' },
+    { path: 'message', operator: 'equals', value: 'proxy_request_completed' },
+    { path: 'metadata.category', operator: 'equals', value: 'proxy_request' },
+    { path: 'severity', operator: 'equals', value: 'low' },
+]
+const selfIngestionExceptions = [selfIngestionException('128.39.142.218'), selfIngestionException('192.99.32.185')]
 export const eventProtectionDefinition = { match: 'all' as const, stage: 'analyze' as const, action: 'keep' as const, conditions: [], protection: { appliesTo: 'custom_drop', checks: [
     { keys: ['detections', 'signature', 'signature_id', 'error', 'errors', 'exception', 'failure', 'failed', 'err', 'errmsg', 'errCode', 'errName', 'errorCode', 'protected', 'suspicious'], operator: 'signal' },
     { keys: ['severity', 'level'], operator: 'in', values: ['medium', 'high', 'critical', 'warn', 'warning', 'error', 'fatal'] },
@@ -14,9 +26,9 @@ export const eventProtectionDefinition = { match: 'all' as const, stage: 'analyz
     { keys: ['outcome', 'status'], operator: 'in', values: ['failure', 'failed', 'error', 'denied', 'blocked', 'timeout', 'timed_out'] },
     { keys: ['success', 'ok'], operator: 'in', values: [false, 0] },
     { keys: ['status', 'status_code', 'statusCode'], operator: 'numberAtLeast', value: 400 },
-    { keys: ['bodyEmpty', 'headersSafe', 'pathSafe'], operator: 'equals', value: false },
+    { keys: ['bodyEmpty', 'headersSafe', 'pathSafe'], operator: 'equals', value: false, unlessAny: selfIngestionExceptions },
     { keys: ['body', 'request_body'], operator: 'signal', whenAny: http },
-    { keys: ['inspection'], operator: 'objectMismatch', expected: { version: 1, bodyEmpty: true, headersSafe: true, pathSafe: true }, whenAny: http },
+    { keys: ['inspection'], operator: 'objectMismatch', expected: { version: 1, bodyEmpty: true, headersSafe: true, pathSafe: true }, whenAny: http, unlessAny: selfIngestionExceptions },
 ] } satisfies EventProtectionPolicy }
 const record = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === 'object' && !Array.isArray(value))
 const scalar = (value: unknown): value is Scalar => value === null || ['string', 'boolean'].includes(typeof value) || typeof value === 'number' && Number.isFinite(value)
@@ -28,7 +40,7 @@ export function normalizeEventProtection(value: unknown): { protection?: EventPr
     const error = 'Protection must contain valid checks with field keys and matching operators.'
     if (!record(value) || Object.keys(value).some(key => !['appliesTo', 'checks'].includes(key)) || !['custom_drop', 'all'].includes(String(value.appliesTo)) || !Array.isArray(value.checks) || value.checks.length > 32) return { error }
     for (const check of value.checks) {
-        if (!record(check) || Object.keys(check).some(key => !['keys', 'operator', 'values', 'value', 'expected', 'whenAny', 'unlessAll'].includes(key))
+        if (!record(check) || Object.keys(check).some(key => !['keys', 'operator', 'values', 'value', 'expected', 'whenAny', 'unlessAll', 'unlessAny'].includes(key))
             || !Array.isArray(check.keys) || !check.keys.length || check.keys.length > 128 || check.keys.some(key => typeof key !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(key))) return { error }
         if (!['signal', 'in', 'numberAtLeast', 'equals', 'objectMismatch'].includes(String(check.operator))) return { error }
         if (check.operator === 'in' && (!Array.isArray(check.values) || check.values.length > 128 || !check.values.every(scalar))) return { error }
@@ -39,6 +51,11 @@ export function normalizeEventProtection(value: unknown): { protection?: EventPr
             || check.unlessAll.some(condition => !record(condition) || Object.keys(condition).some(key => !['path', 'operator', 'value', 'caseSensitive'].includes(key))
                 || typeof condition.path !== 'string' || !/^[a-zA-Z0-9_.-]{1,200}$/.test(condition.path) || condition.operator !== 'equals'
                 || typeof condition.value !== 'string' || condition.value.length > 500 || condition.caseSensitive !== undefined && typeof condition.caseSensitive !== 'boolean'))) return { error }
+        if (check.unlessAny !== undefined && (!Array.isArray(check.unlessAny) || !check.unlessAny.length || check.unlessAny.length > 16
+            || check.unlessAny.some(group => !Array.isArray(group) || !group.length || group.length > 16 || group.some(condition => !record(condition)
+                || Object.keys(condition).some(key => !['path', 'operator', 'value', 'caseSensitive'].includes(key))
+                || typeof condition.path !== 'string' || !/^[a-zA-Z0-9_.-]{1,200}$/.test(condition.path) || condition.operator !== 'equals'
+                || typeof condition.value !== 'string' || condition.value.length > 500 || condition.caseSensitive !== undefined && typeof condition.caseSensitive !== 'boolean')))) return { error }
         if (check.whenAny !== undefined && (!Array.isArray(check.whenAny) || !check.whenAny.length || check.whenAny.length > 16 || check.whenAny.some(context => !record(context)
             || Object.keys(context).some(key => !['path', 'operator', 'value'].includes(key)) || typeof context.path !== 'string' || !/^[a-zA-Z0-9_.-]{1,200}$/.test(context.path)
             || !['signal', 'equals', 'truthy'].includes(String(context.operator)) || context.operator === 'equals' && !scalar(context.value)))) return { error }
@@ -49,7 +66,8 @@ export function normalizeEventProtection(value: unknown): { protection?: EventPr
 // The policy determines what to retain. Bounds only fail closed when complete
 // evaluation is impossible; they never establish that an event may be dropped.
 export function matchesEventProtection(event: Record<string, unknown>, policy: EventProtectionPolicy): boolean {
-    const checks = policy.checks.filter(check => !(check.unlessAll?.length && matchesRule(event, check.unlessAll)) && (!check.whenAny || check.whenAny.some(context => {
+    const checks = policy.checks.filter(check => !(check.unlessAll?.length && matchesRule(event, check.unlessAll))
+        && !(check.unlessAny?.some(group => matchesRule(event, group))) && (!check.whenAny || check.whenAny.some(context => {
         const value = context.path.split('.').reduce<unknown>((row, key) => record(row) ? row[key] : undefined, event)
         return context.operator === 'signal' ? signal(value) : context.operator === 'truthy' ? Boolean(value) : equal(value, context.value)
     })))
