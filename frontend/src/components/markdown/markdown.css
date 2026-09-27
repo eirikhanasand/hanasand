@@ -73,7 +73,7 @@
 }
 
 .markdown-render_citation {
-    color: #780606;
+    color: var(--ui-text);
     font-size: .75em;
     font-weight: 400;
     line-height: 1;
