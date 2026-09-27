@@ -4,10 +4,10 @@ const entries = new Map<string, Entry>()
 const pending = new Map<string, Promise<unknown>>()
 const maxConcurrentReads = 8
 const maxQueuedReads = 32
+const lanes = { default: { active: 0, queued: 0, maxActive: maxConcurrentReads, maxQueued: maxQueuedReads }, preview: { active: 0, queued: 0, maxActive: 1, maxQueued: 4 } }
 const maxEntries = 64
-let activeReads = 0
-let queuedReads = 0
 let cacheGeneration = 0
+type ReadOptions = { lane?: keyof typeof lanes }
 
 export class ReadAdmissionError extends Error {
     code = 'READ_CAPACITY'
@@ -20,30 +20,31 @@ export function invalidateReadCache(prefix?: string) {
     for (const key of pending.keys()) if (!prefix || key.startsWith(prefix)) pending.delete(key)
 }
 
-export async function cachedRead<T>(key: string, ttlMs: number, work: () => Promise<T>): Promise<T> {
+export async function cachedRead<T>(key: string, ttlMs: number, work: () => Promise<T>, options: ReadOptions = {}): Promise<T> {
+    const lane = lanes[options.lane || 'default']
     const cached = entries.get(key)
     if (cached && cached.expiresAt > Date.now()) return cached.value as T
     if (cached) entries.delete(key)
     const existing = pending.get(key)
     if (existing) return existing as Promise<T>
-    if (activeReads >= maxConcurrentReads && queuedReads >= maxQueuedReads) throw new ReadAdmissionError()
-    const queued = activeReads >= maxConcurrentReads
-    if (queued) queuedReads += 1
+    if (lane.active >= lane.maxActive && lane.queued >= lane.maxQueued) throw new ReadAdmissionError()
+    const queued = lane.active >= lane.maxActive
+    if (queued) lane.queued += 1
     const generation = cacheGeneration
     const operation = (async () => {
         try {
             const deadline = Date.now() + 250
-            while (activeReads >= maxConcurrentReads) {
+            while (lane.active >= lane.maxActive) {
                 const remaining = deadline - Date.now()
                 if (remaining <= 0) throw new ReadAdmissionError()
                 await new Promise(resolve => setTimeout(resolve, Math.min(remaining, 10)))
             }
         } catch (error) {
-            if (queued) queuedReads = Math.max(0, queuedReads - 1)
+            if (queued) lane.queued = Math.max(0, lane.queued - 1)
             throw error
         }
-        if (queued) queuedReads = Math.max(0, queuedReads - 1)
-        activeReads += 1
+        if (queued) lane.queued = Math.max(0, lane.queued - 1)
+        lane.active += 1
         try {
             const value = await work()
             if (generation === cacheGeneration) {
@@ -53,7 +54,7 @@ export async function cachedRead<T>(key: string, ttlMs: number, work: () => Prom
             }
             return value
         } finally {
-            activeReads -= 1
+            lane.active -= 1
         }
     })()
     pending.set(key, operation)

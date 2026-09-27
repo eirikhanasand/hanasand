@@ -12,7 +12,7 @@ export type PreviewRequest = { from: string | null, until: string, cursor?: Curs
 
 // Page database-filtered candidates, then retain the authoritative runtime check.
 export async function scanRulePreview(organizationId: string, canReadLogs: boolean, input: PreviewRequest, query = run) {
-    if (process.env.NODE_ENV !== 'test' && (query as typeof run & { primaryDatabaseRunner?: boolean }).primaryDatabaseRunner && !input.sample) {
+    if (process.env.NODE_ENV !== 'test' && (query as typeof run & { primaryDatabaseRunner?: boolean }).primaryDatabaseRunner && input.sample) {
         const key = `rule-preview:${organizationId}:${canReadLogs ? 'logs' : 'public'}:${JSON.stringify(input)}`
         return cachedRead(key, 5000, () => scanRulePreviewUncached(organizationId, canReadLogs, input, query), { lane: 'preview' })
     }
