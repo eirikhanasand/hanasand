@@ -7,6 +7,7 @@ import { useWorkspace } from '@/components/organizations/workspaceProvider'
 import { useEffect, useRef, useState } from 'react'
 import { getRuleCategory, ruleCategories, type RuleCategory } from './rule-categories'
 import { DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
+import SortIndicator from '@/components/dashboard/sort-indicator'
 
 export type Rule = { id: string, hitCount?: number | null, detectionLogic?: string, recordId?: string, rule_id?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'owned' | 'open_source', sourceReference?: string, definition?: { stage?: 'analyze' | 'match' | 'detect', action?: 'drop' | 'keep', storeScope?: 'all' | 'custom_drop', match?: 'all', parameters?: Record<string, number>, protection?: Record<string, unknown>, failureConditions?: Array<{ path: string, operator: string, value: string, caseSensitive?: boolean }>, conditions?: Array<{ path: string, operator: string, value: string, caseSensitive?: boolean }> } }
 
@@ -173,9 +174,9 @@ export default function DetectionRules({ category, initial }: { category: RuleCa
                         <thead className='bg-ui-raised text-xs text-ui-muted'><tr>{columns.map(column => {
                             const active = sort.column === column.key
                             const direction = active ? sort.direction : defaultRuleSortDirection(column.key)
-                            return <th key={column.key} scope='col' aria-sort={active ? direction : 'none'} className='group px-3 py-2 font-medium'>
+                            return <th key={column.key} scope='col' aria-sort={active ? direction : 'none'} className='px-3 py-2 font-medium'>
                                 <button type='button' onClick={() => sortBy(column.key)} className='inline-flex items-center gap-1.5 rounded-sm text-left hover:text-ui-primary focus-visible:outline-2 focus-visible:outline-ui-primary'>
-                                    {column.label}<svg aria-hidden='true' viewBox='0 0 10 6' className={`h-1.5 w-2.5 shrink-0 transition-transform ${direction === 'ascending' ? 'rotate-180' : ''} ${active ? 'text-ui-primary' : 'opacity-0 group-hover:opacity-40 group-focus-within:opacity-40'}`}><path d='M0 0h10L5 6z' fill='currentColor' /></svg>
+                                    {column.label}<SortIndicator active={active} direction={direction === 'ascending' ? 'asc' : 'desc'} />
                                 </button>
                             </th>
                         })}</tr></thead>

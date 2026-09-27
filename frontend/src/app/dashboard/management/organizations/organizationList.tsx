@@ -1,15 +1,16 @@
 'use client'
 
-import { ArrowDown, ArrowUp, ArrowUpDown, Search, X } from 'lucide-react'
+import { Search, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import SortIndicator from '@/components/dashboard/sort-indicator'
 
 type Organization = { id: string, name: string, slug: string, status: string, member_count: number, created_at: string, last_active_at: string | null }
-type SortKey = 'created' | 'lastActive' | 'name' | 'slug' | 'status'
+type SortKey = 'created' | 'lastActive' | 'members' | 'name' | 'slug' | 'status'
 
 export default function OrganizationList({ organizations }: { organizations: Organization[] }) {
     const [search, setSearch] = useState('')
     const [searchOpen, setSearchOpen] = useState(false)
-    const [sort, setSort] = useState<{ key: SortKey, direction: 'asc' | 'desc' }>({ key: 'created', direction: 'desc' })
+    const [sort, setSort] = useState<{ key: SortKey, direction: 'asc' | 'desc' }>({ key: 'name', direction: 'asc' })
     const searchInput = useRef<HTMLInputElement>(null)
     const searchButton = useRef<HTMLButtonElement>(null)
 
@@ -45,7 +46,9 @@ export default function OrganizationList({ organizations }: { organizations: Org
             ? Date.parse(a.created_at) - Date.parse(b.created_at)
             : sort.key === 'lastActive'
                 ? (a.last_active_at ? Date.parse(a.last_active_at) : -Infinity) - (b.last_active_at ? Date.parse(b.last_active_at) : -Infinity)
-                : a[sort.key].localeCompare(b[sort.key], undefined, { sensitivity: 'base', numeric: true })
+                : sort.key === 'members'
+                    ? a.member_count - b.member_count
+                    : a[sort.key].localeCompare(b[sort.key], undefined, { sensitivity: 'base', numeric: true })
         return sign * comparison || a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }) || a.id.localeCompare(b.id)
     })
 
@@ -55,10 +58,9 @@ export default function OrganizationList({ organizations }: { organizations: Org
 
     function sortHeading(label: string, key: SortKey) {
         const active = sort.key === key
-        const Icon = active ? (sort.direction === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown
-        return <th key={key} scope='col' className='whitespace-nowrap px-3 py-3 font-medium'>
+        return <th key={key} scope='col' aria-sort={active ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'} className='whitespace-nowrap px-3 py-3 font-medium'>
             <button type='button' onClick={() => toggleSort(key)} aria-label={`Sort by ${label}, ${active ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'currently inactive'}`} aria-pressed={active} className='inline-flex items-center gap-1.5 hover:text-ui-text focus-visible:outline-2 focus-visible:outline-ui-primary'>
-                {label}<Icon size={14} aria-hidden='true' />
+                {label}<SortIndicator active={active} direction={sort.direction} />
             </button>
         </th>
     }
@@ -77,8 +79,8 @@ export default function OrganizationList({ organizations }: { organizations: Org
         <div className='overflow-x-auto'>
             <table className='w-full text-left text-sm'>
                 <thead className='border-b border-ui-border text-ui-muted'><tr>{[
-                    sortHeading('Organization', 'name'), sortHeading('Slug', 'slug'), sortHeading('Status', 'status'),
-                    <th key='members' scope='col' className='px-3 py-3 font-medium'>Members</th>, sortHeading('Created', 'created'), sortHeading('Last active (UTC)', 'lastActive'),
+                    sortHeading('Organization', 'name'), sortHeading('Slug', 'slug'), sortHeading('Status', 'status'), sortHeading('Members', 'members'),
+                    sortHeading('Created', 'created'), sortHeading('Last active (UTC)', 'lastActive'),
                 ]}</tr></thead>
                 <tbody>{sortedRows.map(org => <tr key={org.id} className='border-b border-ui-border text-ui-text'>
                     <td className='px-3 py-3 font-medium'>{org.name}</td>

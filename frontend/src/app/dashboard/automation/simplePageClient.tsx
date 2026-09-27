@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, ArrowUpDown, AlertTriangle, PanelRightClose, PanelRightOpen, Check, Clock3, Filter, Play, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { AlertTriangle, PanelRightClose, PanelRightOpen, Check, Clock3, Filter, Play, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import {
     createAutomation,
     deleteAutomation,
@@ -21,6 +21,7 @@ import ErrorNotice from '@/components/error/errorNotice'
 import CertificateStatus from './certificateStatus'
 import { healthCheckStatus, healthCheckTag, sortHealthChecks, type HealthSortKey } from './healthCheckSorting'
 import JsonRuleForm, { defaultJsonRule } from './jsonRuleForm'
+import SortIndicator from '@/components/dashboard/sort-indicator'
 
 const inputClass = 'h-10 w-full rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
 const defaultDraft = (): AutomationPayload => ({
@@ -211,9 +212,8 @@ export default function AutomationsClient({ setup, initial, mode = 'health', sys
                         {(['name', 'status', 'cert', 'history', 'uptime', 'tags'] as const).map(key => {
                             const label = key[0].toUpperCase() + key.slice(1)
                             const active = sort.key === key
-                            const Icon = active ? sort.direction === 'asc' ? ArrowUp : ArrowDown : ArrowUpDown
                             return <button key={key} type='button' aria-label={`Sort by ${label}`} aria-pressed={active} title={`${label}${key === 'history' ? ' (unhealthy recent checks)' : ''}: sort ${active && sort.direction === 'asc' ? 'descending' : 'ascending'}`} onClick={() => setSort({ key, direction: active && sort.direction === 'asc' ? 'desc' : 'asc' })} className={`inline-flex shrink-0 items-center gap-1 rounded py-1 text-left hover:text-ui-text focus-visible:outline-2 focus-visible:outline-ui-primary ${active ? 'font-semibold text-ui-text' : ''}`}>
-                                {label}<Icon className='h-3 w-3 shrink-0' aria-hidden='true' />
+                                {label}<SortIndicator active={active} direction={sort.direction} />
                             </button>
                         })}
                     </div>

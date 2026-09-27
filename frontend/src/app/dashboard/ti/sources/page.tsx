@@ -7,6 +7,7 @@ import { getTiAdminOverview } from '@/utils/tiAdmin/ops'
 import ManualRunButton from '../manualRunButton'
 import SourceRow from './sourceRow'
 import SourceFilters from './sourceFilters'
+import SortIndicator from '@/components/dashboard/sort-indicator'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,7 +58,7 @@ export default async function TiSourcesPage(props: { searchParams?: Promise<Reco
 
 function SortHeader({ label, field, scope, sort, direction, filters }: { label: string, field: string, scope: string, sort: string, direction: string, filters: Record<string, string> }) {
     const nextDirection = sort === field && direction === 'asc' ? 'desc' : 'asc'
-    return <Link href={pageHref(scope, field, nextDirection, 1, filters)} className='inline-flex items-center gap-1 whitespace-nowrap hover:text-ui-text' title={`Sort by ${label}`}><span>{label}</span><span className='inline-flex flex-col text-[8px] leading-[7px]'><span className={sort === field && direction === 'asc' ? 'text-ui-primary' : 'text-ui-muted/45'}>▲</span><span className={sort === field && direction === 'desc' ? 'text-ui-primary' : 'text-ui-muted/45'}>▼</span></span></Link>
+    return <Link href={pageHref(scope, field, nextDirection, 1, filters)} className='inline-flex items-center gap-1 whitespace-nowrap hover:text-ui-text' title={`Sort by ${label}`}><span>{label}</span><SortIndicator active={sort === field} direction={direction === 'desc' ? 'desc' : 'asc'} /></Link>
 }
 
 function pageHref(scope: string, sort: string, direction: string, page: number, filters: Record<string, string> = {}) {

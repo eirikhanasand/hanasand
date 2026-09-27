@@ -1,8 +1,8 @@
 'use client'
 
 import { Fragment, useEffect, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import type { DatabaseOverview } from '@/utils/db/internal'
+import SortIndicator from '@/components/dashboard/sort-indicator'
 
 type Instance = NonNullable<DatabaseOverview['storage']>['instances'][number]
 type Database = Instance['databases'][number]
@@ -19,8 +19,7 @@ function compare(a: string | number | null | undefined, b: string | number | nul
 }
 
 function SortButton({ label, active, descending, onClick }: { label: string, active: boolean, descending: boolean, onClick: () => void }) {
-    const Icon = active ? descending ? ArrowDown : ArrowUp : ArrowUpDown
-    return <button type='button' onClick={onClick} aria-label={`Sort by ${label.toLowerCase()} ${active && !descending ? 'descending' : 'ascending'}`} className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded py-1 text-xs focus-visible:outline-ui-primary ${active ? 'text-ui-primary' : 'text-ui-muted hover:text-ui-text'}`}>{label}<Icon aria-hidden className='h-3 w-3' /></button>
+    return <button type='button' onClick={onClick} aria-label={`Sort by ${label.toLowerCase()} ${active && !descending ? 'descending' : 'ascending'}`} className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded py-1 text-xs focus-visible:outline-ui-primary ${active ? 'text-ui-primary' : 'text-ui-muted hover:text-ui-text'}`}>{label}<SortIndicator active={active} direction={descending ? 'desc' : 'asc'} /></button>
 }
 
 async function fetchPage(params: URLSearchParams, signal?: AbortSignal): Promise<Page> {
