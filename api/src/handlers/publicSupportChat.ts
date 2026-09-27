@@ -23,7 +23,7 @@ export async function publicSupportChat(req: FastifyRequest<{ Body: ChatBody; Qu
             const { conversationId } = req.body
             if (typeof conversationId !== 'string' || !supportIdPattern.test(conversationId)) return res.status(400).send({ error: 'Invalid conversation.' })
             const quota = await consumeSharedRateLimitBucket({ key: `support-resolve:${hash}`, rule: { windowMs: 60_000, maxRequests: 10 } }, queryOnce)
-            if (!quota.allowed) return res.status(429).send({ error: 'Please wait before ending this conversation.' })
+            if (!quota.allowed) return res.status(429).send({ error: 'Please wait before closing this conversation.' })
             return res.send({ ok: true, ...await closeVisitorSupportConversation(conversationId, hash) })
         }
         if (req.body?.action === 'connect') {
