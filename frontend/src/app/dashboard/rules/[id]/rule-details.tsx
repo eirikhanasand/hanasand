@@ -4,7 +4,7 @@ import Link from '@/components/organizations/workspaceLink'
 import { useEffect, useState } from 'react'
 import { DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import { requestJson, type Rule } from '../detection-rules'
-import { ArrowLeft, Activity, History, SlidersHorizontal } from 'lucide-react'
+import { ArrowLeft, Activity, History, LoaderCircle, SlidersHorizontal } from 'lucide-react'
 import SignatureEditor from './signature-editor'
 import ReprocessRule from '../reprocess-rule'
 import { getRuleCategory, ruleCategories } from '../rule-categories'
@@ -63,7 +63,7 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
         <Link href={`/rules/${getRuleCategory(data?.rule || { id })}?organizationId=${encodeURIComponent(organizationId)}`} className='inline-flex w-fit items-center gap-2 rounded-md text-sm font-medium text-ui-muted hover:text-ui-primary'><ArrowLeft size={16} aria-hidden='true' />{ruleCategories[getRuleCategory(data?.rule || { id })].label}</Link>
         {error && <div role='alert' className='rounded-lg border border-red-500 p-4'>{error} {data && <button type='button' disabled={busy} onClick={() => void reload()} className='ml-3 underline'>Reload rule</button>}</div>}
         {status && <p role='status'>{status}</p>}
-        {!draft && !error && <p role='status'>Loading rule…</p>}
+        {!draft && !error && <div role='status' aria-label='Loading rule' className='flex justify-center py-12 text-ui-primary'><LoaderCircle aria-hidden className='h-6 w-6 animate-spin motion-reduce:animate-none' /></div>}
         {draft && data && <>
             <DashboardPanel className='overflow-hidden'>
                 <header className='grid min-w-0 gap-3 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center'>

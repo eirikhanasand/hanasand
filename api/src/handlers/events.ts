@@ -425,11 +425,13 @@ export async function getRule(req: FastifyRequest<{ Params: { id: string }, Quer
         displayedRule = { ...rule, ...snapshot, definition: rule.source === 'hanasand' ? builtinDefinition(rule, snapshot.definition) : snapshot.definition }
     }
     const offset = Math.max(0, Math.min(1000000, Number.parseInt(req.query.offset || '0', 10) || 0))
-    const audit = await run(`SELECT id, event_type, actor_id, created_at, context
-        FROM system_events WHERE organization_id = $1 AND object_type = 'event_rule'
-        AND (object_id = $2 OR object_id = $3 OR context->>'ruleId' = $2)
-        ORDER BY created_at DESC, id DESC LIMIT 51 OFFSET $4`, [access.organizationId, rule.id, rule.recordId || rule.id, offset])
-    const hits = await loadRuleHits(access.organizationId, [rule], run)
+    const [audit, hits] = await Promise.all([
+        run(`SELECT id, event_type, actor_id, created_at, context
+            FROM system_events WHERE organization_id = $1 AND object_type = 'event_rule'
+            AND (object_id = $2 OR object_id = $3 OR context->>'ruleId' = $2)
+            ORDER BY created_at DESC, id DESC LIMIT 51 OFFSET $4`, [access.organizationId, rule.id, rule.recordId || rule.id, offset]),
+        loadRuleHits(access.organizationId, [rule], run),
+    ])
     const hitCount = rule.definition?.stage === 'analyze' && rule.definition.action === 'keep' ? null : hits.get(rule.id) ?? 0
     const canEdit = !isHistorical && canManageRules(access.role) && (!([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') || (await hasRole(req, res, 'system_admin')).valid)
     return res.send({ organizationId: access.organizationId, canEdit, isHistorical, currentVersion: rule.version, rule: displayedRule, triggerCount: hitCount, audit: audit.rows.slice(0, 50), nextOffset: audit.rows.length > 50 ? offset + 50 : null })

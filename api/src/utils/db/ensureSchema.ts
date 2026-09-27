@@ -3,6 +3,7 @@ import { ensureColumn, ensureIndex, ensureRuleSourceConstraint } from './existin
 import ensureAuditAcknowledgmentsSchema from './auditAcknowledgmentsSchema.ts'
 import ensureLogAnalyzeSchema from './logAnalyzeSchema.ts'
 import ensureRuleReprocessSchema from './ruleReprocessSchema.ts'
+import ensureRuleHitCountSchema from './ruleHitCountSchema.ts'
 import ensureLogCatchupSchema from './logCatchupSchema.ts'
 import ensureSupportAiSchema from '#utils/support/schema.ts'
 import ensureContentOrganizationSchema from './contentOrganizationSchema.ts'
@@ -1556,6 +1557,7 @@ async function applySchema() {
     await run('CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_findings_org_rule ON findings(organization_id, rule_id)')
     await run('CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_log_analyze_receipts_org_rule ON log_analyze_receipts(organization_id, rule_id)')
     await run('CREATE INDEX IF NOT EXISTS idx_findings_event_ids ON findings USING GIN(event_ids)')
+    await ensureRuleHitCountSchema()
     await run('CREATE INDEX IF NOT EXISTS idx_logs_severity_time ON events ((normalized->>\'severity\'), event_timestamp DESC) WHERE ingestion_id = \'logs\'')
     await run('CREATE INDEX IF NOT EXISTS idx_logs_type_time ON events ((normalized->>\'log_type\'), event_timestamp DESC) WHERE ingestion_id = \'logs\'')
     await run(`CREATE INDEX IF NOT EXISTS idx_logs_executable_suffix ON events

@@ -6,11 +6,11 @@ import { accessRuleId } from './analyzeAccess.ts'
 import { mongoRuleId } from './analyzeMongo.ts'
 import { postgresRuleId } from './analyzePostgres.ts'
 import { proxyRuleId } from './analyzeProxy.ts'
+import { modelDiscoveryRuleId } from './analyzeModelDiscovery.ts'
+import { readinessAuditRuleId } from './analyzeReadinessAudit.ts'
 import { collectorRuleId } from './analyzeCollector.ts'
 import { telemetryRuleId, sshWindowRuleId } from './analyzeRoutineGroups.ts'
 import { cdnRefreshRuleId } from './analyzeCdnRefresh.ts'
-import { modelDiscoveryRuleId } from './analyzeModelDiscovery.ts'
-import { readinessAuditRuleId } from './analyzeReadinessAudit.ts'
 
 type Rule = { id: string, recordId?: string, name: string, explanation: string, family: string, severity: string, source?: string, enabled?: boolean, definition?: { stage?: string, action?: string } }
 const analysis = new Set(['mongodb.cashflow_connections', 'http.routine_access', 'auth.impossible_travel', 'auth.new_country', 'auth.new_device'])
@@ -27,12 +27,12 @@ export function listRule(rule: Rule) {
         family: rule.family, severity: rule.severity, source: rule.source, enabled: rule.enabled,
         definition: { stage: rule.definition?.stage, action: rule.definition?.action } }
 }
+const receiptRules = new Set([ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, sshTransportRuleId, cdnRefreshRuleId, cdnDeliveryRuleId])
 const aggregateTables = new Map([
     [accessRuleId, ['log_access_counts', 'sum(amount)']], [mongoRuleId, ['log_mongo_ping_counts', 'sum(amount)']],
     [postgresRuleId, ['log_postgres_session_state', 'sum(dropped_records)']], [proxyRuleId, ['log_proxy_counts', 'sum(amount)']],
     [modelDiscoveryRuleId, ['log_model_probe_receipts', 'count(*)']], [readinessAuditRuleId, ['log_readiness_audit_receipts', 'count(*)']],
 ])
-const receiptRules = new Set([ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, sshTransportRuleId, cdnRefreshRuleId, cdnDeliveryRuleId])
 export async function loadRuleHits(organizationId: string, rules: Pick<Rule, 'id' | 'source' | 'definition'>[], query: typeof run) {
     const ids = rules.map(rule => rule.id)
     if (!ids.length) return new Map<string, number>()
@@ -41,8 +41,8 @@ export async function loadRuleHits(organizationId: string, rules: Pick<Rule, 'id
     const receiptIds = ids.filter(id => receiptRules.has(id) || customDropIds.has(id))
     const parameters: (string | string[])[] = [organizationId, findingIds, receiptIds]
     const statements = [
-        'SELECT rule_id, count(*)::text AS hits FROM findings WHERE organization_id=$1 AND rule_id=ANY($2::text[]) GROUP BY rule_id',
-        'SELECT rule_id, count(*)::text AS hits FROM log_analyze_receipts WHERE organization_id=$1 AND rule_id=ANY($3::text[]) GROUP BY rule_id',
+        `SELECT rule_id, hits::text AS hits FROM rule_hit_counts WHERE organization_id=$1
+            AND ((source='findings' AND rule_id=ANY($2::text[])) OR (source='receipts' AND rule_id=ANY($3::text[])))`,
     ]
     for (const id of ids) {
         const aggregate = aggregateTables.get(id)
