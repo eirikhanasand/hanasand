@@ -83,17 +83,19 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
             link('Health Checks', '/automation/health'),
             link('Cron Jobs', '/automation/cron'),
         ]),
-        group('Workspace', [
-            link('Projects', '/projects', isAdmin),
+        group('Content', [
             group('Writing', [
                 link('Notes', '/notes', canManageContent || hasContentOrganization),
                 link('Articles', '/content/articles', canManageContent || hasContentOrganization),
                 link('Thoughts', '/content/thoughts', canManageContent || hasContentOrganization),
                 link('Thesis', '/content/thesis', isAdmin),
             ]),
-            group('Media & sharing', [
-                link('Media Library', '/gallery'),
+            group('Media', [
+                link('Gallery', '/gallery'),
                 link('Uploads', '/upload'),
+            ]),
+            group('Code', [
+                link('Projects', '/projects', isAdmin),
                 link('Shares', '/shares'),
             ]),
         ]),
