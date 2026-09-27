@@ -14,9 +14,11 @@ import { telemetryRuleId, sshWindowRuleId } from './analyzeRoutineGroups.ts'
 import { cdnRefreshRuleId } from './analyzeCdnRefresh.ts'
 
 type Rule = { id: string, recordId?: string, name: string, explanation: string, family: string, severity: string, source?: string, enabled?: boolean, definition?: { stage?: string, action?: string } }
+export const internalRetentionRuleIds = new Set(['security.event_evidence.v1'])
 const analysis = new Set(['mongodb.cashflow_connections', 'http.routine_access', 'auth.impossible_travel', 'auth.new_country', 'auth.new_device'])
 const match = new Set(['network.signature_alert', 'vulnerability.cve_asset_context'])
 export function ruleCategory(rule: Pick<Rule, 'id' | 'source' | 'definition'>) {
+    if (rule.definition?.stage === 'analyze' && rule.definition.action === 'keep') return 'detection'
     if (rule.definition?.stage === 'analyze') return 'analysis'
     if (rule.definition?.stage === 'detect') return 'detection'
     const slug = rule.id.replace(/\.v\d+$/, '')

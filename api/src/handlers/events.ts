@@ -3,7 +3,7 @@ import { cdnDeliveryRule, cdnDeliveryRuleId, cdnDeliveryDefinition } from '#util
 import { sshTransportRule, sshTransportRuleId, sshTransportDefinition } from '#utils/events/analyzeSshTransport.ts'
 import { eventProtectionRule, eventProtectionRuleId, eventProtectionDefinition, normalizeEventProtection, type EventProtectionPolicy } from '#utils/events/eventProtection.ts'
 import { ingestionRule, ingestionRuleId, ingestionDefinition } from '#utils/events/analyzeIngestion.ts'
-import { listRule, ruleCategory, loadRuleHits } from '#utils/events/ruleList.ts'
+import { internalRetentionRuleIds, listRule, ruleCategory, loadRuleHits } from '#utils/events/ruleList.ts'
 import { cdnRefreshRule, cdnRefreshRuleId, cdnRefreshDefinition } from '#utils/events/analyzeCdnRefresh.ts'
 import { modelDiscoveryRule, modelDiscoveryRuleId, modelDiscoveryDefinition, modelDiscoveryConfigured, modelDiscoveryUnavailableReason } from '#utils/events/analyzeModelDiscovery.ts'
 import { readinessAuditRule, readinessAuditRuleId, readinessAuditDefinition, readinessAuditConfigured, readinessAuditUnavailable } from '#utils/events/analyzeReadinessAudit.ts'
@@ -302,7 +302,7 @@ export async function getRules(req: FastifyRequest, res: FastifyReply) {
         loadConfiguredRules(access.organizationId, run, compact),
         canManageRules(access.role) ? hasRole(req, res, 'system_admin') : Promise.resolve({ valid: false }),
     ])
-    const rules = configured.filter(rule => !query.category || ruleCategory(rule) === query.category)
+    const rules = configured.filter(rule => !internalRetentionRuleIds.has(rule.id) && (!query.category || ruleCategory(rule) === query.category))
     let hits: Map<string, number>
     try { hits = query.view === 'definitions' ? new Map<string, number>() : await loadRuleHits(access.organizationId, rules, run) }
     catch (error) {

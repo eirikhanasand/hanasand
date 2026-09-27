@@ -15,6 +15,9 @@ describe('rule categories', () => {
     ])('%s belongs to %s', (id: string, category: string) => {
         expect(getRuleCategory({ id, source: 'hanasand' })).toBe(category)
     })
+    test('retention Store rules use the detection category', () => {
+        expect(getRuleCategory({ id: 'auth.new_country.v1', source: 'hanasand', definition: { stage: 'analyze', action: 'keep' } })).toBe('detection')
+    })
     test.each(['owned', 'open_source'])('%s conditions use the match category', (source: string) => {
         expect(getRuleCategory({ id: 'custom.authentication', source })).toBe('match')
     })

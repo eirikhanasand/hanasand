@@ -9,7 +9,8 @@ export type RuleCategory = keyof typeof ruleCategories
 const analysisRules = new Set(['mongodb.cashflow_connections.v1', 'http.routine_access.v1', 'auth.impossible_travel.v1', 'auth.new_country.v1', 'auth.new_device.v1'])
 const matchRules = new Set(['network.signature_alert.v1', 'vulnerability.cve_asset_context.v1'])
 
-export function getRuleCategory(rule: { id: string, source?: string, definition?: { stage?: string } }): RuleCategory {
+export function getRuleCategory(rule: { id: string, source?: string, definition?: { stage?: string, action?: string } }): RuleCategory {
+    if (rule.definition?.stage === 'analyze' && rule.definition.action === 'keep') return 'detection'
     if (rule.definition?.stage === 'analyze') return 'analysis'
     if (rule.definition?.stage === 'detect') return 'detection'
     // Custom and imported rules are evaluated as normalized event-field conditions.
