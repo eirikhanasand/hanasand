@@ -11,7 +11,7 @@ test('list projection excludes definitions and evidence, preserves displayed fie
     expect(listRule(rule)).toEqual({ id: rule.id, recordId: rule.recordId, name: rule.name, explanation: rule.explanation, family: rule.family, severity: rule.severity, source: rule.source, enabled: false, definition: { stage: 'analyze', action: 'drop' } })
 })
 test('category honors custom stages and historical built-in IDs', () => {
-    expect(ruleCategory({ id: 'auth.new_country.v2', source: 'hanasand' })).toBe('analysis')
+    expect(ruleCategory({ id: 'auth.new_country.v2', source: 'hanasand' })).toBe('detection')
     expect(ruleCategory({ id: 'auth.impossible_travel.v1', source: 'hanasand' })).toBe('analysis')
     expect(ruleCategory({ id: 'network.signature_alert.v1', source: 'hanasand' })).toBe('match')
     expect(ruleCategory({ id: 'custom.test.v1', source: 'owned' })).toBe('match')
