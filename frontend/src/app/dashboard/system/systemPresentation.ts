@@ -40,9 +40,10 @@ export function formatBytes(bytes: number | null | undefined): string {
     return `${n.toFixed(decimals)} ${units[i]}`
 }
 
-export function formatPercent(value: number | null | undefined, decimals = 1): string {
-    if (typeof value !== 'number' || !Number.isFinite(value)) return 'Loading…'
-    return `${value.toFixed(decimals)}%`
+export function formatPercent(value: number | string | null | undefined, decimals = 1): string {
+    const numeric = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : Number.NaN
+    if (!Number.isFinite(numeric)) return 'Loading…'
+    return `${numeric.toFixed(decimals)}%`
 }
 
 export function formatDuration(seconds: number | null | undefined): string {
