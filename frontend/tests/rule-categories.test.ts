@@ -7,9 +7,9 @@ describe('rule categories', () => {
         ['mongodb.cashflow_connections.v1', 'analysis'],
         ['auth.brute_force_success.v1', 'detection'],
         ['auth.password_spray.v1', 'detection'],
-        ['auth.impossible_travel.v1', 'analysis'],
-        ['auth.new_country.v1', 'analysis'],
-        ['auth.new_device.v1', 'analysis'],
+        ['auth.impossible_travel.v1', 'detection'],
+        ['auth.new_country.v1', 'detection'],
+        ['auth.new_device.v1', 'detection'],
         ['network.signature_alert.v1', 'match'],
         ['vulnerability.cve_asset_context.v1', 'match'],
     ])('%s belongs to %s', (id: string, category: string) => {
