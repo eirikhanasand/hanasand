@@ -19,6 +19,7 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
     const [draft, setDraft] = useState<Rule | null>(null)
     const [error, setError] = useState('')
     const [status, setStatus] = useState('')
+    const [liveHitsUnavailable, setLiveHitsUnavailable] = useState(false)
     const [busy, setBusy] = useState(false)
     const displayedHitCount = useSmoothedCount(data?.triggerCount, 3_000)
     const endpoint = `/api/backend/rules/${encodeURIComponent(id)}?organizationId=${encodeURIComponent(organizationId)}`
@@ -38,9 +39,12 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
             pending = true
             try {
                 const payload = await requestJson<{ triggerCount: number | null }>(`/api/backend/rules/${encodeURIComponent(id)}/hits?organizationId=${encodeURIComponent(organizationId)}`, { cache: 'no-store' })
-                if (active) setData(previous => previous ? { ...previous, triggerCount: payload.triggerCount } : previous)
+                if (active) {
+                    setLiveHitsUnavailable(false)
+                    setData(previous => previous ? { ...previous, triggerCount: payload.triggerCount } : previous)
+                }
             } catch {
-                // Retain the last count and retry on the next interval.
+                if (active) setLiveHitsUnavailable(true)
             } finally {
                 pending = false
             }
@@ -103,7 +107,7 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
                     </div>
                     <dl className='flex items-center gap-2 border-t border-ui-border pt-2 sm:min-w-32 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-4'>
                         <Activity size={20} className='text-ui-primary' aria-hidden='true' />
-                        <div><dt className='text-xs font-medium text-ui-muted'>Hits</dt><dd className='mt-1 text-xl font-semibold leading-none tabular-nums text-ui-text' title='Recorded rule hits for this organization, using the same total as the rule list.'>{displayedHitCount?.toLocaleString('en-US') ?? 'Unavailable'}</dd></div>
+                        <div><dt className='text-xs font-medium text-ui-muted'>Hits</dt><dd className='mt-1 text-xl font-semibold leading-none tabular-nums text-ui-text' title='Recorded rule hits for this organization, using the same total as the rule list.'>{displayedHitCount?.toLocaleString('en-US') ?? 'Unavailable'}</dd>{liveHitsUnavailable && <p className='mt-1 text-xs text-ui-warning'>Live count unavailable; retrying.</p>}</div>
                     </dl>
                 </header>
             </DashboardPanel>

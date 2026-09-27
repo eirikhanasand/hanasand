@@ -321,7 +321,7 @@ export async function getRuleHitCounts(req: FastifyRequest, res: FastifyReply) {
     if (query.organizationId !== access.organizationId) return res.status(403).send({ error: 'Organization access denied.' })
     const rules = (await loadConfiguredRules(access.organizationId, run, true)).filter(rule => !internalRetentionRuleIds.has(rule.id))
     try {
-        const hits = await loadRuleHits(access.organizationId, rules, run, { cache: false })
+        const hits = await loadRuleHits(access.organizationId, rules, run)
         return res.header('Cache-Control', 'no-store').send({ organizationId: access.organizationId, hitCounts: Object.fromEntries(rules.map(rule => [rule.id,
             rule.definition?.stage === 'analyze' && rule.definition.action === 'keep' ? null : hits.get(rule.id) ?? 0,
         ])) })
@@ -337,7 +337,7 @@ export async function getRuleHitCount(req: FastifyRequest<{ Params: { id: string
     const rule = (await loadConfiguredRules(access.organizationId, run, true)).find(rule => ruleSlug(rule.id) === ruleSlug(req.params.id) || rule.recordId === req.params.id)
     if (!rule || internalRetentionRuleIds.has(rule.id)) return res.status(404).send({ error: 'Rule not found.' })
     try {
-        const hits = await loadRuleHits(access.organizationId, [rule], run, { cache: false })
+        const hits = await loadRuleHits(access.organizationId, [rule], run)
         const triggerCount = rule.definition?.stage === 'analyze' && rule.definition.action === 'keep' ? null : hits.get(rule.id) ?? 0
         return res.header('Cache-Control', 'no-store').send({ organizationId: access.organizationId, triggerCount })
     } catch (error) {
