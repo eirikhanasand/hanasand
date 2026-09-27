@@ -117,6 +117,7 @@ export default function DetectionRules({ category, initial }: { category: RuleCa
     const columns: Array<{ label: string, key: RuleSortColumn }> = (['Title', 'Description', 'Family', 'Severity', 'Status', 'Source', 'Hits'] as RuleSortColumn[]).map(key => ({ label: key, key }))
     if (category === 'analysis') columns.push({ label: 'Action', key: 'Action' })
     columns.push({ label: category === 'analysis' ? 'Controls' : 'Action', key: 'Controls' })
+    const ruleListLabel = ruleCategories[category].label.endsWith(' rules') ? ruleCategories[category].label : `${ruleCategories[category].label} rules`
     const severities = Array.from(new Set(['informational', 'low', 'medium', 'high', 'critical', ...categoryRules.map(rule => rule.severity.toLowerCase())]))
     const hasFilters = Boolean(titleFilter || textFilter || enabledFilter !== 'all' || severityFilter !== 'all')
     function clearFilters() { setTitleFilter(''); setTextFilter(''); setEnabledFilter('all'); setSeverityFilter('all') }
@@ -168,8 +169,8 @@ export default function DetectionRules({ category, initial }: { category: RuleCa
                     <button type='button' onClick={clearFilters} disabled={!hasFilters} className='h-9 self-end rounded-md border border-ui-border px-3 text-xs font-semibold disabled:opacity-50'>Clear filters</button>
                 </div>
                 <p role='status' className='text-xs text-ui-muted'>{filteredRules.length} of {categoryRules.length} rules</p>
-                <div role='region' aria-label={`${ruleCategories[category].label} rules`} tabIndex={0} className='min-w-0 overflow-x-auto rounded-md border border-ui-border focus-visible:outline-2 focus-visible:outline-ui-primary'>
-                    <table className='w-full min-w-[1000px] table-fixed text-left text-sm' aria-label={`${ruleCategories[category].label} rules`}>
+                <div role='region' aria-label={ruleListLabel} tabIndex={0} className='min-w-0 overflow-x-auto rounded-md border border-ui-border focus-visible:outline-2 focus-visible:outline-ui-primary'>
+                    <table className='w-full min-w-[1000px] table-fixed text-left text-sm' aria-label={ruleListLabel}>
                         <colgroup><col className='w-[22%]' /><col className={category === 'analysis' ? 'w-[15%]' : 'w-[23%]'} /><col className='w-[10%]' /><col className='w-[8%]' /><col className='w-[8%]' /><col className='w-[10%]' /><col className='w-[10%]' />{category === 'analysis' && <col className='w-[8%]' />}<col className='w-[9%]' /></colgroup>
                         <thead className='bg-ui-raised text-xs text-ui-muted'><tr>{columns.map(column => {
                             const active = sort.column === column.key
