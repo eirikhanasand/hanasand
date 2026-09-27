@@ -8,6 +8,8 @@ cleanup() { rm -rf "$staged"; }
 trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
 python3 "$root/render_proxy.py" "$root/config.json" "$staged/haproxy.cfg" "$staged/haproxy-secondary.cfg"
+chmod 755 "$staged"
+chmod 644 "$staged"/*.cfg
 for index in 0 1; do
  file=haproxy.cfg; test "$index" = 0 || file=haproxy-secondary.cfg
  docker run --rm --network host -v "$staged:/recovery:ro" haproxy@sha256:de601ccc9a79b715055bc5c8d51ff357edca04c1e869f4209f02bf6872fde8ac haproxy -c -f "/recovery/$file"
