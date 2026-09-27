@@ -139,9 +139,8 @@ extension DesktopAgentModel {
             )
             append(meta: "Agent discovery", body: "Published \(endpoints.joined(separator: ", "))", kind: .note)
         } catch DashboardRequestError.httpStatus(401) {
-            desktopPresenceTask?.cancel()
-            desktopPresenceTask = nil
             let message = "Your Hanasand session expired. Sign in again to resume LAN discovery."
+            clearLocalHanasandSession()
             loginStatus = message
             append(meta: "Agent discovery", body: message, kind: .error)
         } catch {

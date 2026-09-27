@@ -7,7 +7,6 @@ CHANNEL="${HANASAND_APP_CHANNEL:-stable}"
 RELEASED_AT="${HANASAND_APP_RELEASED_AT:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}"
 RELEASE_NOTES="${HANASAND_APP_RELEASE_NOTES:-Desktop app update from commit $(git -C "$ROOT_DIR/../.." rev-parse --short HEAD).}"
 DIST_DIR="${ROOT_DIR}/dist"
-BUILD_DIR="${ROOT_DIR}/.build/release"
 APP_DIR="${DIST_DIR}/Hanasand.app"
 PACKAGE_PATH="${DIST_DIR}/Hanasand-${VERSION}-macos.zip"
 ICON_FILE="${ROOT_DIR}/Resources/Hanasand.icns"
@@ -25,6 +24,7 @@ rm -rf "$APP_DIR" "$PACKAGE_PATH"
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources" "$DIST_DIR"
 
 swift build --package-path "$ROOT_DIR" -c release
+BUILD_DIR="$(swift build --package-path "$ROOT_DIR" -c release --show-bin-path)"
 
 cp "$BUILD_DIR/Hanasand" "$APP_DIR/Contents/MacOS/Hanasand"
 chmod +x "$APP_DIR/Contents/MacOS/Hanasand"
