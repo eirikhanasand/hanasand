@@ -122,7 +122,7 @@ export default function Footer() {
                     <Link href='/cookie-settings' className='inline-flex min-h-9 items-center hover:text-ui-text'>Cookie settings</Link>
                     <span>© {year} Hanasand</span>
                 </div>
-                <a href='https://github.com/eirikhanasand/hanasand/commit/ec92d4838778f8dd5aa5aaeb55880ecb1e3000f4' target='_blank' rel='noreferrer' className='hover:text-ui-text'>v{config.version}</a>
+                <a href='https://github.com/eirikhanasand/hanasand/commit/ec92d4838778f8dd5aa5aaeb55880ecb1e3000f4' target='_blank' rel='noopener noreferrer' className='hover:text-ui-text'>v{config.version}</a>
             </section>
         </footer>
     )
