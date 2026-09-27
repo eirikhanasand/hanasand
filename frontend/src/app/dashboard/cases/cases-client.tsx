@@ -43,7 +43,7 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
             if (collection === 'monitoring') params.set('view', 'summary')
             if (!cursor) params.set('page', String(page))
             if (cursor) params.set('cursor', cursor)
-            void fetch(`/api/cases?${params}`, { cache: 'no-store', signal: controller.signal }).then(async response => {
+            void fetchCaseSource(`/api/cases?${params}`, controller.signal).then(async response => {
                 if (controller.signal.aborted) return
                 if ([401, 403].includes(response.status)) {
                     setCollections({ intelligence: [], monitoring: [] })
@@ -131,6 +131,23 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
             {!loading && !nextCursor && rows.length > 0 && <p className='px-4 py-2 text-xs text-ui-muted/70'>No more cases</p>}
         </>}
     </section>
+}
+
+async function fetchCaseSource(url: string, signal: AbortSignal) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+        let response: Response
+        try {
+            response = await fetch(url, { cache: 'no-store', signal })
+        } catch (error) {
+            if (signal.aborted || attempt === 2) throw error
+            await new Promise(resolve => setTimeout(resolve, 200 * (attempt + 1)))
+            continue
+        }
+        if (response.status < 500 || attempt === 2) return response
+        await response.body?.cancel().catch(() => {})
+        await new Promise(resolve => setTimeout(resolve, 200 * (attempt + 1)))
+    }
+    throw new Error('Cases are unavailable.')
 }
 
 function CaseFilter({ label, value, onChange, options }: { label: string, value: string, onChange: (value: string) => void, options: string[] }) {
