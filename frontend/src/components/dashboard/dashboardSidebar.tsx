@@ -5,7 +5,7 @@ import { NAVIGATION_COOKIE, readNavigationPreferences, type NavigationPreference
 import { getCookie, setCookie } from '@/utils/cookies/cookies'
 import { usePathname } from 'next/navigation'
 import { AlarmClockCheck, ChevronDown, ChevronsUp, FolderKanban, NotebookText, PanelLeftClose, PanelLeftOpen, Pin, Search, Server, Settings2, ShieldCheck, House, ListFilter, Mail, CircleUserRound, Code2 } from 'lucide-react'
-import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { getDashboardViewMode, setDashboardViewMode } from '@/utils/layout/viewMode'
 import { getDashboardNavigation, navigationLinks, pinnedNavigation, type NavigationAccess, type NavigationItem } from '@/utils/layout/dashboardNavigation'
@@ -35,6 +35,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
     const [query, setQuery] = useState('')
     const [preview, setPreview] = useState<{ section: NavigationItem, top: number } | null>(null)
     const previewCloseTimer = useRef<number | null>(null)
+    const previewPanel = useRef<HTMLDivElement | null>(null)
     const mode = useSyncExternalStore(
         (onChange) => {
             window.addEventListener('dashboard-view-mode', onChange)
@@ -168,6 +169,12 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
         return () => window.removeEventListener('keydown', closeOnEscape)
     }, [preview])
 
+    useLayoutEffect(() => {
+        if (!preview || !previewPanel.current) return
+        const maxTop = Math.max(8, window.innerHeight - previewPanel.current.getBoundingClientRect().height - 8)
+        if (preview.top > maxTop) setPreview({ ...preview, top: maxTop })
+    }, [preview])
+
     function showPreview(section: NavigationItem, element: HTMLElement) {
         if (previewCloseTimer.current !== null) window.clearTimeout(previewCloseTimer.current)
         const bounds = element.getBoundingClientRect()
@@ -234,7 +241,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
                 </>}
             </nav>
             {compact && preview && typeof document !== 'undefined' && createPortal(
-                <div role='region' aria-label={`${preview.section.label} navigation`} onMouseEnter={() => {
+                <div ref={previewPanel} role='region' aria-label={`${preview.section.label} navigation`} onMouseEnter={() => {
                     if (previewCloseTimer.current !== null) window.clearTimeout(previewCloseTimer.current)
                 }} onMouseLeave={deferPreviewClose}
                 style={{ position: 'fixed', left: 80, top: preview.top, maxHeight: 'calc(100dvh - 16px)' }}
