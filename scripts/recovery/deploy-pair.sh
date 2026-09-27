@@ -58,7 +58,7 @@ done
 python3 "$script_dir/start-inspur-pair.py" "$kind" "$image" "$source" $ports
 path=/ready
 test "$kind" != frontend || path=/api/recovery/ready
-test "$kind" != api || path=/health
+test "$kind" != api || path=/ready
 for port in $ports; do
  ready=0
  for attempt in $(seq 1 60); do
