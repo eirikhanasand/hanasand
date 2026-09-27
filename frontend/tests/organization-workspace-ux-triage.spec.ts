@@ -208,7 +208,7 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).not.toContain('Linked case or alert available.')
     expect(page).not.toContain('Needs destination and alert context')
     expect(page).toContain('/api/organizations/${encodeURIComponent(selectedOrganization.id)}/watchlists')
-    expect(page).toContain('/api/dwm/webhooks/deliver')
+    expect(page).toContain('/api/findings/webhooks/deliver')
 
     expect(page).toContain('data-org-settings-disclosure')
     expect(page).toContain('<details id=\'settings\' open')
@@ -427,8 +427,8 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('httpStatus: row.httpStatus ?? row.responseStatus')
     expect(page).not.toContain('Open API')
     expect(page).not.toContain('/api/organizations/${organizationId}/watchlists/alert-terms?watchlistId=${watchlistId}')
-    expect(page).not.toContain('/api/dwm/webhooks/deliveries?organizationId=${organizationId}&destinationId=${destinationId}')
-    expect(page).not.toContain('<a href={`/api/dwm/webhooks/deliveries?organizationId=${encodeURIComponent(organization.id)}`} className={secondaryButtonClass}>')
+    expect(page).not.toContain('/api/findings/webhooks/deliveries?organizationId=${organizationId}&destinationId=${destinationId}')
+    expect(page).not.toContain('<a href={`/api/findings/webhooks/deliveries?organizationId=${encodeURIComponent(organization.id)}`} className={secondaryButtonClass}>')
     expect(page).not.toContain('function deliveryHistoryHref')
 
     expect(page).toContain('bg-ui-text px-4 text-sm font-semibold text-ui-canvas')
@@ -514,13 +514,13 @@ test('organization workspace empty state renders create path', async ({ context,
     await page.route(url => new URL(url).pathname === '/api/organizations/org_new/webhooks', async route => {
         await route.fulfill({ json: { destinations: [] } })
     })
-    await page.route(url => new URL(url).pathname === '/api/dwm/alerts', async route => {
+    await page.route(url => new URL(url).pathname === '/api/findings/alerts', async route => {
         await route.fulfill({ json: { alerts: [] } })
     })
     await page.route(url => new URL(url).pathname === '/api/cases', async route => {
         await route.fulfill({ json: { cases: [] } })
     })
-    await page.route(url => new URL(url).pathname === '/api/dwm/webhooks/deliveries', async route => {
+    await page.route(url => new URL(url).pathname === '/api/findings/webhooks/deliveries', async route => {
         await route.fulfill({ json: { deliveries: [] } })
     })
 
@@ -603,13 +603,13 @@ test('organization setup keeps new workspace open when first term fails', async 
     await page.route(url => new URL(url).pathname === '/api/organizations/org_warn/webhooks', async route => {
         await route.fulfill({ json: { destinations: [] } })
     })
-    await page.route(url => new URL(url).pathname === '/api/dwm/alerts', async route => {
+    await page.route(url => new URL(url).pathname === '/api/findings/alerts', async route => {
         await route.fulfill({ json: { alerts: [] } })
     })
     await page.route(url => new URL(url).pathname === '/api/cases', async route => {
         await route.fulfill({ json: { cases: [] } })
     })
-    await page.route(url => new URL(url).pathname === '/api/dwm/webhooks/deliveries', async route => {
+    await page.route(url => new URL(url).pathname === '/api/findings/webhooks/deliveries', async route => {
         await route.fulfill({ json: { deliveries: [] } })
     })
 
@@ -727,16 +727,16 @@ test('organization workspace renders searchable shared watchlists', async ({ con
         destinationTests.push({ destinationId: body.destinationId || '', dryRun: Boolean(body.dryRun) })
         await route.fulfill({ json: { deliveries: [fixtureDeliveries[0]] } })
     })
-    await page.route('**/api/dwm/alerts?organizationId=org_acme', async route => {
+    await page.route('**/api/findings/alerts?organizationId=org_acme', async route => {
         await route.fulfill({ json: { alerts: fixtureAlerts } })
     })
     await page.route('**/api/cases?organizationId=org_acme', async route => {
         await route.fulfill({ json: { cases: fixtureCases } })
     })
-    await page.route('**/api/dwm/webhooks/deliveries**', async route => {
+    await page.route('**/api/findings/webhooks/deliveries**', async route => {
         await route.fulfill({ json: { deliveries: fixtureDeliveries } })
     })
-    await page.route('**/api/dwm/webhooks/deliver', async route => {
+    await page.route('**/api/findings/webhooks/deliver', async route => {
         const body = await route.request().postDataJSON() as { destinationId?: string, alertId?: string, caseId?: string, watchlistId?: string, replay?: boolean, webhookUrl?: string, attachToWatchlist?: boolean }
         if (body.webhookUrl) {
             watchlistDestinationTests.push({ watchlistId: body.watchlistId, webhookUrl: body.webhookUrl, attachToWatchlist: body.attachToWatchlist })
@@ -765,7 +765,7 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await page.route('**/api/organizations/org_contoso/webhooks', async route => {
         await route.fulfill({ json: { destinations: [] } })
     })
-    await page.route('**/api/dwm/alerts?organizationId=org_contoso', async route => {
+    await page.route('**/api/findings/alerts?organizationId=org_contoso', async route => {
         await route.fulfill({ json: { alerts: [] } })
     })
     await page.route('**/api/cases?organizationId=org_contoso', async route => {

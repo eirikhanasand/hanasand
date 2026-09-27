@@ -4,7 +4,7 @@ import test from 'node:test'
 
 const source = readFileSync(new URL('../src/app/dashboard/cases/[id]/case-detail-client.tsx', import.meta.url), 'utf8')
 const pageSource = readFileSync(new URL('../src/app/dashboard/cases/[id]/page.tsx', import.meta.url), 'utf8')
-const deliveryRouteSource = readFileSync(new URL('../src/app/api/dwm/webhooks/deliver/route.ts', import.meta.url), 'utf8')
+const deliveryRouteSource = readFileSync(new URL('../src/app/api/findings/webhooks/deliver/route.ts', import.meta.url), 'utf8')
 
 test('DWM case detail exposes webhook delivery traceability', () => {
     assert.match(source, /<h2 className='text-sm font-semibold text-ui-text'>Evidence<\/h2>/)
@@ -13,7 +13,7 @@ test('DWM case detail exposes webhook delivery traceability', () => {
     assert.match(source, /data-dwm-case-evidence-mobile-row='true'/)
     assert.match(source, /data-dwm-case-evidence-desktop-table='true'/)
     assert.match(source, /function EvidenceMobileRow/)
-    assert.match(source, /import \{ safeEvidenceExcerpt \} from '@\/utils\/dwm\/display'/)
+    assert.match(source, /import \{ safeEvidenceExcerpt \} from '@\/utils\/findings\/display'/)
     assert.match(source, /function safeCaseEvidenceExcerpt\(row: EvidenceRow\)/)
     assert.match(source, /safeEvidenceExcerpt\(row\.safeExcerpt \|\| row\.excerpt/)
     assert.doesNotMatch(source, /\{row\.safeExcerpt \|\| row\.excerpt \|\| 'No safe excerpt available\.'\}/)
@@ -42,10 +42,10 @@ test('DWM case detail exposes webhook delivery traceability', () => {
     assert.match(source, /Manage destination/)
     assert.match(source, /Delivery history/)
     assert.match(source, /focus: 'destinations'/)
-    assert.match(source, /fetch\(`\/api\/dwm\/webhooks\/deliveries\$\{queryString\(\{ organizationId: scopedOrganizationId, alertId: scopedAlertId, reportCaseId: caseId \}\)\}`/)
+    assert.match(source, /fetch\(`\/api\/findings\/webhooks\/deliveries\$\{queryString\(\{ organizationId: scopedOrganizationId, alertId: scopedAlertId, reportCaseId: caseId \}\)\}`/)
     assert.match(source, /deliveries = deliveryRowsFromApi\(deliveryPayload\)/)
     assert.match(source, /\.filter\(delivery => delivery\.thirdPartyReport === true && delivery\.reportCaseId === caseId\)/)
-    assert.match(source, /fetch\(`\/api\/dwm\/webhook-sink\$\{queryString\(\{ orgId: scopedOrganizationId, reportCaseId: caseId \}\)\}`/)
+    assert.match(source, /fetch\(`\/api\/findings\/webhook-sink\$\{queryString\(\{ orgId: scopedOrganizationId, reportCaseId: caseId \}\)\}`/)
     assert.match(source, /receiverReceipts = receiverReceiptRowsFromApi\(receiverPayload\)/)
     assert.match(source, /Hanasand receiver receipt/)
     assert.match(source, /receipt\.destinationId === \(latestDelivery\?\.webhookDestinationId \|\| latestDelivery\?\.destinationId\)/)
@@ -62,7 +62,7 @@ test('DWM case detail exposes webhook delivery traceability', () => {
     assert.match(source, /function deliveryRetryBlockedReason/)
     assert.match(source, /Exact report retry is available at/)
     assert.match(source, /latestDelivery\.requestId \|\| latestDelivery\.auditEventId/)
-    assert.match(source, /\/dwm\$\{queryString\(\{ tenantId, organizationId, alert: alertId \}\)\}/)
+    assert.match(source, /\/findings\$\{queryString\(\{ tenantId, organizationId, alert: alertId \}\)\}/)
     assert.match(source, /Selected alert/)
     assert.match(source, /const caseMeta = \[/)
     assert.match(source, /compactCaseReference\(caseRecord\.id, 'Case'\)/)
@@ -72,7 +72,7 @@ test('DWM case detail exposes webhook delivery traceability', () => {
     assert.match(source, /compactCaseReference\(organizationId, 'Org'\)/)
     assert.doesNotMatch(source, /\{caseRecord\.id\} · \{caseRecord\.organizationId \|\| organizationId \|\| 'organization pending'\}/)
     assert.doesNotMatch(source, /value=\{organizationId \|\| tenantId\}/)
-    assert.doesNotMatch(source, /\/api\/dwm\/alerts/)
+    assert.doesNotMatch(source, /\/api\/findings\/alerts/)
     assert.doesNotMatch(source, /What returned/)
 })
 

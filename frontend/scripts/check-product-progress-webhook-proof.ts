@@ -44,7 +44,7 @@ globalThis.fetch = async (input: RequestInfo | URL) => {
             },
         })
     }
-    if (url.includes('/api/dwm/webhooks/deliveries')) {
+    if (url.includes('/api/findings/webhooks/deliveries')) {
         return jsonResponse({ deliveries: [{ id: 'delivery_1', alertId: 'alert_1', status: 'sent', attemptedAt: generatedAt }] })
     }
     if (url.includes('/api/ti/scraper/control')) {

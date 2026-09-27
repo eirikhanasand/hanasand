@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import test from 'node:test'
-import { POST } from '../src/app/api/dwm/webhook-sink/route.ts'
+import { POST } from '../src/app/api/findings/webhook-sink/route.ts'
 
 const payload = {
     schemaVersion: 'dwm.webhook.v1',
@@ -37,7 +37,7 @@ test('acknowledges a webhook only after the central API persists its receiver re
     }
     try {
         const payloadBody = JSON.stringify(payload, null, 2)
-        const accepted = await POST(new Request('http://local/api/dwm/webhook-sink', {
+        const accepted = await POST(new Request('http://local/api/findings/webhook-sink', {
             method: 'POST',
             headers: {
                 'content-type': 'application/json',
@@ -67,7 +67,7 @@ test('acknowledges a webhook only after the central API persists its receiver re
             },
         })
         assert.equal(persisted.length, 1)
-        assert.equal(new URL(persisted[0].url).pathname, '/api/dwm/webhook-receiver')
+        assert.equal(new URL(persisted[0].url).pathname, '/api/findings/webhook-receiver')
         assert.equal(persisted[0].headers.get('x-hanasand-service-token'), 'service-token')
         assert.deepEqual(await persisted[0].clone().json(), {
             eventId: 'event_1',
@@ -82,7 +82,7 @@ test('acknowledges a webhook only after the central API persists its receiver re
         globalThis.fetch = async () => {
             throw new Error('central API unavailable')
         }
-        const unavailable = await POST(new Request('http://local/api/dwm/webhook-sink', {
+        const unavailable = await POST(new Request('http://local/api/findings/webhook-sink', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify(payload),
@@ -90,7 +90,7 @@ test('acknowledges a webhook only after the central API persists its receiver re
         assert.equal(unavailable.status, 503)
         assert.equal((await unavailable.json()).accepted, false)
 
-        const oversized = await POST(new Request('http://local/api/dwm/webhook-sink', {
+        const oversized = await POST(new Request('http://local/api/findings/webhook-sink', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: `{"padding":"${'x'.repeat(512 * 1024)}"}`,
@@ -112,7 +112,7 @@ test('keeps scraper-owned legacy delivery in its authoritative sender ledger', a
         throw new Error('legacy delivery must not cross stores')
     }
     try {
-        const response = await POST(new Request('http://local/api/dwm/webhook-sink', {
+        const response = await POST(new Request('http://local/api/findings/webhook-sink', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({

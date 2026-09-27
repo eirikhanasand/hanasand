@@ -756,10 +756,10 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
             ['watchlists', `/api/organizations/${encodeURIComponent(organizationId)}/watchlists`],
             ['alertTerms', `/api/organizations/${encodeURIComponent(organizationId)}/watchlists/alert-terms`],
             ['alertCaseVisibility', `/api/organizations/${encodeURIComponent(organizationId)}/alert-case-visibility`],
-            ['alerts', `/api/dwm/alerts?organizationId=${encodeURIComponent(organizationId)}`],
+            ['alerts', `/api/findings/alerts?organizationId=${encodeURIComponent(organizationId)}`],
             ['cases', `/api/cases?organizationId=${encodeURIComponent(organizationId)}`],
             ['webhooks', `/api/organizations/${encodeURIComponent(organizationId)}/webhooks`],
-            ['deliveries', `/api/dwm/webhooks/deliveries?organizationId=${encodeURIComponent(organizationId)}`],
+            ['deliveries', `/api/findings/webhooks/deliveries?organizationId=${encodeURIComponent(organizationId)}`],
         ] as const
         const permittedEndpoints = endpoints.filter(([key]) => mayManage || !['apiKeys', 'invites'].includes(key))
         const results = await Promise.allSettled(permittedEndpoints.map(([, url]) => requestJson<Record<string, unknown>>(url)))
@@ -1230,7 +1230,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
     const replayDelivery = (delivery: DeliveryRow) => selectedOrganization && runAction('replay-delivery', async () => {
         requireEdit()
         if (!canReplayDelivery(delivery, bundle.webhooks)) throw new Error('Delivery replay needs a destination or saved watchlist route.')
-        const result = await requestJson<DeliveryResult>('/api/dwm/webhooks/deliver', {
+        const result = await requestJson<DeliveryResult>('/api/findings/webhooks/deliver', {
             method: 'POST',
             body: JSON.stringify({
                 organizationId: selectedOrganization.id,
@@ -1293,7 +1293,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
 
     const refreshOrganizationAlerts = () => selectedOrganization && runAction('refresh-alerts', async () => {
         requireEdit()
-        const payload = await requestJson<{ savedAlertCount?: number, alertIds?: string[] }>('/api/dwm/alerts/rebuild', {
+        const payload = await requestJson<{ savedAlertCount?: number, alertIds?: string[] }>('/api/findings/alerts/rebuild', {
             method: 'POST',
             body: JSON.stringify({
                 organizationId: selectedOrganization.id,
@@ -3054,7 +3054,7 @@ function ScopePanel({ alertTerms, alerts, cases, deliveries, members, watchlists
                     secondary: term.matchReason || compactReference(term.alertGenerationRef, 'watch') || term.kind || term.family || 'Shared watchlist match',
                     href: term.watchlistItemId || term.watchlistId ? `/organizations/watchlists#watchlist-${encodeURIComponent(term.watchlistItemId || term.watchlistId || '')}` : undefined,
                 }))} empty='Add an active shared watchlist term to create organization alert terms.' />
-                <ScopeColumn icon={<CircleAlert className='h-4 w-4' />} title='Alerts' route={`/api/dwm/alerts?organizationId=${encodeURIComponent(organizationId)}`} rows={alerts.map(alert => {
+                <ScopeColumn icon={<CircleAlert className='h-4 w-4' />} title='Alerts' route={`/api/findings/alerts?organizationId=${encodeURIComponent(organizationId)}`} rows={alerts.map(alert => {
                     const matchReason = matchReasonForRecord(alert.id, deliveries)
                     return {
                         id: alert.id,

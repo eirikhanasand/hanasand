@@ -20,7 +20,7 @@ mock.module('@/utils/status/getStatus', () => ({ default: async (options: { summ
     return new Promise(resolve => { release = resolve })
 } }))
 mock.module('../src/app/dashboard/overview/loadOverview', () => ({ loadOverview: async () => ({ status: 'ready' }) }))
-mock.module('../src/app/dashboard/overview/dwmOverviewPanel', () => ({ default: () => createElement('p', null, 'Monitoring starts independently') }))
+mock.module('../src/app/dashboard/overview/overviewPanel', () => ({ default: () => createElement('p', null, 'Monitoring starts independently') }))
 const { default: Page } = await import('../src/app/dashboard/overview/page')
 const page = await Page({})
 const stream = await renderToReadableStream(page)

@@ -23,7 +23,7 @@ const capabilities = [
         title: 'Watch the names that matter',
         detail: 'Add companies, domains, vendors, brands, and products to your watchlist.',
         icon: Eye,
-        href: '/dwm',
+        href: '/findings',
         link: 'See monitoring workflow',
     },
     {
@@ -80,7 +80,7 @@ export default function TrustPage() {
                             Hanasand checks public sources against your watchlists and sends alerts when it finds a match.
                         </p>
                         <div className='flex flex-wrap gap-3'>
-                            <Link href='/dwm' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
+                            <Link href='/findings' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
                                 See Hanasand in action
                                 <ArrowRight className='h-4 w-4' />
                             </Link>
@@ -182,7 +182,7 @@ export default function TrustPage() {
                         <h2 className='mt-2 max-w-3xl text-3xl font-semibold'>See how Hanasand turns public intelligence into useful alerts.</h2>
                     </div>
                     <div className='flex flex-wrap gap-3 lg:justify-end'>
-                        <Link href='/dwm' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary transition hover:opacity-90'>
+                        <Link href='/findings' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary transition hover:opacity-90'>
                             See Hanasand in action
                             <ArrowRight className='h-4 w-4' />
                         </Link>

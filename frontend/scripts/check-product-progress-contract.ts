@@ -35,13 +35,13 @@ const routes = {
     helpdeskAudit: '/api/admin/support/readiness',
     deployProbe: '/api/product-progress',
     sourceProxy: '/api/ti/scraper/control?q=LockBit',
-    entitlement: '/api/dwm/entitlements/readiness',
+    entitlement: '/api/findings/entitlements/readiness',
     organizationReadiness: '/api/organizations/org_acme/alert-readiness',
     orgAlertExport: '/api/organizations/org_acme/alert-readiness',
-    webhookHealth: '/api/dwm/webhooks',
-    dashboardAlerts: '/api/dwm/alerts',
-    alertGenerationReadiness: '/api/dwm/alerts/generation-readiness',
-    dwmProduct: '/api/dwm/product',
+    webhookHealth: '/api/findings/webhooks',
+    dashboardAlerts: '/api/findings/alerts',
+    alertGenerationReadiness: '/api/findings/alerts/generation-readiness',
+    dwmProduct: '/api/findings/product',
 }
 const sourceProxy = {
     ok: true,
@@ -175,8 +175,8 @@ const partialPayload = buildProductProgressPayload({
         schemaVersion: 'dwm.alert_generation_readiness.v1',
         status: 'ready',
         checkedAt: generatedAt,
-        source: '/api/dwm/alerts/generation-readiness',
-        href: '/api/dwm/alerts/generation-readiness',
+        source: '/api/findings/alerts/generation-readiness',
+        href: '/api/findings/alerts/generation-readiness',
         readyForCustomerDelivery: true,
         candidateCount: 3,
         captureRefCount: 35,
@@ -191,7 +191,7 @@ const partialPayload = buildProductProgressPayload({
         staleAfterSeconds: 900,
         proofTimestamp: generatedAt,
         expectedDashboardRowId: 'alert_generation_readiness',
-        integrationProbeHint: 'GET /api/dwm/alerts/generation-readiness must return dwm.alert_generation_readiness.v1 with candidates and a generation evidence window.',
+        integrationProbeHint: 'GET /api/findings/alerts/generation-readiness must return dwm.alert_generation_readiness.v1 with candidates and a generation evidence window.',
         backendProofContractVersion: 'dwm.alert_generation_readiness.v1',
     },
     cases: [{ id: 'case_acme_1', alertId: 'alert_acme_1', status: 'reviewing', assignedOwner: 'analyst@acme.example', updatedAt: generatedAt }],
@@ -282,7 +282,7 @@ const dwmProductInventoryFallbackPayload = buildProductProgressPayload({
         },
         error: {
             code: 'source_proxy_fallback_from_dwm_product',
-            message: 'Using /api/dwm/product source inventory because scraper control proxy was unavailable.',
+            message: 'Using /api/findings/product source inventory because scraper control proxy was unavailable.',
         },
     },
     alerts: [{ id: 'alert_acme_1', updatedAt: generatedAt }],
@@ -536,10 +536,10 @@ assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'end_to_end_workflow')?.status, 'ready')
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'end_to_end_workflow')?.endToEndWorkflowStepCount, 8)
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'end_to_end_workflow')?.endToEndWorkflowReadyStepCount, 8)
-assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'entitlement_readiness')?.href, '/dwm')
+assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'entitlement_readiness')?.href, '/findings')
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'webhook_delivery')?.href, '/automation?setup=dwm')
-assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'dwm_product_snapshot')?.href, '/dwm')
-assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'org_alert_export')?.href, '/dwm')
+assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'dwm_product_snapshot')?.href, '/findings')
+assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'org_alert_export')?.href, '/findings')
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'webhook_health')?.href, '/automation?setup=dwm')
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'helpdesk_audit')?.href, '/system/impersonation')
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'deploy_probe')?.href, '/status')
@@ -568,7 +568,7 @@ assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 
 const readyPayload = {
     ...partialPayload,
     publicTiProvenance: { ...partialPayload.publicTiProvenance!, status: 'ready' as const, blockers: [], sourceCount: 3, evidenceCount: 5 },
-    entitlement: { ...partialPayload.entitlement!, status: 'ready' as const, blockers: [], allowed: true, policy: 'shared_watchlist', checkedRole: 'analyst', source: routes.entitlement, href: '/dwm', unavailableReason: undefined },
+    entitlement: { ...partialPayload.entitlement!, status: 'ready' as const, blockers: [], allowed: true, policy: 'shared_watchlist', checkedRole: 'analyst', source: routes.entitlement, href: '/findings', unavailableReason: undefined },
     helpdeskAudit: { ...partialPayload.helpdeskAudit!, status: 'ready' as const, blockers: [], auditedActions: 2, openRecoveryRequests: 0 },
     orgAlertExport: { ...partialPayload.orgAlertExport!, status: 'ready' as const, blockers: [], activeTermCount: 1, canGenerateAlerts: true },
     webhookHealth: { ...partialPayload.webhookHealth!, status: 'ready' as const, blockers: [], destinationCount: 1, activeDestinationCount: 1, deliveryReadyCount: 1 },
@@ -591,7 +591,7 @@ const backedOrgWebhookPayload = buildProductProgressPayload({
         status: 'ready',
         checkedAt: generatedAt,
         source: routes.organizationReadiness,
-        href: '/dwm',
+        href: '/findings',
         organizationId: 'org_acme',
         activeTermCount: 2,
         pausedCount: 0,
@@ -622,7 +622,7 @@ const backedOrgWebhookPayload = buildProductProgressPayload({
         staleAfterSeconds: 900,
         proofTimestamp: generatedAt,
         expectedDashboardRowId: 'webhook_health',
-        integrationProbeHint: 'GET /api/organizations/:id/webhooks and GET /api/dwm/webhooks/deliveries must return active destinations and delivery evidence.',
+        integrationProbeHint: 'GET /api/organizations/:id/webhooks and GET /api/findings/webhooks/deliveries must return active destinations and delivery evidence.',
         backendProofContractVersion: 'dwm.webhook_health.readiness.v1',
     },
     helpdeskAudit: {
@@ -647,8 +647,8 @@ const backedOrgWebhookPayload = buildProductProgressPayload({
         schemaVersion: 'dwm.product_snapshot.readiness.v1',
         status: 'ready',
         checkedAt: generatedAt,
-        source: '/api/dwm/product',
-        href: '/dwm',
+        source: '/api/findings/product',
+        href: '/findings',
         tenantId: 'org_acme',
         watchlistTermCount: 1,
         alertCount: 1,
@@ -660,7 +660,7 @@ const backedOrgWebhookPayload = buildProductProgressPayload({
         staleAfterSeconds: 900,
         proofTimestamp: generatedAt,
         expectedDashboardRowId: 'dwm_product_snapshot',
-        integrationProbeHint: 'GET /api/dwm/product must return watchlist, source coverage, and alert proof from the TI backend.',
+        integrationProbeHint: 'GET /api/findings/product must return watchlist, source coverage, and alert proof from the TI backend.',
         backendProofContractVersion: 'dwm.product.v1',
     },
 })
@@ -710,7 +710,7 @@ const organizationProofBackedPayload = buildProductProgressPayload({
         status: 'ready',
         checkedAt: generatedAt,
         source: routes.organizationReadiness,
-        href: '/dwm',
+        href: '/findings',
         organizationId: 'org_acme',
         policy: 'organization_readiness',
         allowed: true,
@@ -728,7 +728,7 @@ const organizationProofBackedPayload = buildProductProgressPayload({
         status: 'ready',
         checkedAt: generatedAt,
         source: routes.organizationReadiness,
-        href: '/dwm',
+        href: '/findings',
         organizationId: 'org_acme',
         activeTermCount: organizationReadinessProof.counts.activeWatchlistTermCount,
         pausedCount: organizationReadinessProof.counts.pausedWatchlistCount,
@@ -800,7 +800,7 @@ const degradedPayload = {
         status: 'blocked' as const,
         checkedAt: generatedAt,
         source: routes.entitlement,
-        href: '/dwm',
+        href: '/findings',
         organizationId: 'org_acme',
         policy: 'shared_watchlist',
         allowed: false,
@@ -967,8 +967,8 @@ for (const scopedProgressToken of [
     'sourceProxyFromDwmProductFallback',
     'source_proxy_fallback_from_dwm_product',
     'dwm.source_inventory.v1',
-    '/api/dwm/watchlists',
-    '/api/dwm/product',
+    '/api/findings/watchlists',
+    '/api/findings/product',
     '/api/organizations/:id/webhooks',
     '/api/backend/admin/support/access-recovery',
     '/api/backend/admin/audit-events?limit=50',
@@ -992,7 +992,7 @@ assert.ok(workbenchSource.includes('data-readiness-detail-href'), 'Readiness det
 assert.ok(workbenchSource.includes('Open workflow'), 'Readiness detail should deep-link to the backed workflow.')
 assert.ok(workbenchSource.includes('readinessPrioritySort'), 'Dashboard readiness rows should be prioritized by blocker state.')
 assert.ok(workbenchSource.includes('data-readiness-priority'), 'Dashboard readiness rows should expose priority for DOM proof.')
-assert.ok(workbenchSource.includes('href=\'/dashboard/dwm\''), 'Dashboard readiness detail should link to the DWM workflow.')
+assert.ok(workbenchSource.includes('href=\'/dashboard/findings\''), 'Dashboard readiness detail should link to the DWM workflow.')
 assert.ok(workbenchSource.includes('inspect_org_members'), 'Org readiness should expose the backed members drill-in.')
 assert.ok(workbenchSource.includes('/api/organizations/${encodeURIComponent(orgContext.organization.id)}/members'), 'Org readiness should link to the scoped members API.')
 assert.ok(workbenchSource.includes('inspect_org_alert_readiness'), 'Org readiness should expose alert-readiness proof.')
@@ -1002,27 +1002,27 @@ assert.ok(workbenchSource.includes('inspect_watchlist_alert_queue'), 'Watchlist 
 assert.ok(workbenchSource.includes('Persisted alerts generated from shared watchlists and source coverage.'), 'Watchlist readiness generated-alert link should name the backed alerts flow.')
 assert.ok(workbenchSource.includes('inspect_watchlist_alertability'), 'Watchlist readiness should expose organization alertability proof.')
 assert.ok(workbenchSource.includes('open_alert_detail'), 'Operator action rail should expose backed DWM alert detail.')
-assert.ok(workbenchSource.includes('/api/dwm/alerts/${encodeURIComponent(selected.id)}'), 'Alert detail action should open the selected alert endpoint.')
-assert.ok(workbenchSource.includes('Fallback alerts cannot load /api/dwm/alerts/:id.'), 'Fallback alerts should block alert detail loading honestly.')
+assert.ok(workbenchSource.includes('/api/findings/alerts/${encodeURIComponent(selected.id)}'), 'Alert detail action should open the selected alert endpoint.')
+assert.ok(workbenchSource.includes('Fallback alerts cannot load /api/findings/alerts/:id.'), 'Fallback alerts should block alert detail loading honestly.')
 assert.ok(workbenchSource.includes('inspect_alert_source_health'), 'Selected alert detail should expose source-health drill-in when evidence provenance returns a source id.')
 assert.ok(workbenchSource.includes('alertSourceProfileHref'), 'Alert source-health action should derive source profile links from backed alert evidence provenance.')
 assert.ok(workbenchSource.includes('sourceProfileHref(item.provenance.sourceId)'), 'Alert evidence rows should deep-link individual evidence provenance to source profiles.')
 assert.ok(workbenchSource.includes('sourceProfileHref(sourceId)'), 'Alert source-health rail and evidence rows should share source profile URL construction.')
 assert.ok(workbenchSource.includes('/ti/sources/${encodeURIComponent(sourceId)}'), 'Alert source-health drill-in should deep-link to the source inventory profile.')
 assert.ok(workbenchSource.includes('replay_alert'), 'Operator action rail should expose backed DWM alert replay.')
-assert.ok(workbenchSource.includes('/api/dwm/alerts/${encodeURIComponent(selected.id)}/replay'), 'Replay action should call the selected alert replay endpoint.')
+assert.ok(workbenchSource.includes('/api/findings/alerts/${encodeURIComponent(selected.id)}/replay'), 'Replay action should call the selected alert replay endpoint.')
 assert.ok(workbenchSource.includes('alertReplayResultMessage'), 'Replay actions should report backed alert replay workflow results.')
 assert.ok(workbenchSource.includes('Replay is waiting on'), 'Replay result handling should surface workflow blockers with customer-safe copy.')
 assert.ok(workbenchSource.includes('payload.alert?.replayCount'), 'Replay result handling should report backend replay count when returned.')
 assert.ok(workbenchSource.includes('payload.alert?.lastReplayedAt'), 'Replay result handling should report backend replay timestamp when returned.')
 assert.ok(workbenchSource.includes('send_alert'), 'Operator action rail should expose backed webhook delivery send.')
-assert.ok(workbenchSource.includes('/api/dwm/webhooks/deliver'), 'Send action should call the webhook delivery endpoint.')
+assert.ok(workbenchSource.includes('/api/findings/webhooks/deliver'), 'Send action should call the webhook delivery endpoint.')
 assert.ok(workbenchSource.includes('sendDeliveryActionFor(selected)'), 'Operator action rail should expose fallback send delivery when a live alert has no explicit action row.')
 assert.ok(workbenchSource.includes('const action = sendDeliveryActionFor(item)'), 'Send handler should use the same fallback delivery action as the action rail.')
 assert.ok(workbenchSource.includes('body: { alertId: item.id, limit: 1 }'), 'Fallback send delivery action should call the backed delivery API for the selected alert.')
 assert.ok(workbenchSource.includes('sendDestinationReady'), 'Send delivery should depend on active org webhook or action-scoped destination state.')
 assert.ok(workbenchSource.includes('sendDeliveryDisabledReason(item, orgContext)'), 'Selected alert detail Send should use the same destination readiness guard as the action rail.')
-assert.ok(workbenchSource.includes('const disabledReason = sendDeliveryDisabledReason(item, orgContext)'), 'Send handler should block missing webhook destination before POST /api/dwm/webhooks/deliver.')
+assert.ok(workbenchSource.includes('const disabledReason = sendDeliveryDisabledReason(item, orgContext)'), 'Send handler should block missing webhook destination before POST /api/findings/webhooks/deliver.')
 assert.ok(workbenchSource.includes('hasSendDeliveryDestination'), 'Send delivery readiness should be centralized across rail, detail, and handler.')
 assert.ok(workbenchSource.includes('scopedDeliveryActionBody(action?.body || { alertId: item.id, limit: 1 }, orgContext)'), 'Send handler should enrich fallback delivery actions with scoped organization destination state.')
 assert.ok(workbenchSource.includes('const sendActionBody = scopedDeliveryActionBody(sendAction.body || {}, orgContext)'), 'Operator action rail should display the same scoped destination payload the send action submits.')
@@ -1121,19 +1121,19 @@ assert.ok(dashboardPageSource.includes('id: \'review_alert\''), 'Dashboard live 
 assert.ok(dashboardPageSource.includes('id: \'escalate_alert\''), 'Dashboard live alert cases should expose a backed escalation action.')
 assert.ok(dashboardPageSource.includes('id: \'suppress_alert\''), 'Dashboard live alert cases should expose a backed suppress/false-positive action.')
 assert.ok(dashboardPageSource.includes('id: \'close_alert\''), 'Dashboard live alert cases should expose a backed close action.')
-assert.ok(dashboardPageSource.includes('href = `/api/dwm/alerts/${encodeURIComponent(alert.id)}`'), 'Dashboard alert workflow actions should PATCH the selected alert endpoint.')
+assert.ok(dashboardPageSource.includes('href = `/api/findings/alerts/${encodeURIComponent(alert.id)}`'), 'Dashboard alert workflow actions should PATCH the selected alert endpoint.')
 assert.ok(workbenchSource.includes('initialSelectedId'), 'Operator workbench should accept an initial selected item id from backed readiness links.')
 assert.ok(workbenchSource.includes('readAlertDetailJson'), 'Operator workbench should parse selected live alert detail from the backed alert proxy.')
-assert.ok(workbenchSource.includes('/api/dwm/alerts/${encodeURIComponent(itemId)}'), 'Selected live alerts should load /api/dwm/alerts/:id in the root console.')
+assert.ok(workbenchSource.includes('/api/findings/alerts/${encodeURIComponent(itemId)}'), 'Selected live alerts should load /api/findings/alerts/:id in the root console.')
 assert.ok(workbenchSource.includes('Alert evidence'), 'Selected alert inspection should expose backed alert evidence when case detail is unavailable.')
-assert.ok(workbenchSource.includes('refreshAlertDetail'), 'Selected live alert detail should refresh from /api/dwm/alerts/:id after backed actions.')
+assert.ok(workbenchSource.includes('refreshAlertDetail'), 'Selected live alert detail should refresh from /api/findings/alerts/:id after backed actions.')
 assert.ok(workbenchSource.includes('refreshBackedSelection(item, payload'), 'Replay/send/update actions should refresh selected backed alert and case state from action responses.')
 assert.ok(workbenchSource.includes('caseDetailHrefFromPayload'), 'Open-case responses should be converted into /api/cases/:id detail refreshes.')
 assert.ok(workbenchSource.includes('payload?.case?.id'), 'Case detail refresh should depend on the backed case id returned by /api/cases.')
 assert.ok(workbenchSource.includes('caseDetailHrefFromAlertDetail'), 'Selected alert detail should open linked /api/cases/:id detail when the alert API returns a case id.')
 assert.ok(workbenchSource.includes('backedCaseHref'), 'Operator action rail should use backed case links derived from live alert detail.')
-assert.ok(workbenchSource.includes('caseDetailHrefFromAlertDetail(alertDetail.detail, orgContext)'), 'Operator action rail should open and export cases discovered from /api/dwm/alerts/:id detail.')
-assert.ok(workbenchSource.includes('alert?.workflowContext?.caseIdCandidate'), 'Alert-derived case detail should consume the workflow case candidate returned by /api/dwm/alerts/:id.')
+assert.ok(workbenchSource.includes('caseDetailHrefFromAlertDetail(alertDetail.detail, orgContext)'), 'Operator action rail should open and export cases discovered from /api/findings/alerts/:id detail.')
+assert.ok(workbenchSource.includes('alert?.workflowContext?.caseIdCandidate'), 'Alert-derived case detail should consume the workflow case candidate returned by /api/findings/alerts/:id.')
 assert.ok(workbenchSource.includes('action=\'review\''), 'Backed case actions should expose the case review mutation.')
 assert.ok(workbenchSource.includes('label=\'Start review\''), 'Backed case review should be visible as an analyst action.')
 assert.ok(workbenchSource.includes('action=\'false_positive\''), 'Backed case actions should expose a false-positive decision.')
@@ -1147,9 +1147,9 @@ assert.ok(workbenchSource.includes('payload.testResult?.delivery'), 'Webhook evi
 assert.ok(workbenchSource.includes('mergeDeliveryEvidence(actionDeliveries'), 'Action-returned delivery evidence should be shown in the backed inspection panel before case detail reloads.')
 assert.ok(workbenchSource.includes('endpoint_hash_not_returned'), 'Delivery evidence from partial webhook responses should mark missing hashes honestly.')
 assert.ok(workbenchSource.includes('open_delivery_ledger'), 'Selected items with delivery evidence should expose the backed delivery ledger in the action rail.')
-assert.ok(workbenchSource.includes('deliveryLedgerHref'), 'Delivery ledger links should use the scoped /api/dwm/webhooks/deliveries proxy.')
+assert.ok(workbenchSource.includes('deliveryLedgerHref'), 'Delivery ledger links should use the scoped /api/findings/webhooks/deliveries proxy.')
 assert.ok(workbenchSource.includes('deliveryLedgerHref(orgContext, selected, selectedDelivery)'), 'Delivery ledger links should include selected alert and delivery evidence scope.')
-assert.ok(workbenchSource.includes('inspect_alert_delivery_history'), 'Selected alert detail should expose delivery-history refs from /api/dwm/alerts/:id.')
+assert.ok(workbenchSource.includes('inspect_alert_delivery_history'), 'Selected alert detail should expose delivery-history refs from /api/findings/alerts/:id.')
 assert.ok(workbenchSource.includes('alertDetail.detail.deliveryReadiness?.deliveryHistoryRefs?.length'), 'Alert delivery-history action should depend on backed alert detail readiness refs.')
 assert.ok(workbenchSource.includes('deliveryLedgerHref(orgContext, selected)'), 'Alert delivery-history action should deep-link to scoped webhook delivery history.')
 assert.ok(workbenchSource.includes('params.set(\'alertId\', selected.id)'), 'Delivery ledger links should carry the selected DWM alert id.')
@@ -1160,7 +1160,7 @@ assert.ok(workbenchSource.includes('const ledgerHref = deliveryLedgerHref(orgCon
 assert.ok(workbenchSource.includes('Open ledger'), 'Delivery evidence rows should expose the backed delivery ledger action.')
 assert.ok(workbenchSource.includes('scopedActionBody'), 'Workbench POST actions should carry selected org/tenant scope unless the backed action body already supplies it.')
 assert.ok(workbenchSource.includes('webhookDeliveryResultMessage'), 'Webhook send/test actions should report backed delivery ids and statuses.')
-assert.ok(workbenchSource.includes('alertWorkflowMutationBody'), 'Alert workflow mutations should send backend idempotency guards from /api/dwm/alerts/:id.')
+assert.ok(workbenchSource.includes('alertWorkflowMutationBody'), 'Alert workflow mutations should send backend idempotency guards from /api/findings/alerts/:id.')
 assert.ok(workbenchSource.includes('expectedWorkflowEventCount'), 'Alert workflow mutations should include expectedWorkflowEventCount when alert detail returns it.')
 assert.ok(workbenchSource.includes('expectedUpdatedAt'), 'Alert workflow mutations should include expectedUpdatedAt when alert detail returns it.')
 assert.ok(workbenchSource.includes('alertWorkflowActionIds'), 'Operator action rail should promote backed alert workflow action rows.')
@@ -1180,7 +1180,7 @@ assert.ok(dashboardPageSource.includes('...alertActionRequestGuard(actionReadine
 assert.ok(workbenchSource.includes('const replayAction = selected.actions?.find(action => action.id === \'replay_alert\')'), 'Operator action rail should reuse backed replay action readiness from selected alerts.')
 assert.ok(workbenchSource.includes('Backed alert workflow'), 'Persistent live alerts without case detail should be labeled as backed alert workflow, not local-only triage.')
 assert.ok(workbenchSource.includes('Updates the persisted alert and refreshes detail.'), 'Persistent live alert decisions should use operator-facing copy.')
-assert.ok(workbenchSource.includes('Replay requires a persistent /api/dwm/alerts/:id alert.'), 'Fallback alert rows should not expose replay as a fake action.')
+assert.ok(workbenchSource.includes('Replay requires a persistent /api/findings/alerts/:id alert.'), 'Fallback alert rows should not expose replay as a fake action.')
 assert.ok(workbenchSource.includes('Send requires a persistent alert and webhook delivery route.'), 'Fallback alert rows should not expose send as a fake action.')
 assert.ok(workbenchSource.includes('AlertWorkflowReadiness'), 'Selected alert detail should expose workflow readiness and downstream handoff blockers.')
 assert.ok(workbenchSource.includes('Workflow guard'), 'Selected alert inspection should label stale workflow and handoff blockers in operator language.')
@@ -1208,12 +1208,12 @@ assert.ok(workbenchSource.includes('Case package'), 'Selected backed case inspec
 assert.ok(workbenchSource.includes('export_case_evidence'), 'Selected backed cases should expose evidence export in the operator action rail.')
 assert.ok(workbenchSource.includes('CaseWatchlistRows'), 'Selected backed cases should render matched watchlist scope from the case API.')
 assert.ok(workbenchSource.includes('watchlistLedgerHref(orgContext)'), 'Case watchlist scope should deep-link to scoped DWM watchlists.')
-assert.ok(workbenchSource.includes('/api/dwm/watchlists'), 'Case watchlist scope should use the backed watchlists API route.')
+assert.ok(workbenchSource.includes('/api/findings/watchlists'), 'Case watchlist scope should use the backed watchlists API route.')
 assert.ok(caseExportProxySource.includes('/v1/cases/${encodeURIComponent(id)}/export'), 'Dashboard case export proxy should forward to the TI case export contract.')
-assert.ok(dashboardModelSource.includes('/api/dwm/source-requests'), 'Source readiness case should call the source request endpoint.')
-assert.ok(dashboardModelSource.includes('/api/dwm/canary/run'), 'Source readiness case should call the canary run endpoint.')
+assert.ok(dashboardModelSource.includes('/api/findings/source-requests'), 'Source readiness case should call the source request endpoint.')
+assert.ok(dashboardModelSource.includes('/api/findings/canary/run'), 'Source readiness case should call the canary run endpoint.')
 assert.ok(dashboardModelSource.includes('open_alert_generation_readiness'), 'Alert readiness case should expose the backed generation-readiness proof.')
-assert.ok(dashboardModelSource.includes('/api/dwm/alerts/generation-readiness'), 'Alert readiness case should link to generation-readiness API.')
+assert.ok(dashboardModelSource.includes('/api/findings/alerts/generation-readiness'), 'Alert readiness case should link to generation-readiness API.')
 assert.ok(dashboardModelSource.includes('Inspect generation readiness before treating fallback rows as customer evidence.'), 'Fallback alert queue should name the exact generation-readiness blocker.')
 assert.ok(productProgressRouteSource.includes('webhookProductProgressProof'), 'Product-progress route should consume webhook destination product-progress proof.')
 assert.ok(productProgressRouteSource.includes('webhookDeliveryProofLedger'), 'Product-progress route should preserve webhook delivery proof ledger provenance.')

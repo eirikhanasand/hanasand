@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import test from 'node:test'
-import { dwmAlertToWorkbenchCase } from '../src/app/dashboard/ti/workbench/dwmAlertAdapter'
+import { dwmAlertToWorkbenchCase } from '../src/app/dashboard/ti/workbench/alertAdapter'
 import type { DwmAlert } from '../src/utils/dwm/product'
 
 const alert = {

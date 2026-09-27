@@ -40,7 +40,7 @@ export default function GlobalError({ reset }: { error: Error & { digest?: strin
                         <nav aria-label='Recovery navigation' className='flex flex-wrap gap-x-5 gap-y-3 border-t border-ui-border pt-5 text-sm font-semibold'>
                             <Link href='/' className='inline-flex items-center gap-1 text-ui-primary dark:text-ui-muted hover:text-ui-primary'><ArrowLeft className='h-4 w-4' />Home</Link>
                             <Link href='/ti' className='inline-flex items-center gap-1 text-ui-primary dark:text-ui-muted hover:text-ui-primary'><Search className='h-4 w-4' />Threat search</Link>
-                            <Link href='/dwm' className='text-ui-primary dark:text-ui-muted hover:text-ui-primary'>Dark web monitoring</Link>
+                            <Link href='/findings' className='text-ui-primary dark:text-ui-muted hover:text-ui-primary'>Dark web monitoring</Link>
                             <Link href='/support' className='text-ui-primary dark:text-ui-muted hover:text-ui-primary'>Support</Link>
                         </nav>
                     </div>

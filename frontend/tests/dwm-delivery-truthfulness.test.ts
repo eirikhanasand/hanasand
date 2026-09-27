@@ -7,8 +7,8 @@ import { test } from 'bun:test'
 test('DWM marks only durable webhook delivery as success', async () => {
     const root = process.cwd().endsWith(`${path.sep}frontend`) ? process.cwd() : path.join(process.cwd(), 'frontend')
     const [portal, actions, workbench] = await Promise.all([
-        readFile(path.join(root, 'src/app/dashboard/dwm/dwm-analyst-portal.tsx'), 'utf8'),
-        readFile(path.join(root, 'src/app/dashboard/dwm/dwm-workflow-actions.tsx'), 'utf8'),
+        readFile(path.join(root, 'src/app/dashboard/findings/findings.tsx'), 'utf8'),
+        readFile(path.join(root, 'src/app/dashboard/findings/workflow-actions.tsx'), 'utf8'),
         readFile(path.join(root, 'src/app/dashboard/ti/workbench/workbenchClient.tsx'), 'utf8'),
     ])
 

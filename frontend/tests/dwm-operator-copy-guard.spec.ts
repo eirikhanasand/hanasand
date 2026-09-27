@@ -5,10 +5,10 @@ import path from 'node:path'
 const root = process.cwd()
 
 test('dashboard DWM keeps scoped workflow and durable delivery wording', async () => {
-    const dwmPage = await readFile(path.join(root, 'src/app/dashboard/dwm/page.tsx'), 'utf8')
-    const dwmPortal = await readFile(path.join(root, 'src/app/dashboard/dwm/dwm-analyst-portal.tsx'), 'utf8')
+    const dwmPage = await readFile(path.join(root, 'src/app/dashboard/findings/page.tsx'), 'utf8')
+    const dwmPortal = await readFile(path.join(root, 'src/app/dashboard/findings/findings.tsx'), 'utf8')
     const dashboardPage = await readFile(path.join(root, 'src/app/dashboard/page.tsx'), 'utf8')
-    const workflowActions = await readFile(path.join(root, 'src/app/dashboard/dwm/dwm-workflow-actions.tsx'), 'utf8')
+    const workflowActions = await readFile(path.join(root, 'src/app/dashboard/findings/workflow-actions.tsx'), 'utf8')
     const workbench = await readFile(path.join(root, 'src/app/dashboard/ti/workbench/workbenchClient.tsx'), 'utf8')
     const caseDetail = await readFile(path.join(root, 'src/app/dashboard/cases/[id]/case-detail-client.tsx'), 'utf8')
 

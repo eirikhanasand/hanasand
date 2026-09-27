@@ -561,7 +561,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
 
     const refreshAlertDetail = useCallback(async (itemId: string, options: { loading?: boolean } = {}) => {
         if (options.loading !== false) setAlertDetails(current => ({ ...current, [itemId]: { status: 'loading' } }))
-        const response = await fetch(`/api/dwm/alerts/${encodeURIComponent(itemId)}`, { cache: 'no-store' })
+        const response = await fetch(`/api/findings/alerts/${encodeURIComponent(itemId)}`, { cache: 'no-store' })
         const payload = await readAlertDetailJson(response)
         if (!response.ok) throw new Error(payload.error?.message || response.statusText)
         setAlertDetails(current => ({ ...current, [itemId]: { status: 'ready', detail: payload } }))
@@ -655,7 +655,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
             const mapped: Partial<{ reviewState: string, deliveryState: string }> = decisionStatus ? mapDwmDecision(decisionStatus, item.status) : {}
             const currentAlertDetail = alertDetails[item.id]
             const mutationDetail = currentAlertDetail?.status === 'ready' ? currentAlertDetail.detail : undefined
-            const response = await fetch(`/api/dwm/alerts/${encodeURIComponent(item.id)}`, {
+            const response = await fetch(`/api/findings/alerts/${encodeURIComponent(item.id)}`, {
                 method: 'PATCH',
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify({
@@ -679,7 +679,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
         await runPersistentAction(`replay:${item.id}`, async () => {
             const currentAlertDetail = alertDetails[item.id]
             const mutationDetail = currentAlertDetail?.status === 'ready' ? currentAlertDetail.detail : undefined
-            const response = await fetch(`/api/dwm/alerts/${encodeURIComponent(item.id)}/replay`, {
+            const response = await fetch(`/api/findings/alerts/${encodeURIComponent(item.id)}/replay`, {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify({
@@ -703,7 +703,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
         }
         await runPersistentAction(`send:${item.id}`, async () => {
             const action = sendDeliveryActionFor(item)
-            const response = await fetch(action?.href || '/api/dwm/webhooks/deliver', {
+            const response = await fetch(action?.href || '/api/findings/webhooks/deliver', {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify(scopedDeliveryActionBody(action?.body || { alertId: item.id, limit: 1 }, orgContext)),
@@ -840,7 +840,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                 terms: [{ value: term, kind: inferTermKind(term) }],
                 status: 'active',
             }
-            const response = await fetch(orgContext.createWatchlistAction?.href || '/api/dwm/watchlists', {
+            const response = await fetch(orgContext.createWatchlistAction?.href || '/api/findings/watchlists', {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify(body),
@@ -895,7 +895,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                 status: input.status || input.watchlist.status,
                 webhookDestinationId: input.watchlist.webhookDestinationId,
             }
-            const response = await fetch('/api/dwm/watchlists', {
+            const response = await fetch('/api/findings/watchlists', {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify(body),
@@ -1430,8 +1430,8 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
     const rows: OperatorActionRailRow[] = []
     const sourceCoverage = orgContext?.readiness.sourceCoverage
     if (selected.kind === 'dwm_alert') {
-        const alertDetailHref = `/api/dwm/alerts/${encodeURIComponent(selected.id)}`
-        const dwmWorkspaceHref = relatedLinkHref(selected, 'Open dark web case') || `/dwm?alert=${encodeURIComponent(selected.id)}`
+        const alertDetailHref = `/api/findings/alerts/${encodeURIComponent(selected.id)}`
+        const dwmWorkspaceHref = relatedLinkHref(selected, 'Open dark web case') || `/findings?alert=${encodeURIComponent(selected.id)}`
         rows.push({
             id: 'open_dwm_workspace',
             label: 'Open dark web case',
@@ -1442,10 +1442,10 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
         rows.push({
             id: 'open_alert_detail',
             label: 'Open alert detail',
-            detail: selected.persistent ? `Open ${alertDetailHref}.` : 'Fallback alerts cannot load /api/dwm/alerts/:id.',
+            detail: selected.persistent ? `Open ${alertDetailHref}.` : 'Fallback alerts cannot load /api/findings/alerts/:id.',
             tone: selected.persistent ? 'ready' : 'blocked',
             href: selected.persistent ? alertDetailHref : undefined,
-            disabledReason: selected.persistent ? undefined : 'Fallback alerts cannot load /api/dwm/alerts/:id.',
+            disabledReason: selected.persistent ? undefined : 'Fallback alerts cannot load /api/findings/alerts/:id.',
         })
         const sourceProfileHref = alertSourceProfileHref(alertDetail?.status === 'ready' ? alertDetail.detail : undefined)
         if (sourceProfileHref) {
@@ -1503,7 +1503,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
                 id: 'replay_alert',
                 label: 'Replay',
                 method: 'POST',
-                href: `/api/dwm/alerts/${encodeURIComponent(selected.id)}/replay`,
+                href: `/api/findings/alerts/${encodeURIComponent(selected.id)}/replay`,
                 body: { actor: 'dashboard' },
                 disabledReason: selected.persistent ? undefined : 'Persisted alert replay has not attached yet.',
             },
@@ -1655,21 +1655,21 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             label: 'Edit watched terms',
             detail: 'Open dark web cases to create shared terms, attach delivery, and rebuild generated alerts.',
             tone: 'ready',
-            href: '/dwm',
+            href: '/findings',
         })
         rows.push({
             id: 'inspect_watchlists',
             label: 'Inspect watchlists',
             detail: 'Shared watchlist terms and delivery routing feed alert generation.',
             tone: orgContext?.readiness.activeWatchlistCount ? 'ready' : 'needs_action',
-            href: '/api/dwm/watchlists',
+            href: '/api/findings/watchlists',
         })
         rows.push({
             id: 'inspect_watchlist_alert_queue',
             label: 'Generated alerts',
             detail: 'Persisted alerts generated from shared watchlists and source coverage.',
             tone: orgContext?.readiness.liveAlertCount ? 'ready' : 'needs_action',
-            href: '/api/dwm/alerts',
+            href: '/api/findings/alerts',
         })
         if (orgContext?.organization) {
             rows.push({
@@ -1689,7 +1689,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
                 ? `${sourceCoverage.activeSourceCount}/${sourceCoverage.sourceCount} active sources, ${sourceCoverage.captureCount} captures, and ${sourceCoverage.watchlistMatchCount} watchlist matches.`
                 : 'Source-health stream updates with the next operation event.',
             tone: sourceCoverage ? sourceCoverage.activeSourceCount ? 'ready' : 'needs_action' : 'needs_action',
-            href: '/api/dwm/operations',
+            href: '/api/findings/operations',
         })
         rows.push({
             id: 'inspect_source_inventory',
@@ -1745,21 +1745,21 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             label: 'Generation status',
             detail: 'Generated alerts link sources, watchlists, and customer visibility.',
             tone: selected.missingDependency ? 'needs_action' : 'ready',
-            href: '/api/dwm/alerts/generation-readiness',
+            href: '/api/findings/alerts/generation-readiness',
         })
         rows.push({
             id: 'inspect_generated_alerts',
             label: 'Generated alerts',
             detail: 'Recent alerts for the selected organization/member workspace.',
             tone: selected.missingDependency ? 'needs_action' : 'ready',
-            href: '/api/dwm/alerts',
+            href: '/api/findings/alerts',
         })
         rows.push({
             id: 'open_dwm_alert_workflow',
             label: 'Open dark web cases',
             detail: 'Open dark web cases to update watched terms, rebuild alerts, and inspect generated alert state.',
             tone: 'ready',
-            href: '/dwm',
+            href: '/findings',
         })
     }
     const handledActionIds = new Set(rows.flatMap(row => [row.id, row.action?.id].filter(Boolean) as string[]))
@@ -1818,7 +1818,7 @@ function handoffActionRailRows(selected: WorkbenchCase, orgContext: WorkbenchOrg
             id: 'public_ti_create_watchlist',
             label: 'Add term',
             method: 'POST',
-            href: '/api/dwm/watchlists',
+            href: '/api/findings/watchlists',
             body: {
                 ...scopeBody(orgContext),
                 name: typeof watchlistPayload?.body?.name === 'string' ? watchlistPayload.body.name : `${handoff.query || selected.title} watchlist`,
@@ -1845,7 +1845,7 @@ function handoffActionRailRows(selected: WorkbenchCase, orgContext: WorkbenchOrg
             id: 'public_ti_rebuild_alerts',
             label: 'Rebuild',
             method: 'POST',
-            href: '/api/dwm/alerts/rebuild',
+            href: '/api/findings/alerts/rebuild',
             body: { ...scopeBody(orgContext), publicTiHandoff: handoffEnvelope(handoff), watchTerms },
             disabledReason: rebuildDisabledReason,
         },
@@ -2012,7 +2012,7 @@ function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContex
                     </p>
                 </div>
                 <div className='flex flex-wrap items-center justify-end gap-2'>
-                    <Link href='/dwm' className='inline-flex min-h-8 min-w-36 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-primary transition hover:bg-ui-raised '>
+                    <Link href='/findings' className='inline-flex min-h-8 min-w-36 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-primary transition hover:bg-ui-raised '>
                         Open DWM queue
                     </Link>
                     <span className={workflowStatusClass(orgContext?.readiness.fullChainReady ? 'ready' : 'needs_action')}>
@@ -2023,7 +2023,7 @@ function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContex
             <div className='mt-3 grid gap-2 sm:grid-cols-3'>
                 <ReadinessDetailField label='Running' value={`${readyCount}/${items.length}`} />
                 <ReadinessDetailField label='Next lane' value={prioritizedItems[0]?.label || 'checking'} />
-                <ReadinessDetailField label='Operations view' value='/dwm' />
+                <ReadinessDetailField label='Operations view' value='/findings' />
             </div>
             <div className='mt-3 grid gap-2'>
                 {prioritizedItems.map((item, index) => {
@@ -2319,7 +2319,7 @@ function EmptyWorkspace() {
                 <h2 className='text-lg font-semibold text-ui-text'>No cases to review</h2>
                 <p className='mt-2 text-sm leading-6 text-ui-muted'>Create watched terms, review source coverage, or run collection to produce the first actionable case.</p>
                 <div className='mt-4 flex flex-wrap gap-2'>
-                    <Link href='/dwm' className='inline-flex h-9 items-center rounded-lg bg-ui-primary px-3 text-xs font-semibold text-ui-on-primary transition hover:bg-ui-primary'>Open dark web cases</Link>
+                    <Link href='/findings' className='inline-flex h-9 items-center rounded-lg bg-ui-primary px-3 text-xs font-semibold text-ui-on-primary transition hover:bg-ui-primary'>Open dark web cases</Link>
                     <Link href='/ti/sources' className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised'>Review sources</Link>
                     <Link href='/automation?setup=dwm' className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised'>Configure delivery</Link>
                 </div>
@@ -2336,7 +2336,7 @@ function AttackWelcome() {
                 <h2 className='mt-5 text-2xl font-semibold text-ui-text'>Attack monitoring is ready</h2>
                 <p className='mt-3 text-sm leading-6 text-ui-muted'>Actionable cases are created when monitored sources produce a relevant exposure. Start with the source inventory or open the dark web case workspace to configure monitoring.</p>
                 <div className='mt-5 flex flex-wrap justify-center gap-2'>
-                    <Link href='/dwm' className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary'>Open dark web cases</Link>
+                    <Link href='/findings' className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary'>Open dark web cases</Link>
                     <Link href='/ti/sources' className='inline-flex h-10 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:bg-ui-panel'>Browse sources</Link>
                 </div>
             </div>
@@ -2351,7 +2351,7 @@ function BackedInspection({ item, caseDetail, alertDetail, actionDeliveries, org
     const blockedDependency = item.missingDependency || (!item.caseDetailHref && item.kind === 'dwm_alert' ? 'Case link is syncing to this alert. Open the dark web case while the live alert record finishes loading.' : '')
     const alertRecord = alertDetail?.status === 'ready' ? alertDetail.detail.alert : undefined
     const alertEvidence = alertRecord?.evidence || []
-    const dwmWorkspaceHref = item.kind === 'dwm_alert' ? relatedLinkHref(item, 'Open dark web case') || `/dwm?alert=${encodeURIComponent(item.id)}` : ''
+    const dwmWorkspaceHref = item.kind === 'dwm_alert' ? relatedLinkHref(item, 'Open dark web case') || `/findings?alert=${encodeURIComponent(item.id)}` : ''
 
     return (
         <section className='rounded-lg border border-ui-border bg-ui-panel'>
@@ -2368,7 +2368,7 @@ function BackedInspection({ item, caseDetail, alertDetail, actionDeliveries, org
                         </Link>
                     )}
                     {item.persistent && item.kind === 'dwm_alert' && (
-                        <Link href={`/api/dwm/alerts/${encodeURIComponent(item.id)}`} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text transition hover:bg-ui-raised'>
+                        <Link href={`/api/findings/alerts/${encodeURIComponent(item.id)}`} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text transition hover:bg-ui-raised'>
                             Alert API
                             <ExternalLink className='h-3.5 w-3.5' />
                         </Link>
@@ -2754,7 +2754,7 @@ function CaseActionRail({ item, note, owner, effectiveStatus, busyAction, caseDe
                     </DecisionButton>
                     {item.kind === 'dwm_alert' && (
                         <>
-                            <DecisionButton busy={busy || busyAction === `replay:${item.id}`} disabledReason={hasBackedAlertWorkflow ? undefined : 'Replay requires a persistent /api/dwm/alerts/:id alert.'} onClick={onReplay}>Replay</DecisionButton>
+                            <DecisionButton busy={busy || busyAction === `replay:${item.id}`} disabledReason={hasBackedAlertWorkflow ? undefined : 'Replay requires a persistent /api/findings/alerts/:id alert.'} onClick={onReplay}>Replay</DecisionButton>
                             <DecisionButton busy={busy || busyAction === `send:${item.id}`} disabledReason={sendDisabledReason || (hasBackedAlertWorkflow ? undefined : 'Send requires a persistent alert and webhook delivery route.')} onClick={onSend}>Send</DecisionButton>
                         </>
                     )}
@@ -3488,7 +3488,7 @@ function watchlistLedgerHref(orgContext: WorkbenchOrgContext | undefined) {
     if (orgContext?.organization?.id || orgContext?.scope.organizationId) params.set('organizationId', orgContext.organization?.id || orgContext.scope.organizationId || '')
     if (orgContext?.scope.tenantId) params.set('tenantId', orgContext.scope.tenantId)
     const query = params.toString()
-    return `/api/dwm/watchlists${query ? `?${query}` : ''}`
+    return `/api/findings/watchlists${query ? `?${query}` : ''}`
 }
 
 function deliveryLedgerHref(orgContext: WorkbenchOrgContext | undefined, selected?: WorkbenchCase, delivery?: WorkbenchDeliveryEvidence | CaseDelivery) {
@@ -3499,7 +3499,7 @@ function deliveryLedgerHref(orgContext: WorkbenchOrgContext | undefined, selecte
     if (delivery?.id) params.set('deliveryId', delivery.id)
     if (delivery?.webhookDestinationId) params.set('webhookDestinationId', delivery.webhookDestinationId)
     const query = params.toString()
-    return `/api/dwm/webhooks/deliveries${query ? `?${query}` : ''}`
+    return `/api/findings/webhooks/deliveries${query ? `?${query}` : ''}`
 }
 
 function organizationWebhookDestinationHref(organizationId: string, webhookDestinationId: string) {
@@ -3537,7 +3537,7 @@ function sendDeliveryActionFor(item: WorkbenchCase) {
         id: 'send_alert',
         label: 'Send',
         method: 'POST' as const,
-        href: '/api/dwm/webhooks/deliver',
+        href: '/api/findings/webhooks/deliver',
         body: { alertId: item.id, limit: 1 },
         disabledReason: item.persistent ? undefined : 'Persisted alert delivery is syncing before webhook send can run.',
     } : undefined)

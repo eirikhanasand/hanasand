@@ -293,9 +293,9 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
             let receiverReceipts: ReceiverReceipt[] = []
             if (scopedOrganizationId && scopedAlertId) {
                 const [deliveryResponse, destinationResponse, receiverResponse] = await Promise.all([
-                    fetch(`/api/dwm/webhooks/deliveries${queryString({ organizationId: scopedOrganizationId, alertId: scopedAlertId, reportCaseId: caseId })}`, { cache: 'no-store' }),
+                    fetch(`/api/findings/webhooks/deliveries${queryString({ organizationId: scopedOrganizationId, alertId: scopedAlertId, reportCaseId: caseId })}`, { cache: 'no-store' }),
                     fetch(`/api/organizations/${encodeURIComponent(scopedOrganizationId)}/webhooks`, { cache: 'no-store' }),
-                    fetch(`/api/dwm/webhook-sink${queryString({ orgId: scopedOrganizationId, reportCaseId: caseId })}`, { cache: 'no-store' }),
+                    fetch(`/api/findings/webhook-sink${queryString({ orgId: scopedOrganizationId, reportCaseId: caseId })}`, { cache: 'no-store' }),
                 ])
                 const deliveryPayload = await deliveryResponse.json().catch(() => ({}))
                 const destinationPayload = await destinationResponse.json().catch(() => ({}))
@@ -431,7 +431,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
         setBusy(dryRun ? 'webhook-test' : 'webhook-send')
         setMessage(null)
         try {
-            const response = await fetch('/api/dwm/webhooks/deliver', {
+            const response = await fetch('/api/findings/webhooks/deliver', {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify(retryDeliveryId ? {
@@ -857,7 +857,7 @@ function CaseCommandBar({ caseId, tenantId, organizationId, alertId, exportReady
         ? `/organizations${queryString({ organizationId, caseId, alertId, focus: alertId ? 'cases' : 'watchlists' })}`
         : '/organizations'
     const exportHref = `/api/cases/${encodeURIComponent(caseId)}/export${queryString({ tenantId, organizationId, alertId, shape: 'full' })}`
-    const alertHref = alertId ? `/dwm${queryString({ tenantId, organizationId, alert: alertId })}` : undefined
+    const alertHref = alertId ? `/findings${queryString({ tenantId, organizationId, alert: alertId })}` : undefined
     const lastDelivery = latestDelivery ? `${stateLabel(latestDelivery.status)} · ${relativeTime(latestDelivery.attemptedAt)}` : 'not sent'
 
     return (

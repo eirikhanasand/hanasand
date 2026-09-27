@@ -14,7 +14,7 @@ const renderDomSource = readFileSync(new URL('./check-dashboard-render-dom.mjs',
 const readinessRows = {
     dashboard_evidence: {
         href: '/dashboard',
-        backendProbe: 'GET /api/product-progress .dashboardEvidence + /api/dwm/alerts/generation-readiness evidence window',
+        backendProbe: 'GET /api/product-progress .dashboardEvidence + /api/findings/alerts/generation-readiness evidence window',
         commits: ['89d9547e', 'dfb2d272'],
     },
     source_inventory_probe: {
@@ -28,22 +28,22 @@ const readinessRows = {
         commits: ['fb8a2066'],
     },
     dwm_product_snapshot: {
-        href: '/dwm',
-        backendProbe: 'GET /api/dwm/product',
+        href: '/findings',
+        backendProbe: 'GET /api/findings/product',
         commits: ['9d4c7118', '03d8d1ec'],
     },
     entitlement_readiness: {
-        href: '/dwm',
-        backendProbe: 'GET /api/dwm/entitlements/readiness',
+        href: '/findings',
+        backendProbe: 'GET /api/findings/entitlements/readiness',
         commits: ['4da6a209', '1c88a82a'],
     },
     webhook_delivery: {
         href: '/automation?setup=dwm',
-        backendProbe: 'GET /api/dwm/webhooks/deliveries',
+        backendProbe: 'GET /api/findings/webhooks/deliveries',
         commits: ['14210040', '03d8d1ec'],
     },
     org_alert_export: {
-        href: '/dwm',
+        href: '/findings',
         backendProbe: 'GET /api/organizations/:id/alert-readiness readinessProof',
         commits: ['414c72a4', 'd0f53e04'],
     },
@@ -122,7 +122,7 @@ for (const alertGenerationProofToken of [
     'generationEvidenceWindowReady',
     'generation evidence window',
     'latestEvidenceAt',
-    '/api/dwm/alerts/generation-readiness',
+    '/api/findings/alerts/generation-readiness',
     'DWM alert-generation proof did not include a generation evidence window with capture timestamps.',
 ]) {
     assert.ok(alertGenerationProofCheckerSource.includes(alertGenerationProofToken), `Alert-generation product-progress checker missing token: ${alertGenerationProofToken}`)

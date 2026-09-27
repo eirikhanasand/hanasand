@@ -16,14 +16,14 @@ const hasAdminLoginCredentials = Boolean(adminId && adminPassword)
 const dashboardRoutes = [
     { path: '/dashboard', heading: /Good|You're|It’s/ },
     { path: '/dashboard', heading: 'Operations Overview', screenshot: 'dashboard-overview.png' },
-    { path: '/dwm', heading: 'Company and vendor exposure alerts' },
+    { path: '/findings', heading: 'Company and vendor exposure alerts' },
     { path: '/subscription', heading: 'Choose what you need' },
 ]
 
 const normalSidebarLinks = [
     { name: 'Console', href: '/dashboard' },
     { name: 'Threat search', href: '/ti' },
-    { name: 'Dark web', href: '/dwm' },
+    { name: 'Dark web', href: '/findings' },
     { name: 'API docs', href: '/developers' },
     { name: 'Subscription', href: '/subscription' },
 ]
@@ -223,13 +223,13 @@ test.describe('dashboard resource routes', () => {
         try {
             await authenticateContext(context, auth, baseURL || 'http://127.0.0.1:3000')
             const page = await context.newPage()
-            const routes = ['/dashboard', '/dwm', '/subscription', '/ti/apt42']
+            const routes = ['/dashboard', '/findings', '/subscription', '/ti/apt42']
 
             for (const route of routes) {
                 await page.goto(route, { waitUntil: 'domcontentloaded' })
                 await expect(page.locator('aside')).toBeVisible()
                 await expect(page.locator('aside').getByRole('button', { name: 'Collapse sidebar' })).toBeVisible()
-                await expect(page.locator('aside nav').getByRole('link', { name: 'Dark web', exact: true })).toHaveAttribute('href', '/dwm')
+                await expect(page.locator('aside nav').getByRole('link', { name: 'Dark web', exact: true })).toHaveAttribute('href', '/findings')
                 await expect(page.locator('aside nav').getByRole('link', { name: 'Subscription', exact: true })).toHaveAttribute('href', '/subscription')
                 await expect(page.locator('aside nav').getByRole('link', { name: 'Webhooks', exact: true })).toHaveCount(0)
                 await expect(page.locator('aside nav').getByRole('link', { name: 'Pricing', exact: true })).toHaveCount(0)

@@ -95,7 +95,7 @@ const fixture: TiSearchResponse = {
             severity: 'high',
             detail: 'Case creation is backed by /v1/cases and requires a DWM alert ID.',
             dependency: '/v1/dwm/alerts or /v1/dwm/alerts/rebuild',
-            route: '/dwm',
+            route: '/findings',
             sourceFamily: 'alert',
             requestedFields: ['relatedAlerts[].id', 'relatedAlerts[].casePath'],
         }],
@@ -246,7 +246,7 @@ assert(actionability.actorEnrichmentConsumerReadiness.rows.some(item => item.con
 assert(actionability.actorEnrichmentConsumerReadiness.safeOutput.crossOrgDataIncluded === false && actionability.actorEnrichmentConsumerReadiness.safeOutput.liveNetworkScrapeStarted === false, 'Actor enrichment consumer readiness should remain safe and no-mutation.')
 assert(actionability.alertGenerationReadiness.schemaVersion === 'ti.public_actor.alert_generation_readiness_export.v1', 'Public TI should expose a versioned alert-generation readiness export.')
 assert(actionability.alertGenerationReadiness.sourceSchemaVersion === 'dwm.alert_generation_readiness.v1', 'Alert-generation readiness export should align to the DWM readiness contract.')
-assert(actionability.alertGenerationReadiness.route === '/api/dwm/alerts/generation-readiness' && actionability.alertGenerationReadiness.sourceRoute === '/v1/dwm/alerts/generation-readiness', 'Alert-generation readiness should carry frontend and source readiness routes.')
+assert(actionability.alertGenerationReadiness.route === '/api/findings/alerts/generation-readiness' && actionability.alertGenerationReadiness.sourceRoute === '/v1/dwm/alerts/generation-readiness', 'Alert-generation readiness should carry frontend and source readiness routes.')
 assert(actionability.alertGenerationReadiness.candidateCount >= actionability.watchlistRelevance.terms.length, 'Alert-generation readiness should count watchlist candidates.')
 assert(actionability.alertGenerationReadiness.blockers.some(item => item.code === 'missing_generation_evidence_window'), 'APT29 alert-generation readiness should stay blocked until capture evidence window exists.')
 assert(actionability.alertGenerationReadiness.safeOutput.metadataOnly && !actionability.alertGenerationReadiness.safeOutput.liveNetworkFetch, 'Alert-generation readiness should be metadata-only and no-mutation.')
@@ -260,7 +260,7 @@ assert(actionability.caseReplayReadiness.routeTemplate === '/v1/cases/:caseId/ac
 assert(actionability.caseReplayReadiness.rows.some(item => item.blockerCodes.includes('missing_case_route') && item.replayPlan.metadataOnly), 'Case replay readiness should block missing case routes without mutation.')
 assert(actionability.caseReplayReadiness.safeOutput.metadataOnly && !actionability.caseReplayReadiness.safeOutput.liveMutation, 'Case replay readiness should remain metadata-only.')
 assert(actionability.createAlertHandoff.kind === 'create_alert' && actionability.createAlertHandoff.endpoint === '/v1/dwm/alerts/rebuild', 'Actionability should expose explicit alert handoff fields.')
-assert(actionability.createAlertHandoff.backedRoute === '/dwm', 'Alert handoff should point to the backed DWM route even when blocked.')
+assert(actionability.createAlertHandoff.backedRoute === '/findings', 'Alert handoff should point to the backed DWM route even when blocked.')
 assert(actionability.caseHandoff.kind === 'case' && actionability.caseHandoff.endpoint === '/v1/cases', 'Actionability should expose explicit case handoff fields.')
 assert(actionability.caseHandoff.blocked && actionability.caseHandoff.missing.some(item => /DWM alert ID/i.test(item)), 'Blocked case handoff should expose missing alert dependency.')
 assert(actionability.webhookDeliveryHandoff.kind === 'webhook_delivery' && actionability.webhookDeliveryHandoff.endpoint === '/v1/dwm/webhooks/deliver', 'Actionability should expose explicit webhook delivery fields.')
@@ -274,7 +274,7 @@ assert(actionability.consumerReadiness.stages.some(stage => stage.id === 'webhoo
 assert(actionability.consumerReadiness.blockers.some(blocker => blocker.code === 'missing_org'), 'Public APT29 readiness should keep org-required blockers explicit.')
 assert(actionability.readiness.schemaVersion === 'ti.public_actor.readiness.v1', 'Public TI should expose backed readiness metadata.')
 assert(actionability.readiness.state === 'degraded', 'APT29 public result should be usable but degraded until org/capture/alert/case/delivery data is attached.')
-assert(actionability.readiness.blockers.some(blocker => blocker.code === 'missing_org' && blocker.ownerLane === 'org' && blocker.route === '/dwm'), 'Readiness blockers should route missing org context to the org lane.')
+assert(actionability.readiness.blockers.some(blocker => blocker.code === 'missing_org' && blocker.ownerLane === 'org' && blocker.route === '/findings'), 'Readiness blockers should route missing org context to the org lane.')
 assert(actionability.readiness.blockers.some(blocker => blocker.code === 'missing_capture' && blocker.ownerLane === 'source'), 'Readiness blockers should route missing capture evidence to source work.')
 assert(actionability.readiness.blockers.some(blocker => blocker.code === 'missing_webhook_destination' && blocker.ownerLane === 'webhook'), 'Readiness blockers should route missing webhook destinations to webhook work.')
 assert(actionability.readiness.blockers.some(blocker => blocker.code === 'stale_provenance' && blocker.ownerLane === 'public-ti'), 'Stale actor evidence should remain a public TI blocker.')
@@ -298,7 +298,7 @@ assert(actionability.actionPayloads.payloads.sourceEnrichment.route === '/ti/enr
 assert(actionability.actionPayloads.payloads.sourceEnrichment.blockedBy.some(blocker => blocker.code === 'missing_capture' && blocker.ownerLane === 'source'), 'Source enrichment export should carry missing capture blockers.')
 assert(JSON.stringify(actionability.actionPayloads.payloads.sourceEnrichment.body).includes('ti.public_actor.source_health_queue.v1'), 'Source enrichment export should carry the modeled source-health queue.')
 assert(JSON.stringify(actionability.actionPayloads.payloads.sourceEnrichment.body).includes('ti.public_actor.source_enrichment_intake.v1'), 'Source enrichment export should carry the modeled source-enrichment intake.')
-assert(actionability.enrichmentGapQueue.some(item => item.route === '/dwm' && item.sourceFamily === 'alert' && item.requestedFields.includes('relatedAlerts[].id')), 'Enrichment gaps should carry route, source family, and requested fields.')
+assert(actionability.enrichmentGapQueue.some(item => item.route === '/findings' && item.sourceFamily === 'alert' && item.requestedFields.includes('relatedAlerts[].id')), 'Enrichment gaps should carry route, source family, and requested fields.')
 assert(actionability.exportPayloads.enrichment.backedRoute === '/ti/enrichment', 'Enrichment package should point to the backed enrichment route.')
 assert(actionability.alertDisposition === 'watchlist_required', 'APT29 fixture should not alert without a backed watchlist match or alert ID.')
 assert(actionability.handoffs.caseBlockers.some(item => /DWM alert ID/i.test(item)), 'No-alert fixture should explain missing case dependency.')
@@ -338,7 +338,7 @@ assert(usArtifact?.readiness.state === 'stale', 'APT29 fixture should gate stale
 assert(usHandoffs?.authBridge.schemaVersion === 'ti.public_actor.authenticated_bridge.v1', 'Selected artifact should export an authenticated bridge contract.')
 assert(usHandoffs?.authBridge.orgRequired, 'Public artifact handoff should keep organization scope explicit.')
 assert(usHandoffs?.authBridge.stale, 'Authenticated bridge should carry stale evidence state.')
-assert(usHandoffs?.authBridge.links.watchlist.href.includes('/dwm?handoff=public-ti'), 'Watchlist bridge should deep-link into the authenticated dashboard.')
+assert(usHandoffs?.authBridge.links.watchlist.href.includes('/findings?handoff=public-ti'), 'Watchlist bridge should deep-link into the authenticated dashboard.')
 assert(usHandoffs?.authBridge.links.watchlist.intent === PUBLIC_TI_HANDOFF_ACTIONS.watchlist, 'Watchlist bridge should use a stable action name.')
 assert(usHandoffs?.authBridge.payload.schemaVersion === PUBLIC_TI_HANDOFF_SCHEMA_VERSION, 'Default bridge payload should carry the exported schema version.')
 assert(usHandoffs?.authBridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.case].selectedPayload.route === 'case', 'Case bridge payload should select the case export payload.')
@@ -396,7 +396,7 @@ const backed = buildTiActionability({
             kind: 'company',
             value: 'Microsoft',
             route: 'organization_watchlist',
-            casePath: '/dwm?organizationId=org_1&watchlistItemId=watch_1',
+            casePath: '/findings?organizationId=org_1&watchlistItemId=watch_1',
         }],
         relatedAlerts: [{
             id: 'dwm_alert_1',
@@ -425,7 +425,7 @@ const backed = buildTiActionability({
             id: 'webhook_1',
             name: 'SOC incident intake',
             status: 'active',
-            path: '/dwm',
+            path: '/findings',
         }],
         sourceProvenance: [
             { sourceId: 'microsoft', sourceName: 'Microsoft', provenance: 'https://www.microsoft.com/en-us/security/blog/', confidence: 0.82, captureId: 'capture_1' },

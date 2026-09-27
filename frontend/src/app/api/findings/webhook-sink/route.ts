@@ -66,7 +66,7 @@ export async function POST(request: Request) {
     }
     let persisted: Response
     try {
-        persisted = await fetch(`${authApiUrl().replace(/\/$/, '')}/dwm/webhook-receiver`, {
+        persisted = await fetch(`${authApiUrl().replace(/\/$/, '')}/findings/webhook-receiver`, {
             method: 'POST',
             cache: 'no-store',
             headers: {
@@ -111,7 +111,7 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: NextRequest) {
-    return proxyOrganizationApiRequest(request, '/dwm/webhook-receiver', { method: 'GET' })
+    return proxyOrganizationApiRequest(request, '/findings/webhook-receiver', { method: 'GET' })
 }
 
 function unavailableReceiver(eventId: string, receivedAt: string) {

@@ -15,7 +15,8 @@ function useRecovery() {
         const refresh = async () => {
             try {
                 const response = await fetch('/api/recovery', { cache: 'no-store', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(5000)]) })
-                const next = await response.json() as State
+                const payload = await response.json() as Partial<State>
+                const next = { ...payload, services: Array.isArray(payload.services) ? payload.services : [] } as State
                 if (alive) setState(next)
             } catch { if (alive) setState({ mode: 'unknown', readOnly: true, services: [] }) }
         }

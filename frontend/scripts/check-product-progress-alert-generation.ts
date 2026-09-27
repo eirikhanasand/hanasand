@@ -4,14 +4,14 @@ import { buildProductProgressPayload } from '../src/utils/productProgress/readin
 
 const here = new URL('.', import.meta.url)
 const productProgressRouteSource = readFileSync(new URL('../src/app/api/product-progress/route.ts', here), 'utf8')
-const alertGenerationProxySource = readFileSync(new URL('../src/app/api/dwm/alerts/generation-readiness/route.ts', here), 'utf8')
+const alertGenerationProxySource = readFileSync(new URL('../src/app/api/findings/alerts/generation-readiness/route.ts', here), 'utf8')
 
 const generatedAt = '2026-06-29T12:00:00.000Z'
 const routes = {
     productProgress: '/api/product-progress',
     sourceProxy: '/api/ti/scraper/control?q=LockBit',
-    dashboardAlerts: '/api/dwm/alerts',
-    alertGenerationReadiness: '/api/dwm/alerts/generation-readiness',
+    dashboardAlerts: '/api/findings/alerts',
+    alertGenerationReadiness: '/api/findings/alerts/generation-readiness',
     deployProbe: '/api/product-progress',
 }
 const sourceProxy = {
@@ -75,7 +75,7 @@ const missingEvidenceWindow = buildProductProgressPayload({
         generationEvidenceWindowReady: false,
         generationEvidenceWindowCaptureCount: 0,
         blockers: ['DWM alert-generation proof did not include a generation evidence window with capture timestamps.'],
-        source: '/api/dwm/alerts/generation-readiness',
+        source: '/api/findings/alerts/generation-readiness',
         proofTimestamp: generatedAt,
     },
 })
@@ -105,7 +105,7 @@ const backedAlertGeneration = buildProductProgressPayload({
         generationEvidenceWindowCaptureCount: 4,
         generationEvidenceWindowSourceFamilies: ['telegram_public', 'darkweb_metadata'],
         latestEvidenceAt: '2026-06-29T11:59:00.000Z',
-        source: '/api/dwm/alerts/generation-readiness',
+        source: '/api/findings/alerts/generation-readiness',
         proofTimestamp: '2026-06-29T11:59:00.000Z',
     },
 })
@@ -113,13 +113,13 @@ const backedAlertGeneration = buildProductProgressPayload({
 assert.equal(backedAlertGeneration.dashboardEvidence?.status, 'ready')
 assert.equal(backedAlertGeneration.dashboardEvidence?.unavailableReason, undefined)
 assert.equal(backedAlertGeneration.dashboardEvidence?.backendProofContractVersion, 'dwm.alert_generation_readiness.v1')
-assert.ok(backedAlertGeneration.dashboardEvidence?.integrationProbeHint?.includes('/api/dwm/alerts/generation-readiness'))
+assert.ok(backedAlertGeneration.dashboardEvidence?.integrationProbeHint?.includes('/api/findings/alerts/generation-readiness'))
 assert.ok(backedAlertGeneration.dashboardEvidence?.integrationProbeHint?.includes('generation evidence window'))
 assert.ok(backedAlertGeneration.dashboardEvidence?.detail?.includes('4 evidence-window captures'))
 
 for (const token of [
     'alertGenerationReadiness',
-    '/api/dwm/alerts/generation-readiness',
+    '/api/findings/alerts/generation-readiness',
     'dwm.alert_generation_readiness.v1',
     'readyForCustomerDelivery',
     'generationEvidenceWindowFromProof',

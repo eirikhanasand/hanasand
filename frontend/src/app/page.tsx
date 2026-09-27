@@ -20,7 +20,7 @@ export const metadata: Metadata = buildRouteMetadata({
 
 const consoleActions = [
     { label: 'Monitor companies', detail: 'Companies, vendors, domains', href: '/organizations' },
-    { label: 'Review alerts', detail: 'Exposure mentions and next steps', href: '/dwm' },
+    { label: 'Review alerts', detail: 'Exposure mentions and next steps', href: '/findings' },
     { label: 'Search intelligence', detail: 'Groups, sources, and activity', href: '/ti' },
     { label: 'Route notifications', detail: 'Email, webhooks, and API', href: '/automation?setup=dwm' },
 ]

@@ -6,7 +6,7 @@ import { dwmNextOperatorAction, type DwmNextOperatorActionInput } from '@/utils/
 const root = process.cwd().endsWith(`${path.sep}frontend`) ? process.cwd() : path.join(process.cwd(), 'frontend')
 
 test('DWM keeps Cases focused and workflow controls on scoped non-Cases views', async () => {
-    const page = await readFile(path.join(root, 'src/app/dashboard/dwm/dwm-analyst-portal.tsx'), 'utf8')
+    const page = await readFile(path.join(root, 'src/app/dashboard/findings/findings.tsx'), 'utf8')
 
     expect(page).toContain('function CaseOverview(')
     expect(page).toContain('return <CaseOverview organizationId={organizationId} state={casesState} alerts={alerts} />')

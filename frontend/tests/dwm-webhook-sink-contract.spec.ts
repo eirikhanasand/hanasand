@@ -20,7 +20,7 @@ const validPayload = {
 }
 
 test('public DWM webhook receiver fails closed unless the delivery scope is durably persisted', async ({ request }) => {
-    const unpersisted = await request.post('/api/dwm/webhook-sink', {
+    const unpersisted = await request.post('/api/findings/webhook-sink', {
         headers: { 'x-hanasand-event-id': 'preview_contract_ok' },
         data: validPayload,
     })
@@ -32,7 +32,7 @@ test('public DWM webhook receiver fails closed unless the delivery scope is dura
         error: 'Durable receiver persistence is temporarily unavailable.',
     })
 
-    const rejected = await request.post('/api/dwm/webhook-sink', {
+    const rejected = await request.post('/api/findings/webhook-sink', {
         headers: { 'x-hanasand-event-id': 'preview_contract_bad' },
         data: { ...validPayload, alert: { severity: 'critical', reviewState: 'needs_review' } },
     })

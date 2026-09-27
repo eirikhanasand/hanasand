@@ -29,7 +29,7 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
             ]),
             group('Intelligence', [
                 link('Latest Activity', '/ti/activity', isAdmin),
-                link('Actors', '/dwm/actors'),
+                link('Actors', '/findings/actors'),
                 link('Actor Profiles', '/ti/enrichment', isAdmin),
             ]),
             group('Monitoring', [
@@ -120,7 +120,7 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
                 link('Service Accounts', '/management/service-accounts', isAdmin),
             ]),
             group('Integrations & delivery', [
-                link('Integrations', '/dwm/delivery'),
+                link('Integrations', '/findings/delivery'),
                 link('Destinations', '/organizations/destinations'),
                 link('Delivery History', '/organizations/delivery'),
             ]),

@@ -11,7 +11,7 @@ import getStatus from '@/utils/status/getStatus'
 import tokenIsValid from '@/utils/proxy/tokenIsValid'
 import { toPublicServiceStatus } from '@/utils/status/publicStatus'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
-import DwmOverviewPanel from './dwmOverviewPanel'
+import DwmOverviewPanel from './overviewPanel'
 import { loadOverview } from './loadOverview'
 
 export const dynamic = 'force-dynamic'

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authApiUrl } from '@/utils/auth/authApiUrl'
-import { proxyApiTiRequest } from '../../dwm/_tiProxy'
+import { proxyApiTiRequest } from '../../findings/_tiProxy'
 
 export const dynamic = 'force-dynamic'
 // Allow the API's bounded 12-second canonical lookup to complete on a cold recovery replica.

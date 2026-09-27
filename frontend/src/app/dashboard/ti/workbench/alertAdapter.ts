@@ -123,7 +123,7 @@ export function dwmAlertToWorkbenchCase(input: DwmAlert): WorkbenchCase {
     ])
     const evidence = buildWorkbenchEvidence(alert, selectedCaptureIds)
     const actionBlockers = alert.customerReadiness?.blockerCodes ?? []
-    const alertHref = `/api/dwm/alerts/${encodeURIComponent(alert.id)}${organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''}`
+    const alertHref = `/api/findings/alerts/${encodeURIComponent(alert.id)}${organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''}`
     const caseDetailHref = dashboardCaseHref({ caseId, casePath, alertId: alert.id, organizationId, tenantId: alert.tenantId })
     const deliveryEvidence = (alert.deliveries ?? []).map(row => ({
         id: String(row.id ?? ''),
@@ -293,7 +293,7 @@ function buildAlertActions(alert: RuntimeDwmAlert, organizationId: string | unde
         ...scope,
         ...(expectedWorkflowEventCount !== undefined ? { expectedWorkflowEventCount } : {}),
     }
-    const alertHref = `/api/dwm/alerts/${encodeURIComponent(alert.id)}`
+    const alertHref = `/api/findings/alerts/${encodeURIComponent(alert.id)}`
     const replayBlocked = alert.customerReadiness?.webhookReplayReadiness?.ready === false ? blockerLabel(alert.customerReadiness.webhookReplayReadiness.blockerCodes) : undefined
     const sendBlocked = alert.customerReadiness?.deliveryReadiness?.ready === false ? blockerLabel(alert.customerReadiness.deliveryReadiness.blockerCodes) : undefined
     return [
@@ -313,7 +313,7 @@ function buildAlertActions(alert: RuntimeDwmAlert, organizationId: string | unde
         { id: 'suppress_alert', label: 'Suppress', method: 'PATCH', href: alertHref, body: { ...bodyBase, status: 'suppressed' } },
         { id: 'close_alert', label: alert.workflowStatus === 'closed' ? 'Reopen' : 'Close', method: 'PATCH', href: alertHref, body: { ...bodyBase, status: alert.workflowStatus === 'closed' ? 'reopened' : 'closed' } },
         { id: 'replay_alert', label: 'Replay', method: 'POST', href: `${alertHref}/replay`, body: { ...bodyBase, action: 'replay' }, disabledReason: replayBlocked },
-        { id: 'send_alert', label: 'Send', method: 'POST', href: '/api/dwm/webhooks/deliver', body: { ...scope, alertId: alert.id, caseId, casePath, webhookDestinationId: alert.customerReadiness?.deliveryReadiness?.selectedWebhookDestinationId ?? alert.deliveryReadinessContext?.selectedWebhookDestinationId, limit: 1 }, disabledReason: sendBlocked },
+        { id: 'send_alert', label: 'Send', method: 'POST', href: '/api/findings/webhooks/deliver', body: { ...scope, alertId: alert.id, caseId, casePath, webhookDestinationId: alert.customerReadiness?.deliveryReadiness?.selectedWebhookDestinationId ?? alert.deliveryReadinessContext?.selectedWebhookDestinationId, limit: 1 }, disabledReason: sendBlocked },
     ]
 }
 
@@ -349,7 +349,7 @@ function watchlistLedgerHref(organizationId: string | undefined, tenantId: strin
     if (organizationId) params.set('organizationId', organizationId)
     if (tenantId) params.set('tenantId', tenantId)
     const query = params.toString()
-    return `/api/dwm/watchlists${query ? `?${query}` : ''}`
+    return `/api/findings/watchlists${query ? `?${query}` : ''}`
 }
 
 function deliveryLedgerHref(organizationId: string | undefined, tenantId: string | undefined, alertId: string) {
@@ -357,7 +357,7 @@ function deliveryLedgerHref(organizationId: string | undefined, tenantId: string
     if (organizationId) params.set('organizationId', organizationId)
     if (tenantId) params.set('tenantId', tenantId)
     params.set('alertId', alertId)
-    return `/api/dwm/webhooks/deliveries?${params.toString()}`
+    return `/api/findings/webhooks/deliveries?${params.toString()}`
 }
 
 function dashboardCaseHref(input: { caseId?: string, casePath?: string, alertId: string, organizationId?: string, tenantId?: string }) {

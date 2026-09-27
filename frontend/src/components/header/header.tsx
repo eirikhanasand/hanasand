@@ -17,7 +17,7 @@ import SupportAssistant from '@/components/support/supportAssistant'
 import { useMobileNavigation } from '@/components/layout/mobileNavigation'
 
 const productItems = [
-    { title: 'Dark Web Monitoring', detail: 'Company and vendor alerts from watched exposure sources.', href: '/dwm', icon: BellRing },
+    { title: 'Dark Web Monitoring', detail: 'Company and vendor alerts from watched exposure sources.', href: '/findings', icon: BellRing },
     { title: 'Security Monitoring', detail: 'Find suspicious logins and other security events.', href: '/solutions/security-monitoring', icon: ShieldAlert },
     { title: 'Security Scanner', detail: 'Safe validation scans for approved Hanasand assets.', href: '/solutions/scanner', icon: ShieldAlert },
     { title: 'Threat Search', detail: 'Search companies, groups, source changes, and alert context.', href: '/ti', icon: Radar },

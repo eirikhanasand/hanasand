@@ -8,7 +8,7 @@ import type { DwmAlert, DwmAlertAnalystAction, DwmProductSnapshot } from '@/util
 import { customerAlertSummary, safeAlertSummary, safeEvidenceExcerpt } from '@/utils/dwm/display'
 import { dwmNextOperatorAction, type DwmNextOperatorActionKind } from '@/utils/dwm/nextOperatorAction'
 import type { PublicTiHandoffDecodeResult } from '@/utils/ti/actorWorkbench'
-import { DwmWorkflowActions } from './dwm-workflow-actions'
+import { DwmWorkflowActions } from './workflow-actions'
 import { ActorDirectory, MonitoringOverview } from './monitoring-overview'
 
 export type PortalAlert = DwmAlert & {
@@ -297,7 +297,7 @@ export function Findings({
     async function sendAlert(alertId: string) {
         await runAction(`send:${alertId}`, async () => {
             const alert = alerts.find(item => item.id === alertId)
-            const response = await fetch('/api/dwm/webhooks/deliver', {
+            const response = await fetch('/api/findings/webhooks/deliver', {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify(scopeBody({ alertId, limit: 1 }, tenantId, alert ? alertOrganizationId(alert, organizationId) : organizationId)),
@@ -312,7 +312,7 @@ export function Findings({
     async function testDelivery(alertId: string) {
         await runAction(`test:${alertId}`, async () => {
             const alert = alerts.find(item => item.id === alertId)
-            const response = await fetch('/api/dwm/webhooks/test', {
+            const response = await fetch('/api/findings/webhooks/test', {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify(scopeBody({ alertId, limit: 1 }, tenantId, alert ? alertOrganizationId(alert, organizationId) : organizationId)),
@@ -405,7 +405,7 @@ export function Findings({
         )
     }
 
-    if (view === 'actions') return <Link href='/dwm/actions'>Delivery</Link>
+    if (view === 'actions') return <Link href='/findings/actions'>Delivery</Link>
 
     if (view === 'cases') {
         return <CaseOverview organizationId={organizationId} state={casesState} alerts={alerts} operations={operations} isAdmin={isAdmin} />
@@ -578,7 +578,7 @@ async function refreshDwmProduct(
     setDataHealth: Dispatch<SetStateAction<DwmDataHealth>>,
 ) {
     try {
-        const response = await fetch(`/api/dwm/product?${params.toString()}`, { cache: 'no-store', signal })
+        const response = await fetch(`/api/findings/product?${params.toString()}`, { cache: 'no-store', signal })
         if (!response.ok) {
             const detail = await responseProblem(response)
             setDataHealth(current => ({ ...current, snapshot: { state: 'error', label: 'Monitoring unavailable', detail } }))
@@ -598,7 +598,7 @@ async function refreshDwmOperations(
     setDataHealth: Dispatch<SetStateAction<DwmDataHealth>>,
 ) {
     try {
-        const response = await fetch(`/api/dwm/operations?${params.toString()}`, { cache: 'no-store', signal })
+        const response = await fetch(`/api/findings/operations?${params.toString()}`, { cache: 'no-store', signal })
         if (!response.ok) {
             const detail = await responseProblem(response)
             setDataHealth(current => ({ ...current, operations: { state: 'error', label: 'Collection unavailable', detail } }))
@@ -618,7 +618,7 @@ async function refreshDwmAlerts(
     setDataHealth: Dispatch<SetStateAction<DwmDataHealth>>,
 ) {
     try {
-        const response = await fetch(`/api/dwm/alerts?${params.toString()}`, { cache: 'no-store', signal })
+        const response = await fetch(`/api/findings/alerts?${params.toString()}`, { cache: 'no-store', signal })
         if (!response.ok) {
             const detail = await responseProblem(response)
             setDataHealth(current => ({ ...current, alerts: { state: 'error', label: 'Events unavailable', detail } }))
@@ -687,7 +687,7 @@ async function refreshDwmDeliveries(
     setDataHealth: Dispatch<SetStateAction<DwmDataHealth>>,
 ) {
     try {
-        const response = await fetch(`/api/dwm/webhooks/deliveries?${params.toString()}`, { cache: 'no-store', signal })
+        const response = await fetch(`/api/findings/webhooks/deliveries?${params.toString()}`, { cache: 'no-store', signal })
         if (!response.ok) {
             const detail = await responseProblem(response)
             setDataHealth(current => ({ ...current, deliveries: { state: 'error', label: 'Deliveries unavailable', detail } }))
@@ -755,7 +755,7 @@ function WorkflowRouteStrip({ watchTermCount, activeSourceCount, sourceCount, ca
             <div className='border-t border-ui-border px-4 py-3'>
                 <div className='flex flex-wrap items-center justify-between gap-2'>
                     <p className='text-xs leading-5 text-ui-muted'>Use this workflow when a source match needs to become a customer case and delivery.</p>
-                    <Link href='/dwm/actions' className='inline-flex h-8 items-center rounded-lg border border-ui-primary bg-ui-primary/10 px-3 text-xs font-semibold text-ui-primary transition hover:bg-ui-primary/15 focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
+                    <Link href='/findings/actions' className='inline-flex h-8 items-center rounded-lg border border-ui-primary bg-ui-primary/10 px-3 text-xs font-semibold text-ui-primary transition hover:bg-ui-primary/15 focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
                         Run workflow
                     </Link>
                 </div>
@@ -1346,7 +1346,7 @@ function WorkflowSpine({ alert, deliveries, workflowContext, evidenceSummary, bu
                     <p className='text-xs font-semibold uppercase text-ui-primary'>Workflow</p>
                     <h3 className='mt-0.5 text-base font-semibold text-ui-text'>Watchlist match to customer handoff</h3>
                 </div>
-                <Link href='/dwm/actions' className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-canvas focus:outline-none focus:ring-2 focus:ring-ui-primary/20'>
+                <Link href='/findings/actions' className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-canvas focus:outline-none focus:ring-2 focus:ring-ui-primary/20'>
                     {routeControlLabel}
                 </Link>
             </div>
@@ -2096,7 +2096,7 @@ function NoCaseWorkspace({ latestCaptures, workflowActions, watchTermCount, data
                                     <td className='px-4 py-3 text-sm font-semibold text-ui-text'>{row.stage}</td>
                                     <td className='px-4 py-3 text-sm text-ui-text'>{row.state}</td>
                                     <td className='px-4 py-3'>
-                                        <Link href='/dwm/actions' className='inline-flex rounded-lg border border-ui-border bg-ui-panel px-3 py-1.5 text-xs font-semibold text-ui-primary transition hover:border-ui-primary hover:bg-ui-primary/10 focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
+                                        <Link href='/findings/actions' className='inline-flex rounded-lg border border-ui-border bg-ui-panel px-3 py-1.5 text-xs font-semibold text-ui-primary transition hover:border-ui-primary hover:bg-ui-primary/10 focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
                                             {row.action}
                                         </Link>
                                     </td>

@@ -2780,7 +2780,7 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                 </div>
 
                 <div className='grid min-w-0 gap-2'>
-                    <Link href='/dwm' className='inline-flex min-h-9 w-fit max-w-full items-center justify-center gap-2 justify-self-start whitespace-nowrap rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'>
+                    <Link href='/findings' className='inline-flex min-h-9 w-fit max-w-full items-center justify-center gap-2 justify-self-start whitespace-nowrap rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'>
                         <ExternalLink className='h-3.5 w-3.5' />
                         Open console
                     </Link>
@@ -2974,7 +2974,7 @@ function relatedRecordHandoffPayloadFor(record: RelatedRecordRow, actionability:
                     ownerLane: 'webhook' as const,
                     field: `relatedAlerts.${record.recordId}.deliveryReadinessContext`,
                     detail: `Delivery status blocker: ${code}.`,
-                    route: '/dwm',
+                    route: '/findings',
                     handoff: 'Resolve delivery status before sending or replaying this alert.',
                     source: 'delivery_readiness' as const,
                 })),
@@ -5866,7 +5866,7 @@ function geographyContextPayloadFor(point: ReturnType<typeof actorGeoProfile>['p
             reportDate: row.reportDate,
             confidence: row.confidence,
         })) ?? [],
-        route: handoff?.watchlistTerm ? '/dwm/watchlists' : '/ti/enrichment',
+        route: handoff?.watchlistTerm ? '/findings/watchlists' : '/ti/enrichment',
         blockedBy: handoff ? [] : [{
             ownerLane: 'source',
             reason: 'Country row needs source evidence before it can be routed.',

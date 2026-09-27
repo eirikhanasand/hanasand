@@ -13,7 +13,7 @@ const footerGroups = [
     {
         title: 'Product',
         links: [
-            { label: 'Monitoring', href: '/dwm', icon: BellRing },
+            { label: 'Monitoring', href: '/findings', icon: BellRing },
             { label: 'Threat Intelligence', href: '/ti', icon: Radar },
             { label: 'Organizations', href: '/organizations', icon: ShieldCheck },
             { label: 'Actors', href: '/ti', icon: Waypoints },

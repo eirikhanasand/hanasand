@@ -11,19 +11,15 @@ export default function ThemeSwitch() {
         const savedTheme = normalizeTheme(getCookie('theme'))
         if (savedTheme) {
             setTheme(savedTheme)
-            document.documentElement.classList.remove('dark', 'light')
-            document.documentElement.classList.add(savedTheme)
-        } else {
-            document.documentElement.classList.remove('dark', 'light')
-            document.documentElement.classList.add(theme)
         }
 
-        updateThemeColorMeta()
+        syncThemeColor(savedTheme ?? theme)
     }, [theme])
 
     function toggleTheme() {
         const newTheme = theme === 'dark' ? 'light' : 'dark'
         setCookie('theme', newTheme)
+        syncThemeColor(newTheme)
         setTheme(newTheme)
     }
 
@@ -45,17 +41,20 @@ export default function ThemeSwitch() {
     )
 }
 
+function syncThemeColor(theme: 'dark' | 'light') {
+    const root = document.documentElement
+    root.classList.remove('dark', 'light')
+    root.classList.add(theme)
+    const canvas = getComputedStyle(root).getPropertyValue('--ui-canvas').trim()
+    if (canvas) document.querySelector('meta[name="theme-color"]')?.setAttribute('content', canvas)
+}
+
 function normalizeTheme(value: string | null | undefined): 'dark' | 'light' | null {
     if (value === 'dark' || value === 'light') {
         return value
     }
 
     return null
-}
-
-function updateThemeColorMeta() {
-    const canvas = getComputedStyle(document.documentElement).getPropertyValue('--ui-canvas').trim()
-    if (canvas) document.querySelector('meta[name="theme-color"]')?.setAttribute('content', canvas)
 }
 
 function ThemeIcon() {

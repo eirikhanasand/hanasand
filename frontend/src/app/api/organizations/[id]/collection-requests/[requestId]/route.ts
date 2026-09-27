@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { proxyTiRequest } from '../../../../dwm/_tiProxy'
+import { proxyTiRequest } from '../../../../findings/_tiProxy'
 
 export const dynamic = 'force-dynamic'
 

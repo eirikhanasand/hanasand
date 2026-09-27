@@ -5,7 +5,7 @@ import type { DwmAlert } from '@/utils/dwm/product'
 import { decodePublicTiHandoffPayload, PUBLIC_TI_HANDOFF_SOURCE } from '@/utils/ti/actorWorkbench'
 import { buildPublicTiHandoffCase, type DwmOrganizationState, type OperatorScope } from '../../operatorConsoleModel'
 import AnalystWorkbenchClient, { type WorkbenchCase } from './workbenchClient'
-import { dwmAlertToWorkbenchCase } from './dwmAlertAdapter'
+import { dwmAlertToWorkbenchCase } from './alertAdapter'
 
 export const dynamic = 'force-dynamic'
 const WORKBENCH_FETCH_TIMEOUT_MS = 800
@@ -46,7 +46,7 @@ export default async function TiAnalystWorkbenchPage({
                 description='Triage active exposure cases, inspect evidence, assign owners, and send findings when they are ready.'
                 actions={(
                     <div className='flex flex-wrap gap-2'>
-                        <Link href='/dwm' className='inline-flex h-10 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-panel'>
+                        <Link href='/findings' className='inline-flex h-10 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-panel'>
                             <Radar className='h-4 w-4' />
                             Dark web cases
                         </Link>
@@ -340,7 +340,7 @@ function dwmCaseToWorkbenchCase(row: WorkbenchDwmCaseListItem): WorkbenchCase {
         ],
         relatedLinks: [
             { href: caseDashboardHref(row), label: 'Open case' },
-            ...(hasAlertRef ? [{ href: `/api/dwm/alerts/${encodeURIComponent(alertId)}`, label: 'Open alert detail' }] : []),
+            ...(hasAlertRef ? [{ href: `/api/findings/alerts/${encodeURIComponent(alertId)}`, label: 'Open alert detail' }] : []),
         ],
         workflowPath: [
             {
@@ -351,7 +351,7 @@ function dwmCaseToWorkbenchCase(row: WorkbenchDwmCaseListItem): WorkbenchCase {
                 source: 'case alert reference',
                 detail: hasAlertRef ? `Alert ${alertId}` : 'Alert reference is syncing.',
                 entityId: alertId || undefined,
-                href: hasAlertRef ? `/api/dwm/alerts/${encodeURIComponent(alertId)}` : undefined,
+                href: hasAlertRef ? `/api/findings/alerts/${encodeURIComponent(alertId)}` : undefined,
             },
             {
                 id: 'case_ref',
@@ -374,8 +374,8 @@ function dwmCaseToWorkbenchCase(row: WorkbenchDwmCaseListItem): WorkbenchCase {
             },
         ],
         actions: [
-            { id: 'replay_alert', label: 'Replay', method: 'POST', href: `/api/dwm/alerts/${encodeURIComponent(rowId)}/replay`, body: { organizationId: row.organizationId, action: 'replay' }, disabledReason: hasAlertRef ? undefined : 'Alert reference is syncing before replay can run.' },
-            { id: 'send_alert', label: 'Send', method: 'POST', href: '/api/dwm/webhooks/deliver', body: { organizationId: row.organizationId, alertId: rowId, limit: 1 }, disabledReason: hasAlertRef ? undefined : 'Alert reference is syncing before delivery can run.' },
+            { id: 'replay_alert', label: 'Replay', method: 'POST', href: `/api/findings/alerts/${encodeURIComponent(rowId)}/replay`, body: { organizationId: row.organizationId, action: 'replay' }, disabledReason: hasAlertRef ? undefined : 'Alert reference is syncing before replay can run.' },
+            { id: 'send_alert', label: 'Send', method: 'POST', href: '/api/findings/webhooks/deliver', body: { organizationId: row.organizationId, alertId: rowId, limit: 1 }, disabledReason: hasAlertRef ? undefined : 'Alert reference is syncing before delivery can run.' },
         ],
         caseDetailHref: caseDashboardHref(row),
         deliveryEvidence,

@@ -16,8 +16,8 @@ export const PUBLIC_TI_HANDOFF_ACTIONS = {
 } as const
 
 export const PUBLIC_TI_HANDOFF_ROUTES = {
-    watchlist: '/dwm',
-    alertRebuild: '/dwm',
+    watchlist: '/findings',
+    alertRebuild: '/findings',
     case: '/ti/workbench',
     enrichment: '/ti/enrichment',
 } as const

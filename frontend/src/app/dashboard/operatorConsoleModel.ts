@@ -699,7 +699,7 @@ function unavailableDwmProduct(source: string, checkedAt: string): DwmProductSna
         status: 'unavailable',
         checkedAt,
         source,
-        href: '/dwm',
+        href: '/findings',
         detail: 'DWM monitor state is updating for live watchlist, source, and alert status.',
         blockers: ['DWM monitor needs live watchlist, source, and alert status.'],
         ownerLane: 'dwm',
@@ -707,7 +707,7 @@ function unavailableDwmProduct(source: string, checkedAt: string): DwmProductSna
         staleAfterSeconds: 900,
         proofTimestamp: checkedAt,
         expectedDashboardRowId: 'dwm_product_snapshot',
-        integrationProbeHint: 'GET /api/dwm/product must return watchlist, source coverage, and alert status from the TI service.',
+        integrationProbeHint: 'GET /api/findings/product must return watchlist, source coverage, and alert status from the TI service.',
         backendProofContractVersion: 'dwm.product.v1',
     }
 }
@@ -718,7 +718,7 @@ function unavailableOrgAlertExport(source: string, checkedAt: string): Organizat
         status: 'unavailable',
         checkedAt,
         source,
-        href: '/dwm',
+        href: '/findings',
         detail: 'Organization alert-term export state is updating for active terms and alertability.',
         blockers: ['Organization alert-term export needs an alertability snapshot.'],
         ownerLane: 'org',
@@ -745,7 +745,7 @@ function unavailableWebhookHealth(source: string, checkedAt: string): WebhookHea
         staleAfterSeconds: 900,
         proofTimestamp: checkedAt,
         expectedDashboardRowId: 'webhook_health',
-        integrationProbeHint: 'GET /api/dwm/webhooks must return active destination count and lifecycle health, not only delivery rows.',
+        integrationProbeHint: 'GET /api/findings/webhooks must return active destination count and lifecycle health, not only delivery rows.',
         backendProofContractVersion: 'dwm.webhook_health.readiness.v1',
     }
 }
@@ -794,7 +794,7 @@ function unavailableEntitlementReadiness(source: string, checkedAt: string): Ent
         status: 'unavailable',
         checkedAt,
         source,
-        href: '/dwm',
+        href: '/findings',
         detail: 'DWM entitlement state is updating for policy and role decisions.',
         blockers: ['DWM entitlement needs policy and role status.'],
         ownerLane: 'org',
@@ -802,7 +802,7 @@ function unavailableEntitlementReadiness(source: string, checkedAt: string): Ent
         staleAfterSeconds: 900,
         proofTimestamp: checkedAt,
         expectedDashboardRowId: 'entitlement_readiness',
-        integrationProbeHint: 'GET /api/dwm/entitlements/status must return policy, checked role, allowed action, and blockers.',
+        integrationProbeHint: 'GET /api/findings/entitlements/status must return policy, checked role, allowed action, and blockers.',
         backendProofContractVersion: 'dwm.entitlement.readiness.v1',
     }
 }
@@ -813,7 +813,7 @@ function unavailableAlertGenerationReadiness(source: string, checkedAt: string):
         status: 'needs_action',
         checkedAt,
         source,
-        href: '/api/dwm/alerts/generation-readiness',
+        href: '/api/findings/alerts/generation-readiness',
         detail: 'DWM alert generation state is updating for candidates and evidence-window status.',
         blockers: ['DWM alert generation needs candidates and evidence-window status.'],
         ownerLane: 'dwm',
@@ -821,7 +821,7 @@ function unavailableAlertGenerationReadiness(source: string, checkedAt: string):
         staleAfterSeconds: 900,
         proofTimestamp: checkedAt,
         expectedDashboardRowId: 'dashboard_evidence',
-        integrationProbeHint: 'GET /api/dwm/alerts/generation-readiness must return dwm.alert_generation_readiness.v1 with candidates and a generation evidence window.',
+        integrationProbeHint: 'GET /api/findings/alerts/generation-readiness must return dwm.alert_generation_readiness.v1 with candidates and a generation evidence window.',
         backendProofContractVersion: 'dwm.alert_generation_readiness.v1',
     }
 }
@@ -940,7 +940,7 @@ function normalizeOrgAlertExportReadiness(input: OrganizationAlertExportReadines
         status: blockers.length ? 'needs_action' : input.status === 'ready' ? 'ready' : 'needs_action',
         checkedAt: input.checkedAt || input.exportedAt || checkedAt,
         source: input.source || source,
-        href: input.href || '/dwm',
+        href: input.href || '/findings',
         blockers,
         ownerLane: input.ownerLane || 'org',
         unavailableReason: blockers.length ? input.unavailableReason || 'missing_org_alert_export_readiness_api' : undefined,
@@ -972,7 +972,7 @@ function normalizeWebhookHealthReadiness(input: WebhookHealthReadiness | undefin
         staleAfterSeconds: input.staleAfterSeconds ?? 900,
         proofTimestamp: input.proofTimestamp || input.latestDeliveryAt || input.latestAuditEventAt || input.checkedAt || checkedAt,
         expectedDashboardRowId: input.expectedDashboardRowId || 'webhook_health',
-        integrationProbeHint: input.integrationProbeHint || 'GET /api/dwm/webhooks must return active destination count and lifecycle health, not only delivery rows.',
+        integrationProbeHint: input.integrationProbeHint || 'GET /api/findings/webhooks must return active destination count and lifecycle health, not only delivery rows.',
         backendProofContractVersion: input.backendProofContractVersion || input.schemaVersion || 'dwm.webhook_health.readiness.v1',
         detail: input.detail || (blockers.length ? visibleChecks(blockers) : `${input.activeDestinationCount} active webhook destination${input.activeDestinationCount === 1 ? '' : 's'} with ${input.deliveryReadyCount} delivery-ready route${input.deliveryReadyCount === 1 ? '' : 's'}.`),
     }
@@ -997,14 +997,14 @@ function normalizeEntitlementReadiness(input: EntitlementReadiness | undefined, 
         status: blockers.length ? 'blocked' : input.status === 'ready' ? 'ready' : 'needs_action',
         checkedAt: input.checkedAt || checkedAt,
         source: input.source || source,
-        href: input.href || '/dwm',
+        href: input.href || '/findings',
         blockers,
         ownerLane: input.ownerLane || 'org',
         unavailableReason: blockers.length ? input.unavailableReason || 'missing_dwm_entitlement_readiness_api' : undefined,
         staleAfterSeconds: input.staleAfterSeconds ?? 900,
         proofTimestamp: input.proofTimestamp || input.checkedAt || checkedAt,
         expectedDashboardRowId: input.expectedDashboardRowId || 'entitlement_readiness',
-        integrationProbeHint: input.integrationProbeHint || 'GET /api/dwm/entitlements/readiness must return policy, checked role, allowed action, and blockers.',
+        integrationProbeHint: input.integrationProbeHint || 'GET /api/findings/entitlements/readiness must return policy, checked role, allowed action, and blockers.',
         backendProofContractVersion: input.backendProofContractVersion || input.schemaVersion || 'dwm.entitlement.readiness.v1',
         detail: input.detail || (blockers.length ? visibleChecks(blockers) : entitlementDetail(input)),
     }
@@ -1018,14 +1018,14 @@ function normalizeDwmProductReadiness(input: DwmProductSnapshotReadiness | undef
         status: input.status === 'unavailable' ? 'unavailable' : blockers.length ? input.status === 'blocked' ? 'blocked' : 'needs_action' : input.status === 'ready' ? 'ready' : 'needs_action',
         checkedAt: input.checkedAt || checkedAt,
         source: input.source || source,
-        href: input.href || '/dwm',
+        href: input.href || '/findings',
         blockers,
         ownerLane: input.ownerLane || 'dwm',
         unavailableReason: blockers.length ? input.unavailableReason || 'missing_dwm_product_snapshot' : undefined,
         staleAfterSeconds: input.staleAfterSeconds ?? 900,
         proofTimestamp: input.proofTimestamp || input.latestAlertAt || input.checkedAt || checkedAt,
         expectedDashboardRowId: input.expectedDashboardRowId || 'dwm_product_snapshot',
-        integrationProbeHint: input.integrationProbeHint || 'GET /api/dwm/product must return watchlist, source coverage, and alert status from the TI service.',
+        integrationProbeHint: input.integrationProbeHint || 'GET /api/findings/product must return watchlist, source coverage, and alert status from the TI service.',
         backendProofContractVersion: input.backendProofContractVersion || 'dwm.product.v1',
         detail: input.detail || (blockers.length ? visibleChecks(blockers) : dwmProductDetail(input)),
     }
@@ -1052,14 +1052,14 @@ function normalizeAlertGenerationReadiness(input: DwmAlertGenerationReadiness | 
         status,
         checkedAt: input.checkedAt || checkedAt,
         source: input.source || source,
-        href: input.href || '/api/dwm/alerts/generation-readiness',
+        href: input.href || '/api/findings/alerts/generation-readiness',
         blockers,
         ownerLane: input.ownerLane || 'dwm',
         unavailableReason: blockers.length ? input.unavailableReason || 'missing_alert_generation_readiness' : undefined,
         staleAfterSeconds: input.staleAfterSeconds ?? 900,
         proofTimestamp: input.proofTimestamp || input.latestEvidenceAt || input.checkedAt || checkedAt,
         expectedDashboardRowId: input.expectedDashboardRowId || 'dashboard_evidence',
-        integrationProbeHint: input.integrationProbeHint || 'GET /api/dwm/alerts/generation-readiness must return dwm.alert_generation_readiness.v1 with candidates and a generation evidence window.',
+        integrationProbeHint: input.integrationProbeHint || 'GET /api/findings/alerts/generation-readiness must return dwm.alert_generation_readiness.v1 with candidates and a generation evidence window.',
         backendProofContractVersion: input.backendProofContractVersion || input.schemaVersion || 'dwm.alert_generation_readiness.v1',
         detail: input.detail || (blockers.length ? visibleChecks(blockers) : `${candidateCount} alert generation candidate${candidateCount === 1 ? '' : 's'} backed by ${captureCount} capture reference${captureCount === 1 ? '' : 's'}.`),
     }
@@ -1513,7 +1513,7 @@ export function buildPublicTiHandoffCase(input: {
                 owner: 'operator',
                 source: 'Shared watchlist',
                 entityId: watchTerms.map(term => term.value).join(', ') || undefined,
-                href: '/api/dwm/watchlists',
+                href: '/api/findings/watchlists',
                 detail: watchlistCovered ? 'selected record term is already covered by a loaded watchlist.' : watchTerms.length ? 'Add selected record terms to an organization watchlist.' : 'No watchlist terms came with this artifact.',
             },
             {
@@ -1522,7 +1522,7 @@ export function buildPublicTiHandoffCase(input: {
                 status: input.operations ? input.liveAlertCount ? 'ready' : 'needs_action' : 'blocked',
                 owner: 'analyst',
                 source: 'Collection and alert rebuild',
-                href: '/api/dwm/alerts',
+                href: '/api/findings/alerts',
                 detail: input.operations ? `${input.operations.counts.activeSourceCount}/${input.operations.counts.sourceCount} active sources; ${input.liveAlertCount} saved alerts.` : 'Source stream reconnecting.',
             },
             {
@@ -1538,7 +1538,7 @@ export function buildPublicTiHandoffCase(input: {
         nextTasks: nextPublicTiTasks({ orgMissing, sourceBlocked, stale: payload.stale, watchTerms: watchTerms.length, selectedMissing, action: input.decode.action }),
         relatedLinks: [
             { href: '/ti', label: 'Public TI' },
-            { href: '/dwm', label: 'DWM console' },
+            { href: '/findings', label: 'DWM console' },
             { href: '/ti/sources', label: 'Source ops' },
             { href: '/automation?setup=dwm', label: 'Delivery routes' },
         ],
@@ -1649,17 +1649,17 @@ export function buildOrgOperatingContext(input: {
         links: organization ? [
             { href: `/api/organizations/${encodeURIComponent(organization.id)}/members`, label: 'Members API' },
             { href: `/api/organizations/${encodeURIComponent(organization.id)}/webhooks`, label: 'Webhooks API' },
-            { href: '/api/dwm/watchlists', label: 'Watchlists API' },
-            { href: '/dwm', label: 'DWM console' },
+            { href: '/api/findings/watchlists', label: 'Watchlists API' },
+            { href: '/findings', label: 'DWM console' },
         ] : [
             { href: '/api/organizations', label: 'Organizations API' },
-            { href: '/dwm', label: 'DWM console' },
+            { href: '/findings', label: 'DWM console' },
         ],
         createWatchlistAction: input.backendConfigured && organization ? {
             id: 'create_shared_watchlist_term',
             label: 'Create shared term',
             method: 'POST' as const,
-            href: '/api/dwm/watchlists',
+            href: '/api/findings/watchlists',
             body: {
                 ...actionScope(input.scope),
                 name: organization ? `${organization.name} shared exposure watchlist` : 'Shared exposure watchlist',
@@ -1742,7 +1742,7 @@ function buildProductReadiness(input: {
             status: watchlistStatus,
             detail: `${input.activeWatchlistCount} active watchlist${input.activeWatchlistCount === 1 ? '' : 's'} with ${input.termCount} term${input.termCount === 1 ? '' : 's'}.`,
             source: 'Shared watchlists',
-            href: '/dwm',
+            href: '/findings',
             checkedAt: input.latestWatchlistAt,
             backendProofContractVersion: 'organization.watchlist_lifecycle.readiness.v1',
         },
@@ -1754,7 +1754,7 @@ function buildProductReadiness(input: {
                 ? entitlement.detail || entitlementDetail(entitlement)
                 : 'DWM entitlement state is loading.',
             source: entitlement?.source || 'DWM entitlement status',
-            href: entitlement?.href || '/dwm',
+            href: entitlement?.href || '/findings',
             checkedAt: entitlement?.checkedAt,
             staleAfterSeconds: entitlement?.staleAfterSeconds,
             proofTimestamp: entitlement?.proofTimestamp,
@@ -1795,7 +1795,7 @@ function buildProductReadiness(input: {
                 ? dwmProduct.detail || dwmProductDetail(dwmProduct)
                 : 'Live DWM monitor is syncing.',
             source: dwmProduct?.source || 'DWM monitor status',
-            href: dwmProduct?.href || '/dwm',
+            href: dwmProduct?.href || '/findings',
             checkedAt: dwmProduct?.checkedAt || dwmProduct?.latestAlertAt,
             staleAfterSeconds: dwmProduct?.staleAfterSeconds,
             proofTimestamp: dwmProduct?.proofTimestamp,
@@ -1824,7 +1824,7 @@ function buildProductReadiness(input: {
                 ? orgAlertExport.detail || orgAlertExportDetail(orgAlertExport)
                 : 'Organization alert-term export state is loading.',
             source: orgAlertExport?.source || 'organization watchlist alert-term export',
-            href: orgAlertExport?.href || '/dwm',
+            href: orgAlertExport?.href || '/findings',
             checkedAt: orgAlertExport?.checkedAt || orgAlertExport?.exportedAt,
             staleAfterSeconds: orgAlertExport?.staleAfterSeconds,
             proofTimestamp: orgAlertExport?.proofTimestamp,
@@ -1917,7 +1917,7 @@ function buildProductReadiness(input: {
             detail: sourceGrowth
                 ? sourceGrowth.detail || sourceGrowthDetail(sourceGrowth)
                 : 'Source pack and inventory state is loading to the operator console.',
-            source: sourceGrowth?.source || (sourceGrowth?.proxyExposed ? 'GET /api/dwm/source-inventory' : 'source-pack operator proxy'),
+            source: sourceGrowth?.source || (sourceGrowth?.proxyExposed ? 'GET /api/findings/source-inventory' : 'source-pack operator proxy'),
             href: '/ti/sources',
             checkedAt: sourceGrowth?.checkedAt || sourceGrowth?.latestInventoryAt,
             staleAfterSeconds: sourceGrowth?.staleAfterSeconds,
@@ -2069,7 +2069,7 @@ function productReadinessActions(item: WorkbenchProductReadinessItem, context: {
         case 'org_alert_export':
             actions.push({ id: 'inspect_watchlist_coverage', label: 'Inspect coverage', method: 'GET', href: watchlistCoverageHref(context.scope, organization) })
             actions.push({ id: 'open_watchlists_api', label: 'Watchlists API', method: 'GET', href: watchlistsHref(context.scope) })
-            if (context.activeWatchlistCount && context.termCount) actions.push({ id: 'rebuild_alerts', label: 'Rebuild alerts', method: 'POST', href: '/api/dwm/alerts/rebuild', body: actionScope(context.scope) })
+            if (context.activeWatchlistCount && context.termCount) actions.push({ id: 'rebuild_alerts', label: 'Rebuild alerts', method: 'POST', href: '/api/findings/alerts/rebuild', body: actionScope(context.scope) })
             break
         case 'source_coverage':
         case 'source_inventory_probe':
@@ -2079,7 +2079,7 @@ function productReadinessActions(item: WorkbenchProductReadinessItem, context: {
                 id: 'run_canary_collection',
                 label: 'Run canary',
                 method: 'POST',
-                href: '/api/dwm/canary/run',
+                href: '/api/findings/canary/run',
                 body: {
                     operatorApproval: true,
                     approvedBy: 'dashboard',
@@ -2098,12 +2098,12 @@ function productReadinessActions(item: WorkbenchProductReadinessItem, context: {
         case 'alert_generation':
         case 'dwm_product_snapshot':
             actions.push({ id: 'open_alert_queue', label: 'Open alerts', method: 'GET', href: alertsHref(context.scope) })
-            actions.push({ id: 'open_alert_generation_readiness', label: 'Generation status', method: 'GET', href: '/api/dwm/alerts/generation-readiness' })
+            actions.push({ id: 'open_alert_generation_readiness', label: 'Generation status', method: 'GET', href: '/api/findings/alerts/generation-readiness' })
             actions.push({
                 id: 'rebuild_alerts',
                 label: 'Rebuild alerts',
                 method: 'POST',
-                href: '/api/dwm/alerts/rebuild',
+                href: '/api/findings/alerts/rebuild',
                 body: actionScope(context.scope),
                 disabledReason: context.activeWatchlistCount && context.sourceCoverage?.activeSourceCount ? undefined : 'Rebuild requires active watchlist terms and source coverage.',
             })
@@ -2124,7 +2124,7 @@ function productReadinessActions(item: WorkbenchProductReadinessItem, context: {
                 id: 'replay_latest_delivery',
                 label: 'Replay latest',
                 method: 'POST',
-                href: '/api/dwm/webhooks/deliver',
+                href: '/api/findings/webhooks/deliver',
                 body: context.latestDelivery?.alertId ? { ...actionScope(context.scope), alertId: context.latestDelivery.alertId, limit: 1 } : actionScope(context.scope),
                 disabledReason: context.activeWebhookCount && context.latestDelivery?.alertId ? undefined : 'Replay requires an active webhook destination and a delivery row with alertId.',
             })
@@ -2132,7 +2132,7 @@ function productReadinessActions(item: WorkbenchProductReadinessItem, context: {
                 id: 'send_queued_alerts',
                 label: 'Send queued',
                 method: 'POST',
-                href: '/api/dwm/webhooks/deliver',
+                href: '/api/findings/webhooks/deliver',
                 body: { ...actionScope(context.scope), limit: 25 },
                 disabledReason: context.activeWebhookCount ? undefined : 'Sending requires an active webhook destination.',
             })
@@ -2153,7 +2153,7 @@ function productReadinessActions(item: WorkbenchProductReadinessItem, context: {
             actions.push({ id: 'open_deploy_status', label: 'Deploy status', method: 'GET', href: '/status' })
             break
         case 'entitlement_readiness':
-            actions.push({ id: 'open_dwm_console', label: 'DWM console', method: 'GET', href: item.href || '/dwm' })
+            actions.push({ id: 'open_dwm_console', label: 'DWM console', method: 'GET', href: item.href || '/findings' })
             break
         default:
             if (item.href) actions.push({ id: 'open_workflow', label: 'Open workflow', method: 'GET', href: item.href })
@@ -2415,21 +2415,21 @@ function productReadinessProofMetadata(item: WorkbenchProductReadinessItem): {
         case 'shared_watchlists':
             return {
                 backendProofContractVersion: 'organization.watchlist_lifecycle.readiness.v1',
-                integrationProbeHint: 'GET/POST /api/dwm/watchlists must return at least one active shared watchlist with alert terms.',
+                integrationProbeHint: 'GET/POST /api/findings/watchlists must return at least one active shared watchlist with alert terms.',
                 staleAfterSeconds: 900,
                 unavailableReason: 'missing_shared_watchlist_readiness',
             }
         case 'entitlement_readiness':
             return {
                 backendProofContractVersion: 'dwm.entitlement.readiness.v1',
-                integrationProbeHint: 'GET /api/dwm/entitlements/readiness must return policy, checked role, allowed action, and blockers.',
+                integrationProbeHint: 'GET /api/findings/entitlements/readiness must return policy, checked role, allowed action, and blockers.',
                 staleAfterSeconds: 900,
                 unavailableReason: 'missing_dwm_entitlement_readiness_api',
             }
         case 'source_coverage':
             return {
                 backendProofContractVersion: 'dwm.operations.source_coverage.v1',
-                integrationProbeHint: 'GET /api/dwm/operations must return active monitored sources and latest run state.',
+                integrationProbeHint: 'GET /api/findings/operations must return active monitored sources and latest run state.',
                 staleAfterSeconds: 1800,
                 unavailableReason: 'missing_dwm_operations_source_coverage',
             }
@@ -2450,21 +2450,21 @@ function productReadinessProofMetadata(item: WorkbenchProductReadinessItem): {
         case 'dashboard_alert':
             return {
                 backendProofContractVersion: 'dwm.alert.matching.readiness.v1',
-                integrationProbeHint: 'GET /api/dwm/alerts must return a live alert visible in the operator dashboard queue.',
+                integrationProbeHint: 'GET /api/findings/alerts must return a live alert visible in the operator dashboard queue.',
                 staleAfterSeconds: 900,
                 unavailableReason: 'missing_dashboard_alert',
             }
         case 'dwm_product_snapshot':
             return {
                 backendProofContractVersion: 'dwm.product.v1',
-                integrationProbeHint: 'GET /api/dwm/product must return watchlist, source coverage, and alert status from the TI service.',
+                integrationProbeHint: 'GET /api/findings/product must return watchlist, source coverage, and alert status from the TI service.',
                 staleAfterSeconds: 900,
                 unavailableReason: 'missing_dwm_product_snapshot',
             }
         case 'webhook_delivery':
             return {
                 backendProofContractVersion: 'dwm.webhook.delivery_ledger.v1',
-                integrationProbeHint: 'GET /api/dwm/webhooks/deliveries must return a delivery row for a dashboard-visible alert.',
+                integrationProbeHint: 'GET /api/findings/webhooks/deliveries must return a delivery row for a dashboard-visible alert.',
                 staleAfterSeconds: 900,
                 unavailableReason: 'missing_matching_delivery',
             }
@@ -2478,7 +2478,7 @@ function productReadinessProofMetadata(item: WorkbenchProductReadinessItem): {
         case 'webhook_health':
             return {
                 backendProofContractVersion: 'dwm.webhook_health.readiness.v1',
-                integrationProbeHint: 'GET /api/dwm/webhooks must return active destination count and lifecycle health, not only delivery rows.',
+                integrationProbeHint: 'GET /api/findings/webhooks must return active destination count and lifecycle health, not only delivery rows.',
                 staleAfterSeconds: 900,
                 unavailableReason: 'missing_webhook_lifecycle_health_api',
             }
@@ -2931,7 +2931,7 @@ export function buildReadinessCases(input: {
                 sourceFamily: 'watchlist workflow',
                 captureMode: 'operator view',
                 redactionState: 'customer safe',
-                contentHash: activeWatchlists[0]?.id || '/api/dwm/watchlists',
+                contentHash: activeWatchlists[0]?.id || '/api/findings/watchlists',
                 excerpt: activeWatchlists.length ? activeWatchlists.map(item => `${item.id}: ${item.name}; ${(item.terms || []).map(term => term.value).join(', ')}`).join(' | ') : 'Create a watchlist with organization, terms, and optional delivery route.',
                 observedAt: activeWatchlists[0]?.updatedAt || now,
                 provenance: 'DWM watchlists',
@@ -2939,7 +2939,7 @@ export function buildReadinessCases(input: {
             }],
             timeline: [{ id: 'watchlist_state_at', at: activeWatchlists[0]?.updatedAt || now, title: activeWatchlists.length ? 'Watchlist lane active' : 'Watchlist lane checking', body: activeWatchlists.length ? 'Watchlist terms are active in DWM.' : 'Alert rebuild is held until watchlist terms attach.' }],
             nextTasks: activeWatchlists.length ? [`Owner: operator. Watchlist IDs: ${activeWatchlists.map(item => item.id).join(', ')}.`, `Terms: ${watchlistTerms.length}. Rebuild alerts for ${input.scope.organizationId || input.scope.tenantId}.`, 'Open generated DWM alerts as analyst cases before delivery.'] : ['Owner: operator. Open DWM console and save watchlist terms.', 'Run alert rebuild.', 'Confirm the watchlist has an organization owner.'],
-            relatedLinks: [{ href: '/dwm', label: 'Edit watchlist' }, { href: watchlistCoverageHref(input.scope, organization), label: 'Watchlist coverage' }, { href: watchlistsHref(input.scope), label: 'Watchlists API' }],
+            relatedLinks: [{ href: '/findings', label: 'Edit watchlist' }, { href: watchlistCoverageHref(input.scope, organization), label: 'Watchlist coverage' }, { href: watchlistsHref(input.scope), label: 'Watchlists API' }],
             workflowPath: path,
             actions: [
                 {
@@ -2952,7 +2952,7 @@ export function buildReadinessCases(input: {
                     id: 'rebuild_alerts',
                     label: 'Rebuild alerts',
                     method: 'POST' as const,
-                    href: '/api/dwm/alerts/rebuild',
+                    href: '/api/findings/alerts/rebuild',
                     body: actionScope(input.scope),
                 }] : []),
             ],
@@ -2986,7 +2986,7 @@ export function buildReadinessCases(input: {
             }],
             timeline: [{ id: 'webhook_route_at', at: orgWebhooks[0]?.lastTestedAt || latestDelivery?.attemptedAt || now, title: hasWebhookDestination ? 'Webhook lane active' : 'Webhook lane checking', body: orgWebhooks[0]?.lastTestStatus ? `${orgWebhooks[0].id} last test ${orgWebhooks[0].lastTestStatus}.` : latestDelivery ? `${latestDelivery.id}: ${latestDelivery.status}${latestDelivery.error ? `: ${latestDelivery.error}` : ''}` : 'Delivery destination is syncing for organization or watchlist routing.' }],
             nextTasks: hasWebhookDestination ? [`Owner: operator. Destination IDs: ${orgWebhooks.map(item => item.id).join(', ') || webhookWatchlists.map(item => item.webhookDestinationId || item.id).join(', ')}.`, 'Run a webhook test.', 'Send queued alerts and inspect delivery failures.'] : ['Owner: operator. Create a Discord or generic organization webhook destination.', 'Run webhook test.', 'Send queued alerts and inspect delivery failures.'],
-            relatedLinks: organization ? [{ href: `/api/organizations/${encodeURIComponent(organization.id)}/webhooks`, label: 'Org webhooks' }, { href: deliveryLedgerHref(input.scope, latestDelivery), label: 'Delivery history' }, { href: '/dwm', label: 'Configure watchlist webhook' }, { href: '/automation?setup=dwm', label: 'Delivery routes' }] : [{ href: deliveryLedgerHref(input.scope, latestDelivery), label: 'Delivery history' }, { href: '/dwm', label: 'Configure webhook' }, { href: '/automation?setup=dwm', label: 'Delivery routes' }],
+            relatedLinks: organization ? [{ href: `/api/organizations/${encodeURIComponent(organization.id)}/webhooks`, label: 'Org webhooks' }, { href: deliveryLedgerHref(input.scope, latestDelivery), label: 'Delivery history' }, { href: '/findings', label: 'Configure watchlist webhook' }, { href: '/automation?setup=dwm', label: 'Delivery routes' }] : [{ href: deliveryLedgerHref(input.scope, latestDelivery), label: 'Delivery history' }, { href: '/findings', label: 'Configure webhook' }, { href: '/automation?setup=dwm', label: 'Delivery routes' }],
             workflowPath: path,
             deliveryEvidence: input.deliveries.map(delivery => ({
                 id: delivery.id,
@@ -3154,7 +3154,7 @@ export function buildReadinessCases(input: {
             relatedLinks: [
                 { href: sourceGrowth.href || '/ti/sources', label: 'Collection' },
                 { href: sourceGrowth.source || '/api/ti/scraper/control', label: 'Source status' },
-                { href: '/dwm', label: 'DWM console' },
+                { href: '/findings', label: 'DWM console' },
             ],
             workflowPath: path,
             missingDependency: sourceWorkerReady ? undefined : visibleChecks(sourceWorkerBlockers) || sourceGrowth.unavailableReason || 'Operator-reachable source worker data is syncing.',
@@ -3195,7 +3195,7 @@ export function buildReadinessCases(input: {
             }],
             timeline: [{ id: 'source_health_at', at: input.operations?.latestRun?.updatedAt || now, title: input.operations?.latestRun ? 'Latest collection run' : 'Source coverage syncing', body: input.operations?.latestRun ? `${input.operations.latestRun.status}: ${input.operations.latestRun.captureCount} captures.` : 'Source coverage is syncing to the TI scraper connection.' }],
             nextTasks: [`Owner: collection. Active sources: ${activeSources}/${sourceCount}.`, 'Approve bounded public Telegram coverage.', 'Approve safe-field dark web source coverage.'],
-            relatedLinks: [{ href: '/dwm', label: 'Run collection' }, { href: '/ti/sources', label: 'Review sources' }, { href: sourceInventoryHref(input.scope), label: 'Source inventory API' }],
+            relatedLinks: [{ href: '/findings', label: 'Run collection' }, { href: '/ti/sources', label: 'Review sources' }, { href: sourceInventoryHref(input.scope), label: 'Source inventory API' }],
             workflowPath: path,
             actions: [
                 {
@@ -3208,7 +3208,7 @@ export function buildReadinessCases(input: {
                     id: 'run_canary_collection',
                     label: 'Run canary',
                     method: 'POST',
-                    href: '/api/dwm/canary/run',
+                    href: '/api/findings/canary/run',
                     body: {
                         operatorApproval: true,
                         approvedBy: 'dashboard',
@@ -3259,7 +3259,7 @@ export function buildReadinessCases(input: {
                         : input.liveAlertCount ? [`Owner: analyst. Case candidates: ${input.liveAlertCount}.`, 'Select a DWM alert and open/update its backed analyst case.', 'Send only after webhook destination test succeeds.'] : ['Owner: operator. Save watchlist.', 'Run collection.', 'Rebuild alerts.'],
             relatedLinks: alertVisibilityBlocked
                 ? [{ href: '/organizations', label: 'Organization access' }, { href: alertsHref(input.scope), label: 'organization alerts' }]
-                : [{ href: '/dwm', label: 'Rebuild alerts' }, { href: alertsHref(input.scope), label: 'Alerts API' }, { href: '/api/dwm/alerts/generation-readiness', label: 'Generation status' }],
+                : [{ href: '/findings', label: 'Rebuild alerts' }, { href: alertsHref(input.scope), label: 'Alerts API' }, { href: '/api/findings/alerts/generation-readiness', label: 'Generation status' }],
             workflowPath: path,
             missingDependency: alertVisibilityBlocked ? undefined : alertGenerationProofReady && input.liveAlertCount ? undefined : alertGenerationProof ? sanitizeVisibleOperatorCopy(visibleChecks(alertGenerationDashboardBlockers) || alertGenerationProof.unavailableReason || 'Alert generation is checking source evidence and delivery routes.') : input.liveAlertCount ? undefined : 'Alert stream is checking saved DWM alerts before customer delivery.',
             actions: [
@@ -3270,12 +3270,12 @@ export function buildReadinessCases(input: {
                     href: '/organizations',
                 }] : []),
                 { id: 'open_alert_queue', label: alertVisibilityBlocked ? 'Retry organization alerts' : 'Open alerts', method: 'GET', href: alertsHref(input.scope) },
-                ...(!alertVisibilityBlocked ? [{ id: 'open_alert_generation_readiness', label: 'Open generation status', method: 'GET' as const, href: '/api/dwm/alerts/generation-readiness' }] : []),
+                ...(!alertVisibilityBlocked ? [{ id: 'open_alert_generation_readiness', label: 'Open generation status', method: 'GET' as const, href: '/api/findings/alerts/generation-readiness' }] : []),
                 ...(!alertVisibilityBlocked && activeWatchlists.length ? [{
                     id: 'rebuild_alerts',
                     label: 'Rebuild alerts',
                     method: 'POST' as const,
-                    href: '/api/dwm/alerts/rebuild',
+                    href: '/api/findings/alerts/rebuild',
                     body: actionScope(input.scope),
                 }] : []),
             ],
@@ -3406,7 +3406,7 @@ function operatorPath(input: {
             owner: 'operator',
             source: 'Shared watchlists',
             entityId: watchlistIds.join(', ') || undefined,
-            href: '/dwm',
+            href: '/findings',
             detail: input.activeWatchlists.length ? `${input.activeWatchlists.length} active; ${input.activeWatchlists.flatMap(item => item.terms || []).length} terms.` : 'Active watchlist state is loading for the selected workspace.',
         },
         {
@@ -3416,7 +3416,7 @@ function operatorPath(input: {
             owner: 'analyst',
             source: 'Alert and case workflow',
             entityId: input.liveAlertCount ? `${input.liveAlertCount} alert candidates` : undefined,
-            href: '/api/dwm/alerts',
+            href: '/api/findings/alerts',
             detail: input.liveAlertCount ? 'Select a DWM alert and open/update the backed analyst case.' : `Rebuild alerts after source coverage (${input.activeSources}/${input.sourceCount}) and watchlist terms exist.`,
         },
         {
@@ -3426,7 +3426,7 @@ function operatorPath(input: {
             owner: 'operator',
             source: 'Webhook delivery',
             entityId: webhookIds.join(', ') || input.latestDelivery?.id,
-            href: input.organization ? `/api/organizations/${encodeURIComponent(input.organization.id)}/webhooks` : '/dwm',
+            href: input.organization ? `/api/organizations/${encodeURIComponent(input.organization.id)}/webhooks` : '/findings',
             detail: input.latestDelivery ? `${input.latestDelivery.id}: ${input.latestDelivery.status}` : input.orgWebhooks.length ? 'Destination active; run a test or send queued alerts.' : 'Webhook destination is syncing.',
         },
     ]
@@ -3454,7 +3454,7 @@ function webhookActions(scope: OperatorScope, organization: DwmOrganizationSumma
             id: 'replay_latest_delivery',
             label: 'Replay latest alert',
             method: 'POST',
-            href: '/api/dwm/webhooks/deliver',
+            href: '/api/findings/webhooks/deliver',
             body: { ...actionScope(scope), alertId: latestDelivery.alertId, limit: 1 },
         })
     }
@@ -3463,7 +3463,7 @@ function webhookActions(scope: OperatorScope, organization: DwmOrganizationSumma
             id: 'deliver_webhooks',
             label: 'Send queued alerts',
             method: 'POST',
-            href: '/api/dwm/webhooks/deliver',
+            href: '/api/findings/webhooks/deliver',
             body: { ...actionScope(scope), limit: 25 },
         })
     }
@@ -3480,7 +3480,7 @@ function deliveryLedgerHref(scope: OperatorScope, latestDelivery?: DwmDeliveryIt
     if (latestDelivery?.alertId) {
         params.set('alertId', latestDelivery.alertId)
     }
-    return `/api/dwm/webhooks/deliveries?${params.toString()}`
+    return `/api/findings/webhooks/deliveries?${params.toString()}`
 }
 
 function sourceInventoryHref(scope: OperatorScope) {
@@ -3508,7 +3508,7 @@ function watchlistsHref(scope: OperatorScope) {
     } else {
         params.set('tenantId', scope.tenantId)
     }
-    return `/api/dwm/watchlists?${params.toString()}`
+    return `/api/findings/watchlists?${params.toString()}`
 }
 
 function alertsHref(scope: OperatorScope) {
@@ -3518,7 +3518,7 @@ function alertsHref(scope: OperatorScope) {
     } else {
         params.set('tenantId', scope.tenantId)
     }
-    return `/api/dwm/alerts?${params.toString()}`
+    return `/api/findings/alerts?${params.toString()}`
 }
 
 function derivedWatchlistMatchCount(operations?: DwmOperationsSnapshot | null) {

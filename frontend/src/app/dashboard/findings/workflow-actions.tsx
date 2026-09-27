@@ -61,7 +61,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     }
 
     function saveWatchlistTerms(nextTerms: string) {
-        return postJson('/api/dwm/watchlists', {
+        return postJson('/api/findings/watchlists', {
             ...scope,
             name: 'Default company exposure watchlist',
             terms: nextTerms,
@@ -172,13 +172,13 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             const watchlist = await saveWatchlistTerms(nextTerms)
             if (!watchlist.ok) throw new Error(watchlist.message)
 
-            const rebuild = await postJson('/api/dwm/alerts/rebuild', scope)
+            const rebuild = await postJson('/api/findings/alerts/rebuild', scope)
             if (!rebuild.ok) throw new Error(rebuild.message)
 
             const alert = selectRebuiltAlert(rebuild, company, nextTerms)
             if (!alert?.id) throw new Error('No matching event was found in this evidence.')
 
-            const casePayload = await postJson(`/api/dwm/alerts/${encodeURIComponent(alert.id)}/case-handoff`, {
+            const casePayload = await postJson(`/api/findings/alerts/${encodeURIComponent(alert.id)}/case-handoff`, {
                 ...scope,
                 actor: 'dashboard',
                 note: `Case opened from public incident evidence for ${company}.`,
@@ -192,7 +192,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             let deliveryReady = false
             let deliveryAttempts = 0
             if (webhookConfigured) {
-                const delivery = await postJson('/api/dwm/webhooks/deliver', {
+                const delivery = await postJson('/api/findings/webhooks/deliver', {
                     ...scope,
                     alertId: alert.id,
                     caseId: caseId || undefined,
@@ -252,7 +252,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             const watchlist = await saveWatchlistTerms(nextTerms)
             if (!watchlist.ok) throw new Error(watchlist.message)
 
-            const telegram = await postJson('/api/dwm/source-requests', {
+            const telegram = await postJson('/api/findings/source-requests', {
                 ...scope,
                 seedPackIds: ['telegram-ransomware-claim-watch', 'telegram-stealer-broker-watch', 'telegram-regional-language-watch'],
                 activate: true,
@@ -261,7 +261,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             })
             if (!telegram.ok) throw new Error(telegram.message)
 
-            const darkweb = await postJson('/api/dwm/darkweb/approve-metadata', {
+            const darkweb = await postJson('/api/findings/darkweb/approve-metadata', {
                 ...scope,
                 seedPackIds: ['darkweb-actor-metadata-core', 'darkweb-market-metadata-watch'],
                 activate: true,
@@ -274,7 +274,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
 
             const advisory = { ok: true, summary: {} as Record<string, unknown> }
 
-            const run = await postJson('/api/dwm/canary/run', {
+            const run = await postJson('/api/findings/canary/run', {
                 ...scope,
                 operatorApproval: true,
                 approvedBy: 'dashboard',
@@ -283,7 +283,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             })
             if (!run.ok) throw new Error(run.message)
 
-            const rebuild = await postJson('/api/dwm/alerts/rebuild', scope)
+            const rebuild = await postJson('/api/findings/alerts/rebuild', scope)
             if (!rebuild.ok) throw new Error(rebuild.message)
             const alert = selectRebuiltAlert(rebuild, '', nextTerms)
             const savedAlertCount = typeof rebuild.savedAlertCount === 'number' ? rebuild.savedAlertCount : 0
@@ -306,7 +306,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 return
             }
 
-            const casePayload = await postJson(`/api/dwm/alerts/${encodeURIComponent(alert.id)}/case-handoff`, {
+            const casePayload = await postJson(`/api/findings/alerts/${encodeURIComponent(alert.id)}/case-handoff`, {
                 ...scope,
                 actor: 'dashboard',
                 note: 'Case opened from source-pack collection.',
@@ -319,7 +319,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             let deliveryAttempts: number | undefined
             let deliveryReady = false
             if (webhookConfigured) {
-                const delivery = await postJson('/api/dwm/webhooks/deliver', {
+                const delivery = await postJson('/api/findings/webhooks/deliver', {
                     ...scope,
                     alertId: alert.id,
                     caseId: caseId || undefined,
@@ -372,7 +372,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         setResult(null)
 
         try {
-            const source = await postJson('/api/dwm/source-requests', {
+            const source = await postJson('/api/findings/source-requests', {
                 ...scope,
                 target: sourceTarget,
                 type: 'telegram_channel',
@@ -405,7 +405,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         setResult(null)
 
         try {
-            const run = await postJson('/api/dwm/canary/run', {
+            const run = await postJson('/api/findings/canary/run', {
                 ...scope,
                 operatorApproval: true,
                 approvedBy: 'dashboard',
@@ -414,7 +414,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             })
             if (!run.ok) throw new Error(run.message)
 
-            const rebuild = await postJson('/api/dwm/alerts/rebuild', scope)
+            const rebuild = await postJson('/api/findings/alerts/rebuild', scope)
             const rebuildOutcome = normalizeAlertRebuildOutcome(rebuild)
             const captureCount = readNumber(run.canaryRun, 'insertedCaptureCount')
             const savedAlertCount = typeof rebuildOutcome.savedAlertCount === 'number' ? rebuildOutcome.savedAlertCount : 0
@@ -448,7 +448,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             const watchlist = await saveWatchlistTerms(nextTerms)
             if (!watchlist.ok) throw new Error(watchlist.message)
 
-            const applied = await postJson('/api/dwm/source-requests', {
+            const applied = await postJson('/api/findings/source-requests', {
                 ...scope,
                 seedPackIds: ['telegram-ransomware-claim-watch', 'telegram-stealer-broker-watch', 'telegram-regional-language-watch'],
                 activate: true,
@@ -457,7 +457,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             })
             if (!applied.ok) throw new Error(applied.message)
 
-            const run = await postJson('/api/dwm/canary/run', {
+            const run = await postJson('/api/findings/canary/run', {
                 ...scope,
                 operatorApproval: true,
                 approvedBy: 'dashboard',
@@ -466,7 +466,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             })
             if (!run.ok) throw new Error(run.message)
 
-            const rebuild = await postJson('/api/dwm/alerts/rebuild', scope)
+            const rebuild = await postJson('/api/findings/alerts/rebuild', scope)
             const summary = applied.summary && typeof applied.summary === 'object' ? applied.summary as Record<string, unknown> : {}
             const createdCount = typeof summary.telegramPublicCreated === 'number' ? summary.telegramPublicCreated : 0
             const duplicateCount = typeof summary.duplicateCount === 'number' ? summary.duplicateCount : 0
@@ -499,7 +499,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             const watchlist = await saveWatchlistTerms(nextTerms)
             if (!watchlist.ok) throw new Error(watchlist.message)
 
-            const approved = await postJson('/api/dwm/darkweb/approve-metadata', {
+            const approved = await postJson('/api/findings/darkweb/approve-metadata', {
                 ...scope,
                 seedPackIds: ['darkweb-actor-metadata-core', 'darkweb-market-metadata-watch'],
                 activate: true,
@@ -540,7 +540,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         setResult(null)
 
         try {
-            const delivery = await postJson('/api/dwm/webhooks/deliver', {
+            const delivery = await postJson('/api/findings/webhooks/deliver', {
                 ...scope,
                 limit: 25,
                 webhookUrl: webhookConfigured ? webhookUrl.trim() : undefined,
@@ -582,7 +582,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         setResult(null)
 
         try {
-            const test = await postJson('/api/dwm/webhooks/test', {
+            const test = await postJson('/api/findings/webhooks/test', {
                 ...scope,
                 webhookUrl: webhookUrl.trim() || undefined,
             })
@@ -851,7 +851,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
 }
 
 async function ingestPublicEvidence(input: { actor: string, company: string, claimedData: string, url: string }, scope: { tenantId: string, organizationId?: string }) {
-    return postJson('/api/dwm/exposure-claims/ingest', {
+    return postJson('/api/findings/exposure-claims/ingest', {
         items: [{
             ...scope,
             company: input.company,
@@ -1103,7 +1103,7 @@ async function alertRebuildFromWatchlistOrRequest(payload: Record<string, unknow
     if (inlineRebuild) {
         return normalizeAlertRebuildOutcome(inlineRebuild)
     }
-    return normalizeAlertRebuildOutcome(await postJson('/api/dwm/alerts/rebuild', scope))
+    return normalizeAlertRebuildOutcome(await postJson('/api/findings/alerts/rebuild', scope))
 }
 
 function readNumber(value: unknown, key: string) {

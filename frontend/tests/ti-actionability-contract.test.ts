@@ -277,7 +277,7 @@ function apt29Result(): TiSearchResponse {
                 watchlistItemId: 'item_microsoft',
                 kind: 'domain',
                 value: 'microsoft.com',
-                route: '/dwm/watchlists/watchlist_acme_vendors',
+                route: '/findings/watchlists/watchlist_acme_vendors',
                 casePath: '/cases/case_apt29_microsoft',
             }],
             relatedAlerts: [{

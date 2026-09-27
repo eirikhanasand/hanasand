@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFile, readdir } from 'node:fs/promises'
 import { chromium } from '@playwright/test'
 
-const route = await readFile('src/app/dashboard/dwm/page.tsx', 'utf8')
+const route = await readFile('src/app/dashboard/findings/page.tsx', 'utf8')
 assert.match(route, /: 'overview'/, 'Default DWM route must open the monitoring overview')
 const now = '2026-09-07T12:00:00Z'
 const actorOverviews = Array.from({ length: 25 }, (_, i) => ({ actor: `Actor ${i + 1}`, aliases: [], sourceFamilies: ['darkweb_metadata'], sourceCount: 1, captureCount: 0, confidence: 99, watchState: 'metadata_only', summary: '' }))
@@ -22,7 +22,7 @@ const server = Bun.serve({ port: 0, async fetch(request) {
     const url = new URL(request.url)
     if (url.pathname === '/app.js') return new Response(bundle, { headers: { 'content-type': 'text/javascript' } })
     if (url.pathname === '/app.css') return new Response(css, { headers: { 'content-type': 'text/css' } })
-    if (url.pathname.startsWith('/api/dwm/')) {
+    if (url.pathname.startsWith('/api/findings/')) {
         calls.push(url)
         if (url.pathname.endsWith('/case-handoff')) {
             throw new Error('Monitoring must link to automatic cases, not create cases on click.')
@@ -37,7 +37,7 @@ const server = Bun.serve({ port: 0, async fetch(request) {
 } })
 const build = await Bun.build({ entrypoints: ['monitoring-fixture'], target: 'browser', plugins: [{ name: 'fixture', setup(builder) {
     builder.onResolve({ filter: /^(monitoring-fixture|next\/link|next\/image|next\/navigation)$/ }, args => ({ path: args.path, namespace: 'fixture' }))
-    builder.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ loader: 'tsx', resolveDir: process.cwd(), contents: args.path === 'next/image' ? 'export default function Image({priority,fill,...props}){return <img {...props}/>}' : args.path === 'next/link' ? 'export default function Link(props){return <a {...props}/>}' : args.path === 'next/navigation' ? 'export const useRouter=()=>({push:href=>{window.caseNavigation=href},refresh:()=>{}});export const usePathname=()=>location.pathname;export const useSearchParams=()=>new URLSearchParams(location.search);' : `import {createRoot} from 'react-dom/client';import {Findings} from './src/app/dashboard/dwm/dwm-analyst-portal';createRoot(document.getElementById('root')).render(<Findings tenantId="org-one" organizationId="org-one" view={location.pathname.includes('actors')?'actors':location.pathname.includes('actions')?'actions':'overview'} snapshot={${JSON.stringify({ ...snapshot, watchlist: [], actorOverviews: [] })}} operations={null} alerts={[]} deliveries={[]} dataHealth={${JSON.stringify(health)}}/>);` }))
+    builder.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ loader: 'tsx', resolveDir: process.cwd(), contents: args.path === 'next/image' ? 'export default function Image({priority,fill,...props}){return <img {...props}/>}' : args.path === 'next/link' ? 'export default function Link(props){return <a {...props}/>}' : args.path === 'next/navigation' ? 'export const useRouter=()=>({push:href=>{window.caseNavigation=href},refresh:()=>{}});export const usePathname=()=>location.pathname;export const useSearchParams=()=>new URLSearchParams(location.search);' : `import {createRoot} from 'react-dom/client';import {Findings} from './src/app/dashboard/findings/findings';createRoot(document.getElementById('root')).render(<Findings tenantId="org-one" organizationId="org-one" view={location.pathname.includes('actors')?'actors':location.pathname.includes('actions')?'actions':'overview'} snapshot={${JSON.stringify({ ...snapshot, watchlist: [], actorOverviews: [] })}} operations={null} alerts={[]} deliveries={[]} dataHealth={${JSON.stringify(health)}}/>);` }))
 } }] })
 assert(build.success, build.logs.join('\n'))
 bundle = await build.outputs[0].text()

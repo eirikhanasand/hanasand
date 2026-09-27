@@ -17,12 +17,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
             headers: request.headers,
             body: JSON.stringify({ ...body, destinationId, webhookDestinationId: destinationId, orgId: id }),
         })
-        return proxyOrganizationApiRequest(nextRequest, `/dwm/webhook-destinations/${encodeURIComponent(destinationId)}/test`, { method: 'POST' })
+        return proxyOrganizationApiRequest(nextRequest, `/findings/webhook-destinations/${encodeURIComponent(destinationId)}/test`, { method: 'POST' })
     }
     const nextRequest = new NextRequest(request.url, {
         method: 'POST',
         headers: request.headers,
         body: JSON.stringify({ ...body, organizationId: id, orgId: id, dryRun: true }),
     })
-    return proxyOrganizationApiRequest(nextRequest, '/dwm/webhook-deliveries', { method: 'POST' })
+    return proxyOrganizationApiRequest(nextRequest, '/findings/webhook-deliveries', { method: 'POST' })
 }

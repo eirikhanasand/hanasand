@@ -6,10 +6,10 @@ import type { NextRequest } from 'next/server'
 
 let product: (request: NextRequest) => Promise<Response>
 let cases: (request: NextRequest) => Promise<Response>
-mock.module('../src/app/api/dwm/product/route', () => ({ GET: (request: NextRequest) => product(request) }))
+mock.module('../src/app/api/findings/product/route', () => ({ GET: (request: NextRequest) => product(request) }))
 mock.module('../src/app/api/cases/route', () => ({ GET: (request: NextRequest) => cases(request) }))
 const { loadOverview } = await import('../src/app/dashboard/overview/loadOverview')
-const { default: Panel } = await import('../src/app/dashboard/overview/dwmOverviewPanel')
+const { default: Panel } = await import('../src/app/dashboard/overview/overviewPanel')
 const snapshot = { schemaVersion: 'test', tenantId: 'org-a', watchlist: [], sourceCoverage: [] }
 beforeEach(() => {
     product = async () => Response.json(snapshot)

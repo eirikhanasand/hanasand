@@ -15,7 +15,7 @@ type SearchItem = {
 
 const publicRouteItems: SearchItem[] = [
     route('Home', 'Overview and product entry point', '/'),
-    route('Dark Web Monitoring', 'Product page', '/dwm'),
+    route('Dark Web Monitoring', 'Product page', '/findings'),
     route('Threat search', 'Search companies, actors, domains, and activity', '/ti'),
     route('Browser', 'Regular and Tor browser runs', '/browser'),
     route('Security Monitoring', 'Managed detection from customer security logs', '/solutions/security-monitoring'),
@@ -34,10 +34,10 @@ const dashboardRouteItems: SearchItem[] = [
     route('Rules', 'Create and import security detection rules', '/rules'),
     route('Security Scanner', 'Run and schedule approved Hanasand scans', '/scanner'),
     route('Cases', 'Cases across all services', '/cases'),
-    route('DWM watchlists', 'Watched companies, vendors, domains, and brands', '/dwm/watchlists'),
-    route('DWM delivery', 'Webhook attempts and customer delivery', '/dwm/delivery'),
-    route('DWM actors', 'Actor context and coverage', '/dwm/actors'),
-    route('Delivery', 'Add and test delivery destinations', '/dwm/actions'),
+    route('DWM watchlists', 'Watched companies, vendors, domains, and brands', '/findings/watchlists'),
+    route('DWM delivery', 'Webhook attempts and customer delivery', '/findings/delivery'),
+    route('DWM actors', 'Actor context and coverage', '/findings/actors'),
+    route('Delivery', 'Add and test delivery destinations', '/findings/actions'),
     route('Automation', 'Webhook and automation setup', '/automation'),
     route('Subscription', 'Billing and plan controls', '/subscription'),
 ]
@@ -79,7 +79,7 @@ export default function SiteSearch({ token }: { token: boolean }) {
             setSavedSearches([])
         }
         if (!token) return
-        fetch('/api/dwm/watchlists', { cache: 'no-store' })
+        fetch('/api/findings/watchlists', { cache: 'no-store' })
             .then(response => response.ok ? response.json() : null)
             .then(payload => setWatchTerms(arrayFrom(payload, ['watchlists', 'items', 'rows']).flatMap(watchlistTerms).slice(0, 20)))
             .catch(() => setWatchTerms([]))
@@ -308,7 +308,7 @@ function watchlistTerms(value: unknown): SearchItem[] {
     return terms.flatMap(term => {
         const item = term && typeof term === 'object' ? term as Record<string, unknown> : null
         const value = typeof term === 'string' ? term : stringValue(item?.value || item?.term)
-        return value ? [{ id: `watch:${value}`, title: value, detail: 'Monitored entity', href: '/dwm/watchlists' }] : []
+        return value ? [{ id: `watch:${value}`, title: value, detail: 'Monitored entity', href: '/findings/watchlists' }] : []
     })
 }
 

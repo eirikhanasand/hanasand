@@ -3,8 +3,8 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 
 const [proxy, product, session] = await Promise.all([
-    readFile(path.join(process.cwd(), 'src/app/api/dwm/_tiProxy.ts'), 'utf8'),
-    readFile(path.join(process.cwd(), 'src/app/api/dwm/product/route.ts'), 'utf8'),
+    readFile(path.join(process.cwd(), 'src/app/api/findings/_tiProxy.ts'), 'utf8'),
+    readFile(path.join(process.cwd(), 'src/app/api/findings/product/route.ts'), 'utf8'),
     readFile(path.join(process.cwd(), 'src/utils/proxy/requireApiSession.ts'), 'utf8'),
 ])
 

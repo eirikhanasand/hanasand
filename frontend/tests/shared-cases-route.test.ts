@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 let intelligence: () => Promise<Response>
 let monitoring: () => Promise<Response>
-mock.module('../src/app/api/dwm/_tiProxy', () => ({ proxyTiRequest: () => intelligence() }))
+mock.module('../src/app/api/findings/_tiProxy', () => ({ proxyTiRequest: () => intelligence() }))
 mock.module('../src/app/api/cases/monitoring/route', () => ({ GET: () => monitoring() }))
 const { GET } = await import('../src/app/api/cases/route')
 beforeEach(() => {

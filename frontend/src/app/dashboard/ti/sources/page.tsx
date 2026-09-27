@@ -8,6 +8,7 @@ import ManualRunButton from '../manualRunButton'
 import SourceRow from './sourceRow'
 import SourceFilters from './sourceFilters'
 import SortIndicator from '@/components/dashboard/sort-indicator'
+import Button from '@/components/misc/button'
 
 export const dynamic = 'force-dynamic'
 
@@ -72,10 +73,7 @@ function Unavailable() {
         <div>
             <RefreshCcw className='mx-auto h-8 w-8 text-ui-warning' />
             <h2 className='mt-4 text-xl font-semibold text-ui-text'>Source inventory is temporarily unavailable</h2>
-            <Link href='/ti/sources' className='ui-button ui-button-primary mt-5 min-h-11 gap-2 px-5 py-2.5 text-sm shadow-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ui-primary'>
-                <RefreshCcw aria-hidden='true' className='h-4 w-4' />
-                Retry
-            </Link>
+            <Button text='Retry' path='/ti/sources' icon={<RefreshCcw className='h-4 w-4' />} variant='primary' className='mt-5 shadow-sm' />
         </div>
     </DashboardPanel>
 }

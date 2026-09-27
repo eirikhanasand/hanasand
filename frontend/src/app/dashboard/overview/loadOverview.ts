@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { GET as getProduct } from '@/app/api/dwm/product/route'
+import { GET as getProduct } from '@/app/api/findings/product/route'
 import { GET as getCases } from '@/app/api/cases/route'
 import type { DwmProductSnapshot } from '@/utils/dwm/product'
 

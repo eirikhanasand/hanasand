@@ -173,7 +173,7 @@ export default async function TiAdminPage() {
                 </DashboardPanel>
 
                 <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
-                    <PanelTitle title='Delivery state' actionHref='/dwm' actionLabel='Dark web cases' />
+                    <PanelTitle title='Delivery state' actionHref='/findings' actionLabel='Dark web cases' />
                     <div className='grid gap-3 p-4'>
                         <DeliveryRow icon={<ShieldCheck className='h-4 w-4' />} title='Matches detected' value={`${reviewDomains.length} entity matches`} tone={reviewDomains.length ? 'watch' : 'ok'} />
                         <DeliveryRow icon={<Webhook className='h-4 w-4' />} title='Webhook delivery' value='Delivery records are linked to dark web alerts' tone='neutral' />

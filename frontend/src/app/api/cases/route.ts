@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { proxyTiRequest } from '../dwm/_tiProxy'
+import { proxyTiRequest } from '../findings/_tiProxy'
 
 import { GET as monitoringCases } from './monitoring/route'
 

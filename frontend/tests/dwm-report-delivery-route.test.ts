@@ -1,10 +1,10 @@
 import { strict as assert } from 'node:assert'
 import test from 'node:test'
 import { NextRequest } from 'next/server'
-import { POST } from '../src/app/api/dwm/webhooks/deliver/route.ts'
+import { POST } from '../src/app/api/findings/webhooks/deliver/route.ts'
 
 test('rejects duplicate evidence before fetching an alert or canonical report', async () => {
-    const response = await POST(new NextRequest('http://local/api/dwm/webhooks/deliver', {
+    const response = await POST(new NextRequest('http://local/api/findings/webhooks/deliver', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -25,7 +25,7 @@ test('rejects duplicate evidence before fetching an alert or canonical report', 
 })
 
 test('requires one configured destination before fetching a canonical report', async () => {
-    const response = await POST(new NextRequest('http://local/api/dwm/webhooks/deliver', {
+    const response = await POST(new NextRequest('http://local/api/findings/webhooks/deliver', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({

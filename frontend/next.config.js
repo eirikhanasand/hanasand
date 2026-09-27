@@ -29,12 +29,17 @@ const nextConfig = {
             },
         ]
     },
+    // The canonical Findings route maps to the dashboard/findings page folder via appRoutes.json.
     async rewrites() {
         return {
-            beforeFiles: appRoutes
-                .filter(([, canonical]) => canonical !== '/dashboard')
-                .sort((a, b) => b[1].length - a[1].length)
-                .map(([legacy, canonical]) => ({ source: `${canonical}/:path*`, destination: `${legacy}/:path*` })),
+            beforeFiles: [
+                { source: '/api/dwm', destination: '/api/findings' },
+                { source: '/api/dwm/:path*', destination: '/api/findings/:path*' },
+                ...appRoutes
+                    .filter(([, canonical]) => canonical !== '/dashboard')
+                    .sort((a, b) => b[1].length - a[1].length)
+                    .map(([legacy, canonical]) => ({ source: `${canonical}/:path*`, destination: `${legacy}/:path*` })),
+            ],
         }
     },
     async redirects() {
@@ -47,6 +52,8 @@ const nextConfig = {
             { source: '/dwm', destination: '/findings', permanent: true },
             { source: '/dwm/:path*', destination: '/findings/:path*', permanent: true },
             { source: '/dashboard/dwm/cases/:path*', destination: '/cases/:path*', permanent: true },
+            { source: '/dashboard/dwm', destination: '/findings', permanent: true },
+            { source: '/dashboard/dwm/:path*', destination: '/findings/:path*', permanent: true },
             {
                 source: '/solutions/dwm',
                 destination: '/findings',

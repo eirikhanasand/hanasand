@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { existsSync, readFileSync } from 'node:fs'
 import { describe, test } from 'node:test'
-import { resolveDwmRequestScope, withDwmRequestScope } from '../src/app/api/dwm/_tiProxy'
+import { resolveDwmRequestScope, withDwmRequestScope } from '../src/app/api/findings/_tiProxy'
 
 describe('DWM tenant scope', () => {
     test('derives a personal tenant from the authenticated identity', () => {
@@ -60,17 +60,19 @@ describe('DWM tenant scope', () => {
     test('keeps the legacy URL as a redirect without retaining sample pages', () => {
         const config = readFileSync(new URL('../next.config.js', import.meta.url), 'utf8')
 
-        assert.match(config, /source: '\/solutions\/dwm',[\s\S]*destination: '\/dwm'/)
+        assert.match(config, /source: '\/solutions\/dwm',[\s\S]*destination: '\/findings'/)
         assert.equal(existsSync(new URL('../src/app/solutions/dwm/page.tsx', import.meta.url)), false)
         assert.equal(existsSync(new URL('../src/app/solutions/dwm/pageClient.tsx', import.meta.url)), false)
-        assert.equal(existsSync(new URL('../src/app/dwm/pageClient.tsx', import.meta.url)), false)
+        const routeMap = JSON.parse(readFileSync(new URL('../src/utils/routes/appRoutes.json', import.meta.url), 'utf8')) as [string, string][]
+        assert.ok(routeMap.some(([dashboard, canonical]) => dashboard === '/dashboard/findings' && canonical === '/findings'))
+        assert.equal(existsSync(new URL('../src/app/dashboard/findings/page.tsx', import.meta.url)), true)
     })
 
     test('renders only persisted DWM workflow history', () => {
-        const portal = readFileSync(new URL('../src/app/dashboard/dwm/dwm-analyst-portal.tsx', import.meta.url), 'utf8')
-        const actions = readFileSync(new URL('../src/app/dashboard/dwm/dwm-workflow-actions.tsx', import.meta.url), 'utf8')
-        const readinessRoute = readFileSync(new URL('../src/app/api/dwm/alerts/generation-readiness/route.ts', import.meta.url), 'utf8')
-        const exposureQueueRoute = readFileSync(new URL('../src/app/api/dwm/exposure-queue/route.ts', import.meta.url), 'utf8')
+        const portal = readFileSync(new URL('../src/app/dashboard/findings/findings.tsx', import.meta.url), 'utf8')
+        const actions = readFileSync(new URL('../src/app/dashboard/findings/workflow-actions.tsx', import.meta.url), 'utf8')
+        const readinessRoute = readFileSync(new URL('../src/app/api/findings/alerts/generation-readiness/route.ts', import.meta.url), 'utf8')
+        const exposureQueueRoute = readFileSync(new URL('../src/app/api/findings/exposure-queue/route.ts', import.meta.url), 'utf8')
 
         assert.doesNotMatch(portal, /hanasand:dwm-case-state/)
         assert.doesNotMatch(portal, /new Date\(\)\.toISOString\(\)/)

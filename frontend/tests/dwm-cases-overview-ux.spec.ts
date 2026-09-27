@@ -14,12 +14,12 @@ test('shared cases preserves scope and has a product-independent empty state', a
     await authenticate(context, baseURL)
     let casesRequest: URL | undefined
     const dwmRequests: string[] = []
-    page.on('request', request => { if (request.url().includes('/api/dwm/')) dwmRequests.push(request.url()) })
+    page.on('request', request => { if (request.url().includes('/api/findings/')) dwmRequests.push(request.url()) })
     await page.route('**/api/cases?**', async route => {
         casesRequest = new URL(route.request().url())
         await route.fulfill({ json: { items: [] } })
     })
-    await page.goto('/dwm/cases?organizationId=org_acme')
+    await page.goto('/findings/cases?organizationId=org_acme')
     await expect(page).toHaveURL(/\/cases\?organizationId=org_acme$/)
     await expect(page.getByRole('heading', { name: 'Cases', exact: true })).toBeVisible()
     await expect(page.getByText('No cases yet.', { exact: true })).toBeVisible()

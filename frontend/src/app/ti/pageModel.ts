@@ -1062,11 +1062,11 @@ export function isPlainRecord(value: unknown): value is Record<string, unknown> 
 }
 
 export function normalizedAuthenticatedRoute(route: string | undefined) {
-    if (!route) return '/dwm'
+    if (!route) return '/findings'
     if (route.startsWith('/v1/cases')) return '/dashboard'
-    if (route.startsWith('/v1/dwm')) return '/dwm'
-    if (route.startsWith('/dwm') || route.startsWith('/ti/') || route === '/dashboard') return route
-    return '/dwm'
+    if (route.startsWith('/v1/dwm')) return '/findings'
+    if (route.startsWith('/findings') || route.startsWith('/ti/') || route === '/dashboard') return route
+    return '/findings'
 }
 
 export function timelineFor(result: TiSearchResponse, selected?: AnalystWorkItem) {
@@ -1219,7 +1219,7 @@ export function watchlistWorkbenchRowsFor({
             ...intersections.flatMap(item => item.blockers.map(blocker => blocker.handoff)),
         ].map(displayRequirementText)).slice(0, 6)
         const state: WatchlistWorkbenchRow['state'] = matched ? 'ready' : actionability.exportPayloads.watchlist.blocked || blockers.length ? 'blocked' : 'review'
-        const route = intersections[0]?.route || actionability.exportPayloads.watchlist.backedRoute || actionability.exportPayloads.watchlist.route || '/dwm'
+        const route = intersections[0]?.route || actionability.exportPayloads.watchlist.backedRoute || actionability.exportPayloads.watchlist.route || '/findings'
         const casePath = intersections.flatMap(item => [item.casePath, ...item.casePaths]).find((value): value is string => Boolean(value))
         const intersectionDetail = intersections[0] ? `${watchlistIntersectionActionLabel(intersections[0].recommendedAction)} for ${parsed.value}.` : ''
         const payload = {
@@ -4116,14 +4116,14 @@ export function displayRequirementText(value: string) {
         .replace(/GET\s+\/api\/organizations\/:id\/alert-status/gi, 'Check org alert state')
         .replace(/\/api\/organizations\/:id\/alert-readiness/gi, 'org alert state')
         .replace(/\/api\/organizations\/:id\/alert-status/gi, 'org alert state')
-        .replace(/\/api\/dwm\/alerts\/generation-readiness/gi, 'alert generation state')
-        .replace(/\/api\/dwm\/alerts\/generation-status/gi, 'alert generation state')
-        .replace(/\/v1\/dwm\/alerts\/generation-readiness/gi, 'alert generation state')
-        .replace(/\/v1\/dwm\/alerts\/generation-status/gi, 'alert generation state')
+        .replace(/\/api\/findings\/alerts\/generation-readiness/gi, 'alert generation state')
+        .replace(/\/api\/findings\/alerts\/generation-status/gi, 'alert generation state')
+        .replace(/\/v1\/findings\/alerts\/generation-readiness/gi, 'alert generation state')
+        .replace(/\/v1\/findings\/alerts\/generation-status/gi, 'alert generation state')
         .replace(/\/v1\/cases\/:caseId\/action-replay-export/gi, 'case action replay')
-        .replace(/\/v1\/dwm\/alerts\/rebuild/gi, 'alert rebuild')
-        .replace(/\/v1\/dwm\/watchlists/gi, 'watchlist update')
-        .replace(/\/v1\/dwm\/webhooks\/deliver/gi, 'webhook delivery')
+        .replace(/\/v1\/findings\/alerts\/rebuild/gi, 'alert rebuild')
+        .replace(/\/v1\/findings\/watchlists/gi, 'watchlist update')
+        .replace(/\/v1\/findings\/webhooks\/deliver/gi, 'webhook delivery')
         .replace(/\/v1\/cases/gi, 'case actions')
         .replace(/generatedAlertReferences/gi, 'generated alert references')
         .replace(/TiSearchResponse\.actorIntelligence\.malwareTools\/campaigns/gi, 'actor tooling and campaign fields')

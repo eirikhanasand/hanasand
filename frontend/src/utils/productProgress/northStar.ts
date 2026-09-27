@@ -411,7 +411,7 @@ export function buildProductNorthStarScoreboard(payload: ProductProgressReadines
             id: 'shared_watchlists',
             label: 'Shared watchlists',
             snapshot: external.orgAlertExport,
-            fallbackHref: '/dwm',
+            fallbackHref: '/findings',
             fallbackOwner: 'org',
             fallbackExpectedDashboardRowId: 'org_alert_export',
             fallbackContract: 'organization.watchlist_alert_terms_export.v1',
@@ -651,7 +651,7 @@ function organizationsRow(external: ProductReadinessExternalState, generatedAt: 
         state: displayState,
         ownerLane: entitlement?.ownerLane || orgExport?.ownerLane || 'org',
         detail: displayState === 'ready' ? 'Organization policy and alert-term export are both connected.' : 'Organization access needs policy and alert-term export data.',
-        href: entitlement?.href || orgExport?.href || '/dwm',
+        href: entitlement?.href || orgExport?.href || '/findings',
         proofSource: [entitlement?.source, orgExport?.source].filter(Boolean).join(' + ') || 'Organization status source not connected',
         proofTimestamp: latestTimestamp([entitlement?.proofTimestamp, orgExport?.proofTimestamp, generatedAt]) || generatedAt,
         staleAfterSeconds: Math.min(entitlement?.staleAfterSeconds || 900, orgExport?.staleAfterSeconds || 900),
@@ -705,7 +705,7 @@ function realAlertGenerationRow(external: ProductReadinessExternalState, generat
         expectedDashboardRowId: [dashboard?.expectedDashboardRowId || 'dashboard_evidence', generation?.expectedDashboardRowId || 'alert_generation_readiness'].join(','),
         backendProofContractVersion: proofContracts.join(' + ') || 'dashboard.alert_evidence.readiness.v1 + dwm.alert_generation_readiness.v1',
         blocker: state === 'ready' ? '' : blocker || 'Alert generation status is incomplete.',
-        integrationProbeHint: [dashboard?.integrationProbeHint, generation?.integrationProbeHint].filter(Boolean).join(' ') || 'GET /api/dwm/alerts/generation-status and dashboard alert evidence must both be connected.',
+        integrationProbeHint: [dashboard?.integrationProbeHint, generation?.integrationProbeHint].filter(Boolean).join(' ') || 'GET /api/findings/alerts/generation-status and dashboard alert evidence must both be connected.',
     })
 }
 
@@ -727,7 +727,7 @@ function webhookDeliveryRow(external: ProductReadinessExternalState, generatedAt
         expectedDashboardRowId: [health?.expectedDashboardRowId || 'webhook_health', dashboard?.expectedDashboardRowId || 'dashboard_evidence'].join(','),
         backendProofContractVersion: [health?.backendProofContractVersion || health?.schemaVersion, dashboard?.backendProofContractVersion || dashboard?.schemaVersion].filter(Boolean).join(' + ') || 'dwm.webhook.readiness.v1',
         blocker: state === 'ready' ? '' : [rowBlocker(health, 'Connect webhook lifecycle status.'), hasMatchedDelivery ? '' : 'No delivery row is matched to a dashboard-visible alert.'].filter(Boolean).join(' '),
-        integrationProbeHint: health?.integrationProbeHint || 'GET /api/dwm/webhooks must return active destination count and lifecycle health.',
+        integrationProbeHint: health?.integrationProbeHint || 'GET /api/findings/webhooks must return active destination count and lifecycle health.',
     })
 }
 

@@ -2,11 +2,11 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { formatClaimSummary } from '../src/utils/dwm/display.ts'
 
-const source = readFileSync(new URL('../src/app/dashboard/dwm/findings.tsx', import.meta.url), 'utf8')
-const pageSource = readFileSync(new URL('../src/app/dashboard/dwm/page.tsx', import.meta.url), 'utf8')
-const workflowSource = readFileSync(new URL('../src/app/dashboard/dwm/dwm-workflow-actions.tsx', import.meta.url), 'utf8')
+const source = readFileSync(new URL('../src/app/dashboard/findings/findings.tsx', import.meta.url), 'utf8')
+const pageSource = readFileSync(new URL('../src/app/dashboard/findings/page.tsx', import.meta.url), 'utf8')
+const workflowSource = readFileSync(new URL('../src/app/dashboard/findings/workflow-actions.tsx', import.meta.url), 'utf8')
 const caseDetailSource = readFileSync(new URL('../src/app/dashboard/cases/[id]/case-detail-client.tsx', import.meta.url), 'utf8')
-const workbenchAdapterSource = readFileSync(new URL('../src/app/dashboard/ti/workbench/dwmAlertAdapter.ts', import.meta.url), 'utf8')
+const workbenchAdapterSource = readFileSync(new URL('../src/app/dashboard/ti/workbench/alertAdapter.ts', import.meta.url), 'utf8')
 const displaySource = readFileSync(new URL('../src/utils/dwm/display.ts', import.meta.url), 'utf8')
 
 for (const token of [
@@ -112,7 +112,7 @@ assert.ok(!source.includes('workflowContext.hasWebhookRoute ? \'test available\'
 assert.ok(source.includes('return \'no retry scheduled\''), 'DWM retry state should use delivery workflow language.')
 assert.ok(!source.includes('return \'none\''), 'DWM retry state should not render dead none labels.')
 assert.ok(pageSource.includes('alerts={[]}'), 'DWM case queue should start empty before the authenticated alert proxy responds.')
-assert.ok(source.includes('fetch(`/api/dwm/alerts?${params.toString()}`'), 'DWM case queue should hydrate from the authenticated alert proxy.')
+assert.ok(source.includes('fetch(`/api/findings/alerts?${params.toString()}`'), 'DWM case queue should hydrate from the authenticated alert proxy.')
 assert.ok(!pageSource.includes('mergeDwmAlerts'), 'DWM case queue should not merge derived product matches into persisted alerts.')
 assert.ok(source.includes('const sharedCaptureCount = operations?.counts.captureCount ?? latestCaptures.length'), 'DWM shared source inventory should retain its real capture total.')
 assert.ok(source.includes('const tenantRunCaptureCount = operations?.latestRun?.captureCount || operations?.counts.captureCount || 0'), 'DWM workflow counters should show retained captures when the latest run has no new rows.')
@@ -130,7 +130,7 @@ assert.ok(source.includes('Severity / status'), 'DWM Cases should expose severit
 assert.ok(source.includes('Owner'), 'DWM Cases should expose assignment state.')
 assert.ok(source.includes('Updated'), 'DWM Cases should expose incident timing.')
 assert.ok(source.includes('fetch(`/api/cases?${params.toString()}`'), 'DWM Cases should hydrate from the scoped cases API.')
-assert.ok(source.includes('fetch(`/api/dwm/alerts?${params.toString()}`'), 'DWM Cases should enrich rows from scoped alert evidence.')
+assert.ok(source.includes('fetch(`/api/findings/alerts?${params.toString()}`'), 'DWM Cases should enrich rows from scoped alert evidence.')
 assert.ok(source.includes('view === \'cases\' ? null'), 'DWM Cases should omit workflow actions from the Cases view.')
 
 for (const token of [

@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
                     'Help with support, contact, billing, webhooks, API access, account access, legal pages, and finding the right public Hanasand page.',
                     'Do not give legal, medical, financial, or security incident advice beyond directing the user to contact support.',
                     'Do not claim to inspect private accounts or live customer data.',
-                    'Useful routes: /support, /contact, /faq, /pricing, /developers, /trust, /status, /dwm, /browser, /ti.',
+                    'Useful routes: /support, /contact, /faq, /pricing, /developers, /trust, /status, /findings, /browser, /ti.',
                     page ? `Current page: ${page}.` : '',
                 ].filter(Boolean).join(' '),
                 maxTokens: 220,

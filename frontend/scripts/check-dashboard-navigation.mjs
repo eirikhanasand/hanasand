@@ -27,7 +27,7 @@ assert.deepEqual(navigationLinks(getDashboardNavigation(memberAccess)).filter(it
 assert(!navigationLinks(getDashboardNavigation({ ...memberAccess, hasVMs: false })).some(item => item.href === '/vms'))
 assert(!operator.some(item => ['/db', '/system/updates'].includes(item.href)))
 for (const href of ['/logs', '/logs/realtime', '/logs/search', '/logs/errors']) assert(operator.some(item => item.href === href), `System administrators need access to ${href}`)
-assert.equal(all.find(item => item.href === '/dwm/actors')?.label, 'Actors')
+assert.equal(all.find(item => item.href === '/findings/actors')?.label, 'Actors')
 assert.deepEqual(all.filter(item => item.ancestors.includes('Logs & rules')).map(item => item.href), ['/logs', '/logs/realtime', '/logs/search', '/logs/errors', '/traffic', '/rules/match', '/rules/analysis', '/rules/detection'])
 for (const href of ['/vulnerabilities', '/system/rates', '/load-testing']) assert.deepEqual(all.find(item => item.href === href)?.ancestors, ['Infrastructure', 'Health'])
 assert(!all.some(item => item.ancestors.includes('Observability') || item.ancestors.includes('Security & recovery')))
@@ -36,7 +36,7 @@ for (const path of ['/management/users', '/management/roles']) {
 }
 assert(!navigationLinks(getDashboardNavigation(memberAccess)).some(item => item.href.startsWith('/management')))
 assert.deepEqual(all.find(item => item.href === '/cases')?.ancestors, ['Security & intelligence', 'Investigations'])
-assert.deepEqual(all.find(item => item.href === '/dwm/actors')?.ancestors, ['Security & intelligence', 'Intelligence'])
+assert.deepEqual(all.find(item => item.href === '/findings/actors')?.ancestors, ['Security & intelligence', 'Intelligence'])
 assert.equal(getDashboardNavigation(access)[0].href, '/dashboard')
 assert.deepEqual(all.find(item => item.href === '/management/service-accounts')?.ancestors, ['Organization', 'Access & credentials'])
 assert.deepEqual(all.find(item => item.href === '/mail')?.ancestors, ['Communication'])
@@ -48,7 +48,7 @@ assert(!orgManager.some(item => item.href === '/management/users'))
 for (const permissions of [access, memberAccess]) {
     const links = navigationLinks(getDashboardNavigation(permissions))
     assert(!links.some(item => item.href === '/solutions'), 'Marketing catalog must not appear in the internal menu')
-    for (const href of ['/dwm', '/cases', '/rules/match', '/rules/analysis', '/rules/detection', '/ti', '/browser', '/organizations', '/pwned', '/test']) assert(links.some(item => item.href === href), `Missing product destination: ${href}`)
+    for (const href of ['/findings', '/cases', '/rules/match', '/rules/analysis', '/rules/detection', '/ti', '/browser', '/organizations', '/pwned', '/test']) assert(links.some(item => item.href === href), `Missing product destination: ${href}`)
     assert(links.some(item => item.label === 'Security Scanner' && item.href === (permissions.canManageSystem ? '/scanner' : '/solutions/scanner')))
     for (const category of ['match', 'analysis', 'detection']) assert.deepEqual(links.find(item => item.href === `/rules/${category}`)?.ancestors, ['Logs & rules', 'Rules'])
 }

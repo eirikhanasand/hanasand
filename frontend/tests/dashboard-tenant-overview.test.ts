@@ -6,12 +6,12 @@ import path from 'node:path'
 test('customer overview keeps tenant monitoring separate from unscoped platform metrics', async () => {
     const root = process.cwd().endsWith(`${path.sep}frontend`) ? process.cwd() : path.join(process.cwd(), 'frontend')
     const page = await readFile(path.join(root, 'src/app/dashboard/overview/page.tsx'), 'utf8')
-    const panel = await readFile(path.join(root, 'src/app/dashboard/overview/dwmOverviewPanel.tsx'), 'utf8')
+    const panel = await readFile(path.join(root, 'src/app/dashboard/overview/overviewPanel.tsx'), 'utf8')
 
     assert.match(page, /DwmOverviewPanel/)
     assert.match(page, /organizationId=\{firstParam\(params\.organizationId\) \|\| firstParam\(params\.orgId\)\}/)
     assert.doesNotMatch(page, /Platform traffic|Domains watched|getMonitoringOverview/)
-    assert.match(panel, /fetch\(`\/api\/dwm\/product\$\{query\}`/)
+    assert.match(panel, /fetch\(`\/api\/findings\/product\$\{query\}`/)
     assert.match(panel, /const query = organizationId \? `\?organizationId=/)
     assert.match(panel, /Personal monitoring/)
     assert.match(panel, /Organization monitoring/)

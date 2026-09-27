@@ -7,7 +7,7 @@ import { test } from 'bun:test'
 test('renders a real cases overview without workflow sections', async () => {
     const frontendRoot = process.cwd().endsWith(`${path.sep}frontend`) ? process.cwd() : path.join(process.cwd(), 'frontend')
     const [portal, route] = await Promise.all([
-        readFile(path.join(frontendRoot, 'src/app/dashboard/dwm/dwm-analyst-portal.tsx'), 'utf8'),
+        readFile(path.join(frontendRoot, 'src/app/dashboard/findings/findings.tsx'), 'utf8'),
         readFile(path.join(frontendRoot, 'src/app/api/cases/route.ts'), 'utf8'),
     ])
 
