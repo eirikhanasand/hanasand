@@ -56,7 +56,9 @@ for port in $ports; do
  fi
 done
 python3 "$script_dir/start-inspur-pair.py" "$kind" "$image" "$source" $ports
-path=/ready; test "$kind" != frontend || path=/api/recovery/ready
+path=/ready
+test "$kind" != frontend || path=/api/recovery/ready
+test "$kind" != api || path=/health
 for port in $ports; do
  ready=0
  for attempt in $(seq 1 60); do
@@ -71,7 +73,7 @@ rollback() { cp "$backup" "$root/config.json"; sh scripts/recovery/start-routing
 trap rollback EXIT HUP INT TERM
 python3 - "$root/config.json" "$kind" $ports <<'JSON'
 import json,pathlib,sys
-p=pathlib.Path(sys.argv[1]);c=json.loads(p.read_text());s=next(s for s in c['services'] if s['id']==sys.argv[2]);s['checkPath']='/api/recovery/ready' if s['id']=='frontend' else '/ready'
+p=pathlib.Path(sys.argv[1]);c=json.loads(p.read_text());s=next(s for s in c['services'] if s['id']==sys.argv[2]);s['checkPath']='/api/recovery/ready' if s['id']=='frontend' else ('/health' if s['id']=='api' else '/ready')
 for item,port in zip([i for i in s['instances'] if i['site']=='inspur'],sys.argv[3:]):
  item.update(address='127.0.0.1:'+port,health='http://127.0.0.1:'+port+s['checkPath'],endpoint='inspur:'+port)
 p.write_text(json.dumps(c,indent=2))
