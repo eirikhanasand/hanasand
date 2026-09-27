@@ -18,9 +18,9 @@ export default function NotFoundSuggestions() {
             </div>
             <div className='flex flex-wrap gap-2'>
                 {suggestions.map(route => (
-                    <Link key={route} href={route} className='inline-flex h-10 items-center gap-2 rounded-lg border border-ui-border bg-white px-3 text-sm font-semibold text-black transition hover:border-ui-primary'>
+                    <Link key={route} href={route} className='inline-flex h-10 items-center gap-2 rounded-lg border border-ui-border bg-white px-3 text-sm font-semibold text-black transition hover:border-gray-400'>
                         {route === '/contact' ? 'Contact' : route}
-                        <ArrowRight className='h-4 w-4 text-black' />
+                        <ArrowRight className='h-4 w-4 text-red-500' />
                     </Link>
                 ))}
             </div>
