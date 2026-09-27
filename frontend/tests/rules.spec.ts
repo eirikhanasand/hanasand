@@ -152,9 +152,9 @@ test('Drop locks Low; broad previews require confirmation and buffered scrolling
         durations.push(Number(await table.getAttribute('data-render-ms')))
     }
     expect(Math.max(...durations)).toBeLessThan(20)
-    await expect(page.getByText(/Checking events…/)).toBeVisible()
+    await expect(page.getByText(/\d+\/\d+ Events checked\./)).toBeVisible()
     finishCount()
-    await expect(page.getByText(/Checking events…/)).toHaveCount(0)
+    await expect(page.getByText(/\d+\/\d+ Events checked\./)).toHaveCount(0)
     console.log('Buffered row update milliseconds:', durations)
     expect(await table.locator('[data-event-id]').count()).toBeLessThanOrEqual(8)
     await page.getByRole('checkbox', { name: 'Yes, I intend to match this many events.' }).scrollIntoViewIfNeeded()
