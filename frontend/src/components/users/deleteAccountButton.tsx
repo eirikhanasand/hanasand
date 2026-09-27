@@ -39,7 +39,7 @@ export default function DeleteAccountButton({ name, onDelete, label, alwaysConfi
             onClick={event => event.stopPropagation()}
             onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); if (pending) event.preventDefault() } }}
             onCancel={event => { if (pending) event.preventDefault() }}
-            className='m-auto w-96 max-w-[calc(100vw-2rem)] rounded-xl border border-ui-border bg-ui-panel p-5 text-ui-text shadow-xl backdrop:bg-black/50'>
+            className='m-auto w-96 max-w-[calc(100vw-2rem)] rounded-xl border border-ui-border bg-ui-panel p-5 text-ui-text shadow-xl backdrop:bg-ui-backdrop'>
             <h2 className='font-semibold'>Delete {name}?</h2>
             <p className='mt-2 text-sm text-ui-muted'>This account will lose access.</p>
             {!alwaysConfirm && <label className='my-4 flex items-center gap-2 text-sm'><input type='checkbox' checked={skip} disabled={pending} onChange={event => setSkip(event.target.checked)} />Don’t ask again for this session</label>}

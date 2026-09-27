@@ -324,10 +324,11 @@ function authServiceUnavailable(req: NextRequest) {
 <meta name="robots" content="noindex"><meta http-equiv="refresh" content="3">
 <title>Reconnecting your session · Hanasand</title>
 <style>
-body{margin:0;min-height:100vh;display:grid;place-items:center;background:${dark ? '#07101d' : '#f7f8fb'};color:${dark ? '#f5f7fb' : '#171a21'};font:16px/1.6 system-ui,sans-serif}
-main{max-width:28rem;margin:1.5rem;padding:2rem;border:1px solid ${dark ? '#34445f' : '#d9e2ef'};border-radius:12px;background:${dark ? '#101927' : '#fff'}}
-h1{font-size:1.5rem;line-height:1.3}p{color:${dark ? '#b9c4d6' : '#4b5565'}}
-a{display:inline-block;margin-top:.5rem;padding:.6rem 1rem;border-radius:6px;background:#3056d3;color:white;text-decoration:none;font-weight:600}a:focus-visible{outline:3px solid ${dark ? '#8fb2ff' : '#171a21'};outline-offset:3px}
+            :root{color-scheme:${dark ? 'dark' : 'light'};--ui-canvas:${dark ? '#070707' : '#f5f5f5'};--ui-panel:${dark ? '#101010' : '#ffffff'};--ui-border:${dark ? '#383838' : '#d4d4d4'};--ui-text:${dark ? '#f5f7fb' : '#171a21'};--ui-muted:${dark ? '#999999' : '#4d4d4d'};--ui-primary:${dark ? '#8fb2ff' : '#3056d3'};--ui-on-primary:${dark ? '#101010' : '#ffffff'}}
+            body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--ui-canvas);color:var(--ui-text);font:16px/1.6 system-ui,sans-serif}
+            main{max-width:28rem;margin:1.5rem;padding:2rem;border:1px solid var(--ui-border);border-radius:12px;background:var(--ui-panel)}
+            h1{font-size:1.5rem;line-height:1.3}p{color:var(--ui-muted)}
+            a{display:inline-block;margin-top:.5rem;padding:.6rem 1rem;border-radius:6px;background:var(--ui-primary);color:var(--ui-on-primary);text-decoration:none;font-weight:600}a:focus-visible{outline:3px solid var(--ui-primary);outline-offset:3px}
 </style></head><body><main>
 <p>Hanasand</p><h1>Reconnecting your session</h1>
 <p role="status">We couldn’t check your session just now. We’ll try again automatically in a few seconds.</p>

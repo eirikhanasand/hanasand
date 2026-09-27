@@ -62,10 +62,10 @@ export default function CreateRuleDialog({ category, organizationId, canManage, 
             if (active.current) onCreated(result.rule)
         } catch (cause) { if (!active.current) return; setError(cause instanceof Error ? cause.message : 'Could not create rule.'); setBusy(false) }
     }
-    return <dialog ref={dialog} id='event-rule-create' aria-labelledby='create-rule-title' onCancel={event => { event.preventDefault(); if (!busy) onClose() }} className='m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-5xl overflow-y-auto rounded-xl border border-ui-border bg-ui-panel p-5 text-ui-text shadow-2xl backdrop:bg-black/60 sm:p-6'>
+    return <dialog ref={dialog} id='event-rule-create' aria-labelledby='create-rule-title' onCancel={event => { event.preventDefault(); if (!busy) onClose() }} className='m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-5xl overflow-y-auto rounded-xl border border-ui-border bg-ui-panel p-5 text-ui-text shadow-2xl backdrop:bg-ui-backdrop sm:p-6'>
         <header className='mb-5 flex items-center justify-between gap-3'><h2 id='create-rule-title' className='text-xl font-semibold'>Create rule</h2><button type='button' aria-label='Close create rule' disabled={busy} onClick={onClose} className='rounded-md border border-ui-border px-3 py-2 text-sm'>Close</button></header>
         <form onSubmit={event => { event.preventDefault(); void submit() }} className='grid min-w-0 gap-5'>
-            {error && <p role='alert' className='rounded-md border border-red-400/40 p-3 text-sm'>{error}</p>}
+            {error && <p role='alert' className='rounded-md border border-ui-danger/40 bg-ui-raised p-3 text-sm text-ui-text'>{error}</p>}
             <fieldset disabled={busy} className='grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]'>
                 <div className='grid min-w-0 content-start gap-4'>
                     <label className='grid gap-1 text-sm'>Name<input autoFocus required minLength={2} maxLength={120} aria-label='Rule name' value={name} onChange={event => setName(event.target.value)} className={ruleInput} /></label>

@@ -69,7 +69,7 @@ export default function BackupPage({ backups, files, loadError = '' }: BackupPag
                         type='button'
                         onClick={runBackup}
                         disabled={busy}
-                        className='inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60'
+                        className='inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary disabled:cursor-not-allowed disabled:opacity-60'
                         data-backup-primary-action
                     >
                         <RefreshCw className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} />

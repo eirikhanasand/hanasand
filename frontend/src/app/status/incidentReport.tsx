@@ -18,7 +18,7 @@ export default function IncidentReport({ incident }: { incident: ServiceIncident
         <header className='border-b border-ui-border p-6 sm:p-8'>
             <div className='flex flex-wrap items-center justify-between gap-3'>
                 <p className='text-xs font-semibold uppercase tracking-wide text-ui-primary'>{incident.service}</p>
-                <span className={`rounded-full px-3 py-1 text-sm font-semibold ${resolved ? 'bg-green-500/10 text-green-700 dark:text-green-400' : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'}`}>{resolved ? 'Resolved' : 'Active incident'}</span>
+                <span className={`rounded-full px-3 py-1 text-sm font-semibold ${resolved ? 'bg-ui-success/10 text-ui-success' : 'bg-ui-warning/10 text-ui-warning'}`}>{resolved ? 'Resolved' : 'Active incident'}</span>
             </div>
             <h1 className='mt-3 text-2xl font-semibold tracking-tight text-ui-text sm:text-3xl'>{incident.title}</h1>
             <dl className='mt-5 grid gap-4 text-sm sm:grid-cols-3'>
@@ -38,7 +38,7 @@ export default function IncidentReport({ incident }: { incident: ServiceIncident
             </div>
             <ol className='mt-6 border-l border-ui-border'>
                 {updates.slice(0, visibleCount).map((update, index) => <li key={`${update.at}-${index}`} className='relative pb-7 pl-6 last:pb-0'>
-                    <span aria-hidden='true' className={`absolute -left-1.5 top-1.5 h-3 w-3 rounded-full border-2 border-ui-panel ${update.status === 'resolved' ? 'bg-green-500' : 'bg-amber-500'}`} />
+                    <span aria-hidden='true' className={`absolute -left-1.5 top-1.5 h-3 w-3 rounded-full border-2 border-ui-panel ${update.status === 'resolved' ? 'bg-ui-success' : 'bg-ui-warning'}`} />
                     <div className='flex flex-wrap items-baseline justify-between gap-2'>
                         <h3 className='font-semibold text-ui-text'>{labels[update.status] || update.status}</h3>
                         <time dateTime={update.at} className='text-xs tabular-nums text-ui-muted'>{timestamp(update.at)}</time>

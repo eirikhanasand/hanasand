@@ -50,11 +50,11 @@ export default function NotFound() {
                         The link may have moved, or it is private.
                     </p>
                     <div className='flex flex-wrap gap-3'>
-                        <Link href='/ti' className='inline-flex h-11 items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-4 text-sm font-semibold text-ui-text transition hover:border-gray-400'>
+                        <Link href='/ti' className='inline-flex h-11 items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
                             Search threat intelligence
-                            <ArrowRight className='h-4 w-4 text-red-500' />
+                            <ArrowRight className='h-4 w-4 text-ui-danger' />
                         </Link>
-                        <Link href='/contact?intent=dwm' className='inline-flex h-11 items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-4 text-sm font-semibold text-ui-text transition hover:border-gray-400'>
+                        <Link href='/contact?intent=dwm' className='inline-flex h-11 items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
                             Contact sales
                         </Link>
                     </div>
@@ -64,14 +64,14 @@ export default function NotFound() {
                     {recoveryLinks.map((item) => {
                         const Icon = item.icon
                         return (
-                            <Link key={item.href} href={item.href} className='group grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-gray-400 hover:shadow-md'>
+                            <Link key={item.href} href={item.href} className='group grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-ui-primary hover:shadow-md'>
                                 <span className='grid h-11 w-11 place-items-center rounded-lg border border-ui-border bg-ui-raised text-ui-text'>
                                     <Icon className='h-5 w-5' />
                                 </span>
                                 <span className='grid gap-2'>
                                     <span className='flex items-center justify-between gap-3 text-base font-semibold text-ui-text'>
                                         {item.title}
-                                        <ArrowRight className='h-4 w-4 shrink-0 text-red-500 transition' />
+                                        <ArrowRight className='h-4 w-4 shrink-0 text-ui-danger transition' />
                                     </span>
                                     <span className='text-sm leading-6 text-ui-muted'>{item.body}</span>
                                 </span>

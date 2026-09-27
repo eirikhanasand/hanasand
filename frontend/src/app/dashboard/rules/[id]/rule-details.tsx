@@ -84,7 +84,7 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
     }
     return <DashboardPage className='!gap-6 !px-2 !py-4'>
         <Link href={`/rules/${getRuleCategory(data?.rule || { id })}?organizationId=${encodeURIComponent(organizationId)}`} className='inline-flex w-fit items-center gap-2 rounded-md text-sm font-medium text-ui-muted hover:text-ui-primary'><ArrowLeft size={16} aria-hidden='true' />{ruleCategories[getRuleCategory(data?.rule || { id })].label}</Link>
-        {error && <div role='alert' className='rounded-lg border border-red-500 p-4'>{error} {data && <button type='button' disabled={busy} onClick={() => void reload()} className='ml-3 underline'>Reload rule</button>}</div>}
+        {error && <div role='alert' className='rounded-lg border border-ui-danger/40 bg-ui-raised p-4 text-ui-text'>{error} {data && <button type='button' disabled={busy} onClick={() => void reload()} className='ml-3 underline hover:text-ui-primary'>Reload rule</button>}</div>}
         {status && <p role='status'>{status}</p>}
         {!draft && !error && <div role='status' aria-label='Loading rule' className='flex justify-center py-12 text-ui-primary'><LoaderCircle aria-hidden className='h-6 w-6 animate-spin motion-reduce:animate-none' /></div>}
         {draft && data && <>
@@ -107,7 +107,7 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
                     </dl>
                 </header>
             </DashboardPanel>
-            {data.isHistorical && <p role='status' className='rounded-lg border border-amber-500/40 p-4 text-sm'>You are viewing a historical signature. <Link className='underline' href={`/rules/${draft.id.replace(/\.v\d+$/, '')}`}>Open current rule</Link></p>}
+            {data.isHistorical && <p role='status' className='rounded-lg border border-ui-warning/40 bg-ui-raised p-4 text-sm text-ui-text'>You are viewing a historical signature. <Link className='underline text-ui-primary' href={`/rules/${draft.id.replace(/\.v\d+$/, '')}`}>Open current rule</Link></p>}
             <form onSubmit={event => { event.preventDefault(); void save() }} className='grid min-w-0 gap-4'>
                 <SignatureEditor rule={draft} disabled={!data.canEdit || busy} onChange={definition => setDraft({ ...draft, definition, severity: definition.action === 'drop' ? 'low' : draft.severity })} />
                 <div className='grid min-w-0 items-start gap-4'>

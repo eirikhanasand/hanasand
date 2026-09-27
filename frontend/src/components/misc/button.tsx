@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import type { JSX } from 'react'
+import type { JSX, MouseEventHandler } from 'react'
 
 type ButtonProps = {
     text: string
@@ -9,8 +9,11 @@ type ButtonProps = {
     type?: 'button' | 'submit' | 'reset'
     variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger'
     size?: 'sm' | 'md' | 'lg'
-    onClick?: (_: object | string) => void
+    onClick?: MouseEventHandler<HTMLButtonElement>
     disabled?: boolean
+    'aria-label'?: string
+    'aria-expanded'?: boolean
+    'aria-controls'?: string
 }
 
 const variants = {
@@ -30,14 +33,17 @@ export default function Button({
     size = 'md',
     type = 'button',
     onClick,
-    disabled
+    disabled,
+    'aria-label': ariaLabel,
+    'aria-expanded': ariaExpanded,
+    'aria-controls': ariaControls
 }: ButtonProps) {
     const classes = `ui-button ${variants[variant]} ui-button-${size} ${className}`
     const contents = <>{icon ? <span className='shrink-0' aria-hidden='true'>{icon}</span> : null}<span>{text}</span></>
 
     if (path) {
-        return <Link href={path} aria-disabled={disabled || undefined} tabIndex={disabled ? -1 : undefined} className={`${classes}${disabled ? ' pointer-events-none opacity-55' : ''}`}>{contents}</Link>
+        return <Link href={path} aria-label={ariaLabel} aria-disabled={disabled || undefined} aria-expanded={ariaExpanded} aria-controls={ariaControls} tabIndex={disabled ? -1 : undefined} className={`${classes}${disabled ? ' pointer-events-none opacity-55' : ''}`}>{contents}</Link>
     }
 
-    return <button type={type} disabled={disabled} onClick={onClick} aria-label={text} className={classes}>{contents}</button>
+    return <button type={type} disabled={disabled} onClick={onClick} aria-label={ariaLabel || text} aria-expanded={ariaExpanded} aria-controls={ariaControls} className={classes}>{contents}</button>
 }

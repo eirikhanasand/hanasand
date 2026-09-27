@@ -124,7 +124,7 @@ export default function WorkspaceProvider({ initial, enabled: authenticated, chi
                     </div>
                     <h1 className='text-xl font-semibold tracking-tight'>{error ? 'Could not switch workspace' : 'Switching workspace'}</h1>
                     {error ? <><p role='alert' className='mt-3 text-sm leading-6 text-ui-muted'>{error}</p><div className='mt-7 flex flex-col gap-3'>
-                        <button className='rounded-lg bg-ui-primary px-4 py-3 text-sm font-semibold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2' onClick={() => void switchOrganization(requested)}>Retry</button>
+                        <button className='rounded-lg bg-ui-primary px-4 py-3 text-sm font-semibold text-ui-on-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2' onClick={() => void switchOrganization(requested)}>Retry</button>
                         <a className='rounded-lg border border-ui-border px-4 py-3 text-sm font-medium hover:bg-ui-canvas' href={cleanWorkspaceUrl(`${pathname}?${params}`)}>Keep current workspace</a>
                     </div></> : <><p className='mt-3 text-sm leading-6 text-ui-muted'>Loading your workspace. This should only take a moment.</p><div role='status' className='mt-7 flex items-center justify-center gap-2 text-sm text-ui-muted'><LoaderCircle aria-hidden className='h-4 w-4 animate-spin motion-reduce:animate-none' />Switching organization…</div></>}
                 </section>

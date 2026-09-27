@@ -192,7 +192,7 @@ export default function AutomationsClient({ setup, initial, mode = 'health', sys
     }
 
     if (!automations.length && loadError) return <ErrorNotice message={loadError} actionLabel={busy ? 'Retrying…' : 'Try again'} onAction={() => void load()} />
-    if (!automations.length && !editing) return <div className='grid min-h-64 place-items-center rounded-xl border border-ui-border bg-ui-panel p-6 text-center'><div><h2 className='text-xl font-semibold text-ui-text'>{mode === 'cron' ? 'No jobs' : 'No health checks yet'}</h2>{mode === 'cron' && systemJobCount ? <button type='button' onClick={() => router.push('/automation/cron?scope=system')} className='mx-auto mt-2 block w-fit text-center text-sm font-normal text-ui-primary hover:underline'>System jobs ({systemJobCount})</button> : <p className='mt-2 text-sm text-ui-muted'>{mode === 'cron' ? 'Got something to keep an eye on? Schedule it here.' : 'Add your first check to start monitoring a service.'}</p>}<button type='button' onClick={beginCreate} className='mx-auto mt-4 block min-w-40 rounded-lg bg-ui-primary px-6 py-2 text-sm font-semibold text-white'>{mode === 'cron' ? 'Create job' : 'Create health check'}</button></div></div>
+    if (!automations.length && !editing) return <div className='grid min-h-64 place-items-center rounded-xl border border-ui-border bg-ui-panel p-6 text-center'><div><h2 className='text-xl font-semibold text-ui-text'>{mode === 'cron' ? 'No jobs' : 'No health checks yet'}</h2>{mode === 'cron' && systemJobCount ? <button type='button' onClick={() => router.push('/automation/cron?scope=system')} className='mx-auto mt-2 block w-fit text-center text-sm font-normal text-ui-primary hover:underline'>System jobs ({systemJobCount})</button> : <p className='mt-2 text-sm text-ui-muted'>{mode === 'cron' ? 'Got something to keep an eye on? Schedule it here.' : 'Add your first check to start monitoring a service.'}</p>}<button type='button' onClick={beginCreate} className='mx-auto mt-4 block min-w-40 rounded-lg bg-ui-primary px-6 py-2 text-sm font-semibold text-ui-on-primary'>{mode === 'cron' ? 'Create job' : 'Create health check'}</button></div></div>
 
     return (
         <div className='grid gap-4'>
@@ -260,7 +260,7 @@ function WelcomeState({ onCreate, compact = false }: { onCreate: () => void, com
             </div>
             <h2 className='text-3xl font-semibold text-(--automation-cloud-ink)'>Create automation</h2>
             <p className='mx-auto mt-3 max-w-lg text-base leading-7 text-(--automation-cloud-ink)/70'>Check that everything is working as it should, and get alerted if something is wrong.</p>
-            <button type='button' onClick={onCreate} className='mt-7 inline-flex h-11 min-w-32 items-center justify-center gap-2 rounded-lg bg-(--automation-cloud-ink) px-5 text-sm font-semibold text-white shadow-lg shadow-black/20 hover:opacity-90'><Plus className='h-4 w-4' />Create</button>
+            <button type='button' onClick={onCreate} className='mt-7 inline-flex h-11 min-w-32 items-center justify-center gap-2 rounded-lg bg-ui-primary px-5 text-sm font-semibold text-ui-on-primary shadow-lg hover:opacity-90'><Plus className='h-4 w-4' />Create</button>
         </div>
     </section>
 }

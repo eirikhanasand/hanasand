@@ -1549,7 +1549,7 @@ function BrowserLoading({ stage, elapsed, target, queuePosition, onCancel }: { s
     const steps = ['Connect', 'Start browser', 'Load page', 'First frame']
     const labels = ['Connecting…', 'Starting browser…', 'Loading page…', 'Preparing your view…']
     return <div className='flex min-h-[65vh] items-center justify-center p-5' data-browser-loading>
-        <section className='w-full max-w-xl overflow-hidden rounded-2xl border border-ui-border bg-ui-panel shadow-xl shadow-black/5' aria-label='Browser startup'>
+        <section className='w-full max-w-xl overflow-hidden rounded-2xl border border-ui-border bg-ui-panel shadow-ui-soft' aria-label='Browser startup'>
             <div className='relative border-b border-ui-border bg-ui-primary/5 px-6 pb-7 pt-8 sm:px-8'>
                 <div className='mb-6 flex items-center justify-between'>
                     <div className='relative grid size-14 place-items-center rounded-2xl border border-ui-primary/20 bg-ui-primary/10 text-ui-primary'>

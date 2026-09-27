@@ -100,7 +100,18 @@ export default function VmConsole({ name }: { name: string }) {
             if (disposed) return
             const [{ Terminal }, { FitAddon }] = await Promise.all([import('@xterm/xterm'), import('@xterm/addon-fit')])
             if (disposed || !container.current) return
-            const terminal = new Terminal({ cursorBlink: true, fontSize: 14, scrollback: 5000, theme: { background: '#08111f', foreground: '#e6edf3' } })
+            const palette = getComputedStyle(document.documentElement)
+            const terminal = new Terminal({
+                cursorBlink: true,
+                fontSize: 14,
+                scrollback: 5000,
+                theme: {
+                    background: palette.getPropertyValue('--ui-canvas').trim(),
+                    foreground: palette.getPropertyValue('--ui-text').trim(),
+                    cursor: palette.getPropertyValue('--ui-primary').trim(),
+                    selectionBackground: palette.getPropertyValue('--ui-selection').trim()
+                }
+            })
             const fit = new FitAddon()
             terminal.loadAddon(fit)
             terminal.open(container.current)
@@ -221,6 +232,6 @@ export default function VmConsole({ name }: { name: string }) {
             <pre ref={bootPanel} onScroll={event => { const el = event.currentTarget; followBoot.current = el.scrollHeight - el.scrollTop - el.clientHeight < 4 }} className='mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-xs' aria-label='VM restart log'>{bootLog || 'Waiting for boot output…'}</pre>
         </details>}
         {opening && <div role='status' className='flex items-center gap-3 rounded-lg border border-ui-primary/25 bg-ui-primary/5 px-4 py-3 text-sm text-ui-primary'><LoaderCircle className='h-5 w-5 animate-spin' aria-hidden />{status}</div>}
-        <div ref={container} aria-label={`${name} terminal`} className='min-h-0 min-w-0 flex-1 overflow-hidden rounded-lg bg-[#08111f] p-2' />
+        <div ref={container} aria-label={`${name} terminal`} className='min-h-0 min-w-0 flex-1 overflow-hidden rounded-lg border border-ui-border bg-ui-canvas p-2' />
     </section>
 }

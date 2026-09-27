@@ -30,7 +30,7 @@ export function RecoveryBanner() {
     const state = useRecovery()
     if (!state || state.mode === 'normal') return null
     const unavailable = state.services.filter(service => service.status === 'unavailable').map(service => service.name)
-    return <div role='status' className='border-b border-amber-500/40 bg-amber-500/10 px-5 py-3 text-sm'>
+    return <div role='status' className='border-b border-ui-warning/40 bg-ui-warning/10 px-5 py-3 text-sm text-ui-text'>
         {state.mode === 'unknown' || state.stale ? 'Service status is reconnecting. Some actions may be temporarily unavailable.'
             : state.readOnly ? 'Recovery mode: existing records remain available where replication is healthy. Changes and new processing are paused.'
                 : 'Running on a backup server.'}

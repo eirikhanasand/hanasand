@@ -279,7 +279,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
                     if (previewCloseTimer.current !== null) window.clearTimeout(previewCloseTimer.current)
                 }} onMouseLeave={deferPreviewClose}
                 style={{ position: 'fixed', left: 80, top: preview.top, maxHeight: preview.maxHeight }}
-                className='z-[200] w-72 overflow-y-auto rounded-xl border border-ui-border bg-ui-panel p-2 text-ui-text shadow-xl shadow-black/20'>
+                className='z-[200] w-72 overflow-y-auto rounded-xl border border-ui-border bg-ui-panel p-2 text-ui-text shadow-ui-panel'>
                     <p className='px-3 py-2 text-sm font-semibold'>{preview.section.label}</p>
                     {renderPreviewItems(preview.section.items || [], [preview.section.label])}
                 </div>, document.body,

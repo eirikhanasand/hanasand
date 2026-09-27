@@ -19,7 +19,12 @@ export type MonitoringCase = CaseRow & {
 }
 
 const control = 'rounded-lg border border-ui-border bg-ui-canvas px-3 py-2 text-sm text-ui-text disabled:cursor-not-allowed disabled:opacity-50'
-const severityColor: Record<string, string> = { low: '#89CFF0', medium: '#22C55E', high: '#FACC15', critical: '#EF4444' }
+const severityColor: Record<string, string> = {
+    low: 'var(--ui-muted)',
+    medium: 'var(--ui-success)',
+    high: 'var(--ui-warning)',
+    critical: 'var(--ui-danger)'
+}
 const headerControl = `${control} inline-flex h-10 min-w-28 items-center justify-center whitespace-nowrap`
 const date = (value?: string) => value ? new Date(value).toLocaleString() : '—'
 

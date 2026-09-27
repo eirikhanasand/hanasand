@@ -29,11 +29,11 @@ export default function SupportAssistant({ force = false, internal = false }: { 
 
     return (
         <div ref={floating.ref} style={floating.style} className={`fixed z-[1100] ${floating.moving ? '' : 'transition-[right,bottom] duration-300 ease-out motion-reduce:transition-none'}`}>
-            <section role='dialog' aria-label='Support assistant' onKeyDown={event => { if (event.key === 'Escape') setOpenPath(null) }} className={`${open ? 'grid' : 'hidden'} h-[min(36rem,calc(100dvh-2rem))] w-[min(25rem,calc(100vw-2rem))] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-2xl border border-ui-border bg-ui-panel text-ui-text shadow-[0_24px_80px_rgba(0,0,0,0.18)]`}>
+            <section role='dialog' aria-label='Support assistant' onKeyDown={event => { if (event.key === 'Escape') setOpenPath(null) }} className={`${open ? 'grid' : 'hidden'} h-[min(36rem,calc(100dvh-2rem))] w-[min(25rem,calc(100vw-2rem))] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-2xl border border-ui-border bg-ui-panel text-ui-text shadow-ui-panel`}>
                 <header className='flex items-center justify-between gap-3 border-b border-ui-border px-5 py-4'>
                     <button type='button' {...floating.handlers} aria-label='Move support window' title='Drag to move, or use the arrow keys' className='flex min-w-0 flex-1 touch-none select-none items-center gap-3 rounded-lg text-left cursor-grab active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-ui-primary'><GripVertical className='h-4 w-4 shrink-0 text-ui-muted' aria-hidden='true' /><span className='grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-ui-primary text-ui-canvas'><Sparkles className='h-4 w-4' aria-hidden='true' /></span><span><span className='block text-sm font-semibold'>Hanasand AI</span><span className='mt-0.5 block text-xs text-ui-muted'>Support</span></span></button>
                     {!floating.isDefault ? <button type='button' onClick={floating.reset} title='Reset support position' aria-label='Reset support position' className='grid h-9 w-9 shrink-0 place-items-center rounded-lg text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>
-                        <svg viewBox='0 0 24 24' className='h-5 w-5' aria-hidden='true'><rect x='3' y='3' width='18' height='18' rx='2' fill='none' stroke='currentColor' strokeWidth='1.5' /><circle cx='16.5' cy='16.5' r='3' className='fill-blue-600' /></svg>
+                        <svg viewBox='0 0 24 24' className='h-5 w-5' aria-hidden='true'><rect x='3' y='3' width='18' height='18' rx='2' fill='none' stroke='currentColor' strokeWidth='1.5' /><circle cx='16.5' cy='16.5' r='3' className='fill-ui-danger' /></svg>
                     </button> : null}
                     <button type='button' onClick={() => setOpenPath(null)} className='grid h-9 w-9 place-items-center rounded-lg text-ui-muted transition hover:bg-ui-raised hover:text-ui-text' aria-label='Close support assistant'>
                         <X className='h-5 w-5' />
@@ -48,7 +48,7 @@ export default function SupportAssistant({ force = false, internal = false }: { 
                     {...floating.handlers}
                     onClick={() => { if (!floating.wasDragged()) setOpenPath(pathname) }}
                     title='Drag to move, or use the arrow keys'
-                    className='relative grid h-14 w-14 touch-none select-none place-items-center rounded-full bg-[rgba(64,64,64,0.62)] text-[#a6a6a6] shadow-[0_12px_36px_rgba(0,0,0,0.2)] backdrop-blur-sm transition-colors hover:bg-[rgba(72,72,72,0.94)] hover:text-[#d0d0d0] cursor-grab active:cursor-grabbing'
+                    className='relative grid h-14 w-14 touch-none select-none place-items-center rounded-full border border-ui-border bg-ui-raised text-ui-muted shadow-lg backdrop-blur-sm transition-colors hover:bg-ui-panel hover:text-ui-text cursor-grab active:cursor-grabbing'
                     aria-label='Open support assistant'
                 >
                     <MessageCircle className='h-6 w-6' />

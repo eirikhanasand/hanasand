@@ -159,7 +159,7 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
 
     return (
         <main className='mx-auto grid max-w-5xl gap-6 pb-8'>
-            <section className={`rounded-md border-l-2 bg-ui-raised px-5 py-4 text-ui-text ${overall === 'up' ? 'border-green-500' : overall === 'degraded' ? 'border-amber-500' : overall === 'unknown' ? 'border-ui-border' : 'border-ui-danger'}`}>
+            <section className={`rounded-md border-l-2 bg-ui-raised px-5 py-4 text-ui-text ${overall === 'up' ? 'border-ui-success' : overall === 'degraded' ? 'border-ui-warning' : overall === 'unknown' ? 'border-ui-border' : 'border-ui-danger'}`}>
                 <div className='flex flex-wrap items-center justify-between gap-3'>
                     <div className='flex items-center gap-3'>
                         {overall === 'up' ? <CheckCircle className='h-5 w-5' /> : <AlertCircle className='h-5 w-5' />}
@@ -228,7 +228,7 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
 
 function IncidentTag({ label, tone }: { label: string, tone: 'ok' | 'warn' }) {
     return (
-        <span className={`rounded-full px-2 py-1 text-xs font-semibold uppercase ${tone === 'ok' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
+        <span className={`rounded-full px-2 py-1 text-xs font-semibold uppercase ${tone === 'ok' ? 'bg-ui-success/10 text-ui-success' : 'bg-ui-warning/10 text-ui-warning'}`}>
             {label}
         </span>
     )
@@ -255,16 +255,16 @@ function formatUptime(value: string) {
 }
 
 function barClass(status: ServiceStatus['checks'][number]['status']) {
-    if (status === 'unknown') return 'bg-slate-600'
-    if (status === 'down') return 'bg-red-500 hover:ring-2 hover:ring-red-300'
-    if (status === 'degraded') return 'bg-amber-400 hover:ring-2 hover:ring-amber-200'
-    return 'bg-green-300'
+    if (status === 'unknown') return 'bg-ui-muted'
+    if (status === 'down') return 'bg-ui-danger hover:ring-2 hover:ring-ui-danger/40'
+    if (status === 'degraded') return 'bg-ui-warning hover:ring-2 hover:ring-ui-warning/40'
+    return 'bg-ui-success'
 }
 
 function statusPillClass(status: ServiceStatus['checks'][number]['status']) {
-    if (status === 'up') return 'bg-green-600 text-white'
-    if (status === 'degraded') return 'bg-amber-100 text-amber-800'
-    return status === 'unknown' ? 'bg-slate-200 text-slate-800' : 'border border-ui-danger/40 bg-ui-raised text-ui-text'
+    if (status === 'up') return 'bg-ui-success text-ui-on-primary'
+    if (status === 'degraded') return 'bg-ui-warning/10 text-ui-warning'
+    return status === 'unknown' ? 'bg-ui-raised text-ui-muted' : 'border border-ui-danger/40 bg-ui-raised text-ui-text'
 }
 
 function historyDaysFor(status: ServiceStatus, check: ServiceStatus['checks'][number]) {
@@ -283,7 +283,7 @@ function historyDaysFor(status: ServiceStatus, check: ServiceStatus['checks'][nu
             displayStatus: dayDisplayStatus(rowStatus, incident),
             incident,
             description: row?.samples ? `${formatDate(date)}: ${((row.healthy_samples || 0) / row.samples * 100).toFixed(2)}% operational across ${row.samples} checks. ${row.failed_samples || 0} failed; ${row.degraded_samples || 0} degraded.` : `${formatDate(date)}: ${rowStatus === 'unknown' ? 'No verified history' : rowStatus === 'up' ? 'Operational' : incident?.summary || rowStatus}`,
-            style: row?.samples ? { background: `linear-gradient(to top, #86efac 0% ${(row.healthy_samples || 0) / row.samples * 100}%, #fbbf24 ${(row.healthy_samples || 0) / row.samples * 100}% ${((row.healthy_samples || 0) + (row.degraded_samples || 0)) / row.samples * 100}%, #ef4444 ${((row.healthy_samples || 0) + (row.degraded_samples || 0)) / row.samples * 100}% 100%)` } : undefined,
+            style: row?.samples ? { background: `linear-gradient(to top, var(--ui-success) 0% ${(row.healthy_samples || 0) / row.samples * 100}%, var(--ui-warning) ${(row.healthy_samples || 0) / row.samples * 100}% ${((row.healthy_samples || 0) + (row.degraded_samples || 0)) / row.samples * 100}%, var(--ui-danger) ${((row.healthy_samples || 0) + (row.degraded_samples || 0)) / row.samples * 100}% 100%)` } : undefined,
         }
     })
 }

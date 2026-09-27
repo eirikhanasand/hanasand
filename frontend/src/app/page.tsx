@@ -60,13 +60,13 @@ export default function Page() {
                         </div>
                         <form action='/ti' className='home-search flex w-full max-w-xl items-center gap-3 rounded-full border px-4 py-1.5'>
                             <Search className='h-4 w-4 shrink-0 text-ui-muted' />
-                            <input name='q' aria-label='Search threat intelligence' placeholder='Search a company, vendor, or domain' className='h-11 min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/45' />
+                            <input name='q' aria-label='Search threat intelligence' placeholder='Search a company, vendor, or domain' className='h-11 min-w-0 flex-1 bg-transparent text-sm text-ui-text outline-none placeholder:text-ui-muted/70' />
                             <button type='submit' className='home-search-button rounded-full px-4 py-2 text-sm font-semibold transition'>Search</button>
                         </form>
                     </div>
                     <div className='hidden lg:block' aria-hidden='true' />
                 </div>
-                <div className='home-hero-caption home-wrap relative px-5 pb-6 text-xs tracking-[0.14em] text-white/50 md:px-10 lg:px-16'>
+                <div className='home-hero-caption home-wrap relative px-5 pb-6 text-xs tracking-[0.14em] text-ui-muted md:px-10 lg:px-16'>
                     CONTINUOUSLY MONITORED
                 </div>
             </section>

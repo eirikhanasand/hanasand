@@ -37,7 +37,7 @@ export default function BrowserHistory({ clientId }: { clientId: string }) {
         <button type='button' onClick={() => { dialog.current?.showModal(); void load() }} disabled={!clientId} className='inline-flex items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-4 py-2 text-sm font-semibold text-ui-text hover:border-ui-primary' aria-haspopup='dialog'>
             <History className='h-4 w-4' />History
         </button>
-        <dialog ref={dialog} aria-labelledby='browser-history-title' onClose={() => request.current?.abort()} className='m-auto max-h-[80dvh] w-[calc(100%-2rem)] max-w-3xl overflow-y-auto rounded-lg border border-ui-border bg-ui-panel p-4 text-ui-text shadow-xl backdrop:bg-black/50'>
+        <dialog ref={dialog} aria-labelledby='browser-history-title' onClose={() => request.current?.abort()} className='m-auto max-h-[80dvh] w-[calc(100%-2rem)] max-w-3xl overflow-y-auto rounded-lg border border-ui-border bg-ui-panel p-4 text-ui-text shadow-xl backdrop:bg-ui-backdrop'>
             <div className='mb-4 flex items-center justify-between gap-4'>
                 <h2 id='browser-history-title' className='text-lg font-semibold'>History</h2>
                 <button type='button' onClick={() => dialog.current?.close()} aria-label='Close history' className='rounded-md p-2 hover:bg-ui-raised'><X className='h-5 w-5' /></button>

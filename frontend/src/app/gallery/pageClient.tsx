@@ -25,7 +25,7 @@ export default function GalleryPageClient() {
         return () => { current = false }
     }, [page, retry])
     const button = 'inline-flex items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm font-semibold hover:border-ui-primary disabled:opacity-40'
-    const uploadButton = 'inline-flex items-center justify-center gap-2 rounded-lg bg-ui-primary px-3 py-2 text-sm font-semibold text-white hover:opacity-90'
+    const uploadButton = 'inline-flex items-center justify-center gap-2 rounded-lg bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-on-primary hover:opacity-90'
     return <section className='mx-auto grid w-full max-w-7xl gap-6 p-4 text-ui-text md:p-6'>
         <header className='flex flex-wrap items-center justify-between gap-4'>
             <div><h1 className='text-2xl font-semibold'>Gallery</h1></div>

@@ -9,7 +9,7 @@ export default function AccessCodePanel({ code, onChange, busy, onSubmit }: {
     const codeInputRef = useRef<HTMLInputElement>(null)
     const codeDigits = code.padEnd(6, ' ').split('')
     return (
-        <form onSubmit={onSubmit} className='mx-auto mt-16 grid w-full max-w-md gap-5 rounded-lg border border-ui-border bg-ui-panel p-6 shadow-2xl shadow-black/20'>
+        <form onSubmit={onSubmit} className='mx-auto mt-16 grid w-full max-w-md gap-5 rounded-lg border border-ui-border bg-ui-panel p-6 shadow-ui-panel'>
             <label className='grid gap-2 text-sm font-semibold'>
                 Access code
                 <input

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import type { WebScanReport, WebScanRun, WebScanSeverity } from '@/utils/monitoring/types'
+import type { WebScanCheck, WebScanReport, WebScanRun, WebScanSeverity } from '@/utils/monitoring/types'
 import { ChevronDown } from 'lucide-react'
 
 const severities: WebScanSeverity[] = ['critical', 'high', 'medium', 'low', 'info']
@@ -24,7 +24,7 @@ export default function WebScanPanel({ initialData, refreshAction, runAction, sc
 function HistoryFindings({ run }: { run: WebScanRun }) {
     const findings = run.targets.flatMap(target => target.checks.filter(check => check.status !== 'pass').map(check => ({ target: target.target, check })))
     const openPorts = run.targets.flatMap(target => target.ports.filter(port => port.open && ![80, 443].includes(port.port)).map(port => ({ target: target.target, port })))
-    return <div className='border-t border-ui-border px-3 pb-3 pt-2'><p className='text-xs font-semibold uppercase tracking-wide text-ui-primary'>Findings and next actions</p><div className='mt-2 grid gap-2'>{findings.map(({ target, check }) => <div key={`${target}-${check.id}`} className='rounded-md border border-ui-border bg-ui-panel p-3'><div className='flex flex-wrap justify-between gap-2 text-sm'><span className='font-medium text-ui-text'>{check.title}</span><span className='text-ui-muted'>{check.severity} · {check.status}</span></div><p className='mt-1 text-xs leading-5 text-ui-muted'>{check.explanation || 'Inspect the observed evidence and apply the recommended control.'}</p><p className='mt-2 text-xs text-ui-text'><span className='font-semibold'>Next action:</span> {recommendedAction(check.id)}</p><p className='mt-1 break-all font-mono text-[11px] text-ui-muted'>Evidence: {formatEvidence(check.evidence)}</p></div>)}{openPorts.map(({ target, port }) => <div key={`${target}-port-${port.port}`} className='rounded-md border border-ui-border bg-ui-panel p-3'><div className='flex justify-between gap-2 text-sm'><span className='font-medium text-ui-text'>Port {port.port} is open</span><span className='text-amber-300'>medium · warn</span></div><p className='mt-1 text-xs leading-5 text-ui-muted'>A non-standard service port accepted a TCP connection during the scan.</p><p className='mt-2 text-xs text-ui-text'><span className='font-semibold'>Next action:</span> Confirm the service is required, restrict its exposure, or close the port.</p><p className='mt-1 font-mono text-[11px] text-ui-muted'>Evidence: {target} · {port.elapsedMs}ms TCP connect</p></div>)}{!findings.length && !openPorts.length ? <p className='text-xs text-ui-muted'>No failed or warned checks in this run.</p> : null}</div></div>
+    return <div className='border-t border-ui-border px-3 pb-3 pt-2'><p className='text-xs font-semibold uppercase tracking-wide text-ui-primary'>Findings and next actions</p><div className='mt-2 grid gap-2'>{findings.map(({ target, check }) => <div key={`${target}-${check.id}`} className='rounded-md border border-ui-border bg-ui-panel p-3'><div className='flex flex-wrap justify-between gap-2 text-sm'><span className='font-medium text-ui-text'>{check.title}</span><span className='text-ui-muted'>{check.severity} · {check.status}</span></div><p className='mt-1 text-xs leading-5 text-ui-muted'>{check.explanation || 'Inspect the observed evidence and apply the recommended control.'}</p><p className='mt-2 text-xs text-ui-text'><span className='font-semibold'>Next action:</span> {recommendedAction(check.id)}</p><p className='mt-1 break-all font-mono text-[11px] text-ui-muted'>Evidence: {formatEvidence(check.evidence)}</p></div>)}{openPorts.map(({ target, port }) => <div key={`${target}-port-${port.port}`} className='rounded-md border border-ui-border bg-ui-panel p-3'><div className='flex justify-between gap-2 text-sm'><span className='font-medium text-ui-text'>Port {port.port} is open</span><span className='text-ui-warning'>medium · warn</span></div><p className='mt-1 text-xs leading-5 text-ui-muted'>A non-standard service port accepted a TCP connection during the scan.</p><p className='mt-2 text-xs text-ui-text'><span className='font-semibold'>Next action:</span> Confirm the service is required, restrict its exposure, or close the port.</p><p className='mt-1 font-mono text-[11px] text-ui-muted'>Evidence: {target} · {port.elapsedMs}ms TCP connect</p></div>)}{!findings.length && !openPorts.length ? <p className='text-xs text-ui-muted'>No failed or warned checks in this run.</p> : null}</div></div>
 }
 
 function recommendedAction(checkId: string) {
@@ -41,7 +41,55 @@ function formatEvidence(evidence: Record<string, unknown>) {
     return Object.entries(evidence).map(([key, value]) => `${key}=${String(value)}`).join(' · ')
 }
 
-function ScanDetail({ run, severityCounts }: { run?: WebScanRun, severityCounts: Record<WebScanSeverity, number> }) { return <div className='rounded-lg border border-ui-border bg-ui-panel p-4'>{!run ? <p className='text-sm text-ui-muted'>Run a scan to see details</p> : <><div className='flex flex-wrap justify-between gap-3'><h2 className='text-lg font-semibold'>{run.target}</h2><div className='text-right text-xs text-ui-muted'><p>{formatDuration(run.durationMs)}</p><p>{formatDate(run.finishedAt || run.startedAt)}</p></div></div><div className='mt-4 grid gap-2 sm:grid-cols-5'>{severities.map(severity => <div key={severity} className={`rounded-md border p-3 ${severityCounts[severity] ? 'border-amber-400/50 bg-amber-400/10' : 'border-ui-border bg-ui-raised'}`}><p className='text-xs uppercase text-ui-muted'>{severity}</p><p className='mt-1 text-xl font-semibold'>{severityCounts[severity]}</p></div>)}</div><div className='mt-4 grid gap-2'>{run.targets.flatMap(target => target.checks).map(check => <div key={check.id} className='grid gap-1 rounded-md border border-ui-border bg-ui-raised p-3 text-sm'><div className='flex flex-wrap justify-between gap-3'><span>{check.title}</span><span className={check.status === 'fail' ? 'text-ui-text' : check.status === 'pass' ? 'text-emerald-300' : 'text-amber-300'}>{check.severity} · {check.status}</span></div><p className='text-xs leading-5 text-ui-muted'>{isUsefulExplanation(check.explanation) ? check.explanation : fallbackExplanation(check)}</p></div>)}</div><p className='mt-3 text-xs text-ui-muted'>Open ports: {run.targets.flatMap(target => target.ports.filter(port => port.open).map(port => `${port.port}`)).join(', ') || 'none detected'}</p>{run.error && <p className='mt-3 text-sm text-ui-text'>{run.error}</p>}</>}</div> }
+function ScanDetail({ run, severityCounts }: { run?: WebScanRun, severityCounts: Record<WebScanSeverity, number> }) {
+    return (
+        <section className='grid content-start gap-4 rounded-lg border border-ui-border bg-ui-panel p-4'>
+            {!run ? <p className='text-sm text-ui-muted'>Run a scan to see details</p> : <>
+                <header className='flex flex-wrap justify-between gap-3'>
+                    <h2 className='text-lg font-semibold'>{run.target}</h2>
+                    <div className='text-right text-xs text-ui-muted'>
+                        <p>{formatDuration(run.durationMs)}</p>
+                        <p>{formatDate(run.finishedAt || run.startedAt)}</p>
+                    </div>
+                </header>
+                <SeveritySummary counts={severityCounts} />
+                <div className='grid gap-2'>
+                    {run.targets.flatMap(target => target.checks).map(check => <ScanCheck key={check.id} check={check} />)}
+                </div>
+                <p className='text-xs text-ui-muted'>
+                    Open ports: {run.targets.flatMap(target => target.ports.filter(port => port.open).map(port => `${port.port}`)).join(', ') || 'none detected'}
+                </p>
+                {run.error ? <p className='text-sm text-ui-text'>{run.error}</p> : null}
+            </>}
+        </section>
+    )
+}
+
+function SeveritySummary({ counts }: { counts: Record<WebScanSeverity, number> }) {
+    return (
+        <div className='grid gap-2 sm:grid-cols-5'>
+            {severities.map(severity => <div key={severity} className={`rounded-md border p-3 ${counts[severity] ? 'border-ui-warning/50 bg-ui-warning/10' : 'border-ui-border bg-ui-raised'}`}>
+                <p className='text-xs uppercase text-ui-muted'>{severity}</p>
+                <p className='mt-1 text-xl font-semibold'>{counts[severity]}</p>
+            </div>)}
+        </div>
+    )
+}
+
+function ScanCheck({ check }: { check: WebScanCheck }) {
+    const statusColor = check.status === 'pass' ? 'text-ui-success' : check.status === 'fail' ? 'text-ui-text' : 'text-ui-warning'
+    return (
+        <article className='grid gap-1 rounded-md border border-ui-border bg-ui-raised p-3 text-sm'>
+            <div className='flex flex-wrap justify-between gap-3'>
+                <span>{check.title}</span>
+                <span className={statusColor}>{check.severity} · {check.status}</span>
+            </div>
+            <p className='text-xs leading-5 text-ui-muted'>
+                {isUsefulExplanation(check.explanation) ? check.explanation : fallbackExplanation(check)}
+            </p>
+        </article>
+    )
+}
 function isUsefulExplanation(value?: string) { return Boolean(value && value.length >= 40 && !/explanation is not available|completed this check/i.test(value)) }
 function fallbackExplanation(check: WebScanRun['targets'][number]['checks'][number]) {
     const present = Boolean(check.evidence.value)

@@ -179,7 +179,7 @@ export default function NotesClient() {
                                 Delete
                             </button>
                         )}
-                        <button onClick={() => void save()} className='inline-flex h-8 items-center gap-2 rounded-md bg-ui-primary/80 px-3 text-xs font-semibold text-white transition hover:bg-ui-primary/70'>
+                        <button onClick={() => void save()} className='inline-flex h-8 items-center gap-2 rounded-md bg-ui-primary/80 px-3 text-xs font-semibold text-ui-on-primary transition hover:bg-ui-primary/70'>
                             <Check className='h-3.5 w-3.5' />
                             Save
                         </button>

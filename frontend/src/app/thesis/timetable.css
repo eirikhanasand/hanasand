@@ -48,7 +48,7 @@
 .thesis-hours-progress summary { cursor: pointer; list-style: none; }
 .thesis-hours-progress strong, .thesis-hours-progress span { display: block; }
 .thesis-hours-progress span { color: var(--color-ui-muted); font-size: .7rem; }
-.thesis-hours-progress > div { position: absolute; right: 0; z-index: 20; width: min(300px, 80vw); padding: .8rem; border: 1px solid var(--color-ui-border); border-radius: .5rem; background: var(--color-ui-panel); text-align: left; box-shadow: 0 4px 16px #0003; }
+.thesis-hours-progress > div { position: absolute; right: 0; z-index: 20; width: min(300px, 80vw); padding: .8rem; border: 1px solid var(--color-ui-border); border-radius: .5rem; background: var(--color-ui-panel); text-align: left; box-shadow: 0 4px 16px var(--ui-shadow); }
 .thesis-week-plan-button { display: block; margin-top: 1rem; color: var(--color-ui-muted); text-decoration: underline; font-size: .75rem; }
 
 .thesis-timetable [data-active=true] { outline: 2px solid var(--color-ui-primary); outline-offset: -2px; }

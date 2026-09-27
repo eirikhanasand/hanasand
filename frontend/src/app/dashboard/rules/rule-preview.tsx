@@ -108,9 +108,9 @@ export default function RulePreview({ organizationId, conditions, action, range,
         {loading && <p role='status' className='text-xs text-ui-muted'>Loading more matches…</p>}
         {complete && !events.length && <p className='text-sm text-ui-muted'>No matching events in this range.</p>}
         {error && <p role='alert' className='text-sm text-ui-text'>{error}<button type='button' onClick={() => complete ? void prefetch() : setAttempt(attempt + 1)} className='ml-2 underline'>Retry</button></p>}
-        {count > 10_000 && <div className='mt-2 overflow-hidden rounded-xl border border-ui-border bg-ui-raised'>
+        {count > 10_000 && <div className='mt-2 overflow-hidden rounded-xl border border-ui-warning/30 bg-ui-raised'>
             <div className='flex items-start gap-3 p-4 sm:p-5'>
-                <span className='flex size-9 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-amber-500'><CircleAlert size={20} aria-hidden='true' /></span>
+                <span className='flex size-9 shrink-0 items-center justify-center rounded-full bg-ui-warning/10 text-ui-warning'><CircleAlert size={20} aria-hidden='true' /></span>
                 <div className='grid gap-1'><p className='text-sm font-semibold'>This rule matches {complete ? '' : 'at least '}{count.toLocaleString()} events</p><p className='text-sm text-ui-muted'>Very many events match this rule. Is this intended?</p></div>
             </div>
             <label className={`relative flex cursor-pointer items-center gap-3 border-t border-ui-border px-4 py-4 transition-colors sm:px-5 ${acknowledged ? 'bg-ui-primary/10' : 'hover:bg-ui-primary/5'}`}>

@@ -14,7 +14,7 @@ export default function DeleteVmDialog({ name, busy, error, onCancel, onConfirm 
         element?.showModal()
         return () => element?.close()
     }, [])
-    return <dialog ref={dialog} aria-labelledby={titleId} aria-describedby={descriptionId} onCancel={event => { event.preventDefault(); if (!busy) onCancel() }} className='m-auto w-[calc(100%_-_2rem)] max-w-md rounded-xl border border-ui-border bg-ui-panel p-5 text-ui-text shadow-xl backdrop:bg-black/60'>
+    return <dialog ref={dialog} aria-labelledby={titleId} aria-describedby={descriptionId} onCancel={event => { event.preventDefault(); if (!busy) onCancel() }} className='m-auto w-[calc(100%_-_2rem)] max-w-md rounded-xl border border-ui-border bg-ui-panel p-5 text-ui-text shadow-xl backdrop:bg-ui-backdrop'>
         <form onSubmit={event => { event.preventDefault(); if (!busy && confirmation === name) onConfirm(confirmation) }}>
             <h2 id={titleId} className='text-lg font-semibold'>Delete {name}?</h2>
             <p id={descriptionId} className='mt-2 text-sm text-ui-muted'>The VM will stop and all access will be blocked. You can restore it for 30 days. After that, the VM and its disk will be permanently deleted.</p>

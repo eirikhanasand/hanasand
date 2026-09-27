@@ -30,7 +30,7 @@ export default function RouteFrame({ children, serverPath, token, sidebar, banne
                     <div className='h-full min-h-0 bg-ui-canvas px-2 text-ui-text'>
                         <div className='grid h-full min-h-0 grid-rows-[minmax(0,1fr)] gap-2 lg:grid-cols-[auto_minmax(0,1fr)]'>
                             {mobile.open && <button type='button' aria-label='Close navigation backdrop' onClick={mobile.close}
-                                className='fixed inset-x-0 bottom-0 top-18 z-100 bg-black/30 lg:hidden' />}
+                                className='fixed inset-x-0 bottom-0 top-18 z-100 bg-ui-scrim lg:hidden' />}
                             <div id='mobile-navigation' onClick={event => {
                                 if ((event.target as HTMLElement).closest('a[href]')) mobile.close()
                             }} className={`${mobile.open ? 'block' : 'hidden'} fixed inset-x-2 top-20 z-101 max-h-[calc(100dvh-5.5rem)] overflow-y-auto lg:contents`}>

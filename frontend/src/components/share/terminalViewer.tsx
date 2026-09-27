@@ -85,10 +85,10 @@ export default function TerminalViewer({ open, share, chunks, status, sendInput,
             fontSize: 14,
             lineHeight: 1.35,
             theme: {
-                background: colorValue('--ui-canvas', 'rgb(8 17 31)'),
-                foreground: colorValue('--ui-text', 'rgb(245 247 251)'),
-                cursor: colorValue('--ui-success', 'rgb(125 224 162)'),
-                selectionBackground: 'rgba(157, 225, 143, 0.24)'
+                background: colorValue('--ui-canvas'),
+                foreground: colorValue('--ui-text'),
+                cursor: colorValue('--ui-success'),
+                selectionBackground: colorValue('--ui-selection')
             }
         })
 

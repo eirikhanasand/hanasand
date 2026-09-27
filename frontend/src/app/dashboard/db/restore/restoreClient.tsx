@@ -91,7 +91,7 @@ export default function RestoreClient({ backups, service, loadError = '' }: { ba
                     </dl>
                 )}
 
-                <button type='button' onClick={runDrill} disabled={!canRun} className='mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto' data-restore-primary-action>
+                <button type='button' onClick={runDrill} disabled={!canRun} className='mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto' data-restore-primary-action>
                     <ShieldCheck className='h-4 w-4' />
                     {activeDrill ? stageLabel(activeDrill.stage) : isPending ? 'Starting isolated drill…' : 'Run isolated restore drill'}
                 </button>

@@ -374,7 +374,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                             type='button'
                             data-testid='mail-compose-button'
                             disabled={!overview || loading || overview.actor.canSend === false}
-                            className='inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-ui-primary px-3 text-xs font-semibold text-white shadow-sm transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45'
+                            className='inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-ui-primary px-3 text-xs font-semibold text-ui-on-primary shadow-sm transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45'
                             onClick={() => setComposer({ ...emptyComposer, open: true })}
                         >
                             <MailPlus className='h-3.5 w-3.5' />

@@ -4,6 +4,29 @@
 @theme {
   --background: #070707;
   --foreground: #f1f3ee;
+  --ui-canvas: #070707;
+  --ui-panel: #101010;
+  --ui-raised: #191919;
+  --ui-border: #383838;
+  --ui-text: #f5f7fb;
+  --ui-muted: #999999;
+  --ui-primary: #8fb2ff;
+  --ui-success: #7de0a2;
+  --ui-warning: #ffd879;
+  --ui-danger: #ffb8b0;
+  --ui-on-primary: #101010;
+  --ui-overlay-soft: color-mix(in srgb, var(--ui-canvas) 68%, transparent);
+  --ui-overlay: color-mix(in srgb, var(--ui-canvas) 88%, transparent);
+  --ui-overlay-strong: color-mix(in srgb, var(--ui-canvas) 95%, transparent);
+  --ui-border-subtle: color-mix(in srgb, var(--ui-text) 14%, transparent);
+  --ui-hover: color-mix(in srgb, var(--ui-text) 5%, transparent);
+  --ui-shadow: rgba(0, 0, 0, 0.24);
+  --ui-shadow-soft: rgba(0, 0, 0, 0.12);
+  --ui-shadow-highlight: rgba(255, 255, 255, 0.08);
+  --ui-backdrop: rgba(0, 0, 0, 0.6);
+  --ui-scrim: rgba(0, 0, 0, 0.3);
+  --ui-ambient-success: rgba(125, 224, 162, 0.06);
+  --ui-selection: rgba(143, 178, 255, 0.24);
   --font-sans: 'Manrope', 'Aptos', sans-serif;
   --color-ui-canvas: var(--ui-canvas);
   --color-ui-panel: var(--ui-panel);
@@ -15,6 +38,11 @@
   --color-ui-success: var(--ui-success);
   --color-ui-warning: var(--ui-warning);
   --color-ui-danger: var(--ui-danger);
+  --color-ui-on-primary: var(--ui-on-primary);
+  --color-ui-backdrop: var(--ui-backdrop);
+  --color-ui-scrim: var(--ui-scrim);
+  --shadow-ui-panel: 0 25px 50px -12px var(--ui-shadow);
+  --shadow-ui-soft: 0 4px 6px -1px var(--ui-shadow-soft), 0 2px 4px -2px var(--ui-shadow-soft);
   --color-background: #070707;
   --color-dark: #171717;
   --color-dark-reverse: #080808;
@@ -24,17 +52,6 @@
   --color-superlight: #444;
   --color-almostbright: #a8a8a8;
   --color-bright: #f7f7f7;
-  --color-red-50: #fff0f0;
-  --color-red-100: #ffd6d6;
-  --color-red-200: #ffb3b3;
-  --color-red-300: #f58282;
-  --color-red-400: #de4d4d;
-  --color-red-500: #b82727;
-  --color-red-600: #780606;
-  --color-red-700: #5e0505;
-  --color-red-800: #490404;
-  --color-red-900: #330303;
-  --color-red-950: #1f0202;
 }
 
 @layer components {
@@ -66,7 +83,7 @@
   .ui-button-sm { min-height: 2rem; padding: 0.375rem 0.625rem; font-size: 0.75rem; }
   .ui-button-md { min-height: 2.5rem; padding: 0.5rem 1rem; font-size: 0.875rem; }
   .ui-button-lg { min-height: 3rem; padding: 0.75rem 1.25rem; font-size: 1rem; }
-  .ui-button-primary { border-color: var(--ui-primary); background: var(--ui-primary); color: var(--ui-canvas); }
+  .ui-button-primary { border-color: var(--ui-primary); background: var(--ui-primary); color: var(--ui-on-primary); }
   .ui-button-primary:hover:not(:disabled) { opacity: 0.9; }
   .ui-button-secondary { border-color: var(--ui-border); background: var(--ui-raised); color: var(--ui-text); }
   .ui-button-secondary:hover:not(:disabled) { border-color: var(--ui-primary); }
@@ -91,18 +108,7 @@
   }
 }
 
-.dark,
-.site-chrome {
-  --ui-canvas: #070707;
-  --ui-panel: #101010;
-  --ui-raised: #191919;
-  --ui-border: #383838;
-  --ui-text: #f5f7fb;
-  --ui-muted: #999;
-  --ui-primary: #8fb2ff;
-  --ui-success: #7de0a2;
-  --ui-warning: #ffd879;
-  --ui-danger: #ffb8b0;
+.dark {
   --background: #070707;
   --foreground: #f1f3ee;
   --color-background: #070707;
@@ -143,6 +149,19 @@
   --ui-success: #147a3b;
   --ui-warning: #8a5a00;
   --ui-danger: #b42318;
+  --ui-on-primary: #ffffff;
+  --ui-overlay-soft: color-mix(in srgb, var(--ui-canvas) 68%, transparent);
+  --ui-overlay: color-mix(in srgb, var(--ui-canvas) 88%, transparent);
+  --ui-overlay-strong: color-mix(in srgb, var(--ui-canvas) 95%, transparent);
+  --ui-border-subtle: color-mix(in srgb, var(--ui-text) 14%, transparent);
+  --ui-hover: color-mix(in srgb, var(--ui-text) 5%, transparent);
+  --ui-shadow: rgba(0, 0, 0, 0.12);
+  --ui-shadow-soft: rgba(0, 0, 0, 0.06);
+  --ui-shadow-highlight: rgba(255, 255, 255, 0.68);
+  --ui-backdrop: rgba(0, 0, 0, 0.5);
+  --ui-scrim: rgba(0, 0, 0, 0.3);
+  --ui-ambient-success: rgba(20, 163, 90, 0.06);
+  --ui-selection: rgba(48, 86, 211, 0.18);
   --background: #f5f5f5;
   --foreground: #171a21;
   --color-background: #f5f5f5;
@@ -184,6 +203,9 @@
   --color-ui-success: var(--ui-success);
   --color-ui-warning: var(--ui-warning);
   --color-ui-danger: var(--ui-danger);
+  --color-ui-on-primary: var(--ui-on-primary);
+  --color-ui-backdrop: var(--ui-backdrop);
+  --color-ui-scrim: var(--ui-scrim);
 }
 
 body {
@@ -198,32 +220,32 @@ body {
 
 .light body {
   background:
-    radial-gradient(ellipse 44rem 24rem at 80% -7%, rgba(48, 86, 211, 0.08) 0%, transparent 72%),
-    radial-gradient(ellipse 42rem 30rem at 8% 88%, rgba(20, 163, 90, 0.06) 0%, transparent 76%),
+    radial-gradient(ellipse 44rem 24rem at 80% -7%, var(--ambient-primary) 0%, transparent 72%),
+    radial-gradient(ellipse 42rem 30rem at 8% 88%, var(--ui-ambient-success) 0%, transparent 76%),
     linear-gradient(180deg, var(--page-wash-top), var(--background) 50%, var(--page-wash-bottom));
 }
 
 .light ::selection {
-  background: rgba(48, 86, 211, 0.18);
+  background: color-mix(in srgb, var(--ui-primary) 18%, transparent);
 }
 
 .light .text-glow {
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.72), 0 12px 38px rgba(26, 35, 55, 0.10);
+  text-shadow: 0 1px 0 var(--ui-shadow-highlight), 0 12px 38px var(--soft-shadow);
 }
 
 .light .glass-panel {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(247, 248, 251, 0.86));
+    linear-gradient(180deg, var(--ui-overlay-strong), var(--ui-overlay));
 }
 
 .light .glass-card {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.68);
+  box-shadow: inset 0 1px 0 var(--ui-shadow-highlight);
 }
 
 .landing-primary-action {
   border-color: var(--ui-primary) !important;
   background-color: var(--ui-primary) !important;
-  color: #ffffff !important;
+  color: var(--ui-on-primary) !important;
 }
 
 .landing-primary-action:hover {

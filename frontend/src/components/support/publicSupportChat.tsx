@@ -212,7 +212,7 @@ export default function PublicSupportChat({ active = true, onUnreadChange, onRes
                     ? <p key={message.id} className='px-2 py-1 text-center text-xs leading-5 text-ui-muted'>{message.body}</p>
                     : <div key={message.id} className={`min-w-0 max-w-[92%] ${message.sender_kind === 'user' ? 'justify-self-end' : 'justify-self-start'}`}>
                         <p className={`mb-1.5 text-[11px] font-medium text-ui-muted ${message.sender_kind === 'user' ? 'text-right' : ''}`}>{message.sender_name}</p>
-                        <div className={`rounded-2xl px-3.5 py-2.5 text-sm leading-6 ${message.sender_kind === 'user' ? 'rounded-tr-md bg-[#363636] text-[#f5f7fb]' : 'rounded-tl-md bg-ui-raised text-ui-text'}`}><MessageBody text={message.body} /></div>
+                        <div className={`rounded-2xl px-3.5 py-2.5 text-sm leading-6 ${message.sender_kind === 'user' ? 'rounded-tr-md bg-ui-primary text-ui-on-primary' : 'rounded-tl-md bg-ui-raised text-ui-text'}`}><MessageBody text={message.body} /></div>
                     </div>)}</div>}
                 {busy && !human ? <p role='status' className='mt-4 flex items-center gap-2 text-xs text-ui-muted'><LoaderCircle className='h-3.5 w-3.5 animate-spin' aria-hidden='true' />Hanasand AI is thinking…</p> : null}
             </div>

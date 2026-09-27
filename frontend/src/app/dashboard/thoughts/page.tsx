@@ -33,7 +33,7 @@ export default async function Page() {
                     </div>
                     <h2 className='mt-4 text-xl font-semibold text-ui-text'>Create your first thought</h2>
                     <div className='mt-5 flex justify-center gap-2'>
-                        <Link href='/content/thoughts/create' className='inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-white'>
+                        <Link href='/content/thoughts/create' className='inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-on-primary'>
                             <Plus className='h-4 w-4' />
                             Create
                         </Link>

@@ -83,7 +83,7 @@ export default function FAQClient({ categories, faqs }: Props) {
                                                     <button
                                                         type='button'
                                                         aria-pressed={selected === 'yes'}
-                                                        className={`inline-flex h-8 items-center gap-1 rounded-full px-3 font-semibold transition ${selected === 'yes' ? 'bg-ui-primary text-white' : 'hover:bg-ui-panel hover:text-ui-text'}`}
+                                                        className={`inline-flex h-8 items-center gap-1 rounded-full px-3 font-semibold transition ${selected === 'yes' ? 'bg-ui-primary text-ui-on-primary' : 'hover:bg-ui-panel hover:text-ui-text'}`}
                                                         onClick={() => setFeedback(current => ({ ...current, [item.question]: 'yes' }))}
                                                     >
                                                         {selected === 'yes' ? <Check className='h-4 w-4' /> : <ThumbsUp className='h-4 w-4' />}
@@ -92,7 +92,7 @@ export default function FAQClient({ categories, faqs }: Props) {
                                                     <button
                                                         type='button'
                                                         aria-pressed={selected === 'no'}
-                                                        className={`inline-flex h-8 items-center gap-1 rounded-full px-3 font-semibold transition ${selected === 'no' ? 'bg-ui-primary text-white' : 'hover:bg-ui-panel hover:text-ui-text'}`}
+                                                        className={`inline-flex h-8 items-center gap-1 rounded-full px-3 font-semibold transition ${selected === 'no' ? 'bg-ui-primary text-ui-on-primary' : 'hover:bg-ui-panel hover:text-ui-text'}`}
                                                         onClick={() => setFeedback(current => ({ ...current, [item.question]: 'no' }))}
                                                     >
                                                         {selected === 'no' ? <Check className='h-4 w-4' /> : <ThumbsDown className='h-4 w-4' />}

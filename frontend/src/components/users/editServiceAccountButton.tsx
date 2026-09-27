@@ -14,7 +14,7 @@ export default function EditServiceAccountButton({ name, description, onSave }: 
 
     return <>
         <button type='button' aria-label={`Edit ${name}`} onClick={() => { setDraftName(name); setDraftDescription(description); setError(''); dialog.current?.showModal(); input.current?.focus() }} className='grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ui-muted hover:bg-ui-raised focus-visible:outline-ui-primary'><Pencil className='h-4 w-4' aria-hidden='true' /></button>
-        <dialog ref={dialog} aria-label={`Edit ${name}`} onCancel={event => { if (pending) event.preventDefault() }} className='m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-2xl border border-ui-border bg-ui-panel p-5 text-ui-text shadow-2xl backdrop:bg-black/60 backdrop:backdrop-blur-sm'>
+        <dialog ref={dialog} aria-label={`Edit ${name}`} onCancel={event => { if (pending) event.preventDefault() }} className='m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-2xl border border-ui-border bg-ui-panel p-5 text-ui-text shadow-2xl backdrop:bg-ui-backdrop backdrop:backdrop-blur-sm'>
             <form className='grid gap-4' onSubmit={async event => {
                 event.preventDefault()
                 if (pending || !draftName.trim()) return
