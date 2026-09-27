@@ -103,6 +103,9 @@ extension DesktopAgentModel {
 
     func beginDesktopAgentPresence() {
         desktopPresenceTask?.cancel()
+        desktopPresenceTask = nil
+        guard hasHanasandAuth else { return }
+
         desktopPresenceTask = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.publishDesktopAgentPresence()
@@ -112,10 +115,7 @@ extension DesktopAgentModel {
     }
 
     func publishDesktopAgentPresence() async {
-        guard !authTokenForRequests.isEmpty, !userIDForRequests.isEmpty else {
-            append(meta: "Agent discovery", body: "Skipping LAN discovery publish until API auth is configured.", kind: .note)
-            return
-        }
+        guard hasHanasandAuth else { return }
 
         let endpoints = Self.localAgentEndpoints(port: 45731)
         guard !endpoints.isEmpty else {
@@ -138,6 +138,12 @@ extension DesktopAgentModel {
                 authenticated: true
             )
             append(meta: "Agent discovery", body: "Published \(endpoints.joined(separator: ", "))", kind: .note)
+        } catch DashboardRequestError.httpStatus(401) {
+            desktopPresenceTask?.cancel()
+            desktopPresenceTask = nil
+            let message = "Your Hanasand session expired. Sign in again to resume LAN discovery."
+            loginStatus = message
+            append(meta: "Agent discovery", body: message, kind: .error)
         } catch {
             append(meta: "Agent discovery", body: error.localizedDescription, kind: .error)
         }
