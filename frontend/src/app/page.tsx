@@ -46,16 +46,16 @@ export default function Page() {
                 <div className='home-hero-glow' aria-hidden='true' />
                 <div className='home-wrap relative grid min-h-[680px] content-center gap-10 px-5 py-20 md:min-h-[760px] md:px-10 lg:grid-cols-[1.1fr_0.9fr] lg:gap-0 lg:px-16'>
                     <div className='home-hero-copy relative z-10 grid content-center justify-items-start gap-8'>
-                        <Link href='/ti' className='home-monitor-link inline-flex min-h-14 items-center gap-3 rounded-full border px-5 py-3 text-sm font-semibold transition'>
-                            <span>Monitor a company or vendor</span>
+                        <Link href='/organizations' className='home-monitor-link inline-flex min-h-14 items-center gap-3 rounded-full border px-5 py-3 text-sm font-semibold transition'>
+                            <span>Start monitoring</span>
                             <ArrowRight className='h-4 w-4' />
                         </Link>
                         <div className='grid max-w-4xl gap-6'>
-                            <h1 className='max-w-4xl text-[clamp(3.4rem,7.5vw,7.4rem)] font-medium leading-[0.94] tracking-[-0.065em]'>
-                                See what surfaces <span className='home-heading-muted'>before it reaches you.</span>
+                            <h1 className='max-w-4xl text-[clamp(3.2rem,6.5vw,6.6rem)] font-medium leading-[0.94] tracking-[-0.065em]'>
+                                Know what’s exposed <span className='home-heading-muted'>before it affects you.</span>
                             </h1>
                             <p className='max-w-xl text-base leading-7 text-ui-muted md:text-lg md:leading-8'>
-                                Company and vendor exposure, with the source and context your team needs to act.
+                                Track companies and vendors with clear sources and context for your next move.
                             </p>
                         </div>
                         <form action='/ti' className='home-search flex w-full max-w-xl items-center gap-3 rounded-full border px-4 py-1.5'>
@@ -67,7 +67,7 @@ export default function Page() {
                     <div className='hidden lg:block' aria-hidden='true' />
                 </div>
                 <div className='home-hero-caption home-wrap relative px-5 pb-6 text-xs tracking-[0.14em] text-white/50 md:px-10 lg:px-16'>
-                    EXTERNAL EXPOSURE · CONTINUOUSLY MONITORED
+                    CONTINUOUSLY MONITORED
                 </div>
             </section>
 
@@ -89,8 +89,8 @@ export default function Page() {
             <section className='home-section home-console' aria-labelledby='console-title'>
                 <div className='home-wrap grid gap-8 px-5 py-16 md:grid-cols-[0.7fr_1.3fr] md:gap-16 md:px-10 md:py-24 lg:px-16'>
                     <div className='grid content-start gap-4'>
-                        <p className='home-eyebrow'>Hanasand console</p>
-                        <h2 id='console-title' className='text-3xl font-medium tracking-[-0.04em] md:text-4xl'>Go straight to work.</h2>
+                        <p className='home-eyebrow'>Console</p>
+                        <h2 id='console-title' className='text-3xl font-medium tracking-[-0.04em] md:text-4xl'>Get started.</h2>
                         <Link href='/dashboard' className='home-text-link mt-2 inline-flex w-fit items-center gap-2 text-sm font-semibold'>
                             Go to dashboard <ArrowRight className='h-4 w-4' />
                         </Link>
@@ -105,7 +105,7 @@ export default function Page() {
                                         <span className='text-sm text-ui-muted'>{item.detail}</span>
                                     </span>
                                 </span>
-                                <ArrowRight className='h-4 w-4 shrink-0 text-white/45 transition group-hover:translate-x-1 group-hover:text-white' />
+                                <ArrowRight className='home-action-arrow h-4 w-4 shrink-0 transition group-hover:translate-x-1' />
                             </Link>
                         ))}
                     </nav>
@@ -117,14 +117,14 @@ export default function Page() {
                     <div className='grid content-start gap-4'>
                         <p className='home-eyebrow'>FAQ</p>
                         <h2 id='faq-title' className='text-3xl font-medium tracking-[-0.04em] md:text-4xl'>A few useful answers.</h2>
-                        <Link href='/faq' className='home-text-link mt-2 inline-flex w-fit items-center gap-2 text-sm font-semibold'>All FAQs <ArrowRight className='h-4 w-4' /></Link>
                     </div>
                     <div className='home-faq-list'>
                         {homepageFaqs.slice(0, 3).map(item => <FaqItem key={item.question} item={item} />)}
                         <details className='home-faq-more'>
-                            <summary>See 7 more questions <span aria-hidden='true'>+</span></summary>
+                            <summary>More questions <span aria-hidden='true'>+</span></summary>
                             <div className='home-faq-list home-faq-expanded'>
                                 {homepageFaqs.slice(3, 10).map(item => <FaqItem key={item.question} item={item} />)}
+                                <Link href='/faq' className='home-faq-all inline-flex min-h-12 items-center gap-2 text-sm font-semibold'>Read all FAQs <ArrowRight className='h-4 w-4' /></Link>
                             </div>
                         </details>
                     </div>
@@ -137,10 +137,10 @@ export default function Page() {
                         <p className='home-eyebrow'>Solutions</p>
                         <h2 id='solutions-title' className='text-2xl font-medium tracking-[-0.035em] md:text-3xl'>Tools for the next step.</h2>
                     </div>
-                    <div className='home-solution-links grid sm:grid-cols-2'>
+                    <div className='home-solution-links grid gap-x-12 sm:grid-cols-2'>
                         {solutions.map(item => (
-                            <Link key={item.href} href={item.href} className='home-solution-link flex items-center justify-between gap-3 border-b py-4 text-sm font-medium'>
-                                {item.title}<ArrowRight className='h-4 w-4 shrink-0 text-white/45' />
+                            <Link key={item.href} href={item.href} className='home-solution-link flex items-center justify-between gap-6 border-b py-4 text-sm font-medium'>
+                                <span>{item.title}</span><ArrowRight className='home-solution-arrow h-4 w-4 shrink-0' />
                             </Link>
                         ))}
                     </div>

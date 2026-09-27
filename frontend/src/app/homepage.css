@@ -4,12 +4,13 @@
   --ui-raised: #111111;
   --ui-border: rgba(255, 255, 255, 0.14);
   --ui-text: #f6f6f3;
-  --ui-muted: #a7a7a4;
+  --ui-muted: #969693;
   --ui-primary: #f4f4f1;
   --ui-success: #d7e5d4;
   --ui-warning: #e5dec8;
   --ui-danger: #f0ceca;
   --landing-surface-border: rgba(255, 255, 255, 0.14);
+  --home-accent: #df5148;
   color: #f6f6f3;
   background: #050505;
 }
@@ -20,7 +21,7 @@ body:has(.home-page) .site-chrome {
   --ui-raised: #111111;
   --ui-border: rgba(255, 255, 255, 0.16);
   --ui-text: #f6f6f3;
-  --ui-muted: #a7a7a4;
+  --ui-muted: #969693;
   --ui-primary: #f4f4f1;
   --ui-success: #d7e5d4;
   --ui-warning: #e5dec8;
@@ -129,6 +130,16 @@ body:has(.home-page) .site-atmosphere::after {
   letter-spacing: 0.14em;
 }
 
+.home-hero-caption::before {
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-right: 0.7rem;
+  border-radius: 50%;
+  background: var(--home-accent);
+  content: '';
+}
+
 .home-section {
   border-top: 1px solid rgba(255, 255, 255, 0.12);
   background: #050505;
@@ -139,7 +150,7 @@ body:has(.home-page) .site-atmosphere::after {
 }
 
 .home-eyebrow {
-  color: rgba(245, 245, 240, 0.57);
+  color: var(--home-accent);
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.16em;
@@ -194,8 +205,10 @@ body:has(.home-page) .site-atmosphere::after {
   background: linear-gradient(90deg, rgba(255, 255, 255, 0.045), transparent 85%);
 }
 
-.home-action-index {
-  color: rgba(255, 255, 255, 0.45);
+.home-action-index,
+.home-action-arrow,
+.home-solution-arrow {
+  color: var(--home-accent);
 }
 
 .home-faq-item,
@@ -223,7 +236,7 @@ body:has(.home-page) .site-atmosphere::after {
 
 .home-faq-item > summary span,
 .home-faq-more > summary span {
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--home-accent);
   font-size: 1.25rem;
   transition: transform 160ms ease;
 }
@@ -248,6 +261,15 @@ body:has(.home-page) .site-atmosphere::after {
 
 .home-faq-expanded {
   border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.home-faq-all {
+  color: var(--home-accent);
+}
+
+.home-faq-all:hover,
+.home-solution-link:hover .home-solution-arrow {
+  color: #ff786c;
 }
 
 .home-solutions {

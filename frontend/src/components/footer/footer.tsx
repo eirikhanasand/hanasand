@@ -13,10 +13,10 @@ const footerGroups = [
     {
         title: 'Product',
         links: [
-            { label: 'Dark Web Monitoring', href: '/dwm', icon: BellRing },
+            { label: 'Monitoring', href: '/dwm', icon: BellRing },
             { label: 'Threat Intelligence', href: '/ti', icon: Radar },
             { label: 'Organizations', href: '/organizations', icon: ShieldCheck },
-            { label: 'Actor Overview', href: '/ti', icon: Waypoints },
+            { label: 'Actors', href: '/ti', icon: Waypoints },
         ],
     },
     {
@@ -33,7 +33,7 @@ const footerGroups = [
             { label: 'Support', href: '/support', icon: ArrowUpRight },
             { label: 'Status', href: '/status', icon: Activity },
             { label: 'Service Checks', href: '/test', icon: Gauge },
-            { label: 'Hash Exposure Lookup', href: '/pwned', icon: LockKeyhole },
+            { label: 'Hash lookup', href: '/pwned', icon: LockKeyhole },
         ],
     },
     {
@@ -43,15 +43,6 @@ const footerGroups = [
             { label: 'Trust Center', href: '/trust', icon: FileText },
             { label: 'Contact', href: '/contact', icon: ArrowUpRight },
             { label: 'Pricing', href: '/pricing', icon: Gauge },
-        ],
-    },
-    {
-        title: 'Legal',
-        links: [
-            { label: 'Terms of use', href: '/terms', icon: BookOpen },
-            { label: 'Privacy policy', href: '/privacy', icon: BookOpen },
-            { label: 'Cookie policy', href: '/cookies', icon: BookOpen },
-            { label: 'Cookie settings', href: '/cookie-settings', icon: BookOpen },
         ],
     },
 ]
@@ -91,11 +82,11 @@ export default function Footer() {
                 <div className='min-w-0'>
                     <BrandLogo />
                     <p className='mt-4 max-w-md text-sm leading-6 text-ui-muted'>
-                        Monitor company exposure and review dark web alerts with the details your team needs.
+                        Know what’s coming before it strikes.
                     </p>
                 </div>
 
-                <nav aria-label='Footer' className='grid gap-6 sm:grid-cols-2 lg:grid-cols-5'>
+                <nav aria-label='Footer' className='grid gap-8 sm:grid-cols-2 lg:grid-cols-4'>
                     {footerGroups.map((group) => (
                         <div key={group.title}>
                             <h2 className='mb-3 text-sm font-semibold text-ui-text'>{group.title}</h2>
@@ -106,9 +97,9 @@ export default function Footer() {
                                         <Link
                                             key={`${group.title}-${link.label}-${link.href}`}
                                             href={link.href}
-                                            className='inline-flex w-fit items-center gap-1.5 py-1.5 text-sm font-medium text-ui-muted transition-colors hover:text-ui-text'
+                                            className='inline-flex w-fit items-center gap-2 py-1.5 text-sm font-medium text-ui-muted transition-colors hover:text-ui-text'
                                         >
-                                            {Icon ? <Icon className='h-3.5 w-3.5 text-ui-muted' /> : null}
+                                            {Icon ? <Icon className='h-3.5 w-3.5 text-[#df5148]' /> : null}
                                             {link.label}
                                         </Link>
                                     )
@@ -131,7 +122,7 @@ export default function Footer() {
                     <Link href='/cookie-settings' className='inline-flex min-h-9 items-center hover:text-ui-text'>Cookie settings</Link>
                     <span>© {year} Hanasand</span>
                 </div>
-                <span>v{config.version}</span>
+                <a href='https://github.com/eirikhanasand/hanasand/commit/ec92d4838778f8dd5aa5aaeb55880ecb1e3000f4' target='_blank' rel='noreferrer' className='hover:text-ui-text'>v{config.version}</a>
             </section>
         </footer>
     )
