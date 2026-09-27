@@ -7,7 +7,7 @@ import { cleanWorkspaceUrl, workspaceShareUrl } from '@/utils/organizations/work
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Archive, BellRing, Building2, CheckCircle2, CircleAlert, Copy, ExternalLink, KeyRound, Loader2, Pause, Pencil, Play, RefreshCw, Search, Settings, ShieldCheck, Trash2, UserPlus, Users, Webhook } from 'lucide-react'
+import { Archive, ArrowRight, BellRing, Building2, CheckCircle2, CircleAlert, Copy, ExternalLink, KeyRound, Loader2, Pause, Pencil, Play, RefreshCw, Search, Settings, ShieldCheck, Trash2, UserPlus, Users, Webhook } from 'lucide-react'
 
 type OrganizationRole = 'owner' | 'admin' | 'editor' | 'reader' | 'member' | 'viewer' | 'support'
 type OrganizationStatus = 'active' | 'archived' | 'deleted' | string
@@ -1540,46 +1540,40 @@ function WorkspaceSectionNav({ activePage }: { activePage: OrganizationPage }) {
 function WorkspaceHealthStrip({ organization, bundle }: { organization: OrganizationSummary, bundle: OrgBundle }) {
     const activeMembers = bundle.members.filter(member => member.status.toLowerCase() === 'active')
     const activeTeammates = activeMembers.filter(member => member.role.toLowerCase() !== 'owner')
-    const adminMembers = bundle.members.filter(member => member.status.toLowerCase() === 'active' && ['owner', 'admin'].includes(member.role.toLowerCase()))
-    const pendingInvites = bundle.invites.filter(invite => invite.status.toLowerCase() === 'pending')
+    const ownerMembers = activeMembers.filter(member => member.role.toLowerCase() === 'owner')
     const activeTerms = bundle.alertTerms.filter(term => (term.status || 'active').toLowerCase() === 'active')
     const configuredDestinations = organizationConfiguredDestinationCount(bundle)
-    const failedDeliveries = bundle.deliveries.filter(delivery => delivery.status?.toLowerCase() === 'failed' || Boolean(delivery.error))
-    const routedCases = bundle.cases.filter(item => item.status?.toLowerCase() !== 'closed')
-    const hasAlertOrCaseActivity = Boolean(bundle.alerts.length || routedCases.length)
+    const openCases = bundle.cases.filter(item => !['closed', 'resolved', 'false_positive', 'suppressed'].includes((item.status || 'open').toLowerCase()))
+    const caseDelivery = [...bundle.deliveries].reverse().find(delivery => delivery.caseId)
     const lastActivityAt = organizationLastActivityAt(organization, bundle)
     const rows = [
         {
             id: 'access',
-            label: 'Access',
-            value: activeTeammates.length ? `${activeTeammates.length} teammate${activeTeammates.length === 1 ? '' : 's'}` : pendingInvites.length ? 'Invite pending' : 'Invite team',
-            detail: adminMembers.length ? `${adminMembers.length} admin${adminMembers.length === 1 ? '' : 's'} · ${pendingInvites.length} pending` : 'Add an owner or admin',
+            label: 'Members',
+            value: `${activeMembers.length} member${activeMembers.length === 1 ? '' : 's'}`,
+            detail: `${ownerMembers.length} owner${ownerMembers.length === 1 ? '' : 's'} · ${activeTeammates.length} teammate${activeTeammates.length === 1 ? '' : 's'}`,
             href: '/organizations/team#members',
-            tone: activeTeammates.length ? 'ready' : pendingInvites.length ? 'neutral' : 'blocked',
         },
         {
             id: 'watchlists',
             label: 'Watchlists',
-            value: activeTerms.length ? `${activeTerms.length} active term${activeTerms.length === 1 ? '' : 's'}` : 'Add watch term',
-            detail: bundle.watchlists.length ? `${bundle.watchlists.length} shared item${bundle.watchlists.length === 1 ? '' : 's'}` : 'Create a shared watchlist term',
+            value: activeTerms.length ? `${activeTerms.length} active term${activeTerms.length === 1 ? '' : 's'}` : 'Create watchlist',
+            detail: activeTerms.length ? `${bundle.watchlists.length} watchlist${bundle.watchlists.length === 1 ? '' : 's'}` : '',
             href: '/organizations/watchlists#watchlists',
-            tone: activeTerms.length ? 'ready' : 'blocked',
         },
         {
             id: 'delivery',
             label: 'Delivery',
-            value: configuredDestinations ? `${configuredDestinations} destination${configuredDestinations === 1 ? '' : 's'}` : 'Set delivery',
-            detail: failedDeliveries.length ? `${failedDeliveries.length} failed delivery` : bundle.deliveries.length ? `${bundle.deliveries.length} delivery event${bundle.deliveries.length === 1 ? '' : 's'}` : 'Test a Discord or webhook destination',
-            href: '/organizations/destinations#destinations',
-            tone: failedDeliveries.length ? 'warning' : configuredDestinations ? 'ready' : 'blocked',
+            value: `${configuredDestinations} location${configuredDestinations === 1 ? '' : 's'}`,
+            detail: `${bundle.deliveries.length} notification${bundle.deliveries.length === 1 ? '' : 's'}`,
+            href: caseDelivery?.caseId ? `/cases/${encodeURIComponent(caseDelivery.caseId)}?organizationId=${encodeURIComponent(organization.id)}${caseDelivery.alertId ? `&alertId=${encodeURIComponent(caseDelivery.alertId)}` : ''}` : '/organizations/delivery#delivery-history',
         },
         {
             id: 'cases',
-            label: 'Alert flow',
-            value: hasAlertOrCaseActivity ? `${bundle.alerts.length} alert${bundle.alerts.length === 1 ? '' : 's'} · ${routedCases.length} case${routedCases.length === 1 ? '' : 's'}` : activeTerms.length ? 'Listening for matches' : 'Add watch term',
-            detail: hasAlertOrCaseActivity ? 'Open exposure monitoring workspace' : activeTerms.length ? 'Matched captures will open alert and case rows' : 'Start with a shared watchlist term',
-            href: '/organizations/delivery#delivery-history',
-            tone: hasAlertOrCaseActivity ? 'ready' : activeTerms.length ? 'neutral' : 'blocked',
+            label: 'Cases',
+            value: `${openCases.length} open case${openCases.length === 1 ? '' : 's'}`,
+            detail: 'View cases',
+            href: openCases[0] ? `/organizations/alerts#case-record-${encodeURIComponent(openCases[0].id)}` : '/organizations/alerts',
         },
     ] as const
 
@@ -1600,10 +1594,10 @@ function WorkspaceHealthStrip({ organization, bundle }: { organization: Organiza
             </div>
             <div className='mt-3 overflow-hidden rounded-lg border border-ui-border dark:border-ui-border' data-org-health-compact='true'>
                 {rows.map(row => (
-                    <a
+                    <Link
                         key={row.id}
                         href={row.href}
-                        className={`grid min-h-12 min-w-0 grid-cols-[minmax(6rem,0.75fr)_minmax(0,1fr)_auto] items-center gap-3 border-b border-ui-border px-3 py-2 text-sm transition last:border-b-0 hover:bg-ui-raised dark:border-ui-border dark:hover:bg-ui-raised ${row.tone === 'warning' ? 'bg-ui-warning/10 dark:bg-ui-warning/10' : row.tone === 'blocked' ? 'bg-ui-raised dark:bg-ui-canvas' : 'bg-ui-panel dark:bg-ui-panel'}`}
+                        className='group grid min-h-12 min-w-0 grid-cols-[minmax(6rem,0.75fr)_minmax(0,1fr)_auto] items-center gap-3 border-b border-ui-border bg-ui-panel px-3 py-2 text-sm transition last:border-b-0 hover:bg-ui-raised dark:border-ui-border dark:bg-ui-panel dark:hover:bg-ui-raised'
                         data-org-health-row={row.id}
                     >
                         <span className='min-w-0'>
@@ -1611,8 +1605,8 @@ function WorkspaceHealthStrip({ organization, bundle }: { organization: Organiza
                             <span className='mt-0.5 block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{row.value}</span>
                         </span>
                         <span className='min-w-0 truncate text-xs text-ui-muted dark:text-ui-muted'>{row.detail}</span>
-                        <StatusPill status={row.tone === 'ready' ? 'ready' : row.tone === 'warning' || row.tone === 'blocked' ? 'review' : 'waiting'} />
-                    </a>
+                        <ArrowRight aria-hidden='true' className='h-4 w-4 text-ui-danger transition-transform group-hover:translate-x-0.5' />
+                    </Link>
                 ))}
             </div>
         </section>
@@ -1635,8 +1629,8 @@ function EmptyWorkspacePreview() {
 function WorkspaceSummary({ organization, activeWatchlists, pausedWatchlists, memberCount, inviteCount, webhookCount }: { organization: OrganizationSummary, activeWatchlists: number, pausedWatchlists: number, memberCount: number, inviteCount: number, webhookCount: number }) {
     const rows = [
         { id: 'role', icon: <ShieldCheck className='h-4 w-4' />, label: 'Role', value: organizationRoleLabel(organization.role || 'reader') },
-        { id: 'members', icon: <Users className='h-4 w-4' />, label: 'Members', value: String(memberCount ?? organization.memberCount ?? organization.activeMemberCount ?? 0), detail: `${inviteCount ?? organization.pendingInviteCount ?? 0} pending` },
-        { id: 'watchlists', icon: <BellRing className='h-4 w-4' />, label: 'Watchlists', value: String(activeWatchlists ?? organization.sharedWatchlistCount ?? 0), detail: `${pausedWatchlists} paused` },
+        { id: 'members', icon: <Users className='h-4 w-4' />, label: 'Members', value: String(memberCount ?? organization.memberCount ?? organization.activeMemberCount ?? 0), detail: inviteCount ?? organization.pendingInviteCount ?? 0 },
+        { id: 'watchlists', icon: <BellRing className='h-4 w-4' />, label: 'Watchlists', value: String(activeWatchlists ?? organization.sharedWatchlistCount ?? 0), detail: pausedWatchlists },
         { id: 'destinations', icon: <Webhook className='h-4 w-4' />, label: 'Destinations', value: String(webhookCount) },
     ]
     return (
@@ -1653,7 +1647,7 @@ function WorkspaceSummary({ organization, activeWatchlists, pausedWatchlists, me
                         <span className='shrink-0 text-ui-muted dark:text-ui-muted'>{row.icon}</span>
                         <span className='min-w-0'>
                             <span className='block truncate text-[11px] font-semibold uppercase tracking-[0.08em] text-ui-muted dark:text-ui-muted'>{row.label}</span>
-                            <span className='block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{row.value}{row.detail && <> <span className='font-medium text-ui-muted dark:text-ui-muted'>{row.detail}</span></>}</span>
+                            <span className='block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{row.value}{row.id === 'members' && Number(row.detail) > 0 ? <> <Link href='/organizations/team#invites' className='font-medium text-ui-muted hover:text-ui-primary dark:text-ui-muted dark:hover:text-ui-primary'>{row.detail} pending</Link></> : null}{row.id === 'watchlists' && Number(row.detail) > 0 ? <> <Link href='/organizations/watchlists#watchlists' className='font-medium text-ui-muted hover:text-ui-primary dark:text-ui-muted dark:hover:text-ui-primary'>{row.detail} paused</Link></> : null}</span>
                         </span>
                     </span>
                 ))}
