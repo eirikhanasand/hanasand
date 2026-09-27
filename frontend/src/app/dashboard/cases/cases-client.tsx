@@ -2,7 +2,7 @@
 
 import Link from '@/components/organizations/workspaceLink'
 import { CreateCase } from './create-case'
-import { Filter, RefreshCw } from 'lucide-react'
+import { Filter, Loader2, RefreshCw } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 export type CaseResolution = { id?: string, type: 'human' | 'ai' | 'automation' | 'unknown', actor?: string, at?: string, note?: string, confirmedBy?: string, confirmedAt?: string }
@@ -116,7 +116,8 @@ export default function CasesClient({ organizationId }: { organizationId?: strin
             <input aria-label='Search cases' placeholder='Search cases' value={query} onChange={event => setQuery(event.target.value)} className='w-44 min-w-0 max-w-full rounded border border-ui-border bg-ui-canvas p-2 text-sm text-ui-text' />
         </div>}
         {Object.values(warnings).filter(Boolean).map(warning => <p role='alert' key={warning} className='px-4 pb-3 text-sm text-ui-danger'>{warning}</p>)}
-        {loading && <p role='status' className='px-4 pb-3 text-sm text-ui-muted'>{rows.length ? 'Updating cases…' : 'Loading cases…'}</p>}
+        {loading && rows.length > 0 && <p role='status' className='px-4 pb-3 text-sm text-ui-muted'>Updating cases…</p>}
+        {loading && rows.length === 0 && <div role='status' aria-label='Loading cases' aria-busy='true' className='grid min-h-[50vh] place-items-center'><Loader2 className='site-loading-icon' aria-hidden='true' /></div>}
         {(!loading || rows.length > 0) && <>
             {!visible.length ? <p className='p-4 text-ui-muted'>{Object.values(warnings).some(Boolean) ? 'No cases could be displayed from the available sources.' : rows.length ? 'No cases match the current filters.' : 'No cases yet.'}</p> : <div className='overflow-x-auto'><table className='w-full text-left text-sm'>
                 <thead className='border-y border-ui-border bg-ui-raised text-ui-muted'><tr>{['Case', 'Severity', 'Status', 'Owner', 'Updated'].map(label => <th key={label} scope='col' className='p-4'>{label}</th>)}</tr></thead>
