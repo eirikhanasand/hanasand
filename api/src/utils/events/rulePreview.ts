@@ -28,7 +28,7 @@ async function scanRulePreviewUncached(organizationId: string, canReadLogs: bool
     // Applying dynamic predicates in SQL can scan an entire event range when matches are rare.
     const scope = [
         'organization_id=$1',
-        ...(!canReadLogs ? ["ingestion_id <> 'logs'"] : []),
+        ...(!canReadLogs ? ['ingestion_id <> \'logs\''] : []),
         'event_timestamp <= $2::timestamptz',
         'received_at <= $2::timestamptz',
         ...(fromParameter ? [`event_timestamp >= ${fromParameter}::timestamptz`] : []),

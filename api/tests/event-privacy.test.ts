@@ -11,7 +11,7 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
         if (sql.includes('WHERE id = $1')) return { rows: events.filter(row => row.id === p[0] && row.organization_id === p[1]) }
         if (sql.includes('event_timestamp::text AS timestamp')) {
             if (previewFailure) throw previewFailure
-            const visible = events.filter(row => row.organization_id === p[0] && (!sql.includes("ingestion_id <> 'logs'") || row.ingestion_id !== 'logs'))
+            const visible = events.filter(row => row.organization_id === p[0] && (!sql.includes('ingestion_id <> \'logs\'') || row.ingestion_id !== 'logs'))
             return { rows: visible.map(row => ({ ...row, timestamp: row.event_timestamp })) }
         }
         return { rows: events.filter(row => row.organization_id === p[0] && (p[2] || row.ingestion_id !== 'logs')) }
