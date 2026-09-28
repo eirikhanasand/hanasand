@@ -32,6 +32,8 @@ services:
     build:
       context: .
       dockerfile: ./frontend/Dockerfile
+      args:
+        HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
     env_file:
       .env
     environment:
@@ -43,6 +45,7 @@ services:
       MAIL_INBOX_USERNAME: ${MAIL_INBOX_USERNAME:-eirik}
       MAIL_INBOX_ADDRESS: ${MAIL_INBOX_ADDRESS:-contact@hanasand.com}
       MAIL_INBOX_PASSWORD: ${MAIL_INBOX_PASSWORD:-}
+      HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
     ports:
       - "3000:3000"
     volumes:
@@ -69,6 +72,8 @@ services:
       additional_contexts:
         database_schema: ./db
       dockerfile: ./api/Dockerfile
+      args:
+        HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
     ports:
       - "127.0.0.1:${API_PORT:-8080}:8080"
     env_file:
@@ -189,6 +194,8 @@ services:
       context: .
       dockerfile: ./api/Dockerfile
       target: browser-runtime
+      args:
+        HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
     user: "1000"
     environment:
       NODE_ENV: production
@@ -208,6 +215,7 @@ services:
       BROWSER_SANDBOX_MAX_SESSIONS: "1"
       BROWSER_SANDBOX_PREWARM: "0"
       ONION_SESSION_PROXY: ${ONION_SESSION_PROXY:-socks5://onion-tor:9050}
+      HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
     expose:
       - "8080"
       - "8081"
@@ -280,6 +288,8 @@ services:
     build:
       context: .
       dockerfile: ./ops/onion-tor/Dockerfile
+      args:
+        HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
     expose:
       - "8118"
       - "9050"
@@ -292,6 +302,8 @@ services:
     networks:
       - hanasandnet
       - browsernet
+    environment:
+      HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
     depends_on:
       deploy-path-guard:
         condition: service_healthy
@@ -303,6 +315,8 @@ services:
     build:
       context: .
       dockerfile: ./ti/ai-parser-bridge/Dockerfile
+      args:
+        HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
     env_file:
       .env
     environment:
@@ -312,6 +326,7 @@ services:
       HANASAND_AI_MODELS_URL: ${HANASAND_AI_MODELS_URL:-http://api:8080/api/ai/models}
       HANASAND_AI_OPENAI_BASE: ${HANASAND_AI_OPENAI_BASE:-http://127.0.0.1:18081}
       HANASAND_AI_MODEL: ${HANASAND_AI_MODEL:-hanasand}
+      HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
     ports:
       # Host-network query replicas use the same parser bridge as the collector.
       - "127.0.0.1:18181:${HANASAND_AI_BRIDGE_PORT:-18181}"
@@ -333,6 +348,8 @@ services:
     build:
       context: .
       dockerfile: ./ti/ai-model-client/Dockerfile
+      args:
+        HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
     env_file:
       .env
     environment:
@@ -342,6 +359,7 @@ services:
       HANASAND_AI_MODEL: ${HANASAND_AI_MODEL:-hanasand}
       HANASAND_AI_CLIENT_NAME: ${HANASAND_AI_CLIENT_NAME:-hanasand-inspur}
       HANASAND_AI_CLIENT_HEALTH_PORT: ${HANASAND_AI_CLIENT_HEALTH_PORT:-18182}
+      HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
     volumes:
       - /var/lib/hanasand/model-probe-receipts:/model-probe-receipts
       - /var/lib/hanasand/model-probe-config:/model-probe-config:ro
@@ -369,6 +387,8 @@ services:
     build:
       context: .
       dockerfile: ./ti/scraper/Dockerfile
+      args:
+        HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
     environment:
       SCRAPER_PORT: 8097
       SCRAPER_HEALTH_PORT: 8098
@@ -427,6 +447,7 @@ services:
       # resolvable from the scraper's bridge network during failover.
       HANASAND_AUTH_API_BASE: ${HANASAND_AUTH_API_BASE:-http://hanasand_api:8080/api}
       TI_SCRAPER_SERVICE_TOKEN: ${TI_SCRAPER_SERVICE_TOKEN:-}
+      HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
     volumes:
       - ti_scraper_evidence:/var/lib/ti-scraper/evidence
     extra_hosts:
@@ -525,6 +546,8 @@ services:
     build:
       context: .
       dockerfile: ./ops/pgbouncer/Dockerfile
+      args:
+        HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
     ports:
       - "127.0.0.1:${DB_POOL_PORT:-18505}:18505"
     restart: always
@@ -540,6 +563,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       DB_DIRECT_HOST: hanasand_database
       DB_DIRECT_PORT: "5432"
+      HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
     healthcheck:
       test: ["CMD-SHELL", "PGPASSWORD=\"$$DB_PASSWORD\" psql -X -w -h 127.0.0.1 -p 18505 -U \"$$DB_USER\" -d hanasand -Atqc 'SELECT 1' | grep -qx 1"]
       interval: 5s

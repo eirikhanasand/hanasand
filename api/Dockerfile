@@ -27,7 +27,9 @@ CMD ["bun", "src/authServer.ts"]
 
 FROM oven/bun:1.3.13-alpine AS app-runtime
 
+ARG HANASAND_RELEASE_COMMIT=unknown
 ARG TRIVY_VERSION=0.72.0
+LABEL org.opencontainers.image.revision=$HANASAND_RELEASE_COMMIT
 RUN apk add --no-cache varnish git openssh-client docker-cli curl tar postgresql-client \
     && curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
         | tar -xz -C /usr/local/bin trivy \
@@ -56,6 +58,9 @@ EXPOSE 8080
 FROM oven/bun:1.3.11 AS browser-bun
 
 FROM ghcr.io/selkies-project/selkies-gstreamer/gst-py-example@sha256:3b7e60077dfc56af335cbe2da33a8255ec0ab954ecf6169b9a46e78d09c3df84 AS browser-runtime
+
+ARG HANASAND_RELEASE_COMMIT=unknown
+LABEL org.opencontainers.image.revision=$HANASAND_RELEASE_COMMIT
 
 USER root
 COPY .git/HEAD /tmp/hanasand-source-head

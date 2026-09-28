@@ -20,6 +20,9 @@ RUN bun run check
 
 FROM test AS runtime
 
+ARG HANASAND_RELEASE_COMMIT=unknown
+LABEL org.opencontainers.image.revision=$HANASAND_RELEASE_COMMIT
+
 COPY . /app/
 WORKDIR /app/ti/scraper
 ENV NODE_ENV=production \
