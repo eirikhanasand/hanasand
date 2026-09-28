@@ -28,7 +28,7 @@ test -d "$root/ti/scraper/node_modules" || {
     exit 1
 }
 ln -s "$root/ti/scraper/node_modules" "$build_dir/ti/scraper/node_modules"
-(cd "$build_dir/ti/scraper" && /home/hanasand/.local/bin/bun run check)
+(cd "$build_dir/ti/scraper" && PATH="/home/hanasand/.local/bin:$PATH" /home/hanasand/.local/bin/bun run check)
 rm "$build_dir/ti/scraper/node_modules"
 
 ti_release_dir="$root/ops/runtime/ti-releases/$release"
