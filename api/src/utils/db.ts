@@ -96,7 +96,7 @@ export async function isDatabaseLowLoad() {
             count(*) FILTER (WHERE state = 'active' AND pid <> pg_backend_pid())::int AS active_queries,
             count(*) FILTER (WHERE wait_event_type = 'Lock' AND pid <> pg_backend_pid())::int AS lock_waiters
             FROM pg_stat_activity WHERE datname = current_database()`)
-        return Number(rows[0]?.active_queries || 0) <= 3 && Number(rows[0]?.lock_waiters || 0) === 0
+        return Number(rows[0]?.active_queries || 0) <= 8 && Number(rows[0]?.lock_waiters || 0) === 0
     } catch {
         // Background scans must wait when the database cannot confirm it is quiet.
         return false
