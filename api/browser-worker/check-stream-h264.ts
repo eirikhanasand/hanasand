@@ -53,7 +53,7 @@ function decode(input: string, outputPattern: string) {
     runGst([
         'filesrc', `location=${input}`, '!',
         'h264parse', '!',
-        'openh264dec', '!',
+        'avdec_h264', '!',
         'videoconvert', '!',
         'videoscale', '!',
         'video/x-raw,format=GRAY8,width=64,height=36', '!',

@@ -73,7 +73,7 @@ COPY --from=browser-bun /usr/local/bin/bun /usr/local/bin/bun
 RUN ln -sf /usr/local/bin/bun /usr/local/bin/bunx \
     && apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl fonts-noto-color-emoji \
-        gstreamer1.0-plugins-bad gstreamer1.0-tools \
+        gstreamer1.0-libav gstreamer1.0-plugins-bad gstreamer1.0-tools \
     && curl -fsSLo /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
     && apt-get install -y --no-install-recommends /tmp/chrome.deb \
     && apt-get purge -y git \
