@@ -51,7 +51,7 @@ function nalTypes(bytes: Buffer) {
 
 function decode(input: string, outputPattern: string) {
     runGst([
-        `filesrc location=${input}`, '!',
+        'filesrc', `location=${input}`, '!',
         'h264parse', '!',
         'openh264dec', '!',
         'videoconvert', '!',
