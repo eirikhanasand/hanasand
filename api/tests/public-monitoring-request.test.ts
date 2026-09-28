@@ -142,8 +142,8 @@ test('native HTTPS pinning preserves SNI and certificate hostname verification',
     let server: ReturnType<typeof createServer> | undefined
     try {
         // Public test-only key and certificate; never used by a deployed service.
-        const cert = await readFile(new URL('cert.pem', fixture))
-        server = createServer({ key: await readFile(new URL('key.pem', fixture)), cert }, (req, res) => res.end(req.headers.host))
+        const cert = await readFile(new URL('cert.txt', fixture))
+        server = createServer({ key: await readFile(new URL('key.txt', fixture)), cert }, (req, res) => res.end(req.headers.host))
         await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve))
         const port = (server.address() as { port: number }).port
         const fetchFixture = (hostname: string, trusted: boolean) => new Promise<string>((resolve, reject) => {
