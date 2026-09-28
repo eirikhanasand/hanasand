@@ -60,7 +60,7 @@ export function getRuleHitRates(organizationId: string, rules: Pick<Rule, 'id'>[
 export async function loadRuleHits(organizationId: string, rules: Pick<Rule, 'id' | 'source' | 'definition'>[], query: typeof run, options: { cache?: boolean } = {}) {
     if (options.cache !== false && process.env.NODE_ENV !== 'test' && (query as typeof run & { primaryDatabaseRunner?: boolean }).primaryDatabaseRunner) {
         const key = `rule-hits:${organizationId}:${rules.map(rule => `${rule.id}:${rule.source || ''}:${rule.definition?.stage || ''}:${rule.definition?.action || ''}`).join(',')}`
-        return cachedRead(key, 5000, () => loadRuleHitsUncached(organizationId, rules, query))
+        return cachedRead(key, 10_000, () => loadRuleHitsUncached(organizationId, rules, query))
     }
     return loadRuleHitsUncached(organizationId, rules, query)
 }

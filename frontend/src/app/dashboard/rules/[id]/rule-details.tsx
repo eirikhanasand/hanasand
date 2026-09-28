@@ -84,7 +84,7 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
             }
         }
         void refreshHitCount()
-        const interval = window.setInterval(() => void refreshHitCount(), 3_000)
+        const interval = window.setInterval(() => void refreshHitCount(), 15_000)
         return () => { active = false; window.clearInterval(interval) }
     }, [id, organizationId, Boolean(data)])
 
