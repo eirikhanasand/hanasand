@@ -160,6 +160,7 @@ export default async function run(query: string, params?: SQLParamType, name?: s
 }
 
 ;(run as typeof run & { primaryDatabaseRunner?: boolean }).primaryDatabaseRunner = true
+;(run as typeof run & { withReadDatabase?: typeof withReadDatabase }).withReadDatabase = withReadDatabase
 
 export async function queryOnce(query: string, params?: SQLParamType, name?: string) {
     const client = await connectDatabase(activePool()).catch(error => {
