@@ -7,6 +7,8 @@ import ts from 'typescript'
 export const sha256 = value => createHash('sha256').update(value).digest('hex')
 const sourceExtensions = /\.(?:[cm]?[jt]sx?|py|swift|sql|sh|bash|zsh|c|cc|cpp|cxx|h|hpp|cu|cuh|cl|comp|glsl|vert|frag|rs|go|java|kt|rb|php|vue|svelte|css|scss|html|cmake|make|mk|jinja|json|ya?ml|toml|nix|wgsl|gbnf|in|metal|m|mm|tmpl|conf|vcl|plist|tcl|s|idl|pc|ini|bat|ps1|service|timer|xml|proto|graphql|prisma)$/i
 const excluded = /(?:^|\/)(?:node_modules|CMakeFiles|\.git|\.next|\.build|build|dist|target|coverage|vendor-cache|\.artifacts|\.venv|venv|__pycache__)(?:\/|$)|(?:^|\/)ops\/runtime\/(?:releases|source)(?:\/|$)|(?:^|\/)(?:\.env(?:\..*)?|.*\.(?:pem|key|p12|pfx)|.*(?:credentials|secrets).*\.(?:json|ya?ml|toml)|package-lock\.json|bun\.lock|.*lock\.json)$/i
+export const isSourcePath = file => sourceExtensions.test(file) && !excluded.test(file)
+export const isInventoryPath = file => isSourcePath(file) || /(?:^|\/)(?:Dockerfile(?:\.[^/]+)?|[^/]+\.Dockerfile|Makefile|CMakeLists\.txt)$/.test(file)
 export function collectSources(root) {
     const files = new Map()
     function walk(directory) {
@@ -14,7 +16,7 @@ export function collectSources(root) {
             const absolute = path.join(directory, entry.name), relative = path.relative(root, absolute).split(path.sep).join('/')
             if (excluded.test(relative) || entry.isSymbolicLink()) continue
             if (entry.isDirectory()) walk(absolute)
-            else if (sourceExtensions.test(relative) || /(?:^|\/)(?:Dockerfile(?:\.[^/]+)?|[^/]+\.Dockerfile|Makefile|CMakeLists\.txt)$/.test(relative)) {
+            else if (isInventoryPath(relative)) {
                 const data = fs.readFileSync(absolute)
                 if (!data.includes(0)) files.set(relative, data.toString('utf8'))
             }
