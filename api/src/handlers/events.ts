@@ -10,7 +10,7 @@ import { readinessAuditRule, readinessAuditRuleId, readinessAuditDefinition, rea
 import { retainedOriginals } from '#utils/events/retainedOriginals.ts'
 import { normalizeLogEvent } from '#utils/events/logEvent.ts'
 import { telemetryRule, telemetryRuleId, sshWindowRule, sshWindowRuleId, telemetryDefinition, sshWindowDefinition, validateRoutineGroupParameters } from '#utils/events/analyzeRoutineGroups.ts'
-import { scanRulePreview, estimateStoredRuleEvents, validPreviewWindow, PreviewRegexTimeout } from '#utils/events/rulePreview.ts'
+import { scanRulePreview, getStoredRuleEstimate, validPreviewWindow, PreviewRegexTimeout } from '#utils/events/rulePreview.ts'
 import { collectorRule, collectorRuleId, collectorDefinition } from '#utils/events/analyzeCollector.ts'
 import { proxyRule, proxyRuleId, proxyDefinition } from '#utils/events/analyzeProxy.ts'
 import { postgresRule, postgresRuleId, postgresDefinition, validPostgresParameters } from '#utils/events/analyzePostgres.ts'
@@ -372,10 +372,10 @@ export async function getRuleStorageEstimate(req: FastifyRequest<{ Params: { id:
     if (query.organizationId !== access.organizationId) return res.status(403).send({ error: 'Organization access denied.' })
     const rule = (await loadConfiguredRules(access.organizationId, run, true)).find(rule => ruleSlug(rule.id) === ruleSlug(req.params.id) || rule.recordId === req.params.id)
     if (!rule || internalRetentionRuleIds.has(rule.id)) return res.status(404).send({ error: 'Rule not found.' })
-    if (rule.definition?.stage !== 'analyze' || rule.definition.action !== 'drop' || !rule.definition.conditions?.length)
+    if (rule.definition?.stage !== 'analyze' || rule.definition.action !== 'drop')
         return res.send({ organizationId: access.organizationId, estimate: null })
     try {
-        const estimate = await estimateStoredRuleEvents(access.organizationId, rule.id, rule.version, rule.definition.conditions)
+        const estimate = await getStoredRuleEstimate(access.organizationId, rule.id, rule.version)
         return res.header('Cache-Control', 'private, max-age=60').send({ organizationId: access.organizationId, estimate })
     } catch (error) {
         if (error instanceof ReadAdmissionError) return res.header('Retry-After', '2').status(503).send({ error: error.message })
