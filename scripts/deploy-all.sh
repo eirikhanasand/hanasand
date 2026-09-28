@@ -23,6 +23,14 @@ mkdir -p "$build_dir/.git"
 printf 'ref: refs/heads/main\n' > "$build_dir/.git/HEAD"
 if test -f "$root/.env"; then cp "$root/.env" "$build_dir/.env"; fi
 
+test -d "$root/ti/scraper/node_modules" || {
+    echo "TI dependencies are missing on the deploy host; refusing an unverified source mount." >&2
+    exit 1
+}
+ln -s "$root/ti/scraper/node_modules" "$build_dir/ti/scraper/node_modules"
+(cd "$build_dir/ti/scraper" && /home/hanasand/.local/bin/bun run check)
+rm "$build_dir/ti/scraper/node_modules"
+
 ti_release_dir="$root/ops/runtime/ti-releases/$release"
 if test -e "$ti_release_dir"; then
     test -f "$ti_release_dir/.hanasand-release" && test "$(cat "$ti_release_dir/.hanasand-release")" = "$release" || {
