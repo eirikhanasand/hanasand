@@ -188,7 +188,7 @@ async function start() {
             })
         }
         if (!browserWorkerOnly && !httpWorkerOnly) await warmDatabasePools()
-        if (!browserWorkerOnly && !httpWorkerOnly && process.env.AUTH_SERVICE_ONLY !== '1') {
+        if (!browserWorkerOnly && process.env.AUTH_SERVICE_ONLY !== '1') {
             await loadCachedLogMetrics().catch(error => fastify.log.warn({ error }, 'Failed to warm log throughput metrics cache'))
             const stopMetricsRefresh = startLogMetricsRefresh()
             fastify.addHook('onClose', async () => { stopMetricsRefresh() })
