@@ -13,14 +13,15 @@ export async function searchLogs(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
     if (!valid) return res.status(401).send({ error: 'Unauthorized.' })
     if (!(await hasRole(req, res, 'system_admin')).valid) return res.status(403).send({ error: 'Missing system_admin role.' })
-    const input = req.query as { hql?: string, kql?: string, search?: string, service?: string, severity?: string, hours?: string, stats?: string, paginate?: string, cursor?: string }
+    const input = req.query as { hql?: string, kql?: string, search?: string, service?: string, severity?: string, hours?: string, stats?: string, paginate?: string, cursor?: string, realtime?: string }
     try {
         const compiled = compileLogQuery(input.hql || input.kql || 'Logs | take 200')
         const paginate = input.paginate === '1'
         if ((paginate && (compiled.summarize || compiled.order !== 'event_timestamp DESC, id DESC' || input.stats === '1')) || (input.cursor && !paginate)) throw new Error('Pagination requires a newest-first event search without counters.')
         const params = [...compiled.params]
         const bind = (value: string | number) => { params.push(value); return `$${params.length}` }
-        const hours = Number(input.hours || 24)
+        const realtime = input.realtime === '1'
+        const hours = Number(input.hours || (realtime ? 1 : 24))
         if (!Number.isFinite(hours) || hours < 1 || hours > 24 * 90) throw new Error('Time range must be between one hour and 90 days.')
         const timeWhere = `event_timestamp >= NOW() - ${bind(hours)} * INTERVAL '1 hour'`
         // Evaluate active organizations once without a join that can lose the
@@ -39,6 +40,7 @@ export async function searchLogs(req: FastifyRequest, res: FastifyReply) {
             const result = paginate ? await searchLogPage(query, { where, params, order: compiled.order, limit: compiled.limit, cursor: input.cursor, recentFirst: Boolean(input.search) }) : compiled.summarize
                 ? await query(`SELECT ${compiled.fields[compiled.summarize]} AS value, COUNT(*)::int AS count FROM events WHERE ${where.join(' AND ')} GROUP BY 1 ORDER BY count DESC LIMIT ${compiled.limit}`, params)
                 : await query(`SELECT id, normalized, event_timestamp, organization_id FROM events WHERE ${where.join(' AND ')} ORDER BY ${compiled.order} LIMIT ${compiled.limit}`, params)
+            if (realtime) return { rows: result.rows, next_cursor: 'next_cursor' in result ? result.next_cursor : undefined, processing: null, counts: [], services: [] }
             const status = await query('SELECT name, updated_at, last_error, last_id, recent_id, history_end_id, (SELECT COUNT(*)::int FROM events WHERE ingestion_id = \'logs\' AND processing_status = \'skipped\') AS skipped_events FROM log_processing_cursors ORDER BY name')
             const progress = (await query('SELECT payload, last_error FROM log_catchup_progress WHERE id = TRUE')).rows[0]
             const catchup = typeof progress?.payload?.remaining === 'number' ? { ...progress.payload, last_error: progress.last_error } : null

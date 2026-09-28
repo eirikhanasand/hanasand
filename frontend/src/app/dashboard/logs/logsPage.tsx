@@ -1,4 +1,4 @@
-import { getErrorEvents, getLogServices, getLogDashboard } from '@/utils/logs/getLogs'
+import { emptyErrorEvents, getErrorEvents, getLogServices, getLogDashboard } from '@/utils/logs/getLogs'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { DashboardPage } from '@/components/dashboard/ui'
@@ -19,8 +19,8 @@ export default async function LogsPage({ searchParams, view = 'dashboard' }: Log
     }
 
     const [services, errors, dashboard] = await Promise.all([
-        getLogServices({ token, id }),
-        getErrorEvents({ token, id }),
+        view === 'realtime' ? Promise.resolve([]) : getLogServices({ token, id }),
+        view === 'dashboard' || view === 'errors' ? getErrorEvents({ token, id }) : Promise.resolve(emptyErrorEvents()),
         getLogDashboard({ token, id, view, params: params || {}, impersonationToken: Cookies.get('impersonation_token')?.value }),
     ])
 

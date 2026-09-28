@@ -23,7 +23,7 @@ export function settingsFor(kind: Kind, old: any, release: string) {
         HOSTNAME: '127.0.0.1', RECOVERY_SITE: 'ovhcloud' })
     if (kind === 'frontend') Object.assign(settings, { RECOVERY_STATUS_URL: settings.RECOVERY_STATUS_URL || 'http://127.0.0.1:19901/status',
         RECOVERY_STATE_FILE: settings.RECOVERY_STATE_FILE || '/recovery/state.json' })
-    if (kind === 'api') Object.assign(settings, { AI_HEALTH_WORKER_BASE: 'http://127.0.0.1:28080', API_HTTP_ONLY: '1' })
+    if (kind === 'api') Object.assign(settings, { AI_HEALTH_WORKER_BASE: 'http://127.0.0.1:28080', API_HTTP_ONLY: '1', RECOVERY_ESSENTIAL_ONLY: '1', RECOVERY_STATE_FILE: '/resilience/state.json' })
     return settings
 }
 

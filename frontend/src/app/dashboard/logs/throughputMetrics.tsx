@@ -50,7 +50,7 @@ export default function ThroughputMetrics() {
     }, [])
     const points = useMemo(() => metrics?.history || [], [metrics])
     if (!metrics) return <section aria-label='Log throughput metrics' className='grid gap-3 sm:grid-cols-5'><div className='sm:col-span-5 rounded-xl border border-ui-border bg-ui-panel p-4 text-sm text-ui-muted'>Loading throughput metrics &</div></section>
-    return <section aria-label='Log throughput metrics' className='grid gap-3' data-log-throughput>
+    return <section id='log-analytics' aria-label='Log throughput metrics' className='grid gap-3' data-log-throughput>
         <div className='grid gap-3 sm:grid-cols-5'>{cards.map(([label, key, description]) => <div key={key} className='rounded-xl border border-ui-border bg-ui-panel p-4'><p className='text-sm text-ui-muted'>{label}</p><p className='mt-2 text-2xl font-semibold tabular-nums'>{format(metrics.current[key])}</p><p className='mt-1 text-xs text-ui-muted'>{description}</p></div>)}<div className='rounded-xl border border-ui-border bg-ui-panel p-4'><p className='text-sm text-ui-muted'>Logs remaining</p><p className='mt-2 text-2xl font-semibold tabular-nums'>{metrics.current.remaining.toLocaleString('en-US')}</p><p className='mt-1 text-xs text-ui-muted'>{age(metrics.generated_at, now)}</p></div></div>
         <div className='grid gap-3 lg:grid-cols-3'>{(['eps', 'pps', 'npps'] as const).map(field => <Chart key={field} title={field.toUpperCase()} points={points} field={field} />)}</div>
     </section>

@@ -83,6 +83,16 @@ test('basic search stays literal and parameterized for rows and exact full-data 
     expect(statements.some(sql => sql.includes('LIKE'))).toBe(false)
 })
 
+test('realtime search defaults to one hour and skips processor metadata queries', async () => {
+    const response = await app.inject('/logs/search?realtime=1')
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toMatchObject({ hours: 1, processing: null, counts: [], services: [] })
+    expect(statements.some(sql => sql.startsWith('SELECT id, normalized'))).toBe(true)
+    expect(statements.some(sql => sql.startsWith('SELECT name, updated_at'))).toBe(false)
+    expect(statements.some(sql => sql.startsWith('SELECT payload, last_error'))).toBe(false)
+    expect(statements.some(sql => sql.includes('FROM log_process_queue'))).toBe(false)
+})
+
 test('processing status exposes bounded pending command counts and their oldest receipt', async () => {
     pendingCount = 10001
     const response = await app.inject('/logs/search')

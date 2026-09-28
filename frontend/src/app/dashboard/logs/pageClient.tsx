@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
-import { Copy, ChevronDown, Search, ListFilter, X } from 'lucide-react'
+import { Copy, ChevronDown, Search, ListFilter, BarChart3, X } from 'lucide-react'
 import { logSearchParams, logTables, type LogEvent as Event, type LogSearchResult as Result, type ProcessingSource } from '@/utils/logs/search'
 import { retainEvents } from '@/utils/logs/retainEvents'
 import EventFeed from './eventFeed'
@@ -36,7 +36,7 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
     const [advanced, setAdvanced] = useState(!!initialHql)
     const [hql, setHql] = useState(initialHql || 'ProcessLogs | where Severity in ("high", "critical") | order by TimeGenerated desc | take 100')
     const [appliedHql, setAppliedHql] = useState(initialHql)
-    const [hours, setHours] = useState(params.get('hours') || '24')
+    const [hours, setHours] = useState(params.get('hours') || (view === 'realtime' ? '1' : '24'))
     const [severity, setSeverity] = useState(params.get('severity') || 'all')
     const [data, setData] = useState<Result | null>(initialData)
     const [error, setError] = useState(initialError)
@@ -49,6 +49,7 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
     const filterPanel = useRef<HTMLDivElement>(null)
     const filterButton = useRef<HTMLButtonElement>(null)
     const [filtersOpen, setFiltersOpen] = useState(false)
+    const [analyticsOpen, setAnalyticsOpen] = useState(true)
     const loadMore = useRef<(cursor: string) => void>(() => {})
     const queryIdentity = useRef(JSON.stringify([view, service, search, table, advanced, appliedHql, hours, severity]))
     useEffect(() => {
@@ -74,7 +75,7 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
         if (view === 'errors') return
         const url = new URL(window.location.href)
         url.searchParams.delete('kql')
-        for (const [key, value] of Object.entries({ service: service === 'all' ? '' : service, search: advanced ? '' : search, table: advanced || table === 'Logs' ? '' : table, hql: advanced ? appliedHql : '', hours: hours === '24' ? '' : hours, severity: view === 'realtime' || severity === 'all' ? '' : severity })) {
+        for (const [key, value] of Object.entries({ service: service === 'all' ? '' : service, search: advanced ? '' : search, table: advanced || table === 'Logs' ? '' : table, hql: advanced ? appliedHql : '', hours: hours === (view === 'realtime' ? '1' : '24') ? '' : hours, severity: view === 'realtime' || severity === 'all' ? '' : severity })) {
             if (value) url.searchParams.set(key, value)
             else url.searchParams.delete(key)
         }
@@ -117,7 +118,7 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
         }
         const debounce = initialData && sameQuery && refresh === 0 ? undefined : setTimeout(() => void load(), 250)
         loadMore.current = cursor => void load(cursor)
-        const interval = view !== 'errors' ? setInterval(() => void load(), view === 'search' ? 10_000 : 5000) : undefined
+        const interval = view !== 'errors' ? setInterval(() => void load(), view === 'search' || view === 'realtime' ? 10_000 : 5000) : undefined
         return () => { controller.abort(); clearTimeout(debounce); clearInterval(interval); loadMore.current = () => {} }
     }, [view, service, search, table, advanced, appliedHql, hours, severity, refresh, initialData])
     async function copy(event: Event | ErrorEvent) {
@@ -129,11 +130,11 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
     const processingError = data?.processing?.last_error?.endsWith('Waiting for active log writes; will retry.') ? null : data?.processing?.last_error
     const commandChecksDelayed = pendingCommands?.oldest_queued_at && Date.parse(data?.generated_at || '') - Date.parse(pendingCommands.oldest_queued_at) >= 60_000
     const serviceOptions = [...new Set([...initialServices.map(item => item.service), ...(data?.services.map(item => item.service) || []), ...(service === 'all' ? [] : [service])])].sort()
-    const activeFilters = [service !== 'all', !advanced && !!search, !advanced && table !== 'Logs', advanced && !!appliedHql, hours !== '24', view !== 'realtime' && severity !== 'all'].filter(Boolean).length
+    const activeFilters = [service !== 'all', !advanced && !!search, !advanced && table !== 'Logs', advanced && !!appliedHql, hours !== (view === 'realtime' ? '1' : '24'), view !== 'realtime' && severity !== 'all'].filter(Boolean).length
     return <div className='grid min-w-0 gap-4'>
         <header className='flex flex-wrap items-center justify-between gap-3'>
             <div><h1 className='text-2xl font-semibold'>{view === 'dashboard' ? 'Logs' : view === 'realtime' ? 'Realtime' : view === 'errors' ? 'Errors' : 'Search logs'}</h1>{view === 'errors' && <p className='mt-1 text-sm text-ui-muted'>Application errors, response codes, and request details.</p>}</div>
-            <nav aria-label='Log pages' className='flex flex-wrap items-center gap-2'>{[['Dashboard', '/logs'], ['Realtime', '/logs/realtime'], ['Search', '/logs/search'], ['Errors', '/logs/errors'], ['Traffic', '/traffic']].filter(([, href]) => (view !== 'realtime' || href !== '/logs/realtime') && (view !== 'dashboard' || href !== '/logs')).map(([label, href]) => <Link key={href} href={href} aria-current={pathname === href || pathname === `/dashboard${href}` ? 'page' : undefined} className={`${fieldClass} ${pathname === href ? 'font-semibold text-ui-primary' : ''}`}>{label}</Link>)}{view !== 'errors' && <button ref={filterButton} type='button' onClick={() => setFiltersOpen(open => !open)} aria-label='Filter logs' aria-expanded={filtersOpen} aria-controls='log-filters' aria-keyshortcuts='Meta+J Control+J' title='Filter logs (⌘J)' className={`${fieldClass} relative inline-flex items-center justify-center ${activeFilters ? 'border-ui-primary text-ui-primary' : ''}`}><ListFilter size={18} aria-hidden />{!!activeFilters && <span className='absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-ui-primary text-[10px] font-semibold text-ui-on-primary'>{activeFilters}<span className='sr-only'> active filters</span></span>}</button>}</nav>
+            <nav aria-label='Log pages' className='flex flex-wrap items-center gap-2'>{[['Dashboard', '/logs'], ['Realtime', '/logs/realtime'], ['Search', '/logs/search'], ['Errors', '/logs/errors'], ['Traffic', '/traffic']].filter(([, href]) => (view !== 'realtime' || href !== '/logs/realtime') && (view !== 'dashboard' || href !== '/logs')).map(([label, href]) => <Link key={href} href={href} aria-current={pathname === href || pathname === `/dashboard${href}` ? 'page' : undefined} className={`${fieldClass} ${pathname === href ? 'font-semibold text-ui-primary' : ''}`}>{label}</Link>)}{view !== 'errors' && <button ref={filterButton} type='button' onClick={() => setFiltersOpen(open => !open)} aria-label='Filter logs' aria-expanded={filtersOpen} aria-controls='log-filters' aria-keyshortcuts='Meta+J Control+J' title='Filter logs (⌘J)' className={`${fieldClass} relative inline-flex items-center justify-center ${activeFilters ? 'border-ui-primary text-ui-primary' : ''}`}><ListFilter size={18} aria-hidden />{!!activeFilters && <span className='absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-ui-primary text-[10px] font-semibold text-ui-on-primary'>{activeFilters}<span className='sr-only'> active filters</span></span>}</button>}{view === 'dashboard' && <button type='button' onClick={() => setAnalyticsOpen(open => !open)} aria-label='Toggle log analytics' aria-expanded={analyticsOpen} aria-controls='log-analytics' title='Toggle log analytics' className={`${fieldClass} ${analyticsOpen ? 'border-ui-primary text-ui-primary' : ''}`}><BarChart3 size={18} aria-hidden /></button></nav>
         </header>
         {error && <div role='alert' className='flex flex-wrap items-center justify-between gap-2 rounded-lg border border-ui-danger p-3 text-sm text-ui-text'><span>{error}</span><button type='button' className={fieldClass} onClick={() => setRefresh(value => value + 1)}>Retry</button></div>}
         {view === 'errors' ? <><div className='flex items-center justify-between gap-3 text-xs text-ui-muted'><span role='status'>{busy ? 'Refreshing…' : copied ? 'Event copied' : 'Recent application errors'}</span><button type='button' className={fieldClass} disabled={busy} onClick={() => setRefresh(value => value + 1)}>Refresh errors</button></div><ErrorsPanel events={errors} expanded={expanded} onToggle={toggle} onCopy={event => void copy(event)} /></> : <>
@@ -161,15 +162,15 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
             </div>
             {processingError && <p role='alert' className='text-sm text-ui-text'>Event processing is delayed: {processingError}</p>}
             {view !== 'realtime' && commandChecksDelayed && <p suppressHydrationWarning role='status' className='text-sm text-ui-warning'>Command checks are delayed. {pendingCommands.has_more ? 'More than ' : ''}{pendingCommands.count.toLocaleString('en-US')} {pendingCommands.count === 1 ? 'command is' : 'commands are'} waiting; oldest received {new Date(pendingCommands.oldest_queued_at!).toLocaleString()}.</p>}
-            {view !== 'realtime' && <ThroughputMetrics />}
+            {view === 'dashboard' && analyticsOpen && <ThroughputMetrics />}
             {view !== 'realtime' && <LogCatchupProgress progress={data?.processing?.catchup} catchingUp={!!data?.processing?.sources?.some(isCatchingUp)} now={data?.generated_at || new Date().toISOString()} stalled={!!processingError} />}
             {!!data?.processing?.skipped_events && <p role='status' className='text-sm text-ui-warning'>{data.processing.skipped_events.toLocaleString('en-US')} events remain excluded from detection.</p>}
-            {data && !data.processing && !busy && <p role='status' className='text-sm text-ui-warning'>Waiting for the log processor to check in.</p>}
+            {view !== 'realtime' && data && !data.processing && !busy && <p role='status' className='text-sm text-ui-warning'>Waiting for the log processor to check in.</p>}
             {view === 'dashboard' ? <>
                 <section className='grid gap-3 sm:grid-cols-5' aria-label='Events by severity' data-logs-metrics>{['low','medium','high','critical'].map(value => <Link key={value} href={`/logs/search?${new URLSearchParams({ hours, ...(service !== 'all' ? { service } : {}), ...(advanced && appliedHql ? { hql: appliedHql } : { table, search }), severity: value })}`} className={`${dashboardPanelClass} p-4`} data-logs-metric-card><p className='text-sm capitalize text-ui-muted'>{value}</p><p className='mt-2 text-2xl font-semibold tabular-nums'>{data ? (data.counts.find(item => item.severity === value)?.count || 0).toLocaleString('en-US') : '—'}</p></Link>)}<Link href='/logs/errors' className={`${dashboardPanelClass} p-4`} data-logs-metric-card><p className='text-sm text-ui-muted'>Errors</p><p className='mt-2 text-2xl font-semibold tabular-nums'>{errors.summary.total.toLocaleString('en-US')}</p></Link></section>
                 <details open className={`${dashboardPanelClass} group overflow-hidden`}><summary className='flex cursor-pointer list-none items-center justify-between border-b border-ui-border bg-ui-raised px-4 py-3 text-sm font-semibold [&::-webkit-details-marker]:hidden'>Most active<ChevronDown size={18} aria-hidden className='-rotate-90 text-ui-muted transition-transform group-open:rotate-0' /></summary><div className='p-4'><dl className='grid gap-2'>{data?.services.map(item => <div key={item.service} className='flex justify-between gap-3 text-sm'><dt>{item.service}</dt><dd>{item.count.toLocaleString('en-US')}</dd></div>)}</dl></div></details>
             </> : <section className={`${dashboardPanelClass} min-w-0 overflow-hidden`} aria-label='Log events'>
-                <div className='flex flex-wrap justify-between gap-2 border-b border-ui-border p-3 text-xs text-ui-muted'><span>{data?.rows.length || 0} results{data && data.rows.length === data.limit && (view !== 'search' || advanced) ? ` · limited to ${data.limit}; narrow your search or use take up to 500` : ''}</span><span role='status'>{busy ? 'Searching…' : view === 'realtime' ? 'Updates every 5 seconds' : 'Results'}{copied ? ' · Event copied' : ''}</span></div>
+                <div className='flex flex-wrap justify-between gap-2 border-b border-ui-border p-3 text-xs text-ui-muted'><span>{data?.rows.length || 0} results{data && data.rows.length === data.limit && (view !== 'search' || advanced) ? ` · limited to ${data.limit}; narrow your search or use take up to 500` : ''}</span><span role='status'>{busy ? 'Searching…' : view === 'realtime' ? 'Updates every 10 seconds' : 'Results'}{copied ? ' · Event copied' : ''}</span></div>
                 <EventFeed rows={data?.rows || []}>{data?.summarize ? <table className='w-full text-left text-sm'><thead><tr><th className='p-3'>{data.summarize}</th><th className='p-3'>Count</th></tr></thead><tbody>{(data.rows as unknown as Array<{value: string,count: number}>).map(row => <tr key={row.value}><td className='p-3'>{row.value}</td><td className='p-3'>{row.count}</td></tr>)}</tbody></table> : data?.rows.map(event => <article key={event.id} className='select-text border-b border-ui-border p-4 last:border-b-0'>
                     <div className='flex flex-wrap items-start justify-between gap-3'>
                         <button type='button' onClick={() => toggle(event.id)} aria-expanded={!!expanded[event.id]} aria-controls={`log-details-${event.id}`} className='flex min-w-0 flex-wrap items-center gap-2 break-all text-left text-sm font-semibold'><ChevronDown size={16} aria-hidden className={expanded[event.id] ? '' : '-rotate-90'} />{event.normalized.service}<span className='font-normal text-ui-muted'>{event.normalized.host}</span></button>

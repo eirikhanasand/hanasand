@@ -1,4 +1,4 @@
-type Entry = { value?: unknown, updatedAt: number, retryAt: number, pending?: Promise<unknown> }
+type Entry = { value?: unknown, updatedAt: number, retryAt: number, failures: number, pending?: Promise<unknown> }
 const entries = new Map<string, Entry>()
 const MAX_ENTRIES = 128
 const MAX_STALE_MS = 5 * 60_000
@@ -13,7 +13,7 @@ export async function cachedLogQuery<T>(key: string, ttl: number, load: () => Pr
             if (oldest) entries.delete(oldest[0])
             else return load()
         }
-        entry = { updatedAt: 0, retryAt: 0 }
+        entry = { updatedAt: 0, retryAt: 0, failures: 0 }
         entries.set(key, entry)
     }
     const current = entry
@@ -25,13 +25,15 @@ export async function cachedLogQuery<T>(key: string, ttl: number, load: () => Pr
             current.value = value
             current.updatedAt = Date.now()
             current.retryAt = 0
+            current.failures = 0
             return value
         }).catch(error => {
-            current.retryAt = Date.now() + 5000
+            current.failures++
+            current.retryAt = Date.now() + Math.min(60_000, 5000 * 2 ** Math.min(current.failures - 1, 4))
             throw error
         }).finally(() => { current.pending = undefined })
         // Refresh failures must be observed even when returning a previous snapshot.
-        void current.pending.catch(() => console.warn('Log snapshot refresh failed; retrying in five seconds.'))
+        void current.pending.catch(() => console.warn('Log snapshot refresh failed; retrying after ' + Math.max(0, current.retryAt - Date.now()) + 'ms.'))
     }
     if (current.value !== undefined && age < MAX_STALE_MS) return current.value as T
     if (current.pending) return current.pending as Promise<T>
