@@ -83,7 +83,7 @@ for (const source of [handoff, runbook].filter(Boolean)) {
 }
 if (existsSync(composeUrl)) {
     const compose = readFileSync(composeUrl, 'utf8')
-    const serviceBlock = (name: string) => new RegExp(`\\n  ${name}:\\n([\\s\\S]*?)(?=\\n  [a-zA-Z0-9_-]+:\\n|\\nvolumes:)`).exec(compose)?.[1] || ''
+    const serviceBlock = (name: string) => new RegExp(`\\n {2}${name}:\\n([\\s\\S]*?)(?=\\n {2}[a-zA-Z0-9_-]+:\\n|\\nvolumes:)`).exec(compose)?.[1] || ''
     assert.doesNotMatch(compose, /BROWSER_SANDBOX_PER_SESSION_WORKER/, 'compose should not expose a production switch back to shared browser workers')
     assert.match(compose, /BROWSER_SANDBOX_WORKER_NETWORK:\s*\$\{BROWSER_SANDBOX_WORKER_NETWORK:-hanasand_browsernet\}/, 'ephemeral browser workers should not join the app network by default')
     assert.match(serviceBlock('api'), /BROWSER_SANDBOX_EGRESS_FIREWALL_READY:\s*\$\{BROWSER_SANDBOX_EGRESS_FIREWALL_READY:-0\}/, 'API should receive the browser egress firewall readiness gate from compose env')
