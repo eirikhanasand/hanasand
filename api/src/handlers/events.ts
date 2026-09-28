@@ -19,7 +19,7 @@ import { redactLogValue } from '#utils/logs/redact.ts'
 import { securityRules, matchSecurityRules } from '#utils/events/securityRules.ts'
 import { randomUUID } from 'node:crypto'
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import run, { withReadDatabase, withTransaction } from '#db'
+import run, { withTransaction } from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import { matchApiKeyScope, validateApiKey } from '#utils/auth/apiKeys.ts'
@@ -37,6 +37,11 @@ type Event = Record<string, unknown>
 type EventBody = { source?: Record<string, unknown>, events?: unknown }
 type RuleDefinition = { match: 'all', conditions: Condition[], storeScope?: 'custom_drop' | 'all', protection?: EventProtectionPolicy, failureConditions?: Condition[], parameters?: Record<string, number>, stage?: 'analyze' | 'match' | 'detect', action?: 'drop' | 'keep' }
 type Rule = { id: string, detectionLogic?: string, recordId?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'owned' | 'open_source', sourceReference?: string, definition?: RuleDefinition }
+
+type ReadAwareRun = typeof run & { withReadDatabase?: <T>(work: () => Promise<T>) => Promise<T> }
+function readDatabase<T>(work: () => Promise<T>): Promise<T> {
+    return (run as ReadAwareRun).withReadDatabase?.(work) || work()
+}
 
 function normalizeParserVersion(value: unknown) {
     const version = String(value || 'event.v1')
@@ -470,7 +475,7 @@ export async function postRuleAction(req: FastifyRequest<{ Params: { id: string 
     if (!canManageRules(access.role)) return res.status(403).send({ error: 'Editor access is required to manage rules.' })
     const action = req.body?.action === 'enable' || req.body?.action === 'disable' ? req.body.action : null
     if (!action) return res.status(400).send({ error: 'Action must be enable or disable.' })
-    const rule = (await withReadDatabase(() => loadConfiguredRules(access.organizationId))).find(rule => ruleSlug(rule.id) === ruleSlug(req.params.id) || rule.recordId === req.params.id)
+    const rule = (await readDatabase(() => loadConfiguredRules(access.organizationId))).find(rule => ruleSlug(rule.id) === ruleSlug(req.params.id) || rule.recordId === req.params.id)
     if (!rule) return res.status(404).send({ error: 'Rule not found.' })
     if (([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') && !(await hasRole(req, res, 'system_admin')).valid) return res.status(403).send({ error: 'System administrator access is required to change platform log retention.' })
     if (action === 'enable' && unavailableAnalysisRule(rule.id)) return res.status(409).send({ error: unavailableAnalysisRule(rule.id) })
@@ -486,13 +491,13 @@ export async function postRuleAction(req: FastifyRequest<{ Params: { id: string 
 export async function getRule(req: FastifyRequest<{ Params: { id: string }, Querystring: { organizationId?: string, offset?: string } }>, res: FastifyReply) {
     const access = await organizationAccess(req, res)
     if (!access) return
-    const rule = (await withReadDatabase(() => loadConfiguredRules(access.organizationId))).find(rule => ruleSlug(rule.id) === ruleSlug(req.params.id) || rule.recordId === req.params.id)
+    const rule = (await readDatabase(() => loadConfiguredRules(access.organizationId))).find(rule => ruleSlug(rule.id) === ruleSlug(req.params.id) || rule.recordId === req.params.id)
     if (!rule) return res.status(404).send({ error: 'Rule not found.' })
     const requestedVersion = /\.v(\d+)$/.exec(req.params.id)?.[1]
     const isHistorical = Boolean(requestedVersion && requestedVersion !== rule.version)
     let displayedRule = rule
     if (isHistorical) {
-        const history = await withReadDatabase(() => run(`SELECT context FROM system_events WHERE organization_id = $1 AND object_type = 'event_rule'
+        const history = await readDatabase(() => run(`SELECT context FROM system_events WHERE organization_id = $1 AND object_type = 'event_rule'
             AND (object_id = $2 OR object_id = $3 OR context->>'ruleId' = $2)
             AND (context->'after'->>'version' = $4 OR context->'before'->>'version' = $4)
             ORDER BY created_at DESC, id DESC LIMIT 1`, [access.organizationId, rule.id, rule.recordId || rule.id, requestedVersion!]))
@@ -505,7 +510,7 @@ export async function getRule(req: FastifyRequest<{ Params: { id: string }, Quer
     try {
         const payload = await cachedRead(`rule-detail:${access.organizationId}:${access.role}:${req.params.id}:${offset}`, 10000, async () => {
             const objectIds = [...new Set([rule.id, rule.recordId || rule.id])]
-            const [audit, hits] = await withReadDatabase(() => Promise.all([
+            const [audit, hits] = await readDatabase(() => Promise.all([
                 run(`SELECT id, event_type, actor_id, created_at, context
                     FROM (
                         SELECT id, event_type, actor_id, created_at, context
