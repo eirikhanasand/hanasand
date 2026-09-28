@@ -1168,6 +1168,8 @@ async function applySchema() {
     await run('CREATE INDEX IF NOT EXISTS idx_system_events_org_created ON system_events(organization_id, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_system_events_actor_created ON system_events(actor_id, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_system_events_object_created ON system_events(object_type, object_id, created_at DESC)')
+    await ensureIndex(run, 'idx_system_events_org_object_created', 'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_system_events_org_object_created ON system_events(organization_id, object_type, object_id, created_at DESC, id DESC)')
+    await ensureIndex(run, 'idx_system_events_org_rule_context', 'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_system_events_org_rule_context ON system_events(organization_id, object_type, ((context->>\'ruleId\')), created_at DESC, id DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_system_events_type_created ON system_events(event_type, severity, outcome, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_system_events_subject_created ON system_events(subject_id, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_system_events_request_created ON system_events(request_id, created_at DESC)')
