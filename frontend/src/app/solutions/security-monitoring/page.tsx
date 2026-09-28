@@ -34,7 +34,7 @@ export default function EventSolutionPage() {
             <section className='mx-auto grid max-w-7xl min-w-0 gap-5 px-4 py-12 md:px-8 lg:grid-cols-2'>
                 <div className='rounded-lg border border-ui-border bg-ui-panel p-5'>
                     <p className='text-sm font-semibold uppercase text-ui-primary'>Send an event</p>
-                    <pre className='mt-4 max-w-full overflow-x-auto whitespace-pre-wrap break-words rounded-lg border border-ui-border bg-ui-canvas p-4 text-xs leading-6 text-ui-muted'>{'POST https://api.hanasand.com/mill\nAuthorization: Bearer hsk_<organization-key>\nContent-Type: application/json\n\n{\n  "events": [{\n    "timestamp": "2026-08-03T08:15:00Z",\n    "event_type": "authentication",\n    "action": "login",\n    "outcome": "success",\n    "user": {"id": "user-123"},\n    "source": {"ip": "203.0.113.10", "country": "NO"}\n  }]\n}'}</pre>
+                    <pre className='mt-4 max-w-full overflow-x-auto whitespace-pre-wrap wrap-break-word rounded-lg border border-ui-border bg-ui-canvas p-4 text-xs leading-6 text-ui-muted'>{'POST https://api.hanasand.com/mill\nAuthorization: Bearer hsk_<organization-key>\nContent-Type: application/json\n\n{\n  "events": [{\n    "timestamp": "2026-08-03T08:15:00Z",\n    "event_type": "authentication",\n    "action": "login",\n    "outcome": "success",\n    "user": {"id": "user-123"},\n    "source": {"ip": "203.0.113.10", "country": "NO"}\n  }]\n}'}</pre>
                 </div>
                 <div className='grid content-start gap-4 rounded-lg border border-ui-border bg-ui-panel p-5'>
                     <p className='text-sm font-semibold uppercase text-ui-primary'>Security Monitoring scope</p>

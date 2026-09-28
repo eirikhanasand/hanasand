@@ -187,7 +187,7 @@ export default function RoleList({ roles, users, canManage, highestPriority }: {
                                         <button type='button' aria-expanded={isOpen} aria-label={`${isOpen ? 'Hide' : 'Show'} users in ${role.name}`} onClick={() => setExpanded(isOpen ? null : role.id)} className='flex min-h-11 min-w-0 max-w-full items-center gap-2 text-left text-ui-text sm:gap-3'>
                                             {isOpen ? <ChevronDown className='h-4 w-4 shrink-0 text-ui-muted' /> : <ChevronRight className='h-4 w-4 shrink-0 text-ui-muted' />}
                                             <span className='grid h-8 w-8 shrink-0 place-items-center rounded-md border border-ui-primary/20 bg-ui-primary/10 text-ui-primary'><RoleIcon role={role} /></span>
-                                            <span className='min-w-0 break-words'><span className='block break-words font-medium'>{role.name}</span>{role.description && <span className='hidden truncate text-xs text-ui-muted sm:block'>{role.description}</span>}</span>
+                                            <span className='min-w-0 wrap-break-word'><span className='block wrap-break-word font-medium'>{role.name}</span>{role.description && <span className='hidden truncate text-xs text-ui-muted sm:block'>{role.description}</span>}</span>
                                         </button>
                                     </td>
                                     <td className='px-2 py-2.5 text-sm tabular-nums text-ui-text sm:px-3'>{memberUsers.length}</td>

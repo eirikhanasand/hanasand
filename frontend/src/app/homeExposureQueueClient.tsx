@@ -147,15 +147,15 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
                         <article key={id} className='grid min-w-0 gap-2 px-4 py-3'>
                             <div className='flex min-w-0 items-start justify-between gap-3'>
                                 <div className='min-w-0'>
-                                    <p className='break-words text-sm font-semibold text-ui-text'>{company}</p>
-                                    <p className='mt-0.5 break-words text-xs text-ui-muted'>{actor}</p>
+                                    <p className='wrap-break-word text-sm font-semibold text-ui-text'>{company}</p>
+                                    <p className='mt-0.5 wrap-break-word text-xs text-ui-muted'>{actor}</p>
                                 </div>
                                 <time dateTime={claimTime || collectedAt || queue.generatedAt} className='shrink-0 text-right text-[0.68rem] font-semibold text-ui-muted'>{formatClaimTime(claimTime || collectedAt)}</time>
                             </div>
                             <div className='grid grid-cols-2 gap-x-3 gap-y-1 text-xs'>
-                                <span className='min-w-0 break-words text-ui-muted'><span className='font-semibold text-ui-text'>Data: </span>{claimedData}</span>
-                                <span className='min-w-0 break-words text-ui-muted'><span className='font-semibold text-ui-text'>Size: </span>{claimedDataSize || '—'}</span>
-                                <span className='col-span-2 min-w-0 break-words text-ui-muted'><span className='font-semibold text-ui-text'>Country: </span>{country || 'Not disclosed'}</span>
+                                <span className='min-w-0 wrap-break-word text-ui-muted'><span className='font-semibold text-ui-text'>Data: </span>{claimedData}</span>
+                                <span className='min-w-0 wrap-break-word text-ui-muted'><span className='font-semibold text-ui-text'>Size: </span>{claimedDataSize || '—'}</span>
+                                <span className='col-span-2 min-w-0 wrap-break-word text-ui-muted'><span className='font-semibold text-ui-text'>Country: </span>{country || 'Not disclosed'}</span>
                             </div>
                         </article>
                     )) : <p className='px-4 py-6 text-sm text-ui-muted'>New company mentions will show here as they are found.</p>}

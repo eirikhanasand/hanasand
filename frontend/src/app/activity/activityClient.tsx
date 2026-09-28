@@ -207,8 +207,8 @@ function ActivityCard({ item }: { item: ExposureQueueItem }) {
         <article className='grid min-w-0 gap-3 px-4 py-4 sm:px-6'>
             <div className='flex min-w-0 items-start justify-between gap-3'>
                 <div className='min-w-0'>
-                    <p className='break-words font-semibold text-ui-text'>{item.company}</p>
-                    <p className='mt-0.5 break-words text-sm text-ui-muted'>{item.actor}</p>
+                    <p className='wrap-break-word font-semibold text-ui-text'>{item.company}</p>
+                    <p className='mt-0.5 wrap-break-word text-sm text-ui-muted'>{item.actor}</p>
                 </div>
                 <time dateTime={item.claimTime || item.collectedAt} className='shrink-0 text-right text-xs font-semibold text-ui-muted'>{formatClaimTime(item.claimTime || item.collectedAt)}</time>
             </div>
@@ -223,7 +223,7 @@ function ActivityCard({ item }: { item: ExposureQueueItem }) {
 }
 
 function ActivityDetail({ label, value }: { label: string, value: string }) {
-    return <div className='min-w-0'><p className='text-[10px] font-semibold uppercase tracking-wide text-ui-muted'>{label}</p><p className='mt-0.5 break-words text-ui-text'>{value || '—'}</p></div>
+    return <div className='min-w-0'><p className='text-[10px] font-semibold uppercase tracking-wide text-ui-muted'>{label}</p><p className='mt-0.5 wrap-break-word text-ui-text'>{value || '—'}</p></div>
 }
 
 function activityStatus(status: string, visible: number, total: number) {

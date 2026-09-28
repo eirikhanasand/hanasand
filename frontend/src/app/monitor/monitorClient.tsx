@@ -120,7 +120,7 @@ function MonitorCard({ row }: { row: MonitorRow }) {
         <article className='grid min-w-0 gap-3 px-4 py-4 sm:px-6'>
             <div className='flex min-w-0 items-start justify-between gap-3'>
                 <div className='min-w-0'>
-                    <p className='break-words font-semibold capitalize text-ui-text'>{row.customer}</p>
+                    <p className='wrap-break-word font-semibold capitalize text-ui-text'>{row.customer}</p>
                     <p className='mt-1 break-all font-mono text-xs text-ui-muted'>{row.domain}</p>
                 </div>
                 <span className='shrink-0 rounded-full border border-ui-border bg-ui-raised px-2 py-0.5 text-xs font-semibold capitalize text-ui-muted'>{row.status}</span>
@@ -132,7 +132,7 @@ function MonitorCard({ row }: { row: MonitorRow }) {
                 <MonitorDetail label='This month' value={formatNumber(row.requestsThisMonth)} />
                 <div className='col-span-2 min-w-0 sm:col-span-3'>
                     <p className='text-[10px] font-semibold uppercase tracking-wide text-ui-muted'>Sources</p>
-                    <p className='mt-0.5 break-words text-ui-text'>{row.sources.join(', ') || 'Traffic monitor'}</p>
+                    <p className='mt-0.5 wrap-break-word text-ui-text'>{row.sources.join(', ') || 'Traffic monitor'}</p>
                 </div>
             </div>
         </article>
@@ -140,7 +140,7 @@ function MonitorCard({ row }: { row: MonitorRow }) {
 }
 
 function MonitorDetail({ label, value }: { label: string, value: string }) {
-    return <div className='min-w-0'><p className='text-[10px] font-semibold uppercase tracking-wide text-ui-muted'>{label}</p><p className='mt-0.5 break-words font-semibold text-ui-text'>{value}</p></div>
+    return <div className='min-w-0'><p className='text-[10px] font-semibold uppercase tracking-wide text-ui-muted'>{label}</p><p className='mt-0.5 wrap-break-word font-semibold text-ui-text'>{value}</p></div>
 }
 
 function MonitorRowView({ row }: { row: MonitorRow }) {

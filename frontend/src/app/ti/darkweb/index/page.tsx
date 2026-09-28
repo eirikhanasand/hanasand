@@ -254,8 +254,8 @@ function Cell({ label, value }: { label: string; value: string }) {
 function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
     return (
         <div className='flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 border border-ui-border bg-ui-panel px-3 py-2'>
-            <span className='inline-flex min-w-0 items-center gap-2 text-ui-muted'>{icon}<span className='break-words'>{label}</span></span>
-            <span className='min-w-0 break-words font-semibold text-ui-text sm:text-right'>{value}</span>
+            <span className='inline-flex min-w-0 items-center gap-2 text-ui-muted'>{icon}<span className='wrap-break-word'>{label}</span></span>
+            <span className='min-w-0 wrap-break-word font-semibold text-ui-text sm:text-right'>{value}</span>
         </div>
     )
 }
