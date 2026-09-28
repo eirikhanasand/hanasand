@@ -197,3 +197,18 @@ mail/**
 Germany/**
 Helmond/**
 agents/**
+
+# Host-side runtime state and historical checkout data are not production
+# image inputs. Keep them out of root-context transfers on the deploy host.
+ops/code-review
+ops/code-review/**
+ops/monitoring-state
+ops/monitoring-state/**
+ops/runtime
+ops/runtime/**
+ops/secrets
+ops/secrets/**
+frontend/node_modules
+frontend/node_modules/**
+frontend/.next
+frontend/.next/**
