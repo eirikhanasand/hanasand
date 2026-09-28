@@ -274,7 +274,7 @@ export async function postRulePreview(req: FastifyRequest, res: FastifyReply) {
             || code === 'DB_QUEUE_FULL' || message.includes('database is temporarily busy'))
             return res.header('Retry-After', '2').status(503).send({ error: 'Preview is temporarily busy. Try again shortly.' })
         if (error instanceof ReadAdmissionError) return res.header('Retry-After', '2').status(503).send({ error: error.message })
-        req.log.error({ error }, 'Rule preview failed')
+        req.log?.error?.({ error }, 'Rule preview failed')
         return res.header('Retry-After', '2').status(503).send({ error: 'Preview is temporarily unavailable. Try again shortly.' })
     }
 }
