@@ -21,18 +21,28 @@ export function normalizeLogEvent(log: LogInput, rules?: Parameters<typeof class
     const type = ['SigninLogs', 'ApplicationLogs', 'ProcessLogs', 'HttpLogs', 'SystemLogs'].includes(String(metadata.log_type)) ? String(metadata.log_type) : inferredType
     const user = object(metadata.user || structured.user)
     const source = object(metadata.source || structured.source)
+    const requestHeaders = object(request.headers)
+    const method = metadata.method || request.method || access.method
+    const userAgent = String(metadata.user_agent || requestHeaders['user-agent'] || '')
+    const sourceIp = String(source.ip || request.remoteAddress || metadata.source_ip || access.ip || '')
+    const expectedPwnedProbe = type === 'HttpLogs' && path === '/api/pwned' && method === 'POST'
+        && Number(statusCode) === 400 && userAgent.startsWith('Bun/')
+        && ['127.0.0.1', '::1'].includes(sourceIp)
+    const eventMetadata = expectedPwnedProbe
+        ? { ...metadata, expected_internal_probe: true, original_level: log.level }
+        : metadata
     return {
         ...(['routine-group-analyzer', 'postgres-session-analyzer'].includes(log.service) && log.source_event_id ? { source_event_id: log.source_event_id } : {}),
         schema_version: 'logs.v1', source_vendor: 'Hanasand', source_product: 'Logs', timestamp: new Date(log.created_at).toISOString(),
         event_type: mongo ? 'database' : process ? 'process' : authentication ? 'authentication' : String(metadata.event_type || structured.event_type || 'application'),
         action: mongo ? mongo.name : process ? 'exec' : String(metadata.action || structured.action || (signin ? 'login' : 'log')),
         outcome: mongo ? mongo.success ? 'success' : 'failure' : String(metadata.outcome || structured.outcome || (signin ? log.message.includes('Accepted ') ? 'success' : 'failure' : ['error', 'fatal'].includes(log.level) ? 'failure' : 'unknown')),
-        log_type: type, level: log.level, service: log.service, host: log.host || '', message: log.message,
+        log_type: type, level: expectedPwnedProbe ? 'info' : log.level, service: log.service, host: log.host || '', message: log.message,
         mongo: mongo ? { command: mongo.name, database: mongo.database, arguments: mongo.command, connection: mongo.connection, clientIp: mongo.ip } : undefined,
         process, http: path ? { path, method: metadata.method || request.method || access.method, status_code: statusCode } : undefined,
         user: signin ? { ...user, id: `${log.host || 'unknown'}:${signin[1]}`, name: signin[1] } : user,
         source: { ...source, ip: mongo?.ip || signin?.[2] || source.ip || request.remoteAddress || metadata.source_ip || access.ip },
-        device: metadata.device || structured.device, metadata,
-        severity: classification?.severity || (log.level === 'fatal' ? 'critical' : log.level === 'error' ? 'high' : log.level === 'warn' ? 'medium' : 'low'),
+        device: metadata.device || structured.device, metadata: eventMetadata,
+        severity: expectedPwnedProbe ? 'low' : classification?.severity || (log.level === 'fatal' ? 'critical' : log.level === 'error' ? 'high' : log.level === 'warn' ? 'medium' : 'low'),
     }
 }

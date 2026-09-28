@@ -2,7 +2,6 @@ import run from '#db'
 import { eligibleCustomDrop } from './dropEligibility.ts'
 import { Worker } from 'node:worker_threads'
 import { matchesRule, type Condition } from './conditions.ts'
-import { previewPredicate } from './previewPredicate.ts'
 import { loadLogRetentionRules, retentionStoreMatches } from './customRetention.ts'
 import { cachedRead } from '../readCache.ts'
 
@@ -10,7 +9,7 @@ export type PreviewEvent = { id: string, timestamp: string, normalized: Record<s
 type Cursor = { time: string, id: string }
 export type PreviewRequest = { from: string | null, until: string, cursor?: Cursor | null, action: 'drop' | 'keep', sample?: boolean, conditions: Condition[] }
 
-// Page database-filtered candidates, then retain the authoritative runtime check.
+// Page recent candidates first, then retain the authoritative runtime check.
 export async function scanRulePreview(organizationId: string, canReadLogs: boolean, input: PreviewRequest, query = run) {
     if (process.env.NODE_ENV !== 'test' && (query as typeof run & { primaryDatabaseRunner?: boolean }).primaryDatabaseRunner && input.sample) {
         const key = `rule-preview:${organizationId}:${canReadLogs ? 'logs' : 'public'}:${JSON.stringify(input)}`
@@ -24,7 +23,8 @@ async function scanRulePreviewUncached(organizationId: string, canReadLogs: bool
     const fromParameter = input.from ? `$${params.push(input.from)}` : null
     const cursorTimeParameter = input.cursor ? `$${params.push(input.cursor.time)}` : null
     const cursorIdParameter = input.cursor ? `$${params.push(input.cursor.id)}` : null
-    const filter = previewPredicate(input.conditions, params)
+    // Bound work by recent candidate rows before evaluating user-supplied conditions.
+    // Applying dynamic predicates in SQL can scan an entire event range when matches are rare.
     const scope = [
         'organization_id=$1',
         '($2::boolean OR ingestion_id <> \'logs\')',
@@ -32,11 +32,10 @@ async function scanRulePreviewUncached(organizationId: string, canReadLogs: bool
         'received_at <= $3::timestamptz',
         ...(fromParameter ? [`event_timestamp >= ${fromParameter}::timestamptz`] : []),
         ...(cursorTimeParameter && cursorIdParameter ? [`(event_timestamp,id) < (${cursorTimeParameter}::timestamptz,${cursorIdParameter}::text)`] : []),
-        filter,
     ].join(' AND ')
     const rules = input.action === 'drop' ? await loadLogRetentionRules(organizationId, query) : []
     const result = await query(`SELECT id, event_timestamp::text AS timestamp, normalized, pg_column_size(events)::bigint AS bytes${input.action === 'drop' ? ', original' : ''}
-        FROM events WHERE ${scope} ${input.action === 'drop' ? 'AND normalized->>\'severity\' = \'low\'' : ''}
+        FROM events WHERE ${scope}${input.action === 'drop' ? ' AND normalized->>\'severity\' = \'low\'' : ''}
         ORDER BY event_timestamp DESC, id DESC LIMIT 2000`, params)
     const eligible = result.rows.filter(row => input.action !== 'drop' || eligibleCustomDrop(row.normalized || {})
         && !retentionStoreMatches(row.normalized || {}, rules) && !retentionStoreMatches(row.original || {}, rules)) as PreviewEvent[]

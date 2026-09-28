@@ -15,5 +15,10 @@ export const fetchManagementOrganizations = cache(async (accessOnly = false) => 
 })
 
 export async function canManageOrganizations() {
-    try { return (await fetchManagementOrganizations(true)).ok } catch { return false }
+    try {
+        const response = await fetchManagementOrganizations(true)
+        if (!response.ok) return false
+        const result = await response.json() as { allowed?: unknown }
+        return result.allowed === true
+    } catch { return false }
 }

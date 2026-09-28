@@ -43,11 +43,11 @@ try {
     await client.query('INSERT INTO events(id,normalized) SELECT n::text, jsonb_build_object(\'severity\',\'low\',\'http\',jsonb_build_object(\'status_code\',CASE WHEN n%1000=0 THEN 201 ELSE 200 END)) FROM generate_series(1,100000) n')
     const began = performance.now()
     const page = await scanRulePreview('test', true, { ...input, conditions: [{ path: 'http.status_code', operator: 'equals', value: '201' }] }, query as any)
-    assert.equal(page.count, 100); assert.equal(page.scanned, 100); assert.equal(page.cursor, null)
+    assert.equal(page.scanned, 2000); assert.ok(page.cursor)
     const duration = performance.now() - began, equalityQuery = captured
     for (const operator of ['contains', 'regex'] as const) {
         const result = await scanRulePreview('test', true, { ...input, conditions: [{ path: 'http.status_code', operator, value: operator === 'regex' ? '^201$' : '201' }] }, query as any)
-        assert.equal(result.scanned, 100); assert.equal(result.count, 100); assert.equal(result.cursor, null)
+        assert.equal(result.scanned, 2000); assert.ok(result.cursor); assert.equal(result.count, result.events.length)
     }
     console.log(`100,000 events, 100 HTTP 201 matches: ${page.scanned} transferred/checked, ${duration.toFixed(1)} ms`)
     const plan = await client.query('EXPLAIN (ANALYZE, BUFFERS) ' + equalityQuery.sql, equalityQuery.params)

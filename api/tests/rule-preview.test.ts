@@ -19,12 +19,13 @@ test('preview uses runtime selectors and excludes higher and unknown severities 
     const query = async (sql: string, params: unknown[]) => {
         expect(sql).toContain('organization_id=$1 AND ($2::boolean OR ingestion_id <> \'logs\')')
         expect(sql).toContain('received_at <= $3::timestamptz')
+        expect(sql).toContain('normalized->>\'severity\' = \'low\'')
         expect(sql).not.toContain('($4::timestamptz IS NULL OR event_timestamp >= $4::timestamptz)')
         expect(sql).not.toContain('($5::timestamptz IS NULL OR (event_timestamp,id)')
         expect(params.slice(0, 4)).toEqual(['org-a', false, input.until, input.from])
         expect(params).not.toContain(null)
-        expect(sql).toContain('jsonb_typeof')
-        expect(params).toContainEqual(['http', 'status_code'])
+        expect(sql).not.toContain('jsonb_typeof')
+        expect(params).not.toContainEqual(['http', 'status_code'])
         return { rows: [row(1), row(2, 'high'), row(3, 'unknown'), row(4, 'low', 404)] }
     }
     const page = await scanRulePreview('org-a', false, input, query as any)
@@ -33,14 +34,14 @@ test('preview uses runtime selectors and excludes higher and unknown severities 
     expect(page.events[0].normalized.message).toHaveLength(500)
     expect(page.cursor).toBeNull()
 })
-test('preview narrows scalar event conditions before reading event JSON', async () => {
+test('preview applies scalar conditions after bounding database candidates', async () => {
     let sql = ''
     let params: unknown[] = []
     await scanRulePreview('org-a', true, { ...input, action: 'keep', conditions: [{ path: 'event_type', operator: 'equals', value: 'authentication' }] }, (async (query: string, values: unknown[]) => {
         sql = query; params = values; return { rows: [] }
     }) as any)
-    expect(sql).toContain('lower(event_type COLLATE "C")')
-    expect(params).toContain('authentication')
+    expect(sql).not.toContain('lower(event_type COLLATE "C")')
+    expect(params).not.toContain('authentication')
 })
 test('complete count is independent of bounded random sample; cursors preserve microseconds', async () => {
     const query = async () => ({ rows: Array.from({ length: 2000 }, (_, index) => row(index)) })

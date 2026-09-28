@@ -17,8 +17,8 @@ export async function getManagementOrganizations(req: FastifyRequest<{ Querystri
           AND m.status = 'active' AND m.role IN ('owner', 'admin')
         LIMIT 1
     `, [id, hanasandOrganizationId])
+    if (req.query.access === '1') return res.send({ allowed: access.rows.length > 0 })
     if (!access.rows.length) return res.status(403).send({ error: 'Hanasand organization administrator access required.' })
-    if (req.query.access === '1') return res.send({ allowed: true })
     const result = await run(`
         SELECT o.id, o.name, o.slug, o.status, o.created_at,
             GREATEST(o.updated_at,

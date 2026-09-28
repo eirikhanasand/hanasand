@@ -109,7 +109,7 @@ export default function RulePreview({ organizationId, conditions, action, range,
         {limited && <div className='mt-2 overflow-hidden rounded-xl border border-ui-warning/30 bg-ui-raised'>
             <div className='flex items-start gap-3 p-4 sm:p-5'>
                 <span className='flex size-9 shrink-0 items-center justify-center rounded-full bg-ui-warning/10 text-ui-warning'><CircleAlert size={20} aria-hidden='true' /></span>
-                <p className='text-sm font-semibold'>This rule will match more than 2000 events. Are you sure?</p>
+                <p className='text-sm font-semibold'>This preview stopped after 2,000 events. More matches may exist outside this sample. Continue?</p>
             </div>
             <div className='flex gap-2 border-t border-ui-border px-4 py-4 sm:px-5'>
                 <button type='button' className='rounded-md bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-on-primary' aria-pressed={acknowledged} onClick={() => setAcknowledged(true)}>Yes</button>
