@@ -13,6 +13,7 @@ export function logSearchParams({ view, hours, advanced, appliedHql, table, sear
     if (search && !advanced) params.set('search', search)
     if (service !== 'all') params.set('service', service)
     if (view !== 'realtime' && severity !== 'all') params.set('severity', severity)
+    if (view === 'realtime') params.set('realtime', '1')
     if (view === 'dashboard') params.set('stats', '1')
     if (view === 'search' && !advanced) params.set('paginate', '1')
     return params
