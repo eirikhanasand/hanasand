@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 
 mock.module('../src/constants.ts', () => ({ default: { github_articles_ssh: 'unused-for-local-content' } }))
-test('persistent articles read and save without network access or losing Git dates', { timeout: 30_000 }, async () => {
+test('persistent articles read and save without network access or losing Git dates', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'content-ownership-articles-'))
     const previous = process.env.ARTICLES_REPO_PATH
     process.env.ARTICLES_REPO_PATH = directory
