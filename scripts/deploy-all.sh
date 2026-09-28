@@ -23,6 +23,20 @@ mkdir -p "$build_dir/.git"
 printf 'ref: refs/heads/main\n' > "$build_dir/.git/HEAD"
 if test -f "$root/.env"; then cp "$root/.env" "$build_dir/.env"; fi
 
+ti_release_dir="$root/ops/runtime/ti-releases/$release"
+if test -e "$ti_release_dir"; then
+    test -f "$ti_release_dir/.hanasand-release" && test "$(cat "$ti_release_dir/.hanasand-release")" = "$release" || {
+        echo "TI release directory exists for a different revision: $ti_release_dir" >&2
+        exit 1
+    }
+else
+    mkdir -p "$root/ops/runtime/ti-releases"
+    mkdir "$ti_release_dir"
+    cp -a "$build_dir/ti/scraper/." "$ti_release_dir/"
+    printf '%s\n' "$release" > "$ti_release_dir/.hanasand-release"
+fi
+export HANASAND_TI_SCRAPER_SOURCE="$ti_release_dir"
+
 # Build from the immutable release archive, not the live checkout. This keeps
 # runtime state (including the separate code-review mirror) out of every image
 # context while preserving parallel BuildKit execution for the release.

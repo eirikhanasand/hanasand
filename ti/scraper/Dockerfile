@@ -1,29 +1,8 @@
-FROM oven/bun:1.3.11-alpine AS deps
-COPY .git/HEAD /tmp/hanasand-source-head
-RUN test "$(cat /tmp/hanasand-source-head)" = "ref: refs/heads/main" || { echo "Production image builds are allowed only from the main branch." >&2; exit 1; }
-
-
-WORKDIR /app/ti/scraper
-
-COPY ti/scraper/package.json ti/scraper/bun.lock* ti/scraper/bunfig.toml ./
-RUN bun install
-
-FROM oven/bun:1.3.11-alpine AS test
-
-WORKDIR /app/ti/scraper
-COPY --from=deps /app/ti/scraper/node_modules /app/ti/scraper/node_modules
-COPY . /app/
-WORKDIR /app/ti/scraper
-# ponytail: the full Bun suite is stateful and is run as a separate release check;
-# keep the production image build focused on the executable type boundary.
-RUN bun run check
-
-FROM test AS runtime
+FROM oven/bun:1.3.11-alpine AS runtime
 
 ARG HANASAND_RELEASE_COMMIT=unknown
 LABEL org.opencontainers.image.revision=$HANASAND_RELEASE_COMMIT
 
-COPY . /app/
 WORKDIR /app/ti/scraper
 ENV NODE_ENV=production \
     SCRAPER_PORT=8097 \
@@ -31,4 +10,4 @@ ENV NODE_ENV=production \
 
 EXPOSE 8097
 
-CMD ["bun", "run", "start"]
+CMD ["sh", "-c", "test \"$(cat .hanasand-release)\" = \"$HANASAND_RELEASE_COMMIT\" && exec bun run start"]

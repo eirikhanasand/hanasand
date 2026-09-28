@@ -385,8 +385,8 @@ services:
     restart: always
     stop_grace_period: 10m
     build:
-      context: .
-      dockerfile: ./ti/scraper/Dockerfile
+      context: ./ti/scraper
+      dockerfile: Dockerfile
       args:
         HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
     environment:
@@ -450,6 +450,7 @@ services:
       HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
     volumes:
       - ti_scraper_evidence:/var/lib/ti-scraper/evidence
+      - ${HANASAND_TI_SCRAPER_SOURCE:-/home/hanasand/hanasand/ti/scraper}:/app/ti/scraper:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     expose:

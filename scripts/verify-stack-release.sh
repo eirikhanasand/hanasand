@@ -27,6 +27,16 @@ for container in $containers; do
     }
 done
 
+ti_source=$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/app/ti/scraper"}}{{.Source}}{{end}}{{end}}' hanasand_ti_scraper)
+test "$ti_source" = "/home/hanasand/hanasand/ops/runtime/ti-releases/$release" || {
+    echo "hanasand_ti_scraper is not mounted from the immutable release directory." >&2
+    exit 1
+}
+test "$(cat "$ti_source/.hanasand-release")" = "$release" || {
+    echo "hanasand_ti_scraper source marker does not match the release." >&2
+    exit 1
+}
+
 if docker inspect hanasand_browser_worker >/dev/null 2>&1; then
     env_release=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' hanasand_browser_worker \
         | sed -n 's/^HANASAND_RELEASE_COMMIT=//p' | head -1)
