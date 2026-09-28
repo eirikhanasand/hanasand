@@ -102,12 +102,11 @@ async function enforceRateLimit(req: FastifyRequest, res: FastifyReply, database
     }
     const logIngest = req.method === 'POST' && path === '/api/logs/ingest' && (hasLogIngestToken(req) || hasInternalToken(req))
     const internalTokenRoute = internalTokenRoutes.get(`${req.method} ${path}`)
-    const actor: RateLimitActor = logIngest ? { scope: 'internal', identifier: 'service:log-ingest' }
-        : internalTokenRoute && hasInternalToken(req)
-            ? { scope: 'internal', identifier: internalTokenRoute }
-        : req.method === 'GET' && path === '/api/thesis/code-reviews' && hasInternalToken(req)
-            ? { scope: 'internal', identifier: 'service:code-review' }
-            : await resolveRateLimitActor(req)
+    let actor: RateLimitActor
+    if (logIngest) actor = { scope: 'internal', identifier: 'service:log-ingest' }
+    else if (internalTokenRoute && hasInternalToken(req)) actor = { scope: 'internal', identifier: internalTokenRoute }
+    else if (req.method === 'GET' && path === '/api/thesis/code-reviews' && hasInternalToken(req)) actor = { scope: 'internal', identifier: 'service:code-review' }
+    else actor = await resolveRateLimitActor(req)
     measure('session')
     if (actor.invalidApiKey) {
         sendBoundaryError(req, res, 401, 'invalid_api_key', 'The presented API key is invalid, disabled, or expired.')
