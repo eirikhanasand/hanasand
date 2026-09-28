@@ -58,7 +58,7 @@ test('stored log estimates scope processed logs and use the trigram candidate in
     ] }, (async (query: string, values: unknown[]) => {
         sql = query; params = values; return { rows: [] }
     }) as any, { storedLogsOnly: true })
-    expect(sql).toContain("ingestion_id='logs' AND processing_status='processed'")
+    expect(sql).toContain('ingestion_id=\'logs\' AND processing_status=\'processed\'')
     expect(sql).toContain('translate(lower(normalized::text)')
     expect(params).toContain('ovhcloud')
     expect(params).not.toContain('GET')

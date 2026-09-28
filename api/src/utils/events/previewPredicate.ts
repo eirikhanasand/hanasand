@@ -100,7 +100,7 @@ function regexCandidate(expression: string): string | null {
 }
 
 const scalarColumns: Record<string, string> = {
-    service: "normalized->>'service'",
+    service: 'normalized->>\'service\'',
     event_type: 'event_type',
     action: 'action',
     outcome: 'outcome',
@@ -116,7 +116,7 @@ function scalarCandidatePredicate(condition: Condition, column: string, bind: (v
     // Normalized log service has a matching partial B-tree index. The JSON path
     // scalar check already excludes missing/null values, so keep this term
     // sargable for exact service rules instead of wrapping it in a fallback OR.
-    if (column === "normalized->>'service'" && condition.operator === 'equals' && condition.caseSensitive)
+    if (column === 'normalized->>\'service\'' && condition.operator === 'equals' && condition.caseSensitive)
         return `${column} = ${bind(condition.value)}`
     const ascii = `${column} !~ '[^\\x00-\\x7F]'`
     const prefix = `${column} IS NULL OR NOT (${ascii}) OR `
