@@ -42,7 +42,7 @@ export default function ThroughputMetrics() {
     useEffect(() => {
         let cancelled = false
         const load = async () => {
-            try { const response = await fetch('/api/backend/logs/metrics', { cache: 'no-store' }); const body = await response.json(); if (response.ok && !cancelled) setMetrics(body) } catch {}
+            try { const response = await fetch('/api/backend/logs/metrics', { cache: 'no-store' }); const body = await response.json(); if (response.ok && !cancelled) setMetrics(body) } catch { /* Keep the last successful sample visible. */ }
         }
         void load()
         const interval = setInterval(() => { void load(); setNow(Date.now()) }, 5000)
