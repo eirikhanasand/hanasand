@@ -531,7 +531,7 @@ export async function getRule(req: FastifyRequest<{ Params: { id: string }, Quer
             const canEdit = !isHistorical && canManageRules(access.role) && (!([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') || (await hasRole(req, res, 'system_admin')).valid)
             return { organizationId: access.organizationId, canEdit, isHistorical, currentVersion: rule.version, rule: displayedRule, triggerCount: hitCount, audit: audit.rows.slice(0, 50), nextOffset: audit.rows.length > 50 ? offset + 50 : null }
         }
-        const payload = process.env.NODE_ENV === 'test'
+        const payload = process.env.NODE_ENV === 'test' || !(run as ReadAwareRun).withReadDatabase
             ? await loadDetail()
             : await cachedRead(`rule-detail:${access.organizationId}:${access.role}:${req.params.id}:${offset}`, 10000, loadDetail)
         return res.send(payload)
