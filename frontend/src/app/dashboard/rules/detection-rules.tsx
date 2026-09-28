@@ -22,6 +22,8 @@ export default function DetectionRules({ category, initial }: { category: RuleCa
     const [canManageRetention, setCanManageRetention] = useState(matchingInitial?.canManageRetention === true)
     const [showImports, setShowImports] = useState(false)
     const [showCreate, setShowCreate] = useState(false)
+    const [showFilters, setShowFilters] = useState(false)
+    const [showDisabled, setShowDisabled] = useState(false)
     const [packName, setPackName] = useState('')
     const [packVersion, setPackVersion] = useState('')
     const [packReference, setPackReference] = useState('')
@@ -128,8 +130,13 @@ export default function DetectionRules({ category, initial }: { category: RuleCa
                 <RulePageActions
                     showCreate={showCreate}
                     showImports={showImports}
+                    showFilters={showFilters}
+                    showDisabled={showDisabled}
+                    disabledCount={rules.filter(rule => rule.enabled === false).length}
                     onToggleCreate={() => { setShowCreate(open => !open); setShowImports(false) }}
                     onToggleImports={() => { setShowImports(open => !open); setShowCreate(false) }}
+                    onToggleFilters={() => setShowFilters(open => !open)}
+                    onToggleDisabled={() => setShowDisabled(open => !open)}
                 />
             </div>
             {error && <div role='alert' className='rounded-lg border border-ui-danger/40 bg-ui-raised p-3 text-sm text-ui-text'>{error}</div>}
@@ -159,7 +166,7 @@ export default function DetectionRules({ category, initial }: { category: RuleCa
                     </form>
                 </details>
             </DashboardPanel>}
-            <RuleLibrary category={category} rules={rules} loading={loading} canManageRules={canManageRules} organizationId={organizationId} onToggleRule={rule => void toggleRule(rule)} />
+            <RuleLibrary category={category} rules={rules} loading={loading} canManageRules={canManageRules} organizationId={organizationId} showFilters={showFilters} showDisabled={showDisabled} onToggleRule={rule => void toggleRule(rule)} />
         </DashboardPage>
     )
 }

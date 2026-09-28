@@ -1,13 +1,19 @@
 import Button from '@/components/misc/button'
+import { Filter } from 'lucide-react'
 
 type RulePageActionsProps = {
     showCreate: boolean
     showImports: boolean
     onToggleCreate: () => void
     onToggleImports: () => void
+    showFilters: boolean
+    showDisabled: boolean
+    disabledCount: number
+    onToggleFilters: () => void
+    onToggleDisabled: () => void
 }
 
-export default function RulePageActions({ showCreate, showImports, onToggleCreate, onToggleImports }: RulePageActionsProps) {
+export default function RulePageActions({ showCreate, showImports, showFilters, showDisabled, disabledCount, onToggleCreate, onToggleImports, onToggleFilters, onToggleDisabled }: RulePageActionsProps) {
     return (
         <div className='flex max-w-full flex-wrap items-center gap-3'>
             <Button
@@ -31,6 +37,23 @@ export default function RulePageActions({ showCreate, showImports, onToggleCreat
                 path='/cases'
                 variant='ghost'
                 className='h-10 px-4 text-sm font-semibold'
+            />
+            <Button
+                text={showDisabled ? 'Hide disabled' : 'Show disabled'}
+                icon={<span className='rounded-full bg-ui-raised px-1.5 py-0.5 text-[10px] leading-none text-ui-muted'>{disabledCount}</span>}
+                variant='ghost'
+                className='h-10 px-4 text-sm font-semibold'
+                aria-pressed={showDisabled}
+                onClick={onToggleDisabled}
+            />
+            <Button
+                text='Filters'
+                icon={<Filter className='h-4 w-4' />}
+                variant='ghost'
+                className='h-10 px-4 text-sm font-semibold'
+                aria-expanded={showFilters}
+                aria-controls='event-rule-filters'
+                onClick={onToggleFilters}
             />
         </div>
     )

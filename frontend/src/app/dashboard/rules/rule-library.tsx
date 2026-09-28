@@ -16,15 +16,19 @@ type RuleLibraryProps = {
     loading: boolean
     canManageRules: boolean
     organizationId: string
+    showFilters: boolean
+    showDisabled: boolean
     onToggleRule: (rule: Rule) => void
 }
 
-export default function RuleLibrary({ category, rules, loading, canManageRules, organizationId, onToggleRule }: RuleLibraryProps) {
+export default function RuleLibrary({ category, rules, loading, canManageRules, organizationId, showFilters, showDisabled, onToggleRule }: RuleLibraryProps) {
     const [sort, setSort] = useState<{ column: RuleSortColumn, direction: RuleSortDirection }>({ column: 'Hits', direction: 'descending' })
     const [titleFilter, setTitleFilter] = useState('')
     const [textFilter, setTextFilter] = useState('')
     const [enabledFilter, setEnabledFilter] = useState('all')
     const [severityFilter, setSeverityFilter] = useState('all')
+    const [actionFilter, setActionFilter] = useState('all')
+    const [familyFilter, setFamilyFilter] = useState('all')
 
     function sortBy(column: RuleSortColumn) {
         setSort(current => ({ column, direction: current.column === column ? current.direction === 'descending' ? 'ascending' : 'descending' : defaultRuleSortDirection(column) }))
@@ -36,8 +40,11 @@ export default function RuleLibrary({ category, rules, loading, canManageRules, 
     const filteredRules = categoryRules.filter(rule =>
         rule.name.toLowerCase().includes(titleQuery)
         && (!textQuery || [rule.name, rule.id, rule.rule_id, rule.explanation, rule.family, rule.severity, rule.source].join(' ').toLowerCase().includes(textQuery))
+        && (showDisabled || enabledFilter === 'disabled' || rule.enabled !== false)
         && (enabledFilter === 'all' || (rule.enabled !== false) === (enabledFilter === 'enabled'))
         && (severityFilter === 'all' || rule.severity.toLowerCase() === severityFilter)
+        && (actionFilter === 'all' || (rule.definition?.action || 'store') === actionFilter)
+        && (familyFilter === 'all' || rule.family === familyFilter)
     )
     const sortedRules = [...filteredRules].sort((a, b) => compareRules(a, b, sort.column, sort.direction))
     const columns: Array<{ label: string, key: RuleSortColumn }> = (['Title', 'Description', 'Family', 'Severity', 'Status', 'Source', 'Hits'] as RuleSortColumn[]).map(key => ({ label: key, key }))
@@ -45,25 +52,30 @@ export default function RuleLibrary({ category, rules, loading, canManageRules, 
     columns.push({ label: category === 'analysis' ? 'Controls' : 'Action', key: 'Controls' })
     const ruleListLabel = ruleCategories[category].label.endsWith(' rules') ? ruleCategories[category].label : `${ruleCategories[category].label} rules`
     const severities = Array.from(new Set(['informational', 'low', 'medium', 'high', 'critical', ...categoryRules.map(rule => rule.severity.toLowerCase())]))
-    const hasFilters = Boolean(titleFilter || textFilter || enabledFilter !== 'all' || severityFilter !== 'all')
+    const families = Array.from(new Set(categoryRules.map(rule => rule.family).filter(Boolean))).sort()
+    const hasFilters = Boolean(titleFilter || textFilter || enabledFilter !== 'all' || severityFilter !== 'all' || actionFilter !== 'all' || familyFilter !== 'all')
 
     function clearFilters() {
         setTitleFilter('')
         setTextFilter('')
         setEnabledFilter('all')
         setSeverityFilter('all')
+        setActionFilter('all')
+        setFamilyFilter('all')
     }
 
     return (
         <DashboardPanel className='grid min-w-0 gap-4 p-4 sm:p-6' id='event-rules'>
             <h2 className='font-semibold'>Rule library</h2>
-            <div role='search' aria-label='Filter rules' className='grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_1.5fr_auto_auto_auto]'>
+            {showFilters && <div id='event-rule-filters' role='search' aria-label='Filter rules' className='grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_1.5fr_auto_auto_auto_auto_auto]'>
                 <label className='grid min-w-0 gap-1 text-xs text-ui-muted'>Title<input type='search' value={titleFilter} onChange={event => setTitleFilter(event.target.value)} placeholder='Filter by title' className='h-9 min-w-0 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text' /></label>
                 <label className='grid min-w-0 gap-1 text-xs text-ui-muted'>Search text<input type='search' value={textFilter} onChange={event => setTextFilter(event.target.value)} placeholder='Search descriptions, IDs, families…' className='h-9 min-w-0 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text' /></label>
                 <label className='grid min-w-0 gap-1 text-xs text-ui-muted'>Status<select value={enabledFilter} onChange={event => setEnabledFilter(event.target.value)} className='h-9 min-w-0 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text'><option value='all'>All statuses</option><option value='enabled'>Enabled</option><option value='disabled'>Disabled</option></select></label>
                 <label className='grid min-w-0 gap-1 text-xs text-ui-muted'>Severity<select value={severityFilter} onChange={event => setSeverityFilter(event.target.value)} className='h-9 min-w-0 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text'><option value='all'>All severities</option>{severities.map(severity => <option key={severity} value={severity}>{severity.charAt(0).toUpperCase() + severity.slice(1)}</option>)}</select></label>
+                {category === 'analysis' && <label className='grid min-w-0 gap-1 text-xs text-ui-muted'>Action<select value={actionFilter} onChange={event => setActionFilter(event.target.value)} className='h-9 min-w-0 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text'><option value='all'>All actions</option><option value='drop'>Drop</option><option value='keep'>Store</option></select></label>}
+                <label className='grid min-w-0 gap-1 text-xs text-ui-muted'>Family<select value={familyFilter} onChange={event => setFamilyFilter(event.target.value)} className='h-9 min-w-0 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text'><option value='all'>All families</option>{families.map(family => <option key={family} value={family}>{family}</option>)}</select></label>
                 <Button text='Clear filters' variant='outline' size='sm' onClick={clearFilters} disabled={!hasFilters} className='h-9 self-end rounded-md' />
-            </div>
+            </div>}
             <p role='status' className='text-xs text-ui-muted'>{filteredRules.length} of {categoryRules.length} rules</p>
             <div role='region' aria-label={ruleListLabel} tabIndex={0} className='min-w-0 overflow-x-auto rounded-md border border-ui-border focus-visible:outline-2 focus-visible:outline-ui-primary'>
                 <table className='w-full min-w-[1000px] table-fixed text-left text-sm' aria-label={ruleListLabel}>

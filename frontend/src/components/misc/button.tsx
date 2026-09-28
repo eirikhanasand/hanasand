@@ -14,6 +14,7 @@ type ButtonProps = {
     'aria-label'?: string
     'aria-expanded'?: boolean
     'aria-controls'?: string
+    'aria-pressed'?: boolean
 }
 
 const variants = {
@@ -36,14 +37,15 @@ export default function Button({
     disabled,
     'aria-label': ariaLabel,
     'aria-expanded': ariaExpanded,
-    'aria-controls': ariaControls
+    'aria-controls': ariaControls,
+    'aria-pressed': ariaPressed
 }: ButtonProps) {
     const classes = `ui-button ${variants[variant]} ui-button-${size} ${className}`
     const contents = <>{icon ? <span className='shrink-0' aria-hidden='true'>{icon}</span> : null}<span>{text}</span></>
 
     if (path) {
-        return <Link href={path} aria-label={ariaLabel} aria-disabled={disabled || undefined} aria-expanded={ariaExpanded} aria-controls={ariaControls} tabIndex={disabled ? -1 : undefined} className={`${classes}${disabled ? ' pointer-events-none opacity-55' : ''}`}>{contents}</Link>
+        return <Link href={path} aria-label={ariaLabel} aria-disabled={disabled || undefined} aria-expanded={ariaExpanded} aria-controls={ariaControls} aria-pressed={ariaPressed} tabIndex={disabled ? -1 : undefined} className={`${classes}${disabled ? ' pointer-events-none opacity-55' : ''}`}>{contents}</Link>
     }
 
-    return <button type={type} disabled={disabled} onClick={onClick} aria-label={ariaLabel || text} aria-expanded={ariaExpanded} aria-controls={ariaControls} className={classes}>{contents}</button>
+    return <button type={type} disabled={disabled} onClick={onClick} aria-label={ariaLabel || text} aria-expanded={ariaExpanded} aria-controls={ariaControls} aria-pressed={ariaPressed} className={classes}>{contents}</button>
 }
