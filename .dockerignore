@@ -49,6 +49,8 @@ ti/scraper/.tmp
 **/*.pem
 **/*.key
 **/*secret*
+!api/tests/fixtures/monitoring-tls/cert.pem
+!api/tests/fixtures/monitoring-tls/key.pem
 
 **/.DS_Store
 
