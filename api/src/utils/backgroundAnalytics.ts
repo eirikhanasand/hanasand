@@ -13,7 +13,7 @@ export async function startBackgroundAnalytics(logger: Pick<FastifyBaseLogger, '
     if (process.env.AUTH_SERVICE_ONLY === '1') return stopLogs
     await warmRuleHitSnapshots(logger).catch(error => logger.warn({ error }, 'Rule hit snapshots will retry in the background'))
     await new Promise(resolve => setTimeout(resolve, 1000))
-    await warmRuleHitSnapshots(logger).catch(error => logger.warn({ error }, 'Rule hit snapshots will retry in the background'))
+    await warmRuleHitSnapshots(logger, true).catch(error => logger.warn({ error }, 'Rule hit snapshots will retry in the background'))
     const ruleHits = setInterval(() => {
         void warmRuleHitSnapshots(logger).catch(error => logger.warn({ error }, 'Rule hit snapshot refresh failed'))
     }, 10_000)

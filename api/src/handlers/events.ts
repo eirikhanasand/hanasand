@@ -318,14 +318,15 @@ export async function getRules(req: FastifyRequest, res: FastifyReply) {
         loadConfiguredRules(access.organizationId, run, compact),
         canManageRules(access.role) ? hasRole(req, res, 'system_admin') : Promise.resolve({ valid: false }),
     ])
-    const rules = configured.filter(rule => !internalRetentionRuleIds.has(rule.id) && (!query.category || ruleCategory(rule) === query.category))
+    const hitRules = configured.filter(rule => !internalRetentionRuleIds.has(rule.id))
+    const rules = hitRules.filter(rule => !query.category || ruleCategory(rule) === query.category)
     let hits: Map<string, number>
-    try { hits = query.view === 'definitions' ? new Map<string, number>() : await loadRuleHits(access.organizationId, rules, run) }
+    try { hits = query.view === 'definitions' ? new Map<string, number>() : await loadRuleHits(access.organizationId, hitRules, run) }
     catch (error) {
         if (error instanceof ReadAdmissionError) return res.header('Retry-After', '2').status(503).send({ error: error.message })
         throw error
     }
-    const { sampledAt, hitRates } = getRuleHitRates(access.organizationId, rules)
+    const { sampledAt, hitRates } = getRuleHitRates(access.organizationId, hitRules)
     return res.send({ organizationId: access.organizationId, sampledAt, hitRates, rules: rules.map(rule => ({ ...(compact ? listRule(rule) : rule),
         hitCount: rule.definition?.stage === 'analyze' && rule.definition.action === 'keep' ? null : hits.get(rule.id) ?? 0,
     })), canManageRetention: retentionRole.valid })
