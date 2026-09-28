@@ -15,6 +15,7 @@ import rateLimit from './plugins/rateLimit.ts'
 import fp from '#utils/refresh/fp.ts'
 import ensureRepositoryUpToDate from '#utils/git/ensureRepositoryUpToDate.ts'
 import ensureSchema from '#utils/db/ensureSchema.ts'
+import { loadCachedLogMetrics, startLogMetricsRefresh } from './handlers/logs/metrics.ts'
 import recordLog from '#utils/logs/recordLog.ts'
 import recordTraffic from '#utils/traffic/recordTraffic.ts'
 import { recordHttpErrorResponse } from '#utils/logs/httpErrors.ts'
@@ -187,6 +188,11 @@ async function start() {
             })
         }
         if (!browserWorkerOnly && !httpWorkerOnly) await warmDatabasePools()
+        if (!browserWorkerOnly && !httpWorkerOnly && process.env.AUTH_SERVICE_ONLY !== '1') {
+            await loadCachedLogMetrics().catch(error => fastify.log.warn({ error }, 'Failed to warm log throughput metrics cache'))
+            const stopMetricsRefresh = startLogMetricsRefresh()
+            fastify.addHook('onClose', async () => { stopMetricsRefresh() })
+        }
         if (!browserWorkerOnly && !httpWorkerOnly && process.env.AUTH_SERVICE_ONLY !== '1') {
             const stopProcessing = startLogProcessor(() => withEventDatabase(processStoredLogs), error => fastify.log.error({ error }, 'Event log processing failed; will retry'))
             const stopLiveProcessing = startLogProcessor(() => withEventDatabase(processLiveLogs), error => fastify.log.error({ error }, 'Event live processing failed; will retry'), () => 100, undefined, 100)

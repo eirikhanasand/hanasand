@@ -2,8 +2,28 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
+import { cachedLogQuery } from '#utils/logs/cache.ts'
 
 type SampleRow = { sampled_at: string, pps: number, eps: number, historical_eps: number, npps: number, remaining: number }
+const METRICS_CACHE_TTL_MS = 5000
+let metricsSchema: Promise<void> | undefined
+let lastCleanupAt = 0
+
+export type LogMetrics = {
+    generated_at: string
+    current: { pps: number, eps: number, historical_eps: number, npps: number, remaining: number, thresholds: { npps_below: boolean, eps_above: boolean, pps_below: boolean }, alert: boolean }
+    history: SampleRow[]
+}
+
+export function loadCachedLogMetrics() {
+    return cachedLogQuery('throughput-metrics', METRICS_CACHE_TTL_MS, queryLogMetrics)
+}
+
+export function startLogMetricsRefresh() {
+    const timer = setInterval(() => { void loadCachedLogMetrics().catch(() => undefined) }, METRICS_CACHE_TTL_MS)
+    timer.unref()
+    return () => clearInterval(timer)
+}
 
 export async function getLogMetrics(req: FastifyRequest, res: FastifyReply) {
     const publicRequest = (req.query as { public?: string }).public === '1'
@@ -13,7 +33,14 @@ export async function getLogMetrics(req: FastifyRequest, res: FastifyReply) {
         if (!(await hasRole(req, res, 'system_admin')).valid) return res.status(403).send({ error: 'Missing system_admin role.' })
     }
     try {
-        await run(`CREATE TABLE IF NOT EXISTS log_throughput_samples (
+        return res.send(await loadCachedLogMetrics())
+    } catch (error) {
+        return res.status(503).send({ error: error instanceof Error ? error.message : 'Metrics unavailable.' })
+    }
+}
+
+async function queryLogMetrics(): Promise<LogMetrics> {
+    metricsSchema ??= run(`CREATE TABLE IF NOT EXISTS log_throughput_samples (
             sampled_at TIMESTAMPTZ PRIMARY KEY,
             checked_count BIGINT NOT NULL,
             pps DOUBLE PRECISION NOT NULL,
@@ -21,32 +48,33 @@ export async function getLogMetrics(req: FastifyRequest, res: FastifyReply) {
             historical_eps DOUBLE PRECISION NOT NULL,
             npps DOUBLE PRECISION NOT NULL,
             remaining BIGINT NOT NULL
-        )`)
-        const current = (await run(`
+        )`).then(() => undefined).catch(error => { metricsSchema = undefined; throw error })
+    await metricsSchema
+    const current = (await run(`
             SELECT c.checked_count, c.updated_at, COALESCE((p.payload->>'remaining')::bigint, 0) AS remaining
             FROM log_processing_cursors c
             LEFT JOIN log_catchup_progress p ON p.id = TRUE
             WHERE c.name = 'service_logs'
         `)).rows[0]
-        const now = new Date()
-        const previous = (await run('SELECT checked_count, sampled_at FROM log_throughput_samples ORDER BY sampled_at DESC LIMIT 1')).rows[0]
-        const elapsed = previous ? Math.max(1, (now.getTime() - new Date(previous.sampled_at).getTime()) / 1000) : 0
-        const checked = Number(current?.checked_count || 0)
-        const pps = previous && checked >= Number(previous.checked_count) ? (checked - Number(previous.checked_count)) / elapsed : 0
-        const epsResult = await run('SELECT COUNT(*)::int AS count FROM service_logs WHERE created_at >= NOW() - make_interval(secs => 10)')
-        const eps = Number(epsResult.rows[0]?.count || 0) / 10
-        const historical_eps = Math.max(0, pps - eps)
-        const npps = pps > 0 ? (eps + historical_eps) / pps : 0
-        await run('INSERT INTO log_throughput_samples (sampled_at,checked_count,pps,eps,historical_eps,npps,remaining) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (sampled_at) DO NOTHING', [now, checked, pps, eps, historical_eps, npps, Number(current?.remaining || 0)])
+    const now = new Date()
+    const previous = (await run('SELECT checked_count, sampled_at FROM log_throughput_samples ORDER BY sampled_at DESC LIMIT 1')).rows[0]
+    const elapsed = previous ? Math.max(1, (now.getTime() - new Date(previous.sampled_at).getTime()) / 1000) : 0
+    const checked = Number(current?.checked_count || 0)
+    const pps = previous && checked >= Number(previous.checked_count) ? (checked - Number(previous.checked_count)) / elapsed : 0
+    const epsResult = await run('SELECT COUNT(*)::int AS count FROM service_logs WHERE created_at >= NOW() - make_interval(secs => 10)')
+    const eps = Number(epsResult.rows[0]?.count || 0) / 10
+    const historical_eps = Math.max(0, pps - eps)
+    const npps = pps > 0 ? (eps + historical_eps) / pps : 0
+    await run('INSERT INTO log_throughput_samples (sampled_at,checked_count,pps,eps,historical_eps,npps,remaining) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (sampled_at) DO NOTHING', [now, checked, pps, eps, historical_eps, npps, Number(current?.remaining || 0)])
+    if (Date.now() - lastCleanupAt >= 60 * 60_000) {
         await run('DELETE FROM log_throughput_samples WHERE sampled_at < NOW() - INTERVAL \'24 hours\'')
-        const history = (await run('SELECT sampled_at,pps,eps,historical_eps,npps,remaining FROM log_throughput_samples WHERE sampled_at >= NOW() - make_interval(hours => 6) ORDER BY sampled_at ASC')).rows as SampleRow[]
-        return res.send({
-            generated_at: now.toISOString(),
-            current: { pps, eps, historical_eps, npps, remaining: Number(current?.remaining || 0), thresholds: { npps_below: npps < 100, eps_above: eps > 100, pps_below: pps < 200 }, alert: npps < 100 || eps > 100 || pps < 200 },
-            history,
-        })
-    } catch (error) {
-        return res.status(503).send({ error: error instanceof Error ? error.message : 'Metrics unavailable.' })
+        lastCleanupAt = Date.now()
+    }
+    const history = (await run('SELECT sampled_at,pps,eps,historical_eps,npps,remaining FROM log_throughput_samples WHERE sampled_at >= NOW() - make_interval(hours => 6) ORDER BY sampled_at ASC')).rows as SampleRow[]
+    return {
+        generated_at: now.toISOString(),
+        current: { pps, eps, historical_eps, npps, remaining: Number(current?.remaining || 0), thresholds: { npps_below: npps < 100, eps_above: eps > 100, pps_below: pps < 200 }, alert: npps < 100 || eps > 100 || pps < 200 },
+        history,
     }
 }
 
