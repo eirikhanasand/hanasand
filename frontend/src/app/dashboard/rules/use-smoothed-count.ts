@@ -40,7 +40,7 @@ export function useSmoothedCount(target: number | null | undefined, durationMs: 
         }
         frame = requestAnimationFrame(animate)
         return () => cancelAnimationFrame(frame)
-    }, [target, durationMs])
+    }, [target, durationMs, rate, sampledAt])
 
     return displayed
 }
