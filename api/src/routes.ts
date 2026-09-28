@@ -2,6 +2,7 @@ import { setAuditAcknowledgment } from './handlers/auditAcknowledgments.ts'
 import systemSnapshot from './handlers/metrics/systemSnapshot.ts'
 import { getDockerStorage, clearDockerStorage } from './handlers/dockerStorage.ts'
 import { searchLogs } from './handlers/logs/search.ts'
+import { getLogMetrics, getPublicLogMetrics } from './handlers/logs/metrics.ts'
 import { getManagementOrganizations } from './handlers/managementOrganizations.ts'
 import assignVmOrganization from './handlers/vms/organization.ts'
 import { getContainerProducts, createContainerCheckout } from './handlers/containerBilling.ts'
@@ -613,6 +614,8 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/logs/realtime', getRealtimeLogs)
     fastify.post('/logs/ingest', ingestLog)
     fastify.get('/logs/search', searchLogs)
+    fastify.get('/logs/metrics', getLogMetrics)
+    fastify.get('/logs/metrics/public', getPublicLogMetrics)
 
     // Events and rules
     fastify.get('/events', getEvents)

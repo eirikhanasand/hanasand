@@ -8,6 +8,7 @@ import { logSearchParams, logTables, type LogEvent as Event, type LogSearchResul
 import { retainEvents, realtimeEvents } from '@/utils/logs/retainEvents'
 import EventFeed from './eventFeed'
 import LogCatchupProgress from './catchupProgress'
+import ThroughputMetrics from './throughputMetrics'
 import ErrorsPanel from './errorsPanel'
 import type { ErrorEvent, ErrorEventsResponse, LogService } from '@/utils/logs/getLogs'
 import { dashboardPanelClass } from '@/components/dashboard/ui'
@@ -160,6 +161,7 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
             </div>
             {processingError && <p role='alert' className='text-sm text-ui-text'>Event processing is delayed: {processingError}</p>}
             {view !== 'realtime' && commandChecksDelayed && <p suppressHydrationWarning role='status' className='text-sm text-ui-warning'>Command checks are delayed. {pendingCommands.has_more ? 'More than ' : ''}{pendingCommands.count.toLocaleString('en-US')} {pendingCommands.count === 1 ? 'command is' : 'commands are'} waiting; oldest received {new Date(pendingCommands.oldest_queued_at!).toLocaleString()}.</p>}
+            {view !== 'realtime' && <ThroughputMetrics />}
             {view !== 'realtime' && <LogCatchupProgress progress={data?.processing?.catchup} catchingUp={!!data?.processing?.sources?.some(isCatchingUp)} now={data?.generated_at || new Date().toISOString()} stalled={!!processingError} />}
             {!!data?.processing?.skipped_events && <p role='status' className='text-sm text-ui-warning'>{data.processing.skipped_events.toLocaleString('en-US')} events remain excluded from detection.</p>}
             {data && !data.processing && !busy && <p role='status' className='text-sm text-ui-warning'>Waiting for the log processor to check in.</p>}
