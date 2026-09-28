@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
-import { Copy, ChevronDown, Search, ListFilter, X } from 'lucide-react'
+import { Copy, ChevronDown, Search, ListFilter, BarChart3, X } from 'lucide-react'
 import { logSearchParams, logTables, type LogEvent as Event, type LogSearchResult as Result, type ProcessingSource } from '@/utils/logs/search'
 import { retainEvents } from '@/utils/logs/retainEvents'
 import EventFeed from './eventFeed'
@@ -49,6 +49,7 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
     const filterPanel = useRef<HTMLDivElement>(null)
     const filterButton = useRef<HTMLButtonElement>(null)
     const [filtersOpen, setFiltersOpen] = useState(false)
+    const [analyticsOpen, setAnalyticsOpen] = useState(true)
     const loadMore = useRef<(cursor: string) => void>(() => {})
     const queryIdentity = useRef(JSON.stringify([view, service, search, table, advanced, appliedHql, hours, severity]))
     useEffect(() => {
@@ -133,7 +134,7 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
     return <div className='grid min-w-0 gap-4'>
         <header className='flex flex-wrap items-center justify-between gap-3'>
             <div><h1 className='text-2xl font-semibold'>{view === 'dashboard' ? 'Logs' : view === 'realtime' ? 'Realtime' : view === 'errors' ? 'Errors' : 'Search logs'}</h1>{view === 'errors' && <p className='mt-1 text-sm text-ui-muted'>Application errors, response codes, and request details.</p>}</div>
-            <nav aria-label='Log pages' className='flex flex-wrap items-center gap-2'>{[['Dashboard', '/logs'], ['Realtime', '/logs/realtime'], ['Search', '/logs/search'], ['Errors', '/logs/errors'], ['Traffic', '/traffic']].filter(([, href]) => (view !== 'realtime' || href !== '/logs/realtime') && (view !== 'dashboard' || href !== '/logs')).map(([label, href]) => <Link key={href} href={href} aria-current={pathname === href || pathname === `/dashboard${href}` ? 'page' : undefined} className={`${fieldClass} ${pathname === href ? 'font-semibold text-ui-primary' : ''}`}>{label}</Link>)}{view !== 'errors' && <button ref={filterButton} type='button' onClick={() => setFiltersOpen(open => !open)} aria-label='Filter logs' aria-expanded={filtersOpen} aria-controls='log-filters' aria-keyshortcuts='Meta+J Control+J' title='Filter logs (⌘J)' className={`${fieldClass} relative inline-flex items-center justify-center ${activeFilters ? 'border-ui-primary text-ui-primary' : ''}`}><ListFilter size={18} aria-hidden />{!!activeFilters && <span className='absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-ui-primary text-[10px] font-semibold text-ui-on-primary'>{activeFilters}<span className='sr-only'> active filters</span></span>}</button>}</nav>
+            <nav aria-label='Log pages' className='flex flex-wrap items-center gap-2'>{[['Dashboard', '/logs'], ['Realtime', '/logs/realtime'], ['Search', '/logs/search'], ['Errors', '/logs/errors'], ['Traffic', '/traffic']].filter(([, href]) => (view !== 'realtime' || href !== '/logs/realtime') && (view !== 'dashboard' || href !== '/logs')).map(([label, href]) => <Link key={href} href={href} aria-current={pathname === href || pathname === `/dashboard${href}` ? 'page' : undefined} className={`${fieldClass} ${pathname === href ? 'font-semibold text-ui-primary' : ''}`}>{label}</Link>)}{view !== 'errors' && <button ref={filterButton} type='button' onClick={() => setFiltersOpen(open => !open)} aria-label='Filter logs' aria-expanded={filtersOpen} aria-controls='log-filters' aria-keyshortcuts='Meta+J Control+J' title='Filter logs (⌘J)' className={`${fieldClass} relative inline-flex items-center justify-center ${activeFilters ? 'border-ui-primary text-ui-primary' : ''}`}><ListFilter size={18} aria-hidden />{!!activeFilters && <span className='absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-ui-primary text-[10px] font-semibold text-ui-on-primary'>{activeFilters}<span className='sr-only'> active filters</span></span>}</button>}{view === 'dashboard' && <button type='button' onClick={() => setAnalyticsOpen(open => !open)} aria-label='Toggle log analytics' aria-expanded={analyticsOpen} aria-controls='log-analytics' title='Toggle log analytics' className={`${fieldClass} ${analyticsOpen ? 'border-ui-primary text-ui-primary' : ''}`}><BarChart3 size={18} aria-hidden /></button></nav>
         </header>
         {error && <div role='alert' className='flex flex-wrap items-center justify-between gap-2 rounded-lg border border-ui-danger p-3 text-sm text-ui-text'><span>{error}</span><button type='button' className={fieldClass} onClick={() => setRefresh(value => value + 1)}>Retry</button></div>}
         {view === 'errors' ? <><div className='flex items-center justify-between gap-3 text-xs text-ui-muted'><span role='status'>{busy ? 'Refreshing…' : copied ? 'Event copied' : 'Recent application errors'}</span><button type='button' className={fieldClass} disabled={busy} onClick={() => setRefresh(value => value + 1)}>Refresh errors</button></div><ErrorsPanel events={errors} expanded={expanded} onToggle={toggle} onCopy={event => void copy(event)} /></> : <>
@@ -161,7 +162,7 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
             </div>
             {processingError && <p role='alert' className='text-sm text-ui-text'>Event processing is delayed: {processingError}</p>}
             {view !== 'realtime' && commandChecksDelayed && <p suppressHydrationWarning role='status' className='text-sm text-ui-warning'>Command checks are delayed. {pendingCommands.has_more ? 'More than ' : ''}{pendingCommands.count.toLocaleString('en-US')} {pendingCommands.count === 1 ? 'command is' : 'commands are'} waiting; oldest received {new Date(pendingCommands.oldest_queued_at!).toLocaleString()}.</p>}
-            {view !== 'realtime' && <ThroughputMetrics />}
+            {view === 'dashboard' && analyticsOpen && <ThroughputMetrics />}
             {view !== 'realtime' && <LogCatchupProgress progress={data?.processing?.catchup} catchingUp={!!data?.processing?.sources?.some(isCatchingUp)} now={data?.generated_at || new Date().toISOString()} stalled={!!processingError} />}
             {!!data?.processing?.skipped_events && <p role='status' className='text-sm text-ui-warning'>{data.processing.skipped_events.toLocaleString('en-US')} events remain excluded from detection.</p>}
             {view !== 'realtime' && data && !data.processing && !busy && <p role='status' className='text-sm text-ui-warning'>Waiting for the log processor to check in.</p>}
