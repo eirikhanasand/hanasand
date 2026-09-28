@@ -48,6 +48,8 @@ services:
       HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
     ports:
       - "3000:3000"
+      # Keep the stable host-side frontend port used by the production proxy.
+      - "127.0.0.1:3100:3000"
     volumes:
       - prompt_portal_state:/var/lib/hanasand-prompt
     healthcheck:
@@ -76,6 +78,8 @@ services:
         HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
     ports:
       - "127.0.0.1:${API_PORT:-8080}:8080"
+      # Keep the stable host-side API port used by the production proxy.
+      - "127.0.0.1:8082:8080"
     env_file:
       .env
     volumes:
