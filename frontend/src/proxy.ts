@@ -331,7 +331,7 @@ function authServiceUnavailable(req: NextRequest) {
             a{display:inline-block;margin-top:.5rem;padding:.6rem 1rem;border-radius:6px;background:var(--ui-primary);color:var(--ui-on-primary);text-decoration:none;font-weight:600}a:focus-visible{outline:3px solid var(--ui-primary);outline-offset:3px}
 </style></head><body><main>
 <p>Hanasand</p><h1>Reconnecting your session</h1>
-<p role="status">We couldn’t check your session just now. We’ll try again automatically in a few seconds.</p>
+<p role="status">Unable to authenticate. Trying again in a few seconds.</p>
 <a href="${retryPath}">Try again now</a>
 </main></body></html>`, { status: 503, headers: { ...headers, 'content-type': 'text/html; charset=utf-8' } })
 }
