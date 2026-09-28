@@ -12,6 +12,10 @@
 !ops
 !ops/threat-intel-backup
 !ops/threat-intel-backup/run-threat-intel-backup.sh
+!ops/onion-tor
+!ops/onion-tor/**
+!ops/pgbouncer
+!ops/pgbouncer/**
 !docker-compose.yml
 !.dockerignore
 
@@ -47,7 +51,6 @@ ti/scraper/.tmp
 **/*secret*
 
 **/.DS_Store
-**/.git
 
 # Include source for the private review inventory, without runtime assets.
 !**/*.ts
@@ -155,3 +158,16 @@ ops/runtime/releases
 ops/runtime/releases/**
 ops/runtime/source
 ops/runtime/source/**
+
+# Expose only the active checkout branch to production Dockerfile guards.
+**/.git
+
+# These exclusions must follow the source-file allowlist above.
+**/node_modules
+**/node_modules/**
+**/.artifacts
+**/.next
+**/.git
+!.git/
+.git/*
+!.git/HEAD

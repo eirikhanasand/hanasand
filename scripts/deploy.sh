@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+sh /home/hanasand/hanasand/scripts/require-main.sh
 if test -f /home/hanasand/hanasand/ops/runtime/config.json; then exec sh scripts/recovery/deploy-pair.sh frontend "$@"; fi
 
 root=$(pwd)

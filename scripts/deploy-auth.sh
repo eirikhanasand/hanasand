@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+sh /home/hanasand/hanasand/scripts/require-main.sh
 if test -f /home/hanasand/hanasand/ops/runtime/config.json; then exec sh scripts/recovery/deploy-pair.sh auth "$@"; fi
 # Two serving workers and two temporary replacements. The API is never restarted.
 test "$(pwd)" = /home/hanasand/hanasand || { echo 'Run from /home/hanasand/hanasand' >&2; exit 1; }
@@ -12,7 +13,7 @@ upstream=$conf_dir/auth-upstream.conf
 release=$(git rev-parse HEAD)
 image=hanasand-auth:$release
 case "${1:-}" in
-    '') docker build --target auth-runtime -t "$image" api ;;
+    '') docker build -f api/Dockerfile --target auth-runtime -t "$image" . ;;
     --no-build) docker image inspect "$image" >/dev/null ;;
     *) echo 'Usage: scripts/deploy-auth.sh [--no-build]' >&2; exit 2 ;;
 esac

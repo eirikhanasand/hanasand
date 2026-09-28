@@ -1,0 +1,7 @@
+*
+!.git/
+.git/*
+!.git/HEAD
+!ti/
+!ti/ai-parser-bridge/
+!ti/ai-parser-bridge/**

@@ -2,18 +2,21 @@ FROM grafana/k6:latest AS k6builder
 
 FROM oven/bun:1.3.13-alpine AS deps
 
+COPY .git/HEAD /tmp/hanasand-source-head
+RUN test "$(cat /tmp/hanasand-source-head)" = "ref: refs/heads/main" || { echo "Production image builds are allowed only from the main branch." >&2; exit 1; }
+
 WORKDIR /app
 
-COPY package.json bun.lock* bunfig.toml ./
+COPY api/package.json api/bun.lock* api/bunfig.toml ./
 RUN bun install
 
 FROM deps AS session-geo
-COPY scripts/download-session-geo.ts scripts/download-session-geo.ts
+COPY api/scripts/download-session-geo.ts scripts/download-session-geo.ts
 ARG SESSION_GEOIP_MONTH
 RUN SESSION_GEOIP_MONTH=$SESSION_GEOIP_MONTH bun scripts/download-session-geo.ts
 
 FROM deps AS auth-runtime
-COPY --chown=bun:bun . .
+COPY --chown=bun:bun api/ .
 COPY --from=session-geo /app/geoip /app/geoip
 RUN bun scripts/check-session-network.ts
 RUN DB_PASSWORD=build-test DB_HOST=localhost VM_API_TOKEN=build-test bun run test --only=auth-service,auth-boundary,social-oidc,social-auth
@@ -35,9 +38,9 @@ COPY --from=k6builder /usr/bin/k6 /usr/bin/k6
 WORKDIR /app
 ENV NODE_ENV=production
 
-COPY default.vcl /etc/varnish/default.vcl
+COPY api/default.vcl /etc/varnish/default.vcl
 COPY --from=deps /app/node_modules /app/node_modules
-COPY . .
+COPY api/ .
 COPY --from=session-geo /app/geoip /app/geoip
 
 # Build-time tests import the runtime constants module, but Docker builds do
@@ -55,6 +58,8 @@ FROM oven/bun:1.3.11 AS browser-bun
 FROM ghcr.io/selkies-project/selkies-gstreamer/gst-py-example@sha256:3b7e60077dfc56af335cbe2da33a8255ec0ab954ecf6169b9a46e78d09c3df84 AS browser-runtime
 
 USER root
+COPY .git/HEAD /tmp/hanasand-source-head
+RUN test "$(cat /tmp/hanasand-source-head)" = "ref: refs/heads/main" || { echo "Production image builds are allowed only from the main branch." >&2; exit 1; }
 COPY --from=browser-bun /usr/local/bin/bun /usr/local/bin/bun
 RUN ln -s /usr/local/bin/bun /usr/local/bin/bunx \
     && apt-get update \
@@ -66,22 +71,22 @@ RUN ln -s /usr/local/bin/bun /usr/local/bin/bunx \
     && rm -rf /var/lib/apt/lists/* /tmp/chrome.deb
 
 WORKDIR /app
-COPY package.json bun.lock* bunfig.toml ./
+COPY api/package.json api/bun.lock* api/bunfig.toml ./
 RUN bun install --frozen-lockfile
-COPY . .
-COPY browser-worker/supervisor.conf /etc/supervisor/conf.d/browser-worker.conf
-COPY browser-worker/start.sh /usr/local/bin/hanasand-browser-worker
-COPY browser-worker/reconnect-watchdog.js /opt/gst-web/reconnect-watchdog.js
-COPY browser-worker/patch-stream-input.ts /tmp/patch-stream-input.ts
-COPY browser-worker/touch-input.js /tmp/touch-input.js
-COPY browser-worker/wheel-input.js /tmp/wheel-input.js
-COPY browser-worker/patch-stream-controls.ts /tmp/patch-stream-controls.ts
-COPY browser-worker/patch-stream-playback.ts /tmp/patch-stream-playback.ts
-COPY browser-worker/patch-stream-framerate.ts /tmp/patch-stream-framerate.ts
-COPY browser-worker/patch-stream-h264.ts /tmp/patch-stream-h264.ts
-COPY browser-worker/patch-stream-receiver.ts /tmp/patch-stream-receiver.ts
-COPY browser-worker/patch-stream-packets.ts /tmp/patch-stream-packets.ts
-COPY browser-worker/patch-stream-signalling.ts /tmp/patch-stream-signalling.ts
+COPY api/ .
+COPY api/browser-worker/supervisor.conf /etc/supervisor/conf.d/browser-worker.conf
+COPY api/browser-worker/start.sh /usr/local/bin/hanasand-browser-worker
+COPY api/browser-worker/reconnect-watchdog.js /opt/gst-web/reconnect-watchdog.js
+COPY api/browser-worker/patch-stream-input.ts /tmp/patch-stream-input.ts
+COPY api/browser-worker/touch-input.js /tmp/touch-input.js
+COPY api/browser-worker/wheel-input.js /tmp/wheel-input.js
+COPY api/browser-worker/patch-stream-controls.ts /tmp/patch-stream-controls.ts
+COPY api/browser-worker/patch-stream-playback.ts /tmp/patch-stream-playback.ts
+COPY api/browser-worker/patch-stream-framerate.ts /tmp/patch-stream-framerate.ts
+COPY api/browser-worker/patch-stream-h264.ts /tmp/patch-stream-h264.ts
+COPY api/browser-worker/patch-stream-receiver.ts /tmp/patch-stream-receiver.ts
+COPY api/browser-worker/patch-stream-packets.ts /tmp/patch-stream-packets.ts
+COPY api/browser-worker/patch-stream-signalling.ts /tmp/patch-stream-signalling.ts
 RUN bun /tmp/patch-stream-input.ts \
     && bun /tmp/patch-stream-playback.ts \
     && bun /tmp/patch-stream-framerate.ts \

@@ -1,4 +1,6 @@
 FROM oven/bun:1.3.11
+COPY .git/HEAD /tmp/hanasand-source-head
+RUN test "$(cat /tmp/hanasand-source-head)" = "ref: refs/heads/main" || { echo "Production image builds are allowed only from the main branch." >&2; exit 1; }
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends git openssh-client ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app

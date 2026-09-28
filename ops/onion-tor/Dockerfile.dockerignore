@@ -1,0 +1,7 @@
+*
+!.git/
+.git/*
+!.git/HEAD
+!ops/
+!ops/onion-tor/
+!ops/onion-tor/**

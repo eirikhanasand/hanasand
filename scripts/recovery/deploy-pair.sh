@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+sh /home/hanasand/hanasand/scripts/require-main.sh
 kind=${1:?frontend, api or auth required}; shift
 case "$kind" in frontend|api|auth) ;; *) exit 2;; esac
 test "$(pwd)" = /home/hanasand/hanasand
@@ -16,9 +17,9 @@ case "${1:-}" in
  '')
   test "$release" = "$(git rev-parse HEAD)" || { echo 'Build the selected release from its clean archive, then use --no-build.' >&2; exit 1; }
   case "$kind" in
-   frontend) git archive "$release" | docker build -f frontend/Dockerfile -t "$image" -;;
-   api) docker build --build-arg SESSION_GEOIP_MONTH="$(date -u +%Y-%m)" --target app-runtime --build-context database_schema=./db -t "$image" api;;
-   auth) docker build --build-arg SESSION_GEOIP_MONTH="$(date -u +%Y-%m)" --target auth-runtime -t "$image" api;;
+   frontend) docker build -f frontend/Dockerfile -t "$image" .;;
+   api) docker build -f api/Dockerfile --build-arg SESSION_GEOIP_MONTH="$(date -u +%Y-%m)" --target app-runtime --build-context database_schema=./db -t "$image" .;;
+   auth) docker build -f api/Dockerfile --build-arg SESSION_GEOIP_MONTH="$(date -u +%Y-%m)" --target auth-runtime -t "$image" .;;
   esac;;
  *) exit 2;;
 esac

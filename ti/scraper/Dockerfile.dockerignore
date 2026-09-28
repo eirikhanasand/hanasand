@@ -28,3 +28,7 @@ ti/scraper/bun-debug.log
 **/*secret*
 **/.DS_Store
 **/.git
+
+!.git/
+.git/*
+!.git/HEAD

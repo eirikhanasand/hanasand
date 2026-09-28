@@ -65,10 +65,10 @@ services:
     cpus: "2.0"
     restart: always
     build:
-      context: ./api
+      context: .
       additional_contexts:
         database_schema: ./db
-      dockerfile: ./Dockerfile
+      dockerfile: ./api/Dockerfile
     ports:
       - "127.0.0.1:${API_PORT:-8080}:8080"
     env_file:
@@ -186,8 +186,8 @@ services:
     init: true
     restart: always
     build:
-      context: ./api
-      dockerfile: ./Dockerfile
+      context: .
+      dockerfile: ./api/Dockerfile
       target: browser-runtime
     user: "1000"
     environment:
@@ -278,8 +278,8 @@ services:
     image: hanasand_onion_tor
     restart: always
     build:
-      context: ./ops/onion-tor
-      dockerfile: ./Dockerfile
+      context: .
+      dockerfile: ./ops/onion-tor/Dockerfile
     expose:
       - "8118"
       - "9050"
@@ -523,7 +523,8 @@ services:
     container_name: hanasand_pgbouncer
     image: hanasand_pgbouncer
     build:
-      context: ./ops/pgbouncer
+      context: .
+      dockerfile: ./ops/pgbouncer/Dockerfile
     ports:
       - "127.0.0.1:${DB_POOL_PORT:-18505}:18505"
     restart: always

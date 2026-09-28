@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+sh /home/hanasand/hanasand/scripts/require-main.sh
 cd /home/hanasand/hanasand
 release=${HANASAND_RELEASE_COMMIT:-$(git rev-parse HEAD)}
 test "$(git rev-parse --verify "$release^{commit}")" = "$release"
@@ -17,7 +18,7 @@ for remote in origin github; do
 done
 image=hanasand-code-indexer:$release
 if ! docker image inspect "$image" >/dev/null 2>&1; then
- git archive "$release" | docker build -f frontend/CodeInventory.Dockerfile -t "$image" -
+ docker build -f frontend/CodeInventory.Dockerfile -t "$image" .
 fi
 if docker inspect hanasand-code-indexer >/dev/null 2>&1; then
  docker stop -t 35 hanasand-code-indexer >/dev/null

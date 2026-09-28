@@ -1,0 +1,11 @@
+*
+!.git/
+.git/*
+!.git/HEAD
+!frontend/
+!frontend/package.json
+!frontend/bun.lock
+!frontend/bunfig.toml
+!frontend/scripts/
+!frontend/scripts/code-inventory.mjs
+!frontend/scripts/code-inventory-watch.mjs
