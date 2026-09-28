@@ -40,31 +40,31 @@ test('failed preload returns a recoverable error instead of fabricated counts', 
     globalThis.fetch = (async () => Response.json({ error: 'Log search unavailable' }, { status: 503 })) as typeof fetch
     expect(await getLogDashboard({ token: 'session', id: 'user', params: {} })).toEqual({ data: null, error: 'Log search unavailable' })
 })
-test('Realtime server preload always requests high and critical, even with a low query parameter', async () => {
+test('Realtime server preload includes normal traffic regardless of a severity query parameter', async () => {
     let query = new URLSearchParams()
     globalThis.fetch = (async (input: string | URL | Request) => { query = new URL(String(input)).searchParams; return Response.json(data) }) as typeof fetch
     await getLogDashboard({ token: 'session', id: 'user', view: 'realtime', params: { severity: 'low' } })
-    expect(query.get('severity')).toBe('high,critical')
+    expect(query.has('severity')).toBe(false)
     expect(query.has('stats')).toBe(false)
 })
-test('Realtime drops low and medium preload rows and downgraded updates', async () => {
-    const { realtimeEvents, retainEvents } = await import('../src/utils/logs/retainEvents')
+test('Realtime retains all severities, including downgraded updates', async () => {
+    const { retainEvents } = await import('../src/utils/logs/retainEvents')
     const events = ['low','medium','high','critical'].map((severity, index) => ({ id: String(index), event_timestamp: '2026-09-24T12:00:00Z', normalized: { severity } }))
-    expect(realtimeEvents(events).map(event => event.normalized.severity)).toEqual(['high','critical'])
-    expect(realtimeEvents(retainEvents(events, [{ ...events[2], normalized: { severity: 'low' } }])).map(event => event.normalized.severity)).toEqual(['critical'])
+    expect(retainEvents([], events).map(event => event.normalized.severity)).toEqual(['low','medium','high','critical'])
+    expect(retainEvents(events, [{ ...events[2], normalized: { severity: 'low' } }]).map(event => event.normalized.severity)).toEqual(['low','medium','low','critical'])
 })
 
-test('the Realtime route seeds filtered HTML rather than dashboard rows', async () => {
+test('the Realtime route seeds HTML with normal traffic', async () => {
     pathname = '/logs/realtime'
     const { default: RealtimePage } = await import('../src/app/dashboard/logs/realtime/page')
     globalThis.fetch = (async (input: string | URL | Request) => {
         if (!String(input).includes('/logs/search?')) return Response.json({ services: [], summary: { total: 0 }, errors: [] })
-        expect(new URL(String(input)).searchParams.get('severity')).toBe('high,critical')
+        expect(new URL(String(input)).searchParams.has('severity')).toBe(false)
         return Response.json({ ...data, rows: ['low','medium','high','critical'].map(severity => ({id:severity,event_timestamp:data.generated_at,normalized:{severity,service:'test',message:`event-${severity}`,level:'info',log_type:'ApplicationLogs'}})) })
     }) as typeof fetch
     const html = renderToStaticMarkup(await RealtimePage({ searchParams: Promise.resolve({severity:'low'}) }))
-    expect(html).not.toContain('event-low')
-    expect(html).not.toContain('event-medium')
+    expect(html).toContain('event-low')
+    expect(html).toContain('event-medium')
     expect(html).toContain('event-high')
     expect(html).toContain('event-critical')
 })

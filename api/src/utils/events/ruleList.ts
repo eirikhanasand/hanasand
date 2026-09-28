@@ -36,6 +36,27 @@ const aggregateTables = new Map([
     [postgresRuleId, ['log_postgres_session_state', 'sum(dropped_records)']], [proxyRuleId, ['log_proxy_counts', 'sum(amount)']],
     [modelDiscoveryRuleId, ['log_model_probe_receipts', 'count(*)']], [readinessAuditRuleId, ['log_readiness_audit_receipts', 'count(*)']],
 ])
+type HitSample = { at: number, counts: Map<string, number> }
+const hitSamples = new Map<string, HitSample[]>()
+const hitSampleKey = (organizationId: string, rules: Pick<Rule, 'id'>[]) => `${organizationId}:${rules.map(rule => rule.id).sort().join(',')}`
+
+export function getRuleHitRates(organizationId: string, rules: Pick<Rule, 'id'>[]) {
+    const relevant = rules.map(rule => rule.id)
+    const candidates = [...hitSamples].filter(([key, samples]) => key.startsWith(`${organizationId}:`)
+        && samples[0] && samples[1] && relevant.every(id => samples[0].counts.has(id) && samples[1].counts.has(id)))
+    const samples = hitSamples.get(hitSampleKey(organizationId, rules)) || candidates.sort((a, b) => b[1][1].at - a[1][1].at)[0]?.[1]
+    if (!samples || samples.length < 2) return { sampledAt: null, hitRates: {} as Record<string, number> }
+    const [previous, current] = samples
+    const elapsed = (current.at - previous.at) / 1000
+    if (elapsed <= 0 || elapsed > 30) return { sampledAt: current.at, hitRates: {} as Record<string, number> }
+    const hitRates: Record<string, number> = {}
+    for (const rule of rules) {
+        const change = (current.counts.get(rule.id) ?? 0) - (previous.counts.get(rule.id) ?? 0)
+        if (change > 0) hitRates[rule.id] = change / elapsed
+    }
+    return { sampledAt: current.at, hitRates }
+}
+
 export async function loadRuleHits(organizationId: string, rules: Pick<Rule, 'id' | 'source' | 'definition'>[], query: typeof run, options: { cache?: boolean } = {}) {
     if (options.cache !== false && process.env.NODE_ENV !== 'test' && (query as typeof run & { primaryDatabaseRunner?: boolean }).primaryDatabaseRunner) {
         const key = `rule-hits:${organizationId}:${rules.map(rule => `${rule.id}:${rule.source || ''}:${rule.definition?.stage || ''}:${rule.definition?.action || ''}`).join(',')}`
@@ -62,5 +83,12 @@ async function loadRuleHitsUncached(organizationId: string, rules: Pick<Rule, 'i
         statements.push(`SELECT $${parameters.length}::text, COALESCE(${aggregate[1]},0)::text FROM ${aggregate[0]} WHERE organization_id=$1`)
     }
     const result = await query(statements.join(' UNION ALL '), parameters)
-    return new Map<string, number>(result.rows.map(row => [row.rule_id, Number(row.hits)]))
+    const counts = new Map<string, number>(result.rows.map(row => [row.rule_id, Number(row.hits)]))
+    const sampleKey = hitSampleKey(organizationId, rules)
+    const samples = hitSamples.get(sampleKey) || []
+    samples.push({ at: Date.now(), counts })
+    if (samples.length > 2) samples.shift()
+    hitSamples.set(sampleKey, samples)
+    while (hitSamples.size > 128) hitSamples.delete(hitSamples.keys().next().value!)
+    return counts
 }

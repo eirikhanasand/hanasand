@@ -3,7 +3,7 @@ import { cdnDeliveryRule, cdnDeliveryRuleId, cdnDeliveryDefinition } from '#util
 import { sshTransportRule, sshTransportRuleId, sshTransportDefinition } from '#utils/events/analyzeSshTransport.ts'
 import { eventProtectionRule, eventProtectionRuleId, eventProtectionDefinition, normalizeEventProtection, type EventProtectionPolicy } from '#utils/events/eventProtection.ts'
 import { ingestionRule, ingestionRuleId, ingestionDefinition } from '#utils/events/analyzeIngestion.ts'
-import { internalRetentionRuleIds, listRule, ruleCategory, loadRuleHits } from '#utils/events/ruleList.ts'
+import { internalRetentionRuleIds, listRule, ruleCategory, loadRuleHits, getRuleHitRates } from '#utils/events/ruleList.ts'
 import { cdnRefreshRule, cdnRefreshRuleId, cdnRefreshDefinition } from '#utils/events/analyzeCdnRefresh.ts'
 import { modelDiscoveryRule, modelDiscoveryRuleId, modelDiscoveryDefinition, modelDiscoveryConfigured, modelDiscoveryUnavailableReason } from '#utils/events/analyzeModelDiscovery.ts'
 import { readinessAuditRule, readinessAuditRuleId, readinessAuditDefinition, readinessAuditConfigured, readinessAuditUnavailable } from '#utils/events/analyzeReadinessAudit.ts'
@@ -318,14 +318,16 @@ export async function getRules(req: FastifyRequest, res: FastifyReply) {
         loadConfiguredRules(access.organizationId, run, compact),
         canManageRules(access.role) ? hasRole(req, res, 'system_admin') : Promise.resolve({ valid: false }),
     ])
-    const rules = configured.filter(rule => !internalRetentionRuleIds.has(rule.id) && (!query.category || ruleCategory(rule) === query.category))
+    const hitRules = configured.filter(rule => !internalRetentionRuleIds.has(rule.id))
+    const rules = hitRules.filter(rule => !query.category || ruleCategory(rule) === query.category)
     let hits: Map<string, number>
-    try { hits = query.view === 'definitions' ? new Map<string, number>() : await loadRuleHits(access.organizationId, rules, run) }
+    try { hits = query.view === 'definitions' ? new Map<string, number>() : await loadRuleHits(access.organizationId, hitRules, run) }
     catch (error) {
         if (error instanceof ReadAdmissionError) return res.header('Retry-After', '2').status(503).send({ error: error.message })
         throw error
     }
-    return res.send({ organizationId: access.organizationId, rules: rules.map(rule => ({ ...(compact ? listRule(rule) : rule),
+    const { sampledAt, hitRates } = getRuleHitRates(access.organizationId, hitRules)
+    return res.send({ organizationId: access.organizationId, sampledAt, hitRates, rules: rules.map(rule => ({ ...(compact ? listRule(rule) : rule),
         hitCount: rule.definition?.stage === 'analyze' && rule.definition.action === 'keep' ? null : hits.get(rule.id) ?? 0,
     })), canManageRetention: retentionRole.valid })
 }
@@ -338,7 +340,8 @@ export async function getRuleHitCounts(req: FastifyRequest, res: FastifyReply) {
     const rules = (await loadConfiguredRules(access.organizationId, run, true)).filter(rule => !internalRetentionRuleIds.has(rule.id))
     try {
         const hits = await loadRuleHits(access.organizationId, rules, run)
-        return res.header('Cache-Control', 'no-store').send({ organizationId: access.organizationId, hitCounts: Object.fromEntries(rules.map(rule => [rule.id,
+        const trend = getRuleHitRates(access.organizationId, rules)
+        return res.header('Cache-Control', 'no-store').send({ organizationId: access.organizationId, ...trend, hitCounts: Object.fromEntries(rules.map(rule => [rule.id,
             rule.definition?.stage === 'analyze' && rule.definition.action === 'keep' ? null : hits.get(rule.id) ?? 0,
         ])) })
     } catch (error) {

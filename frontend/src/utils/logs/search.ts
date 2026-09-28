@@ -12,8 +12,7 @@ export function logSearchParams({ view, hours, advanced, appliedHql, table, sear
     const params = new URLSearchParams({ hours, hql: advanced && appliedHql ? appliedHql : `${table} | take 200` })
     if (search && !advanced) params.set('search', search)
     if (service !== 'all') params.set('service', service)
-    if (view === 'realtime') params.set('severity', 'high,critical')
-    else if (severity !== 'all') params.set('severity', severity)
+    if (view !== 'realtime' && severity !== 'all') params.set('severity', severity)
     if (view === 'dashboard') params.set('stats', '1')
     if (view === 'search' && !advanced) params.set('paginate', '1')
     return params

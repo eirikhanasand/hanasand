@@ -90,7 +90,7 @@ export default function RuleLibrary({ category, rules, loading, canManageRules, 
                             <td className='px-3 py-2 text-xs capitalize'>{rule.severity}</td>
                             <td className='px-3 py-2 text-xs'>{rule.enabled === false ? 'Disabled' : 'Enabled'}</td>
                             <td className='px-3 py-2 text-xs text-ui-muted'>{rule.source === 'open_source' ? 'Imported rule' : rule.source === 'owned' ? 'Custom rule' : 'Hanasand rule'}</td>
-                            <td className='px-3 py-2 text-xs tabular-nums'><AnimatedHits value={rule.hitCount} /></td>
+                            <td className='px-3 py-2 text-xs tabular-nums'><AnimatedHits value={rule.hitCount} rate={rule.hitRate} sampledAt={rule.sampledAt} /></td>
                             {category === 'analysis' && <td className='px-3 py-2 text-xs'>{rule.definition?.action === 'drop' ? 'Drop' : 'Store'}</td>}
                             <td className='px-2 py-2'><Button text={rule.enabled === false ? 'Enable' : 'Disable'} aria-label={`${rule.enabled === false ? 'Enable' : 'Disable'} ${rule.name}`} variant='outline' size='sm' className='rounded-md' disabled={!canManageRules} onClick={() => onToggleRule(rule)} /></td>
                         </tr>)}
@@ -102,7 +102,7 @@ export default function RuleLibrary({ category, rules, loading, canManageRules, 
     )
 }
 
-function AnimatedHits({ value }: { value?: number | null }) {
-    const count = useSmoothedCount(value, 10_000)
+function AnimatedHits({ value, rate, sampledAt }: { value?: number | null, rate?: number | null, sampledAt?: number }) {
+    const count = useSmoothedCount(value, 10_000, rate, sampledAt)
     return <>{count?.toLocaleString('en-US') ?? '—'}</>
 }
