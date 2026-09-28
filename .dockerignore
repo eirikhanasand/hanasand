@@ -112,6 +112,8 @@ ti/scraper/.tmp
 **/*.pem
 **/*.key
 **/*secret*
+!api/tests/fixtures/
+!api/tests/fixtures/monitoring-tls/
 !api/tests/fixtures/monitoring-tls/cert.pem
 !api/tests/fixtures/monitoring-tls/key.pem
 **/code-inventory.json
