@@ -9,7 +9,7 @@ const services = []
 function service(id, name, port, check, ports) {
     const instances = ports.map(([instance, remoteSite, endpointPort]) => {
         const endpoint = `${remoteSite}:${endpointPort}`
-        const instanceCheck = id === 'frontend' ? '/api/resilience/ready' : check
+        const instanceCheck = id === 'frontend' ? '/api/recovery/ready' : check
         const health = id === 'database' ? `postgres://127.0.0.1:${endpointPort}` : `http://127.0.0.1:${endpointPort}${instanceCheck}`
         const entry = { id: instance, site: remoteSite, endpoint, health: site === 'ovhcloud' && remoteSite === 'inspur' && id !== 'database' ? `peer:${instance}` : health }
         if (id !== 'database') entry.checkPath = instanceCheck
@@ -18,7 +18,7 @@ function service(id, name, port, check, ports) {
     })
     services.push({ id, name, listenPort: site === 'inspur' || id === 'database' ? port : null, checkPath: check, instances })
 }
-service('frontend', 'Frontend', 13000, '/', [['inspur-frontend-1', 'inspur', 3000], ['inspur-frontend-2', 'inspur', 3100], ['ovh-frontend', 'ovhcloud', 19300]])
+service('frontend', 'Frontend', 13000, '/api/recovery/ready', [['inspur-frontend-1', 'inspur', 3000], ['inspur-frontend-2', 'inspur', 3100], ['ovh-frontend', 'ovhcloud', 19300]])
 service('api', 'API', 18080, '/health', [['inspur-api-1', 'inspur', 8082], ['inspur-api-2', 'inspur', 8083], ['ovh-api', 'ovhcloud', 19080]])
 service('auth', 'Authentication', 18090, '/ready', [['inspur-auth-1', 'inspur', 8183], ['inspur-auth-2', 'inspur', 8184], ['ovh-auth', 'ovhcloud', 19090]])
 service('intelligence', 'Threat intelligence queries', 18097, '/v1/health', [['inspur-ti-1', 'inspur', 8097], ['inspur-ti-2', 'inspur', 18099], ['ovh-ti', 'ovhcloud', 19097]])
