@@ -116,6 +116,7 @@ ti/scraper/.tmp
 !api/tests/fixtures/monitoring-tls/
 !api/tests/fixtures/monitoring-tls/cert.pem
 !api/tests/fixtures/monitoring-tls/key.pem
+
 !api/tests/
 !api/tests/fixtures/**
 !api/tests/fixtures/monitoring-tls/*.pem
@@ -182,3 +183,17 @@ ops/runtime/source/**
 !api/tests/fixtures/monitoring-tls/
 !api/tests/fixtures/monitoring-tls/cert.pem
 !api/tests/fixtures/monitoring-tls/key.pem
+
+# The production Compose images use api, frontend, ti, and the selected ops
+# services. Keep local mobile/model worktrees and runtime data out of every
+# root-context build; the frontend's source inventory does not need them.
+app/**
+gpt/**
+sandbox/**
+mail/**
+1923/**
+1946/**
+2007/**
+Germany/**
+Helmond/**
+agents/**
