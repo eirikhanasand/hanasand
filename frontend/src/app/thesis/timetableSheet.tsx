@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useId, useState } from 'react'
+import { Fragment, useEffect, useId, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight, ClipboardPlus, Download, Pencil, Trash2, X } from 'lucide-react'
 import SheetEditor, { sheetButton, type SheetEditorProps } from './sheetEditor'
 import { tables, writeTable } from './workspace'
@@ -42,6 +42,16 @@ export default function TimetableSheet({ onActivityLogChange, ...props }: SheetE
     const [message, setMessage] = useState('')
     const [pdfBusy, setPdfBusy] = useState(false)
     const [pdfError, setPdfError] = useState('')
+    const pointerDown = useRef(false)
+    useEffect(() => {
+        const releasePointer = () => { pointerDown.current = false }
+        window.addEventListener('pointerup', releasePointer)
+        window.addEventListener('pointercancel', releasePointer)
+        return () => {
+            window.removeEventListener('pointerup', releasePointer)
+            window.removeEventListener('pointercancel', releasePointer)
+        }
+    }, [])
     function changeWeek(week: Week | undefined, date?: string) {
         if (!canEdit || !model) return
         const table = parsed[target]
@@ -139,7 +149,8 @@ export default function TimetableSheet({ onActivityLogChange, ...props }: SheetE
             tabIndex: 0,
             'data-table-cell': `${index}:${row}:${col}`,
             'data-active': interaction.active?.table === index && interaction.active.row === row && interaction.active.col === col,
-            onFocus: () => interaction.onSelect({ table: index, row, col }),
+            onPointerDownCapture: () => { pointerDown.current = true },
+            onFocus: () => { if (!pointerDown.current) interaction.onSelect({ table: index, row, col }) },
             onClick: () => interaction.onSelect({ table: index, row, col }),
             onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => {
                 if (event.metaKey || event.ctrlKey || event.altKey) return
