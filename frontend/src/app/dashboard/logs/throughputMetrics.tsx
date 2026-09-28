@@ -7,14 +7,23 @@ type Point = { sampled_at: string, pps: number, eps: number, historical_eps: num
 type Metrics = { generated_at: string, current: { pps: number, eps: number, historical_eps: number, npps: number, remaining: number, thresholds: { npps_below: boolean, eps_above: boolean, pps_below: boolean } }, history: Point[] }
 
 const cards = [
-    ['PPS', 'pps', 'Processed per second'],
-    ['EPS', 'eps', 'Incoming events per second'],
-    ['Historical EPS', 'historical_eps', 'Backlog processing rate'],
-    ['NPPS', 'npps', 'Load ratio: incoming + historical / processing'],
+    ['PPS', 'pps', 'Events checked per second'],
+    ['EPS', 'eps', 'New service logs per second'],
+    ['Historical EPS', 'historical_eps', 'Backlog processed per second'],
+    ['NPPS', 'npps', 'Incoming load ÷ checked throughput'],
 ] as const
+const chartDescriptions = {
+    eps: 'New service logs per second',
+    pps: 'Events checked per second',
+    npps: 'Incoming load ÷ checked throughput; above 1 means the backlog can grow',
+} as const
 
 function format(value: number) {
     return value >= 1000 ? value.toLocaleString('en-US', { maximumFractionDigits: 0 }) : value.toFixed(1)
+}
+function sampleTime(value?: string) {
+    if (!value) return '—'
+    return new Date(value).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
 }
 function age(value: string, now: number) {
     const seconds = Math.max(0, Math.floor((now - Date.parse(value)) / 1000))
@@ -29,11 +38,35 @@ function Chart({ title, points, field }: { title: string, points: Point[], field
     const [expanded, setExpanded] = useState(false)
     const values = points.map(point => Number(point[field]) || 0)
     const max = Math.max(1, ...values)
-    const width = Math.max(560, points.length * 8)
-    const path = values.map((value, index) => `${index ? 'L' : 'M'} ${(index / Math.max(1, values.length - 1)) * (width - 24) + 12} ${112 - (value / max) * 96}`).join(' ')
+    const width = 720
+    const height = 184
+    const plot = { left: 62, right: 12, top: 16, bottom: 42 }
+    const plotWidth = width - plot.left - plot.right
+    const plotHeight = height - plot.top - plot.bottom
+    const stride = Math.max(1, Math.ceil(points.length / 240))
+    const visible = points.filter((_, index) => index % stride === 0 || index === points.length - 1)
+    const path = visible.map((point, index) => {
+        const x = plot.left + (index / Math.max(1, visible.length - 1)) * plotWidth
+        const y = plot.top + plotHeight - ((Number(point[field]) || 0) / max) * plotHeight
+        return `${index ? 'L' : 'M'} ${x} ${y}`
+    }).join(' ')
+    const latest = visible.at(-1)
+    const ticks = [1, 0.75, 0.5, 0.25, 0]
+    const unit = field === 'npps' ? '× load ratio' : 'events / second'
     return <div className={expanded ? 'fixed inset-4 z-50 rounded-xl border border-ui-border bg-ui-panel p-4 shadow-2xl' : 'rounded-xl border border-ui-border bg-ui-panel p-3'}>
-        <div className='flex items-center justify-between gap-2'><h3 className='text-sm font-semibold'>{title}</h3><button type='button' aria-label={expanded ? `Close expanded ${title} chart` : `Expand ${title} chart`} className='rounded-md p-1 text-ui-muted hover:text-ui-text' onClick={() => setExpanded(value => !value)}>{expanded ? <Minimize2 size={16} aria-hidden /> : <Maximize2 size={16} aria-hidden />}</button></div>
-        <div className='mt-2 overflow-x-auto' onWheel={event => { if (event.deltaY) event.currentTarget.scrollLeft += event.deltaY }}><svg role='img' aria-label={title} width={width} height='128' viewBox={`0 0 ${width} 128`} className='min-w-full'><path d={path || 'M 12 112'} fill='none' stroke='currentColor' strokeWidth='2' className='text-ui-primary' /><line x1='12' x2={width - 12} y1='112' y2='112' stroke='currentColor' className='text-ui-border' /></svg></div>
+        <div className='flex items-center justify-between gap-2'><div><h3 className='text-sm font-semibold'>{title}</h3><p className='text-xs text-ui-muted'>{chartDescriptions[field]}</p></div><button type='button' aria-label={expanded ? `Close expanded ${title} chart` : `Expand ${title} chart`} className='rounded-md p-1 text-ui-muted hover:text-ui-text' onClick={() => setExpanded(value => !value)}>{expanded ? <Minimize2 size={16} aria-hidden /> : <Maximize2 size={16} aria-hidden />}</button></div>
+        <div className='mt-2 overflow-x-auto'><svg role='img' aria-label={`${title}: ${format(Number(latest?.[field]) || 0)} ${unit}, sampled from ${sampleTime(visible[0]?.sampled_at)} to ${sampleTime(latest?.sampled_at)}. Y axis shows ${unit}.`} width={width} height={height} viewBox={`0 0 ${width} ${height}`} className='min-w-full'>
+            {ticks.map((fraction, index) => {
+                const y = plot.top + plotHeight * (1 - fraction)
+                const value = max * fraction
+                return <g key={fraction}><line x1={plot.left} x2={width - plot.right} y1={y} y2={y} stroke='currentColor' opacity={fraction === 0 ? 0.35 : 0.12} /><text x={plot.left - 8} y={y + 4} textAnchor='end' fontSize='11' fill='currentColor' opacity='0.7'>{field === 'npps' ? `${value.toFixed(1)}×` : format(value)}</text></g>
+            })}
+            <path d={path || `M ${plot.left} ${plot.top + plotHeight}`} fill='none' stroke='currentColor' strokeWidth='2' className='text-ui-primary' />
+            {latest && <circle cx={plot.left + plotWidth} cy={plot.top + plotHeight - ((Number(latest[field]) || 0) / max) * plotHeight} r='3.5' fill='currentColor' className='text-ui-primary'><title>{`${sampleTime(latest.sampled_at)}: ${format(Number(latest[field]) || 0)} ${unit}`}</title></circle>}
+            <text x={plot.left} y={height - 12} fontSize='11' fill='currentColor' opacity='0.7'>{sampleTime(visible[0]?.sampled_at)}</text>
+            <text x={width - plot.right} y={height - 12} textAnchor='end' fontSize='11' fill='currentColor' opacity='0.7'>{sampleTime(latest?.sampled_at)}</text>
+            <text x={width / 2} y={height - 12} textAnchor='middle' fontSize='11' fill='currentColor' opacity='0.7'>Last 6 hours · {points.length.toLocaleString('en-US')} samples</text>
+        </svg></div>
     </div>
 }
 export default function ThroughputMetrics() {
@@ -49,7 +82,7 @@ export default function ThroughputMetrics() {
         return () => { cancelled = true; clearInterval(interval) }
     }, [])
     const points = useMemo(() => metrics?.history || [], [metrics])
-    if (!metrics) return <section aria-label='Log throughput metrics' className='grid gap-3 sm:grid-cols-5'><div className='sm:col-span-5 rounded-xl border border-ui-border bg-ui-panel p-4 text-sm text-ui-muted'>Loading throughput metrics &</div></section>
+    if (!metrics) return <section aria-label='Log throughput metrics' className='grid gap-3 sm:grid-cols-5'><div className='sm:col-span-5 rounded-xl border border-ui-border bg-ui-panel p-4 text-sm text-ui-muted'>Loading throughput metrics…</div></section>
     return <section id='log-analytics' aria-label='Log throughput metrics' className='grid gap-3' data-log-throughput>
         <div className='grid gap-3 sm:grid-cols-5'>{cards.map(([label, key, description]) => <div key={key} className='rounded-xl border border-ui-border bg-ui-panel p-4'><p className='text-sm text-ui-muted'>{label}</p><p className='mt-2 text-2xl font-semibold tabular-nums'>{format(metrics.current[key])}</p><p className='mt-1 text-xs text-ui-muted'>{description}</p></div>)}<div className='rounded-xl border border-ui-border bg-ui-panel p-4'><p className='text-sm text-ui-muted'>Logs remaining</p><p className='mt-2 text-2xl font-semibold tabular-nums'>{metrics.current.remaining.toLocaleString('en-US')}</p><p className='mt-1 text-xs text-ui-muted'>{age(metrics.generated_at, now)}</p></div></div>
         <div className='grid gap-3 lg:grid-cols-3'>{(['eps', 'pps', 'npps'] as const).map(field => <Chart key={field} title={field.toUpperCase()} points={points} field={field} />)}</div>

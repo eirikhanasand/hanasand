@@ -10,7 +10,7 @@ import EventFeed from './eventFeed'
 import LogCatchupProgress from './catchupProgress'
 import ThroughputMetrics from './throughputMetrics'
 import ErrorsPanel from './errorsPanel'
-import type { ErrorEvent, ErrorEventsResponse, LogService } from '@/utils/logs/getLogs'
+import { emptyErrorEvents, type ErrorEvent, type ErrorEventsResponse, type LogService } from '@/utils/logs/getLogs'
 import { dashboardPanelClass } from '@/components/dashboard/ui'
 
 const colors: Record<string, string> = { low: 'text-ui-muted bg-ui-raised', medium: 'text-ui-warning bg-ui-warning/10', high: 'text-ui-text bg-ui-raised/10', critical: 'text-ui-text bg-ui-raised/20 ring-1 ring-ui-danger' }
@@ -25,7 +25,7 @@ function isCatchingUp({ last_id, recent_id, history_end_id }: ProcessingSource) 
         && /^\d+$/.test(last_id) && /^\d+$/.test(recent_id)
         && BigInt(last_id) < BigInt(recent_id)
 }
-export default function LogsPageClient({ initialServices, initialErrors, initialServiceFilter = 'all', initialData = null, initialError = '' }: { initialServices: LogService[], initialErrors: ErrorEventsResponse, initialServiceFilter?: string, initialData?: Result | null, initialError?: string }) {
+export default function LogsPageClient({ initialServices = [], initialErrors, initialServiceFilter = 'all', initialData = null, initialError = '' }: { initialServices?: LogService[], initialErrors?: ErrorEventsResponse, initialServiceFilter?: string, initialData?: Result | null, initialError?: string }) {
     const pathname = usePathname()
     const params = useSearchParams()
     const view = pathname.endsWith('/realtime') ? 'realtime' : pathname.endsWith('/search') ? 'search' : pathname.endsWith('/errors') ? 'errors' : 'dashboard'
@@ -43,7 +43,8 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
     const [busy, setBusy] = useState(false)
     const [expanded, setExpanded] = useState<Record<string, boolean>>({})
     const [copied, setCopied] = useState('')
-    const [errors, setErrors] = useState(initialErrors)
+    const [errors, setErrors] = useState(initialErrors || emptyErrorEvents())
+    const [errorsLoaded, setErrorsLoaded] = useState(Boolean(initialErrors))
     const [refresh, setRefresh] = useState(0)
     const [paged, setPaged] = useState(false)
     const filterPanel = useRef<HTMLDivElement>(null)
@@ -116,11 +117,26 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
             } catch (cause) { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Could not load logs.') }
             finally { if (!controller.signal.aborted) setBusy(false); inFlight = false }
         }
-        const debounce = initialData && sameQuery && refresh === 0 ? undefined : setTimeout(() => void load(), 250)
+        const debounce = sameQuery && refresh === 0 ? undefined : setTimeout(() => void load(), 250)
+        if (sameQuery && refresh === 0) void load()
         loadMore.current = cursor => void load(cursor)
         const interval = view !== 'errors' ? setInterval(() => void load(), view === 'search' || view === 'realtime' ? 10_000 : 5000) : undefined
         return () => { controller.abort(); clearTimeout(debounce); clearInterval(interval); loadMore.current = () => {} }
     }, [view, service, search, table, advanced, appliedHql, hours, severity, refresh, initialData])
+    useEffect(() => {
+        if (view !== 'dashboard' || initialErrors) return
+        const controller = new AbortController()
+        void fetch('/api/backend/logs/errors?limit=150', { signal: controller.signal, cache: 'no-store' })
+            .then(async response => {
+                if (!response.ok) throw new Error('Could not load log error summary.')
+                return response.json() as Promise<ErrorEventsResponse>
+            })
+            .then(body => {
+                if (!controller.signal.aborted) { setErrors(body); setErrorsLoaded(true) }
+            })
+            .catch(() => { if (!controller.signal.aborted) setErrorsLoaded(true) })
+        return () => controller.abort()
+    }, [view, initialErrors])
     async function copy(event: Event | ErrorEvent) {
         try { await navigator.clipboard.writeText(JSON.stringify('normalized' in event ? event.normalized : event, null, 2)); setCopied(event.id) }
         catch { setCopied(''); setError('Copy failed. Select the event text and copy it manually.') }
@@ -182,7 +198,7 @@ export default function LogsPageClient({ initialServices, initialErrors, initial
             {!!data?.processing?.skipped_events && <p role='status' className='text-sm text-ui-warning'>{data.processing.skipped_events.toLocaleString('en-US')} events remain excluded from detection.</p>}
             {view !== 'realtime' && data && !data.processing && !busy && <p role='status' className='text-sm text-ui-warning'>Waiting for the log processor to check in.</p>}
             {view === 'dashboard' ? <>
-                <section className='grid gap-3 sm:grid-cols-5' aria-label='Events by severity' data-logs-metrics>{['low','medium','high','critical'].map(value => <Link key={value} href={`/logs/search?${new URLSearchParams({ hours, ...(service !== 'all' ? { service } : {}), ...(advanced && appliedHql ? { hql: appliedHql } : { table, search }), severity: value })}`} className={`${dashboardPanelClass} p-4`} data-logs-metric-card><p className='text-sm capitalize text-ui-muted'>{value}</p><p className='mt-2 text-2xl font-semibold tabular-nums'>{data ? (data.counts.find(item => item.severity === value)?.count || 0).toLocaleString('en-US') : '—'}</p></Link>)}<Link href='/logs/errors' className={`${dashboardPanelClass} p-4`} data-logs-metric-card><p className='text-sm text-ui-muted'>Errors</p><p className='mt-2 text-2xl font-semibold tabular-nums'>{errors.summary.total.toLocaleString('en-US')}</p></Link></section>
+                <section className='grid gap-3 sm:grid-cols-5' aria-label='Events by severity' data-logs-metrics>{['low','medium','high','critical'].map(value => <Link key={value} href={`/logs/search?${new URLSearchParams({ hours, ...(service !== 'all' ? { service } : {}), ...(advanced && appliedHql ? { hql: appliedHql } : { table, search }), severity: value })}`} className={`${dashboardPanelClass} p-4`} data-logs-metric-card><p className='text-sm capitalize text-ui-muted'>{value}</p><p className='mt-2 text-2xl font-semibold tabular-nums'>{data ? (data.counts.find(item => item.severity === value)?.count || 0).toLocaleString('en-US') : '—'}</p></Link>)}<Link href='/logs/errors' className={`${dashboardPanelClass} p-4`} data-logs-metric-card><p className='text-sm text-ui-muted'>Errors</p><p className='mt-2 text-2xl font-semibold tabular-nums'>{errorsLoaded ? errors.summary.total.toLocaleString('en-US') : '—'}</p></Link></section>
                 <details open className={`${dashboardPanelClass} group overflow-hidden`}><summary className='flex cursor-pointer list-none items-center justify-between border-b border-ui-border bg-ui-raised px-4 py-3 text-sm font-semibold [&::-webkit-details-marker]:hidden'>Most active<ChevronDown size={18} aria-hidden className='-rotate-90 text-ui-muted transition-transform group-open:rotate-0' /></summary><div className='p-4'><dl className='grid gap-2'>{data?.services.map(item => <div key={item.service} className='flex justify-between gap-3 text-sm'><dt>{item.service}</dt><dd>{item.count.toLocaleString('en-US')}</dd></div>)}</dl></div></details>
             </> : <section className={`${dashboardPanelClass} min-w-0 overflow-hidden`} aria-label='Log events'>
                 <div className='flex flex-wrap justify-between gap-2 border-b border-ui-border p-3 text-xs text-ui-muted'><span>{data?.rows.length || 0} results{data && data.rows.length === data.limit && (view !== 'search' || advanced) ? ` · limited to ${data.limit}; narrow your search or use take up to 500` : ''}</span><span role='status'>{busy ? 'Searching…' : view === 'realtime' ? 'Updates every 10 seconds' : 'Results'}{copied ? ' · Event copied' : ''}</span></div>
