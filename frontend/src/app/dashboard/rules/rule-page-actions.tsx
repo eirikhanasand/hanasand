@@ -1,7 +1,9 @@
 import Button from '@/components/misc/button'
 import { Filter } from 'lucide-react'
+import { ruleCategories, type RuleCategory } from './rule-categories'
 
 type RulePageActionsProps = {
+    category: RuleCategory
     showCreate: boolean
     showImports: boolean
     onToggleCreate: () => void
@@ -13,7 +15,9 @@ type RulePageActionsProps = {
     onToggleDisabled: () => void
 }
 
-export default function RulePageActions({ showCreate, showImports, showFilters, showDisabled, disabledCount, onToggleCreate, onToggleImports, onToggleFilters, onToggleDisabled }: RulePageActionsProps) {
+export default function RulePageActions({ category, showCreate, showImports, showFilters, showDisabled, disabledCount, onToggleCreate, onToggleImports, onToggleFilters, onToggleDisabled }: RulePageActionsProps) {
+    const otherCategories = (Object.keys(ruleCategories) as RuleCategory[]).filter(value => value !== category)
+    const navigationLabels: Record<RuleCategory, string> = { analysis: 'Analysis rules', match: 'Match rules', detection: 'Detection rules' }
     return (
         <div className='flex max-w-full flex-wrap items-center gap-3'>
             <Button
@@ -32,12 +36,13 @@ export default function RulePageActions({ showCreate, showImports, showFilters, 
                 aria-controls='event-rule-imports'
                 onClick={onToggleImports}
             />
-            <Button
-                text='Cases'
-                path='/cases'
+            {otherCategories.map(value => <Button
+                key={value}
+                text={navigationLabels[value]}
+                path={`/rules/${value}`}
                 variant='ghost'
                 className='h-10 px-4 text-sm font-semibold'
-            />
+            />)}
             <Button
                 text={showDisabled ? 'Hide disabled' : 'Show disabled'}
                 icon={<span className='rounded-full bg-ui-raised px-1.5 py-0.5 text-[10px] leading-none text-ui-muted'>{disabledCount}</span>}
