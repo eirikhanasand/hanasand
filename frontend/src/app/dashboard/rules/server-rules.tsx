@@ -21,9 +21,9 @@ export default async function ServerRules({ category }: { category: RuleCategory
                     headers, cache: 'no-store', signal: AbortSignal.timeout(12_000),
                 })
                 if (!response.ok) throw new Error('Rules request failed.')
-                const payload = await response.json()
+                const payload = await response.json() as { rules?: InitialRules['rules'], hitRates?: Record<string, number>, sampledAt?: number | null, canManageRetention?: boolean }
                 if (!Array.isArray(payload.rules)) throw new Error('Invalid rules response.')
-                initial.rules = payload.rules
+                initial.rules = payload.rules.map(rule => ({ ...rule, hitRate: payload.hitRates?.[rule.id] ?? null, sampledAt: payload.sampledAt ?? undefined }))
                 initial.canManageRetention = payload.canManageRetention === true
             } catch {
                 initial.error = 'Unable to load rules. Reload the page to try again.'

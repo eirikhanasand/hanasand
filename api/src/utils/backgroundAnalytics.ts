@@ -2,6 +2,7 @@ import type { FastifyBaseLogger } from 'fastify'
 import { warmTrafficStatistics } from '../handlers/traffic/legacy.ts'
 import { refreshTrafficHistory } from './traffic/history.ts'
 import { warmLogSnapshots, refreshLogSnapshots } from './logs/warm.ts'
+import { warmRuleHitSnapshots } from './events/warmRuleHits.ts'
 
 export async function startBackgroundAnalytics(logger: Pick<FastifyBaseLogger, 'warn'>) {
     // Recovery servers answer requested reads; they must not continuously scan
@@ -10,11 +11,18 @@ export async function startBackgroundAnalytics(logger: Pick<FastifyBaseLogger, '
     await warmLogSnapshots()
     const stopLogs = refreshLogSnapshots()
     if (process.env.AUTH_SERVICE_ONLY === '1') return stopLogs
+    await warmRuleHitSnapshots(logger).catch(error => logger.warn({ error }, 'Rule hit snapshots will retry in the background'))
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    await warmRuleHitSnapshots(logger).catch(error => logger.warn({ error }, 'Rule hit snapshots will retry in the background'))
+    const ruleHits = setInterval(() => {
+        void warmRuleHitSnapshots(logger).catch(error => logger.warn({ error }, 'Rule hit snapshot refresh failed'))
+    }, 10_000)
+    ruleHits.unref()
     await warmTrafficStatistics().catch(error => logger.warn({ error }, 'Traffic startup snapshots will retry in the background'))
     const stopTraffic = refreshTrafficHistory()
     const timer = setInterval(() => {
         void warmTrafficStatistics().catch(error => logger.warn({ error }, 'Traffic snapshot refresh failed'))
     }, 30000)
     timer.unref()
-    return () => { stopLogs(); stopTraffic(); clearInterval(timer) }
+    return () => { stopLogs(); stopTraffic(); clearInterval(timer); clearInterval(ruleHits) }
 }

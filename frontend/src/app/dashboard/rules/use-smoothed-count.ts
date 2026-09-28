@@ -2,11 +2,22 @@
 
 import { useEffect, useRef, useState } from 'react'
 
-export function useSmoothedCount(target: number | null | undefined, durationMs: number) {
+export function useSmoothedCount(target: number | null | undefined, durationMs: number, rate?: number | null, sampledAt?: number) {
     const [displayed, setDisplayed] = useState<number | null>(target ?? null)
     const displayedRef = useRef(displayed)
 
     useEffect(() => {
+        if (target != null && rate != null && Number.isFinite(rate) && rate > 0 && sampledAt != null && Number.isFinite(sampledAt)) {
+            const update = () => {
+                const elapsedSeconds = Math.max(0, Date.now() - sampledAt) / 1000
+                const next = Math.round(target + rate * elapsedSeconds)
+                displayedRef.current = next
+                setDisplayed(next)
+            }
+            update()
+            const interval = window.setInterval(update, 1000)
+            return () => window.clearInterval(interval)
+        }
         if (target == null) {
             displayedRef.current = null
             setDisplayed(null)
