@@ -322,7 +322,7 @@ function authServiceUnavailable(req: NextRequest) {
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex"><meta http-equiv="refresh" content="3">
-<title>Reconnecting · Hanasand</title>
+<title>Reconnecting</title>
 <style>
             :root{color-scheme:${dark ? 'dark' : 'light'};--ui-canvas:${dark ? '#070707' : '#f5f5f5'};--ui-panel:${dark ? '#101010' : '#ffffff'};--ui-border:${dark ? '#383838' : '#d4d4d4'};--ui-text:${dark ? '#f5f7fb' : '#171a21'};--ui-muted:${dark ? '#999999' : '#4d4d4d'};--ui-primary:${dark ? '#f5f7fb' : '#22252b'};--ui-loader:#8b0000;--ui-on-primary:${dark ? '#101010' : '#ffffff'}}
             body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--ui-canvas);color:var(--ui-text);font:16px/1.6 system-ui,sans-serif}
