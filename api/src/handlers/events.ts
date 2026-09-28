@@ -19,7 +19,7 @@ import { redactLogValue } from '#utils/logs/redact.ts'
 import { securityRules, matchSecurityRules } from '#utils/events/securityRules.ts'
 import { randomUUID } from 'node:crypto'
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import run, { withTransaction } from '#db'
+import run, { withReadDatabase, withTransaction } from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import { matchApiKeyScope, validateApiKey } from '#utils/auth/apiKeys.ts'
@@ -470,7 +470,7 @@ export async function postRuleAction(req: FastifyRequest<{ Params: { id: string 
     if (!canManageRules(access.role)) return res.status(403).send({ error: 'Editor access is required to manage rules.' })
     const action = req.body?.action === 'enable' || req.body?.action === 'disable' ? req.body.action : null
     if (!action) return res.status(400).send({ error: 'Action must be enable or disable.' })
-    const rule = (await loadConfiguredRules(access.organizationId)).find(rule => ruleSlug(rule.id) === ruleSlug(req.params.id) || rule.recordId === req.params.id)
+    const rule = (await withReadDatabase(() => loadConfiguredRules(access.organizationId))).find(rule => ruleSlug(rule.id) === ruleSlug(req.params.id) || rule.recordId === req.params.id)
     if (!rule) return res.status(404).send({ error: 'Rule not found.' })
     if (([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') && !(await hasRole(req, res, 'system_admin')).valid) return res.status(403).send({ error: 'System administrator access is required to change platform log retention.' })
     if (action === 'enable' && unavailableAnalysisRule(rule.id)) return res.status(409).send({ error: unavailableAnalysisRule(rule.id) })
@@ -486,38 +486,51 @@ export async function postRuleAction(req: FastifyRequest<{ Params: { id: string 
 export async function getRule(req: FastifyRequest<{ Params: { id: string }, Querystring: { organizationId?: string, offset?: string } }>, res: FastifyReply) {
     const access = await organizationAccess(req, res)
     if (!access) return
-    const rule = (await loadConfiguredRules(access.organizationId)).find(rule => ruleSlug(rule.id) === ruleSlug(req.params.id) || rule.recordId === req.params.id)
+    const rule = (await withReadDatabase(() => loadConfiguredRules(access.organizationId))).find(rule => ruleSlug(rule.id) === ruleSlug(req.params.id) || rule.recordId === req.params.id)
     if (!rule) return res.status(404).send({ error: 'Rule not found.' })
     const requestedVersion = /\.v(\d+)$/.exec(req.params.id)?.[1]
     const isHistorical = Boolean(requestedVersion && requestedVersion !== rule.version)
     let displayedRule = rule
     if (isHistorical) {
-        const history = await run(`SELECT context FROM system_events WHERE organization_id = $1 AND object_type = 'event_rule'
+        const history = await withReadDatabase(() => run(`SELECT context FROM system_events WHERE organization_id = $1 AND object_type = 'event_rule'
             AND (object_id = $2 OR object_id = $3 OR context->>'ruleId' = $2)
             AND (context->'after'->>'version' = $4 OR context->'before'->>'version' = $4)
-            ORDER BY created_at DESC, id DESC LIMIT 1`, [access.organizationId, rule.id, rule.recordId || rule.id, requestedVersion!])
+            ORDER BY created_at DESC, id DESC LIMIT 1`, [access.organizationId, rule.id, rule.recordId || rule.id, requestedVersion!]))
         const context = history.rows[0]?.context
         const snapshot = context?.after?.version === requestedVersion ? context.after : context?.before
         if (!snapshot) return res.status(404).send({ error: 'This historical rule version is unavailable. Open the current rule using its version-free URL.' })
         displayedRule = { ...rule, ...snapshot, definition: rule.source === 'hanasand' ? builtinDefinition(rule, snapshot.definition) : snapshot.definition }
     }
     const offset = Math.max(0, Math.min(1000000, Number.parseInt(req.query.offset || '0', 10) || 0))
-    let audit: { rows: any[] }, hits: Map<string, number>
     try {
-        [audit, hits] = await Promise.all([
-            run(`SELECT id, event_type, actor_id, created_at, context
-                FROM system_events WHERE organization_id = $1 AND object_type = 'event_rule'
-                AND (object_id = $2 OR object_id = $3 OR context->>'ruleId' = $2)
-                ORDER BY created_at DESC, id DESC LIMIT 51 OFFSET $4`, [access.organizationId, rule.id, rule.recordId || rule.id, offset]),
-            loadRuleHits(access.organizationId, [rule], run),
-        ])
+        const payload = await cachedRead(`rule-detail:${access.organizationId}:${access.role}:${req.params.id}:${offset}`, 10000, async () => {
+            const objectIds = [...new Set([rule.id, rule.recordId || rule.id])]
+            const [audit, hits] = await withReadDatabase(() => Promise.all([
+                run(`SELECT id, event_type, actor_id, created_at, context
+                    FROM (
+                        SELECT id, event_type, actor_id, created_at, context
+                        FROM system_events
+                        WHERE organization_id = $1 AND object_type = 'event_rule'
+                            AND object_id = ANY($2::text[])
+                        UNION ALL
+                        SELECT id, event_type, actor_id, created_at, context
+                        FROM system_events
+                        WHERE organization_id = $1 AND object_type = 'event_rule'
+                            AND context->>'ruleId' = $3
+                            AND (object_id IS NULL OR NOT (object_id = ANY($2::text[])))
+                    ) AS audit_events
+                    ORDER BY created_at DESC, id DESC LIMIT 51 OFFSET $4`, [access.organizationId, objectIds, rule.id, offset]),
+                loadRuleHits(access.organizationId, [rule], run),
+            ]))
+            const hitCount = rule.definition?.stage === 'analyze' && rule.definition.action === 'keep' ? null : hits.get(rule.id) ?? 0
+            const canEdit = !isHistorical && canManageRules(access.role) && (!([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') || (await hasRole(req, res, 'system_admin')).valid)
+            return { organizationId: access.organizationId, canEdit, isHistorical, currentVersion: rule.version, rule: displayedRule, triggerCount: hitCount, audit: audit.rows.slice(0, 50), nextOffset: audit.rows.length > 50 ? offset + 50 : null }
+        })
+        return res.send(payload)
     } catch (error) {
         if (error instanceof ReadAdmissionError) return res.header('Retry-After', '2').status(503).send({ error: error.message })
         throw error
     }
-    const hitCount = rule.definition?.stage === 'analyze' && rule.definition.action === 'keep' ? null : hits.get(rule.id) ?? 0
-    const canEdit = !isHistorical && canManageRules(access.role) && (!([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') || (await hasRole(req, res, 'system_admin')).valid)
-    return res.send({ organizationId: access.organizationId, canEdit, isHistorical, currentVersion: rule.version, rule: displayedRule, triggerCount: hitCount, audit: audit.rows.slice(0, 50), nextOffset: audit.rows.length > 50 ? offset + 50 : null })
 }
 
 export async function putRule(req: FastifyRequest<{ Params: { id: string } }>, res: FastifyReply) {
@@ -583,6 +596,7 @@ async function saveRule(req: FastifyRequest, access: { organizationId: string, u
     })
     invalidateReadCache(`rules:${access.organizationId}:`)
     invalidateReadCache(`rule-hits:${access.organizationId}:`)
+    invalidateReadCache(`rule-detail:${access.organizationId}:`)
     return saved
 }
 

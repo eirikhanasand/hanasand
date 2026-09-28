@@ -29,6 +29,7 @@ export function withSchemaLockTimeout<T>(work: () => Promise<T>): Promise<T> {
 }
 
 const eventWork = new AsyncLocalStorage<boolean>()
+const readWork = new AsyncLocalStorage<boolean>()
 const maxConnections = Number(DB_MAX_CONN) || (DB_POOL_HOST ? 1000 : 20)
 // Bound the number of requests waiting inside node-postgres. Without this,
 // bursts can turn into an unbounded in-process queue while the database is slow.
@@ -40,11 +41,16 @@ const directConnections = DB_POOL_HOST ? Math.min(8, maxConnections) : 0
 // Event holds cursor and batch locks while committing evidence on another client.
 const eventConnections = process.env.API_HTTP_ONLY !== '1' && process.env.AUTH_SERVICE_ONLY !== '1'
     && maxConnections >= 12 ? 8 : 0
-const primaryConnections = Math.max(0, maxConnections - eventConnections - directConnections)
+// Keep short-lived rule/detail reads away from ingestion and event writes.
+// Reserve only when the pool has enough capacity to avoid starving ordinary API work.
+const readConnections = process.env.API_HTTP_ONLY !== '1' && process.env.AUTH_SERVICE_ONLY !== '1'
+    && maxConnections >= 16 ? Math.min(4, Math.max(2, Math.floor(maxConnections / 5))) : 0
+const primaryConnections = Math.max(0, maxConnections - eventConnections - readConnections - directConnections)
 const warmupBudget = Math.max(0, Math.min(maxConnections, Math.floor(Number(process.env.DB_POOL_WARMUP_CONN) || 0)))
 const primaryWarmup = Math.min(primaryConnections, warmupBudget)
 const eventWarmup = Math.min(eventConnections, Math.max(0, warmupBudget - primaryWarmup))
-const directWarmup = Math.min(directConnections, Math.max(0, warmupBudget - primaryWarmup - eventWarmup))
+const readWarmup = Math.min(readConnections, Math.max(0, warmupBudget - primaryWarmup - eventWarmup))
+const directWarmup = Math.min(directConnections, Math.max(0, warmupBudget - primaryWarmup - eventWarmup - readWarmup))
 const httpOnlyApi = process.env.API_HTTP_ONLY === '1' && process.env.AUTH_SERVICE_ONLY !== '1'
 const configuredIdleTimeout = Number(DB_IDLE_TIMEOUT_MS) || (
     process.env.AUTH_SERVICE_ONLY === '1' ? 5000 : 120_000
@@ -73,12 +79,13 @@ const poolOptions = {
 }
 const pool = new Pool(poolOptions)
 const eventPool = eventConnections ? new Pool({ ...poolOptions, max: eventConnections, min: eventWarmup }) : pool
+const readPool = readConnections ? new Pool({ ...poolOptions, application_name: `${poolOptions.application_name}-read`, max: readConnections, min: readWarmup }) : pool
 // Schema startup uses session-scoped SET/RESET and CREATE INDEX CONCURRENTLY.
 // Keep that small, infrequent path on PostgreSQL directly when traffic uses PgBouncer.
 const directPool = DB_POOL_HOST ? new Pool({ ...poolOptions, host: DB_HOST, port: Number(DB_PORT) || 5432, max: directConnections, min: directWarmup }) : pool
 
 export async function warmDatabasePools() {
-    const targets = new Map([[pool, primaryWarmup], [eventPool, eventWarmup], [directPool, directWarmup]])
+    const targets = new Map([[pool, primaryWarmup], [eventPool, eventWarmup], [readPool, readWarmup], [directPool, directWarmup]])
     await Promise.all([...targets].map(async ([connectionPool, minimum]) => {
         const missing = Math.max(0, minimum - connectionPool.totalCount)
         await Promise.all(Array.from({ length: missing }, async () => {
@@ -89,7 +96,7 @@ export async function warmDatabasePools() {
 }
 
 export async function isDatabaseLowLoad() {
-    const pools = [...new Set([pool, eventPool, directPool])]
+    const pools = [...new Set([pool, eventPool, readPool, directPool])]
     if (pools.some(connectionPool => connectionPool.waitingCount > 0) || pool.idleCount === 0) return false
     try {
         const { rows } = await queryOnce(`SELECT
@@ -107,8 +114,13 @@ export function withEventDatabase<T>(work: () => Promise<T>): Promise<T> {
     return eventWork.run(true, work)
 }
 
+export function withReadDatabase<T>(work: () => Promise<T>): Promise<T> {
+    return readWork.run(true, work)
+}
+
 function activePool() {
     if (schemaWork.getStore()) return directPool
+    if (readWork.getStore()) return readPool
     return eventWork.getStore() ? eventPool : pool
 }
 
@@ -120,13 +132,13 @@ function connectDatabase(connectionPool: pg.Pool) {
 }
 
 // Checked-out clients can emit transport errors between queries, outside the pool's idle handler.
-for (const connectionPool of new Set([pool, eventPool, directPool])) {
+for (const connectionPool of new Set([pool, eventPool, readPool, directPool])) {
     connectionPool.on('connect', client => client.on('error', error => console.error('Database connection failed:', error.message)))
     connectionPool.on('error', error => console.error('Idle database connection failed:', error.message))
 }
 
 export async function closeDatabase() {
-    await Promise.all([...new Set([pool, eventPool, directPool])].map(connectionPool => connectionPool.end()))
+    await Promise.all([...new Set([pool, eventPool, readPool, directPool])].map(connectionPool => connectionPool.end()))
 }
 
 export default async function run(query: string, params?: SQLParamType, name?: string) {
