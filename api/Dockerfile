@@ -68,7 +68,7 @@ USER root
 COPY .git/HEAD /tmp/hanasand-source-head
 RUN test "$(cat /tmp/hanasand-source-head)" = "ref: refs/heads/main" || { echo "Production image builds are allowed only from the main branch." >&2; exit 1; }
 COPY --from=browser-bun /usr/local/bin/bun /usr/local/bin/bun
-RUN ln -s /usr/local/bin/bun /usr/local/bin/bunx \
+RUN ln -sf /usr/local/bin/bun /usr/local/bin/bunx \
     && apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl fonts-noto-color-emoji \
     && curl -fsSLo /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
