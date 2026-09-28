@@ -58,9 +58,11 @@ export HANASAND_TI_SCRAPER_SOURCE="$ti_release_dir"
 # context while preserving parallel BuildKit execution for the release.
 if test -f "$build_dir/.env"; then
     docker compose --env-file "$build_dir/.env" -f "$build_dir/docker-compose.yml" build
+    docker compose --env-file "$build_dir/.env" -f "$root/docker-compose.yml" down --remove-orphans
     docker compose --env-file "$build_dir/.env" -f "$root/docker-compose.yml" up -d --force-recreate
 else
     docker compose -f "$build_dir/docker-compose.yml" build
+    docker compose -f "$root/docker-compose.yml" down --remove-orphans
     docker compose -f "$root/docker-compose.yml" up -d --force-recreate
 fi
 sh "$root/scripts/verify-stack-release.sh" "$release"
