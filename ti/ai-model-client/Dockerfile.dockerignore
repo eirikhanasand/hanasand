@@ -1,12 +1,6 @@
 *
 !.git/
-.git/*
 !.git/HEAD
 !ti/
 !ti/ai-model-client/
 !ti/ai-model-client/**
-!api/
-!api/src/
-!api/src/utils/
-!api/src/utils/logs/
-!api/src/utils/logs/redact.ts
