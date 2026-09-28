@@ -5,6 +5,15 @@
 !api/**
 api/node_modules
 api/node_modules/**
+api/**/node_modules/**
 api/articles
 api/articles/**
-api/.env*
+api/.env
+api/.env.*
+api/coverage
+api/dist
+api/.tmp
+**/*.pem
+**/*.key
+**/*secret*
+**/.DS_Store
