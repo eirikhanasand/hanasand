@@ -28,6 +28,13 @@ if test -f "$build_dir/.env"; then
     else
         printf 'HANASAND_RELEASE_COMMIT=%s\n' "$release" >> "$build_dir/.env"
     fi
+    if docker image inspect hanasand_browser_base:latest >/dev/null 2>&1; then
+        if grep -q '^HANASAND_BROWSER_RUNTIME_BASE=' "$build_dir/.env"; then
+            sed -i 's#^HANASAND_BROWSER_RUNTIME_BASE=.*#HANASAND_BROWSER_RUNTIME_BASE=hanasand_browser_base:latest#' "$build_dir/.env"
+        else
+            printf 'HANASAND_BROWSER_RUNTIME_BASE=hanasand_browser_base:latest\n' >> "$build_dir/.env"
+        fi
+    fi
     printf 'HANASAND_TI_SCRAPER_SOURCE=%s\n' "$root/ops/runtime/ti-releases/$release" >> "$build_dir/.env"
     printf 'HANASAND_TI_API_SOURCE=%s\n' "$root/ops/runtime/ti-releases/$release/api" >> "$build_dir/.env"
 fi

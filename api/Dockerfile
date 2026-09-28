@@ -1,3 +1,5 @@
+ARG HANASAND_BROWSER_RUNTIME_BASE=ghcr.io/selkies-project/selkies-gstreamer/gst-py-example@sha256:3b7e60077dfc56af335cbe2da33a8255ec0ab954ecf6169b9a46e78d09c3df84
+
 FROM grafana/k6:latest AS k6builder
 
 FROM oven/bun:1.3.13-alpine AS deps
@@ -57,7 +59,7 @@ EXPOSE 8080
 
 FROM oven/bun:1.3.11 AS browser-bun
 
-FROM ghcr.io/selkies-project/selkies-gstreamer/gst-py-example@sha256:3b7e60077dfc56af335cbe2da33a8255ec0ab954ecf6169b9a46e78d09c3df84 AS browser-runtime
+FROM ${HANASAND_BROWSER_RUNTIME_BASE} AS browser-runtime
 
 ARG HANASAND_RELEASE_COMMIT=unknown
 LABEL org.opencontainers.image.revision=$HANASAND_RELEASE_COMMIT
