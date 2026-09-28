@@ -17,12 +17,12 @@ const input = { from: '2026-09-01T00:00:00Z', until: '2026-09-02T00:00:00Z', act
 const row = (id: number, severity = 'low', status = 200) => ({ id: String(id), timestamp: '2026-09-01 12:00:00.123456+00', normalized: { severity, http: { status_code: status }, service: `service-${id % 7}`, message: 'x'.repeat(1000) } })
 test('preview uses runtime selectors and excludes higher and unknown severities for Drop', async () => {
     const query = async (sql: string, params: unknown[]) => {
-        expect(sql).toContain('organization_id=$1 AND ($2::boolean OR ingestion_id <> \'logs\')')
-        expect(sql).toContain('received_at <= $3::timestamptz')
+        expect(sql).toContain('organization_id=$1 AND ingestion_id <> \'logs\'')
+        expect(sql).toContain('received_at <= $2::timestamptz')
         expect(sql).toContain('normalized->>\'severity\' = \'low\'')
         expect(sql).not.toContain('($4::timestamptz IS NULL OR event_timestamp >= $4::timestamptz)')
         expect(sql).not.toContain('($5::timestamptz IS NULL OR (event_timestamp,id)')
-        expect(params.slice(0, 4)).toEqual(['org-a', false, input.until, input.from])
+        expect(params.slice(0, 3)).toEqual(['org-a', input.until, input.from])
         expect(params).not.toContain(null)
         expect(sql).not.toContain('jsonb_typeof')
         expect(params).not.toContainEqual(['http', 'status_code'])
@@ -52,7 +52,7 @@ test('complete count is independent of bounded random sample; cursors preserve m
     expect(page.cursor).toEqual({ time: '2026-09-01 12:00:00.123456+00', id: '1999' })
     let params: unknown[] = []
     await scanRulePreview('org-a', true, { ...input, cursor: page.cursor }, (async (_sql: string, p: unknown[]) => { params = p; return { rows: [] } }) as any)
-    expect(params.slice(4, 6)).toEqual([page.cursor?.time, '1999'])
+    expect(params.slice(3, 5)).toEqual([page.cursor?.time, '1999'])
 })
 test('preview preserves JavaScript regex and contains semantics and Store can match high events', async () => {
     const query = async () => ({ rows: [row(1, 'high'), row(2, 'medium', 404)] })

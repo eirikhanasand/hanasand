@@ -19,7 +19,7 @@ export async function scanRulePreview(organizationId: string, canReadLogs: boole
 }
 
 async function scanRulePreviewUncached(organizationId: string, canReadLogs: boolean, input: PreviewRequest, query = run) {
-    const params: (string | boolean | string[])[] = [organizationId, canReadLogs, input.until]
+    const params: (string | string[])[] = [organizationId, input.until]
     const fromParameter = input.from ? `$${params.push(input.from)}` : null
     const cursorTimeParameter = input.cursor ? `$${params.push(input.cursor.time)}` : null
     const cursorIdParameter = input.cursor ? `$${params.push(input.cursor.id)}` : null
@@ -27,15 +27,15 @@ async function scanRulePreviewUncached(organizationId: string, canReadLogs: bool
     // Applying dynamic predicates in SQL can scan an entire event range when matches are rare.
     const scope = [
         'organization_id=$1',
-        '($2::boolean OR ingestion_id <> \'logs\')',
-        'event_timestamp <= $3::timestamptz',
-        'received_at <= $3::timestamptz',
+        ...(!canReadLogs ? ["ingestion_id <> 'logs'"] : []),
+        'event_timestamp <= $2::timestamptz',
+        'received_at <= $2::timestamptz',
         ...(fromParameter ? [`event_timestamp >= ${fromParameter}::timestamptz`] : []),
         ...(cursorTimeParameter && cursorIdParameter ? [`(event_timestamp,id) < (${cursorTimeParameter}::timestamptz,${cursorIdParameter}::text)`] : []),
-    ].join(' AND ')
+    ]
     const rules = input.action === 'drop' ? await loadLogRetentionRules(organizationId, query) : []
     const result = await query(`SELECT id, event_timestamp::text AS timestamp, normalized, pg_column_size(events)::bigint AS bytes${input.action === 'drop' ? ', original' : ''}
-        FROM events WHERE ${scope}${input.action === 'drop' ? ' AND normalized->>\'severity\' = \'low\'' : ''}
+        FROM events WHERE ${scope.join(' AND ')}${input.action === 'drop' ? ' AND normalized->>\'severity\' = \'low\'' : ''}
         ORDER BY event_timestamp DESC, id DESC LIMIT 2000`, params)
     const eligible = result.rows.filter(row => input.action !== 'drop' || eligibleCustomDrop(row.normalized || {})
         && !retentionStoreMatches(row.normalized || {}, rules) && !retentionStoreMatches(row.original || {}, rules)) as PreviewEvent[]
