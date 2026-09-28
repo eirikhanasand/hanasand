@@ -88,7 +88,7 @@ if (existsSync(composeUrl)) {
     assert.match(compose, /BROWSER_SANDBOX_WORKER_NETWORK:\s*\$\{BROWSER_SANDBOX_WORKER_NETWORK:-hanasand_browsernet\}/, 'ephemeral browser workers should not join the app network by default')
     assert.match(serviceBlock('api'), /BROWSER_SANDBOX_EGRESS_FIREWALL_READY:\s*\$\{BROWSER_SANDBOX_EGRESS_FIREWALL_READY:-0\}/, 'API should receive the browser egress firewall readiness gate from compose env')
     assert.doesNotMatch(serviceBlock('api'), /BROWSER_SANDBOX_WORKER_WS/, 'API should not default to a shared browser worker websocket in production')
-    assert.match(compose, /\n  browsers:\n/, 'browsers should be a canonical production Compose service')
+    assert.match(compose, /\n {2}browsers:\n/, 'browsers should be a canonical production Compose service')
     assert.match(serviceBlock('browsers'), /container_name:\s*hanasand_browsers/, 'browsers should use the stable container name')
     assert.match(serviceBlock('browsers'), /image:\s*hanasand_browsers/, 'browsers should use the stable image name')
     assert.match(serviceBlock('browsers'), /target:\s*browser-runtime/, 'browsers image should build the Chromium-enabled Docker target')
