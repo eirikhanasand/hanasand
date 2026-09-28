@@ -69,8 +69,12 @@ export async function estimateStoredRuleEvents(
     const claimed = await query(`INSERT INTO rule_storage_estimates(organization_id,rule_id,rule_version,scanned_date)
         VALUES($1,$2,$3,(NOW() AT TIME ZONE 'UTC')::date)
         ON CONFLICT(organization_id,rule_id,rule_version) DO UPDATE
-        SET scanned_date=(NOW() AT TIME ZONE 'UTC')::date,scan_started_at=NOW()
+        SET scanned_date=(NOW() AT TIME ZONE 'UTC')::date,scan_started_at=NOW(),scan_finished_at=NULL
         WHERE rule_storage_estimates.scanned_date < (NOW() AT TIME ZONE 'UTC')::date
+            OR (rule_storage_estimates.scanned_date=(NOW() AT TIME ZONE 'UTC')::date
+                AND rule_storage_estimates.generated_at IS NULL
+                AND rule_storage_estimates.scan_finished_at IS NULL
+                AND rule_storage_estimates.scan_started_at < NOW() - INTERVAL '15 minutes')
         RETURNING event_count::text,estimated_bytes::text,scanned_date::text,generated_at,true AS claimed`, [organizationId, ruleId, version])
     const row = claimed.rows[0] || (await query(`SELECT event_count::text,estimated_bytes::text,scanned_date::text,generated_at,false AS claimed
         FROM rule_storage_estimates WHERE organization_id=$1 AND rule_id=$2 AND rule_version=$3`, [organizationId, ruleId, version])).rows[0]
@@ -93,11 +97,14 @@ export async function estimateStoredRuleEvents(
             } while (cursor)
             return { count, bytes, generatedAt: until }
         }, { lane: 'preview' })
-        await query(`UPDATE rule_storage_estimates SET event_count=$4,estimated_bytes=$5,generated_at=NOW()
+        await query(`UPDATE rule_storage_estimates SET event_count=$4,estimated_bytes=$5,generated_at=NOW(),scan_finished_at=NOW()
             WHERE organization_id=$1 AND rule_id=$2 AND rule_version=$3 AND scanned_date=$6::date`,
         [organizationId, ruleId, version, estimate.count, estimate.bytes, row.scanned_date])
         return { ...estimate, checkedDate: row.scanned_date }
     } catch (error) {
+        await query(`UPDATE rule_storage_estimates SET scan_finished_at=NOW()
+            WHERE organization_id=$1 AND rule_id=$2 AND rule_version=$3 AND scanned_date=$4::date`,
+        [organizationId, ruleId, version, row.scanned_date]).catch(() => {})
         if (previous) return previous
         throw error
     }

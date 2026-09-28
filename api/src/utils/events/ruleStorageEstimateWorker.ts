@@ -13,7 +13,9 @@ export async function runRuleStorageEstimateWorker() {
         const [organizations, handled] = await Promise.all([
             run('SELECT id FROM organizations ORDER BY id'),
             run(`SELECT organization_id,rule_id,rule_version FROM rule_storage_estimates
-                WHERE scanned_date=(NOW() AT TIME ZONE 'UTC')::date`),
+                WHERE scanned_date=(NOW() AT TIME ZONE 'UTC')::date
+                    AND (generated_at IS NOT NULL OR scan_finished_at IS NOT NULL
+                        OR scan_started_at >= NOW() - INTERVAL '15 minutes')`),
         ])
         const completed = new Set(handled.rows.map(row => `${row.organization_id}:${row.rule_id}:${row.rule_version}`))
 

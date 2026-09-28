@@ -1549,9 +1549,11 @@ async function applySchema() {
             estimated_bytes BIGINT NOT NULL DEFAULT 0,
             generated_at TIMESTAMPTZ,
             scan_started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            scan_finished_at TIMESTAMPTZ,
             PRIMARY KEY (organization_id, rule_id, rule_version)
         )
     `)
+    await ensureColumn(run, 'rule_storage_estimates', 'scan_finished_at', 'ALTER TABLE rule_storage_estimates ADD COLUMN IF NOT EXISTS scan_finished_at TIMESTAMPTZ')
     await ensureColumn(run, 'rules', 'source', 'ALTER TABLE rules ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT \'owned\'')
     await ensureColumn(run, 'rules', 'source_reference', 'ALTER TABLE rules ADD COLUMN IF NOT EXISTS source_reference TEXT')
     await ensureRuleSourceConstraint(run)
