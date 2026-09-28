@@ -175,3 +175,7 @@ ops/runtime/source/**
 !.git/
 .git/*
 !.git/HEAD
+!api/tests/fixtures/
+!api/tests/fixtures/monitoring-tls/
+!api/tests/fixtures/monitoring-tls/cert.pem
+!api/tests/fixtures/monitoring-tls/key.pem
