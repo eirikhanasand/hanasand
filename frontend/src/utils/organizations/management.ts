@@ -16,9 +16,9 @@ export const fetchManagementOrganizations = cache(async (accessOnly = false) => 
 
 export async function canManageOrganizations() {
     try {
-        const token = (await cookies()).get("access_token")?.value
+        const token = (await cookies()).get('access_token')?.value
         // API keys cannot administer organizations; avoid a guaranteed scope-denied request.
-        if (token?.startsWith("hsk_")) return false
+        if (token?.startsWith('hsk_')) return false
 
         const response = await fetchManagementOrganizations(true)
         if (!response.ok) return false
