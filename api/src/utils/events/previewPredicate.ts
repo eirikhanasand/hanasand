@@ -1,5 +1,87 @@
 import type { Condition } from './conditions.ts'
 
+// Expand only anchored finite regexes made from literal characters, alternation,
+// groups, and small character classes. Anything else stays with the JS matcher.
+export function finiteRegexAlternatives(expression: string, limit = 64): string[] | null {
+    if (!expression.startsWith('^') || !expression.endsWith('$')) return null
+    const source = expression.slice(1, -1)
+    let offset = 0
+    const combine = (left: string[], right: string[]): string[] | null => left.length * right.length > limit
+        ? null : left.flatMap(prefix => right.map(suffix => prefix + suffix))
+    const parseClass = (): string[] | null => {
+        const end = source.indexOf(']', offset + 1)
+        if (end < 0) return null
+        const contents = source.slice(offset + 1, end)
+        if (!contents || contents.startsWith('^')) return null
+        let values: string[]
+        const range = /^([A-Za-z0-9])-([A-Za-z0-9])$/.exec(contents)
+        if (range) {
+            const [, first, last] = range
+            if (first.charCodeAt(0) > last.charCodeAt(0)) return null
+            values = Array.from({ length: last.charCodeAt(0) - first.charCodeAt(0) + 1 }, (_, index) => String.fromCharCode(first.charCodeAt(0) + index))
+        } else {
+            if (!/^[A-Za-z0-9_-]+$/.test(contents) || (contents.includes('-') && !contents.startsWith('-') && !contents.endsWith('-'))) return null
+            values = [...contents]
+        }
+        if (values.some(value => !/[A-Za-z0-9_-]/.test(value))) return null
+        if (values.length > limit) return null
+        offset = end + 1
+        return values
+    }
+    const parsePiece = (): string[] | null => {
+        const char = source[offset]
+        if (char === '(') {
+            offset++
+            if (source.slice(offset, offset + 2) === '?:') offset += 2
+            const values = parseAlternatives(true)
+            if (!values || source[offset] !== ')') return null
+            offset++
+            return values
+        }
+        if (char === '[') return parseClass()
+        if (char === '\\') {
+            const escaped = source[offset + 1]
+            if (!escaped || !'.[]{}()*+?^$|\\-'.includes(escaped)) return null
+            offset += 2
+            return [escaped]
+        }
+        if (!/[A-Za-z0-9_-]/.test(char || '')) return null
+        offset++
+        return [char]
+    }
+    const parseSequence = (): string[] | null => {
+        let sequence = ['']
+        while (offset < source.length) {
+            const char = source[offset]
+            if (char === '|' || char === ')') break
+            const piece = parsePiece()
+            if (!piece) return null
+            const combined = combine(sequence, piece)
+            if (!combined) return null
+            sequence = combined
+        }
+        return sequence
+    }
+    const parseAlternatives = (insideGroup = false): string[] | null => {
+        const alternatives: string[] = []
+        let sequence = parseSequence()
+        if (!sequence) return null
+        alternatives.push(...sequence)
+        while (source[offset] === '|') {
+            offset++
+            sequence = parseSequence()
+            if (!sequence) return null
+            alternatives.push(...sequence)
+            if (alternatives.length > limit) return null
+        }
+        if (insideGroup && source[offset] !== ')') return null
+        return alternatives
+    }
+    const values = parseAlternatives()
+    if (!values || offset !== source.length || values.length > limit) return null
+    return [...new Set(values)]
+}
+
 function regexCandidate(expression: string): string | null {
     const token = /(?:[A-Za-z0-9 _:/@,=-]|[.^$*+?()|]|\{\d+(?:,\d*)?\}|\[\^?[A-Za-z0-9 _:/@,=.-]+\]|\\[dDwWsSbB]|\\[.^$*+?()|{}[\]\\])/gy
     let offset = 0, pattern = ''
@@ -18,6 +100,7 @@ function regexCandidate(expression: string): string | null {
 }
 
 const scalarColumns: Record<string, string> = {
+    service: "normalized->>'service'",
     event_type: 'event_type',
     action: 'action',
     outcome: 'outcome',
@@ -30,6 +113,11 @@ const scalarColumns: Record<string, string> = {
 }
 
 function scalarCandidatePredicate(condition: Condition, column: string, bind: (value: string) => string) {
+    // Normalized log service has a matching partial B-tree index. The JSON path
+    // scalar check already excludes missing/null values, so keep this term
+    // sargable for exact service rules instead of wrapping it in a fallback OR.
+    if (column === "normalized->>'service'" && condition.operator === 'equals' && condition.caseSensitive)
+        return `${column} = ${bind(condition.value)}`
     const ascii = `${column} !~ '[^\\x00-\\x7F]'`
     const prefix = `${column} IS NULL OR NOT (${ascii}) OR `
     const actual = condition.caseSensitive ? column : `lower(${column} COLLATE "C")`
@@ -58,7 +146,7 @@ export function messageCandidatePredicate(conditions: Condition[], column: strin
 
 // These are candidate predicates, not a second rule engine. Keep the runtime
 // recheck: JavaScript number formatting and Unicode folding differ from SQL.
-export function previewPredicate(conditions: Condition[], params: (string | boolean | null | string[])[]) {
+export function previewPredicate(conditions: Condition[], params: (string | number | boolean | null | string[])[]) {
     const bind = (value: string | string[]) => { params.push(value); return `$${params.length}` }
     const predicates: string[] = []
     for (const condition of conditions) {

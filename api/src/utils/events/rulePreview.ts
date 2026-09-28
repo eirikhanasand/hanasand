@@ -2,24 +2,28 @@ import run from '#db'
 import { eligibleCustomDrop } from './dropEligibility.ts'
 import { Worker } from 'node:worker_threads'
 import { matchesRule, type Condition } from './conditions.ts'
-import { loadLogRetentionRules, retentionStoreMatches } from './customRetention.ts'
+import { loadLogRetentionRules, retentionStoreMatches, type RetentionRule } from './customRetention.ts'
 import { cachedRead, ReadAdmissionError } from '../readCache.ts'
+import { finiteRegexAlternatives, previewPredicate } from './previewPredicate.ts'
+import { logFieldTextCandidates } from '../logs/searchText.ts'
 
 export type PreviewEvent = { id: string, timestamp: string, normalized: Record<string, unknown>, rank: number, bytes?: number }
 type Cursor = { time: string, id: string }
 export type PreviewRequest = { from: string | null, until: string, cursor?: Cursor | null, action: 'drop' | 'keep', sample?: boolean, limit?: 1000 | 2000, conditions: Condition[] }
 
 // Page recent candidates first, then retain the authoritative runtime check.
-export async function scanRulePreview(organizationId: string, canReadLogs: boolean, input: PreviewRequest, query = run) {
+type ScanOptions = { storedLogsOnly?: boolean, retentionRules?: RetentionRule[] }
+
+export async function scanRulePreview(organizationId: string, canReadLogs: boolean, input: PreviewRequest, query = run, options: ScanOptions = {}) {
     if (process.env.NODE_ENV !== 'test' && (query as typeof run & { primaryDatabaseRunner?: boolean }).primaryDatabaseRunner && input.sample) {
         const key = `rule-preview:${organizationId}:${canReadLogs ? 'logs' : 'public'}:${JSON.stringify(input)}`
-        return cachedRead(key, 5000, () => scanRulePreviewUncached(organizationId, canReadLogs, input, query), { lane: 'preview' })
+        return cachedRead(key, 5000, () => scanRulePreviewUncached(organizationId, canReadLogs, input, query, options), { lane: 'preview' })
     }
-    return scanRulePreviewUncached(organizationId, canReadLogs, input, query)
+    return scanRulePreviewUncached(organizationId, canReadLogs, input, query, options)
 }
 
-async function scanRulePreviewUncached(organizationId: string, canReadLogs: boolean, input: PreviewRequest, query = run) {
-    const params: (string | string[] | number)[] = [organizationId, input.until]
+async function scanRulePreviewUncached(organizationId: string, canReadLogs: boolean, input: PreviewRequest, query = run, options: ScanOptions = {}) {
+    const params: (string | string[] | number | boolean | null)[] = [organizationId, input.until]
     const fromParameter = input.from ? `$${params.push(input.from)}` : null
     const cursorTimeParameter = input.cursor ? `$${params.push(input.cursor.time)}` : null
     const cursorIdParameter = input.cursor ? `$${params.push(input.cursor.id)}` : null
@@ -28,15 +32,19 @@ async function scanRulePreviewUncached(organizationId: string, canReadLogs: bool
     // Applying dynamic predicates in SQL can scan an entire event range when matches are rare.
     const scope = [
         'organization_id=$1',
+        ...(options.storedLogsOnly ? ["ingestion_id='logs'", "processing_status='processed'"] : []),
         ...(!canReadLogs ? ['ingestion_id <> \'logs\''] : []),
         'event_timestamp <= $2::timestamptz',
         'received_at <= $2::timestamptz',
         ...(fromParameter ? [`event_timestamp >= ${fromParameter}::timestamptz`] : []),
         ...(cursorTimeParameter && cursorIdParameter ? [`(event_timestamp,id) < (${cursorTimeParameter}::timestamptz,${cursorIdParameter}::text)`] : []),
     ]
-    const rules = input.action === 'drop' ? await loadLogRetentionRules(organizationId, query) : []
+    // Storage estimates only need likely matches from processed logs. Filter in
+    // PostgreSQL before paging, then retain the JS matcher as the source of truth.
+    const candidates = options.storedLogsOnly ? storageEstimatePredicate(input.conditions, params) : 'TRUE'
+    const rules = input.action === 'drop' ? options.retentionRules ?? await loadLogRetentionRules(organizationId, query) : []
     const result = await query(`SELECT id, event_timestamp::text AS timestamp, normalized, pg_column_size(events)::bigint AS bytes${input.action === 'drop' ? ', original' : ''}
-        FROM events WHERE ${scope.join(' AND ')}${input.action === 'drop' ? ' AND normalized->>\'severity\' = \'low\'' : ''}
+        FROM events WHERE ${scope.join(' AND ')}${input.action === 'drop' ? ' AND normalized->>\'severity\' = \'low\'' : ''} AND (${candidates})
         ORDER BY event_timestamp DESC, id DESC LIMIT ${limitParameter}`, params)
     const eligible = result.rows.filter(row => input.action !== 'drop' || eligibleCustomDrop(row.normalized || {})
         && !retentionStoreMatches(row.normalized || {}, rules) && !retentionStoreMatches(row.original || {}, rules)) as PreviewEvent[]
@@ -51,6 +59,28 @@ async function scanRulePreviewUncached(organizationId: string, canReadLogs: bool
     const last = result.rows.at(-1)
     const pageLimit = input.limit || 2000
     return { scanned: result.rows.length, count: matches.length, bytes, events: input.sample ? events.slice(0, 100) : events, cursor: result.rows.length === pageLimit && last ? { time: last.timestamp, id: last.id } : null }
+}
+
+function storageEstimatePredicate(conditions: Condition[], params: (string | string[] | number | boolean | null)[]) {
+    const predicates = [previewPredicate(conditions, params)]
+    // The existing GIN index covers processed logs. One safe, selective literal
+    // from this conjunction is enough to exclude non-candidates before paging.
+    // The residual predicate and JS matcher still determine exact membership.
+    const groups = conditions.flatMap(condition => {
+        const values = condition.operator === 'regex' ? finiteRegexAlternatives(condition.value) : [condition.value]
+        if (!values || values.some(value => value.length < 3 || !/^[\x20-\x7E]+$/.test(value)
+            || (value.match(/[A-Za-z0-9]/g)?.length || 0) < 3)) return []
+        return [{ values, shortest: Math.min(...values.map(value => value.length)) }]
+    }).sort((left, right) => right.shortest - left.shortest || right.values.reduce((sum, value) => sum + value.length, 0)
+        - left.values.reduce((sum, value) => sum + value.length, 0))
+    if (groups[0]) {
+        const alternatives = groups[0].values.map(value => {
+            params.push(value)
+            return logFieldTextCandidates(`$${params.length}`)
+        })
+        predicates.push(alternatives.length === 1 ? alternatives[0] : `(${alternatives.join(' OR ')})`)
+    }
+    return predicates.filter(predicate => predicate !== 'TRUE').map(predicate => `(${predicate})`).join(' AND ') || 'TRUE'
 }
 
 export async function getStoredRuleEstimate(organizationId: string, ruleId: string, version: string, query = run) {
@@ -86,13 +116,15 @@ export async function estimateStoredRuleEvents(
 
     try {
         const estimate = await cachedRead(`rule-storage-estimate-scan:${organizationId}:${ruleId}:${version}:${row.scanned_date}`, 24 * 60 * 60_000, async () => {
+            const retentionRules = await loadLogRetentionRules(organizationId, query)
             let cursor: Cursor | null = null
             let count = 0
             let bytes = 0
             const until = new Date().toISOString()
             do {
                 if (!(await shouldContinue())) throw new ReadAdmissionError()
-                const page = await scanRulePreview(organizationId, true, { from: null, until, cursor, action: 'drop', conditions }, query)
+                const page = await scanRulePreview(organizationId, true, { from: null, until, cursor, action: 'drop', conditions }, query,
+                    { storedLogsOnly: true, retentionRules })
                 count += page.count
                 bytes += page.bytes
                 cursor = page.cursor

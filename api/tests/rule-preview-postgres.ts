@@ -28,8 +28,11 @@ try {
     let captured = { sql: '', params: [] as unknown[] }
     const query = async (sql: string, params: unknown[]) => { captured = { sql, params }; return client.query(sql, params) }
     for (const conditions of cases) {
-        const result = await scanRulePreview('test', true, { ...input, conditions }, query as any)
-        assert.deepEqual(result.events.map(event => event.id).sort(), events.flatMap((event, id) => matchesRule(event, conditions) ? [String(id)] : []).sort(), JSON.stringify(conditions))
+        const expected = events.flatMap((event, id) => matchesRule(event, conditions) ? [String(id)] : []).sort()
+        for (const options of [{}, { storedLogsOnly: true }]) {
+            const result = await scanRulePreview('test', true, { ...input, conditions }, query as any, options)
+            assert.deepEqual(result.events.map(event => event.id).sort(), expected, JSON.stringify({ conditions, options }))
+        }
     }
     await client.query('INSERT INTO rules VALUES($1,$2,true,$3)', ['test', 'builtin', eventProtectionDefinition])
     await client.query('UPDATE events SET original=\'{"error":"retained evidence"}\' WHERE id=\'0\'')
@@ -44,6 +47,8 @@ try {
     const began = performance.now()
     const page = await scanRulePreview('test', true, { ...input, conditions: [{ path: 'http.status_code', operator: 'equals', value: '201' }] }, query as any)
     assert.equal(page.scanned, 2000); assert.ok(page.cursor)
+    const narrowedPage = await scanRulePreview('test', true, { ...input, conditions: [{ path: 'http.status_code', operator: 'equals', value: '201' }] }, query as any, { storedLogsOnly: true })
+    assert.equal(narrowedPage.scanned, 100); assert.equal(narrowedPage.count, 100); assert.equal(narrowedPage.cursor, null)
     const duration = performance.now() - began, equalityQuery = captured
     for (const operator of ['contains', 'regex'] as const) {
         const result = await scanRulePreview('test', true, { ...input, conditions: [{ path: 'http.status_code', operator, value: operator === 'regex' ? '^201$' : '201' }] }, query as any)

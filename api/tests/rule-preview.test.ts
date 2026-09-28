@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'bun:test'
 import { eventProtectionDefinition } from '../src/utils/events/eventProtection.ts'
-import { messageCandidatePredicate } from '../src/utils/events/previewPredicate.ts'
+import { finiteRegexAlternatives, messageCandidatePredicate } from '../src/utils/events/previewPredicate.ts'
 mock.module('#db', () => ({ default: async () => ({ rows: [] }) }))
 const { scanRulePreview: scan, validPreviewWindow } = await import('../src/utils/events/rulePreview.ts')
 test('historical message candidate filtering leaves unsupported expressions for the full matcher', () => {
@@ -9,6 +9,12 @@ test('historical message candidate filtering leaves unsupported expressions for 
     expect(messageCandidatePredicate([{ path: 'message', operator: 'regex', value: '^(runc .*|journalctl .*)$' }], 'message', bind)).toContain('~* $7')
     expect(messageCandidatePredicate([{ path: 'message', operator: 'regex', value: '^(journalctl --no-pager.*|runc .*|wget -qO- http://localhost:3000.*)$' }], 'message', bind)).toContain('~* $8')
     expect(messageCandidatePredicate([{ path: 'message', operator: 'regex', value: '(?=runc)runc' }], 'message', bind)).toBe('TRUE')
+})
+test('finite anchored regexes produce safe index candidates', () => {
+    expect(finiteRegexAlternatives('^(?:http-traffic|cdn|hanasand[-_]api|api|hanasand-api-[1-4])$'))
+        .toEqual(['http-traffic', 'cdn', 'hanasand-api', 'hanasand_api', 'api', 'hanasand-api-1', 'hanasand-api-2', 'hanasand-api-3', 'hanasand-api-4'])
+    expect(finiteRegexAlternatives('^service-[1-3]$')).toEqual(['service-1', 'service-2', 'service-3'])
+    expect(finiteRegexAlternatives('^service-.*$')).toBeNull()
 })
 const scanRulePreview: typeof scan = (org, canReadLogs, input, query) => scan(org, canReadLogs, input,
     (async (sql: string, params: any) => sql.includes('FROM rules')
@@ -42,6 +48,20 @@ test('preview applies scalar conditions after bounding database candidates', asy
     }) as any)
     expect(sql).not.toContain('lower(event_type COLLATE "C")')
     expect(params).not.toContain('authentication')
+})
+test('stored log estimates scope processed logs and use the trigram candidate index', async () => {
+    let sql = ''
+    let params: unknown[] = []
+    await scan('org-a', true, { ...input, action: 'keep', conditions: [
+        { path: 'service', operator: 'regex', value: '^(?:http-traffic|cdn|hanasand[-_]api|api|hanasand-api-[1-4])$' },
+        { path: 'host', operator: 'regex', value: '^(native|inspur|ovhcloud)$' },
+    ] }, (async (query: string, values: unknown[]) => {
+        sql = query; params = values; return { rows: [] }
+    }) as any, { storedLogsOnly: true })
+    expect(sql).toContain("ingestion_id='logs' AND processing_status='processed'")
+    expect(sql).toContain('translate(lower(normalized::text)')
+    expect(params).toContain('ovhcloud')
+    expect(params).not.toContain('GET')
 })
 test('complete count is independent of bounded random sample; cursors preserve microseconds', async () => {
     const query = async () => ({ rows: Array.from({ length: 2000 }, (_, index) => row(index)) })
