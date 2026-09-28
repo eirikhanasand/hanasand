@@ -482,7 +482,7 @@ try {
     assert.equal(other.rows[0].count, 0, 'No findings in another organization')
     // Apply the committed standby SELECT block to isolated temporary relations.
     // Authentication is mocked; the actual handlers and SQL run under an unprivileged role.
-    const permissions = readFileSync(new URL('../../scripts/recovery/standby-permissions.sql', import.meta.url), 'utf8')
+    const permissions = readFileSync(new URL('../../db/standby-permissions.sql', import.meta.url), 'utf8')
     const logsGrant = permissions.match(/-- Administrator-only Logs pages[^\n]*\n(GRANT SELECT[\s\S]*?;)/)?.[1]
     assert.ok(logsGrant, 'The explicit standby Logs grant must exist')
     const logTables = ['service_logs', 'traffic_events', 'events', 'log_processing_cursors', 'log_catchup_progress', 'log_process_queue', 'log_dimensions', 'log_dimensions_state', 'log_counts', 'log_counts_state']

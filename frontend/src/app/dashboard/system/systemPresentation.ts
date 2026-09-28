@@ -13,7 +13,7 @@ const CONTAINER_LABELS: Record<string, string> = {
     hanasand_ti_scraper: 'Threat intelligence collector',
     hanasand_ai_parser_bridge: 'AI parser bridge',
     hanasand_ai_model_client: 'AI model client',
-    hanasand_browser_worker: 'Browser worker',
+    hanasand_browsers: 'Browsers',
     hanasand_browser_turn: 'Browser networking',
     hanasand_onion_tor: 'Onion/Tor gateway',
     'hanasand-deploy-path-guard-1': 'Deployment path guard',

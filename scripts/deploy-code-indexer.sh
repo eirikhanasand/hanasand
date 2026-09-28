@@ -34,5 +34,5 @@ for attempt in $(seq 1 60); do
  then exit 0; fi
  sleep 2
 done
-echo 'The Git indexer did not become ready. The serving frontend pair is unchanged.' >&2
+echo 'The Git indexer did not become ready.' >&2
 exit 1

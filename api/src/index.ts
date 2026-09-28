@@ -102,7 +102,7 @@ if (!browserWorkerOnly) {
     fastify.post('/mill', ingestEvent)
 }
 if (browserWorkerOnly) {
-    fastify.get('/', async () => ({ ok: true, service: 'browser-worker' }))
+    fastify.get('/', async () => ({ ok: true, service: 'browsers' }))
 } else {
     fastify.get('/', IndexHandler)
 }

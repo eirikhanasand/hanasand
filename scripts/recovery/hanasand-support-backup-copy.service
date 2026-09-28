@@ -1,7 +1,0 @@
-[Unit]
-Description=Keep an independent support snapshot on Inspur
-After=docker.service
-[Service]
-Type=oneshot
-User=hanasand
-ExecStart=/home/hanasand/hanasand/scripts/run-typescript-node.sh /home/hanasand/hanasand/scripts/recovery/support-backup-copy.ts

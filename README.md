@@ -26,7 +26,7 @@ All monitoring alerts, including replication, backups and failover, must go thro
 
 Each intelligence health check keeps the same case when its error changes, including connection failures. Collection, enrichment and delivery remain separate checks. When duplicate cases are merged, keep their old links, events, comments and notification history, and preserve the latest notification deadline.
 
-The standby case reader uses the read-only grants in `scripts/recovery/standby-permissions.sql`. Keep case writes, VM passwords and repository secrets out of that role.
+The standby case reader uses the read-only grants in `db/standby-permissions.sql`. Keep case writes, VM passwords and repository secrets out of that role.
 
 Recovery checks run every minute using `system:recovery` and the monitor's read-only state file. Run `bun scripts/setup-recovery-monitoring.ts` in the API worker to configure them with the existing Hanasand owner, organization and Discord destination. The independent recovery monitor keeps sampling and routing traffic; the API creates cases when it can reach the writable database.
 
@@ -163,4 +163,4 @@ Follow [AGENTS.md](AGENTS.md) and [copy style](docs/copy-style.md). Keep changes
 
 ### Authentication releases
 
-Authentication has its own redundant worker pool. Deploy it with `scripts/deploy-auth.sh` on the production host, independently of API replacement. See [authentication availability](docs/authentication-availability.md) for readiness, rollback, session consistency, and scaling constraints.
+Authentication is deployed as part of the canonical full-stack release. Standalone recovery/auth replacement commands are intentionally removed; use `scripts/deploy-all.sh` so the API, frontend, and supporting services stay on one main revision.

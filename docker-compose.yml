@@ -181,11 +181,9 @@ services:
       postgres:
         condition: service_healthy
 
-  browser-worker:
-    container_name: hanasand_browser_worker
-    profiles:
-      - unsafe-dev-only
-    image: hanasand_browser_worker
+  browsers:
+    container_name: hanasand_browsers
+    image: hanasand_browsers
     mem_limit: 3g
     cpus: "3.0"
     init: true

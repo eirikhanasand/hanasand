@@ -319,7 +319,7 @@ function proxyBrowserStreamWebSocket(
 
 function proxyBrowserSocket(connection: WebSocket, id: string, route: 'browser' | 'browser-sandbox' | 'onion-session') {
     if (process.env.BROWSER_SANDBOX_WORKER_ONLY === '1') return false
-    if (process.env.BROWSER_SANDBOX_ALLOW_SHARED_WORKER !== 'unsafe-dev-only') {
+    if (process.env.BROWSER_SANDBOX_ALLOW_SHARED_WORKER !== 'development') {
         void recordLog({
             level: 'info',
             message: `Starting isolated browser worker for ${route} session ${id}`,
@@ -1008,7 +1008,7 @@ async function startEphemeralBrowserWorker(sessionId: string, resolution = '1280
     const networkName = process.env.BROWSER_SANDBOX_WORKER_NETWORK || 'hanasand_browsernet'
     const turn = browserTurnCredentials(sessionId, warmSlot === undefined ? 60 * 60 : 120 * 60)
     const containerId = await createRuntimeContainer(containerName, {
-        Image: process.env.BROWSER_SANDBOX_WORKER_IMAGE || 'hanasand_browser_worker',
+        Image: process.env.BROWSER_SANDBOX_WORKER_IMAGE || 'hanasand_browsers',
         User: '1000',
         Env: [
             'NODE_ENV=production',
