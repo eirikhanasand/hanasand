@@ -24,7 +24,11 @@ describe('OVH staged deployment config', () => {
                 expect(env.RECOVERY_STATUS_URL).toBe('http://127.0.0.1:19901/status')
                 expect(env.RECOVERY_STATE_FILE).toBe('/recovery/state.json')
             }
-            if (kind === 'api') expect(env.API_HTTP_ONLY).toBe('1')
+            if (kind === 'api') {
+                expect(env.API_HTTP_ONLY).toBe('1')
+                expect(env.RECOVERY_ESSENTIAL_ONLY).toBe('1')
+                expect(env.RECOVERY_STATE_FILE).toBe('/resilience/state.json')
+            }
         }
     })
 
