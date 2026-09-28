@@ -15,7 +15,8 @@ export function useSmoothedCount(target: number | null | undefined, durationMs: 
                 setDisplayed(next)
             }
             update()
-            const interval = window.setInterval(update, 1000)
+            const updateIntervalMs = Math.max(1, Math.round(1000 / rate))
+            const interval = window.setInterval(update, updateIntervalMs)
             return () => window.clearInterval(interval)
         }
         if (target == null) {
