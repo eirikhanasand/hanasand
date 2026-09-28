@@ -87,7 +87,7 @@ export default function RulePreview({ organizationId, conditions, action, range,
     const start = Math.max(0, offset - 1), visible = events.slice(start, start + 8)
     const paths = [...new Set(conditions.map(condition => condition.path))]
     return <section className='grid min-w-0 gap-3' aria-label='Matching events preview'>
-        <div className='flex flex-wrap items-center justify-between gap-2'><h3 className='font-semibold' aria-live='polite'>{limited || !complete ? 'At least ' : ''}{new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(count)} matching events</h3><span className='text-xs text-ui-muted'>{limited ? `Preview capped at ${scanned.toLocaleString()} events checked` : complete ? `${count.toLocaleString()} matches · ${scanned.toLocaleString()} events checked` : `${count.toLocaleString()}/${scanned.toLocaleString()} Events checked.`}</span></div>
+        <div className='flex flex-wrap items-center justify-between gap-2'><h3 className='font-semibold' aria-live='polite'>{limited ? `${count.toLocaleString()} matching events in the checked sample` : !complete ? 'Checking matching events…' : `${new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(count)} matching events`}</h3><span className='text-xs text-ui-muted'>{limited ? `Preview capped at ${scanned.toLocaleString()} candidate events checked` : complete ? `${count.toLocaleString()} matches · ${scanned.toLocaleString()} events checked` : `${count.toLocaleString()}/${scanned.toLocaleString()} events checked`}</span></div>
         {!!events.length && <div role='region' aria-label='Matching event rows' tabIndex={0} style={{ overflowAnchor: 'none' }} className='h-[360px] overflow-auto rounded-lg border border-ui-border' onScroll={event => {
             browsing.current = true
             const began = performance.now(), element = event.currentTarget
@@ -109,7 +109,7 @@ export default function RulePreview({ organizationId, conditions, action, range,
         {limited && <div className='mt-2 overflow-hidden rounded-xl border border-ui-warning/30 bg-ui-raised'>
             <div className='flex items-start gap-3 p-4 sm:p-5'>
                 <span className='flex size-9 shrink-0 items-center justify-center rounded-full bg-ui-warning/10 text-ui-warning'><CircleAlert size={20} aria-hidden='true' /></span>
-                <p className='text-sm font-semibold'>This preview stopped after 2,000 events. More matches may exist outside this sample. Continue?</p>
+                <p className='text-sm font-semibold'>This preview stopped after 2,000 candidate events. It found {count.toLocaleString()} matching events in the checked sample; more matches may exist outside it. Continue?</p>
             </div>
             <div className='flex gap-2 border-t border-ui-border px-4 py-4 sm:px-5'>
                 <button type='button' className='rounded-md bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-on-primary' aria-pressed={acknowledged} onClick={() => setAcknowledged(true)}>Yes</button>
