@@ -38,9 +38,9 @@ function Chart({ title, points, field }: { title: string, points: Point[], field
     const [expanded, setExpanded] = useState(false)
     const values = points.map(point => Number(point[field]) || 0)
     const max = Math.max(1, ...values)
-    const width = 720
-    const height = 184
-    const plot = { left: 62, right: 12, top: 16, bottom: 42 }
+    const width = 360
+    const height = 164
+    const plot = { left: 44, right: 8, top: 12, bottom: 36 }
     const plotWidth = width - plot.left - plot.right
     const plotHeight = height - plot.top - plot.bottom
     const stride = Math.max(1, Math.ceil(points.length / 240))
@@ -55,17 +55,17 @@ function Chart({ title, points, field }: { title: string, points: Point[], field
     const unit = field === 'npps' ? '× load ratio' : 'events / second'
     return <div className={expanded ? 'fixed inset-4 z-50 rounded-xl border border-ui-border bg-ui-panel p-4 shadow-2xl' : 'rounded-xl border border-ui-border bg-ui-panel p-3'}>
         <div className='flex items-center justify-between gap-2'><div><h3 className='text-sm font-semibold'>{title}</h3><p className='text-xs text-ui-muted'>{chartDescriptions[field]}</p></div><button type='button' aria-label={expanded ? `Close expanded ${title} chart` : `Expand ${title} chart`} className='rounded-md p-1 text-ui-muted hover:text-ui-text' onClick={() => setExpanded(value => !value)}>{expanded ? <Minimize2 size={16} aria-hidden /> : <Maximize2 size={16} aria-hidden />}</button></div>
-        <div className='mt-2 overflow-x-auto'><svg role='img' aria-label={`${title}: ${format(Number(latest?.[field]) || 0)} ${unit}, sampled from ${sampleTime(visible[0]?.sampled_at)} to ${sampleTime(latest?.sampled_at)}. Y axis shows ${unit}.`} width={width} height={height} viewBox={`0 0 ${width} ${height}`} className='min-w-full'>
-            {ticks.map((fraction, index) => {
+        <div className='mt-2 min-w-0'><svg role='img' aria-label={`${title}: ${format(Number(latest?.[field]) || 0)} ${unit}, sampled from ${sampleTime(visible[0]?.sampled_at)} to ${sampleTime(latest?.sampled_at)}. Y axis shows ${unit}.`} width={width} height={height} viewBox={`0 0 ${width} ${height}`} className='block h-auto w-full'>
+            {ticks.map(fraction => {
                 const y = plot.top + plotHeight * (1 - fraction)
                 const value = max * fraction
-                return <g key={fraction}><line x1={plot.left} x2={width - plot.right} y1={y} y2={y} stroke='currentColor' opacity={fraction === 0 ? 0.35 : 0.12} /><text x={plot.left - 8} y={y + 4} textAnchor='end' fontSize='11' fill='currentColor' opacity='0.7'>{field === 'npps' ? `${value.toFixed(1)}×` : format(value)}</text></g>
+                return <g key={fraction}><line x1={plot.left} x2={width - plot.right} y1={y} y2={y} stroke='currentColor' opacity={fraction === 0 ? 0.35 : 0.12} /><text x={plot.left - 6} y={y + 3.5} textAnchor='end' fontSize='10' fill='currentColor' opacity='0.7'>{field === 'npps' ? `${value.toFixed(1)}×` : format(value)}</text></g>
             })}
             <path d={path || `M ${plot.left} ${plot.top + plotHeight}`} fill='none' stroke='currentColor' strokeWidth='2' className='text-ui-primary' />
             {latest && <circle cx={plot.left + plotWidth} cy={plot.top + plotHeight - ((Number(latest[field]) || 0) / max) * plotHeight} r='3.5' fill='currentColor' className='text-ui-primary'><title>{`${sampleTime(latest.sampled_at)}: ${format(Number(latest[field]) || 0)} ${unit}`}</title></circle>}
-            <text x={plot.left} y={height - 12} fontSize='11' fill='currentColor' opacity='0.7'>{sampleTime(visible[0]?.sampled_at)}</text>
-            <text x={width - plot.right} y={height - 12} textAnchor='end' fontSize='11' fill='currentColor' opacity='0.7'>{sampleTime(latest?.sampled_at)}</text>
-            <text x={width / 2} y={height - 12} textAnchor='middle' fontSize='11' fill='currentColor' opacity='0.7'>Last 6 hours · {points.length.toLocaleString('en-US')} samples</text>
+            <text x={plot.left} y={height - 10} fontSize='10' fill='currentColor' opacity='0.7'>{sampleTime(visible[0]?.sampled_at)}</text>
+            <text x={width - plot.right} y={height - 10} textAnchor='end' fontSize='10' fill='currentColor' opacity='0.7'>{sampleTime(latest?.sampled_at)}</text>
+            <text x={width / 2} y={height - 10} textAnchor='middle' fontSize='9' fill='currentColor' opacity='0.7'>6 hours · {points.length.toLocaleString('en-US')} samples</text>
         </svg></div>
     </div>
 }
@@ -82,9 +82,9 @@ export default function ThroughputMetrics() {
         return () => { cancelled = true; clearInterval(interval) }
     }, [])
     const points = useMemo(() => metrics?.history || [], [metrics])
-    if (!metrics) return <section aria-label='Log throughput metrics' className='grid gap-3 sm:grid-cols-5'><div className='sm:col-span-5 rounded-xl border border-ui-border bg-ui-panel p-4 text-sm text-ui-muted'>Loading throughput metrics…</div></section>
+    if (!metrics) return <section aria-label='Log throughput metrics' className='grid gap-3'><div className='rounded-xl border border-ui-border bg-ui-panel p-4 text-sm text-ui-muted'>Loading throughput metrics…</div></section>
     return <section id='log-analytics' aria-label='Log throughput metrics' className='grid gap-3' data-log-throughput>
-        <div className='grid gap-3 sm:grid-cols-5'>{cards.map(([label, key, description]) => <div key={key} className='rounded-xl border border-ui-border bg-ui-panel p-4'><p className='text-sm text-ui-muted'>{label}</p><p className='mt-2 text-2xl font-semibold tabular-nums'>{format(metrics.current[key])}</p><p className='mt-1 text-xs text-ui-muted'>{description}</p></div>)}<div className='rounded-xl border border-ui-border bg-ui-panel p-4'><p className='text-sm text-ui-muted'>Logs remaining</p><p className='mt-2 text-2xl font-semibold tabular-nums'>{metrics.current.remaining.toLocaleString('en-US')}</p><p className='mt-1 text-xs text-ui-muted'>{age(metrics.generated_at, now)}</p></div></div>
-        <div className='grid gap-3 lg:grid-cols-3'>{(['eps', 'pps', 'npps'] as const).map(field => <Chart key={field} title={field.toUpperCase()} points={points} field={field} />)}</div>
+        <div className='grid grid-cols-2 gap-2.5 min-[380px]:gap-3 md:grid-cols-3 xl:grid-cols-5'>{cards.map(([label, key, description]) => <div key={key} className='min-w-0 rounded-xl border border-ui-border bg-ui-panel p-3 sm:p-4'><p className='text-xs text-ui-muted sm:text-sm'>{label}</p><p className='mt-1.5 text-xl font-semibold tabular-nums sm:mt-2 sm:text-2xl'>{format(metrics.current[key])}</p><p className='mt-1 text-[11px] leading-4 text-ui-muted sm:text-xs'>{description}</p></div>)}<div className='min-w-0 rounded-xl border border-ui-border bg-ui-panel p-3 sm:p-4'><p className='text-xs text-ui-muted sm:text-sm'>Logs remaining</p><p className='mt-1.5 text-xl font-semibold tabular-nums sm:mt-2 sm:text-2xl'>{metrics.current.remaining.toLocaleString('en-US')}</p><p className='mt-1 text-[11px] leading-4 text-ui-muted sm:text-xs'>{age(metrics.generated_at, now)}</p></div></div>
+        <div className='grid min-w-0 gap-3 md:grid-cols-2 2xl:grid-cols-3'>{(['eps', 'pps', 'npps'] as const).map(field => <Chart key={field} title={field.toUpperCase()} points={points} field={field} />)}</div>
     </section>
 }
