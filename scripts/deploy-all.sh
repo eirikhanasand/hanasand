@@ -22,6 +22,14 @@ rm -f "$build_dir/source.tar"
 mkdir -p "$build_dir/.git"
 printf 'ref: refs/heads/main\n' > "$build_dir/.git/HEAD"
 if test -f "$root/.env"; then cp "$root/.env" "$build_dir/.env"; fi
+if test -f "$build_dir/.env"; then
+    if grep -q '^HANASAND_RELEASE_COMMIT=' "$build_dir/.env"; then
+        sed -i "s/^HANASAND_RELEASE_COMMIT=.*/HANASAND_RELEASE_COMMIT=$release/" "$build_dir/.env"
+    else
+        printf 'HANASAND_RELEASE_COMMIT=%s\n' "$release" >> "$build_dir/.env"
+    fi
+    printf 'HANASAND_TI_SCRAPER_SOURCE=%s\n' "$root/ops/runtime/ti-releases/$release" >> "$build_dir/.env"
+fi
 
 test -d "$root/ti/scraper/node_modules" || {
     echo "TI dependencies are missing on the deploy host; refusing an unverified source mount." >&2
@@ -50,9 +58,10 @@ export HANASAND_TI_SCRAPER_SOURCE="$ti_release_dir"
 # context while preserving parallel BuildKit execution for the release.
 if test -f "$build_dir/.env"; then
     docker compose --env-file "$build_dir/.env" -f "$build_dir/docker-compose.yml" build
+    docker compose --env-file "$build_dir/.env" -f "$root/docker-compose.yml" up -d --force-recreate
 else
     docker compose -f "$build_dir/docker-compose.yml" build
+    docker compose -f "$root/docker-compose.yml" up -d --force-recreate
 fi
-docker compose up -d --force-recreate
 sh "$root/scripts/verify-stack-release.sh" "$release"
 echo "Hanasand stack deployed from main at $release."
