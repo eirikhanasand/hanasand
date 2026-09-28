@@ -16,9 +16,9 @@ Prefer deletion, reuse, plain language, and the smallest complete fix. Verify th
 
 Do not expand a small request into a redesign, new workflow, documentation exercise, or deployment ceremony unless the request requires it. Preserve unrelated work in a dirty tree. Never expose secrets or perform destructive actions without explicit scope.
 
-Always work on the main branch, never create new worktrees, branches or checkouts as there is a chance of forgetting to merge these into the real main.
+Always work on main. Never create branches, commit, or push on Inspur or OVH. Make commits and pushes from a local development checkout, and update server checkouts only by fast-forwarding main from an upstream main. Keep application directories writable by their runtime processes; do not change their ownership or permissions to enforce this Git policy.
 
-After completing and verifying requested changes, always commit, push to both GitHub and Forgejo, and redeploy the affected service. This is standing user authorization; do not ask for confirmation again for routine publication or deployment. Verify the deployed revision and affected live behavior before reporting completion.
+After completing and verifying requested changes, commit and push to both GitHub and Forgejo from a local development checkout, then redeploy the affected service. This is standing user authorization; do not ask for confirmation again for routine publication or deployment. Verify the deployed revision and affected live behavior before reporting completion.
 
 ## Completion responses
 
