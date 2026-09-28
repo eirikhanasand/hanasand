@@ -9,22 +9,23 @@ const { getLogDashboard } = await import('../src/utils/logs/getLogs')
 const { default: Page } = await import('../src/app/dashboard/logs/page')
 const fetchOriginal = globalThis.fetch
 const data = { rows: [], counts: [{ severity: 'low', count: 12345 }], services: [{ service: 'preloaded-service', count: 321 }], processing: { updated_at: '2026-09-24T12:00:00Z' }, generated_at: '2026-09-24T12:00:00Z', limit: 200 }
+const metrics = { generated_at: '2026-09-24T12:00:00Z', current: { pps: 128.4, eps: 42.1, historical_eps: 11, npps: 0.33, remaining: 1840, thresholds: { npps_below: false, eps_above: false, pps_below: false } }, history: [] }
 afterEach(() => { globalThis.fetch = fetchOriginal; params = new URLSearchParams(); pathname = '/logs' })
-test('server HTML contains counts and services before any client code runs', async () => {
+test('dashboard server HTML preloads public throughput metrics without log rows or credentials', async () => {
+    const requests: Array<{ url: string, init?: RequestInit }> = []
     globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
         const url = String(input)
-        if (url.includes('/logs/search?')) {
-            expect(init?.cache).toBe('no-store')
-            expect(init?.headers).toEqual({ id: 'user', Authorization: 'Bearer session', 'x-impersonation-token': 'impersonation' })
-            expect(new URL(url).searchParams.get('stats')).toBe('1')
-            return Response.json(data)
-        }
-        return Response.json(url.includes('/logs/services') ? { services: [] } : { summary: { total: 42 }, errors: [] })
+        requests.push({ url, init })
+        return Response.json(metrics)
     }) as typeof fetch
     const html = renderToStaticMarkup(await Page({ searchParams: Promise.resolve({}) }))
-    expect(html).toContain('12,345')
-    expect(html).toContain('preloaded-service')
-    expect(html).toContain('321')
+    expect(requests).toHaveLength(1)
+    expect(new URL(requests[0].url).pathname).toMatch(/\/logs\/metrics\/public$/)
+    expect(requests[0].init?.next).toEqual({ revalidate: 5 })
+    expect(requests[0].init?.headers).toBeUndefined()
+    expect(html).toContain('42.1')
+    expect(html).not.toContain('12,345')
+    expect(html).not.toContain('preloaded-service')
     expect(html).not.toContain('Bearer session')
 })
 test('server preload honors basic filters and legacy HQL without caching credentials', async () => {
@@ -54,17 +55,13 @@ test('Realtime retains all severities, including downgraded updates', async () =
     expect(retainEvents(events, [{ ...events[2], normalized: { severity: 'low' } }]).map(event => event.normalized.severity)).toEqual(['low','medium','low','critical'])
 })
 
-test('the Realtime route seeds HTML with normal traffic', async () => {
+test('the Realtime route leaves log loading to the client', async () => {
     pathname = '/logs/realtime'
     const { default: RealtimePage } = await import('../src/app/dashboard/logs/realtime/page')
-    globalThis.fetch = (async (input: string | URL | Request) => {
-        if (!String(input).includes('/logs/search?')) return Response.json({ services: [], summary: { total: 0 }, errors: [] })
-        expect(new URL(String(input)).searchParams.has('severity')).toBe(false)
-        return Response.json({ ...data, rows: ['low','medium','high','critical'].map(severity => ({id:severity,event_timestamp:data.generated_at,normalized:{severity,service:'test',message:`event-${severity}`,level:'info',log_type:'ApplicationLogs'}})) })
-    }) as typeof fetch
+    const requests: string[] = []
+    globalThis.fetch = (async (input: string | URL | Request) => { requests.push(String(input)); return Response.json(data) }) as typeof fetch
     const html = renderToStaticMarkup(await RealtimePage({ searchParams: Promise.resolve({severity:'low'}) }))
-    expect(html).toContain('event-low')
-    expect(html).toContain('event-medium')
-    expect(html).toContain('event-high')
-    expect(html).toContain('event-critical')
+    expect(requests).toEqual([])
+    expect(html).toContain('Realtime')
+    expect(html).not.toContain('event-low')
 })
