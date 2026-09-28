@@ -234,6 +234,10 @@ SH
     cat >/usr/local/sbin/hanasand-sync-ssh-users <<SH
 #!/usr/bin/env bash
 set -euo pipefail
+if ! timeout 5 "${LXC_BIN}" info >/dev/null 2>&1; then
+    echo "LXD is unavailable; skipping VM SSH gateway synchronization"
+    exit 0
+fi
 STATE_DIR="/var/lib/hanasand-ssh-gateway/state"
 groupadd -f "${VM_GROUP}"
 install -d -m 0750 -o root -g "${VM_GROUP}" "\$STATE_DIR"

@@ -1,6 +1,6 @@
 import { once } from 'node:events';
 import { StringDecoder } from 'node:string_decoder';
-import { fs, join, Store, Commands, Config, LogEvent, Metadata, Events, randomUUID, MAX_RECORD_BYTES, scrub, boundedMetadata, syncDirectory, sha, iso, readBoundedPrefix, collectionError, CollectionError } from './core';
+import { fs, join, Store, Commands, Config, LogEvent, Metadata, Events, randomUUID, MAX_RECORD_BYTES, scrub, boundedMetadata, syncDirectory, sha, iso, readBoundedPrefix, collectionError, CollectionError, CommandError } from './core';
 import { Sources, auditEvents, localAuditDate } from './sources';
 
 export function checkpointFiles(root: string) {
@@ -93,8 +93,12 @@ export async function printRecent(store: Store, config: Config, write = writeOut
 }
 export async function guests(store: Store, config: Config) {
   if (config.guestCollection === false) throw new CollectionError('Administrative VM access unavailable');
-  if (!fs.existsSync('/var/snap/lxd/common/lxd/unix.socket')) return;
   const commands = new Commands(store), lxc = '/snap/lxd/current/bin/lxc';
+  try { await commands.run([lxc, 'info'], { timeout: 5 }); }
+  catch (error) {
+    if (!(error instanceof CommandError)) throw error;
+    return { skipped: true, reason: 'LXD unavailable' };
+  }
   const inventory = JSON.parse(await commands.run([lxc, 'list', '--format=json'])) as { name: string; status?: string; type?: string; created_at?: string }[];
   const binary = '/usr/local/lib/hanasand-log-collector/collector.cjs', version = sha(fs.readFileSync(binary));
   const installed = store.load<Record<string, string>>('guests.json', {}), failures: string[] = [];

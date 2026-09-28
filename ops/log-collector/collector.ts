@@ -72,11 +72,11 @@ async function main() {
   while (!stopping) {
     const snapshot = { ...statuses }, failures = Object.entries(snapshot).filter(([, status]) => !status.ok).map(([name, status]) => name + ': ' + status.error);
     const coverage = store.load<{ checkedAt: string; failures: string[]; instances: { status: string }[] } | null>('guest-coverage.json', null);
-    if (coverage?.failures.length && !failures.some(item => item.startsWith('guests:'))) failures.push('guests: ' + coverage.failures.join(', '));
+    if (coverage?.failures.length && snapshot.guests?.skipped !== true && !failures.some(item => item.startsWith('guests:'))) failures.push('guests: ' + coverage.failures.join(', '));
     const health: Record<string, boolean | null> = Object.fromEntries(sources.map(name => [name, snapshot[name]?.ok ?? null]));
     const metadata: Metadata = { collector_health: health, source_status: JSON.parse(JSON.stringify(snapshot)), persistence: { intervalMs: COMMIT_INTERVAL_MS, flushes: persistence.flushes, lastFlushMs: persistence.lastFlushMs, lastFlushAt: persistence.lastFlushAt ?? null } };
     store.save('health.json', { checkedAt: iso(), release: process.env.HANASAND_COLLECTOR_RELEASE || 'development', runtime: 'typescript', ...metadata });
-    if (coverage) metadata.guest_coverage = { checkedAt: coverage.checkedAt, running: coverage.instances.filter(g => g.status === 'Running').length, stopped: coverage.instances.filter(g => g.status !== 'Running').length, failures: coverage.failures, enrollment: 'Stopped guests are enrolled when next running.' };
+    if (coverage) metadata.guest_coverage = { checkedAt: coverage.checkedAt, running: coverage.instances.filter(g => g.status === 'Running').length, stopped: coverage.instances.filter(g => g.status !== 'Running').length, failures: coverage.failures, enrollment: 'Stopped guests are enrolled when next running.', ...(snapshot.guests?.skipped === true ? { skipped: true, skip_reason: String(snapshot.guests.reason || 'LXD unavailable') } : {}) };
     const message = failures.length ? 'Collection failed: ' + failures.join(', ') : Object.values(health).includes(null) ? 'Collection starting' : 'Collection healthy';
     try { await store.send([event(config, 'health:' + Math.floor(Date.now() / 30000), 'host-log-collector', message, iso(), metadata, failures.length ? 'error' : 'info')]); }
     catch { failures.push('delivery failed'); }
