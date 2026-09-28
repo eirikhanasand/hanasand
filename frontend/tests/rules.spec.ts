@@ -114,16 +114,17 @@ test('searchable event types, JSON and Drop creation preserve drafts on failure'
     await expect(page.getByRole('cell', { name: 'Drop', exact: true })).toBeVisible()
 })
 
-test('Drop locks Low; broad previews require confirmation and buffered scrolling stays below 20ms', async ({ page }) => {
+test('Drop locks Low; capped previews can check another 1000 events and buffered scrolling stays below 20ms', async ({ page }) => {
     await page.route('**/api/backend/rules?*', route => route.fulfill({ json: { canManageRetention: true, rules: [] } }))
     const events = Array.from({ length: 250 }, (_, index) => ({ id: String(index), timestamp: '2026-09-23T12:00:00Z', rank: ((index * 137) % 251) / 251, normalized: { severity: 'low', service: `service-${index % 5}`, event_type: 'network', http: { status_code: 200, path: `/path-${index % 9}` }, source: { ip: `192.0.2.${index % 250}` } } }))
-    let finishCount = () => {}
-    const pendingCount = new Promise<void>(resolve => { finishCount = resolve })
+    let previewPages = 0
     await page.route('**/api/backend/rules/preview?*', async route => {
         const body = route.request().postDataJSON()
         expect(body.action).toBe('drop')
-        if (body.sample && body.cursor) { await pendingCount; return route.fulfill({ json: { count: 0, scanned: 0, events: [], cursor: null } }) }
-        return route.fulfill({ json: { count: 10001, scanned: 20000, events: body.sample ? events.slice(0, 100) : events, cursor: body.sample ? { time: '2026-09-23T12:00:00Z', id: '250' } : null } })
+        if (!body.cursor) return route.fulfill({ json: { count: 10001, scanned: 2000, events: body.sample ? events.slice(0, 100) : events, cursor: { time: '2026-09-23T12:00:00Z', id: '250' } } })
+        previewPages++
+        expect(body.limit).toBe(1000)
+        return route.fulfill({ json: { count: 0, scanned: 1000, events: [], cursor: null } })
     })
     await page.goto('http://event.test/rules/analysis')
     await page.getByRole('button', { name: 'Create', exact: true }).click()
@@ -136,14 +137,15 @@ test('Drop locks Low; broad previews require confirmation and buffered scrolling
     await page.getByLabel('Condition 1 field', { exact: true }).fill('http.status_code')
     await page.getByLabel('Condition 1 value', { exact: true }).fill('200')
     await page.getByLabel('Rule name', { exact: true }).click()
-    await expect(page.getByText('Very many events match this rule. Is this intended?')).toBeVisible()
     const create = page.getByRole('button', { name: 'Create rule', exact: true })
     await expect(create).toBeDisabled()
-    await page.getByRole('checkbox', { name: 'Yes, I intend to match this many events.' }).check()
     await expect(create).toBeEnabled()
+    await expect(page.getByText('2000 events checked', { exact: true })).toBeVisible()
+    await page.getByRole('button', { name: 'Check 1000 more events' }).click()
+    await expect(page.getByText('3000 events checked', { exact: true })).toBeVisible()
+    expect(previewPages).toBe(1)
     const table = page.getByRole('region', { name: 'Matching event rows' })
     await expect(table.locator('[data-event-id]')).toHaveCount(8)
-    expect(await page.getByRole('checkbox', { name: 'Yes, I intend to match this many events.' }).evaluate(input => Boolean(document.querySelector('[aria-label="Matching event rows"]')!.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true)
     const first = await table.locator('[data-event-id]').evaluateAll(rows => rows.slice(0, 5).map(row => row.getAttribute('data-event-id')))
     expect(first).not.toEqual(['0', '1', '2', '3', '4'])
     const durations: number[] = []
@@ -152,20 +154,14 @@ test('Drop locks Low; broad previews require confirmation and buffered scrolling
         durations.push(Number(await table.getAttribute('data-render-ms')))
     }
     expect(Math.max(...durations)).toBeLessThan(20)
-    await expect(page.getByText(/\d+\/\d+ Events checked\./)).toBeVisible()
-    finishCount()
-    await expect(page.getByText(/\d+\/\d+ Events checked\./)).toHaveCount(0)
     console.log('Buffered row update milliseconds:', durations)
     expect(await table.locator('[data-event-id]').count()).toBeLessThanOrEqual(8)
-    await page.getByRole('checkbox', { name: 'Yes, I intend to match this many events.' }).scrollIntoViewIfNeeded()
     await page.screenshot({ path: '/tmp/event-preview-desktop.png' })
     await page.getByLabel('Preview range').selectOption('1')
-    await expect(page.getByRole('checkbox', { name: 'Yes, I intend to match this many events.' })).not.toBeChecked()
     await expect(create).toBeDisabled()
     await page.setViewportSize({ width: 390, height: 844 })
     await table.scrollIntoViewIfNeeded()
     await expect(table.locator('[data-event-id]').first()).toBeVisible()
-    await page.getByRole('checkbox', { name: 'Yes, I intend to match this many events.' }).scrollIntoViewIfNeeded()
     await page.screenshot({ path: '/tmp/event-preview-mobile.png' })
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })

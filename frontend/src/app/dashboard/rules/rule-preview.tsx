@@ -1,7 +1,6 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { CircleAlert } from 'lucide-react'
 import { requestJson } from './detection-rules'
 import type { Condition } from './condition-builder'
 
@@ -29,7 +28,7 @@ export function diverseEvents(pool: Event[], count = 5) {
 
 export default function RulePreview({ organizationId, conditions, action, range, onReady }: { organizationId: string, conditions: Condition[], action: string, range: string, onReady: (ready: boolean) => void }) {
     const [count, setCount] = useState(0), [scanned, setScanned] = useState(0), [complete, setComplete] = useState(false), [limited, setLimited] = useState(false)
-    const [events, setEvents] = useState<Event[]>([]), [error, setError] = useState(''), [acknowledged, setAcknowledged] = useState(false)
+    const [events, setEvents] = useState<Event[]>([]), [error, setError] = useState('')
     const [attempt, setAttempt] = useState(0)
     const [offset, setOffset] = useState(0), [more, setMore] = useState(true), [loading, setLoading] = useState(false)
     const browsing = useRef(false)
@@ -37,15 +36,15 @@ export default function RulePreview({ organizationId, conditions, action, range,
     const window = useRef({ until: new Date().toISOString(), from: range === 'all' ? null : new Date(Date.now() - Number(range) * 3600_000).toISOString() })
     const controller = useRef(new AbortController())
     const endpoint = `/api/backend/rules/preview?organizationId=${encodeURIComponent(organizationId)}`
-    const read = (next: Cursor, sample: boolean) => requestJson<Page>(endpoint, { method: 'POST', signal: controller.current.signal, body: JSON.stringify({ ...window.current, conditions, action, cursor: next, sample }) })
+    const read = (next: Cursor, sample: boolean, limit: 1000 | 2000) => requestJson<Page>(endpoint, { method: 'POST', signal: controller.current.signal, body: JSON.stringify({ ...window.current, conditions, action, cursor: next, sample, limit }) })
     useEffect(() => {
-        setError(''); setCount(0); setScanned(0); setComplete(false); setLimited(false); setAcknowledged(false); setMore(true); setOffset(0); setEvents([])
+        setError(''); setCount(0); setScanned(0); setComplete(false); setLimited(false); setMore(true); setOffset(0); setEvents([])
         browsing.current = false; rows.current = []; cursor.current = null; seen.current = new Set(); busy.current = false
         const abort = new AbortController()
         controller.current = abort
         const timer = setTimeout(async () => {
             try {
-                const page = await read(null, true)
+                const page = await read(null, true, 2000)
                 if (abort.signal.aborted) return
                 const total = page.count, inspected = page.scanned, next = page.cursor
                 const pool = page.events.sort((a, b) => a.rank - b.rank).slice(0, 100)
@@ -55,7 +54,9 @@ export default function RulePreview({ organizationId, conditions, action, range,
                     seen.current = new Set(rows.current.map(event => event.id))
                     setEvents(rows.current)
                 }
-                setCount(total); setScanned(inspected); setLimited(Boolean(next)); setMore(false)
+                setCount(total); setScanned(inspected); setLimited(Boolean(next))
+                cursor.current = next
+                setMore(Boolean(next))
                 seen.current = new Set(rows.current.map(event => event.id))
                 setComplete(true)
             } catch (cause) { if (!abort.signal.aborted) setError(cause instanceof Error ? cause.message : 'Preview could not be loaded.') }
@@ -63,31 +64,33 @@ export default function RulePreview({ organizationId, conditions, action, range,
         return () => { clearTimeout(timer); abort.abort() }
         // The parent remounts this snapshot when the organization, rule or range changes.
     }, [attempt])
-    useEffect(() => { onReady(!error && complete && (!limited || acknowledged)) }, [complete, acknowledged, error, limited, onReady])
-    async function prefetch() {
-        if (busy.current || !more || !rows.current.length || controller.current.signal.aborted) return
+    useEffect(() => { onReady(!error && complete) }, [complete, error, onReady])
+    async function prefetch(checkMore = false) {
+        if (busy.current || !more || controller.current.signal.aborted) return
         const abort = controller.current
         browsing.current = true
         busy.current = true; setLoading(true); if (complete) setError('')
         try {
             do {
-                const page = await read(cursor.current, false)
+                const page = await read(cursor.current, false, 1000)
                 if (abort.signal.aborted) return
                 cursor.current = page.cursor
                 const fresh = page.events.filter(event => !seen.current.has(event.id)).sort((a, b) => a.rank - b.rank)
                 fresh.forEach(event => seen.current.add(event.id))
                 rows.current = [...rows.current, ...fresh]
                 setEvents(rows.current)
-                if (!page.cursor) { setMore(false); break }
+                setCount(current => current + page.count)
+                setScanned(current => current + page.scanned)
+                setLimited(Boolean(page.cursor))
+                if (!page.cursor || checkMore) { setMore(Boolean(page.cursor)); break }
             } while (rows.current.length - offset < 100)
         } catch (cause) { if (!abort.signal.aborted) setError(cause instanceof Error ? cause.message : 'More events could not be loaded.') }
         finally { if (controller.current === abort) { busy.current = false; if (!abort.signal.aborted) setLoading(false) } }
     }
-    useEffect(() => { if (complete && !limited) void prefetch() }, [complete, limited])
     const start = Math.max(0, offset - 1), visible = events.slice(start, start + 8)
     const paths = [...new Set(conditions.map(condition => condition.path))]
     return <section className='grid min-w-0 gap-3' aria-label='Matching events preview'>
-        <div className='flex flex-wrap items-center justify-between gap-2'><h3 className='font-semibold' aria-live='polite'>{limited ? `${count.toLocaleString()} matching events in the checked sample` : !complete ? 'Checking matching events…' : `${new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(count)} matching events`}</h3><span className='text-xs text-ui-muted'>{limited ? `Preview capped at ${scanned.toLocaleString()} candidate events checked` : complete ? `${count.toLocaleString()} matches · ${scanned.toLocaleString()} events checked` : `${count.toLocaleString()}/${scanned.toLocaleString()} events checked`}</span></div>
+        <div className='flex flex-wrap items-center justify-between gap-2'><h3 className='font-semibold' aria-live='polite'>{limited ? `${count.toLocaleString()} matching events in the checked sample` : !complete ? 'Checking matching events…' : `${new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(count)} matching events`}</h3><span className='flex items-center gap-1 text-xs text-ui-muted'>{limited ? `${scanned} events checked` : complete ? `${count.toLocaleString()} matches · ${scanned.toLocaleString()} events checked` : `${count.toLocaleString()}/${scanned.toLocaleString()} events checked`}{limited && <button type='button' aria-label='Check 1000 more events' title='Check 1000 more events' disabled={loading} onClick={() => void prefetch(true)} className='inline-flex size-5 items-center justify-center rounded border border-ui-border text-sm leading-none text-ui-text disabled:opacity-50'>+</button>}</span></div>
         {!!events.length && <div role='region' aria-label='Matching event rows' tabIndex={0} style={{ overflowAnchor: 'none' }} className='h-[360px] overflow-auto rounded-lg border border-ui-border' onScroll={event => {
             browsing.current = true
             const began = performance.now(), element = event.currentTarget
@@ -103,18 +106,7 @@ export default function RulePreview({ organizationId, conditions, action, range,
             </tbody></table>
         </div>}
         {loading && <p role='status' className='text-xs text-ui-muted'>Loading more matches…</p>}
-        {limited && <p role='status' className='text-sm text-ui-muted'>This preview is intentionally capped to protect the database. Narrow the time range or add a condition to verify the complete total before creating the rule.</p>}
         {complete && !events.length && <p className='text-sm text-ui-muted'>No matching events in this range.</p>}
         {error && <p role='alert' className='text-sm text-ui-text'>{error}<button type='button' onClick={() => complete ? void prefetch() : setAttempt(attempt + 1)} className='ml-2 underline'>Retry</button></p>}
-        {limited && <div className='mt-2 overflow-hidden rounded-xl border border-ui-warning/30 bg-ui-raised'>
-            <div className='flex items-start gap-3 p-4 sm:p-5'>
-                <span className='flex size-9 shrink-0 items-center justify-center rounded-full bg-ui-warning/10 text-ui-warning'><CircleAlert size={20} aria-hidden='true' /></span>
-                <p className='text-sm font-semibold'>This preview stopped after 2,000 candidate events. It found {count.toLocaleString()} matching events in the checked sample; more matches may exist outside it. Continue?</p>
-            </div>
-            <div className='flex gap-2 border-t border-ui-border px-4 py-4 sm:px-5'>
-                <button type='button' className='rounded-md bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-on-primary' aria-pressed={acknowledged} onClick={() => setAcknowledged(true)}>Yes</button>
-                <button type='button' className='rounded-md border border-ui-border px-3 py-2 text-sm font-semibold text-ui-text' aria-pressed={!acknowledged} onClick={() => setAcknowledged(false)}>No</button>
-            </div>
-        </div>}
     </section>
 }

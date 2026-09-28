@@ -7,7 +7,7 @@ import { cachedRead, ReadAdmissionError } from '../readCache.ts'
 
 export type PreviewEvent = { id: string, timestamp: string, normalized: Record<string, unknown>, rank: number, bytes?: number }
 type Cursor = { time: string, id: string }
-export type PreviewRequest = { from: string | null, until: string, cursor?: Cursor | null, action: 'drop' | 'keep', sample?: boolean, conditions: Condition[] }
+export type PreviewRequest = { from: string | null, until: string, cursor?: Cursor | null, action: 'drop' | 'keep', sample?: boolean, limit?: 1000 | 2000, conditions: Condition[] }
 
 // Page recent candidates first, then retain the authoritative runtime check.
 export async function scanRulePreview(organizationId: string, canReadLogs: boolean, input: PreviewRequest, query = run) {
@@ -19,10 +19,11 @@ export async function scanRulePreview(organizationId: string, canReadLogs: boole
 }
 
 async function scanRulePreviewUncached(organizationId: string, canReadLogs: boolean, input: PreviewRequest, query = run) {
-    const params: (string | string[])[] = [organizationId, input.until]
+    const params: (string | string[] | number)[] = [organizationId, input.until]
     const fromParameter = input.from ? `$${params.push(input.from)}` : null
     const cursorTimeParameter = input.cursor ? `$${params.push(input.cursor.time)}` : null
     const cursorIdParameter = input.cursor ? `$${params.push(input.cursor.id)}` : null
+    const limitParameter = `$${params.push(input.limit || 2000)}`
     // Bound work by recent candidate rows before evaluating user-supplied conditions.
     // Applying dynamic predicates in SQL can scan an entire event range when matches are rare.
     const scope = [
@@ -36,7 +37,7 @@ async function scanRulePreviewUncached(organizationId: string, canReadLogs: bool
     const rules = input.action === 'drop' ? await loadLogRetentionRules(organizationId, query) : []
     const result = await query(`SELECT id, event_timestamp::text AS timestamp, normalized, pg_column_size(events)::bigint AS bytes${input.action === 'drop' ? ', original' : ''}
         FROM events WHERE ${scope.join(' AND ')}${input.action === 'drop' ? ' AND normalized->>\'severity\' = \'low\'' : ''}
-        ORDER BY event_timestamp DESC, id DESC LIMIT 2000`, params)
+        ORDER BY event_timestamp DESC, id DESC LIMIT ${limitParameter}`, params)
     const eligible = result.rows.filter(row => input.action !== 'drop' || eligibleCustomDrop(row.normalized || {})
         && !retentionStoreMatches(row.normalized || {}, rules) && !retentionStoreMatches(row.original || {}, rules)) as PreviewEvent[]
     const matches = input.conditions.some(condition => condition.operator === 'regex')
@@ -48,7 +49,8 @@ async function scanRulePreviewUncached(organizationId: string, canReadLogs: bool
         .map(([key, value]) => [key, typeof value === 'string' ? value.slice(0, 500) : value])) }))
     if (input.sample) events.sort((a, b) => a.rank - b.rank)
     const last = result.rows.at(-1)
-    return { scanned: result.rows.length, count: matches.length, bytes, events: input.sample ? events.slice(0, 100) : events, cursor: result.rows.length === 2000 && last ? { time: last.timestamp, id: last.id } : null }
+    const pageLimit = input.limit || 2000
+    return { scanned: result.rows.length, count: matches.length, bytes, events: input.sample ? events.slice(0, 100) : events, cursor: result.rows.length === pageLimit && last ? { time: last.timestamp, id: last.id } : null }
 }
 
 export async function getStoredRuleEstimate(organizationId: string, ruleId: string, version: string, query = run) {
@@ -114,6 +116,7 @@ export function validPreviewWindow(input: Record<string, unknown>): input is Rec
     const validTime = (value: unknown) => typeof value === 'string' && value.length <= 40 && Number.isFinite(Date.parse(value))
     if (!validTime(input.until) || Date.parse(input.until as string) > Date.now() + 60_000 || (input.from !== null && !validTime(input.from))) return false
     if (input.from && Date.parse(input.from as string) > Date.parse(input.until as string)) return false
+    if (input.limit !== undefined && input.limit !== 1000 && input.limit !== 2000) return false
     if (input.action !== 'drop' && input.action !== 'keep') return false
     if (input.cursor != null) {
         const cursor = input.cursor as Cursor
