@@ -40,6 +40,11 @@ const directConnections = DB_POOL_HOST ? Math.min(8, maxConnections) : 0
 // Event holds cursor and batch locks while committing evidence on another client.
 const eventConnections = process.env.API_HTTP_ONLY !== '1' && process.env.AUTH_SERVICE_ONLY !== '1'
     && maxConnections >= 12 ? 8 : 0
+const primaryConnections = Math.max(0, maxConnections - eventConnections - directConnections)
+const warmupBudget = Math.max(0, Math.min(maxConnections, Math.floor(Number(process.env.DB_POOL_WARMUP_CONN) || 0)))
+const primaryWarmup = Math.min(primaryConnections, warmupBudget)
+const eventWarmup = Math.min(eventConnections, Math.max(0, warmupBudget - primaryWarmup))
+const directWarmup = Math.min(directConnections, Math.max(0, warmupBudget - primaryWarmup - eventWarmup))
 const httpOnlyApi = process.env.API_HTTP_ONLY === '1' && process.env.AUTH_SERVICE_ONLY !== '1'
 const configuredIdleTimeout = Number(DB_IDLE_TIMEOUT_MS) || (
     process.env.AUTH_SERVICE_ONLY === '1' ? 5000 : 120_000
@@ -53,10 +58,10 @@ const poolOptions = {
     application_name: process.env.AUTH_SERVICE_ONLY === '1'
         ? 'hanasand-auth'
         : httpOnlyApi ? 'hanasand-api-http' : 'hanasand-api',
-    max: maxConnections - eventConnections - directConnections,
-    // Do not pin API sessions behind HAProxy's reloadable DB listener. The
-    // short idle window leaves room for sessions released just after a reload.
-    min: 0,
+    max: primaryConnections,
+    // Keep warmed client sessions available so bursts reuse SCRAM-authenticated
+    // connections instead of paying the handshake cost on request paths.
+    min: primaryWarmup,
     idleTimeoutMillis: httpOnlyApi
         ? Math.min(Math.max(configuredIdleTimeout, 1), 15_000)
         : configuredIdleTimeout,
@@ -67,10 +72,21 @@ const poolOptions = {
     keepAlive: true
 }
 const pool = new Pool(poolOptions)
-const eventPool = eventConnections ? new Pool({ ...poolOptions, max: eventConnections }) : pool
+const eventPool = eventConnections ? new Pool({ ...poolOptions, max: eventConnections, min: eventWarmup }) : pool
 // Schema startup uses session-scoped SET/RESET and CREATE INDEX CONCURRENTLY.
 // Keep that small, infrequent path on PostgreSQL directly when traffic uses PgBouncer.
-const directPool = DB_POOL_HOST ? new Pool({ ...poolOptions, host: DB_HOST, port: Number(DB_PORT) || 5432, max: directConnections }) : pool
+const directPool = DB_POOL_HOST ? new Pool({ ...poolOptions, host: DB_HOST, port: Number(DB_PORT) || 5432, max: directConnections, min: directWarmup }) : pool
+
+export async function warmDatabasePools() {
+    const targets = new Map([[pool, primaryWarmup], [eventPool, eventWarmup], [directPool, directWarmup]])
+    await Promise.all([...targets].map(async ([connectionPool, minimum]) => {
+        const missing = Math.max(0, minimum - connectionPool.totalCount)
+        await Promise.all(Array.from({ length: missing }, async () => {
+            const client = await connectionPool.connect()
+            client.release()
+        }))
+    }))
+}
 
 export function withEventDatabase<T>(work: () => Promise<T>): Promise<T> {
     return eventWork.run(true, work)

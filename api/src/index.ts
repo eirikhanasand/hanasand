@@ -3,7 +3,7 @@ import { processRuleReprocessJob } from '#utils/events/ruleReprocess.ts'
 import { startLogProcessor } from '#utils/events/processor.ts'
 import { startBackgroundAnalytics } from './utils/backgroundAnalytics.ts'
 import { recoveryRequestAllowed, recoveryState, recoveryReadOnly } from './utils/recovery.ts'
-import { queryOnce, closeDatabase, withEventDatabase, isTransientDatabaseError } from './utils/db.ts'
+import { queryOnce, closeDatabase, withEventDatabase, isTransientDatabaseError, warmDatabasePools } from './utils/db.ts'
 import Fastify from 'fastify'
 import apiRoutes from './routes.ts'
 import cors from '@fastify/cors'
@@ -186,6 +186,7 @@ async function start() {
                 fastify.log.warn({ error }, 'Failed to provision mail accounts on startup')
             })
         }
+        if (!browserWorkerOnly && !httpWorkerOnly) await warmDatabasePools()
         if (!browserWorkerOnly && !httpWorkerOnly && process.env.AUTH_SERVICE_ONLY !== '1') {
             const stopProcessing = startLogProcessor(() => withEventDatabase(processStoredLogs), error => fastify.log.error({ error }, 'Event log processing failed; will retry'))
             const stopLiveProcessing = startLogProcessor(() => withEventDatabase(processLiveLogs), error => fastify.log.error({ error }, 'Event live processing failed; will retry'), () => 100, undefined, 100)
