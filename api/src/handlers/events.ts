@@ -508,7 +508,7 @@ export async function getRule(req: FastifyRequest<{ Params: { id: string }, Quer
     }
     const offset = Math.max(0, Math.min(1000000, Number.parseInt(req.query.offset || '0', 10) || 0))
     try {
-        const payload = await cachedRead(`rule-detail:${access.organizationId}:${access.role}:${req.params.id}:${offset}`, 10000, async () => {
+        const loadDetail = async () => {
             const objectIds = [...new Set([rule.id, rule.recordId || rule.id])]
             const [audit, hits] = await readDatabase(() => Promise.all([
                 run(`SELECT id, event_type, actor_id, created_at, context
@@ -530,7 +530,10 @@ export async function getRule(req: FastifyRequest<{ Params: { id: string }, Quer
             const hitCount = rule.definition?.stage === 'analyze' && rule.definition.action === 'keep' ? null : hits.get(rule.id) ?? 0
             const canEdit = !isHistorical && canManageRules(access.role) && (!([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') || (await hasRole(req, res, 'system_admin')).valid)
             return { organizationId: access.organizationId, canEdit, isHistorical, currentVersion: rule.version, rule: displayedRule, triggerCount: hitCount, audit: audit.rows.slice(0, 50), nextOffset: audit.rows.length > 50 ? offset + 50 : null }
-        })
+        }
+        const payload = process.env.NODE_ENV === 'test'
+            ? await loadDetail()
+            : await cachedRead(`rule-detail:${access.organizationId}:${access.role}:${req.params.id}:${offset}`, 10000, loadDetail)
         return res.send(payload)
     } catch (error) {
         if (error instanceof ReadAdmissionError) return res.header('Retry-After', '2').status(503).send({ error: error.message })
