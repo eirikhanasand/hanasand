@@ -49,8 +49,6 @@ ti/scraper/.tmp
 **/*.pem
 **/*.key
 **/*secret*
-!api/tests/fixtures/monitoring-tls/cert.pem
-!api/tests/fixtures/monitoring-tls/key.pem
 
 **/.DS_Store
 
@@ -114,6 +112,8 @@ ti/scraper/.tmp
 **/*.pem
 **/*.key
 **/*secret*
+!api/tests/fixtures/monitoring-tls/cert.pem
+!api/tests/fixtures/monitoring-tls/key.pem
 **/code-inventory.json
 
 # Native shaders, grammars and build/service configuration are source too.
