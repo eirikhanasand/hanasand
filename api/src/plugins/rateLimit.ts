@@ -31,6 +31,15 @@ const sessionBatchScope = organizationPublicApiScopes().find(scope =>
     scope.method === 'POST' && scope.route === '/api/v1/ti/search/batch'
 )
 
+const internalTokenRoutes = new Map<string, string>([
+    ['GET /api/vms/names', 'service:vm-sync'],
+    ['POST /api/vm', 'service:vm-sync'],
+    ['POST /api/vm/details', 'service:vm-sync'],
+    ['POST /api/vms/shutdown', 'service:vm-sync'],
+    ['DELETE /api/vms', 'service:vm-sync'],
+    ['POST /api/status/ingest', 'service:status-ingest'],
+])
+
 export async function resetApiKeyRateLimitBuckets(apiKeyId: string) {
     return resetSharedRateLimitBuckets(`api_key:${apiKeyId}:`)
 }
@@ -92,7 +101,10 @@ async function enforceRateLimit(req: FastifyRequest, res: FastifyReply, database
         phaseStarted = now
     }
     const logIngest = req.method === 'POST' && path === '/api/logs/ingest' && (hasLogIngestToken(req) || hasInternalToken(req))
+    const internalTokenRoute = internalTokenRoutes.get(`${req.method} ${path}`)
     const actor: RateLimitActor = logIngest ? { scope: 'internal', identifier: 'service:log-ingest' }
+        : internalTokenRoute && hasInternalToken(req)
+            ? { scope: 'internal', identifier: internalTokenRoute }
         : req.method === 'GET' && path === '/api/thesis/code-reviews' && hasInternalToken(req)
             ? { scope: 'internal', identifier: 'service:code-review' }
             : await resolveRateLimitActor(req)
