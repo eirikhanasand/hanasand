@@ -118,6 +118,7 @@ ti/scraper/.tmp
 !api/tests/fixtures/monitoring-tls/key.pem
 !api/tests/
 !api/tests/fixtures/**
+!api/tests/fixtures/monitoring-tls/*.pem
 **/code-inventory.json
 
 # Native shaders, grammars and build/service configuration are source too.
