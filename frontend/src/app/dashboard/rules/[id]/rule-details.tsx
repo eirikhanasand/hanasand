@@ -22,7 +22,7 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
     const [status, setStatus] = useState('')
     const [liveHitsUnavailable, setLiveHitsUnavailable] = useState(false)
     const [storageEstimate, setStorageEstimate] = useState<StorageEstimate | null>(null)
-    const [storageEstimateState, setStorageEstimateState] = useState<'idle' | 'loading' | 'unavailable'>('idle')
+    const [storageEstimateState, setStorageEstimateState] = useState<'idle' | 'loading' | 'pending' | 'unavailable'>('idle')
     const [busy, setBusy] = useState(false)
     const displayedHitCount = useSmoothedCount(data?.triggerCount, 3_000)
     const endpoint = `/api/backend/rules/${encodeURIComponent(id)}?organizationId=${encodeURIComponent(organizationId)}`
@@ -39,19 +39,29 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
             setStorageEstimateState('idle')
             return
         }
-        const controller = new AbortController()
+        let active = true
+        let requestPending = false
+        let hasEstimate = false
         setStorageEstimate(null)
         setStorageEstimateState('loading')
-        requestJson<{ estimate: StorageEstimate | null }>(`/api/backend/rules/${encodeURIComponent(id)}/storage-estimate?organizationId=${encodeURIComponent(organizationId)}`, { signal: controller.signal, cache: 'no-store' })
-            .then(payload => {
-                if (controller.signal.aborted) return
+        const refreshEstimate = async() => {
+            if (!active || requestPending || hasEstimate || document.visibilityState !== 'visible') return
+            requestPending = true
+            try {
+                const payload = await requestJson<{ estimate: StorageEstimate | null }>(`/api/backend/rules/${encodeURIComponent(id)}/storage-estimate?organizationId=${encodeURIComponent(organizationId)}`, { cache: 'no-store' })
+                if (!active) return
                 setStorageEstimate(payload.estimate)
-                setStorageEstimateState(payload.estimate ? 'idle' : 'unavailable')
-            })
-            .catch(() => {
-                if (!controller.signal.aborted) setStorageEstimateState('unavailable')
-            })
-        return () => controller.abort()
+                hasEstimate = Boolean(payload.estimate)
+                setStorageEstimateState(payload.estimate ? 'idle' : 'pending')
+            } catch {
+                if (active) setStorageEstimateState('unavailable')
+            } finally {
+                requestPending = false
+            }
+        }
+        void refreshEstimate()
+        const interval = window.setInterval(() => void refreshEstimate(), 60_000)
+        return () => { active = false; window.clearInterval(interval) }
     }, [id, organizationId, data?.isHistorical, data?.rule.version, data?.rule.definition?.stage, data?.rule.definition?.action])
 
     useEffect(() => {
@@ -129,19 +139,19 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
                             <span className='break-all font-mono'>{draft.id.replace(/\.v\d+$/, '')}</span>{data.isHistorical && <span>Version {draft.version} · Historical</span>}<span className='h-3 border-l border-ui-border' aria-hidden='true' /><span>{draft.source === 'hanasand' ? 'Hanasand rule' : draft.source === 'open_source' ? 'Imported rule' : 'Custom rule'}</span>
                         </div>
                     </div>
-                    <div className='flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-ui-border pt-2 sm:border-t-0 sm:border-l sm:py-1 sm:pl-4'>
-                        <dl className='flex items-center gap-2'>
+                    <div className='flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-ui-border pt-2 sm:border-t-0 sm:py-1'>
+                        {data.rule.definition?.stage === 'analyze' && data.rule.definition.action === 'drop' && !data.isHistorical && <dl className='sm:border-l sm:border-ui-border sm:pl-4' title='Estimated event-row bytes for stored low-severity records matching this rule and eligible to be dropped. Index space is excluded.'>
+                            <dt className='text-xs font-medium text-ui-muted'>Undropped</dt>
+                            <dd className='mt-1 text-sm font-semibold leading-none tabular-nums text-ui-text'>
+                                {storageEstimateState === 'loading' ? 'Loading…' : storageEstimateState === 'pending' ? 'Pending' : storageEstimateState === 'unavailable' ? 'Unavailable' : `${storageEstimate?.count.toLocaleString('en-US') ?? '0'} events`}
+                            </dd>
+                            <dd className='mt-1 text-xs tabular-nums text-ui-muted'>{storageEstimateState === 'loading' ? 'Loading saved estimate…' : storageEstimateState === 'pending' ? 'Waiting for estimate' : storageEstimateState === 'unavailable' ? 'Space estimate unavailable' : `${formatBytes(storageEstimate?.bytes ?? 0)} estimated savings`}</dd>
+                            {storageEstimate && <dd className='mt-1 text-right text-[10px] tabular-nums text-ui-muted'>{formatEstimateDate(storageEstimate.checkedDate)}</dd>}
+                        </dl>}
+                        <dl className='flex items-center gap-2 sm:border-l sm:border-ui-border sm:pl-4'>
                             <Activity size={20} className='text-ui-primary' aria-hidden='true' />
                             <div><dt className='text-xs font-medium text-ui-muted'>Hits</dt><dd className='mt-1 text-xl font-semibold leading-none tabular-nums text-ui-text' title='Recorded rule hits for this organization, using the same total as the rule list.'>{displayedHitCount?.toLocaleString('en-US') ?? 'Unavailable'}</dd>{liveHitsUnavailable && <p className='mt-1 text-xs text-ui-warning'>Live count unavailable; retrying.</p>}</div>
                         </dl>
-                        {data.rule.definition?.stage === 'analyze' && data.rule.definition.action === 'drop' && !data.isHistorical && <dl title='Estimated event-row bytes for stored low-severity records matching this rule and eligible to be dropped. Index space is excluded.'>
-                            <dt className='text-xs font-medium text-ui-muted'>Undropped</dt>
-                            <dd className='mt-1 text-sm font-semibold leading-none tabular-nums text-ui-text'>
-                                {storageEstimateState === 'loading' ? 'Estimating…' : storageEstimateState === 'unavailable' ? 'Unavailable' : `${storageEstimate?.count.toLocaleString('en-US') ?? '0'} events`}
-                            </dd>
-                            <dd className='mt-1 text-xs tabular-nums text-ui-muted'>{storageEstimateState === 'loading' ? 'Calculating saved space…' : storageEstimateState === 'unavailable' ? 'Space estimate unavailable' : `${formatBytes(storageEstimate?.bytes ?? 0)} estimated savings`}</dd>
-                            {storageEstimate && <dd className='mt-1 text-right text-[10px] tabular-nums text-ui-muted'>{formatEstimateDate(storageEstimate.checkedDate)}</dd>}
-                        </dl>}
                     </div>
                 </header>
             </DashboardPanel>

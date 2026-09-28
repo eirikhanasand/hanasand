@@ -3,7 +3,7 @@ import { eligibleCustomDrop } from './dropEligibility.ts'
 import { Worker } from 'node:worker_threads'
 import { matchesRule, type Condition } from './conditions.ts'
 import { loadLogRetentionRules, retentionStoreMatches } from './customRetention.ts'
-import { cachedRead } from '../readCache.ts'
+import { cachedRead, ReadAdmissionError } from '../readCache.ts'
 
 export type PreviewEvent = { id: string, timestamp: string, normalized: Record<string, unknown>, rank: number, bytes?: number }
 type Cursor = { time: string, id: string }
@@ -51,7 +51,21 @@ async function scanRulePreviewUncached(organizationId: string, canReadLogs: bool
     return { scanned: result.rows.length, count: matches.length, bytes, events: input.sample ? events.slice(0, 100) : events, cursor: result.rows.length === 2000 && last ? { time: last.timestamp, id: last.id } : null }
 }
 
-export async function estimateStoredRuleEvents(organizationId: string, ruleId: string, version: string, conditions: Condition[], query = run) {
+export async function getStoredRuleEstimate(organizationId: string, ruleId: string, version: string, query = run) {
+    const row = (await query(`SELECT event_count::text,estimated_bytes::text,scanned_date::text,generated_at
+        FROM rule_storage_estimates WHERE organization_id=$1 AND rule_id=$2 AND rule_version=$3 AND generated_at IS NOT NULL`, [organizationId, ruleId, version])).rows[0]
+    if (!row) return null
+    return { count: Number(row.event_count), bytes: Number(row.estimated_bytes), checkedDate: String(row.scanned_date).slice(0, 10), generatedAt: new Date(row.generated_at).toISOString() }
+}
+
+export async function estimateStoredRuleEvents(
+    organizationId: string,
+    ruleId: string,
+    version: string,
+    conditions: Condition[],
+    query = run,
+    shouldContinue: () => Promise<boolean> = async() => true,
+) {
     const claimed = await query(`INSERT INTO rule_storage_estimates(organization_id,rule_id,rule_version,scanned_date)
         VALUES($1,$2,$3,(NOW() AT TIME ZONE 'UTC')::date)
         ON CONFLICT(organization_id,rule_id,rule_version) DO UPDATE
@@ -71,6 +85,7 @@ export async function estimateStoredRuleEvents(organizationId: string, ruleId: s
             let bytes = 0
             const until = new Date().toISOString()
             do {
+                if (!(await shouldContinue())) throw new ReadAdmissionError()
                 const page = await scanRulePreview(organizationId, true, { from: null, until, cursor, action: 'drop', conditions }, query)
                 count += page.count
                 bytes += page.bytes

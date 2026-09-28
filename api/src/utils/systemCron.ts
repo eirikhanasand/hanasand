@@ -7,6 +7,7 @@ import { promisify } from 'node:util'
 import { getBackgroundJobRuntime, type BackgroundJobRuntime } from './backgroundJobRuntime.ts'
 import { canRunApiCronJobNow, HOST_UPDATE_MONITOR_JOB_ID, isApiCronJobPaused, runApiCronJobNow, setApiCronJobPaused } from './cron.ts'
 import { ORGANIZATION_RETENTION_JOB_ID } from './organizationPrivacy.ts'
+import { RULE_STORAGE_ESTIMATE_JOB_ID } from './events/ruleStorageEstimateWorker.ts'
 import { getVulnerabilityReport, isVulnerabilityScanActive, setVulnerabilityScannerPaused, startTrackedVulnerabilityScan, VULNERABILITY_SCAN_CADENCE_SECONDS, VULNERABILITY_SCAN_JOB_ID } from './vulnerabilities/scanner.ts'
 import { collectDatabaseBackupServices, createDatabaseBackup, DATABASE_BACKUP_JOB_ID, setDatabaseBackupSchedulePaused } from './db/backups.ts'
 
@@ -262,6 +263,16 @@ const apiBackgroundJobDefinitions: Array<{
         schedule: 'Every minute',
         cadenceSeconds: API_CRON_CADENCE_SECONDS,
         source: 'api/src/utils/organizationPrivacy.ts',
+        controls: ['pause', 'resume', 'run_now'],
+    },
+    {
+        id: RULE_STORAGE_ESTIMATE_JOB_ID,
+        name: 'Rule storage estimates',
+        description: 'Calculates saved event counts and row bytes for drop rules one at a time when database load is low.',
+        category: 'Backup/Database',
+        schedule: 'Every minute when database load is low',
+        cadenceSeconds: API_CRON_CADENCE_SECONDS,
+        source: 'api/src/utils/events/ruleStorageEstimateWorker.ts',
         controls: ['pause', 'resume', 'run_now'],
     },
     {
