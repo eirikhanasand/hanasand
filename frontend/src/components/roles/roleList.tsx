@@ -171,9 +171,9 @@ export default function RoleList({ roles, users, canManage, highestPriority }: {
             </div>}
             {error && <ErrorNotice compact message={error} />}
             {notice && <p role='status' className='text-sm text-ui-success'>{notice}</p>}
-            <div className='overflow-x-auto'>
-                <table className='w-full min-w-[560px] border-collapse text-left'>
-                    <thead><tr className='border-b border-ui-border text-[0.68rem] font-bold uppercase tracking-[0.12em] text-ui-muted'><th className='px-3 py-2'>Group</th><th className='w-28 px-3 py-2'>Users</th><th className='w-24 px-3 py-2'>Priority</th><th className='w-24 px-3 py-2 text-right'><span className='sr-only'>Role actions</span></th></tr></thead>
+            <div className='min-w-0 overflow-x-auto'>
+                <table className='w-full table-fixed border-collapse text-left sm:table-auto sm:min-w-[560px]'>
+                    <thead><tr className='border-b border-ui-border text-[0.68rem] font-bold uppercase tracking-[0.12em] text-ui-muted'><th className='px-2 py-2 sm:px-3'>Group</th><th className='w-16 px-2 py-2 sm:w-28 sm:px-3'>Users</th><th className='hidden w-24 px-3 py-2 sm:table-cell'>Priority</th><th className={`${editing ? 'w-28' : 'w-16'} px-2 py-2 text-right sm:w-24 sm:px-3`}><span className='sr-only'>Role actions</span></th></tr></thead>
                     <tbody>
                         {visibleItems.map(role => {
                             const memberUsers = users.filter(user => memberships.get(user.id)?.has(role.id))
@@ -183,18 +183,18 @@ export default function RoleList({ roles, users, canManage, highestPriority }: {
                             const visibleUsers = query && !roleMatchesQuery ? matchingUsers : listedUsers
                             return <Fragment key={role.id}>
                                 <tr className='border-b border-ui-border/70 hover:bg-ui-raised/60'>
-                                    <td className='px-3 py-2.5'>
-                                        <button type='button' aria-expanded={isOpen} aria-label={`${isOpen ? 'Hide' : 'Show'} users in ${role.name}`} onClick={() => setExpanded(isOpen ? null : role.id)} className='flex min-h-11 items-center gap-3 text-left text-ui-text'>
+                                    <td className='min-w-0 px-2 py-2.5 sm:px-3'>
+                                        <button type='button' aria-expanded={isOpen} aria-label={`${isOpen ? 'Hide' : 'Show'} users in ${role.name}`} onClick={() => setExpanded(isOpen ? null : role.id)} className='flex min-h-11 min-w-0 max-w-full items-center gap-2 text-left text-ui-text sm:gap-3'>
                                             {isOpen ? <ChevronDown className='h-4 w-4 shrink-0 text-ui-muted' /> : <ChevronRight className='h-4 w-4 shrink-0 text-ui-muted' />}
                                             <span className='grid h-8 w-8 shrink-0 place-items-center rounded-md border border-ui-primary/20 bg-ui-primary/10 text-ui-primary'><RoleIcon role={role} /></span>
-                                            <span className='min-w-0'><span className='block font-medium'>{role.name}</span>{role.description && <span className='block truncate text-xs text-ui-muted'>{role.description}</span>}</span>
+                                            <span className='min-w-0 break-words'><span className='block break-words font-medium'>{role.name}</span>{role.description && <span className='hidden truncate text-xs text-ui-muted sm:block'>{role.description}</span>}</span>
                                         </button>
                                     </td>
-                                    <td className='px-3 py-2.5 text-sm tabular-nums text-ui-text'>{memberUsers.length}</td>
-                                    <td className='px-3 py-2.5 text-sm tabular-nums text-ui-muted'>{role.priority}</td>
-                                    <td className='px-3 py-2.5 text-right'>{editing && canManage && highestPriority <= role.priority && <div className='flex justify-end gap-1'>
-                                        <button type='button' disabled={pending} aria-label={`Edit ${role.name}`} title='Edit role' onClick={() => openForm(role)} className='inline-flex min-h-11 min-w-11 items-center justify-center rounded p-2 text-ui-muted hover:bg-ui-raised hover:text-ui-text disabled:opacity-50'><Pencil className='h-4 w-4' /></button>
-                                        {role.id !== 'administrator' && <button type='button' disabled={pending} aria-label={`Delete ${role.name}`} title='Delete role' onClick={() => { setRemoving(role); setForm(null); setError('') }} className='inline-flex min-h-11 min-w-11 items-center justify-center rounded p-2 text-ui-muted hover:bg-ui-raised hover:text-ui-text disabled:opacity-50'><Trash2 className='h-4 w-4' /></button>}
+                                    <td className='px-2 py-2.5 text-sm tabular-nums text-ui-text sm:px-3'>{memberUsers.length}</td>
+                                    <td className='hidden px-3 py-2.5 text-sm tabular-nums text-ui-muted sm:table-cell'>{role.priority}</td>
+                                    <td className='px-2 py-2.5 text-right sm:px-3'>{editing && canManage && highestPriority <= role.priority && <div className='flex flex-wrap justify-end gap-1'>
+                                        <button type='button' disabled={pending} aria-label={`Edit ${role.name}`} title='Edit role' onClick={() => openForm(role)} className='inline-flex min-h-10 min-w-10 items-center justify-center rounded p-2 text-ui-muted hover:bg-ui-raised hover:text-ui-text disabled:opacity-50 sm:min-h-11 sm:min-w-11'><Pencil className='h-4 w-4' /></button>
+                                        {role.id !== 'administrator' && <button type='button' disabled={pending} aria-label={`Delete ${role.name}`} title='Delete role' onClick={() => { setRemoving(role); setForm(null); setError('') }} className='inline-flex min-h-10 min-w-10 items-center justify-center rounded p-2 text-ui-muted hover:bg-ui-raised hover:text-ui-text disabled:opacity-50 sm:min-h-11 sm:min-w-11'><Trash2 className='h-4 w-4' /></button>}
                                     </div>}</td>
                                 </tr>
                                 {isOpen && <tr className='border-b border-ui-border/70 bg-ui-raised/30'><td colSpan={4} className='px-3 py-3'>

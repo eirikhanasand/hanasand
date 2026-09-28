@@ -80,7 +80,7 @@ export default function MonitorClient({ initialRows }: { initialRows: MonitorRow
             </section>
 
             <section className='min-h-0 flex-1 overflow-auto'>
-                <div className='min-w-[76rem]'>
+                <div className='hidden min-w-[76rem] xl:block'>
                     <div className='sticky top-0 z-10 grid grid-cols-[minmax(13rem,1fr)_minmax(13rem,1fr)_8rem_9rem_9rem_9rem_9rem_minmax(14rem,1fr)] gap-3 border-b border-ui-border bg-ui-raised px-4 py-2 text-[0.68rem] font-semibold uppercase text-ui-muted md:px-6'>
                         <span>Customer</span>
                         <span>Domain</span>
@@ -101,9 +101,46 @@ export default function MonitorClient({ initialRows }: { initialRows: MonitorRow
                         )}
                     </div>
                 </div>
+                <div className='divide-y divide-ui-border bg-ui-panel xl:hidden'>
+                    {rows.map(row => <MonitorCard key={row.domain} row={row} />)}
+                    {!rows.length && (
+                        <div className='grid gap-2 px-4 py-10 text-sm sm:px-6'>
+                            <p className='font-semibold text-ui-text'>No monitored domains match.</p>
+                            <p className='text-ui-muted'>Clear the search or use a broader customer/domain term.</p>
+                        </div>
+                    )}
+                </div>
             </section>
         </main>
     )
+}
+
+function MonitorCard({ row }: { row: MonitorRow }) {
+    return (
+        <article className='grid min-w-0 gap-3 px-4 py-4 sm:px-6'>
+            <div className='flex min-w-0 items-start justify-between gap-3'>
+                <div className='min-w-0'>
+                    <p className='break-words font-semibold capitalize text-ui-text'>{row.customer}</p>
+                    <p className='mt-1 break-all font-mono text-xs text-ui-muted'>{row.domain}</p>
+                </div>
+                <span className='shrink-0 rounded-full border border-ui-border bg-ui-raised px-2 py-0.5 text-xs font-semibold capitalize text-ui-muted'>{row.status}</span>
+            </div>
+            <div className='grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3'>
+                <MonitorDetail label='Monitored' value={row.monitoredSince ? age(row.monitoredSince) : 'Traffic only'} />
+                <MonitorDetail label='Breaches' value={formatNumber(row.breachMentions)} />
+                <MonitorDetail label='Requests today' value={formatNumber(row.requestsToday)} />
+                <MonitorDetail label='This month' value={formatNumber(row.requestsThisMonth)} />
+                <div className='col-span-2 min-w-0 sm:col-span-3'>
+                    <p className='text-[10px] font-semibold uppercase tracking-wide text-ui-muted'>Sources</p>
+                    <p className='mt-0.5 break-words text-ui-text'>{row.sources.join(', ') || 'Traffic monitor'}</p>
+                </div>
+            </div>
+        </article>
+    )
+}
+
+function MonitorDetail({ label, value }: { label: string, value: string }) {
+    return <div className='min-w-0'><p className='text-[10px] font-semibold uppercase tracking-wide text-ui-muted'>{label}</p><p className='mt-0.5 break-words font-semibold text-ui-text'>{value}</p></div>
 }
 
 function MonitorRowView({ row }: { row: MonitorRow }) {

@@ -26,6 +26,7 @@ const PAGE_SIZE = 50
 
 export default function ActivityClient({ initialQueue }: Props) {
     const [filters, setFilters] = useState<Filters>(() => emptyFilters())
+    const [filtersOpen, setFiltersOpen] = useState(false)
     const [queue, setQueue] = useState(initialQueue)
     const [items, setItems] = useState(initialQueue.items)
     const [nextOffset, setNextOffset] = useState<number | null>(() => initialQueue.page?.nextOffset ?? (initialQueue.items.length >= PAGE_SIZE ? initialQueue.items.length : null))
@@ -108,6 +109,7 @@ export default function ActivityClient({ initialQueue }: Props) {
     const visibleItems = useMemo(() => applyFilters(items, filters), [filters, items])
     const total = queue.page?.total ?? queue.counts?.total ?? items.length
     const newest = visibleItems[0]?.claimTime || visibleItems[0]?.collectedAt || queue.freshness?.latestClaimAt
+    const activeFilterCount = Object.entries(filters).filter(([key, value]) => key !== 'q' && Boolean(value)).length
 
     return (
         <main className='flex h-app-viewport min-h-full flex-col bg-ui-canvas text-ui-text'>
@@ -132,27 +134,37 @@ export default function ActivityClient({ initialQueue }: Props) {
             </section>
 
             <section className='sticky top-0 z-20 border-b border-ui-border bg-ui-panel/95 px-4 py-3 backdrop-blur md:px-6'>
-                <div className='grid gap-2 lg:grid-cols-[1.1fr_0.9fr_0.9fr_0.9fr_0.8fr_0.8fr_8rem_8rem_auto]'>
-                    <FilterInput icon={<Search className='h-4 w-4' />} label='Search' value={filters.q} onChange={q => setFilters(current => ({ ...current, q }))} placeholder='Any text' />
-                    <FilterInput label='Company' value={filters.company} onChange={company => setFilters(current => ({ ...current, company }))} placeholder='Company' />
-                    <FilterInput label='Actor' value={filters.actor} onChange={actor => setFilters(current => ({ ...current, actor }))} placeholder='Group' />
-                    <FilterInput label='Category' value={filters.category} onChange={category => setFilters(current => ({ ...current, category }))} placeholder='Documents' />
-                    <FilterInput label='Size' value={filters.size} onChange={size => setFilters(current => ({ ...current, size }))} placeholder='5GB' />
-                    <FilterInput label='Country' value={filters.country} onChange={country => setFilters(current => ({ ...current, country }))} placeholder='Norway' />
-                    <DateInput label='From' value={filters.from} onChange={from => setFilters(current => ({ ...current, from }))} />
-                    <DateInput label='To' value={filters.to} onChange={to => setFilters(current => ({ ...current, to }))} />
-                    <div className='grid gap-1'>
-                        <span className='text-[10px] font-semibold uppercase text-ui-muted'>Filters</span>
-                        <button type='button' onClick={() => setFilters(emptyFilters())} className='inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-muted transition hover:text-ui-text'>
+                <div className='flex flex-col gap-2 xl:grid xl:grid-cols-[1.1fr_0.9fr_0.9fr_0.9fr_0.8fr_0.8fr_8rem_8rem_auto]'>
+                    <div className='flex min-w-0 gap-2'>
+                        <div className='min-w-0 flex-1 xl:contents'>
+                            <FilterInput icon={<Search className='h-4 w-4' />} label='Search' value={filters.q} onChange={q => setFilters(current => ({ ...current, q }))} placeholder='Any text' />
+                        </div>
+                        <button type='button' aria-expanded={filtersOpen} aria-controls='activity-extra-filters' onClick={() => setFiltersOpen(open => !open)} className='inline-flex h-11 shrink-0 items-center gap-2 self-end rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-muted transition hover:text-ui-text xl:hidden'>
                             <Filter className='h-4 w-4' />
-                            Clear
+                            Filters{activeFilterCount ? ` · ${activeFilterCount}` : ''}
                         </button>
+                    </div>
+                    <div id='activity-extra-filters' className={`${filtersOpen ? 'grid' : 'hidden'} grid-cols-2 gap-2 sm:grid-cols-3 xl:contents`}>
+                        <FilterInput label='Company' value={filters.company} onChange={company => setFilters(current => ({ ...current, company }))} placeholder='Company' />
+                        <FilterInput label='Actor' value={filters.actor} onChange={actor => setFilters(current => ({ ...current, actor }))} placeholder='Group' />
+                        <FilterInput label='Category' value={filters.category} onChange={category => setFilters(current => ({ ...current, category }))} placeholder='Documents' />
+                        <FilterInput label='Size' value={filters.size} onChange={size => setFilters(current => ({ ...current, size }))} placeholder='5GB' />
+                        <FilterInput label='Country' value={filters.country} onChange={country => setFilters(current => ({ ...current, country }))} placeholder='Norway' />
+                        <DateInput label='From' value={filters.from} onChange={from => setFilters(current => ({ ...current, from }))} />
+                        <DateInput label='To' value={filters.to} onChange={to => setFilters(current => ({ ...current, to }))} />
+                        <div className='grid gap-1'>
+                            <span className='text-[10px] font-semibold uppercase text-ui-muted'>Filters</span>
+                            <button type='button' onClick={() => setFilters(emptyFilters())} className='inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-muted transition hover:text-ui-text'>
+                                <Filter className='h-4 w-4' />
+                                Clear
+                            </button>
+                        </div>
                     </div>
                 </div>
             </section>
 
             <section className='min-h-0 flex-1 overflow-auto'>
-                <div className='min-w-[76rem]'>
+                <div className='hidden min-w-[76rem] xl:block'>
                     <div className='sticky top-0 z-10 grid grid-cols-[8rem_minmax(14rem,1fr)_minmax(14rem,1fr)_12rem_10rem_9rem_12rem] gap-3 border-b border-ui-border bg-ui-raised px-4 py-2 text-[0.68rem] font-semibold uppercase text-ui-muted md:px-6'>
                         <span>Seen</span>
                         <span>Actor</span>
@@ -171,14 +183,47 @@ export default function ActivityClient({ initialQueue }: Props) {
                             </div>
                         )}
                     </div>
-                    <div ref={sentinelRef} className='px-4 py-6 text-center text-xs text-ui-muted'>
-                        {loadingMore ? 'Loading more activity...' : nextOffset !== null ? 'Scroll for more' : visibleItems.length ? 'End of loaded activity' : ''}
-                    </div>
+                </div>
+                <div className='divide-y divide-ui-border bg-ui-panel xl:hidden'>
+                    {visibleItems.map(item => <ActivityCard key={item.id} item={item} />)}
+                    {!visibleItems.length && (
+                        <div className='grid gap-2 px-4 py-10 text-sm sm:px-6'>
+                            <p className='font-semibold text-ui-text'>{emptyActivityTitle(queue.status)}</p>
+                            <p className='text-ui-muted'>{emptyActivityDetail(queue.status)}</p>
+                        </div>
+                    )}
+                </div>
+                <div ref={sentinelRef} className='px-4 py-6 text-center text-xs text-ui-muted'>
+                    {loadingMore ? 'Loading more activity...' : nextOffset !== null ? 'Scroll for more' : visibleItems.length ? 'End of loaded activity' : ''}
                 </div>
             </section>
             {error ? <p className='border-t border-ui-danger/35 bg-ui-raised/10 px-4 py-2 text-xs font-semibold text-ui-text'>{error}</p> : null}
         </main>
     )
+}
+
+function ActivityCard({ item }: { item: ExposureQueueItem }) {
+    return (
+        <article className='grid min-w-0 gap-3 px-4 py-4 sm:px-6'>
+            <div className='flex min-w-0 items-start justify-between gap-3'>
+                <div className='min-w-0'>
+                    <p className='break-words font-semibold text-ui-text'>{item.company}</p>
+                    <p className='mt-0.5 break-words text-sm text-ui-muted'>{item.actor}</p>
+                </div>
+                <time dateTime={item.claimTime || item.collectedAt} className='shrink-0 text-right text-xs font-semibold text-ui-muted'>{formatClaimTime(item.claimTime || item.collectedAt)}</time>
+            </div>
+            <div className='grid min-w-0 grid-cols-2 gap-x-4 gap-y-2 text-sm'>
+                <ActivityDetail label='Data' value={item.claimedData} />
+                <ActivityDetail label='Size' value={item.claimedDataSize} />
+                <ActivityDetail label='Country' value={item.country || 'Not disclosed'} />
+                <ActivityDetail label='Source' value={item.sourceName || 'Exposure source'} />
+            </div>
+        </article>
+    )
+}
+
+function ActivityDetail({ label, value }: { label: string, value: string }) {
+    return <div className='min-w-0'><p className='text-[10px] font-semibold uppercase tracking-wide text-ui-muted'>{label}</p><p className='mt-0.5 break-words text-ui-text'>{value || '—'}</p></div>
 }
 
 function activityStatus(status: string, visible: number, total: number) {

@@ -92,8 +92,8 @@ export default async function DarkwebIndexPage({ searchParams }: DarkwebIndexPag
     const records = search?.rows ?? []
 
     return (
-        <main className='min-h-app-viewport w-full bg-ui-canvas px-4 py-8 text-ui-text md:px-8'>
-            <div className='mx-auto grid w-full max-w-7xl gap-6'>
+        <main className='min-h-app-viewport w-full min-w-0 bg-ui-canvas px-4 py-8 text-ui-text md:px-8'>
+            <div className='mx-auto grid w-full min-w-0 max-w-7xl grid-cols-[minmax(0,1fr)] gap-6'>
                 <section className='grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-5 shadow-sm lg:grid-cols-[1.2fr_0.8fr]'>
                     <div className='grid gap-3'>
                         <div className='flex flex-wrap items-center gap-2'>
@@ -105,7 +105,7 @@ export default async function DarkwebIndexPage({ searchParams }: DarkwebIndexPag
                             Search monitored exposure sources, recent postings, and captured page summaries for company names, group names, posted dates, sectors, countries, and data descriptions. This is the working index behind fast customer notifications and customer-ready summaries.
                         </p>
                     </div>
-                    <div className='grid gap-2 text-sm'>
+                    <div className='grid min-w-0 gap-2 text-sm'>
                         <Metric icon={<Database className='h-4 w-4' />} label='Monitored sources' value={formatNumber(statusIndex?.monitoredSourceCount, 'Unavailable')} />
                         <Metric icon={<Search className='h-4 w-4' />} label='Indexed records' value={formatNumber(statusIndex?.indexedRecordCount, 'Unavailable')} />
                         <Metric icon={<ShieldCheck className='h-4 w-4' />} label='Matches' value={formatNumber(search?.count, records.length ? 'Matched' : 'No current match')} />
@@ -131,8 +131,8 @@ export default async function DarkwebIndexPage({ searchParams }: DarkwebIndexPag
                     />
                 </section>
 
-                <form className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm' action='/ti/darkweb/index'>
-                    <div className='grid gap-3 md:grid-cols-[1.2fr_0.7fr_0.7fr_0.7fr_auto] md:items-end'>
+                <form className='grid min-w-0 gap-3 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm' action='/ti/darkweb/index'>
+                    <div className='grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-[1.2fr_0.7fr_0.7fr_0.7fr_auto] xl:items-end'>
                         <Input label='Search' name='q' defaultValue={query} placeholder='company, group, domain, sector...' />
                         <Input label='Network' name='network' defaultValue={network} placeholder='tor, i2p, clear web' />
                         <Input label='Review type' name='legalTriage' defaultValue={legalTriage} placeholder='approved, review' />
@@ -230,13 +230,13 @@ function RecordRow({ record }: { record: DarkwebRecord }) {
 
 function Input({ label, name, defaultValue, placeholder }: { label: string; name: string; defaultValue: string; placeholder: string }) {
     return (
-        <label className='grid gap-2'>
+        <label className='grid min-w-0 gap-2'>
             <span className='text-xs font-semibold uppercase text-ui-primary'>{label}</span>
             <input
                 name={name}
                 defaultValue={defaultValue}
                 placeholder={placeholder}
-                className='h-11 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-medium text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-4 focus:ring-ui-primary/20'
+                className='h-11 w-full min-w-0 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-medium text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-4 focus:ring-ui-primary/20'
             />
         </label>
     )
@@ -253,9 +253,9 @@ function Cell({ label, value }: { label: string; value: string }) {
 
 function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
     return (
-        <div className='flex items-center justify-between gap-3 border border-ui-border bg-ui-panel px-3 py-2'>
-            <span className='inline-flex items-center gap-2 text-ui-muted'>{icon}{label}</span>
-            <span className='font-semibold text-ui-text'>{value}</span>
+        <div className='flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 border border-ui-border bg-ui-panel px-3 py-2'>
+            <span className='inline-flex min-w-0 items-center gap-2 text-ui-muted'>{icon}<span className='break-words'>{label}</span></span>
+            <span className='min-w-0 break-words font-semibold text-ui-text sm:text-right'>{value}</span>
         </div>
     )
 }

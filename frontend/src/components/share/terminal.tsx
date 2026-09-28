@@ -243,7 +243,7 @@ export default function Terminal({
                 </div>
 
                 <div className='relative min-h-0 w-full flex-1 overflow-hidden px-2 pb-2 pt-0 text-sm font-mono text-ui-muted'>
-                    {share && <TerminalViewer
+                    {open && share && <TerminalViewer
                         open={open}
                         share={share}
                         sendInput={sendInput}

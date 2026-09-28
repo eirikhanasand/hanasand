@@ -22,11 +22,12 @@ export default function RouteFrame({ children, serverPath, token, sidebar, banne
     const isPublicProduct = isPublicProductPath(pathname)
     const isLoggedInTi = token && (pathname === '/ti' || pathname.startsWith('/ti/'))
     const isAppSurface = showSidebar || isDashboard || isLoggedInTi || (!isPublicProduct && (isShare || pathname.startsWith('/ai') || isDashboard || isProfile || isOrganizations))
+    const showFooter = !isBrowserLanding && (!isAppSurface || isAiWorkbench)
 
     return (
-        <div data-route-frame className={`enterprise-theme relative z-10 mt-18 h-[calc(100dvh-4.5rem)] w-full bg-ui-canvas grid grid-rows-[auto_minmax(0,1fr)] ${isBrowserLanding || showSidebar ? 'overflow-hidden overscroll-none' : 'overflow-auto'}`}>
+        <div data-route-frame className={`enterprise-theme relative z-10 mt-18 h-[calc(100dvh-4.5rem)] w-full bg-ui-canvas grid grid-cols-[minmax(0,1fr)] ${showFooter ? 'grid-rows-[auto_auto_auto]' : 'grid-rows-[auto_minmax(0,1fr)]'} ${isBrowserLanding || isShare || showSidebar ? 'overflow-hidden overscroll-none' : 'overflow-auto'}`}>
             {banner}
-            <main className={`min-h-0 w-full ${isAppSurface || isBrowserLanding ? 'h-full' : isPublicProduct ? 'min-h-full' : 'min-h-app-viewport pt-3 md:pt-0'}`}>
+            <main className={`min-h-0 min-w-0 w-full ${isAppSurface || isBrowserLanding ? 'h-full' : 'min-h-app-viewport pt-3 md:pt-0'}`}>
                 {showSidebar ? (
                     <div className='h-full min-h-0 bg-ui-canvas px-2 text-ui-text'>
                         <div className='grid h-full min-h-0 grid-rows-[minmax(0,1fr)] gap-2 lg:grid-cols-[auto_minmax(0,1fr)]'>
@@ -42,7 +43,7 @@ export default function RouteFrame({ children, serverPath, token, sidebar, banne
                     </div>
                 ) : children}
             </main>
-            {isBrowserLanding || (isAppSurface && !isAiWorkbench) ? null : <Footer />}
+            {showFooter ? <Footer /> : null}
         </div>
     )
 }
