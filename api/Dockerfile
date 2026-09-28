@@ -1,4 +1,5 @@
 ARG HANASAND_BROWSER_RUNTIME_BASE=ghcr.io/selkies-project/selkies-gstreamer/gst-py-example@sha256:3b7e60077dfc56af335cbe2da33a8255ec0ab954ecf6169b9a46e78d09c3df84
+ARG HANASAND_BROWSER_RUNTIME_PATCHED=0
 
 FROM grafana/k6:latest AS k6builder
 
@@ -62,6 +63,7 @@ FROM oven/bun:1.3.11 AS browser-bun
 FROM ${HANASAND_BROWSER_RUNTIME_BASE} AS browser-runtime
 
 ARG HANASAND_RELEASE_COMMIT=unknown
+ARG HANASAND_BROWSER_RUNTIME_PATCHED
 LABEL org.opencontainers.image.revision=$HANASAND_RELEASE_COMMIT
 
 USER root
@@ -94,7 +96,10 @@ COPY api/browser-worker/patch-stream-h264.ts /tmp/patch-stream-h264.ts
 COPY api/browser-worker/patch-stream-receiver.ts /tmp/patch-stream-receiver.ts
 COPY api/browser-worker/patch-stream-packets.ts /tmp/patch-stream-packets.ts
 COPY api/browser-worker/patch-stream-signalling.ts /tmp/patch-stream-signalling.ts
-RUN bun /tmp/patch-stream-input.ts \
+RUN if [ "$HANASAND_BROWSER_RUNTIME_PATCHED" = "1" ]; then \
+        echo 'Using prepatched browser runtime'; \
+    else \
+        bun /tmp/patch-stream-input.ts \
     && bun /tmp/patch-stream-playback.ts \
     && bun /tmp/patch-stream-framerate.ts \
     && bun /tmp/patch-stream-h264.ts \
@@ -102,6 +107,7 @@ RUN bun /tmp/patch-stream-input.ts \
     && bun /tmp/patch-stream-packets.ts \
     && bun /tmp/patch-stream-signalling.ts \
     && bun /tmp/patch-stream-controls.ts \
+    ; fi \
     && chmod +x /usr/local/bin/hanasand-browser-worker \
     && sed -i 's/selkies-gstreamer-resize 1920x1080/selkies-gstreamer-resize "${BROWSER_STREAM_RESOLUTION:-1280x720}"/' /etc/entrypoint.sh \
     && sed -i '/\.scale {/,/}/s/height: 100%;/height: 100%;\n      object-fit: contain;/' /opt/gst-web/index.html \

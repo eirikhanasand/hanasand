@@ -60,6 +60,8 @@ assert.match(ws, /AutoRemove:\s*true/, 'session worker should auto-remove so fai
 assert.doesNotMatch(ws, /DB_PASSWORD=|VM_API_TOKEN=|MAIL_ADMIN_PASSWORD=|API_SSH_KEY=|\/var\/run\/docker\.sock|lxd\/unix\.socket/, 'session worker should not receive app secrets or host control sockets')
 assert.match(dockerfile, /ARG HANASAND_BROWSER_RUNTIME_BASE=ghcr\.io\/selkies-project\/selkies-gstreamer\/gst-py-example@sha256:[a-f0-9]{64}/, 'browser worker should default to a pinned WebRTC runtime image')
 assert.match(dockerfile, /FROM \$\{HANASAND_BROWSER_RUNTIME_BASE\} AS browser-runtime/, 'browser worker runtime base should be explicitly configurable for an authenticated or local registry')
+assert.match(dockerfile, /ARG HANASAND_BROWSER_RUNTIME_PATCHED/, 'browser worker should make prepatched runtime reuse explicit')
+assert.match(dockerfile, /Using prepatched browser runtime/, 'prepatched browser runtime path should be explicit in the build')
 assert.match(dockerfile, /google-chrome-stable_current_amd64\.deb/, 'Chromium should live only in the browser-worker image target')
 assert.match(dockerfile, /object-fit: contain/, 'Selkies should preserve the remote display aspect ratio instead of cropping it')
 assert.match(dockerfile, /apt-get purge -y git/, 'browser-worker image should strip operational source-control tools')
