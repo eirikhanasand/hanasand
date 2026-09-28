@@ -97,7 +97,7 @@ try {
     const damaged = decode(lostStream, join(scratch, 'damaged-%03d.gray'))
     if (complete.length !== frameCount) throw new Error(`Expected ${frameCount} decoded frames, got ${complete.length}`)
     if (damaged.length !== frameCount - 1) throw new Error(`Expected ${frameCount - 1} frames after dropping one access unit, got ${damaged.length}`)
-    if (complete.some((frame, index) => !frame.equals(damaged[index]) && index < droppedFrame)) {
+    if (complete.some((frame, index) => index < droppedFrame && !frame.equals(damaged[index]))) {
         throw new Error('Frames before the simulated loss changed')
     }
 
