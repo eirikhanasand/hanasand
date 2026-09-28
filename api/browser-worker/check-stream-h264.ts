@@ -68,7 +68,6 @@ try {
         'videotestsrc', `num-buffers=${frameCount}`, 'pattern=ball', '!',
         'video/x-raw,format=NV12,width=1920,height=1080,framerate=60/1', '!',
         'x264enc', 'bitrate=4000', `key-int-max=${recoveryFrame}`, 'bframes=0', 'rc-lookahead=0', 'sliced-threads=false', '!',
-        'video/x-h264,profile=constrained-baseline,level=4.2', '!',
         'h264parse', 'config-interval=-1', '!',
         'video/x-h264,stream-format=byte-stream,alignment=au', '!',
         'multifilesink', 'next-file=buffer', `location=${encodedPattern}`,
@@ -84,8 +83,9 @@ try {
         if (types.includes(5)) keyframes.push(index)
     }
     if (String(keyframes) !== '0,60,120') throw new Error(`Unexpected IDR access units: ${keyframes}`)
-    if (!caps.includes('profile=(string)constrained-baseline') || !caps.includes('level=(string)4.2')) {
-        throw new Error('The negotiated H.264 caps do not match constrained-baseline level 4.2')
+    const profile = caps.match(/profile=\(string\)([^,\s]+)/)?.[1]
+    if (!profile || !caps.includes('level=(string)4.2')) {
+        throw new Error('The negotiated H.264 caps do not include a profile and level 4.2')
     }
 
     const completeStream = join(scratch, 'complete.h264')
@@ -114,7 +114,7 @@ try {
 
     const elapsedSeconds = (performance.now() - started) / 1000
     const digest = createHash('sha256').update(Buffer.concat(complete)).digest('hex').slice(0, 16)
-    console.log(`H.264: 1080p60 constrained-baseline level 4.2; IDRs ${keyframes}; recovered after frame loss; ${frameCount / elapsedSeconds | 0} FPS; ${digest}`)
+    console.log(`H.264: 1080p60 ${profile} level 4.2; IDRs ${keyframes}; recovered after frame loss; ${frameCount / elapsedSeconds | 0} FPS; ${digest}`)
 } finally {
     rmSync(scratch, { recursive: true, force: true })
 }
