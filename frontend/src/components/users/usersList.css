@@ -1,0 +1,32 @@
+.dashboard-user-mobile-label { display: none; }
+
+@media (max-width: 1279px) {
+    .users-list-toolbar { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; }
+    .users-list-controls { width: 100%; flex-wrap: wrap; }
+    .users-list-search { min-width: 0; flex: 1 1 12rem; }
+    .users-list-search input { width: 100%; }
+    .users-list-scroll { overflow-x: visible; }
+    .users-list-table { min-width: 0; }
+    .users-list-heading { display: none; }
+    .dashboard-user-row { height: auto; min-height: 0; max-height: none; }
+    .dashboard-user-row .dashboard-user-row-main {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            'name actions'
+            'username actions'
+            'email email'
+            'created last-login';
+        align-items: start;
+        gap: .35rem .75rem;
+        min-height: 0;
+        padding: .75rem;
+        border-bottom: 1px solid var(--color-ui-border);
+    }
+    .dashboard-user-row .dashboard-user-name { grid-area: name; overflow: visible; white-space: normal; }
+    .dashboard-user-row .dashboard-user-username { grid-area: username; overflow-wrap: anywhere; }
+    .dashboard-user-row .dashboard-user-email { grid-area: email; overflow-wrap: anywhere; }
+    .dashboard-user-row .dashboard-user-created { grid-area: created; }
+    .dashboard-user-row .dashboard-user-last-login { grid-area: last-login; }
+    .dashboard-user-row .dashboard-user-actions { grid-area: actions; opacity: 1 !important; }
+    .dashboard-user-mobile-label { display: block; margin-bottom: .1rem; color: var(--color-ui-muted); font-size: .65rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+}

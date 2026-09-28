@@ -80,14 +80,14 @@ export default function PlanSheet(props: SheetEditorProps) {
     function expand(row: number) { setExpanded(expanded === row ? null : row) }
     function rowCells(row: string[], rowIndex: number, interaction: TableInteraction) {
         const input = (col: number, value = row[col], type = 'text') => <input aria-label={`Cell ${columnName(col)}${rowIndex + 1}`} value={value} disabled={!canEdit} type={type} min={col === fields.progress ? 0 : undefined} max={col === fields.progress ? 100 : undefined} step={col === fields.hours || col === fields.progress ? '0.25' : undefined} onFocus={() => interaction.onSelect({ table: index, row: rowIndex, col })} onClick={() => interaction.onSelect({ table: index, row: rowIndex, col })} onChange={event => update(rowIndex, col, event.target.value)} />
-        const cell = (col: number, content: React.ReactNode) => <td key={col} data-table-cell={`${index}:${rowIndex}:${col}`} data-active={interaction.active?.table === index && interaction.active.row === rowIndex && interaction.active.col === col} tabIndex={0} onFocus={() => interaction.onSelect({ table: index, row: rowIndex, col })} onClick={() => interaction.onSelect({ table: index, row: rowIndex, col })} onKeyDown={event => {
+        const cell = (col: number, content: React.ReactNode) => <td key={col} role='cell' data-label={cells[0][col]} data-table-cell={`${index}:${rowIndex}:${col}`} data-active={interaction.active?.table === index && interaction.active.row === rowIndex && interaction.active.col === col} tabIndex={0} onFocus={() => interaction.onSelect({ table: index, row: rowIndex, col })} onClick={() => interaction.onSelect({ table: index, row: rowIndex, col })} onKeyDown={event => {
             if (event.metaKey || event.ctrlKey || event.altKey) return
             const nextRow = rowIndex + (event.key === 'ArrowUp' ? -1 : event.key === 'ArrowDown' ? 1 : 0)
             const nextCol = col + (event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0)
             if (nextRow === rowIndex && nextCol === col) return
             event.preventDefault()
             interaction.onNavigate({ table: index, row: Math.max(0, Math.min(nextRow, cells.length - 1)), col: Math.max(0, Math.min(nextCol, cells[0].length - 1)) }, true)
-        }}>{content}</td>
+        }}><span className='thesis-plan-mobile-label' aria-hidden='true'>{cells[0][col]}</span>{content}</td>
         return cells[0].map((_, col) => {
             const content = col === fields.task && fields.task >= 0 ? <div className='flex items-center gap-2'>{hasRowDetails && <button type='button' aria-label={`${expanded === rowIndex ? 'Collapse' : 'Expand'} details for ${(fields.task >= 0 && row[fields.task]) || `row ${rowIndex}`}`} aria-expanded={expanded === rowIndex} onClick={() => expand(rowIndex)}>{expanded === rowIndex ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button>}{input(col)}</div>
                 : col === fields.status && fields.status >= 0 ? <select aria-label={`Status for ${(fields.task >= 0 && row[fields.task]) || `row ${rowIndex}`}`} value={statuses.includes(row[col]) ? row[col] : 'Planned'} disabled={!canEdit} onFocus={() => interaction.onSelect({ table: index, row: rowIndex, col })} onChange={event => update(rowIndex, col, event.target.value)}>{statuses.map(status => <option key={status}>{status}</option>)}</select>
@@ -111,11 +111,11 @@ export default function PlanSheet(props: SheetEditorProps) {
         </div>
     </section>} renderTable={(data, tableIndex, interaction) => {
         if (tableIndex !== index) return undefined
-        const visible = view !== 'board' || fields.task < 0 || fields.status < 0 ? <div className='thesis-plan-table-scroll'><table className='thesis-plan-table'><thead><tr>{cells[0].map((header, col) => <th key={col}>{header}</th>)}</tr></thead><tbody>{tasks.map(({ row, index: rowIndex }) => <Fragment key={rowIndex}>
-            <tr key={rowIndex}>
+        const visible = view !== 'board' || fields.task < 0 || fields.status < 0 ? <div className='thesis-plan-table-scroll'><table className='thesis-plan-table' role='table' aria-label='Project plan tasks'><thead role='rowgroup'><tr role='row'>{cells[0].map((header, col) => <th role='columnheader' key={col}>{header}</th>)}</tr></thead><tbody role='rowgroup'>{tasks.map(({ row, index: rowIndex }) => <Fragment key={rowIndex}>
+            <tr key={rowIndex} role='row'>
                 {rowCells(row, rowIndex, interaction)}
             </tr>
-            {expanded === rowIndex && <tr key={`${rowIndex}-details`} className='thesis-plan-expanded'><td colSpan={cells[0].length}><div className='grid gap-4 p-4'>
+            {expanded === rowIndex && <tr key={`${rowIndex}-details`} role='row' className='thesis-plan-expanded'><td role='cell' colSpan={cells[0].length}><div className='grid gap-4 p-4'>
                 {fields.notes >= 0 && <label>Notes<textarea value={row[fields.notes]} disabled={!canEdit} rows={2} onChange={event => update(rowIndex, fields.notes, event.target.value)} /></label>}
                 {fields.details >= 0 && <label>Details<textarea value={row[fields.details]} disabled={!canEdit} rows={3} placeholder='Add context, blockers, links, or progress updates' onChange={event => update(rowIndex, fields.details, event.target.value)} /></label>}
                 {fields.subgoals >= 0 && <div><h3 className='mb-2 font-semibold'>Subgoals</h3><ul className='grid gap-2'>{subgoalLines(row[fields.subgoals]).map((goal, goalIndex) => <li key={goalIndex} className='flex items-center gap-2'><input type='checkbox' aria-label={`Complete subgoal ${goal.text}`} checked={goal.done} disabled={!canEdit} onChange={event => { const goals = subgoalLines(row[fields.subgoals]); goals[goalIndex].done = event.target.checked; update(rowIndex, fields.subgoals, goals.map(item => `- [${item.done ? 'x' : ' '}] ${item.text}`).join('\n')) }} /><span>{goal.text}</span><button type='button' className='ml-auto text-ui-muted' disabled={!canEdit} onClick={() => update(rowIndex, fields.subgoals, subgoalLines(row[fields.subgoals]).filter((_, i) => i !== goalIndex).map(item => `- [${item.done ? 'x' : ' '}] ${item.text}`).join('\n'))}>Remove</button></li>)}</ul>

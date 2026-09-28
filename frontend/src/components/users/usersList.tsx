@@ -39,14 +39,14 @@ export default function UsersList({ users, roles }: { users: UserWithRole[], rol
 
     return (
         <>
-            <div className='flex items-center justify-between gap-3'>
+            <div className='users-list-toolbar flex items-center justify-between gap-3'>
                 <div>
                     <h1 className='text-base font-semibold text-ui-text'>Users</h1>
                     <p className='mt-1 text-sm text-ui-muted'>{visibleUsers.length} shown</p>
                 </div>
-                <div className='flex items-center gap-2'>
+                <div className='users-list-controls flex items-center gap-2'>
                     {searchOpen ? (
-                        <div className='flex items-center gap-1 rounded-lg border border-ui-border bg-ui-raised px-2'>
+                        <div className='users-list-search flex items-center gap-1 rounded-lg border border-ui-border bg-ui-raised px-2'>
                             <Search className='h-4 w-4 text-ui-muted' />
                             <input
                                 autoFocus
@@ -58,7 +58,7 @@ export default function UsersList({ users, roles }: { users: UserWithRole[], rol
                                     }
                                 }}
                                 aria-label='Filter users'
-                                className='h-8 w-52 bg-transparent text-sm text-ui-text outline-none placeholder:text-ui-muted'
+                                className='h-8 w-52 min-w-0 bg-transparent text-sm text-ui-text outline-none placeholder:text-ui-muted'
                                 onChange={(event) => setSearch(event.target.value)}
                                 placeholder='Name, username or email'
                                 value={search}
@@ -97,8 +97,8 @@ export default function UsersList({ users, roles }: { users: UserWithRole[], rol
                     )}
                 </div>
             </div>
-            <div className='overflow-x-auto'><div className='min-w-[1000px]'>
-                <div className='grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)_100px_100px_40px] gap-3 text-[0.68rem] font-bold uppercase tracking-[0.12em] text-ui-muted'>
+            <div className='users-list-scroll overflow-x-auto'><div className='users-list-table min-w-[1000px]'>
+                <div className='users-list-heading grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)_100px_100px_40px] gap-3 text-[0.68rem] font-bold uppercase tracking-[0.12em] text-ui-muted'>
                     <span>Name</span>
                     <span>Username</span>
                     <span>Email</span>
