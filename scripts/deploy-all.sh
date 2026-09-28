@@ -29,6 +29,7 @@ if test -f "$build_dir/.env"; then
         printf 'HANASAND_RELEASE_COMMIT=%s\n' "$release" >> "$build_dir/.env"
     fi
     printf 'HANASAND_TI_SCRAPER_SOURCE=%s\n' "$root/ops/runtime/ti-releases/$release" >> "$build_dir/.env"
+    printf 'HANASAND_TI_API_SOURCE=%s\n' "$root/ops/runtime/ti-releases/$release/api" >> "$build_dir/.env"
 fi
 
 test -d "$root/ti/scraper/node_modules" || {
@@ -49,9 +50,18 @@ else
     mkdir -p "$root/ops/runtime/ti-releases"
     mkdir "$ti_release_dir"
     cp -a "$build_dir/ti/scraper/." "$ti_release_dir/"
+    mkdir -p "$ti_release_dir/api/src/utils/alerts" "$ti_release_dir/api/src/utils/dwm"
+    cp "$build_dir/api/src/utils/alerts/discordWebhookFile.ts" "$ti_release_dir/api/src/utils/alerts/"
+    cp "$build_dir/api/src/utils/dwm/customerOutputSafety.ts" "$ti_release_dir/api/src/utils/dwm/"
     printf '%s\n' "$release" > "$ti_release_dir/.hanasand-release"
 fi
+if ! test -f "$ti_release_dir/api/src/utils/alerts/discordWebhookFile.ts" || ! test -f "$ti_release_dir/api/src/utils/dwm/customerOutputSafety.ts"; then
+    mkdir -p "$ti_release_dir/api/src/utils/alerts" "$ti_release_dir/api/src/utils/dwm"
+    cp "$build_dir/api/src/utils/alerts/discordWebhookFile.ts" "$ti_release_dir/api/src/utils/alerts/"
+    cp "$build_dir/api/src/utils/dwm/customerOutputSafety.ts" "$ti_release_dir/api/src/utils/dwm/"
+fi
 export HANASAND_TI_SCRAPER_SOURCE="$ti_release_dir"
+export HANASAND_TI_API_SOURCE="$ti_release_dir/api"
 
 # Build from the immutable release archive, not the live checkout. This keeps
 # runtime state (including the separate code-review mirror) out of every image

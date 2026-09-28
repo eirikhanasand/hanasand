@@ -36,6 +36,15 @@ test "$(cat "$ti_source/.hanasand-release")" = "$release" || {
     echo "hanasand_ti_scraper source marker does not match the release." >&2
     exit 1
 }
+ti_api_source=$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/app/api"}}{{.Source}}{{end}}{{end}}' hanasand_ti_scraper)
+test "$ti_api_source" = "/home/hanasand/hanasand/ops/runtime/ti-releases/$release/api" || {
+    echo "hanasand_ti_scraper API utility mount is not from the immutable release directory." >&2
+    exit 1
+}
+test -f "$ti_api_source/src/utils/alerts/discordWebhookFile.ts" && test -f "$ti_api_source/src/utils/dwm/customerOutputSafety.ts" || {
+    echo "hanasand_ti_scraper API utility mount is incomplete." >&2
+    exit 1
+}
 
 if docker inspect hanasand_browser_worker >/dev/null 2>&1; then
     env_release=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' hanasand_browser_worker \

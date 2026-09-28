@@ -451,6 +451,7 @@ services:
     volumes:
       - ti_scraper_evidence:/var/lib/ti-scraper/evidence
       - ${HANASAND_TI_SCRAPER_SOURCE:-/home/hanasand/hanasand/ti/scraper}:/app/ti/scraper:ro
+      - ${HANASAND_TI_API_SOURCE:-/home/hanasand/hanasand/ops/runtime/ti-releases/api}:/app/api:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     expose:
