@@ -13,7 +13,7 @@ test('measured progress shows remaining count, percent and ETA', () => {
     expect(html).toContain('About 1 min remaining')
     expect(html).toContain('25.0% · ')
     expect(html).toContain(`dateTime="${now}"`)
-    expect(html).toContain('Last refreshed')
+    expect(html).toContain('Last changed')
     expect(html).not.toContain('Results and counters will update')
 })
 test('missing, paused and stale measurements do not invent an ETA', () => {
