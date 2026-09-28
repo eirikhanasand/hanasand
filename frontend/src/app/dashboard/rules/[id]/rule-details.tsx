@@ -12,6 +12,7 @@ import { useSmoothedCount } from '../use-smoothed-count'
 
 type Audit = { id: string, event_type: string, actor_id: string | null, created_at: string, context: { before?: Record<string, unknown> | null, after?: Record<string, unknown>, action?: string } }
 type Payload = { isHistorical?: boolean, currentVersion?: string, triggerCount: number | null, rule: Rule, canEdit: boolean, audit: Audit[], nextOffset: number | null }
+type StorageEstimate = { count: number, bytes: number, checkedDate: string, generatedAt: string }
 const fieldClass = 'mt-1.5 w-full min-w-0 rounded-lg border border-ui-border bg-ui-canvas px-3 py-2 text-sm font-normal text-ui-text outline-none focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/15 disabled:opacity-70'
 
 export default function RuleDetails({ id, organizationId }: { id: string, organizationId: string }) {
@@ -20,6 +21,8 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
     const [error, setError] = useState('')
     const [status, setStatus] = useState('')
     const [liveHitsUnavailable, setLiveHitsUnavailable] = useState(false)
+    const [storageEstimate, setStorageEstimate] = useState<StorageEstimate | null>(null)
+    const [storageEstimateState, setStorageEstimateState] = useState<'idle' | 'loading' | 'unavailable'>('idle')
     const [busy, setBusy] = useState(false)
     const displayedHitCount = useSmoothedCount(data?.triggerCount, 3_000)
     const endpoint = `/api/backend/rules/${encodeURIComponent(id)}?organizationId=${encodeURIComponent(organizationId)}`
@@ -29,6 +32,27 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
         requestJson<Payload>(endpoint).then(payload => { if (active) { setData(payload); setDraft(payload.rule); canonicalize(payload) } }).catch(cause => { if (active) setError(cause.message) })
         return () => { active = false }
     }, [endpoint, organizationId])
+
+    useEffect(() => {
+        if (!data || data.isHistorical || data.rule.definition?.stage !== 'analyze' || data.rule.definition.action !== 'drop') {
+            setStorageEstimate(null)
+            setStorageEstimateState('idle')
+            return
+        }
+        const controller = new AbortController()
+        setStorageEstimate(null)
+        setStorageEstimateState('loading')
+        requestJson<{ estimate: StorageEstimate | null }>(`/api/backend/rules/${encodeURIComponent(id)}/storage-estimate?organizationId=${encodeURIComponent(organizationId)}`, { signal: controller.signal, cache: 'no-store' })
+            .then(payload => {
+                if (controller.signal.aborted) return
+                setStorageEstimate(payload.estimate)
+                setStorageEstimateState(payload.estimate ? 'idle' : 'unavailable')
+            })
+            .catch(() => {
+                if (!controller.signal.aborted) setStorageEstimateState('unavailable')
+            })
+        return () => controller.abort()
+    }, [id, organizationId, data?.isHistorical, data?.rule.version, data?.rule.definition?.stage, data?.rule.definition?.action])
 
     useEffect(() => {
         if (!organizationId || !data) return
@@ -105,10 +129,20 @@ export default function RuleDetails({ id, organizationId }: { id: string, organi
                             <span className='break-all font-mono'>{draft.id.replace(/\.v\d+$/, '')}</span>{data.isHistorical && <span>Version {draft.version} · Historical</span>}<span className='h-3 border-l border-ui-border' aria-hidden='true' /><span>{draft.source === 'hanasand' ? 'Hanasand rule' : draft.source === 'open_source' ? 'Imported rule' : 'Custom rule'}</span>
                         </div>
                     </div>
-                    <dl className='flex items-center gap-2 border-t border-ui-border pt-2 sm:min-w-32 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-4'>
-                        <Activity size={20} className='text-ui-primary' aria-hidden='true' />
-                        <div><dt className='text-xs font-medium text-ui-muted'>Hits</dt><dd className='mt-1 text-xl font-semibold leading-none tabular-nums text-ui-text' title='Recorded rule hits for this organization, using the same total as the rule list.'>{displayedHitCount?.toLocaleString('en-US') ?? 'Unavailable'}</dd>{liveHitsUnavailable && <p className='mt-1 text-xs text-ui-warning'>Live count unavailable; retrying.</p>}</div>
-                    </dl>
+                    <div className='flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-ui-border pt-2 sm:border-t-0 sm:border-l sm:py-1 sm:pl-4'>
+                        <dl className='flex items-center gap-2'>
+                            <Activity size={20} className='text-ui-primary' aria-hidden='true' />
+                            <div><dt className='text-xs font-medium text-ui-muted'>Hits</dt><dd className='mt-1 text-xl font-semibold leading-none tabular-nums text-ui-text' title='Recorded rule hits for this organization, using the same total as the rule list.'>{displayedHitCount?.toLocaleString('en-US') ?? 'Unavailable'}</dd>{liveHitsUnavailable && <p className='mt-1 text-xs text-ui-warning'>Live count unavailable; retrying.</p>}</div>
+                        </dl>
+                        {data.rule.definition?.stage === 'analyze' && data.rule.definition.action === 'drop' && !data.isHistorical && <dl title='Estimated event-row bytes for stored low-severity records matching this rule and eligible to be dropped. Index space is excluded.'>
+                            <dt className='text-xs font-medium text-ui-muted'>Undropped</dt>
+                            <dd className='mt-1 text-sm font-semibold leading-none tabular-nums text-ui-text'>
+                                {storageEstimateState === 'loading' ? 'Estimating…' : storageEstimateState === 'unavailable' ? 'Unavailable' : `${storageEstimate?.count.toLocaleString('en-US') ?? '0'} events`}
+                            </dd>
+                            <dd className='mt-1 text-xs tabular-nums text-ui-muted'>{storageEstimateState === 'loading' ? 'Calculating saved space…' : storageEstimateState === 'unavailable' ? 'Space estimate unavailable' : `${formatBytes(storageEstimate?.bytes ?? 0)} estimated savings`}</dd>
+                            {storageEstimate && <dd className='mt-1 text-right text-[10px] tabular-nums text-ui-muted'>{formatEstimateDate(storageEstimate.checkedDate)}</dd>}
+                        </dl>}
+                    </div>
                 </header>
             </DashboardPanel>
             {data.isHistorical && <p role='status' className='rounded-lg border border-ui-warning/40 bg-ui-raised p-4 text-sm text-ui-text'>You are viewing a historical signature. <Link className='underline text-ui-primary' href={`/rules/${draft.id.replace(/\.v\d+$/, '')}`}>Open current rule</Link></p>}
@@ -151,4 +185,25 @@ function displayValue(value: unknown): string {
     if (value == null) return 'Not set'
     if (typeof value === 'boolean') return value ? 'Enabled' : 'Disabled'
     return typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)
+}
+
+function formatBytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes}B`
+    const units = ['KB', 'MB', 'GB', 'TB']
+    let amount = bytes / 1024, unit = 0
+    while (amount >= 1024 && unit < units.length - 1) { amount /= 1024; unit++ }
+    return `${amount >= 10 ? Math.round(amount) : amount.toFixed(1)}${units[unit]}`
+}
+
+function formatEstimateDate(value: string): string {
+    const [year, month, day] = value.slice(0, 10).split('-').map(Number)
+    if (!year || !month || !day) return ''
+    const label = `${String(day).padStart(2, '0')}:${String(month).padStart(2, '0')}`
+    const now = new Date()
+    const nowYear = now.getUTCFullYear(), nowMonth = now.getUTCMonth(), nowDay = now.getUTCDate()
+    const previousMonth = nowMonth === 0 ? 11 : nowMonth - 1
+    const previousMonthYear = nowMonth === 0 ? nowYear - 1 : nowYear
+    const previousMonthDay = Math.min(nowDay, new Date(Date.UTC(previousMonthYear, previousMonth + 1, 0)).getUTCDate())
+    const olderThanMonth = Date.UTC(year, month - 1, day) < Date.UTC(previousMonthYear, previousMonth, previousMonthDay)
+    return year !== nowYear && olderThanMonth ? `${label}:${year}` : label
 }

@@ -1539,6 +1539,19 @@ async function applySchema() {
             CHECK (severity IN ('low', 'medium', 'high', 'critical'))
         )
     `)
+    await run(`
+        CREATE TABLE IF NOT EXISTS rule_storage_estimates (
+            organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            rule_id TEXT NOT NULL,
+            rule_version TEXT NOT NULL,
+            scanned_date DATE NOT NULL,
+            event_count BIGINT NOT NULL DEFAULT 0,
+            estimated_bytes BIGINT NOT NULL DEFAULT 0,
+            generated_at TIMESTAMPTZ,
+            scan_started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (organization_id, rule_id, rule_version)
+        )
+    `)
     await ensureColumn(run, 'rules', 'source', 'ALTER TABLE rules ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT \'owned\'')
     await ensureColumn(run, 'rules', 'source_reference', 'ALTER TABLE rules ADD COLUMN IF NOT EXISTS source_reference TEXT')
     await ensureRuleSourceConstraint(run)

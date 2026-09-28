@@ -10,7 +10,7 @@ import { readinessAuditRule, readinessAuditRuleId, readinessAuditDefinition, rea
 import { retainedOriginals } from '#utils/events/retainedOriginals.ts'
 import { normalizeLogEvent } from '#utils/events/logEvent.ts'
 import { telemetryRule, telemetryRuleId, sshWindowRule, sshWindowRuleId, telemetryDefinition, sshWindowDefinition, validateRoutineGroupParameters } from '#utils/events/analyzeRoutineGroups.ts'
-import { scanRulePreview, validPreviewWindow, PreviewRegexTimeout } from '#utils/events/rulePreview.ts'
+import { scanRulePreview, estimateStoredRuleEvents, validPreviewWindow, PreviewRegexTimeout } from '#utils/events/rulePreview.ts'
 import { collectorRule, collectorRuleId, collectorDefinition } from '#utils/events/analyzeCollector.ts'
 import { proxyRule, proxyRuleId, proxyDefinition } from '#utils/events/analyzeProxy.ts'
 import { postgresRule, postgresRuleId, postgresDefinition, validPostgresParameters } from '#utils/events/analyzePostgres.ts'
@@ -356,6 +356,24 @@ export async function getRuleHitCount(req: FastifyRequest<{ Params: { id: string
         const hits = await loadRuleHits(access.organizationId, [rule], run)
         const triggerCount = rule.definition?.stage === 'analyze' && rule.definition.action === 'keep' ? null : hits.get(rule.id) ?? 0
         return res.header('Cache-Control', 'no-store').send({ organizationId: access.organizationId, triggerCount })
+    } catch (error) {
+        if (error instanceof ReadAdmissionError) return res.header('Retry-After', '2').status(503).send({ error: error.message })
+        throw error
+    }
+}
+
+export async function getRuleStorageEstimate(req: FastifyRequest<{ Params: { id: string }, Querystring: { organizationId?: string } }>, res: FastifyReply) {
+    const access = await organizationAccess(req, res)
+    if (!access) return
+    const query = req.query as { organizationId?: string }
+    if (query.organizationId !== access.organizationId) return res.status(403).send({ error: 'Organization access denied.' })
+    const rule = (await loadConfiguredRules(access.organizationId, run, true)).find(rule => ruleSlug(rule.id) === ruleSlug(req.params.id) || rule.recordId === req.params.id)
+    if (!rule || internalRetentionRuleIds.has(rule.id)) return res.status(404).send({ error: 'Rule not found.' })
+    if (rule.definition?.stage !== 'analyze' || rule.definition.action !== 'drop' || !rule.definition.conditions?.length)
+        return res.send({ organizationId: access.organizationId, estimate: null })
+    try {
+        const estimate = await estimateStoredRuleEvents(access.organizationId, rule.id, rule.version, rule.definition.conditions)
+        return res.header('Cache-Control', 'private, max-age=60').send({ organizationId: access.organizationId, estimate })
     } catch (error) {
         if (error instanceof ReadAdmissionError) return res.header('Retry-After', '2').status(503).send({ error: error.message })
         throw error
