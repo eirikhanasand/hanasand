@@ -31,7 +31,7 @@ export default function RouteFrame({ children, serverPath, token, sidebar, banne
     return (
         <div data-route-frame className={`enterprise-theme relative z-10 mt-18 h-[calc(100dvh-4.5rem)] w-full bg-ui-canvas grid grid-cols-[minmax(0,1fr)] ${frameRows} ${frameOverflow}`}>
             <div className='min-w-0'>{banner}</div>
-            <main className={`min-h-0 min-w-0 w-full ${isAppSurface || isBrowserLanding || thesisScroll ? 'h-full' : 'pt-3 md:pt-0'} ${thesisScroll ? 'overflow-y-auto overscroll-contain' : ''}`}>
+            <main className={`${showFooter && !thesisScroll ? 'min-h-max' : 'min-h-0'} min-w-0 w-full ${isAppSurface || isBrowserLanding || thesisScroll ? 'h-full' : 'pt-3 md:pt-0'} ${thesisScroll ? 'overflow-y-auto overscroll-contain' : ''}`}>
                 {showSidebar ? (
                     <div className='h-full min-h-0 bg-ui-canvas px-2 text-ui-text'>
                         <div className='grid h-full min-h-0 grid-rows-[minmax(0,1fr)] gap-2 lg:grid-cols-[auto_minmax(0,1fr)]'>
