@@ -48,9 +48,10 @@ async function scanRulePreviewUncached(organizationId: string, canReadLogs: bool
         ORDER BY event_timestamp DESC, id DESC LIMIT ${limitParameter}`, params)
     const eligible = result.rows.filter(row => input.action !== 'drop' || eligibleCustomDrop(row.normalized || {})
         && !retentionStoreMatches(row.normalized || {}, rules) && !retentionStoreMatches(row.original || {}, rules)) as PreviewEvent[]
-    const matches = input.conditions.some(condition => condition.operator === 'regex')
-        ? (await matchRegexPage(eligible, input.conditions)).map(index => eligible[index])
-        : eligible.filter(row => matchesRule(row.normalized, input.conditions))
+    const matchedIndices = input.conditions.some(condition => condition.operator === 'regex')
+        ? await matchRulePage(eligible.map(row => row.normalized), input.conditions)
+        : eligible.flatMap((row, index) => matchesRule(row.normalized, input.conditions) ? [index] : [])
+    const matches = matchedIndices.map(index => eligible[index])
     const bytes = matches.reduce((total, row) => total + Number(row.bytes || 0), 0)
     const events = matches.map(row => ({ id: row.id, timestamp: row.timestamp, rank: Math.random(), normalized: Object.fromEntries(Object.entries(row.normalized)
         .filter(([key]) => ['event_type', 'severity', 'service', 'host', 'action', 'outcome', 'http', 'source', 'user', 'device', 'message'].includes(key) || input.conditions.some(condition => condition.path.split('.')[0] === key))
