@@ -123,6 +123,8 @@ services:
     restart: unless-stopped
     labels: *release-label
     network_mode: host
+    tmpfs:
+      - /run/haproxy:rw,noexec,nosuid,nodev,size=16m,uid=99,gid=99,mode=0770
     volumes:
       - /home/hanasand/hanasand/ops/runtime/proxy:/recovery:ro
     healthcheck: &proxy-healthcheck
@@ -140,6 +142,8 @@ services:
     restart: unless-stopped
     labels: *release-label
     network_mode: host
+    tmpfs:
+      - /run/haproxy:rw,noexec,nosuid,nodev,size=16m,uid=99,gid=99,mode=0770
     volumes:
       - /home/hanasand/hanasand/ops/runtime/proxy:/recovery:ro
     healthcheck:
