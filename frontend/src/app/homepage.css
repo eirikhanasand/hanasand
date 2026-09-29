@@ -95,7 +95,7 @@ body:has(.home-page) [data-route-frame] {
   height: 0.45rem;
   margin-right: 0.7rem;
   border-radius: 50%;
-  background: var(--ui-danger);
+  background: var(--ui-success);
   content: '';
 }
 
