@@ -12,13 +12,15 @@ export type NavigationAccess = {
     canManageSystem: boolean
     canManageContent: boolean
     hasContentOrganization?: boolean
+    hasHanasandOrganization?: boolean
+    thesisSheets?: Array<{ label: string, href: string }>
     hasVMs?: boolean
     canReviewIntel?: boolean
 }
 
-export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = false, canManageSystem, canManageContent, hasContentOrganization = false, canReviewIntel = isAdmin, hasVMs = false }: NavigationAccess): NavigationItem[] {
+export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = false, canManageSystem, canManageContent, hasContentOrganization = false, hasHanasandOrganization = false, thesisSheets = [], canReviewIntel = isAdmin, hasVMs = false }: NavigationAccess): NavigationItem[] {
     const link = (label: string, href: string, visible = true): NavigationItem => ({ label, href, visible })
-    const group = (label: string, items: NavigationItem[]): NavigationItem => ({ label, items })
+    const group = (label: string, items: NavigationItem[], visible = true): NavigationItem => ({ label, items, visible })
     const sections = [
         group('Security & intelligence', [
             group('Investigations', [
@@ -91,7 +93,6 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
                 link('Notes', '/notes', canManageContent || hasContentOrganization),
                 link('Articles', '/content/articles', canManageContent || hasContentOrganization),
                 link('Thoughts', '/content/thoughts', canManageContent || hasContentOrganization),
-                link('Thesis', '/content/thesis', isAdmin),
             ]),
             group('Media', [
                 link('Gallery', '/gallery'),
@@ -102,6 +103,9 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
                 link('Shares', '/shares'),
             ]),
         ]),
+        nestedGroup('Thesis', thesisSheets.length
+            ? thesisSheets.map(sheet => link(sheet.label, sheet.href))
+            : [link('Workspace', '/thesis')], hasHanasandOrganization),
         group('Communication', [
             link('Mail', '/mail'),
             link('Support Chats', '/support'),
@@ -144,6 +148,10 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
             link('Tickets', `/profile/${id}/support`),
         ]),
     ]
+    function nestedGroup(label: string, items: NavigationItem[], visible = true): NavigationItem {
+        if (items.length <= 5) return group(label, items, visible)
+        return group(label, [...items.slice(0, 4), nestedGroup('More sheets', items.slice(4))], visible)
+    }
     const permitted = (items: NavigationItem[]): NavigationItem[] => items
         .filter(item => item.visible !== false)
         .map(item => item.items ? { ...item, items: permitted(item.items) } : item)

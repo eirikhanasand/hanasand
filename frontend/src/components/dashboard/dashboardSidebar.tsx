@@ -3,13 +3,16 @@
 import Link from 'next/link'
 import { NAVIGATION_COOKIE, readNavigationPreferences, type NavigationPreferences as Preferences } from '@/utils/layout/navigationPreferences'
 import { getCookie, setCookie } from '@/utils/cookies/cookies'
-import { usePathname } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { AlarmClockCheck, ChevronDown, ChevronsUp, FolderKanban, NotebookText, PanelLeftClose, PanelLeftOpen, Pin, Search, Server, Settings2, ShieldCheck, House, ListFilter, Mail, CircleUserRound, Code2 } from 'lucide-react'
 import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { getDashboardViewMode, setDashboardViewMode } from '@/utils/layout/viewMode'
 import { getDashboardNavigation, navigationLinks, pinnedNavigation, type NavigationAccess, type NavigationItem } from '@/utils/layout/dashboardNavigation'
 import { useWorkspace } from '@/components/organizations/workspaceProvider'
+import { getThesisNavigation, subscribeThesisNavigation } from '@/utils/layout/thesisNavigation'
+
+const emptyThesisNavigation: ReturnType<typeof getThesisNavigation> = []
 
 const sectionIcons: Record<string, typeof ShieldCheck> = {
     'Security & intelligence': ShieldCheck,
@@ -26,8 +29,9 @@ const sectionIcons: Record<string, typeof ShieldCheck> = {
 }
 
 export default function DashboardSidebar({ initialPreferences = { expanded: {}, pinned: [] }, initialMode = 'normal', ...access }: NavigationAccess & { initialPreferences?: Preferences, initialMode?: 'normal' | 'compact' }) {
-    const { organizationId } = useWorkspace()
+    const { organizationId, organizations } = useWorkspace()
     const pathname = usePathname()
+    const searchParams = useSearchParams()
     const domId = useId()
     const storageKey = `dashboard-navigation:v1:${access.id}`
     const [preferences, setPreferences] = useState<Preferences>(initialPreferences)
@@ -56,6 +60,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
     )
     const compact = desktop && mode === 'compact'
     const [hasVMs, setHasVMs] = useState(false)
+    const thesisSheets = useSyncExternalStore(subscribeThesisNavigation, getThesisNavigation, () => emptyThesisNavigation)
     useEffect(() => {
         const controller = new AbortController()
         const refresh = async () => {
@@ -72,11 +77,18 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
         window.addEventListener('vms-updated', refresh)
         return () => { controller.abort(); window.removeEventListener('vms-updated', refresh) }
     }, [access.id, pathname])
-    const sections = getDashboardNavigation({ ...access, hasVMs, hasContentOrganization: Boolean(organizationId) })
+    const hasHanasandOrganization = organizations.some(organization => organization.slug?.toLowerCase() === 'hanasand' && organization.lifecycleStatus === 'active')
+    const sections = getDashboardNavigation({ ...access, hasVMs, hasContentOrganization: Boolean(organizationId), hasHanasandOrganization, thesisSheets })
     const links = navigationLinks(sections)
     const route = pathname
-    const active = links.filter(item => route === item.href || route.startsWith(`${item.href}/`))
+    const matchesHref = (href: string) => {
+        const [hrefPath, hrefQuery = ''] = href.split('?')
+        if (route !== hrefPath && !route.startsWith(`${hrefPath}/`)) return false
+        return [...new URLSearchParams(hrefQuery)].every(([key, value]) => searchParams.get(key) === value)
+    }
+    const active = links.filter(item => matchesHref(item.href))
         .sort((left, right) => right.href.length - left.href.length)[0]
+        ?? (route === '/thesis' ? links.find(item => item.href.startsWith('/thesis?sheet=')) : undefined)
     const activePath = (active?.ancestors.length ? active.ancestors.join('/') : active?.label) ?? (pathname.startsWith('/automation') ? 'Automation' : '')
 
     useEffect(() => {
@@ -124,6 +136,12 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
         return (
             <div key={key} className='group flex min-w-0 items-center rounded-md hover:bg-ui-canvas'>
                 <Link href={item.href} aria-current={active?.href === item.href ? 'page' : undefined}
+                    data-thesis-sheet-link={item.href.startsWith('/thesis?sheet=') ? '' : undefined}
+                    onClick={event => {
+                        if (!item.href.startsWith('/thesis?sheet=') || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+                        event.preventDefault()
+                        window.history.pushState(null, '', item.href)
+                    }}
                     className={`min-w-0 flex-1 rounded-md px-2 py-2 text-sm leading-5 focus-visible:outline-2 focus-visible:outline-ui-primary ${active?.href === item.href ? 'bg-ui-primary/10 font-semibold text-ui-primary' : 'text-ui-muted hover:text-ui-text'}`}>
                     {item.label}
                 </Link>
@@ -304,10 +322,8 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
                     {renderPreviewItems(preview.section.items || [], [preview.section.label])}
                 </div>, document.body,
             )}
-            <nav aria-label='Workspace shortcuts' className='mt-2 grid gap-1 border-t border-ui-border pt-2 lg:hidden'>
-                {[['Workspace', '/s'], ['Workspace assistant', '/ai'], ['Status', '/status']].map(([label, href]) => (
-                    <Link key={href} href={href} className='rounded-md px-2 py-2 text-sm text-ui-muted hover:bg-ui-canvas hover:text-ui-text'>{label}</Link>
-                ))}
+            <nav aria-label='Status shortcut' className='mt-2 grid gap-1 border-t border-ui-border pt-2 lg:hidden'>
+                <Link href='/status' className='rounded-md px-2 py-2 text-sm text-ui-muted hover:bg-ui-canvas hover:text-ui-text'>Status</Link>
             </nav>
         </aside>
     )

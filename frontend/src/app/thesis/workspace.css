@@ -24,11 +24,6 @@
 .thesis-resize-column { top: 0; right: -3px; width: 9px; height: 100%; cursor: col-resize; }
 .thesis-resize-row { bottom: -3px; left: 0; width: 100%; height: 9px; cursor: row-resize; }
 .thesis-resize:hover, .thesis-resize:focus-visible { background: var(--color-ui-primary); }
-.thesis-tabs { position: fixed; bottom: 0; left: 0; right: 0; z-index: 30; display: flex; overflow-x: auto; border-top: 1px solid var(--color-ui-border); background: var(--color-ui-canvas); padding: 0 max(1rem, calc((100vw - 72rem) / 2)); padding-bottom: env(safe-area-inset-bottom); }
-.thesis-tabs[hidden] { display: none; }
-.thesis-tabs button { min-height: 44px; min-width: 44px; flex-shrink: 0; padding: 1rem 1.25rem; border-top: 3px solid transparent; }
-.thesis-tabs button[aria-selected=true] { color: var(--color-ui-primary); border-color: var(--color-ui-primary); background: var(--color-ui-raised); font-weight: 600; }
-
 .thesis-inline-document { min-width: 0; }
 .thesis-inline-render { cursor: text; }
 .thesis-inline-render [data-source-line]:hover { background: color-mix(in srgb, var(--color-ui-primary) 5%, transparent); }
@@ -38,14 +33,6 @@
 
 .thesis-markdown p.thesis-markdown-blank { min-height: 1.75em; margin: 0; }
 
-.thesis-tab { position: relative; display: flex; flex-shrink: 0; align-items: center; border-top: 3px solid transparent; }
-.thesis-tab[data-active=true] { border-color: var(--color-ui-primary); background: var(--color-ui-raised); }
-.thesis-tab > button { border-top: 0; }
-.thesis-tab:has(.thesis-tab-remove) > [role=tab] { padding-right: 2rem; }
-.thesis-tabs .thesis-tab-remove { position: absolute; right: .25rem; display: grid; place-items: center; width: 1.5rem; height: 1.5rem; min-width: 1.5rem; min-height: 1.5rem; margin: 0; padding: 0; border-radius: .25rem; color: var(--color-ui-muted); }
-.thesis-tab-remove svg { width: .75rem; height: .75rem; }
-.thesis-tab-remove:hover:not(:disabled) { color: var(--color-ui-danger); background: var(--color-ui-panel); }
-.thesis-tab-remove:disabled { opacity: .4; cursor: not-allowed; }
 .thesis-sheet-dialog { margin: auto; width: min(28rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; padding: 1.5rem; border: 1px solid var(--color-ui-border); border-radius: .75rem; background: var(--color-ui-panel); color: var(--color-ui-text); box-shadow: 0 24px 80px var(--ui-shadow); overflow-wrap: anywhere; }
 .thesis-sheet-dialog::backdrop { background: var(--ui-backdrop); backdrop-filter: blur(4px); }
 

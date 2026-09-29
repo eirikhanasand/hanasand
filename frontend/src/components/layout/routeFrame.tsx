@@ -20,10 +20,10 @@ export default function RouteFrame({ children, serverPath, token, sidebar, banne
     const isOrganizations = pathname.startsWith('/organizations')
     const isAiWorkbench = pathname.startsWith('/ai') && pathname !== '/ai/window'
     const isPublicProduct = isPublicProductPath(pathname)
-    const isThesisPage = pathname === '/thesis'
+    const isThesisPage = pathname === '/thesis' || pathname.startsWith('/thesis/') || pathname === '/content/thesis' || pathname.startsWith('/content/thesis/')
     const isLoggedInTi = token && (pathname === '/ti' || pathname.startsWith('/ti/'))
     const isAppSurface = showSidebar || isDashboard || isLoggedInTi || (!isPublicProduct && (isShare || pathname.startsWith('/ai') || isDashboard || isProfile || isOrganizations))
-    const showFooter = !isBrowserLanding && (!isAppSurface || isAiWorkbench)
+    const showFooter = !isBrowserLanding && !isThesisPage && (!isAppSurface || isAiWorkbench)
     const thesisScroll = isThesisPage && !showSidebar
     const frameRows = thesisScroll ? 'grid-rows-[auto_minmax(0,1fr)]' : showFooter ? 'grid-rows-[auto_minmax(max-content,auto)_auto]' : 'grid-rows-[auto_minmax(0,1fr)]'
     const frameOverflow = isThesisPage || isBrowserLanding || isShare || showSidebar ? 'overflow-hidden overscroll-none' : 'overflow-auto'
@@ -46,7 +46,6 @@ export default function RouteFrame({ children, serverPath, token, sidebar, banne
                         </div>
                     </div>
                 ) : children}
-                {thesisScroll && showFooter ? <Footer /> : null}
             </main>
             {showFooter && !thesisScroll ? <Footer /> : null}
         </div>

@@ -11,6 +11,7 @@ import CodeReview from './codeReview'
 import type { Sheet, SheetSettings } from './workspace'
 import { identifiedSheets, writeSheets, sheetChanges } from './workspace'
 import type { ThesisDocument } from '@/utils/thesis'
+import { setThesisNavigation } from '@/utils/layout/thesisNavigation'
 import useThesis from './useThesis'
 
 function ReadOnlySheet({ sheet }: { sheet: Sheet }) {
@@ -57,6 +58,13 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
     const [validationError, setValidationError] = useState('')
     const sheets = identifiedSheets(document.title, document.body)
     const sheetUrlValue = (sheet: Sheet) => sheet.name?.trim().toLowerCase() === 'code' ? 'code' : sheet.id || ''
+    useEffect(() => {
+        setThesisNavigation(sheets.map(sheet => ({
+            label: sheet.name,
+            href: `/thesis?sheet=${encodeURIComponent(sheetUrlValue(sheet))}`,
+        })))
+    }, [document.body])
+    useEffect(() => () => setThesisNavigation([]), [])
     const selectedSheet = sheets.find(sheet => sheet.id === selected || sheetUrlValue(sheet) === selected)
     const active = Math.max(0, selectedSheet ? sheets.indexOf(selectedSheet) : 0)
     function selectSheet(id: string, replace = false) {
@@ -110,7 +118,7 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
     useEffect(() => {
         if (sheetDialog) dialogRef.current?.showModal()
         else if (triggerRef.current) {
-            const target = triggerRef.current.isConnected ? triggerRef.current : window.document.querySelector<HTMLButtonElement>('.thesis-tabs [aria-selected=true]')
+            const target = triggerRef.current.isConnected ? triggerRef.current : window.document.querySelector<HTMLAnchorElement>('[data-thesis-sheet-link][aria-current="page"]')
             target?.focus()
         }
     }, [sheetDialog])
@@ -224,6 +232,8 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
                     actions={(canEdit || codeEnabled) && <>
                         {codeEnabled && <div ref={setCodeToolbar} className='flex' />}
                         {canEdit && <>
+                            <button type='button' disabled={!ready} onClick={event => openSheetDialog({ kind: 'add' }, event.currentTarget)} aria-label='Add sheet' title='Add sheet' className={sheetButton + ' w-10 px-0'}><Plus size={18} /></button>
+                            <button type='button' disabled={!ready || sheets.length === 1} onClick={event => openSheetDialog({ kind: 'delete', id: sheets[active].id, name: sheets[active].name }, event.currentTarget)} aria-label={`Remove ${sheets[active].name} sheet`} title={sheets.length === 1 ? 'Keep at least one sheet' : `Remove ${sheets[active].name}`} className={sheetButton + ' w-10 px-0'}><Minus size={18} /></button>
                             <button type='button' disabled={!thesis.canUndo || busy} onClick={thesis.undo} aria-label='Undo' title='Undo (Ctrl/⌘ Z)' className={sheetButton + ' w-10 px-0'}><Undo2 size={18} /></button>
                             <button type='button' disabled={!thesis.canRedo || busy} onClick={thesis.redo} aria-label='Redo' title='Redo (Ctrl/⌘ Shift Z)' className={sheetButton + ' w-10 px-0'}><Redo2 size={18} /></button>
                             {settings.history !== false && <button type='button' disabled={busy || !ready} aria-expanded={history !== null} aria-label={history === null ? 'History' : 'Close history'} title={history === null ? 'History' : 'Close history'} onClick={() => history === null ? loadHistory() : setHistory(null)} className={sheetButton + ' w-10 px-0'}>
@@ -234,18 +244,6 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
                 {ready && codeEnabled && <CodeReview canReview={canEdit} toolbar={codeToolbar} />}
             </div>
             {validationError && <p role='alert' className='text-sm text-ui-text'>{validationError}</p>}
-            <nav className='thesis-tabs' aria-label='Sheet navigation'>
-                <div role='tablist' aria-label='Thesis sheets' className='flex'>
-                    {sheets.map(({ id, name }, index) => <div key={id} role='presentation' className='thesis-tab' data-active={active === index}><button id={`tab-${index}`} role='tab' disabled={!ready} aria-selected={active === index} aria-controls={`sheet-${index}`} tabIndex={active === index ? 0 : -1}
-                        onClick={() => selectSheet(id)} onKeyDown={event => {
-                            const target = event.key === 'ArrowRight' ? (index + 1) % sheets.length : event.key === 'ArrowLeft' ? (index + sheets.length - 1) % sheets.length : event.key === 'Home' ? 0 : event.key === 'End' ? sheets.length - 1 : -1
-                            if (target >= 0) { event.preventDefault(); selectSheet(sheets[target].id); window.document.getElementById(`tab-${target}`)?.focus() }
-                        }}>{name}</button>
-                    {canEdit && active === index && <button className='thesis-tab-remove' disabled={!ready || sheets.length === 1} aria-label={`Remove ${name} sheet`} title={sheets.length === 1 ? 'Keep at least one sheet' : `Remove ${name}`} onClick={event => openSheetDialog({ kind: 'delete', id, name }, event.currentTarget)}><Minus size={16} aria-hidden='true' /></button>}
-                    </div>)}
-                </div>
-                {canEdit && <button disabled={!ready} onClick={event => openSheetDialog({ kind: 'add' }, event.currentTarget)} aria-label='Add sheet'><Plus size={18} aria-hidden='true' /></button>}
-            </nav>
             {canEdit && sheetDialog && <dialog ref={dialogRef} className='thesis-sheet-dialog' aria-labelledby='sheet-dialog-title' onCancel={event => { event.preventDefault(); closeSheetDialog() }}>
                 <form onSubmit={submitSheetDialog} className='grid gap-5'>
                     <h2 id='sheet-dialog-title' className='text-lg font-semibold'>{sheetDialog.kind === 'add' ? 'Create a new sheet' : 'Are you sure you want to delete?'}</h2>
