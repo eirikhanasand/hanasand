@@ -126,10 +126,17 @@ test('power loss after checkpoint persistence retains its dependent batch', asyn
 
 test('partial unpublished batch is quarantined and leaves its cursor replayable', async () => {
   const state = new Store(root); state.save('cursor', 0);
-  fs.mkdirSync(state.path('queue/live'), { recursive: true }); fs.writeFileSync(state.path('queue/live/torn.pending'), '{"events":[');
+  fs.mkdirSync(state.path('queue/live/current'), { recursive: true }); fs.writeFileSync(state.path('queue/live/current/torn.pending'), '{"events":[');
   const group = new GroupCommit(root, async () => {}, 0); await group.recover(); await group.flush();
-  expect(fs.existsSync(state.path('queue/live/torn.pending.interrupted'))).toBe(true);
+  expect(fs.existsSync(state.path('queue/live/current/torn.pending.interrupted'))).toBe(true);
   expect(state.load('cursor', -1)).toBe(0); expect(state.queuedNames('live', 100)).toHaveLength(0);
+});
+
+test('legacy pending batches stay replayable and cannot block current queue recovery', async () => {
+  const state = new Store(root), pending = state.path('queue/live/legacy.pending');
+  fs.mkdirSync(state.path('queue/live'), { recursive: true }); fs.writeFileSync(pending, JSON.stringify({ events: [row(8)] }));
+  const group = new GroupCommit(root, async () => {}, 0); await group.recover(); await group.flush();
+  expect(fs.existsSync(pending)).toBe(true); expect(state.queuedNames('live', 100)).toHaveLength(0);
 });
 
 test('external acknowledgements wait for the barrier covering prior batches', async () => {

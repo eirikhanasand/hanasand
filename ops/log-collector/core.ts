@@ -119,7 +119,7 @@ export class Store {
   }
   async durable() { if (this.persistence) { await this.persistence.barrier(); this.pendingBatches = 0; } }
   queueBatch(batch: LogEvent[], lane: string, atomic = false) {
-    const root = this.path('queue/' + (lane === 'live' ? 'live/current' : lane));
+    const root = this.path('queue/' + lane + '/current');
     fs.mkdirSync(root, { recursive: true, mode: 0o700 });
     if (!this.persistence) { syncDirectory(dirname(root)); syncDirectory(this.root); }
     const identity = (BigInt(Date.now()) * 1000000n).toString().padStart(20, '0') + '-' + randomUUID().replaceAll('-', '');
@@ -174,10 +174,8 @@ export class Store {
       names.sort();
       return names.map(name => join(directoryPath, name));
     };
-    if (lane === 'live') {
-      const current = namesIn(join(root, 'current'));
-      if (current.length) return current;
-    }
+    const current = namesIn(join(root, 'current'));
+    if (current.length) return current;
     return namesIn(root);
   }
   private queuedCurrentLiveNames(limit: number) { return this.queuedNames('live/current', limit); }

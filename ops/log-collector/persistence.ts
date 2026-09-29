@@ -141,14 +141,20 @@ export class GroupCommit implements Persistence {
   async recover() {
     for (const lane of ['live', 'history']) {
       let scanned = 0;
-      const roots = lane === 'live' ? [join(this.root, 'queue/live/current'), join(this.root, 'queue/live')] : [join(this.root, 'queue/history')];
-      for (const root of roots) {
+      const roots = [
+        { path: join(this.root, 'queue', lane, 'current'), recoverPending: true },
+        { path: join(this.root, 'queue', lane), recoverPending: false },
+      ];
+      for (const { path: root, recoverPending } of roots) {
         if (!fs.existsSync(root)) continue;
         const directory = fs.opendirSync(root);
         try {
           for (let entry; (entry = directory.readSync());) {
             if (++scanned % 1000 === 0) await new Promise<void>(resolve => setImmediate(resolve));
-            if (!entry.name.endsWith('.pending')) continue;
+            // Legacy flat queues keep their old cursor until publication, so
+            // source replay can rebuild these batches without renaming into a
+            // directory too large for new writes.
+            if (!recoverPending || !entry.name.endsWith('.pending')) continue;
             const path = join(root, entry.name);
             // An interrupted, unpublished batch cannot have advanced a durable
             // cursor. Quarantine it; source replay recovers its stable event IDs.
