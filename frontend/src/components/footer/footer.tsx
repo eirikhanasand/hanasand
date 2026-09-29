@@ -125,8 +125,8 @@ export default function Footer() {
                     <span>© {year} Hanasand</span>
                 </div>
                 {isValidReleaseCommit ? (
-                    <a href={`https://github.com/eirikhanasand/hanasand/commit/${releaseCommit}`} target='_blank' rel='noopener noreferrer' className='hover:text-ui-text' aria-label={`Version ${config.version}, commit ${releaseCommit}`} title={`Commit ${releaseCommit}`}>
-                        v{config.version} · {releaseCommit.slice(0, 7)}
+                    <a href={`https://github.com/eirikhanasand/hanasand/commit/${releaseCommit}`} target='_blank' rel='noopener noreferrer' className='hover:text-ui-text' aria-label={`Version ${config.version}`} title='View deployed source commit'>
+                        v{config.version}
                     </a>
                 ) : (
                     <span>v{config.version}</span>
