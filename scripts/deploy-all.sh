@@ -31,7 +31,7 @@ stop_deployment_group() {
 
 deployment_group_exists() {
     ps -eo pid=,pgid=,args= | awk -v group="$1" \
-        '$2 == group && $0 ~ /(deploy-all[.]sh|docker compose|docker-buildx)/ { found=1 } END { exit !found }'
+        '$2 == group && $0 ~ /(deploy-all[.]sh|docker compose|docker-compose|docker-buildx)/ { found=1 } END { exit !found }'
 }
 
 stop_existing_deployments() {
