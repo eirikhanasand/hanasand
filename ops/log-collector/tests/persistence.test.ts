@@ -34,6 +34,17 @@ test('queue listing returns bounded pages so large backlogs need no full scan', 
   expect(second).toHaveLength(40); expect(second.some(path => first.includes(path))).toBe(false);
 });
 
+test('fresh live batches take priority over the legacy live backlog', () => {
+  const store = disk(), legacy = store.path('queue/live'), current = store.path('queue/live/current');
+  fs.mkdirSync(legacy, { recursive: true }); fs.mkdirSync(current, { recursive: true });
+  fs.writeFileSync(join(legacy, '01790000000000000000-old.json'), JSON.stringify({ events: [row(1)] }));
+  fs.writeFileSync(join(current, '01791000000000000000-new.json'), JSON.stringify({ events: [row(2)] }));
+  expect(store.queuedNames('live', 1)[0]).toBe(join(current, '01791000000000000000-new.json'));
+  expect(store.queuedBatches('history')).toEqual([]);
+  fs.rmSync(join(current, '01791000000000000000-new.json'));
+  expect(store.queuedNames('live', 1)[0]).toBe(join(legacy, '01790000000000000000-old.json'));
+});
+
 test('updates received during a barrier cannot publish a newer unsafe cursor', async () => {
   let release!: () => void;
   const gate = new Promise<void>(ok => release = ok);

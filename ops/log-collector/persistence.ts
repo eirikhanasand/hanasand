@@ -127,24 +127,27 @@ export class GroupCommit implements Persistence {
   }
   async recover() {
     for (const lane of ['live', 'history']) {
-      const root = join(this.root, 'queue', lane); if (!fs.existsSync(root)) continue;
-      const directory = fs.opendirSync(root);
       let scanned = 0;
-      try {
-        for (let entry; (entry = directory.readSync());) {
-          if (++scanned % 1000 === 0) await new Promise<void>(resolve => setImmediate(resolve));
-          if (!entry.name.endsWith('.pending')) continue;
-          const path = join(root, entry.name);
-          // An interrupted, unpublished batch cannot have advanced a durable
-          // cursor. Quarantine it; source replay recovers its stable event IDs.
-          try {
-            if (fs.statSync(path).size > 512000) throw new Error('Oversized pending batch');
-            const value = JSON.parse(fs.readFileSync(path, 'utf8'));
-            if (!Array.isArray(value.events) || !value.events.length) throw new Error('Invalid pending batch');
-            this.queue(path);
-          } catch { fs.renameSync(path, path + '.interrupted'); this.dirty(); }
-        }
-      } finally { directory.closeSync(); }
+      const roots = lane === 'live' ? [join(this.root, 'queue/live/current'), join(this.root, 'queue/live')] : [join(this.root, 'queue/history')];
+      for (const root of roots) {
+        if (!fs.existsSync(root)) continue;
+        const directory = fs.opendirSync(root);
+        try {
+          for (let entry; (entry = directory.readSync());) {
+            if (++scanned % 1000 === 0) await new Promise<void>(resolve => setImmediate(resolve));
+            if (!entry.name.endsWith('.pending')) continue;
+            const path = join(root, entry.name);
+            // An interrupted, unpublished batch cannot have advanced a durable
+            // cursor. Quarantine it; source replay recovers its stable event IDs.
+            try {
+              if (fs.statSync(path).size > 512000) throw new Error('Oversized pending batch');
+              const value = JSON.parse(fs.readFileSync(path, 'utf8'));
+              if (!Array.isArray(value.events) || !value.events.length) throw new Error('Invalid pending batch');
+              this.queue(path);
+            } catch { fs.renameSync(path, path + '.interrupted'); this.dirty(); }
+          }
+        } finally { directory.closeSync(); }
+      }
     }
   }
 }

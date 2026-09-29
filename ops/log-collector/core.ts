@@ -119,7 +119,7 @@ export class Store {
   }
   async durable() { if (this.persistence) { await this.persistence.barrier(); this.pendingBatches = 0; } }
   queueBatch(batch: LogEvent[], lane: string, atomic = false) {
-    const root = this.path('queue/' + lane);
+    const root = this.path('queue/' + (lane === 'live' ? 'live/current' : lane));
     fs.mkdirSync(root, { recursive: true, mode: 0o700 });
     if (!this.persistence) { syncDirectory(dirname(root)); syncDirectory(this.root); }
     const identity = (BigInt(Date.now()) * 1000000n).toString().padStart(20, '0') + '-' + randomUUID().replaceAll('-', '');
@@ -161,20 +161,28 @@ export class Store {
   }
   queuedNames(lane: string, limit: number): string[] {
     if (limit <= 0) return [];
-    const root = this.path('queue/' + lane); if (!fs.existsSync(root)) return [];
-    const names: string[] = [], directory = fs.opendirSync(root);
-    try { for (let entry; (entry = directory.readSync());) {
-      if (!entry.name.endsWith('.json')) continue;
-      // A huge delivery backlog must not turn every poll into a full directory
-      // scan. Drain the filesystem's current iteration order in bounded pages.
-      names.push(entry.name);
-      if (names.length >= limit) break;
-    } } finally { directory.closeSync(); }
-    names.sort();
-    return names.map(name => join(root, name));
+    const root = this.path('queue/' + lane);
+    const namesIn = (directoryPath: string) => {
+      if (!fs.existsSync(directoryPath)) return [];
+      const names: string[] = [], directory = fs.opendirSync(directoryPath);
+      try { for (let entry; (entry = directory.readSync());) {
+        if (!entry.name.endsWith('.json')) continue;
+        // A huge delivery backlog must not turn every poll into a full scan.
+        names.push(entry.name);
+        if (names.length >= limit) break;
+      } } finally { directory.closeSync(); }
+      names.sort();
+      return names.map(name => join(directoryPath, name));
+    };
+    if (lane === 'live') {
+      const current = namesIn(join(root, 'current'));
+      if (current.length) return current;
+    }
+    return namesIn(root);
   }
+  private queuedCurrentLiveNames(limit: number) { return this.queuedNames('live/current', limit); }
   queuedBatches(lane: string): string[] {
-    if (lane === 'history' && this.queuedNames('live', 1).length) return [];
+    if (lane === 'history' && this.queuedCurrentLiveNames(1).length) return [];
     const paths: string[] = []; let size = 0, count = 0;
     for (const path of this.queuedNames(lane, BATCH_COUNT)) {
       const raw = readBounded(path, 512000), batch = JSON.parse(raw.toString()) as { events: LogEvent[]; atomic?: boolean }, entries = batch.events.length;
