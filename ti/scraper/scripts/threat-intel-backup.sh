@@ -23,7 +23,7 @@ repo_root=$(CDPATH= cd -- "$script_dir/../../.." && pwd)
 scraper_source=$(CDPATH= cd -- "$script_dir/.." && pwd)
 release=$(git -C "$repo_root" rev-parse HEAD)
 api_source=${HANASAND_TI_API_SOURCE:-$repo_root/ops/runtime/ti-releases/$release/api}
-[ -d "$api_source" ] || api_source="$repo_root/api"
+[ -f "$api_source/src/utils/dwm/customerOutputSafety.ts" ] || api_source="$repo_root/api"
 
 usage() {
   echo "usage: $0 <backup|verify|drill> <archive-directory>" >&2
