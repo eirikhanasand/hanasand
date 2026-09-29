@@ -20,8 +20,12 @@ export function collectorHeartbeatStatus(row: CollectorHeartbeat | null, now = D
     if (sourceStatus.audit_live?.ok !== true) {
         return { status: 'down', message: 'The host audit log is not accepting new records.' }
     }
-    if (sourceStatus.delivery_live?.ok !== true) {
+    const lastAcknowledgedAt = new Date(sourceStatus.delivery_live?.lastAcknowledgedAt).getTime()
+    if (!Number.isFinite(lastAcknowledgedAt) || lastAcknowledgedAt > now || now - lastAcknowledgedAt > 90_000) {
         return { status: 'down', message: 'The host log collector cannot send records to Hanasand.' }
+    }
+    if (sourceStatus.delivery_live?.ok !== true) {
+        return { status: 'up', message: 'The host audit collector is sending records while it catches up with its queue.' }
     }
     if (row.message.startsWith('Collection failed:')) {
         return { status: 'down', message: 'The host log collector reported a collection failure.' }
