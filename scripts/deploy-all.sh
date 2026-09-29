@@ -117,8 +117,24 @@ release=$(git rev-parse HEAD)
 sh "$root/scripts/require-compose-healthchecks.sh"
 
 export HANASAND_RELEASE_COMMIT="$release"
+export BROWSER_SANDBOX_WORKER_IMAGE="hanasand_browsers:$release"
+candidate_suffix=$(printf '%s' "$release" | cut -c1-12)
+candidate_offset=$(printf '%s' "$release" | cksum | awk '{ print $1 % 10000 }')
+export HANASAND_API_CANDIDATE_CONTAINER="hanasand_api_candidate_$candidate_suffix"
+export HANASAND_FRONTEND_CANDIDATE_CONTAINER="hanasand_frontend_candidate_$candidate_suffix"
+export HANASAND_API_CANDIDATE_PORT=$((40000 + candidate_offset))
+export HANASAND_FRONTEND_CANDIDATE_PORT=$((30000 + candidate_offset))
 build_dir=$(mktemp -d "/tmp/hanasand-release-build.XXXXXX")
-cleanup() { rm -rf "$build_dir"; }
+candidate_started=0
+proxy_target=canonical
+cleanup() {
+    status=$?
+    if test "$status" -ne 0 && test "$candidate_started" = 1 && test "$proxy_target" != candidate; then
+        docker rm -f "$HANASAND_FRONTEND_CANDIDATE_CONTAINER" "$HANASAND_API_CANDIDATE_CONTAINER" >/dev/null 2>&1 || true
+    fi
+    rm -rf "$build_dir"
+    return "$status"
+}
 trap cleanup EXIT HUP INT TERM
 git archive --format=tar --output="$build_dir/source.tar" "$release"
 tar -xf "$build_dir/source.tar" -C "$build_dir"
@@ -132,6 +148,11 @@ if test -f "$build_dir/.env"; then
         sed -i "s/^HANASAND_RELEASE_COMMIT=.*/HANASAND_RELEASE_COMMIT=$release/" "$build_dir/.env"
     else
         printf 'HANASAND_RELEASE_COMMIT=%s\n' "$release" >> "$build_dir/.env"
+    fi
+    if grep -q '^BROWSER_SANDBOX_WORKER_IMAGE=' "$build_dir/.env"; then
+        sed -i "s#^BROWSER_SANDBOX_WORKER_IMAGE=.*#BROWSER_SANDBOX_WORKER_IMAGE=$BROWSER_SANDBOX_WORKER_IMAGE#" "$build_dir/.env"
+    else
+        printf 'BROWSER_SANDBOX_WORKER_IMAGE=%s\n' "$BROWSER_SANDBOX_WORKER_IMAGE" >> "$build_dir/.env"
     fi
     if docker image inspect hanasand_browser_base:latest >/dev/null 2>&1; then
         if grep -q '^HANASAND_BROWSER_RUNTIME_BASE=' "$build_dir/.env"; then
@@ -195,6 +216,10 @@ compose_live() {
         docker compose -f "$root/docker-compose.yml" "$@"
     fi
 }
+compose_candidates() {
+    docker compose --profile deployment-candidates --env-file "$build_dir/.env" \
+        -f "$root/docker-compose.yml" "$@"
+}
 wait_for_healthy() {
     container=$1
     service=$2
@@ -218,20 +243,105 @@ wait_for_healthy() {
     return 1
 }
 
-# Keep both authentication replicas running while the rest of the stack is
-# recreated. Replace each replica only after the previous one is healthy.
-services=$(compose_live config --services | sed '/^auth-primary$/d; /^auth-secondary$/d')
+# Replace all internal services first, while the currently serving frontend
+# and API remain untouched. Authentication replicas are updated separately.
+services=$(compose_live config --services | sed '/^api$/d; /^frontend$/d; /^auth-primary$/d; /^auth-secondary$/d')
 # Compose service names are controlled by docker-compose.yml and contain no
 # shell metacharacters, so split the list into its individual arguments.
 # shellcheck disable=SC2086
 compose_live up -d --no-build --no-deps browsers
 compose_live up -d --no-build --no-deps --remove-orphans $services
+
+# Start a matching API/frontend pair on release-specific loopback ports. The
+# API candidate runs schema setup but suppresses the production background
+# workers, then both candidates must pass their container health checks before
+# traffic moves.
+compose_candidates run -d --no-deps --name "$HANASAND_API_CANDIDATE_CONTAINER" \
+    --publish "127.0.0.1:$HANASAND_API_CANDIDATE_PORT:8080" api-candidate
+candidate_started=1
+compose_candidates run -d --no-deps --name "$HANASAND_FRONTEND_CANDIDATE_CONTAINER" \
+    --publish "127.0.0.1:$HANASAND_FRONTEND_CANDIDATE_PORT:3000" frontend-candidate
+wait_for_healthy "$HANASAND_API_CANDIDATE_CONTAINER" "API release candidate" 600
+wait_for_healthy "$HANASAND_FRONTEND_CANDIDATE_CONTAINER" "Frontend release candidate" 180
+candidate_api_health=$(curl --fail --silent --show-error --max-time 10 "http://127.0.0.1:$HANASAND_API_CANDIDATE_PORT/health")
+case "$candidate_api_health" in *'"ok":true'*"\"release\":\"$release\""*) ;; *)
+    echo "API release candidate did not report release $release." >&2
+    exit 1
+    ;;
+esac
+candidate_frontend_health=$(curl --fail --silent --show-error --max-time 10 "http://127.0.0.1:$HANASAND_FRONTEND_CANDIDATE_PORT/api/health")
+case "$candidate_frontend_health" in *'"ok":true'*"\"release\":\"$release\""*"\"api\""*) ;; *)
+    echo "Frontend release candidate did not report release $release and its matching API." >&2
+    exit 1
+    ;;
+esac
+
+upstream_file=/home/hanasand/openresty/nginx/conf.d/hanasand-upstreams.conf
+test -w "$upstream_file" || {
+    echo "Cannot update the OpenResty upstream file: $upstream_file" >&2
+    exit 1
+}
+docker inspect openresty >/dev/null 2>&1 || {
+    echo "The OpenResty container is not available for a graceful cutover." >&2
+    exit 1
+}
+switch_upstreams() {
+    frontend_port=$1
+    api_port=$2
+    backup=$(mktemp "${upstream_file}.backup.XXXXXX")
+    temporary=$(mktemp "${upstream_file}.tmp.XXXXXX")
+    cp "$upstream_file" "$backup"
+    cat > "$temporary" <<EOF
+upstream hanasand_frontend {
+    server 127.0.0.1:$frontend_port max_fails=1 fail_timeout=3s;
+    keepalive 32;
+}
+
+upstream hanasand_api {
+    server 127.0.0.1:$api_port max_fails=1 fail_timeout=3s;
+    keepalive 32;
+}
+EOF
+    chmod --reference="$upstream_file" "$temporary"
+    mv "$temporary" "$upstream_file"
+    if ! docker exec openresty /usr/local/openresty/bin/openresty -t >/dev/null \
+        || ! docker exec openresty /usr/local/openresty/bin/openresty -s reload; then
+        mv "$backup" "$upstream_file"
+        docker exec openresty /usr/local/openresty/bin/openresty -t >/dev/null 2>&1 || true
+        docker exec openresty /usr/local/openresty/bin/openresty -s reload >/dev/null 2>&1 || true
+        rm -f "$temporary" "$backup"
+        return 1
+    fi
+    rm -f "$backup"
+}
+
+switch_upstreams "$HANASAND_FRONTEND_CANDIDATE_PORT" "$HANASAND_API_CANDIDATE_PORT"
+proxy_target=candidate
+echo "OpenResty now serves the healthy frontend and API candidates for $release."
+
 compose_live up -d --no-build --no-deps api frontend
-# The API can report unhealthy while its startup schema work retries transient
-# database locks. Keep the existing auth pair up until the API has recovered.
 wait_for_healthy hanasand_api "API" 600
 wait_for_healthy hanasand "Frontend" 180
-curl --fail --silent --show-error --max-time 10 --output /dev/null http://127.0.0.1:3100/api/health
+canonical_frontend_health=$(curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3100/api/health)
+case "$canonical_frontend_health" in *'"ok":true'*"\"release\":\"$release\""*"\"api\""*) ;; *)
+    echo "Canonical frontend did not report release $release and its matching API." >&2
+    exit 1
+    ;;
+esac
+canonical_api_health=$(curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8082/health)
+case "$canonical_api_health" in *'"ok":true'*"\"release\":\"$release\""*) ;; *)
+    echo "Canonical API did not report release $release." >&2
+    exit 1
+    ;;
+esac
+switch_upstreams 3100 8082
+proxy_target=canonical
+for candidate in $(docker ps -aq --filter label=com.docker.compose.project=hanasand \
+    --filter label=com.docker.compose.service=api-candidate) \
+    $(docker ps -aq --filter label=com.docker.compose.project=hanasand \
+    --filter label=com.docker.compose.service=frontend-candidate); do
+    docker rm -f "$candidate" >/dev/null
+done
 echo "Frontend and API health verified."
 compose_live up -d --no-build --no-deps --force-recreate auth-secondary
 wait_for_healthy hanasand_auth_secondary "Secondary auth worker" 180

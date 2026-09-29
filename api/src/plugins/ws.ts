@@ -79,7 +79,7 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
         }).catch(() => socket.close(1011))
     })
     registerBrowserStreamRoute(fastify)
-    if (process.env.NODE_ENV === 'production' && process.env.BROWSER_SANDBOX_EGRESS_FIREWALL_READY === '1') {
+    if (process.env.NODE_ENV === 'production' && process.env.DEPLOYMENT_CANDIDATE_ONLY !== '1' && process.env.BROWSER_SANDBOX_EGRESS_FIREWALL_READY === '1') {
         const maintain = () => {
             void browserWarmPool.replenish()
             // Reap abandoned claims after the longest possible run and idle wait.

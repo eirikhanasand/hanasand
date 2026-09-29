@@ -63,6 +63,19 @@ services:
       deploy-path-guard:
         condition: service_healthy
 
+  # These profile-only services are started explicitly during a serialized
+  # release. They let the proxy switch to a fully healthy pair before the
+  # canonical frontend and API containers are replaced.
+  frontend-candidate:
+    extends:
+      service: frontend
+    container_name: ${HANASAND_FRONTEND_CANDIDATE_CONTAINER:-hanasand_frontend_candidate}
+    environment:
+      FRONTEND_INTERNAL_API: http://${HANASAND_API_CANDIDATE_CONTAINER:-hanasand_api_candidate}:8080/api
+    ports: !override
+      - "127.0.0.1:${HANASAND_FRONTEND_CANDIDATE_PORT:-3101}:3000"
+    profiles: [deployment-candidates]
+
   api:
     container_name: hanasand_api
     image: hanasand_api
@@ -127,6 +140,7 @@ services:
       BROWSER_SANDBOX_MAX_SESSIONS: ${BROWSER_SANDBOX_MAX_SESSIONS:-100}
       BROWSER_SANDBOX_EGRESS_FIREWALL_READY: ${BROWSER_SANDBOX_EGRESS_FIREWALL_READY:-0}
       BROWSER_SANDBOX_PREWARM: "0"
+      BROWSER_SANDBOX_WORKER_IMAGE: ${BROWSER_SANDBOX_WORKER_IMAGE:-hanasand_browsers}
       VULNERABILITY_SCAN_STATE_PATH: ${VULNERABILITY_SCAN_STATE_PATH:-/var/lib/hanasand/vulnerability-scan.json}
       DB_BACKUP_WORKER_SOCKET: /var/lib/hanasand/backups/database/.worker.sock
       DB_BACKUP_DIR: ${DB_BACKUP_DIR:-/var/lib/hanasand/backups/database}
@@ -157,6 +171,17 @@ services:
         condition: service_started
       onion-tor:
         condition: service_started
+
+  api-candidate:
+    extends:
+      service: api
+    container_name: ${HANASAND_API_CANDIDATE_CONTAINER:-hanasand_api_candidate}
+    environment:
+      API_HTTP_ONLY: "1"
+      DEPLOYMENT_CANDIDATE_ONLY: "1"
+    ports: !override
+      - "127.0.0.1:${HANASAND_API_CANDIDATE_PORT:-8083}:8080"
+    profiles: [deployment-candidates]
 
   auth-primary:
     container_name: hanasand_auth_primary
@@ -279,7 +304,7 @@ services:
 
   browsers:
     container_name: hanasand_browsers
-    image: hanasand_browsers
+    image: ${BROWSER_SANDBOX_WORKER_IMAGE:-hanasand_browsers}
     mem_limit: 3g
     cpus: "3.0"
     init: true

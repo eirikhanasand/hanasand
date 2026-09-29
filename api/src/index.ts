@@ -2,7 +2,7 @@ import { processLiveLogs, processStoredLogs } from '#utils/events/processLogs.ts
 import { processRuleReprocessJob } from '#utils/events/ruleReprocess.ts'
 import { startLogProcessor } from '#utils/events/processor.ts'
 import { startBackgroundAnalytics } from './utils/backgroundAnalytics.ts'
-import { recoveryRequestAllowed, recoveryState, recoveryReadOnly } from './utils/recovery.ts'
+import { recoveryRequestAllowed, recoveryReadOnly } from './utils/recovery.ts'
 import { queryOnce, closeDatabase, withEventDatabase, isTransientDatabaseError, warmDatabasePools } from './utils/db.ts'
 import Fastify from 'fastify'
 import apiRoutes from './routes.ts'
@@ -46,6 +46,7 @@ const fastify = Fastify({
 })
 const port = Number(process.env.PORT) || 8081
 const httpWorkerOnly = process.env.API_HTTP_ONLY === '1'
+const deploymentCandidateOnly = process.env.DEPLOYMENT_CANDIDATE_ONLY === '1'
 fastify.addHook('onRequest', async (req, reply) => {
     if (!recoveryRequestAllowed(req.method, req.url.split('?')[0])) {
         return reply.code(503).header('Retry-After', '30').send({ code: 'recovery_read_only', error: 'Recovery mode: viewing existing cases, alerts and intelligence is available. Changes and new processing are temporarily paused.' })
@@ -86,7 +87,7 @@ fastify.register(cors, {
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD']
 })
 
-if (!browserWorkerOnly && process.env.RECOVERY_ESSENTIAL_ONLY !== '1') fastify.register(fp)
+if (!browserWorkerOnly && !httpWorkerOnly && process.env.RECOVERY_ESSENTIAL_ONLY !== '1') fastify.register(fp)
 fastify.register(ws)
 if (!browserWorkerOnly) {
     fastify.register(rateLimit)
@@ -176,7 +177,10 @@ process.on('unhandledRejection', reason => {
 
 async function start() {
     try {
-        if (!browserWorkerOnly && !httpWorkerOnly) await ensureSchema()
+        // A cutover candidate must prepare the release schema before it can
+        // serve traffic, while API_HTTP_ONLY keeps it from running duplicate
+        // production workers beside the active API.
+        if (!browserWorkerOnly && (!httpWorkerOnly || deploymentCandidateOnly)) await ensureSchema()
         if (!browserWorkerOnly && !httpWorkerOnly && process.env.SKIP_MAIL_PROVISIONING !== '1') {
             await provisionExistingMailAccounts().catch(error => {
                 if (isMailAdminConfigError(error)) {
@@ -188,7 +192,7 @@ async function start() {
             })
         }
         if (!browserWorkerOnly && !httpWorkerOnly) await warmDatabasePools()
-        if (!browserWorkerOnly && process.env.AUTH_SERVICE_ONLY !== '1') {
+        if (!browserWorkerOnly && !httpWorkerOnly && process.env.AUTH_SERVICE_ONLY !== '1') {
             await loadCachedLogMetrics().catch(error => fastify.log.warn({ error }, 'Failed to warm log throughput metrics cache'))
             const stopMetricsRefresh = startLogMetricsRefresh()
             fastify.addHook('onClose', async () => { stopMetricsRefresh() })
@@ -199,7 +203,7 @@ async function start() {
             const stopReprocessing = startLogProcessor(processRuleReprocessJob, error => fastify.log.error({ error }, 'Rule reprocessing failed'), () => 1000)
             fastify.addHook('onClose', async () => { await Promise.all([stopProcessing(), stopLiveProcessing(), stopReprocessing()]) })
         }
-        if (!browserWorkerOnly) {
+        if (!browserWorkerOnly && !httpWorkerOnly) {
             const stopAnalytics = await startBackgroundAnalytics(fastify.log)
             fastify.addHook('onClose', async () => { stopAnalytics() })
         }
