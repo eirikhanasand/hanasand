@@ -4,6 +4,7 @@ import { SingleUseBrowser } from '../src/utils/ws/singleUseBrowser.ts'
 
 function fixture() {
     let sequence = 0
+    let currentRelease = 'release-1'
     const slots = new Map<number, WarmWorker>()
     const states = new Map<string, SingleUseBrowser<object>>()
     const removed: string[] = []
@@ -13,7 +14,7 @@ function fixture() {
         async create(slot: number) {
             if (slots.has(slot)) return // Atomic Docker name reservation.
             const id = String(++sequence)
-            slots.set(slot, { containerId: id, streamIp: id, wsUrl: id, token: id, createdAt: Date.now(), running: true })
+            slots.set(slot, { containerId: id, streamIp: id, wsUrl: id, token: id, createdAt: Date.now(), running: true, release: currentRelease })
             const state = new SingleUseBrowser<object>()
             state.ready({ id })
             states.set(id, state)
@@ -27,7 +28,7 @@ function fixture() {
         async retire(worker: WarmWorker) { return states.get(worker.containerId)!.retire() },
         error(error: unknown) { errors.push(error) },
     }
-    return { adapter, slots, states, removed, errors, pool: new BrowserWarmPool(adapter) }
+    return { adapter, slots, states, removed, errors, pool: new BrowserWarmPool(adapter), setRelease(value: string) { currentRelease = value } }
 }
 
 describe('five ready browsers shared by API replicas', () => {
@@ -51,6 +52,17 @@ describe('five ready browsers shared by API replicas', () => {
         expect(await f.pool.take('empty')).toBeNull()
         await f.pool.replenish()
         expect(f.slots.size).toBe(5)
+    })
+    test('replaces warm workers built from the previous release', async () => {
+        const f = fixture()
+        await f.pool.replenish()
+        const previous = [...f.slots.values()].map(worker => worker.containerId)
+        f.setRelease('release-2')
+        await new BrowserWarmPool(f.adapter, 'release-2').replenish()
+        expect(f.removed).toEqual(previous)
+        expect(f.slots.size).toBe(5)
+        expect([...f.slots.values()].every(worker => worker.release === 'release-2')).toBe(true)
+        expect(f.errors).toEqual([])
     })
     test('unready and retired browsers are not handed out', async () => {
         const f = fixture()

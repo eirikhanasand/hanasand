@@ -61,7 +61,7 @@ type DockerContainerResponse = {
 type DockerInspectResponse = {
     Id?: string
     Created?: string
-    Config?: { Env?: string[], Cmd?: string[] }
+    Config?: { Env?: string[], Cmd?: string[], Labels?: Record<string, string> }
     HostConfig?: { NetworkMode?: string }
     Args?: string[]
     RestartCount?: number

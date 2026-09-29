@@ -202,6 +202,7 @@ services=$(compose_live config --services | sed '/^auth-primary$/d; /^auth-secon
 # Compose service names are controlled by docker-compose.yml and contain no
 # shell metacharacters, so split the list into its individual arguments.
 # shellcheck disable=SC2086
+compose_live up -d --no-build --no-deps browsers
 compose_live up -d --no-build --no-deps --remove-orphans $services
 compose_live up -d --no-build --no-deps api frontend
 # The API can report unhealthy while its startup schema work retries transient

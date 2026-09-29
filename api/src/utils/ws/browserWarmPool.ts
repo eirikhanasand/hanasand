@@ -2,7 +2,7 @@ export const BROWSER_WARM_POOL_SIZE = 5
 export const BROWSER_WARM_IDLE_MS = 15 * 60_000
 export const BROWSER_WARM_MAX_AGE_MS = 120 * 60_000
 
-export type WarmWorker = { containerId: string; wsUrl: string; streamIp: string; token: string; createdAt: number; running?: boolean }
+export type WarmWorker = { containerId: string; wsUrl: string; streamIp: string; token: string; createdAt: number; running?: boolean; release?: string }
 export type WarmStatus = { state: 'starting' | 'ready' | 'claimed' | 'retired'; sessionId?: string }
 type PoolAdapter = {
     inspect(slot: number): Promise<WarmWorker | null>
@@ -19,7 +19,7 @@ type PoolAdapter = {
 // The worker's atomic claim, not this process's local snapshot, grants ownership.
 export class BrowserWarmPool {
     private filling: Promise<void> | null = null
-    constructor(private adapter: PoolAdapter) {}
+    constructor(private adapter: PoolAdapter, private readonly release?: string) {}
 
     replenish() {
         if (this.filling) return this.filling
@@ -30,6 +30,7 @@ export class BrowserWarmPool {
                     const status = await this.adapter.status(worker)
                     if (status?.state === 'claimed') await this.adapter.detach(worker)
                     else if (status?.state === 'retired') await this.adapter.remove(worker)
+                    else if (this.release && worker.release !== this.release) await this.adapter.remove(worker)
                     else if (Date.now() - worker.createdAt > BROWSER_WARM_IDLE_MS + slot * 60_000 && status?.state === 'ready') {
                         if (!await this.adapter.retire(worker)) return
                         await this.adapter.remove(worker)

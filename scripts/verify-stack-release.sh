@@ -34,6 +34,36 @@ for container in hanasand_auth_primary hanasand_auth_secondary; do
     }
 done
 
+# Browser warm workers are created directly by the API, so Compose does not
+# recreate them with the rest of the stack. Wait until all named pool slots
+# report both the application release and browser image revision being checked.
+elapsed=0
+while test "$elapsed" -lt 240; do
+    browser_pool_current=1
+    for slot in 0 1 2 3 4; do
+        container="hanasand_browser_warm_$slot"
+        if ! docker inspect "$container" >/dev/null 2>&1; then
+            browser_pool_current=0
+            continue
+        fi
+        running=$(docker inspect -f '{{.State.Running}}' "$container")
+        health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$container")
+        worker_release=$(docker inspect -f '{{index .Config.Labels "com.hanasand.release"}}' "$container")
+        image=$(docker inspect -f '{{.Image}}' "$container")
+        image_release=$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image" 2>/dev/null || true)
+        if test "$running" != true || test "$health" != healthy || test "$worker_release" != "$release" || test "$image_release" != "$release"; then
+            browser_pool_current=0
+        fi
+    done
+    test "$browser_pool_current" = 1 && break
+    sleep 5
+    elapsed=$((elapsed + 5))
+done
+test "$browser_pool_current" = 1 || {
+    echo "Browser warm pool did not reach five healthy workers on release $release within 240 seconds." >&2
+    exit 1
+}
+
 ti_source=$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/app/ti/scraper"}}{{.Source}}{{end}}{{end}}' hanasand_ti_scraper)
 test "$ti_source" = "/home/hanasand/hanasand/ops/runtime/ti-releases/$release" || {
     echo "hanasand_ti_scraper is not mounted from the immutable release directory." >&2
@@ -53,4 +83,4 @@ test -f "$ti_api_source/src/utils/alerts/discordWebhookFile.ts" && test -f "$ti_
     exit 1
 }
 
-echo "All Hanasand code containers are on $release."
+echo "All Hanasand code containers and browser warm workers are on $release."
