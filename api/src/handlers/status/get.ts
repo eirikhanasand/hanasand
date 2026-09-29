@@ -124,7 +124,12 @@ function prepareDashboard() {
 function withHistory(current: object) {
     const snapshot = historySnapshot
     const received = (current as { checks: MonitorRow[] }).checks
-    const retained = snapshot?.checks.filter(old => !received.some(check => check.service === old.service && check.check_name === old.check_name)) || []
+    const cutoff = Date.now() - MONITOR_STALE_MS
+    // A history snapshot can outlive a monitor rename or a failed refresh. Do
+    // not reintroduce an old check into the live banner after the current
+    // five-minute freshness window has expired.
+    const retained = snapshot?.checks.filter(old => time(old.checked_at) >= cutoff
+        && !received.some(check => check.service === old.service && check.check_name === old.check_name)) || []
     const checks = [...received, ...retained].filter(isCurrentCheck).map(check => ({
         ...check,
         uptime_30d: snapshot?.checks.find(row => row.service === check.service && row.check_name === check.check_name)?.uptime_30d || 'unverified',
