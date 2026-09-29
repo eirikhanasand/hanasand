@@ -179,6 +179,7 @@ services:
     environment:
       API_HTTP_ONLY: "1"
       DEPLOYMENT_CANDIDATE_ONLY: "1"
+      DB_POOL_HOST: ${HANASAND_PGBOUNCER_CANDIDATE_CONTAINER:-hanasand_pgbouncer_candidate}
     ports: !override
       - "127.0.0.1:${HANASAND_API_CANDIDATE_PORT:-8083}:8080"
     profiles: [deployment-candidates]
@@ -704,6 +705,13 @@ services:
         condition: service_healthy
     networks:
       - hanasandnet
+
+  pgbouncer-candidate:
+    extends:
+      service: pgbouncer
+    container_name: ${HANASAND_PGBOUNCER_CANDIDATE_CONTAINER:-hanasand_pgbouncer_candidate}
+    ports: !override []
+    profiles: [deployment-candidates]
 
   stalwart:
     image: hanasand_stalwart

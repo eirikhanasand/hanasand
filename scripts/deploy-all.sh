@@ -122,6 +122,7 @@ candidate_suffix=$(printf '%s' "$release" | cut -c1-12)
 candidate_offset=$(printf '%s' "$release" | cksum | awk '{ print $1 % 10000 }')
 export HANASAND_API_CANDIDATE_CONTAINER="hanasand_api_candidate_$candidate_suffix"
 export HANASAND_FRONTEND_CANDIDATE_CONTAINER="hanasand_frontend_candidate_$candidate_suffix"
+export HANASAND_PGBOUNCER_CANDIDATE_CONTAINER="hanasand_pgbouncer_candidate_$candidate_suffix"
 export HANASAND_API_CANDIDATE_PORT=$((40000 + candidate_offset))
 export HANASAND_FRONTEND_CANDIDATE_PORT=$((30000 + candidate_offset))
 build_dir=$(mktemp -d "/tmp/hanasand-release-build.XXXXXX")
@@ -130,7 +131,8 @@ proxy_target=canonical
 cleanup() {
     status=$?
     if test "$status" -ne 0 && test "$candidate_started" = 1 && test "$proxy_target" != candidate; then
-        docker rm -f "$HANASAND_FRONTEND_CANDIDATE_CONTAINER" "$HANASAND_API_CANDIDATE_CONTAINER" >/dev/null 2>&1 || true
+        docker rm -f "$HANASAND_FRONTEND_CANDIDATE_CONTAINER" "$HANASAND_API_CANDIDATE_CONTAINER" \
+            "$HANASAND_PGBOUNCER_CANDIDATE_CONTAINER" >/dev/null 2>&1 || true
     fi
     rm -rf "$build_dir"
     return "$status"
@@ -243,22 +245,22 @@ wait_for_healthy() {
     return 1
 }
 
-# Replace all internal services first, while the currently serving frontend
-# and API remain untouched. Authentication replicas are updated separately.
+# Keep authentication replicas untouched until the rest of the release passes
+# its health checks.
 services=$(compose_live config --services | sed '/^api$/d; /^frontend$/d; /^auth-primary$/d; /^auth-secondary$/d')
 # Compose service names are controlled by docker-compose.yml and contain no
 # shell metacharacters, so split the list into its individual arguments.
 # shellcheck disable=SC2086
 compose_live up -d --no-build --no-deps browsers
-compose_live up -d --no-build --no-deps --remove-orphans $services
 
-# Start a matching API/frontend pair on release-specific loopback ports. The
-# API candidate runs schema setup but suppresses the production background
-# workers, then both candidates must pass their container health checks before
-# traffic moves.
+# Start an isolated release-matched connection pool and API/frontend pair
+# before touching any live dependencies. The API candidate applies additive
+# schema setup but suppresses duplicate production workers.
+compose_candidates run -d --no-deps --name "$HANASAND_PGBOUNCER_CANDIDATE_CONTAINER" pgbouncer-candidate
+candidate_started=1
+wait_for_healthy "$HANASAND_PGBOUNCER_CANDIDATE_CONTAINER" "PgBouncer release candidate" 180
 compose_candidates run -d --no-deps --name "$HANASAND_API_CANDIDATE_CONTAINER" \
     --publish "127.0.0.1:$HANASAND_API_CANDIDATE_PORT:8080" api-candidate
-candidate_started=1
 compose_candidates run -d --no-deps --name "$HANASAND_FRONTEND_CANDIDATE_CONTAINER" \
     --publish "127.0.0.1:$HANASAND_FRONTEND_CANDIDATE_PORT:3000" frontend-candidate
 wait_for_healthy "$HANASAND_API_CANDIDATE_CONTAINER" "API release candidate" 600
@@ -319,6 +321,12 @@ switch_upstreams "$HANASAND_FRONTEND_CANDIDATE_PORT" "$HANASAND_API_CANDIDATE_PO
 proxy_target=candidate
 echo "OpenResty now serves the healthy frontend and API candidates for $release."
 
+# Recreate dependent services only after traffic is on the isolated candidates.
+# The candidate API continues using its candidate pool while canonical PgBouncer
+# and the rest of the stack are updated. Authentication replicas stay online.
+# shellcheck disable=SC2086
+compose_live up -d --no-build --no-deps --remove-orphans $services
+
 compose_live up -d --no-build --no-deps api frontend
 wait_for_healthy hanasand_api "API" 600
 wait_for_healthy hanasand "Frontend" 180
@@ -339,7 +347,9 @@ proxy_target=canonical
 for candidate in $(docker ps -aq --filter label=com.docker.compose.project=hanasand \
     --filter label=com.docker.compose.service=api-candidate) \
     $(docker ps -aq --filter label=com.docker.compose.project=hanasand \
-    --filter label=com.docker.compose.service=frontend-candidate); do
+    --filter label=com.docker.compose.service=frontend-candidate) \
+    $(docker ps -aq --filter label=com.docker.compose.project=hanasand \
+    --filter label=com.docker.compose.service=pgbouncer-candidate); do
     docker rm -f "$candidate" >/dev/null
 done
 echo "Frontend and API health verified."
