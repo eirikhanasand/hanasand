@@ -8,6 +8,7 @@ test "$root" = "/home/hanasand/hanasand" || {
 }
 sh "$root/scripts/require-main.sh"
 release=$(git rev-parse HEAD)
+sh "$root/scripts/require-compose-healthchecks.sh"
 
 exec 9>/tmp/hanasand-full-deploy.lock
 flock 9
@@ -81,13 +82,27 @@ export HANASAND_TI_API_SOURCE="$ti_release_dir/api"
 # context while preserving parallel BuildKit execution for the release.
 if test -f "$build_dir/.env"; then
     docker compose --env-file "$build_dir/.env" -f "$build_dir/docker-compose.yml" build
-    docker compose --env-file "$build_dir/.env" -f "$root/docker-compose.yml" down --remove-orphans
-    docker compose --env-file "$build_dir/.env" -f "$root/docker-compose.yml" up -d --force-recreate
 else
     docker compose -f "$build_dir/docker-compose.yml" build
-    docker compose -f "$root/docker-compose.yml" down --remove-orphans
-    docker compose -f "$root/docker-compose.yml" up -d --force-recreate
 fi
+
+compose_live() {
+    if test -f "$build_dir/.env"; then
+        docker compose --env-file "$build_dir/.env" -f "$root/docker-compose.yml" "$@"
+    else
+        docker compose -f "$root/docker-compose.yml" "$@"
+    fi
+}
+
+# Keep both authentication replicas running while the rest of the stack is
+# recreated. Replace each replica only after the previous one is healthy.
+services=$(compose_live config --services | sed '/^auth-primary$/d; /^auth-secondary$/d')
+# Compose service names are controlled by docker-compose.yml and contain no
+# shell metacharacters, so split the list into its individual arguments.
+# shellcheck disable=SC2086
+compose_live up -d --force-recreate --remove-orphans --wait --wait-timeout 180 $services
+compose_live up -d --force-recreate --wait --wait-timeout 180 auth-secondary
+compose_live up -d --force-recreate --wait --wait-timeout 180 auth-primary
 
 # The host-network HAProxy instance cannot resolve the Compose service name.
 # Resolve the freshly recreated scraper container and refresh its runtime

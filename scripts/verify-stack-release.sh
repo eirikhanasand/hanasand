@@ -27,6 +27,13 @@ for container in $containers; do
     }
 done
 
+for container in hanasand_auth_primary hanasand_auth_secondary; do
+    test "$(docker inspect -f '{{.State.Health.Status}}' "$container")" = healthy || {
+        echo "$container is not healthy after deployment." >&2
+        exit 1
+    }
+done
+
 ti_source=$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/app/ti/scraper"}}{{.Source}}{{end}}{{end}}' hanasand_ti_scraper)
 test "$ti_source" = "/home/hanasand/hanasand/ops/runtime/ti-releases/$release" || {
     echo "hanasand_ti_scraper is not mounted from the immutable release directory." >&2
