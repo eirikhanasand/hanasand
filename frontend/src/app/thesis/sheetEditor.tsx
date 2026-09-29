@@ -253,16 +253,20 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions, trailin
     }
     const tokens = marked.lexer(sheet.body)
     const compact = (contentOnly || parsed.length > 0 || tokens.some(token => token.type === 'code')) && tokens.every(token => ['space', 'table', 'code', 'html'].includes(token.type) && (token.type !== 'html' || /^<!-- thesis-table:/.test(token.raw)))
-    function prose(text: string, start: number, end: number) {
+    function prose(text: string, start: number, end: number, beforeTable = false) {
         if (!text.trim() && (!canEdit || (compact && !writing))) return null
-        if (compact && !writing) return <RenderMarkdown text={text} />
+        const displayText = beforeTable ? text.replace(/(?:\r?\n[ \t]*)+$/, '') : text
+        if (compact && !writing) return <RenderMarkdown text={displayText} />
         return canEdit ? <InlineMarkdown text={text} label='Description Markdown' showEmptyHint={!parsed.length}
             onSelection={(a, b) => { selection.current = { source: sheet.body, start: start + a, end: start + b } }}
-            onChange={(value, group) => onChange('body', sheet.body.slice(0, start) + value + sheet.body.slice(end), group ? `prose:${start}:${group}` : undefined)} /> : <RenderMarkdown text={text} />
+            onChange={(value, group) => {
+                const separated = beforeTable && value.trim() && !/(?:\r?\n)$/.test(value) ? value + '\n' : value
+                onChange('body', sheet.body.slice(0, start) + separated + sheet.body.slice(end), group ? `prose:${start}:${group}` : undefined)
+            }} /> : <RenderMarkdown text={displayText} />
     }
     let offset = 0
     const content = parsed.map((table, index) => {
-        const before = prose(sheet.body.slice(offset, table.start), offset, table.start)
+        const before = prose(sheet.body.slice(offset, table.start), offset, table.start, true)
         offset = table.end
         return <div key={index}>{before}<div data-sheet-table={index} data-table-tools={wholeTable === index ? '' : undefined} tabIndex={wholeTable === index ? -1 : undefined} className={wholeTable === index ? 'thesis-selected-table' : undefined}
             onCopy={event => {
