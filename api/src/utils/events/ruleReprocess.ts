@@ -11,7 +11,7 @@ import { messageCandidatePredicate } from './previewPredicate.ts'
 import type { Condition } from './conditions.ts'
 import { builtinReprocessable, reprocessBuiltinPage } from './builtinReprocess.ts'
 
-type Cursor = { phase: number, time?: string, id?: string, serviceEnd: string, trafficEnd: string }
+type Cursor = { phase: number, time?: string, id?: string, windowEnd?: string, serviceEnd: string, trafficEnd: string }
 export type ReprocessJob = { id: string, organization_id: string, rule_id: string, rule_version: string, status: string,
     from_time: string | null, until_time: string, cursor: Cursor, scanned: string, matched: string, protected: string,
     removed_events: string, removed_sources: string, error: string | null }
@@ -53,21 +53,43 @@ export async function processRuleReprocessJob() {
             if (rule.source === 'hanasand') return reprocessBuiltinPage(job, query)
             const cursor = { ...job.cursor }
             let items: Item[], scanned: number
+            const windowedPhase = cursor.phase === 0 && Boolean(job.from_time)
             if (cursor.phase === 0) {
-                const params: (string | number | null)[] = [job.organization_id, job.until_time, job.from_time, cursor.time || null, cursor.id || '', size]
+                const windowed = windowedPhase
+                const upper = cursor.windowEnd || job.until_time
+                const fromMs = job.from_time ? Date.parse(job.from_time) : 0
+                const upperMs = Date.parse(upper)
+                const lowerMs = windowed ? Math.max(fromMs, upperMs - 60 * 60 * 1000) : 0
+                const lower = windowed ? new Date(lowerMs).toISOString() : job.from_time
+                const params: (string | number | null)[] = [job.organization_id, upper, lower]
                 const candidate = messageCandidatePredicate(rule.definition.conditions, 'normalized->>\'message\'', value => { params.push(value); return `$${params.length}` })
                 const ownedLogScope = rule.source === 'owned' ? 'AND ingestion_id=\'logs\' AND processing_status=\'processed\'' : ''
+                const cursorTimeParam = params.push(windowed && cursor.windowEnd ? cursor.time || null : cursor.time || null)
+                const cursorIdParam = params.push(cursor.id || '')
+                const limitParam = params.push(size)
                 const rows = (await query(`SELECT id,log_key,source_vendor,source_product,normalized,original,event_timestamp::text AS time FROM events
                     WHERE organization_id=$1 AND event_timestamp<=$2::timestamptz AND received_at<=$2::timestamptz
                     ${ownedLogScope}
-                    AND ($3::timestamptz IS NULL OR event_timestamp>=$3::timestamptz)
-                    AND ($4::timestamptz IS NULL OR (event_timestamp,id)<($4::timestamptz,$5::text)) AND ${candidate}
-                    ORDER BY event_timestamp DESC,id DESC LIMIT $6 FOR UPDATE`,
+                    AND ($3::timestamptz IS NULL OR event_timestamp>$3::timestamptz)
+                    AND ($${cursorTimeParam}::timestamptz IS NULL OR (event_timestamp,id)<($${cursorTimeParam}::timestamptz,$${cursorIdParam}::text)) AND ${candidate}
+                    ORDER BY event_timestamp DESC,id DESC LIMIT $${limitParam} FOR UPDATE`,
                 params)).rows
                 scanned = rows.length
                 items = rows.map(row => ({ id: row.id, key: row.log_key,
                     event: { ...row.normalized, source_vendor: row.source_vendor, source_product: row.source_product }, original: row.original }))
-                if (rows.length) Object.assign(cursor, { time: rows.at(-1).time, id: rows.at(-1).id })
+                if (rows.length) Object.assign(cursor, { time: rows.at(-1).time, id: rows.at(-1).id, ...(windowed ? { windowEnd: upper } : {}) })
+                if (windowed && scanned < size) {
+                    if (lowerMs <= fromMs) {
+                        cursor.phase++
+                        delete cursor.time
+                        delete cursor.id
+                        delete cursor.windowEnd
+                    } else {
+                        cursor.windowEnd = lower
+                        delete cursor.time
+                        delete cursor.id
+                    }
+                }
             } else {
                 const source = cursor.phase === 1 ? 'service_logs' : 'traffic_events'
                 const params: (string | number | null)[] = [cursor.phase === 1 ? cursor.serviceEnd : cursor.trafficEnd,
@@ -95,7 +117,7 @@ export async function processRuleReprocessJob() {
                 if (rows.length) Object.assign(cursor, { time: rows.at(-1).cursor_time, id: String(rows.at(-1).id) })
             }
             const result = await reprocessRuleItems(items, job, rule, query)
-            if (scanned < size) { cursor.phase++; delete cursor.time; delete cursor.id }
+            if (scanned < size && !windowedPhase) { cursor.phase++; delete cursor.time; delete cursor.id; delete cursor.windowEnd }
             const done = cursor.phase > 2
             await query(`UPDATE rule_reprocess_jobs SET status=$2,cursor=$3::jsonb,scanned=scanned+$4,
                 matched=matched+$5,protected=protected+$6,removed_events=removed_events+$7,removed_sources=removed_sources+$8,
