@@ -16,7 +16,7 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
 
     try {
         const query = `
-            SELECT u.id, u.name, u.password, u.account_type, u.avatar, u.active, u.deletion_scheduled_at
+            SELECT u.id, u.name, u.password, u.account_type, u.avatar, u.active, u.deletion_scheduled_at, u.password_reset_locked_at
             FROM users u
             LEFT JOIN mail_accounts ma ON ma.user_id = u.id
             WHERE u.id = $1
@@ -37,6 +37,10 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
         if (user.active === false) {
             await recordLoginEvent(userId, ip, userAgent, 'deactivated')
             return res.status(403).send({ error: 'This account is deactivated.' })
+        }
+        if (user.password_reset_locked_at) {
+            await recordLoginEvent(userId, ip, userAgent, 'password_reset_security_lock')
+            return res.status(423).send({ error: 'This account is locked. Reset your password to restore access.' })
         }
 
         const attemptCheck = await run('SELECT attempts FROM attempts WHERE id = $1', [userId])

@@ -13,7 +13,13 @@ import { getSsoStart, postSsoCallback } from './handlers/auth/sso.ts'
 import { getSocialProviders, getSocialConnections, postSocialStart, postSocialCallback } from './handlers/auth/social.ts'
 import logoutHandler from './handlers/auth/logout.ts'
 import tokenHandler from './handlers/auth/token.ts'
-import { completePasswordReset, requestPasswordReset, verifyPasswordResetCode } from './handlers/auth/passwordReset.ts'
+import {
+    completePasswordReset,
+    lockAccountFromPasswordReset,
+    requestPasswordReset,
+    startPasswordResetAgain,
+    verifyPasswordResetCode,
+} from './handlers/auth/passwordReset.ts'
 import { getSessions, revokeSession, revokeSessions } from './handlers/auth/sessions.ts'
 
 // Shared by the API and the independently deployed authentication workers.
@@ -39,6 +45,8 @@ export default async function authRoutes(fastify: FastifyInstance) {
     fastify.post('/auth/password-reset/request', requestPasswordReset)
     fastify.post('/auth/password-reset/verify', verifyPasswordResetCode)
     fastify.post('/auth/password-reset/complete', completePasswordReset)
+    fastify.post('/auth/password-reset/lock-account', lockAccountFromPasswordReset)
+    fastify.post('/auth/password-reset/start-again', startPasswordResetAgain)
     fastify.post('/auth/sessions/revoke', revokeSessions)
     fastify.delete('/auth/sessions/:token_id', revokeSession)
 }

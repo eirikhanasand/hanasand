@@ -5,6 +5,8 @@ Disallow: /dashboard/
 Disallow: /login
 Disallow: /register
 Disallow: /reset-password
+Disallow: /secure-account
+Disallow: /reset-password-again
 Disallow: /notes
 Disallow: /thought
 Disallow: /thoughts

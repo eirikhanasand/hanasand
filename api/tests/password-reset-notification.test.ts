@@ -4,8 +4,11 @@ import Fastify from 'fastify'
 let consumeSucceeds = true
 let failMail = false
 const sentMail: Array<{ to: string, subject: string, textBody: string, htmlBody?: string }> = []
+const executedSql: string[] = []
+const transactionSql: string[] = []
 mock.module('#db', () => ({
     default: async (sql: string) => {
+        executedSql.push(sql)
         if (sql.includes('SELECT u.id, u.name, u.active')) {
             return { rows: [{ id: 'reset-user', name: 'Reset User', active: true, recovery_email: 'recovery@example.test', mail_address: null }] }
         }
@@ -15,11 +18,12 @@ mock.module('#db', () => ({
         return { rows: [] }
     },
     withTransaction: async (work: (query: (sql: string) => Promise<{ rows: Array<{ id: string }> }>) => Promise<unknown>) => work(async sql => {
+        transactionSql.push(sql)
         if (sql.includes('RETURNING id')) return { rows: consumeSucceeds ? [{ id: 'reset-code' }] : [] }
         return { rows: [] }
     }),
 }))
-mock.module('../src/utils/auth/session.ts', () => ({ revokeAllTokens: async () => {} }))
+mock.module('../src/utils/auth/session.ts', () => ({ issueToken: async () => null, validateSession: async () => ({ valid: false }), revokeAllTokens: async () => {} }))
 mock.module('../src/utils/auth/password.ts', () => ({ validatePassword: async () => ({ valid: true }) }))
 mock.module('../src/utils/mail/accounts.ts', () => ({ syncMailPasswordForUser: async () => {} }))
 mock.module('../src/utils/mail/system.ts', () => ({
@@ -51,6 +55,10 @@ test('successful reset emails a security alert after consuming the reset token',
     expect(sentMail[0].to).toBe('recovery@example.test')
     expect(sentMail[0].subject).toBe('Your Hanasand password was changed')
     expect(sentMail[0].textBody).toContain('198.51.100.24')
+    expect(sentMail[0].textBody).toContain('Wasn’t you? Lock your account: https://hanasand.com/secure-account#token=')
+    expect(sentMail[0].textBody).toContain('Reset your password again: https://hanasand.com/reset-password-again#token=')
+    expect(executedSql.some(sql => sql.includes('INSERT INTO password_reset_security_actions'))).toBe(true)
+    expect(transactionSql.some(sql => sql.includes('password_reset_locked_at = NULL'))).toBe(true)
 })
 
 test('an unconsumed reset session sends no security email', async () => {

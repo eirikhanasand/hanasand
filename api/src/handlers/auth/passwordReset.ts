@@ -27,6 +27,10 @@ type CompleteBody = {
     password?: string
 }
 
+type SecurityActionBody = {
+    token?: string
+}
+
 type ResetRow = {
     id: string
     user_id: string
@@ -173,7 +177,7 @@ export async function completePasswordReset(req: FastifyRequest, res: FastifyRep
             WHERE id = $1 AND reset_token_hash = $2 AND consumed_at IS NULL AND expires_at > NOW()
             RETURNING id`, [reset.id, tokenHash])
         if (!consumed.rows.length) return false
-        await query('UPDATE users SET password = $2 WHERE id = $1', [userId, hashedPassword])
+        await query('UPDATE users SET password = $2, password_reset_locked_at = NULL WHERE id = $1', [userId, hashedPassword])
         await query('UPDATE password_reset_codes SET consumed_at = NOW() WHERE user_id = $1 AND consumed_at IS NULL', [userId])
         await query('DELETE FROM attempts WHERE id = $1', [userId])
         await revokeAllTokens({ userId, revokedBy: 'password_reset' }, query)
@@ -183,19 +187,95 @@ export async function completePasswordReset(req: FastifyRequest, res: FastifyRep
     await syncMailPasswordForUser(userId, reset.name || userId, password).catch(error => {
         req.log.error({ error, userId }, 'Failed to sync mail password after password reset')
     })
-    await sendSystemMail({
-        to: recoveryAddressForUser(user),
-        ...passwordChangedMail({
-            id: userId,
-            changedAt: new Date(),
-            ip: req.ip,
-            userAgent: String(req.headers['user-agent'] || ''),
-        }),
-    }).catch(error => {
+    try {
+        const actions = await createSecurityActionTokens(userId, reset.id)
+        await sendSystemMail({
+            to: recoveryAddressForUser(user),
+            ...passwordChangedMail({
+                id: userId,
+                changedAt: new Date(),
+                ip: req.ip,
+                userAgent: String(req.headers['user-agent'] || ''),
+                ...actions,
+            }),
+        })
+    } catch (error) {
         req.log.error({ error, userId }, 'Failed to send password reset security notification')
-    })
+    }
 
     return res.send({ ok: true })
+}
+
+export async function lockAccountFromPasswordReset(req: FastifyRequest, res: FastifyReply) {
+    const token = readSecurityActionToken(req.body)
+    if (!token) return res.status(400).send({ error: 'This security link is invalid or expired.' })
+
+    const locked = await withTransaction(async query => {
+        const action = await query(`
+            UPDATE password_reset_security_actions
+            SET consumed_at = NOW()
+            WHERE token_hash = $1
+              AND action = 'lock_account'
+              AND consumed_at IS NULL
+              AND expires_at > NOW()
+              AND EXISTS (SELECT 1 FROM users WHERE users.id = password_reset_security_actions.user_id AND users.active IS TRUE)
+            RETURNING user_id
+        `, [hashResetToken(token)])
+        if (!action.rows.length) return false
+
+        const userId = String(action.rows[0].user_id)
+        const user = await query('SELECT id FROM users WHERE id = $1 AND active IS TRUE FOR UPDATE', [userId])
+        if (!user.rows.length) return false
+
+        const updated = await query('UPDATE users SET password_reset_locked_at = NOW() WHERE id = $1 AND active IS TRUE RETURNING id', [userId])
+        if (!updated.rows.length) return false
+
+        await revokeAllTokens({ userId, revokedBy: 'password_reset_security_lock' }, query)
+        return true
+    })
+    if (!locked) return res.status(400).send({ error: 'This security link is invalid or expired.' })
+    return res.send({ ok: true })
+}
+
+export async function startPasswordResetAgain(req: FastifyRequest, res: FastifyReply) {
+    const token = readSecurityActionToken(req.body)
+    if (!token) return res.status(400).send({ error: 'This reset link is invalid or expired.' })
+
+    const resetToken = createOpaqueToken()
+    const expiresAt = new Date(Date.now() + RESET_TTL_MINUTES * 60 * 1000)
+    const started = await withTransaction(async query => {
+        const action = await query(`
+            UPDATE password_reset_security_actions
+            SET consumed_at = NOW()
+            WHERE token_hash = $1
+              AND action = 'reset_password'
+              AND consumed_at IS NULL
+              AND expires_at > NOW()
+              AND EXISTS (SELECT 1 FROM users WHERE users.id = password_reset_security_actions.user_id AND users.active IS TRUE)
+            RETURNING user_id
+        `, [hashResetToken(token)])
+        if (!action.rows.length) return null
+
+        const userId = String(action.rows[0].user_id)
+        const user = await query('SELECT id FROM users WHERE id = $1 AND active IS TRUE FOR UPDATE', [userId])
+        if (!user.rows.length) return null
+
+        const code = crypto.randomBytes(32).toString('hex')
+        const codeHash = await bcrypt.hash(code, 10)
+        await query(`
+            UPDATE password_reset_codes
+            SET consumed_at = NOW()
+            WHERE user_id = $1 AND consumed_at IS NULL
+        `, [userId])
+        await query(`
+            INSERT INTO password_reset_codes (user_id, code_hash, reset_token_hash, requested_ip, user_agent, verified_at, expires_at)
+            VALUES ($1, $2, $3, $4, $5, NOW(), $6)
+        `, [userId, codeHash, hashResetToken(resetToken), req.ip, String(req.headers['user-agent'] || ''), expiresAt])
+        return { userId }
+    })
+    if (!started) return res.status(400).send({ error: 'This reset link is invalid or expired.' })
+
+    return res.send({ ok: true, id: started.userId, resetToken })
 }
 
 async function getActiveUser(id: string) {
@@ -244,4 +324,31 @@ function normalizeUserId(value?: string) {
 
 function hashResetToken(token: string) {
     return crypto.createHash('sha256').update(token).digest('hex')
+}
+
+function readSecurityActionToken(body: unknown) {
+    const token = (body as SecurityActionBody | null)?.token
+    return typeof token === 'string' && /^[A-Za-z0-9_-]{43}$/.test(token) ? token : ''
+}
+
+function createOpaqueToken() {
+    return crypto.randomBytes(32).toString('base64url')
+}
+
+async function createSecurityActionTokens(userId: string, resetCodeId: string) {
+    const lockToken = createOpaqueToken()
+    const resetToken = createOpaqueToken()
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
+
+    await run(`
+        UPDATE password_reset_security_actions
+        SET consumed_at = NOW()
+        WHERE user_id = $1 AND consumed_at IS NULL
+    `, [userId])
+    await run(`
+        INSERT INTO password_reset_security_actions (user_id, reset_code_id, action, token_hash, expires_at)
+        VALUES ($1, $2, 'lock_account', $3, $5), ($1, $2, 'reset_password', $4, $5)
+    `, [userId, resetCodeId, hashResetToken(lockToken), hashResetToken(resetToken), expiresAt])
+
+    return { lockToken, resetToken }
 }
