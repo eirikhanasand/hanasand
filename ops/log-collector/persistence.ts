@@ -125,12 +125,14 @@ export class GroupCommit implements Persistence {
     if (queues.size || staged.length) this.changed = true;
     for (const ok of waiters) ok();
   }
-  recover() {
+  async recover() {
     for (const lane of ['live', 'history']) {
       const root = join(this.root, 'queue', lane); if (!fs.existsSync(root)) continue;
       const directory = fs.opendirSync(root);
+      let scanned = 0;
       try {
         for (let entry; (entry = directory.readSync());) {
+          if (++scanned % 1000 === 0) await new Promise<void>(resolve => setImmediate(resolve));
           if (!entry.name.endsWith('.pending')) continue;
           const path = join(root, entry.name);
           // An interrupted, unpublished batch cannot have advanced a durable

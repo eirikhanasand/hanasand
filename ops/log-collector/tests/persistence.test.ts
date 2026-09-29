@@ -85,7 +85,7 @@ test('power loss after the data barrier recovers pending batches with the old cu
   // Only what existed at syncfs is durable; emulate losing subsequent renames.
   fs.rmSync(state, { recursive: true }); fs.cpSync(snapshot, state, { recursive: true });
   expect(new Store(state).load('cursor', -1)).toBe(0);
-  const recovered = new GroupCommit(state, async () => {}, 0); recovered.recover(); await recovered.flush();
+  const recovered = new GroupCommit(state, async () => {}, 0); await recovered.recover(); await recovered.flush();
   const paths = new Store(state).queuedNames('live', 100);
   expect(paths).toHaveLength(1); expect(JSON.parse(fs.readFileSync(paths[0], 'utf8')).events[0].sourceEventId).toBe(row(1).sourceEventId);
 });
@@ -101,7 +101,7 @@ test('power loss after checkpoint persistence retains its dependent batch', asyn
 test('partial unpublished batch is quarantined and leaves its cursor replayable', async () => {
   const state = new Store(root); state.save('cursor', 0);
   fs.mkdirSync(state.path('queue/live'), { recursive: true }); fs.writeFileSync(state.path('queue/live/torn.pending'), '{"events":[');
-  const group = new GroupCommit(root, async () => {}, 0); group.recover(); await group.flush();
+  const group = new GroupCommit(root, async () => {}, 0); await group.recover(); await group.flush();
   expect(fs.existsSync(state.path('queue/live/torn.pending.interrupted'))).toBe(true);
   expect(state.load('cursor', -1)).toBe(0); expect(state.queuedNames('live', 100)).toHaveLength(0);
 });
