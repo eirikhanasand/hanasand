@@ -25,7 +25,7 @@ export default function RouteFrame({ children, serverPath, token, sidebar, banne
     const isAppSurface = showSidebar || isDashboard || isLoggedInTi || (!isPublicProduct && (isShare || pathname.startsWith('/ai') || isDashboard || isProfile || isOrganizations))
     const showFooter = !isBrowserLanding && (!isAppSurface || isAiWorkbench)
     const thesisScroll = isThesisPage && !showSidebar
-    const frameRows = thesisScroll ? 'grid-rows-[auto_minmax(0,1fr)]' : showFooter ? 'grid-rows-[auto_auto_auto]' : 'grid-rows-[auto_minmax(0,1fr)]'
+    const frameRows = thesisScroll ? 'grid-rows-[auto_minmax(0,1fr)]' : showFooter ? 'grid-rows-[auto_minmax(max-content,auto)_auto]' : 'grid-rows-[auto_minmax(0,1fr)]'
     const frameOverflow = isThesisPage || isBrowserLanding || isShare || showSidebar ? 'overflow-hidden overscroll-none' : 'overflow-auto'
 
     return (
