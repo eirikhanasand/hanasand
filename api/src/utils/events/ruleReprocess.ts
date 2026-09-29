@@ -85,7 +85,7 @@ export async function processRuleReprocessJob() {
                         delete cursor.id
                         delete cursor.windowEnd
                     } else {
-                        cursor.windowEnd = lower
+                        cursor.windowEnd = lower!
                         delete cursor.time
                         delete cursor.id
                     }
