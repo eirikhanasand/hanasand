@@ -1863,126 +1863,126 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, members, canMa
                 </span>
             </summary>
             <div className='grid gap-3 border-t border-ui-border p-4 dark:border-ui-border'>
-            {busyLabel && <InlineBusy label={busyLabel} marker='data-org-invite-busy' />}
-            {invites.length > 0 && (
-                <div className='mt-3 flex flex-wrap gap-2' data-org-invite-status-counts='true'>
-                    {inviteCounts.map(item => (
-                        <span key={item.status} className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>
-                            {item.label}: {item.count}
-                        </span>
-                    ))}
-                    {inviteRoleCounts.map(item => (
-                        <span key={item.role} className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>
-                            {item.label}: {item.count}
-                        </span>
-                    ))}
-                </div>
-            )}
-            <div className='mt-4 grid gap-3'>
-                <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
-                    Emails
-                    <textarea value={emails} disabled={!canManage} onChange={event => setEmails(event.target.value)} className={`${inputClass} min-h-24 resize-y`} placeholder='analyst@company.com, admin@company.com' />
-                    {invalidEmails.length > 0 && <span className='text-xs font-semibold text-ui-text dark:text-ui-text'>Invalid: {invalidEmails.slice(0, 2).join(', ')}{invalidEmails.length > 2 ? ` +${invalidEmails.length - 2}` : ''}</span>}
-                    {invalidEmails.length === 0 && inviteConflicts.length > 0 && <span className='text-xs font-semibold text-ui-warning dark:text-ui-warning' data-org-invite-conflicts='true'>Already in this workspace: {inviteConflicts.slice(0, 2).join(', ')}{inviteConflicts.length > 2 ? ` +${inviteConflicts.length - 2}` : ''}</span>}
-                    {invalidEmails.length === 0 && inviteConflicts.length === 0 && parsedEmails.length > 0 && <span className='text-xs font-semibold text-ui-muted dark:text-ui-muted'>{parsedEmails.length} recipient{parsedEmails.length === 1 ? '' : 's'}</span>}
-                </label>
-                <SelectField label='Role' value={role} options={roleOptions} disabled={!canManage} onChange={value => setRole(value as OrganizationRole)} />
-                <button type='button' className={primaryButtonClass} disabled={!canSendInvite} onClick={onInvite}>
-                    <UserPlus className='h-4 w-4' />
-                    Send invites
-                </button>
-                <RowStatus message={rowMessages['invite-create']} />
-            </div>
-            <div className='mt-5 grid gap-2'>
-                {invites.length === 0 && <EmptyLine text='Send invites from the form above. Pending access requests appear here with copy, resend, and revoke actions.' />}
+                {busyLabel && <InlineBusy label={busyLabel} marker='data-org-invite-busy' />}
                 {invites.length > 0 && (
-                    <>
-                        <div className='grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas md:grid-cols-[minmax(0,1fr)_9rem_auto]' data-org-invite-filter-strip='true'>
-                            <label className='grid min-w-0 gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
-                                Find invite
-                                <input
-                                    value={inviteQuery}
-                                    disabled={Boolean(busy)}
-                                    onChange={event => setInviteQuery(event.target.value)}
-                                    className={inputClass}
-                                    placeholder='Email, role, status'
-                                />
-                            </label>
-                            <SelectField
-                                label='Status'
-                                value={inviteStatusFilter}
-                                options={['all', 'pending', 'accepted', 'revoked', 'expired']}
-                                disabled={Boolean(busy)}
-                                onChange={setInviteStatusFilter}
-                            />
-                            <div className='grid content-end gap-1'>
-                                <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-2 text-center text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted' data-org-invite-filter-count='true'>
-                                    {visibleInvites.length}/{invites.length} shown
-                                </span>
-                                <button
-                                    type='button'
-                                    className={secondaryButtonClass}
-                                    disabled={!inviteFiltersActive || Boolean(busy)}
-                                    onClick={() => {
-                                        setInviteQuery('')
-                                        setInviteStatusFilter('all')
-                                    }}
-                                >
-                                    Clear
-                                </button>
-                            </div>
-                        </div>
-                        {visibleInvites.length === 0 && <EmptyLine text='Adjust filters to see pending access requests.' />}
-                        {visibleInvites.map(invite => {
-                            const linkAvailable = Boolean(inviteLink(invite)) && inviteActionAllowed(invite, 'copy')
-                            const canCopy = canManage && linkAvailable && !busy
-                            const canResend = canManage && inviteActionAllowed(invite, 'resend') && !busy
-                            const canRevoke = canManage && inviteActionAllowed(invite, 'revoke') && !busy
-                            const copyReason = !canManage ? 'Owner or admin required' : !inviteLink(invite) ? 'Invite link unavailable' : !inviteActionAllowed(invite, 'copy') ? 'Pending invite required' : ''
-                            const resendReason = !canManage ? 'Owner or admin required' : !inviteActionAllowed(invite, 'resend') ? 'Invite closed' : ''
-                            const revokeReason = !canManage ? 'Owner or admin required' : !inviteActionAllowed(invite, 'revoke') ? 'Invite already closed' : ''
-                            const linkState = !canManage ? 'restricted' : linkAvailable ? 'available' : 'closed'
-                            const selected = selectedSubject.type === 'invite' && selectedSubject.id === invite.id
-                            return (
-                                <div
-                                    role='button'
-                                    tabIndex={0}
-                                    aria-pressed={selected}
-                                    id={`invite-${encodeURIComponent(invite.id)}`}
-                                    key={invite.id}
-                                    className={`grid min-w-0 gap-3 rounded-lg border border-ui-border p-3 text-left transition dark:border-ui-border ${selected ? 'bg-ui-primary/10 dark:bg-ui-raised' : 'hover:bg-ui-raised dark:hover:bg-ui-panel'}`}
-                                    onClick={() => onSelectSubject({ type: 'invite', id: invite.id })}
-                                    onKeyDown={event => {
-                                        if (event.key === 'Enter' || event.key === ' ') {
-                                            event.preventDefault()
-                                            onSelectSubject({ type: 'invite', id: invite.id })
-                                        }
-                                    }}
-                                >
-                                    <span className='grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start'>
-                                        <span className='min-w-0'>
-                                            <span className='block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{invite.email}</span>
-                                            <span className='mt-1 flex flex-wrap gap-2'>
-                                                <RoleBadge role={invite.role} />
-                                                <StatusPill status={invite.status} />
-                                                <span className='rounded-full border border-ui-border px-2 py-0.5 text-xs font-semibold text-ui-muted dark:border-ui-border dark:text-ui-muted' data-org-invite-link-state='true'>
-                                                    Link {linkState}
-                                                </span>
-                                            </span>
-                                            <RowStatus message={rowMessages[`invite-${invite.id}`]} />
-                                        </span>
-                                        <span className='flex gap-1 sm:justify-end' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
-                                            <button type='button' aria-label={copyReason ? `Copy invite link: ${copyReason}` : 'Copy invite link'} title={copyReason || 'Copy invite link'} className={iconButtonClass} disabled={!canCopy} onClick={event => { event.stopPropagation(); onCopyInvite(invite) }}><Copy className='h-4 w-4' /></button>
-                                            <button type='button' aria-label={resendReason ? `Resend invite: ${resendReason}` : 'Resend invite'} title={resendReason || 'Resend invite'} className={iconButtonClass} disabled={!canResend} onClick={event => { event.stopPropagation(); onInviteAction(invite, 'resend') }}><RefreshCw className='h-4 w-4' /></button>
-                                            <ConfirmActionButton ariaLabel='Revoke invite' title={revokeReason || 'Revoke invite'} disabled={!canRevoke} onConfirm={() => onInviteAction(invite, 'revoke')} icon={<Trash2 className='h-4 w-4' />} />
-                                        </span>
-                                    </span>
-                                </div>
-                            )
-                        })}
-                    </>
+                    <div className='mt-3 flex flex-wrap gap-2' data-org-invite-status-counts='true'>
+                        {inviteCounts.map(item => (
+                            <span key={item.status} className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>
+                                {item.label}: {item.count}
+                            </span>
+                        ))}
+                        {inviteRoleCounts.map(item => (
+                            <span key={item.role} className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>
+                                {item.label}: {item.count}
+                            </span>
+                        ))}
+                    </div>
                 )}
-            </div>
+                <div className='mt-4 grid gap-3'>
+                    <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
+                        Emails
+                        <textarea value={emails} disabled={!canManage} onChange={event => setEmails(event.target.value)} className={`${inputClass} min-h-24 resize-y`} placeholder='analyst@company.com, admin@company.com' />
+                        {invalidEmails.length > 0 && <span className='text-xs font-semibold text-ui-text dark:text-ui-text'>Invalid: {invalidEmails.slice(0, 2).join(', ')}{invalidEmails.length > 2 ? ` +${invalidEmails.length - 2}` : ''}</span>}
+                        {invalidEmails.length === 0 && inviteConflicts.length > 0 && <span className='text-xs font-semibold text-ui-warning dark:text-ui-warning' data-org-invite-conflicts='true'>Already in this workspace: {inviteConflicts.slice(0, 2).join(', ')}{inviteConflicts.length > 2 ? ` +${inviteConflicts.length - 2}` : ''}</span>}
+                        {invalidEmails.length === 0 && inviteConflicts.length === 0 && parsedEmails.length > 0 && <span className='text-xs font-semibold text-ui-muted dark:text-ui-muted'>{parsedEmails.length} recipient{parsedEmails.length === 1 ? '' : 's'}</span>}
+                    </label>
+                    <SelectField label='Role' value={role} options={roleOptions} disabled={!canManage} onChange={value => setRole(value as OrganizationRole)} />
+                    <button type='button' className={primaryButtonClass} disabled={!canSendInvite} onClick={onInvite}>
+                        <UserPlus className='h-4 w-4' />
+                        Send invites
+                    </button>
+                    <RowStatus message={rowMessages['invite-create']} />
+                </div>
+                <div className='mt-5 grid gap-2'>
+                    {invites.length === 0 && <EmptyLine text='Send invites from the form above. Pending access requests appear here with copy, resend, and revoke actions.' />}
+                    {invites.length > 0 && (
+                        <>
+                            <div className='grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas md:grid-cols-[minmax(0,1fr)_9rem_auto]' data-org-invite-filter-strip='true'>
+                                <label className='grid min-w-0 gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
+                                    Find invite
+                                    <input
+                                        value={inviteQuery}
+                                        disabled={Boolean(busy)}
+                                        onChange={event => setInviteQuery(event.target.value)}
+                                        className={inputClass}
+                                        placeholder='Email, role, status'
+                                    />
+                                </label>
+                                <SelectField
+                                    label='Status'
+                                    value={inviteStatusFilter}
+                                    options={['all', 'pending', 'accepted', 'revoked', 'expired']}
+                                    disabled={Boolean(busy)}
+                                    onChange={setInviteStatusFilter}
+                                />
+                                <div className='grid content-end gap-1'>
+                                    <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-2 text-center text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted' data-org-invite-filter-count='true'>
+                                        {visibleInvites.length}/{invites.length} shown
+                                    </span>
+                                    <button
+                                        type='button'
+                                        className={secondaryButtonClass}
+                                        disabled={!inviteFiltersActive || Boolean(busy)}
+                                        onClick={() => {
+                                            setInviteQuery('')
+                                            setInviteStatusFilter('all')
+                                        }}
+                                    >
+                                        Clear
+                                    </button>
+                                </div>
+                            </div>
+                            {visibleInvites.length === 0 && <EmptyLine text='Adjust filters to see pending access requests.' />}
+                            {visibleInvites.map(invite => {
+                                const linkAvailable = Boolean(inviteLink(invite)) && inviteActionAllowed(invite, 'copy')
+                                const canCopy = canManage && linkAvailable && !busy
+                                const canResend = canManage && inviteActionAllowed(invite, 'resend') && !busy
+                                const canRevoke = canManage && inviteActionAllowed(invite, 'revoke') && !busy
+                                const copyReason = !canManage ? 'Owner or admin required' : !inviteLink(invite) ? 'Invite link unavailable' : !inviteActionAllowed(invite, 'copy') ? 'Pending invite required' : ''
+                                const resendReason = !canManage ? 'Owner or admin required' : !inviteActionAllowed(invite, 'resend') ? 'Invite closed' : ''
+                                const revokeReason = !canManage ? 'Owner or admin required' : !inviteActionAllowed(invite, 'revoke') ? 'Invite already closed' : ''
+                                const linkState = !canManage ? 'restricted' : linkAvailable ? 'available' : 'closed'
+                                const selected = selectedSubject.type === 'invite' && selectedSubject.id === invite.id
+                                return (
+                                    <div
+                                        role='button'
+                                        tabIndex={0}
+                                        aria-pressed={selected}
+                                        id={`invite-${encodeURIComponent(invite.id)}`}
+                                        key={invite.id}
+                                        className={`grid min-w-0 gap-3 rounded-lg border border-ui-border p-3 text-left transition dark:border-ui-border ${selected ? 'bg-ui-primary/10 dark:bg-ui-raised' : 'hover:bg-ui-raised dark:hover:bg-ui-panel'}`}
+                                        onClick={() => onSelectSubject({ type: 'invite', id: invite.id })}
+                                        onKeyDown={event => {
+                                            if (event.key === 'Enter' || event.key === ' ') {
+                                                event.preventDefault()
+                                                onSelectSubject({ type: 'invite', id: invite.id })
+                                            }
+                                        }}
+                                    >
+                                        <span className='grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start'>
+                                            <span className='min-w-0'>
+                                                <span className='block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{invite.email}</span>
+                                                <span className='mt-1 flex flex-wrap gap-2'>
+                                                    <RoleBadge role={invite.role} />
+                                                    <StatusPill status={invite.status} />
+                                                    <span className='rounded-full border border-ui-border px-2 py-0.5 text-xs font-semibold text-ui-muted dark:border-ui-border dark:text-ui-muted' data-org-invite-link-state='true'>
+                                                        Link {linkState}
+                                                    </span>
+                                                </span>
+                                                <RowStatus message={rowMessages[`invite-${invite.id}`]} />
+                                            </span>
+                                            <span className='flex gap-1 sm:justify-end' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
+                                                <button type='button' aria-label={copyReason ? `Copy invite link: ${copyReason}` : 'Copy invite link'} title={copyReason || 'Copy invite link'} className={iconButtonClass} disabled={!canCopy} onClick={event => { event.stopPropagation(); onCopyInvite(invite) }}><Copy className='h-4 w-4' /></button>
+                                                <button type='button' aria-label={resendReason ? `Resend invite: ${resendReason}` : 'Resend invite'} title={resendReason || 'Resend invite'} className={iconButtonClass} disabled={!canResend} onClick={event => { event.stopPropagation(); onInviteAction(invite, 'resend') }}><RefreshCw className='h-4 w-4' /></button>
+                                                <ConfirmActionButton ariaLabel='Revoke invite' title={revokeReason || 'Revoke invite'} disabled={!canRevoke} onConfirm={() => onInviteAction(invite, 'revoke')} icon={<Trash2 className='h-4 w-4' />} />
+                                            </span>
+                                        </span>
+                                    </div>
+                                )
+                            })}
+                        </>
+                    )}
+                </div>
             </div>
         </details>
     )
