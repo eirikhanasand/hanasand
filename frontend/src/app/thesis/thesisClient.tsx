@@ -50,14 +50,6 @@ type HistoryItem = { revision: number, title: string, saved_at: string, immediat
 export default function ThesisClient({ initialDocument, canEdit }: { initialDocument: ThesisDocument, canEdit: boolean }) {
     const [ready, setReady] = useState(false)
     const [codeToolbar, setCodeToolbar] = useState<HTMLDivElement | null>(null)
-    const [footerVisible, setFooterVisible] = useState(false)
-    useEffect(() => {
-        const footer = window.document.querySelector('footer')
-        if (!footer) return
-        const observer = new IntersectionObserver(([entry]) => setFooterVisible(entry.isIntersecting), { rootMargin: '0px 0px -1px 0px' })
-        observer.observe(footer)
-        return () => observer.disconnect()
-    }, [])
     useEffect(() => { setReady(true) }, [])
     const thesis = useThesis(initialDocument, canEdit)
     const { document } = thesis
@@ -242,7 +234,7 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
                 {ready && codeEnabled && <CodeReview canReview={canEdit} toolbar={codeToolbar} />}
             </div>
             {validationError && <p role='alert' className='text-sm text-ui-text'>{validationError}</p>}
-            <nav className='thesis-tabs' hidden={footerVisible} aria-label='Sheet navigation'>
+            <nav className='thesis-tabs' aria-label='Sheet navigation'>
                 <div role='tablist' aria-label='Thesis sheets' className='flex'>
                     {sheets.map(({ id, name }, index) => <div key={id} role='presentation' className='thesis-tab' data-active={active === index}><button id={`tab-${index}`} role='tab' disabled={!ready} aria-selected={active === index} aria-controls={`sheet-${index}`} tabIndex={active === index ? 0 : -1}
                         onClick={() => selectSheet(id)} onKeyDown={event => {
