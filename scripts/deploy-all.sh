@@ -23,19 +23,16 @@ running_deployments() {
         '$1 != self && ($2 == "sh" || $2 == "dash") && $0 ~ /scripts\/deploy-all[.]sh/ { print $1 }'
 }
 
-stop_tree() {
+stop_deployment_group() {
     signal=$1
-    parent=$2
-    for child in $(ps -eo pid=,ppid= | awk -v parent="$parent" '$2 == parent { print $1 }'); do
-        stop_tree "$signal" "$child"
-    done
-    kill -"$signal" "$parent" 2>/dev/null || true
+    pid=$2
+    kill -"$signal" -- "-$pid" 2>/dev/null || kill -"$signal" "$pid" 2>/dev/null || true
 }
 
 stop_existing_deployments() {
     for pid in $(running_deployments); do
         if test "$(readlink "/proc/$pid/cwd" 2>/dev/null || true)" = "$root"; then
-            stop_tree TERM "$pid"
+            stop_deployment_group TERM "$pid"
         fi
     done
 
@@ -50,7 +47,7 @@ stop_existing_deployments() {
 
     for pid in $(running_deployments); do
         if test "$(readlink "/proc/$pid/cwd" 2>/dev/null || true)" = "$root"; then
-            stop_tree KILL "$pid"
+            stop_deployment_group KILL "$pid"
         fi
     done
     flock 9
