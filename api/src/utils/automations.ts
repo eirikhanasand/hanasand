@@ -566,14 +566,20 @@ export async function runMonitoringCheck(automation: AutomationRow) {
         const startedAt = Date.now()
         try {
             if (automation.monitoring_type === 'json') return await runJsonCheck(automation, attempt)
-            if (tlsTarget) {
-                certificate = await checkCertificate(tlsTarget, automation.timeout_seconds * 1000)
-                    .catch(() => ({ status: 'invalid' as const, subject: null, issuer: null, expiresAt: null }))
-                if (certificate.status === 'invalid') throw new MonitoringResponseError(`TLS certificate validation failed for ${tlsTarget.hostname}.`)
-            }
-            const timeoutMs = automation.timeout_seconds * 1000 - (Date.now() - startedAt)
+            // Certificate validation and the monitored request are independent
+            // checks. Running them sequentially lets a slow TLS handshake
+            // consume the entire HTTP request budget and report a false
+            // timeout even when the endpoint is healthy.
+            const timeoutMs = automation.timeout_seconds * 1000
             if (timeoutMs <= 0) throw new DOMException('Monitoring request timed out.', 'TimeoutError')
-            const result = target ? await runHttpCheck(target, automation, timeoutMs) : await runSocketCheck(automation, timeoutMs)
+            const certificatePromise = tlsTarget
+                ? checkCertificate(tlsTarget, timeoutMs)
+                    .catch(() => ({ status: 'invalid' as const, subject: null, issuer: null, expiresAt: null }))
+                : Promise.resolve(certificate!)
+            const requestPromise = target ? runHttpCheck(target, automation, timeoutMs) : runSocketCheck(automation, timeoutMs)
+            const [checkedCertificate, result] = await Promise.all([certificatePromise, requestPromise])
+            certificate = checkedCertificate
+            if (certificate.status === 'invalid' && tlsTarget) throw new MonitoringResponseError(`TLS certificate validation failed for ${tlsTarget.hostname}.`)
             const healthy = automation.upside_down ? !result.up : automation.expected_down ? !result.up : result.up
             const message = `${automation.monitoring_type.toUpperCase()} check ${healthy ? 'passed' : 'failed'}: ${automation.target_url} ${result.detail}.`
             if (!healthy) throw new MonitoringResponseError(message)

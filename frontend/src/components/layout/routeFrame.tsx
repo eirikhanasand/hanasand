@@ -20,14 +20,18 @@ export default function RouteFrame({ children, serverPath, token, sidebar, banne
     const isOrganizations = pathname.startsWith('/organizations')
     const isAiWorkbench = pathname.startsWith('/ai') && pathname !== '/ai/window'
     const isPublicProduct = isPublicProductPath(pathname)
+    const isThesisPage = pathname === '/thesis'
     const isLoggedInTi = token && (pathname === '/ti' || pathname.startsWith('/ti/'))
     const isAppSurface = showSidebar || isDashboard || isLoggedInTi || (!isPublicProduct && (isShare || pathname.startsWith('/ai') || isDashboard || isProfile || isOrganizations))
     const showFooter = !isBrowserLanding && (!isAppSurface || isAiWorkbench)
+    const frameRows = isThesisPage ? 'grid-rows-[auto_minmax(0,1fr)_auto]' : showFooter ? 'grid-rows-[auto_auto_auto]' : 'grid-rows-[auto_minmax(0,1fr)]'
+    const frameOverflow = isThesisPage || isBrowserLanding || isShare || showSidebar ? 'overflow-hidden overscroll-none' : 'overflow-auto'
+    const thesisScroll = isThesisPage && !showSidebar
 
     return (
-        <div data-route-frame className={`enterprise-theme relative z-10 mt-18 h-[calc(100dvh-4.5rem)] w-full bg-ui-canvas grid grid-cols-[minmax(0,1fr)] ${showFooter ? 'grid-rows-[auto_auto_auto]' : 'grid-rows-[auto_minmax(0,1fr)]'} ${isBrowserLanding || isShare || showSidebar ? 'overflow-hidden overscroll-none' : 'overflow-auto'}`}>
+        <div data-route-frame className={`enterprise-theme relative z-10 mt-18 h-[calc(100dvh-4.5rem)] w-full bg-ui-canvas grid grid-cols-[minmax(0,1fr)] ${frameRows} ${frameOverflow}`}>
             <div className='min-w-0'>{banner}</div>
-            <main className={`min-h-0 min-w-0 w-full ${isAppSurface || isBrowserLanding ? 'h-full' : 'pt-3 md:pt-0'}`}>
+            <main className={`min-h-0 min-w-0 w-full ${isAppSurface || isBrowserLanding || thesisScroll ? 'h-full' : 'pt-3 md:pt-0'} ${thesisScroll ? 'overflow-y-auto overscroll-contain' : ''}`}>
                 {showSidebar ? (
                     <div className='h-full min-h-0 bg-ui-canvas px-2 text-ui-text'>
                         <div className='grid h-full min-h-0 grid-rows-[minmax(0,1fr)] gap-2 lg:grid-cols-[auto_minmax(0,1fr)]'>

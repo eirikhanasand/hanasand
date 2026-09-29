@@ -2,6 +2,10 @@ import config from '@/config'
 import tokenIsValid from '@/utils/proxy/tokenIsValid'
 
 export type ThesisDocument = { title: string, body: string, revision: number }
+export type ThesisRenderResult =
+    | { state: 'invalid-session' }
+    | { state: 'not-member' }
+    | { state: 'loaded', document: ThesisDocument, canEdit: boolean }
 
 export async function canEditThesis(token?: string, id?: string) {
     if (!token || id !== 'eirikhanasand') return false
@@ -24,6 +28,20 @@ export async function readThesis(token: string, id: string): Promise<ThesisDocum
     const document = await response.json()
     if (!validThesis(document)) throw new Error('Invalid saved thesis')
     return document
+}
+
+export async function loadThesisForRender(token: string, id: string): Promise<ThesisRenderResult> {
+    const response = await fetch(`${config.url.api}/thesis`, {
+        headers: { Authorization: `Bearer ${token}`, id },
+        cache: 'no-store',
+        signal: AbortSignal.timeout(10000),
+    })
+    if (response.status === 401) return { state: 'invalid-session' }
+    if (response.status === 403) return { state: 'not-member' }
+    if (!response.ok) throw new Error('The thesis could not be loaded.')
+    const document = await response.json()
+    if (!validThesis(document)) throw new Error('Invalid saved thesis')
+    return { state: 'loaded', document, canEdit: response.headers.get('X-Thesis-Can-Edit') === 'true' }
 }
 export async function writeThesis(document: ThesisDocument, token: string, id: string) {
     return fetch(`${config.url.api}/thesis`, {

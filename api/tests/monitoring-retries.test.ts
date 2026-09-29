@@ -66,11 +66,10 @@ test('five timeouts fit the 35-second attempt and delay budget', async () => {
     await expect(check()).rejects.toThrow('timed out after 5 seconds. Failed after 5 attempts.')
     expect(clock).toBe(35000)
 })
-test('certificate preflight shares the five-second request budget', async () => {
+test('certificate preflight runs in parallel without shrinking the request budget', async () => {
     tlsDuration = 2000
     await check({ ...monitor, target_url: 'https://example.test' })
-    expect(timeouts[0]).toBeLessThanOrEqual(3000)
-    expect(timeouts[0]).toBeGreaterThan(2900)
+    expect(timeouts[0]).toBe(5000)
 })
 test('a received HTTP failure is final even if the next response would pass', async () => {
     failures = 1

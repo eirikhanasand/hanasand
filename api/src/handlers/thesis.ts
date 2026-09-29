@@ -1,8 +1,9 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
+import { performance } from 'node:perf_hooks'
 import { queryOnce } from '#db'
 import { validateSession } from '#utils/auth/session.ts'
-import { compactThesisHistory, readThesis, saveThesis, validThesis } from '#utils/thesis.ts'
-import { thesisCredentials, thesisMember } from '#utils/thesisAccess.ts'
+import { compactThesisHistory, isThesisCached, readThesis, saveThesis, validThesis } from '#utils/thesis.ts'
+import { thesisAccess, thesisCredentials, thesisMember } from '#utils/thesisAccess.ts'
 
 async function owner(req: FastifyRequest) {
     const authorization = req.headers.authorization || ''
@@ -13,14 +14,45 @@ async function owner(req: FastifyRequest) {
 }
 
 export async function getThesis(req: FastifyRequest, res: FastifyReply) {
+    const started = performance.now()
     try {
         const { id, token } = thesisCredentials(req)
-        if (!await thesisMember(id, token)) return res.status(403).send({ error: 'Hanasand organization membership is required.' })
-        return res.header('Cache-Control', 'no-store').send(await readThesis())
+        const access = await thesisAccess(id, token)
+        if (!access.session) {
+            logThesisRender(req, { sessionMs: access.sessionMs, membershipMs: 0, cacheHit: isThesisCached(), documentMs: 0, totalMs: performance.now() - started })
+            return res.status(401).header('Cache-Control', 'no-store').send({ error: 'A valid session is required.' })
+        }
+        if (!access.member) {
+            logThesisRender(req, { sessionMs: access.sessionMs, membershipMs: access.membershipMs, cacheHit: isThesisCached(), documentMs: 0, totalMs: performance.now() - started })
+            return res.status(403).header('Cache-Control', 'no-store').send({ error: 'Hanasand organization membership is required.' })
+        }
+        const cacheHit = isThesisCached()
+        const documentStarted = performance.now()
+        const document = await readThesis()
+        const documentMs = performance.now() - documentStarted
+        const totalMs = performance.now() - started
+        logThesisRender(req, { sessionMs: access.sessionMs, membershipMs: access.membershipMs, cacheHit, documentMs, totalMs })
+        const serverTiming = `session;dur=${access.sessionMs.toFixed(2)}, membership;dur=${access.membershipMs.toFixed(2)}, thesis;dur=${documentMs.toFixed(2)}, total;dur=${totalMs.toFixed(2)}`
+        return res.header('Cache-Control', 'no-store')
+            .header('Server-Timing', serverTiming)
+            .header('X-Thesis-Can-Edit', access.session.user.id === 'eirikhanasand' ? 'true' : 'false')
+            .send(document)
     } catch (error) {
         req.log.error(error)
+        req.log.info({ event: 'thesis_render_timing', total_ms: Number((performance.now() - started).toFixed(2)), status: 500 }, 'thesis_render_timing')
         return res.status(500).send({ error: 'The thesis could not be loaded.' })
     }
+}
+
+function logThesisRender(req: FastifyRequest, timing: { sessionMs: number, membershipMs: number, cacheHit: boolean, documentMs: number, totalMs: number }) {
+    req.log.info({
+        event: 'thesis_render_timing',
+        session_ms: Number(timing.sessionMs.toFixed(2)),
+        membership_ms: Number(timing.membershipMs.toFixed(2)),
+        thesis_ms: Number(timing.documentMs.toFixed(2)),
+        thesis_cache: timing.cacheHit ? 'hit' : 'miss',
+        total_ms: Number(timing.totalMs.toFixed(2)),
+    }, 'thesis_render_timing')
 }
 
 export async function putThesis(req: FastifyRequest, res: FastifyReply) {

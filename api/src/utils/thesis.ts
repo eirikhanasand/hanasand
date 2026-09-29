@@ -4,11 +4,36 @@ import type WebSocket from 'ws'
 export type ThesisDocument = { title: string, body: string, revision: number }
 const clients = new Set<WebSocket>()
 const columns = 'title, content AS body, revision::float8 AS revision'
+let cachedDocument: ThesisDocument | null = null
+let pendingRead: Promise<ThesisDocument> | null = null
+let cacheGeneration = 0
 
 export async function readThesis() {
-    const result = await queryOnce(`SELECT ${columns} FROM thesis WHERE id = 1`)
-    if (!result.rows[0]) throw new Error('The thesis is not initialized.')
-    return result.rows[0] as ThesisDocument
+    if (cachedDocument) return cachedDocument
+    if (pendingRead) return pendingRead
+
+    const generation = cacheGeneration
+    const read = (async() => {
+        const result = await queryOnce(`SELECT ${columns} FROM thesis WHERE id = 1`)
+        if (!result.rows[0]) throw new Error('The thesis is not initialized.')
+        const document = result.rows[0] as ThesisDocument
+        if (generation === cacheGeneration) {
+            cachedDocument = document
+            return document
+        }
+        // A write completed while the cold read was in flight; return its fresh value.
+        return cachedDocument ?? document
+    })()
+    pendingRead = read
+    try {
+        return await read
+    } finally {
+        if (pendingRead === read) pendingRead = null
+    }
+}
+
+export function isThesisCached() {
+    return cachedDocument !== null
 }
 
 export function validThesis(value: unknown): value is ThesisDocument {
@@ -60,6 +85,8 @@ export async function saveThesis(document: ThesisDocument) {
         return { status: 200, document: updated.rows[0] as ThesisDocument, changed: true }
     })
     if (result.changed) {
+        cacheGeneration++
+        cachedDocument = result.document
         for (const client of clients) send(client, result.document)
     }
     return result

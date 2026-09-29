@@ -1,10 +1,15 @@
 import type { FastifyRequest } from 'fastify'
+import { performance } from 'node:perf_hooks'
 import run from '#db'
 import { validateSession } from '#utils/auth/session.ts'
 
-export async function thesisMember(id: string, token: string) {
+export async function thesisAccess(id: string, token: string) {
+    const sessionStarted = performance.now()
     const session = await validateSession({ id, token })
-    if (!session) return false
+    const sessionMs = performance.now() - sessionStarted
+    if (!session) return { session: null, member: false, sessionMs, membershipMs: 0 }
+
+    const membershipStarted = performance.now()
     const result = await run(`
         SELECT EXISTS (
             SELECT 1 FROM organization_members m
@@ -13,7 +18,17 @@ export async function thesisMember(id: string, token: string) {
               AND o.slug = 'hanasand' AND o.status = 'active'
         ) AS is_member
     `, [session.user.id])
-    return result.rows[0]?.is_member === true
+    return {
+        session,
+        member: result.rows[0]?.is_member === true,
+        sessionMs,
+        membershipMs: performance.now() - membershipStarted,
+    }
+}
+
+export async function thesisMember(id: string, token: string) {
+    const access = await thesisAccess(id, token)
+    return Boolean(access.session && access.member)
 }
 
 export function thesisCredentials(req: FastifyRequest) {
