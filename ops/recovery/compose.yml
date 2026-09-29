@@ -124,7 +124,7 @@ services:
     labels: *release-label
     network_mode: host
     volumes:
-      - /home/hanasand/runtime/proxy:/recovery:ro
+      - /home/hanasand/hanasand/ops/runtime/proxy:/recovery:ro
     healthcheck: &proxy-healthcheck
       test: ["CMD", "pidof", "haproxy"]
       interval: 30s
@@ -141,7 +141,7 @@ services:
     labels: *release-label
     network_mode: host
     volumes:
-      - /home/hanasand/runtime/proxy:/recovery:ro
+      - /home/hanasand/hanasand/ops/runtime/proxy:/recovery:ro
     healthcheck:
       <<: *proxy-healthcheck
 
