@@ -20,6 +20,10 @@ postgres_image=
 verifier_image=
 prior_object_ledger=${TI_BACKUP_PRIOR_OBJECT_LEDGER:-}
 repo_root=$(CDPATH= cd -- "$script_dir/../../.." && pwd)
+scraper_source=$(CDPATH= cd -- "$script_dir/.." && pwd)
+release=$(git -C "$repo_root" rev-parse HEAD)
+api_source=${HANASAND_TI_API_SOURCE:-$repo_root/ops/runtime/ti-releases/$release/api}
+[ -d "$api_source" ] || api_source="$repo_root/api"
 
 usage() {
   echo "usage: $0 <backup|verify|drill> <archive-directory>" >&2
@@ -133,6 +137,8 @@ inspect_evidence_archive() (
 
   references_path=$(CDPATH= cd -- "$(dirname -- "$object_references")" && pwd)/$(basename -- "$object_references")
   docker run --rm \
+    -v "$scraper_source:/app/ti/scraper:ro" \
+    -v "$api_source:/app/api:ro" \
     -v "$evidence_tmp:/evidence:ro" \
     -v "$references_path:/backup/OBJECT-REFERENCES.tsv:ro" \
   "$verifier_image" \
@@ -591,6 +597,8 @@ case "$action" in
       -e TI_RESTORE_VERIFIER_COMMIT="$verifier_commit" \
       -e TI_RESTORE_SCRAPER_IMAGE_ID="$verifier_image" \
       -v "$drill_evidence:/var/lib/ti-scraper/evidence:ro" \
+      -v "$scraper_source:/app/ti/scraper:ro" \
+      -v "$api_source:/app/api:ro" \
       -v "$evidence_inventory:/restore/EVIDENCE-INVENTORY.tsv:ro" \
       -v "$object_ledger:/restore/OBJECT-LEDGER.tsv:ro" \
       "$verifier_image" bun scripts/verify-restored-database.ts > "$application_proof"
