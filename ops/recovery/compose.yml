@@ -149,12 +149,15 @@ services:
     image: postgres:16-alpine
     container_name: log-catchup-pg-check
     restart: "no"
+    environment:
+      POSTGRES_USER: log_test
+      POSTGRES_DB: log_test
     volumes:
       - log-catchup-pg-data:/var/lib/postgresql/data
     networks:
       - log-catchup-test
     healthcheck:
-      test: ["CMD", "pg_isready", "-q"]
+      test: ["CMD", "pg_isready", "-q", "-U", "log_test", "-d", "log_test"]
       interval: 30s
       timeout: 5s
       retries: 3
