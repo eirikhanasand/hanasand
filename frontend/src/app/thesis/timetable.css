@@ -6,6 +6,7 @@
 .thesis-timetable th:first-child { text-align: left; }
 .thesis-week-row { cursor: pointer; }
 .thesis-week-row:hover { background: var(--color-ui-raised); }
+.thesis-week-row[data-selected=true] > * { background: color-mix(in srgb, var(--color-ui-primary) 18%, var(--color-ui-panel)); }
 .thesis-week-row th { padding: 0; }
 .thesis-week-row th button { display: flex; align-items: center; gap: .25rem; width: 100%; min-height: 30px; padding: .2rem .25rem; text-align: left; font: inherit; }
 .thesis-week-row small { display: block; font-size: .65rem; font-weight: 400; color: var(--color-ui-muted); }
@@ -50,4 +51,5 @@
 .thesis-hours-progress > div { position: absolute; right: 0; z-index: 20; width: min(300px, 80vw); padding: .8rem; border: 1px solid var(--color-ui-border); border-radius: .5rem; background: var(--color-ui-panel); text-align: left; box-shadow: 0 4px 16px var(--ui-shadow); }
 .thesis-week-plan-button { display: block; margin-top: 1rem; color: var(--color-ui-muted); text-decoration: underline; font-size: .75rem; }
 
-.thesis-timetable [data-active=true] { outline: 2px solid var(--color-ui-primary); outline-offset: -2px; }
+.thesis-timetable [data-active=true] { outline: none; }
+.thesis-timetable [data-active=true]:focus-visible { outline: 2px solid var(--color-ui-primary); outline-offset: -2px; }

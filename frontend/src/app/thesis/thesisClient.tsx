@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Copy, Info, Minus, Plus, Redo2, Settings2, Undo2 } from 'lucide-react'
+import { Copy, History, Info, Minus, Plus, Redo2, Settings2, Undo2 } from 'lucide-react'
 import SheetEditor, { sheetButton } from './sheetEditor'
 import TimetableSheet from './timetableSheet'
 import PlanSheet from './planSheet'
@@ -25,10 +25,10 @@ function SheetSettingsMenu({ children }: { children: ReactNode }) {
     function positionPanel() {
         if (!panel.current || !trigger.current) return
         const box = trigger.current.getBoundingClientRect()
-        const height = panel.current.offsetHeight || 180
+        const height = Math.min(panel.current.offsetHeight || 180, 288)
         panel.current.style.left = `${Math.max(16, Math.min(box.right - 240, window.innerWidth - 256))}px`
         panel.current.style.top = `${Math.max(16, Math.min(box.bottom + 8, window.innerHeight - height - 16))}px`
-        panel.current.style.maxHeight = `${Math.max(44, window.innerHeight - 32)}px`
+        panel.current.style.maxHeight = `${Math.max(44, Math.min(288, window.innerHeight - 32))}px`
     }
     useEffect(() => {
         const reposition = () => { if (panel.current?.matches(':popover-open')) positionPanel() }
@@ -40,7 +40,7 @@ function SheetSettingsMenu({ children }: { children: ReactNode }) {
         }
     }, [])
     return <>
-        <button ref={trigger} type='button' popoverTarget={id} aria-label='Sheet settings' title='Sheet settings' className={sheetButton + ' grid min-w-11 place-items-center'} onClick={positionPanel}><Settings2 size={18} /></button>
+        <button ref={trigger} type='button' popoverTarget={id} aria-label='Sheet settings' title='Sheet settings' className={sheetButton + ' w-10 px-0'} onClick={() => requestAnimationFrame(positionPanel)}><Settings2 size={18} /></button>
         <div ref={panel} id={id} popover='auto' className='thesis-settings-panel' role='group' aria-label='Features on this sheet'>{children}</div>
     </>
 }
@@ -224,10 +224,10 @@ export default function ThesisClient({ initialDocument, canEdit }: { initialDocu
                     actions={(canEdit || codeEnabled) && <>
                         {codeEnabled && <div ref={setCodeToolbar} className='flex' />}
                         {canEdit && <>
-                            <button type='button' disabled={!thesis.canUndo || busy} onClick={thesis.undo} aria-label='Undo' title='Undo (Ctrl/⌘ Z)' className={sheetButton + ' grid min-w-11 place-items-center'}><Undo2 size={18} /></button>
-                            <button type='button' disabled={!thesis.canRedo || busy} onClick={thesis.redo} aria-label='Redo' title='Redo (Ctrl/⌘ Shift Z)' className={sheetButton + ' grid min-w-11 place-items-center'}><Redo2 size={18} /></button>
-                            {settings.history !== false && <button type='button' disabled={busy || !ready} aria-expanded={history !== null} onClick={() => history === null ? loadHistory() : setHistory(null)} className={sheetButton}>
-                                {history === null ? 'History' : 'Close history'}
+                            <button type='button' disabled={!thesis.canUndo || busy} onClick={thesis.undo} aria-label='Undo' title='Undo (Ctrl/⌘ Z)' className={sheetButton + ' w-10 px-0'}><Undo2 size={18} /></button>
+                            <button type='button' disabled={!thesis.canRedo || busy} onClick={thesis.redo} aria-label='Redo' title='Redo (Ctrl/⌘ Shift Z)' className={sheetButton + ' w-10 px-0'}><Redo2 size={18} /></button>
+                            {settings.history !== false && <button type='button' disabled={busy || !ready} aria-expanded={history !== null} aria-label={history === null ? 'History' : 'Close history'} title={history === null ? 'History' : 'Close history'} onClick={() => history === null ? loadHistory() : setHistory(null)} className={sheetButton + ' w-10 px-0'}>
+                                <History size={18} />
                             </button>}
                         </>}
                     </>} />

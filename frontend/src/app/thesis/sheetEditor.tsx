@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowDown, ArrowUp, ArrowLeft, ArrowRight, Pencil } from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowLeft, ArrowRight, Pencil, Table2, Trash2 } from 'lucide-react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { marked } from 'marked'
@@ -11,7 +11,7 @@ import { navigateTable, type PendingTable } from './tableNavigation'
 import markdownSpacing from './markdownSpacing'
 import './workspace.css'
 
-export const sheetButton = 'min-h-11 rounded-lg border border-ui-border px-3 py-2 text-sm text-ui-text hover:bg-ui-raised disabled:opacity-40'
+export const sheetButton = 'inline-flex h-10 min-h-10 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-ui-border px-3 py-2 text-sm text-ui-text hover:bg-ui-raised disabled:opacity-40'
 export function RenderMarkdown({ text }: { text: string }) {
     return <div className='thesis-markdown'><Markdown remarkPlugins={[remarkGfm, markdownSpacing]}>{text}</Markdown></div>
 }
@@ -284,24 +284,35 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions, trailin
             {titleAside && <div>{titleAside}</div>}
             {(canEdit || actions) && <div data-table-tools className={`thesis-document-actions${titleAside ? ' thesis-document-actions-wide' : ''}`} aria-label='Document actions'>
                 {actions}
-                {canEdit && compact && <button className={sheetButton} aria-label={writing ? 'Hide text editor' : 'Add text'} title={writing ? 'Hide text editor' : 'Add text'} aria-pressed={writing} onClick={() => setWriting(value => !value)}><Pencil size={18} /></button>}
-                {canEdit && showInsertTable && <button className={sheetButton} onMouseDown={event => event.preventDefault()} onClick={insert}>Insert table</button>}
+                {canEdit && compact && <button className={sheetButton + ' w-10 px-0'} aria-label={writing ? 'Hide text editor' : 'Add text'} title={writing ? 'Hide text editor' : 'Add text'} aria-pressed={writing} onClick={() => setWriting(value => !value)}><Pencil size={18} /></button>}
+                {canEdit && <details className='thesis-table-actions' data-table-tools>
+                    <summary className={sheetButton + ' w-10 cursor-pointer px-0'} aria-label='Table actions' title='Table actions'><Table2 size={18} /></summary>
+                    <div className='thesis-table-actions-panel' aria-label='Table actions'>
+                        {showInsertTable && <button className={sheetButton} onMouseDown={event => event.preventDefault()} onClick={insert}>Insert table</button>}
+                        {cell && table ? <>
+                            <p className='thesis-table-actions-label'>Table {cell.table + 1} · {columnName(cell.col)}{cell.row + 1}</p>
+                            <button className={sheetButton} aria-pressed={wholeTable === cell.table} onClick={selectWholeTable}>Select table</button>
+                            <button className={sheetButton} onClick={() => deleteTable(cell.table)}><Trash2 size={16} />Delete table</button>
+                            <p className='thesis-table-actions-label'>Row</p>
+                            <div className='thesis-table-actions-row'>
+                                <button className={sheetButton} aria-label={`Add row above ${cell.row + 1}`} title={`Add row above ${cell.row + 1}`} onClick={() => changeShape('row', false, -1)}><ArrowUp size={16} />Above</button>
+                                <button className={sheetButton} aria-label={`Add row below ${cell.row + 1}`} title={`Add row below ${cell.row + 1}`} onClick={() => changeShape('row', false, 1)}><ArrowDown size={16} />Below</button>
+                                <button className={sheetButton} aria-label={`Remove row ${cell.row + 1}`} title={`Remove row ${cell.row + 1}`} disabled={custom ? !custom.canRemoveRow(cell.row) : cell.row === 0} onClick={() => changeShape('row', true)}><Trash2 size={16} />Delete</button>
+                            </div>
+                            <p className='thesis-table-actions-label'>Column</p>
+                            <div className='thesis-table-actions-row'>
+                                <button className={sheetButton} aria-label={`Add column left of ${columnName(cell.col)}`} title={`Add column left of ${columnName(cell.col)}`} onClick={() => changeShape('column', false, -1)}><ArrowLeft size={16} />Left</button>
+                                <button className={sheetButton} aria-label={`Add column right of ${columnName(cell.col)}`} title={`Add column right of ${columnName(cell.col)}`} onClick={() => changeShape('column', false, 1)}><ArrowRight size={16} />Right</button>
+                                {!custom && <button className={sheetButton} aria-label={`Remove column ${columnName(cell.col)}`} title={`Remove column ${columnName(cell.col)}`} disabled={table.data.cells[0].length <= 1} onClick={() => changeShape('column', true)}><Trash2 size={16} />Delete</button>}
+                            </div>
+                            <span className='thesis-table-actions-row [@media(hover:hover)_and_(pointer:fine)]:hidden'>
+                                <button className={sheetButton} aria-label='Cell above' onClick={() => selectCell({ ...cell, row: cell.row - 1 }, true, true)}><ArrowUp size={18} />Above</button>
+                                <button className={sheetButton} aria-label='Cell below' onClick={() => selectCell({ ...cell, row: cell.row + 1 }, true, true)}><ArrowDown size={18} />Below</button>
+                            </span>
+                        </> : !showInsertTable && <p className='text-sm text-ui-muted'>Select a table cell to see its actions.</p>}
+                    </div>
+                </details>}
                 {trailingActions}
-                {canEdit && cell && table && <div className='flex shrink-0 flex-wrap items-center gap-2' role='group' aria-label='Active table controls'>
-                    <span className='text-sm font-semibold text-ui-primary'>Table {cell.table + 1} · {columnName(cell.col)}{cell.row + 1}</span>
-                    <button className={sheetButton} aria-label={`Select table ${cell.table + 1}`} aria-pressed={wholeTable === cell.table} onClick={selectWholeTable}>Select table</button>
-                    <button className={sheetButton} aria-label={`Delete table ${cell.table + 1}`} onClick={() => deleteTable(cell.table)}>Delete table</button>
-                    <button className={sheetButton} aria-label={`Add row above ${cell.row + 1}`} title={`Add row above ${cell.row + 1}`} onClick={() => changeShape('row', false, -1)}><ArrowUp size={16} /> Row</button>
-                    <button className={sheetButton} aria-label={`Add row below ${cell.row + 1}`} title={`Add row below ${cell.row + 1}`} onClick={() => changeShape('row', false, 1)}><ArrowDown size={16} /> Row</button>
-                    <button className={sheetButton} aria-label={`Remove row ${cell.row + 1}`} title={`Remove row ${cell.row + 1}`} disabled={custom ? !custom.canRemoveRow(cell.row) : cell.row === 0} onClick={() => changeShape('row', true)}>− Row</button>
-                    <button className={sheetButton} aria-label={`Add column left of ${columnName(cell.col)}`} title={`Add column left of ${columnName(cell.col)}`} onClick={() => changeShape('column', false, -1)}><ArrowLeft size={16} /> Column</button>
-                    <button className={sheetButton} aria-label={`Add column right of ${columnName(cell.col)}`} title={`Add column right of ${columnName(cell.col)}`} onClick={() => changeShape('column', false, 1)}><ArrowRight size={16} /> Column</button>
-                    {!custom && <button className={sheetButton} aria-label={`Remove column ${columnName(cell.col)}`} title={`Remove column ${columnName(cell.col)}`} disabled={table.data.cells[0].length <= 1} onClick={() => changeShape('column', true)}>− Column</button>}
-                    <span className='flex gap-2 [@media(hover:hover)_and_(pointer:fine)]:hidden'>
-                        <button className={sheetButton} aria-label='Cell above' onClick={() => selectCell({ ...cell, row: cell.row - 1 }, true, true)}><ArrowUp size={18} /></button>
-                        <button className={sheetButton} aria-label='Cell below' onClick={() => selectCell({ ...cell, row: cell.row + 1 }, true, true)}><ArrowDown size={18} /></button>
-                    </span>
-                </div>}
             </div>}
         </div>
         {beforeContent}

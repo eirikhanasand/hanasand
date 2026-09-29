@@ -137,8 +137,8 @@ export default function TimetableSheet({ onActivityLogChange, ...props }: SheetE
         extendRow: direction => addWeekNear(direction < 0 ? 1 : model.weeks.length, direction),
     } : undefined} titleAside={model && <details className='thesis-hours-progress'><summary aria-label='Hours spent and expected'><strong>{model.totals.at(-1)} / {expectedHoursText(model.expectedHours)} h</strong><span>spent / expected</span></summary><div>12 hours per week before Christmas; 7.5 hours per weekday from January. Before Christmas, each public holiday deducts 2.4 hours. Weeks 51–53 and Norwegian weekday public holidays are excluded. Work logged on days off still counts as spent.</div></details>} actions={<>
         {model && <>
-            {canEdit && <button type='button' className={sheetButton + ' inline-flex min-w-11 items-center justify-center gap-2'} aria-label='Log activity' title='Log activity' aria-expanded={form !== null && !form.week} onClick={() => { setMessage(''); setForm(form && !form.week ? null : {}) }}><ClipboardPlus size={18} /></button>}
-            <button type='button' className={sheetButton + ' inline-flex min-w-11 items-center justify-center gap-2'} aria-label='Export timetable as PDF' title='Export as PDF' disabled={pdfBusy} onClick={exportPdf}><Download size={18} /><span>{pdfBusy ? 'Exporting…' : 'PDF'}</span></button>
+            {canEdit && <button type='button' className={sheetButton + ' w-10 px-0'} aria-label='Log activity' title='Log activity' aria-expanded={form !== null && !form.week} onClick={() => { setMessage(''); setForm(form && !form.week ? null : {}) }}><ClipboardPlus size={18} /></button>}
+            <button type='button' className={sheetButton + ' w-10 px-0'} aria-label={pdfBusy ? 'Exporting timetable as PDF' : 'Export timetable as PDF'} title='Download PDF' disabled={pdfBusy} onClick={exportPdf}><Download size={18} /></button>
         </>}
         {props.actions}
     </>} beforeContent={<div className='thesis-timetable-controls'>
@@ -172,7 +172,7 @@ export default function TimetableSheet({ onActivityLogChange, ...props }: SheetE
             <div className='thesis-timetable-scroll'><table>
                 <thead><tr><th {...cellProps(0, 0)} scope='col'>Week</th>{model.categories.map((category, col) => <th {...cellProps(0, col + 1)} key={category} scope='col'>{category}</th>)}<th {...cellProps(0, model.categories.length + 1)} scope='col'>Total</th></tr></thead>
                 <tbody>{model.weeks.map((week, row) => <Fragment key={week.key}>
-                    <tr className='thesis-week-row' data-week={week.key}>
+                    <tr className='thesis-week-row' data-week={week.key} data-selected={interaction.active?.row === row + 1}>
                         <th {...cellProps(row + 1, 0)} scope='row'><button type='button' aria-label={`Week ${week.week}, ${week.year}`} aria-expanded={expanded === week.key} aria-controls={`week-${instanceId}-${week.key}`} onClick={() => setExpanded(expanded === week.key ? null : week.key)}>{expanded === week.key ? <ChevronDown size={14} /> : <ChevronRight size={14} />}<span>{week.week}<small>{week.year}</small></span></button></th>
                         {week.values.map((value, col) => <td {...cellProps(row + 1, col + 1)} key={col}>{value || '—'}</td>)}
                     </tr>
