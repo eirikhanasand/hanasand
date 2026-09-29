@@ -35,7 +35,7 @@ services:
       args:
         HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
     env_file:
-      .env
+      - ${HANASAND_DEPLOY_ENV_FILE:-.env}
     environment:
       FRONTEND_AUTH_API: ${FRONTEND_AUTH_API:-https://api.hanasand.com/api}
       FRONTEND_INTERNAL_API: ${FRONTEND_INTERNAL_API:-http://api:8080/api}
@@ -81,7 +81,7 @@ services:
       # Keep the stable host-side API port used by the production proxy.
       - "127.0.0.1:8082:8080"
     env_file:
-      .env
+      - ${HANASAND_DEPLOY_ENV_FILE:-.env}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/snap/lxd/common/lxd/unix.socket:/var/snap/lxd/common/lxd/unix.socket
@@ -175,7 +175,7 @@ services:
     ports:
       - "127.0.0.1:8183:8081"
     env_file:
-      - .env
+      - ${HANASAND_DEPLOY_ENV_FILE:-.env}
     environment:
       AUTH_SERVICE_ONLY: "1"
       PORT: 8081
@@ -216,7 +216,7 @@ services:
     ports:
       - "127.0.0.1:8184:8081"
     env_file:
-      - .env
+      - ${HANASAND_DEPLOY_ENV_FILE:-.env}
     environment:
       AUTH_SERVICE_ONLY: "1"
       PORT: 8081
@@ -249,7 +249,7 @@ services:
     mem_limit: 512m
     blkio_config:
       weight: 100
-    env_file: .env
+    env_file: ${HANASAND_DEPLOY_ENV_FILE:-.env}
     environment:
       DB_BACKUP_WORKER: "1"
       DB_BACKUP_WORKER_SOCKET: /var/lib/hanasand/backups/database/.worker.sock
@@ -404,7 +404,7 @@ services:
       args:
         HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
     env_file:
-      .env
+      - ${HANASAND_DEPLOY_ENV_FILE:-.env}
     environment:
       HANASAND_AI_BRIDGE_PORT: ${HANASAND_AI_BRIDGE_PORT:-18181}
       HANASAND_AI_TRANSPORT: ${HANASAND_AI_TRANSPORT:-tools-ai}
@@ -437,7 +437,7 @@ services:
       args:
         HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
     env_file:
-      .env
+      - ${HANASAND_DEPLOY_ENV_FILE:-.env}
     environment:
       MODEL_PROBE_PROOF_DIR: /model-probe-receipts
       HANASAND_AI_CLIENT_API_WS: ${HANASAND_AI_CLIENT_API_WS:-ws://127.0.0.1:8080/api/client/ws/gpt}

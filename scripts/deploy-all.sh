@@ -23,6 +23,7 @@ mkdir -p "$build_dir/.git"
 printf 'ref: refs/heads/main\n' > "$build_dir/.git/HEAD"
 if test -f "$root/.env"; then cp "$root/.env" "$build_dir/.env"; fi
 if test -f "$build_dir/.env"; then
+    printf 'HANASAND_DEPLOY_ENV_FILE=%s\n' "$build_dir/.env" >> "$build_dir/.env"
     if grep -q '^HANASAND_RELEASE_COMMIT=' "$build_dir/.env"; then
         sed -i "s/^HANASAND_RELEASE_COMMIT=.*/HANASAND_RELEASE_COMMIT=$release/" "$build_dir/.env"
     else
