@@ -18,8 +18,8 @@ exec 8>/tmp/hanasand-full-deploy-start.lock
 exec 9>"$lock_file"
 
 running_deployments() {
-    ps -eo pid=,comm=,args= | awk -v self="$$" \
-        '$1 != self && ($2 == "sh" || $2 == "dash") && $0 ~ /scripts\/deploy-all[.]sh/ { print $1 }'
+    ps -eo pid=,args= | awk -v self="$$" \
+        '$1 != self && $NF ~ /(^|\/)deploy-all[.]sh$/ { print $1 }'
 }
 
 stop_deployment_group() {
