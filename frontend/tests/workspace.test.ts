@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { readSheets, writeSheets, identifiedSheets, sheetChanges, tables, writeTable, cellValue, reshape, columnName } from '../src/app/thesis/workspace'
+import { readSheets, writeSheets, identifiedSheets, sheetChanges, tables, writeTable, cellValue, reshape, columnName, tableEditorRows } from '../src/app/thesis/workspace'
 
 test('sheets preserve existing markdown and round-trip titles, prose, tables and sizes', () => {
     const sheets = readSheets('# Existing **thesis**', '## Existing content\n\nKeep this.\n')
@@ -65,4 +65,11 @@ test('table cells preserve whitespace, punctuation, literal entities and arbitra
         value += character
         assert.equal(tables(writeTable({ cells: [['Header'], [value]], widths: [], heights: [] }))[0].data.cells[1][0], value)
     }
+})
+
+test('table editor does not expand for trailing blank lines but keeps real multiline cells', () => {
+    assert.equal(tableEditorRows(''), 1)
+    assert.equal(tableEditorRows('\n'), 1)
+    assert.equal(tableEditorRows('text\n\n'), 1)
+    assert.equal(tableEditorRows('first\n\nsecond'), 3)
 })

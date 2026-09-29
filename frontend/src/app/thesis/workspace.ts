@@ -91,6 +91,13 @@ export function writeTable(data: TableData) {
     rows.splice(1, 0, `| ${data.cells[0].map(() => '---').join(' | ')} |`)
     return rows.join('\n') + `\n<!-- thesis-table:${JSON.stringify({ widths: data.widths, heights: data.heights })} -->\n`
 }
+
+export function tableEditorRows(value: string) {
+    const lines = value.split('\n')
+    while (lines.length > 1 && !lines.at(-1)?.trim()) lines.pop()
+    return lines.length
+}
+
 export function columnName(index: number): string {
     return index < 26 ? String.fromCharCode(65 + index) : columnName(Math.floor(index / 26) - 1) + String.fromCharCode(65 + index % 26)
 }

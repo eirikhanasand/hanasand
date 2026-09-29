@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm'
 import { marked } from 'marked'
 import type { Root } from 'mdast'
 import markdownSpacing from './markdownSpacing'
+import { thesisMarkdownComponents } from './markdownComponents'
 
 type SourceNode = {
     type: string, value?: string, children?: SourceNode[],
@@ -91,7 +92,7 @@ export default function InlineMarkdown({ text, label, singleLine = false, showEm
                 }
                 select(selected)
             }}>
-            <Markdown remarkPlugins={[remarkGfm, markdownSpacing, sourceLines]}>{source}</Markdown>
+            <Markdown components={thesisMarkdownComponents} remarkPlugins={[remarkGfm, markdownSpacing, sourceLines]}>{source}</Markdown>
         </div>
     }
 

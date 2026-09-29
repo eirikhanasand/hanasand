@@ -5,15 +5,17 @@ import { ArrowDown, ArrowUp, ArrowLeft, ArrowRight, Pencil, Table2, Trash2 } fro
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { marked } from 'marked'
-import { cellValue, columnName, reshape, tables, writeTable, type TableData, type Sheet } from './workspace'
+import { cellValue, columnName, reshape, tableEditorRows, tables, writeTable, type TableData, type Sheet } from './workspace'
 import InlineMarkdown from './inlineMarkdown'
 import { navigateTable, type PendingTable } from './tableNavigation'
 import markdownSpacing from './markdownSpacing'
+import { thesisMarkdownComponents } from './markdownComponents'
 import './workspace.css'
 
 export const sheetButton = 'inline-flex h-10 min-h-10 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-ui-border px-3 py-2 text-sm text-ui-text hover:bg-ui-raised disabled:opacity-40'
+
 export function RenderMarkdown({ text }: { text: string }) {
-    return <div className='thesis-markdown'><Markdown remarkPlugins={[remarkGfm, markdownSpacing]}>{text}</Markdown></div>
+    return <div className='thesis-markdown'><Markdown components={thesisMarkdownComponents} remarkPlugins={[remarkGfm, markdownSpacing]}>{text}</Markdown></div>
 }
 
 type Cell = { table: number, row: number, col: number }
@@ -80,7 +82,7 @@ function InlineTable({ data, index, active, onSelect, onNavigate, onChange }: { 
                     const completion = '=SUMMARIZE()'
                     const suggestion = focused === address && completionCell === address && dismissedCompletion !== `${address}:${raw}` && /^=[a-z]*$/i.test(raw) && '=SUMMARIZE'.startsWith(raw.toUpperCase()) ? completion.slice(raw.length) : ''
                     return <Cell key={c} data-active={active?.table === index && active.row === r && active.col === c} scope={r === 0 ? 'col' : undefined}>
-                        {onChange ? <textarea data-table-cell={`${index}:${r}:${c}`} aria-label={`Cell ${address}`} spellCheck={false} rows={Math.max(1, raw.split('\n').length)} value={focused === address ? raw : value}
+                        {onChange ? <textarea data-table-cell={`${index}:${r}:${c}`} aria-label={`Cell ${address}`} spellCheck={false} rows={tableEditorRows(raw)} value={focused === address ? raw : value}
                             onFocus={event => { setFocused(address); setDismissedCompletion(''); setCompletionCell(event.currentTarget.selectionStart === raw.length ? address : ''); onSelect({ table: index, row: r, col: c }) }} onBlur={() => { setFocused(''); setCompletionCell('') }}
                             aria-autocomplete='inline' aria-description={suggestion ? 'Tab to complete SUMMARIZE' : undefined}
                             onSelect={event => { const input = event.currentTarget; setCompletionCell(!composing.current && input.selectionStart === input.value.length && input.selectionEnd === input.value.length ? address : '') }}

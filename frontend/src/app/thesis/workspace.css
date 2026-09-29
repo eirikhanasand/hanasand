@@ -6,7 +6,11 @@
 .thesis-markdown p, .thesis-markdown ul, .thesis-markdown ol { margin: .75rem 0; white-space: pre-wrap; }
 .thesis-markdown ul { list-style: disc; padding-left: 1.5rem; }
 .thesis-markdown ol { list-style: decimal; padding-left: 1.5rem; }
-.thesis-markdown a { color: var(--color-ui-primary); text-decoration: underline; }
+.thesis-markdown a { color: #1a73e8; text-decoration: underline; text-underline-offset: .12em; }
+.thesis-markdown a:hover { color: #174ea6; }
+.dark .thesis-markdown a { color: #8ab4f8; }
+.dark .thesis-markdown a:hover { color: #aecbfa; }
+.thesis-markdown a:focus-visible { outline: 1px solid currentColor; outline-offset: 2px; border-radius: 2px; }
 .thesis-markdown pre { overflow: auto; padding: 1rem; background: var(--color-ui-raised); border-radius: .5rem; }
 .thesis-markdown blockquote { border-left: 3px solid var(--color-ui-border); padding-left: 1rem; }
 .thesis-table-block { min-width: 0; margin: 1.5rem 0; }
@@ -16,7 +20,7 @@
 .thesis-table-scroll th { background: var(--color-ui-raised); font-weight: 600; }
 .thesis-table-scroll tr:nth-child(odd) td { background: var(--color-ui-panel); }
 .thesis-table-scroll textarea { display: block; width: 100%; min-height: 2em; padding: .25em; resize: none; background: transparent; color: inherit; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; }
-.thesis-table-scroll textarea:focus { outline: 2px solid var(--color-ui-primary); outline-offset: -2px; }
+.thesis-table-scroll textarea:focus { outline: none; }
 .thesis-table-scroll .thesis-markdown { padding: .25em .35em; white-space: pre-wrap; }
 .thesis-table-scroll .thesis-markdown :is(h1, h2, h3) { margin: .3em 0; font-size: inherit; line-height: 1.25; }
 .thesis-table-scroll .thesis-markdown p { margin: 0; }
@@ -36,7 +40,7 @@
 .thesis-sheet-dialog { margin: auto; width: min(28rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; padding: 1.5rem; border: 1px solid var(--color-ui-border); border-radius: .75rem; background: var(--color-ui-panel); color: var(--color-ui-text); box-shadow: 0 24px 80px var(--ui-shadow); overflow-wrap: anywhere; }
 .thesis-sheet-dialog::backdrop { background: var(--ui-backdrop); backdrop-filter: blur(4px); }
 
-.thesis-table-scroll [data-active=true] { outline: 2px solid var(--color-ui-primary); outline-offset: -2px; }
+.thesis-table-scroll [data-active=true] { outline: 1px solid color-mix(in srgb, var(--color-ui-border) 85%, var(--color-ui-text) 15%); outline-offset: -1px; }
 
 .thesis-document-actions { display: flex; align-items: center; gap: .5rem; flex: 0 1 auto; min-width: 0; max-width: min(75%, calc(100% - 10rem)); overflow-x: auto; scrollbar-width: none; padding: .25rem; white-space: nowrap; }
 .thesis-document-actions > * { flex-shrink: 0; }
