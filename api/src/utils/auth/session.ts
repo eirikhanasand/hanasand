@@ -75,7 +75,14 @@ export async function issueToken({ id, ip, userAgent = '' }: { id: string, ip: s
     }
 }
 
-export async function validateSession({ id, token }: { id?: string, token: string }) {
+export async function validateSession({ id, token, organizationSlug }: { id?: string, token: string, organizationSlug?: string }) {
+    const organizationMemberSelect = organizationSlug ? `,
+            EXISTS (
+                SELECT 1 FROM organization_members m
+                JOIN organizations o ON o.id = m.organization_id
+                WHERE m.user_id = t.id AND m.status = 'active'
+                  AND o.slug = $3 AND o.status = 'active'
+            ) AS organization_member` : ''
     const tokenResult = await run(`
         SELECT t.token_id, t.id, t.token, t.ip, t.user_agent, t.created_at, t.timestamp,
             pg_is_in_recovery() AS database_read_only,
@@ -86,17 +93,18 @@ export async function validateSession({ id, token }: { id?: string, token: strin
                 FROM roles r JOIN user_roles ur ON ur.role_id = r.id
                 WHERE ur.user_id = t.id
             ) role), '[]'::json) AS session_roles
+            ${organizationMemberSelect}
         FROM tokens t JOIN users u ON u.id = t.id
         WHERE ($1::text IS NULL OR t.id = $1)
           AND t.token = $2 AND t.revoked_at IS NULL
           AND u.active IS TRUE AND u.deletion_scheduled_at IS NULL AND u.account_type = 'user'
         LIMIT 1
-    `, [id ?? null, token])
+    `, organizationSlug ? [id ?? null, token, organizationSlug] : [id ?? null, token])
 
-    const row = tokenResult.rows[0] as (SessionRow & { session_user: SessionUser, session_roles: SessionRole[] }) | undefined
+    const row = tokenResult.rows[0] as (SessionRow & { session_user: SessionUser, session_roles: SessionRole[], organization_member?: boolean }) | undefined
     if (!row || !isSessionFresh(row)) return null
 
-    const { session_user: user, session_roles: roles, ...session } = row
+    const { session_user: user, session_roles: roles, organization_member: organizationMember, ...session } = row
     const userId = session.id
     const ttlHours = sessionTTLHours(session.user_agent)
 
@@ -119,6 +127,7 @@ export async function validateSession({ id, token }: { id?: string, token: strin
         user,
         roles,
         session,
+        ...(organizationSlug ? { organizationMember: organizationMember === true } : {}),
         refreshed: {
             token,
             expires_at: new Date(new Date(session.timestamp).getTime() + ttlHours * 60 * 60 * 1000).toISOString(),
