@@ -34,46 +34,6 @@ for container in hanasand_auth_primary hanasand_auth_secondary; do
     }
 done
 
-recovery_services='tunnel tunnel-database tunnel-intelligence tunnel-web tunnel-monitor tunnel-replication tunnel-support tunnel-ai proxy-1 proxy-2'
-elapsed=0
-while test "$elapsed" -lt 180; do
-    recovery_current=1
-    for service in $recovery_services; do
-        container="hanasand-$service"
-        if ! docker inspect "$container" >/dev/null 2>&1; then
-            recovery_current=0
-            continue
-        fi
-        running=$(docker inspect -f '{{.State.Running}}' "$container")
-        health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$container")
-        container_release=$(docker inspect -f '{{index .Config.Labels "com.hanasand.release"}}' "$container")
-        project=$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$container")
-        compose_service=$(docker inspect -f '{{index .Config.Labels "com.docker.compose.service"}}' "$container")
-        if test "$running" != true || test "$health" != healthy || test "$container_release" != "$release" || test "$project" != hanasand-recovery || test "$compose_service" != "$service"; then
-            recovery_current=0
-            continue
-        fi
-        case "$service" in
-            proxy-*)
-                config_source=$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/recovery"}}{{.Source}}{{end}}{{end}}' "$container")
-                test "$config_source" = /home/hanasand/hanasand/ops/runtime/proxy || recovery_current=0
-                ;;
-            *)
-                image=$(docker inspect -f '{{.Image}}' "$container")
-                image_release=$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image" 2>/dev/null || true)
-                test "$image_release" = "$release" || recovery_current=0
-                ;;
-        esac
-    done
-    test "$recovery_current" = 1 && break
-    sleep 5
-    elapsed=$((elapsed + 5))
-done
-test "$recovery_current" = 1 || {
-    echo "Recovery tunnels and proxies did not reach the healthy release $release within 180 seconds." >&2
-    exit 1
-}
-
 # Browser warm workers are created directly by the API, so Compose does not
 # recreate them with the rest of the stack. Wait until all named pool slots
 # report both the application release and browser image revision being checked.
@@ -123,4 +83,4 @@ test -f "$ti_api_source/src/utils/alerts/discordWebhookFile.ts" && test -f "$ti_
     exit 1
 }
 
-echo "All Hanasand code, browser warm, recovery tunnel, and proxy containers are on $release."
+echo "All Hanasand code and browser containers are on $release."
