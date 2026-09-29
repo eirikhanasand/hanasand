@@ -8,7 +8,7 @@ const access = { id: 'sidebar-test', isAdmin: true, canManageSystem: true, canMa
 const all = navigationLinks(getDashboardNavigation(access))
 assert.equal(all.length, new Set(all.map(item => item.href)).size)
 const memberAccess = { ...access, isAdmin: false, canManageSystem: false, canManageContent: false }
-assert.deepEqual(getDashboardNavigation(memberAccess).map(item => item.label), ['Home', 'Security & intelligence', 'Logs & rules', 'Infrastructure', 'Automation', 'Workspace', 'Communication', 'Organization', 'Help & developer resources', 'Account'])
+assert.deepEqual(getDashboardNavigation(memberAccess).map(item => item.label), ['Security & intelligence', 'Logs & rules', 'Infrastructure', 'Automation', 'Workspace', 'Communication', 'Organization', 'Help & developer resources', 'Account'])
 for (const permissions of [access, memberAccess]) {
     const automation = getDashboardNavigation(permissions).find(item => item.label === 'Automation')
     assert.deepEqual(automation.items.map(({ label, href, items }) => ({ label, href, items })), [
@@ -37,7 +37,7 @@ for (const path of ['/management/users', '/management/roles']) {
 assert(!navigationLinks(getDashboardNavigation(memberAccess)).some(item => item.href.startsWith('/management')))
 assert.deepEqual(all.find(item => item.href === '/cases')?.ancestors, ['Security & intelligence', 'Investigations'])
 assert.deepEqual(all.find(item => item.href === '/findings/actors')?.ancestors, ['Security & intelligence', 'Intelligence'])
-assert.deepEqual({ label: getDashboardNavigation(access)[0].label, href: getDashboardNavigation(access)[0].href }, { label: 'Home', href: '/dashboard' })
+assert(!getDashboardNavigation(access).some(item => item.href === '/dashboard'), 'Home must stay in the sidebar header instead of the navigation list')
 assert.deepEqual(all.find(item => item.href === '/management/service-accounts')?.ancestors, ['Organization', 'Access & credentials'])
 assert.deepEqual(all.find(item => item.href === '/mail')?.ancestors, ['Communication'])
 assert.deepEqual(all.find(item => item.href === '/organizations')?.ancestors, ['Organization'])
@@ -87,6 +87,7 @@ try {
     const nav = page.getByRole('navigation', { name: 'Main navigation' })
     const button = (name) => nav.getByRole('button', { name, exact: true })
     const link = (name) => nav.getByRole('link', { name, exact: true })
+    const home = page.getByRole('link', { name: 'Home', exact: true })
     const searchbox = page.getByRole('searchbox', { name: 'Find a page' })
     const openSearch = async () => {
         if (!await searchbox.isVisible()) await page.getByRole('button', { name: 'Find a page', exact: true }).click()
@@ -96,10 +97,11 @@ try {
     assert.equal(await searchbox.count(), 0, 'Page search must start closed')
     assert(await page.getByRole('button', { name: 'Find a page', exact: true }).isVisible(), 'Page search must be available from the sidebar header')
     assert.equal(await link('Actors').getAttribute('aria-current'), 'page')
-    await link('Home').click()
-    assert.equal(await link('Home').getAttribute('aria-current'), 'page')
+    assert.equal(await link('Home').count(), 0, 'Home must not use a navigation-list row')
+    await home.click()
+    assert.equal(await home.getAttribute('aria-current'), 'page')
     await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click()
-    assert((await nav.getByRole('link', { name: 'Home', exact: true }).getAttribute('class')).includes('bg-ui-primary/10'), 'Compact Home must show the active background')
+    assert((await home.getAttribute('class')).includes('bg-ui-primary/10'), 'Compact Home must show the active background')
     await page.getByRole('button', { name: 'Expand sidebar', exact: true }).click()
     await button('Logs & rules').click()
     await button('Rules').click()

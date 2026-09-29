@@ -129,13 +129,14 @@ try {
     const sidebar = page.getByRole('complementary', { name: 'Dashboard sidebar' })
     await page.getByRole('button', { name: 'Collapse all menus', exact: true }).click()
     const top = (await sidebar.boundingBox()).y
+    const homeLink = sidebar.getByRole('link', { name: 'Home', exact: true })
     for (const name of ['Security & intelligence', 'Investigations', 'Intelligence', 'Monitoring', 'Collection', 'Logs & rules', 'Logs', 'Rules']) {
         const toggle = sidebar.getByRole('button', { name, exact: true })
         await toggle.scrollIntoViewIfNeeded()
-        const headingTop = (await sidebar.getByRole('heading', { name: 'Navigation' }).boundingBox()).y
+        const homeTop = (await homeLink.boundingBox()).y
         await toggle.click()
         assert.equal((await sidebar.boundingBox()).y, top, `${name} must expand downwards`)
-        assert.equal((await sidebar.getByRole('heading', { name: 'Navigation' }).boundingBox()).y, headingTop, `${name} must not scroll the sidebar header upwards`)
+        assert.equal((await homeLink.boundingBox()).y, homeTop, `${name} must not scroll the sidebar header upwards`)
     }
     assert(top >= 72, 'Sidebar must remain below the site header')
     await page.screenshot({ path: '/tmp/sidebar-nested-desktop.png' })

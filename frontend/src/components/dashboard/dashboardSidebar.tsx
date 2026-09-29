@@ -12,7 +12,6 @@ import { getDashboardNavigation, navigationLinks, pinnedNavigation, type Navigat
 import { useWorkspace } from '@/components/organizations/workspaceProvider'
 
 const sectionIcons: Record<string, typeof ShieldCheck> = {
-    Home: House,
     'Security & intelligence': ShieldCheck,
     'Logs & rules': ListFilter,
     Automation: AlarmClockCheck,
@@ -238,9 +237,12 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
 
     return (
         <aside aria-label='Dashboard sidebar' className={`site-chrome dashboard-sidebar-sticky noscroll min-h-0 w-full overflow-auto rounded-lg border border-ui-border bg-ui-panel text-ui-text p-2 shadow-sm shadow-ui-canvas/10 dark:shadow-ui-canvas/20 ${compact ? 'lg:w-16' : 'lg:w-58'}`}>
-            <div className={`mb-2 flex items-center ${compact ? 'justify-center' : 'justify-between px-2'}`}>
-                {!compact && <h2 className='text-sm font-semibold text-ui-text'>Navigation</h2>}
-                <div className='flex shrink-0 items-center'>
+            <div className={`mb-2 flex ${compact ? 'flex-col items-center gap-1' : 'items-center justify-between px-2'}`}>
+                <Link href='/dashboard' aria-label='Home' title='Home' aria-current={route === '/dashboard' ? 'page' : undefined}
+                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg focus-visible:outline-2 focus-visible:outline-ui-primary ${route === '/dashboard' ? 'bg-ui-primary/10 text-ui-primary' : 'text-ui-muted hover:bg-ui-canvas'}`}>
+                    <House aria-hidden='true' className='h-4 w-4' />
+                </Link>
+                <div className={`flex shrink-0 items-center ${compact ? 'flex-col' : ''}`}>
                     {!compact && hasExpandedMenu && <button type='button' onClick={collapseAll} aria-label='Collapse all menus' title='Collapse all menus'
                         className='grid h-10 w-10 place-items-center rounded-lg text-ui-muted hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary'>
                         <ChevronsUp aria-hidden='true' className='h-4 w-4' />
