@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Maximize2, Minimize2 } from 'lucide-react'
 
 type Point = { sampled_at: string, pps: number, eps: number, historical_eps: number, npps: number, remaining: number }
@@ -13,17 +14,39 @@ const cards = [
     ['NPPS', 'npps', 'Incoming load ÷ checked throughput'],
 ] as const
 const chartDescriptions = {
-    eps: 'New service logs per second',
-    pps: 'Events checked per second',
-    npps: 'Incoming load ÷ checked throughput; above 1 means the backlog can grow',
+    eps: 'Five-minute average of new service logs per second',
+    pps: 'Five-minute average of events checked per second',
+    npps: 'Five-minute average of incoming load ÷ checked throughput',
 } as const
+const FIVE_MINUTES = 5 * 60_000
 
 function format(value: number) {
     return value >= 1000 ? value.toLocaleString('en-US', { maximumFractionDigits: 0 }) : value.toFixed(1)
 }
 function sampleTime(value?: string) {
     if (!value) return '—'
-    return new Date(value).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+    return new Date(value).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+function timeWindow(value: string) {
+    const end = new Date(value)
+    const start = new Date(end.getTime() - FIVE_MINUTES)
+    const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }
+    return `${start.toLocaleString('en-US', options)} – ${end.toLocaleString('en-US', options)}`
+}
+type Coordinate = { x: number, y: number, sampled_at: string }
+function smoothPath(points: Coordinate[]) {
+    if (points.length < 2) return points.length ? `M ${points[0].x} ${points[0].y}` : ''
+    let path = `M ${points[0].x} ${points[0].y}`
+    for (let index = 0; index < points.length - 1; index++) {
+        const previous = points[Math.max(0, index - 1)]
+        const first = points[index]
+        const second = points[index + 1]
+        const next = points[Math.min(points.length - 1, index + 2)]
+        const control1 = { x: first.x + (second.x - previous.x) / 6, y: first.y + (second.y - previous.y) / 6 }
+        const control2 = { x: second.x - (next.x - first.x) / 6, y: second.y - (next.y - first.y) / 6 }
+        path += ` C ${control1.x} ${control1.y}, ${control2.x} ${control2.y}, ${second.x} ${second.y}`
+    }
+    return path
 }
 function age(value: string, now: number) {
     const seconds = Math.max(0, Math.floor((now - Date.parse(value)) / 1000))
@@ -36,38 +59,87 @@ function age(value: string, now: number) {
 }
 function Chart({ title, points, field }: { title: string, points: Point[], field: 'eps' | 'pps' | 'npps' }) {
     const [expanded, setExpanded] = useState(false)
+    const [hoveredTime, setHoveredTime] = useState<string | null>(null)
+    const scrollRef = useRef<HTMLDivElement>(null)
+    const followingLatest = useRef(true)
     const values = points.map(point => Number(point[field]) || 0)
     const max = Math.max(1, ...values)
-    const width = 360
-    const height = 164
-    const plot = { left: 44, right: 8, top: 12, bottom: 36 }
-    const plotWidth = width - plot.left - plot.right
+    const pointSpacing = 52
+    const firstTime = Date.parse(points[0]?.sampled_at || '')
+    const latestTime = Date.parse(points.at(-1)?.sampled_at || '')
+    const bucketSpan = Number.isFinite(firstTime) && Number.isFinite(latestTime) ? Math.max(0, (latestTime - firstTime) / FIVE_MINUTES) : 0
+    const width = Math.max(360, 44 + bucketSpan * pointSpacing + 16)
+    const height = 220
+    const plot = { left: 44, right: 16, top: 12, bottom: 40 }
     const plotHeight = height - plot.top - plot.bottom
-    const stride = Math.max(1, Math.ceil(points.length / 240))
-    const visible = points.filter((_, index) => index % stride === 0 || index === points.length - 1)
-    const path = visible.map((point, index) => {
-        const x = plot.left + (index / Math.max(1, visible.length - 1)) * plotWidth
-        const y = plot.top + plotHeight - ((Number(point[field]) || 0) / max) * plotHeight
-        return `${index ? 'L' : 'M'} ${x} ${y}`
-    }).join(' ')
-    const latest = visible.at(-1)
+    const coordinates = points.map(point => ({
+        x: plot.left + Math.max(0, (Date.parse(point.sampled_at) - firstTime) / FIVE_MINUTES) * pointSpacing,
+        y: plot.top + plotHeight - ((Number(point[field]) || 0) / max) * plotHeight,
+        sampled_at: point.sampled_at,
+    }))
+    const segments: Coordinate[][] = []
+    for (const coordinate of coordinates) {
+        const segment = segments.at(-1)
+        if (!segment || Date.parse(coordinate.sampled_at) - Date.parse(segment.at(-1)!.sampled_at) > FIVE_MINUTES * 1.5) segments.push([coordinate])
+        else segment.push(coordinate)
+    }
+    const path = segments.map(smoothPath).join(' ')
+    const latest = points.at(-1)
     const ticks = [1, 0.75, 0.5, 0.25, 0]
-    const unit = field === 'npps' ? '× load ratio' : 'events / second'
-    return <div className={expanded ? 'fixed inset-4 z-50 rounded-xl border border-ui-border bg-ui-panel p-4 shadow-2xl' : 'rounded-xl border border-ui-border bg-ui-panel p-3'}>
-        <div className='flex items-center justify-between gap-2'><div><h3 className='text-sm font-semibold'>{title}</h3><p className='text-xs text-ui-muted'>{chartDescriptions[field]}</p></div><button type='button' aria-label={expanded ? `Close expanded ${title} chart` : `Expand ${title} chart`} className='rounded-md p-1 text-ui-muted hover:text-ui-text' onClick={() => setExpanded(value => !value)}>{expanded ? <Minimize2 size={16} aria-hidden /> : <Maximize2 size={16} aria-hidden />}</button></div>
-        <div className='mt-2 min-w-0'><svg role='img' aria-label={`${title}: ${format(Number(latest?.[field]) || 0)} ${unit}, sampled from ${sampleTime(visible[0]?.sampled_at)} to ${sampleTime(latest?.sampled_at)}. Y axis shows ${unit}.`} width={width} height={height} viewBox={`0 0 ${width} ${height}`} className='block h-auto w-full'>
-            {ticks.map(fraction => {
-                const y = plot.top + plotHeight * (1 - fraction)
-                const value = max * fraction
-                return <g key={fraction}><line x1={plot.left} x2={width - plot.right} y1={y} y2={y} stroke='currentColor' opacity={fraction === 0 ? 0.35 : 0.12} /><text x={plot.left - 6} y={y + 3.5} textAnchor='end' fontSize='10' fill='currentColor' opacity='0.7'>{field === 'npps' ? `${value.toFixed(1)}×` : format(value)}</text></g>
-            })}
-            <path d={path || `M ${plot.left} ${plot.top + plotHeight}`} fill='none' stroke='currentColor' strokeWidth='2' className='text-ui-primary' />
-            {latest && <circle cx={plot.left + plotWidth} cy={plot.top + plotHeight - ((Number(latest[field]) || 0) / max) * plotHeight} r='3.5' fill='currentColor' className='text-ui-primary'><title>{`${sampleTime(latest.sampled_at)}: ${format(Number(latest[field]) || 0)} ${unit}`}</title></circle>}
-            <text x={plot.left} y={height - 10} fontSize='10' fill='currentColor' opacity='0.7'>{sampleTime(visible[0]?.sampled_at)}</text>
-            <text x={width - plot.right} y={height - 10} textAnchor='end' fontSize='10' fill='currentColor' opacity='0.7'>{sampleTime(latest?.sampled_at)}</text>
-            <text x={width / 2} y={height - 10} textAnchor='middle' fontSize='9' fill='currentColor' opacity='0.7'>6 hours · {points.length.toLocaleString('en-US')} samples</text>
-        </svg></div>
-    </div>
+    const unit = field === 'npps' ? '× load ratio' : 'logs per second'
+    const hovered = points.find(point => point.sampled_at === hoveredTime)
+    const scrollClass = expanded ? 'h-full overflow-x-auto overflow-y-hidden overscroll-x-contain rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-ui-primary' : 'overflow-x-auto overflow-y-hidden overscroll-x-contain rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-ui-primary'
+    const plotAreaClass = expanded ? 'relative mt-3 min-h-0 flex-1' : 'relative mt-3'
+    const content = <>
+        <div className='flex shrink-0 items-center justify-between gap-2'><div><h3 id={`chart-title-${field}`} className='text-sm font-semibold'>{title}</h3><p className='text-xs text-ui-muted'>{chartDescriptions[field]}</p></div><button type='button' aria-label={expanded ? `Close expanded ${title} chart` : `Expand ${title} chart`} className='rounded-md p-2 text-ui-muted hover:text-ui-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-ui-primary' onClick={() => setExpanded(value => !value)}>{expanded ? <Minimize2 size={18} aria-hidden /> : <Maximize2 size={18} aria-hidden />}</button></div>
+        <div className={plotAreaClass}>
+            {hovered && <div id={`chart-tooltip-${field}`} role='tooltip' className='pointer-events-none absolute right-2 top-2 z-10 max-w-[min(22rem,90%)] rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-xs shadow-lg'>
+                <p className='font-semibold'>{field === 'npps' ? 'Five-minute average load ratio' : 'Five-minute average'}</p>
+                <p className='mt-0.5 tabular-nums'>{format(Number(hovered[field]) || 0)} {unit}</p>
+                <p className='mt-0.5 text-ui-muted'>{timeWindow(hovered.sampled_at)}</p>
+            </div>}
+            <div ref={scrollRef} role='region' aria-label={`${title} chart history; scroll horizontally for older five-minute averages`} tabIndex={0} onScroll={event => {
+                const element = event.currentTarget
+                followingLatest.current = element.scrollWidth - element.clientWidth - element.scrollLeft < 32
+            }} className={scrollClass}>
+                <svg role='img' aria-labelledby={`chart-title-${field}`} aria-label={`${title}: ${points.length} five-minute averages from ${sampleTime(points[0]?.sampled_at)} to ${sampleTime(latest?.sampled_at)}. Y axis shows ${unit}.`} width={width} height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio='none' style={{ width: `${width}px`, height: expanded ? 'min(70dvh, 520px)' : `${height}px` }} className='block max-w-none text-ui-primary'>
+                    {ticks.map(fraction => {
+                        const y = plot.top + plotHeight * (1 - fraction)
+                        const value = max * fraction
+                        return <g key={fraction}><line x1={plot.left} x2={width - plot.right} y1={y} y2={y} stroke='currentColor' opacity={fraction === 0 ? 0.35 : 0.12} /><text x={plot.left - 6} y={y + 3.5} textAnchor='end' fontSize='10' fill='currentColor' opacity='0.7'>{field === 'npps' ? `${value.toFixed(1)}×` : format(value)}</text></g>
+                    })}
+                    <path d={path || `M ${plot.left} ${plot.top + plotHeight}`} fill='none' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round' strokeLinejoin='round' />
+                    {points.map((point, index) => {
+                        const coordinate = coordinates[index]
+                        const selected = point.sampled_at === hoveredTime
+                        const value = Number(point[field]) || 0
+                        const label = `${timeWindow(point.sampled_at)}: ${format(value)} ${unit}`
+                        return <g key={point.sampled_at} role='button' tabIndex={0} aria-label={label} aria-describedby={selected ? `chart-tooltip-${field}` : undefined} onPointerEnter={() => setHoveredTime(point.sampled_at)} onPointerLeave={() => setHoveredTime(current => current === point.sampled_at ? null : current)} onFocus={() => setHoveredTime(point.sampled_at)} onBlur={() => setHoveredTime(current => current === point.sampled_at ? null : current)} className='cursor-crosshair outline-none'>
+                            <circle cx={coordinate.x} cy={coordinate.y} r='12' fill='transparent'><title>{label}</title></circle>
+                            <circle cx={coordinate.x} cy={coordinate.y} r={selected ? '4.5' : '2.5'} fill='currentColor' pointerEvents='none' />
+                        </g>
+                    })}
+                    <text x={plot.left} y={height - 12} fontSize='10' fill='currentColor' opacity='0.7'>{sampleTime(points[0]?.sampled_at)}</text>
+                    <text x={width - plot.right} y={height - 12} textAnchor='end' fontSize='10' fill='currentColor' opacity='0.7'>{sampleTime(latest?.sampled_at)}</text>
+                </svg></div>
+        </div>
+    </>
+    useEffect(() => {
+        const element = scrollRef.current
+        if (element && followingLatest.current) element.scrollLeft = element.scrollWidth
+    }, [points, expanded])
+    useEffect(() => {
+        if (!expanded) return
+        const previousOverflow = document.body.style.overflow
+        const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setExpanded(false) }
+        document.body.style.overflow = 'hidden'
+        window.addEventListener('keydown', closeOnEscape)
+        return () => { document.body.style.overflow = previousOverflow; window.removeEventListener('keydown', closeOnEscape) }
+    }, [expanded])
+    if (expanded) return createPortal(<div role='dialog' aria-modal='true' aria-labelledby={`chart-title-${field}`} className='fixed inset-0 z-[100] flex h-dvh w-screen flex-col overflow-hidden bg-ui-panel p-3 sm:p-5'>
+        {content}
+    </div>, document.body)
+    return <div className='flex min-w-0 flex-col rounded-xl border border-ui-border bg-ui-panel p-3'>{content}</div>
 }
 export default function ThroughputMetrics({ initialMetrics }: { initialMetrics: Metrics | null }) {
     const [metrics, setMetrics] = useState<Metrics | null>(initialMetrics)

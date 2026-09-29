@@ -70,7 +70,25 @@ async function queryLogMetrics(): Promise<LogMetrics> {
         await run('DELETE FROM log_throughput_samples WHERE sampled_at < NOW() - INTERVAL \'24 hours\'')
         lastCleanupAt = Date.now()
     }
-    const history = (await run('SELECT sampled_at,pps,eps,historical_eps,npps,remaining FROM log_throughput_samples WHERE sampled_at >= NOW() - make_interval(hours => 6) ORDER BY sampled_at ASC')).rows as SampleRow[]
+    const history = (await run(`
+        WITH samples AS (
+            SELECT date_bin(INTERVAL '5 minutes', sampled_at, TIMESTAMPTZ '1970-01-01 00:00:00+00') AS bucket_start,
+                pps, eps, historical_eps, npps, remaining
+            FROM log_throughput_samples
+            WHERE sampled_at >= NOW() - INTERVAL '24 hours'
+        )
+        SELECT bucket_start + INTERVAL '5 minutes' AS sampled_at,
+            AVG(pps)::double precision AS pps,
+            AVG(eps)::double precision AS eps,
+            AVG(historical_eps)::double precision AS historical_eps,
+            AVG(npps)::double precision AS npps,
+            MAX(remaining)::bigint AS remaining
+        FROM samples
+        WHERE bucket_start >= date_bin(INTERVAL '5 minutes', NOW() - INTERVAL '24 hours', TIMESTAMPTZ '1970-01-01 00:00:00+00') + INTERVAL '5 minutes'
+            AND bucket_start + INTERVAL '5 minutes' <= NOW()
+        GROUP BY bucket_start
+        ORDER BY bucket_start ASC
+    `)).rows as SampleRow[]
     return {
         generated_at: now.toISOString(),
         current: { pps, eps, historical_eps, npps, remaining: Number(current?.remaining || 0), thresholds: { npps_below: npps < 100, eps_above: eps > 100, pps_below: pps < 200 }, alert: npps < 100 || eps > 100 || pps < 200 },

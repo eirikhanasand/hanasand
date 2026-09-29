@@ -137,9 +137,7 @@ export default function LogsPageClient({ initialServices = [], initialErrors, in
         catch { setCopied(''); setError('Copy failed. Select the event text and copy it manually.') }
     }
     const toggle = (id: string | number) => setExpanded(previous => ({ ...previous, [id]: !previous[id] }))
-    const pendingCommands = data?.processing?.pending_commands
     const processingError = data?.processing?.last_error?.endsWith('Waiting for active log writes; will retry.') ? null : data?.processing?.last_error
-    const commandChecksDelayed = pendingCommands?.oldest_queued_at && Date.parse(data?.generated_at || '') - Date.parse(pendingCommands.oldest_queued_at) >= 60_000
     const serviceOptions = [...new Set([...initialServices.map(item => item.service), ...(data?.services.map(item => item.service) || []), ...(service === 'all' ? [] : [service])])].sort()
     const activeFilters = [service !== 'all', !advanced && !!search, !advanced && table !== 'Logs', advanced && !!appliedHql, hours !== (view === 'realtime' ? '1' : '24'), view !== 'realtime' && severity !== 'all'].filter(Boolean).length
     return <div className='grid min-w-0 gap-3 sm:gap-4'>
@@ -187,7 +185,6 @@ export default function LogsPageClient({ initialServices = [], initialErrors, in
                 </div>
             </div>
             {processingError && <p role='alert' className='text-sm text-ui-text'>Event processing is delayed: {processingError}</p>}
-            {view !== 'realtime' && commandChecksDelayed && <p suppressHydrationWarning role='status' className='text-sm text-ui-warning'>Command checks are delayed. {pendingCommands.has_more ? 'More than ' : ''}{pendingCommands.count.toLocaleString('en-US')} {pendingCommands.count === 1 ? 'command is' : 'commands are'} waiting; oldest received {new Date(pendingCommands.oldest_queued_at!).toLocaleString()}.</p>}
             {view === 'dashboard' && analyticsOpen && <ThroughputMetrics initialMetrics={initialMetrics} />}
             {view === 'dashboard' && <LogCatchupProgress progress={data?.processing?.catchup} now={data?.generated_at || new Date().toISOString()} stalled={!!processingError} />}
             {!!data?.processing?.skipped_events && <p role='status' className='text-sm text-ui-warning'>{data.processing.skipped_events.toLocaleString('en-US')} events remain excluded from detection.</p>}
