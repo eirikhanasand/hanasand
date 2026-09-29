@@ -33,13 +33,21 @@ function labelFor(route) {
     ).join(' · ')
 }
 
+function quote(value) {
+    const escaped = value.replace(/[\\'\u0000-\u001f\u2028\u2029]/g, character => {
+        const escapes = { '\\': '\\\\', "'": "\\'", '\n': '\\n', '\r': '\\r', '\t': '\\t' }
+        return escapes[character] ?? `\\u${character.codePointAt(0).toString(16).padStart(4, '0')}`
+    })
+    return `'${escaped}'`
+}
+
 const routes = [...new Set(await pageRoutes(appDir))].sort((a, b) => a.localeCompare(b))
-const items = routes.map(href => JSON.stringify({
-    id: `route:${href}`,
-    title: labelFor(href),
-    detail: href === '/' ? 'Overview and product entry point' : `Page · ${href}`,
-    href,
-}))
+const items = routes.map(href => `{
+        id: ${quote(`route:${href}`)},
+        title: ${quote(labelFor(href))},
+        detail: ${quote(href === '/' ? 'Overview and product entry point' : `Page · ${href}`)},
+        href: ${quote(href)},
+    }`)
 const content = `// Generated from static App Router page files by scripts/generate-site-search-routes.mjs.\nexport const generatedSearchRoutes = [\n    ${items.join(',\n    ')}\n] as const\n`
 
 await writeFile(outputPath, content)
