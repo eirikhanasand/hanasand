@@ -3,7 +3,10 @@ set -eu
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
-docker compose -f "$root/docker-compose.yml" config --format json | python3 -c '
+
+check_compose_healthchecks() {
+    compose_file=$1
+    docker compose -f "$compose_file" config --format json | python3 -c '
 import json
 import sys
 
@@ -16,7 +19,11 @@ for name, service in services.items():
         missing.append(name)
 
 if missing:
-    print("Docker healthchecks are required for every Hanasand Compose service; missing: " + ", ".join(missing), file=sys.stderr)
+    print("Docker healthchecks are required for every Hanasand Compose service; missing in " + sys.argv[1] + ": " + ", ".join(missing), file=sys.stderr)
     sys.exit(1)
-print(f"Docker healthchecks are configured for all {len(services)} Hanasand Compose services.")
-'
+print(f"Docker healthchecks are configured for all {len(services)} services in {sys.argv[1]}.")
+    ' "$compose_file"
+}
+
+check_compose_healthchecks "$root/docker-compose.yml"
+check_compose_healthchecks "$root/ops/recovery/compose.yml"
