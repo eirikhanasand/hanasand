@@ -119,12 +119,27 @@ sh "$root/scripts/require-compose-healthchecks.sh"
 export HANASAND_RELEASE_COMMIT="$release"
 export BROWSER_SANDBOX_WORKER_IMAGE="hanasand_browsers:$release"
 candidate_suffix=$(printf '%s' "$release" | cut -c1-12)
-candidate_offset=$(printf '%s' "$release" | cksum | awk '{ print $1 % 10000 }')
+candidate_offset=$(printf '%s' "$release" | cksum | awk '{ print $1 % 5000 }')
+candidate_attempt=0
+while test "$candidate_attempt" -lt 5000; do
+    candidate_frontend_port=$((20000 + candidate_offset))
+    candidate_api_port=$((25000 + candidate_offset))
+    if ! ss -H -lnt "sport = :$candidate_frontend_port" | grep -q . \
+        && ! ss -H -lnt "sport = :$candidate_api_port" | grep -q .; then
+        break
+    fi
+    candidate_offset=$(((candidate_offset + 1) % 5000))
+    candidate_attempt=$((candidate_attempt + 1))
+done
+test "$candidate_attempt" -lt 5000 || {
+    echo "No unused loopback ports are available for release candidates." >&2
+    exit 1
+}
 export HANASAND_API_CANDIDATE_CONTAINER="hanasand_api_candidate_$candidate_suffix"
 export HANASAND_FRONTEND_CANDIDATE_CONTAINER="hanasand_frontend_candidate_$candidate_suffix"
 export HANASAND_PGBOUNCER_CANDIDATE_CONTAINER="hanasand_pgbouncer_candidate_$candidate_suffix"
-export HANASAND_API_CANDIDATE_PORT=$((40000 + candidate_offset))
-export HANASAND_FRONTEND_CANDIDATE_PORT=$((30000 + candidate_offset))
+export HANASAND_API_CANDIDATE_PORT=$candidate_api_port
+export HANASAND_FRONTEND_CANDIDATE_PORT=$candidate_frontend_port
 build_dir=$(mktemp -d "/tmp/hanasand-release-build.XXXXXX")
 candidate_started=0
 proxy_target=canonical
