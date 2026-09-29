@@ -100,9 +100,10 @@ services=$(compose_live config --services | sed '/^auth-primary$/d; /^auth-secon
 # Compose service names are controlled by docker-compose.yml and contain no
 # shell metacharacters, so split the list into its individual arguments.
 # shellcheck disable=SC2086
-compose_live up -d --force-recreate --remove-orphans --wait --wait-timeout 180 $services
-compose_live up -d --force-recreate --wait --wait-timeout 180 auth-secondary
-compose_live up -d --force-recreate --wait --wait-timeout 180 auth-primary
+compose_live up -d --no-build --remove-orphans $services
+compose_live up -d --no-build --wait --wait-timeout 180 api frontend
+compose_live up -d --no-build --force-recreate --wait --wait-timeout 180 auth-secondary
+compose_live up -d --no-build --force-recreate --wait --wait-timeout 180 auth-primary
 
 # The host-network HAProxy instance cannot resolve the Compose service name.
 # Resolve the freshly recreated scraper container and refresh its runtime
