@@ -154,7 +154,7 @@ function Chart({ title, points, field }: { title: string, points: Point[], field
                     })}
                     {points.map((point, index) => index % 5 === 0 || index === points.length - 1 ? <text key={point.sampled_at} x={coordinates[index].x} y={height - 12} textAnchor={index === 0 ? 'start' : index === points.length - 1 ? 'end' : 'middle'} fontSize='10' fill='currentColor' opacity='0.7'>{sampleTime(point.sampled_at)}</text> : null)}
                 </svg></div>
-            <div aria-hidden='true' className='pointer-events-none absolute left-0 top-0 z-10 h-[220px] w-[44px] bg-ui-panel' style={{ height: expanded ? 'min(70dvh, 520px)' : `${height}px` }}>
+            <div aria-hidden='true' className='pointer-events-none absolute left-0 top-0 z-10 h-[220px] w-11 bg-ui-panel' style={{ height: expanded ? 'min(70dvh, 520px)' : `${height}px` }}>
                 <svg width='44' height={height} viewBox={`0 0 44 ${height}`} preserveAspectRatio='none' style={{ width: '44px', height: expanded ? 'min(70dvh, 520px)' : `${height}px` }} className='block text-ui-primary'>
                     {ticks.map(fraction => {
                         const y = plot.top + plotHeight * (1 - fraction)
