@@ -133,7 +133,7 @@ services:
       DB_BACKUP_DIR: ${DB_BACKUP_DIR:-/var/lib/hanasand/backups/database}
       DB_BACKUP_STATE_PATH: ${DB_BACKUP_STATE_PATH:-/var/lib/hanasand/backups/database/.backup-state.json}
       DB_BACKUP_SCHEDULE: ${DB_BACKUP_SCHEDULE:-23 2 * * *}
-      DB_BACKUP_RETENTION_DAYS: ${DB_BACKUP_RETENTION_DAYS:-14}
+      DB_BACKUP_RETENTION_DAYS: ${DB_BACKUP_RETENTION_DAYS:-63}
       DB_BACKUP_ENABLED: ${DB_BACKUP_ENABLED:-true}
       HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
     healthcheck:
@@ -257,7 +257,7 @@ services:
       DB_BACKUP_DIR: ${DB_BACKUP_DIR:-/var/lib/hanasand/backups/database}
       DB_BACKUP_STATE_PATH: ${DB_BACKUP_STATE_PATH:-/var/lib/hanasand/backups/database/.backup-state.json}
       DB_BACKUP_SCHEDULE: ${DB_BACKUP_SCHEDULE:-23 2 * * *}
-      DB_BACKUP_RETENTION_DAYS: ${DB_BACKUP_RETENTION_DAYS:-14}
+      DB_BACKUP_RETENTION_DAYS: ${DB_BACKUP_RETENTION_DAYS:-63}
       DB_BACKUP_ENABLED: ${DB_BACKUP_ENABLED:-true}
       HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
     volumes:

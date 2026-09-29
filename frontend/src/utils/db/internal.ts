@@ -98,6 +98,7 @@ export type BackupRetentionOutcome = {
     deleted: number
     deletedBytes: number
     cutoffAt: string
+    retained?: Array<{ file: string, slots: string[] }>
 }
 
 export type BackupIntegrity = {

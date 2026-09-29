@@ -57,7 +57,11 @@ assert.doesNotMatch(apiCore, /--clean[\s\S]*databaseName\(\)/, 'the product must
 assert.match(apiCron, /runDueDatabaseBackup/)
 assert.match(compose, /api_state:\/var\/lib\/hanasand/)
 assert.match(compose, /DB_BACKUP_SCHEDULE: \$\{DB_BACKUP_SCHEDULE:-23 2 \* \* \*\}/)
-assert.match(compose, /DB_BACKUP_RETENTION_DAYS: \$\{DB_BACKUP_RETENTION_DAYS:-14\}/)
+assert.match(compose, /DB_BACKUP_RETENTION_DAYS: \$\{DB_BACKUP_RETENTION_DAYS:-63\}/)
+assert.match(apiCore, /RECENT_RETENTION_DAYS = 3/)
+assert.match(apiCore, /WEEKLY_RETENTION_WEEKS = 8/)
+assert.match(apiCore, /startOfUtcWeek/)
+assert.match(frontendApi, /slots: string\[\]/)
 assert.match(dockerfile, /postgresql-client/)
 
 console.log('Backup operator workflow checks passed.')

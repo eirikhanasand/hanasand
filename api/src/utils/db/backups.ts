@@ -36,6 +36,7 @@ type RetentionOutcome = {
     deleted: number
     deletedBytes: number
     cutoffAt: string
+    retained: Array<{ file: string, slots: string[] }>
 }
 
 export type BackupOperation = {
@@ -144,7 +145,12 @@ export type BackupFileEntry = {
 const BACKUP_EXTENSIONS = ['.dump', '.backup', '.sql', '.tar', '.gz']
 const DEFAULT_BACKUP_DIR = process.env.NODE_ENV === 'production' ? '/var/lib/hanasand/backups/database' : path.join(tmpdir(), 'hanasand-backups', 'database')
 const DEFAULT_BACKUP_SCHEDULE = '23 2 * * *'
-const DEFAULT_RETENTION_DAYS = 14
+const DEFAULT_RETENTION_DAYS = 63
+const MAX_RETENTION_DAYS = 63
+const RECENT_RETENTION_DAYS = 3
+const WEEKLY_RETENTION_WEEKS = 8
+const DAY_MS = 86_400_000
+const WEEK_MS = 7 * DAY_MS
 const MAX_OPERATION_HISTORY = 100
 export const DATABASE_BACKUP_JOB_ID = 'api-database-backup'
 const activeOperationIds = new Set<string>()
@@ -185,7 +191,7 @@ export async function collectDatabaseBackupServices(): Promise<BackupServiceStat
         schedule: state.configuration.schedule,
         scheduleTimezone: state.configuration.timezone,
         scheduleEnabled: state.configuration.enabled,
-        retention: `${state.configuration.retentionDays} days`,
+        retention: `${RECENT_RETENTION_DAYS} daily + ${WEEKLY_RETENTION_WEEKS} weekly checkpoints`,
         retentionOutcome: lastRetention,
         storageTarget: state.configuration.storageTarget,
         statePath: state.configuration.statePath,
@@ -832,12 +838,48 @@ async function checksumFile(file: string) {
 
 async function applyRetention(currentFile: string): Promise<RetentionOutcome> {
     const retentionDays = configuredRetentionDays()
-    const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000)
+    const now = Date.now()
+    const cutoff = new Date(now - retentionDays * DAY_MS)
     const files = await listBackupCandidates()
+    const verified = files
+        .map(file => ({ file, createdAt: file.metadata ? Date.parse(file.metadata.createdAt) : Number.NaN }))
+        .filter(candidate => Number.isFinite(candidate.createdAt))
+        .sort((a, b) => b.createdAt - a.createdAt)
+    const retained = new Map<string, Set<string>>()
+    const retain = (file: string, slot: string) => {
+        const slots = retained.get(file) || new Set<string>()
+        slots.add(slot)
+        retained.set(file, slots)
+    }
+    const newestForDay = new Map<string, typeof verified[number]>()
+    const currentDay = new Date(now)
+    for (let offset = 0; offset < RECENT_RETENTION_DAYS; offset += 1) {
+        const day = new Date(currentDay.getTime() - offset * DAY_MS).toISOString().slice(0, 10)
+        const candidate = verified.find(item => new Date(item.createdAt).toISOString().slice(0, 10) === day)
+        if (candidate) newestForDay.set(day, candidate)
+    }
+    for (const [day, candidate] of newestForDay) retain(candidate.file.file, `day:${day}`)
+
+    // Fixed Monday-to-Monday UTC windows keep weekly checkpoints from drifting each day.
+    const currentWeekStart = startOfUtcWeek(now)
+    const newestForWeek = new Map<string, typeof verified[number]>()
+    for (const candidate of verified) {
+        const weekStart = startOfUtcWeek(candidate.createdAt)
+        const weeksAgo = Math.floor((currentWeekStart - weekStart) / WEEK_MS)
+        if (weeksAgo < 1 || weeksAgo > WEEKLY_RETENTION_WEEKS) continue
+        const week = new Date(weekStart).toISOString().slice(0, 10)
+        if (!newestForWeek.has(week)) newestForWeek.set(week, candidate)
+    }
+    for (const [week, candidate] of newestForWeek) retain(candidate.file.file, `week:${week}`)
+
+    for (const candidate of verified) {
+        if (candidate.createdAt > now) retain(candidate.file.file, 'clock-skew')
+    }
+
     let deleted = 0
     let deletedBytes = 0
     for (const file of files) {
-        if (file.file === currentFile || file.mtime >= cutoff) continue
+        if (file.file === currentFile || !file.metadata || !Number.isFinite(Date.parse(file.metadata.createdAt)) || retained.has(file.file)) continue
         await unlink(file.path)
         await unlink(metadataPath(file.path)).catch(error => {
             if (!isCode(error, 'ENOENT')) throw error
@@ -851,6 +893,10 @@ async function applyRetention(currentFile: string): Promise<RetentionOutcome> {
         deleted,
         deletedBytes,
         cutoffAt: cutoff.toISOString(),
+        retained: [...retained.entries()]
+            .map(([file, slots]) => ({ file, slots: [...slots].sort() }))
+            .sort((a, b) => (verified.find(candidate => candidate.file.file === b.file)?.createdAt || 0)
+                - (verified.find(candidate => candidate.file.file === a.file)?.createdAt || 0)),
     }
 }
 
@@ -925,7 +971,14 @@ function scheduleEnabled() {
 
 function configuredRetentionDays() {
     const value = Number(process.env.DB_BACKUP_RETENTION_DAYS || process.env.BACKUP_RETENTION_DAYS || DEFAULT_RETENTION_DAYS)
-    return Number.isInteger(value) && value > 0 ? value : DEFAULT_RETENTION_DAYS
+    return Number.isInteger(value) && value > 0 ? Math.min(value, MAX_RETENTION_DAYS) : DEFAULT_RETENTION_DAYS
+}
+
+function startOfUtcWeek(timestamp: number) {
+    const date = new Date(timestamp)
+    date.setUTCHours(0, 0, 0, 0)
+    date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7))
+    return date.getTime()
 }
 
 function parseDailySchedule(schedule: string) {

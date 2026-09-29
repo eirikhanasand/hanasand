@@ -23,7 +23,7 @@ process.env.VM_API_TOKEN = 'test-token'
 process.env.DB_BACKUP_DIR = backupDir
 process.env.DB_BACKUP_STATE_PATH = statePath
 process.env.DB_BACKUP_LOCK_PATH = lockPath
-process.env.DB_BACKUP_RETENTION_DAYS = '1'
+process.env.DB_BACKUP_RETENTION_DAYS = '63'
 process.env.DB_BACKUP_SCHEDULE = '23 2 * * *'
 process.env.DB_BACKUP_ENABLED = 'true'
 process.env.DB_BACKUP_TEST_COMMAND_LOG = commandLog
@@ -36,14 +36,28 @@ try {
 
     const oldFile = join(backupDir, 'hanasand-2026-01-01T00-00-00-000Z.dump')
     await writeFile(oldFile, 'expired archive')
-    const oldTime = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)
+    const oldTime = new Date(Date.now() - 70 * 24 * 60 * 60 * 1000)
     await utimes(oldFile, oldTime, oldTime)
+    await writeFile(`${oldFile}.metadata.json`, JSON.stringify({
+        schemaVersion: 'hanasand.database_backup.v1',
+        file: 'hanasand-2026-01-01T00-00-00-000Z.dump',
+        database: 'hanasand',
+        createdAt: oldTime.toISOString(),
+        verifiedAt: oldTime.toISOString(),
+        checksumSha256: 'a'.repeat(64),
+        sizeBytes: (await stat(oldFile)).size,
+        durationMs: 1,
+        archiveEntries: 1,
+        sourceIntegrity: { schemas: 1, tables: 1, estimatedRows: 1 },
+        releaseCommit: null,
+    }))
 
     const created = await backups.createDatabaseBackup({ actorId: 'admin-1' })
     assert.equal(created.status, 'succeeded', 'backup must only return success after dump verification and retention')
     assert.equal(created.kind, 'backup')
     assert.equal(created.actorId, 'admin-1')
     assert.equal(created.releaseCommit, 'test-release-commit')
+    assert.equal(created.retention?.policyDays, 63)
     assert.match(created.checksumSha256 || '', /^[a-f0-9]{64}$/)
     assert.ok((created.sizeBytes || 0) > 0)
     assert.ok((created.archiveEntries || 0) > 0)
@@ -160,6 +174,58 @@ try {
     assert.match(interrupted?.error || '', /restarted before/)
     await assert.rejects(stat(lockPath), /ENOENT/, 'restart recovery must clear the stale operation lock')
 
+    const historicalArchives: Array<{ file: string, ageDays: number, fullPath: string, createdAt: number }> = []
+    for (let ageDays = 0; ageDays <= 70; ageDays += 1) {
+        const file = `hanasand-retention-${ageDays}d.dump`
+        const fullPath = join(backupDir, file)
+        const createdAt = new Date(Date.now() - ageDays * 24 * 60 * 60 * 1000)
+        await writeFile(fullPath, `verified archive ${ageDays}`)
+        await writeFile(`${fullPath}.metadata.json`, JSON.stringify({
+            schemaVersion: 'hanasand.database_backup.v1',
+            file,
+            database: 'hanasand',
+            createdAt: createdAt.toISOString(),
+            verifiedAt: createdAt.toISOString(),
+            checksumSha256: 'b'.repeat(64),
+            sizeBytes: (await stat(fullPath)).size,
+            durationMs: 1,
+            archiveEntries: 1,
+            sourceIntegrity: { schemas: 1, tables: 1, estimatedRows: 1 },
+            releaseCommit: null,
+        }))
+        await utimes(fullPath, createdAt, createdAt)
+        historicalArchives.push({ file, ageDays, fullPath, createdAt: createdAt.getTime() })
+    }
+    const unverifiedOldFile = join(backupDir, 'hanasand-unverified-old.dump')
+    const unverifiedOldTime = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+    await writeFile(unverifiedOldFile, 'unverified archive')
+    await utimes(unverifiedOldFile, unverifiedOldTime, unverifiedOldTime)
+
+    const tiered = await restarted.createDatabaseBackup({ actorId: 'retention-test' })
+    const retainedFiles = tiered.retention?.retained || []
+    const retainedSlots = retainedFiles.flatMap(file => file.slots)
+    assert.equal(retainedSlots.filter(slot => slot.startsWith('day:')).length, 3, 'retention must select one archive for each of the latest three UTC dates')
+    assert.equal(retainedSlots.filter(slot => slot.startsWith('week:')).length, 8, 'retention must select one archive for each of the previous eight complete UTC weeks')
+    assert.equal(new Set(retainedSlots).size, 11, 'retention must report all 11 calendar checkpoints')
+    const currentWeekStart = utcWeekStart(Date.now())
+    for (let weeksAgo = 1; weeksAgo <= 8; weeksAgo += 1) {
+        const weekStart = currentWeekStart - weeksAgo * 7 * 24 * 60 * 60 * 1000
+        const weekKey = new Date(weekStart).toISOString().slice(0, 10)
+        const slot = `week:${weekKey}`
+        const selected = retainedFiles.find(file => file.slots.includes(slot))
+        const expected = historicalArchives
+            .filter(archive => Math.floor((currentWeekStart - utcWeekStart(archive.createdAt)) / (7 * 24 * 60 * 60 * 1000)) === weeksAgo)
+            .sort((a, b) => b.createdAt - a.createdAt)[0]
+        assert.equal(selected?.file, expected?.file, `weekly slot ${weekKey} must keep the newest verified archive in that UTC week`)
+    }
+    const selectedFileNames = new Set(retainedFiles.map(file => file.file))
+    assert.equal((await restarted.listDatabaseBackupFiles('hanasand')).length, selectedFileNames.size + 1, 'retention must leave selected verified archives and preserve unknown unverified data')
+    assert.ok(await stat(unverifiedOldFile), 'retention must preserve unverified archives rather than risk deleting possible recovery data')
+    for (const archive of historicalArchives.filter(archive => !selectedFileNames.has(archive.file))) {
+        await assert.rejects(stat(archive.fullPath), /ENOENT/, `intermediate archive ${archive.file} must be removed`)
+        await assert.rejects(stat(`${archive.fullPath}.metadata.json`), /ENOENT/, `intermediate metadata ${archive.file} must be removed`)
+    }
+
     const routeSource = await readFile(new URL('../src/routes.ts', import.meta.url), 'utf8')
     const handlerSource = await readFile(new URL('../src/handlers/database/backups.ts', import.meta.url), 'utf8')
     assert.match(routeSource, /fastify\.get\('\/backup', getDatabaseBackups\)/)
@@ -214,4 +280,11 @@ if [ "$DB_BACKUP_TEST_FAIL" = "dropdb" ] || [ "$DB_BACKUP_TEST_DROP_FAIL" = "tru
         await writeFile(file, source)
         await chmod(file, 0o755)
     }
+}
+
+function utcWeekStart(timestamp: number) {
+    const date = new Date(timestamp)
+    date.setUTCHours(0, 0, 0, 0)
+    date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7))
+    return date.getTime()
 }

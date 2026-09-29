@@ -175,7 +175,11 @@ function Status({ value }: { value: string }) {
 
 function retentionLabel(service?: BackupService) {
     const outcome = service?.retentionOutcome
-    return outcome ? `Last pass examined ${outcome.examined}, deleted ${outcome.deleted}` : 'No completed retention pass yet'
+    if (!outcome) return 'No completed retention pass yet'
+    const slots = (outcome.retained || []).flatMap(point => point.slots)
+    const daily = new Set(slots.filter(slot => slot.startsWith('day:'))).size
+    const weekly = new Set(slots.filter(slot => slot.startsWith('week:'))).size
+    return `Kept ${daily} daily + ${weekly} weekly checkpoints; deleted ${outcome.deleted}`
 }
 
 function operationLabel(operation: BackupOperation) {
