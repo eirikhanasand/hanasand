@@ -92,6 +92,13 @@ sh "$root/scripts/require-main.sh"
 release=$(git rev-parse HEAD)
 sh "$root/scripts/require-compose-healthchecks.sh"
 
+# Remove stale, ignored app trees left behind by earlier one-off deployments.
+for stale_dir in Germany Helmond 1923 1946 2007 test-nextjs-app; do
+    if test -d "$root/$stale_dir" || test -L "$root/$stale_dir"; then
+        rm -rf -- "$root/$stale_dir"
+    fi
+done
+
 export HANASAND_RELEASE_COMMIT="$release"
 build_dir=$(mktemp -d "/tmp/hanasand-release-build.XXXXXX")
 cleanup() { rm -rf "$build_dir"; }
