@@ -34,8 +34,8 @@ if (!dashboardUi.includes('px-2 py-4') || casesPage.includes('paddingBottom: 0')
     throw new Error('The Cases page must keep its 16px bottom padding inside the full-height frame.')
 }
 
-if (!desktopBlock.includes('margin-top: 1rem') || !desktopBlock.includes('max-height: calc(100dvh - 6.5rem)')) {
-    throw new Error('Desktop dashboard sidebar must keep a header-safe inset and bounded height.')
+if (!desktopBlock.includes('margin-top: 1rem') || !desktopBlock.includes('max-height: calc(100% - 2rem)')) {
+    throw new Error('Desktop dashboard sidebar must stay within the available frame with a 16px bottom inset.')
 }
 
 if (desktopBlock.includes('height: 100%')) {
