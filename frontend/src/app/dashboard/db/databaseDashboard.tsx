@@ -1,6 +1,6 @@
 import { AlertTriangle, ArchiveRestore, CheckCircle2, ChevronDown, Clock3, DatabaseBackup, HardDrive, TrendingUp } from 'lucide-react'
-import Link from 'next/link'
 import type { ReactNode } from 'react'
+import Button from '@/components/misc/button'
 import { DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import type { DatabaseOverview } from '@/utils/db/internal'
 import DatabaseWorkbench from './databaseWorkbench'
@@ -58,21 +58,9 @@ function Disclosure({ title, detail, id, children }: { title: string, detail: st
 export function DatabaseActions() {
     return (
         <div className='flex flex-wrap gap-2'>
-            <ActionLink href='/db/backups' icon={<DatabaseBackup className='h-4 w-4' />} label='Backups' />
-            <ActionLink href='/db/restore' icon={<ArchiveRestore className='h-4 w-4' />} label='Restore' />
+            <Button path='/db/backups' icon={<DatabaseBackup className='h-4 w-4' />} text='Backups' variant='secondary' />
+            <Button path='/db/restore' icon={<ArchiveRestore className='h-4 w-4' />} text='Restore' variant='secondary' />
         </div>
-    )
-}
-
-function ActionLink({ href, icon, label }: { href: string, icon: ReactNode, label: string }) {
-    return (
-        <Link
-            href={href}
-            className='inline-flex items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-sm font-semibold text-ui-on-primary shadow-sm transition hover:border-ui-primary/35 hover:bg-ui-primary/10'
-        >
-            {icon}
-            {label}
-        </Link>
     )
 }
 
