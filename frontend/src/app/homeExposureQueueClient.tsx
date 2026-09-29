@@ -231,7 +231,7 @@ function EmptyActivityState({ status, refreshing }: { status: string, refreshing
             <div className='grid max-w-md justify-items-center gap-2 rounded-xl border border-ui-border bg-ui-raised/40 px-6 py-7'>
                 <span className={`mb-1 h-2.5 w-2.5 rounded-full ${status === 'unavailable' ? 'bg-ui-warning' : 'animate-pulse bg-ui-primary'}`} aria-hidden='true' />
                 <p className='font-semibold text-ui-text'>{latestActivityEmptyTitle(status)}</p>
-                <p className='text-ui-muted'>{status === 'unavailable' ? 'The saved activity feed is empty. New mentions will appear when the service reconnects.' : 'New company mentions will appear here as they are found.'}</p>
+                <p className='text-ui-muted'>{status === 'unavailable' ? 'The saved activity feed is empty. New mentions will appear when the service reconnects.' : 'New company mentions appear as they are found.'}</p>
                 {refreshing ? <span className='mt-1 text-xs font-medium text-ui-muted'>Reconnecting to live activity…</span> : null}
             </div>
         </div>
