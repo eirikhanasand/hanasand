@@ -9,5 +9,8 @@ RUN bun install --frozen-lockfile
 COPY frontend/scripts/code-inventory.mjs frontend/scripts/code-inventory-watch.mjs ./scripts/
 RUN mkdir -p /home/bun/.ssh && chown bun:bun /home/bun/.ssh && chmod 700 /home/bun/.ssh
 USER bun
-HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=3 CMD bun -e 'try { const s = await Bun.file("/published/status.json").json(); process.exit(s.phase === "ready" && Date.now() - Date.parse(s.checkedAt) < 15000 ? 0 : 1) } catch { process.exit(1) }'
+# A commit inventory is incremental, but indexing a changed commit can take longer
+# than one healthcheck interval. Treat recent indexing as healthy while still
+# failing closed for errors or a stalled worker.
+HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=3 CMD bun -e 'try { const s = await Bun.file("/published/status.json").json(); const recent = Date.now() - Date.parse(s.checkedAt) < 120000; process.exit(recent && (s.phase === "ready" || s.phase === "indexing") ? 0 : 1) } catch { process.exit(1) }'
 CMD ["bun", "scripts/code-inventory-watch.mjs", "/repository", "/published"]
