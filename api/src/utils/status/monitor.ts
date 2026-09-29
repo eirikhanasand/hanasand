@@ -12,6 +12,7 @@ const webBase = (process.env.MONITOR_WEB_BASE || 'https://hanasand.com').replace
 const scraperBase = (process.env.TI_SCRAPER_API_BASE || 'http://ti-scraper:8097').replace(/\/$/, '')
 const modelClientBase = (process.env.HANASAND_MODEL_CLIENT_HEALTH_BASE || 'http://hanasand_ai_model_client:18182').replace(/\/$/, '')
 const MONITOR_REQUEST_TIMEOUT_MS = 5_000
+const ARTICLES_MONITOR_TIMEOUT_MS = 15_000
 const SCRAPER_PENDING_WRITES_DEGRADED_THRESHOLD = 1_000
 const SOURCE_OPERATIONS_DEGRADED_RATIO = 0.05
 type CheckResult = string | void | { status: MonitorStatus, message: string }
@@ -421,9 +422,13 @@ export default async function runSyntheticMonitor() {
                 : message
         }),
         check('content', 'Articles', async () => {
-            const { response } = await fetchJson('/articles')
-            if (response.status >= 500) throw new Error(`Unexpected articles response ${response.status}`)
-        }),
+            // The public listing resolves Git history for each article. The
+            // workspace response uses file timestamps and exercises the same
+            // API route without making the monitor spawn Git per file.
+            const { response, body } = await fetchJson('/articles?workspace=true', {}, apiBase, ARTICLES_MONITOR_TIMEOUT_MS)
+            if (response.status !== 200 || !Array.isArray(body)) throw new Error(`Unexpected articles response ${response.status}`)
+            return 'The articles API returned a valid workspace listing.'
+        }, { degraded: MONITOR_REQUEST_TIMEOUT_MS, down: ARTICLES_MONITOR_TIMEOUT_MS }),
         check('content', 'Thoughts', async () => {
             const { response } = await fetchJson('/thoughts')
             if (response.status >= 500) throw new Error(`Unexpected thoughts response ${response.status}`)
