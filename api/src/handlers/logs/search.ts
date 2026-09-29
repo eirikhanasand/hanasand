@@ -28,6 +28,7 @@ export async function searchLogs(req: FastifyRequest, res: FastifyReply) {
         // timestamp index order and sort every matching event before LIMIT.
         const where = ['ingestion_id = \'logs\'', 'processing_status = \'processed\'', timeWhere, ...compiled.where,
             'organization_id = ANY(ARRAY(SELECT o.id FROM organizations o WHERE o.status = \'active\'))']
+        if (realtime) where.push("normalized->>'severity' IN ('high', 'critical')")
         if (input.search) where.push(basicLogSearchPredicate(bind(input.search)))
         if (input.service) where.push(`normalized->>'service' = ${bind(input.service)}`)
         if (input.severity === 'high,critical') where.push('normalized->>\'severity\' IN (\'high\', \'critical\')')

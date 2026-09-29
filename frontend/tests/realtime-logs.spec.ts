@@ -24,7 +24,7 @@ test('realtime continues polling while search filters and retries are used', asy
     await page.clock.runFor(300)
     await expect(search).toBeFocused()
     await expect(page.locator('article')).toContainText('xmrig')
-    expect(requests.at(-1)!.searchParams.has('severity')).toBe(false)
+    expect(requests.at(-1)!.searchParams.get('severity')).toBe('high,critical')
     const filteredCount = requests.length
     await page.clock.runFor(10000)
     await expect.poll(() => requests.length).toBe(filteredCount + 2)
@@ -96,7 +96,7 @@ test('retains logs and reading position across overlapping polls and failures', 
     const rows = feed.locator('article')
     await page.clock.runFor(300)
     await expect(rows).toHaveCount(30)
-    expect(requests[0].searchParams.has('severity')).toBe(false)
+    expect(requests[0].searchParams.get('severity')).toBe('high,critical')
     const reading = rows.filter({ hasText: 'Original log 10' })
     await reading.getByRole('button', { expanded: false }).click()
     await expect(reading.getByText('Retained context', { exact: false })).toBeVisible()

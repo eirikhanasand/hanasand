@@ -19,6 +19,7 @@ const fieldNames: Record<string, string> = { TimeGenerated: 'timestamp', Severit
 function projected(event: Event, fields: string[]) {
     return Object.fromEntries(fields.map(field => [field, field === 'TimeGenerated' ? event.event_timestamp : field === 'RuleId' ? event.normalized.detections?.map(rule => rule.rule_id) : fieldNames[field]?.split('.').reduce<unknown>((value, key) => value && typeof value === 'object' ? (value as Record<string, unknown>)[key] : undefined, event.normalized)]))
 }
+function isRealtimeSeverity(event: Event) { return event.normalized.severity === 'high' || event.normalized.severity === 'critical' }
 export default function LogsPageClient({ initialServices = [], initialErrors, initialServiceFilter = 'all', initialData = null, initialError = '', initialMetrics = null }: { initialServices?: LogService[], initialErrors?: ErrorEventsResponse, initialServiceFilter?: string, initialData?: Result | null, initialError?: string, initialMetrics?: Metrics | null }) {
     const pathname = usePathname()
     const params = useSearchParams()
@@ -103,7 +104,7 @@ export default function LogsPageClient({ initialServices = [], initialErrors, in
                         }
                         // Keep the pages being read in place while progress keeps refreshing.
                         if (browsingPages && previous) return { ...previous, processing: body.processing, generated_at: body.generated_at }
-                        return view === 'realtime' && !body.summarize ? { ...body, rows: retainEvents(previous?.rows || [], body.rows) } : body
+                        return view === 'realtime' && !body.summarize ? { ...body, rows: retainEvents((previous?.rows || []).filter(isRealtimeSeverity), body.rows.filter(isRealtimeSeverity)) } : body
                     })
                     if (cursor) { browsingPages = true; setPaged(true) }
                     setError('')
