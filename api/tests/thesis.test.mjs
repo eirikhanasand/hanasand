@@ -2,8 +2,8 @@ import { strict as assert } from 'node:assert'
 import { mock, test } from 'bun:test'
 
 mock.module('../src/utils/auth/session.ts', () => ({
-    validateSession: async({ id, token }) => id === 'eirikhanasand' && token === 'synthetic-owner'
-        ? { user: { id, name: 'Eirik Hanasand' } } : null,
+    validateSession: async({ id, token, organizationSlug }) => id === 'eirikhanasand' && token === 'synthetic-owner'
+        ? { user: { id, name: 'Eirik Hanasand' }, ...(organizationSlug ? { organizationMember: true } : {}) } : null,
 }))
 const { validThesis } = await import('../src/utils/thesis.ts')
 const { putThesis, getThesisHistory } = await import('../src/handlers/thesis.ts')
@@ -78,4 +78,3 @@ test.skipIf(process.env.THESIS_TEST_DATABASE !== '1')('PostgreSQL: idempotent au
     assert.equal((await queryOnce('SELECT content FROM thesis_history WHERE id=\'previous\'')).rows[0].content, 'Second edit')
     socket.emit('close')
 })
-
