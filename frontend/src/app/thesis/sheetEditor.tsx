@@ -257,7 +257,7 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions, trailin
         if (!text.trim() && (!canEdit || (compact && !writing))) return null
         const displayText = beforeTable ? text.replace(/(?:\r?\n[ \t]*)+$/, '') : text
         if (compact && !writing) return <RenderMarkdown text={displayText} />
-        return canEdit ? <InlineMarkdown text={text} label='Description Markdown' showEmptyHint={!parsed.length}
+        return canEdit ? <InlineMarkdown text={text} displayText={displayText} label='Description Markdown' showEmptyHint={!parsed.length}
             onSelection={(a, b) => { selection.current = { source: sheet.body, start: start + a, end: start + b } }}
             onChange={(value, group) => {
                 const separated = beforeTable && value.trim() && !/(?:\r?\n)$/.test(value) ? value + '\n' : value

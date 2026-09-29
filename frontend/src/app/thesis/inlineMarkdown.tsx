@@ -36,8 +36,8 @@ function sourceLines() {
     }
 }
 
-export default function InlineMarkdown({ text, label, singleLine = false, showEmptyHint = true, onChange, onSelection }: {
-    text: string, label: string, singleLine?: boolean, showEmptyHint?: boolean,
+export default function InlineMarkdown({ text, displayText = text, label, singleLine = false, showEmptyHint = true, onChange, onSelection }: {
+    text: string, displayText?: string, label: string, singleLine?: boolean, showEmptyHint?: boolean,
     onChange: (text: string, group?: string) => void, onSelection?: (start: number, end: number) => void,
 }) {
     const [active, setActive] = useState<number | null>(null)
@@ -96,7 +96,7 @@ export default function InlineMarkdown({ text, label, singleLine = false, showEm
         </div>
     }
 
-    let before = line === null ? text : lines.slice(0, line).join('\n')
+    let before = line === null ? displayText : lines.slice(0, line).join('\n')
     let after = line === null ? '' : lines.slice(line + 1).join('\n')
     let afterLine = (line ?? -1) + 1
     // Keep fenced code rendered as code on both sides of the active source line.
