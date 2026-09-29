@@ -5,12 +5,12 @@ mock.module('../src/utils/db.ts', () => ({ default: async () => ({ rows: [{ conf
 mock.module('../src/utils/status/record.ts', () => ({ recordMonitorResult: async (_service: string, name: string, status: string) => { results.push({ name, status }) } }))
 const { default: runMonitor } = await import('../src/utils/status/monitor.ts')
 
-test('synthetic monitor checks the public articles page and accepts normal watchlist health', async () => {
+test('synthetic monitor leaves Articles health to the shared status output', async () => {
     const originalFetch = globalThis.fetch, originalError = console.error
     const previousKey = process.env.MONITOR_SERVICE_ACCOUNT_KEY
     process.env.MONITOR_SERVICE_ACCOUNT_KEY = 'hsk_fixture'
     let accountMutations = 0
-    let articlesPageCheck = false
+    let articlesPageRequests = 0
     globalThis.fetch = (async (input: string | URL | Request, options: RequestInit = {}) => {
         const url = new URL(String(input))
         const path = url.pathname
@@ -19,7 +19,7 @@ test('synthetic monitor checks the public articles page and accepts normal watch
             return Response.json({ id: 'svc_fixture' })
         }
         if (path === '/articles') {
-            articlesPageCheck = true
+            articlesPageRequests++
             return new Response('<h1>Articles</h1><a href="/articles/example">Example</a>', { status: 200, headers: { 'Content-Type': 'text/html' } })
         }
         if (path === '/api/user' || path === '/api/user/self' || path.includes('/auth/login/')) accountMutations++
@@ -36,8 +36,8 @@ test('synthetic monitor checks the public articles page and accepts normal watch
     try {
         await runMonitor()
         for (const name of ['Service account authentication', 'Watchlist processing']) expect(results.find(row => row.name === name)?.status).toBe('up')
-        expect(articlesPageCheck).toBe(true)
-        expect(results.find(row => row.name === 'Articles')?.status).toBe('up')
+        expect(articlesPageRequests).toBe(0)
+        expect(results.some(row => row.name === 'Articles')).toBe(false)
         expect(accountMutations).toBe(0)
     } finally {
         if (previousKey === undefined) delete process.env.MONITOR_SERVICE_ACCOUNT_KEY

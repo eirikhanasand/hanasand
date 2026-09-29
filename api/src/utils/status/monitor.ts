@@ -420,13 +420,6 @@ export default async function runSyntheticMonitor() {
                 ? `Collection processing is current; automatic review is disabled and ${unreviewedSources} captured sources have no optional automatic review.`
                 : message
         }),
-        check('content', 'Articles', async () => {
-            const { response, body } = await fetchPage('/articles')
-            if (response.status !== 200 || !/<h1[^>]*>Articles<\/h1>/i.test(body) || !/href=["']\/articles\//i.test(body)) {
-                throw new Error(`Unexpected articles page response ${response.status}`)
-            }
-            return 'The public Articles page rendered with article links.'
-        }),
         check('content', 'Thoughts', async () => {
             const { response } = await fetchJson('/thoughts')
             if (response.status >= 500) throw new Error(`Unexpected thoughts response ${response.status}`)
