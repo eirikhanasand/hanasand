@@ -26,7 +26,7 @@ running_deployments() {
 stop_deployment_group() {
     signal=$1
     pid=$2
-    kill -"$signal" -- "-$pid" 2>/dev/null || kill -"$signal" "$pid" 2>/dev/null || true
+    /bin/kill -"$signal" -- "-$pid" 2>/dev/null || /bin/kill -"$signal" "$pid" 2>/dev/null || true
 }
 
 deployment_group_exists() {
