@@ -7,6 +7,7 @@ import { validatePassword } from '#utils/auth/password.ts'
 import { addressForUser } from '#utils/mail/helpers.ts'
 import { sendSystemMail } from '#utils/mail/system.ts'
 import { syncMailPasswordForUser } from '#utils/mail/accounts.ts'
+import { passwordChangedMail } from '#utils/auth/passwordChangedMail.ts'
 
 const RESET_TTL_MINUTES = 15
 const MAX_CODE_ATTEMPTS = 5
@@ -137,7 +138,7 @@ export async function completePasswordReset(req: FastifyRequest, res: FastifyRep
     const user = await getActiveUser(normalizeUserId(id))
     const userId = user?.id || ''
     const tokenHash = hashResetToken(String(resetToken || ''))
-    if (!userId || !resetToken || !password) {
+    if (!user || !resetToken || !password) {
         return res.status(400).send({ error: 'Missing reset token or password.' })
     }
 
@@ -181,6 +182,17 @@ export async function completePasswordReset(req: FastifyRequest, res: FastifyRep
     if (!updated) return res.status(400).send({ error: 'The reset session is invalid or expired.' })
     await syncMailPasswordForUser(userId, reset.name || userId, password).catch(error => {
         req.log.error({ error, userId }, 'Failed to sync mail password after password reset')
+    })
+    await sendSystemMail({
+        to: recoveryAddressForUser(user),
+        ...passwordChangedMail({
+            id: userId,
+            changedAt: new Date(),
+            ip: req.ip,
+            userAgent: String(req.headers['user-agent'] || ''),
+        }),
+    }).catch(error => {
+        req.log.error({ error, userId }, 'Failed to send password reset security notification')
     })
 
     return res.send({ ok: true })

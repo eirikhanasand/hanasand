@@ -4,11 +4,13 @@ import bcrypt from 'bcrypt'
 if (process.env.DB !== 'account_deletion_test' || process.env.DB_HOST !== '127.0.0.1' || process.env.DB_PORT !== '18543') throw Error('Requires the disposable account_deletion_test database')
 let impersonating = false
 let failMail = false
-let mail: { to: string, textBody: string, htmlBody: string } | undefined
+type SentMail = { to: string, subject: string, textBody: string, htmlBody: string }
+let mail: SentMail | undefined
+const sentMails: SentMail[] = []
 mock.module('../src/utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: true, id: 'recovery-user', authenticatedId: 'recovery-user', impersonating }) }))
 mock.module('../src/utils/systemEvent.ts', () => ({ recordSystemEvent: async () => {}, userHasAdministrativeRole: async () => false }))
 mock.module('../src/utils/auth/sessionNetwork.ts', () => ({ sessionNetwork: async () => ({ ip: '198.51.100.10', network: { country: 'Norway', city: 'Oslo' } }) }))
-mock.module('../src/utils/mail/system.ts', () => ({ sendSystemMail: async (message: typeof mail) => { if (failMail) throw Error('SMTP unavailable'); mail = message } }))
+mock.module('../src/utils/mail/system.ts', () => ({ sendSystemMail: async (message: SentMail) => { if (failMail) throw Error('SMTP unavailable'); mail = message; sentMails.push(message) } }))
 mock.module('../src/utils/mail/accounts.ts', () => ({ syncMailPasswordForUser: async () => {} }))
 mock.module('../src/utils/pwned/checkPwned.ts', () => ({ default: async () => ({ ok: true, count: 0 }) }))
 const { queryOnce: query, closeDatabase } = await import('../src/utils/db.ts')
@@ -78,10 +80,19 @@ test('deletion email, independent one-use restoration, and secure password chang
     expect(user.deletion_scheduled_at).toBeNull()
     expect(user.deletion_email_token_hash).toBeNull()
     const resetToken = restored.json().resetToken
-    const reset = (password: string) => app.inject({ method: 'POST', url: '/reset', payload: { id: 'recovery-user', resetToken, password } })
+    const resetMailCount = sentMails.length
+    const reset = (password: string) => app.inject({ method: 'POST', url: '/reset', remoteAddress: '198.51.100.77', headers: { 'user-agent': 'Mozilla/5.0 (Macintosh) Version/17.0 Safari/605.1.15' }, payload: { id: 'recovery-user', resetToken, password } })
     expect((await reset('weak')).statusCode).toBe(400)
+    expect(sentMails).toHaveLength(resetMailCount)
     const responses = await Promise.all([reset('A-new-Long-Password!2917'), reset('Another-Long-Password!2917')])
     expect(responses.map(result => result.statusCode).sort()).toEqual([200, 400])
+    expect(sentMails).toHaveLength(resetMailCount + 1)
+    expect(mail?.to).toBe('recovery@example.test')
+    expect(mail?.subject).toBe('Your Hanasand password was changed')
+    expect(mail?.textBody).toContain('If this wasn’t you, secure your account')
+    expect(mail?.textBody).toContain('IP address: 198.51.100.77')
+    expect(mail?.textBody).toContain('Browser / device: Safari on Mac')
+    expect(mail?.htmlBody).toContain('>Secure your account</a>')
     expect((await query('SELECT token FROM tokens WHERE revoked_at IS NULL')).rows).toHaveLength(0)
     const password = (await query('SELECT password FROM users')).rows[0].password
     expect(await bcrypt.compare(responses[0].statusCode === 200 ? 'A-new-Long-Password!2917' : 'Another-Long-Password!2917', password)).toBe(true)
