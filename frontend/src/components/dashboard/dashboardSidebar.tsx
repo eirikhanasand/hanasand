@@ -250,7 +250,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
                         setSearchOpen(open => !open)
                         setQuery('')
                     }} aria-label={searchOpen ? 'Close page search' : 'Find a page'} title={searchOpen ? 'Close page search' : 'Find a page'} aria-expanded={searchOpen} aria-controls={`${domId}-navigation-search`}
-                        className='grid h-10 w-10 place-items-center rounded-lg text-ui-muted hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary'>
+                    className='grid h-10 w-10 place-items-center rounded-lg text-ui-muted hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary'>
                         <Search aria-hidden='true' className='h-4 w-4' />
                     </button>
                     <button type='button' onClick={() => setDashboardViewMode(compact ? 'normal' : 'compact')} aria-label={compact ? 'Expand sidebar' : 'Collapse sidebar'} title={compact ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -268,7 +268,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
                         searchButton.current?.focus()
                     }
                 }}
-                    className='h-10 w-full min-w-0 rounded-md border border-ui-border bg-ui-canvas pl-8 pr-2 text-sm text-ui-text placeholder:text-ui-muted focus-visible:outline-2 focus-visible:outline-ui-primary' />
+                className='h-10 w-full min-w-0 rounded-md border border-ui-border bg-ui-canvas pl-8 pr-2 text-sm text-ui-text placeholder:text-ui-muted focus-visible:outline-2 focus-visible:outline-ui-primary' />
             </div>}
             <nav aria-label='Main navigation' onMouseLeave={deferPreviewClose} className='grid gap-1'>
                 {compact ? sections.map(section => {
