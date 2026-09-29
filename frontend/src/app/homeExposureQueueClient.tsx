@@ -11,6 +11,8 @@ type Props = {
 }
 
 const PAGE_SIZE = 10
+const CACHE_SIZE = 100
+const CACHE_KEY = 'hanasand-home-exposure-queue-v1'
 const REFRESH_MS = 300_000
 
 export default function HomeExposureQueueClient({ initialQueue }: Props) {
@@ -20,6 +22,7 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
     const [loadingMore, setLoadingMore] = useState(false)
     const [refreshing, setRefreshing] = useState(false)
     const [error, setError] = useState('')
+    const [cacheReady, setCacheReady] = useState(false)
     const sentinelRef = useRef<HTMLDivElement | null>(null)
     const viewportRef = useRef<HTMLDivElement | null>(null)
     const itemsRef = useRef(items)
@@ -28,14 +31,41 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
         itemsRef.current = items
     }, [items])
 
+    useEffect(() => {
+        try {
+            const cached = window.localStorage.getItem(CACHE_KEY)
+            if (!initialQueue.items.length && cached) {
+                const saved = normalizeExposureQueue(JSON.parse(cached))
+                if (saved.items.length) {
+                    setQueue({ ...saved, status: 'stale' })
+                    setItems(saved.items.slice(0, CACHE_SIZE))
+                    setNextOffset(saved.page?.nextOffset ?? (saved.items.length >= CACHE_SIZE ? CACHE_SIZE : null))
+                }
+            }
+        } catch {
+            // Storage can be unavailable or contain data from an older version.
+        }
+        setCacheReady(true)
+    }, [initialQueue.items.length])
+
+    useEffect(() => {
+        if (!cacheReady || !items.length) return
+        try {
+            const cachedQueue = { ...queue, status: queue.status === 'live' ? 'stale' : queue.status, items: items.slice(0, CACHE_SIZE) }
+            window.localStorage.setItem(CACHE_KEY, JSON.stringify(cachedQueue))
+        } catch {
+            // Storage quota and privacy settings must not interrupt the live feed.
+        }
+    }, [cacheReady, items, queue])
+
     const mergeQueue = useCallback((nextQueue: ExposureQueue, mode: 'replace' | 'append') => {
         setQueue(nextQueue)
-        setItems((current) => mergeExposureQueueItems(current, nextQueue.items, mode))
+        setItems((current) => mergeExposureQueueItems(current, nextQueue.items, mode).slice(0, CACHE_SIZE))
         setNextOffset(nextQueue.page?.nextOffset ?? null)
     }, [])
 
-    const fetchQueue = useCallback(async (offset = 0) => {
-        const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) })
+    const fetchQueue = useCallback(async (offset = 0, limit = PAGE_SIZE) => {
+        const params = new URLSearchParams({ limit: String(limit), offset: String(offset) })
         const response = await fetch(`/api/public/exposure-queue?${params.toString()}`, { cache: 'default' })
         if (!response.ok && response.status !== 202) throw new Error(`activity-status:${response.status}`)
         return normalizeExposureQueue(await response.json())
@@ -44,7 +74,7 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
     const refresh = useCallback(async () => {
         setRefreshing(true)
         try {
-            const next = await fetchQueue(0)
+            const next = await fetchQueue(0, CACHE_SIZE)
             mergeQueue(next, 'replace')
             setError('')
         } catch (reason) {
@@ -93,7 +123,7 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
         return () => observer.disconnect()
     }, [loadMore])
 
-    const subtitle = useMemo(() => latestActivitySubtitle(queue, items), [queue, items])
+    const subtitle = useMemo(() => latestActivitySubtitle(queue, items, refreshing), [queue, items, refreshing])
     const total = queue.page?.total ?? queue.counts?.total ?? items.length
 
     return (
@@ -104,7 +134,7 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
                     <Marquee text={subtitle} className='text-xs text-ui-muted' />
                 </div>
                 <div className='flex flex-wrap items-center gap-2'>
-                    <span className='landing-surface-border rounded-full border border-ui-border bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-muted'>{queue.status === 'unavailable' && !items.length ? 'Unavailable' : queue.status === 'checking' && !items.length ? 'Checking' : `${items.length}/${total}`}</span>
+                    <span className='landing-surface-border rounded-full border border-ui-border bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-muted'>{items.length ? refreshing ? 'Saved rows · updating' : queue.status !== 'live' ? 'Saved rows · reconnecting' : `${items.length}/${total}` : queue.status === 'unavailable' ? 'Unavailable' : 'Checking'}</span>
                     <span className='text-xs text-ui-muted'>{formatRefreshCadence(queue.scheduler?.cadenceSeconds)}</span>
                     <button type='button' onClick={() => void refresh()} disabled={refreshing} className='landing-surface-border rounded-md border border-ui-border bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-primary transition hover:border-ui-primary disabled:cursor-wait disabled:opacity-60'>
                         {refreshing ? 'Checking...' : 'Check now'}
@@ -114,7 +144,7 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
                     </Link>
                 </div>
             </div>
-            <div ref={viewportRef} className='max-h-[34rem] min-h-72 min-w-0 overscroll-contain overflow-x-hidden overflow-y-auto'>
+            <div ref={viewportRef} className='max-h-[34rem] min-w-0 overscroll-contain overflow-x-hidden overflow-y-auto'>
                 <div className='hidden w-full min-w-[56rem] xl:block'>
                     <div className='landing-surface-divider sticky top-0 z-10 grid grid-cols-[7rem_minmax(12rem,1fr)_11rem_9rem_9rem_11rem] gap-3 border-b border-ui-border bg-ui-panel px-4 py-2 text-[0.68rem] font-semibold uppercase text-ui-muted' data-home-exposure-panel-table-header='true'>
                         <span>Group</span>
@@ -135,10 +165,7 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
                                 <time dateTime={claimTime || collectedAt || queue.generatedAt} className='truncate whitespace-nowrap text-xs font-semibold text-ui-muted'>{formatClaimTime(claimTime || collectedAt)}</time>
                             </div>
                         )) : (
-                            <div className='grid min-w-0 gap-2 px-4 py-8 text-sm'>
-                                <p className='font-semibold text-ui-text'>{latestActivityEmptyTitle(queue.status)}</p>
-                                <p className='max-w-2xl text-ui-muted'>New company mentions will show here as they are found.</p>
-                            </div>
+                            <EmptyActivityState status={queue.status} refreshing={refreshing} />
                         )}
                     </div>
                 </div>
@@ -158,7 +185,7 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
                                 <span className='col-span-2 min-w-0 wrap-break-word text-ui-muted'><span className='font-semibold text-ui-text'>Country: </span>{country || 'Not disclosed'}</span>
                             </div>
                         </article>
-                    )) : <p className='px-4 py-6 text-sm text-ui-muted'>New company mentions will show here as they are found.</p>}
+                    )) : <EmptyActivityState status={queue.status} refreshing={refreshing} />}
                 </div>
                 <div ref={sentinelRef} className='px-4 py-4 text-center text-xs text-ui-muted'>
                     {loadingMore ? 'Loading...' : nextOffset !== null ? 'Scroll for more' : items.length ? 'End of list' : ''}
@@ -169,12 +196,15 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
     )
 }
 
-function latestActivitySubtitle(queue: ExposureQueue, items: ExposureQueueItem[]) {
+function latestActivitySubtitle(queue: ExposureQueue, items: ExposureQueueItem[], refreshing: boolean) {
     if (!items.length && queue.status === 'unavailable') {
         return 'Live exposure feed is temporarily unavailable.'
     }
     if (!items.length && queue.status === 'checking') {
         return 'Monitoring company mentions across exposure sources.'
+    }
+    if (items.length && (refreshing || queue.status !== 'live')) {
+        return 'Showing saved activity while the live feed reconnects.'
     }
     const age = queue.freshness?.collectionAgeMinutes ?? queue.freshness?.ageMinutes
     if (queue.status === 'live' && typeof age === 'number') {
@@ -193,6 +223,19 @@ function latestActivityEmptyTitle(status: string) {
     if (status === 'unavailable') return 'Exposure feed temporarily unavailable.'
     if (status === 'checking') return 'Monitoring exposure sources.'
     return 'No recent activity yet.'
+}
+
+function EmptyActivityState({ status, refreshing }: { status: string, refreshing: boolean }) {
+    return (
+        <div className='grid min-h-56 place-items-center px-4 py-8 text-center text-sm' role='status' aria-live='polite'>
+            <div className='grid max-w-md justify-items-center gap-2 rounded-xl border border-ui-border bg-ui-raised/40 px-6 py-7'>
+                <span className={`mb-1 h-2.5 w-2.5 rounded-full ${status === 'unavailable' ? 'bg-ui-warning' : 'animate-pulse bg-ui-primary'}`} aria-hidden='true' />
+                <p className='font-semibold text-ui-text'>{latestActivityEmptyTitle(status)}</p>
+                <p className='text-ui-muted'>{status === 'unavailable' ? 'The saved activity feed is empty. New mentions will appear when the service reconnects.' : 'New company mentions will appear here as they are found.'}</p>
+                {refreshing ? <span className='mt-1 text-xs font-medium text-ui-muted'>Reconnecting to live activity…</span> : null}
+            </div>
+        </div>
+    )
 }
 
 function activityErrorMessage(reason: unknown) {

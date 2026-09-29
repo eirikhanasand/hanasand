@@ -25,9 +25,9 @@ export default function RouteFrame({ children, serverPath, token, sidebar, banne
     const showFooter = !isBrowserLanding && (!isAppSurface || isAiWorkbench)
 
     return (
-        <div data-route-frame className={`enterprise-theme relative z-10 mt-18 h-[calc(100dvh-4.5rem)] w-full bg-ui-canvas grid grid-cols-[minmax(0,1fr)] ${showFooter ? 'grid-rows-[auto_auto_auto]' : 'grid-rows-[auto_minmax(0,1fr)]'} ${isBrowserLanding || isShare || showSidebar ? 'overflow-hidden overscroll-none' : 'overflow-auto'}`}>
-            {banner}
-            <main className={`min-h-0 min-w-0 w-full ${isAppSurface || isBrowserLanding ? 'h-full' : 'min-h-app-viewport pt-3 md:pt-0'}`}>
+        <div data-route-frame className={`enterprise-theme relative z-10 mt-18 ${showFooter ? 'h-auto min-h-[calc(100dvh-4.5rem)]' : 'h-[calc(100dvh-4.5rem)]'} w-full bg-ui-canvas grid grid-cols-[minmax(0,1fr)] ${showFooter ? 'grid-rows-[auto_minmax(0,1fr)_auto]' : 'grid-rows-[auto_minmax(0,1fr)]'} ${isBrowserLanding || isShare || showSidebar ? 'overflow-hidden overscroll-none' : 'overflow-auto'}`}>
+            <div className='min-w-0'>{banner}</div>
+            <main className={`min-h-0 min-w-0 w-full ${isAppSurface || isBrowserLanding ? 'h-full' : 'pt-3 md:pt-0'}`}>
                 {showSidebar ? (
                     <div className='h-full min-h-0 bg-ui-canvas px-2 text-ui-text'>
                         <div className='grid h-full min-h-0 grid-rows-[minmax(0,1fr)] gap-2 lg:grid-cols-[auto_minmax(0,1fr)]'>
