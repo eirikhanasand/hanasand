@@ -5,6 +5,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { FileText, Loader2, Search, ShieldCheck, X } from 'lucide-react'
 import { ActorMark } from '@/components/ti/actorMark'
 import { actorSummary, usefulActorSummary } from '@/utils/ti/actorSummary'
+import { useRouter } from 'next/navigation'
+import { generatedSearchRoutes } from '@/utils/routes/generatedSearchRoutes'
 
 type SearchItem = {
     id: string
@@ -12,35 +14,6 @@ type SearchItem = {
     detail: string
     href: string
 }
-
-const publicRouteItems: SearchItem[] = [
-    route('Home', 'Overview and product entry point', '/'),
-    route('Dark Web Monitoring', 'Product page', '/findings'),
-    route('Threat search', 'Search companies, actors, domains, and activity', '/ti'),
-    route('Browser', 'Regular and Tor browser runs', '/browser'),
-    route('Security Monitoring', 'Managed detection from customer security logs', '/solutions/security-monitoring'),
-    route('Security Scanner', 'Safe validation scans and historical results', '/solutions/scanner'),
-    route('Organizations', 'Members, watchlists, and destinations', '/organizations'),
-    route('Developers', 'API and webhook documentation', '/developers'),
-    route('Pricing', 'Plans and subscription details', '/pricing'),
-    route('Trust Center', 'Security, DPA, SLA, and subprocessors', '/trust'),
-    route('Status', 'Service health and incidents', '/status'),
-    route('Hash lookup', 'Prefix-only SHA-1 lookup', '/pwned'),
-    route('Support', 'Contact support', '/support'),
-]
-
-const dashboardRouteItems: SearchItem[] = [
-    route('Dashboard overview', 'Customer console overview', '/dashboard'),
-    route('Rules', 'Create and import security detection rules', '/rules'),
-    route('Security Scanner', 'Run and schedule approved Hanasand scans', '/scanner'),
-    route('Cases', 'Cases across all services', '/cases'),
-    route('DWM watchlists', 'Watched companies, vendors, domains, and brands', '/findings/watchlists'),
-    route('DWM delivery', 'Webhook attempts and customer delivery', '/findings/delivery'),
-    route('DWM actors', 'Actor context and coverage', '/findings/actors'),
-    route('Delivery', 'Add and test delivery destinations', '/findings/actions'),
-    route('Automation', 'Webhook and automation setup', '/automation'),
-    route('Subscription', 'Billing and plan controls', '/subscription'),
-]
 
 export default function SiteSearch({ token }: { token: boolean }) {
     const [open, setOpen] = useState(false)
@@ -50,14 +23,32 @@ export default function SiteSearch({ token }: { token: boolean }) {
     const [savedSearches, setSavedSearches] = useState<SearchItem[]>([])
     const [watchTerms, setWatchTerms] = useState<SearchItem[]>([])
     const [loading, setLoading] = useState(false)
+    const [selectedIndex, setSelectedIndex] = useState(0)
     const inputRef = useRef<HTMLInputElement>(null)
+    const router = useRouter()
     const cleanQuery = query.trim().toLowerCase()
-    const routes = useMemo(() => [...(token ? dashboardRouteItems : []), ...publicRouteItems], [token])
-    const routeResults = useMemo(() => filterItems(routes, cleanQuery).slice(0, 8), [routes, cleanQuery])
+    const routeResults = useMemo(() => filterItems([...generatedSearchRoutes], cleanQuery).sort((a, b) => routeRelevance(b, cleanQuery) - routeRelevance(a, cleanQuery)), [cleanQuery])
     const directThreatResult = useMemo(() => directThreatItem(cleanQuery, actors), [actors, cleanQuery])
     const savedResults = useMemo(() => filterItems(savedSearches, cleanQuery).slice(0, 4), [savedSearches, cleanQuery])
     const watchResults = useMemo(() => filterItems(watchTerms, cleanQuery).slice(0, 4), [watchTerms, cleanQuery])
     const fallbackSearch = useMemo(() => cleanQuery && !directThreatResult ? manualSearchItem(cleanQuery) : null, [cleanQuery, directThreatResult])
+    const groups = useMemo(() => [
+        { title: 'ROUTES', items: routeResults, icon: 'route' as const },
+        { title: 'THREAT INTELLIGENCE', items: directThreatResult ? [directThreatResult] : [], icon: 'actor' as const },
+        { title: 'CASES', items: token ? cases.slice(0, 6) : [], icon: 'case' as const },
+        { title: 'SAVED SEARCHES', items: savedResults, icon: 'route' as const },
+        { title: 'WATCHLISTS', items: watchResults, icon: 'actor' as const },
+        { title: 'RECENT EVIDENCE', items: actors.filter(item => item.href !== directThreatResult?.href).slice(0, 6), icon: 'route' as const },
+        { title: 'SEARCH', items: fallbackSearch ? [fallbackSearch] : [], icon: 'route' as const },
+    ], [actors, cases, directThreatResult, fallbackSearch, routeResults, savedResults, token, watchResults])
+    const flatResults = useMemo(() => groups.flatMap(group => group.items), [groups])
+
+    useEffect(() => setSelectedIndex(0), [cleanQuery])
+
+    useEffect(() => {
+        if (!open || !flatResults.length) return
+        document.getElementById(`site-search-result-${flatResults[selectedIndex]?.id}`)?.scrollIntoView({ block: 'nearest' })
+    }, [flatResults, open, selectedIndex])
 
     useEffect(() => {
         function onKeyDown(event: KeyboardEvent) {
@@ -129,12 +120,26 @@ export default function SiteSearch({ token }: { token: boolean }) {
             {open ? (
                 <div role='dialog' aria-modal='true' aria-label='Site search' onKeyDownCapture={event => {
                     if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); event.nativeEvent.stopImmediatePropagation(); setOpen(false) }
+                    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                        event.preventDefault()
+                        if (flatResults.length) setSelectedIndex(index => (index + (event.key === 'ArrowDown' ? 1 : -1) + flatResults.length) % flatResults.length)
+                    }
+                    if (event.key === 'Enter' && flatResults.length) {
+                        event.preventDefault()
+                        const selected = flatResults[selectedIndex]
+                        if (selected) {
+                            router.push(selected.href)
+                            setOpen(false)
+                        }
+                    }
                 }} className='fixed inset-0 z-[1200] bg-ui-canvas/70 px-3 py-20 backdrop-blur' onMouseDown={() => setOpen(false)}>
                     <div className='mx-auto max-w-3xl overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-[0_28px_90px_var(--ui-shadow)]' onMouseDown={event => event.stopPropagation()}>
                         <div className='flex h-16 items-center gap-3 border-b border-ui-border px-4'>
                             <Search className='h-5 w-5 text-ui-muted' />
                             <input
                                 ref={inputRef}
+                                aria-label='Search routes and workspace'
+                                aria-activedescendant={flatResults[selectedIndex] ? `site-search-result-${flatResults[selectedIndex].id}` : undefined}
                                 value={query}
                                 onChange={event => setQuery(event.target.value)}
                                 placeholder='Search routes, cases, and threat actors'
@@ -146,14 +151,10 @@ export default function SiteSearch({ token }: { token: boolean }) {
                             </button>
                         </div>
                         <div className='max-h-[60vh] overflow-auto p-3'>
-                            <ResultGroup title='THREAT INTELLIGENCE' items={directThreatResult ? [directThreatResult] : []} icon='actor' onSelect={() => setOpen(false)} />
-                            <ResultGroup title='SAVED SEARCHES' items={savedResults} icon='route' onSelect={() => setOpen(false)} />
-                            <ResultGroup title='WATCHLISTS' items={watchResults} icon='actor' onSelect={() => setOpen(false)} />
-                            <ResultGroup title='RECENT EVIDENCE' items={actors.filter(item => item.href !== directThreatResult?.href).slice(0, 6)} icon='route' onSelect={() => setOpen(false)} />
-                            {token ? <ResultGroup title='CASES' items={cases.slice(0, 6)} icon='case' onSelect={() => setOpen(false)} /> : null}
-                            <ResultGroup title='ROUTES' items={routeResults} icon='route' onSelect={() => setOpen(false)} />
-                            <ResultGroup title='SEARCH' items={fallbackSearch ? [fallbackSearch] : []} icon='route' onSelect={() => setOpen(false)} />
-                            {!routeResults.length && !directThreatResult && !cases.length && !actors.length && !savedResults.length && !watchResults.length ? (
+                            <div role='listbox' aria-label='Search results'>
+                                {groups.map(group => <ResultGroup key={group.title} {...group} selectedIndex={selectedIndex} startIndex={flatResults.findIndex(item => item.id === group.items[0]?.id)} onSelect={() => setOpen(false)} onSelectIndex={setSelectedIndex} />)}
+                            </div>
+                            {!flatResults.length ? (
                                 <div className='grid min-h-40 place-items-center text-sm font-medium text-ui-muted'>
                                     {cleanQuery ? 'No results' : 'Start typing to search everything'}
                                 </div>
@@ -166,14 +167,15 @@ export default function SiteSearch({ token }: { token: boolean }) {
     )
 }
 
-function ResultGroup({ title, items, icon, onSelect }: { title: string, items: SearchItem[], icon: 'route' | 'case' | 'actor', onSelect: () => void }) {
+function ResultGroup({ title, items, icon, onSelect, onSelectIndex, selectedIndex, startIndex }: { title: string, items: SearchItem[], icon: 'route' | 'case' | 'actor', onSelect: () => void, onSelectIndex: (index: number) => void, selectedIndex: number, startIndex: number }) {
     if (!items.length) return null
     return (
-        <section className='mb-3 last:mb-0'>
+        <section role='group' aria-label={title} className='mb-3 last:mb-0'>
             <p className='px-2 pb-1 text-[10px] font-semibold uppercase text-ui-muted'>{title}</p>
             <div className='grid gap-1'>
-                {items.map(item => (
-                    <Link key={item.id} href={item.href} onClick={onSelect} className='grid grid-cols-[2.25rem_1fr] gap-3 rounded-lg px-2 py-2 transition hover:bg-ui-raised'>
+                {items.map((item, index) => {
+                    const selected = startIndex + index === selectedIndex
+                    return <Link key={item.id} id={`site-search-result-${item.id}`} role='option' aria-selected={selected} href={item.href} onClick={onSelect} onMouseEnter={() => onSelectIndex(startIndex + index)} className={`grid grid-cols-[2.25rem_1fr] gap-3 rounded-lg border px-2 py-2 transition ${selected ? 'border-ui-primary/35 bg-ui-primary/10' : 'border-transparent hover:bg-ui-raised'}`}>
                         <span className='grid h-9 w-9 place-items-center rounded-lg border border-ui-border bg-ui-raised text-ui-primary'>
                             {icon === 'case' ? <ShieldCheck className='h-4 w-4' /> : icon === 'actor' ? <ActorMark name={item.title} /> : <FileText className='h-4 w-4' />}
                         </span>
@@ -182,19 +184,23 @@ function ResultGroup({ title, items, icon, onSelect }: { title: string, items: S
                             <span className='block truncate text-xs leading-5 text-ui-muted'>{item.detail || item.href}</span>
                         </span>
                     </Link>
-                ))}
+                })}
             </div>
         </section>
     )
 }
 
-function route(title: string, detail: string, href: string): SearchItem {
-    return { id: `route:${href}`, title, detail, href }
-}
-
 function filterItems(items: SearchItem[], query: string) {
     if (!query) return items
     return items.filter(item => `${item.title} ${item.detail} ${item.href}`.toLowerCase().includes(query))
+}
+
+function routeRelevance(item: SearchItem, query: string) {
+    if (!query) return 0
+    const title = item.title.toLowerCase()
+    if (title === query) return 3
+    if (title.startsWith(query)) return 2
+    return 1
 }
 
 export function directThreatItem(query: string, actorResults: SearchItem[] = []): SearchItem | null {
