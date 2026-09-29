@@ -26,4 +26,3 @@ print(f"Docker healthchecks are configured for all {len(services)} services in {
 }
 
 check_compose_healthchecks "$root/docker-compose.yml"
-check_compose_healthchecks "$root/ops/recovery/compose.yml"

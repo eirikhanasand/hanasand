@@ -188,25 +188,11 @@ if test -f "$build_dir/.env"; then
 else
     docker compose -f "$build_dir/docker-compose.yml" build
 fi
-if test -f "$build_dir/.env"; then
-    docker compose --env-file "$build_dir/.env" -p hanasand-recovery -f "$build_dir/ops/recovery/compose.yml" build tunnel
-else
-    docker compose -p hanasand-recovery -f "$build_dir/ops/recovery/compose.yml" build tunnel
-fi
-
 compose_live() {
     if test -f "$build_dir/.env"; then
         docker compose --env-file "$build_dir/.env" -f "$root/docker-compose.yml" "$@"
     else
         docker compose -f "$root/docker-compose.yml" "$@"
-    fi
-}
-
-recovery_compose_live() {
-    if test -f "$build_dir/.env"; then
-        docker compose --env-file "$build_dir/.env" -p hanasand-recovery -f "$build_dir/ops/recovery/compose.yml" "$@"
-    else
-        docker compose -p hanasand-recovery -f "$build_dir/ops/recovery/compose.yml" "$@"
     fi
 }
 
@@ -253,16 +239,11 @@ wait_for_healthy hanasand_auth_secondary "Secondary auth worker" 180
 compose_live up -d --no-build --no-deps --force-recreate auth-primary
 wait_for_healthy hanasand_auth_primary "Primary auth worker" 180
 
-# These host-network services have stable container names and predate their
-# Compose project. Remove any legacy instances under the release lock so
-# Compose can take ownership and recreate them from this immutable release.
-recovery_services=$(recovery_compose_live config --services | sed '/^log-catchup-pg-check$/d')
-for service in $recovery_services; do
-    container="hanasand-$service"
+# Remove obsolete recovery tunnel/proxy instances. The normal Compose stack is
+# the only supported production runtime and owns all traffic paths.
+for container in hanasand-tunnel hanasand-tunnel-database hanasand-tunnel-intelligence hanasand-tunnel-web hanasand-tunnel-monitor hanasand-tunnel-replication hanasand-tunnel-support hanasand-tunnel-ai hanasand-proxy-1 hanasand-proxy-2; do
     if docker inspect "$container" >/dev/null 2>&1; then docker rm -f "$container"; fi
 done
-# shellcheck disable=SC2086
-recovery_compose_live up -d --no-deps --remove-orphans $recovery_services
 
 # The host-network HAProxy instance cannot resolve the Compose service name.
 # Resolve the freshly recreated scraper container and refresh its runtime
