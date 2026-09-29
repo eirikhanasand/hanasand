@@ -19,12 +19,15 @@
 .thesis-table-scroll th, .thesis-table-scroll td { position: relative; vertical-align: top; border-right: 1px solid var(--color-ui-border); border-bottom: 1px solid var(--color-ui-border); padding: 0; text-align: left; }
 .thesis-table-scroll th { background: var(--color-ui-raised); font-weight: 600; }
 .thesis-table-scroll tr:nth-child(odd) td { background: var(--color-ui-panel); }
-.thesis-table-scroll textarea { display: block; width: 100%; min-height: 2em; padding: .25em; resize: none; background: transparent; color: inherit; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; }
+.thesis-table-cell-render { min-height: 2em; padding: .25em .35em; white-space: pre-wrap; cursor: text; }
+.thesis-table-scroll textarea { position: absolute; inset: 0; z-index: 1; display: block; box-sizing: border-box; width: 100%; min-height: 100%; padding: .25em .35em; resize: none; border: 0; opacity: 0; pointer-events: none; background: transparent; color: inherit; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; }
+.thesis-table-scroll :is(td, th)[data-editing=true] .thesis-table-cell-render { display: none; }
+.thesis-table-scroll td[data-editing=true] textarea, .thesis-table-scroll th[data-editing=true] textarea { position: relative; inset: auto; min-height: 2em; opacity: 1; pointer-events: auto; }
 .thesis-table-scroll textarea:focus { outline: none; }
-.thesis-table-scroll .thesis-markdown { padding: .25em .35em; white-space: pre-wrap; }
+.thesis-table-scroll .thesis-markdown { white-space: pre-wrap; }
 .thesis-table-scroll .thesis-markdown :is(h1, h2, h3) { margin: .3em 0; font-size: inherit; line-height: 1.25; }
 .thesis-table-scroll .thesis-markdown p { margin: 0; }
-.thesis-resize { position: absolute; touch-action: none; z-index: 1; }
+.thesis-resize { position: absolute; touch-action: none; z-index: 3; }
 .thesis-resize-column { top: 0; right: -3px; width: 9px; height: 100%; cursor: col-resize; }
 .thesis-resize-row { bottom: -3px; left: 0; width: 100%; height: 9px; cursor: row-resize; }
 .thesis-resize:hover, .thesis-resize:focus-visible { background: var(--color-ui-primary); }
@@ -45,7 +48,7 @@
 .thesis-document-actions { display: flex; align-items: center; gap: .5rem; flex: 0 1 auto; min-width: 0; max-width: min(75%, calc(100% - 10rem)); overflow-x: auto; scrollbar-width: none; padding: .25rem; white-space: nowrap; }
 .thesis-document-actions > * { flex-shrink: 0; }
 
-.thesis-formula-suggestion { position: absolute; inset: 0; overflow: hidden; padding: .75rem; white-space: pre-wrap; overflow-wrap: anywhere; color: inherit; opacity: .45; pointer-events: none; }
+.thesis-formula-suggestion { position: absolute; inset: 0; z-index: 2; overflow: hidden; padding: .75rem; white-space: pre-wrap; overflow-wrap: anywhere; color: inherit; opacity: .45; pointer-events: none; }
 
 .thesis-document-actions::-webkit-scrollbar { display: none; }
 .thesis-table-actions-panel { position: fixed; inset: auto; z-index: 1200; display: none; width: min(18rem, calc(100vw - 2rem)); max-height: min(70vh, 28rem); gap: .5rem; overflow: auto; margin: 0; padding: .75rem; border: 1px solid var(--color-ui-border); border-radius: .5rem; background: var(--color-ui-panel); color: var(--color-ui-text); box-shadow: 0 8px 24px var(--ui-shadow); }

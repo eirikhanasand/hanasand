@@ -81,8 +81,15 @@ function InlineTable({ data, index, active, onSelect, onNavigate, onChange }: { 
                     const value = cellValue(data.cells, r, c)
                     const completion = '=SUMMARIZE()'
                     const suggestion = focused === address && completionCell === address && dismissedCompletion !== `${address}:${raw}` && /^=[a-z]*$/i.test(raw) && '=SUMMARIZE'.startsWith(raw.toUpperCase()) ? completion.slice(raw.length) : ''
-                    return <Cell key={c} data-active={active?.table === index && active.row === r && active.col === c} scope={r === 0 ? 'col' : undefined}>
-                        {onChange ? <textarea data-table-cell={`${index}:${r}:${c}`} aria-label={`Cell ${address}`} spellCheck={false} rows={tableEditorRows(raw)} value={focused === address ? raw : value}
+                    const editing = focused === address
+                    return <Cell key={c} data-active={active?.table === index && active.row === r && active.col === c} data-editing={editing || undefined} scope={r === 0 ? 'col' : undefined}
+                        onClick={event => {
+                            if (!onChange || editing || (event.target as HTMLElement).closest('a, textarea, [data-table-tools]')) return
+                            onSelect({ table: index, row: r, col: c })
+                            requestAnimationFrame(() => tableScroll.current?.querySelector<HTMLTextAreaElement>(`textarea[data-table-cell="${index}:${r}:${c}"]`)?.focus())
+                        }}>
+                        <div className='thesis-table-cell-render'><RenderMarkdown text={value} /></div>
+                        {onChange && <textarea data-table-cell={`${index}:${r}:${c}`} aria-label={`Cell ${address}`} spellCheck={false} rows={tableEditorRows(raw)} value={focused === address ? raw : value}
                             onFocus={event => { setFocused(address); setDismissedCompletion(''); setCompletionCell(event.currentTarget.selectionStart === raw.length ? address : ''); onSelect({ table: index, row: r, col: c }) }} onBlur={() => { setFocused(''); setCompletionCell('') }}
                             aria-autocomplete='inline' aria-description={suggestion ? 'Tab to complete SUMMARIZE' : undefined}
                             onSelect={event => { const input = event.currentTarget; setCompletionCell(!composing.current && input.selectionStart === input.value.length && input.selectionEnd === input.value.length ? address : '') }}
@@ -128,7 +135,7 @@ function InlineTable({ data, index, active, onSelect, onNavigate, onChange }: { 
                                 if (event.key === 'Tab' && (row < 0 || col < 0 || row >= data.cells.length || col >= data.cells[0].length)) return
                                 event.preventDefault()
                                 onNavigate({ table: index, row, col }, event.key !== 'Tab')
-                            }} /> : <RenderMarkdown text={value} />}
+                            }} />}
                         {onChange && suggestion && <span className='thesis-formula-suggestion' aria-hidden='true'><span className='invisible'>{raw}</span>{suggestion}</span>}
                         {onChange && r === 0 && resizeHandle('column', c)}
                         {onChange && c === 0 && resizeHandle('row', r)}
