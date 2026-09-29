@@ -18,6 +18,19 @@ export type ReprocessJob = { id: string, organization_id: string, rule_id: strin
 type Rule = { rule_id: string, version: string, source: string, enabled: boolean, definition: { stage: string, action: string, conditions: Condition[] } }
 type Item = { id: string, key: string | null, event: Record<string, unknown>, original?: Record<string, unknown> }
 const size = 1000
+const eventCandidateColumns: Record<string, string> = {
+    source_vendor: 'source_vendor', source_product: 'source_product', event_type: 'event_type',
+    action: 'action', outcome: 'outcome', user_id: 'user_id', source_ip: 'source_ip',
+}
+
+function eventFieldCandidatePredicate(conditions: Condition[], bind: (value: string) => string) {
+    return conditions.flatMap(condition => {
+        const column = eventCandidateColumns[condition.path]
+        if (!column || condition.operator !== 'equals') return []
+        const value = bind(condition.value)
+        return [condition.caseSensitive ? `${column} = ${value}` : `lower(${column}) = lower(${value})`]
+    }).join(' AND ')
+}
 
 
 export function reprocessableRule(rule: Rule | undefined): rule is Rule {
@@ -62,7 +75,10 @@ export async function processRuleReprocessJob() {
                 const lowerMs = windowed ? Math.max(fromMs, upperMs - 60 * 60 * 1000) : 0
                 const lower = windowed ? new Date(lowerMs).toISOString() : job.from_time
                 const params: (string | number | null)[] = [job.organization_id, upper, lower]
-                const candidate = messageCandidatePredicate(rule.definition.conditions, 'normalized->>\'message\'', value => { params.push(value); return `$${params.length}` })
+                const candidate = [
+                    eventFieldCandidatePredicate(rule.definition.conditions, value => { params.push(value); return `$${params.length}` }),
+                    messageCandidatePredicate(rule.definition.conditions, 'normalized->>\'message\'', value => { params.push(value); return `$${params.length}` }),
+                ].filter(Boolean).join(' AND ') || 'TRUE'
                 const ownedLogScope = rule.source === 'owned' ? 'AND ingestion_id=\'logs\' AND processing_status=\'processed\'' : ''
                 const cursorTimeParam = params.push(windowed && cursor.windowEnd ? cursor.time || null : cursor.time || null)
                 const cursorIdParam = params.push(cursor.id || '')
