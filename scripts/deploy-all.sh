@@ -173,16 +173,45 @@ compose_live() {
     fi
 }
 
+wait_for_healthy() {
+    container=$1
+    service=$2
+    timeout=$3
+    elapsed=0
+    while test "$elapsed" -lt "$timeout"; do
+        state=$(docker inspect -f '{{.State.Status}}' "$container" 2>/dev/null || true)
+        health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$container" 2>/dev/null || true)
+        if test "$state" = running && test "$health" = healthy; then
+            echo "$service is healthy."
+            return 0
+        fi
+        if test -n "$state" && test "$state" != running; then
+            echo "$service stopped during startup (state: $state)." >&2
+            return 1
+        fi
+        sleep 5
+        elapsed=$((elapsed + 5))
+    done
+    echo "$service did not become healthy within ${timeout}s." >&2
+    return 1
+}
+
 # Keep both authentication replicas running while the rest of the stack is
 # recreated. Replace each replica only after the previous one is healthy.
 services=$(compose_live config --services | sed '/^auth-primary$/d; /^auth-secondary$/d')
 # Compose service names are controlled by docker-compose.yml and contain no
 # shell metacharacters, so split the list into its individual arguments.
 # shellcheck disable=SC2086
-compose_live up -d --no-build --remove-orphans $services
-compose_live up -d --no-build --wait --wait-timeout 180 api frontend
-compose_live up -d --no-build --force-recreate --wait --wait-timeout 180 auth-secondary
-compose_live up -d --no-build --force-recreate --wait --wait-timeout 180 auth-primary
+compose_live up -d --no-build --no-deps --remove-orphans $services
+compose_live up -d --no-build --no-deps api frontend
+# The API can report unhealthy while its startup schema work retries transient
+# database locks. Keep the existing auth pair up until the API has recovered.
+wait_for_healthy hanasand_api "API" 600
+wait_for_healthy hanasand "Frontend" 180
+compose_live up -d --no-build --no-deps --force-recreate auth-secondary
+wait_for_healthy hanasand_auth_secondary "Secondary auth worker" 180
+compose_live up -d --no-build --no-deps --force-recreate auth-primary
+wait_for_healthy hanasand_auth_primary "Primary auth worker" 180
 
 # The host-network HAProxy instance cannot resolve the Compose service name.
 # Resolve the freshly recreated scraper container and refresh its runtime
