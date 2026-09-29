@@ -56,8 +56,10 @@ export async function processRuleReprocessJob() {
             if (cursor.phase === 0) {
                 const params: (string | number | null)[] = [job.organization_id, job.until_time, job.from_time, cursor.time || null, cursor.id || '', size]
                 const candidate = messageCandidatePredicate(rule.definition.conditions, 'normalized->>\'message\'', value => { params.push(value); return `$${params.length}` })
+                const ownedLogScope = rule.source === 'owned' ? "AND ingestion_id='logs' AND processing_status='processed'" : ''
                 const rows = (await query(`SELECT id,log_key,source_vendor,source_product,normalized,original,event_timestamp::text AS time FROM events
                     WHERE organization_id=$1 AND event_timestamp<=$2::timestamptz AND received_at<=$2::timestamptz
+                    ${ownedLogScope}
                     AND ($3::timestamptz IS NULL OR event_timestamp>=$3::timestamptz)
                     AND ($4::timestamptz IS NULL OR (event_timestamp,id)<($4::timestamptz,$5::text)) AND ${candidate}
                     ORDER BY event_timestamp DESC,id DESC LIMIT $6 FOR UPDATE`,

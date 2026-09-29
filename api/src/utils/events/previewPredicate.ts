@@ -132,6 +132,14 @@ function scalarCandidatePredicate(condition: Condition, column: string, bind: (v
 // PostgreSQL. The full rule still runs on every returned candidate.
 export function messageCandidatePredicate(conditions: Condition[], column: string, bind: (value: string) => string) {
     const ascii = `${column} !~ '[^\\x00-\\x7F]'`
+    const trigramNeedles = column === "normalized->>'message'" ? conditions.flatMap(condition => {
+        if (condition.path !== 'message') return []
+        const value = condition.operator === 'regex'
+            ? /^\^([A-Za-z0-9 _:/@,=-]{3,})/.exec(condition.value)?.[1]
+            : condition.value.length >= 3 ? condition.value : null
+        if (!value || /[^A-Za-z0-9 _:/@,=-]/.test(value)) return []
+        return [`translate(lower(normalized::text), ' ', '0') LIKE ${bind('%' + value.toLowerCase().replaceAll(' ', '0') + '%')}`]
+    }) : []
     const predicates = conditions.filter(condition => condition.path === 'message').flatMap(condition => {
         if (condition.operator === 'regex') {
             const pattern = regexCandidate(condition.value)
@@ -141,7 +149,8 @@ export function messageCandidatePredicate(conditions: Condition[], column: strin
         const actual = condition.caseSensitive ? column : `lower(${column} COLLATE "C")`
         return [`(NOT (${ascii}) OR ${condition.operator === 'equals' ? `${actual} = ${expected}` : `strpos(${actual}, ${expected}) > 0`})`]
     })
-    return predicates.length ? predicates.join(' AND ') : 'TRUE'
+    const all = [...trigramNeedles, ...predicates]
+    return all.length ? all.join(' AND ') : 'TRUE'
 }
 
 // These are candidate predicates, not a second rule engine. Keep the runtime
