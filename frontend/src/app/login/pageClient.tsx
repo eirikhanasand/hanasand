@@ -12,6 +12,7 @@ import { ArrowRight, Fingerprint, KeyRound } from 'lucide-react'
 import { reservedUsernames } from '@/utils/auth/reservedUsernames'
 import ErrorNotice from '@/components/error/errorNotice'
 import { decodePasskeyRequestOptions, passkeyCredentialToJSON } from '@/utils/auth/passkeys'
+import { storePasswordResetSession } from '@/utils/auth/passwordResetSession'
 
 type LoginPageProps = {
     path: string | null
@@ -135,7 +136,11 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
                 return setError(data?.error || 'Invalid reset code.')
             }
 
-            router.push(`/reset-password?id=${encodeURIComponent(resetUserId)}#token=${encodeURIComponent(data.resetToken)}`)
+            const resetPath = `/reset-password?id=${encodeURIComponent(resetUserId)}`
+            const resetUrl = storePasswordResetSession(resetUserId, data.resetToken)
+                ? resetPath
+                : `${resetPath}#token=${encodeURIComponent(data.resetToken)}`
+            router.push(resetUrl)
         } catch (error) {
             setError(error instanceof Error ? error.message : 'Invalid reset code.')
         } finally {

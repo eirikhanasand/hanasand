@@ -1,7 +1,36 @@
 import { test, expect } from '@playwright/test'
 
-test.skip(process.env.PASSWORD_POLICY_TEST !== '1', 'Requires a local frontend.')
+test('password reset keeps its verified token through client-side navigation without a token URL', async({ page }) => {
+    const resetToken = 'reset-flow-test-token'
+    let completedReset: Record<string, unknown> | null = null
+
+    await page.route('**/auth/password-reset/request', route => route.fulfill({ json: { ok: true } }))
+    await page.route('**/auth/password-reset/verify', route => route.fulfill({ json: { ok: true, resetToken } }))
+    await page.route('**/auth/password-reset/complete', async route => {
+        completedReset = route.request().postDataJSON()
+        return route.fulfill({ json: { ok: true } })
+    })
+
+    await page.goto('/login')
+    await page.getByRole('button', { name: 'Reset password', exact: true }).click()
+    await page.locator('#login-reset-username').fill('policytest')
+    await page.getByRole('button', { name: 'Send code', exact: true }).click()
+    for (const [index, digit] of '123456'.split('').entries()) {
+        await page.getByLabel(`Reset code digit ${index + 1}`).fill(digit)
+    }
+
+    await expect(page.getByRole('heading', { name: 'New password', exact: true })).toBeVisible()
+    await expect(page.getByText('This reset link is missing or expired.', { exact: true })).toHaveCount(0)
+    expect(new URL(page.url()).hash).toBe('')
+    expect(page.url()).not.toContain(resetToken)
+    await page.getByLabel('New password', { exact: true }).fill('Abcdefghijklmn1!')
+    await page.getByLabel('Confirm password', { exact: true }).fill('Abcdefghijklmn1!')
+    await page.getByRole('button', { name: 'Set password', exact: true }).click()
+    await expect.poll(() => completedReset).toEqual({ id: 'policytest', resetToken, password: 'Abcdefghijklmn1!' })
+})
+
 test('signup and reset accept one of each character type and reject missing types', async({ page }) => {
+    test.skip(process.env.PASSWORD_POLICY_TEST !== '1', 'Requires a local frontend.')
     await page.route('**/api/auth/register', route => route.fulfill({ status: 202, json: { verificationRequired: true, challengeId: 'policy-test' } }))
     await page.goto('/login')
     await page.getByRole('button', { name: 'Sign up', exact: true }).click()

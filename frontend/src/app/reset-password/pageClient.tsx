@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { passwordMeetsRequirements, passwordRequirementMessage } from '@/utils/auth/password'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { clearPasswordResetSession, readPasswordResetSession } from '@/utils/auth/passwordResetSession'
 
 type ResetPasswordPageProps = {
     userId: string
@@ -28,9 +29,9 @@ export default function ResetPasswordPage({ userId, initialResetToken = '', rest
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.hash.replace(/^#/, ''))
-        setResetToken(initialResetToken || params.get('token') || '')
+        setResetToken(initialResetToken || readPasswordResetSession(userId) || params.get('token') || '')
         setTokenLoaded(true)
-    }, [initialResetToken])
+    }, [initialResetToken, userId])
 
     async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
         e.preventDefault()
@@ -57,6 +58,7 @@ export default function ResetPasswordPage({ userId, initialResetToken = '', rest
                 return setError(data?.error || 'Unable to reset password.')
             }
 
+            clearPasswordResetSession(userId)
             setDone(true)
             setTimeout(() => router.push('/login'), 1200)
         } catch (error) {
