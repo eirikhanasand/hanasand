@@ -20,6 +20,20 @@ test('one barrier commits many sources and coalesces their checkpoints', async (
   expect(disk().load('cursor-0', -1)).toBe(96);
 });
 
+test('queue listing returns bounded pages so large backlogs need no full scan', () => {
+  const queue = disk().path('queue/live'); fs.mkdirSync(queue, { recursive: true });
+  for (let index = 0; index < 250; index++) {
+    const name = String(index).padStart(20, '0') + '-batch.json';
+    fs.writeFileSync(join(queue, name), JSON.stringify({ events: [row(index)] }));
+  }
+  fs.writeFileSync(join(queue, 'unfinished.pending'), '{}');
+  const first = disk().queuedNames('live', 40);
+  expect(first).toHaveLength(40); expect(first).toEqual([...first].sort());
+  first.forEach(path => fs.rmSync(path));
+  const second = disk().queuedNames('live', 40);
+  expect(second).toHaveLength(40); expect(second.some(path => first.includes(path))).toBe(false);
+});
+
 test('updates received during a barrier cannot publish a newer unsafe cursor', async () => {
   let release!: () => void;
   const gate = new Promise<void>(ok => release = ok);

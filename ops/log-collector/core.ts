@@ -160,13 +160,17 @@ export class Store {
     flush();
   }
   queuedNames(lane: string, limit: number): string[] {
+    if (limit <= 0) return [];
     const root = this.path('queue/' + lane); if (!fs.existsSync(root)) return [];
     const names: string[] = [], directory = fs.opendirSync(root);
     try { for (let entry; (entry = directory.readSync());) {
       if (!entry.name.endsWith('.json')) continue;
-      // Keep only the first 100 names, regardless of backlog size.
-      if (names.length < limit || entry.name < names[names.length - 1]) { names.push(entry.name); names.sort(); if (names.length > limit) names.pop(); }
+      // A huge delivery backlog must not turn every poll into a full directory
+      // scan. Drain the filesystem's current iteration order in bounded pages.
+      names.push(entry.name);
+      if (names.length >= limit) break;
     } } finally { directory.closeSync(); }
+    names.sort();
     return names.map(name => join(root, name));
   }
   queuedBatches(lane: string): string[] {
