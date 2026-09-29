@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { Copy, ChevronDown, Search, ListFilter, BarChart3, X } from 'lucide-react'
-import { logSearchParams, logTables, type LogEvent as Event, type LogSearchResult as Result, type ProcessingSource } from '@/utils/logs/search'
+import { logSearchParams, logTables, type LogEvent as Event, type LogSearchResult as Result } from '@/utils/logs/search'
 import { retainEvents } from '@/utils/logs/retainEvents'
 import EventFeed from './eventFeed'
 import LogCatchupProgress from './catchupProgress'
@@ -18,12 +18,6 @@ const fieldClass = 'rounded-lg border border-ui-border bg-ui-panel px-3 py-2 tex
 const fieldNames: Record<string, string> = { TimeGenerated: 'timestamp', Severity: 'severity', Level: 'level', Service: 'service', Host: 'host', Message: 'message', LogType: 'log_type', CommandLine: 'process.command_line', Executable: 'process.executable', UserId: 'user.id', RuleId: 'detections' }
 function projected(event: Event, fields: string[]) {
     return Object.fromEntries(fields.map(field => [field, field === 'TimeGenerated' ? event.event_timestamp : field === 'RuleId' ? event.normalized.detections?.map(rule => rule.rule_id) : fieldNames[field]?.split('.').reduce<unknown>((value, key) => value && typeof value === 'object' ? (value as Record<string, unknown>)[key] : undefined, event.normalized)]))
-}
-function isCatchingUp({ last_id, recent_id, history_end_id }: ProcessingSource) {
-    recent_id = history_end_id ?? recent_id
-    return typeof last_id === 'string' && typeof recent_id === 'string'
-        && /^\d+$/.test(last_id) && /^\d+$/.test(recent_id)
-        && BigInt(last_id) < BigInt(recent_id)
 }
 export default function LogsPageClient({ initialServices = [], initialErrors, initialServiceFilter = 'all', initialData = null, initialError = '', initialMetrics = null }: { initialServices?: LogService[], initialErrors?: ErrorEventsResponse, initialServiceFilter?: string, initialData?: Result | null, initialError?: string, initialMetrics?: Metrics | null }) {
     const pathname = usePathname()
@@ -194,7 +188,7 @@ export default function LogsPageClient({ initialServices = [], initialErrors, in
             {processingError && <p role='alert' className='text-sm text-ui-text'>Event processing is delayed: {processingError}</p>}
             {view !== 'realtime' && commandChecksDelayed && <p suppressHydrationWarning role='status' className='text-sm text-ui-warning'>Command checks are delayed. {pendingCommands.has_more ? 'More than ' : ''}{pendingCommands.count.toLocaleString('en-US')} {pendingCommands.count === 1 ? 'command is' : 'commands are'} waiting; oldest received {new Date(pendingCommands.oldest_queued_at!).toLocaleString()}.</p>}
             {view === 'dashboard' && analyticsOpen && <ThroughputMetrics initialMetrics={initialMetrics} />}
-            {view !== 'realtime' && <LogCatchupProgress progress={data?.processing?.catchup} catchingUp={!!data?.processing?.sources?.some(isCatchingUp)} now={data?.generated_at || new Date().toISOString()} stalled={!!processingError} />}
+            {view !== 'realtime' && <LogCatchupProgress progress={data?.processing?.catchup} now={data?.generated_at || new Date().toISOString()} stalled={!!processingError} />}
             {!!data?.processing?.skipped_events && <p role='status' className='text-sm text-ui-warning'>{data.processing.skipped_events.toLocaleString('en-US')} events remain excluded from detection.</p>}
             {view !== 'realtime' && data && !data.processing && !busy && <p role='status' className='text-sm text-ui-warning'>Waiting for the log processor to check in.</p>}
             {view === 'dashboard' ? <>

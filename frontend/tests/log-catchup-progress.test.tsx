@@ -5,7 +5,7 @@ import LogCatchupProgress, { type CatchupProgress } from '../src/app/dashboard/l
 
 const now = '2026-09-19T12:00:00Z'
 const progress: CatchupProgress = { remaining: 3000, processed: 1000, total: 4000, rate: 50, estimated_seconds: 60, updated_at: now }
-const render = (value: CatchupProgress | null, catchingUp = true) => renderToStaticMarkup(<LogCatchupProgress progress={value} catchingUp={catchingUp} now={now} />)
+const render = (value: CatchupProgress | null) => renderToStaticMarkup(<LogCatchupProgress progress={value} now={now} />)
 test('measured progress shows remaining count, percent and ETA', () => {
     const html = render(progress)
     expect(html).toContain('3,000 logs remaining')
@@ -13,7 +13,8 @@ test('measured progress shows remaining count, percent and ETA', () => {
     expect(html).toContain('About 1 min remaining')
     expect(html).toContain('25.0% · ')
     expect(html).toContain(`dateTime="${now}"`)
-    expect(html).toContain('Last changed')
+    expect(html).toContain('Historical log lag')
+    expect(html).toContain('Checked')
     expect(html).not.toContain('Results and counters will update')
 })
 test('missing, paused and stale measurements do not invent an ETA', () => {
@@ -24,9 +25,9 @@ test('missing, paused and stale measurements do not invent an ETA', () => {
     expect(stale).toContain(`dateTime="${now}"`)
     expect(stale).not.toContain('About 1 min')
 })
-test('an empty range finishes at 100 percent then hides after cursors catch up', () => {
-    const done = { ...progress, remaining: 0, processed: 0, total: 0, estimated_seconds: 0 }
-    expect(render(done)).toContain('aria-valuenow="100"')
-    expect(render(done)).toContain('Finishing catch-up')
-    expect(render(done, false)).toBe('')
+test('small backlogs and unknown counts stay hidden', () => {
+    expect(render({ ...progress, remaining: 1000 })).toBe('')
+    expect(render({ ...progress, remaining: 999 })).toBe('')
+    expect(render(null)).toBe('')
+    expect(render({ ...progress, remaining: 1001 })).toContain('Historical log lag')
 })
