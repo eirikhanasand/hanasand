@@ -12,10 +12,10 @@ export default function GlobalError({ reset }: { error: Error & { digest?: strin
                 <script dangerouslySetInnerHTML={{ __html: 'document.documentElement.className = document.cookie.split("; ").some(cookie => cookie === "theme=light") ? "light" : "dark"' }} />
             </head>
             <body className='min-h-screen bg-ui-canvas text-ui-primary dark:text-ui-text'>
-                <main className='min-h-screen px-4 py-6 sm:px-8 sm:py-10'>
-                    <div className='mx-auto flex min-h-[calc(100vh-3rem)] max-w-5xl flex-col'>
+                <main className='min-h-screen px-4 py-5 sm:px-8 sm:py-7'>
+                    <div className='mx-auto flex min-h-[calc(100vh-2.5rem)] max-w-5xl flex-col sm:min-h-[calc(100vh-3.5rem)]'>
                         <BrandLogo />
-                        <section className='my-auto grid gap-8 py-16 md:grid-cols-[auto_minmax(0,1fr)] md:items-center md:gap-12'>
+                        <section className='my-8 grid gap-6 py-4 md:grid-cols-[auto_minmax(0,1fr)] md:items-center md:gap-10 md:py-8'>
                             <div className='grid h-20 w-20 place-items-center rounded-2xl border border-ui-primary/30 bg-ui-primary/10 text-ui-primary'>
                                 <AlertTriangle className='h-9 w-9' />
                             </div>
