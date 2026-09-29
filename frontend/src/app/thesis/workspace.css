@@ -57,10 +57,8 @@
 .thesis-formula-suggestion { position: absolute; inset: 0; overflow: hidden; padding: .75rem; white-space: pre-wrap; overflow-wrap: anywhere; color: inherit; opacity: .45; pointer-events: none; }
 
 .thesis-document-actions::-webkit-scrollbar { display: none; }
-.thesis-table-actions { position: relative; flex-shrink: 0; }
-.thesis-table-actions > summary { list-style: none; }
-.thesis-table-actions > summary::-webkit-details-marker { display: none; }
-.thesis-table-actions-panel { position: absolute; top: calc(100% + .4rem); right: 0; z-index: 40; display: grid; width: min(18rem, calc(100vw - 2rem)); max-height: min(70vh, 28rem); gap: .5rem; overflow: auto; padding: .75rem; border: 1px solid var(--color-ui-border); border-radius: .5rem; background: var(--color-ui-panel); box-shadow: 0 8px 24px var(--ui-shadow); }
+.thesis-table-actions-panel { position: fixed; inset: auto; z-index: 1200; display: none; width: min(18rem, calc(100vw - 2rem)); max-height: min(70vh, 28rem); gap: .5rem; overflow: auto; margin: 0; padding: .75rem; border: 1px solid var(--color-ui-border); border-radius: .5rem; background: var(--color-ui-panel); color: var(--color-ui-text); box-shadow: 0 8px 24px var(--ui-shadow); }
+.thesis-table-actions-panel:popover-open { display: grid; }
 .thesis-table-actions-panel > button { width: 100%; justify-content: flex-start; }
 .thesis-table-actions-label { margin: .25rem 0 0; color: var(--color-ui-muted); font-size: .75rem; font-weight: 600; }
 .thesis-table-actions-row { display: flex; gap: .35rem; }

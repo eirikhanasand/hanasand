@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { ArrowDown, ArrowUp, ArrowLeft, ArrowRight, Pencil, Table2, Trash2 } from 'lucide-react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -144,6 +144,21 @@ export type SheetEditorProps = { contentOnly?: boolean, sheet: Sheet, canEdit: b
 
 export default function SheetEditor({ sheet, canEdit, onChange, actions, trailingActions, titleAside, beforeContent, renderTable, customTable, showInsertTable = true, contentOnly = false }: SheetEditorProps) {
     const root = useRef<HTMLDivElement>(null)
+    const tableActionsId = useId()
+    const tableActionsPanel = useRef<HTMLDivElement>(null)
+    const tableActionsTrigger = useRef<HTMLButtonElement>(null)
+    function positionTableActions() {
+        const panel = tableActionsPanel.current
+        const trigger = tableActionsTrigger.current
+        if (!panel || !trigger) return
+        const box = trigger.getBoundingClientRect()
+        const maxHeight = Math.min(448, window.innerHeight - 32)
+        const width = Math.min(panel.offsetWidth || 288, window.innerWidth - 32)
+        const height = Math.min(panel.offsetHeight || 180, maxHeight)
+        panel.style.left = `${Math.max(16, Math.min(box.right - width, window.innerWidth - width - 16))}px`
+        panel.style.top = `${Math.max(16, Math.min(box.bottom + 8, window.innerHeight - height - 16))}px`
+        panel.style.maxHeight = `${maxHeight}px`
+    }
     const [writing, setWriting] = useState(false)
     const selection = useRef<{ source: string, start: number, end: number } | null>(null)
     const [active, setActive] = useState<Cell | null>(null)
@@ -285,9 +300,11 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions, trailin
             {(canEdit || actions) && <div data-table-tools className={`thesis-document-actions${titleAside ? ' thesis-document-actions-wide' : ''}`} aria-label='Document actions'>
                 {actions}
                 {canEdit && compact && <button className={sheetButton + ' w-10 px-0'} aria-label={writing ? 'Hide text editor' : 'Add text'} title={writing ? 'Hide text editor' : 'Add text'} aria-pressed={writing} onClick={() => setWriting(value => !value)}><Pencil size={18} /></button>}
-                {canEdit && <details className='thesis-table-actions' data-table-tools>
-                    <summary className={sheetButton + ' w-10 cursor-pointer px-0'} aria-label='Table actions' title='Table actions'><Table2 size={18} /></summary>
-                    <div className='thesis-table-actions-panel' aria-label='Table actions'>
+                {canEdit && <>
+                    <button ref={tableActionsTrigger} type='button' popoverTarget={tableActionsId} aria-controls={tableActionsId} aria-haspopup='true' className={sheetButton + ' w-10 px-0'} aria-label='Table actions' title='Table actions' onClick={() => requestAnimationFrame(positionTableActions)}><Table2 size={18} /></button>
+                    <div ref={tableActionsPanel} id={tableActionsId} popover='auto' role='group' className='thesis-table-actions-panel' aria-label='Table actions' onClickCapture={event => {
+                        if ((event.target as HTMLElement).closest('button:not(:disabled)')) requestAnimationFrame(() => tableActionsPanel.current?.hidePopover())
+                    }}>
                         {showInsertTable && <button className={sheetButton} onMouseDown={event => event.preventDefault()} onClick={insert}>Insert table</button>}
                         {cell && table ? <>
                             <p className='thesis-table-actions-label'>Table {cell.table + 1} · {columnName(cell.col)}{cell.row + 1}</p>
@@ -311,7 +328,7 @@ export default function SheetEditor({ sheet, canEdit, onChange, actions, trailin
                             </span>
                         </> : !showInsertTable && <p className='text-sm text-ui-muted'>Select a table cell to see its actions.</p>}
                     </div>
-                </details>}
+                </>}
                 {trailingActions}
             </div>}
         </div>
