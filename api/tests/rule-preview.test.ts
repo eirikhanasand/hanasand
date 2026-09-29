@@ -18,11 +18,11 @@ test('finite anchored regexes produce safe index candidates', () => {
 })
 test('event message candidates use the existing log trigram index for literal prefixes', () => {
     const values: string[] = []
-    const predicate = messageCandidatePredicate([{ path: 'message', operator: 'regex', value: '^runc .*$' }], "normalized->>'message'", value => {
+    const predicate = messageCandidatePredicate([{ path: 'message', operator: 'regex', value: '^runc .*$' }], 'normalized->>\'message\'', value => {
         values.push(value)
         return `$${values.length}`
     })
-    expect(predicate).toContain("translate(lower(normalized::text), ' ', '0') LIKE $1")
+    expect(predicate).toContain('translate(lower(normalized::text), \' \', \'0\') LIKE $1')
     expect(values[0]).toBe('%runc0%')
 })
 const scanRulePreview: typeof scan = (org, canReadLogs, input, query) => scan(org, canReadLogs, input,

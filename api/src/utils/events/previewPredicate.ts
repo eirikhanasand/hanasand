@@ -132,7 +132,7 @@ function scalarCandidatePredicate(condition: Condition, column: string, bind: (v
 // PostgreSQL. The full rule still runs on every returned candidate.
 export function messageCandidatePredicate(conditions: Condition[], column: string, bind: (value: string) => string) {
     const ascii = `${column} !~ '[^\\x00-\\x7F]'`
-    const trigramNeedles = column === "normalized->>'message'" ? conditions.flatMap(condition => {
+    const trigramNeedles = column === 'normalized->>\'message\'' ? conditions.flatMap(condition => {
         if (condition.path !== 'message') return []
         const value = condition.operator === 'regex'
             ? /^\^([A-Za-z0-9 _:/@,=-]{3,})/.exec(condition.value)?.[1]
