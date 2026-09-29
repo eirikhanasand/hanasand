@@ -1039,6 +1039,13 @@ async function startEphemeralBrowserWorker(sessionId: string, resolution = '1280
             `ONION_SESSION_PROXY=${process.env.ONION_SESSION_PROXY || 'socks5://hanasand_onion_tor:9050'}`,
         ],
         ExposedPorts: { '8080/tcp': {}, '8090/tcp': {}, '9081/tcp': {} },
+        Healthcheck: {
+            Test: ['CMD-SHELL', 'curl -fsS --max-time 3 http://127.0.0.1:8080/health'],
+            Interval: 10_000_000_000,
+            Timeout: 5_000_000_000,
+            Retries: 3,
+            StartPeriod: 20_000_000_000,
+        },
         HostConfig: {
             NetworkMode: networkName,
             AutoRemove: true,

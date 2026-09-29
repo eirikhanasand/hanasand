@@ -8,6 +8,7 @@ test "$root" = "/home/hanasand/hanasand" || {
 }
 sh "$root/scripts/require-main.sh"
 release=$(git rev-parse HEAD)
+sh "$root/scripts/require-compose-healthchecks.sh"
 
 exec 9>/tmp/hanasand-full-deploy.lock
 flock 9

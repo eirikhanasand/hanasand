@@ -243,6 +243,10 @@ async function inspectRuntimeContainer(id: string) {
 }
 
 export async function createRuntimeContainer(name: string, body: Record<string, unknown>, sharedName = false) {
+    const healthcheck = body.Healthcheck as { Test?: unknown } | undefined
+    if (!Array.isArray(healthcheck?.Test) || healthcheck.Test.length === 0 || healthcheck.Test[0] === 'NONE') {
+        throw new Error('Runtime containers must define a Docker healthcheck.')
+    }
     let response: Buffer
     try {
         // Image/container filesystem setup can outlast ordinary Docker reads on a busy host.

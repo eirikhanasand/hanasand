@@ -24,6 +24,15 @@ if (!acquired.rows[0].acquired) throw new Error('Another backup worker is alread
     await backups.listDatabaseBackupFiles()
     await unlink(socket).catch(error => { if (error.code !== 'ENOENT') throw error })
     const server = createServer(async (req, res) => {
+        if (req.method === 'GET' && req.url === '/health') {
+            try {
+                await owner.query('SELECT 1')
+                res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end('{"ok":true}')
+            } catch {
+                res.writeHead(503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end('{"ok":false}')
+            }
+            return
+        }
         try {
             if (req.method !== 'POST' || req.url !== '/') throw Object.assign(new Error('Not found'), { statusCode: 404 })
             let body = ''
