@@ -41,14 +41,14 @@ test('failed preload returns a recoverable error instead of fabricated counts', 
     globalThis.fetch = (async () => Response.json({ error: 'Log search unavailable' }, { status: 503 })) as typeof fetch
     expect(await getLogDashboard({ token: 'session', id: 'user', params: {} })).toEqual({ data: null, error: 'Log search unavailable' })
 })
-test('Realtime server preload includes normal traffic regardless of a severity query parameter', async () => {
+test('Realtime server preload always requests high severity regardless of the supplied filter', async () => {
     let query = new URLSearchParams()
     globalThis.fetch = (async (input: string | URL | Request) => { query = new URL(String(input)).searchParams; return Response.json(data) }) as typeof fetch
     await getLogDashboard({ token: 'session', id: 'user', view: 'realtime', params: { severity: 'low' } })
-    expect(query.has('severity')).toBe(false)
+    expect(query.get('severity')).toBe('high,critical')
     expect(query.has('stats')).toBe(false)
 })
-test('Realtime retains all severities, including downgraded updates', async () => {
+test('event retention replaces duplicate IDs when an event changes', async () => {
     const { retainEvents } = await import('../src/utils/logs/retainEvents')
     const events = ['low','medium','high','critical'].map((severity, index) => ({ id: String(index), event_timestamp: '2026-09-24T12:00:00Z', normalized: { severity } }))
     expect(retainEvents([], events).map(event => event.normalized.severity)).toEqual(['low','medium','high','critical'])
