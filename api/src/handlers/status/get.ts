@@ -179,6 +179,7 @@ async function loadStatusPayload(summary = false, query = run) {
             'unverified'::text AS uptime_30d
         FROM service_status_snapshots
         WHERE id LIKE 'check:%'
+          AND (payload->>'checked_at')::timestamptz >= NOW() - INTERVAL '5 minutes'
           AND NOT (payload->>'service' = 'core' AND payload->>'check_name' = 'API index')
         ` : `
         WITH latest AS (
