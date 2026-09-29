@@ -14,6 +14,7 @@ if test "${HANASAND_DEPLOY_GUARDED:-}" != 1; then
 fi
 
 lock_file=/tmp/hanasand-full-deploy.lock
+owner_file=/tmp/hanasand-full-deploy.pid
 exec 8>/tmp/hanasand-full-deploy-start.lock
 exec 9>"$lock_file"
 
@@ -28,12 +29,33 @@ stop_deployment_group() {
     kill -"$signal" -- "-$pid" 2>/dev/null || kill -"$signal" "$pid" 2>/dev/null || true
 }
 
+deployment_group_exists() {
+    ps -eo pid=,pgid=,args= | awk -v group="$1" \
+        '$2 == group && $0 ~ /(deploy-all[.]sh|docker compose|docker-buildx)/ { found=1 } END { exit !found }'
+}
+
 stop_existing_deployments() {
     previous_pids=
+    previous_owner=$(cat "$owner_file" 2>/dev/null || true)
+    case "$previous_owner" in
+        ''|*[!0-9]*|1|"$$") ;;
+        *)
+            if deployment_group_exists "$previous_owner"; then
+                previous_pids="$previous_pids $previous_owner"
+                stop_deployment_group TERM "$previous_owner"
+            fi
+            ;;
+    esac
+
     for pid in $(running_deployments); do
         if test "$(readlink "/proc/$pid/cwd" 2>/dev/null || true)" = "$root"; then
-            previous_pids="$previous_pids $pid"
-            stop_deployment_group TERM "$pid"
+            case " $previous_pids " in
+                *" $pid "*) ;;
+                *)
+                    previous_pids="$previous_pids $pid"
+                    stop_deployment_group TERM "$pid"
+                    ;;
+            esac
         fi
     done
 
@@ -63,6 +85,7 @@ else
     stop_existing_deployments
 fi
 
+printf '%s\n' "$$" > "$owner_file"
 flock -u 8
 
 sh "$root/scripts/require-main.sh"
