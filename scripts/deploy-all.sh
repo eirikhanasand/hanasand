@@ -88,5 +88,19 @@ else
     docker compose -f "$root/docker-compose.yml" down --remove-orphans
     docker compose -f "$root/docker-compose.yml" up -d --force-recreate
 fi
+
+# The host-network HAProxy instance cannot resolve the Compose service name.
+# Resolve the freshly recreated scraper container and refresh its runtime
+# server address so a Compose network recreation cannot strand the TI route on
+# the previous container IP.
+if docker inspect hanasand-proxy-1 >/dev/null 2>&1; then
+    ti_ip=$(docker inspect -f '{{with index .NetworkSettings.Networks "hanasand_hanasandnet"}}{{.IPAddress}}{{end}}' hanasand_ti_scraper)
+    test -n "$ti_ip" || {
+        echo "Could not resolve the threat-intelligence scraper address." >&2
+        exit 1
+    }
+    docker exec hanasand-proxy-1 sh -lc \
+        "printf 'set server intelligence/inspur-ti-1 addr %s port 8097\\nset server intelligence/inspur-ti-1 check-port 8098\\n' '$ti_ip' | socat - UNIX-CONNECT:/run/haproxy/admin0.sock"
+fi
 sh "$root/scripts/verify-stack-release.sh" "$release"
 echo "Hanasand stack deployed from main at $release."
