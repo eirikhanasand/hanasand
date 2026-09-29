@@ -6,12 +6,86 @@ test "$root" = "/home/hanasand/hanasand" || {
     echo "Run this from /home/hanasand/hanasand" >&2
     exit 1
 }
+
+# Run each deployment in its own process group so a newer request can stop
+# the complete older deployment, including a docker compose child process.
+if test "${HANASAND_DEPLOY_GUARDED:-}" != 1; then
+    exec env HANASAND_DEPLOY_GUARDED=1 setsid "$0" "$@"
+fi
+
+lock_file=/tmp/hanasand-full-deploy.lock
+owner_file=/tmp/hanasand-full-deploy.pid
+exec 8>/tmp/hanasand-full-deploy-start.lock
+flock 8
+exec 9>"$lock_file"
+
+lock_owner() {
+    lock_inode=$(stat -c '%i' "$lock_file")
+    awk -v inode="$lock_inode" '$2 == "FLOCK" && $6 ~ (":" inode "$" ) { print $5; exit }' /proc/locks
+}
+
+stop_tree() {
+    signal=$1
+    parent=$2
+    for child in $(ps -eo pid=,ppid= | awk -v parent="$parent" '$2 == parent { print $1 }'); do
+        stop_tree "$signal" "$child"
+    done
+    kill -"$signal" "$parent" 2>/dev/null || true
+}
+
+stop_deployment() {
+    pid=$1
+    case "$pid" in
+        ''|*[!0-9]*|1)
+            # Keep deployments serialized even if the kernel does not expose
+            # an owner PID that can be safely stopped.
+            flock 9
+            return
+            ;;
+    esac
+
+    kill -TERM -- "-$pid" 2>/dev/null || stop_tree TERM "$pid"
+    attempt=0
+    while test "$attempt" -lt 15; do
+        if flock -n 9; then
+            return
+        fi
+        sleep 1
+        attempt=$((attempt + 1))
+    done
+
+    owner=$(lock_owner)
+    if test -n "$owner"; then
+        kill -KILL -- "-$owner" 2>/dev/null || stop_tree KILL "$owner"
+    else
+        # If the kernel lock owner cannot be identified, keep serialization
+        # and let flock wait for it instead of starting a concurrent deploy.
+        flock 9
+        return
+    fi
+    flock 9
+}
+
+if flock -n 9; then
+    :
+else
+    previous=$(lock_owner)
+    stop_deployment "$previous"
+fi
+
+printf '%s\n' "$$" > "$owner_file"
+flock -u 8
+
+cleanup_deploy_lock() {
+    if test "$(cat "$owner_file" 2>/dev/null || true)" = "$$"; then
+        rm -f "$owner_file"
+    fi
+}
+trap cleanup_deploy_lock EXIT
+
 sh "$root/scripts/require-main.sh"
 release=$(git rev-parse HEAD)
 sh "$root/scripts/require-compose-healthchecks.sh"
-
-exec 9>/tmp/hanasand-full-deploy.lock
-flock 9
 
 export HANASAND_RELEASE_COMMIT="$release"
 build_dir=$(mktemp -d "/tmp/hanasand-release-build.XXXXXX")
