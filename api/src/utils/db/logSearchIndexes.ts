@@ -1,7 +1,7 @@
 import run, { withDatabaseAdvisoryLock } from '#db'
 import { logPhraseSearchExpression } from '../logs/searchText.ts'
 
-const logSearchIndexNames = ['idx_logs_phrase_trgm', 'idx_logs_service_time', 'idx_logs_org_time', 'idx_log_dimensions_service_time'] as const
+const logSearchIndexNames = ['idx_logs_phrase_trgm', 'idx_logs_service_time', 'idx_log_dimensions_service_time'] as const
 
 // Match the service equality plus the complete deterministic newest-first order.
 // The covering projection index counts matches without fetching wide event JSON.
@@ -11,9 +11,6 @@ export const logSearchIndexes = [
         WHERE ingestion_id = 'logs' AND processing_status = 'processed'`,
     `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_logs_service_time ON events
         ((normalized->>'service'), event_timestamp DESC, id DESC)
-        WHERE ingestion_id = 'logs' AND processing_status = 'processed'`,
-    `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_logs_org_time ON events
-        (organization_id, event_timestamp DESC, id DESC)
         WHERE ingestion_id = 'logs' AND processing_status = 'processed'`,
     `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_log_dimensions_service_time ON log_dimensions
         (service, event_timestamp DESC) INCLUDE (organization_id, severity, log_type)`,
