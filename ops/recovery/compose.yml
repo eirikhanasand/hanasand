@@ -2,6 +2,8 @@ x-tunnel: &tunnel
   build:
     context: .
     dockerfile: Dockerfile.tunnel
+    args:
+      HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
   image: hanasand-recovery-tunnel:latest
   restart: unless-stopped
   network_mode: host
@@ -14,6 +16,8 @@ x-tunnel: &tunnel
     timeout: 5s
     retries: 3
     start_period: 20s
+  labels: &release-label
+    com.hanasand.release: ${HANASAND_RELEASE_COMMIT:-unknown}
 
 services:
   tunnel:
@@ -117,6 +121,7 @@ services:
     user: haproxy
     command: ["haproxy", "-W", "-db", "-f", "/recovery/haproxy.cfg"]
     restart: unless-stopped
+    labels: *release-label
     network_mode: host
     volumes:
       - /home/hanasand/runtime/proxy:/recovery:ro
@@ -133,6 +138,7 @@ services:
     user: haproxy
     command: ["haproxy", "-W", "-db", "-f", "/recovery/haproxy-secondary.cfg"]
     restart: unless-stopped
+    labels: *release-label
     network_mode: host
     volumes:
       - /home/hanasand/runtime/proxy:/recovery:ro
