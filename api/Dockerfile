@@ -18,19 +18,23 @@ COPY api/scripts/download-session-geo.ts scripts/download-session-geo.ts
 ARG SESSION_GEOIP_MONTH
 RUN SESSION_GEOIP_MONTH=$SESSION_GEOIP_MONTH bun scripts/download-session-geo.ts
 
-FROM deps AS auth-runtime
+FROM deps AS auth-runtime-base
 ARG HANASAND_RELEASE_COMMIT=unknown
 LABEL org.opencontainers.image.revision=$HANASAND_RELEASE_COMMIT
 COPY --chown=bun:bun api/ .
 COPY --from=session-geo /app/geoip /app/geoip
 RUN bun scripts/check-session-network.ts
+
+FROM auth-runtime-base AS auth-review
 RUN DB_PASSWORD=build-test DB_HOST=localhost VM_API_TOKEN=build-test bun run test --only=auth-service,auth-boundary,social-oidc,social-auth
 RUN bun run lint
+
+FROM auth-runtime-base AS auth-runtime
 ENV NODE_ENV=production AUTH_SERVICE_ONLY=1
 USER bun
 CMD ["bun", "src/authServer.ts"]
 
-FROM oven/bun:1.3.13-alpine AS app-runtime
+FROM oven/bun:1.3.13-alpine AS app-runtime-base
 
 ARG HANASAND_RELEASE_COMMIT=unknown
 ARG TRIVY_VERSION=0.72.0
@@ -50,13 +54,15 @@ COPY --from=deps /app/node_modules /app/node_modules
 COPY api/ .
 COPY --from=session-geo /app/geoip /app/geoip
 
-# Build-time tests import the runtime constants module, but Docker builds do
-# not receive the compose env_file. Keep placeholders scoped to this check so
-# browser-worker containers do not inherit fake app credentials.
+RUN chmod +x /app/entrypoint.sh
+
+FROM app-runtime-base AS app-review
+# The full API test/lint gate is an explicit review target so production image
+# builds do not block on it or inherit its build-only credentials.
 RUN --mount=from=database_schema,target=/db NODE_ENV=test DB_PASSWORD=build-test DB_HOST=localhost DB_POOL_HOST=localhost DB_POOL_PORT=18505 DB_MAX_CONN=1000 VM_API_TOKEN=build-test bun run test
 RUN bun run lint
 
-RUN chmod +x /app/entrypoint.sh
+FROM app-runtime-base AS app-runtime
 
 EXPOSE 8080
 
