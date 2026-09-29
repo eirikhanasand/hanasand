@@ -4,7 +4,14 @@ const entries = new Map<string, Entry>()
 const pending = new Map<string, Promise<unknown>>()
 const maxConcurrentReads = 8
 const maxQueuedReads = 32
-const lanes = { default: { active: 0, queued: 0, maxActive: maxConcurrentReads, maxQueued: maxQueuedReads }, preview: { active: 0, queued: 0, maxActive: 1, maxQueued: 4 } }
+type Lane = { active: number, maxActive: number, maxQueued: number, waiters: Array<(release: () => void) => void> }
+// Keep the database execution lane bounded while allowing a burst of rule
+// previews to wait in the application instead of being rejected as busy.
+const previewMaxQueued = 1000
+const lanes = {
+    default: { active: 0, maxActive: maxConcurrentReads, maxQueued: maxQueuedReads, waiters: [] },
+    preview: { active: 0, maxActive: maxConcurrentReads, maxQueued: previewMaxQueued, waiters: [] },
+} satisfies Record<string, Lane>
 const maxEntries = 64
 let cacheGeneration = 0
 type ReadOptions = { lane?: keyof typeof lanes }
@@ -17,7 +24,21 @@ export class ReadAdmissionError extends Error {
 export function invalidateReadCache(prefix?: string) {
     cacheGeneration += 1
     for (const key of entries.keys()) if (!prefix || key.startsWith(prefix)) entries.delete(key)
-    for (const key of pending.keys()) if (!prefix || key.startsWith(prefix)) pending.delete(key)
+}
+
+function acquire(lane: Lane): Promise<() => void> {
+    if (lane.active < lane.maxActive) {
+        lane.active += 1
+        return Promise.resolve(() => release(lane))
+    }
+    if (lane.waiters.length >= lane.maxQueued) throw new ReadAdmissionError()
+    return new Promise(resolve => lane.waiters.push(resolve))
+}
+
+function release(lane: Lane) {
+    const next = lane.waiters.shift()
+    if (next) next(() => release(lane))
+    else lane.active -= 1
 }
 
 export async function cachedRead<T>(key: string, ttlMs: number, work: () => Promise<T>, options: ReadOptions = {}): Promise<T> {
@@ -27,24 +48,9 @@ export async function cachedRead<T>(key: string, ttlMs: number, work: () => Prom
     if (cached) entries.delete(key)
     const existing = pending.get(key)
     if (existing) return existing as Promise<T>
-    if (lane.active >= lane.maxActive && lane.queued >= lane.maxQueued) throw new ReadAdmissionError()
-    const queued = lane.active >= lane.maxActive
-    if (queued) lane.queued += 1
     const generation = cacheGeneration
     const operation = (async () => {
-        try {
-            const deadline = Date.now() + 250
-            while (lane.active >= lane.maxActive) {
-                const remaining = deadline - Date.now()
-                if (remaining <= 0) throw new ReadAdmissionError()
-                await new Promise(resolve => setTimeout(resolve, Math.min(remaining, 10)))
-            }
-        } catch (error) {
-            if (queued) lane.queued = Math.max(0, lane.queued - 1)
-            throw error
-        }
-        if (queued) lane.queued = Math.max(0, lane.queued - 1)
-        lane.active += 1
+        const release = await acquire(lane)
         try {
             const value = await work()
             if (generation === cacheGeneration) {
@@ -54,7 +60,7 @@ export async function cachedRead<T>(key: string, ttlMs: number, work: () => Prom
             }
             return value
         } finally {
-            lane.active -= 1
+            release()
         }
     })()
     pending.set(key, operation)
