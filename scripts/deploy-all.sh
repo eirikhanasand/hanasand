@@ -208,6 +208,8 @@ compose_live up -d --no-build --no-deps api frontend
 # database locks. Keep the existing auth pair up until the API has recovered.
 wait_for_healthy hanasand_api "API" 600
 wait_for_healthy hanasand "Frontend" 180
+curl --fail --silent --show-error --max-time 10 --output /dev/null http://127.0.0.1:3100/
+echo "Homepage cache warmed."
 compose_live up -d --no-build --no-deps --force-recreate auth-secondary
 wait_for_healthy hanasand_auth_secondary "Secondary auth worker" 180
 compose_live up -d --no-build --no-deps --force-recreate auth-primary

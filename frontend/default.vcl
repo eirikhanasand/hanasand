@@ -54,7 +54,7 @@ sub vcl_backend_response {
         # layout reads cookies and headers. Authenticated requests already
         # pass in vcl_recv; theme cookies are part of the cache hash.
         unset beresp.http.Set-Cookie;
-        set beresp.ttl = 5s;
+        set beresp.ttl = 5m;
         set beresp.grace = 30s;
         set beresp.http.Cache-Control = "public, max-age=5, stale-while-revalidate=30";
         return (deliver);

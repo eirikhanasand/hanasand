@@ -9,7 +9,7 @@ import { buildRouteMetadata } from './seo'
 import { homepageFaqs } from './faqData'
 import HomeExposureQueueClient from './homeExposureQueueClient'
 
-export const revalidate = 5
+export const revalidate = 300
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Hanasand Threat Intelligence',
@@ -41,7 +41,7 @@ export default function Page() {
 
             <section className='home-hero relative isolate overflow-hidden'>
                 <div className='home-hero-art' aria-hidden='true'>
-                    <Image src='/lantern-hero.png' alt='' fill priority sizes='(max-width: 768px) 100vw, 68vw' className='object-cover object-center' />
+                    <Image src='/lantern-hero.webp' alt='' fill priority unoptimized sizes='(max-width: 768px) 100vw, 68vw' className='object-cover object-center' />
                 </div>
                 <div className='home-hero-glow' aria-hidden='true' />
                 <div className='home-wrap relative grid min-h-[680px] content-center gap-10 px-5 py-20 md:min-h-[760px] md:px-10 lg:grid-cols-[1.1fr_0.9fr] lg:gap-0 lg:px-16'>

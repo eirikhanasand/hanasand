@@ -18,6 +18,7 @@ const REFRESH_MS = 300_000
 export default function HomeExposureQueueClient({ initialQueue }: Props) {
     const [queue, setQueue] = useState(initialQueue)
     const [items, setItems] = useState(() => dedupeItems(initialQueue.items))
+    const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
     const [nextOffset, setNextOffset] = useState<number | null>(() => initialQueue.page?.nextOffset ?? (initialQueue.items.length >= PAGE_SIZE ? initialQueue.items.length : null))
     const [loadingMore, setLoadingMore] = useState(false)
     const [refreshing, setRefreshing] = useState(false)
@@ -85,18 +86,24 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
     }, [fetchQueue, mergeQueue])
 
     const loadMore = useCallback(async () => {
-        if (loadingMore || nextOffset === null) return
+        if (loadingMore) return
+        if (visibleCount < itemsRef.current.length) {
+            setVisibleCount((current) => Math.min(current + PAGE_SIZE, itemsRef.current.length))
+            return
+        }
+        if (nextOffset === null) return
         setLoadingMore(true)
         try {
             const next = await fetchQueue(nextOffset)
             mergeQueue(next, 'append')
+            setVisibleCount((current) => current + PAGE_SIZE)
             setError('')
         } catch (reason) {
             if (!itemsRef.current.length) setError(activityErrorMessage(reason))
         } finally {
             setLoadingMore(false)
         }
-    }, [fetchQueue, loadingMore, mergeQueue, nextOffset])
+    }, [fetchQueue, loadingMore, mergeQueue, nextOffset, visibleCount])
 
     useEffect(() => {
         if (initialQueue.status === 'checking' || initialQueue.status === 'unavailable') {
@@ -118,12 +125,13 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
             if (entries.some((entry) => entry.isIntersecting)) {
                 void loadMore()
             }
-        }, { root: viewportRef.current, rootMargin: '320px 0px' })
+        }, { root: viewportRef.current, rootMargin: '160px 0px' })
         observer.observe(node)
         return () => observer.disconnect()
     }, [loadMore])
 
     const subtitle = useMemo(() => latestActivitySubtitle(queue, items, refreshing), [queue, items, refreshing])
+    const visibleItems = useMemo(() => items.slice(0, visibleCount), [items, visibleCount])
     const total = queue.page?.total ?? queue.counts?.total ?? items.length
 
     return (
@@ -155,7 +163,7 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
                         <span>Seen</span>
                     </div>
                     <div>
-                        {items.length ? items.map(({ id, actor, company, claimedData, claimedDataSize, country, claimTime, collectedAt }) => (
+                        {items.length ? visibleItems.map(({ id, actor, company, claimedData, claimedDataSize, country, claimTime, collectedAt }) => (
                             <div key={id} className='grid min-w-0 grid-cols-[7rem_minmax(12rem,1fr)_11rem_9rem_9rem_11rem] items-center gap-3 border-b border-ui-border px-4 py-3 text-sm last:border-b-0'>
                                 <Marquee text={actor} innerClassName='font-semibold text-ui-text' />
                                 <Marquee text={company} innerClassName='text-ui-text' />
@@ -170,7 +178,7 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
                     </div>
                 </div>
                 <div className='divide-y divide-ui-border xl:hidden'>
-                    {items.length ? items.map(({ id, actor, company, claimedData, claimedDataSize, country, claimTime, collectedAt }) => (
+                    {items.length ? visibleItems.map(({ id, actor, company, claimedData, claimedDataSize, country, claimTime, collectedAt }) => (
                         <article key={id} className='grid min-w-0 gap-2 px-4 py-3'>
                             <div className='flex min-w-0 items-start justify-between gap-3'>
                                 <div className='min-w-0'>
@@ -188,7 +196,7 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
                     )) : <EmptyActivityState status={queue.status} refreshing={refreshing} />}
                 </div>
                 <div ref={sentinelRef} className='px-4 py-4 text-center text-xs text-ui-muted'>
-                    {loadingMore ? 'Loading...' : nextOffset !== null ? 'Scroll for more' : items.length ? 'End of list' : ''}
+                    {loadingMore ? 'Loading...' : visibleCount < items.length || nextOffset !== null ? 'Scroll for more' : items.length ? 'End of list' : ''}
                 </div>
             </div>
             {error ? <p className='border-t border-ui-danger/35 bg-ui-raised/10 px-4 py-2 text-xs font-semibold text-ui-text'>{error}</p> : null}

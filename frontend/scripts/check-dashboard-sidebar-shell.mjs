@@ -26,8 +26,8 @@ if (stalePageHeights.length) {
     throw new Error(`Pages must size content within the shared route frame: ${stalePageHeights.map(({ path }) => path).join(', ')}`)
 }
 
-if (!routeFrame.includes('h-[calc(100dvh-4.5rem)]') || !routeFrame.includes('h-auto min-h-[calc(100dvh-4.5rem)]') || !routeFrame.includes('grid-rows-[auto_minmax(0,1fr)_auto]') || !routeFrame.includes('<div className=\'min-w-0\'>{banner}</div>') || !routeFrame.includes('bg-ui-canvas')) {
-    throw new Error('The shared page frame must size app and public routes correctly, keep its banner grid row, and use its canvas background.')
+if (!routeFrame.includes('mt-18 h-[calc(100dvh-4.5rem)]') || !routeFrame.includes('grid-rows-[auto_auto_auto]') || !routeFrame.includes('<div className=\'min-w-0\'>{banner}</div>') || !routeFrame.includes('bg-ui-canvas')) {
+    throw new Error('The shared page frame must scroll long public routes, preserve its banner and footer rows, and use its canvas background.')
 }
 
 if (!dashboardUi.includes('px-2 py-4') || casesPage.includes('paddingBottom: 0')) {
