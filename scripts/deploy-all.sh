@@ -15,7 +15,6 @@ fi
 
 lock_file=/tmp/hanasand-full-deploy.lock
 exec 8>/tmp/hanasand-full-deploy-start.lock
-flock 8
 exec 9>"$lock_file"
 
 running_deployments() {
@@ -52,6 +51,11 @@ stop_existing_deployments() {
     done
     flock 9
 }
+
+if ! flock -n 8; then
+    stop_existing_deployments
+    flock 8
+fi
 
 if flock -n 9; then
     :
