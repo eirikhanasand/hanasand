@@ -12,7 +12,7 @@ import { getDashboardNavigation, navigationLinks, pinnedNavigation, type Navigat
 import { useWorkspace } from '@/components/organizations/workspaceProvider'
 
 const sectionIcons: Record<string, typeof ShieldCheck> = {
-    Overview: House,
+    Home: House,
     'Security & intelligence': ShieldCheck,
     'Logs & rules': ListFilter,
     Automation: AlarmClockCheck,
@@ -33,6 +33,8 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
     const storageKey = `dashboard-navigation:v1:${access.id}`
     const [preferences, setPreferences] = useState<Preferences>(initialPreferences)
     const [query, setQuery] = useState('')
+    const [searchOpen, setSearchOpen] = useState(false)
+    const searchButton = useRef<HTMLButtonElement | null>(null)
     const [preview, setPreview] = useState<{ section: NavigationItem, anchorTop: number, top: number, maxHeight: number } | null>(null)
     const previewCloseTimer = useRef<number | null>(null)
     const previewPanel = useRef<HTMLDivElement | null>(null)
@@ -88,6 +90,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
         } catch { /* Preferences are optional. */ }
         save(saved)
         setQuery('')
+        setSearchOpen(false)
     }, [storageKey, pathname, activePath])
 
     function save(next: Preferences) {
@@ -242,22 +245,36 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
                         className='grid h-10 w-10 place-items-center rounded-lg text-ui-muted hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary'>
                         <ChevronsUp aria-hidden='true' className='h-4 w-4' />
                     </button>}
+                    <button ref={searchButton} type='button' onClick={() => {
+                        if (!searchOpen && compact) setDashboardViewMode('normal')
+                        setSearchOpen(open => !open)
+                        setQuery('')
+                    }} aria-label={searchOpen ? 'Close page search' : 'Find a page'} title={searchOpen ? 'Close page search' : 'Find a page'} aria-expanded={searchOpen} aria-controls={`${domId}-navigation-search`}
+                        className='grid h-10 w-10 place-items-center rounded-lg text-ui-muted hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary'>
+                        <Search aria-hidden='true' className='h-4 w-4' />
+                    </button>
                     <button type='button' onClick={() => setDashboardViewMode(compact ? 'normal' : 'compact')} aria-label={compact ? 'Expand sidebar' : 'Collapse sidebar'} title={compact ? 'Expand sidebar' : 'Collapse sidebar'}
                         className='hidden h-10 w-10 place-items-center rounded-lg text-ui-muted hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary lg:grid'>
                         {compact ? <PanelLeftOpen className='h-4 w-4' /> : <PanelLeftClose className='h-4 w-4' />}
                     </button>
                 </div>
             </div>
-            {!compact && <div className='relative mb-2'>
+            {!compact && searchOpen && <div className='relative mb-2'>
                 <Search aria-hidden='true' className='pointer-events-none absolute left-2 top-3 h-4 w-4 text-ui-muted' />
-                <input type='search' aria-label='Search navigation' placeholder='Find a page…' value={query} onChange={event => setQuery(event.target.value)}
+                <input id={`${domId}-navigation-search`} type='search' aria-label='Find a page' placeholder='Find a page…' value={query} autoFocus onChange={event => setQuery(event.target.value)} onKeyDown={event => {
+                    if (event.key === 'Escape') {
+                        setQuery('')
+                        setSearchOpen(false)
+                        searchButton.current?.focus()
+                    }
+                }}
                     className='h-10 w-full min-w-0 rounded-md border border-ui-border bg-ui-canvas pl-8 pr-2 text-sm text-ui-text placeholder:text-ui-muted focus-visible:outline-2 focus-visible:outline-ui-primary' />
             </div>}
             <nav aria-label='Main navigation' onMouseLeave={deferPreviewClose} className='grid gap-1'>
                 {compact ? sections.map(section => {
                     const Icon = sectionIcons[section.label] || FolderKanban
                     if (section.href) return <Link key={section.href} href={section.href} aria-label={section.label} title={section.label} aria-current={active?.href === section.href ? 'page' : undefined}
-                        className='grid h-10 w-full place-items-center rounded-md text-ui-muted hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary'><Icon className='h-4 w-4' /></Link>
+                        className={`grid h-10 w-full place-items-center rounded-md focus-visible:outline-2 focus-visible:outline-ui-primary ${active?.href === section.href ? 'bg-ui-primary/10 text-ui-primary' : 'text-ui-muted hover:bg-ui-canvas'}`}><Icon className='h-4 w-4' /></Link>
                     return <button key={section.label} type='button' aria-label={`Open ${section.label}`} title={section.label}
                         onMouseEnter={event => showPreview(section, event.currentTarget)} onFocus={event => showPreview(section, event.currentTarget)}
                         onClick={() => { save({ ...preferences, expanded: { ...preferences.expanded, [section.label]: true } }); setDashboardViewMode('normal'); setPreview(null) }}

@@ -20,7 +20,7 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
     const link = (label: string, href: string, visible = true): NavigationItem => ({ label, href, visible })
     const group = (label: string, items: NavigationItem[]): NavigationItem => ({ label, items })
     const sections = [
-        link('Overview', '/dashboard'),
+        link('Home', '/dashboard'),
         group('Security & intelligence', [
             group('Investigations', [
                 link('Cases', '/cases'),
