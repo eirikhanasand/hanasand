@@ -19,10 +19,23 @@ export function RenderMarkdown({ text }: { text: string }) {
 type Cell = { table: number, row: number, col: number }
 
 function InlineTable({ data, index, active, onSelect, onNavigate, onChange }: { data: TableData, index: number, active: Cell | null, onSelect: (cell: Cell) => void, onNavigate: (cell: Cell, extend?: boolean) => void, onChange?: (data: TableData, group?: string) => void }) {
+    const tableScroll = useRef<HTMLDivElement>(null)
+    const [availableWidth, setAvailableWidth] = useState(0)
     const [focused, setFocused] = useState('')
     const [completionCell, setCompletionCell] = useState('')
     const [dismissedCompletion, setDismissedCompletion] = useState('')
     const composing = useRef(false)
+    useEffect(() => {
+        const element = tableScroll.current
+        if (!element) return
+        const measure = () => setAvailableWidth(element.clientWidth)
+        measure()
+        const observer = new ResizeObserver(measure)
+        observer.observe(element)
+        return () => observer.disconnect()
+    }, [])
+    const naturalWidth = data.cells[0].reduce((sum, _, c) => sum + (data.widths[c] || 180), 0)
+    const scale = availableWidth > 0 ? Math.min(1, availableWidth / naturalWidth) : 1
     const resize = useRef<{ axis: 'row' | 'column', index: number, start: number, size: number, value: number } | null>(null)
     function resizeHandle(axis: 'row' | 'column', index: number) {
         const size = (axis === 'row' ? data.heights[index] : data.widths[index]) || (axis === 'row' ? 48 : 180)
@@ -42,11 +55,11 @@ function InlineTable({ data, index, active, onSelect, onNavigate, onChange }: { 
             onPointerMove={event => {
                 if (!resize.current) return
                 const state = resize.current
-                state.value = Math.max(40, Math.min(1200, state.size + (axis === 'row' ? event.clientY : event.clientX) - state.start))
+                state.value = Math.max(40, Math.min(1200, state.size + ((axis === 'row' ? event.clientY : event.clientX) - state.start) / scale))
                 event.currentTarget.setAttribute('aria-valuenow', String(state.value))
                 const table = event.currentTarget.closest('table')!
-                if (axis === 'row') (table.rows[index] as HTMLElement).style.height = `${state.value}px`
-                else (table.querySelectorAll('col')[index] as HTMLElement).style.width = `${state.value}px`
+                if (axis === 'row') (table.rows[index] as HTMLElement).style.height = `${state.value * scale}px`
+                else (table.querySelectorAll('col')[index] as HTMLElement).style.width = `${state.value * scale}px`
             }}
             onPointerUp={() => {
                 if (!resize.current) return
@@ -57,10 +70,10 @@ function InlineTable({ data, index, active, onSelect, onNavigate, onChange }: { 
             }} onPointerCancel={() => { resize.current = null }} />
     }
     return <section className='thesis-table-block' aria-label='Inline table'>
-        <div className='thesis-table-scroll'>
-            <table style={{ width: data.cells[0].reduce((sum, _, c) => sum + (data.widths[c] || 180), 0) }}>
-                <colgroup>{data.cells[0].map((_, c) => <col key={c} style={{ width: data.widths[c] || 180 }} />)}</colgroup>
-                <tbody>{data.cells.map((cells, r) => <tr key={r} style={{ height: data.heights[r] || 48 }}>{cells.map((raw, c) => {
+        <div ref={tableScroll} className='thesis-table-scroll' style={{ fontSize: `${Math.max(10, 14 * scale)}px` }}>
+            <table style={{ width: naturalWidth * scale }}>
+                <colgroup>{data.cells[0].map((_, c) => <col key={c} style={{ width: (data.widths[c] || 180) * scale }} />)}</colgroup>
+                <tbody>{data.cells.map((cells, r) => <tr key={r} style={{ height: Math.max(26, (data.heights[r] || 48) * scale) }}>{cells.map((raw, c) => {
                     const Cell = r === 0 ? 'th' : 'td'
                     const address = `${columnName(c)}${r + 1}`
                     const value = cellValue(data.cells, r, c)

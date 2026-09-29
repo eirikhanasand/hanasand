@@ -1,11 +1,16 @@
 .thesis-plan { min-width: 0; }
-.thesis-plan-table-scroll { overflow-x: auto; border: 1px solid var(--color-ui-border); border-radius: .5rem; }
-.thesis-plan-table { width: 100%; min-width: 900px; border-collapse: collapse; font-size: .85rem; }
-.thesis-plan-table th, .thesis-plan-table td { padding: .55rem; border-bottom: 1px solid var(--color-ui-border); text-align: left; vertical-align: top; }
+.thesis-plan-table-scroll { min-width: 0; overflow-x: hidden; border: 1px solid var(--color-ui-border); border-radius: .5rem; }
+.thesis-plan-table { width: 100%; min-width: 0; table-layout: fixed; border-collapse: collapse; font-size: .65rem; line-height: 1.3; }
+.thesis-plan-table th, .thesis-plan-table td { min-width: 0; padding: .22rem; border-bottom: 1px solid var(--color-ui-border); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
 .thesis-plan-table th { background: var(--color-ui-raised); }
-.thesis-plan-table input:not([type=checkbox]), .thesis-plan-table select, .thesis-plan-expanded textarea, .thesis-plan-expanded input:not([type=checkbox]), .thesis-plan-card input, .thesis-plan-card select, .thesis-plan-card textarea, .thesis-plan select { min-width: 0; width: 100%; border: 1px solid var(--color-ui-border); border-radius: .35rem; background: var(--color-ui-panel); color: var(--color-ui-text); padding: .45rem; font: inherit; }
-.thesis-plan-table td:first-child { min-width: 180px; }
-.thesis-plan-table td:nth-child(2), .thesis-plan-table td:nth-child(6) { min-width: 90px; }
+.thesis-plan-table input:not([type=checkbox]), .thesis-plan-table select, .thesis-plan-expanded textarea, .thesis-plan-expanded input:not([type=checkbox]), .thesis-plan-card input, .thesis-plan-card select, .thesis-plan-card textarea, .thesis-plan select { min-width: 0; width: 100%; border: 1px solid var(--color-ui-border); border-radius: .25rem; background: var(--color-ui-panel); color: var(--color-ui-text); padding: .16rem; font: inherit; }
+.thesis-plan-table td:first-child { width: 21%; }
+.thesis-plan-table td:nth-child(2) { width: 9%; }
+.thesis-plan-table td:nth-child(3) { width: 18%; }
+.thesis-plan-table td:nth-child(4) { width: 12%; }
+.thesis-plan-table td:nth-child(5) { width: 10%; }
+.thesis-plan-table td:nth-child(6) { width: 10%; }
+.thesis-plan-mobile-label { display: none; }
 .thesis-plan-expanded > td { background: var(--color-ui-raised); }
 .thesis-plan-expanded label { display: grid; gap: .35rem; font-size: .8rem; }
 .thesis-plan-board { display: grid; grid-template-columns: repeat(5, minmax(230px, 1fr)); gap: .75rem; overflow-x: auto; padding-bottom: .5rem; }
@@ -16,16 +21,4 @@
 .thesis-plan-card input:first-child { font-weight: 600; }
 @media (max-width: 700px) { .thesis-plan-board { grid-template-columns: repeat(5, minmax(250px, 1fr)); } }
 
-@media (max-width: 1279px) {
-    .thesis-plan-table-scroll { overflow: visible; border: 0; }
-    .thesis-plan-table { display: block; width: 100%; min-width: 0; }
-    .thesis-plan-table thead { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
-    .thesis-plan-table tbody { display: grid; gap: .75rem; }
-    .thesis-plan-table tbody > tr:not(.thesis-plan-expanded) { display: grid; gap: .25rem; padding: .5rem; border: 1px solid var(--color-ui-border); border-radius: .6rem; background: var(--color-ui-raised); }
-    .thesis-plan-table td { display: grid; grid-template-columns: minmax(5rem, .35fr) minmax(0, 1fr); align-items: center; gap: .5rem; min-width: 0 !important; padding: .35rem; border: 0; }
-    .thesis-plan-table td:first-child, .thesis-plan-table td:nth-child(2), .thesis-plan-table td:nth-child(6) { min-width: 0; }
-    .thesis-plan-table td > * { min-width: 0; }
-    .thesis-plan-mobile-label { color: var(--color-ui-muted); font-size: .7rem; font-weight: 700; }
-    .thesis-plan-table .thesis-plan-expanded { display: block; }
-    .thesis-plan-table .thesis-plan-expanded > td { display: block; padding: 0; }
-}
+.thesis-plan-table .thesis-plan-expanded > td { padding: 0; }

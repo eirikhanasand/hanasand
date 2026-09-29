@@ -24,9 +24,9 @@ export default function RouteFrame({ children, serverPath, token, sidebar, banne
     const isLoggedInTi = token && (pathname === '/ti' || pathname.startsWith('/ti/'))
     const isAppSurface = showSidebar || isDashboard || isLoggedInTi || (!isPublicProduct && (isShare || pathname.startsWith('/ai') || isDashboard || isProfile || isOrganizations))
     const showFooter = !isBrowserLanding && (!isAppSurface || isAiWorkbench)
-    const frameRows = isThesisPage ? 'grid-rows-[auto_minmax(0,1fr)_auto]' : showFooter ? 'grid-rows-[auto_auto_auto]' : 'grid-rows-[auto_minmax(0,1fr)]'
-    const frameOverflow = isThesisPage || isBrowserLanding || isShare || showSidebar ? 'overflow-hidden overscroll-none' : 'overflow-auto'
     const thesisScroll = isThesisPage && !showSidebar
+    const frameRows = thesisScroll ? 'grid-rows-[auto_minmax(0,1fr)]' : showFooter ? 'grid-rows-[auto_auto_auto]' : 'grid-rows-[auto_minmax(0,1fr)]'
+    const frameOverflow = isThesisPage || isBrowserLanding || isShare || showSidebar ? 'overflow-hidden overscroll-none' : 'overflow-auto'
 
     return (
         <div data-route-frame className={`enterprise-theme relative z-10 mt-18 h-[calc(100dvh-4.5rem)] w-full bg-ui-canvas grid grid-cols-[minmax(0,1fr)] ${frameRows} ${frameOverflow}`}>
@@ -46,8 +46,9 @@ export default function RouteFrame({ children, serverPath, token, sidebar, banne
                         </div>
                     </div>
                 ) : children}
+                {thesisScroll && showFooter ? <Footer /> : null}
             </main>
-            {showFooter ? <Footer /> : null}
+            {showFooter && !thesisScroll ? <Footer /> : null}
         </div>
     )
 }
