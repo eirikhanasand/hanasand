@@ -34,11 +34,13 @@ function labelFor(route) {
 }
 
 function quote(value) {
-    const escaped = value.replace(/[\\'\u0000-\u001f\u2028\u2029]/g, character => {
-        const escapes = { '\\': '\\\\', "'": "\\'", '\n': '\\n', '\r': '\\r', '\t': '\\t' }
-        return escapes[character] ?? `\\u${character.codePointAt(0).toString(16).padStart(4, '0')}`
-    })
-    return `'${escaped}'`
+    const apostrophe = String.fromCharCode(39)
+    const escaped = JSON.stringify(value).slice(1, -1)
+        .replaceAll('\\"', '"')
+        .replaceAll(apostrophe, '\\' + apostrophe)
+        .replaceAll('\u2028', '\\u2028')
+        .replaceAll('\u2029', '\\u2029')
+    return apostrophe + escaped + apostrophe
 }
 
 const routes = [...new Set(await pageRoutes(appDir))].sort((a, b) => a.localeCompare(b))
