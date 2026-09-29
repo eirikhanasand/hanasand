@@ -103,9 +103,9 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
                 link('Shares', '/shares'),
             ]),
         ]),
-        nestedGroup('Thesis', thesisSheets.length
-            ? thesisSheets.map(sheet => link(sheet.label, sheet.href))
-            : [link('Workspace', '/thesis')], hasHanasandOrganization),
+        thesisSheets.length
+            ? nestedGroup('Thesis', thesisSheets.map(sheet => link(sheet.label, sheet.href)), hasHanasandOrganization)
+            : link('Thesis', '/thesis', hasHanasandOrganization),
         group('Communication', [
             link('Mail', '/mail'),
             link('Support Chats', '/support'),
