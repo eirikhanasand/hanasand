@@ -32,10 +32,10 @@ try {
     assert((await page.locator('body').innerText()).includes('Changes and new processing are paused.'))
     state = { mode: 'unknown', readOnly: true, services: [] }
     await page.reload()
-    await page.getByText('Status is reconnecting; availability has not been verified.', { exact: true }).waitFor()
+    await page.getByText('Reconnecting.', { exact: true }).waitFor()
     state = { mode: 'normal', stale: true, readOnly: false, services: [] }
     await page.reload()
-    await page.getByText('Status is reconnecting; availability has not been verified.', { exact: true }).waitFor()
+    await page.getByText('Reconnecting.', { exact: true }).waitFor()
     state = { mode: 'normal', readOnly: false, services: [] }
     await page.reload()
     await page.getByText('All services are healthy.', { exact: true }).waitFor()
