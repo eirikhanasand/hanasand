@@ -7,7 +7,7 @@ test "$(git rev-parse HEAD)" = "$release" || {
     exit 1
 }
 
-containers='hanasand hanasand_api hanasand_database_backup hanasand_onion_tor hanasand_ai_parser_bridge hanasand_ai_model_client hanasand_ti_scraper hanasand_pgbouncer hanasand_browsers'
+containers='hanasand hanasand_api hanasand_auth_primary hanasand_auth_secondary hanasand_database_backup hanasand_onion_tor hanasand_ai_parser_bridge hanasand_ai_model_client hanasand_ti_scraper hanasand_pgbouncer hanasand_browsers'
 for container in $containers; do
     test "$(docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null || true)" = true || {
         echo "Required Hanasand container is not running: $container" >&2

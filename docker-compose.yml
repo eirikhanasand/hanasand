@@ -158,6 +158,88 @@ services:
       onion-tor:
         condition: service_started
 
+  auth-primary:
+    container_name: hanasand_auth_primary
+    image: hanasand_auth
+    mem_limit: 512m
+    cpus: "1.0"
+    restart: always
+    build:
+      context: .
+      additional_contexts:
+        database_schema: ./db
+      dockerfile: ./api/Dockerfile
+      target: auth-runtime
+      args:
+        HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
+    ports:
+      - "127.0.0.1:8183:8081"
+    env_file:
+      - .env
+    environment:
+      AUTH_SERVICE_ONLY: "1"
+      PORT: 8081
+      DB_POOL_HOST: pgbouncer
+      DB_POOL_PORT: ${DB_POOL_PORT:-18505}
+      DB_MAX_CONN: 5
+      DB_TIMEOUT_MS: 2000
+      AUTH_TRUSTED_PROXY: ${AUTH_TRUSTED_PROXY:-}
+      HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- -T 8 http://127.0.0.1:8081/ready"]
+      interval: 10s
+      timeout: 9s
+      retries: 3
+      start_period: 10s
+    networks:
+      - hanasandnet
+    depends_on:
+      deploy-path-guard:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_healthy
+
+  auth-secondary:
+    container_name: hanasand_auth_secondary
+    image: hanasand_auth
+    mem_limit: 512m
+    cpus: "1.0"
+    restart: always
+    build:
+      context: .
+      additional_contexts:
+        database_schema: ./db
+      dockerfile: ./api/Dockerfile
+      target: auth-runtime
+      args:
+        HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
+    ports:
+      - "127.0.0.1:8184:8081"
+    env_file:
+      - .env
+    environment:
+      AUTH_SERVICE_ONLY: "1"
+      PORT: 8081
+      DB_POOL_HOST: pgbouncer
+      DB_POOL_PORT: ${DB_POOL_PORT:-18505}
+      DB_MAX_CONN: 5
+      DB_TIMEOUT_MS: 2000
+      AUTH_TRUSTED_PROXY: ${AUTH_TRUSTED_PROXY:-}
+      HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- -T 8 http://127.0.0.1:8081/ready"]
+      interval: 10s
+      timeout: 9s
+      retries: 3
+      start_period: 10s
+    networks:
+      - hanasandnet
+    depends_on:
+      deploy-path-guard:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_healthy
+
   database-backup:
     container_name: hanasand_database_backup
     image: hanasand_api
