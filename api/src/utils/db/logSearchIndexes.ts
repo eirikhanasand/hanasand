@@ -7,6 +7,9 @@ export const logSearchIndexes = [
     `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_logs_phrase_trgm ON events
         USING GIN ((${logPhraseSearchExpression}) gin_trgm_ops)
         WHERE ingestion_id = 'logs' AND processing_status = 'processed'`,
+    `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_logs_message_trgm ON events
+        USING GIN ((normalized->>'message') gin_trgm_ops)
+        WHERE ingestion_id = 'logs' AND processing_status = 'processed'`,
     `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_logs_service_time ON events
         ((normalized->>'service'), event_timestamp DESC, id DESC)
         WHERE ingestion_id = 'logs' AND processing_status = 'processed'`,
@@ -20,7 +23,7 @@ export default async function ensureLogSearchIndexes() {
     await withDatabaseAdvisoryLock('event:log-search-indexes', async () => {
         for (const statement of logSearchIndexes) await run(statement)
         const invalid = await run(`SELECT c.relname FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
-            WHERE c.relname IN ('idx_logs_phrase_trgm', 'idx_logs_service_time', 'idx_log_dimensions_service_time')
+            WHERE c.relname IN ('idx_logs_phrase_trgm', 'idx_logs_message_trgm', 'idx_logs_service_time', 'idx_log_dimensions_service_time')
               AND NOT i.indisvalid`)
         if (invalid.rows.length) throw new Error('Log search index build is incomplete: ' + invalid.rows.map(row => row.relname).join(', '))
     })
