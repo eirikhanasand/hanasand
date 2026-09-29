@@ -425,7 +425,11 @@ export default async function runSyntheticMonitor() {
             // The public listing resolves Git history for each article. The
             // workspace response uses file timestamps and exercises the same
             // API route without making the monitor spawn Git per file.
-            const { response, body } = await fetchJson('/articles?workspace=true', {}, apiBase, ARTICLES_MONITOR_TIMEOUT_MS)
+            const serviceAccountKey = process.env.MONITOR_SERVICE_ACCOUNT_KEY
+            if (!serviceAccountKey) throw new Error('MONITOR_SERVICE_ACCOUNT_KEY is not configured.')
+            const { response, body } = await fetchJson('/articles?workspace=true', {
+                headers: { 'X-API-Key': serviceAccountKey },
+            }, apiBase, ARTICLES_MONITOR_TIMEOUT_MS)
             if (response.status !== 200 || !Array.isArray(body)) throw new Error(`Unexpected articles response ${response.status}`)
             return 'The articles API returned a valid workspace listing.'
         }, { degraded: MONITOR_REQUEST_TIMEOUT_MS, down: ARTICLES_MONITOR_TIMEOUT_MS }),

@@ -28,6 +28,7 @@ test('synthetic monitor uses a lightweight articles listing and accepts normal w
             return Response.json({ id: 'svc_fixture' })
         }
         if (path === '/api/articles') {
+            expect(new Headers(options.headers).get('X-API-Key')).toBe('hsk_fixture')
             articlesWorkspaceCheck = url.searchParams.get('workspace') === 'true'
             return Response.json([])
         }
