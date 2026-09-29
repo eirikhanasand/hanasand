@@ -56,8 +56,8 @@ test('organization workspace scopes alert workflow by selected tenant and role',
         assert.ok(source.includes(scopedRoute), `Expected organization workspace to load ${scopedRoute}`)
     }
 
-    assert.match(destinationsRoute, /\/findings\/webhook-destinations\?orgId=\$\{encodeURIComponent\(id\)\}/)
+    assert.match(destinationsRoute, /\/dwm\/webhook-destinations\?orgId=\$\{encodeURIComponent\(id\)\}/)
     assert.doesNotMatch(destinationsRoute, /webhook-destinations\?organizationId=/)
-    assert.match(deliveriesRoute, /if \(organizationId\) \{[\s\S]*searchParams\.set\('orgId', organizationId\)[\s\S]*proxyOrganizationApiRequest\(new NextRequest\(scopedUrl/)
-    assert.match(deliveriesRoute, /proxyTiRequest\(request, '\/v1\/findings\/webhooks\/deliveries'/)
+    assert.match(deliveriesRoute, /if \(organizationId\) \{[\s\S]*searchParams\.set\('orgId', organizationId\)[\s\S]*proxyOrganizationApiRequest\(new NextRequest\(scopedUrl, \{ headers: request\.headers \}\), '\/dwm\/webhook-deliveries'/)
+    assert.match(deliveriesRoute, /proxyTiRequest\(request, '\/v1\/dwm\/webhooks\/deliveries'/)
 })

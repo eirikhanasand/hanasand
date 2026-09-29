@@ -11,10 +11,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         headers: request.headers,
         body: JSON.stringify({ ...body, orgId: id }),
     })
-    return proxyOrganizationApiRequest(nextRequest, `/findings/webhook-destinations/${encodeURIComponent(destinationId)}`, { method: 'PUT' })
+    return proxyOrganizationApiRequest(nextRequest, `/dwm/webhook-destinations/${encodeURIComponent(destinationId)}`, { method: 'PUT' })
 }
 
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string, destinationId: string }> }) {
     const { destinationId } = await context.params
-    return proxyOrganizationApiRequest(request, `/findings/webhook-destinations/${encodeURIComponent(destinationId)}`, { method: 'DELETE' })
+    return proxyOrganizationApiRequest(request, `/dwm/webhook-destinations/${encodeURIComponent(destinationId)}`, { method: 'DELETE' })
 }

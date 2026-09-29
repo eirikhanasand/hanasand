@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const { id } = await context.params
-    return proxyOrganizationApiRequest(request, `/findings/webhook-destinations?orgId=${encodeURIComponent(id)}`, { method: 'GET' })
+    return proxyOrganizationApiRequest(request, `/dwm/webhook-destinations?orgId=${encodeURIComponent(id)}`, { method: 'GET' })
 }
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -16,5 +16,5 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         headers: request.headers,
         body: JSON.stringify({ ...body, orgId: id }),
     })
-    return proxyOrganizationApiRequest(nextRequest, '/findings/webhook-destinations', { method: 'POST' })
+    return proxyOrganizationApiRequest(nextRequest, '/dwm/webhook-destinations', { method: 'POST' })
 }

@@ -7,7 +7,7 @@ import { cleanWorkspaceUrl, workspaceShareUrl } from '@/utils/organizations/work
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Archive, ArrowRight, BellRing, Building2, CheckCircle2, CircleAlert, Copy, ExternalLink, KeyRound, Loader2, Pause, Pencil, Play, RefreshCw, Search, Settings, ShieldCheck, Trash2, UserPlus, Users, Webhook } from 'lucide-react'
+import { Archive, ArrowRight, BellRing, Building2, CheckCircle2, ChevronDown, CircleAlert, Copy, ExternalLink, KeyRound, Loader2, Pause, Pencil, Play, RefreshCw, Search, Settings, ShieldCheck, Trash2, UserPlus, Users, Webhook } from 'lucide-react'
 
 type OrganizationRole = 'owner' | 'admin' | 'editor' | 'reader' | 'member' | 'viewer' | 'support'
 type OrganizationStatus = 'active' | 'archived' | 'deleted' | string
@@ -1852,9 +1852,17 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, members, canMa
     const inviteFiltersActive = Boolean(inviteQuery.trim()) || inviteStatusFilter !== 'all'
     const inviteCounts = inviteStatusCounts(invites)
     const inviteRoleCounts = inviteRoleStatusCounts(invites)
+    const pendingInviteCount = invites.filter(invite => invite.status.toLowerCase() === 'pending').length
     return (
-        <section id='invites' className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
-            <SectionTitle icon={<UserPlus className='h-4 w-4' />} title='Invite queue' detail={canManage ? 'Send, resend, revoke, copy.' : 'Owner or admin required.'} />
+        <details id='invites' className='group overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-invite-disclosure>
+            <summary className='flex cursor-pointer list-none flex-col gap-3 p-4 outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 dark:hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                <SectionTitle icon={<UserPlus className='h-4 w-4' />} title='Invite' detail='' />
+                <span className='flex shrink-0 items-center gap-2'>
+                    <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>{pendingInviteCount} pending</span>
+                    <ChevronDown aria-hidden='true' className='h-4 w-4 text-ui-muted transition-transform group-open:rotate-180' />
+                </span>
+            </summary>
+            <div className='grid gap-3 border-t border-ui-border p-4 dark:border-ui-border'>
             {busyLabel && <InlineBusy label={busyLabel} marker='data-org-invite-busy' />}
             {invites.length > 0 && (
                 <div className='mt-3 flex flex-wrap gap-2' data-org-invite-status-counts='true'>
@@ -1975,7 +1983,8 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, members, canMa
                     </>
                 )}
             </div>
-        </section>
+            </div>
+        </details>
     )
 }
 

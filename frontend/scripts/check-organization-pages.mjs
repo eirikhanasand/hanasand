@@ -32,7 +32,7 @@ const api = Bun.serve({ port: 0, async fetch(request) {
         }
         return Response.json({ organizations })
     }
-    if (url.pathname.startsWith('/api/findings/webhook-destinations') && (url.searchParams.get('orgId') === 'research-mnemonic' || url.pathname.endsWith('/editor-target'))) {
+    if (url.pathname.startsWith('/api/dwm/webhook-destinations') && (url.searchParams.get('orgId') === 'research-mnemonic' || url.pathname.endsWith('/editor-target'))) {
         if (request.method === 'DELETE') { destinationRemoved = true; return Response.json({}) }
         return Response.json({ destinations: destinationRemoved ? [] : [{ id: 'editor-target', name: 'Editor target', kind: 'webhook', status: 'active', endpointHint: 'example.test', url: 'https://example.test/hook', events: ['dwm.alert.created'] }] })
     }

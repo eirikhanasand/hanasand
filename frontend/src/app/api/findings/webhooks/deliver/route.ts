@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
             headers: request.headers,
             body: JSON.stringify({ organizationId, orgId: organizationId, tenantId: organizationId, deliveryId }),
         })
-        return proxyOrganizationApiRequest(retryRequest, '/findings/webhook-deliveries', { method: 'POST', timeoutMs: 20000 })
+        return proxyOrganizationApiRequest(retryRequest, '/dwm/webhook-deliveries', { method: 'POST', timeoutMs: 20000 })
     }
     if (!alertId || !organizationId) {
         const passthrough = new NextRequest(request.url, { method: 'POST', headers: request.headers, body: JSON.stringify(body) })
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
             live: body.live === true || body.dryRun !== true,
         }),
     })
-    return proxyOrganizationApiRequest(deliveryRequest, '/findings/webhook-deliveries', { method: 'POST', timeoutMs: 20000 })
+    return proxyOrganizationApiRequest(deliveryRequest, '/dwm/webhook-deliveries', { method: 'POST', timeoutMs: 20000 })
 }
 
 function thirdPartyReportRequest(body: Record<string, unknown>): {

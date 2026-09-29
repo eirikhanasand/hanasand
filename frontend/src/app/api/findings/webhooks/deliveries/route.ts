@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     if (organizationId) {
         const scopedUrl = new URL(request.url)
         scopedUrl.searchParams.set('orgId', organizationId)
-        return proxyOrganizationApiRequest(new NextRequest(scopedUrl, { headers: request.headers }), '/findings/webhook-deliveries', { method: 'GET' })
+        return proxyOrganizationApiRequest(new NextRequest(scopedUrl, { headers: request.headers }), '/dwm/webhook-deliveries', { method: 'GET' })
     }
 
     return proxyTiRequest(request, '/v1/dwm/webhooks/deliveries', { method: 'GET' })
