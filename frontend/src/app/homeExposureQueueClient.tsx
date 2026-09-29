@@ -38,9 +38,21 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
             if (!initialQueue.items.length && cached) {
                 const saved = normalizeExposureQueue(JSON.parse(cached))
                 if (saved.items.length) {
-                    setQueue({ ...saved, status: 'stale' })
-                    setItems(saved.items.slice(0, CACHE_SIZE))
-                    setNextOffset(saved.page?.nextOffset ?? (saved.items.length >= CACHE_SIZE ? CACHE_SIZE : null))
+                    const cachedItems = saved.items.slice(0, CACHE_SIZE)
+                    const total = saved.page?.total ?? saved.counts?.total
+                    const hasMore = typeof total === 'number'
+                        ? total > cachedItems.length
+                        : typeof saved.page?.hasMore === 'boolean'
+                            ? saved.page.hasMore
+                            : typeof saved.page?.nextOffset === 'number' || cachedItems.length >= CACHE_SIZE
+                    const cachedNextOffset = hasMore ? cachedItems.length : null
+                    setQueue({
+                        ...saved,
+                        status: 'stale',
+                        page: { ...saved.page, limit: CACHE_SIZE, offset: 0, total, nextOffset: cachedNextOffset, hasMore },
+                    })
+                    setItems(cachedItems)
+                    setNextOffset(cachedNextOffset)
                 }
             }
         } catch {
@@ -52,7 +64,19 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
     useEffect(() => {
         if (!cacheReady || !items.length) return
         try {
-            const cachedQueue = { ...queue, status: queue.status === 'live' ? 'stale' : queue.status, items: items.slice(0, CACHE_SIZE) }
+            const cachedItems = items.slice(0, CACHE_SIZE)
+            const total = queue.page?.total ?? queue.counts?.total
+            const hasMore = typeof total === 'number'
+                ? total > cachedItems.length
+                : typeof queue.page?.hasMore === 'boolean'
+                    ? queue.page.hasMore
+                    : typeof queue.page?.nextOffset === 'number'
+            const cachedQueue = {
+                ...queue,
+                status: queue.status === 'live' ? 'stale' : queue.status,
+                page: { ...queue.page, limit: CACHE_SIZE, offset: 0, total, nextOffset: hasMore ? cachedItems.length : null, hasMore },
+                items: cachedItems,
+            }
             window.localStorage.setItem(CACHE_KEY, JSON.stringify(cachedQueue))
         } catch {
             // Storage quota and privacy settings must not interrupt the live feed.
@@ -61,7 +85,7 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
 
     const mergeQueue = useCallback((nextQueue: ExposureQueue, mode: 'replace' | 'append') => {
         setQueue(nextQueue)
-        setItems((current) => mergeExposureQueueItems(current, nextQueue.items, mode).slice(0, CACHE_SIZE))
+        setItems((current) => mergeExposureQueueItems(current, nextQueue.items, mode))
         setNextOffset(nextQueue.page?.nextOffset ?? null)
     }, [])
 
