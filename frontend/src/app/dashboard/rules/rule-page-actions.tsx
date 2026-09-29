@@ -1,5 +1,5 @@
 import Button from '@/components/misc/button'
-import { Filter } from 'lucide-react'
+import { Filter, ListFilter } from 'lucide-react'
 import { ruleCategories, type RuleCategory } from './rule-categories'
 
 type RulePageActionsProps = {
@@ -51,7 +51,17 @@ export default function RulePageActions({ category, showCreate, showImports, sho
                 aria-pressed={showDisabled}
                 onClick={onToggleDisabled}
             />
-            <Button
+            {category === 'analysis' ? <button
+                type='button'
+                aria-label={showFilters ? 'Hide filters' : 'Show filters'}
+                title={showFilters ? 'Hide filters' : 'Show filters'}
+                aria-expanded={showFilters}
+                aria-controls='event-rule-filters'
+                onClick={onToggleFilters}
+                className='inline-flex h-10 w-10 items-center justify-center rounded-md text-ui-text hover:bg-ui-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary'
+            >
+                <ListFilter className='h-4 w-4' aria-hidden='true' />
+            </button> : <Button
                 text='Filters'
                 icon={<Filter className='h-4 w-4' />}
                 variant='ghost'
@@ -59,7 +69,7 @@ export default function RulePageActions({ category, showCreate, showImports, sho
                 aria-expanded={showFilters}
                 aria-controls='event-rule-filters'
                 onClick={onToggleFilters}
-            />
+            />}
         </div>
     )
 }
