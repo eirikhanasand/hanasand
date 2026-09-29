@@ -138,6 +138,7 @@ services:
       HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api"]
+      start_period: 60s
       interval: 5s
       retries: 5
     networks:
