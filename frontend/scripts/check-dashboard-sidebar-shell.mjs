@@ -26,7 +26,7 @@ if (stalePageHeights.length) {
     throw new Error(`Pages must size content within the shared route frame: ${stalePageHeights.map(({ path }) => path).join(', ')}`)
 }
 
-if (!routeFrame.includes('mt-18 h-[calc(100dvh-4.5rem)]') || !routeFrame.includes('grid-rows-[auto_auto_auto]') || !routeFrame.includes('<div className=\'min-w-0\'>{banner}</div>') || !routeFrame.includes('bg-ui-canvas')) {
+if (!routeFrame.includes('mt-18 h-[calc(100dvh-4.5rem)]') || !routeFrame.includes('grid-rows-[auto_minmax(max-content,auto)_auto]') || !routeFrame.includes('<div className=\'min-w-0\'>{banner}</div>') || !routeFrame.includes('bg-ui-canvas')) {
     throw new Error('The shared page frame must scroll long public routes, preserve its banner and footer rows, and use its canvas background.')
 }
 
