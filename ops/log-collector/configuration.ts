@@ -24,7 +24,27 @@ export function retention(path = '/etc/audit/auditd.conf', available?: number) {
   if (process.geteuid?.() === 0) fs.chownSync(temporary, stat.uid, stat.gid);
   fs.renameSync(temporary, path); return { changed: true, max_log_file: size, num_logs: count };
 }
-export async function applyRetention() { const result = retention(); if (result.changed) await new Commands(new Store()).run(['auditctl', '--signal', 'reload']); console.log(JSON.stringify(result)); }
+export function auditdResumeHeadroom(path = '/etc/audit/auditd.conf', available?: number) {
+  const text = fs.readFileSync(path, 'utf8');
+  const values = Object.fromEntries([...text.matchAll(/^\s*([a-z_]+)\s*=\s*([^#\n]+)/gm)].map(m => [m[1], m[2].trim()]));
+  const number = (key: string, fallback: number) => {
+    const value = Number(values[key] || fallback);
+    if (!Number.isFinite(value) || value < 0) throw new Error('Invalid audit disk watermark');
+    return value;
+  };
+  const disk = available === undefined ? fs.statfsSync(dirname(values.log_file || '/var/log/audit/audit.log')) : undefined;
+  const free = available ?? disk!.bavail * disk!.bsize;
+  const watermark = Math.max(number('space_left', 75), number('admin_space_left', 50)) * 1024 ** 2;
+  const reserve = Math.max(2 * 1024 ** 3, number('max_log_file', 8) * number('num_logs', 5) * 1024 ** 2 + 2 * 1024 ** 3);
+  return free > watermark + reserve;
+}
+export async function applyRetention() {
+  const result = retention();
+  const commands = new Commands(new Store());
+  if (result.changed) await commands.run(['auditctl', '--signal', 'reload']);
+  if (auditdResumeHeadroom()) await commands.run(['auditctl', '--signal', 'resume']);
+  console.log(JSON.stringify(result));
+}
 
 interface ReleaseHealth {
   runtime?: string; release?: string; checkedAt?: string;

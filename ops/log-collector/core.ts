@@ -194,7 +194,7 @@ export class CommandError extends Error {
   constructor(public code: number | null, public reason?: string) { super('Command collection failed'); }
 }
 export class TimeoutError extends Error { override name = 'TimeoutError'; }
-export const collectionError = (error: unknown) => error instanceof CollectionError || error instanceof DeliveryError ? error.message : error instanceof Error ? error.name : 'Error';
+export const collectionError = (error: unknown) => error instanceof CollectionError || error instanceof DeliveryError ? error.message : error instanceof Error ? error.name === 'PersistenceBarrierError' ? error.message : error.name : 'Error';
 export class Delivery {
   url: URL; agent: http.Agent | https.Agent;
   eventAgeSeconds = 0;

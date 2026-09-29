@@ -298,7 +298,7 @@ const apiBackgroundJobDefinitions: Array<{
     {
         id: 'api-production-log-monitor',
         name: 'Production log monitor',
-        description: 'Scans production logs for operator-visible failures and monitor signals.',
+        description: 'Checks production log streams and host audit collector health for operator-visible failures.',
         category: 'Other/System',
         schedule: 'Every minute',
         cadenceSeconds: API_CRON_CADENCE_SECONDS,

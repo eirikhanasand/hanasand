@@ -18,7 +18,12 @@ export interface Persistence {
 }
 export function syncFilesystem(root: string): Promise<void> {
   // One syncfs covers file contents AND directory entries. No per-file fsyncs.
-  return new Promise((ok, fail) => execFile('sync', ['-f', root], { timeout: 15000 }, error => error ? fail(new Error('Collector persistence barrier failed')) : ok()));
+  return new Promise((ok, fail) => execFile('sync', ['-f', root], { timeout: 120000 }, error => {
+    if (!error) return ok();
+    const detail = error.killed ? 'timed out' : typeof error.code === 'string' || typeof error.code === 'number' ? String(error.code) : 'failed';
+    const failure = new Error('Collector persistence barrier failed (' + detail + ')');
+    failure.name = 'PersistenceBarrierError'; fail(failure);
+  }));
 }
 export class WorkerPersistence implements Persistence {
   private next = 0;
@@ -68,7 +73,7 @@ export class GroupCommit implements Persistence {
   }
   start(failed: (error: unknown) => void) {
     const tick = async () => {
-      try { await this.flush(); } catch (error) { failed(error); return; }
+      try { await this.flush(); } catch (error) { failed(error); }
       if (!this.stopped) this.timer = setTimeout(tick, this.interval);
     };
     this.timer = setTimeout(tick, this.interval);
@@ -94,11 +99,24 @@ export class GroupCommit implements Persistence {
     const checkpoints = this.checkpoints, queues = this.queues, waiters = this.waiters;
     this.checkpoints = new Map(); this.queues = new Set(); this.waiters = []; this.changed = false;
     const staged: [string, string][] = [];
-    for (const [path, data] of checkpoints) {
-      const pending = path + '.' + randomUUID() + '.tmp';
-      fs.writeFileSync(pending, data, { mode: 0o600, flag: 'wx' }); staged.push([pending, path]);
+    try {
+      for (const [path, data] of checkpoints) {
+        const pending = path + '.' + randomUUID() + '.tmp'; staged.push([pending, path]);
+        fs.writeFileSync(pending, data, { mode: 0o600, flag: 'wx' });
+      }
+      await this.sync();
     }
-    await this.sync();
+    catch (error) {
+      // The pending queues and old checkpoints are still authoritative because
+      // nothing has been published yet. Keep the barrier waiters blocked and
+      // retry the same transaction after the filesystem recovers.
+      for (const [pending] of staged) fs.rmSync(pending, { force: true });
+      this.checkpoints = new Map([...checkpoints, ...this.checkpoints]);
+      this.queues = new Set([...queues, ...this.queues]);
+      this.waiters = [...waiters, ...this.waiters];
+      this.changed = true;
+      throw error;
+    }
     this.flushes++; this.lastFlushMs = performance.now() - this.lastStarted; this.lastFlushAt = new Date().toISOString();
     // A durable .pending batch survives a crash even if its rename does not.
     // Publish all batches before any cursor that depends on them.

@@ -1,5 +1,6 @@
 import run from '#db'
 import { recordMonitorResult } from './record.ts'
+import { collectorHeartbeatStatus, type CollectorHeartbeat } from './collectorHealth.ts'
 
 type MonitorDefinition = {
     service: string
@@ -39,7 +40,25 @@ const monitors: MonitorDefinition[] = [
 ]
 
 export default async function runProductionLogMonitors() {
-    await Promise.all(monitors.map(runMonitor))
+    await Promise.all([...monitors.map(runMonitor), runCollectorMonitor()])
+}
+
+async function runCollectorMonitor() {
+    const result = await run(`
+        SELECT created_at, message, metadata FROM (
+          (SELECT created_at, message, metadata FROM service_logs
+           WHERE service = 'host-log-collector' AND level = 'info' AND host IN ('inspur', 'hanasand')
+           ORDER BY created_at DESC LIMIT 1)
+          UNION ALL
+          (SELECT created_at, message, metadata FROM service_logs
+           WHERE service = 'host-log-collector' AND level = 'error' AND host IN ('inspur', 'hanasand')
+           ORDER BY created_at DESC LIMIT 1)
+        ) recent
+        ORDER BY created_at DESC
+        LIMIT 1
+    `)
+    const status = collectorHeartbeatStatus((result.rows[0] as CollectorHeartbeat | undefined) || null)
+    await recordMonitorResult('host-log-collector', 'Audit and log delivery', status.status, 0, status.message)
 }
 
 async function runMonitor(monitor: MonitorDefinition) {

@@ -2,6 +2,8 @@
 
 The Linux collector sends audit executions, system journal entries and Docker stdout/stderr to `https://api.hanasand.com/api/logs/ingest`. Original levels are retained; the API assigns the separate detection severity. Every execve/execveat from every user and service is audited. Shell built-ins do not create execve events; a shell invocation retains its command arguments. Audit collection requires root and kernel audit support.
 
+The live audit worker writes and verifies an audit marker once a minute. If auditd is suspended, it requests resume only after the configured disk watermarks and the audit retention reserve are clear. Failed probes remain visible in collector health. The API checks the collector heartbeat and audit/delivery workers every minute, records failures as monitoring cases, and uses the shared case sender for Discord notifications.
+
 The collector is maintained here in TypeScript: `core.ts` owns redaction, durable queues and HTTP delivery; `sources.ts` reads host logs; `guests.ts` handles LXD exports; `collector.ts` runs independent Node worker threads. `configuration.ts` manages protected configuration and audit retention. There is no Python runtime dependency.
 
 Build with `bun install --frozen-lockfile && bun run build` in this directory. The resulting `dist/collector.cjs` has no runtime npm dependencies. Node 18.15+ and systemd are required on Debian/Ubuntu; the installer checks the runtime and installs the distribution Node package when needed. Run `install.sh <host-id>` as root. It installs persistent audit rules, the collector and an enabled service, but does not start delivery. Configure its protected credential, then start it only after the ingestion API is ready:

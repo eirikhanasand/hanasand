@@ -41,6 +41,28 @@ test('failed persistence does not publish batches or advance durable cursors', a
   expect(disk().load('cursor', -1)).toBe(0); expect(disk().queuedNames('live', 100)).toHaveLength(0);
 });
 
+test('a transient persistence barrier failure preserves queued batches and checkpoints for retry', async () => {
+  let calls = 0;
+  const group = new GroupCommit(root, async () => { if (++calls === 1) throw new Error('transient sync failure'); }, 0);
+  const store = new Store(root, group); store.queueBatch([row(4)], 'live'); store.save('cursor', 4);
+  await expect(group.flush()).rejects.toThrow('transient sync failure');
+  expect(disk().queuedNames('live', 100)).toHaveLength(0); expect(disk().load('cursor', -1)).toBe(-1);
+  await group.flush();
+  expect(disk().queuedNames('live', 100)).toHaveLength(1); expect(disk().load('cursor', -1)).toBe(4);
+});
+
+test('the persistence timer retries after a failed filesystem barrier', async () => {
+  let calls = 0, failures = 0;
+  const group = new GroupCommit(root, async () => { if (++calls === 1) throw new Error('transient sync failure'); }, 5);
+  new Store(root, group).queueBatch([row(5)], 'live');
+  group.start(() => { failures++; });
+  const deadline = Date.now() + 1000;
+  while (group.flushes === 0 && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
+  await group.close();
+  expect(failures).toBe(1); expect(calls).toBeGreaterThanOrEqual(2);
+  expect(disk().queuedNames('live', 100)).toHaveLength(1);
+});
+
 test('power loss after the data barrier recovers pending batches with the old cursor', async () => {
   const snapshot = join(root, 'durable'), state = join(root, 'state');
   new Store(state).save('cursor', 0);

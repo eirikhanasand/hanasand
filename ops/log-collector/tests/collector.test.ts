@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { fs, join, Store, Delivery, DeliveryError, Commands, CommandError, CollectionError, Config, LogEvent, iso, sha, scrub, scrubArguments, scrubMetadata, boundedMetadata, event, recordLines, MAX_RECORD_BYTES, seconds } from '../core';
 import { Sources, parseAudit, dockerEvent, dockerCliStream, localAuditDate, auditEvents } from '../sources';
 import { guestExport, guestAck, jsonEvents } from '../guests';
-import { configure, retention, releaseReady } from '../configuration';
+import { configure, retention, auditdResumeHeadroom, releaseReady } from '../configuration';
 let root: string, store: Store, source: Sources;
 const config: Config = { host: 'fixture', start: '2026-09-19T00:00:00Z', token: 'synthetic-test-token' };
 beforeEach(() => { root = fs.mkdtempSync(join(os.tmpdir(), 'collector-test-')); store = new Store(join(root, 'state')); source = new Sources(store); });
@@ -28,6 +28,14 @@ test('audit identity, process attributes, split and hex arguments preserve Pytho
   expect((split.metadata.process as any).arguments).toEqual(['curl', '--password', '[REDACTED]', 'https://example.test/sample']);
   expect(JSON.stringify(split)).not.toContain('private');
   expect(parseAudit('random whoami text', config)).toEqual([]);
+});
+test('failed exec without EXECVE arguments is retained from its PATH record', () => {
+  const raw = 'type=SYSCALL msg=audit(1789817000.124:458): success=no exit=-2 pid=123 ppid=100 uid=1000 auid=1000 comm="bash" exe="/usr/bin/bash"\n'
+    + 'type=PATH msg=audit(1789817000.124:458): item=0 name="/usr/bin/xsel" inode=0 dev=00:00 mode=000000\n';
+  const row = parseAudit(raw, config)[0];
+  expect(row.message).toBe('failed exec: /usr/bin/xsel');
+  expect(row.metadata.outcome).toBe('failure');
+  expect(row.metadata.process).toEqual({ executable: '/usr/bin/xsel', command_line: 'failed exec: /usr/bin/xsel', arguments: [], pid: '123', parent_pid: '100', caller_executable: '/usr/bin/bash' });
 });
 for (const text of ['token: Bearer synthetic-private', 'curl --client-secret-key synthetic-private https://example.test', 'curl --header "Cookie: sid=synthetic-private; session=synthetic-private" https://example.test', 'curl -u "user:synthetic-private" https://example.test', 'sshpass -p synthetic-private ssh example.test', 'mysql -p synthetic-private', 'redis-cli -a synthetic-private', 'DB_PASSWORD="synthetic-private phrase"', 'curl -uuser:synthetic-private https://example.test', 'mysql -psynthetic-private', 'curl https://user:synthetic-private@example.test']) {
   test('redacts credential syntax: ' + text.split('synthetic')[0], () => expect(scrub(text)).not.toContain('synthetic-private'));
@@ -223,6 +231,26 @@ test('retention preserves larger and nonrotating policies and fails before writi
     const text = `max_log_file = ${size}\nnum_logs = ${count}\nmax_log_file_action = ${action}\n`; fs.writeFileSync(path, text); expect(retention(path, 0).changed).toBe(false); expect(fs.readFileSync(path, 'utf8')).toBe(text);
   }
   fs.writeFileSync(path, 'max_log_file_action = ROTATE\n'); expect(() => retention(path, 3 * 1024 ** 3)).toThrow('headroom'); expect(fs.readFileSync(path, 'utf8')).toBe('max_log_file_action = ROTATE\n');
+});
+test('auditd resumes only after its configured watermarks and retention reserve are clear', () => {
+  const path = join(root, 'auditd.conf');
+  fs.writeFileSync(path, 'space_left = 500\nadmin_space_left = 250\nmax_log_file = 100\nnum_logs = 20\n');
+  expect(auditdResumeHeadroom(path, 4 * 1024 ** 3)).toBe(false);
+  expect(auditdResumeHeadroom(path, 6 * 1024 ** 3)).toBe(true);
+  fs.writeFileSync(path, 'space_left = invalid\n'); expect(() => auditdResumeHeadroom(path, 8 * 1024 ** 3)).toThrow('watermark');
+});
+test('auditd health probe verifies a marker was appended to the audit log', async () => {
+  const calls: string[][] = []; let marker = '';
+  source.commands.run = async args => {
+    calls.push(args);
+    if (args[0] === 'auditctl' && args[1] === '-m') marker = args[2];
+    if (args[0] === 'tail') return marker;
+    return '';
+  };
+  await source.auditdHealthProbe();
+  expect(calls.some(args => args[0] === 'auditctl' && args[1] === '-m')).toBe(true);
+  expect(calls.some(args => args[0] === 'tail')).toBe(true);
+  expect(calls.some(args => args[0] === 'auditctl' && args[2] === 'resume')).toBe(false);
 });
 
 test('Docker CLI isolates failures, clamps creation time, and commits only completed minute', async () => {

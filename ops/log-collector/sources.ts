@@ -1,4 +1,5 @@
-import { fs, join, dirname, basename, Store, Commands, Config, LogEvent, Metadata, event, scrub, scrubArguments, iso, seconds, sha, MAX_RECORD_BYTES, BATCH_BYTES, CollectionError, CommandError, TimeoutError, collectionError } from './core';
+import { fs, join, dirname, basename, Store, Commands, Config, LogEvent, Metadata, event, scrub, scrubArguments, iso, seconds, sha, randomUUID, sleep, MAX_RECORD_BYTES, BATCH_BYTES, CollectionError, CommandError, TimeoutError, collectionError } from './core';
+import { auditdResumeHeadroom } from './configuration';
 import { executionReceipts, matchingExecution, type ExecutionLookup } from './executions';
 import { enrichModelProbe } from './model-probes';
 import { attestReadinessAudit, markReadinessContext } from './readinessAttestation';
@@ -12,7 +13,7 @@ export function auditArg(value: string): string {
 export function parseAudit(text: string, config: Config, receipts: ExecutionLookup = []): LogEvent[] {
   const groups = new Map<string, string[]>(), events: LogEvent[] = [];
   for (const line of text.split(/\r?\n/)) {
-    const row = line.split('\x1d', 1)[0]; if (!/^type=(SYSCALL|EXECVE) /.test(row)) continue;
+    const row = line.split('\x1d', 1)[0]; if (!/^type=(SYSCALL|EXECVE|PATH|PROCTITLE) /.test(row)) continue;
     const identity = row.match(/msg=audit\((\d+(?:\.\d+)?):(\d+)\)/)?.[0];
     if (identity) { if (!groups.has(identity)) groups.set(identity, []); groups.get(identity)!.push(row); }
   }
@@ -26,14 +27,19 @@ export function parseAudit(text: string, config: Config, receipts: ExecutionLook
       else args.set(key, auditArg(match[3]));
     }
     for (const [key, chunks] of parts) args.set(key, [...chunks].sort((a, b) => a[0] - b[0]).map(pair => pair[1]).join(''));
-    if (!args.size) continue;
-    let argv = [...args].sort((a, b) => a[0] - b[0]).map(pair => pair[1]);
-    const executable = auditArg(attrs.exe || '"' + argv[0] + '"'); argv = scrubArguments(argv);
-    const command = scrub(argv.map(shellQuote).join(' ')), match = identity.match(/\((\d+(?:\.\d+)?):(\d+)\)/)!;
+    const attemptedPath = rows.filter(row => row.startsWith('type=PATH ')).map(row => row.match(/\bname=((?:"[^"]*")|\S+)/)?.[1]).filter((value): value is string => Boolean(value))
+      .map(auditArg).find(value => value !== '(null)');
+    const hasArguments = args.size > 0;
+    if (!hasArguments && attrs.success === 'yes') continue;
+    let argv = hasArguments ? [...args].sort((a, b) => a[0] - b[0]).map(pair => pair[1]) : [];
+    const executable = hasArguments ? auditArg(attrs.exe || '"' + argv[0] + '"') : attemptedPath || auditArg(attrs.exe || '"unknown"');
+    argv = scrubArguments(argv);
+    const command = scrub(hasArguments ? argv.map(shellQuote).join(' ') : 'failed exec: ' + executable), match = identity.match(/\((\d+(?:\.\d+)?):(\d+)\)/)!;
     const execution = matchingExecution(attrs, argv, Number(match[1]) * 1000, receipts);
     const log = event(config, 'audit:' + identity, 'audit', command, iso(Number(match[1])), {
       collector: 'auditd', event_type: 'process', action: 'exec', outcome: attrs.success === 'yes' ? 'success' : 'failure',
-      process: { executable, command_line: command, arguments: argv, pid: attrs.pid ?? null, parent_pid: attrs.ppid ?? null },
+      process: { executable, command_line: command, arguments: argv, pid: attrs.pid ?? null, parent_pid: attrs.ppid ?? null,
+        ...(!hasArguments && attrs.exe ? { caller_executable: auditArg(attrs.exe) } : {}) },
       user: { id: attrs.uid ?? null, login_id: attrs.auid ?? null }, audit_id: match[2],
       ...(execution ? { collector_execution: { ...execution } } : {}),
     });
@@ -45,7 +51,7 @@ export function parseAudit(text: string, config: Config, receipts: ExecutionLook
 export async function* auditEvents(lines: AsyncIterable<string>, config: Config, receipts: ExecutionLookup = []) {
   let identity: string | undefined, rows: string[] = [], size = 0;
   for await (const line of lines) {
-    if (!/^type=(SYSCALL|EXECVE) /.test(line)) continue;
+    if (!/^type=(SYSCALL|EXECVE|PATH|PROCTITLE) /.test(line)) continue;
     const current = line.match(/msg=audit\((\d+(?:\.\d+)?):(\d+)\)/)?.[0]; if (!current) continue;
     if (identity && current !== identity) { yield* parseAudit(rows.join(''), config, receipts); rows = []; size = 0; }
     identity = current; size += Buffer.byteLength(line); if (size > MAX_RECORD_BYTES) throw new Error('Audit event exceeds 8MB; cursor retained'); rows.push(line);
@@ -122,6 +128,23 @@ class FileLines {
 }
 export class Sources {
   constructor(public store: Store, public commands = new Commands(store)) {}
+  async auditdHealthProbe() {
+    const writeAndFind = async () => {
+      const id = randomUUID(), marker = 'hanasand-audit-health-' + id;
+      await this.commands.run(['auditctl', '-m', marker], { timeout: 10 });
+      const deadline = Date.now() + 5000;
+      do {
+        const recent = await this.commands.run(['tail', '-c', '1048576', '/var/log/audit/audit.log'], { timeout: 5 });
+        if (recent.includes(id)) return true;
+        await sleep(250);
+      } while (Date.now() < deadline);
+      return false;
+    };
+    if (await writeAndFind()) return;
+    if (!auditdResumeHeadroom()) throw new CollectionError('auditd stopped writing and configured disk headroom is not available');
+    await this.commands.run(['auditctl', '--signal', 'resume'], { timeout: 10 });
+    if (!await writeAndFind()) throw new CollectionError('auditd did not resume writing after a safe resume request');
+  }
   async journal(config: Config, live = false) {
     const stateName = live ? 'journal-live.json' : 'journal.json';
     const checkpoint = this.store.load<string | { cursor: string; since?: string } | null>(stateName, null);

@@ -24,10 +24,17 @@ async function worker(name: string) {
       } catch (error) { parentPort!.postMessage({ ok: false, checkedAt: iso(), lastAcknowledgedAt, error: collectionError(error) }); await sleep(1000); }
     }
   }
+  let nextAuditProbeAt = 0;
   const work: Record<string, [() => Promise<unknown>, number]> = {
     audit: [() => source.audit(config), 5000], journal: [() => source.journal(config), 1000], docker: [() => source.docker(config), 5000],
     docker_file_history: [() => source.dockerFileSource(config), 250], docker_file_live: [() => source.dockerFileSource(config, true), 100],
-    guests: [() => guests(store, config), 30000], audit_live: [() => source.audit(config, true), 1000], journal_live: [() => source.journal(config, true), 1000],
+    guests: [() => guests(store, config), 30000], audit_live: [async () => {
+      if (Date.now() >= nextAuditProbeAt) {
+        nextAuditProbeAt = Date.now() + 60000;
+        await source.auditdHealthProbe();
+      }
+      return source.audit(config, true);
+    }, 1000], journal_live: [() => source.journal(config, true), 1000],
   };
   const [run, interval] = work[name];
   while (true) {
@@ -51,7 +58,13 @@ async function main() {
   // Fail before starting source workers if configuration cannot deliver their queue.
   new Delivery(config).close();
   const persistence = new GroupCommit(store.root); store.persistence = persistence; persistence.recover();
-  persistence.start(error => { console.error(collectionError(error)); process.exit(1); });
+  let lastPersistenceErrorAt = 0;
+  persistence.start(error => {
+    if (Date.now() - lastPersistenceErrorAt < 60000) return;
+    lastPersistenceErrorAt = Date.now();
+    const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
+    console.error(typeof code === 'string' ? 'Collector persistence failed (' + code + ')' : collectionError(error));
+  });
   let stopping = false;
   const statuses: Record<string, Status> = {}, workers: Worker[] = [];
   for (const name of ['delivery_live', 'delivery_history', ...sources, 'audit_live', 'journal_live']) {
