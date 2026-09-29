@@ -88,6 +88,21 @@ test('the persistence timer retries after a failed filesystem barrier', async ()
   expect(disk().queuedNames('live', 100)).toHaveLength(1);
 });
 
+test('a partial queue rename failure keeps the remaining batches and cursor pending for retry', async () => {
+  let renames = 0;
+  const rename = (from: string, to: string) => {
+    if (++renames === 2) throw Object.assign(new Error('directory update failed'), { code: 'ENOSPC' });
+    fs.renameSync(from, to);
+  };
+  const group = new GroupCommit(root, async () => {}, 0, rename), store = new Store(root, group);
+  store.queueBatch([row(6)], 'live'); store.queueBatch([row(7)], 'live'); store.save('cursor', 7);
+  const barrier = store.durable(); let acknowledged = false; void barrier.then(() => { acknowledged = true; });
+  await expect(group.flush()).rejects.toThrow('queue publication failed (ENOSPC)');
+  expect(acknowledged).toBe(false); expect(disk().load('cursor', -1)).toBe(-1);
+  await group.flush(); await barrier;
+  expect(disk().queuedNames('live', 100)).toHaveLength(2); expect(disk().load('cursor', -1)).toBe(7);
+});
+
 test('power loss after the data barrier recovers pending batches with the old cursor', async () => {
   const snapshot = join(root, 'durable'), state = join(root, 'state');
   new Store(state).save('cursor', 0);

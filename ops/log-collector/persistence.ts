@@ -54,7 +54,7 @@ export class GroupCommit implements Persistence {
   flushes = 0;
   lastFlushMs = 0;
   lastFlushAt?: string;
-  constructor(public root: string, private sync = () => syncFilesystem(root), private interval = COMMIT_INTERVAL_MS) {}
+  constructor(public root: string, private sync = () => syncFilesystem(root), private interval = COMMIT_INTERVAL_MS, private rename = (from: string, to: string) => fs.renameSync(from, to)) {}
   private check(path: string) {
     const name = relative(resolve(this.root), resolve(path));
     if (!name || name.startsWith('..') || name.startsWith('/')) throw new Error('Persistence path outside collector state');
@@ -99,29 +99,42 @@ export class GroupCommit implements Persistence {
     const checkpoints = this.checkpoints, queues = this.queues, waiters = this.waiters;
     this.checkpoints = new Map(); this.queues = new Set(); this.waiters = []; this.changed = false;
     const staged: [string, string][] = [];
+    let phase = 'checkpoint staging';
     try {
       for (const [path, data] of checkpoints) {
         const pending = path + '.' + randomUUID() + '.tmp'; staged.push([pending, path]);
         fs.writeFileSync(pending, data, { mode: 0o600, flag: 'wx' });
       }
+      phase = 'filesystem sync';
       await this.sync();
+      phase = 'queue publication';
+      for (const path of queues) this.rename(path, path.slice(0, -'.pending'.length) + '.json');
+      phase = 'checkpoint publication';
+      for (const [pending, path] of staged) this.rename(pending, path);
     }
     catch (error) {
-      // The pending queues and old checkpoints are still authoritative because
-      // nothing has been published yet. Keep the barrier waiters blocked and
-      // retry the same transaction after the filesystem recovers.
-      for (const [pending] of staged) fs.rmSync(pending, { force: true });
-      this.checkpoints = new Map([...checkpoints, ...this.checkpoints]);
-      this.queues = new Set([...queues, ...this.queues]);
+      // Publication can fail after some renames. Keep unpublished files and
+      // cursors queued for retry; already-published queue files are durable
+      // and need not be renamed again.
+      const retryCheckpoints = new Map<string, string>();
+      for (const [pending, path] of staged) {
+        if (phase === 'checkpoint publication' && !fs.existsSync(pending)) continue;
+        fs.rmSync(pending, { force: true }); retryCheckpoints.set(path, checkpoints.get(path)!);
+      }
+      const retryQueues = new Set([...queues].filter(path => fs.existsSync(path) || !fs.existsSync(path.slice(0, -'.pending'.length) + '.json')));
+      this.checkpoints = new Map([...retryCheckpoints, ...this.checkpoints]);
+      this.queues = new Set([...retryQueues, ...this.queues]);
       this.waiters = [...waiters, ...this.waiters];
       this.changed = true;
-      throw error;
+      const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : undefined;
+      const detail = code || (error instanceof Error ? error.message : 'failed');
+      const failure = new Error('Collector persistence ' + phase + ' failed (' + detail + ')');
+      failure.name = 'PersistenceBarrierError';
+      throw failure;
     }
     this.flushes++; this.lastFlushMs = performance.now() - this.lastStarted; this.lastFlushAt = new Date().toISOString();
     // A durable .pending batch survives a crash even if its rename does not.
     // Publish all batches before any cursor that depends on them.
-    for (const path of queues) fs.renameSync(path, path.slice(0, -'.pending'.length) + '.json');
-    for (const [pending, path] of staged) fs.renameSync(pending, path);
     if (queues.size || staged.length) this.changed = true;
     for (const ok of waiters) ok();
   }
