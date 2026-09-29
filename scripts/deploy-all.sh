@@ -23,6 +23,31 @@ running_deployments() {
         '$1 != self && $NF ~ /(^|\/)deploy-all[.]sh$/ { print $1 }'
 }
 
+reuse_schema_marker_for_code_only_release() {
+    previous_release=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' hanasand_api 2>/dev/null \
+        | sed -n 's/^HANASAND_RELEASE_COMMIT=//p' | head -1)
+    case "$previous_release" in
+        *[!a-f0-9]*|'') return ;;
+    esac
+    test "${#previous_release}" -eq 40 || return
+    test "$previous_release" != "$release" || return
+
+    # All schema setup is under api/src and db. Reuse the marker when neither
+    # changed; replaying idempotent ALTERs on every code-only release can hold
+    # candidate startup behind ordinary production traffic.
+    if ! git diff --quiet "$previous_release" "$release" -- api/src db; then
+        return
+    fi
+
+    previous_schema_applied=$(docker exec hanasand_database psql -U hanasand -d hanasand -Atc \
+        "SELECT EXISTS (SELECT 1 FROM app_schema_releases WHERE release = '$previous_release')" 2>/dev/null || true)
+    test "$previous_schema_applied" = t || return
+
+    docker exec hanasand_database psql -v ON_ERROR_STOP=1 -U hanasand -d hanasand \
+        -c "INSERT INTO app_schema_releases (release) VALUES ('$release') ON CONFLICT DO NOTHING" >/dev/null
+    echo "Reused the applied database schema marker for code-only release $release."
+}
+
 stop_deployment_group() {
     signal=$1
     group=$2
@@ -115,6 +140,7 @@ flock -u 8
 sh "$root/scripts/require-main.sh"
 release=$(git rev-parse HEAD)
 sh "$root/scripts/require-compose-healthchecks.sh"
+reuse_schema_marker_for_code_only_release
 
 export HANASAND_RELEASE_COMMIT="$release"
 export BROWSER_SANDBOX_WORKER_IMAGE="hanasand_browsers:$release"
@@ -143,9 +169,11 @@ export HANASAND_FRONTEND_CANDIDATE_PORT=$candidate_frontend_port
 build_dir=$(mktemp -d "/tmp/hanasand-release-build.XXXXXX")
 candidate_started=0
 proxy_target=canonical
+candidate_safe_to_remove=1
 cleanup() {
     status=$?
-    if test "$status" -ne 0 && test "$candidate_started" = 1 && test "$proxy_target" != candidate; then
+    if test "$status" -ne 0 && test "$candidate_started" = 1 \
+        && test "$proxy_target" != candidate && test "$candidate_safe_to_remove" = 1; then
         docker rm -f "$HANASAND_FRONTEND_CANDIDATE_CONTAINER" "$HANASAND_API_CANDIDATE_CONTAINER" \
             "$HANASAND_PGBOUNCER_CANDIDATE_CONTAINER" >/dev/null 2>&1 || true
     fi
@@ -305,6 +333,9 @@ docker inspect openresty >/dev/null 2>&1 || {
 switch_upstreams() {
     frontend_port=$1
     api_port=$2
+    next_proxy_target=$3
+    last_proxy_workers=$(docker exec openresty sh -c 'ps -o pid=,args=' \
+        | awk '$0 ~ /nginx: worker process$/ { print $1 }')
     backup=$(mktemp "${upstream_file}.backup.XXXXXX")
     temporary=$(mktemp "${upstream_file}.tmp.XXXXXX")
     cp "$upstream_file" "$backup"
@@ -329,11 +360,60 @@ EOF
         rm -f "$temporary" "$backup"
         return 1
     fi
+    proxy_target=$next_proxy_target
     rm -f "$backup"
 }
 
-switch_upstreams "$HANASAND_FRONTEND_CANDIDATE_PORT" "$HANASAND_API_CANDIDATE_PORT"
-proxy_target=candidate
+proxy_workers_for_pids() {
+    worker_pids=$1
+    state=$2
+    docker exec openresty sh -c 'ps -o pid=,args=' \
+        | awk -v worker_pids="$worker_pids" -v state="$state" '
+            BEGIN {
+                count = split(worker_pids, pids, " ")
+                for (i = 1; i <= count; i++) wanted[pids[i]] = 1
+            }
+            $1 in wanted && $0 ~ /nginx: worker process/ {
+                if (state == "shutting" && $0 !~ /nginx: worker process is shutting down/) next
+                print $1
+            }
+        '
+}
+
+wait_for_proxy_workers_to_drain() {
+    workers=$1
+    test -n "$workers" || return 0
+    elapsed=0
+    while test "$elapsed" -lt 15; do
+        pending=$(proxy_workers_for_pids "$workers" all)
+        test -z "$pending" && return 0
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+
+    # Reloaded workers stop taking new requests. Bound long-lived WebSockets so
+    # their old upstream containers can be removed without leaving stale routes.
+    shutting_down=$(proxy_workers_for_pids "$workers" shutting)
+    if test "$(printf '%s\n' "$pending" | sort -u | wc -l | tr -d ' ')" \
+        -ne "$(printf '%s\n' "$shutting_down" | sort -u | wc -l | tr -d ' ')"; then
+        echo "OpenResty workers did not enter graceful shutdown; preserving their upstream." >&2
+        return 1
+    fi
+    docker exec openresty sh -c "kill -TERM $shutting_down" >/dev/null 2>&1 || true
+
+    elapsed=0
+    while test "$elapsed" -lt 5; do
+        pending=$(proxy_workers_for_pids "$workers" all)
+        test -z "$pending" && return 0
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+    echo "OpenResty workers still reference the previous upstream; preserving its containers." >&2
+    return 1
+}
+
+switch_upstreams "$HANASAND_FRONTEND_CANDIDATE_PORT" "$HANASAND_API_CANDIDATE_PORT" candidate
+wait_for_proxy_workers_to_drain "$last_proxy_workers"
 echo "OpenResty now serves the healthy frontend and API candidates for $release."
 
 # Recreate dependent services only after traffic is on the isolated candidates.
@@ -357,8 +437,10 @@ case "$canonical_api_health" in *'"ok":true'*"\"release\":\"$release\""*) ;; *)
     exit 1
     ;;
 esac
-switch_upstreams 3100 8082
-proxy_target=canonical
+candidate_safe_to_remove=0
+switch_upstreams 3100 8082 canonical
+wait_for_proxy_workers_to_drain "$last_proxy_workers"
+candidate_safe_to_remove=1
 for candidate in $(docker ps -aq --filter label=com.docker.compose.project=hanasand \
     --filter label=com.docker.compose.service=api-candidate) \
     $(docker ps -aq --filter label=com.docker.compose.project=hanasand \
