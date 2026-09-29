@@ -173,6 +173,21 @@ function matchRegexPage(events: PreviewEvent[], conditions: Condition[]): Promis
 
 export async function matchRulePage(events: Record<string, unknown>[], conditions: Condition[]): Promise<number[]> {
     if (!conditions.length) return []
+    const finite = conditions.map(condition => condition.operator === 'regex' ? finiteRegexAlternatives(condition.value) : null)
+    if (conditions.some(condition => condition.operator === 'regex') && finite.every((values, index) => conditions[index].operator !== 'regex' || values)) {
+        return events.flatMap((event, index) => conditions.every((condition, conditionIndex) => {
+            const value = condition.path.split('.').reduce<unknown>((item, key) => item && typeof item === 'object' && !Array.isArray(item) ? (item as Record<string, unknown>)[key] : undefined, event)
+            if (value === undefined || value === null || typeof value === 'object') return false
+            const actual = String(value)
+            const comparable = condition.caseSensitive ? actual : actual.toLowerCase()
+            if (condition.operator === 'regex') {
+                const alternatives = finite[conditionIndex] || []
+                return alternatives.some(expected => comparable === (condition.caseSensitive ? expected : expected.toLowerCase()))
+            }
+            const expected = condition.caseSensitive ? condition.value : condition.value.toLowerCase()
+            return condition.operator === 'equals' ? comparable === expected : comparable.includes(expected)
+        }) ? [index] : [])
+    }
     if (conditions.some(condition => condition.operator === 'regex'))
         return matchRegexPage(events.map((normalized, index) => ({ id: String(index), timestamp: '', normalized, rank: 0 })), conditions)
     return events.flatMap((event, index) => matchesRule(event, conditions) ? [index] : [])
