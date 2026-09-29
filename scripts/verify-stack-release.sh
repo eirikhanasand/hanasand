@@ -34,6 +34,16 @@ for container in hanasand_auth_primary hanasand_auth_secondary; do
     }
 done
 
+for container in $(docker ps -aq --filter label=com.docker.compose.project=hanasand-recovery) \
+    hanasand-tunnel hanasand-tunnel-database hanasand-tunnel-intelligence hanasand-tunnel-web \
+    hanasand-tunnel-monitor hanasand-tunnel-replication hanasand-tunnel-support hanasand-tunnel-ai \
+    hanasand-proxy-1 hanasand-proxy-2 log-catchup-pg-check; do
+    if docker inspect "$container" >/dev/null 2>&1; then
+        echo "Retired recovery container still exists: $container" >&2
+        exit 1
+    fi
+done
+
 # Browser warm workers are created directly by the API, so Compose does not
 # recreate them with the rest of the stack. Wait until all named pool slots
 # report both the application release and browser image revision being checked.
@@ -80,6 +90,24 @@ test "$ti_api_source" = "/home/hanasand/hanasand/ops/runtime/ti-releases/$releas
 }
 test -f "$ti_api_source/src/utils/alerts/discordWebhookFile.ts" && test -f "$ti_api_source/src/utils/dwm/customerOutputSafety.ts" || {
     echo "hanasand_ti_scraper API utility mount is incomplete." >&2
+    exit 1
+}
+
+api_health=$(curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8082/health)
+case "$api_health" in *'"ok":true'*"\"release\":\"$release\""*) ;; *)
+    echo "API health endpoint did not report release $release." >&2
+    exit 1
+    ;;
+esac
+frontend_health=$(curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3100/api/health)
+case "$frontend_health" in *'"ok":true'*"\"release\":\"$release\""*"\"api\""*) ;; *)
+    echo "Frontend health endpoint did not report release $release and API health." >&2
+    exit 1
+    ;;
+esac
+recovery_route_status=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 10 http://127.0.0.1:3100/api/recovery)
+test "$recovery_route_status" = 404 || {
+    echo "Retired /api/recovery route returned HTTP $recovery_route_status instead of 404." >&2
     exit 1
 }
 

@@ -1,6 +1,5 @@
 import VmPage from '../vms/page'
 import { canViewHostMetrics } from '@/utils/vms/hostAccess'
-import RecoveryPanel from '@/components/system/recovery'
 import DockerStoragePanel from '@/components/system/dockerStorage'
 import { cookies } from 'next/headers'
 import SystemDashboard from './clientPage'
@@ -34,7 +33,6 @@ export default async function SystemPageContent({ section }: { section: SystemSe
             <DashboardHeader title='System' description={sectionDescriptions[section]} />
             {section === 'overview' ? <>
                 <div id='system-overview-statistics-target' className='min-w-0 [&:empty]:hidden' />
-                <RecoveryPanel />
                 <DockerStoragePanel />
             </> : null}
             <SystemDashboard

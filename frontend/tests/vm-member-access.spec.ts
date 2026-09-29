@@ -17,19 +17,12 @@ test('members can create VMs from System and VMs without requesting host telemet
         await expect(page.getByRole('button', { name: 'Create VM', exact: true })).toBeVisible()
         await expect(page.getByRole('heading', { name: 'my-machine', exact: true })).toBeVisible()
         await expect(page.locator('[data-system-summary-metrics]')).toHaveCount(0)
-        await expect(page.getByRole('region', { name: 'Service recovery' })).toHaveCount(0)
         await expect(page.getByText('OVHcloud', { exact: true })).toHaveCount(0)
     }
     await page.getByLabel('VM name', { exact: true }).fill('new-machine')
     await page.getByRole('button', { name: 'Create VM', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'new-machine', exact: true })).toBeVisible()
     await expect(page.getByRole('status').filter({ hasText: 'Created VM' })).toContainText('Created VM new-machine.')
-    const status = await page.request.get('/api/recovery')
-    const data = await status.json()
-    expect(data).not.toHaveProperty('compute')
-    expect(data).not.toHaveProperty('sites')
-    expect(data).not.toHaveProperty('replicaEligibility')
-    expect(data.mode).toBe('normal')
     // A client-side role cookie cannot unlock server-rendered host data.
     await context.addCookies([{ name: 'roles', value: encodeURIComponent(JSON.stringify(['system_admin'])), url: baseURL! }])
     await page.goto('/system')
@@ -44,17 +37,6 @@ test('VM pages still require a signed-in session', async ({ page }) => {
     await page.goto('/vms')
     await expect(page).toHaveURL(/\/login\?path=/)
 })
-
-test('verified system admins retain the system dashboard and private recovery metrics', async ({ context, page, baseURL }) => {
-    test.skip(!process.env.VM_FIXTURE_API, 'Requires the VM fixture API')
-    await context.addCookies(Object.entries({ id: 'admin-proof', access_token: 'local-admin-token', roles: '[]' }).map(([name, value]) => ({ name, value, url: baseURL! })))
-    await page.goto('/system')
-    await expect(page.getByRole('region', { name: 'Service recovery' })).toBeVisible()
-    const data = await (await page.request.get('/api/recovery')).json()
-    expect(data.compute.memoryTotalBytes).toBe(123)
-    expect(data.sites.inspur.compute.diskFreeBytes).toBe(456)
-})
-
 
 test('empty accounts only see Infrastructure Overview until their first VM is created', async ({ context, page, baseURL }) => {
     test.skip(!process.env.VM_FIXTURE_API, 'Requires the VM fixture API')

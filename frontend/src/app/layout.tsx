@@ -10,7 +10,6 @@ import { cookies, headers } from 'next/headers'
 import './globals.css'
 import Header from '@/components/header/header'
 import DetachedBoxHost from '@/components/box/detachedBoxHost'
-import { RecoveryBanner } from '@/components/system/recovery'
 import RouteFrame from '@/components/layout/routeFrame'
 import MobileNavigation from '@/components/layout/mobileNavigation'
 export { default as metadata } from './metadata'
@@ -52,7 +51,7 @@ export default async function layout({ children }: { children: ReactNode }) {
                             sidebar={id && token ? <Suspense fallback={<DashboardSidebar {...sidebarProps} canManageOrganizations={false} />}>
                                 <AuthorizedSidebar {...sidebarProps} />
                             </Suspense> : null}
-                            banner={<><RecoveryBanner />{impersonatingId ? <ImpersonationBanner id={impersonatingId} name={impersonatingName} /> : null}</>}>
+                            banner={impersonatingId ? <ImpersonationBanner id={impersonatingId} name={impersonatingName} /> : null}>
                             {children}
                         </RouteFrame>
                     </MobileNavigation>

@@ -231,31 +231,20 @@ compose_live up -d --no-build --no-deps api frontend
 # database locks. Keep the existing auth pair up until the API has recovered.
 wait_for_healthy hanasand_api "API" 600
 wait_for_healthy hanasand "Frontend" 180
-curl --fail --silent --show-error --max-time 10 --output /dev/null http://127.0.0.1:3100/
-echo "Homepage cache warmed."
+curl --fail --silent --show-error --max-time 10 --output /dev/null http://127.0.0.1:3100/api/health
+echo "Frontend and API health verified."
 compose_live up -d --no-build --no-deps --force-recreate auth-secondary
 wait_for_healthy hanasand_auth_secondary "Secondary auth worker" 180
 compose_live up -d --no-build --no-deps --force-recreate auth-primary
 wait_for_healthy hanasand_auth_primary "Primary auth worker" 180
 
-# Remove obsolete recovery tunnel/proxy instances. The normal Compose stack is
-# the only supported production runtime and owns all traffic paths.
-for container in hanasand-tunnel hanasand-tunnel-database hanasand-tunnel-intelligence hanasand-tunnel-web hanasand-tunnel-monitor hanasand-tunnel-replication hanasand-tunnel-support hanasand-tunnel-ai hanasand-proxy-1 hanasand-proxy-2; do
+# Remove containers left by the retired cross-site recovery stack. Preserve
+# anonymous volumes so this cleanup cannot delete data.
+for container in $(docker ps -aq --filter label=com.docker.compose.project=hanasand-recovery); do
+    docker rm -f "$container"
+done
+for container in hanasand-tunnel hanasand-tunnel-database hanasand-tunnel-intelligence hanasand-tunnel-web hanasand-tunnel-monitor hanasand-tunnel-replication hanasand-tunnel-support hanasand-tunnel-ai hanasand-proxy-1 hanasand-proxy-2 log-catchup-pg-check; do
     if docker inspect "$container" >/dev/null 2>&1; then docker rm -f "$container"; fi
 done
-
-# The host-network HAProxy instance cannot resolve the Compose service name.
-# Resolve the freshly recreated scraper container and refresh its runtime
-# server address so a Compose network recreation cannot strand the TI route on
-# the previous container IP.
-if docker inspect hanasand-proxy-1 >/dev/null 2>&1; then
-    ti_ip=$(docker inspect -f '{{with index .NetworkSettings.Networks "hanasand_hanasandnet"}}{{.IPAddress}}{{end}}' hanasand_ti_scraper)
-    test -n "$ti_ip" || {
-        echo "Could not resolve the threat-intelligence scraper address." >&2
-        exit 1
-    }
-    docker exec hanasand-proxy-1 sh -lc \
-        "printf 'set server intelligence/inspur-ti-1 addr %s port 8097\\nset server intelligence/inspur-ti-1 check-port 8098\\n' '$ti_ip' | socat - UNIX-CONNECT:/run/haproxy/admin0.sock"
-fi
 sh "$root/scripts/verify-stack-release.sh" "$release"
 echo "Hanasand stack deployed from main at $release."

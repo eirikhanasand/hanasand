@@ -53,8 +53,8 @@ fastify.addHook('onRequest', async (req, reply) => {
 })
 fastify.get('/health', async (_req, reply) => {
     try {
-        const result = await queryOnce('SELECT pg_is_in_recovery() AS replica')
-        return { ok: true, service: 'api', site: process.env.RECOVERY_SITE || 'unknown', release: process.env.HANASAND_RELEASE_COMMIT || 'unknown', readOnly: result.rows[0].replica, recovery: recoveryState().mode || 'normal' }
+        await queryOnce('SELECT 1')
+        return { ok: true, service: 'api', release: process.env.HANASAND_RELEASE_COMMIT || 'unknown' }
     } catch { return reply.code(503).send({ ok: false }) }
 })
 if (httpWorkerOnly) {

@@ -59,7 +59,6 @@ const tasks: TestTask[] = [
     { id: 'organization-pages', title: 'Organization and account pages', command: [bun, 'scripts/check-organization-pages.mjs'], requires: 'playwright' },
     { id: 'dashboard-streaming', title: 'Dashboard independent status streaming', command: [bun, 'tests/dashboard-streaming.test.tsx'] },
     { id: 'recovery-boundary', title: 'Recovery request boundaries', command: [bun, 'tests/recovery-boundary.test.ts'] },
-    { id: 'recovery-ui', title: 'Recovery status and failback UI', command: [bun, 'scripts/check-recovery-ui.mjs'], requires: 'playwright' },
     {
         id: 'automation-ssr',
         title: 'Automation server rendering and hydration',

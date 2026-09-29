@@ -53,7 +53,7 @@ services:
     volumes:
       - prompt_portal_state:/var/lib/hanasand-prompt
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health"]
       start_period: 30s
       interval: 5s
       retries: 5
@@ -88,7 +88,6 @@ services:
       - /var/spool/cron/crontabs:/host/cron/crontabs
       - /var/lib/hanasand:/host/var/lib/hanasand:ro
       - /var/lib/hanasand/docker-storage:/var/lib/hanasand/docker-storage
-      - ${HANASAND_RECOVERY_STATUS_DIR:-/home/hanasand/hanasand/ops/runtime/status}:/recovery:ro
       - api_state:/var/lib/hanasand
       - ${HANASAND_APP_UPDATE_DIR:-/srv/hanasand/app-updates}:/srv/hanasand/app-updates
     extra_hosts:
@@ -137,7 +136,7 @@ services:
       DB_BACKUP_ENABLED: ${DB_BACKUP_ENABLED:-true}
       HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health"]
       start_period: 60s
       interval: 5s
       retries: 5
@@ -541,9 +540,7 @@ services:
       TI_AUTOMATIC_EVALUATION_INTERVAL_SECONDS: ${TI_AUTOMATIC_EVALUATION_INTERVAL_SECONDS:-60}
       TI_AUTOMATIC_EVALUATION_MAX_TASKS_PER_CYCLE: ${TI_AUTOMATIC_EVALUATION_MAX_TASKS_PER_CYCLE:-2}
       TI_AUTOMATIC_EVALUATION_SAMPLE_SIZE: ${TI_AUTOMATIC_EVALUATION_SAMPLE_SIZE:-50}
-      # Use the stable container alias shared by the regular and recovery
-      # networks. The recovery API runs with host networking, so `api` is not
-      # resolvable from the scraper's bridge network during failover.
+      # Use the stable container alias on the shared application network.
       HANASAND_AUTH_API_BASE: ${HANASAND_AUTH_API_BASE:-http://hanasand_api:8080/api}
       TI_SCRAPER_SERVICE_TOKEN: ${TI_SCRAPER_SERVICE_TOKEN:-}
       HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
