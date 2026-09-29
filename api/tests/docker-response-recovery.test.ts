@@ -8,6 +8,7 @@ const directory = mkdtempSync(join(tmpdir(), 'docker-response-'))
 const socket = join(directory, 'docker.sock')
 const oldSocket = process.env.DOCKER_SOCKET_PATH
 process.env.DOCKER_SOCKET_PATH = socket
+const healthcheck = { Test: ['CMD-SHELL', 'true'] }
 let mode = 'interrupt'
 const requests: string[] = []
 const server = http.createServer((req, res) => {
@@ -51,7 +52,7 @@ test('a Docker response that never finishes has an absolute deadline', async () 
 
 test('browser creation can finish after the former eight-second deadline', async () => {
     mode = 'slow-create'
-    expect(await createRuntimeContainer('slow-browser', { Image: 'browser' })).toBe('new-browser')
+    expect(await createRuntimeContainer('slow-browser', { Image: 'browser', Healthcheck: healthcheck })).toBe('new-browser')
 }, 10000)
 
 test('container creation and start remain bounded, with cleanup only for timed-out creates', async () => {
@@ -64,13 +65,13 @@ test('container creation and start remain bounded, with cleanup only for timed-o
     try {
         requests.length = 0
         mode = 'hang'
-        await expect(createRuntimeContainer('timed-out-browser', {})).rejects.toThrow('Docker API timed out')
+        await expect(createRuntimeContainer('timed-out-browser', { Healthcheck: healthcheck })).rejects.toThrow('Docker API timed out')
         expect(requests).toContain('DELETE /containers/timed-out-browser?force=1&v=1')
         await expect(startRuntimeContainer('starting-browser')).rejects.toThrow('Docker API timed out')
         expect(deadlines.filter(delay => delay === 60_000)).toHaveLength(2)
         requests.length = 0
         mode = 'conflict'
-        await expect(createRuntimeContainer('existing-browser', {})).rejects.toThrow('Name already exists')
+        await expect(createRuntimeContainer('existing-browser', { Healthcheck: healthcheck })).rejects.toThrow('Name already exists')
         expect(requests.some(request => request.startsWith('DELETE'))).toBe(false)
     } finally { timer.mockRestore() }
 })
