@@ -663,7 +663,6 @@ CREATE INDEX IF NOT EXISTS idx_service_logs_created_at ON service_logs(created_a
 CREATE INDEX IF NOT EXISTS idx_service_logs_service_level ON service_logs(service, level, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_traffic_events_created_at ON traffic_events(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_traffic_events_domain_created_at ON traffic_events(domain, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_traffic_events_path_created_at ON traffic_events(path, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS admin_audit_events (
     id BIGSERIAL PRIMARY KEY,

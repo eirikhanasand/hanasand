@@ -672,8 +672,6 @@ async function applySchema() {
     }
     await run('CREATE INDEX IF NOT EXISTS idx_traffic_events_created_at ON traffic_events(created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_traffic_events_domain_created_at ON traffic_events(domain, created_at DESC)')
-    await run('CREATE INDEX IF NOT EXISTS idx_traffic_events_path_created_at ON traffic_events(path, created_at DESC)')
-    await run('CREATE INDEX IF NOT EXISTS idx_traffic_events_country_created_at ON traffic_events(country_iso, created_at DESC)')
     await ensureTrafficHistorySchema()
     await run(`
         CREATE TABLE IF NOT EXISTS desktop_agent_presence (
@@ -1506,7 +1504,6 @@ async function applySchema() {
     await run('ALTER TABLE events ADD COLUMN IF NOT EXISTS parser_version TEXT NOT NULL DEFAULT \'event.v1\'')
     await run('CREATE INDEX IF NOT EXISTS idx_events_org_time ON events(organization_id, event_timestamp DESC)')
     await run('ALTER TABLE events ADD COLUMN IF NOT EXISTS log_key TEXT')
-    await run('CREATE INDEX IF NOT EXISTS idx_events_pending ON events(event_timestamp, id) WHERE processing_status = \'pending\'')
     await run(`CREATE INDEX IF NOT EXISTS idx_events_native_pending ON events(event_timestamp, id)
         WHERE ingestion_id <> 'logs' AND processing_status = 'pending'`)
     await run('CREATE UNIQUE INDEX IF NOT EXISTS idx_events_log_key ON events(log_key)')

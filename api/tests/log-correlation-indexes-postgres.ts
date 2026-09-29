@@ -44,7 +44,6 @@ try {
     }
     await q('CREATE INDEX idx_events_org_time ON events(organization_id,event_timestamp DESC)')
     await q('CREATE INDEX idx_events_org_user_time ON events(organization_id,user_id,event_timestamp DESC)')
-    await q('CREATE INDEX idx_events_pending ON events(event_timestamp,id) WHERE processing_status=\'pending\'')
     await q('ANALYZE events')
     await q('ANALYZE organizations')
     const now=(await q('SELECT NOW()::text AS value')).rows[0].value
