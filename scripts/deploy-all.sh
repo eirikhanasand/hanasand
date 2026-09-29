@@ -29,8 +29,10 @@ stop_deployment_group() {
 }
 
 stop_existing_deployments() {
+    previous_pids=
     for pid in $(running_deployments); do
         if test "$(readlink "/proc/$pid/cwd" 2>/dev/null || true)" = "$root"; then
+            previous_pids="$previous_pids $pid"
             stop_deployment_group TERM "$pid"
         fi
     done
@@ -44,10 +46,8 @@ stop_existing_deployments() {
         attempt=$((attempt + 1))
     done
 
-    for pid in $(running_deployments); do
-        if test "$(readlink "/proc/$pid/cwd" 2>/dev/null || true)" = "$root"; then
-            stop_deployment_group KILL "$pid"
-        fi
+    for pid in $previous_pids; do
+        stop_deployment_group KILL "$pid"
     done
     flock 9
 }
