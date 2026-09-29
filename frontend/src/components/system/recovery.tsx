@@ -30,13 +30,18 @@ function useRecovery() {
 export function RecoveryBanner() {
     const state = useRecovery()
     if (!state || state.mode === 'normal') return null
-    const unavailable = state.services.filter(service => service.status === 'unavailable').map(service => service.name)
+    const reconnecting = state.mode === 'unknown' || state.stale
+    const unavailable = state.services.filter(service => reconnecting ? service.status !== 'available' : service.status === 'unavailable').map(service => service.name)
     return <div role='status' className='w-full border-b border-ui-warning/40 bg-ui-warning/10 px-5 py-3 text-sm text-ui-text'>
-        {state.mode === 'unknown' || state.stale ? 'Service status is reconnecting. Some actions may be temporarily unavailable.'
-            : state.readOnly ? 'Recovery mode: existing records remain available where replication is healthy. Changes and new processing are paused.'
-                : 'Running on a backup server.'}
+        {reconnecting ? unavailable.length > 0
+            ? `Reconnecting. The following services are unavailable while reconnecting: ${unavailable.join(', ')}.`
+            : 'Reconnecting. Service availability has not been verified.'
+            : state.mode === 'down' ? 'Service interruption.'
+                : state.mode === 'degraded' ? 'Some services are degraded.'
+                    : state.readOnly ? 'Recovery mode: existing records remain available where replication is healthy. Changes and new processing are paused.'
+                        : 'Running on a backup server.'}
         {state.services.some(service => service.id === 'intelligence' && service.activeInstance && service.activeInstance !== 'inspur-ti-1') && <span> Threat intelligence is read-only.</span>}
-        {unavailable.length > 0 && <span> Currently unavailable: {unavailable.join(', ')}.</span>}
+        {!reconnecting && state.mode === 'down' && unavailable.length > 0 && <span> Currently unavailable: {unavailable.join(', ')}.</span>}
     </div>
 }
 
@@ -53,7 +58,7 @@ export default function RecoveryPanel() {
         {!state ? <p>Loading service status…</p> : <>
             <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${normal ? 'border-ui-success/25 bg-ui-success/5 text-ui-success' : 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'}`} role='status'>
                 {normal ? <CheckCircle2 className='h-4 w-4 shrink-0' aria-hidden /> : <TriangleAlert className='h-4 w-4 shrink-0' aria-hidden />}
-                <span>{state.mode === 'unknown' || state.stale ? 'Status is reconnecting; availability has not been verified.' : state.readOnly ? 'Database recovery is read-only. Changes are paused.' : normal ? 'All services are healthy.' : 'Backup services are active.'}</span>
+                <span>{state.mode === 'unknown' || state.stale ? 'Status is reconnecting; availability has not been verified.' : state.mode === 'down' ? 'Service interruption.' : state.mode === 'degraded' ? 'Some services are degraded.' : state.readOnly ? 'Database recovery is read-only. Changes are paused.' : normal ? 'All services are healthy.' : 'Backup services are active.'}</span>
             </div>
             <div className='grid min-w-0 gap-3 sm:grid-cols-2 xl:hidden' data-recovery-cards>
                 {state.services.map(service => <article key={service.id} className='min-w-0 rounded-lg border border-current/10 p-3'>
