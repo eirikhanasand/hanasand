@@ -11,9 +11,11 @@ RUN bun install
 FROM deps AS builder
 
 WORKDIR /workspace/frontend
+ARG HANASAND_RELEASE_COMMIT=unknown
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 ENV HANASAND_REPO_ROOT=/repository
+ENV NEXT_PUBLIC_HANASAND_RELEASE_COMMIT=$HANASAND_RELEASE_COMMIT
 
 # The deploy test index intentionally checks a few cross-package contracts
 # before building. Keep the Docker build context at the repository root so

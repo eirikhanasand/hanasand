@@ -51,6 +51,8 @@ export default function Footer() {
     const pathname = usePathname()
     const isShare = isSharePath(pathname)
     const year = new Date().getFullYear()
+    const releaseCommit = process.env.NEXT_PUBLIC_HANASAND_RELEASE_COMMIT || ''
+    const isValidReleaseCommit = /^[0-9a-f]{7,40}$/i.test(releaseCommit)
     const [publicStatus, setPublicStatus] = useState<ServiceStatus['overall'] | 'unknown'>('unknown')
 
     useEffect(() => {
@@ -122,7 +124,13 @@ export default function Footer() {
                     <Link href='/cookie-settings' className='inline-flex min-h-9 items-center hover:text-ui-text'>Cookie settings</Link>
                     <span>© {year} Hanasand</span>
                 </div>
-                <a href='https://github.com/eirikhanasand/hanasand/commit/ec92d4838778f8dd5aa5aaeb55880ecb1e3000f4' target='_blank' rel='noopener noreferrer' className='hover:text-ui-text'>v{config.version}</a>
+                {isValidReleaseCommit ? (
+                    <a href={`https://github.com/eirikhanasand/hanasand/commit/${releaseCommit}`} target='_blank' rel='noopener noreferrer' className='hover:text-ui-text' aria-label={`Version ${config.version}, commit ${releaseCommit}`} title={`Commit ${releaseCommit}`}>
+                        v{config.version} · {releaseCommit.slice(0, 7)}
+                    </a>
+                ) : (
+                    <span>v{config.version}</span>
+                )}
             </section>
         </footer>
     )
