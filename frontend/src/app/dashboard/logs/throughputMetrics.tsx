@@ -15,7 +15,7 @@ const cards = [
 ] as const
 const chartDescriptions = {
     eps: 'Five-minute average of new service logs per second',
-    pps: 'Five-minute average of events checked per second',
+    pps: '',
     npps: 'Five-minute average of incoming load ÷ checked throughput',
 } as const
 const FIVE_MINUTES = 5 * 60_000
@@ -60,6 +60,7 @@ function age(value: string, now: number) {
 function Chart({ title, points, field }: { title: string, points: Point[], field: 'eps' | 'pps' | 'npps' }) {
     const [expanded, setExpanded] = useState(false)
     const [hoveredTime, setHoveredTime] = useState<string | null>(null)
+    const [tooltipPosition, setTooltipPosition] = useState<{ x: number, y: number } | null>(null)
     const scrollRef = useRef<HTMLDivElement>(null)
     const followingLatest = useRef(true)
     const values = points.map(point => Number(point[field]) || 0)
@@ -88,25 +89,57 @@ function Chart({ title, points, field }: { title: string, points: Point[], field
     const ticks = [1, 0.75, 0.5, 0.25, 0]
     const unit = field === 'npps' ? '× load ratio' : 'logs per second'
     const hovered = points.find(point => point.sampled_at === hoveredTime)
+    const hoveredIndex = hovered ? points.indexOf(hovered) : -1
+    const tooltipWidth = scrollRef.current?.clientWidth || 360
+    const tooltipLeft = tooltipPosition ? Math.min(Math.max(tooltipPosition.x, 160), Math.max(160, tooltipWidth - 160)) : 0
     const scrollClass = expanded ? 'h-full overflow-x-auto overflow-y-hidden overscroll-x-contain rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-ui-primary' : 'overflow-x-auto overflow-y-hidden overscroll-x-contain rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-ui-primary'
     const plotAreaClass = expanded ? 'relative mt-3 min-h-0 flex-1' : 'relative mt-3'
     const content = <>
-        <div className='flex shrink-0 items-center justify-between gap-2'><div><h3 id={`chart-title-${field}`} className='text-sm font-semibold'>{title}</h3><p className='text-xs text-ui-muted'>{chartDescriptions[field]}</p></div><button type='button' aria-label={expanded ? `Close expanded ${title} chart` : `Expand ${title} chart`} className='rounded-md p-2 text-ui-muted hover:text-ui-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-ui-primary' onClick={() => setExpanded(value => !value)}>{expanded ? <Minimize2 size={18} aria-hidden /> : <Maximize2 size={18} aria-hidden />}</button></div>
+        <div className='flex shrink-0 items-center justify-between gap-2'><div><h3 id={`chart-title-${field}`} className='text-sm font-semibold'>{title}</h3>{chartDescriptions[field] && <p className='text-xs text-ui-muted'>{chartDescriptions[field]}</p>}</div><button type='button' aria-label={expanded ? `Close expanded ${title} chart` : `Expand ${title} chart`} className='rounded-md p-2 text-ui-muted hover:text-ui-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-ui-primary' onClick={() => setExpanded(value => !value)}>{expanded ? <Minimize2 size={18} aria-hidden /> : <Maximize2 size={18} aria-hidden />}</button></div>
         <div className={plotAreaClass}>
-            {hovered && <div id={`chart-tooltip-${field}`} role='tooltip' className='pointer-events-none absolute right-2 top-2 z-10 max-w-[min(22rem,90%)] rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-xs shadow-lg'>
+            {hovered && tooltipPosition && <div id={`chart-tooltip-${field}`} role='tooltip' style={{ left: `${tooltipLeft}px`, top: `${tooltipPosition.y}px`, transform: tooltipPosition.y < 104 ? 'translate(-50%, 12px)' : 'translate(-50%, calc(-100% - 12px))' }} className='pointer-events-none absolute z-20 max-w-[min(22rem,90%)] rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-xs shadow-lg'>
                 <p className='font-semibold'>{field === 'npps' ? 'Five-minute average load ratio' : 'Five-minute average'}</p>
                 <p className='mt-0.5 tabular-nums'>{format(Number(hovered[field]) || 0)} {unit}</p>
                 <p className='mt-0.5 text-ui-muted'>{timeWindow(hovered.sampled_at)}</p>
             </div>}
-            <div ref={scrollRef} role='region' aria-label={`${title} chart history; scroll horizontally for older five-minute averages`} tabIndex={0} onScroll={event => {
+            <div ref={scrollRef} role='region' aria-label={`${title} chart history; scroll horizontally for older five-minute averages`} tabIndex={0} onPointerMove={event => {
+                const element = event.currentTarget
+                const svg = element.querySelector('svg')
+                const rect = svg?.getBoundingClientRect()
+                if (!svg || !rect || rect.width === 0 || rect.height === 0) return
+                const pointerX = (event.clientX - rect.left) * width / rect.width
+                const pointerY = (event.clientY - rect.top) * height / rect.height
+                if (pointerY < plot.top || pointerY > height - plot.bottom) {
+                    setHoveredTime(null)
+                    setTooltipPosition(null)
+                    return
+                }
+                let nearestIndex = -1
+                let nearestDistance = Number.POSITIVE_INFINITY
+                for (let index = 0; index < coordinates.length; index++) {
+                    const distance = Math.abs(coordinates[index].x - pointerX)
+                    if (distance < nearestDistance) { nearestDistance = distance; nearestIndex = index }
+                }
+                if (nearestIndex < 0 || nearestDistance > pointSpacing / 2) {
+                    setHoveredTime(null)
+                    setTooltipPosition(null)
+                    return
+                }
+                const coordinate = coordinates[nearestIndex]
+                setHoveredTime(points[nearestIndex].sampled_at)
+                setTooltipPosition({ x: coordinate.x - element.scrollLeft, y: coordinate.y * rect.height / height })
+            }} onPointerLeave={() => { setHoveredTime(null); setTooltipPosition(null) }} onScroll={event => {
                 const element = event.currentTarget
                 followingLatest.current = element.scrollWidth - element.clientWidth - element.scrollLeft < 32
+                if (hoveredIndex >= 0) {
+                    const svgHeight = element.querySelector('svg')?.getBoundingClientRect().height || height
+                    setTooltipPosition({ x: coordinates[hoveredIndex].x - element.scrollLeft, y: coordinates[hoveredIndex].y * svgHeight / height })
+                }
             }} className={scrollClass}>
                 <svg role='img' aria-labelledby={`chart-title-${field}`} aria-label={`${title}: ${points.length} five-minute averages from ${sampleTime(points[0]?.sampled_at)} to ${sampleTime(latest?.sampled_at)}. Y axis shows ${unit}.`} width={width} height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio='none' style={{ width: `${width}px`, height: expanded ? 'min(70dvh, 520px)' : `${height}px` }} className='block max-w-none text-ui-primary'>
                     {ticks.map(fraction => {
                         const y = plot.top + plotHeight * (1 - fraction)
-                        const value = max * fraction
-                        return <g key={fraction}><line x1={plot.left} x2={width - plot.right} y1={y} y2={y} stroke='currentColor' opacity={fraction === 0 ? 0.35 : 0.12} /><text x={plot.left - 6} y={y + 3.5} textAnchor='end' fontSize='10' fill='currentColor' opacity='0.7'>{field === 'npps' ? `${value.toFixed(1)}×` : format(value)}</text></g>
+                        return <line key={fraction} x1={plot.left} x2={width - plot.right} y1={y} y2={y} stroke='currentColor' opacity={fraction === 0 ? 0.35 : 0.12} />
                     })}
                     <path d={path || `M ${plot.left} ${plot.top + plotHeight}`} fill='none' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round' strokeLinejoin='round' />
                     {points.map((point, index) => {
@@ -114,14 +147,22 @@ function Chart({ title, points, field }: { title: string, points: Point[], field
                         const selected = point.sampled_at === hoveredTime
                         const value = Number(point[field]) || 0
                         const label = `${timeWindow(point.sampled_at)}: ${format(value)} ${unit}`
-                        return <g key={point.sampled_at} role='button' tabIndex={0} aria-label={label} aria-describedby={selected ? `chart-tooltip-${field}` : undefined} onPointerEnter={() => setHoveredTime(point.sampled_at)} onPointerLeave={() => setHoveredTime(current => current === point.sampled_at ? null : current)} onFocus={() => setHoveredTime(point.sampled_at)} onBlur={() => setHoveredTime(current => current === point.sampled_at ? null : current)} className='cursor-crosshair outline-none'>
-                            <circle cx={coordinate.x} cy={coordinate.y} r='12' fill='transparent'><title>{label}</title></circle>
+                        return <g key={point.sampled_at} role='button' tabIndex={0} aria-label={label} aria-describedby={selected ? `chart-tooltip-${field}` : undefined} onFocus={() => { setHoveredTime(point.sampled_at); setTooltipPosition({ x: coordinate.x - (scrollRef.current?.scrollLeft || 0), y: coordinate.y * ((scrollRef.current?.querySelector('svg')?.getBoundingClientRect().height || height) / height) }) }} onBlur={() => { setHoveredTime(current => current === point.sampled_at ? null : current); setTooltipPosition(current => current && selected ? null : current) }} className='cursor-crosshair outline-none'>
+                            <circle cx={coordinate.x} cy={coordinate.y} r='12' fill='transparent' />
                             <circle cx={coordinate.x} cy={coordinate.y} r={selected ? '4.5' : '2.5'} fill='currentColor' pointerEvents='none' />
                         </g>
                     })}
-                    <text x={plot.left} y={height - 12} fontSize='10' fill='currentColor' opacity='0.7'>{sampleTime(points[0]?.sampled_at)}</text>
-                    <text x={width - plot.right} y={height - 12} textAnchor='end' fontSize='10' fill='currentColor' opacity='0.7'>{sampleTime(latest?.sampled_at)}</text>
+                    {points.map((point, index) => index % 5 === 0 || index === points.length - 1 ? <text key={point.sampled_at} x={coordinates[index].x} y={height - 12} textAnchor={index === 0 ? 'start' : index === points.length - 1 ? 'end' : 'middle'} fontSize='10' fill='currentColor' opacity='0.7'>{sampleTime(point.sampled_at)}</text> : null)}
                 </svg></div>
+            <div aria-hidden='true' className='pointer-events-none absolute left-0 top-0 z-10 h-[220px] w-[44px] bg-ui-panel' style={{ height: expanded ? 'min(70dvh, 520px)' : `${height}px` }}>
+                <svg width='44' height={height} viewBox={`0 0 44 ${height}`} preserveAspectRatio='none' style={{ width: '44px', height: expanded ? 'min(70dvh, 520px)' : `${height}px` }} className='block text-ui-primary'>
+                    {ticks.map(fraction => {
+                        const y = plot.top + plotHeight * (1 - fraction)
+                        const value = max * fraction
+                        return <text key={fraction} x={plot.left - 6} y={y + 3.5} textAnchor='end' fontSize='10' fill='currentColor' opacity='0.7'>{field === 'npps' ? `${value.toFixed(1)}×` : format(value)}</text>
+                    })}
+                </svg>
+            </div>
         </div>
     </>
     useEffect(() => {
@@ -136,7 +177,7 @@ function Chart({ title, points, field }: { title: string, points: Point[], field
         window.addEventListener('keydown', closeOnEscape)
         return () => { document.body.style.overflow = previousOverflow; window.removeEventListener('keydown', closeOnEscape) }
     }, [expanded])
-    if (expanded) return createPortal(<div role='dialog' aria-modal='true' aria-labelledby={`chart-title-${field}`} className='fixed inset-0 z-[100] flex h-dvh w-screen flex-col overflow-hidden bg-ui-panel p-3 sm:p-5'>
+    if (expanded) return createPortal(<div role='dialog' aria-modal='true' aria-labelledby={`chart-title-${field}`} className='fixed inset-0 z-[1100] flex h-dvh w-screen flex-col overflow-hidden bg-ui-panel p-3 sm:p-5'>
         {content}
     </div>, document.body)
     return <div className='flex min-w-0 flex-col rounded-xl border border-ui-border bg-ui-panel p-3'>{content}</div>
