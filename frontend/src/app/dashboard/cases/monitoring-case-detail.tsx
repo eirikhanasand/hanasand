@@ -27,9 +27,11 @@ const severityColor: Record<string, string> = {
 }
 const headerControl = `${control} inline-flex h-10 min-w-28 items-center justify-center whitespace-nowrap`
 const date = (value?: string) => value ? new Date(value).toLocaleString() : '—'
+const caseTabs = ['overview', 'history', 'events'] as const
+type CaseTab = typeof caseTabs[number]
 
 export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: string, organizationId?: string }) {
-    const [tab, setTab] = useState('details')
+    const [tab, setTab] = useState<CaseTab>('overview')
     const [loadingEvents, setLoadingEvents] = useState(false)
     const [item, setItem] = useState<MonitoringCase | null>(null)
     const [error, setError] = useState('')
@@ -44,7 +46,7 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
     useEffect(() => {
         const controller = new AbortController()
         setItem(null)
-        setTab('details')
+        setTab('overview')
         setComment('')
         setError('')
         fetch(endpoint, { cache: 'no-store', signal: controller.signal }).then(async response => {
@@ -102,7 +104,7 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
                     <select aria-label='Severity' className={headerControl} value={item.severity} disabled={busy || item.canManage === false} onChange={event => void save({ severity: event.target.value })}>{['low', 'medium', 'high', 'critical'].map(value => <option key={value} value={value}>{value[0].toUpperCase() + value.slice(1)}</option>)}</select>
                     {['closed', 'resolved'].includes(item.status) ? <button className={headerControl} disabled={busy || item.canManage === false} onClick={() => void save({ status: 'open' })}>Reopen case</button> : <>
                         <button className={headerControl} disabled={busy || item.canManage === false} onClick={() => void save({ status: item.status === 'in_progress' ? 'open' : 'in_progress' })}>{item.status === 'in_progress' ? 'Set as open' : 'Start progress'}</button>
-                        <button className={headerControl} disabled={busy || item.canManage === false} onClick={() => { setTab('details'); setResolving(true) }}>Resolve case</button>
+                        <button className={headerControl} disabled={busy || item.canManage === false} onClick={() => { setTab('overview'); setResolving(true) }}>Resolve case</button>
                     </>}
                     {item.resolution?.id && ['ai', 'automation'].includes(item.resolution.type) && !item.resolution.confirmedAt && ['resolved', 'closed'].includes(item.status) && <button className={headerControl} disabled={busy || item.canManage === false} onClick={() => void save({ confirmResolutionId: item.resolution!.id })}>Confirm resolution</button>}
                 </div>}
@@ -110,29 +112,20 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
             <p role='status' className='sr-only'>{busy ? 'Saving…' : notice}</p>
             {error && <div role='alert' className='text-sm text-ui-text'>{error} <button className='underline' disabled={busy} onClick={() => setRevision(value => value + 1)}>Retry</button></div>}
         </header>
-        {item?.diskDiagnostics && <section aria-label='Disk usage diagnostics' className='border-b border-ui-border p-5 sm:p-6'>
-            <h2 className='font-semibold'>Largest directories</h2>
-            <p className='mt-1 text-xs text-ui-muted'>{item.diskDiagnostics.host} · Collected {new Date(item.diskDiagnostics.sampledAt).toLocaleString()}. Directory sizes include their contents; nested rows overlap.</p>
-            {item.diskDiagnostics.filesystems.map(filesystem => <div key={filesystem.path} className='mt-4'>
-                <h3 className='text-sm font-medium'>{filesystem.path} · {filesystem.usedPercent}% used</h3>
-                {!filesystem.complete && <p className='mt-1 text-sm text-ui-warning'>Partial scan. Some directories could not be measured before the time limit or were inaccessible.</p>}
-                <div className='mt-2 overflow-x-auto'><table className='w-full text-left text-sm'>
-                    <thead className='border-b border-ui-border text-ui-muted'><tr><th className='py-2 pr-4'>Directory</th><th className='py-2 text-right'>Size</th></tr></thead>
-                    <tbody>{filesystem.directories.map(directory => <tr key={directory.path} className='border-b border-ui-border/50'>
-                        <td className='break-all py-2 pr-4 font-mono'>{directory.path}</td>
-                        <td className='whitespace-nowrap py-2 text-right tabular-nums' title={`${directory.sizeBytes.toLocaleString()} bytes`}>{formatDirectorySize(directory.sizeBytes)}</td>
-                    </tr>)}</tbody>
-                </table></div>
-            </div>)}
-        </section>}
-
         {!item && !error && <p className='p-6'>Loading case…</p>}
         {item && <>
-            <div role='tablist' aria-label='Case views' className='flex gap-3 border-b border-ui-border px-5 py-3'>
-                {['details', 'events'].map(value => <button key={value} id={`case-tab-${value}`} role='tab' aria-selected={tab === value} aria-controls={`case-panel-${value}`} tabIndex={tab === value ? 0 : -1} onKeyDown={event => { if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) { event.preventDefault(); const next = event.key === 'Home' ? 'details' : event.key === 'End' ? 'events' : value === 'details' ? 'events' : 'details'; setTab(next); document.getElementById(`case-tab-${next}`)?.focus() } }} className={`${control} ${tab === value ? 'font-semibold text-ui-primary' : ''}`} onClick={() => setTab(value)}>{value === 'details' ? 'Details' : `Events (${item.eventTotal ?? item.occurrences})`}</button>)}
+            <div role='tablist' aria-label='Case views' className='flex flex-wrap gap-2 border-b border-ui-border px-5 py-3'>
+                {caseTabs.map(value => <button key={value} id={`case-tab-${value}`} role='tab' aria-selected={tab === value} aria-controls={`case-panel-${value}`} tabIndex={tab === value ? 0 : -1} onKeyDown={event => {
+                    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+                    event.preventDefault()
+                    const index = caseTabs.indexOf(value)
+                    const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? caseTabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + caseTabs.length) % caseTabs.length
+                    const next = caseTabs[nextIndex]
+                    setTab(next)
+                    document.getElementById(`case-tab-${next}`)?.focus()
+                }} className={`${control} ${tab === value ? 'font-semibold text-ui-primary' : ''}`} onClick={() => setTab(value)}>{value === 'overview' ? 'Overview' : value === 'history' ? 'History' : `Events (${item.eventTotal ?? item.occurrences})`}</button>)}
             </div>
-            <div id='case-panel-events' role='tabpanel' aria-labelledby='case-tab-events' hidden={tab !== 'events'}><CaseEvents events={item.events || []} total={item.eventTotal || 0} occurrences={item.occurrences} loading={loadingEvents} onMore={() => void moreEvents()} /></div>
-            <div id='case-panel-details' role='tabpanel' aria-labelledby='case-tab-details' hidden={tab !== 'details'}>
+            <div id='case-panel-overview' role='tabpanel' aria-labelledby='case-tab-overview' hidden={tab !== 'overview'}>
                 {resolving && <form className='grid gap-3 border-b border-ui-border p-5' onSubmit={event => { event.preventDefault(); if (comment.trim()) void save({ status: 'resolved', comment, ...(aiAssisted ? { resolutionMethod: 'ai' } : {}) }) }}>
                     <label htmlFor='resolution-comment' className='font-medium'>Resolution comment (required)</label>
                     <textarea id='resolution-comment' className={`${control} min-h-24`} required maxLength={5000} value={comment} onChange={event => setComment(event.target.value)} placeholder='What was fixed, and how did you verify it?' />
@@ -162,6 +155,21 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
                     {item.events?.[0] && <div className='grid gap-2'><h3 className='font-medium'>Latest recorded result</h3><p className='whitespace-pre-wrap [overflow-wrap:anywhere]'>{item.events[0].message}</p><p className='text-sm text-ui-muted'>Duration: {item.events[0].durationMs == null ? 'Not recorded' : `${item.events[0].durationMs.toLocaleString()} ms`}</p></div>}
                     <dl className='grid gap-4 sm:grid-cols-2 xl:grid-cols-4'>{[['First seen', date(item.createdAt)], ['Last seen', date(item.lastSeenAt || item.updatedAt)], ['Recovered', item.resolvedAt ? date(item.resolvedAt) : 'Not recovered'], ['Occurrences', item.occurrences.toLocaleString()]].map(([label, value]) => <div key={label} className='min-w-0 rounded-lg bg-ui-canvas p-4'><dt className='text-sm text-ui-muted'>{label}</dt><dd className='mt-2 wrap-break-word text-sm font-medium'>{value}</dd></div>)}</dl>
                     <p className='text-sm text-ui-muted'>Health checks update recovery automatically. A manual case status stays in effect until you change it; closing a case does not mark the health check as recovered.</p>
+                    {item.diskDiagnostics && <section aria-label='Disk usage diagnostics' className='grid gap-4 rounded-lg border border-ui-border bg-ui-canvas p-4'>
+                        <h3 className='font-semibold'>Largest directories</h3>
+                        <p className='text-xs text-ui-muted'>{item.diskDiagnostics.host} · Collected {new Date(item.diskDiagnostics.sampledAt).toLocaleString()}. Directory sizes include their contents; nested rows overlap.</p>
+                        {item.diskDiagnostics.filesystems.map(filesystem => <div key={filesystem.path} className='grid gap-2'>
+                            <h4 className='text-sm font-medium'>{filesystem.path} · {filesystem.usedPercent}% used</h4>
+                            {!filesystem.complete && <p className='text-sm text-ui-warning'>Partial scan. Some directories could not be measured before the time limit or were inaccessible.</p>}
+                            <div className='overflow-x-auto'><table className='w-full text-left text-sm'>
+                                <thead className='border-b border-ui-border text-ui-muted'><tr><th className='py-2 pr-4'>Directory</th><th className='py-2 text-right'>Size</th></tr></thead>
+                                <tbody>{filesystem.directories.map(directory => <tr key={directory.path} className='border-b border-ui-border/50'>
+                                    <td className='break-all py-2 pr-4 font-mono'>{directory.path}</td>
+                                    <td className='whitespace-nowrap py-2 text-right tabular-nums' title={`${directory.sizeBytes.toLocaleString()} bytes`}>{formatDirectorySize(directory.sizeBytes)}</td>
+                                </tr>)}</tbody>
+                            </table></div>
+                        </div>)}
+                    </section>}
                 </section>
                 <details key={`notifications-${caseId}`} className='border-b border-ui-border p-5 sm:p-6'>
                     <summary className='cursor-pointer text-lg font-semibold'>Notification settings ({item.notifications.filter(notification => notification.deliveredAt).length})</summary>
@@ -184,27 +192,6 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
                     </div>
                 </details>
                 <CaseDevelopment caseId={caseId} organizationId={item.organizationId || organizationId} />
-                <section aria-labelledby='case-history' className='grid gap-4 border-b border-ui-border p-5 sm:p-6'>
-                    <h2 id='case-history' className='text-lg font-semibold'>Case history</h2>
-                    <div className='overflow-x-auto rounded-lg border border-ui-border' role='region' aria-label='History timeline' tabIndex={0}>
-                        <table aria-labelledby='case-history' className='w-full min-w-[720px] text-left text-sm'>
-                            <thead className='border-b border-ui-border bg-ui-canvas text-ui-muted'><tr>
-                                {['Time', 'Event', 'Actor', 'Details'].map(label => <th key={label} scope='col' className='px-4 py-3 font-medium'>{label}</th>)}
-                            </tr></thead>
-                            <tbody className='divide-y divide-ui-border'>{item.history?.map(event => <tr key={event.id} className='align-top'>
-                                <td className='whitespace-nowrap px-4 py-3 tabular-nums'><time dateTime={event.at}>{date(event.at)}</time></td>
-                                <td className='whitespace-nowrap px-4 py-3 font-medium capitalize'>{event.action.replaceAll('_', ' ')}</td>
-                                <td className='min-w-40 px-4 py-3 [overflow-wrap:anywhere]'>{event.actor}</td>
-                                <td className='w-full min-w-64 space-y-1 px-4 py-3 [overflow-wrap:anywhere]'>
-                                    {event.fromStatus !== event.toStatus && <p>{event.fromStatus?.replaceAll('_', ' ')} → {event.toStatus?.replaceAll('_', ' ')}</p>}
-                                    {event.fromSeverity !== event.toSeverity && <p>Severity: {event.fromSeverity} → {event.toSeverity}</p>}
-                                    {event.action === 'notifications_changed' && <p>Notifications {event.notificationsEnabled ? 'enabled' : 'disabled'}</p>}
-                                    {event.note && <p className='whitespace-pre-wrap'>{event.note}</p>}
-                                </td>
-                            </tr>)}</tbody>
-                        </table>
-                    </div>
-                </section>
                 <section aria-labelledby='case-comments' className='grid gap-4 p-5 sm:p-6'>
                     <h2 id='case-comments' className='text-lg font-semibold'>Comments</h2>
                     {item.comments?.length ? item.comments.map(entry => <article className='rounded-lg border border-ui-border p-4' key={entry.id}><p className='wrap-break-word text-sm text-ui-muted'>{entry.author} · {date(entry.createdAt)}</p><p className='mt-2 whitespace-pre-wrap [overflow-wrap:anywhere]'>{entry.body}</p></article>) : <p className='text-sm text-ui-muted'>No comments yet.</p>}
@@ -215,6 +202,32 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
                     </form>
                 </section>
             </div>
+            <div id='case-panel-history' role='tabpanel' aria-labelledby='case-tab-history' hidden={tab !== 'history'}>
+                <details className='border-b border-ui-border'>
+                    <summary id='case-history' className='cursor-pointer px-5 py-4 text-lg font-semibold sm:px-6'>Case history</summary>
+                    <div className='px-5 pb-5 sm:px-6 sm:pb-6'>
+                        <div className='overflow-x-auto rounded-lg border border-ui-border' role='region' aria-label='History timeline' tabIndex={0}>
+                            <table aria-labelledby='case-history' className='w-full min-w-[720px] text-left text-sm'>
+                                <thead className='border-b border-ui-border bg-ui-canvas text-ui-muted'><tr>
+                                    {['Time', 'Event', 'Actor', 'Details'].map(label => <th key={label} scope='col' className='px-4 py-3 font-medium'>{label}</th>)}
+                                </tr></thead>
+                                <tbody className='divide-y divide-ui-border'>{item.history?.map(event => <tr key={event.id} className='align-top'>
+                                    <td className='whitespace-nowrap px-4 py-3 tabular-nums'><time dateTime={event.at}>{date(event.at)}</time></td>
+                                    <td className='whitespace-nowrap px-4 py-3 font-medium capitalize'>{event.action.replaceAll('_', ' ')}</td>
+                                    <td className='min-w-40 px-4 py-3 [overflow-wrap:anywhere]'>{event.actor}</td>
+                                    <td className='w-full min-w-64 space-y-1 px-4 py-3 [overflow-wrap:anywhere]'>
+                                        {event.fromStatus !== event.toStatus && <p>{event.fromStatus?.replaceAll('_', ' ')} → {event.toStatus?.replaceAll('_', ' ')}</p>}
+                                        {event.fromSeverity !== event.toSeverity && <p>Severity: {event.fromSeverity} → {event.toSeverity}</p>}
+                                        {event.action === 'notifications_changed' && <p>Notifications {event.notificationsEnabled ? 'enabled' : 'disabled'}</p>}
+                                        {event.note && <p className='whitespace-pre-wrap'>{event.note}</p>}
+                                    </td>
+                                </tr>)}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                </details>
+            </div>
+            <div id='case-panel-events' role='tabpanel' aria-labelledby='case-tab-events' hidden={tab !== 'events'}><CaseEvents events={item.events || []} total={item.eventTotal || 0} occurrences={item.occurrences} loading={loadingEvents} onMore={() => void moreEvents()} /></div>
         </>}
     </article>
 }
