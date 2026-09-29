@@ -19,6 +19,8 @@ ARG SESSION_GEOIP_MONTH
 RUN SESSION_GEOIP_MONTH=$SESSION_GEOIP_MONTH bun scripts/download-session-geo.ts
 
 FROM deps AS auth-runtime
+ARG HANASAND_RELEASE_COMMIT=unknown
+LABEL org.opencontainers.image.revision=$HANASAND_RELEASE_COMMIT
 COPY --chown=bun:bun api/ .
 COPY --from=session-geo /app/geoip /app/geoip
 RUN bun scripts/check-session-network.ts
