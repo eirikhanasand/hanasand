@@ -36,8 +36,8 @@ function sourceLines() {
     }
 }
 
-export default function InlineMarkdown({ text, displayText = text, label, singleLine = false, showEmptyHint = true, onChange, onSelection }: {
-    text: string, displayText?: string, label: string, singleLine?: boolean, showEmptyHint?: boolean,
+export default function InlineMarkdown({ text, displayText = text, label, singleLine = false, showEmptyHint = true, showAddTextButton = true, onChange, onSelection }: {
+    text: string, displayText?: string, label: string, singleLine?: boolean, showEmptyHint?: boolean, showAddTextButton?: boolean,
     onChange: (text: string, group?: string) => void, onSelection?: (start: number, end: number) => void,
 }) {
     const [active, setActive] = useState<number | null>(null)
@@ -146,7 +146,7 @@ export default function InlineMarkdown({ text, displayText = text, label, single
                 }
             }} />}
         {render(after, afterLine, 'after', line === null ? 0 : lines.length - line - 1)}
-        {line === null && !singleLine && <div className='thesis-inline-empty' role='button' tabIndex={0} aria-label={`Add text to ${label}`}
+        {line === null && !singleLine && showAddTextButton && <div className='thesis-inline-empty' role='button' tabIndex={0} aria-label={`Add text to ${label}`}
             onClick={() => {
                 if (!text || text.endsWith('\n')) select(lines.length - 1, 0)
                 else { cursor.current = 0; setActive(lines.length); onChange(text + '\n') }
