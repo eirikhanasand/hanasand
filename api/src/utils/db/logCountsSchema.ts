@@ -69,6 +69,13 @@ export default async function ensureLogCountsSchema() {
         await query('SET LOCAL lock_timeout = \'2s\'')
         await query('SET LOCAL statement_timeout = \'30s\'')
         await query('SELECT pg_advisory_xact_lock(hashtextextended(\'event:log-counts-schema\', 0))')
+        // The advisory lock serializes this readiness check with first-time setup.
+        // Once current, skip the write-conflicting lock on the large dimensions table.
+        const stateTableExists = (await query('SELECT to_regclass($1) IS NOT NULL AS present', ['public.log_counts_state'])).rows[0]?.present
+        if (stateTableExists) {
+            const current = (await query('SELECT ready, to_jsonb(state)->>\'version\' AS version FROM log_counts_state AS state WHERE id = TRUE')).rows[0]
+            if (current?.ready && Number(current.version) >= 2) return false
+        }
         // Serialize the one-time snapshot with writers. The short lock timeout
         // avoids queuing behind a busy writer; a failed bootstrap rolls back.
         await query('LOCK TABLE log_dimensions IN SHARE ROW EXCLUSIVE MODE')
