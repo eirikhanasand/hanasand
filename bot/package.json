@@ -1,0 +1,25 @@
+{
+  "name": "hanasand-discord-bot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24.17.0" },
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env --import tsx --watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "start": "node dist/index.js",
+    "deploy:commands": "npm run build && node dist/deploy-commands.js",
+    "invite:url": "npm run build && node dist/invite-url.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.27.0",
+    "ws": "^8.20.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.20.0",
+    "typescript": "^6.0.3"
+  }
+}

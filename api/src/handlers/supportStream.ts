@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import WebSocket from 'ws'
 import { queryOnce } from '#utils/support/db.ts'
 import { validateSupportSession as validateSession } from '#utils/support/auth.ts'
+import { matchApiKeyScope, validateApiKey } from '#utils/auth/apiKeys.ts'
 import { supportSessionHash } from '#utils/support/conversation.ts'
 import { supportNotifications, type SupportChange } from '#utils/support/live.ts'
 import { recoveryRequestAllowed } from '#utils/recovery.ts'
@@ -49,6 +50,31 @@ export default function registerSupportStream(fastify: FastifyInstance) {
                     const ticket = await queryOnce('DELETE FROM support_live_tickets WHERE token_hash=$1 AND expires_at>NOW() RETURNING visitor_token_hash', [supportSessionHash(auth.ticket)])
                     if (!ticket.rows[0]) throw new Error('Expired ticket')
                     viewer.visitor = ticket.rows[0].visitor_token_hash
+                } else if (typeof auth.apiKey === 'string' && auth.apiKey.length <= 512) {
+                    const credential = await validateApiKey(auth.apiKey)
+                    const streamScope = credential && matchApiKeyScope(credential.apiKey.scopes, 'GET', '/api/ws/support')
+                    const supportQueueScope = credential?.serviceAccount
+                        ? matchApiKeyScope(credential.apiKey.scopes, 'GET', '/api/support/tickets')
+                        : null
+                    const hasSupportRole = credential?.roles.some(role => role.id === 'support')
+                    if (!credential?.ownerId || !streamScope || (!hasSupportRole && !supportQueueScope)) throw new Error('Unauthorized')
+                    viewer.id = credential.ownerId
+                    viewer.support = true
+                    let checking = false
+                    recheck = setInterval(async () => {
+                        if (checking) return
+                        checking = true
+                        try {
+                            const current = await validateApiKey(auth.apiKey)
+                            const currentStreamScope = current && matchApiKeyScope(current.apiKey.scopes, 'GET', '/api/ws/support')
+                            const currentQueueScope = current?.serviceAccount
+                                ? matchApiKeyScope(current.apiKey.scopes, 'GET', '/api/support/tickets')
+                                : null
+                            const currentSupportRole = current?.roles.some(role => role.id === 'support')
+                            if (!current?.ownerId || current.ownerId !== viewer.id || !currentStreamScope
+                                || (!currentSupportRole && !currentQueueScope)) socket.close(1008)
+                        } catch { socket.close(1011) } finally { checking = false }
+                    }, 30000)
                 } else {
                     if (typeof auth.id !== 'string' || typeof auth.token !== 'string' || auth.id.length > 200 || auth.token.length > 512) throw new Error('Unauthorized')
                     const session = await validateSession(auth)

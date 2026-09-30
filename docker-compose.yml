@@ -192,6 +192,49 @@ services:
       - "127.0.0.1:${HANASAND_API_CANDIDATE_PORT:-8083}:8080"
     profiles: [deployment-candidates]
 
+  discord-bot:
+    container_name: hanasand_discord_bot
+    image: hanasand_discord_bot
+    build:
+      context: .
+      dockerfile: ./bot/Dockerfile
+    init: true
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: "0.5"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-}
+      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
+      HANASAND_DISCORD_SUPPORT_API_KEY: ${HANASAND_DISCORD_SUPPORT_API_KEY:-}
+      HANASAND_API_BASE: ${HANASAND_API_BASE:-http://api:8080}
+      DISCORD_SUPPORT_ROLE_ID: ${DISCORD_SUPPORT_ROLE_ID:-}
+      DISCORD_SUPPORT_CATEGORY_ID: ${DISCORD_SUPPORT_CATEGORY_ID:-}
+      SUPPORT_STATE_FILE: /data/support-state.json
+    volumes:
+      - discord_bot_state:/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      start_period: 30s
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - hanasandnet
+    depends_on:
+      api:
+        condition: service_healthy
+    profiles: [discord]
+
   auth-primary:
     container_name: hanasand_auth_primary
     image: hanasand_auth
@@ -753,6 +796,7 @@ services:
       - hanasandnet
 
 volumes:
+  discord_bot_state:
   api_state:
   prompt_portal_state:
   postgres_data:
