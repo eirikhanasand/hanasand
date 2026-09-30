@@ -31,7 +31,7 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
             group('Intelligence', [
                 link('Latest Activity', '/ti/activity', isAdmin),
                 link('Actors', '/findings/actors'),
-                link('Actor Profiles', '/ti/enrichment', isAdmin),
+                link('Actor Profiles', '/ti/profiles', isAdmin),
             ]),
             group('Monitoring', [
                 link('Watchlists', '/findings/watchlists'),

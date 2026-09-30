@@ -276,7 +276,7 @@ function readyRelevance() {
       ownerLane: "source",
       label: "Microsoft",
       action: "Use capture as evidence",
-      route: "/ti/enrichment",
+      route: "/ti/profiles",
       sourceFamily: "vendor_disclosure",
       provenanceRefs: ["microsoft", "capture_microsoft_apt29", "https://www.microsoft.com/en-us/security/blog/"],
       captureIds: ["capture_microsoft_apt29"],

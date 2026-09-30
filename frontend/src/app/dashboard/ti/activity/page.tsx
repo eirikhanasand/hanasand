@@ -6,6 +6,7 @@ import { Activity, AlertTriangle, CheckCircle2, Clock3, ExternalLink, Radio } fr
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import { getTiEnrichmentOverview, type TiActivityEvent } from '@/utils/tiAdmin/enrichment'
 import { formatTiDate } from '@/utils/tiAdmin/ops'
+import { actorProfileHref } from '@/utils/ti/actorProfileRoute'
 
 export const dynamic = 'force-dynamic'
 
@@ -94,7 +95,7 @@ export default async function TiActivityPage({ searchParams }: { searchParams?: 
                                 <tr key={event.id} className='align-top hover:bg-ui-raised'>
                                     <td className='whitespace-nowrap px-4 py-2.5 text-ui-muted'>{formatTiDate(event.happenedAt)}</td>
                                     <td className='px-4 py-2.5'>
-                                        <Link href={`/ti/${encodeURIComponent(event.actorId)}`} className='font-semibold text-ui-text hover:text-ui-primary'>{event.actorName}</Link>
+                                        <Link href={actorProfileHref(event.actorName)} className='font-semibold text-ui-text hover:text-ui-primary'>{event.actorName}</Link>
                                     </td>
                                     <td className='px-4 py-2.5'>
                                         <p className='font-semibold text-ui-text'>{event.title}</p>
@@ -103,7 +104,7 @@ export default async function TiActivityPage({ searchParams }: { searchParams?: 
                                     <td className='px-4 py-2.5 text-ui-muted'>{event.source}</td>
                                     <td className='px-4 py-2.5'><StatusPill label={event.tone === 'bad' ? 'attention' : event.tone === 'watch' ? 'watching' : 'observed'} tone={event.tone} /></td>
                                     <td className='px-4 py-2.5 text-right'>
-                                        <Link href={`/ti/${encodeURIComponent(event.actorId)}`} className='inline-flex h-8 items-center gap-1 rounded-md border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text hover:border-ui-primary'>
+                                        <Link href={actorProfileHref(event.actorName)} className='inline-flex h-8 items-center gap-1 rounded-md border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text hover:border-ui-primary'>
                                             Open
                                             <ExternalLink className='h-3 w-3' />
                                         </Link>
@@ -135,7 +136,7 @@ export default async function TiActivityPage({ searchParams }: { searchParams?: 
                     <h2 className='text-base font-semibold text-ui-text'>Recently observed actors</h2>
                     <div className='mt-3 grid gap-2 md:grid-cols-2'>
                         {updatedActors.slice(0, 8).map(actor => (
-                            <Link key={actor.id} href={`/ti/${encodeURIComponent(actor.id)}`} className='rounded-md border border-ui-border bg-ui-raised p-3 hover:border-ui-primary'>
+                            <Link key={actor.id} href={actorProfileHref(actor.name)} className='rounded-md border border-ui-border bg-ui-raised p-3 hover:border-ui-primary'>
                                 <div className='flex items-start justify-between gap-3'>
                                     <div>
                                         <p className='font-semibold text-ui-text'>{actor.name}</p>
@@ -169,7 +170,7 @@ function Metric({ title, value, icon, tone = 'neutral' }: { title: string, value
 
 function AttentionRow({ event }: { event: TiActivityEvent }) {
     return (
-        <Link href={`/ti/${encodeURIComponent(event.actorId)}`} className='rounded-md border border-ui-border bg-ui-raised p-3 hover:border-ui-primary'>
+        <Link href={actorProfileHref(event.actorName)} className='rounded-md border border-ui-border bg-ui-raised p-3 hover:border-ui-primary'>
             <div className='flex flex-wrap items-start justify-between gap-3'>
                 <div>
                     <p className='text-xs font-semibold uppercase text-ui-muted'>{event.actorName}</p>

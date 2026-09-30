@@ -3,6 +3,7 @@ import { ArrowRight, ExternalLink, Radio, Users } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import { getTiEnrichmentOverview, type TiActivityEvent, type TiEnrichedActor, type TiProfileUpdate } from '@/utils/tiAdmin/enrichment'
 import { formatTiDate } from '@/utils/tiAdmin/ops'
+import { actorProfileHref } from '@/utils/ti/actorProfileRoute'
 
 export const dynamic = 'force-dynamic'
 
@@ -86,7 +87,7 @@ function ActorRow({ actor }: { actor: TiEnrichedActor }) {
     return (
         <div className='flex flex-wrap items-center justify-between gap-3 px-4 py-3 hover:bg-ui-raised'>
             <div className='min-w-0'>
-                <Link href={`/ti/${encodeURIComponent(actor.id)}`} className='font-semibold text-ui-text hover:text-ui-primary'>{actor.name}</Link>
+                <Link href={actorProfileHref(actor.name)} className='font-semibold text-ui-text hover:text-ui-primary'>{actor.name}</Link>
                 <p className='mt-1 text-xs text-ui-muted'>{actor.sourceLinks.length} source{actor.sourceLinks.length === 1 ? '' : 's'} · {actor.automationEvidence.length} evidence row{actor.automationEvidence.length === 1 ? '' : 's'}</p>
             </div>
             <div className='flex items-center gap-4 text-right'>
@@ -94,7 +95,7 @@ function ActorRow({ actor }: { actor: TiEnrichedActor }) {
                     <p className='text-[10px] font-semibold uppercase text-ui-muted'>Last update</p>
                     <p className='mt-1 text-xs font-semibold text-ui-text'>{formatTiDate(actor.lastUpdatedAt)}</p>
                 </div>
-                <Link href={`/ti/${encodeURIComponent(actor.id)}`} aria-label={`Open ${actor.name} profile`} className='inline-flex h-8 items-center gap-1 rounded-md border border-ui-border px-2.5 text-xs font-semibold text-ui-text hover:bg-ui-raised'>
+                <Link href={actorProfileHref(actor.name)} aria-label={`Open ${actor.name} profile`} className='inline-flex h-8 items-center gap-1 rounded-md border border-ui-border px-2.5 text-xs font-semibold text-ui-text hover:bg-ui-raised'>
                     Open
                     <ArrowRight className='h-3.5 w-3.5' />
                 </Link>
@@ -108,7 +109,7 @@ function ActivityRow({ event }: { event: TiActivityEvent }) {
         <div className='px-4 py-3'>
             <div className='flex items-start justify-between gap-3'>
                 <div className='min-w-0'>
-                    <Link href={`/ti/${encodeURIComponent(event.actorId)}`} className='font-semibold text-ui-text hover:text-ui-primary'>{event.actorName}</Link>
+                    <Link href={actorProfileHref(event.actorName)} className='font-semibold text-ui-text hover:text-ui-primary'>{event.actorName}</Link>
                     <p className='mt-1 line-clamp-2 text-sm text-ui-muted'>{event.title}</p>
                 </div>
                 <span className='shrink-0 text-xs text-ui-muted'>{formatTiDate(event.happenedAt)}</span>
@@ -121,7 +122,7 @@ function ActivityRow({ event }: { event: TiActivityEvent }) {
 function ProfileUpdateRow({ update, actor }: { update: TiProfileUpdate, actor: TiEnrichedActor | undefined }) {
     return <div className='flex flex-wrap items-center justify-between gap-3 px-4 py-3 hover:bg-ui-raised'>
         <div className='min-w-0'>
-            <Link href={`/ti/${encodeURIComponent(update.actorId)}`} className='font-semibold text-ui-text hover:text-ui-primary'>{actor?.name || update.actorId}</Link>
+            <Link href={actorProfileHref(actor?.name || update.actorName || '')} className='font-semibold text-ui-text hover:text-ui-primary'>{actor?.name || update.actorName || 'Actor profile'}</Link>
             <p className='mt-1 text-sm text-ui-muted'>{update.kind === 'added' ? 'Profile created from' : 'Profile updated from'} retained evidence · {update.summary}</p>
             <p className='mt-1 text-xs text-ui-primary'>{update.sourceId || 'source linked'} · {update.captureIds.length} capture{update.captureIds.length === 1 ? '' : 's'}</p>
         </div>

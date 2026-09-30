@@ -212,7 +212,7 @@ for (const requiredToken of [
     '/notes',
     '/ti/activity',
     '/ti/audit',
-    '/ti/enrichment',
+    '/ti/profiles',
     '/ti/sources',
     '/ti/runs',
     'screenshotPath',

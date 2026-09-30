@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react'
 import Link from '@/components/organizations/workspaceLink'
 import type { DwmActorOverview } from '@/utils/dwm/product'
 import { customerAlertSummary, safeEvidenceExcerpt } from '@/utils/dwm/display'
+import { actorProfileHref } from '@/utils/ti/actorProfileRoute'
 import type { DwmDataHealth, PortalAlert } from './findings'
 
 const panel = 'min-w-0 rounded-lg border border-ui-border bg-ui-panel'
@@ -102,7 +103,7 @@ export function MonitoringOverview({ alerts, dataHealth, organizationId, initial
                     <details className='mt-3' open={initialAlertId === alert.id || undefined}>
                         <summary className={`${link} cursor-pointer`}>Investigate finding</summary>
                         <p className='mt-3 text-sm text-ui-muted'>{alert.recommendedAction}</p>
-                        {alert.actor && <Link className={`${link} mt-2 inline-block`} href={`/ti/${encodeURIComponent(alert.actor)}`}>Open {alert.actor} profile</Link>}
+                        {alert.actor && <Link className={`${link} mt-2 inline-block`} href={actorProfileHref(alert.actor)}>Open {alert.actor} profile</Link>}
                         {!evidence.length && <p className='mt-3 text-sm text-ui-muted'>No retained evidence is attached to this finding.</p>}
                         <ul className='mt-3 grid gap-3'>{evidence.map(item => <li key={item.id} className='min-w-0 rounded-md border border-ui-border bg-ui-canvas p-3'>
                             <p className='text-sm font-semibold text-ui-text'>{item.sourceName} <span className='font-normal text-ui-muted'>· {label(item.captureMode)}</span></p>
@@ -130,8 +131,8 @@ export function ActorDirectory({ actors, state, onRetry, query = '' }: { actors:
         {state === 'live' && <>
             {!rows.length && <p className='p-4 text-sm text-ui-muted'>{actors.length ? 'No actors match this search.' : 'No actor profiles are linked to this monitoring scope yet.'}</p>}
             <ul className='divide-y divide-ui-border'>{rows.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(actor => <li key={actor.actor} className='flex flex-wrap items-center justify-between gap-3 p-4'>
-                <div className='min-w-0'><Link className={`${link} wrap-break-word`} href={`/ti/${encodeURIComponent(actor.actor)}`}>{actor.actor}</Link><p className='mt-1 text-xs text-ui-muted'>{actor.sourceCount} sources · {actor.captureCount} captures · {actor.captureCount ? 'Recorded observations' : 'No captured observations'}</p><p className='mt-1 text-xs text-ui-muted'>Latest observation: <Timestamp value={actor.latestSeenAt} /></p>{actor.sourceFamilies.includes('darkweb_metadata') && <p className='mt-1 text-xs text-ui-muted'>Includes metadata-only sources</p>}</div>
-                <Link className={link} href={`/ti/${encodeURIComponent(actor.actor)}`} aria-label={`Open ${actor.actor} profile`}>Open profile</Link>
+                <div className='min-w-0'><Link className={`${link} wrap-break-word`} href={actorProfileHref(actor.actor)}>{actor.actor}</Link><p className='mt-1 text-xs text-ui-muted'>{actor.sourceCount} sources · {actor.captureCount} captures · {actor.captureCount ? 'Recorded observations' : 'No captured observations'}</p><p className='mt-1 text-xs text-ui-muted'>Latest observation: <Timestamp value={actor.latestSeenAt} /></p>{actor.sourceFamilies.includes('darkweb_metadata') && <p className='mt-1 text-xs text-ui-muted'>Includes metadata-only sources</p>}</div>
+                <Link className={link} href={actorProfileHref(actor.actor)} aria-label={`Open ${actor.actor} profile`}>Open profile</Link>
             </li>)}</ul>
             <Pages count={rows.length} page={currentPage} setPage={setPage} />
         </>}

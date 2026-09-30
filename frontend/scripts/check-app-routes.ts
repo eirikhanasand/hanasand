@@ -1,11 +1,18 @@
 import assert from 'node:assert/strict'
 import config from '../next.config.js'
-const rewrites = (await config.rewrites()).beforeFiles
 import { readdirSync, existsSync } from 'node:fs'
 import { appRoutes, canonicalAppPath, appPagePath, hasAppSidebar } from '../src/utils/routes/appRoutes'
 import { getDashboardNavigation, navigationLinks } from '../src/utils/layout/dashboardNavigation'
 import { proxy } from '../src/proxy'
 import { NextRequest } from 'next/server'
+
+const rewrites = (await config.rewrites()).beforeFiles
+const redirects = await config.redirects()
+assert.deepEqual(redirects.find(route => route.source === '/ti/enrichment'), {
+    source: '/ti/enrichment',
+    destination: '/ti/profiles',
+    permanent: true,
+})
 
 const base = new URL('../src/app/dashboard/', import.meta.url)
 const pages = readdirSync(base, { recursive: true }).map(String).filter(path => path.endsWith('page.tsx'))
@@ -50,7 +57,9 @@ assert.equal(appPagePath('/articles/example'), '/articles/example')
 assert.equal(appPagePath('/ti/example'), '/ti/example')
 for (const path of ['/organizations', '/organizations/123', '/profile/123', '/ti', '/ti/example', '/api']) assert.ok(hasAppSidebar(path))
 for (const path of ['/', '/articles', '/login', '/pricing']) assert.ok(!hasAppSidebar(path))
-for (const link of navigationLinks(getDashboardNavigation({ id: 'test', isAdmin: true, canManageSystem: true, canManageContent: true }))) {
+const navigation = navigationLinks(getDashboardNavigation({ id: 'test', isAdmin: true, canManageSystem: true, canManageContent: true }))
+assert.equal(navigation.find(link => link.label === 'Actor Profiles')?.href, '/ti/profiles')
+for (const link of navigation) {
     assert.ok(!link.href.startsWith('/dashboard/'), link.href)
     assert.ok(hasAppSidebar(link.href), link.href)
 }

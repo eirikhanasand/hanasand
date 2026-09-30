@@ -1149,6 +1149,7 @@ async function searchCaptures(store: any, query: string, entityType: SearchEntit
 
 function actorIdentity(store: any, tenantId: string | undefined, query: string) {
   const normalizedQuery = normalizeActorName(query);
+  const normalizedQuerySlug = normalizedQuery.replace(/\s+/g, "");
   const registeredIdentities = store.listActorIdentities?.() ?? [];
   const catalogResolution = resolveMitreActorIdentity(query, registeredIdentities);
   const profiles = (store.listActorProfiles?.() ?? []).filter((profile: any) => (profile.tenantId || undefined) === tenantId);
@@ -1161,9 +1162,14 @@ function actorIdentity(store: any, tenantId: string | undefined, query: string) 
     && entity.extractionMethod === "source_specific"
     && normalizeActorName(entity.value) === normalizedQuery
   );
+  const matchesProfileName = (value: unknown) => {
+    const normalizedName = normalizeActorName(value);
+    return normalizedName === normalizedQuery
+      || (!normalizedQuery.includes(" ") && normalizedQuerySlug.length > 0 && normalizedName.replace(/\s+/g, "") === normalizedQuerySlug);
+  };
   const matchedProfileIds = new Set([
-    ...profiles.filter((profile: any) => [profile.canonicalName, ...(profile.aliases ?? [])].some((value) => normalizeActorName(value) === normalizedQuery)).map((profile: any) => profile.id),
-    ...aliases.filter((alias: any) => normalizeActorName(alias.normalizedAlias ?? alias.alias) === normalizedQuery).map((alias: any) => alias.actorProfileId)
+    ...profiles.filter((profile: any) => [profile.canonicalName, ...(profile.aliases ?? [])].some(matchesProfileName)).map((profile: any) => profile.id),
+    ...aliases.filter((alias: any) => matchesProfileName(alias.normalizedAlias ?? alias.alias)).map((alias: any) => alias.actorProfileId)
   ]);
   const matchedProfiles = profiles.filter((profile: any) => matchedProfileIds.has(profile.id));
   const terms = unique([

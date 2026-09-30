@@ -1912,7 +1912,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     await admin`
       INSERT INTO threat_intel.workflow_records (record_type, id, tenant_id, created_at, updated_at, record)
       VALUES (
-        'actor_scope_probe',
+        'profile_scope_probe',
         'workflow_worldleaks',
         NULL,
         ${collectedAt},

@@ -1,4 +1,4 @@
-import { readdir, writeFile } from 'node:fs/promises'
+import { readFile, readdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -6,6 +6,7 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const frontendDir = path.resolve(scriptDir, '..')
 const appDir = path.join(frontendDir, 'src/app')
 const outputPath = path.join(frontendDir, 'src/utils/routes/generatedSearchRoutes.ts')
+const appRoutes = JSON.parse(await readFile(path.join(frontendDir, 'src/utils/routes/appRoutes.json'), 'utf8'))
 
 async function pageRoutes(directory, segments = []) {
     const entries = await readdir(directory, { withFileTypes: true })
@@ -44,7 +45,10 @@ function quote(value) {
 }
 
 const nonSearchableRoutes = new Set(['/browser/report', '/dashboard/system/ssh-keys'])
-const routes = [...new Set(await pageRoutes(appDir))].filter(route => !nonSearchableRoutes.has(route)).sort((a, b) => a.localeCompare(b))
+const profilePagePath = appRoutes.find(([, canonical]) => canonical === '/ti/profiles')?.[0]
+const routes = [...new Set((await pageRoutes(appDir))
+    .filter(route => !nonSearchableRoutes.has(route))
+    .map(route => route === profilePagePath ? '/ti/profiles' : route))].sort((a, b) => a.localeCompare(b))
 const items = routes.map(href => `{
         id: ${quote(`route:${href}`)},
         title: ${quote(labelFor(href))},

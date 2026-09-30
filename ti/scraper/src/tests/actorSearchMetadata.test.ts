@@ -14,3 +14,21 @@ test('cached and refreshed searches preserve catalog dates and cited description
     expect(result.actorIdentity.candidates[0]).toMatchObject({ createdAt: identity.createdAt, modifiedAt: identity.modifiedAt, description: identity.description, referenceSources: identity.referenceSources });
   }
 });
+
+test('resolves actor profile slugs that omit spaces from the actor name', async () => {
+  const store = new InMemoryScraperStore();
+  store.saveActorProfile({
+    id: 'actor_the_gentlemen',
+    canonicalName: 'The Gentlemen',
+    normalizedName: 'the gentlemen',
+    actorType: 'threat_actor',
+    aliases: ['The Gentlemen'],
+    sourceIds: [],
+    captureIds: [],
+    confidence: 0.8,
+  });
+  const url = new URL('http://localhost/v1/intel/search?q=thegentlemen');
+  const response = await searchResponse(new Request(url), { store, frontier: new FocusedFrontier() }, url);
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ query: 'thegentlemen', queryKind: 'actor' });
+});

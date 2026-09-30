@@ -101,7 +101,7 @@ export default function ActorArtifactWorkbench({ artifact, handoffs }: { artifac
                                             {sourceRequestFamilyLabel(request.sourceFamily ?? 'source_capture')}
                                         </span>
                                         <span className='max-w-full wrap-break-word rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-text dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
-                                            {sourceRequestRouteLabel(request.route ?? '/ti/enrichment')}
+                                            {sourceRequestRouteLabel(request.route ?? '/ti/profiles')}
                                         </span>
                                     </div>
                                 </div>

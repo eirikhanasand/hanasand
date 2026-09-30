@@ -2932,7 +2932,7 @@ export function drilldownRow(input: {
         confidence: input.confidence,
         state,
         ownerLane: state === 'ready' ? 'case' : state === 'needs_capture' ? 'source' : 'public-ti',
-        route: state === 'ready' ? '/v1/cases' : '/ti/enrichment',
+        route: state === 'ready' ? '/v1/cases' : '/ti/profiles',
         missing,
         handoff: input.handoff,
     }
@@ -3104,7 +3104,7 @@ export function enrichmentGapWorkbenchRowsFor({
             newestAt: artifact.freshness,
             source: artifact.provenance[0] || 'Detail context',
             impact: artifact.subtitle,
-            route: artifact.readiness.state === 'needs_source' ? '/ti/enrichment' : undefined,
+            route: artifact.readiness.state === 'needs_source' ? '/ti/profiles' : undefined,
             evidenceItems,
             artifactIds: [artifact.id],
             missing: [...artifact.readiness.blockers, ...artifact.enrichmentTasks],
@@ -3128,7 +3128,7 @@ export function enrichmentGapWorkbenchRowsFor({
             newestAt: actor.sourceCoverage.latestReportDate || actor.lastSeen,
             source: 'Actor profile',
             impact: actor.freshness.reason,
-            route: '/ti/enrichment',
+            route: '/ti/profiles',
             evidenceItems: workItems.slice(0, 3),
             artifactIds: artifacts.slice(0, 3).map(item => item.id),
             missing: actor.sourceCoverage.missing,
@@ -4161,7 +4161,7 @@ export function displayRequirementList(values: string[]) {
 }
 
 export function sourceRequestRouteLabel(value: string) {
-    if (value === '/ti/enrichment') return 'source review'
+    if (value === '/ti/profiles') return 'source review'
     return 'review action'
 }
 

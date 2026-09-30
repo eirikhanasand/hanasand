@@ -1182,7 +1182,7 @@ describe("actor org relevance API", () => {
       "missing_webhook_destination"
     ]));
     expect(payload.summary.nextActions).toEqual(expect.arrayContaining([
-      expect.objectContaining({ ownerLane: "source", route: "/ti/enrichment" }),
+      expect.objectContaining({ ownerLane: "source", route: "/ti/profiles" }),
       expect.objectContaining({ ownerLane: "alert", route: "/dwm" }),
       expect.objectContaining({ ownerLane: "case", route: "/v1/cases" }),
       expect.objectContaining({ ownerLane: "webhook", route: "/dwm" })
@@ -1411,7 +1411,7 @@ function readyRelevance(): PublicTiOrgRelevanceProofLike {
       ownerLane: "source",
       label: "Microsoft",
       action: "Use capture as evidence",
-      route: "/ti/enrichment",
+      route: "/ti/profiles",
       sourceFamily: "vendor_disclosure",
       provenanceRefs: ["microsoft", "capture_microsoft_apt29", "https://www.microsoft.com/en-us/security/blog/"],
       captureIds: ["capture_microsoft_apt29"],

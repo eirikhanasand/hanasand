@@ -404,7 +404,7 @@ export type PublicTiSourceEnrichmentIntake = {
     schemaVersion: 'ti.public_actor.source_enrichment_intake.v1'
     query: string
     generatedAt: string
-    route: '/ti/enrichment'
+    route: '/ti/profiles'
     items: PublicTiSourceEnrichmentIntakeItem[]
     summary: {
         total: number
@@ -1240,7 +1240,7 @@ function buildPublicTiActionPayloads(input: {
                 label: 'Source enrichment request',
                 actorId,
                 result: input.result,
-                route: input.exportPayloads.enrichment.backedRoute ?? '/ti/enrichment',
+                route: input.exportPayloads.enrichment.backedRoute ?? '/ti/profiles',
                 backedRoute: input.exportPayloads.enrichment.backedRoute,
                 body: {
                     ...input.exportPayloads.enrichment.body,
@@ -1582,12 +1582,12 @@ function orgRelevanceEnrichmentGaps(input: {
     freshness: TiActorIntelligenceProfile['freshness']
 }): PublicTiOrgRelevanceEnrichmentGap[] {
     const gaps: PublicTiOrgRelevanceEnrichmentGap[] = []
-    if (!input.actorIdentity.aliases.length) gaps.push(orgGap('missing_actor_aliases', 'public-ti', 'actorIdentity.aliases', 'Add known aliases before alert or watchlist handoff.', '/ti/enrichment', 'actor_profile'))
-    if (!input.actorIdentity.sectors.length) gaps.push(orgGap('missing_target_sectors', 'public-ti', 'actorIdentity.sectors', 'Attach target-sector evidence before routing this actor to a customer watchlist.', '/ti/enrichment', 'actor_profile'))
-    if (!input.actorIdentity.regions.length) gaps.push(orgGap('missing_target_regions', 'public-ti', 'actorIdentity.regions', 'Attach target-region evidence before regional exposure review.', '/ti/enrichment', 'geography'))
+    if (!input.actorIdentity.aliases.length) gaps.push(orgGap('missing_actor_aliases', 'public-ti', 'actorIdentity.aliases', 'Add known aliases before alert or watchlist handoff.', '/ti/profiles', 'actor_profile'))
+    if (!input.actorIdentity.sectors.length) gaps.push(orgGap('missing_target_sectors', 'public-ti', 'actorIdentity.sectors', 'Attach target-sector evidence before routing this actor to a customer watchlist.', '/ti/profiles', 'actor_profile'))
+    if (!input.actorIdentity.regions.length) gaps.push(orgGap('missing_target_regions', 'public-ti', 'actorIdentity.regions', 'Attach target-region evidence before regional exposure review.', '/ti/profiles', 'geography'))
     if (!input.sourceCoverage.length) gaps.push(orgGap('missing_source_coverage', 'source', 'sourceCoverage', 'Attach at least one source coverage row for this actor result.', '/ti/sources', 'source_capture'))
-    if (!input.sourceEvidence.length) gaps.push(orgGap('missing_provenance', 'source', 'sourceEvidence', 'Source details are required before org relevance can be reviewed.', '/ti/enrichment', 'source_capture'))
-    if (input.freshness.stale) gaps.push(orgGap('stale_evidence', 'source', 'freshness.lastSeen', input.freshness.reason, '/ti/enrichment', 'source_capture'))
+    if (!input.sourceEvidence.length) gaps.push(orgGap('missing_provenance', 'source', 'sourceEvidence', 'Source details are required before org relevance can be reviewed.', '/ti/profiles', 'source_capture'))
+    if (input.freshness.stale) gaps.push(orgGap('stale_evidence', 'source', 'freshness.lastSeen', input.freshness.reason, '/ti/profiles', 'source_capture'))
     return uniqueBy(gaps, gap => `${gap.code}:${gap.field}`)
 }
 
@@ -1723,7 +1723,7 @@ function buildOrgRelevanceRows(input: {
             ownerLane: 'source',
             label: source.sourceName,
             action: source.captureId ? 'Use capture as evidence' : 'Attach capture ID',
-            route: '/ti/enrichment',
+            route: '/ti/profiles',
             sourceFamily: sourceFamilyForEvidence(source),
             provenanceRefs,
             captureIds: uniqueStrings([source.captureId]),
@@ -1956,10 +1956,10 @@ function buildPublicTiStatus(input: {
 
     if (!hasOrgContext) blockers.push(statusBlocker('missing_org', 'watchlist', 'org', 'watchlistMatches[].organizationId', 'Organization context is required before watchlist, alert, case, or delivery handoff can mutate customer state.', '/findings', 'Open the authenticated console and choose the customer organization before saving watchlist terms.', 'consumer_readiness'))
     if (!watchlistIds.length || !watchlistItemIds.length) blockers.push(statusBlocker('missing_org_watchlist', 'watchlist', 'org', 'watchlistMatches[].watchlistId', hasWatchlistTerms ? 'Candidate watchlist terms exist, but no persisted organization watchlist item is attached.' : 'No candidate or persisted organization watchlist term is attached to this result.', '/findings', hasWatchlistTerms ? 'Create or select the customer watchlist, then rebuild alerts from the saved items.' : 'Collect a customer-relevant company, domain, vendor, or sector term before rebuilding alerts.', 'consumer_readiness'))
-    if (!input.sourceProvenance.length) blockers.push(statusBlocker('missing_source_provenance', 'source', 'source', 'sourceProvenance[]', 'No source detail row is attached to this result.', '/ti/enrichment', 'Attach source name, source ID, source URL, report date, and confidence before using this result for alerting.', 'public_result'))
-    if (input.actor.freshness.stale) blockers.push(statusBlocker('stale_provenance', 'public_ti', 'public-ti', 'actorIntelligence.freshness', input.actor.freshness.reason, '/ti/enrichment', 'Refresh the actor profile or attach newer corroborating evidence before sending this to review.', 'public_result'))
+    if (!input.sourceProvenance.length) blockers.push(statusBlocker('missing_source_provenance', 'source', 'source', 'sourceProvenance[]', 'No source detail row is attached to this result.', '/ti/profiles', 'Attach source name, source ID, source URL, report date, and confidence before using this result for alerting.', 'public_result'))
+    if (input.actor.freshness.stale) blockers.push(statusBlocker('stale_provenance', 'public_ti', 'public-ti', 'actorIntelligence.freshness', input.actor.freshness.reason, '/ti/profiles', 'Refresh the actor profile or attach newer corroborating evidence before sending this to review.', 'public_result'))
     if (!alertIds.length) blockers.push(statusBlocker('missing_alert', 'alert', 'alert', 'relatedAlerts[].id', 'No generated alert ID is attached to this actor result.', '/findings', 'Rebuild alerts from persisted watchlist items and return the alert ID.', 'consumer_readiness'))
-    if (!captureIds.length) blockers.push(statusBlocker('missing_capture', 'source', 'source', 'sourceProvenance[].captureId', 'No replayable capture ID is attached for case evidence or delivery dry-run.', '/ti/enrichment', 'Attach capture IDs or source request IDs to the source rows.', 'consumer_readiness'))
+    if (!captureIds.length) blockers.push(statusBlocker('missing_capture', 'source', 'source', 'sourceProvenance[].captureId', 'No replayable capture ID is attached for case evidence or delivery dry-run.', '/ti/profiles', 'Attach capture IDs or source request IDs to the source rows.', 'consumer_readiness'))
     if (!casePaths.length) blockers.push(statusBlocker('missing_case_route', 'case', 'case', 'relatedCases[].path', 'No case route or case path is attached to this result.', '/ti/workbench', 'Return relatedCases[].path or relatedAlerts[].casePath after case creation is available.', 'consumer_readiness'))
     if (!webhookDestinationIds.length) blockers.push(statusBlocker('missing_webhook_destination', 'webhook', 'webhook', 'relatedWebhookDestinations[].id', 'No active webhook destination ID is attached for dry-run delivery.', '/findings', 'Attach an active webhook destination before preparing customer delivery.', 'consumer_readiness'))
 
@@ -1978,7 +1978,7 @@ function buildPublicTiStatus(input: {
 
     for (const alert of input.relatedAlerts) {
         for (const code of alert.deliveryReadinessContext?.blockerCodes ?? []) {
-            if (code === 'missing_capture_evidence') blockers.push(statusBlocker('missing_capture', 'source', 'source', `relatedAlerts.${alert.id}.deliveryReadinessContext.selectedCaptureIds`, 'Delivery readiness reports missing capture evidence.', '/ti/enrichment', 'Attach capture IDs and evidence count before delivery or replay.', 'delivery_readiness'))
+            if (code === 'missing_capture_evidence') blockers.push(statusBlocker('missing_capture', 'source', 'source', `relatedAlerts.${alert.id}.deliveryReadinessContext.selectedCaptureIds`, 'Delivery readiness reports missing capture evidence.', '/ti/profiles', 'Attach capture IDs and evidence count before delivery or replay.', 'delivery_readiness'))
             if (code === 'case_route_unavailable') blockers.push(statusBlocker('missing_case_route', 'case', 'case', `relatedAlerts.${alert.id}.deliveryReadinessContext.casePath`, 'Delivery readiness reports that the case route is unavailable.', '/ti/workbench', 'Return case path and case ID candidate from the case workflow before handoff.', 'delivery_readiness'))
             if (code === 'delivery_disabled') blockers.push(statusBlocker('missing_webhook_destination', 'webhook', 'webhook', `relatedAlerts.${alert.id}.deliveryReadinessContext.webhookDestinationIds`, 'Delivery readiness reports that webhook delivery is not configured.', '/findings', 'Attach an active webhook destination or mark delivery intentionally disabled.', 'delivery_readiness'))
             if (code === 'entitlement_denied') blockers.push(statusBlocker('entitlement_blocked', 'entitlement', 'entitlement', `relatedAlerts.${alert.id}.deliveryReadinessContext.entitlement`, 'Delivery readiness reports an entitlement denial.', '/findings', 'Resolve organization entitlement before replay, delivery, or alert rebuild.', 'delivery_readiness'))
@@ -2157,7 +2157,7 @@ function buildPublicTiSourceHealthQueue(input: {
             captureId: source.captureId,
             sourceRequestId: source.sourceRequestId,
             sourceId: source.sourceId,
-            route: matchingGaps[0]?.route || input.exportPayloads.enrichment.backedRoute || '/ti/enrichment',
+            route: matchingGaps[0]?.route || input.exportPayloads.enrichment.backedRoute || '/ti/profiles',
             requestedFields,
             ownerLane: source.status === 'missing_capture' ? 'source' : stale ? 'public-ti' : 'source',
             nextAction: source.status === 'capture_ready'
@@ -2240,7 +2240,7 @@ function buildPublicTiSourceEnrichmentIntake(input: {
         schemaVersion: 'ti.public_actor.source_enrichment_intake.v1',
         query: input.result.query,
         generatedAt: input.result.generatedAt,
-        route: '/ti/enrichment',
+        route: '/ti/profiles',
         items,
         summary: {
             total: items.length,
@@ -2951,7 +2951,7 @@ function buildExportPayloads(input: {
             query: input.result.query,
             generatedAt: input.result.generatedAt,
             route: 'enrichment_queue',
-            backedRoute: '/ti/enrichment',
+            backedRoute: '/ti/profiles',
             blocked: enrichmentTasks.length === 0,
             missing: enrichmentTasks.length ? [] : ['No enrichment tasks queued for this actor/query result'],
             body: {
@@ -3209,7 +3209,7 @@ function normalizeMissingDetails(contractGaps: TiActionabilityContract['enrichme
             severity: 'high',
             detail: 'Source records identify provenance, but no capture IDs are attached for alert replay or case evidence.',
             dependency: 'TI search response sourceProvenance[].captureId or DWM alert evidence provenance',
-            route: '/ti/enrichment',
+            route: '/ti/profiles',
             sourceFamily: 'source_capture',
             requestedFields: ['sourceProvenance[].captureId', 'sourceProvenance[].sourceId', 'sourceProvenance[].provenance'],
         })
@@ -3233,7 +3233,7 @@ function normalizeMissingDetails(contractGaps: TiActionabilityContract['enrichme
             severity: 'medium',
             detail: 'Actor tools and campaigns are needed to enrich watchlists and explain defensive relevance.',
             dependency: 'TiSearchResponse.actorIntelligence.malwareTools/campaigns',
-            route: '/ti/enrichment',
+            route: '/ti/profiles',
             sourceFamily: 'actor_profile',
             requestedFields: ['actorIntelligence.malwareTools', 'actorIntelligence.campaigns', 'actorIntelligence.sourceProvenance'],
         })
@@ -3264,7 +3264,7 @@ function normalizeRelatedCases(
 function routeForGap(gap: NonNullable<TiActionabilityContract['enrichmentGaps']>[number]) {
     if (/alert|dwm/i.test(`${gap.id} ${gap.dependency}`)) return '/findings'
     if (/case/i.test(`${gap.id} ${gap.dependency}`)) return '/ti/workbench'
-    return '/ti/enrichment'
+    return '/ti/profiles'
 }
 
 function sourceFamilyForGap(gap: NonNullable<TiActionabilityContract['enrichmentGaps']>[number]): EnrichmentGapQueueItem['sourceFamily'] {

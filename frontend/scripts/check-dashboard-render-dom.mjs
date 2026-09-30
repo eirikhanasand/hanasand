@@ -115,7 +115,7 @@ const pageSpecs = [
     },
     {
         id: 'ti_enrichment',
-        path: '/ti/enrichment',
+        path: '/ti/profiles',
         requiredSelectors: ['main'],
     },
     {

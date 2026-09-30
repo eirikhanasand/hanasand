@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { buildActorIntelligence } from '../src/utils/ti/actorIntelligence'
 import { actorGeoProfile, victimObservationsFor } from '../src/utils/ti/actorProfile'
+import { actorProfileHref } from '../src/utils/ti/actorProfileRoute'
 import { buildTiActionability } from '../src/utils/ti/actionability'
 import {
     PUBLIC_TI_HANDOFF_ACTIONS,
@@ -101,6 +102,7 @@ const fixture: TiSearchResponse = {
         }],
     },
 }
+assert(actorProfileHref('The Gentlemen') === '/ti/thegentlemen', 'Actor profile links should use the real name as a lowercase URL slug.')
 
 const victims = [{
     victim: 'SolarWinds Orion customers and U.S. federal agencies',
@@ -241,7 +243,7 @@ assert(actionability.sourceEnrichmentIntake.items.some(item => item.requestedFie
 assert(actionability.actorEnrichmentCoverage.schemaVersion === 'ti.public_actor.actor_enrichment_coverage_export.v1', 'Actor enrichment coverage should expose a versioned public TI export.')
 assert(actionability.actorEnrichmentCoverage.sourceContractSchemaVersion === 'ti.source_provenance_actor_enrichment_coverage_export.v1', 'Actor enrichment coverage should align to the source provenance coverage export contract.')
 assert(actionability.actorEnrichmentCoverage.coverageRows.some(item => item.field === 'sourceProvenance' && item.blockerCodes.includes('coverage_pending')), 'Actor enrichment coverage should preserve source provenance coverage blockers.')
-assert(actionability.actorEnrichmentCoverage.consumers.some(item => item.consumer === 'sourceOps' && item.route.path === '/ti/enrichment'), 'Actor enrichment coverage should route source-owned coverage work to enrichment intake.')
+assert(actionability.actorEnrichmentCoverage.consumers.some(item => item.consumer === 'sourceOps' && item.route.path === '/ti/profiles'), 'Actor enrichment coverage should route source-owned coverage work to enrichment intake.')
 assert(actionability.actorEnrichmentCoverage.safeOutput.liveNetworkScrapeStarted === false, 'Actor enrichment coverage export should be dry-run and safe for public TI.')
 assert(actionability.actorEnrichmentConsumerReadiness.schemaVersion === 'ti.public_actor.actor_enrichment_consumer_readiness_receipt.v1', 'Actor enrichment consumer readiness should expose a versioned public TI receipt.')
 assert(actionability.actorEnrichmentConsumerReadiness.sourceContractSchemaVersion === 'ti.source_provenance_actor_enrichment_consumer_readiness_receipt.v1', 'Actor enrichment consumer readiness should align to the source provenance receipt contract.')
@@ -298,12 +300,12 @@ assert(JSON.stringify(actionability.actionPayloads.payloads.caseHandoff.body).in
 assert(actionability.actionPayloads.payloads.webhookDelivery.route === '/v1/dwm/webhooks/deliver', 'Webhook action export should point to the delivery route.')
 assert(actionability.actionPayloads.payloads.webhookDelivery.blockedBy.some(blocker => blocker.code === 'missing_webhook_destination' && blocker.ownerLane === 'webhook'), 'Webhook action export should carry destination blockers.')
 assert(actionability.actionPayloads.payloads.analystHandoffBundle.body.schemaVersion === 'hanasand.analyst_handoff.consumer.v1', 'Analyst bundle export should align to the authenticated consumer schema.')
-assert(actionability.actionPayloads.payloads.sourceEnrichment.route === '/ti/enrichment', 'Source enrichment action export should point to source enrichment work.')
+assert(actionability.actionPayloads.payloads.sourceEnrichment.route === '/ti/profiles', 'Source enrichment action export should point to source enrichment work.')
 assert(actionability.actionPayloads.payloads.sourceEnrichment.blockedBy.some(blocker => blocker.code === 'missing_capture' && blocker.ownerLane === 'source'), 'Source enrichment export should carry missing capture blockers.')
 assert(JSON.stringify(actionability.actionPayloads.payloads.sourceEnrichment.body).includes('ti.public_actor.source_health_queue.v1'), 'Source enrichment export should carry the modeled source-health queue.')
 assert(JSON.stringify(actionability.actionPayloads.payloads.sourceEnrichment.body).includes('ti.public_actor.source_enrichment_intake.v1'), 'Source enrichment export should carry the modeled source-enrichment intake.')
 assert(actionability.enrichmentGapQueue.some(item => item.route === '/findings' && item.sourceFamily === 'alert' && item.requestedFields.includes('relatedAlerts[].id')), 'Enrichment gaps should carry route, source family, and requested fields.')
-assert(actionability.exportPayloads.enrichment.backedRoute === '/ti/enrichment', 'Enrichment package should point to the backed enrichment route.')
+assert(actionability.exportPayloads.enrichment.backedRoute === '/ti/profiles', 'Enrichment package should point to the backed enrichment route.')
 assert(actionability.alertDisposition === 'watchlist_required', 'APT29 fixture should not alert without a backed watchlist match or alert ID.')
 assert(actionability.handoffs.caseBlockers.some(item => /DWM alert ID/i.test(item)), 'No-alert fixture should explain missing case dependency.')
 assert(actionability.geographyHandoffs.some(item => item.code === 'US' && item.watchlistTerm?.value.includes('SolarWinds')), 'APT29 geography should map country observations to watchlist actions.')
@@ -358,7 +360,7 @@ assert(decodedWatchlist?.ok && decodedWatchlist.payload.sourceRequired, 'Decoded
 assert(decodedWatchlist?.ok && decodedWatchlist.payload.stale, 'Decoded APT29 payload should keep stale-evidence blocker state.')
 assert(decodedWatchlist?.ok && decodedWatchlist.payload.blockers.some(blocker => blocker.code === 'stale_evidence'), 'Decoded APT29 payload should carry stable blocker codes.')
 assert(decodedWatchlist?.ok && decodedWatchlist.payload.sourceRequests.some(source => source.missing.includes('captureId or source request ID')), 'Decoded APT29 payload should expose missing capture/source request IDs.')
-assert(decodedWatchlist?.ok && decodedWatchlist.payload.sourceRequests.every(source => source.ownerLane === 'source' && source.route === '/ti/enrichment' && source.sourceFamily === 'source_capture'), 'Decoded APT29 source requests should carry source owner, route, and family.')
+assert(decodedWatchlist?.ok && decodedWatchlist.payload.sourceRequests.every(source => source.ownerLane === 'source' && source.route === '/ti/profiles' && source.sourceFamily === 'source_capture'), 'Decoded APT29 source requests should carry source owner, route, and family.')
 assert(decodedWatchlist?.ok && decodedWatchlist.payload.sourceRequests.some(source => source.requestedFields?.includes('sourceProvenance[].captureId') && source.requestedFields?.includes('sourceProvenance[].sourceRequestId')), 'Decoded APT29 source requests should carry requested source/capture fields.')
 assert(decodedWatchlist?.ok && decodedWatchlist.payload.actionReadiness.length === 4, 'Decoded APT29 payload should expose per-action readiness for watchlist, alert, case, and enrichment.')
 assert(decodedWatchlist?.ok && decodedWatchlist.payload.actionReadiness.some(item => item.action === PUBLIC_TI_HANDOFF_ACTIONS.watchlist && item.selected && item.ownerLane === 'org' && item.blockerCodes.includes('org_required')), 'Decoded APT29 watchlist readiness should carry selected action, org owner, and blocker code.')

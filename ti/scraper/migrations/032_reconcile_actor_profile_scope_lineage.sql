@@ -142,10 +142,8 @@ SELECT
   CASE
     WHEN grouped.scope_tenant_id IS NOT DISTINCT FROM grouped.source_tenant_id THEN grouped.source_actor_profile_id
     WHEN grouped.scope_count = 1 AND NOT grouped.has_source_scope THEN grouped.source_actor_profile_id
-    ELSE 'actor_scope_' || md5(
-      grouped.source_actor_profile_id || ':' ||
+    ELSE grouped.source_actor_profile_id || ':' ||
       CASE WHEN grouped.scope_tenant_id IS NULL THEN 'global' ELSE 'tenant:' || md5(grouped.scope_tenant_id) END
-    )
   END AS target_actor_profile_id,
   CASE
     WHEN grouped.scope_tenant_id IS NOT DISTINCT FROM grouped.source_tenant_id THEN 'scope_preserved'

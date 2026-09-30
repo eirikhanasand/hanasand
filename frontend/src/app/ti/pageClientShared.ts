@@ -305,7 +305,7 @@ export function techniqueCoveragePayloadFor(item: TiActorIntelligenceProfile['te
         sourceIds: item.sourceIds,
         captureIds: item.captureIds,
         provenanceRefs: item.provenanceRefs,
-        route: missing.length ? '/ti/enrichment' : '/ti/workbench',
+        route: missing.length ? '/ti/profiles' : '/ti/workbench',
         recommendedAction: missing.length ? 'queue_enrichment' : 'attach_to_case_review',
         blockedBy: missing.map(field => ({
             ownerLane: /capture|source|provenance/i.test(field) ? 'source' : 'public-ti',
@@ -330,7 +330,7 @@ export function campaignActivityPayloadFor(item: TiActorIntelligenceProfile['cam
         countries: item.countries,
         sourceIds: item.sourceIds,
         provenanceRefs: item.provenanceRefs,
-        route: missing.length ? '/ti/enrichment' : '/ti/workbench',
+        route: missing.length ? '/ti/profiles' : '/ti/workbench',
         recommendedAction: missing.length ? 'queue_enrichment' : 'attach_to_case_review',
         blockedBy: missing.map(field => ({
             ownerLane: /source|provenance/i.test(field) ? 'source' : 'public-ti',
@@ -1047,7 +1047,7 @@ export function geographyContextPayloadFor(point: ReturnType<typeof actorGeoProf
             reportDate: row.reportDate,
             confidence: row.confidence,
         })) ?? [],
-        route: handoff?.watchlistTerm ? '/findings/watchlists' : '/ti/enrichment',
+        route: handoff?.watchlistTerm ? '/findings/watchlists' : '/ti/profiles',
         blockedBy: handoff ? [] : [{
             ownerLane: 'source',
             reason: 'Country row needs source evidence before it can be routed.',

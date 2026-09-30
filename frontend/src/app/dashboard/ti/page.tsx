@@ -7,6 +7,7 @@ import { formatTiDate, getTiAdminOverview, type TiAdminOverview } from '@/utils/
 import { evidenceStrengthLabel } from '@/utils/dwm/display'
 import ManualRunButton from './manualRunButton'
 import TiDataAvailability from './ti-data-availability'
+import { actorProfileHref } from '@/utils/ti/actorProfileRoute'
 
 export const dynamic = 'force-dynamic'
 
@@ -54,7 +55,7 @@ export default async function TiAdminPage() {
                 />
                 <LiveLane
                     title='Actor profiles'
-                    href='/ti/enrichment'
+                    href='/ti/profiles'
                     icon={<Radar className='h-4 w-4' />}
                     state={operationalStateLabel(enrichment.worker.state)}
                     stateTone={enrichment.worker.state === 'active' ? 'ok' : enrichment.worker.state === 'unavailable' ? 'bad' : 'watch'}
@@ -220,7 +221,7 @@ export default async function TiAdminPage() {
             </div>
 
             <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
-                <PanelTitle title='Actors being enriched' actionHref='/ti/enrichment' actionLabel='Enrichment' />
+                <PanelTitle title='Actors being enriched' actionHref='/ti/profiles' actionLabel='Enrichment' />
                 <div className='overflow-x-auto'>
                     <table className='min-w-full divide-y divide-ui-border text-sm'>
                         <thead className='bg-ui-canvas text-left text-xs font-semibold uppercase text-ui-muted'>
@@ -237,7 +238,7 @@ export default async function TiAdminPage() {
                             {[...enrichment.updatedActors, ...enrichment.queuedActors].slice(0, 8).map(actor => (
                                 <tr key={`${actor.id}-${actor.status}`} className='hover:bg-ui-panel'>
                                     <td className='px-4 py-4'>
-                                        <Link href={`/ti/${encodeURIComponent(actor.id)}`} className='font-semibold text-ui-text hover:text-ui-primary'>{actor.name}</Link>
+                                        <Link href={actorProfileHref(actor.name)} className='font-semibold text-ui-text hover:text-ui-primary'>{actor.name}</Link>
                                         <p className='mt-1 text-xs text-ui-muted'>{actor.changedFields.length ? actor.changedFields.join(', ') : 'queued'}</p>
                                     </td>
                                     <td className='px-4 py-4'><StatusPill label={operationalStateLabel(actor.status)} tone={actor.status === 'queued' ? 'neutral' : actor.status === 'review' ? 'watch' : 'ok'} /></td>

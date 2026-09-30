@@ -463,12 +463,6 @@ export const generatedSearchRoutes = [
         href: '/dashboard/ti/control',
     },
     {
-        id: 'route:/dashboard/ti/enrichment',
-        title: 'Dashboard · Ti · Enrichment',
-        detail: 'Page · /dashboard/ti/enrichment',
-        href: '/dashboard/ti/enrichment',
-    },
-    {
         id: 'route:/dashboard/ti/evaluation',
         title: 'Dashboard · Ti · Evaluation',
         detail: 'Page · /dashboard/ti/evaluation',
@@ -785,6 +779,12 @@ export const generatedSearchRoutes = [
         title: 'Ti · Darkweb · Index',
         detail: 'Page · /ti/darkweb/index',
         href: '/ti/darkweb/index',
+    },
+    {
+        id: 'route:/ti/profiles',
+        title: 'Ti · Profiles',
+        detail: 'Page · /ti/profiles',
+        href: '/ti/profiles',
     },
     {
         id: 'route:/trust',

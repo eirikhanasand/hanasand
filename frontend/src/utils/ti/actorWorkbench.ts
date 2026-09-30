@@ -19,7 +19,7 @@ export const PUBLIC_TI_HANDOFF_ROUTES = {
     watchlist: '/findings',
     alertRebuild: '/findings',
     case: '/ti/workbench',
-    enrichment: '/ti/enrichment',
+    enrichment: '/ti/profiles',
 } as const
 
 export type ActorArtifactKind = 'country' | 'tool' | 'campaign' | 'infrastructure' | 'technique'
@@ -109,7 +109,7 @@ export type PublicTiHandoffPayload = {
         confidence?: number
         missing: string[]
         ownerLane?: 'source'
-        route?: '/ti/enrichment'
+        route?: '/ti/profiles'
         sourceFamily?: 'source_capture'
         requestedFields?: string[]
     }>
