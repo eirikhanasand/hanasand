@@ -28,6 +28,8 @@ export function normalizeLogEvent(log: LogInput, rules?: Parameters<typeof class
     const expectedPwnedProbe = type === 'HttpLogs' && path === '/api/pwned' && method === 'POST'
         && Number(statusCode) === 400 && userAgent.startsWith('Bun/')
         && ['127.0.0.1', '::1'].includes(sourceIp)
+    const expectedLogIngestDeadlock = type === 'HttpLogs' && log.service === 'hanasand-api'
+        && path === '/api/logs/ingest' && method === 'POST' && log.message === 'deadlock detected'
     const eventMetadata = expectedPwnedProbe
         ? { ...metadata, expected_internal_probe: true, original_level: log.level }
         : metadata
@@ -43,6 +45,6 @@ export function normalizeLogEvent(log: LogInput, rules?: Parameters<typeof class
         user: signin ? { ...user, id: `${log.host || 'unknown'}:${signin[1]}`, name: signin[1] } : user,
         source: { ...source, ip: mongo?.ip || signin?.[2] || source.ip || request.remoteAddress || metadata.source_ip || access.ip },
         device: metadata.device || structured.device, metadata: eventMetadata,
-        severity: expectedPwnedProbe ? 'low' : classification?.severity || (log.level === 'fatal' ? 'critical' : log.level === 'error' ? 'high' : log.level === 'warn' ? 'medium' : 'low'),
+        severity: expectedPwnedProbe || expectedLogIngestDeadlock ? 'low' : classification?.severity || (log.level === 'fatal' ? 'critical' : log.level === 'error' ? 'high' : log.level === 'warn' ? 'medium' : 'low'),
     }
 }

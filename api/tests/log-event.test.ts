@@ -45,3 +45,31 @@ test('external Pwned validation failures remain high severity', () => {
     expect(event.severity).toBe('high')
     expect(event.metadata.expected_internal_probe).toBeUndefined()
 })
+
+test('log-ingest deadlocks remain errors but use low detection severity', () => {
+    const event = normalizeLogEvent({
+        id: 'deadlock',
+        service: 'hanasand-api',
+        level: 'error',
+        message: 'deadlock detected',
+        created_at: '2026-09-28T00:00:00.000Z',
+        metadata: { log_type: 'HttpLogs', method: 'POST', path: '/api/logs/ingest' },
+    })
+
+    expect(event.level).toBe('error')
+    expect(event.severity).toBe('low')
+    expect(event.outcome).toBe('failure')
+})
+
+test('deadlocks outside log ingest keep their level-derived severity', () => {
+    const event = normalizeLogEvent({
+        id: 'other-deadlock',
+        service: 'hanasand-api',
+        level: 'error',
+        message: 'deadlock detected',
+        created_at: '2026-09-28T00:00:00.000Z',
+        metadata: { log_type: 'HttpLogs', method: 'POST', path: '/api/other' },
+    })
+
+    expect(event.severity).toBe('high')
+})
