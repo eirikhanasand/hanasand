@@ -59,13 +59,13 @@ export default async function TiEnrichmentPage() {
             ) : (
                 <div className='grid gap-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.65fr)]'>
                     <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
-                        <PanelHeader title='Observed profiles' subtitle='Most recently observed profiles first.' />
+                        <PanelHeader title='Observed profiles' />
                         <div className='divide-y divide-ui-border'>
                             {actors.map(actor => <ActorRow key={actor.id} actor={actor} />)}
                         </div>
                     </DashboardPanel>
                     <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
-                        <PanelHeader title='Latest evidence' subtitle='Recent retained observations linked to their source.' />
+                        <PanelHeader title='Latest evidence' />
                         <div className='divide-y divide-ui-border'>
                             {recentActivity.map(event => <ActivityRow key={event.id} event={event} />)}
                         </div>
