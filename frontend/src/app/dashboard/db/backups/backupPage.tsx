@@ -53,7 +53,7 @@ export default function BackupPage({ backups, files, loadError = '' }: BackupPag
     }
 
     const busy = isPending || Boolean(service?.currentOperation)
-    const visibleError = error || loadError || service?.error || ''
+    const visibleError = backupErrorMessage(error) || backupErrorMessage(loadError) || backupErrorMessage(service?.error) || ''
 
     return (
         <main className='grid w-full gap-4 px-2 py-4' data-backup-operator-console>
@@ -88,7 +88,7 @@ export default function BackupPage({ backups, files, loadError = '' }: BackupPag
                 <dl className='mt-4 grid gap-x-6 gap-y-4 sm:grid-cols-2 xl:grid-cols-4'>
                     <Evidence label='Last attempt' value={formatUtcDateTime(service?.lastAttempt, 'Never')} />
                     <Evidence label='Last success' value={formatUtcDateTime(service?.lastSuccess, 'Never')} />
-                    <Evidence label='Last failure' value={formatUtcDateTime(service?.lastFailure, 'Never')} detail={service?.lastError || undefined} />
+                    <Evidence label='Last failure' value={formatUtcDateTime(service?.lastFailure, 'Never')} detail={backupErrorMessage(service?.lastError)} />
                     <Evidence label='Next automatic run' value={service?.scheduleEnabled ? formatUtcDateTime(service.nextBackup, 'Never') : 'Paused'} detail={service?.schedule ? `${service.schedule} ${service.scheduleTimezone || 'UTC'}` : undefined} />
                     <Evidence label='Storage target' value={service?.storageTarget || 'Not reported'} mono />
                     <Evidence label='Retention' value={service?.retention || 'Not reported'} detail={retentionLabel(service)} />
@@ -163,7 +163,7 @@ function OperationHistory({ operations }: { operations: BackupOperation[] }) {
                                 <td className='px-4 py-3'>{operationLabel(operation)}</td>
                                 <td className='px-4 py-3'><Status value={operation.status} /></td>
                                 <td className='px-4 py-3'>{formatDuration(operation.durationMs)}</td>
-                                <td className='max-w-md px-4 py-3 text-ui-muted'>{operation.error || operation.file || stageLabel(operation.stage)}</td>
+                                <td className='max-w-md px-4 py-3 text-ui-muted'>{backupErrorMessage(operation.error) || operation.file || stageLabel(operation.stage)}</td>
                             </tr>
                         ))}
                         {!operations.length && <tr><td colSpan={5} className='px-4 py-8 text-center text-ui-muted'>No operation has been attempted yet.</td></tr>}
@@ -172,6 +172,14 @@ function OperationHistory({ operations }: { operations: BackupOperation[] }) {
             </div>
         </section>
     )
+}
+
+function backupErrorMessage(value?: string | null) {
+    // Historical operation records can retain the earlier worker restart wording.
+    if (value === 'The backup worker restarted before this operation reached a terminal state.') {
+        return 'The backup worker restarted before the backup finished.'
+    }
+    return value || undefined
 }
 
 function Evidence({ label, value, detail, mono = false }: { label: string, value: string, detail?: string, mono?: boolean }) {
