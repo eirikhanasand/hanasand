@@ -160,7 +160,7 @@ export default function Header({ token, id, path: serverPath }: { token: boolean
                     <Link href={token ? '/dashboard' : '/login'} className={`${token ? 'hidden sm:inline-flex' : 'inline-flex'} h-11 items-center gap-2 rounded-lg bg-ui-text px-3 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90 sm:px-4`}>
                         <span className='sm:hidden'>Dashboard</span><span className='hidden sm:inline'>{token ? 'Dashboard' : 'Go to Dashboard'}</span>
                     </Link>
-                    {token && <details key={`account:${pathname}`} className='relative' onKeyDown={event => {
+                    <details key={`account:${pathname}:${token ? 'signed-in' : 'signed-out'}`} className='relative' onKeyDown={event => {
                         if (event.key === 'Escape') {
                             event.currentTarget.open = false
                             event.currentTarget.querySelector('summary')?.focus()
@@ -170,13 +170,15 @@ export default function Header({ token, id, path: serverPath }: { token: boolean
                             <UserRound className='h-5 w-5' />
                         </summary>
                         <div className='fixed inset-x-3 top-18 z-30 grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-3 text-sm text-ui-text shadow-xl sm:absolute sm:left-auto sm:right-0 sm:top-13 sm:w-60'>
-                            <Link href={profileHref} className='rounded-lg p-2 hover:bg-ui-raised'>Profile</Link>
-                            {id && <Link href={`/profile/${encodeURIComponent(id)}/security`} className='rounded-lg p-2 hover:bg-ui-raised'>Security</Link>}
-                            {id && <Link href={`/profile/${encodeURIComponent(id)}/sessions`} className='rounded-lg p-2 hover:bg-ui-raised'>Sessions</Link>}
-                            <div role='separator' className='border-t border-ui-border' />
-                            <Link href='/logout' className='rounded-lg p-2 hover:bg-ui-raised'>Sign out</Link>
+                            {token ? <>
+                                <Link href={profileHref} className='rounded-lg p-2 hover:bg-ui-raised'>Profile</Link>
+                                {id && <Link href={`/profile/${encodeURIComponent(id)}/security`} className='rounded-lg p-2 hover:bg-ui-raised'>Security</Link>}
+                                {id && <Link href={`/profile/${encodeURIComponent(id)}/sessions`} className='rounded-lg p-2 hover:bg-ui-raised'>Sessions</Link>}
+                                <div role='separator' className='border-t border-ui-border' />
+                                <Link href='/logout' className='rounded-lg p-2 hover:bg-ui-raised'>Sign out</Link>
+                            </> : <Link href='/login' className='rounded-lg p-2 hover:bg-ui-raised'>Sign in</Link>}
                         </div>
-                    </details>}
+                    </details>
                     <PublicMobileMenu key={pathname} token={token} />
                     {mobile.enabled && <Menu />}
                 </div>
