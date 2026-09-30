@@ -58,7 +58,7 @@ export default function LogsPageClient({ initialServices = [], initialErrors, in
     const [advanced, setAdvanced] = useState(!!initialHql)
     const [hql, setHql] = useState(initialHql || 'ProcessLogs | where Severity in ("high", "critical") | order by TimeGenerated desc | take 100')
     const [appliedHql, setAppliedHql] = useState(initialHql)
-    const [hours, setHours] = useState(params.get('hours') || (view === 'realtime' ? '1' : '24'))
+    const [hours, setHours] = useState(params.get('hours') || '24')
     const [severity, setSeverity] = useState(params.get('severity') || 'all')
     const [data, setData] = useState<Result | null>(initialData)
     const [error, setError] = useState(initialError)
@@ -100,7 +100,7 @@ export default function LogsPageClient({ initialServices = [], initialErrors, in
         if (view === 'errors') return
         const url = new URL(window.location.href)
         url.searchParams.delete('kql')
-        for (const [key, value] of Object.entries({ service: service === 'all' ? '' : service, search: advanced ? '' : search, table: advanced || table === 'Logs' ? '' : table, hql: advanced ? appliedHql : '', hours: hours === (view === 'realtime' ? '1' : '24') ? '' : hours, severity: view === 'realtime' || severity === 'all' ? '' : severity })) {
+        for (const [key, value] of Object.entries({ service: service === 'all' ? '' : service, search: advanced ? '' : search, table: advanced || table === 'Logs' ? '' : table, hql: advanced ? appliedHql : '', hours: hours === '24' ? '' : hours, severity: view === 'realtime' || severity === 'all' ? '' : severity })) {
             if (value) url.searchParams.set(key, value)
             else url.searchParams.delete(key)
         }
@@ -185,7 +185,7 @@ export default function LogsPageClient({ initialServices = [], initialErrors, in
     const toggle = (id: string | number) => setExpanded(previous => ({ ...previous, [id]: !previous[id] }))
     const processingError = data?.processing?.last_error?.endsWith('Waiting for active log writes; will retry.') ? null : data?.processing?.last_error
     const serviceOptions = [...new Set([...initialServices.map(item => item.service), ...(data?.services.map(item => item.service) || []), ...(service === 'all' ? [] : [service])])].sort()
-    const activeFilters = [service !== 'all', !advanced && !!search, !advanced && table !== 'Logs', advanced && !!appliedHql, hours !== (view === 'realtime' ? '1' : '24'), view !== 'realtime' && severity !== 'all'].filter(Boolean).length
+    const activeFilters = [service !== 'all', !advanced && !!search, !advanced && table !== 'Logs', advanced && !!appliedHql, hours !== '24', view !== 'realtime' && severity !== 'all'].filter(Boolean).length
     const periodLabel = logPeriodLabel(hours)
     const totalEvents = data?.counts.reduce((total, item) => total + item.count, 0)
     const realtimeLoadMore = view === 'realtime' && !advanced && !busy && !error && data?.next_cursor

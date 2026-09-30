@@ -46,6 +46,7 @@ test('Realtime server preload always requests high severity regardless of the su
     globalThis.fetch = (async (input: string | URL | Request) => { query = new URL(String(input)).searchParams; return Response.json(data) }) as typeof fetch
     await getLogDashboard({ token: 'session', id: 'user', view: 'realtime', params: { severity: 'low' } })
     expect(query.get('severity')).toBe('high,critical')
+    expect(query.get('hours')).toBe('24')
     expect(query.has('stats')).toBe(false)
 })
 test('event retention replaces duplicate IDs when an event changes', async () => {

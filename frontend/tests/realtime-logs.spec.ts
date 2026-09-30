@@ -135,6 +135,7 @@ test('realtime loads 100 events first and fetches the next page at the feed end'
     await openLogs(page)
     await expect(page.locator('article')).toHaveCount(100)
     expect(requests[0].searchParams.get('hql')).toBe('Logs | take 100')
+    expect(requests[0].searchParams.get('hours')).toBe('24')
     expect(requests[0].searchParams.get('paginate')).toBe('1')
     await expect(page.getByText('100/205')).toBeVisible()
 
