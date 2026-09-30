@@ -14,6 +14,7 @@ import { accessRuleId } from './analyzeAccess.ts'
 import { withLogBatch } from './logBatch.ts'
 
 let running = false
+const AUTH_CORRELATION_PAGE_SIZE = 25
 // Stateless results commit atomically with their findings; authentication keeps
 // durable pending history for correlation. Stable identities make retries safe.
 export async function processLog(log: LogInput, organizationId: string, rules: Awaited<ReturnType<typeof loadConfiguredRules>>) {
@@ -175,7 +176,11 @@ function scopedProcessor(platformId: string, onWork: () => void, afterBatch?: ()
             const pageSize = priority ? 200 : 400
             const processPage = (page: LogInput[]) => processLogBatch(page, target, configured.get(target)!)
             const processPages = async (logs: LogInput[], independent: boolean) => {
-                const pages = Array.from({ length: Math.ceil(logs.length / pageSize) }, (_, index) => logs.slice(index * pageSize, (index + 1) * pageSize))
+                // Correlation pages hold the shared advisory lock while login
+                // history is evaluated. Bound each hold so a large auth burst
+                // cannot stall the dedicated catch-up worker for minutes.
+                const batchSize = independent ? pageSize : Math.min(pageSize, AUTH_CORRELATION_PAGE_SIZE)
+                const pages = Array.from({ length: Math.ceil(logs.length / batchSize) }, (_, index) => logs.slice(index * batchSize, (index + 1) * batchSize))
                 if (!independent) {
                     for (const page of pages) {
                         await withLogBatch(() => processPage(page))

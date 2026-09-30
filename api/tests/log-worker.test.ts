@@ -398,6 +398,16 @@ test('durable authentication login pages keep the correlation lock', async () =>
     expect(statements.filter(sql => sql.includes('event:log-batch'))).toHaveLength(1)
 })
 
+test('authentication correlation releases the shared lock between bounded pages', async () => {
+    fresh = []; priority = []; watermark = '1000'; cursor.history_end_id = '51'
+    backlog = Array.from({ length: 51 }, (_, index) => makeLog(String(index + 1), { category: 'authentication', action: 'login' }))
+
+    await processStoredLogs()
+
+    expect(checked).toHaveLength(51)
+    expect(statements.filter(sql => sql.includes('event:log-batch'))).toHaveLength(3)
+})
+
 
 test('fresh arrivals are serviced between durable historical pages', async () => {
     let clock = 0
