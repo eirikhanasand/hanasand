@@ -197,7 +197,7 @@ export default function AuditTimeline({ initialAudit, filters }: { initialAudit:
     const lastEvent = sortedEvents[0]
 
     const timeline = (
-        <DashboardPanel className={`min-h-0 overflow-hidden border-ui-border bg-ui-panel p-0 ${fullscreen ? 'flex h-full flex-col rounded-none border-0' : 'mb-4'}`}>
+        <DashboardPanel className={`min-h-0 overflow-hidden border-ui-border bg-ui-panel p-0${fullscreen ? ' flex h-full flex-col rounded-none border-0' : ''}`}>
             <div className='flex shrink-0 items-center justify-between gap-3 border-b border-ui-border bg-ui-raised px-3 py-2'>
                 <div>
                     <h2 className='text-sm font-semibold text-ui-text'>Timeline</h2>
