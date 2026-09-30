@@ -60,6 +60,12 @@ const tasks: TestTask[] = [
     { id: 'dashboard-streaming', title: 'Dashboard independent status streaming', command: [bun, 'tests/dashboard-streaming.test.tsx'] },
     { id: 'recovery-boundary', title: 'Recovery request boundaries', command: [bun, 'tests/recovery-boundary.test.ts'] },
     {
+        id: 'dashboard-hydration',
+        title: 'Dashboard hydration across timezones',
+        command: [bun, 'scripts/check-dashboard-hydration.mjs'],
+        requires: 'playwright',
+    },
+    {
         id: 'automation-ssr',
         title: 'Automation server rendering and hydration',
         command: [bun, 'scripts/check-automation-ssr.mjs'],

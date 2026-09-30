@@ -33,3 +33,11 @@ export function DashboardHeader(props: DashboardHeaderProps) {
 export function DashboardPanel({ children, className = '', id }: DashboardPanelProps) {
     return <section id={id} className={`${dashboardPanelClass} ${className}`.trim()}>{children}</section>
 }
+
+export function DashboardDataFallback({ label }: { label: string }) {
+    return <div role='status' aria-busy='true' aria-label={`Loading ${label}`} className='grid min-h-48 content-start gap-3 rounded-xl border border-ui-border bg-ui-panel p-4'>
+        <span className='h-5 w-40 animate-pulse rounded bg-ui-raised' />
+        <span className='h-4 w-full max-w-2xl animate-pulse rounded bg-ui-raised' />
+        <span className='h-24 w-full animate-pulse rounded-lg bg-ui-raised' />
+    </div>
+}

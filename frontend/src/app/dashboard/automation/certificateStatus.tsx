@@ -4,6 +4,7 @@ import { useId } from 'react'
 import { healthCheckCertificate } from './healthCheckSorting'
 import { Clock3, Info, ShieldCheck, ShieldX } from 'lucide-react'
 import type { AgentAutomation } from '@/utils/automations/client'
+import formatUtcDateTime from '@/utils/date/formatUtcDateTime'
 
 export default function CertificateStatus({ automation }: { automation: AgentAutomation }) {
     const id = useId()
@@ -27,7 +28,7 @@ export default function CertificateStatus({ automation }: { automation: AgentAut
             <p className='mt-2 leading-6 text-ui-muted'>{details}</p>
             {applies && automation.certificateSubject && <p className='mt-2 wrap-break-word'>Issued to: {automation.certificateSubject}</p>}
             {applies && automation.certificateIssuer && <p className='mt-1 wrap-break-word'>Issuer: {automation.certificateIssuer}</p>}
-            {applies && automation.certificateExpiresAt && <p className='mt-1'>Expires: {new Date(automation.certificateExpiresAt).toLocaleString()}</p>}
+            {applies && automation.certificateExpiresAt && <p className='mt-1'>Expires: {formatUtcDateTime(automation.certificateExpiresAt)}</p>}
             <button type='button' popoverTarget={id} popoverTargetAction='hide' className='mt-3 rounded border border-ui-border px-3 py-1 text-xs'>Close</button>
         </div>
     </div>

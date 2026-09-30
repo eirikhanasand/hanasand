@@ -10,8 +10,9 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { DashboardPanel } from '../dashboard/ui'
 
-export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
+export default function VMs({ vms: serverVMs, initialNow }: { vms: VM[], initialNow: number }) {
     const [vms, setVms] = useState<VM[]>(serverVMs || [])
+    const [now, setNow] = useState(initialNow)
     const router = useRouter()
     const [showCreate, setShowCreate] = useState(false)
     const createFormId = useId()
@@ -43,6 +44,12 @@ export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
     }
 
     useEffect(() => { setVms(serverVMs || []) }, [serverVMs])
+
+    useEffect(() => {
+        setNow(Date.now())
+        const timer = setInterval(() => setNow(Date.now()), 60000)
+        return () => clearInterval(timer)
+    }, [])
 
     useEffect(() => {
         update()
@@ -83,7 +90,7 @@ export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
             </form>
             {vms.length > 0 ? (
                 <div className='grid gap-2'>
-                    {vms.map(vm => <VMRow update={update} key={vm.name} vm={vm} />)}
+                    {vms.map(vm => <VMRow update={update} key={vm.name} vm={vm} now={now} />)}
                 </div>
             ) : (
                 <div className='flex flex-wrap gap-x-1 text-sm text-ui-muted'>

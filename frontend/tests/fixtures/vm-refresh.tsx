@@ -9,6 +9,6 @@ const vm = { name: 'cashflow', status: 'RUNNING', owner: 'owner', access_users: 
 const details = { ...vm, profiles: [], ephemeral: 'false', stateful: 'false', device_eth0_ipv4_address: '192.0.2.1' } as unknown as VMDetails
 createRoot(document.getElementById('root')!).render(
     <AppRouterContext.Provider value={{ push() {} } as unknown as React.ContextType<typeof AppRouterContext>}>
-        <VMClient vm={vm} details={details} metrics={[]} connection={null} />
+        <VMClient vm={vm} details={details} metrics={[]} connection={null} initialNow={Date.now()} />
     </AppRouterContext.Provider>
 )

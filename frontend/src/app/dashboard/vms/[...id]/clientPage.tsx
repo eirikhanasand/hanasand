@@ -27,9 +27,10 @@ type VMClientProps = {
     details: VMDetails | null
     metrics: VMMetrics[]
     connection: VMConnectionDetails | null
+    initialNow: number
 }
 
-export default function VMClient({ vm: serverVM, details: serverDetails, metrics: serverMetrics, connection: serverConnection }: VMClientProps) {
+export default function VMClient({ vm: serverVM, details: serverDetails, metrics: serverMetrics, connection: serverConnection, initialNow }: VMClientProps) {
     const [vm, setVM] = useState<VM>(serverVM)
     const [details, setDetails] = useState(serverDetails)
     const [refreshing, setRefreshing] = useState(false)
@@ -66,7 +67,7 @@ export default function VMClient({ vm: serverVM, details: serverDetails, metrics
         }
     }
 
-    if (vm.deleted_at) return <VMRow vm={vm} update={() => void handleRefresh()} />
+    if (vm.deleted_at) return <VMRow vm={vm} update={() => void handleRefresh()} now={initialNow} />
 
     return (
         <div className='grid gap-3'>

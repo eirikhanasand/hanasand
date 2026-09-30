@@ -11,27 +11,27 @@ import useClearStateAfter from '@/hooks/useClearStateAfter'
 import deleteVM from '@/utils/vms/fetch/deleteVM'
 import { ArrowRight, Cpu, HardDrive, Network, Trash2 } from 'lucide-react'
 import Notify from '../notify/notify'
-import prettyDate from '@/utils/date/prettyDate'
+import formatUtcDateTime from '@/utils/date/formatUtcDateTime'
 import formatDescription from '@/utils/vms/formatDescription'
 import formatStatus from '@/utils/vms/formatStatus'
 import { useRouter } from 'next/navigation'
 import RestartButtons from '../vms/restartButtons'
 import { vmActionStyle } from '../vms/actionStyle'
 
-export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
+export default function VMRow({ vm, update, now }: { vm: VM, update: () => void, now: number }) {
     const router = useRouter()
     const [confirmingDelete, setConfirmingDelete] = useState(false)
     const [busy, setBusy] = useState(false)
     const [deleteError, setDeleteError] = useState('')
     const deleted = Boolean(vm.deleted_at)
-    const expired = Boolean(vm.delete_after && new Date(vm.delete_after).getTime() <= Date.now())
+    const expired = Boolean(vm.delete_after && new Date(vm.delete_after).getTime() <= now)
     const { condition: message, setCondition: setMessage } = useClearStateAfter()
     const name = vm.name || 'Unnamed virtual machine'
     const ip = vm.device_eth0_ipv4_address || 'IP pending'
     const status = deleted ? 'Scheduled for deletion' : formatStatus(vm.status) || 'Syncing'
     const os = [vm.config_image_os, vm.config_image_version].filter(Boolean).join(' ')
     const image = os || formatDescription(vm.config_image_description)
-    const lastUsed = vm.last_used ? prettyDate(vm.last_used) : vm.last_checked ? `Checked ${prettyDate(vm.last_checked)}` : 'Telemetry pending'
+    const lastUsed = vm.last_used ? formatUtcDateTime(vm.last_used) : vm.last_checked ? `Checked ${formatUtcDateTime(vm.last_checked)}` : 'Telemetry pending'
     const statusNote = (vm as VM & { status_reason?: string }).status_reason || ''
     const editors = vm.access_users?.length || 0
 
@@ -120,7 +120,7 @@ export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
                             {!deleted && <RestartButtons vm={vm} />}
                         </div>
                         {deleted && <div className='max-w-sm rounded-lg border border-ui-warning/35 bg-ui-warning/10 p-3 text-sm'>
-                            <p>{expired ? 'Recovery period ended. Permanent deletion is pending.' : `Restore before ${new Date(vm.delete_after!).toLocaleString()}.`}</p>
+                            <p>{expired ? 'Recovery period ended. Permanent deletion is pending.' : `Restore before ${formatUtcDateTime(vm.delete_after)}.`}</p>
                             <p className='mt-1 text-ui-muted'>{vm.deletion_error ? 'Dashboard access is blocked. The host is retrying the shutdown.' : 'The VM is disabled while scheduled for deletion.'}</p>
                             {vm.deletion_error && <p role='alert' className='mt-2 text-ui-text'>The host operation failed: {vm.deletion_error}</p>}
                             <button type='button' disabled={busy || expired} onClick={() => void handleRestore()} className={`${vmActionStyle} mt-3 px-3 text-ui-primary`}>{busy ? 'Restoring…' : 'Restore VM'}</button>

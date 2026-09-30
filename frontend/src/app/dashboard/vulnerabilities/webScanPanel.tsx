@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { WebScanCheck, WebScanReport, WebScanRun, WebScanSeverity } from '@/utils/monitoring/types'
 import { ChevronDown } from 'lucide-react'
+import formatUtcDateTime from '@/utils/date/formatUtcDateTime'
 
 const severities: WebScanSeverity[] = ['critical', 'high', 'medium', 'low', 'info']
 
@@ -101,16 +102,6 @@ function fallbackExplanation(check: WebScanRun['targets'][number]['checks'][numb
     if (check.id === 'header.server') return present ? `The response included a Server header (${String(check.evidence.value)}), which reveals an implementation detail useful for fingerprinting.` : 'The response did not expose a Server header, so this scan found no server implementation detail to fingerprint.'
     return check.status === 'pass' ? `The scan observed the condition described by “${check.title}”; no immediate change is indicated by this result.` : `The scan observed “${check.title}” as needing attention; inspect the retained evidence for the next action.`
 }
-function formatDate(value?: string | null) { return value ? new Date(value).toLocaleString() : 'not yet' }
-function formatScheduleTime(value: string | null, direction: 'next' | 'previous') {
-    if (!value) return 'not yet'
-    const difference = Date.parse(value) - Date.now()
-    const minutes = Math.round(Math.abs(difference) / 60_000)
-    if (minutes >= 7 * 24 * 60) return formatDate(value)
-    if (direction === 'next' && difference <= 0) return 'due now'
-    const hours = Math.floor(minutes / 60)
-    const remainder = minutes % 60
-    const duration = hours ? `${hours} hour${hours === 1 ? '' : 's'}${remainder ? ` ${remainder} minute${remainder === 1 ? '' : 's'}` : ''}` : `${Math.max(1, remainder)} minute${remainder === 1 ? '' : 's'}`
-    return direction === 'next' ? `in ${duration}` : difference <= 0 ? `${duration} ago` : `in ${duration}`
-}
+function formatDate(value?: string | null) { return formatUtcDateTime(value, 'not yet') }
+function formatScheduleTime(value: string | null, direction: 'next' | 'previous') { return formatUtcDateTime(value, direction === 'next' ? 'pending' : 'not yet') }
 function formatDuration(value?: number | null) { return value === null || value === undefined ? 'running' : `${(value / 1000).toFixed(1)}s` }

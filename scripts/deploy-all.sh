@@ -288,6 +288,16 @@ wait_for_healthy() {
     return 1
 }
 
+warm_dashboard_pages() {
+    port=$1
+    for page_path in /scanner /vms /db/backups /automation/health; do
+        curl --silent --show-error --max-time 15 --output /dev/null \
+            -H 'Cookie: id=dashboard-render-proof-user; access_token=local-dashboard-render-proof-token; roles=["system_admin"]; dashboard_view_mode=normal' \
+            -H 'x-hanasand-render-proof-auth: local-dashboard-render-proof' \
+            "http://127.0.0.1:$port$page_path"
+    done
+}
+
 # Keep authentication replicas untouched until the rest of the release passes
 # its health checks.
 services=$(compose_live config --services | sed '/^api$/d; /^frontend$/d; /^auth-primary$/d; /^auth-secondary$/d')
@@ -320,6 +330,7 @@ case "$candidate_frontend_health" in *'"ok":true'*"\"release\":\"$release\""*"\"
     exit 1
     ;;
 esac
+warm_dashboard_pages "$HANASAND_FRONTEND_CANDIDATE_PORT"
 
 upstream_file=/home/hanasand/openresty/nginx/conf.d/hanasand-upstreams.conf
 test -w "$upstream_file" || {
@@ -437,6 +448,7 @@ case "$canonical_api_health" in *'"ok":true'*"\"release\":\"$release\""*) ;; *)
     exit 1
     ;;
 esac
+warm_dashboard_pages 3100
 candidate_safe_to_remove=0
 switch_upstreams 3100 8082 canonical
 wait_for_proxy_workers_to_drain "$last_proxy_workers"

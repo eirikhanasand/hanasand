@@ -68,6 +68,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
                 details={details}
                 metrics={metrics}
                 connection={connection}
+                initialNow={Date.now()}
             />
         </DashboardPage>
     )

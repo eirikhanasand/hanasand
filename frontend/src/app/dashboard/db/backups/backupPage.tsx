@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState, useTransition } from 'react'
 import { DatabaseBackup, RefreshCw, ShieldCheck } from 'lucide-react'
 import type { BackupFile, BackupOperation, BackupService } from '@/utils/db/internal'
+import formatUtcDateTime from '@/utils/date/formatUtcDateTime'
 import { triggerBackupAction, verifyBackupAction } from '../actions'
 
 type BackupPageProps = {
@@ -86,13 +87,13 @@ export default function BackupPage({ backups, files, loadError = '' }: BackupPag
                     <Status value={service?.status || 'Unavailable'} />
                 </div>
                 <dl className='mt-4 grid gap-x-6 gap-y-4 sm:grid-cols-2 xl:grid-cols-4'>
-                    <Evidence label='Last attempt' value={formatDate(service?.lastAttempt)} />
-                    <Evidence label='Last success' value={formatDate(service?.lastSuccess)} />
-                    <Evidence label='Last failure' value={formatDate(service?.lastFailure)} detail={service?.lastError || undefined} />
-                    <Evidence label='Next automatic run' value={service?.scheduleEnabled ? formatDate(service.nextBackup) : 'Paused'} detail={service?.schedule ? `${service.schedule} ${service.scheduleTimezone || 'UTC'}` : undefined} />
+                    <Evidence label='Last attempt' value={formatUtcDateTime(service?.lastAttempt, 'Never')} />
+                    <Evidence label='Last success' value={formatUtcDateTime(service?.lastSuccess, 'Never')} />
+                    <Evidence label='Last failure' value={formatUtcDateTime(service?.lastFailure, 'Never')} detail={service?.lastError || undefined} />
+                    <Evidence label='Next automatic run' value={service?.scheduleEnabled ? formatUtcDateTime(service.nextBackup, 'Never') : 'Paused'} detail={service?.schedule ? `${service.schedule} ${service.scheduleTimezone || 'UTC'}` : undefined} />
                     <Evidence label='Storage target' value={service?.storageTarget || 'Not reported'} mono />
                     <Evidence label='Retention' value={service?.retention || 'Not reported'} detail={retentionLabel(service)} />
-                    <Evidence label='Latest checksum' value={shortHash(service?.latestChecksum)} detail={service?.latestVerifiedAt ? `Verified ${formatDate(service.latestVerifiedAt)}` : 'No verification metadata'} mono />
+                    <Evidence label='Latest checksum' value={shortHash(service?.latestChecksum)} detail={service?.latestVerifiedAt ? `Verified ${formatUtcDateTime(service.latestVerifiedAt)}` : 'No verification metadata'} mono />
                     <Evidence label='Release commit' value={shortHash(service?.releaseCommit)} mono />
                 </dl>
             </section>
@@ -114,7 +115,7 @@ export default function BackupPage({ backups, files, loadError = '' }: BackupPag
                             {files.map(file => (
                                 <tr key={file.file} className='text-ui-text'>
                                     <td className='px-4 py-3 font-mono text-xs'>{file.file}</td>
-                                    <td className='px-4 py-3'>{formatDate(file.mtime)}</td>
+                                    <td className='px-4 py-3'>{formatUtcDateTime(file.mtime, 'Unknown')}</td>
                                     <td className='px-4 py-3'>{file.size || '—'}</td>
                                     <td className='px-4 py-3'>{file.verified ? <span className='inline-flex items-center gap-1 text-ui-success'><ShieldCheck className='h-4 w-4' /> {shortHash(file.checksumSha256)}</span> : <span className='text-ui-warning'>Unverified</span>}</td>
                                     <td className='px-4 py-3 text-right'>
@@ -148,7 +149,7 @@ function OperationHistory({ operations }: { operations: BackupOperation[] }) {
                     <tbody className='divide-y divide-ui-border'>
                         {operations.map(operation => (
                             <tr key={operation.id} className='text-ui-text'>
-                                <td className='px-4 py-3'>{formatDate(operation.startedAt)}</td>
+                                <td className='px-4 py-3'>{formatUtcDateTime(operation.startedAt, 'Unknown')}</td>
                                 <td className='px-4 py-3'>{operationLabel(operation)}</td>
                                 <td className='px-4 py-3'><Status value={operation.status} /></td>
                                 <td className='px-4 py-3'>{formatDuration(operation.durationMs)}</td>
@@ -189,12 +190,6 @@ function operationLabel(operation: BackupOperation) {
 
 function stageLabel(value: string) {
     return value.replaceAll('_', ' ').replace(/^./, character => character.toUpperCase())
-}
-
-function formatDate(value?: string | null) {
-    if (!value) return 'Never'
-    const date = new Date(value)
-    return Number.isFinite(date.getTime()) ? date.toLocaleString() : value
 }
 
 function formatDuration(value: number | null) {
