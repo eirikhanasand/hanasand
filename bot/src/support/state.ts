@@ -3,23 +3,25 @@ import { dirname } from 'node:path'
 
 export type TicketState = {
     channelId: string
+    channelNumber?: number
     status: 'open' | 'closed'
     mirroredMessageIds: string[]
     handledDiscordMessageIds: string[]
 }
 
-type StateFile = { version: 1; tickets: Record<string, TicketState> }
+type StateFile = { version: 1; nextChannelNumber: number; tickets: Record<string, TicketState> }
 
 function isTicketState(value: unknown): value is TicketState {
     return typeof value === 'object' && value !== null
         && typeof (value as TicketState).channelId === 'string'
+        && ((value as TicketState).channelNumber === undefined || Number.isSafeInteger((value as TicketState).channelNumber) && (value as TicketState).channelNumber! > 0)
         && ((value as TicketState).status === 'open' || (value as TicketState).status === 'closed')
         && Array.isArray((value as TicketState).mirroredMessageIds)
         && Array.isArray((value as TicketState).handledDiscordMessageIds)
 }
 
 export class SupportState {
-    private readonly state: StateFile = { version: 1, tickets: {} }
+    private readonly state: StateFile = { version: 1, nextChannelNumber: 1, tickets: {} }
     private writeQueue: Promise<void> = Promise.resolve()
 
     private constructor(private readonly path: string) {}
@@ -30,9 +32,13 @@ export class SupportState {
             const saved: unknown = JSON.parse(await readFile(path, 'utf8'))
             if (typeof saved === 'object' && saved !== null && (saved as StateFile).version === 1
                 && typeof (saved as StateFile).tickets === 'object' && (saved as StateFile).tickets !== null) {
+                const nextChannelNumber = (saved as Partial<StateFile>).nextChannelNumber
+                if (Number.isSafeInteger(nextChannelNumber) && nextChannelNumber! > 0) store.state.nextChannelNumber = nextChannelNumber!
                 for (const [id, value] of Object.entries((saved as StateFile).tickets)) {
                     if (isTicketState(value)) store.state.tickets[id] = value
                 }
+                const highestNumber = Math.max(0, ...Object.values(store.state.tickets).map(ticket => ticket.channelNumber || 0))
+                store.state.nextChannelNumber = Math.max(store.state.nextChannelNumber, highestNumber + 1)
             }
         } catch (error) {
             if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
@@ -46,6 +52,12 @@ export class SupportState {
 
     set(ticketId: string, value: TicketState) {
         this.state.tickets[ticketId] = value
+    }
+
+    allocateChannelNumber() {
+        if (!Number.isSafeInteger(this.state.nextChannelNumber)) throw new Error('The next Hanasand support channel number is invalid.')
+        const number = this.state.nextChannelNumber++
+        return number
     }
 
     entries() {

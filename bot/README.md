@@ -1,6 +1,6 @@
 # Hanasand Discord bot
 
-This TypeScript bot provides `/info`, `/ping`, and `/help`, and mirrors human Hanasand support chats into private Discord channels. It uses the website's support change stream over WebSocket and its scoped support API for messages. It does not poll the site.
+This TypeScript bot provides `/info`, `/ping`, `/help`, and `/tickets`, and mirrors human Hanasand support chats into private Discord channels. It uses the website's support change stream over WebSocket and its scoped support API for messages. It does not poll the site.
 
 ## Setup
 
@@ -12,7 +12,7 @@ This TypeScript bot provides `/info`, `/ping`, and `/help`, and mirrors human Ha
    - `GET /api/ws/support`
 
    The service account may read human support chats and send replies only through those endpoints. Add the token it returns to `HANASAND_DISCORD_SUPPORT_API_KEY`.
-3. Set `DISCORD_BOT_TOKEN`, `DISCORD_CLIENT_ID`, `DISCORD_GUILD_ID`, and `HANASAND_DISCORD_SUPPORT_API_KEY` in the Hanasand server's environment. Optionally set `DISCORD_SUPPORT_ROLE_ID`; without it, only the server owner and administrators can see and reply in ticket channels. New channels use the existing `Support` category when present, or `DISCORD_SUPPORT_CATEGORY_ID` when explicitly configured.
+3. Set `DISCORD_BOT_TOKEN`, `DISCORD_CLIENT_ID`, `DISCORD_GUILD_ID`, `HANASAND_DISCORD_SUPPORT_API_KEY`, and `DISCORD_SUPPORT_ROLE_ID` in the Hanasand server's environment. `DISCORD_SUPPORT_ROLE_ID` must identify a least-privileged Support role, and the Hanasand bot plus staff who need access must have that role. New channels are placed in the existing `Support` category or the category identified by `DISCORD_SUPPORT_CATEGORY_ID`. Discord server owners and members with Administrator permission can still bypass channel restrictions.
 4. Register the guild commands and create the server invite link:
 
    ```sh

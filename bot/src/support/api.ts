@@ -4,6 +4,8 @@ export type SupportTicket = {
     status: 'open' | 'closed'
     channel: string
     user_name: string
+    created_at: string
+    first_message: string
 }
 
 export type SupportMessage = {
@@ -34,6 +36,8 @@ function ticket(value: unknown): SupportTicket | null {
         status: value.status,
         channel: value.channel,
         user_name: typeof value.user_name === 'string' ? value.user_name : 'Visitor',
+        created_at: typeof value.created_at === 'string' ? value.created_at : '',
+        first_message: typeof value.first_message === 'string' ? value.first_message : '',
     }
 }
 

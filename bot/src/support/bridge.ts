@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { ChannelType, EmbedBuilder, Events, PermissionFlagsBits, type Client, type Guild, type Message, type TextChannel } from 'discord.js'
+import { ChannelType, EmbedBuilder, Events, PermissionFlagsBits, type Client, type Guild, type Message, type Role, type TextChannel } from 'discord.js'
 import WebSocket from 'ws'
 import type { BotConfig } from '../config.js'
 import { SupportApi, SupportApiError, type SupportMessage, type SupportTicket } from './api.js'
@@ -27,6 +27,12 @@ function splitMessage(value: string, limit = 1800) {
     return parts.length ? parts : [' ']
 }
 
+function ticketChannelName(number: number, value: string) {
+    const title = value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48).replace(/-$/g, '') || 'ticket'
+    return `ha-${number}-${title}`
+}
+
 function supportAuthor(message: SupportMessage) {
     if (message.sender_kind === 'assistant') return 'Hanasand AI'
     if (message.sender_kind === 'system') return 'Support'
@@ -44,6 +50,7 @@ export class SupportBridge {
     private socket?: WebSocket
     private guild?: Guild
     private supportCategoryId: string | undefined
+    private supportRole: Role | undefined
     private connected = false
     private stopping = false
     private reconnectTimer: NodeJS.Timeout | undefined
@@ -134,9 +141,9 @@ export class SupportBridge {
     private async getGuild() {
         if (this.guild) return this.guild
         const guild = await this.client.guilds.fetch(this.config.guildId)
-        if (this.config.supportRoleId && !await guild.roles.fetch(this.config.supportRoleId)) {
-            throw new Error('DISCORD_SUPPORT_ROLE_ID does not exist in the configured server.')
-        }
+        if (!this.config.supportRoleId) throw new Error('DISCORD_SUPPORT_ROLE_ID must identify the private support-access role.')
+        this.supportRole = await guild.roles.fetch(this.config.supportRoleId) || undefined
+        if (!this.supportRole) throw new Error('DISCORD_SUPPORT_ROLE_ID does not exist in the configured server.')
         const channels = await guild.channels.fetch()
         if (this.config.supportCategoryId) {
             const category = channels.get(this.config.supportCategoryId)
@@ -145,7 +152,8 @@ export class SupportBridge {
         } else {
             const supportCategory = [...channels.values()].find(channel => channel?.type === ChannelType.GuildCategory
                 && channel.name.toLowerCase() === 'support')
-            this.supportCategoryId = supportCategory?.id
+            if (!supportCategory) throw new Error('Create a Discord category named support or set DISCORD_SUPPORT_CATEGORY_ID.')
+            this.supportCategoryId = supportCategory.id
         }
         this.guild = guild
         return guild
@@ -162,7 +170,7 @@ export class SupportBridge {
 
     private async syncQueue() {
         try {
-            const tickets = await this.api.getTickets()
+            const tickets = (await this.api.getTickets()).sort((left, right) => left.created_at.localeCompare(right.created_at))
             for (const ticket of tickets) {
                 const saved = this.state.get(ticket.id)
                 if (ticket.channel === 'human' && (ticket.status === 'open' || saved)) await this.syncTicketRecord(ticket)
@@ -212,47 +220,80 @@ export class SupportBridge {
         const guild = await this.getGuild()
         if (existing) {
             const savedChannel = await guild.channels.fetch(existing.channelId).catch(() => null)
-            if (channelIsText(savedChannel)) return { channel: savedChannel, created: false }
+            if (channelIsText(savedChannel)) {
+                await this.prepareSupportChannel(savedChannel, ticket, existing)
+                return { channel: savedChannel, created: false }
+            }
         }
 
         const found = [...guild.channels.cache.values()].find(channel => channelIsText(channel)
             && channel.topic?.includes(`${ticketMarker}${ticket.id}`))
         if (found && channelIsText(found)) {
-            this.state.set(ticket.id, existing ? { ...existing, channelId: found.id } : {
+            const saved = existing ? { ...existing, channelId: found.id } : {
                 channelId: found.id,
                 status: ticket.status,
                 mirroredMessageIds: [],
                 handledDiscordMessageIds: [],
-            })
+            }
+            await this.prepareSupportChannel(found, ticket, saved)
             await this.state.save()
             return { channel: found, created: false }
         }
         if (ticket.status === 'closed') throw new Error('Closed support channel no longer exists; refusing to recreate it.')
 
-        const botId = this.client.user?.id
-        if (!botId) throw new Error('Discord client is not ready.')
-        const permissionOverwrites = [
-            { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
-            { id: botId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.EmbedLinks] },
-            { id: guild.ownerId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
-            ...(this.config.supportRoleId ? [{ id: this.config.supportRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }] : []),
-        ]
         const channel = await guild.channels.create({
-            name: `support-${ticket.id.slice(0, 8)}`,
+            name: `ha-pending-${ticket.id.slice(0, 8)}`,
             type: ChannelType.GuildText,
-            ...(this.supportCategoryId ? { parent: this.supportCategoryId } : {}),
+            parent: this.supportCategoryId!,
             topic: `${ticketMarker}${ticket.id}`,
-            permissionOverwrites,
+            permissionOverwrites: this.supportPermissionOverwrites(guild),
             reason: 'Open a private channel for a Hanasand website support chat',
         })
+        const channelNumber = this.state.allocateChannelNumber()
         this.state.set(ticket.id, {
             channelId: channel.id,
+            channelNumber,
             status: ticket.status,
             mirroredMessageIds: [],
             handledDiscordMessageIds: existing?.handledDiscordMessageIds || [],
         })
         await this.state.save()
+        await channel.setName(ticketChannelName(channelNumber, ticket.first_message || ticket.subject), 'Use the Hanasand support ticket number and first message')
         return { channel, created: true }
+    }
+
+    private supportPermissionOverwrites(guild: Guild) {
+        if (!this.supportRole) throw new Error('The Hanasand support role is not configured.')
+        return [
+            { id: guild.roles.everyone, deny: [PermissionFlagsBits.ViewChannel] },
+            { id: this.supportRole, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.EmbedLinks] },
+        ]
+    }
+
+    private async prepareSupportChannel(channel: TextChannel, ticket: SupportTicket, saved: TicketState) {
+        const guild = await this.getGuild()
+        const number = saved.channelNumber || this.state.allocateChannelNumber()
+        saved.channelNumber = number
+        if (this.supportCategoryId && channel.parentId !== this.supportCategoryId) {
+            await channel.setParent(this.supportCategoryId, { lockPermissions: false, reason: 'Keep Hanasand support chats under the support category' })
+        }
+        const desired = this.supportPermissionOverwrites(guild)
+        const overwrites = channel.permissionOverwrites.cache
+        const everyone = overwrites.get(guild.roles.everyone.id)
+        const support = overwrites.get(this.supportRole!.id)
+        const correctOverwrites = overwrites.size === 2
+            && Boolean(everyone?.deny.has(PermissionFlagsBits.ViewChannel))
+            && Boolean(support?.allow.has(PermissionFlagsBits.ViewChannel)
+                && support.allow.has(PermissionFlagsBits.SendMessages)
+                && support.allow.has(PermissionFlagsBits.ReadMessageHistory)
+                && support.allow.has(PermissionFlagsBits.EmbedLinks))
+        if (!correctOverwrites) {
+            await channel.permissionOverwrites.set(desired, 'Restrict Hanasand support chats to the Hanasand Support role')
+        }
+        const name = ticketChannelName(number, ticket.first_message || ticket.subject)
+        if (channel.name !== name) await channel.setName(name, 'Use the Hanasand support ticket number and first message')
+        this.state.set(ticket.id, saved)
+        await this.state.save()
     }
 
     private async sendChannelHeader(channel: TextChannel, ticket: SupportTicket) {
@@ -296,11 +337,9 @@ export class SupportBridge {
 
     private async isSupportStaff(message: Message) {
         const guild = await this.getGuild()
-        if (message.author.id === guild.ownerId) return true
         const member = message.member || await guild.members.fetch(message.author.id).catch(() => null)
         if (!member) return false
-        return member.permissions.has(PermissionFlagsBits.Administrator)
-            || Boolean(this.config.supportRoleId && member.roles.cache.has(this.config.supportRoleId))
+        return member.roles.cache.has(this.supportRole!.id)
     }
 
     private async forwardStaffMessage(ticketId: string, message: Message) {
@@ -308,7 +347,7 @@ export class SupportBridge {
             const state = this.state.get(ticketId)
             if (!state || state.handledDiscordMessageIds.includes(message.id)) return
             if (!await this.isSupportStaff(message)) {
-                await message.reply({ content: 'Only the server owner, administrators, and configured support staff can reply to website chats.', allowedMentions: { parse: [] } })
+                await message.reply({ content: 'Only members of the Hanasand Support role can reply to website chats.', allowedMentions: { parse: [] } })
                 state.handledDiscordMessageIds.push(message.id)
                 await this.state.save()
                 return

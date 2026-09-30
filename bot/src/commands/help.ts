@@ -5,7 +5,7 @@ const command: BotCommand = {
     data: new SlashCommandBuilder().setName('help').setDescription('Show the available bot commands.'),
     async execute(interaction) {
         await interaction.reply({
-            content: '`/info` — Hanasand bot details\n`/ping` — bot and support connection status\n`/help` — this list',
+            content: '`/info` — Hanasand bot details\n`/ping` — bot and support connection status\n`/tickets` — post the Hanasand support panel\n`/help` — this list',
             flags: MessageFlags.Ephemeral,
         })
     },

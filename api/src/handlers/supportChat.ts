@@ -39,27 +39,60 @@ async function isSupport(userId: string, req: FastifyRequest) {
     return hasHanasandInternalPageAccess(userId)
 }
 
-async function listSupportTickets(userId: string, supportQueue: boolean) {
+type TicketFilters = { search: string; from: string; to: string; stars: string; feedback: string }
+
+async function listSupportTickets(userId: string, supportQueue: boolean, filters: TicketFilters) {
     return run(`
             SELECT t.id, t.user_id, t.subject, t.status, t.created_at, t.updated_at, t.channel, t.resolution_version, t.feedback_rating, t.feedback_comment,
                    (SELECT u2.name FROM support_messages m2 JOIN users u2 ON u2.id=m2.sender_id WHERE m2.ticket_id=t.id AND m2.sender_kind='support' ORDER BY m2.created_at DESC, m2.id DESC LIMIT 1) AS agent_name,
                    (SELECT COUNT(*)::int FROM support_messages m3 WHERE m3.ticket_id=t.id AND (m3.sender_kind<>'system' OR m3.event=CASE WHEN $1::boolean THEN 'feedback' ELSE 'resolved' END OR (NOT $1::boolean AND m3.event='reopened')) AND m3.sender_id IS DISTINCT FROM $2) AS reply_count,
                    COALESCE(u.name, 'Visitor') AS user_name,
-                   (SELECT body FROM support_messages WHERE ticket_id = t.id ORDER BY created_at DESC LIMIT 1) AS last_message
+                   (SELECT body FROM support_messages WHERE ticket_id = t.id ORDER BY created_at DESC, id DESC LIMIT 1) AS last_message,
+                   (SELECT body FROM support_messages WHERE ticket_id = t.id ORDER BY created_at ASC, id ASC LIMIT 1) AS first_message
             FROM support_tickets t
             LEFT JOIN users u ON u.id = t.user_id
             WHERE (($1::boolean AND t.channel = 'human') OR (NOT $1::boolean AND t.user_id = $2))
+              AND ($3 = '' OR position(lower($3) in lower(t.subject)) > 0
+                   OR position(lower($3) in lower(COALESCE(u.name, 'Visitor'))) > 0
+                   OR position(lower($3) in lower(COALESCE(t.feedback_comment, ''))) > 0
+                   OR EXISTS (SELECT 1 FROM support_messages m4 WHERE m4.ticket_id = t.id AND position(lower($3) in lower(m4.body)) > 0))
+              AND ($4::date IS NULL OR t.created_at >= $4::date)
+              AND ($5::date IS NULL OR t.created_at < $5::date + INTERVAL '1 day')
+              AND ($6 = 'all' OR ($6 = 'rated' AND t.feedback_rating IS NOT NULL) OR ($6 = 'unrated' AND t.feedback_rating IS NULL) OR (CASE WHEN $6 ~ '^[1-5]$' THEN t.feedback_rating = $6::int ELSE FALSE END))
+              AND ($7 = 'all' OR ($7 = 'comment' AND length(trim(COALESCE(t.feedback_comment, ''))) > 0) OR ($7 = 'none' AND length(trim(COALESCE(t.feedback_comment, ''))) = 0))
             ORDER BY t.updated_at DESC
             LIMIT 100
-        `, [supportQueue, userId])
+        `, [supportQueue, userId, filters.search, filters.from || null, filters.to || null, filters.stars, filters.feedback])
 }
 
-export async function getSupportTickets(req: FastifyRequest, res: FastifyReply) {
+type SupportTicketQuery = { search?: unknown; from?: unknown; to?: unknown; stars?: unknown; feedback?: unknown }
+
+function supportTicketFilters(query: SupportTicketQuery): TicketFilters | null {
+    const search = typeof query.search === 'string' ? query.search.trim().slice(0, 160) : ''
+    const from = typeof query.from === 'string' ? query.from : ''
+    const to = typeof query.to === 'string' ? query.to : ''
+    const stars = typeof query.stars === 'string' ? query.stars : 'all'
+    const feedback = typeof query.feedback === 'string' ? query.feedback : 'all'
+    const validDate = (value: string) => {
+        if (!value) return true
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+        const date = new Date(`${value}T00:00:00.000Z`)
+        return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
+    }
+    if (!validDate(from) || !validDate(to) || from && to && from > to
+        || !['all', 'rated', 'unrated', '1', '2', '3', '4', '5'].includes(stars)
+        || !['all', 'comment', 'none'].includes(feedback)) return null
+    return { search, from, to, stars, feedback }
+}
+
+export async function getSupportTickets(req: FastifyRequest<{ Querystring: SupportTicketQuery }>, res: FastifyReply) {
     const userId = await auth(req, res)
     if (!userId) return
     try {
         const support = await isSupport(userId, req)
-        const result = await listSupportTickets(userId, support)
+        const filters = supportTicketFilters(support ? req.query : {})
+        if (!filters) return res.status(400).send({ error: 'Invalid support ticket filters.' })
+        const result = await listSupportTickets(userId, support, filters)
         return res.send({ isSupport: support, tickets: result.rows, realtime: true })
     } catch (error) {
         req.log.error(error)
@@ -71,7 +104,7 @@ export async function getMySupportTickets(req: FastifyRequest, res: FastifyReply
     const userId = await auth(req, res)
     if (!userId) return
     try {
-        const result = await listSupportTickets(userId, false)
+        const result = await listSupportTickets(userId, false, { search: '', from: '', to: '', stars: 'all', feedback: 'all' })
         return res.send({ isSupport: false, tickets: result.rows, realtime: true })
     } catch (error) {
         req.log.error(error)
