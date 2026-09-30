@@ -8,6 +8,7 @@ import assignVmOrganization from './handlers/vms/organization.ts'
 import { getContainerProducts, createContainerCheckout } from './handlers/containerBilling.ts'
 import { caseRepositoryWebhooks, getCaseDevelopment, getCaseRepositories, postCaseRepository, deleteCaseRepository, getCaseCommits, postCaseCommit } from './handlers/caseDevelopment.ts'
 import { getServiceAccounts, postServiceAccount, patchServiceAccount, deleteServiceAccount, serviceAccountSelf } from './handlers/serviceAccounts.ts'
+import { getHostSshKeys, postHostSshKey, deleteHostSshKey } from './handlers/hostSshKeys.ts'
 import authRoutes from './authRoutes.ts'
 import { getMonitoringCases, updateMonitoringCase } from './handlers/monitoringCases.ts'
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify'
@@ -454,6 +455,11 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/certificates', postCertificate)
     fastify.put('/certificates/:id', putCertificate)
     fastify.delete('/certificates/:id', deleteCertificate)
+
+    // Host SSH access
+    fastify.get('/host-ssh-keys', getHostSshKeys)
+    fastify.post('/host-ssh-keys', postHostSshKey)
+    fastify.delete('/host-ssh-keys/:id', deleteHostSshKey)
 
     // Vms
     fastify.get('/vms/agent/targets', getAgentTargets)

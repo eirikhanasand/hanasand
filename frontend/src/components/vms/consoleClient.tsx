@@ -7,7 +7,8 @@ import config from '@/config'
 import { prepareVmConsole } from '@/utils/vms/prepareConsole'
 import { getCookie } from '@/utils/cookies/cookies'
 
-export default function VmConsole({ name }: { name: string }) {
+export default function VmConsole({ name, host, onHostChange }: { name?: string; host?: 'hanasand' | 'inspur'; onHostChange?: (host: 'hanasand' | 'inspur') => void }) {
+    const consoleTarget = host || name || 'Host'
     const panel = useRef<HTMLElement>(null)
     const [nativeFullscreen, setNativeFullscreen] = useState(false)
     const [expanded, setExpanded] = useState(false)
@@ -84,7 +85,7 @@ export default function VmConsole({ name }: { name: string }) {
         let socket: WebSocket | undefined
         let retry: ReturnType<typeof setTimeout> | undefined
         let disposeTerminal: (() => void) | undefined
-        setStatus('Checking container…')
+        setStatus(host ? 'Connecting…' : 'Checking container…')
         setOpening(true)
         setUsername('')
         setBootLog('')
@@ -92,7 +93,10 @@ export default function VmConsole({ name }: { name: string }) {
         setShowBoot(false)
         void (async () => {
             try {
-                await prepareVmConsole(name, config.url.api, getCookie('id') || '', decodeURIComponent(getCookie('access_token') || ''), message => { if (!disposed) setStatus(message) }, AbortSignal.any([controller.signal, AbortSignal.timeout(120000)]))
+                if (!host) {
+                    if (!name) throw new Error('Select a virtual machine to open its console.')
+                    await prepareVmConsole(name, config.url.api, getCookie('id') || '', decodeURIComponent(getCookie('access_token') || ''), message => { if (!disposed) setStatus(message) }, AbortSignal.any([controller.signal, AbortSignal.timeout(120000)]))
+                }
             } catch (error) {
                 if (!disposed) { setOpening(false); setStatus(error instanceof Error ? error.message : 'Unable to open container.'); reconnect.current = () => window.location.reload() }
                 return
@@ -140,8 +144,8 @@ export default function VmConsole({ name }: { name: string }) {
             const stopFollowing = (event: WheelEvent) => {
                 if (event.deltaY < 0) followOutput = false
             }
-            const host = container.current
-            host.addEventListener('wheel', stopFollowing, { passive: true })
+            const terminalElement = container.current
+            terminalElement.addEventListener('wheel', stopFollowing, { passive: true })
             let ready = false
             let failed = false
             const sendSize = () => {
@@ -158,14 +162,14 @@ export default function VmConsole({ name }: { name: string }) {
                 terminal.scrollToBottom()
                 if (ready && socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'input', data }))
             })
-            disposeTerminal = () => { observer.disconnect(); host.removeEventListener('wheel', stopFollowing); input.dispose(); selection.dispose(); scroll.dispose(); terminal.dispose() }
+            disposeTerminal = () => { observer.disconnect(); terminalElement.removeEventListener('wheel', stopFollowing); input.dispose(); selection.dispose(); scroll.dispose(); terminal.dispose() }
             const connect = () => {
                 if (disposed) return
                 clearTimeout(retry)
                 if (socket) { socket.onclose = null; socket.close() }
                 ready = false
                 failed = false
-                socket = new WebSocket(`${config.url.api_wss}/vm/${encodeURIComponent(name)}/console`)
+                socket = new WebSocket(config.url.api_wss + (host ? '/host/' + encodeURIComponent(host) + '/console' : '/vm/' + encodeURIComponent(name || '') + '/console'))
                 socket.onopen = () => {
                     socket?.send(JSON.stringify({ type: 'auth', id: getCookie('id'), token: decodeURIComponent(getCookie('access_token') || '') }))
                     setStatus('Opening console…')
@@ -195,7 +199,7 @@ export default function VmConsole({ name }: { name: string }) {
                         } else if (message.type === 'status') {
                             ready = false
                             setStatus(message.message)
-                            if (message.message !== 'Opening console…') setShowBoot(true)
+                            if (!host && message.message !== 'Opening console…') setShowBoot(true)
                         } else if (message.type === 'boot-output') {
                             setBootError('')
                             setBootLog(previous => (previous + message.data).slice(-65536))
@@ -215,12 +219,13 @@ export default function VmConsole({ name }: { name: string }) {
             connect()
         })().catch(() => { if (!disposed) setStatus('Unable to load the console. Try again.') })
         return () => { disposed = true; controller.abort(); clearTimeout(retry); reconnect.current = () => {}; socket?.close(); disposeTerminal?.() }
-    }, [name])
+    }, [name, host])
 
     return <section ref={panel} data-expanded={expanded || undefined} style={expanded ? viewport : undefined} className={`flex min-h-0 flex-col gap-3 overflow-hidden border border-ui-border bg-ui-panel p-4 [&:fullscreen]:h-dvh [&:fullscreen]:w-screen [&:fullscreen]:rounded-none ${expanded ? 'fixed inset-0 z-[1000] h-dvh rounded-none pt-[max(1rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))]' : 'h-[calc(100dvh-7rem)] rounded-xl'}`}>
         <header className='flex flex-wrap items-center justify-between gap-3'>
-            <div><h1 className='text-lg font-semibold'>{name} console</h1><p role='status' className='text-sm text-ui-muted'>{status}{username ? ` · ${username}` : ''}</p></div>
+            <div><h1 className='text-lg font-semibold'>{consoleTarget} console</h1><p role='status' className='text-sm text-ui-muted'>{status}{username ? ` · ${username}` : ''}</p></div>
             <div className='flex items-center gap-3'>
+                {host && onHostChange && <label className='flex items-center gap-2 text-sm text-ui-muted'>Host<select aria-label='Console host' value={host} onChange={event => onHostChange(event.target.value as 'hanasand' | 'inspur')} className='rounded-lg border border-ui-border bg-ui-panel px-2 py-2 text-ui-text'><option value='hanasand'>Hanasand</option><option value='inspur'>Inspur</option></select></label>}
                 <button type='button' onClick={() => void toggleFullscreen()} aria-label={fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'} title={fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'} aria-pressed={fullscreen} className='rounded-lg border border-ui-border p-2'>{fullscreen ? <Minimize2 className='h-4 w-4' /> : <Maximize2 className='h-4 w-4' />}</button>
                 <Link href='/system' className='text-sm text-ui-primary'>Back to overview</Link>
                 <button type='button' onClick={() => reconnect.current()} className='flex items-center gap-2 rounded-lg border border-ui-border px-3 py-2 text-sm'><RefreshCw className='h-4 w-4' />Reconnect</button>
@@ -232,6 +237,6 @@ export default function VmConsole({ name }: { name: string }) {
             <pre ref={bootPanel} onScroll={event => { const el = event.currentTarget; followBoot.current = el.scrollHeight - el.scrollTop - el.clientHeight < 4 }} className='mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-xs' aria-label='VM restart log'>{bootLog || 'Waiting for boot output…'}</pre>
         </details>}
         {opening && <div role='status' className='flex items-center gap-3 rounded-lg border border-ui-primary/25 bg-ui-primary/5 px-4 py-3 text-sm text-ui-primary'><LoaderCircle className='h-5 w-5 animate-spin text-ui-loader' aria-hidden />{status}</div>}
-        <div ref={container} aria-label={`${name} terminal`} className='min-h-0 min-w-0 flex-1 overflow-hidden rounded-lg border border-ui-border bg-ui-canvas p-2' />
+        <div ref={container} aria-label={consoleTarget + ' terminal'} className='min-h-0 min-w-0 flex-1 overflow-hidden rounded-lg border border-ui-border bg-ui-canvas p-2' />
     </section>
 }

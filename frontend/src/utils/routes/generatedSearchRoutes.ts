@@ -379,6 +379,12 @@ export const generatedSearchRoutes = [
         href: '/dashboard/system/ai',
     },
     {
+        id: 'route:/dashboard/system/console',
+        title: 'Dashboard · System · Console',
+        detail: 'Page · /dashboard/system/console',
+        href: '/dashboard/system/console',
+    },
+    {
         id: 'route:/dashboard/system/impersonation',
         title: 'Dashboard · System · Impersonation',
         detail: 'Page · /dashboard/system/impersonation',
@@ -389,6 +395,12 @@ export const generatedSearchRoutes = [
         title: 'Dashboard · System · Rates',
         detail: 'Page · /dashboard/system/rates',
         href: '/dashboard/system/rates',
+    },
+    {
+        id: 'route:/dashboard/system/ssh-keys',
+        title: 'Dashboard · System · Ssh Keys',
+        detail: 'Page · /dashboard/system/ssh-keys',
+        href: '/dashboard/system/ssh-keys',
     },
     {
         id: 'route:/dashboard/system/updates',

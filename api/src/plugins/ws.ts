@@ -9,6 +9,7 @@ import { BrowserWarmPool, BROWSER_WARM_MAX_AGE_MS, type WarmWorker, type WarmSta
 import registerSupportStream from '../handlers/supportStream.ts'
 import registerSystemStream from '../handlers/metrics/systemStream.ts'
 import registerVmConsole from '../handlers/vms/console.ts'
+import registerHostConsole from '../handlers/hostConsole.ts'
 import { subscribeThesis } from '#utils/thesis.ts'
 import { thesisCredentials, thesisMember } from '#utils/thesisAccess.ts'
 import WebSocket from 'ws'
@@ -68,6 +69,7 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
     }
 
     registerVmConsole(fastify)
+    registerHostConsole(fastify)
     registerSystemStream(fastify)
     registerSupportStream(fastify)
 
