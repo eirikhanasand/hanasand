@@ -1,6 +1,6 @@
 import { createServer } from 'node:http'
 import { closeDatabase, withEventDatabase } from '#db'
-import { processStoredLogs } from '#utils/events/processLogs.ts'
+import { processLiveLogs, processStoredLogs } from '#utils/events/processLogs.ts'
 import { startLogProcessor } from '#utils/events/processor.ts'
 import { readLogCatchupSettings } from '#utils/events/catchupLimit.ts'
 import { isLogProcessorHealthy } from '#utils/events/processorHealth.ts'
@@ -44,10 +44,13 @@ healthServer.listen(healthPort, '0.0.0.0')
 stopProcessing = startLogProcessor(async () => {
     processingStartedAt = Date.now()
     try {
-        const didWork = await withEventDatabase(processStoredLogs)
+        // Keep all service-log work on this dedicated process. Run the fresh
+        // lane first, then let catch-up service durable history and its FIFO.
+        const didLiveWork = await withEventDatabase(processLiveLogs)
+        const didStoredWork = await withEventDatabase(processStoredLogs)
         lastSuccessfulTickAt = Date.now()
         consecutiveFailures = 0
-        return didWork
+        return didLiveWork || didStoredWork
     } catch (error) {
         consecutiveFailures++
         console.error('Durable log processor pass failed.', error)

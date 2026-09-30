@@ -208,14 +208,20 @@ function scopedProcessor(platformId: string, onWork: () => void, afterBatch?: ()
                 }
             }
 
-            if (priority) await processPages(batch, false)
-            else {
-                // Only login events use shared event-time correlation state. Keep
-                // those serialized; other durable event pages are independent.
-                const independentLogs: LogInput[] = [], correlationLogs: LogInput[] = []
-                for (const log of batch) {
-                    (requiresCorrelation(log, configured.get(target)!) ? correlationLogs : independentLogs).push(log)
-                }
+            // Only login events use shared event-time correlation state. Keep
+            // those serialized; fresh stateless logs must not hold the global
+            // correlation lock while their findings are evaluated and written.
+            const independentLogs: LogInput[] = [], correlationLogs: LogInput[] = []
+            for (const log of batch) {
+                (requiresCorrelation(log, configured.get(target)!) ? correlationLogs : independentLogs).push(log)
+            }
+            if (priority) {
+                // Preserve the latency-sensitive login lane, then let ordinary
+                // fresh records use the same bounded parallel path as history.
+                await processPages(correlationLogs, false)
+                await processPages(independentLogs, true)
+            } else {
+                // Fresh arrivals can run between durable independent pages.
                 await processPages(independentLogs, true)
                 await processPages(correlationLogs, false)
             }

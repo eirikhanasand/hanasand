@@ -463,7 +463,7 @@ test('live processing completes while a catch-up read is blocked and leaves its 
         expect(acknowledged.flat()).toContain('2001')
         expect(cursor).toEqual(before)
         expect(statements.some(sql => sql.includes('event:live-service-logs'))).toBe(true)
-        expect(statements.some(sql => sql.includes('event:log-batch'))).toBe(true)
+        expect(statements.some(sql => sql.includes('event:log-batch'))).toBe(false)
     } finally { historyGate = undefined; historyEntered = undefined; release(); await historical }
 })
 
@@ -473,5 +473,12 @@ test('a live burst is committed together while historical pages still yield', as
     expect(await processLiveLogs()).toBe(true)
     expect(checked).toHaveLength(200)
     expect(statements.filter(sql => sql.includes('INSERT INTO events'))).toHaveLength(1)
+    expect(statements.some(sql => sql.includes('event:log-batch'))).toBe(false)
+})
+
+test('live authentication logins retain the correlation lock', async () => {
+    priority = [{ ...makeLog('3001', { category: 'authentication', action: 'login' }), created_at: new Date().toISOString() }]
+    expect(await processLiveLogs()).toBe(true)
+    expect(checked).toEqual(['3001'])
     expect(statements.filter(sql => sql.includes('event:log-batch'))).toHaveLength(1)
 })
