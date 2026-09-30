@@ -65,7 +65,6 @@ export default function SessionsPanel({ isSelf }: { isSelf: boolean }) {
                     Log out others
                 </button>
             </div>
-            <p className='mt-2 text-xs text-ui-muted'>Each session is a sign-in. Multiple sessions can belong to the same device.</p>
             {error && <p role='alert' className='mt-3 text-sm text-ui-text'>{error} <button onClick={refresh} className='cursor-pointer underline'>Retry</button></p>}
             <div className='mt-4 grid gap-2'>
                 {sessions.map(session => {
