@@ -17,7 +17,7 @@ export async function postPushMonitoringKey(req: FastifyRequest<{ Params: { id: 
         const current = (await query('SELECT status FROM agent_automations WHERE id=$1 FOR UPDATE', [automation.id])).rows[0]
         if (!current || current.status === 'archived') return null
         const old = (await query('SELECT api_key_id FROM monitoring_push_sources WHERE automation_id=$1', [automation.id])).rows[0]
-        const key = await createApiKey({ ownerId: automation.owner_id, name: `${automation.name} sender`, tier: 'custom',
+        const key = await createApiKey({ ownerId: automation.owner_id, organizationId: automation.organization_id, name: `${automation.name} sender`, tier: 'custom',
             scopes: [{ id: 'external-events', method: 'POST', route: '/api/automations/:id/events', enabled: true,
                 limits: { perSecond: 5, perMinute: 60, perHour: 1000, perDay: 10000 } }] }, query)
         if (old?.api_key_id) await query('UPDATE api_keys SET enabled=FALSE, updated_at=NOW() WHERE id=$1', [old.api_key_id])

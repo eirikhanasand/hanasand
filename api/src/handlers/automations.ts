@@ -282,6 +282,7 @@ export async function postAutomationRunNow(req: FastifyRequest<{ Params: { id: s
     if (!automation) {
         return res.status(404).send({ error: 'Automation not found.' })
     }
+    if (automation.status !== 'active') return res.status(409).send({ error: 'Resume this check before running it.' })
 
     const claim = await run(`
         UPDATE agent_automations
@@ -290,6 +291,7 @@ export async function postAutomationRunNow(req: FastifyRequest<{ Params: { id: s
                last_error = NULL,
                updated_at = NOW()
          WHERE id = $1
+           AND status = 'active'
            AND last_status IS DISTINCT FROM 'running'
          RETURNING *
     `, [automation.id])

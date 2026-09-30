@@ -43,6 +43,11 @@ test('personal automation persistence, owner and organization isolation, privile
     const created = await app.inject({ method: 'POST', url: '/automations', payload })
     expect(created.statusCode).toBe(201)
     const id = created.json().automation.id
+    const paused = await app.inject({ method: 'POST', url: '/automations', payload: { ...payload, name: 'Paused reminder', status: 'paused' } })
+    expect(paused.statusCode).toBe(201)
+    const pausedId = paused.json().automation.id
+    expect((await app.inject({ method: 'POST', url: `/automations/${pausedId}/run` })).statusCode).toBe(409)
+    expect((await query('SELECT last_status FROM agent_automations WHERE id=$1', [pausedId])).rows[0].last_status).toBeNull()
     expect((await app.inject(`/automations/${id}`)).json().automation).toMatchObject({ ownerId: 'alice', organizationId: null, intervalMinutes: 10 })
     await executeAutomation((await query('SELECT * FROM agent_automations WHERE id=$1', [id])).rows[0])
     expect((await query('SELECT last_status,next_run_at,last_result FROM agent_automations WHERE id=$1', [id])).rows[0]).toMatchObject({ last_status: 'completed', next_run_at: expect.any(Date), last_result: expect.stringContaining('Renew certificate') })

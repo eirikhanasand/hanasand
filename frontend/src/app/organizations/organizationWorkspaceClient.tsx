@@ -52,7 +52,7 @@ type OrganizationMember = {
     joinedAt?: string
     invitedBy?: string | null
 }
-type OrganizationApiKey = { id: string, enabled?: boolean, keyPrefix?: string, key_prefix?: string, expiresAt?: string, expires_at?: string }
+type OrganizationApiKey = { id: string, name?: string, enabled?: boolean, keyPrefix?: string, key_prefix?: string, expiresAt?: string, expires_at?: string }
 
 type OrganizationInvite = {
     id: string
@@ -998,12 +998,12 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
         }
     }, 'organization-create')
 
-    const createEventApiKey = () => selectedOrganization && runAction('create-event-api-key', async () => {
+    const createEventApiKey = (name: string) => selectedOrganization && runAction('create-event-api-key', async () => {
         requireManage()
         const payload = await requestJson<{ apiKey?: OrganizationApiKey, secret?: string }>(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/api-keys`, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ name: 'Event ingestion' }),
+            body: JSON.stringify({ name }),
         })
         if (!payload.secret) throw new Error('The API key was created without a secret. Contact support before sending logs.')
         setNewApiKeySecret(payload.secret)
@@ -1505,7 +1505,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
                                     onSelectSubject={selectActivitySubject}
                                 />}
                                 {activePage === 'destinations' && <DestinationPanel destinations={bundle.webhooks} deliveries={bundle.deliveries} canManage={canEdit} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} createDraft={destinationCreateDraft} setCreateDraft={setDestinationCreateDraft} editing={editingDestinations} setEditing={setEditingDestinations} onSelectSubject={selectActivitySubject} onCreate={() => void createSavedDestination()} onTest={destination => void testSavedDestination(destination)} onUpdate={(destination, draft) => void updateSavedDestination(destination, draft)} onRotateSigningSecret={destination => void rotateDestinationSigningSecret(destination)} onDelete={destination => void deleteSavedDestination(destination)} signingSecret={newWebhookSigningSecret} onClearSigningSecret={() => setNewWebhookSigningSecret('')} />}
-                                {activePage === 'api-keys' && (canManage ? <EventApiKeyPanel apiKeys={bundle.apiKeys} secret={newApiKeySecret} canManage={canManage} busy={busy} rowMessage={rowMessages['event-api-key']} onCreate={() => void createEventApiKey()} onRevoke={key => void revokeEventApiKey(key)} onClearSecret={() => setNewApiKeySecret('')} /> : <p className='rounded-lg border border-ui-border bg-ui-panel p-4 text-sm text-ui-muted'>Only this organization’s owners and admins can manage API keys.</p>)}
+                                {activePage === 'api-keys' && (canManage ? <EventApiKeyPanel key={selectedOrganization.id} apiKeys={bundle.apiKeys} secret={newApiKeySecret} canManage={canManage} busy={busy} rowMessage={rowMessages['event-api-key']} onCreate={name => void createEventApiKey(name)} onRevoke={key => void revokeEventApiKey(key)} onClearSecret={() => setNewApiKeySecret('')} /> : <p className='rounded-lg border border-ui-border bg-ui-panel p-4 text-sm text-ui-muted'>Only this organization’s owners and admins can manage API keys.</p>)}
                                 {activePage === 'privacy' && <PrivacyLifecyclePanel organization={selectedOrganization} privacy={bundle.privacy} retentionDays={Number(bundle.settings?.retentionDays || 365)} canManage={canManage} busy={busy} rowMessage={rowMessages.privacy} onRun={() => void runRetention()} onExport={() => void exportPrivacyData()} onDelete={(confirmation, currentPassword) => void requestPrivacyDeletion(confirmation, currentPassword)} />}
                                 {activePage === 'delivery' && <DeliveryHistoryPanel
                                     organization={selectedOrganization}
@@ -1666,8 +1666,10 @@ function ActionAnchor({ href, icon, label, disabled, disabledReason }: { href: s
     return <a className={classes} href={href}>{icon}{label}</a>
 }
 
-function EventApiKeyPanel({ apiKeys, secret, canManage, busy, rowMessage, onCreate, onRevoke, onClearSecret }: { apiKeys: OrganizationApiKey[], secret: string, canManage: boolean, busy: string, rowMessage?: RowMessage, onCreate: () => void, onRevoke: (apiKey: OrganizationApiKey) => void, onClearSecret: () => void }) {
-    const activeKey = apiKeys.find(key => key.enabled !== false)
+function EventApiKeyPanel({ apiKeys, secret, canManage, busy, rowMessage, onCreate, onRevoke, onClearSecret }: { apiKeys: OrganizationApiKey[], secret: string, canManage: boolean, busy: string, rowMessage?: RowMessage, onCreate: (name: string) => void, onRevoke: (apiKey: OrganizationApiKey) => void, onClearSecret: () => void }) {
+    const activeKeys = apiKeys.filter(key => key.enabled !== false)
+    const revokedKeys = apiKeys.filter(key => key.enabled === false)
+    const [keyName, setKeyName] = useState('')
     const [copyStatus, setCopyStatus] = useState<RowMessage | undefined>()
     const creating = busy === 'create-event-api-key'
     const revoking = busy === 'revoke-event-api-key'
@@ -1682,29 +1684,31 @@ function EventApiKeyPanel({ apiKeys, secret, canManage, busy, rowMessage, onCrea
     return (
         <details id='event-api-key' open className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-event-api-key>
             <summary className='flex cursor-pointer list-none flex-col gap-3 p-4 outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 dark:hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
-                <SectionTitle icon={<KeyRound className='h-4 w-4' />} title='Security Monitoring access' detail='One organization API key for sending JSON logs to Hanasand Security Monitoring.' />
-                <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>{activeKey ? 'Configured' : 'Setup required'}</span>
+                <SectionTitle icon={<KeyRound className='h-4 w-4' />} title='Organization API keys' detail='Create separate keys for integrations. Every key belongs to this organization.' />
+                <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>{activeKeys.length ? `${activeKeys.length} active` : 'Setup required'}</span>
             </summary>
             <div className='grid gap-3 border-t border-ui-border p-4 dark:border-ui-border'>
-                {activeKey ? (
-                    <div className='flex flex-col gap-3 rounded-md border border-ui-border p-3 dark:border-ui-border sm:flex-row sm:items-center sm:justify-between'>
-                        <div className='min-w-0'>
-                            <p className='text-xs font-semibold uppercase tracking-[0.08em] text-ui-muted dark:text-ui-muted'>Active organization key</p>
-                            <p className='mt-1 truncate font-mono text-sm text-ui-text dark:text-ui-text'>{activeKey.keyPrefix || activeKey.key_prefix || 'prefix unavailable'}••••</p>
-                            <p className='mt-1 text-xs text-ui-muted dark:text-ui-muted'>Expires {formatDate(activeKey.expiresAt || activeKey.expires_at) || 'according to organization policy'}</p>
-                        </div>
-                        <button type='button' className={secondaryButtonClass} disabled={!canManage || Boolean(busy)} onClick={() => onRevoke(activeKey)} title={!canManage ? 'Owner or admin required' : 'Revoke organization API key'}>
-                            {revoking ? <Loader2 className='h-4 w-4 animate-spin' /> : <Trash2 className='h-4 w-4' />} Revoke key
-                        </button>
+                <p className='text-sm text-ui-muted dark:text-ui-muted'>Each key has its own name, secret, and revoke action. Creating a key does not disable existing keys.</p>
+                {activeKeys.map(apiKey => <div key={apiKey.id} className='flex flex-col gap-3 rounded-md border border-ui-border p-3 dark:border-ui-border sm:flex-row sm:items-center sm:justify-between' data-org-api-key-id={apiKey.id}>
+                    <div className='min-w-0'>
+                        <p className='truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{apiKey.name || 'Organization API key'}</p>
+                        <p className='mt-1 truncate font-mono text-xs text-ui-muted dark:text-ui-muted'>{apiKey.keyPrefix || apiKey.key_prefix || 'prefix unavailable'}••••</p>
+                        <p className='mt-1 text-xs text-ui-muted dark:text-ui-muted'>Expires {formatDate(apiKey.expiresAt || apiKey.expires_at) || 'according to organization policy'}</p>
                     </div>
-                ) : (
-                    <div className='flex flex-col gap-3 rounded-md border border-dashed border-ui-border p-3 dark:border-ui-border sm:flex-row sm:items-center sm:justify-between'>
-                        <p className='text-sm text-ui-muted dark:text-ui-muted'>Create one key to start sending logs. Owners and administrators can create or revoke it.</p>
-                        <button type='button' className={primaryButtonClass} disabled={!canManage || Boolean(busy)} onClick={onCreate} title={!canManage ? 'Owner or admin required' : 'Create organization API key'}>
-                            {creating ? <Loader2 className='h-4 w-4 animate-spin' /> : <KeyRound className='h-4 w-4' />} Create key
-                        </button>
-                    </div>
-                )}
+                    <button type='button' className={secondaryButtonClass} disabled={!canManage || Boolean(busy)} onClick={() => onRevoke(apiKey)} title={!canManage ? 'Owner or admin required' : 'Revoke organization API key'}>
+                        {revoking ? <Loader2 className='h-4 w-4 animate-spin' /> : <Trash2 className='h-4 w-4' />} Revoke key
+                    </button>
+                </div>)}
+                {revokedKeys.length > 0 && <p className='text-xs text-ui-muted dark:text-ui-muted'>{revokedKeys.length} revoked {revokedKeys.length === 1 ? 'key' : 'keys'} retained in history.</p>}
+                <div className='flex flex-col gap-3 rounded-md border border-dashed border-ui-border p-3 dark:border-ui-border sm:flex-row sm:items-end sm:justify-between'>
+                    <label className='grid min-w-0 flex-1 gap-1.5'>
+                        <span className='text-xs font-semibold text-ui-muted dark:text-ui-muted'>New key name</span>
+                        <input className='min-h-10 w-full rounded-md border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none focus:border-ui-primary' required minLength={2} maxLength={80} value={keyName} onChange={event => setKeyName(event.target.value)} placeholder='e.g. Production integration' />
+                    </label>
+                    <button type='button' className={primaryButtonClass} disabled={!canManage || Boolean(busy) || keyName.trim().length < 2 || keyName.trim().length > 80} onClick={() => { onCreate(keyName.trim()); setKeyName('') }} title={!canManage ? 'Owner or admin required' : 'Create organization API key'}>
+                        {creating ? <Loader2 className='h-4 w-4 animate-spin' /> : <KeyRound className='h-4 w-4' />} Create key
+                    </button>
+                </div>
                 {secret && <div className='rounded-md border border-ui-primary/40 bg-ui-primary/5 p-3 dark:border-ui-primary/40 dark:bg-ui-primary/10' role='status'>
                     <p className='text-sm font-semibold text-ui-text dark:text-ui-text'>Copy this secret now</p>
                     <p className='mt-1 text-xs text-ui-muted dark:text-ui-muted'>It is shown once and will not be recoverable after leaving this page.</p>

@@ -8,7 +8,6 @@ import { recordSystemEvent } from '#utils/systemEvent.ts'
 import { checkBillingCapacity } from './billing.ts'
 import {
     createApiKey,
-    findEnabledOrganizationApiKey,
     listOrganizationApiKeys,
     organizationPublicApiScopes,
     revokeOrganizationApiKey,
@@ -300,7 +299,6 @@ export async function postOrganizationApiKey(req: FastifyRequest<{ Params: Organ
             if (!roleCanManageOrganization(lockedOrganization.role)) return { error: 'organization_role_forbidden' as const }
             if (lockedOrganization.status !== 'active') return { error: 'organization_inactive' as const }
             if (await activeOwnerCount(organization.id, query) < 1) return { error: 'organization_owner_required' as const }
-            if (await findEnabledOrganizationApiKey(organization.id, query)) return { error: 'active_api_key_exists' as const }
             return {
                 created: await createApiKey({
                     ownerId: userId,
@@ -319,7 +317,6 @@ export async function postOrganizationApiKey(req: FastifyRequest<{ Params: Organ
             if (creation.error === 'organization_role_forbidden') return res.status(403).send({ error: { code: creation.error, message: 'Organization owners and administrators manage API keys.' } })
             if (creation.error === 'organization_inactive') return res.status(409).send({ error: { code: creation.error, message: 'Reactivate the organization before creating an API key.' } })
             if (creation.error === 'organization_owner_required') return res.status(409).send({ error: { code: creation.error, message: 'Add or transfer ownership to an active member before creating an API key.' } })
-            return res.status(409).send({ error: { code: creation.error, message: 'Revoke the current organization API key before creating another.' } })
         }
         const { created } = creation
         logOrganizationEvent(req, 'organization_api_key_created', organization.id, userId, {
@@ -329,7 +326,7 @@ export async function postOrganizationApiKey(req: FastifyRequest<{ Params: Organ
         })
         return res.status(201).send(created)
     } catch (error) {
-        if ((error as { code?: string }).code === '23505') return res.status(409).send({ error: { code: 'active_api_key_exists', message: 'Revoke the current organization API key before creating another.' } })
+        if ((error as { code?: string }).code === '23505') return res.status(409).send({ error: { code: 'api_key_conflict', message: 'The API key could not be generated. Try again.' } })
         req.log.error({ error, organizationId: organization.id }, 'Failed to create organization API key')
         return res.status(500).send({ error: { code: 'api_key_create_failed', message: 'The API key could not be created.' } })
     }

@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { readFile } from 'node:fs/promises'
 import {
     createApiKey,
-    findEnabledOrganizationApiKey,
     listOrganizationApiKeys,
     organizationPublicApiScopes,
     revokeOrganizationApiKey,
@@ -36,18 +35,28 @@ describe('organization API key onboarding', () => {
         expect(init).toContain('owner_id TEXT REFERENCES users(id) ON DELETE SET NULL')
         expect(ensureSchema).toContain('ALTER TABLE api_keys ALTER COLUMN owner_id DROP NOT NULL')
         expect(ensureSchema).toContain('FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE SET NULL')
+        expect(ensureSchema).toContain('DROP INDEX IF EXISTS idx_api_keys_one_active_org')
+        expect(ensureSchema).not.toContain('CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_one_active_org')
     })
 
-    test('creates one fixed-scope organization key and enforces its full lifecycle', async () => {
+    test('creates multiple fixed-scope organization keys and enforces their independent lifecycles', async () => {
         const created = await createApiKey({
             ownerId: 'customer-user',
             organizationId: 'org-a',
-            name: 'Developer API',
+            name: 'Production integration',
+            tier: 'starter',
+            scopes: organizationPublicApiScopes(),
+        }, fakeRun as any)
+        const second = await createApiKey({
+            ownerId: 'customer-user',
+            organizationId: 'org-a',
+            name: 'Development integration',
             tier: 'starter',
             scopes: organizationPublicApiScopes(),
         }, fakeRun as any)
         expect(created.secret).toMatch(/^hsk_[a-f0-9]{12}_[a-f0-9]{48}$/)
-        expect(created.apiKey).toMatchObject({ organizationId: 'org-a', name: 'Developer API', tier: 'starter', enabled: true })
+        expect(created.apiKey).toMatchObject({ organizationId: 'org-a', name: 'Production integration', tier: 'starter', enabled: true })
+        expect(second.apiKey).toMatchObject({ organizationId: 'org-a', name: 'Development integration', tier: 'starter', enabled: true })
         expect(created.apiKey.scopes).toHaveLength(13)
         expect(created.apiKey.scopes.find(scope => scope.route === '/api/v1/ti/search/batch')?.limits).toEqual({
             perSecond: 1,
@@ -56,11 +65,12 @@ describe('organization API key onboarding', () => {
             perDay: 1_000,
         })
         expect(JSON.stringify(created.apiKey)).not.toContain(created.secret)
-        expect(await findEnabledOrganizationApiKey('org-a', fakeRun as any)).toBe(created.apiKey.id)
 
         expect((await validateApiKey(created.secret, fakeRun as any))?.organizationId).toBe('org-a')
+        expect((await validateApiKey(second.secret, fakeRun as any))?.organizationId).toBe('org-a')
         organizationStatus = 'archived'
         expect(await validateApiKey(created.secret, fakeRun as any)).toBeNull()
+        expect(await validateApiKey(second.secret, fakeRun as any)).toBeNull()
         organizationStatus = 'active'
         expect((await validateApiKey(created.secret, fakeRun as any))?.organizationId).toBe('org-a')
 
@@ -73,11 +83,15 @@ describe('organization API key onboarding', () => {
         expect(afterCreatorRemoval?.organizationId).toBe('org-a')
 
         const listed = await listOrganizationApiKeys('org-a', fakeRun as any)
-        expect(listed).toHaveLength(1)
+        expect(listed).toHaveLength(2)
+        expect(listed.map(key => key.name).sort()).toEqual(['Development integration', 'Production integration'])
         expect(JSON.stringify(listed)).not.toContain(created.secret)
         expect(await revokeOrganizationApiKey('org-b', created.apiKey.id, fakeRun as any)).toBeNull()
         expect((await revokeOrganizationApiKey('org-a', created.apiKey.id, fakeRun as any))?.enabled).toBe(false)
         expect(await validateApiKey(created.secret, fakeRun as any)).toBeNull()
+        expect((await validateApiKey(second.secret, fakeRun as any))?.organizationId).toBe('org-a')
+        expect((await revokeOrganizationApiKey('org-a', second.apiKey.id, fakeRun as any))?.enabled).toBe(false)
+        expect(await validateApiKey(second.secret, fakeRun as any)).toBeNull()
     })
 
     test('limits organization key management to owners and administrators', () => {
@@ -89,9 +103,6 @@ describe('organization API key onboarding', () => {
 
 async function fakeRun(sql: string, params: unknown[] = []) {
     const query = sql.replace(/\s+/g, ' ').trim()
-    if (query.startsWith('SELECT id FROM api_keys') && query.includes('organization_id = $1')) {
-        return { rows: apiKeys.filter(row => row.organization_id === params[0] && row.enabled).slice(0, 1).map(row => ({ id: row.id })) }
-    }
     if (query.startsWith('INSERT INTO api_keys')) {
         const now = new Date().toISOString()
         const row = {

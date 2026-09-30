@@ -1492,7 +1492,7 @@ async function applySchema() {
     `)
     await run('CREATE INDEX IF NOT EXISTS idx_api_keys_owner_created_at ON api_keys(owner_id, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_api_keys_organization_created_at ON api_keys(organization_id, created_at DESC)')
-    await run('CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_one_active_org ON api_keys(organization_id) WHERE organization_id IS NOT NULL AND enabled IS TRUE')
+    await run('DROP INDEX IF EXISTS idx_api_keys_one_active_org')
     await run('CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(key_prefix)')
     await run('CREATE INDEX IF NOT EXISTS idx_api_key_scopes_key_route ON api_key_scopes(api_key_id, method, route)')
     await ensurePushMonitoringSchema()

@@ -68,9 +68,12 @@ if (!modulePath) {
                 status text, warning boolean DEFAULT false, result text, error text, provider text, model text, artifacts jsonb,
                 started_at timestamptz DEFAULT NOW(), completed_at timestamptz, duration_ms int);
             INSERT INTO users(id) VALUES ('test-owner');
+            INSERT INTO organizations(id,status) VALUES ('org-a','active');
+            INSERT INTO organization_members(organization_id,user_id,role,status) VALUES ('org-a','test-owner','owner','active');
             INSERT INTO agent_automations(id,owner_id,name,target_url) VALUES ('sensor','test-owner','Basement moisture','home-1/moisture'),
                 ('other','test-owner','Other sensor','home-2/moisture');
         `)
+        await query('UPDATE agent_automations SET organization_id=\'org-a\' WHERE id IN (\'sensor\',\'other\')')
         await caseSchema()
         await pushSchema()
         // Re-running the new schema must preserve state and history.
@@ -79,6 +82,7 @@ if (!modulePath) {
         expect(keyResponse.statusCode).toBe(201)
         const key = keyResponse.json().secret
         const keyId = (await validateApiKey(key))!.apiKey.id
+        expect((await validateApiKey(key))?.organizationId).toBe('org-a')
         let sequence = 0
         const makeEvent = (type: 'incident' | 'recovery' | 'heartbeat') => parsePushEvent({ eventId: `event-${++sequence}`, sequence,
             source: 'home-1/moisture', type, observedAt: new Date().toISOString(),

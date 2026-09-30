@@ -8,9 +8,30 @@ let role: OrganizationRole = 'reader'
 let active = true
 let archived = false
 const writes: string[] = []
+const apiKeys: Record<string, any>[] = []
+const apiKeyScopes: Record<string, any>[] = []
 const destination = { id: 'target', orgId: 'org', ownerId: 'owner', name: 'Delivery target', kind: 'webhook', status: 'active', endpointHint: 'example.com/…', endpointHash: 'hash', events: ['dwm.alert.created'] }
 const query = async (sql: string, params: unknown[] = []) => {
+    const statement = sql.replace(/\s+/g, ' ').trim()
     if (/^\s*(INSERT|UPDATE|DELETE)/.test(sql)) writes.push(sql)
+    if (statement.includes('COUNT(*)::int AS owner_count')) return { rows: [{ owner_count: 1 }] }
+    if (statement.startsWith('INSERT INTO api_keys')) {
+        const now = new Date().toISOString()
+        const row = { id: params[0], owner_id: params[1], organization_id: params[2], name: params[3], tier: params[4], description: params[5], enabled: params[6], key_prefix: params[7], secret_hash: params[8], expires_at: params[9], last_used_at: null, created_at: now, updated_at: now }
+        apiKeys.push(row)
+        return { rows: [row], rowCount: 1 }
+    }
+    if (statement.startsWith('DELETE FROM api_key_scopes')) {
+        const before = apiKeyScopes.length
+        for (let i = apiKeyScopes.length - 1; i >= 0; i--) if (apiKeyScopes[i]?.api_key_id === params[0]) apiKeyScopes.splice(i, 1)
+        return { rows: [], rowCount: before - apiKeyScopes.length }
+    }
+    if (statement.startsWith('INSERT INTO api_key_scopes')) {
+        apiKeyScopes.push({ id: params[0], api_key_id: params[1], method: params[2], route: params[3], enabled: params[4], per_second: params[5], per_minute: params[6], per_hour: params[7], per_day: params[8] })
+        return { rows: [], rowCount: 1 }
+    }
+    if (statement.includes('FROM api_key_scopes') && statement.includes('WHERE api_key_id = $1')) return { rows: apiKeyScopes.filter(scope => scope.api_key_id === params[0]) }
+    if (statement.includes('FROM api_keys') && statement.includes('WHERE organization_id = $1') && statement.includes('ORDER BY created_at DESC')) return { rows: apiKeys.filter(key => key.organization_id === params[0]) }
     if (sql.includes('FROM dwm_webhook_destinations')) return { rows: [{ id: 'target', org_id: 'org' }] }
     if (sql.includes('FROM organizations o')) return { rows: params[0] === 'org' && active ? [{ id: 'org', name: 'Organization', slug: 'org', status: 'active', role, owner_count: 1 }] : [] }
     if (sql.includes('FROM organization_members member')) return { rows: active ? [{ role, organization_status: 'active' }] : [] }
@@ -40,7 +61,7 @@ app.post('/org/:id/watchlists', org.postOrganizationWatchlist)
 app.patch('/org/:id/members/:userId/role', org.patchOrganizationMemberRole)
 app.delete('/org/:id/members/:userId', org.deleteOrganizationMember)
 
-beforeEach(() => { role = 'reader'; active = true; archived = false; writes.length = 0 })
+beforeEach(() => { role = 'reader'; active = true; archived = false; writes.length = 0; apiKeys.length = 0; apiKeyScopes.length = 0 })
 
 test('legacy roles and invitations become Reader without gaining permissions', () => {
     for (const legacy of ['member', 'viewer']) {
@@ -82,6 +103,17 @@ test('Editor can remove a delivery target; Reader and legacy roles cannot', asyn
 test('Reader cannot create watchlists, even with a direct request', async () => {
     expect((await app.inject({ method: 'POST', url: '/org/org/watchlists', payload: { kind: 'domain', value: 'example.com' } })).statusCode).toBe(403)
     expect(writes).toHaveLength(0)
+})
+
+test('organization owners can create multiple active organization API keys', async () => {
+    role = 'owner'
+    const first = await app.inject({ method: 'POST', url: '/org/org/api-keys', payload: { name: 'Production integration' } })
+    const second = await app.inject({ method: 'POST', url: '/org/org/api-keys', payload: { name: 'Development integration' } })
+    expect(first.statusCode).toBe(201)
+    expect(second.statusCode).toBe(201)
+    expect(first.json().apiKey.organizationId).toBe('org')
+    expect(second.json().apiKey.organizationId).toBe('org')
+    expect(apiKeys.filter(key => key.organization_id === 'org' && key.enabled)).toHaveLength(2)
 })
 
 test('Editor and Reader are denied administrative mutations without domain writes', async () => {

@@ -387,7 +387,15 @@ export async function recoverStaleAutomationRuns() {
 }
 
 export async function executeAutomation(automation: AutomationRow) {
-    if (automation.monitoring_type === 'push') return (await import('./pushMonitoring.ts')).checkPushMonitor(automation.id)
+    if (automation.monitoring_type === 'push') {
+        const pushMonitoring = await import('./pushMonitoring.ts')
+        try {
+            return await pushMonitoring.checkPushMonitor(automation.id)
+        } catch (error) {
+            await pushMonitoring.recordPushExecutionFailure(automation, error)
+        }
+        return
+    }
     let accessGranted = false
     let actionCompleted = false
     let outcome: { kind: 'failure' | 'warning' | null, message: string }

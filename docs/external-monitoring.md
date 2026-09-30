@@ -1,6 +1,6 @@
 # External monitoring
 
-Create a check at `/automation/health`, choose **External events**, and enter one source ID for one sensor condition, for example `home-1/basement/moisture`. Save the check, then create its sender key. Store the key on the household hub. Creating another key revokes the previous one. Pausing or archiving the check stops event acceptance.
+Create a check at `/automation/health`, choose **External events**, and enter one source ID for one sensor condition, for example `home-1/basement/moisture`. Save the check, then create its sender key. Store the key on the household hub. For an organization-owned check, the sender key is organization-scoped; personal checks keep a personal key. Creating another key for the same check revokes its previous key. Pausing or archiving the check stops event acceptance.
 
 Send `POST /api/automations/<check-id>/events` to the Hanasand API with `Content-Type: application/json` and `X-API-Key: <sender-key>`. The key is bound to that check and permits only event submission. It grants no browser login, management access or access to another check.
 

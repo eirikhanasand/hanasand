@@ -123,3 +123,21 @@ export async function checkPushMonitor(automationId: string) {
     })
     if (result) await notify(result)
 }
+
+export async function recordPushExecutionFailure(automation: AutomationRow, error: unknown) {
+    const message = redactSecretBearingText(error instanceof Error ? error.message : 'External monitor check failed.').slice(0, 2000)
+    const id = randomUUID()
+    await withTransaction(async query => {
+        await query(`INSERT INTO agent_automation_runs
+            (id, automation_id, owner_id, status, error, provider, model, completed_at, duration_ms, check_details, artifacts)
+            VALUES ($1,$2,$3,'failed',$4,'external-monitor','push',NOW(),0,$5::jsonb,$6::jsonb)`,
+        [id, automation.id, automation.owner_id, message, JSON.stringify(monitoringCheckDetails(automation)),
+            JSON.stringify([{ type: 'log', label: 'Check failure', text: message, href: null, createdAt: new Date().toISOString() }])])
+        await query(`UPDATE agent_automations
+            SET last_completed_at=NOW(), last_status='failed', last_result=NULL, last_error=$2,
+                consecutive_failures=consecutive_failures+1, run_count=run_count+1,
+                next_run_at=CASE WHEN status='active' AND schedule_kind='interval' THEN date_trunc('minute',NOW())+INTERVAL '1 minute' ELSE next_run_at END,
+                updated_at=NOW()
+            WHERE id=$1 AND monitoring_type='push'`, [automation.id, message])
+    })
+}
