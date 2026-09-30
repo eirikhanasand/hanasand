@@ -3,13 +3,14 @@ import { closeDatabase, withEventDatabase } from '#db'
 import { processStoredLogs } from '#utils/events/processLogs.ts'
 import { startLogProcessor } from '#utils/events/processor.ts'
 import { readLogCatchupSettings } from '#utils/events/catchupLimit.ts'
+import { isLogProcessorHealthy } from '#utils/events/processorHealth.ts'
 
 const settings = readLogCatchupSettings()
 const release = process.env.HANASAND_RELEASE_COMMIT || 'unknown'
 const healthPort = Number(process.env.LOG_PROCESSOR_HEALTH_PORT) || 8099
-const unhealthyAfterMs = 120_000
 const restartAfterFailures = 10
 let lastSuccessfulTickAt: number | null = null
+let processingStartedAt: number | null = null
 let consecutiveFailures = 0
 let shuttingDown = false
 let stopProcessing: () => Promise<void> = async () => {}
@@ -20,8 +21,13 @@ const healthServer = createServer((request, response) => {
         response.end('Not found')
         return
     }
-    const stale = lastSuccessfulTickAt === null || Date.now() - lastSuccessfulTickAt > unhealthyAfterMs
-    const ok = !shuttingDown && !stale && consecutiveFailures < restartAfterFailures
+    const now = Date.now()
+    const ok = isLogProcessorHealthy({
+        shuttingDown,
+        lastSuccessfulTickAt,
+        processingStartedAt,
+        consecutiveFailures,
+    }, now)
     response.statusCode = ok ? 200 : 503
     response.setHeader('Content-Type', 'application/json')
     response.end(JSON.stringify({
@@ -29,12 +35,14 @@ const healthServer = createServer((request, response) => {
         service: 'log-processor',
         release,
         lastSuccessfulTickAt: lastSuccessfulTickAt === null ? null : new Date(lastSuccessfulTickAt).toISOString(),
+        processingStartedAt: processingStartedAt === null ? null : new Date(processingStartedAt).toISOString(),
         consecutiveFailures,
     }))
 })
 healthServer.listen(healthPort, '0.0.0.0')
 
 stopProcessing = startLogProcessor(async () => {
+    processingStartedAt = Date.now()
     try {
         const didWork = await withEventDatabase(processStoredLogs)
         lastSuccessfulTickAt = Date.now()
@@ -48,6 +56,8 @@ stopProcessing = startLogProcessor(async () => {
             setTimeout(() => process.exit(1), 0)
         }
         throw error
+    } finally {
+        processingStartedAt = null
     }
 }, () => {}, () => settings.intervalMs)
 

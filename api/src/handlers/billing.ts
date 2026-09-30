@@ -120,9 +120,13 @@ export async function createBillingPortal(req: FastifyRequest, reply: FastifyRep
 export async function receiveStripeWebhook(req: FastifyRequest, reply: FastifyReply) {
     const secret = process.env.STRIPE_WEBHOOK_SECRET
     if (!secret) return reply.status(503).send({ error: 'Stripe webhook is not configured.' })
+    const previousSecret = process.env.STRIPE_WEBHOOK_SECRET_PREVIOUS
     const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {})
     const signature = header(req.headers['stripe-signature'])
-    if (!verifyStripeSignature(rawBody, signature, secret)) return reply.status(400).send({ error: 'Invalid Stripe signature.' })
+    const candidateSecrets = previousSecret ? [secret, previousSecret] : [secret]
+    let signatureValid = false
+    for (const candidate of candidateSecrets) signatureValid = verifyStripeSignature(rawBody, signature, candidate) || signatureValid
+    if (!signatureValid) return reply.status(400).send({ error: 'Invalid Stripe signature.' })
     let event: StripeEvent
     try {
         event = JSON.parse(rawBody) as StripeEvent

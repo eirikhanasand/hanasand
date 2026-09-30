@@ -1,4 +1,5 @@
 import crypto from 'node:crypto'
+import { decryptSecret, deriveSecretKey, encryptSecret } from '#utils/crypto/secretBox.ts'
 import { canonicalJson, containsUnsafeCustomerOutboundText, sanitizeCustomerOutboundText } from './customerOutputSafety.ts'
 import { lookup } from 'node:dns/promises'
 import { request as httpsRequest } from 'node:https'
@@ -386,8 +387,14 @@ const SECRET_KEY_SOURCE = process.env.DWM_WEBHOOK_SECRET_KEY
     || process.env.VM_API_TOKEN
     || process.env.DB_PASSWORD
     || 'hanasand-dwm-webhooks-development-key'
-const SECRET_KEY = crypto.createHash('sha256').update(SECRET_KEY_SOURCE).digest()
-const IV_LENGTH = 12
+const SECRET_KEY_SOURCES = [
+    SECRET_KEY_SOURCE,
+    process.env.DWM_WEBHOOK_SECRET_KEY_PREVIOUS,
+    process.env.MAIL_SERVICE_KEY_PREVIOUS,
+    process.env.VM_API_TOKEN_PREVIOUS,
+    process.env.DB_PASSWORD_PREVIOUS,
+].filter((value, index, values): value is string => typeof value === 'string' && values.indexOf(value) === index)
+const SECRET_KEYS = SECRET_KEY_SOURCES.map(deriveSecretKey)
 const DISCORD_CONTENT_LIMIT = 2000
 const DISCORD_EMBED_TITLE_LIMIT = 256
 const DISCORD_EMBED_DESCRIPTION_LIMIT = 4096
@@ -12132,11 +12139,7 @@ function hashValue(scope: string, value: string) {
 }
 
 function encryptWebhookSecret(value: string) {
-    const iv = crypto.randomBytes(IV_LENGTH)
-    const cipher = crypto.createCipheriv('aes-256-gcm', SECRET_KEY, iv)
-    const encrypted = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()])
-    const tag = cipher.getAuthTag()
-    return `${iv.toString('base64')}.${tag.toString('base64')}.${encrypted.toString('base64')}`
+    return encryptSecret(value, SECRET_KEYS[0])
 }
 
 function encryptWebhookTarget(endpoint: string, signingSecret: string) {
@@ -12144,12 +12147,7 @@ function encryptWebhookTarget(endpoint: string, signingSecret: string) {
 }
 
 function decryptWebhookSecret(value: string) {
-    const [ivB64, tagB64, dataB64] = value.split('.')
-    if (!ivB64 || !tagB64 || !dataB64) return value
-    const decipher = crypto.createDecipheriv('aes-256-gcm', SECRET_KEY, Buffer.from(ivB64, 'base64'))
-    decipher.setAuthTag(Buffer.from(tagB64, 'base64'))
-    const decrypted = Buffer.concat([decipher.update(Buffer.from(dataB64, 'base64')), decipher.final()])
-    return decrypted.toString('utf8')
+    return decryptSecret(value, SECRET_KEYS)
 }
 
 function decryptWebhookTarget(value: string) {

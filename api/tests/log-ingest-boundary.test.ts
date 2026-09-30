@@ -2,6 +2,7 @@ import { afterAll, beforeEach, expect, mock, test } from 'bun:test'
 import Fastify from 'fastify'
 let stored = 0, rateAllowed = true
 const token = process.env.LOG_INGEST_TOKEN
+const previousToken = process.env.LOG_INGEST_TOKEN_PREVIOUS
 mock.module('#db', () => ({ default: async () => ({ rows: [] }), withTransaction: async (work: any) => work(async () => ({rows:[]})), isTransientDatabaseError: () => false }))
 mock.module('#utils/auth/internalToken.ts', () => ({ default: (req: any) => req.headers.authorization === 'Bearer existing-internal' }))
 mock.module('#utils/auth/session.ts', () => ({ validateSession: async () => null }))
@@ -19,16 +20,16 @@ await app.register(rateLimit)
 app.post('/api/logs/ingest', ingestLog)
 app.get('/api/logs', async () => ({ private: true }))
 await app.ready()
-beforeEach(() => {stored=0;rateAllowed=true;process.env.LOG_INGEST_TOKEN='dedicated-ingest'})
-afterAll(async () => {await app.close();if(token===undefined)delete process.env.LOG_INGEST_TOKEN;else process.env.LOG_INGEST_TOKEN=token})
+beforeEach(() => {stored=0;rateAllowed=true;process.env.LOG_INGEST_TOKEN='dedicated-ingest';process.env.LOG_INGEST_TOKEN_PREVIOUS='previous-dedicated-ingest'})
+afterAll(async () => {await app.close();if(token===undefined)delete process.env.LOG_INGEST_TOKEN;else process.env.LOG_INGEST_TOKEN=token;if(previousToken===undefined)delete process.env.LOG_INGEST_TOKEN_PREVIOUS;else process.env.LOG_INGEST_TOKEN_PREVIOUS=previousToken})
 const send = (value: string) => app.inject({method:'POST',url:'/api/logs/ingest',headers:{authorization:'Bearer '+value},payload:{service:'audit',message:'whoami'}})
 test('both authorized collector credentials reach ingestion through the real rate-limit hook', async () => {
-    for(const value of ['dedicated-ingest','existing-internal']) {
+    for(const value of ['dedicated-ingest','previous-dedicated-ingest','existing-internal']) {
         const response=await send(value)
         expect(response.statusCode).toBe(201)
         expect(response.headers['x-rate-limit-scope']).toBe('internal')
     }
-    expect(stored).toBe(2)
+    expect(stored).toBe(3)
 })
 test('dedicated collector credential cannot read logs or authenticate another route', async () => {
     expect((await app.inject({method:'GET',url:'/api/logs',headers:{authorization:'Bearer dedicated-ingest'}})).statusCode).toBe(401)
