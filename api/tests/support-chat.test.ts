@@ -191,6 +191,9 @@ test('public endpoint validates session and message length; handoff works withou
     const response = await app.inject({ method: 'POST', url: '/support/chat', headers, payload: input('let me speakk with support') })
     expect(response.statusCode).toBe(200)
     expect(response.json().channel).toBe('human')
+    const shortRequest = await app.inject({ method: 'POST', url: '/support/chat', headers: { 'x-support-session': randomBytes(32).toString('hex') }, payload: input('support') })
+    expect(shortRequest.statusCode).toBe(200)
+    expect(shortRequest.json().channel).toBe('human')
 })
 
 test('Hanasand model answers support without broadcasting private output to AI viewers', async () => {

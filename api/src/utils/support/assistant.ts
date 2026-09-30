@@ -4,11 +4,12 @@ export const handoffMessage = 'Waiting for support.'
 export const handoffMarker = '[[HUMAN_HANDOFF]]'
 
 export function asksForHuman(message: string) {
-    const text = message.toLowerCase().replace(/[’']/g, '\'')
+    const text = message.toLowerCase().replace(/[’']/g, '\'').trim().replace(/\s+/g, ' ')
     if (/\b(don't|do not|no need|not now|ikke|trenger ikke)\b/.test(text)) return false
     return /\b(human|real person|live agent|support agent|representative|menneske|kundebehandler)\b/.test(text)
         && /\b(talk|speak|chat|connect|transfer|want|need|please|can i|snakke|prate|kontakt|ønsker|vil)\b/.test(text)
         || /^(human|live agent|agent|menneske)( please)?[.!?]*$/.test(text.trim())
+        || /^(?:(?:customer )?support(?: team)?)(?: please)?[.!?]*$/.test(text)
         || /\b(speak+|talk|chat|snakke|prate) (to|with|med) (someone|somebody|support(?: team)?|kundeservice)\b/.test(text)
 }
 
