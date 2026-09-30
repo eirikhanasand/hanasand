@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mock } from 'bun:test'
 import { createElement } from 'react'
 import { renderToReadableStream } from 'react-dom/server'
-let validation = { valid: true, state: 'valid', canViewInternalPages: false }
+let validation = { valid: true, state: 'valid', canViewInternalPages: true }
 let statusCalls = 0
 let organizationCalls = 0
 let organizationResponse = () => Response.json({ organizations: [] })
