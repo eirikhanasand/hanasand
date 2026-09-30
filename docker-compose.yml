@@ -103,6 +103,8 @@ services:
       - /var/lib/hanasand/docker-storage:/var/lib/hanasand/docker-storage
       - api_state:/var/lib/hanasand
       - ${HANASAND_APP_UPDATE_DIR:-/srv/hanasand/app-updates}:/srv/hanasand/app-updates
+      - ${HOST_CONSOLE_SSH_KEY_FILE:-/home/hanasand/.ssh/host-console}:/run/secrets/host-console:ro
+      - ${HOST_CONSOLE_KNOWN_HOSTS_FILE:-/home/hanasand/.ssh/host-console-known-hosts}:/run/secrets/host-console-known-hosts:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
@@ -297,8 +299,6 @@ services:
       HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
     volumes:
       - api_state:/var/lib/hanasand
-      - ${HOST_CONSOLE_SSH_KEY_FILE:-/home/hanasand/.ssh/host-console}:/run/secrets/host-console:ro
-      - ${HOST_CONSOLE_KNOWN_HOSTS_FILE:-/home/hanasand/.ssh/host-console-known-hosts}:/run/secrets/host-console-known-hosts:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS --max-time 3 --unix-socket /var/lib/hanasand/backups/database/.worker.sock http://localhost/health"]
       interval: 15s
