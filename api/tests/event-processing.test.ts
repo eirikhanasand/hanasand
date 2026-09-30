@@ -2,7 +2,7 @@ import { beforeEach, expect, mock, test } from 'bun:test'
 let stored: Record<string, any> = {}, findings: any[] = [], fail = false, findingWrites = 0, eventUpdates = 0, pendingLookups = 0
 let authRechecks: Array<{ sql: string, params: any[] }> = []
 const query = async (sql: string, p: any[] = []): Promise<any> => {
-    if (sql.includes('WITH changed AS (SELECT * FROM jsonb_to_recordset')) { authRechecks.push({ sql, params: p }); return { rows: [] } }
+    if (sql.includes('WITH later_users AS')) { authRechecks.push({ sql, params: p }); return { rows: [] } }
     if (sql.includes('SELECT log_key FROM events')) return { rows: Object.values(stored)
         .filter(row => p[0].includes(row.log_key) && row.processing_status === 'processed').map(row => ({ log_key: row.log_key })) }
     if (sql.includes('SELECT id, event_timestamp, outcome, source_country, normalized')) return { rows: [] }
@@ -97,12 +97,15 @@ test('late authentication rechecks use bounded user and source-IP index lanes', 
     await processLogBatch([login], 'org-a', rules())
     expect(authRechecks).toHaveLength(1)
     const { sql, params } = authRechecks[0]
-    expect(params[3]).toBe(25)
-    expect(sql).toContain('e.user_id = c.user_id')
-    expect(sql).toContain('md5(e.source_ip) = md5(c.source_ip)')
-    expect(sql).toContain('c.outcome = \'failure\'')
+    expect(params[1]).toBe('inspur:alice')
+    expect(params[2]).toBe('192.0.2.1')
+    expect(params[3]).toBe('failure')
+    expect(params[6]).toBe(25)
+    expect(sql).toContain('e.user_id = $2')
+    expect(sql).toContain('md5(e.source_ip) = md5($3::text)')
+    expect(sql).toContain('$4 = \'failure\'')
     expect(sql).toContain('e.outcome = \'success\'')
-    expect(sql).toContain('LIMIT $4')
+    expect(sql).toContain('LIMIT $7')
     expect(sql).not.toContain(' OR e.source_ip')
     expect(sql).not.toContain('OFFSET')
 })

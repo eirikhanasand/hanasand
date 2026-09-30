@@ -94,34 +94,33 @@ export async function processLogBatch(logs: LogInput[], organizationId: string, 
         // Late delivery/backfill can provide the missing precursor to a login
         // already checked by the fresh stream. Revisit only matching identities
         // inside a configured correlation window, in bounded pages.
-        const changed = auth.map(({ event }) => ({ timestamp: event.timestamp, user_id: event.userId, source_ip: event.sourceIp, outcome: event.outcome }))
         // Keep each correlation on its matching index. A shared source IP can
         // match an organization's full login history, so each rule lane gets
         // one bounded page and can never pin the worker while scanning it all.
-        const later = await run(`WITH changed AS (SELECT * FROM jsonb_to_recordset($1::jsonb) AS item(timestamp timestamptz, user_id text, source_ip text, outcome text)),
-            later_users AS (
-                SELECT e.id, e.normalized, e.event_timestamp FROM changed c JOIN events e
-                  ON e.organization_id = $2 AND e.user_id = c.user_id
-                WHERE c.user_id IS NOT NULL AND e.ingestion_id = 'logs' AND e.processing_status = 'processed'
-                  AND e.event_type = 'authentication' AND e.action = 'login' AND e.outcome = 'success'
-                  AND e.event_timestamp > c.timestamp AND e.event_timestamp <= c.timestamp + $3 * INTERVAL '1 minute'
-                ORDER BY e.event_timestamp, e.id LIMIT $4
-            ),
-            later_source_ip AS (
-                SELECT e.id, e.normalized, e.event_timestamp FROM changed c JOIN events e
-                  ON e.organization_id = $2 AND md5(e.source_ip) = md5(c.source_ip)
-                WHERE c.outcome = 'failure' AND c.source_ip IS NOT NULL
-                  AND e.source_ip = c.source_ip AND e.ingestion_id = 'logs' AND e.processing_status = 'processed'
-                  AND e.event_type = 'authentication' AND e.action = 'login' AND e.outcome = 'failure'
-                  AND e.event_timestamp > c.timestamp AND e.event_timestamp <= c.timestamp + $3 * INTERVAL '1 minute'
-                ORDER BY e.event_timestamp, e.id LIMIT $4
-            )
-            SELECT id, normalized FROM (
-                SELECT id, normalized, event_timestamp FROM later_users
-                UNION ALL
-                SELECT id, normalized, event_timestamp FROM later_source_ip
-            ) related ORDER BY event_timestamp, id`, [JSON.stringify(changed), organizationId, windowMinutes, AUTH_CORRELATION_RECHECK_LIMIT])
-        for (const row of later.rows) work.push({ id: row.id, key: '', logId: '', complete: false, findings: [], event: normalizeEvent(row.normalized, { vendor: 'Hanasand', product: 'Logs' }) })
+        for (const { event } of auth) {
+            const later = await run(`WITH later_users AS (
+                    SELECT e.id, e.normalized, e.event_timestamp FROM events e
+                    WHERE e.organization_id = $1 AND $2::text IS NOT NULL AND e.user_id = $2
+                      AND e.ingestion_id = 'logs' AND e.processing_status = 'processed'
+                      AND e.event_type = 'authentication' AND e.action = 'login' AND e.outcome = 'success'
+                      AND e.event_timestamp > $5::timestamptz AND e.event_timestamp <= $5::timestamptz + $6 * INTERVAL '1 minute'
+                    ORDER BY e.event_timestamp, e.id LIMIT $7
+                ), later_source_ip AS (
+                    SELECT e.id, e.normalized, e.event_timestamp FROM events e
+                    WHERE e.organization_id = $1 AND $4 = 'failure' AND $3::text IS NOT NULL
+                      AND e.source_ip = $3 AND md5(e.source_ip) = md5($3::text)
+                      AND e.ingestion_id = 'logs' AND e.processing_status = 'processed'
+                      AND e.event_type = 'authentication' AND e.action = 'login' AND e.outcome = 'failure'
+                      AND e.event_timestamp > $5::timestamptz AND e.event_timestamp <= $5::timestamptz + $6 * INTERVAL '1 minute'
+                    ORDER BY e.event_timestamp, e.id LIMIT $7
+                )
+                SELECT id, normalized FROM (
+                    SELECT id, normalized, event_timestamp FROM later_users
+                    UNION ALL
+                    SELECT id, normalized, event_timestamp FROM later_source_ip
+                ) related ORDER BY event_timestamp, id`, [organizationId, event.userId, event.sourceIp, event.outcome, event.timestamp, windowMinutes, AUTH_CORRELATION_RECHECK_LIMIT])
+            for (const row of later.rows) work.push({ id: row.id, key: '', logId: '', complete: false, findings: [], event: normalizeEvent(row.normalized, { vendor: 'Hanasand', product: 'Logs' }) })
+        }
     }
     // Events are persisted together before correlation, then checked in event-time order.
     work.sort((a, b) => Date.parse(a.event.timestamp) - Date.parse(b.event.timestamp))
