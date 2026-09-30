@@ -53,13 +53,10 @@ const LogMetricCard = memo(function LogMetricCard({ label, count24h, countTotal,
     return <article className={`${dashboardPanelClass} min-w-0 p-3 sm:p-4`} data-logs-metric-card>
         <div className='flex items-center justify-between gap-1.5'>
             {href ? <Link href={href} aria-label={hrefLabel || `View ${label} logs`} title={hrefLabel || `View ${label} logs`} className='truncate text-xs capitalize text-ui-muted hover:text-ui-primary sm:text-sm'>{label}</Link> : <p className='truncate text-xs capitalize text-ui-muted sm:text-sm'>{label}</p>}
-            <div role='group' aria-label={`${label} count range`} className='flex shrink-0 items-center gap-1 text-[10px] font-medium sm:text-xs'>
-                <span className={scope === '24h' ? 'text-ui-text' : 'text-ui-muted'}>24h</span>
-                <button type='button' role='switch' aria-label={`Toggle ${label} count between 24 hours and all time`} aria-checked={total} onClick={() => setScope(value => value === '24h' ? 'total' : '24h')} className={`relative h-4 w-7 rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary ${total ? 'bg-ui-primary' : 'bg-ui-border'}`}>
-                    <span aria-hidden className={`absolute top-0.5 h-3 w-3 rounded-full bg-ui-panel shadow-sm transition-transform ${total ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
-                </button>
-                <span className={total ? 'text-ui-text' : 'text-ui-muted'}>Total</span>
-            </div>
+            <button type='button' role='switch' aria-label={`Toggle ${label} count between 24 hours and all time`} aria-checked={total} onClick={() => setScope(value => value === '24h' ? 'total' : '24h')} className={`relative inline-flex h-6 w-[60px] shrink-0 items-center rounded-full border text-[10px] font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary ${total ? 'border-ui-primary bg-ui-primary/10 text-ui-text' : 'border-ui-border bg-ui-raised text-ui-muted'}`}>
+                <span className={`relative z-10 ${total ? 'ml-1 mr-auto' : 'ml-auto mr-1'}`}>{total ? 'Total' : '24h'}</span>
+                <span aria-hidden className={`absolute left-1 h-3.5 w-3.5 rounded-full bg-ui-primary transition-transform ${total ? 'translate-x-9' : ''}`} />
+            </button>
         </div>
         <p className='mt-1.5 text-xl font-semibold tabular-nums sm:mt-2 sm:text-2xl'>{count === undefined ? '—' : count.toLocaleString('en-US')}</p>
     </article>
