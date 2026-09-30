@@ -1528,7 +1528,7 @@ async function applySchema() {
         WHERE ingestion_id <> 'logs' AND processing_status = 'pending'`)
     await run('CREATE UNIQUE INDEX IF NOT EXISTS idx_events_log_key ON events(log_key)')
     await run('CREATE TABLE IF NOT EXISTS log_processing_cursors (name TEXT PRIMARY KEY, last_id BIGINT NOT NULL DEFAULT 0, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), last_error TEXT)')
-    await run('ALTER TABLE log_processing_cursors ADD COLUMN IF NOT EXISTS recent_id BIGINT')
+    await ensureColumn(run, 'log_processing_cursors', 'recent_id', 'ALTER TABLE log_processing_cursors ADD COLUMN IF NOT EXISTS recent_id BIGINT')
     await ensureLogCatchupSchema()
     await run('CREATE INDEX IF NOT EXISTS idx_events_logs_skipped ON events(id) WHERE ingestion_id = \'logs\' AND processing_status = \'skipped\'')
     await run('CREATE INDEX IF NOT EXISTS idx_events_logs_time ON events(event_timestamp DESC, id DESC) WHERE ingestion_id = \'logs\' AND processing_status = \'processed\'')
