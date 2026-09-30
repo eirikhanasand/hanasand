@@ -27,7 +27,7 @@ const severityColor: Record<string, string> = {
 }
 const headerControl = `${control} inline-flex h-10 min-w-28 items-center justify-center whitespace-nowrap`
 const date = (value?: string) => value ? new Date(value).toLocaleString() : '—'
-const caseTabs = ['overview', 'history', 'events'] as const
+const caseTabs = ['overview', 'history', 'events', 'settings'] as const
 type CaseTab = typeof caseTabs[number]
 
 export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: string, organizationId?: string }) {
@@ -123,7 +123,7 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
                     const next = caseTabs[nextIndex]
                     setTab(next)
                     document.getElementById(`case-tab-${next}`)?.focus()
-                }} className={`${control} ${tab === value ? 'font-semibold text-ui-primary' : ''}`} onClick={() => setTab(value)}>{value === 'overview' ? 'Overview' : value === 'history' ? 'History' : `Events (${item.eventTotal ?? item.occurrences})`}</button>)}
+                }} className={`${control} ${tab === value ? 'font-semibold text-ui-primary' : ''}`} onClick={() => setTab(value)}>{value === 'overview' ? 'Overview' : value === 'history' ? 'History' : value === 'settings' ? 'Settings' : `Events (${item.eventTotal ?? item.occurrences})`}</button>)}
             </div>
             <div id='case-panel-overview' role='tabpanel' aria-labelledby='case-tab-overview' hidden={tab !== 'overview'}>
                 {resolving && <form className='grid gap-3 border-b border-ui-border p-5' onSubmit={event => { event.preventDefault(); if (comment.trim()) void save({ status: 'resolved', comment, ...(aiAssisted ? { resolutionMethod: 'ai' } : {}) }) }}>
@@ -171,26 +171,6 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
                         </div>)}
                     </section>}
                 </section>
-                <details key={`notifications-${caseId}`} className='border-b border-ui-border p-5 sm:p-6'>
-                    <summary className='cursor-pointer text-lg font-semibold'>Notification settings ({item.notifications.filter(notification => notification.deliveredAt).length})</summary>
-                    <div className='mt-4 grid gap-4'>
-                        <label className='flex items-center gap-3 text-sm'><input type='checkbox' className='h-4 w-4' checked={item.notificationsEnabled} disabled={busy || item.canManage === false} onChange={event => void save({ notificationsEnabled: event.target.checked })} />Enable notifications for this case</label>
-                        <h3 className='text-sm font-medium'>Delivery history</h3>
-                        {item.notifications.length ? item.notifications.map((notification, index) => <article className='grid gap-2 rounded-lg bg-ui-canvas p-3 text-sm' key={notification.messageId || index}>
-                            <p>{notification.deliveredAt ? `Delivered ${date(notification.deliveredAt)}` : 'Delivery pending'}</p>
-                            {notification.error && <p className='text-ui-text'>{notification.error}</p>}
-                            {notification.message ? <div className='grid gap-3 [overflow-wrap:anywhere]'>
-                                {notification.message.content && <NotificationText text={notification.message.content} />}
-                                {notification.message.embeds?.map((embed, embedIndex) => <div key={embedIndex} className='grid gap-2 border-l-2 border-ui-border pl-3'>
-                                    {embed.title && <p className='font-semibold'>{notificationText(embed.title)}</p>}
-                                    {embed.description && <NotificationText text={embed.description} />}
-                                    {embed.fields?.length ? <dl className='grid gap-2 sm:grid-cols-2'>{embed.fields.map((field, fieldIndex) => <div key={fieldIndex}><dt className='text-ui-muted'>{field.name}</dt><dd><NotificationText text={field.value} /></dd></div>)}</dl> : null}
-                                </div>)}
-                            </div> : notification.deliveredAt && <p className='text-ui-muted'>Original message content is unavailable.</p>}
-                            {notification.messageId && <p className='wrap-break-word text-xs text-ui-muted'>Message ID: {notification.messageId}</p>}
-                        </article>) : <p className='text-sm text-ui-muted'>No notifications sent.</p>}
-                    </div>
-                </details>
                 <CaseDevelopment caseId={caseId} organizationId={item.organizationId || organizationId} />
                 <section aria-labelledby='case-comments' className='grid gap-4 p-5 sm:p-6'>
                     <h2 id='case-comments' className='text-lg font-semibold'>Comments</h2>
@@ -200,6 +180,26 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
                         <textarea id='case-comment' className={`${control} min-h-28 w-full`} value={comment} onChange={event => setComment(event.target.value)} maxLength={5000} disabled={busy || item.canManage === false} placeholder='Share an update or investigation notes…' required />
                         <button type='submit' className={`${control} justify-self-start`} disabled={busy || item.canManage === false || !comment.trim()}>Post comment</button>
                     </form>
+                </section>
+            </div>
+            <div id='case-panel-settings' role='tabpanel' aria-labelledby='case-tab-settings' hidden={tab !== 'settings'}>
+                <section aria-labelledby='case-notification-settings' className='grid gap-4 p-5 sm:p-6'>
+                    <h2 id='case-notification-settings' className='text-lg font-semibold'>Notification settings ({item.notifications.filter(notification => notification.deliveredAt).length})</h2>
+                    <label className='flex items-center gap-3 text-sm'><input type='checkbox' className='h-4 w-4' checked={item.notificationsEnabled} disabled={busy || item.canManage === false} onChange={event => void save({ notificationsEnabled: event.target.checked })} />Enable notifications for this case</label>
+                    <h3 className='text-sm font-medium'>Delivery history</h3>
+                    {item.notifications.length ? item.notifications.map((notification, index) => <article className='grid gap-2 rounded-lg bg-ui-canvas p-3 text-sm' key={notification.messageId || index}>
+                        <p>{notification.deliveredAt ? `Delivered ${date(notification.deliveredAt)}` : 'Delivery pending'}</p>
+                        {notification.error && <p className='text-ui-text'>{notification.error}</p>}
+                        {notification.message ? <div className='grid gap-3 [overflow-wrap:anywhere]'>
+                            {notification.message.content && <NotificationText text={notification.message.content} />}
+                            {notification.message.embeds?.map((embed, embedIndex) => <div key={embedIndex} className='grid gap-2 border-l-2 border-ui-border pl-3'>
+                                {embed.title && <p className='font-semibold'>{notificationText(embed.title)}</p>}
+                                {embed.description && <NotificationText text={embed.description} />}
+                                {embed.fields?.length ? <dl className='grid gap-2 sm:grid-cols-2'>{embed.fields.map((field, fieldIndex) => <div key={fieldIndex}><dt className='text-ui-muted'>{field.name}</dt><dd><NotificationText text={field.value} /></dd></div>)}</dl> : null}
+                            </div>)}
+                        </div> : notification.deliveredAt && <p className='text-ui-muted'>Original message content is unavailable.</p>}
+                        {notification.messageId && <p className='wrap-break-word text-xs text-ui-muted'>Message ID: {notification.messageId}</p>}
+                    </article>) : <p className='text-sm text-ui-muted'>No notifications sent.</p>}
                 </section>
             </div>
             <div id='case-panel-history' role='tabpanel' aria-labelledby='case-tab-history' hidden={tab !== 'history'}>
