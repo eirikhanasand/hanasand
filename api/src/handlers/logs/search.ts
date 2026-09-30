@@ -41,7 +41,22 @@ export async function searchLogs(req: FastifyRequest, res: FastifyReply) {
             const result = paginate ? await searchLogPage(query, { where, params, order: compiled.order, limit: compiled.limit, cursor: input.cursor, recentFirst: Boolean(input.search) }) : compiled.summarize
                 ? await query(`SELECT ${compiled.fields[compiled.summarize]} AS value, COUNT(*)::int AS count FROM events WHERE ${where.join(' AND ')} GROUP BY 1 ORDER BY count DESC LIMIT ${compiled.limit}`, params)
                 : await query(`SELECT id, normalized, event_timestamp, organization_id FROM events WHERE ${where.join(' AND ')} ORDER BY ${compiled.order} LIMIT ${compiled.limit}`, params)
-            if (realtime) return { rows: result.rows, next_cursor: 'next_cursor' in result ? result.next_cursor : undefined, processing: null, counts: [], services: [] }
+            if (realtime) {
+                const compact = dimensionLogWhere(where)
+                let totalEvents = 0
+                if (compact) {
+                    const state = (await query('SELECT ready, last_error, (SELECT ready FROM log_counts_state WHERE id = TRUE) AS counts_ready FROM log_dimensions_state WHERE id = TRUE')).rows[0]
+                    const rollup = state?.ready && state?.counts_ready ? rollupLogCountsSql(compact, timeWhere) : null
+                    const totals = rollup ? await query(rollup, params) : state?.ready
+                        ? await query(`SELECT severity, COUNT(*)::int AS count FROM log_dimensions events WHERE ${compact.join(' AND ')} GROUP BY 1`, params)
+                        : await query(`SELECT normalized->>'severity' AS severity, COUNT(*)::int AS count FROM events WHERE ${where.join(' AND ')} GROUP BY 1`, params)
+                    totalEvents = totals.rows.reduce((sum, row) => ['high', 'critical'].includes(row.severity) ? sum + Number(row.count) : sum, 0)
+                } else {
+                    const totals = await query(`SELECT COUNT(*)::int AS total FROM events WHERE ${where.join(' AND ')}`, params)
+                    totalEvents = Number(totals.rows[0]?.total || 0)
+                }
+                return { rows: result.rows, next_cursor: 'next_cursor' in result ? result.next_cursor : undefined, total_events: totalEvents, processing: null, counts: [], services: [] }
+            }
             const status = await query('SELECT name, updated_at, last_error, last_id, recent_id, history_end_id, (SELECT COUNT(*)::int FROM events WHERE ingestion_id = \'logs\' AND processing_status = \'skipped\') AS skipped_events FROM log_processing_cursors ORDER BY name')
             const progress = (await query('SELECT payload, last_error FROM log_catchup_progress WHERE id = TRUE')).rows[0]
             const catchup = typeof progress?.payload?.remaining === 'number' ? { ...progress.payload, last_error: progress.last_error } : null

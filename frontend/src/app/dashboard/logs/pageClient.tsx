@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
-import { Copy, ChevronDown, Search, ListFilter, BarChart3, X } from 'lucide-react'
+import { Copy, ChevronDown, Search, ListFilter, BarChart3, RefreshCw, X } from 'lucide-react'
 import { logSearchParams, logTables, type LogEvent as Event, type LogSearchResult as Result } from '@/utils/logs/search'
 import { retainEvents } from '@/utils/logs/retainEvents'
 import EventFeed from './eventFeed'
@@ -103,7 +103,7 @@ export default function LogsPageClient({ initialServices = [], initialErrors, in
                             return { ...body, rows: [...previous.rows, ...body.rows.filter((row: Event) => !seen.has(row.id))] }
                         }
                         // Keep the pages being read in place while progress keeps refreshing.
-                        if (browsingPages && previous) return { ...previous, processing: body.processing, generated_at: body.generated_at }
+                        if (browsingPages && previous) return { ...previous, processing: body.processing, generated_at: body.generated_at, total_events: body.total_events }
                         return view === 'realtime' && !body.summarize ? { ...body, rows: retainEvents((previous?.rows || []).filter(isRealtimeSeverity), body.rows.filter(isRealtimeSeverity)) } : body
                     })
                     if (cursor) { browsingPages = true; setPaged(true) }
@@ -140,6 +140,13 @@ export default function LogsPageClient({ initialServices = [], initialErrors, in
     const processingError = data?.processing?.last_error?.endsWith('Waiting for active log writes; will retry.') ? null : data?.processing?.last_error
     const serviceOptions = [...new Set([...initialServices.map(item => item.service), ...(data?.services.map(item => item.service) || []), ...(service === 'all' ? [] : [service])])].sort()
     const activeFilters = [service !== 'all', !advanced && !!search, !advanced && table !== 'Logs', advanced && !!appliedHql, hours !== (view === 'realtime' ? '1' : '24'), view !== 'realtime' && severity !== 'all'].filter(Boolean).length
+    const realtimeLoadMore = view === 'realtime' && !advanced && !busy && !error && data?.next_cursor
+        ? () => loadMore.current(data.next_cursor!) : undefined
+    const resultCount = data?.rows.length || 0
+    const showRealtimeCount = view === 'realtime' && !advanced && !data?.summarize
+    const resultLabel = view === 'realtime'
+        ? showRealtimeCount ? `${resultCount.toLocaleString('en-US')}/${data?.total_events?.toLocaleString('en-US') ?? '—'}` : `${resultCount} results`
+        : `${resultCount} results${data && resultCount === data.limit && (view !== 'search' || advanced) ? ` · limited to ${data.limit}; narrow your search or use take up to 500` : ''}`
     return <div className={`${view === 'realtime' ? 'flex h-full min-h-0 flex-col gap-3 sm:gap-4' : 'grid gap-3 sm:gap-4'} min-w-0`}>
         <header className='flex min-w-0 flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between'>
             <div className='min-w-0'><h1 className='text-xl font-semibold sm:text-2xl'>{view === 'dashboard' ? 'Logs' : view === 'realtime' ? 'Realtime' : view === 'errors' ? 'Errors' : 'Search logs'}</h1>{view === 'errors' && <p className='mt-1 text-sm text-ui-muted'>Application errors, response codes, and request details.</p>}</div>
@@ -193,8 +200,14 @@ export default function LogsPageClient({ initialServices = [], initialErrors, in
                 <section className='grid grid-cols-2 gap-2.5 min-[380px]:gap-3 md:grid-cols-3 xl:grid-cols-5' aria-label='Events by severity' data-logs-metrics>{['low','medium','high','critical'].map(value => <Link key={value} href={`/logs/search?${new URLSearchParams({ hours, ...(service !== 'all' ? { service } : {}), ...(advanced && appliedHql ? { hql: appliedHql } : { table, search }), severity: value })}`} className={`${dashboardPanelClass} min-w-0 p-3 sm:p-4`} data-logs-metric-card><p className='text-xs capitalize text-ui-muted sm:text-sm'>{value}</p><p className='mt-1.5 text-xl font-semibold tabular-nums sm:mt-2 sm:text-2xl'>{data ? (data.counts.find(item => item.severity === value)?.count || 0).toLocaleString('en-US') : '—'}</p></Link>)}<Link href='/logs/errors' className={`${dashboardPanelClass} min-w-0 p-3 sm:p-4`} data-logs-metric-card><p className='text-xs text-ui-muted sm:text-sm'>Errors</p><p className='mt-1.5 text-xl font-semibold tabular-nums sm:mt-2 sm:text-2xl'>{errorsLoaded ? errors.summary.total.toLocaleString('en-US') : '—'}</p></Link></section>
                 <details open className={`${dashboardPanelClass} group overflow-hidden`}><summary className='flex cursor-pointer list-none items-center justify-between border-b border-ui-border bg-ui-raised px-4 py-3 text-sm font-semibold [&::-webkit-details-marker]:hidden'>Most active<ChevronDown size={18} aria-hidden className='-rotate-90 text-ui-muted transition-transform group-open:rotate-0' /></summary><div className='p-4'><dl className='grid gap-2'>{data?.services.map(item => <div key={item.service} className='flex justify-between gap-3 text-sm'><dt>{item.service}</dt><dd>{item.count.toLocaleString('en-US')}</dd></div>)}</dl></div></details>
             </> : <section className={`${dashboardPanelClass} min-w-0 overflow-hidden ${view === 'realtime' ? 'flex min-h-0 flex-1 flex-col' : ''}`} aria-label='Log events'>
-                <div className='flex flex-wrap justify-between gap-2 border-b border-ui-border p-3 text-xs text-ui-muted'><span>{data?.rows.length || 0} results{data && data.rows.length === data.limit && (view !== 'search' || advanced) ? ` · limited to ${data.limit}; narrow your search or use take up to 500` : ''}</span><span role='status'>{busy ? 'Searching…' : view === 'realtime' ? 'Updates every 10 seconds' : 'Results'}{copied ? ' · Event copied' : ''}</span></div>
-                <EventFeed rows={data?.rows || []} fill={view === 'realtime'}>{data?.summarize ? <table className='w-full text-left text-sm'><thead><tr><th className='p-3'>{data.summarize}</th><th className='p-3'>Count</th></tr></thead><tbody>{(data.rows as unknown as Array<{value: string,count: number}>).map(row => <tr key={row.value}><td className='p-3'>{row.value}</td><td className='p-3'>{row.count}</td></tr>)}</tbody></table> : data?.rows.map(event => <article key={event.id} className='select-text border-b border-ui-border p-4 last:border-b-0'>
+                <div className='flex flex-wrap items-center justify-between gap-2 border-b border-ui-border p-3 text-xs text-ui-muted'>
+                    <span>{showRealtimeCount ? <><span aria-hidden>{resultLabel}</span><span className='sr-only'>{resultCount.toLocaleString('en-US')} of {data?.total_events?.toLocaleString('en-US') ?? 'an unknown number of'} high and critical events</span></> : resultLabel}</span>
+                    <div className='inline-flex items-center gap-2'>
+                        {(busy || copied || view !== 'realtime') && <span role='status'>{busy ? 'Searching…' : view === 'realtime' ? '' : 'Results'}{copied ? ' · Event copied' : ''}</span>}
+                        {view === 'realtime' && <button type='button' onClick={() => setRefresh(value => value + 1)} disabled={busy} aria-label='Refresh events' title='Refresh events · automatically every 10 seconds' className='inline-flex items-center gap-1 rounded-md px-1 py-0.5 hover:text-ui-primary disabled:opacity-50'><RefreshCw size={14} aria-hidden /><span>10s</span></button>}
+                    </div>
+                </div>
+                <EventFeed rows={data?.rows || []} fill={view === 'realtime'} onLoadMore={realtimeLoadMore}>{data?.summarize ? <table className='w-full text-left text-sm'><thead><tr><th className='p-3'>{data.summarize}</th><th className='p-3'>Count</th></tr></thead><tbody>{(data.rows as unknown as Array<{value: string,count: number}>).map(row => <tr key={row.value}><td className='p-3'>{row.value}</td><td className='p-3'>{row.count}</td></tr>)}</tbody></table> : data?.rows.map(event => <article key={event.id} className='select-text border-b border-ui-border p-4 last:border-b-0'>
                     <div className='flex flex-wrap items-start justify-between gap-3'>
                         <button type='button' onClick={() => toggle(event.id)} aria-expanded={!!expanded[event.id]} aria-controls={`log-details-${event.id}`} className='flex min-w-0 flex-wrap items-center gap-2 break-all text-left text-sm font-semibold'><ChevronDown size={16} aria-hidden className={expanded[event.id] ? '' : '-rotate-90'} />{event.normalized.service}<span className='font-normal text-ui-muted'>{event.normalized.host}</span></button>
                         <div className='flex items-center gap-2'><span className={`rounded-md px-2 py-1 text-xs font-semibold capitalize ${colors[event.normalized.severity]}`}>{event.normalized.severity}</span><button type='button' aria-label='Copy event JSON' onClick={() => void copy(event)} className='rounded-md p-1.5 text-ui-muted hover:text-ui-primary'><Copy size={16} /></button></div>

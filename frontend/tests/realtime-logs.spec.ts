@@ -15,7 +15,7 @@ test('realtime continues polling while search filters and retries are used', asy
     await expect(page.locator('article')).toContainText('initial')
     await expect(page.getByRole('button', { name: 'Pause', exact: true })).toHaveCount(0)
     const initialCount = requests.length
-    await page.clock.runFor(5000)
+    await page.clock.runFor(10000)
     await expect.poll(() => requests.length).toBe(initialCount + 1)
 
     await page.getByRole('button', { name: 'Filter logs', exact: true }).click()
@@ -27,7 +27,7 @@ test('realtime continues polling while search filters and retries are used', asy
     expect(requests.at(-1)!.searchParams.get('severity')).toBe('high,critical')
     const filteredCount = requests.length
     await page.clock.runFor(10000)
-    await expect.poll(() => requests.length).toBe(filteredCount + 2)
+    await expect.poll(() => requests.length).toBe(filteredCount + 1)
 
     fail = true
     await search.fill('bloodhound')
@@ -38,9 +38,9 @@ test('realtime continues polling while search filters and retries are used', asy
     await page.clock.runFor(300)
     await expect(page.locator('article')).toContainText('bloodhound')
     await expect(page.getByRole('button', { name: 'Pause', exact: true })).toHaveCount(0)
-    await expect(page.getByRole('status').filter({ hasText: 'Updates every 5 seconds' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Refresh events' })).toContainText('10s')
     const beforePoll = requests.length
-    await page.clock.runFor(5000)
+    await page.clock.runFor(10000)
     await expect.poll(() => requests.length).toBe(beforePoll + 1)
     await search.fill('filter-keeps-polling')
     await page.clock.runFor(300)
@@ -56,9 +56,9 @@ test('realtime polling continues during event text selection', async ({ page }) 
     const row = page.locator('article')
     await row.dispatchEvent('pointerdown')
     const beforePoll = requests
-    await page.clock.runFor(5000)
+    await page.clock.runFor(10000)
     await expect.poll(() => requests).toBe(beforePoll + 1)
-    await expect(page.getByRole('status').filter({ hasText: 'Updates every 5 seconds' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Refresh events' })).toContainText('10s')
 })
 
 test('an automatic response already in flight updates the feed', async ({ page }) => {
@@ -73,13 +73,13 @@ test('an automatic response already in flight updates the feed', async ({ page }
     await openLogs(page)
     await page.clock.runFor(300)
     await expect(page.locator('article')).toContainText('poll-1')
-    await page.clock.runFor(5000)
+    await page.clock.runFor(10000)
     await expect.poll(() => Boolean(release)).toBe(true)
     release!()
     await expect(page.getByRole('button', { name: 'Pause', exact: true })).toHaveCount(0)
-    await expect(page.locator('article')).toHaveCount(1)
-    await expect(page.locator('article')).toContainText('poll-2')
-    await expect(page.getByRole('status').filter({ hasText: 'Updates every 5 seconds' })).toBeVisible()
+    await expect(page.locator('article')).toHaveCount(2)
+    await expect(page.locator('article').filter({ hasText: 'poll-2' })).toHaveCount(1)
+    await expect(page.getByRole('button', { name: 'Refresh events' })).toContainText('10s')
 })
 
 test('retains logs and reading position across overlapping polls and failures', async ({ page }) => {
@@ -102,23 +102,50 @@ test('retains logs and reading position across overlapping polls and failures', 
     await expect(reading.getByText('Retained context', { exact: false })).toBeVisible()
     const before = (await reading.boundingBox())!.y
     incoming = Array.from({ length: 5 }, (_, i) => ({ id: `new-${i}`, event_timestamp: '2026-09-19T12:01:00Z', normalized: { service: 'test', host: 'inspur', severity: 'high', level: 'info', log_type: 'ProcessLogs', message: `New log ${i}` } }))
-    await page.clock.runFor(5000)
+    await page.clock.runFor(10000)
     await expect(rows).toHaveCount(35)
     expect(Math.abs((await reading.boundingBox())!.y - before)).toBeLessThan(2)
     await expect(reading.getByRole('button', { expanded: true })).toHaveAttribute('aria-expanded', 'true')
-    await page.clock.runFor(5000)
+    await page.clock.runFor(10000)
     await expect(rows).toHaveCount(35)
     fail = true
-    await page.clock.runFor(5000)
+    await page.clock.runFor(10000)
     await expect(rows).toHaveCount(35)
     await expect(page.getByRole('alert')).toContainText('Could not search logs.')
     fail = false
     const retryCount = requests.length
-    await page.clock.runFor(5000)
+    await page.clock.runFor(10000)
     await expect.poll(() => requests.length).toBe(retryCount + 1)
     await expect(rows).toHaveCount(35)
     await expect(reading.getByRole('button', { expanded: true })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Pause', exact: true })).toHaveCount(0)
+})
+
+test('realtime loads 100 events first and fetches the next page at the feed end', async ({ page }) => {
+    const requests: URL[] = []
+    await page.route('**/api/backend/logs/search?*', route => {
+        const url = new URL(route.request().url())
+        requests.push(url)
+        const secondPage = url.searchParams.has('cursor')
+        const rows = secondPage
+            ? Array.from({ length: 5 }, (_, index) => event(`event-${100 + index}`))
+            : Array.from({ length: 100 }, (_, index) => event(`event-${index}`))
+        return route.fulfill({ json: { ...result(rows), limit: 100, total_events: 205, next_cursor: secondPage ? null : 'second-page' } })
+    })
+    await openLogs(page)
+    await expect(page.locator('article')).toHaveCount(100)
+    expect(requests[0].searchParams.get('hql')).toBe('Logs | take 100')
+    expect(requests[0].searchParams.get('paginate')).toBe('1')
+    await expect(page.getByText('100/205')).toBeVisible()
+
+    await page.locator('[data-logs-scroll]').evaluate(element => {
+        element.scrollTop = element.scrollHeight
+        element.dispatchEvent(new Event('scroll'))
+    })
+    await expect.poll(() => requests.length).toBe(2)
+    expect(requests[1].searchParams.get('cursor')).toBe('second-page')
+    await expect(page.locator('article')).toHaveCount(105)
+    await expect(page.getByText('105/205')).toBeVisible()
 })
 
 test('event text remains selectable and copies full evidence without navigating', async ({ page }) => {

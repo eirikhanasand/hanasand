@@ -86,12 +86,21 @@ test('basic search stays literal and parameterized for rows and exact full-data 
 test('realtime search defaults to one hour and skips processor metadata queries', async () => {
     const response = await app.inject('/logs/search?realtime=1')
     expect(response.statusCode).toBe(200)
-    expect(response.json()).toMatchObject({ hours: 1, processing: null, counts: [], services: [] })
+    expect(response.json()).toMatchObject({ hours: 1, processing: null, counts: [], services: [], total_events: 4 })
     const eventQuery = statements.find(sql => sql.startsWith('SELECT id, normalized'))
     expect(eventQuery).toContain("normalized->>'severity' IN ('high', 'critical')")
     expect(statements.some(sql => sql.startsWith('SELECT name, updated_at'))).toBe(false)
     expect(statements.some(sql => sql.startsWith('SELECT payload, last_error'))).toBe(false)
     expect(statements.some(sql => sql.includes('FROM log_process_queue'))).toBe(false)
+})
+
+test('realtime pagination keeps 100-event pages and reports the total high-severity count', async () => {
+    const query = new URLSearchParams({ realtime: '1', paginate: '1', hql: 'Logs | take 100' })
+    const response = await app.inject('/logs/search?' + query)
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toMatchObject({ limit: 100, total_events: 4 })
+    expect(statements.find(sql => sql.includes('cursor_time'))).toContain('LIMIT 101')
+    expect(statements.find(sql => sql.includes('FROM log_counts events'))).toContain("severity IN ('high', 'critical')")
 })
 
 test('processing status exposes bounded pending command counts and their oldest receipt', async () => {
