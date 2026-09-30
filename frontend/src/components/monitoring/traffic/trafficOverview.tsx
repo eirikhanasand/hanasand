@@ -25,7 +25,7 @@ export default function TrafficOverviewClient({ domains, initialMetrics, initial
             try {
                 const params = new URLSearchParams({ mode: 'snapshot', ...(selectedDomain ? { domain: selectedDomain } : {}) })
                 const response = await fetch(`/api/live-traffic?${params}`, { cache: 'no-store' })
-                if (!response.ok) throw new Error(`Traffic snapshot returned ${response.status}`)
+                if (!response.ok) throw new Error(`Traffic request returned ${response.status}`)
                 const snapshot = await response.json() as { metrics?: TrafficMetrics | null, records?: TrafficRecords | null }
                 if (stopped) return
                 if (snapshot.metrics) setMetrics(snapshot.metrics)
