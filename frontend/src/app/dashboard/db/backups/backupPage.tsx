@@ -56,7 +56,7 @@ export default function BackupPage({ backups, files, loadError = '' }: BackupPag
     const visibleError = backupErrorMessage(error) || backupErrorMessage(loadError) || backupErrorMessage(service?.error) || ''
 
     return (
-        <main className='grid w-full gap-4 px-2 py-4' data-backup-operator-console>
+        <main className='grid w-full gap-4' data-backup-operator-console>
             <section className='rounded-xl border border-ui-border bg-ui-panel p-4 sm:p-5' aria-labelledby='backup-runtime-heading' data-backup-primary-flow>
                 <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
                     <h1 id='backup-runtime-heading' className='font-semibold text-ui-text'>Overview</h1>
