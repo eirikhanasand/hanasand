@@ -2,12 +2,12 @@ import ProfileIdentity from '@/components/profile/profileIdentity'
 import ProfileOverview from '@/components/profile/profileOverview'
 import getProfileStats from '@/utils/profile/getProfileStats'
 import { redirect, notFound } from 'next/navigation'
-import Certificates from '@/components/profile/certificates'
+import SshKeys from '@/components/profile/sshKeys'
 import AccountActions from '@/components/profile/accountActions'
 import SessionsPanel from '@/components/profile/sessions'
 import SupportTickets from '@/components/profile/supportTickets'
 import { DashboardPanel, DashboardPage } from '@/components/dashboard/ui'
-import getCertificates from '@/utils/certificates/getCertificates'
+import { getProfileSshKeys } from '@/utils/sshKeys'
 import fetchUser from '@/utils/users/fetchUser'
 import PublicProfile from '@/components/profile/publicProfile'
 import { cookies } from 'next/headers'
@@ -16,8 +16,9 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     const params = await props.params
     const profileId = params.id[0]
     const section = params.id[1] || 'profile'
-    const sections = ['profile', 'security', 'sessions', 'certificates', 'support']
+    const sections = ['profile', 'security', 'sessions', 'certificates', 'ssh-keys', 'support']
     if (params.id.length > 2 || !sections.includes(section)) notFound()
+    if (section === 'certificates') redirect(`/profile/${encodeURIComponent(profileId)}/ssh-keys`)
     const Cookies = await cookies()
     const name = Cookies.get('name')?.value
     const userId = Cookies.get('id')?.value
@@ -39,7 +40,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
 
     const displayName = profile?.name || (isSelf ? name : null) || profileId
     const stats = section === 'profile' ? await getProfileStats(userId, token) : null
-    const certificates = isSelf && section === 'certificates' ? await getCertificates(userId, token, userId) : null
+    const sshKeys = isSelf && section === 'ssh-keys' ? await getProfileSshKeys(userId, token) : null
 
     return (
         <DashboardPage>
@@ -54,7 +55,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
             ) : <p className='px-1 text-xs text-ui-muted'>@{username}</p>}
             {section === 'profile' && <ProfileOverview stats={stats} />}
             {section === 'sessions' && <SessionsPanel isSelf />}
-            {section === 'certificates' && <Certificates certificates={certificates} />}
+            {section === 'ssh-keys' && <SshKeys initialKeys={sshKeys} />}
             {section === 'support' && <SupportTickets />}
             {section === 'security' && <AccountActions isSelf />}
         </DashboardPage>

@@ -7,8 +7,8 @@ import config from '@/config'
 import { prepareVmConsole } from '@/utils/vms/prepareConsole'
 import { getCookie } from '@/utils/cookies/cookies'
 
-export default function VmConsole({ name, host, onHostChange }: { name?: string; host?: 'hanasand' | 'inspur'; onHostChange?: (host: 'hanasand' | 'inspur') => void }) {
-    const consoleTarget = host || name || 'Host'
+export default function VmConsole({ name, host, onHostChange }: { name?: string; host?: 'inspur' | 'ovh'; onHostChange?: (host: 'inspur' | 'ovh') => void }) {
+    const consoleTarget = host === 'ovh' ? 'OVH' : host === 'inspur' ? 'Inspur' : name || 'Host'
     const panel = useRef<HTMLElement>(null)
     const [nativeFullscreen, setNativeFullscreen] = useState(false)
     const [expanded, setExpanded] = useState(false)
@@ -225,9 +225,9 @@ export default function VmConsole({ name, host, onHostChange }: { name?: string;
         <header className='flex flex-wrap items-center justify-between gap-3'>
             <div><h1 className='text-lg font-semibold'>{consoleTarget} console</h1><p role='status' className='text-sm text-ui-muted'>{status}{username ? ` · ${username}` : ''}</p></div>
             <div className='flex items-center gap-3'>
-                {host && onHostChange && <label className='flex items-center gap-2 text-sm text-ui-muted'>Host<select aria-label='Console host' value={host} onChange={event => onHostChange(event.target.value as 'hanasand' | 'inspur')} className='rounded-lg border border-ui-border bg-ui-panel px-2 py-2 text-ui-text'><option value='hanasand'>Hanasand</option><option value='inspur'>Inspur</option></select></label>}
+                {host && onHostChange && <label className='flex items-center gap-2 text-sm text-ui-muted'>Host<select aria-label='Console host' value={host} onChange={event => onHostChange(event.target.value as 'inspur' | 'ovh')} className='rounded-lg border border-ui-border bg-ui-panel px-2 py-2 text-ui-text'><option value='inspur'>Inspur</option><option value='ovh'>OVH</option></select></label>}
                 <button type='button' onClick={() => void toggleFullscreen()} aria-label={fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'} title={fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'} aria-pressed={fullscreen} className='rounded-lg border border-ui-border p-2'>{fullscreen ? <Minimize2 className='h-4 w-4' /> : <Maximize2 className='h-4 w-4' />}</button>
-                <Link href='/system' className='text-sm text-ui-primary'>Back to overview</Link>
+                <Link href={host ? '/system/hosts' : '/system'} className='text-sm text-ui-primary'>Back to overview</Link>
                 <button type='button' onClick={() => reconnect.current()} className='flex items-center gap-2 rounded-lg border border-ui-border px-3 py-2 text-sm'><RefreshCw className='h-4 w-4' />Reconnect</button>
             </div>
         </header>

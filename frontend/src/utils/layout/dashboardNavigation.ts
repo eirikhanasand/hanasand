@@ -68,12 +68,11 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
                 link('Overview', '/system'),
                 link('Virtual machines', '/system/virtual-machines', hasVMs),
                 link('Containers', '/system/containers'),
-                link('Host console', '/system/console', isAdmin),
+                link('Hosts', '/system/hosts', isAdmin),
             ]),
             group('Compute', [
                 link('Virtual Machines', '/vms', hasVMs),
                 link('Host Updates', '/system/updates', isAdmin),
-                link('SSH keys', '/system/ssh-keys', isAdmin),
             ]),
             group('Health', [
                 link('AI Metrics', '/system/ai', canManageSystem),
@@ -146,7 +145,7 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
             link('Profile', `/profile/${id}`),
             link('Security', `/profile/${id}/security`),
             link('Sessions', `/profile/${id}/sessions`),
-            link('Certificates', `/profile/${id}/certificates`),
+            link('SSH Keys', `/profile/${id}/ssh-keys`),
             link('Tickets', `/profile/${id}/support`),
         ]),
     ]

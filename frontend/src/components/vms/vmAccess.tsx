@@ -17,7 +17,7 @@ export default function VMAccess({ boxStyle, boxTitleStyle, connection, error }:
                     <div className='space-y-1 text-xs text-almostbright/80'>
                         <p><span className='font-semibold text-ui-text/70'>Username:</span> {connection.username}</p>
                         <p><span className='font-semibold text-ui-text/70'>Host:</span> {connection.vmIp || 'IP attaching'}</p>
-                        <p><span className='font-semibold text-ui-text/70'>Profile certificates:</span> {connection.certificateCount}</p>
+                        <p><span className='font-semibold text-ui-text/70'>Profile SSH keys:</span> {connection.certificateCount}</p>
                     </div>
                     {connection.sshCommand && (
                         <div className='rounded-md border border-ui-border/10 bg-ui-canvas/20 px-3 py-2 text-xs text-ui-text/84'>

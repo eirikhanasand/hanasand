@@ -1,10 +1,10 @@
 import type { FastifyInstance } from 'fastify'
 import WebSocket from 'ws'
-import run from '#db'
+import run, { withDatabaseAdvisoryLock } from '#db'
 import { validateSession } from '#utils/auth/session.ts'
 import { loadSQL } from '#utils/loadSQL.ts'
 import { recoveryReadOnly } from '#utils/recovery.ts'
-import { hostConsoleNames, startHostConsole, type HostConsoleName } from '#utils/hostSsh.ts'
+import { applyManagedHostSshKeys, hostConsoleNames, normalizeHostPublicKey, startHostConsole, type HostConsoleName } from '#utils/hostSsh.ts'
 
 async function canOpenHostConsole(id: string, token: string) {
     const session = await validateSession({ id, token })
@@ -14,6 +14,35 @@ async function canOpenHostConsole(id: string, token: string) {
 }
 
 export default function registerHostConsole(fastify: FastifyInstance) {
+    fastify.addHook('onReady', async () => {
+        if (process.env.NODE_ENV !== 'production'
+            || process.env.API_HTTP_ONLY === '1'
+            || process.env.AUTH_SERVICE_ONLY === '1'
+            || process.env.DEPLOYMENT_CANDIDATE_ONLY === '1') return
+        try {
+            await withDatabaseAdvisoryLock('profile-ssh-keys-sync', async () => {
+                const result = await run(`
+                    SELECT DISTINCT c.public_key
+                    FROM certificates c
+                    JOIN user_certificates uc ON uc.certificate_id = c.id
+                    JOIN users u ON u.id = uc.user_id
+                    WHERE u.active IS TRUE AND u.deletion_scheduled_at IS NULL
+                `)
+                const keys = new Map<string, string>()
+                for (const row of result.rows as Array<{ public_key: string }>) {
+                    const key = normalizeHostPublicKey(row.public_key)
+                    if (key) keys.set(key.fingerprint, key.publicKey)
+                }
+                const activeKeys = [...keys.values()]
+                // Reconcile existing profile keys at deploy/startup and move
+                // matching unmanaged entries into the profile-managed block.
+                await applyManagedHostSshKeys(activeKeys, activeKeys)
+            })
+        } catch (error) {
+            fastify.log.error({ err: error }, 'Unable to reconcile profile SSH keys on both hosts during startup.')
+        }
+    })
+
     fastify.get<{ Params: { name: string } }>('/api/ws/host/:name/console', { websocket: true }, (socket, request) => {
         const name = request.params.name as HostConsoleName
         if (!hostConsoleNames.includes(name)) { socket.close(1008); return }

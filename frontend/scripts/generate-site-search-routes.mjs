@@ -43,7 +43,7 @@ function quote(value) {
     return apostrophe + escaped + apostrophe
 }
 
-const nonSearchableRoutes = new Set(['/browser/report'])
+const nonSearchableRoutes = new Set(['/browser/report', '/dashboard/system/ssh-keys'])
 const routes = [...new Set(await pageRoutes(appDir))].filter(route => !nonSearchableRoutes.has(route)).sort((a, b) => a.localeCompare(b))
 const items = routes.map(href => `{
         id: ${quote(`route:${href}`)},

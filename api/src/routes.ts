@@ -8,7 +8,8 @@ import assignVmOrganization from './handlers/vms/organization.ts'
 import { getContainerProducts, createContainerCheckout } from './handlers/containerBilling.ts'
 import { caseRepositoryWebhooks, getCaseDevelopment, getCaseRepositories, postCaseRepository, deleteCaseRepository, getCaseCommits, postCaseCommit } from './handlers/caseDevelopment.ts'
 import { getServiceAccounts, postServiceAccount, patchServiceAccount, deleteServiceAccount, serviceAccountSelf } from './handlers/serviceAccounts.ts'
-import { getHostSshKeys, postHostSshKey, deleteHostSshKey } from './handlers/hostSshKeys.ts'
+import getHostOverview from './handlers/hostOverview.ts'
+import { getProfileSshKeys, postProfileSshKey, deleteProfileSshKey } from './handlers/profileSshKeys.ts'
 import authRoutes from './authRoutes.ts'
 import { getMonitoringCases, updateMonitoringCase } from './handlers/monitoringCases.ts'
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify'
@@ -308,6 +309,9 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.put('/user/:id', putUser)
     fastify.put('/user/:id/active', deactivateUser)
     fastify.put('/user/self', putSelf)
+    fastify.get('/user/self/ssh-keys', getProfileSshKeys)
+    fastify.post('/user/self/ssh-keys', postProfileSshKey)
+    fastify.delete('/user/self/ssh-keys/:id', deleteProfileSshKey)
     fastify.post('/user/restore', restoreSelf)
     fastify.delete('/user/:id', deleteUser)
     fastify.delete('/user/self', deleteSelf)
@@ -458,9 +462,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.delete('/certificates/:id', deleteCertificate)
 
     // Host SSH access
-    fastify.get('/host-ssh-keys', getHostSshKeys)
-    fastify.post('/host-ssh-keys', postHostSshKey)
-    fastify.delete('/host-ssh-keys/:id', deleteHostSshKey)
+    fastify.get('/host-overview', getHostOverview)
 
     // Vms
     fastify.get('/vms/agent/targets', getAgentTargets)

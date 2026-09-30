@@ -560,8 +560,6 @@ async function applySchema() {
         )
     `)
     await run('CREATE INDEX IF NOT EXISTS idx_host_update_events_host_occurred ON host_update_events(host, occurred_at DESC)')
-    await run('CREATE TABLE IF NOT EXISTS host_ssh_keys (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), name TEXT NOT NULL, public_key TEXT NOT NULL, fingerprint TEXT NOT NULL UNIQUE, created_by TEXT NOT NULL REFERENCES users(id), created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())')
-    await run('CREATE INDEX IF NOT EXISTS idx_host_ssh_keys_created_at ON host_ssh_keys(created_at DESC, id DESC)')
     await ensureIndex(run, 'idx_service_logs_http_errors', 'CREATE INDEX IF NOT EXISTS idx_service_logs_http_errors ON service_logs((metadata->>\'category\'), created_at DESC)')
     await ensureIndex(run, 'idx_service_logs_http_error_code', 'CREATE INDEX IF NOT EXISTS idx_service_logs_http_error_code ON service_logs((metadata->>\'error_code\'), created_at DESC) WHERE metadata->>\'category\' = \'http_response_error\'')
     await run(`
