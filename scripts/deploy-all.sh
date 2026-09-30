@@ -291,7 +291,7 @@ wait_for_healthy() {
 warm_dashboard_pages() {
     port=$1
     for page_path in /scanner /vms /db/backups /automation/health; do
-        page_cookie='id=dashboard-render-proof-user; access_token=local-dashboard-render-proof-token; roles=%5B%22system_admin%22%5D; dashboard_view_mode=normal'
+        page_cookie='id=dashboard-render-proof-user; access_token=local-dashboard-render-proof-token; dashboard_view_mode=normal'
         curl --fail --silent --show-error --max-time 15 --output /dev/null \
             -H "Cookie: $page_cookie" \
             -H 'x-hanasand-render-proof-auth: local-dashboard-render-proof' \

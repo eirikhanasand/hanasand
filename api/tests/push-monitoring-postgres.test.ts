@@ -18,7 +18,7 @@ if (!modulePath) {
             return database.transaction((tx: { query: typeof query }) => work(tx.query.bind(tx)))
         } }))
     mock.module('../src/utils/auth/tokenWrapper.ts', () => ({ default: async (req: { headers: Record<string, string> }) => ({ valid: Boolean(req.headers.id), id: req.headers.id }) }))
-    mock.module('../src/utils/auth/hasRole.ts', () => ({ default: async () => ({ valid: false }) }))
+    mock.module('#utils/auth/organizationPageAccess.ts', () => ({ default: async (req: { headers: Record<string, string> }) => ({ valid: req.headers.id === 'test-owner' }) }))
     mock.module('../src/utils/systemEvent.ts', () => ({ recordSystemEvent: async () => {} }))
 
     const { default: caseSchema } = await import('../src/utils/db/monitoringIssuesSchema.ts')
@@ -48,8 +48,6 @@ if (!modulePath) {
             CREATE TABLE users (id text PRIMARY KEY, active boolean DEFAULT true, deletion_scheduled_at timestamptz, account_type text DEFAULT 'user');
             CREATE TABLE organizations (id text PRIMARY KEY, status text);
             CREATE TABLE organization_members (organization_id text, user_id text, role text, status text);
-            CREATE TABLE roles (id text PRIMARY KEY, name text, description text, priority int);
-            CREATE TABLE user_roles (user_id text, role_id text);
             CREATE TABLE vms (name text PRIMARY KEY);
             CREATE TABLE api_keys (id text PRIMARY KEY, owner_id text, organization_id text, name text, tier text, description text,
                 enabled boolean, key_prefix text UNIQUE, secret_hash text, expires_at timestamptz, last_used_at timestamptz,
