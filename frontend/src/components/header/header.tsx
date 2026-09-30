@@ -160,7 +160,11 @@ export default function Header({ token, id, username, path: serverPath }: { toke
                     <Link href={token ? '/dashboard' : '/login'} className={`${token ? 'hidden sm:inline-flex' : 'inline-flex'} h-11 items-center gap-2 rounded-lg bg-ui-text px-3 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90 sm:px-4`}>
                         <span className='sm:hidden'>Dashboard</span><span className='hidden sm:inline'>{token ? 'Dashboard' : 'Go to Dashboard'}</span>
                     </Link>
-                    <details key={`account:${pathname}:${token ? 'signed-in' : 'signed-out'}`} className='relative' onKeyDown={event => {
+                    <details key={`account:${pathname}:${token ? 'signed-in' : 'signed-out'}`} className='relative' onMouseEnter={event => {
+                        event.currentTarget.open = true
+                    }} onMouseLeave={event => {
+                        event.currentTarget.open = false
+                    }} onKeyDown={event => {
                         if (event.key === 'Escape') {
                             event.currentTarget.open = false
                             event.currentTarget.querySelector('summary')?.focus()
