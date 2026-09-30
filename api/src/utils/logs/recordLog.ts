@@ -82,8 +82,6 @@ async function prepareLog({
 
     const classification = classifyApplicationError(baseLog, retention.get(scopeId || ''))
     if (classification) { level = classification.level; metadata = classification.metadata }
-    const normalized = normalizeLogEvent({ id: sourceEventId || '', service, host, level,
-        message: redactedMessage, metadata, created_at: timestamp || new Date() }, retention.get(scopeId || ''))
     // Explicit Store exceptions must win before any built-in analyzer can drop.
     if (retentionAction !== 'keep') {
         if (await analyzeModelDiscovery({ service, host, level, message, metadata, sourceEventId, timestamp }, query === run ? undefined : query)) return
