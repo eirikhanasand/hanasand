@@ -79,6 +79,25 @@ async function rotateAiRepoCredentials() {
     return { scanned: rows.length, changed }
 }
 
+async function rotateCaseRepositorySecrets() {
+    const { rows } = await client.query(
+        'SELECT id, secret_encrypted AS secret FROM case_repositories WHERE secret_encrypted IS NOT NULL FOR UPDATE',
+    )
+    let changed = 0
+    for (const row of rows as Array<{ id: string, secret: string }>) {
+        if (isRepoSecretEncryptedWithCurrentKey(row.secret)) continue
+
+        const rotated = encryptRepoSecret(decryptRepoSecret(row.secret))
+        const result = await client.query(
+            'UPDATE case_repositories SET secret_encrypted = $2 WHERE id = $1 AND secret_encrypted = $3',
+            [row.id, rotated, row.secret],
+        )
+        if (result.rowCount !== 1) throw new Error('Concurrent update blocked migration of case repository secrets.')
+        changed++
+    }
+    return { scanned: rows.length, changed }
+}
+
 await client.connect()
 try {
     await client.query('BEGIN')
@@ -87,6 +106,7 @@ try {
         sharedMailAccounts: await rotateRows({ table: 'shared_mail_accounts', idColumn: 'id', secretColumn: 'mail_password_encrypted', currentKey: deriveSecretKey(mailCurrent) }),
         dwmDestinations: await rotateRows({ table: 'dwm_webhook_destinations', idColumn: 'id', secretColumn: 'endpoint_encrypted', currentKey: deriveSecretKey(dwmCurrent) }),
         aiRepoCredentials: await rotateAiRepoCredentials(),
+        caseRepositorySecrets: await rotateCaseRepositorySecrets(),
     }
     await client.query('COMMIT')
     console.info('Encrypted credential migration completed.', result)
