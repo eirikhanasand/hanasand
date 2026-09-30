@@ -65,11 +65,15 @@ export function configuredPromptCodeHashes(env: Record<string, string | undefine
 }
 
 export function verifyWorkerToken(value: string | null, env: Record<string, string | undefined> = process.env) {
-    const expected = env.PROMPT_PORTAL_WORKER_TOKEN?.trim()
-    if (!expected || !value) return false
+    if (!value) return false
     const left = Buffer.from(value)
-    const right = Buffer.from(expected)
-    return left.length === right.length && timingSafeEqual(left, right)
+    return [env.PROMPT_PORTAL_WORKER_TOKEN, env.PROMPT_PORTAL_WORKER_TOKEN_PREVIOUS]
+        .map(expected => expected?.trim())
+        .filter((expected): expected is string => Boolean(expected))
+        .some(expected => {
+            const right = Buffer.from(expected)
+            return left.length === right.length && timingSafeEqual(left, right)
+        })
 }
 
 export function promptPortalReadOnly(state: PromptPortalState, now = Date.now()) {
