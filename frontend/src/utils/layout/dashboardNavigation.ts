@@ -55,7 +55,12 @@ export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = f
                 link('Realtime', '/logs/realtime', canManageSystem),
                 link('Search', '/logs/search', canManageSystem),
                 link('Errors', '/logs/errors', canManageSystem),
-                link('Traffic', '/traffic', canManageSystem),
+            ]),
+            group('Traffic', [
+                link('Overview', '/traffic', canManageSystem),
+                link('Recent traffic', '/traffic/recent', canManageSystem),
+                link('Live map', '/traffic/map', canManageSystem),
+                link('Blocklist', '/traffic/blocklist', canManageSystem),
             ]),
             group('Rules', [
                 link('Match Rules', '/rules/match'),

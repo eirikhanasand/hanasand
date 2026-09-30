@@ -12,6 +12,9 @@ export default async function postBlocklist(editingBlock: BlocklistEntry | null,
             body: JSON.stringify(form)
         })
         const data = await response.json()
+        if (!response.ok) {
+            return { error: data?.error || data?.message || response.statusText || 'Blocklist request failed' }
+        }
         return data
     } catch (error) {
         console.log(error)

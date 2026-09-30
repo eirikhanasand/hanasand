@@ -1,8 +1,7 @@
 'use client'
 
-import { useCallback, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import DomainSelector from './domainSelector'
-import TrafficMap from './trafficMap'
 import TrafficDashboard from './traffic'
 import { DashboardPanel } from '@/components/dashboard/ui'
 import formatRequestTime from '@/utils/monitoring/formatRequestTime'
@@ -17,25 +16,47 @@ export default function TrafficOverviewClient({ domains, initialMetrics, initial
 }) {
     const [metrics, setMetrics] = useState(initialMetrics)
     const [records, setRecords] = useState(initialRecords)
-    const updateSnapshot = useCallback((next: { metrics?: TrafficMetrics | null, records?: TrafficRecords | null }) => {
-        if (next.metrics) setMetrics({
-            ...next.metrics!,
-            total_requests: Math.max(Number(next.metrics!.total_requests), Number(next.records?.total || 0), next.records?.result.length || 0),
-        })
-        if (next.records) setRecords(next.records)
-    }, [])
-    const domainOptions = domains.domains
-    const trafficMetrics = metrics
-    const trafficRecords = records
-    const latestRecord = trafficRecords?.result?.[0]
-    const topPath = trafficMetrics?.top_paths?.[0]
-    const topDomain = trafficMetrics?.top_domains?.[0]
-    const errorRate = Number.isFinite(Number(trafficMetrics?.error_rate)) ? Math.round(Number(trafficMetrics?.error_rate) * 1000) / 10 : 0
+
+    useEffect(() => {
+        let stopped = false
+        let timer: ReturnType<typeof setTimeout> | null = null
+
+        async function refresh() {
+            try {
+                const params = new URLSearchParams({ mode: 'snapshot', ...(selectedDomain ? { domain: selectedDomain } : {}) })
+                const response = await fetch(`/api/live-traffic?${params}`, { cache: 'no-store' })
+                if (!response.ok) throw new Error(`Traffic snapshot returned ${response.status}`)
+                const snapshot = await response.json() as { metrics?: TrafficMetrics | null, records?: TrafficRecords | null }
+                if (stopped) return
+                if (snapshot.metrics) setMetrics(snapshot.metrics)
+                if (snapshot.records && Array.isArray(snapshot.records.result)) setRecords(snapshot.records)
+            } catch {
+                // Keep the most recent server snapshot visible until a later refresh succeeds.
+            } finally {
+                if (!stopped) timer = setTimeout(refresh, 30_000)
+            }
+        }
+
+        timer = setTimeout(refresh, 30_000)
+        return () => {
+            stopped = true
+            if (timer) clearTimeout(timer)
+        }
+    }, [selectedDomain])
+
+    const latestRecord = records.result[0]
+    const topPath = metrics.top_paths?.[0]
+    const topDomain = metrics.top_domains?.[0]
+    const errorRate = Number.isFinite(Number(metrics.error_rate)) ? Math.round(Number(metrics.error_rate) * 1000) / 10 : 0
 
     return (
-        <>
+        <div className='grid min-w-0 gap-4'>
+            <header>
+                <h1 className='text-xl font-semibold text-ui-text sm:text-2xl'>Traffic overview</h1>
+                <p className='mt-1 text-sm text-ui-muted'>Request volume, response times, routes, and errors.</p>
+            </header>
             <DashboardPanel className='grid min-w-0 gap-3 p-3 xl:grid-cols-[minmax(160px,0.9fr)_minmax(0,4fr)] xl:items-center'>
-                <DomainSelector domains={domainOptions} selectedDomain={selectedDomain} />
+                <DomainSelector domains={domains.domains} selectedDomain={selectedDomain} />
                 <section aria-label='Traffic summary' className='grid min-w-0 grid-cols-2 gap-3 md:grid-cols-4'>
                     <TrafficLane
                         title='Latest request'
@@ -56,33 +77,23 @@ export default function TrafficOverviewClient({ domains, initialMetrics, initial
                     <TrafficLane
                         title='Response time'
                         icon={<Clock3 className='h-4 w-4' />}
-                        value={formatRequestTime(trafficMetrics)}
-                        detail={`${trafficMetrics?.total_requests || 0} tracked requests`}
-                        footer={trafficMetrics?.sampled_at ? `Updated ${shortTime(trafficMetrics.sampled_at)}` : undefined}
-                        tone={trafficMetrics?.avg_request_time && trafficMetrics.avg_request_time > 1000 ? 'watch' : 'ok'}
+                        value={formatRequestTime(metrics)}
+                        detail={`${metrics.total_requests || 0} tracked requests`}
+                        footer={metrics.sampled_at ? `Updated ${shortTime(metrics.sampled_at)}` : undefined}
+                        tone={metrics.avg_request_time > 1000 ? 'watch' : 'ok'}
                     />
                     <TrafficLane
                         title='Errors'
                         icon={<AlertTriangle className='h-4 w-4' />}
                         value={`${errorRate}%`}
-                        detail={trafficMetrics?.top_error_paths?.[0] ? trafficMetrics.top_error_paths[0].key : undefined}
+                        detail={metrics.top_error_paths?.[0] ? metrics.top_error_paths[0].key : undefined}
                         footer='4xx/5xx share'
                         tone={errorRate > 5 ? 'bad' : errorRate > 1 ? 'watch' : 'ok'}
                     />
                 </section>
             </DashboardPanel>
-            <TrafficMap
-                initialMetrics={trafficMetrics}
-                initialRecords={trafficRecords.result}
-                selectedDomain={selectedDomain}
-                onSnapshot={updateSnapshot}
-            />
-            <TrafficDashboard
-                metrics={metrics}
-                records={records}
-                selectedDomain={selectedDomain}
-            />
-        </>
+            <TrafficDashboard metrics={metrics} selectedDomain={selectedDomain} />
+        </div>
     )
 }
 

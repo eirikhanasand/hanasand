@@ -32,3 +32,13 @@ test('feeds remain reachable without the removed collection targets entry', () =
     assert.equal(links.filter(link => link.href === '/ti/sources').length, 1)
     assert.equal(links.some(link => link.href?.startsWith('/ti/domains')), false)
 })
+
+test('traffic has separate overview, recent, map, and blocklist destinations', () => {
+    const sections = getDashboardNavigation({ id: 'admin', isAdmin: true, canManageSystem: true, canManageContent: true })
+    const logsAndRules = sections.find(item => item.label === 'Logs & rules')
+    assert.deepEqual(logsAndRules?.items?.map(item => item.label), ['Logs', 'Traffic', 'Rules'])
+
+    const traffic = logsAndRules?.items?.find(item => item.label === 'Traffic')
+    assert.deepEqual(traffic?.items?.map(item => item.label), ['Overview', 'Recent traffic', 'Live map', 'Blocklist'])
+    assert.deepEqual(traffic?.items?.map(item => item.href), ['/traffic', '/traffic/recent', '/traffic/map', '/traffic/blocklist'])
+})

@@ -7,11 +7,10 @@ import statusClasses from './statusClasses'
 import RequestsOverTimeChart from './requestsOverTimeChart'
 import CombinedMetrics from './combinedMetrics'
 import Bar from './bar'
-import type { TrafficMetric, TrafficMetrics, TrafficRecord, TrafficRecords, TrafficSlowMetric } from '@/utils/monitoring/types'
+import type { TrafficMetric, TrafficMetrics, TrafficRecord, TrafficSlowMetric } from '@/utils/monitoring/types'
 
 type TrafficDashboardProps = {
     metrics?: TrafficMetrics | string
-    records?: TrafficRecords | string
     selectedDomain?: string
 }
 
@@ -23,7 +22,7 @@ type StatCardProps = {
     icon: React.ReactNode
 }
 
-export default function TrafficDashboard({ metrics, records, selectedDomain }: TrafficDashboardProps) {
+export default function TrafficDashboard({ metrics, selectedDomain }: TrafficDashboardProps) {
     const m = typeof metrics === 'object' && metrics !== null ? (metrics as TrafficMetrics) : undefined
 
     const totalRequests = Number(m?.total_requests) || 0
@@ -51,12 +50,8 @@ export default function TrafficDashboard({ metrics, records, selectedDomain }: T
         { title: ['Top Paths', 'Top Error Paths'], data: [topPaths, topErrorPaths] }
     ]
 
-    const r = typeof records === 'object' && records !== null ? (records as TrafficRecords) : undefined
-
-    const recs = (r?.result ?? []) as TrafficRecord[]
-
     return (
-        <div className='space-y-6 h-full'>
+        <div className='min-w-0 space-y-6'>
             {m && (
                 <>
                     <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
@@ -135,45 +130,51 @@ export default function TrafficDashboard({ metrics, records, selectedDomain }: T
                 </>
             )}
 
-            {recs && recs.length > 0 &&
-                <div className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm'>
-                    <div className='border-b border-ui-border p-4'>
-                        <h3 className='text-lg font-semibold text-ui-text'>Recent Traffic</h3>
-                    </div>
-                    <div className='overflow-x-auto'>
-                        <table className='w-full text-sm text-left table-fixed'>
-                            <thead className='bg-ui-raised text-xs uppercase text-ui-muted'>
-                                <tr>
-                                    <th className='px-4 py-3'>Date</th>
-                                    <th className='px-4 py-3'>Method</th>
-                                    <th className='px-4 py-3'>Path</th>
-                                    <th className='px-4 py-3'>Status</th>
-                                    <th className='px-4 py-3'>Duration</th>
-                                    <th className='px-4 py-3 max-w-72 truncate'>Domain</th>
+        </div>
+    )
+}
+
+export function RecentTrafficTable({ records }: { records: TrafficRecord[] }) {
+    return (
+        <div className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm'>
+            <div className='border-b border-ui-border p-4'>
+                <h2 className='text-lg font-semibold text-ui-text'>Recent traffic</h2>
+                <p className='mt-1 text-sm text-ui-muted'>{records.length} latest requests</p>
+            </div>
+            {records.length ? (
+                <div className='overflow-x-auto'>
+                    <table className='w-full min-w-[44rem] table-fixed text-left text-sm'>
+                        <thead className='bg-ui-raised text-xs uppercase text-ui-muted'>
+                            <tr>
+                                <th className='px-4 py-3'>Date</th>
+                                <th className='px-4 py-3'>Method</th>
+                                <th className='px-4 py-3'>Path</th>
+                                <th className='px-4 py-3'>Status</th>
+                                <th className='px-4 py-3'>Duration</th>
+                                <th className='max-w-72 truncate px-4 py-3'>Domain</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {records.map((record, index) => (
+                                <tr key={record.id ?? `${record.timestamp}-${index}`} className='border-b border-ui-border hover:bg-ui-raised'>
+                                    <td className='px-4 py-3 text-ui-muted'>{new Date(record.timestamp).toLocaleString()}</td>
+                                    <td className='px-4 py-3 font-medium text-ui-text'>{record.method}</td>
+                                    <td className='px-4 py-3 break-all text-ui-muted'>{record.path}</td>
+                                    <td className='px-4 py-3'>
+                                        <span className={`rounded px-2 py-1 text-xs ${statusClasses(record.status)}`}>
+                                            {record.status}
+                                        </span>
+                                    </td>
+                                    <td className='px-4 py-3 text-ui-muted'>{record.request_time}ms</td>
+                                    <td className='max-w-72 truncate px-4 py-3 text-ui-muted'>{record.domain}</td>
                                 </tr>
-                            </thead>
-                            <tbody>
-                                {recs.map((req, i) => (
-                                    <tr key={i} className='border-b border-ui-border hover:bg-ui-raised'>
-                                        <td className='px-4 py-3 text-ui-muted'>
-                                            {new Date(req.timestamp).toLocaleString()}
-                                        </td>
-                                        <td className='px-4 py-3 font-medium text-ui-text'>{req.method}</td>
-                                        <td className='px-4 py-3 text-ui-muted'>{req.path}</td>
-                                        <td className='px-4 py-3'>
-                                            <span className={`px-2 py-1 rounded text-xs ${statusClasses(req.status)}`}>
-                                                {req.status}
-                                            </span>
-                                        </td>
-                                        <td className='px-4 py-3 text-ui-muted'>{req.request_time}ms</td>
-                                        <td className='px-4 py-3 max-w-72 truncate text-ui-muted'>{req.domain}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
-            }
+            ) : (
+                <p className='p-4 text-sm text-ui-muted'>No recent traffic has been recorded yet.</p>
+            )}
         </div>
     )
 }

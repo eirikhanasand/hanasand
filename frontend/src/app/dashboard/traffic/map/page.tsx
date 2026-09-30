@@ -1,4 +1,5 @@
-import TrafficOverviewClient from '@/components/monitoring/traffic/trafficOverview'
+import DomainSelector from '@/components/monitoring/traffic/domainSelector'
+import TrafficMap from '@/components/monitoring/traffic/trafficMap'
 import { Suspense } from 'react'
 import { getTrafficDomains, getTrafficMetrics, getTrafficRecords } from '@/utils/monitoring/data'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
@@ -6,9 +7,7 @@ import type { TrafficDomains, TrafficMetrics, TrafficRecords } from '@/utils/mon
 
 export const dynamic = 'force-dynamic'
 
-export default async function Page({
-    searchParams,
-}: {
+export default async function Page({ searchParams }: {
     searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
     const params = await searchParams
@@ -16,15 +15,15 @@ export default async function Page({
 
     return (
         <DashboardPage>
-            <DashboardHeader eyebrow='Operations' title='Traffic overview' description='Request volume, response times, routes, and errors.' />
-            <Suspense key={selectedDomain || 'all'} fallback={<DashboardPanel className='p-4'><p role='status'>Loading traffic statistics…</p></DashboardPanel>}>
-                <TrafficOverview selectedDomain={selectedDomain} />
+            <DashboardHeader eyebrow='Traffic' title='Live map' description='Watch recent request locations and live traffic pulses.' />
+            <Suspense key={selectedDomain || 'all'} fallback={<DashboardPanel className='p-4'><p role='status'>Loading live traffic map…</p></DashboardPanel>}>
+                <LiveTrafficMap selectedDomain={selectedDomain} />
             </Suspense>
         </DashboardPage>
     )
 }
 
-async function TrafficOverview({ selectedDomain }: { selectedDomain?: string }) {
+async function LiveTrafficMap({ selectedDomain }: { selectedDomain?: string }) {
     const [domains, metrics, records] = await Promise.all([
         getTrafficDomains(), getTrafficMetrics(selectedDomain), getTrafficRecords(selectedDomain, 200, 1),
     ])
@@ -33,7 +32,14 @@ async function TrafficOverview({ selectedDomain }: { selectedDomain?: string }) 
         return <DashboardPanel className='p-4'><p role='alert'>Traffic statistics are temporarily unavailable. Refresh to try again.</p></DashboardPanel>
     }
 
-    return <TrafficOverviewClient domains={domains} initialMetrics={metrics} initialRecords={records} selectedDomain={selectedDomain} />
+    return (
+        <div className='grid min-w-0 gap-4'>
+            <DashboardPanel className='p-3'>
+                <DomainSelector domains={domains.domains} selectedDomain={selectedDomain} />
+            </DashboardPanel>
+            <TrafficMap initialMetrics={metrics} initialRecords={records.result} selectedDomain={selectedDomain} />
+        </div>
+    )
 }
 
 function isTrafficDomains(value: unknown): value is TrafficDomains {

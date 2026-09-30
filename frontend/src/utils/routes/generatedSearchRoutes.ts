@@ -505,6 +505,24 @@ export const generatedSearchRoutes = [
         href: '/dashboard/traffic',
     },
     {
+        id: 'route:/dashboard/traffic/blocklist',
+        title: 'Dashboard · Traffic · Blocklist',
+        detail: 'Page · /dashboard/traffic/blocklist',
+        href: '/dashboard/traffic/blocklist',
+    },
+    {
+        id: 'route:/dashboard/traffic/map',
+        title: 'Dashboard · Traffic · Map',
+        detail: 'Page · /dashboard/traffic/map',
+        href: '/dashboard/traffic/map',
+    },
+    {
+        id: 'route:/dashboard/traffic/recent',
+        title: 'Dashboard · Traffic · Recent',
+        detail: 'Page · /dashboard/traffic/recent',
+        href: '/dashboard/traffic/recent',
+    },
+    {
         id: 'route:/dashboard/vm',
         title: 'Dashboard · Vm',
         detail: 'Page · /dashboard/vm',
