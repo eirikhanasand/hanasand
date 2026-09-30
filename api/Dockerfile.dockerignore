@@ -18,5 +18,7 @@ api/.tmp
 **/*secret*
 **/.DS_Store
 
-# This encryption helper is source code, not a secret value.
+# These files implement encrypted-secret handling; they contain no credentials.
 !api/src/utils/crypto/secretBox.ts
+!api/scripts/rotate-encrypted-secrets.ts
+!api/tests/secret-box.test.ts
