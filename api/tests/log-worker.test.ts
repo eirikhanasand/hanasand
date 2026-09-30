@@ -108,23 +108,23 @@ test('fresh events complete before bounded historical work and both cursors adva
     expect(historyLimits).toEqual([1000])
     expect(Object.values(stored).every(row => row.processing_status === 'processed')).toBe(true)
 })
-test('delayed commands get more time while every catch-up cursor advances bounded pages and restores capacity', async () => {
+test('delayed command work keeps its longer budget while catch-up uses the configured page size', async () => {
     delayed = true; watermark = '2000'; cursor.recent_id = '1000'
     fresh = Array.from({ length: 250 }, (_, index) => makeLog(String(index + 1001)))
     backlog = Array.from({ length: 250 }, (_, index) => makeLog(String(index + 1)))
     await processStoredLogs()
-    expect(checked).toEqual([...fresh.slice(0, 100), ...backlog.slice(0, 100)].map(row => row.message))
-    expect(cursor).toMatchObject({ last_id: '100', recent_id: '1100' })
-    expect(historyLimits).toEqual([100]); expect(recentLimits).toEqual([100]); expect(queueModes).toEqual([true])
-    expect(reads[0].params[2]).toBe(100); expect(reads[1].params[2]).toBe(100)
+    expect(checked).toEqual([...fresh, ...backlog.slice(0, 100)].map(row => row.message))
+    expect(cursor).toMatchObject({ last_id: '100', recent_id: '1250' })
+    expect(historyLimits).toEqual([100]); expect(recentLimits).toEqual([1000]); expect(queueModes).toEqual([true])
+    expect(reads[0].params[2]).toBe(1000); expect(reads[1].params[2]).toBe(100)
     expect(queueRuns).toBe(1); expect(recoveryRuns).toBe(1)
     const ageQuery = statements.find(sql => sql.includes('AS delayed'))!
     expect(ageQuery).toContain('clock_timestamp() - INTERVAL \'60 seconds\'')
     expect(ageQuery).toContain('ORDER BY queued_at, log_id LIMIT 1')
     delayed = false
     await processStoredLogs()
-    expect(cursor).toMatchObject({ last_id: '250', recent_id: '1250' })
-    expect(historyLimits).toEqual([100, 1000]); expect(recentLimits).toEqual([100, 1000]); expect(queueModes).toEqual([true, false])
+    expect(cursor).toMatchObject({ last_id: '250', recent_id: '2000' })
+    expect(historyLimits).toEqual([100, 1000]); expect(recentLimits).toEqual([1000, 1000]); expect(queueModes).toEqual([true, false])
     expect(checked).toHaveLength(500); expect(new Set(checked).size).toBe(500)
     expect(Object.values(stored).every(row => row.processing_status === 'processed')).toBe(true)
     expect(queueRuns).toBe(2); expect(recoveryRuns).toBe(2)
@@ -270,7 +270,7 @@ for (const limit of [5000, 10000]) test(`history batch ${limit} leaves fresh and
     expect(queueRuns).toBe(2)
     delayed = true
     await processStoredLogs()
-    expect(historyLimits.at(-1)).toBe(100); expect(recentLimits.at(-1)).toBe(100)
+    expect(historyLimits.at(-1)).toBe(100); expect(recentLimits.at(-1)).toBe(1000)
 })
 
 test('new forward rows never extend the fixed historical range', async () => {

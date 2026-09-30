@@ -241,9 +241,10 @@ export async function processStoredLogs() {
             await processFresh()
             await recoverUnassignedLogs(processScopes)
             await processFresh()
-            // Keep every cursor moving while delayed commands get more capacity.
-            // A fixed snapshot restores ordinary limits on the next clear tick.
-            const catchupLimit = Math.min(queue.delayed ? 100 : 1000, configuredLimit)
+            // The priority queue above already gets a longer budget when it is
+            // delayed. Keep the configured service-log page size so catch-up
+            // does not fall behind new arrivals indefinitely.
+            const catchupLimit = Math.min(1000, configuredLimit)
             const historyLimit = Math.min(queue.delayed ? 100 : 10000, settings.historyLimit)
             const beforeHistory = historyLimit > catchupLimit ? () => processQueuedLogs(processScopes, false) : undefined
             const processPage = async (after: string, until: string, pageLimit = catchupLimit) => {
