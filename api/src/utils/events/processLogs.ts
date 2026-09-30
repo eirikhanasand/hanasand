@@ -78,9 +78,11 @@ export async function processLogBatch(logs: LogInput[], organizationId: string, 
         const writtenIds = new Set(written.rows.map(row => row.id))
         await persistEventFindings(stateless.filter(item => writtenIds.has(item.id)).flatMap(item => item.findings), query)
     })
-    const pending = await run('SELECT id FROM events WHERE id = ANY($1::text[]) AND organization_id = $2 AND processing_status <> \'processed\'', [prepared.map(item => item.id), organizationId])
+    const correlationCandidates = prepared.filter(item => !item.complete)
+    if (!correlationCandidates.length) return
+    const pending = await run('SELECT id FROM events WHERE id = ANY($1::text[]) AND organization_id = $2 AND processing_status <> \'processed\'', [correlationCandidates.map(item => item.id), organizationId])
     const pendingIds = new Set(pending.rows.map(row => row.id))
-    const work = prepared.filter(item => pendingIds.has(item.id))
+    const work = correlationCandidates.filter(item => pendingIds.has(item.id))
     if (!work.length) return
     const auth = work.filter(item => item.event.eventType === 'authentication' && item.event.action === 'login')
     const windowMinutes = Math.max(0, ...rules.filter(rule => rule.enabled !== false && rule.id.startsWith('auth.')).map(rule => Number(rule.definition?.parameters?.windowMinutes || 0)))
@@ -150,9 +152,9 @@ function scopedProcessor(platformId: string, onWork: () => void, afterBatch?: ()
             const active = await run('SELECT id FROM organizations WHERE id = $1 AND status = \'active\'', [scope])
             const target = active.rows.length ? scope : platformId
             if (!configured.has(target)) configured.set(target, await loadConfiguredRules(target))
-            // Use the same bounded page as live processing to amortize index writes.
+            // Keep fresh work small for latency; larger durable pages reduce write overhead.
             // Recovery still yields to fresh arrivals after every durable page.
-            const pageSize = 200
+            const pageSize = priority ? 200 : 400
             for (let offset = 0; offset < batch.length; offset += pageSize) {
                 await withLogBatch(() => processLogBatch(batch.slice(offset, offset + pageSize), target, configured.get(target)!))
                 if (!priority) await afterBatch?.()

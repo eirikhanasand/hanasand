@@ -327,19 +327,19 @@ test('fresh committed events are processed even when a writer prevents a stable 
 test('fresh arrivals are serviced between durable historical pages', async () => {
     let clock = 0
     const timer = spyOn(performance, 'now').mockImplementation(() => { clock += 300; return clock })
-    backlog = Array.from({ length: 250 }, (_, n) => makeLog(String(n + 1)))
-    cursor.history_end_id = '250'; watermark = '1000'; fresh = []
+    backlog = Array.from({ length: 750 }, (_, n) => makeLog(String(n + 1)))
+    cursor.history_end_id = '750'; watermark = '1000'; fresh = []
     const findings = await import('../src/handlers/events.ts')
     const original = findings.persistEventFindings
     const hook = spyOn(findings, 'persistEventFindings').mockImplementation(async rows => {
         await original(rows)
-        if (checked.length === 200) priority.push({ ...makeLog('1001'), created_at: new Date().toISOString() })
+        if (checked.length === 400) priority.push({ ...makeLog('1001'), created_at: new Date().toISOString() })
     })
     try {
         await processStoredLogs()
-        expect(checked.indexOf('1001')).toBe(200)
-        expect(checked).toHaveLength(251)
-        expect(cursor.last_id).toBe('250')
+        expect(checked.indexOf('1001')).toBe(400)
+        expect(checked).toHaveLength(751)
+        expect(cursor.last_id).toBe('750')
     } finally { hook.mockRestore(); timer.mockRestore() }
 })
 
