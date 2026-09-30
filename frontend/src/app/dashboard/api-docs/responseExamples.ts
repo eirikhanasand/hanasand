@@ -23,7 +23,7 @@ export const responseExamples: Record<string, ResponseExample> = {
     'GET /share/:id': example(share),
     'GET /share/tree/:id': example(tree),
     'GET /share/user/:id': example([share]),
-    'GET /share/lock/:id': example({ ...share, locked: true }),
+    'PUT /share/lock/:id': example({ ...share, locked: true }),
     'POST /share': example(share, 201),
     'PUT /share/:id': example(share),
     'DELETE /share/:id': example({ deleted: share.id }),

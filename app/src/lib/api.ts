@@ -834,11 +834,13 @@ export async function deleteShare(settings: AppSettings, id: string) {
     }
 }
 
-export async function toggleShareLock(settings: AppSettings, id: string) {
+export async function setShareLock(settings: AppSettings, id: string, locked: boolean) {
     requireCdnAuth(settings, 'lock shares')
 
     const response = await fetch(joinUrl(settings.cdnBaseUrl, `share/lock/${segment(id)}`), {
+        method: 'PUT',
         headers: headers(settings),
+        body: JSON.stringify({ locked }),
     })
     const body = await response.json().catch(() => ({} as Record<string, unknown>))
     if (!response.ok) {

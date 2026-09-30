@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Alert, Linking, Share, TextInput, View } from 'react-native'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { generateSync } from 'otplib'
-import { assignDashboardUserRole, deleteShare as deleteShareRequest, fetchAiModels, fetchDashboardRoles, fetchDashboardUserRoles, fetchDashboardUsers, fetchServerText, fetchShareTree, fetchTopDomains, fetchUserShares, runDesktopAgentCommand, setDashboardUserActive, toggleShareLock, triggerServerAction, createShare as createShareRequest, unassignDashboardUserRole, updateShare as updateShareRequest } from '../lib/api'
+import { assignDashboardUserRole, deleteShare as deleteShareRequest, fetchAiModels, fetchDashboardRoles, fetchDashboardUserRoles, fetchDashboardUsers, fetchServerText, fetchShareTree, fetchTopDomains, fetchUserShares, runDesktopAgentCommand, setDashboardUserActive, setShareLock, triggerServerAction, createShare as createShareRequest, unassignDashboardUserRole, updateShare as updateShareRequest } from '../lib/api'
 import type { AppSettings, AuthenticatorEntry, DashboardRole, DashboardUser, DashboardUserRoleAssignment, GptClient, ShareSummary, ShareTreeItem } from '../types'
 import { GlassCard, LabeledInput, NativeTile, PillButton, Screen, SectionTitle } from '../components/ui'
 import { spacing, type ThemePalette } from '../theme/tokens'
@@ -257,7 +257,7 @@ export function ControlScreen({
         if (shareActionBusy) return
         setShareActionBusy(share.id)
         try {
-            upsertShare(await toggleShareLock(draft, share.id))
+            upsertShare(await setShareLock(draft, share.id, !share.locked))
         } catch (cause) {
             Alert.alert('Unable to update lock', cause instanceof Error ? cause.message : 'Request failed.')
         } finally {

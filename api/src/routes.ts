@@ -168,7 +168,7 @@ import {
     postSupportSession,
     postSupportSessionRevoke,
 } from './handlers/adminSupport.ts'
-import { deleteProject, deleteShare, getProject, getShare, getShareTree, getUserProjects, getUserShares, postShare, putShare, toggleShareLock } from './handlers/share.ts'
+import { deleteProject, deleteShare, getProject, getShare, getShareTree, getUserProjects, getUserShares, postShare, putShare, setShareLock } from './handlers/share.ts'
 import postTiSearch from './handlers/ti/search.ts'
 import { getTiEnrichment, postTiEnrichmentRun } from './handlers/ti/enrichment.ts'
 import {
@@ -439,7 +439,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     // Share workspaces
     fastify.get('/share/tree/:id', getShareTree)
     fastify.get('/share/user/:id', getUserShares)
-    fastify.get('/share/lock/:id', toggleShareLock)
+    fastify.put('/share/lock/:id', setShareLock)
     fastify.get('/share/:id', getShare)
     fastify.post('/share', postShare)
     fastify.put('/share/:id', putShare)

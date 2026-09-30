@@ -15,7 +15,8 @@ mock.module('../src/utils/db.ts', () => ({ default: async (sql: string, params: 
     if (sql.startsWith('SELECT content_organization_access')) return { rows: [{ allowed: active && params[0] === 'hanasand' && params[1] === 'member' && (!params[2] || ['owner', 'admin', 'editor'].includes(role)) }] }
     if (/^\s*(INSERT|UPDATE|DELETE)/.test(sql)) {
         writes.push({ sql, params })
-        return { rows: [{ ...share(), created_by: 'member' }] }
+        const updatedShare = sql.includes('UPDATE share SET locked =') ? { ...share(), locked: params[1] === true } : share()
+        return { rows: [{ ...updatedShare, created_by: 'member' }] }
     }
     if (sql.includes('FROM share')) return { rows: [share()] }
     if (sql.includes('FROM thoughts')) return { rows: [{ id: 1, title: 'Why?', created_by: 'author', organization_id: 'hanasand' }] }
@@ -47,7 +48,7 @@ app.get('/share/:id', shares.getShare)
 app.post('/share', shares.postShare)
 app.put('/share/:id', shares.putShare)
 app.delete('/share/:id', shares.deleteShare)
-app.get('/share/lock/:id', shares.toggleShareLock)
+app.put('/share/lock/:id', shares.setShareLock)
 app.get('/notes', notes.getNotes)
 app.post('/notes', notes.postNote)
 app.put('/notes/:id', notes.putNote)
@@ -94,13 +95,25 @@ test('workspace article lists use filesystem timestamps without spawning Git his
 test('organization share writes and locks reject readers, anonymous users and stale membership', async () => {
     for (const state of ['reader', 'anonymous', 'removed']) {
         role = state === 'reader' ? 'reader' : 'editor'; user = state === 'anonymous' ? null : 'member'; active = state !== 'removed'
-        for (const method of ['PUT', 'DELETE', 'GET'] as const) {
-            const response = await app.inject({ method, url: method === 'GET' ? '/share/lock/code' : '/share/code', headers, ...(method === 'PUT' ? { payload: { content: 'changed' } } : {}) })
+        for (const method of ['PUT', 'DELETE'] as const) {
+            const response = await app.inject({ method, url: '/share/code', headers, ...(method === 'PUT' ? { payload: { content: 'changed' } } : {}) })
             expect(response.statusCode).toBe(403)
         }
+        expect((await app.inject({ method: 'PUT', url: '/share/lock/code', headers, payload: { locked: true } })).statusCode).toBe(403)
         expect((await app.inject({ method: 'POST', url: '/share', headers, payload: { id: 'code', content: 'changed' } })).statusCode).toBe(403)
     }
     expect(writes).toEqual([])
+})
+test('share lock requests set the supplied state and can be safely repeated', async () => {
+    for (const locked of [true, true, false, false]) {
+        const response = await app.inject({ method: 'PUT', url: '/share/lock/code', headers, payload: { locked } })
+        expect(response.statusCode).toBe(200)
+        expect(response.json().locked).toBe(locked)
+        expect(writes.at(-1)?.params).toEqual(['code', locked])
+    }
+    expect((await app.inject({ method: 'PUT', url: '/share/lock/code', headers, payload: {} })).statusCode).toBe(400)
+    expect((await app.inject({ method: 'GET', url: '/share/lock/code', headers })).statusCode).toBe(404)
+    expect(writes).toHaveLength(4)
 })
 test('organization editors can edit shares, while anonymous legacy shares preserve their behavior', async () => {
     expect((await app.inject({ method: 'PUT', url: '/share/code', headers, payload: { content: 'changed' } })).statusCode).toBe(200)

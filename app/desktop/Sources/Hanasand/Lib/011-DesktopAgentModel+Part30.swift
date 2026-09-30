@@ -166,12 +166,15 @@ extension DesktopAgentModel {
         defer { isLoadingNativeDashboard = false }
 
         do {
+            let locked = share.locked != true
             _ = try await requestPrettyText(
                 settings.cdnBaseURL.normalizedBaseURL.appendingAPIPath("share/lock/\(share.id)"),
+                method: "PUT",
+                body: try JSONSerialization.data(withJSONObject: ["locked": locked]),
                 authenticated: true
             )
-            nativeDashboardStatus = share.locked == true ? "Unlocked share." : "Locked share."
-            append(meta: "Share lock toggled", body: share.id, kind: .change)
+            nativeDashboardStatus = locked ? "Locked share." : "Unlocked share."
+            append(meta: locked ? "Share locked" : "Share unlocked", body: share.id, kind: .change)
             await loadNativeDashboardData()
         } catch {
             nativeDashboardStatus = error.localizedDescription

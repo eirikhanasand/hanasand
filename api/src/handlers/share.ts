@@ -232,12 +232,14 @@ export async function deleteProject(req: FastifyRequest, res: FastifyReply) {
     return res.send({ deleted: root.alias || root.id })
 }
 
-export async function toggleShareLock(req: FastifyRequest, res: FastifyReply) {
+export async function setShareLock(req: FastifyRequest, res: FastifyReply) {
     const { id } = req.params as { id: string }
+    const { locked } = (req.body || {}) as { locked?: unknown }
+    if (typeof locked !== 'boolean') return res.status(400).send({ error: 'A boolean locked value is required.' })
     const existing = await findShare(id)
     if (!existing) return res.status(404).send({ error: 'Share not found.' })
     if (!await requireContentOrganization(req, res, existing.organization_id, true)) return
-    const result = await run('UPDATE share SET locked = NOT locked, updated_at = NOW() WHERE id = $1 RETURNING *', [id])
+    const result = await run('UPDATE share SET locked = $2, updated_at = NOW() WHERE id = $1 RETURNING *', [id, locked])
     const share = result.rows[0] as ShareRow | undefined
     if (!share) return res.status(404).send({ error: 'Share not found.' })
     return res.send(toShare(share))

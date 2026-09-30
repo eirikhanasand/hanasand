@@ -31,13 +31,13 @@ type Contract = {
     components?: { schemas?: Record<string, Schema>, responses?: Record<string, ResponseSpec> }
 }
 
-type ApplicationEndpoint = { path: string, method: string, summary: string }
+type ApplicationEndpoint = { path: string, method: string, summary: string, requestBody?: Operation['requestBody'] }
 
 const applicationEndpoints: ApplicationEndpoint[] = [
     { method: 'GET', path: '/share/:id', summary: 'Read a shared file' },
     { method: 'GET', path: '/share/tree/:id', summary: 'Read a share file tree' },
     { method: 'GET', path: '/share/user/:id', summary: 'List the current user’s shares' },
-    { method: 'GET', path: '/share/lock/:id', summary: 'Toggle a share lock' },
+    { method: 'PUT', path: '/share/lock/:id', summary: 'Set a share lock state', requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['locked'], properties: { locked: { type: 'boolean' } } } } } } },
     { method: 'POST', path: '/share', summary: 'Create or update a shared file' },
     { method: 'PUT', path: '/share/:id', summary: 'Update a shared file' },
     { method: 'DELETE', path: '/share/:id', summary: 'Delete a shared file' },
@@ -109,7 +109,7 @@ export default async function ApiDocsPage() {
 
             <section className='grid gap-3' aria-label='Application API endpoints'>
                 <div><div className='flex items-center gap-2'><Code2 className='h-4 w-4 text-ui-primary' /><h2 className='text-base font-semibold text-ui-text'>Application API</h2></div><p className='mt-1 text-sm text-ui-muted'>Customer-facing dashboard, sharing, support, browser, organization, and billing endpoints.</p></div>
-                {applicationEndpoints.map(endpoint => <div key={`${endpoint.method}:${endpoint.path}`} data-api-search={`${endpoint.method} ${endpoint.path} ${endpoint.summary}`}><Endpoint path={endpoint.path} method={endpoint.method} operation={{ summary: endpoint.summary }} /></div>)}
+                {applicationEndpoints.map(endpoint => <div key={`${endpoint.method}:${endpoint.path}`} data-api-search={`${endpoint.method} ${endpoint.path} ${endpoint.summary}`}><Endpoint path={endpoint.path} method={endpoint.method} operation={{ summary: endpoint.summary, requestBody: endpoint.requestBody }} /></div>)}
             </section>
 
             {schemaEntries.length ? <section className='grid gap-3'><div className='flex items-center gap-2'><Braces className='h-4 w-4 text-ui-primary' /><h2 className='text-base font-semibold text-ui-text'>Schemas</h2></div><div className='grid gap-2'>{schemaEntries.map(([name, schema]) => <details key={name} data-api-search={`${name} ${JSON.stringify(schema)}`} className='rounded-lg border border-ui-border bg-ui-panel'><summary className='cursor-pointer px-4 py-3 text-sm font-semibold text-ui-text'>{name}</summary><pre className='overflow-x-auto border-t border-ui-border bg-ui-canvas p-4 text-xs leading-6 text-ui-muted'>{JSON.stringify(schema, null, 2)}</pre></details>)}</div></section> : null}

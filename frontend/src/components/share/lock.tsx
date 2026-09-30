@@ -21,7 +21,8 @@ export default function Lock({ share, setError, baseButtonStyle }: LockProps) {
             return setError('Login required.')
         }
 
-        const response = await lockShare(share!, id, token)
+        const nextLocked = !locked
+        const response = await lockShare(share!, id, token, nextLocked)
         if (response) {
             setLocked(response.locked)
         } else {

@@ -1,16 +1,18 @@
 import config from '@/config'
 
-export async function lockShare(share: Share, id: string, token: string): Promise<Share | null> {
+export async function lockShare(share: Share, id: string, token: string, locked: boolean): Promise<Share | null> {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
 
     try {
         const response = await fetch(`${config.url.api}/share/lock/${share.id}`, {
+            method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`,
                 id,
             },
+            body: JSON.stringify({ locked }),
             cache: 'no-store',
             signal: controller.signal
         })
