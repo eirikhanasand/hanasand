@@ -138,11 +138,9 @@ export async function processLogBatch(logs: LogInput[], organizationId: string, 
         AND (e.processing_status IS DISTINCT FROM 'processed' OR e.normalized IS DISTINCT FROM e.normalized || item.result)`, [JSON.stringify(updates)])
 }
 
-function hasProcessContext(log: LogInput) {
-    const metadata = log.metadata && typeof log.metadata === 'object' && !Array.isArray(log.metadata) ? log.metadata : {}
-    const structured = metadata.structured && typeof metadata.structured === 'object' && !Array.isArray(metadata.structured) ? metadata.structured as Record<string, unknown> : {}
-    const process = metadata.process || structured.process
-    return Boolean(process && typeof process === 'object' && !Array.isArray(process) && Object.keys(process).length)
+function requiresCorrelation(log: LogInput, rules: Awaited<ReturnType<typeof loadConfiguredRules>>) {
+    const event = normalizeEvent(normalizeLogEvent(log, rules), { vendor: 'Hanasand', product: 'Logs' })
+    return event.eventType === 'authentication' && event.action === 'login'
 }
 
 function scopedProcessor(platformId: string, onWork: () => void, afterBatch?: () => Promise<void>) {
@@ -199,10 +197,14 @@ function scopedProcessor(platformId: string, onWork: () => void, afterBatch?: ()
 
             if (priority) await processPages(batch, false)
             else {
-                const processLogs = batch.filter(hasProcessContext)
-                const otherLogs = batch.filter(log => !hasProcessContext(log))
-                await processPages(processLogs, true)
-                await processPages(otherLogs, false)
+                // Only login events use shared event-time correlation state. Keep
+                // those serialized; other durable event pages are independent.
+                const independentLogs: LogInput[] = [], correlationLogs: LogInput[] = []
+                for (const log of batch) {
+                    (requiresCorrelation(log, configured.get(target)!) ? correlationLogs : independentLogs).push(log)
+                }
+                await processPages(independentLogs, true)
+                await processPages(correlationLogs, false)
             }
         }
     }

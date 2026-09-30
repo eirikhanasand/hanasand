@@ -343,7 +343,7 @@ test('durable process pages overlap without taking the correlation lock', async 
     } finally { hook.mockRestore() }
 })
 
-test('durable process pages from mixed batches overlap while other events keep the correlation lock', async () => {
+test('durable stateless pages from mixed batches overlap without the correlation lock', async () => {
     fresh = []; priority = []; watermark = '1000'; cursor.history_end_id = '750'
     backlog = [
         ...Array.from({ length: 500 }, (_, n) => makeLog(String(n + 1), { process: { executable: '/usr/bin/sed', command_line: 'sed' } })),
@@ -362,8 +362,18 @@ test('durable process pages from mixed batches overlap while other events keep t
         expect(maximum).toBe(2)
         expect(checked).toHaveLength(750)
         expect(cursor.last_id).toBe('750')
-        expect(statements.filter(sql => sql.includes('event:log-batch'))).toHaveLength(1)
+        expect(statements.some(sql => sql.includes('event:log-batch'))).toBe(false)
     } finally { hook.mockRestore() }
+})
+
+test('durable authentication login pages keep the correlation lock', async () => {
+    fresh = []; priority = []; watermark = '1000'; cursor.history_end_id = '1'
+    backlog = [makeLog('1', { category: 'authentication', action: 'login' })]
+
+    await processStoredLogs()
+
+    expect(checked).toContain('1')
+    expect(statements.filter(sql => sql.includes('event:log-batch'))).toHaveLength(1)
 })
 
 
@@ -374,16 +384,21 @@ test('fresh arrivals are serviced between durable historical pages', async () =>
     cursor.history_end_id = '750'; watermark = '1000'; fresh = []
     const findings = await import('../src/handlers/events.ts')
     const original = findings.persistEventFindings
+    let releaseSecondPage!: () => void
+    const secondPageGate = new Promise<void>(resolve => { releaseSecondPage = resolve })
     const hook = spyOn(findings, 'persistEventFindings').mockImplementation(async rows => {
+        if (rows.some(row => row[3] === '750')) await secondPageGate
         await original(rows)
-        if (checked.length === 400) priority.push({ ...makeLog('1001'), created_at: new Date().toISOString() })
+        if (rows.some(row => row[3] === '400')) priority.push({ ...makeLog('1001'), created_at: new Date().toISOString() })
+        if (rows.some(row => row[3] === '1001')) releaseSecondPage()
     })
     try {
         await processStoredLogs()
-        expect(checked.indexOf('1001')).toBe(400)
+        expect(checked.indexOf('1001')).toBeGreaterThan(0)
+        expect(checked.indexOf('1001')).toBeLessThan(750)
         expect(checked).toHaveLength(751)
         expect(cursor.last_id).toBe('750')
-    } finally { hook.mockRestore(); timer.mockRestore() }
+    } finally { releaseSecondPage(); hook.mockRestore(); timer.mockRestore() }
 })
 
 
