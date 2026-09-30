@@ -161,7 +161,8 @@ async function queryErrorEvents(query: ErrorQuery) {
                     ${scannerProjectSummaryPredicate()} AS project_scan,
                     ${scannerShareSummaryPredicate()} AS share_scan,
                     COUNT(*)::int AS count,
-                    COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '1 hour')::int AS last_hour
+                    COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '1 hour')::int AS last_hour,
+                    COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours')::int AS last_24h
                 FROM raw_events
                 GROUP BY 1, 2, 3, 4, 5
             ),
@@ -180,6 +181,7 @@ async function queryErrorEvents(query: ErrorQuery) {
                 SELECT
                     COALESCE(SUM(count), 0)::int AS total,
                     COALESCE(SUM(last_hour), 0)::int AS last_hour,
+                    COALESCE(SUM(last_24h), 0)::int AS last_24h,
                     COALESCE(SUM(count) FILTER (WHERE status_code >= 500), 0)::int AS server_errors,
                     COALESCE(SUM(count) FILTER (WHERE status_code BETWEEN 400 AND 499), 0)::int AS client_errors
                 FROM events
@@ -211,6 +213,7 @@ async function queryErrorEvents(query: ErrorQuery) {
             SELECT
                 stats.total,
                 stats.last_hour,
+                stats.last_24h,
                 stats.server_errors,
                 stats.client_errors,
                 status_counts.rows AS status_counts,
@@ -297,6 +300,7 @@ function emptySummary() {
     return {
         total: 0,
         last_hour: 0,
+        last_24h: 0,
         server_errors: 0,
         client_errors: 0,
         status_counts: [],

@@ -20,15 +20,13 @@ function projected(event: Event, fields: string[]) {
     return Object.fromEntries(fields.map(field => [field, field === 'TimeGenerated' ? event.event_timestamp : field === 'RuleId' ? event.normalized.detections?.map(rule => rule.rule_id) : fieldNames[field]?.split('.').reduce<unknown>((value, key) => value && typeof value === 'object' ? (value as Record<string, unknown>)[key] : undefined, event.normalized)]))
 }
 function isRealtimeSeverity(event: Event) { return event.normalized.severity === 'high' || event.normalized.severity === 'critical' }
-function logPeriodLabel(hours: string) {
-    const labels: Record<string, string> = { '1': '1h', '24': '24h', '168': '7d', '720': '30d', '2160': '90d' }
-    return labels[hours] || `${hours}h`
-}
-type MostActiveServiceSummary = { last_24h: Array<{ service: string, count: number }>, total: Array<{ service: string, count: number }> }
-const MostActiveServicesPanel = memo(function MostActiveServicesPanel({ summary, fallbackRecent, loaded }: { summary: MostActiveServiceSummary | null, fallbackRecent?: Array<{ service: string, count: number }>, loaded: boolean }) {
+type Severity = 'low' | 'medium' | 'high' | 'critical'
+type ScopeSummary = { services: Array<{ service: string, count: number }>, severities: Record<Severity, number> }
+type LogsDashboardSummary = { last_24h: ScopeSummary, total: ScopeSummary }
+const MostActiveServicesPanel = memo(function MostActiveServicesPanel({ summary, fallbackRecent, loaded }: { summary: LogsDashboardSummary | null, fallbackRecent?: Array<{ service: string, count: number }>, loaded: boolean }) {
     const [scope, setScope] = useState<'24h' | 'total'>('24h')
     const [open, setOpen] = useState(true)
-    const services = scope === '24h' ? summary?.last_24h ?? fallbackRecent : summary?.total
+    const services = scope === '24h' ? summary?.last_24h.services ?? fallbackRecent : summary?.total.services
 
     return <section className={`${dashboardPanelClass} overflow-hidden`} aria-label='Most active services' data-most-active>
         <header className='flex items-center justify-between gap-3 border-b border-ui-border bg-ui-raised px-4 py-2.5'>
@@ -47,6 +45,26 @@ const MostActiveServicesPanel = memo(function MostActiveServicesPanel({ summary,
         </div>
     </section>
 })
+
+const LogMetricCard = memo(function LogMetricCard({ label, count24h, countTotal, href, hrefLabel }: { label: string, count24h?: number, countTotal?: number, href?: string, hrefLabel?: string }) {
+    const [scope, setScope] = useState<'24h' | 'total'>('24h')
+    const total = scope === 'total'
+    const count = total ? countTotal : count24h
+    return <article className={`${dashboardPanelClass} min-w-0 p-3 sm:p-4`} data-logs-metric-card>
+        <div className='flex items-center justify-between gap-1.5'>
+            {href ? <Link href={href} aria-label={hrefLabel || `View ${label} logs`} title={hrefLabel || `View ${label} logs`} className='truncate text-xs capitalize text-ui-muted hover:text-ui-primary sm:text-sm'>{label}</Link> : <p className='truncate text-xs capitalize text-ui-muted sm:text-sm'>{label}</p>}
+            <div role='group' aria-label={`${label} count range`} className='flex shrink-0 items-center gap-1 text-[10px] font-medium sm:text-xs'>
+                <span className={scope === '24h' ? 'text-ui-text' : 'text-ui-muted'}>24h</span>
+                <button type='button' role='switch' aria-label={`Toggle ${label} count between 24 hours and all time`} aria-checked={total} onClick={() => setScope(value => value === '24h' ? 'total' : '24h')} className={`relative h-4 w-7 rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary ${total ? 'bg-ui-primary' : 'bg-ui-border'}`}>
+                    <span aria-hidden className={`absolute top-0.5 h-3 w-3 rounded-full bg-ui-panel shadow-sm transition-transform ${total ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+                </button>
+                <span className={total ? 'text-ui-text' : 'text-ui-muted'}>Total</span>
+            </div>
+        </div>
+        <p className='mt-1.5 text-xl font-semibold tabular-nums sm:mt-2 sm:text-2xl'>{count === undefined ? '—' : count.toLocaleString('en-US')}</p>
+    </article>
+})
+
 export default function LogsPageClient({ initialServices = [], initialErrors, initialServiceFilter = 'all', initialData = null, initialError = '', initialMetrics = null }: { initialServices?: LogService[], initialErrors?: ErrorEventsResponse, initialServiceFilter?: string, initialData?: Result | null, initialError?: string, initialMetrics?: Metrics | null }) {
     const pathname = usePathname()
     const params = useSearchParams()
@@ -67,7 +85,7 @@ export default function LogsPageClient({ initialServices = [], initialErrors, in
     const [copied, setCopied] = useState('')
     const [errors, setErrors] = useState(initialErrors || emptyErrorEvents())
     const [errorsLoaded, setErrorsLoaded] = useState(Boolean(initialErrors))
-    const [mostActiveSummary, setMostActiveSummary] = useState<MostActiveServiceSummary | null>(null)
+    const [mostActiveSummary, setMostActiveSummary] = useState<LogsDashboardSummary | null>(null)
     const [mostActiveLoaded, setMostActiveLoaded] = useState(false)
     const [refresh, setRefresh] = useState(0)
     const [paged, setPaged] = useState(false)
@@ -167,7 +185,7 @@ export default function LogsPageClient({ initialServices = [], initialErrors, in
         void fetch('/api/backend/logs/services/summary', { signal: controller.signal, cache: 'no-store' })
             .then(async response => {
                 if (!response.ok) throw new Error('Could not load most active services.')
-                return response.json() as Promise<MostActiveServiceSummary>
+                return response.json() as Promise<LogsDashboardSummary>
             })
             .then(body => {
                 if (!controller.signal.aborted) setMostActiveSummary(body)
@@ -186,8 +204,6 @@ export default function LogsPageClient({ initialServices = [], initialErrors, in
     const processingError = data?.processing?.last_error?.endsWith('Waiting for active log writes; will retry.') ? null : data?.processing?.last_error
     const serviceOptions = [...new Set([...initialServices.map(item => item.service), ...(data?.services.map(item => item.service) || []), ...(service === 'all' ? [] : [service])])].sort()
     const activeFilters = [service !== 'all', !advanced && !!search, !advanced && table !== 'Logs', advanced && !!appliedHql, hours !== '24', view !== 'realtime' && severity !== 'all'].filter(Boolean).length
-    const periodLabel = logPeriodLabel(hours)
-    const totalEvents = data?.counts.reduce((total, item) => total + item.count, 0)
     const realtimeLoadMore = view === 'realtime' && !advanced && !busy && !error && data?.next_cursor
         ? () => loadMore.current(data.next_cursor!) : undefined
     const resultCount = data?.rows.length || 0
@@ -245,11 +261,14 @@ export default function LogsPageClient({ initialServices = [], initialErrors, in
             {!!data?.processing?.skipped_events && <p role='status' className='text-sm text-ui-warning'>{data.processing.skipped_events.toLocaleString('en-US')} events remain excluded from detection.</p>}
             {view !== 'realtime' && data && !data.processing && !busy && <p role='status' className='text-sm text-ui-warning'>Waiting for the log processor to check in.</p>}
             {view === 'dashboard' ? <>
-                <div className='flex items-center justify-between gap-3 px-1' data-logs-total>
-                    <div className='flex items-center gap-2'><p className='text-sm font-medium text-ui-muted'>Total</p><span className='text-xs text-ui-muted'>{periodLabel}</span></div>
-                    <p className='text-lg font-semibold tabular-nums text-ui-text'>{totalEvents?.toLocaleString('en-US') ?? '—'}</p>
-                </div>
-                <section className='grid grid-cols-2 gap-2.5 min-[380px]:gap-3 md:grid-cols-3 xl:grid-cols-5' aria-label='Events by severity' data-logs-metrics>{['low','medium','high','critical'].map(value => <Link key={value} href={`/logs/search?${new URLSearchParams({ hours, ...(service !== 'all' ? { service } : {}), ...(advanced && appliedHql ? { hql: appliedHql } : { table, search }), severity: value })}`} className={`${dashboardPanelClass} min-w-0 p-3 sm:p-4`} data-logs-metric-card><div className='flex items-center justify-between gap-2'><p className='text-xs capitalize text-ui-muted sm:text-sm'>{value}</p><span className='text-[10px] font-medium text-ui-muted sm:text-xs'>{periodLabel}</span></div><p className='mt-1.5 text-xl font-semibold tabular-nums sm:mt-2 sm:text-2xl'>{data ? (data.counts.find(item => item.severity === value)?.count || 0).toLocaleString('en-US') : '—'}</p></Link>)}<Link href='/logs/errors' className={`${dashboardPanelClass} min-w-0 p-3 sm:p-4`} data-logs-metric-card><p className='text-xs text-ui-muted sm:text-sm'>Errors</p><p className='mt-1.5 text-xl font-semibold tabular-nums sm:mt-2 sm:text-2xl'>{errorsLoaded ? errors.summary.total.toLocaleString('en-US') : '—'}</p></Link></section>
+                <section className='grid grid-cols-2 gap-2.5 min-[380px]:gap-3 md:grid-cols-3 xl:grid-cols-5' aria-label='Events by severity' data-logs-metrics>
+                    {(['low', 'medium', 'high', 'critical'] as const).map(value => {
+                        const params = new URLSearchParams({ hours: '24', ...(service !== 'all' ? { service } : {}), ...(advanced && appliedHql ? { hql: appliedHql } : { table, search }), severity: value })
+                        const fallback24h = hours === '24' ? data?.counts.find(item => item.severity === value)?.count : undefined
+                        return <LogMetricCard key={value} label={value} href={`/logs/search?${params}`} hrefLabel={`View 24-hour ${value} logs`} count24h={mostActiveSummary?.last_24h.severities[value] ?? fallback24h} countTotal={mostActiveSummary?.total.severities[value]} />
+                    })}
+                    <LogMetricCard label='Errors' href='/logs/errors' hrefLabel='View error details' count24h={errorsLoaded ? errors.summary.last_24h : undefined} countTotal={errorsLoaded ? errors.summary.total : undefined} />
+                </section>
                 <MostActiveServicesPanel summary={mostActiveSummary} fallbackRecent={data?.services} loaded={mostActiveLoaded} />
             </> : <section className={`${dashboardPanelClass} min-w-0 overflow-hidden ${view === 'realtime' ? 'flex min-h-0 flex-1 flex-col' : ''}`} aria-label='Log events'>
                 <div className='flex flex-wrap items-center justify-between gap-2 border-b border-ui-border p-3 text-xs text-ui-muted'>

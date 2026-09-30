@@ -144,7 +144,7 @@ test('HQL requires running edited queries, projects fields, summarizes and repor
 test('errors expand inline, copy JSON and show a recoverable data failure', async ({ page }) => {
     const error = { id: 'error-1', source: 'api', service: 'api', surface: 'api', method: 'GET', path: '/api/example', status_code: 500, error_code: 'EXAMPLE_FAILURE', message: 'Example failure context', request_id: 'request-1', user_id: '', level: 'error', created_at: event().event_timestamp }
     let fail = false
-    await page.route('**/api/backend/logs/errors?*', route => fail ? route.fulfill({ status: 503, json: { error: 'Log storage unavailable.' } }) : route.fulfill({ json: { generated_at: '', errors: [error], summary: { total: 1, last_hour: 1, server_errors: 1, client_errors: 0, status_counts: [], surface_counts: [], code_counts: [], project_scans: 0, share_scans: 0 } } }))
+    await page.route('**/api/backend/logs/errors?*', route => fail ? route.fulfill({ status: 503, json: { error: 'Log storage unavailable.' } }) : route.fulfill({ json: { generated_at: '', errors: [error], summary: { total: 1, last_hour: 1, last_24h: 1, server_errors: 1, client_errors: 0, status_counts: [], surface_counts: [], code_counts: [], project_scans: 0, share_scans: 0 } } }))
     await openLogs(page, '/logs/errors')
     await page.getByRole('button', { name: 'EXAMPLE_FAILURE' }).click()
     await expect(page.getByText('Example failure context', { exact: false })).toBeVisible()

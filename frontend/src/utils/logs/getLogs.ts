@@ -59,6 +59,7 @@ export type ErrorEvent = {
 export type ErrorEventSummary = {
     total: number
     last_hour: number
+    last_24h: number
     server_errors: number
     client_errors: number
     status_counts: Array<{ status_code: number, count: number }>
@@ -131,6 +132,7 @@ export function emptyErrorEvents(): ErrorEventsResponse {
         summary: {
             total: 0,
             last_hour: 0,
+            last_24h: 0,
             server_errors: 0,
             client_errors: 0,
             status_counts: [],
@@ -148,6 +150,7 @@ function normalizeSummary(value: unknown): ErrorEventSummary {
     return {
         total: numberValue(summary.total),
         last_hour: numberValue(summary.last_hour),
+        last_24h: numberValue(summary.last_24h),
         server_errors: numberValue(summary.server_errors),
         client_errors: numberValue(summary.client_errors),
         status_counts: Array.isArray(summary.status_counts) ? summary.status_counts : [],

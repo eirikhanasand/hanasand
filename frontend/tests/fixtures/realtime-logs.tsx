@@ -17,7 +17,7 @@ function Fixture() {
     const pathname = useSyncExternalStore(subscribe, () => window.location.pathname)
     return <AppRouterContext.Provider value={{ push: navigate, replace: navigate, prefetch: async () => {}, refresh() {} } as unknown as React.ContextType<typeof AppRouterContext>}>
         <PathnameContext.Provider value={pathname}><SearchParamsContext.Provider value={new URLSearchParams(window.location.search)}>
-            <LogsPageClient initialData={(window as Window & { logsInitialData?: LogSearchResult }).logsInitialData} key={pathname} initialServices={[{ service: 'api', entries: 10, last_seen: '' }, { service: 'audit', entries: 5, last_seen: '' }]} initialErrors={{ generated_at: '', errors: [], summary: { total: 0, last_hour: 0, server_errors: 0, client_errors: 0, status_counts: [], surface_counts: [], code_counts: [], project_scans: 0, share_scans: 0 } }} />
+            <LogsPageClient initialData={(window as Window & { logsInitialData?: LogSearchResult }).logsInitialData} key={pathname} initialServices={[{ service: 'api', entries: 10, last_seen: '' }, { service: 'audit', entries: 5, last_seen: '' }]} initialErrors={{ generated_at: '', errors: [], summary: { total: 0, last_hour: 0, last_24h: 0, server_errors: 0, client_errors: 0, status_counts: [], surface_counts: [], code_counts: [], project_scans: 0, share_scans: 0 } }} />
         </SearchParamsContext.Provider></PathnameContext.Provider>
     </AppRouterContext.Provider>
 }
