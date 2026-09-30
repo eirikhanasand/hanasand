@@ -23,6 +23,25 @@ running_deployments() {
         '$1 != self && $NF ~ /(^|\/)deploy-all[.]sh$/ { print $1 }'
 }
 
+release_has_schema_changes() {
+    previous_release=$1
+    target_release=$2
+    # Re-run schema setup when the schema entry points or SQL files changed.
+    # Other API source changes only trigger it when their diff changes DDL;
+    # replaying idempotent ALTERs on every code-only release can hold candidate
+    # startup behind long-running production transactions.
+    if ! git diff --quiet "$previous_release" "$target_release" -- api/src/utils/db db; then
+        return 0
+    fi
+    for path in $(git diff --name-only "$previous_release" "$target_release" -- api/src); do
+        if git diff --unified=0 "$previous_release" "$target_release" -- "$path" \
+            | grep -Eiq '^[+-].*([^[:alnum:]_])(CREATE|ALTER|DROP|TRUNCATE|REINDEX|GRANT|REVOKE)([[:space:]]|$)'; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 reuse_schema_marker_for_code_only_release() {
     previous_release=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' hanasand_api 2>/dev/null \
         | sed -n 's/^HANASAND_RELEASE_COMMIT=//p' | head -1)
@@ -31,11 +50,7 @@ reuse_schema_marker_for_code_only_release() {
     esac
     test "${#previous_release}" -eq 40 || return
     test "$previous_release" != "$release" || return
-
-    # All schema setup is under api/src and db. Reuse the marker when neither
-    # changed; replaying idempotent ALTERs on every code-only release can hold
-    # candidate startup behind ordinary production traffic.
-    if ! git diff --quiet "$previous_release" "$release" -- api/src db; then
+    if release_has_schema_changes "$previous_release" "$release"; then
         return
     fi
 
