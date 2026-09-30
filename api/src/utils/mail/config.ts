@@ -1,4 +1,4 @@
-import crypto from 'node:crypto'
+import { deriveSecretKey } from '../crypto/secretBox.ts'
 
 const mailHost = process.env.MAIL_HOST || 'mail.hanasand.com'
 const mailInternalUrl = process.env.MAIL_INTERNAL_URL || process.env.MAIL_JMAP_INTERNAL_URL || 'http://127.0.0.1:8081'
@@ -7,6 +7,12 @@ const mailAdminUser = process.env.MAIL_ADMIN_USERNAME || 'admin'
 const mailAdminPassword = process.env.MAIL_ADMIN_PASSWORD || ''
 const mailDomain = process.env.MAIL_DOMAIN || 'hanasand.com'
 const serviceKeySource = process.env.MAIL_SERVICE_KEY || process.env.VM_API_TOKEN || process.env.DB_PASSWORD || ''
+const serviceKeySources = [
+    serviceKeySource,
+    process.env.MAIL_SERVICE_KEY_PREVIOUS,
+    process.env.VM_API_TOKEN_PREVIOUS,
+    process.env.DB_PASSWORD_PREVIOUS,
+].filter((value, index, values): value is string => typeof value === 'string' && values.indexOf(value) === index)
 const systemSenderLocalPart = process.env.MAIL_SYSTEM_SENDER_LOCAL_PART || 'noreply'
 const mailUserAliases = new Map(
     (process.env.MAIL_USER_ALIASES || 'eirikhanasand:eirik')
@@ -37,7 +43,8 @@ export const mailConfig = {
     smtpPort: Number(process.env.MAIL_SMTP_PORT || 587),
     internalSmtpPort: mailInternalSmtpPort,
     managesievePort: Number(process.env.MAIL_MANAGESIEVE_PORT || 4190),
-    encryptionKey: crypto.createHash('sha256').update(serviceKeySource).digest(),
+    encryptionKey: deriveSecretKey(serviceKeySource),
+    decryptionKeys: serviceKeySources.map(deriveSecretKey),
     systemMailboxOwner,
     systemSenderLocalPart,
     systemAliasLocalParts,

@@ -12,8 +12,9 @@ export default function hasInternalToken(req: FastifyRequest) {
         : authHeader
 
     try {
-        return decodeURIComponent(rawToken) === config.vm_api_token
+        const presented = decodeURIComponent(rawToken)
+        return presented === config.vm_api_token || Boolean(process.env.VM_API_TOKEN_PREVIOUS && presented === process.env.VM_API_TOKEN_PREVIOUS)
     } catch {
-        return rawToken === config.vm_api_token
+        return rawToken === config.vm_api_token || Boolean(process.env.VM_API_TOKEN_PREVIOUS && rawToken === process.env.VM_API_TOKEN_PREVIOUS)
     }
 }

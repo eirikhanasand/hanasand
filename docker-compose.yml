@@ -788,6 +788,8 @@ services:
       DB_USER: ${DB_USER:-hanasand}
       DB: ${DB:-hanasand}
       DB_PASSWORD: ${DB_PASSWORD}
+      DB_AUTH_EXTRA_USER: ${DB_AUTH_EXTRA_USER:-}
+      DB_AUTH_EXTRA_PASSWORD: ${DB_AUTH_EXTRA_PASSWORD:-}
       DB_DIRECT_HOST: hanasand_database
       DB_DIRECT_PORT: "5432"
       HANASAND_RELEASE_COMMIT: ${HANASAND_RELEASE_COMMIT:-unknown}
