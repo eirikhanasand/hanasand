@@ -243,12 +243,16 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
         const expanded = isExpanded(key)
         const Icon = sectionIcons[item.label] || FolderKanban
         const controls = `${domId}-${encodeURIComponent(key)}`
+        const pendingSummary = item.label === 'Communication' ? communicationSummary : ''
         return (
             <div key={key} className={ancestors.length ? 'min-w-0' : 'min-w-0 border-t border-ui-border/50 pt-1 first:border-0'}>
-                <button type='button' aria-expanded={expanded} aria-controls={controls} onClick={() => toggle(key)}
+                <button type='button' aria-expanded={expanded} aria-controls={controls}
+                    aria-label={!expanded && pendingSummary ? `${item.label}, ${pendingSummary}` : undefined}
+                    onClick={() => toggle(key)}
                     className={`flex min-h-10 w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm leading-5 hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary ${containsActive ? 'text-ui-primary' : 'text-ui-text'} ${ancestors.length ? 'font-medium' : 'font-semibold'}`}>
                     {!ancestors.length && <Icon className='h-4 w-4 shrink-0' />}
                     <span className='min-w-0 flex-1'>{item.label}</span>
+                    {!expanded && pendingSummary ? <PendingBadge /> : null}
                     <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${expanded ? '' : '-rotate-90'}`} />
                 </button>
                 <div id={controls} hidden={!expanded} className='ml-2 border-l border-ui-border pl-2'>
