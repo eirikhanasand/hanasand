@@ -46,17 +46,17 @@ reuse_schema_marker_for_code_only_release() {
     previous_release=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' hanasand_api 2>/dev/null \
         | sed -n 's/^HANASAND_RELEASE_COMMIT=//p' | head -1)
     case "$previous_release" in
-        *[!a-f0-9]*|'') return ;;
+        *[!a-f0-9]*|'') return 0 ;;
     esac
-    test "${#previous_release}" -eq 40 || return
-    test "$previous_release" != "$release" || return
+    test "${#previous_release}" -eq 40 || return 0
+    test "$previous_release" != "$release" || return 0
     if release_has_schema_changes "$previous_release" "$release"; then
-        return
+        return 0
     fi
 
     previous_schema_applied=$(docker exec hanasand_database psql -U hanasand -d hanasand -Atc \
         "SELECT EXISTS (SELECT 1 FROM app_schema_releases WHERE release = '$previous_release')" 2>/dev/null || true)
-    test "$previous_schema_applied" = t || return
+    test "$previous_schema_applied" = t || return 0
 
     docker exec hanasand_database psql -v ON_ERROR_STOP=1 -U hanasand -d hanasand \
         -c "INSERT INTO app_schema_releases (release) VALUES ('$release') ON CONFLICT DO NOTHING" >/dev/null
