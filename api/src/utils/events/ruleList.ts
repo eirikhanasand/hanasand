@@ -36,19 +36,23 @@ const aggregateTables = new Map([
     [postgresRuleId, ['log_postgres_session_state', 'sum(dropped_records)']], [proxyRuleId, ['log_proxy_counts', 'sum(amount)']],
     [modelDiscoveryRuleId, ['log_model_probe_receipts', 'count(*)']], [readinessAuditRuleId, ['log_readiness_audit_receipts', 'count(*)']],
 ])
-type HitSample = { at: number, counts: Map<string, number> }
+type HitSample = { at: number, counts: Map<string, number>, ruleIds: Set<string> }
 const hitSamples = new Map<string, HitSample[]>()
 const hitSampleKey = (organizationId: string, rules: Pick<Rule, 'id'>[]) => `${organizationId}:${rules.map(rule => rule.id).sort().join(',')}`
+const hitSampleDelayMs = 10_000
+const maxHitSampleAgeMs = 20_000
+const maxHitSamplesPerRuleSet = 32
 
-export function getPreviousRuleHitCounts(organizationId: string, rules: Pick<Rule, 'id'>[]) {
+export function getPreviousRuleHitCounts(organizationId: string, rules: Pick<Rule, 'id'>[], currentCounts: ReadonlyMap<string, number>) {
     const relevant = rules.map(rule => rule.id)
-    const candidates = [...hitSamples].filter(([key, samples]) => key.startsWith(`${organizationId}:`)
-        && samples[0] && samples[1] && relevant.every(id => samples[0].counts.has(id) && samples[1].counts.has(id)))
-    const samples = hitSamples.get(hitSampleKey(organizationId, rules)) || candidates.sort((a, b) => b[1][1].at - a[1][1].at)[0]?.[1]
+    const samples = [...hitSamples].find(([key, history]) => key.startsWith(`${organizationId}:`)
+        && history.some(sample => sample.counts === currentCounts && relevant.every(id => sample.ruleIds.has(id))))?.[1]
     if (!samples || samples.length < 2) return {} as Record<string, number>
-    const [previous, current] = samples
-    const elapsed = current.at - previous.at
-    if (elapsed <= 0 || elapsed > 30_000) return {} as Record<string, number>
+    const current = samples.find(sample => sample.counts === currentCounts)
+    if (!current) return {} as Record<string, number>
+    const previous = samples.slice(0, samples.indexOf(current)).reverse().find(sample => sample.at <= current.at - hitSampleDelayMs
+        && relevant.every(id => sample.ruleIds.has(id)))
+    if (!previous || current.at - previous.at > maxHitSampleAgeMs) return {} as Record<string, number>
     return Object.fromEntries(rules.map(rule => [rule.id, previous.counts.get(rule.id) ?? 0]))
 }
 
@@ -63,6 +67,7 @@ export async function loadRuleHits(organizationId: string, rules: Pick<Rule, 'id
 async function loadRuleHitsUncached(organizationId: string, rules: Pick<Rule, 'id' | 'source' | 'definition'>[], query: typeof run) {
     const ids = rules.map(rule => rule.id)
     if (!ids.length) return new Map<string, number>()
+    const sampledAt = Date.now()
     const customDropIds = new Set(rules.filter(rule => rule.source === 'owned' && rule.definition?.stage === 'analyze' && rule.definition.action === 'drop').map(rule => rule.id))
     const findingIds = ids.filter(id => !aggregateTables.has(id) && !receiptRules.has(id) && !customDropIds.has(id))
     const receiptIds = ids.filter(id => receiptRules.has(id) || customDropIds.has(id))
@@ -81,8 +86,9 @@ async function loadRuleHitsUncached(organizationId: string, rules: Pick<Rule, 'i
     const counts = new Map<string, number>(result.rows.map(row => [row.rule_id, Number(row.hits)]))
     const sampleKey = hitSampleKey(organizationId, rules)
     const samples = hitSamples.get(sampleKey) || []
-    samples.push({ at: Date.now(), counts })
-    if (samples.length > 2) samples.shift()
+    samples.push({ at: sampledAt, counts, ruleIds: new Set(ids) })
+    samples.sort((a, b) => a.at - b.at)
+    if (samples.length > maxHitSamplesPerRuleSet) samples.splice(0, samples.length - maxHitSamplesPerRuleSet)
     hitSamples.set(sampleKey, samples)
     while (hitSamples.size > 128) hitSamples.delete(hitSamples.keys().next().value!)
     return counts

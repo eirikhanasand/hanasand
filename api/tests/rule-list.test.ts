@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { listRule, ruleCategory, loadRuleHits } from '../src/utils/events/ruleList.ts'
+import { listRule, ruleCategory, loadRuleHits, getPreviousRuleHitCounts } from '../src/utils/events/ruleList.ts'
 import { collectorRuleId } from '../src/utils/events/analyzeCollector.ts'
 import { postgresRuleId } from '../src/utils/events/analyzePostgres.ts'
 import { modelDiscoveryRuleId } from '../src/utils/events/analyzeModelDiscovery.ts'
@@ -50,4 +50,37 @@ test('custom Analyze Drop hits come from receipts', async () => {
         return { rows: [{ rule_id: 'custom.drop.v1', hits: '4' }] }
     }
     expect((await loadRuleHits('org-a', [{ id: 'custom.drop.v1', source: 'owned', definition: { stage: 'analyze', action: 'drop' } }], query as any)).get('custom.drop.v1')).toBe(4)
+})
+
+test('previous hit counts come from an actual server sample at least ten seconds earlier', async () => {
+    const organizationId = `org-rule-samples-${crypto.randomUUID()}`
+    const rules = [{ id: 'auth.new_country.v1' }]
+    let now = 0
+    let count = 0
+    const originalNow = Date.now
+    Date.now = () => now
+    const query = async () => ({ rows: [{ rule_id: rules[0].id, hits: String(count) }] })
+
+    const sample = async (at: number, value: number) => {
+        now = at
+        count = value
+        return loadRuleHits(organizationId, rules, query as any, { cache: false })
+    }
+
+    try {
+        const first = await sample(0, 10)
+        expect(getPreviousRuleHitCounts(organizationId, rules, first)).toEqual({})
+
+        await sample(1_000, 12)
+        const atTenSeconds = await sample(10_000, 18)
+        expect(getPreviousRuleHitCounts(organizationId, rules, atTenSeconds)).toEqual({ [rules[0].id]: 10 })
+
+        const atElevenSeconds = await sample(11_000, 20)
+        expect(getPreviousRuleHitCounts(organizationId, rules, atElevenSeconds)).toEqual({ [rules[0].id]: 12 })
+
+        const stale = await sample(41_000, 30)
+        expect(getPreviousRuleHitCounts(organizationId, rules, stale)).toEqual({})
+    } finally {
+        Date.now = originalNow
+    }
 })

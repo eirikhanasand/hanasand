@@ -3,20 +3,23 @@
 import { useEffect, useRef, useState } from 'react'
 
 export function useSmoothedCount(target: number | null | undefined, durationMs: number, previousSample?: number | null) {
-    const [displayed, setDisplayed] = useState<number | null>(target ?? null)
+    const initial = typeof previousSample === 'number' && Number.isFinite(previousSample) ? previousSample : target ?? null
+    const [displayed, setDisplayed] = useState<number | null>(initial)
     const displayedRef = useRef(displayed)
-    const targetRef = useRef(target)
+    const previousSampleRef = useRef(previousSample)
+
+    useEffect(() => {
+        previousSampleRef.current = previousSample
+    }, [previousSample])
 
     useEffect(() => {
         if (target == null) {
-            targetRef.current = target
             displayedRef.current = null
             setDisplayed(null)
             return
         }
-        if (targetRef.current === target) return
-        targetRef.current = target
-        const from = typeof previousSample === 'number' && Number.isFinite(previousSample) ? previousSample : displayedRef.current
+        const sample = previousSampleRef.current
+        const from = typeof sample === 'number' && Number.isFinite(sample) ? sample : displayedRef.current
         if (from == null || from === target) {
             displayedRef.current = target
             setDisplayed(target)
@@ -35,7 +38,7 @@ export function useSmoothedCount(target: number | null | undefined, durationMs: 
         }
         frame = requestAnimationFrame(animate)
         return () => cancelAnimationFrame(frame)
-    }, [target, durationMs, previousSample])
+    }, [target, durationMs])
 
     return displayed
 }

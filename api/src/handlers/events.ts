@@ -331,7 +331,7 @@ export async function getRules(req: FastifyRequest, res: FastifyReply) {
         if (error instanceof ReadAdmissionError) return res.header('Retry-After', '2').status(503).send({ error: error.message })
         throw error
     }
-    const previousHitCounts = getPreviousRuleHitCounts(access.organizationId, hitRules)
+    const previousHitCounts = getPreviousRuleHitCounts(access.organizationId, hitRules, hits)
     return res.send({ organizationId: access.organizationId, rules: rules.map(rule => ({ ...(compact ? listRule(rule) : rule),
         hitCount: rule.definition?.stage === 'analyze' && rule.definition.action === 'keep' ? null : hits.get(rule.id) ?? 0,
         ...(Object.hasOwn(previousHitCounts, rule.id) ? { previousHitCount: previousHitCounts[rule.id] } : {}),
@@ -346,7 +346,7 @@ export async function getRuleHitCounts(req: FastifyRequest, res: FastifyReply) {
     const rules = (await loadConfiguredRules(access.organizationId, run, true)).filter(rule => !internalRetentionRuleIds.has(rule.id))
     try {
         const hits = await loadRuleHits(access.organizationId, rules, run)
-        const previousHitCounts = getPreviousRuleHitCounts(access.organizationId, rules)
+        const previousHitCounts = getPreviousRuleHitCounts(access.organizationId, rules, hits)
         return res.header('Cache-Control', 'no-store').send({ organizationId: access.organizationId, previousHitCounts, hitCounts: Object.fromEntries(rules.map(rule => [rule.id,
             rule.definition?.stage === 'analyze' && rule.definition.action === 'keep' ? null : hits.get(rule.id) ?? 0,
         ])) })
