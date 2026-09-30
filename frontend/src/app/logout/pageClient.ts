@@ -11,6 +11,7 @@ export default function LogoutPageClient({ path }: { path?: string }) {
     useEffect(() => {
         (async () => {
             const id = getCookie('id')
+            const accessToken = getCookie('access_token')
             try {
                 for (const key of Object.keys(sessionStorage)) {
                     if (key.startsWith('account-delete-confirmation:')) sessionStorage.removeItem(key)
@@ -20,10 +21,11 @@ export default function LogoutPageClient({ path }: { path?: string }) {
             const searchParams = new URLSearchParams(window.location.search)
             const queryString = searchParams.toString()
 
-            if (id) {
+            if (id && accessToken) {
                 const controller = new AbortController()
                 const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
                 fetch(`${config.url.api}/auth/logout/${id}`, {
+                    headers: { Authorization: `Bearer ${accessToken}` },
                     signal: controller.signal
                 }).catch(() => null).finally(() => clearTimeout(timeout))
             }
