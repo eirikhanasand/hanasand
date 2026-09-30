@@ -193,7 +193,7 @@ export default function LogsPageClient({ initialServices = [], initialErrors, in
     const resultCount = data?.rows.length || 0
     const showRealtimeCount = view === 'realtime' && !advanced && !data?.summarize
     const resultLabel = view === 'realtime'
-        ? showRealtimeCount ? `${resultCount.toLocaleString('en-US')}/${data?.total_events?.toLocaleString('en-US') ?? '—'}` : `${resultCount} results`
+        ? showRealtimeCount ? `${resultCount.toLocaleString('en-US')}/${data?.total_events?.toLocaleString('en-US') ?? '—'}` : `${resultCount} events`
         : `${resultCount} results${data && resultCount === data.limit && (view !== 'search' || advanced) ? ` · limited to ${data.limit}; narrow your search or use take up to 500` : ''}`
     return <div className={`${view === 'realtime' ? 'flex h-full min-h-0 flex-col gap-3 sm:gap-4' : 'grid gap-3 sm:gap-4'} min-w-0`}>
         <header className='flex min-w-0 flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between'>
