@@ -83,7 +83,7 @@ const headers = { cookie, 'x-hanasand-render-proof-auth': 'local-dashboard-rende
 const routes = [
     { path: '/scanner', heading: 'Runs' },
     { path: '/vms', heading: 'Virtual machines' },
-    { path: '/db/backups', heading: 'Database backup and recovery' },
+    { path: '/db/backups', heading: 'Backups' },
     { path: '/automation/health', heading: 'Server rendered monitor' },
 ]
 

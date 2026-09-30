@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState, useTransition } from 'react'
-import { DatabaseBackup, RefreshCw, ShieldCheck } from 'lucide-react'
+import { ChevronDown, DatabaseBackup, RefreshCw, ShieldCheck } from 'lucide-react'
 import type { BackupFile, BackupOperation, BackupService } from '@/utils/db/internal'
 import formatUtcDateTime from '@/utils/date/formatUtcDateTime'
 import { triggerBackupAction, verifyBackupAction } from '../actions'
@@ -62,9 +62,8 @@ export default function BackupPage({ backups, files, loadError = '' }: BackupPag
                     <div>
                         <div className='flex items-center gap-2'>
                             <DatabaseBackup className='h-5 w-5 text-ui-primary' />
-                            <h1 className='text-xl font-semibold text-ui-text'>Database backup and recovery</h1>
+                            <h1 className='text-xl font-semibold text-ui-text'>Backups</h1>
                         </div>
-                        <p className='mt-2 text-sm text-ui-muted'>Verified PostgreSQL archives, retention evidence, and isolated restore drills.</p>
                     </div>
                     <button
                         type='button'
@@ -74,7 +73,7 @@ export default function BackupPage({ backups, files, loadError = '' }: BackupPag
                         data-backup-primary-action
                     >
                         <RefreshCw className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} />
-                        {service?.currentOperation ? stageLabel(service.currentOperation.stage) : isPending ? 'Running backup…' : 'Run verified backup'}
+                        {service?.currentOperation ? stageLabel(service.currentOperation.stage) : isPending ? 'Running backup…' : 'Backup now'}
                     </button>
                 </div>
                 {visibleError && <p role='alert' className='mt-4 rounded-lg border border-ui-danger/30 bg-ui-raised/10 p-3 text-sm text-ui-text'>{visibleError}</p>}
@@ -83,7 +82,7 @@ export default function BackupPage({ backups, files, loadError = '' }: BackupPag
 
             <section className='rounded-xl border border-ui-border bg-ui-panel p-4 sm:p-5' aria-labelledby='backup-runtime-heading'>
                 <div className='flex items-center justify-between gap-3'>
-                    <h2 id='backup-runtime-heading' className='font-semibold text-ui-text'>Runtime evidence</h2>
+                    <h2 id='backup-runtime-heading' className='font-semibold text-ui-text'>Overview</h2>
                     <Status value={service?.status || 'Unavailable'} />
                 </div>
                 <dl className='mt-4 grid gap-x-6 gap-y-4 sm:grid-cols-2 xl:grid-cols-4'>
@@ -101,10 +100,10 @@ export default function BackupPage({ backups, files, loadError = '' }: BackupPag
             <section className='overflow-hidden rounded-xl border border-ui-border bg-ui-panel' aria-labelledby='backup-files-heading'>
                 <div className='flex flex-col gap-2 border-b border-ui-border p-4 sm:flex-row sm:items-center sm:justify-between sm:px-5'>
                     <div>
-                        <h2 id='backup-files-heading' className='font-semibold text-ui-text'>Backup files</h2>
-                        <p className='mt-1 text-sm text-ui-muted'>{files.length} archive{files.length === 1 ? '' : 's'} measured from {service?.storageTarget || 'configured storage'}.</p>
+                        <h2 id='backup-files-heading' className='font-semibold text-ui-text'>Available backups</h2>
+                        <p className='mt-1 text-sm text-ui-muted'>{files.length} {files.length === 1 ? 'backup' : 'backups'} in {service?.storageTarget || 'configured storage'}.</p>
                     </div>
-                    <Link href='/db/restore' className='text-sm font-semibold text-ui-primary hover:underline'>Open restore drills</Link>
+                    <Link href='/db/restore' className='text-sm font-semibold text-ui-primary hover:underline'>Restore</Link>
                 </div>
                 <div className='overflow-x-auto'>
                     <table className='min-w-[760px] w-full text-left text-sm'>
@@ -137,13 +136,24 @@ export default function BackupPage({ backups, files, loadError = '' }: BackupPag
 }
 
 function OperationHistory({ operations }: { operations: BackupOperation[] }) {
+    const [expanded, setExpanded] = useState(false)
+
     return (
         <section className='overflow-hidden rounded-xl border border-ui-border bg-ui-panel' aria-labelledby='backup-history-heading'>
-            <div className='border-b border-ui-border p-4 sm:px-5'>
-                <h2 id='backup-history-heading' className='font-semibold text-ui-text'>Persistent operation history</h2>
-                <p className='mt-1 text-sm text-ui-muted'>Terminal failures and interrupted runs remain visible after restart.</p>
+            <div className='flex items-center justify-between gap-3 border-b border-ui-border p-4 sm:px-5'>
+                <h2 id='backup-history-heading' className='font-semibold text-ui-text'>History</h2>
+                <button
+                    type='button'
+                    onClick={() => setExpanded(value => !value)}
+                    aria-expanded={expanded}
+                    aria-controls='backup-history-content'
+                    aria-label={expanded ? 'Collapse history' : 'Expand history'}
+                    className='inline-flex h-9 w-9 items-center justify-center rounded-md text-ui-muted hover:bg-ui-raised hover:text-ui-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ui-primary'
+                >
+                    <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                </button>
             </div>
-            <div className='overflow-x-auto'>
+            <div id='backup-history-content' hidden={!expanded} className='overflow-x-auto'>
                 <table className='min-w-[760px] w-full text-left text-sm'>
                     <thead className='bg-ui-raised text-xs uppercase text-ui-muted'><tr><th className='px-4 py-3'>Started</th><th className='px-4 py-3'>Operation</th><th className='px-4 py-3'>Status</th><th className='px-4 py-3'>Duration</th><th className='px-4 py-3'>Evidence</th></tr></thead>
                     <tbody className='divide-y divide-ui-border'>

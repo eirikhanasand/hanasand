@@ -652,7 +652,7 @@ async function initializeState() {
             operation.stage = 'interrupted'
             operation.finishedAt = now
             operation.durationMs = Math.max(0, Date.parse(now) - Date.parse(operation.startedAt))
-            operation.error = 'The backup worker restarted before this operation reached a terminal state.'
+            operation.error = 'The backup worker restarted before the backup finished.'
         }
     }
     await unlink(lockPath()).catch(error => {
