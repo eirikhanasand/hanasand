@@ -1,7 +1,7 @@
 import { withTransaction } from '#db'
 
-// Live and catch-up passes may read concurrently, but detection/correlation
-// writes remain serialized in short pages, including across worker replicas.
+// Serialize pages that depend on shared event-time state. Independent process
+// pages can run outside this lock because log and finding writes are idempotent.
 export function withLogBatch<T>(work: () => Promise<T>, transaction = withTransaction) {
     return transaction(async query => {
         await query('SELECT pg_advisory_xact_lock(hashtextextended(\'event:log-batch\', 0))')

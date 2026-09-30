@@ -138,6 +138,13 @@ export async function processLogBatch(logs: LogInput[], organizationId: string, 
         AND (e.processing_status IS DISTINCT FROM 'processed' OR e.normalized IS DISTINCT FROM e.normalized || item.result)`, [JSON.stringify(updates)])
 }
 
+function hasProcessContext(log: LogInput) {
+    const metadata = log.metadata && typeof log.metadata === 'object' && !Array.isArray(log.metadata) ? log.metadata : {}
+    const structured = metadata.structured && typeof metadata.structured === 'object' && !Array.isArray(metadata.structured) ? metadata.structured as Record<string, unknown> : {}
+    const process = metadata.process || structured.process
+    return Boolean(process && typeof process === 'object' && !Array.isArray(process) && Object.keys(process).length)
+}
+
 function scopedProcessor(platformId: string, onWork: () => void, afterBatch?: () => Promise<void>) {
     const configured = new Map<string, Awaited<ReturnType<typeof loadConfiguredRules>>>()
     const processScopes = async (logs: LogInput[], priority = false) => {
@@ -155,9 +162,35 @@ function scopedProcessor(platformId: string, onWork: () => void, afterBatch?: ()
             // Keep fresh work small for latency; larger durable pages reduce write overhead.
             // Recovery still yields to fresh arrivals after every durable page.
             const pageSize = priority ? 200 : 400
-            for (let offset = 0; offset < batch.length; offset += pageSize) {
-                await withLogBatch(() => processLogBatch(batch.slice(offset, offset + pageSize), target, configured.get(target)!))
-                if (!priority) await afterBatch?.()
+            const pages = Array.from({ length: Math.ceil(batch.length / pageSize) }, (_, index) => batch.slice(index * pageSize, (index + 1) * pageSize))
+            const processPage = (page: LogInput[]) => processLogBatch(page, target, configured.get(target)!)
+            if (!priority && pages.length && pages.every(page => page.every(hasProcessContext))) {
+                // Process events are evaluated independently. Let two durable pages overlap;
+                // event IDs and finding keys make replay races safe, while auth stays serialized.
+                for (let offset = 0; offset < pages.length; offset += 2) {
+                    const group = pages.slice(offset, offset + 2)
+                    if (group.length === 1) await processPage(group[0])
+                    else {
+                        const work = group.map(processPage)
+                        let firstError: unknown
+                        try { await Promise.race(work) } catch (error) { firstError = error }
+                        let freshError: unknown
+                        if (!firstError) {
+                            try { await afterBatch?.() } catch (error) { freshError = error }
+                        }
+                        const results = await Promise.allSettled(work)
+                        const workError = results.find((result): result is PromiseRejectedResult => result.status === 'rejected')
+                        if (workError) throw workError.reason
+                        if (freshError) throw freshError
+                        continue
+                    }
+                    await afterBatch?.()
+                }
+            } else {
+                for (const page of pages) {
+                    await withLogBatch(() => processPage(page))
+                    if (!priority) await afterBatch?.()
+                }
             }
         }
     }

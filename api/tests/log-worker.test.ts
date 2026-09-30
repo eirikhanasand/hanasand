@@ -323,6 +323,26 @@ test('fresh committed events are processed even when a writer prevents a stable 
     expect(cursor.recent_id).toBe('100')
 })
 
+test('durable process pages overlap without taking the correlation lock', async () => {
+    fresh = []; priority = []; watermark = '1000'; cursor.history_end_id = '750'
+    backlog = Array.from({ length: 750 }, (_, n) => makeLog(String(n + 1), { process: { executable: '/usr/bin/sed', command_line: 'sed' } }))
+    let active = 0, maximum = 0
+    const findings = await import('../src/handlers/events.ts')
+    const original = findings.persistEventFindings
+    const hook = spyOn(findings, 'persistEventFindings').mockImplementation(async rows => {
+        active++; maximum = Math.max(maximum, active)
+        await new Promise(resolve => setTimeout(resolve, 10))
+        try { await original(rows) } finally { active-- }
+    })
+    try {
+        await processStoredLogs()
+        expect(maximum).toBe(2)
+        expect(checked).toHaveLength(750)
+        expect(cursor.last_id).toBe('750')
+        expect(statements.some(sql => sql.includes('event:log-batch'))).toBe(false)
+    } finally { hook.mockRestore() }
+})
+
 
 test('fresh arrivals are serviced between durable historical pages', async () => {
     let clock = 0
