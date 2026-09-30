@@ -8,9 +8,9 @@ import type { Metrics } from './throughputMetrics'
 export type LogsPageProps = {
     searchParams?: Promise<Record<string, string | string[] | undefined>>
 }
-type LogsPageRenderProps = LogsPageProps & { loadThroughputMetrics?: boolean }
+type LogsPageRenderProps = LogsPageProps & { loadThroughputMetrics?: boolean, fillViewport?: boolean }
 
-export default async function LogsPage({ searchParams, loadThroughputMetrics = false }: LogsPageRenderProps) {
+export default async function LogsPage({ searchParams, loadThroughputMetrics = false, fillViewport = false }: LogsPageRenderProps) {
     const Cookies = await cookies()
     const params = await searchParams
     const serviceParam = Array.isArray(params?.service) ? params?.service[0] : params?.service
@@ -30,8 +30,8 @@ export default async function LogsPage({ searchParams, loadThroughputMetrics = f
     }
 
     return (
-        <DashboardPage className='gap-4 px-2 py-4'>
-            <main className='grid gap-5' data-logs-dashboard>
+        <DashboardPage className={`gap-4 px-2 py-4 ${fillViewport ? 'h-full min-h-0 grid-rows-[minmax(0,1fr)]' : ''}`}>
+            <main className={`grid gap-5 ${fillViewport ? 'h-full min-h-0 grid-rows-[minmax(0,1fr)]' : ''}`} data-logs-dashboard>
                 <LogsPageClient
                     initialServiceFilter={serviceParam || 'all'}
                     initialMetrics={initialMetrics}

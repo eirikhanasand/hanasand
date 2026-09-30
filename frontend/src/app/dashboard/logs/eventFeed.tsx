@@ -2,7 +2,7 @@
 import { Component, createRef, type ReactNode } from 'react'
 
 // Keep the reader's position when new detections arrive above the event being read.
-export default class EventFeed extends Component<{ children: ReactNode, rows: unknown[] }> {
+export default class EventFeed extends Component<{ children: ReactNode, rows: unknown[], fill?: boolean }> {
     private viewport = createRef<HTMLDivElement>()
     getSnapshotBeforeUpdate(previous: Readonly<{ rows: unknown[] }>) {
         const node = this.viewport.current
@@ -13,6 +13,6 @@ export default class EventFeed extends Component<{ children: ReactNode, rows: un
         if (node && snapshot) node.scrollTop = snapshot.top + node.scrollHeight - snapshot.height
     }
     render() {
-        return <div ref={this.viewport} data-logs-scroll style={{ overflowAnchor: 'none' }} className='max-h-[70vh] overflow-auto'>{this.props.children}</div>
+        return <div ref={this.viewport} data-logs-scroll style={{ overflowAnchor: 'none' }} className={`overflow-auto ${this.props.fill ? 'min-h-0 flex-1' : 'max-h-[70vh]'}`}>{this.props.children}</div>
     }
 }
