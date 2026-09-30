@@ -2,7 +2,7 @@ import DomainSelector from '@/components/monitoring/traffic/domainSelector'
 import TrafficRecentClient from './pageClient'
 import { Suspense } from 'react'
 import { getTrafficDomains, getTrafficRecords } from '@/utils/monitoring/data'
-import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
+import { DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import type { TrafficDomains, TrafficRecords } from '@/utils/monitoring/types'
 
 export const dynamic = 'force-dynamic'
@@ -14,13 +14,11 @@ export default async function Page({ searchParams }: {
     const selectedDomain = typeof params.domain === 'string' ? params.domain : undefined
 
     return (
-        <DashboardPage>
-            <DashboardHeader eyebrow='Traffic' title='Recent traffic' description='The latest requests, updated while you watch.' />
+        <DashboardPage className='h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden'>
             <header>
                 <h1 className='text-xl font-semibold text-ui-text sm:text-2xl'>Recent traffic</h1>
-                <p className='mt-1 text-sm text-ui-muted'>The latest requests, refreshed while you watch.</p>
             </header>
-            <Suspense key={selectedDomain || 'all'} fallback={<DashboardPanel className='p-4'><p role='status'>Loading recent traffic…</p></DashboardPanel>}>
+            <Suspense key={selectedDomain || 'all'} fallback={<DashboardPanel className='min-h-0 p-4'><p role='status'>Loading recent traffic…</p></DashboardPanel>}>
                 <RecentTraffic selectedDomain={selectedDomain} />
             </Suspense>
         </DashboardPage>
@@ -29,7 +27,7 @@ export default async function Page({ searchParams }: {
 
 async function RecentTraffic({ selectedDomain }: { selectedDomain?: string }) {
     const [domains, records] = await Promise.all([
-        getTrafficDomains(), getTrafficRecords(selectedDomain, 200, 1),
+        getTrafficDomains(), getTrafficRecords(selectedDomain, 100, 1),
     ])
 
     if (!isTrafficDomains(domains) || !isTrafficRecords(records)) {
@@ -37,7 +35,7 @@ async function RecentTraffic({ selectedDomain }: { selectedDomain?: string }) {
     }
 
     return (
-        <div className='grid min-w-0 gap-4'>
+        <div className='grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] gap-4'>
             <DashboardPanel className='p-3'>
                 <DomainSelector domains={domains.domains} selectedDomain={selectedDomain} />
             </DashboardPanel>

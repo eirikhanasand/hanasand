@@ -1,5 +1,6 @@
 'use client'
 
+import type { RefObject, UIEvent } from 'react'
 import formatRequestTime from '@/utils/monitoring/formatRequestTime'
 
 import { Activity, Clock, AlertTriangle } from 'lucide-react'
@@ -134,17 +135,25 @@ export default function TrafficDashboard({ metrics, selectedDomain }: TrafficDas
     )
 }
 
-export function RecentTrafficTable({ records }: { records: TrafficRecord[] }) {
+export function RecentTrafficTable({ records, scrollContainerRef, hasMore, loadingMore, loadError, onLoadMore, onScroll }: {
+    records: TrafficRecord[]
+    scrollContainerRef: RefObject<HTMLDivElement | null>
+    hasMore: boolean
+    loadingMore: boolean
+    loadError: string | null
+    onLoadMore: () => void
+    onScroll: (event: UIEvent<HTMLDivElement>) => void
+}) {
     return (
-        <div className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm'>
-            <div className='border-b border-ui-border p-4'>
+        <div className='flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm'>
+            <div className='shrink-0 border-b border-ui-border p-4'>
                 <h2 className='text-lg font-semibold text-ui-text'>Recent traffic</h2>
                 <p className='mt-1 text-sm text-ui-muted'>{records.length} latest requests</p>
             </div>
-            {records.length ? (
-                <div className='overflow-x-auto'>
+            {records.length || hasMore ? (
+                <div ref={scrollContainerRef} role='region' aria-label='Recent traffic requests' tabIndex={0} onScroll={onScroll} className='min-h-0 flex-1 overflow-auto overscroll-contain'>
                     <table className='w-full min-w-[44rem] table-fixed text-left text-sm'>
-                        <thead className='bg-ui-raised text-xs uppercase text-ui-muted'>
+                        <thead className='sticky top-0 z-10 bg-ui-raised text-xs uppercase text-ui-muted'>
                             <tr>
                                 <th className='px-4 py-3'>Date</th>
                                 <th className='px-4 py-3'>Method</th>
@@ -171,6 +180,9 @@ export function RecentTrafficTable({ records }: { records: TrafficRecord[] }) {
                             ))}
                         </tbody>
                     </table>
+                    {loadError ? <div role='alert' className='flex items-center justify-between gap-3 border-t border-ui-border p-3 text-sm text-ui-muted'><span>{loadError}</span><button type='button' onClick={onLoadMore} className='shrink-0 font-medium text-ui-primary hover:underline'>Retry</button></div> : null}
+                    {loadingMore ? <p role='status' className='border-t border-ui-border p-3 text-center text-xs text-ui-muted'>Loading requests…</p> : null}
+                    {hasMore ? <button type='button' onClick={onLoadMore} className='w-full border-t border-ui-border p-3 text-xs text-ui-muted hover:bg-ui-raised hover:text-ui-text'>Load 10 more requests</button> : null}
                 </div>
             ) : (
                 <p className='p-4 text-sm text-ui-muted'>No recent traffic has been recorded yet.</p>

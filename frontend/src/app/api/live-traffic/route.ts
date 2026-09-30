@@ -23,12 +23,16 @@ export async function GET(request: NextRequest) {
         if (after) liveScope.set('after', after)
 
         if (request.nextUrl.searchParams.get('mode') === 'snapshot') {
+            const requestedLimit = Number(request.nextUrl.searchParams.get('limit'))
+            const snapshotLimit = Number.isSafeInteger(requestedLimit) && requestedLimit > 0
+                ? Math.min(requestedLimit, 200)
+                : 200
             const [metrics, records] = await Promise.all([
                 fetch(`${config.url.cdn}/traffic/metrics?${scope}`, {
                     headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
                     cache: 'no-store',
                 }),
-                fetch(`${config.url.cdn}/traffic/records?limit=200&page=1&${scope}`, {
+                fetch(`${config.url.cdn}/traffic/records?limit=${snapshotLimit}&page=1&${scope}`, {
                     headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
                     cache: 'no-store',
                 }),
