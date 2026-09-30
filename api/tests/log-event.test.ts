@@ -73,3 +73,18 @@ test('deadlocks outside log ingest use the default error severity', () => {
 
     expect(event.severity).toBe('medium')
 })
+
+test('base normalization can skip derived severity before retention', () => {
+    const event = normalizeLogEvent({
+        id: 'base',
+        service: 'hanasand-api',
+        level: 'error',
+        message: 'deadlock detected',
+        created_at: '2026-09-28T00:00:00.000Z',
+        metadata: { log_type: 'HttpLogs', method: 'POST', path: '/api/logs/ingest' },
+    }, undefined, { classify: false, includeSeverity: false })
+
+    expect(event.severity).toBeUndefined()
+    expect(event.outcome).toBe('failure')
+    expect(event.http).toMatchObject({ path: '/api/logs/ingest', method: 'POST' })
+})

@@ -69,13 +69,21 @@ async function prepareLog({
             ? metadata.tenantId
             : null
     if (!retention.has(scopeId || '')) retention.set(scopeId || '', await loadLogRetentionRules(scopeId, query))
-    const classification = classifyApplicationError({ service, level, message, metadata }, retention.get(scopeId || ''))
-    if (classification) { level = classification.level; metadata = classification.metadata }
     const redactedMessage = redactLogText(message)
     const redactedMetadata = redactLogValue(metadata) as Record<string, unknown>
+    const baseLog = { id: sourceEventId || '', service, host, level,
+        message: redactedMessage, metadata: redactedMetadata, created_at: timestamp || new Date() }
+    const baseNormalized = normalizeLogEvent(baseLog, undefined, { classify: false, includeSeverity: false })
+    const retentionAction = Object.hasOwn(metadata, 'unrecognized_ingest_fields') ? 'keep' : customRetentionAction(baseNormalized, retention.get(scopeId || '')!)
+    if (retentionAction === 'drop') {
+        await recordCustomDropReceipts(baseNormalized, retention.get(scopeId || '')!, sourceEventId, scopeId || undefined, query)
+        return
+    }
+
+    const classification = classifyApplicationError(baseLog, retention.get(scopeId || ''))
+    if (classification) { level = classification.level; metadata = classification.metadata }
     const normalized = normalizeLogEvent({ id: sourceEventId || '', service, host, level,
-        message: redactedMessage, metadata: redactedMetadata, created_at: timestamp || new Date() }, retention.get(scopeId || ''))
-    const retentionAction = Object.hasOwn(metadata, 'unrecognized_ingest_fields') ? 'keep' : customRetentionAction(normalized, retention.get(scopeId || '')!)
+        message: redactedMessage, metadata, created_at: timestamp || new Date() }, retention.get(scopeId || ''))
     // Explicit Store exceptions must win before any built-in analyzer can drop.
     if (retentionAction !== 'keep') {
         if (await analyzeModelDiscovery({ service, host, level, message, metadata, sourceEventId, timestamp }, query === run ? undefined : query)) return
@@ -88,10 +96,6 @@ async function prepareLog({
     }
     message = redactedMessage
     metadata = redactedMetadata
-    if (retentionAction === 'drop') {
-        await recordCustomDropReceipts(normalized, retention.get(scopeId || '')!, sourceEventId, scopeId || undefined, query)
-        return
-    }
     if (retentionAction !== 'keep' && await analyzeIngestion({ service, host, level, message, metadata, sourceEventId, timestamp }, query === run ? undefined : query)) return
     if (retentionAction !== 'keep' && await analyzeProxy({ service, host, level, message, metadata, sourceEventId, timestamp }, query === run ? undefined : query)) return
     if (!scopeId && isOrganizationRequest(metadata)) {
