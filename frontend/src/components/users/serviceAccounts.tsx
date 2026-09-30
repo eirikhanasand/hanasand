@@ -124,7 +124,7 @@ export default function ServiceAccounts() {
                             try { await navigator.clipboard.writeText(secret); setCopied(true); setCopyError('') }
                             catch { setCopyError('Could not copy automatically. Select the key above and copy it.'); setCopied(false) }
                         }}>{copied ? <Check className='h-4 w-4' aria-hidden='true' /> : <Copy className='h-4 w-4' aria-hidden='true' />}<span aria-live='polite'>{copied ? 'Copied' : 'Copy key'}</span></button>
-                        <button type='button' className='rounded-lg border border-ui-primary/25 px-3 py-2 text-sm font-medium text-ui-on-primary transition hover:bg-ui-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary' onClick={() => { setSecret(''); setCopied(false); setCopyError('') }}>Dismiss key</button>
+                        <button type='button' className='rounded-lg border border-ui-border bg-white px-3 py-2 text-sm font-medium text-black transition hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary' onClick={() => { setSecret(''); setCopied(false); setCopyError('') }}>Dismiss key</button>
                     </div>
                 </div>
                 {copyError && <p role='alert' className='text-sm text-ui-text'>{copyError}</p>}
