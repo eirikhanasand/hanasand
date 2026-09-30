@@ -152,7 +152,7 @@ export default function Header({ token, path: serverPath, initialMode = 'normal'
                     <Link href={pricingHref} className='inline-flex h-10 min-w-20 items-center justify-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Pricing</Link>
                 </nav>
 
-                <div className='flex shrink-0 items-center justify-end gap-1 sm:gap-2'>
+                <div className='flex min-w-0 flex-1 items-center justify-end gap-1 sm:gap-2'>
                     {token && <OrganizationSwitcher />}
                     <SiteSearch token={token} />
                     <span className='[&_button]:w-10'><ThemeSwitch /></span>

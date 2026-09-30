@@ -138,8 +138,8 @@ export default function WorkspaceProvider({ initial, enabled: authenticated, ser
 }
 export function OrganizationSwitcher() {
     const { organizationId, organizationName, organizations, loading, unavailable, switching, canSwitchOrganization, switchOrganization } = useWorkspace()
-    return <label className='relative flex min-w-0 items-center text-sm font-semibold text-ui-text'>
-        <select aria-label='Org' aria-busy={loading || switching} value={organizationId} disabled={loading || switching || unavailable || !canSwitchOrganization} onChange={event => void switchOrganization(event.target.value)} className='h-10 min-w-0 max-w-20 appearance-none rounded-lg border border-ui-border bg-ui-panel px-2 pr-8 text-sm text-ui-text sm:max-w-48'>
+    return <label className='relative flex min-w-12 max-w-64 flex-1 items-center text-sm font-semibold text-ui-text'>
+        <select aria-label='Org' aria-busy={loading || switching} value={organizationId} disabled={loading || switching || unavailable || !canSwitchOrganization} onChange={event => void switchOrganization(event.target.value)} className='h-10 w-full min-w-0 appearance-none rounded-lg border border-ui-border bg-ui-panel px-2 pr-8 text-sm text-ui-text'>
             <option value=''>Personal workspace</option>
             {organizationId && !organizations.some(org => org.id === organizationId) && <option value={organizationId}>{loading || unavailable ? organizationName || 'Loading organization…' : 'Organization unavailable'}</option>}
             {organizations.map(org => <option key={org.id} value={org.id} disabled={org.lifecycleStatus !== 'active'}>{org.name || org.slug || org.id}</option>)}
