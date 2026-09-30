@@ -89,8 +89,11 @@ mock.module('../src/handlers/events.ts', () => ({
 const { processStoredLogs, processLiveLogs } = await import('../src/utils/events/processLogs.ts')
 const originalLimit = process.env.LOG_CATCHUP_BATCH_LIMIT
 const originalHistoryLimit = process.env.LOG_CATCHUP_HISTORY_LIMIT
+const originalProcessorOnly = process.env.LOG_PROCESSOR_ONLY
 afterEach(() => { if (originalHistoryLimit === undefined) delete process.env.LOG_CATCHUP_HISTORY_LIMIT; else process.env.LOG_CATCHUP_HISTORY_LIMIT = originalHistoryLimit })
+afterEach(() => { if (originalProcessorOnly === undefined) delete process.env.LOG_PROCESSOR_ONLY; else process.env.LOG_PROCESSOR_ONLY = originalProcessorOnly })
 beforeEach(() => { delete process.env.LOG_CATCHUP_HISTORY_LIMIT })
+beforeEach(() => { delete process.env.LOG_PROCESSOR_ONLY })
 beforeEach(() => { queueLimits = []; acknowledged = []; transactions = []; transactionQueries = []; transactionStatements = []; failHistory = false; additionalCursorQuery = undefined })
 afterEach(() => { if (originalLimit === undefined) delete process.env.LOG_CATCHUP_BATCH_LIMIT; else process.env.LOG_CATCHUP_BATCH_LIMIT = originalLimit })
 beforeEach(() => { delete process.env.LOG_CATCHUP_BATCH_LIMIT; historyScans = []; inactiveScopes = new Set(['inactive']); watermark = '200'; additionalRuns = 0; queueRuns = 0; recoveryRuns = 0; locked = true; fail = false; delayed = false; historyLimits = []; recentLimits = []; queueModes = []; recoveryLimits = []; reads = []; cursor = { last_id: '0', recent_id: '100' }; statements = []; checked = []; stored = {}; pending = []; priority = []; fresh = [makeLog('101')]; backlog = [makeLog('1')] })
@@ -128,6 +131,20 @@ test('delayed command work keeps its longer budget while catch-up uses the confi
     expect(checked).toHaveLength(500); expect(new Set(checked).size).toBe(500)
     expect(Object.values(stored).every(row => row.processing_status === 'processed')).toBe(true)
     expect(queueRuns).toBe(2); expect(recoveryRuns).toBe(2)
+})
+
+test('dedicated worker keeps every page and queue batch within its durable limit', async () => {
+    process.env.LOG_PROCESSOR_ONLY = '1'
+    process.env.LOG_CATCHUP_BATCH_LIMIT = '1000'
+    process.env.LOG_CATCHUP_HISTORY_LIMIT = '1000'
+    fresh = []; priority = []; backlog = [makeLog('1')]
+
+    await processStoredLogs()
+
+    expect(reads.length).toBeGreaterThan(0)
+    expect(reads.every(read => read.params[2] === 25)).toBe(true)
+    expect(historyLimits).toEqual([25]); expect(recentLimits).toEqual([25])
+    expect(recoveryLimits).toEqual([25]); expect(queueLimits).toEqual([25])
 })
 test('failed findings roll back the event and preserve cursors for successful retry', async () => {
     fail = true
@@ -395,7 +412,7 @@ test('durable authentication login pages keep the correlation lock', async () =>
     await processStoredLogs()
 
     expect(checked).toEqual(['1', '2'])
-    expect(statements.filter(sql => sql.includes('event:log-batch'))).toHaveLength(1)
+    expect(statements.filter(sql => sql.includes('event:log-batch'))).toHaveLength(2)
 })
 
 test('authentication correlation releases the shared lock between bounded pages', async () => {
@@ -405,7 +422,7 @@ test('authentication correlation releases the shared lock between bounded pages'
     await processStoredLogs()
 
     expect(checked).toHaveLength(51)
-    expect(statements.filter(sql => sql.includes('event:log-batch'))).toHaveLength(3)
+    expect(statements.filter(sql => sql.includes('event:log-batch'))).toHaveLength(51)
 })
 
 

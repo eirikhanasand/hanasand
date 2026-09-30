@@ -14,7 +14,9 @@ import { accessRuleId } from './analyzeAccess.ts'
 import { withLogBatch } from './logBatch.ts'
 
 let running = false
-const AUTH_CORRELATION_PAGE_SIZE = 25
+// Keep a slow login's correlation work from holding the global lock for a batch.
+const AUTH_CORRELATION_PAGE_SIZE = 1
+const DEDICATED_LOG_BATCH_LIMIT = 25
 // Stateless results commit atomically with their findings; authentication keeps
 // durable pending history for correlation. Stable identities make retries safe.
 export async function processLog(log: LogInput, organizationId: string, rules: Awaited<ReturnType<typeof loadConfiguredRules>>) {
@@ -269,7 +271,12 @@ export async function processStoredLogs() {
         // Operators can temporarily bound catch-up during replication recovery.
         // Fresh command admission and the event-time priority pass remain unchanged.
         const settings = readLogCatchupSettings()
-        const configuredLimit = settings.limit
+        // The dedicated worker commits cursor/progress state once a pass ends.
+        // Keep each pass deliberately small even if a deployment tuning changes.
+        const dedicatedWorker = process.env.LOG_PROCESSOR_ONLY === '1'
+        const configuredLimit = dedicatedWorker ? Math.min(settings.limit, DEDICATED_LOG_BATCH_LIMIT) : settings.limit
+        const configuredHistoryLimit = dedicatedWorker ? Math.min(settings.historyLimit, DEDICATED_LOG_BATCH_LIMIT) : settings.historyLimit
+        const queueLimit = dedicatedWorker ? configuredLimit : 1000
         // The transaction owns the lock connection until both cursors are durable.
         // Another replica skips this tick instead of duplicating the same work.
         let didWork = false, advanced = false
@@ -308,7 +315,7 @@ export async function processStoredLogs() {
             const { rows: [queue] } = await run(`SELECT COALESCE((SELECT queued_at < clock_timestamp() - INTERVAL '60 seconds'
                 FROM log_process_queue ORDER BY queued_at, log_id LIMIT 1), FALSE) AS delayed`)
             // Command checks must not inherit the historical replication throttle.
-            await processQueuedLogs(processScopes, queue.delayed)
+            await processQueuedLogs(processScopes, queue.delayed, queueLimit)
             await processFresh()
             await recoverProcessLogs(processScopes, configuredLimit)
             await processFresh()
@@ -318,7 +325,7 @@ export async function processStoredLogs() {
             // delayed. Keep the configured service-log page size so catch-up
             // does not fall behind new arrivals indefinitely.
             const catchupLimit = Math.min(1000, configuredLimit)
-            const historyLimit = Math.min(queue.delayed ? 100 : 10000, settings.historyLimit)
+            const historyLimit = Math.min(queue.delayed ? 100 : 10000, configuredHistoryLimit)
             const beforeHistory = historyLimit > catchupLimit ? () => processQueuedLogs(processScopes, false) : undefined
             const processPage = async (after: string, until: string, pageLimit = catchupLimit) => {
                 const candidates = await run('SELECT id FROM service_logs WHERE id > $1 AND id <= $2 ORDER BY id LIMIT 10000', [after, until])
