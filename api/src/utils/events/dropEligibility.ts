@@ -1,5 +1,6 @@
-// Low-only is the rule creation invariant. Storage protection policy is read
-// from enabled analysis rules by customRetention.
-export function eligibleCustomDrop(event: Record<string, unknown>): boolean {
-    return event.severity === 'low'
+// Drop selectors are retention predicates, not severity classifiers. Severity
+// is kept for triage and detection; it must not decide whether a selector can
+// match. Evidence protection is evaluated separately by customRetention.
+export function eligibleCustomDrop(_event: Record<string, unknown>): boolean {
+    return true
 }

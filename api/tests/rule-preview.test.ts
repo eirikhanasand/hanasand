@@ -30,11 +30,11 @@ const scanRulePreview: typeof scan = (org, canReadLogs, input, query) => scan(or
         ? { rows: [{ enabled: true, definition: eventProtectionDefinition }] } : query!(sql, params)) as any)
 const input = { from: '2026-09-01T00:00:00Z', until: '2026-09-02T00:00:00Z', action: 'drop' as const, conditions: [{ path: 'http.status_code', operator: 'equals' as const, value: '200' }] }
 const row = (id: number, severity = 'low', status = 200) => ({ id: String(id), timestamp: '2026-09-01 12:00:00.123456+00', normalized: { severity, http: { status_code: status }, service: `service-${id % 7}`, message: 'x'.repeat(1000) } })
-test('preview uses runtime selectors and excludes higher and unknown severities for Drop', async () => {
+test('preview uses runtime selectors regardless of event severity for Drop', async () => {
     const query = async (sql: string, params: unknown[]) => {
         expect(sql).toContain('organization_id=$1 AND ingestion_id <> \'logs\'')
         expect(sql).toContain('received_at <= $2::timestamptz')
-        expect(sql).toContain('normalized->>\'severity\' = \'low\'')
+        expect(sql).not.toContain('normalized->>\'severity\' = \'low\'')
         expect(sql).not.toContain('($4::timestamptz IS NULL OR event_timestamp >= $4::timestamptz)')
         expect(sql).not.toContain('($5::timestamptz IS NULL OR (event_timestamp,id)')
         expect(params.slice(0, 3)).toEqual(['org-a', input.until, input.from])
@@ -44,8 +44,8 @@ test('preview uses runtime selectors and excludes higher and unknown severities 
         return { rows: [row(1), row(2, 'high'), row(3, 'unknown'), row(4, 'low', 404)] }
     }
     const page = await scanRulePreview('org-a', false, input, query as any)
-    expect(page.count).toBe(1)
-    expect(page.events.map(event => event.id)).toEqual(['1'])
+    expect(page.count).toBe(3)
+    expect(page.events.map(event => event.id)).toEqual(['1', '2', '3'])
     expect(page.events[0].normalized.message).toHaveLength(500)
     expect(page.cursor).toBeNull()
 })

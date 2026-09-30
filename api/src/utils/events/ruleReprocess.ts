@@ -4,7 +4,6 @@ import run, { withTransaction } from '#db'
 import { normalizeLogEvent, type LogInput } from './logEvent.ts'
 import { storedSourceLog } from './storedSources.ts'
 import { loadLogRetentionRules, retentionStoreMatches } from './customRetention.ts'
-import { eligibleCustomDrop } from './dropEligibility.ts'
 import { collectEventFindings, loadConfiguredRules, normalizeEvent } from '../../handlers/events.ts'
 import { matchRulePage } from './rulePreview.ts'
 import { messageCandidatePredicate } from './previewPredicate.ts'
@@ -161,8 +160,7 @@ export async function reprocessRuleItems(items: Item[], job: Pick<ReprocessJob, 
     const matches = (await matchRulePage(items.map(item => item.event), rule.definition.conditions)).map(index => items[index])
     const storageRules = await loadLogRetentionRules(job.organization_id, query)
     const detectors = await loadConfiguredRules(job.organization_id, query)
-    const protectedEvent = (event: Record<string, unknown>) => !eligibleCustomDrop(event)
-        || Boolean((event.metadata as Record<string, unknown>)?.unrecognized_ingest_fields)
+    const protectedEvent = (event: Record<string, unknown>) => Boolean((event.metadata as Record<string, unknown>)?.unrecognized_ingest_fields)
         || collectEventFindings(job.organization_id, '', normalizeEvent(event,
             { vendor: event.source_vendor, product: event.source_product }), detectors).findings.length > 0
     const keeps = storageRules.filter(r => r.definition?.action === 'keep' && !r.definition.protection && r.definition.conditions?.length)

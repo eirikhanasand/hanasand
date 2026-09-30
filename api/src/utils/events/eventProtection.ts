@@ -21,7 +21,6 @@ const selfIngestionException = (sourceIp: string): Condition[] => [
 const selfIngestionExceptions = [selfIngestionException('128.39.142.218'), selfIngestionException('192.99.32.185')]
 export const eventProtectionDefinition = { match: 'all' as const, stage: 'analyze' as const, action: 'keep' as const, conditions: [], protection: { appliesTo: 'custom_drop', checks: [
     { keys: ['detections', 'signature', 'signature_id', 'error', 'errors', 'exception', 'failure', 'failed', 'err', 'errmsg', 'errCode', 'errName', 'errorCode', 'protected', 'suspicious'], operator: 'signal' },
-    { keys: ['severity', 'level'], operator: 'in', values: ['medium', 'high', 'critical', 'warn', 'warning', 'error', 'fatal'] },
     { keys: ['level'], operator: 'numberAtLeast', value: 40 },
     { keys: ['outcome', 'status'], operator: 'in', values: ['failure', 'failed', 'error', 'denied', 'blocked', 'timeout', 'timed_out'] },
     { keys: ['success', 'ok'], operator: 'in', values: [false, 0] },

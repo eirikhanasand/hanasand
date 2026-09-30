@@ -583,7 +583,6 @@ export async function putRule(req: FastifyRequest<{ Params: { id: string } }>, r
 class RuleConflict extends Error { constructor() { super('This rule changed since you opened it. Reload the rule before saving again.') } }
 
 async function saveRule(req: FastifyRequest, access: { organizationId: string, userId: string }, rule: Rule, action: string, expectedVersion?: string, preserveEnabled = false) {
-    if (rule.definition?.action === 'drop') rule = { ...rule, severity: 'low' }
     const saved = await withTransaction(async query => {
         // Serialize edits even when a built-in rule has no organization override yet.
         await query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`event-rule:${access.organizationId}:${rule.id}`])
@@ -662,7 +661,7 @@ async function loadConfiguredRulesUncached(organizationId: string, query: typeof
         .map(row => ({
             id: String(row.rule_id), recordId: String(row.id), version: String(row.version), name: String(row.name), family: String(row.family), severity: String(row.severity), explanation: String(row.explanation), evidence: eventConditionEvidence(row.definition), enabled: Boolean(row.enabled), source: (row.source === 'open_source' ? 'open_source' : 'owned') as 'open_source' | 'owned', sourceReference: typeof row.source_reference === 'string' ? row.source_reference : undefined, definition: row.definition as Rule['definition'],
         }))
-    return [...builtIns, ...custom].map(rule => rule.definition?.action === 'drop' ? { ...rule, severity: 'low' } : rule)
+    return [...builtIns, ...custom]
 }
 
 function enabledRules(event: NormalizedEvent, rules: Rule[]) {

@@ -276,7 +276,7 @@ test('custom Analyze rules drop before storage and retain audited Store exceptio
     expect(denied.statusCode).toBe(403)
     systemAdmin = true
     const created = await postRule(request('', body), reply() as any)
-    expect(created.rule.severity).toBe('low')
+    expect(created.rule.severity).toBe('critical')
     expect(created.rule.definition).toMatchObject({ stage: 'analyze', action: 'drop' })
     rows.push({ ...eventProtectionRule, rule_id: eventProtectionRule.id, organization_id: 'org-a', source: 'hanasand', definition: structuredClone(eventProtectionDefinition) })
     expect(await ingestEvent(request('', benign), reply() as any)).toMatchObject({ accepted_events: 1, stored_events: 0, dropped_events: 1 })
@@ -346,15 +346,16 @@ test('preview requires organization membership and validates the submitted selec
     expect(invalid.statusCode).toBe(400)
 })
 
-test('Drop remains Low on edit and high or unclassified events are retained', async () => {
+test('Drop rule severity metadata is independent from matched event severity', async () => {
     systemAdmin = true
     const body = { name: 'Drop low network events', explanation: 'Drop only routine low severity network events.', severity: 'critical', stage: 'analyze', action: 'drop', conditions: [{ path: 'event_type', operator: 'equals', value: 'network' }] }
     const created = await postRule(request('', body), reply() as any)
     const saved = await putRule(request(created.rule.id, { ...body, severity: 'high', version: created.rule.version, enabled: true }), reply() as any)
-    expect(saved.rule.severity).toBe('low')
-    for (const severity of ['medium', 'high', 'critical', undefined]) {
-        const result = await ingestEvent(request('', { ...network, events: network.events.map(event => ({ ...event, severity })) }), reply() as any)
-        expect(result).toMatchObject({ stored_events: 1, dropped_events: 0 })
+    expect(saved.rule.severity).toBe('high')
+    const dropEvent = { source: {}, events: [{ timestamp: '2026-09-14T12:00:00Z', event_type: 'network', action: 'heartbeat' }] }
+    for (const severity of ['low', 'medium', 'high', 'critical', undefined]) {
+        const result = await ingestEvent(request('', { ...dropEvent, events: dropEvent.events.map(event => ({ ...event, severity })) }), reply() as any)
+        expect(result).toMatchObject({ stored_events: 0, dropped_events: 1 })
     }
 })
 
@@ -401,11 +402,11 @@ test.each(['postgresql.readiness_audit.v1', 'model.verified_discovery_probes.v1'
 })
 
 
-test('existing Drop rules expose Low while Store rules retain their configured severity', async () => {
+test('Drop and Store rules retain their configured severity metadata', async () => {
     systemAdmin = true
     const created = await postRule(request('', { name: 'Old drop rule', explanation: 'An older rule that dropped matching network events.', severity: 'high', stage: 'analyze', action: 'drop', conditions: [{ path: 'event_type', operator: 'equals', value: 'network' }] }), reply() as any)
     rows[0].severity = 'critical'
-    expect((await getRule(request(created.rule.id), reply() as any)).rule.severity).toBe('low')
+    expect((await getRule(request(created.rule.id), reply() as any)).rule.severity).toBe('critical')
     rows[0].definition.action = 'keep'
     expect((await getRule(request(created.rule.id), reply() as any)).rule.severity).toBe('critical')
 })

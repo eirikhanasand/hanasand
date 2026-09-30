@@ -44,7 +44,7 @@ async function scanRulePreviewUncached(organizationId: string, canReadLogs: bool
     const candidates = options.storedLogsOnly ? storageEstimatePredicate(input.conditions, params) : 'TRUE'
     const rules = input.action === 'drop' ? options.retentionRules ?? await loadLogRetentionRules(organizationId, query) : []
     const result = await query(`SELECT id, event_timestamp::text AS timestamp, normalized, pg_column_size(events)::bigint AS bytes${input.action === 'drop' ? ', original' : ''}
-        FROM events WHERE ${scope.join(' AND ')}${input.action === 'drop' ? ' AND normalized->>\'severity\' = \'low\'' : ''} AND (${candidates})
+        FROM events WHERE ${scope.join(' AND ')} AND (${candidates})
         ORDER BY event_timestamp DESC, id DESC LIMIT ${limitParameter}`, params)
     const eligible = result.rows.filter(row => input.action !== 'drop' || eligibleCustomDrop(row.normalized || {})
         && !retentionStoreMatches(row.normalized || {}, rules) && !retentionStoreMatches(row.original || {}, rules)) as PreviewEvent[]

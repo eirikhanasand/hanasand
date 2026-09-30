@@ -1,26 +1,31 @@
 import { applicationErrorRuleId } from './applicationError.ts'
 import run from '#db'
 import { matchesEventProtection, normalizeEventProtection, type EventProtectionPolicy } from './eventProtection.ts'
-import { eligibleCustomDrop } from './dropEligibility.ts'
 import { matchesRule, type Condition } from './conditions.ts'
 import { createHash, randomUUID } from 'node:crypto'
 
 export type RetentionRule = { id?: string, organization_id?: string, version?: string, severity?: string, source?: string, enabled?: boolean, definition?: { stage?: string, action?: string, conditions?: Condition[], storeScope?: 'custom_drop' | 'all', protection?: EventProtectionPolicy } }
 
 export function customRetentionAction(event: Record<string, unknown>, rules: RetentionRule[]): 'drop' | 'keep' | undefined {
+    // Evaluate cheap Drop selectors first, then apply Store/protection rules as
+    // a deterministic safety barrier. Rule array order cannot change outcome.
+    const matches = matchingCustomDropRules(event, rules)
+    if (!matches.length) return retentionStoreMatches(event, rules, 'all') ? 'keep' : undefined
     if (retentionStoreMatches(event, rules, 'all')) return 'keep'
-    if (matchingCustomDropRules(event, rules).length) return 'drop'
+    if (retentionStoreMatches(event, rules)) return
+    return 'drop'
 }
 
 export function matchingCustomDropRules(event: Record<string, unknown>, rules: RetentionRule[]) {
-    if (!eligibleCustomDrop(event) || retentionStoreMatches(event, rules)) return []
     const match = rules.find(rule => rule.source === 'owned' && rule.enabled !== false && rule.definition?.stage === 'analyze'
         && rule.definition.action === 'drop' && rule.definition.conditions?.length && matchesRule(event, rule.definition.conditions))
     return match ? [match] : []
 }
 
 export async function recordCustomDropReceipts(event: Record<string, unknown>, rules: RetentionRule[], identity: string | undefined, organizationId?: string, query: typeof run = run) {
-    const matched = matchingCustomDropRules(event, rules).filter(rule => rule.id && rule.version && (rule.organization_id || organizationId))
+    const matches = matchingCustomDropRules(event, rules)
+    const matched = matches.length && !retentionStoreMatches(event, rules, 'all') && !retentionStoreMatches(event, rules)
+        ? matches.filter(rule => rule.id && rule.version && (rule.organization_id || organizationId)) : []
     if (!matched.length) return
     const eventIdentity = identity || randomUUID()
     await query(`INSERT INTO log_analyze_receipts(key,organization_id,rule_id,rule_version)

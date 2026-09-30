@@ -76,9 +76,8 @@ test('a failed lookup fails ingestion without acknowledging a lost log', async (
     expect(writes).toHaveLength(0)
 })
 
-test('only explicitly Low events can be dropped, including older broad rules', () => {
-    for (const severity of ['medium', 'high', 'critical', 'unknown', undefined, null]) expect(customRetentionAction({ event_type: 'application', severity }, [drop])).toBeUndefined()
-    expect(customRetentionAction({ event_type: 'application', severity: 'low' }, [drop])).toBe('drop')
+test('Drop selectors match regardless of event severity', () => {
+    for (const severity of ['low', 'medium', 'high', 'critical', 'unknown', undefined, null]) expect(customRetentionAction({ event_type: 'application', severity }, [drop])).toBe('drop')
 })
 
 test('persisted protection Store rules can be disabled or edited and win over Drop rules', () => {
