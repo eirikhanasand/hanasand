@@ -133,17 +133,6 @@ export async function listOrganizationApiKeys(organizationId: string, query: typ
     return summaries
 }
 
-export async function findEnabledOrganizationApiKey(organizationId: string, query: typeof run = run) {
-    const result = await query(`
-        SELECT id
-        FROM api_keys
-        WHERE organization_id = $1
-          AND enabled IS TRUE
-        LIMIT 1
-    `, [organizationId])
-    return result.rows[0]?.id as string | undefined
-}
-
 export function organizationPublicApiScopes(): ApiKeyScopeRule[] {
     const routes = [
         ['POST', '/mill'],

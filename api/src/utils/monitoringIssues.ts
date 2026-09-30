@@ -12,6 +12,7 @@ export const isServiceStatusCheck = (automation: Pick<AutomationRow, 'target_url
 
 export function monitoringIssueFingerprint(automation: Pick<AutomationRow, 'target_url' | 'monitoring_type' | 'json_rule'>, kind: string, message: string) {
     const targetUrl = monitoringTargetIdentity(automation.target_url)
+    if (automation.monitoring_type === 'push') return createHash('sha256').update(JSON.stringify(['push', targetUrl, kind])).digest('hex')
     // A job keeps its case when the blocker changes, including after recovery.
     if (targetUrl?.startsWith('system:cron:')) return createHash('sha256').update(targetUrl).digest('hex')
     // Synthetic service checks report changing ages, counts and affected sources.
@@ -49,8 +50,8 @@ export async function claimMonitoringNotification(automation: AutomationRow, iss
     })
 }
 
-export async function recordMonitoringOutcome(automation: AutomationRow, runId: string, kind: 'failure' | 'warning' | null, message: string) {
-    const issue = await withTransaction(async query => {
+export async function recordMonitoringOutcome(automation: AutomationRow, runId: string, kind: 'failure' | 'warning' | null, message: string, transactionQuery?: typeof run) {
+    const save = async (query: typeof run) => {
         await query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [monitoringScope(automation)])
         const check = (await query('SELECT issue_id FROM agent_automation_runs WHERE id = $1 FOR UPDATE', [runId])).rows[0]
         if (!check) throw new Error('Monitoring run was not found.')
@@ -83,12 +84,19 @@ export async function recordMonitoringOutcome(automation: AutomationRow, runId: 
         await query('INSERT INTO monitoring_issue_checks VALUES ($1,$2,true) ON CONFLICT(issue_id,automation_id) DO UPDATE SET active=true', [id, automation.id])
         await query('UPDATE agent_automation_runs SET issue_id = $2 WHERE id = $1', [runId, id])
         return id
-    })
+    }
+    const issue = await (transactionQuery ? save(transactionQuery) : withTransaction(save))
+    if (transactionQuery) return issue
     if (issue && kind === 'failure') {
         try { await attachDiskDiagnostics(String(issue), automation) }
         catch (error) { console.error('Disk diagnostics could not be attached:', error instanceof Error ? error.message : 'unknown error') }
     }
-    if (!issue || automation.notify_on === 'never' || kind === 'warning' && !automation.notify_warnings && automation.notify_on !== 'always') return
+    await notifyMonitoringOutcome(automation, runId, issue, kind)
+    return issue
+}
+
+export async function notifyMonitoringOutcome(automation: AutomationRow, runId: string, issue: string | null, kind: 'failure' | 'warning' | null) {
+    if (!issue || !kind || automation.notify_on === 'never' || kind === 'warning' && !automation.notify_warnings && automation.notify_on !== 'always') return
     // Use persisted check history so restarts and intermittent successes do not
     // bypass the grace period. Cases and their raw outcomes remain immediate.
     const history = await run(`SELECT id, status, warning, completed_at FROM agent_automation_runs

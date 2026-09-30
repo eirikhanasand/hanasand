@@ -22,6 +22,8 @@ Hanasand combines threat intelligence, AI development tools, and infrastructure 
 
 ## Monitoring issues
 
+External sensor hubs can submit incident, recovery and heartbeat events to an **External events** check. See [external monitoring](docs/external-monitoring.md) for the event schema, sender setup and mock.
+
 All monitoring alerts, including replication, backups and failover, must go through HA cases. Never post individual events directly to Discord. Repeated events update the same case; only that case may notify Discord, once per destination every 24 hours. Recovery and recurrence do not reset that limit.
 
 Each intelligence health check keeps the same case when its error changes, including connection failures. Collection, enrichment and delivery remain separate checks. When duplicate cases are merged, keep their old links, events, comments and notification history, and preserve the latest notification deadline.

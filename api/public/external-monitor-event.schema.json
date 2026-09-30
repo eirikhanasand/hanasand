@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "External monitoring event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventId", "sequence", "source", "type", "observedAt"],
+  "properties": {
+    "eventId": { "type": "string", "pattern": "^[A-Za-z0-9_.-]{1,128}$" },
+    "sequence": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+    "source": { "type": "string", "pattern": "^[A-Za-z0-9_./:-]{1,128}$" },
+    "type": { "enum": ["incident", "recovery", "heartbeat"] },
+    "observedAt": { "type": "string", "format": "date-time" },
+    "message": { "type": "string", "minLength": 1, "maxLength": 2000, "pattern": "\\S" },
+    "details": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "podId": { "type": "string", "maxLength": 256 },
+        "sensorId": { "type": "string", "maxLength": 256 },
+        "location": { "type": "string", "maxLength": 256 },
+        "value": { "type": ["number", "boolean"] },
+        "unit": { "type": "string", "maxLength": 256 }
+      }
+    }
+  },
+  "allOf": [{
+    "if": { "properties": { "type": { "enum": ["incident", "recovery"] } } },
+    "then": { "required": ["message"] }
+  }]
+}

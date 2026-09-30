@@ -168,6 +168,10 @@ export async function putAutomation(req: FastifyRequest<{ Params: { id: string }
 
     const accessError = await automationAccessError(input, ownerId, manageAll)
     if (accessError) return res.status(403).send({ error: accessError })
+    if ((existing.monitoring_type === 'push' || input.monitoringType === 'push')
+        && (existing.monitoring_type !== input.monitoringType || existing.target_url !== input.targetUrl)) {
+        return res.status(400).send({ error: 'Create a separate check when changing an external source or check type.' })
+    }
     if (input.status === 'active' && existing.status !== 'active' && !manageAll) {
         const limitError = await activeAutomationLimitError(existing.owner_id, req.params.id)
         if (limitError) {
@@ -260,6 +264,11 @@ export async function deleteAutomation(req: FastifyRequest<{ Params: { id: strin
         return res.status(404).send({ error: 'Automation not found.' })
     }
 
+    if (result.rows[0].monitoring_type === 'push') {
+        await run(`UPDATE api_keys SET enabled=FALSE, updated_at=NOW()
+            WHERE id IN (SELECT api_key_id FROM monitoring_push_sources WHERE automation_id=$1)`, [req.params.id])
+    }
+
     return res.send({ automation: toAutomation(result.rows[0] as AutomationRow) })
 }
 
@@ -273,6 +282,7 @@ export async function postAutomationRunNow(req: FastifyRequest<{ Params: { id: s
     if (!automation) {
         return res.status(404).send({ error: 'Automation not found.' })
     }
+    if (automation.status !== 'active') return res.status(409).send({ error: 'Resume this check before running it.' })
 
     const claim = await run(`
         UPDATE agent_automations
@@ -281,6 +291,7 @@ export async function postAutomationRunNow(req: FastifyRequest<{ Params: { id: s
                last_error = NULL,
                updated_at = NOW()
          WHERE id = $1
+           AND status = 'active'
            AND last_status IS DISTINCT FROM 'running'
          RETURNING *
     `, [automation.id])
@@ -290,7 +301,7 @@ export async function postAutomationRunNow(req: FastifyRequest<{ Params: { id: s
     return res.status(202).send({ ok: true, message: 'Automation run queued.' })
 }
 
-async function loadAutomation(id: string, ownerId: string, includeAll = false, mutate = false) {
+export async function loadAutomation(id: string, ownerId: string, includeAll = false, mutate = false) {
     const result = await run(`
         SELECT *
         FROM agent_automations

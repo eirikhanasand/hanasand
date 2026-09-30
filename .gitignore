@@ -1,5 +1,6 @@
 # dependencies
 node_modules/
+.cache/npm/
 package-lock.json
 !bot/package-lock.json
 .hanasand
