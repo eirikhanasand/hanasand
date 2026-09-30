@@ -261,25 +261,14 @@ fi
 export HANASAND_TI_SCRAPER_SOURCE="$ti_release_dir"
 export HANASAND_TI_API_SOURCE="$ti_release_dir/api"
 
-# Build from the immutable release archive, not the live checkout. This keeps
-# runtime state (including the separate code-review mirror) out of every image
-# context while preserving parallel BuildKit execution for the release.
-if test -f "$build_dir/.env"; then
-    docker compose --env-file "$build_dir/.env" -f "$build_dir/docker-compose.yml" build
-else
-    docker compose -f "$build_dir/docker-compose.yml" build
-fi
-compose_live() {
+compose_release() {
     if test -f "$build_dir/.env"; then
-        docker compose --env-file "$build_dir/.env" -f "$root/docker-compose.yml" "$@"
+        docker compose --env-file "$build_dir/.env" -f "$build_dir/docker-compose.yml" "$@"
     else
-        docker compose -f "$root/docker-compose.yml" "$@"
+        docker compose -f "$build_dir/docker-compose.yml" "$@"
     fi
 }
-compose_candidates() {
-    docker compose --profile deployment-candidates --env-file "$build_dir/.env" \
-        -f "$root/docker-compose.yml" "$@"
-}
+
 wait_for_healthy() {
     container=$1
     service=$2
@@ -301,6 +290,33 @@ wait_for_healthy() {
     done
     echo "$service did not become healthy within ${timeout}s." >&2
     return 1
+}
+
+# The durable log processor keeps using canonical PgBouncer while the new
+# release is built in isolation. Restore and verify that path first so a
+# partially completed prior deployment cannot strand backlog processing.
+canonical_pgbouncer_state=$(docker inspect -f '{{.State.Status}}' hanasand_pgbouncer 2>/dev/null || true)
+canonical_pgbouncer_health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' hanasand_pgbouncer 2>/dev/null || true)
+if test "$canonical_pgbouncer_state" != running || test "$canonical_pgbouncer_health" != healthy; then
+    compose_release up -d --no-build --no-deps --force-recreate pgbouncer
+fi
+wait_for_healthy hanasand_pgbouncer "Canonical PgBouncer" 180
+wait_for_healthy hanasand_log_processor "Durable log processor" 180
+
+# Build from the immutable release archive, not the live checkout. This keeps
+# runtime state (including the separate code-review mirror) out of every image
+# context while preserving parallel BuildKit execution for the release.
+compose_release build
+compose_live() {
+    if test -f "$build_dir/.env"; then
+        docker compose --env-file "$build_dir/.env" -f "$root/docker-compose.yml" "$@"
+    else
+        docker compose -f "$root/docker-compose.yml" "$@"
+    fi
+}
+compose_candidates() {
+    docker compose --profile deployment-candidates --env-file "$build_dir/.env" \
+        -f "$root/docker-compose.yml" "$@"
 }
 
 warm_dashboard_pages() {
