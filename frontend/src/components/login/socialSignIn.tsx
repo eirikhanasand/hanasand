@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import fetchWithRetry from '@/utils/fetchWithRetry'
 
 type Provider = 'google' | 'apple'
 type Connection = { provider: Provider, email: string | null }
@@ -17,12 +18,12 @@ export default function SocialSignIn({ link = false, redirectPath = '/dashboard'
         let active = true
         async function load() {
             try {
-                const response = await fetch('/api/auth/social/providers', { cache: 'no-store' })
+                const response = await fetchWithRetry('/api/auth/social/providers', { cache: 'no-store', timeoutMs: 10000, retries: 2 })
                 if (!response.ok) throw new Error('Unable to load sign-in options.')
                 const data = await response.json()
                 if (active) setProviders(data.providers)
                 if (link) {
-                    const response = await fetch('/api/auth/social/connections', { cache: 'no-store' })
+                    const response = await fetchWithRetry('/api/auth/social/connections', { cache: 'no-store', timeoutMs: 10000, retries: 2 })
                     if (!response.ok) throw new Error('Unable to load connected accounts.')
                     const data = await response.json()
                     if (active) setConnections(data.connections)
@@ -34,7 +35,7 @@ export default function SocialSignIn({ link = false, redirectPath = '/dashboard'
         return () => { active = false }
     }, [link])
     return <div className={link ? 'mt-4 border-t border-ui-border pt-4' : ''}>
-        {link && <><h3 className='text-sm font-semibold text-ui-text'>Connected sign-in accounts</h3><p className='mb-3 mt-1 text-xs text-ui-muted'>Connect Google to sign in to this account with the same permissions.</p></>}
+        {link && <h3 className='text-sm font-semibold text-ui-text'>Connected sign-in accounts</h3>}
         <div className='grid gap-2'>
             {(['google'] as const).map(provider => {
                 const ready = providers.find(item => item.provider === provider)?.configured

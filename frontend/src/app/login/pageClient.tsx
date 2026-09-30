@@ -6,7 +6,7 @@ import Notify from '@/components/notify/notify'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import { getCookie } from '@/utils/cookies/cookies'
 import { usePathname, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import config from '@/config'
 import { ArrowRight, Fingerprint, KeyRound } from 'lucide-react'
 import { reservedUsernames } from '@/utils/auth/reservedUsernames'
@@ -36,6 +36,7 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
     const [resetCode, setResetCode] = useState('')
     const [busy, setBusy] = useState(false)
     const [hydrated, setHydrated] = useState(false)
+    const loginUsernameRef = useRef<HTMLInputElement>(null)
     const [signupName, setSignupName] = useState('')
     const [signupUsername, setSignupUsername] = useState('')
     const [signupChallenge, setSignupChallenge] = useState('')
@@ -163,7 +164,10 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
         setBusy(true)
         setError(null)
         try {
-            const optionsResponse = await fetch('/api/auth/passkeys/authenticate/options', { cache: 'no-store' })
+            const optionsUrl = new URL('/api/auth/passkeys/authenticate/options', window.location.origin)
+            const username = loginUsernameRef.current?.value.trim()
+            if (username) optionsUrl.searchParams.set('username', username)
+            const optionsResponse = await fetch(optionsUrl, { cache: 'no-store' })
             const options = await optionsResponse.json().catch(() => null)
             if (!optionsResponse.ok || !options?.challengeId || !options?.publicKey) {
                 return setError(options?.error || 'No passkey challenge is available.')
@@ -252,6 +256,7 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
                                     <span className='text-xs font-semibold text-ui-muted'>Username</span>
                                     <input
                                         id='login-username'
+                                        ref={loginUsernameRef}
                                         type='text'
                                         name='username'
                                         placeholder='Username'

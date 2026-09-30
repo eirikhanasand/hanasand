@@ -163,7 +163,6 @@ export default function AccountActions({ isSelf }: { isSelf: boolean }) {
             <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
                 <div>
                     <h2 className='text-base font-semibold text-ui-text'>Account</h2>
-                    <p className='mt-1 text-sm text-ui-muted'>Session and deletion controls.</p>
                 </div>
                 <div className='flex flex-wrap gap-2'>
                     <button onClick={() => void addPasskey()} disabled={busy} className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text hover:bg-ui-raised disabled:opacity-60'>

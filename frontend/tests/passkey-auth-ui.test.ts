@@ -16,6 +16,8 @@ test('passkey UI exposes enrollment and login actions', () => {
 
     assert.match(loginClient, /Sign in with passkey/)
     assert.match(loginClient, /\/api\/auth\/passkeys\/authenticate\/options/)
+    assert.match(loginClient, /loginUsernameRef\.current\?\.value\.trim\(\)/)
+    assert.match(loginClient, /optionsUrl\.searchParams\.set\('username', username\)/)
     assert.match(loginClient, /\/api\/auth\/passkeys\/authenticate\/verify/)
     assert.match(accountActions, /Add passkey/)
     assert.match(accountActions, /No passkeys enrolled/)
