@@ -7,7 +7,7 @@ test "$(git rev-parse HEAD)" = "$release" || {
     exit 1
 }
 
-containers='hanasand hanasand_api hanasand_auth_primary hanasand_auth_secondary hanasand_database_backup hanasand_onion_tor hanasand_ai_parser_bridge hanasand_ai_model_client hanasand_ti_scraper hanasand_pgbouncer hanasand_browsers'
+containers='hanasand hanasand_api hanasand_log_processor hanasand_auth_primary hanasand_auth_secondary hanasand_database_backup hanasand_onion_tor hanasand_ai_parser_bridge hanasand_ai_model_client hanasand_ti_scraper hanasand_pgbouncer hanasand_browsers'
 for container in $containers; do
     test "$(docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null || true)" = true || {
         echo "Required Hanasand container is not running: $container" >&2
@@ -26,6 +26,17 @@ for container in $containers; do
         exit 1
     }
 done
+
+test "$(docker inspect -f '{{.State.Health.Status}}' hanasand_log_processor)" = healthy || {
+    echo "hanasand_log_processor is not healthy after deployment." >&2
+    exit 1
+}
+processor_health=$(docker exec hanasand_log_processor wget -qO- http://127.0.0.1:8099/health)
+case "$processor_health" in *'"ok":true'*"\"release\":\"$release\""*) ;; *)
+    echo "Durable log processor health did not report release $release." >&2
+    exit 1
+    ;;
+esac
 
 for container in hanasand_auth_primary hanasand_auth_secondary; do
     test "$(docker inspect -f '{{.State.Health.Status}}' "$container")" = healthy || {

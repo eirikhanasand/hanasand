@@ -7,6 +7,7 @@ assert.equal(process.env.DB, 'logs_test', 'Never run queue concurrency fixtures 
 const options={host:process.env.DB_HOST,port:Number(process.env.DB_PORT||5432),database:process.env.DB,user:process.env.DB_USER,password:process.env.DB_PASSWORD}
 const admin=new pg.Client(options), migration=new pg.Client(options), writer=new pg.Client(options)
 const clients=[admin,migration,writer]
+const watermarkSources=['service_logs','login_events','traffic_events','system_events']
 const schema='fixture_queue_lock_'+Date.now()+'_'+process.pid
 let afterQuery: ((sql: string) => Promise<void>)|undefined
 const run=async(sql: string,params: any[]=[])=>{const result=await migration.query(sql,params);await afterQuery?.(sql);return result}
@@ -32,6 +33,7 @@ try {
     await admin.query('CREATE SCHEMA '+schema);created=true
     for(const client of clients){await client.query('SET search_path TO '+schema);await client.query('SET statement_timeout=\'10s\'')}
     await admin.query('CREATE TABLE service_logs(id bigserial PRIMARY KEY,metadata jsonb NOT NULL DEFAULT \'{}\'::jsonb)')
+    for(const source of watermarkSources.slice(1))await admin.query('CREATE TABLE '+source+'(id bigserial PRIMARY KEY)')
     await admin.query('CREATE TABLE log_processing_cursors(name text PRIMARY KEY,recent_id bigint)')
     const migrationPid=(await migration.query('SELECT pg_backend_pid() AS pid')).rows[0].pid
     const writerPid=(await writer.query('SELECT pg_backend_pid() AS pid')).rows[0].pid
@@ -45,11 +47,20 @@ try {
     await waitSourceLock(migrationPid,'ShareRowExclusiveLock')
     await writer.query('COMMIT')
     assert.equal((await initial).error,null)
+    for(const source of watermarkSources){
+        const installed=(await admin.query('SELECT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid=$1::regclass AND tgname=\'log_watermark_writer_lock\' AND NOT tgisinternal) AS installed',[source])).rows[0].installed
+        assert.equal(installed,true,'The safe watermark writer barrier must be installed on '+source)
+    }
+    await writer.query('BEGIN')
+    await writer.query('LOCK TABLE service_logs IN SHARE UPDATE EXCLUSIVE MODE')
+    const idempotent=await ensureSchema().then(()=>({error:null}),error=>({error}))
+    assert.equal(idempotent.error,null,'A complete barrier must reinstall without conflicting with autovacuum locks')
+    await writer.query('COMMIT')
     const boundary=(await admin.query('SELECT recent_id::text FROM log_processing_cursors WHERE name=\'process_logs_recovery\'')).rows[0].recent_id
     assert.equal(boundary,initialId)
 
-    // Reinstall while a writer has the source lock but has not reached its queue trigger.
-    // The old queue-first order forms a real deadlock at this exact boundary.
+    // Reinstall a missing queue trigger while a writer owns the source lock.
+    await admin.query('DROP TRIGGER log_process_queue_insert ON service_logs')
     await writer.query('BEGIN')
     await writer.query('LOCK TABLE service_logs IN ROW EXCLUSIVE MODE')
     const reinstall=ensureSchema().then(()=>({error:null}),error=>({error}))
@@ -61,6 +72,7 @@ try {
     assert.equal((await admin.query('SELECT recent_id::text FROM log_processing_cursors WHERE name=\'process_logs_recovery\'')).rows[0].recent_id,boundary,'Reinstall preserves recovery progress')
 
     // Writers arriving after migration owns the source lock wait, then use the committed trigger.
+    await admin.query('DROP TRIGGER log_watermark_writer_lock ON traffic_events')
     const held=deferred(),release=deferred()
     afterQuery=async sql=>{if(sql==='LOCK TABLE service_logs IN SHARE ROW EXCLUSIVE MODE'){held.resolve();await release.promise}}
     const refreshing=ensureSchema().then(()=>({error:null}),error=>({error}))

@@ -198,7 +198,9 @@ async function start() {
             fastify.addHook('onClose', async () => { stopMetricsRefresh() })
         }
         if (!browserWorkerOnly && !httpWorkerOnly && process.env.AUTH_SERVICE_ONLY !== '1') {
-            const stopProcessing = startLogProcessor(() => withEventDatabase(processStoredLogs), error => fastify.log.error({ error }, 'Event log processing failed; will retry'))
+            const stopProcessing = process.env.LOG_CATCHUP_WORKER_DISABLED === '1'
+                ? async () => {}
+                : startLogProcessor(() => withEventDatabase(processStoredLogs), error => fastify.log.error({ error }, 'Event log processing failed; will retry'))
             const stopLiveProcessing = startLogProcessor(() => withEventDatabase(processLiveLogs), error => fastify.log.error({ error }, 'Event live processing failed; will retry'), () => 100, undefined, 100)
             const stopReprocessing = startLogProcessor(processRuleReprocessJob, error => fastify.log.error({ error }, 'Rule reprocessing failed'), () => 1000)
             fastify.addHook('onClose', async () => { await Promise.all([stopProcessing(), stopLiveProcessing(), stopReprocessing()]) })

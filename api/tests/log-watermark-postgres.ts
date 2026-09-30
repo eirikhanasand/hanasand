@@ -9,6 +9,14 @@ await reader.connect(); await writer.connect()
 const schema = `log_watermark_fixture_${process.pid}`
 await reader.query(`CREATE SCHEMA ${schema}`)
 await reader.query(`CREATE TABLE ${schema}.service_logs (id bigserial PRIMARY KEY)`)
+await reader.query(`CREATE FUNCTION ${schema}.lock_watermark_writers() RETURNS trigger LANGUAGE plpgsql AS $function$
+    BEGIN
+        PERFORM pg_advisory_xact_lock_shared(hashtextextended('logs:watermark:' || TG_TABLE_NAME, 0));
+        RETURN NULL;
+    END;
+    $function$`)
+await reader.query(`CREATE TRIGGER log_watermark_writer_lock BEFORE INSERT ON ${schema}.service_logs
+    FOR EACH STATEMENT EXECUTE FUNCTION ${schema}.lock_watermark_writers()`)
 await reader.query(`SET search_path = ${schema}`)
 await writer.query(`SET search_path = ${schema}`)
 mock.module('#db', () => ({ withTransaction: async (work: (query: (sql: string, values?: unknown[]) => Promise<pg.QueryResult>) => Promise<unknown>) => {
@@ -27,6 +35,10 @@ try {
     assert.ok(performance.now() - blockedAt >= 75, 'Busy writers should receive a bounded wait instead of an immediate skip')
     await writer.query('COMMIT')
     assert.equal(String(await stableLogWatermark('service_logs')), '2')
+    await writer.query('BEGIN')
+    await writer.query('LOCK TABLE service_logs IN SHARE UPDATE EXCLUSIVE MODE')
+    assert.equal(String(await stableLogWatermark('service_logs')), '2', 'Watermarks must progress while autovacuum holds its compatible table lock')
+    await writer.query('COMMIT')
     await writer.query('SET statement_timeout = \'500ms\'')
     await writer.query('INSERT INTO service_logs DEFAULT VALUES')
     assert.equal(String(await stableLogWatermark('service_logs')), '3', 'Watermark lock must be released before log processing')

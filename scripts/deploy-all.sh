@@ -314,7 +314,7 @@ warm_dashboard_pages() {
 
 # Keep authentication replicas untouched until the rest of the release passes
 # its health checks.
-services=$(compose_live config --services | sed '/^api$/d; /^frontend$/d; /^auth-primary$/d; /^auth-secondary$/d')
+services=$(compose_live config --services | sed '/^api$/d; /^frontend$/d; /^auth-primary$/d; /^auth-secondary$/d; /^log-processor$/d')
 # Compose service names are controlled by docker-compose.yml and contain no
 # shell metacharacters, so split the list into its individual arguments.
 # shellcheck disable=SC2086
@@ -450,6 +450,8 @@ compose_live up -d --no-build --no-deps --remove-orphans $services
 compose_live up -d --no-build --no-deps api frontend
 wait_for_healthy hanasand_api "API" 600
 wait_for_healthy hanasand "Frontend" 180
+compose_live up -d --no-build --no-deps log-processor
+wait_for_healthy hanasand_log_processor "Durable log processor" 180
 canonical_frontend_health=$(curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3100/api/health)
 case "$canonical_frontend_health" in *'"ok":true'*"\"release\":\"$release\""*"\"api\""*) ;; *)
     echo "Canonical frontend did not report release $release and its matching API." >&2
