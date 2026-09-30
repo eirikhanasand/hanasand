@@ -29,7 +29,6 @@ import mapData from '@parent/public/world.json'
 import { Activity, Clock3, Globe2, MapPinned, Move, Route, Search, Zap } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { EmptyCopy, InsightCard, SignalGroup, StatCard, ZoomButton } from './liveMapPrimitives'
-import statusClasses from './statusClasses'
 
 import type { TrafficMetrics, TrafficRecord, TrafficRecords } from '@/utils/monitoring/types'
 
@@ -559,27 +558,6 @@ export default function TrafficMap({
                     <SignalGroup title='Top Paths' entries={initialMetrics?.top_paths || []} valueLabel='requests' />
                     <SignalGroup title='Methods' entries={initialMetrics?.top_methods || []} valueLabel='requests' />
                     <SignalGroup title='Statuses' entries={initialMetrics?.top_status_codes || []} valueLabel='hits' />
-                </InsightCard>
-
-                <InsightCard title='Recent Requests' icon={<Clock3 className='h-4 w-4 stroke-ui-success' />}>
-                    <div className='space-y-2'>
-                        {liveRecords.length ? selectedRecords.map((record) => (
-                            <div key={record.id} className='rounded-lg border border-ui-border bg-ui-panel p-3'>
-                                <div className='flex items-center justify-between gap-3'>
-                                    <span className='text-sm font-medium text-ui-text'>{record.method} {record.path}</span>
-                                    <span className={`rounded-full px-2 py-0.5 text-[11px] ${statusClasses(record.status)}`}>
-                                        {record.status}
-                                    </span>
-                                </div>
-                                <div className='mt-2 flex items-center justify-between text-xs text-ui-muted'>
-                                    <span className='truncate'>{record.domain}</span>
-                                    <span>{record.request_time}ms</span>
-                                </div>
-                            </div>
-                        )) : (
-                            <EmptyCopy text='Recent request rows refresh as ingress records stream in.' />
-                        )}
-                    </div>
                 </InsightCard>
             </aside>
         </div>
