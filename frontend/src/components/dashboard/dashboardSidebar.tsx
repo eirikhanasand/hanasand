@@ -30,7 +30,7 @@ const sectionIcons: Record<string, typeof ShieldCheck> = {
     Pinned: Pin,
 }
 
-export default function DashboardSidebar({ initialPreferences = { expanded: {}, pinned: [] }, initialMode = 'normal', ...access }: NavigationAccess & { initialPreferences?: Preferences, initialMode?: 'normal' | 'compact' }) {
+export default function DashboardSidebar({ initialPreferences = { expanded: {}, pinned: [] }, initialMode = 'normal', thesisSheets: initialThesisSheets = emptyThesisNavigation, ...access }: NavigationAccess & { initialPreferences?: Preferences, initialMode?: 'normal' | 'compact' }) {
     const { organizationId, organizations } = useWorkspace()
     const pathname = usePathname()
     const searchParams = useSearchParams()
@@ -71,7 +71,10 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
         hasPendingSupport ? 'pending support chats' : null,
     ].filter((item): item is string => item !== null)
     const communicationSummary = pendingCommunicationItems.join(' and ')
-    const thesisSheets = useSyncExternalStore(subscribeThesisNavigation, getThesisNavigation, () => emptyThesisNavigation)
+    const thesisSheets = useSyncExternalStore(subscribeThesisNavigation, () => {
+        const current = getThesisNavigation()
+        return current.length ? current : initialThesisSheets
+    }, () => initialThesisSheets)
     useEffect(() => {
         const controller = new AbortController()
         const refresh = async () => {
@@ -147,7 +150,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
             document.removeEventListener('visibilitychange', refreshWhenVisible)
         }
     }, [access.id])
-    const hasHanasandOrganization = organizations.some(organization => organization.slug?.toLowerCase() === 'hanasand' && organization.lifecycleStatus === 'active')
+    const hasHanasandOrganization = access.hasHanasandOrganization === true || organizations.some(organization => organization.slug?.toLowerCase() === 'hanasand' && organization.lifecycleStatus === 'active')
     const canViewInternalPages = access.canViewInternalPages === true || canViewHanasandInternalPages(organizations)
     const sections = getDashboardNavigation({
         ...access,

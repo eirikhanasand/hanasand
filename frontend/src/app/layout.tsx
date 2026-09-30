@@ -3,6 +3,8 @@ import tokenIsValid from '@/utils/proxy/tokenIsValid'
 import WorkspaceProvider from '@/components/organizations/workspaceProvider'
 import { readWorkspace, WORKSPACE_COOKIE } from '@/utils/organizations/workspace'
 import { NAVIGATION_COOKIE, readNavigationPreferences } from '@/utils/layout/navigationPreferences'
+import { thesisNavigationFromDocument } from '@/utils/layout/thesisNavigationData'
+import { loadThesisForRender } from '@/utils/thesis'
 import DashboardSidebar from '@/components/dashboard/dashboardSidebar'
 import ImpersonationBanner from '@/components/impersonation/impersonationBanner'
 import { ReactNode, Suspense, type ComponentProps } from 'react'
@@ -19,7 +21,8 @@ export { viewport } from './metadata'
 export default async function layout({ children }: { children: ReactNode }) {
     const Cookies = await cookies()
     const Headers = await headers()
-    const token = Boolean(Cookies.get('access_token')?.value) || false
+    const accessToken = Cookies.get('access_token')?.value || ''
+    const token = Boolean(accessToken)
     const themeCookie = Cookies.get('theme')?.value
     const theme = themeCookie === 'light' ? 'light' : 'dark'
     const path = Headers.get('x-current-path') || ''
@@ -30,9 +33,16 @@ export default async function layout({ children }: { children: ReactNode }) {
         : ''
     const initialMode = Cookies.get('dashboard_view_mode')?.value === 'compact' ? 'compact' : 'normal'
     const initialPreferences = readNavigationPreferences(Cookies.get(NAVIGATION_COOKIE)?.value, id)
-    const sidebarProps = { initialPreferences, initialMode, id } satisfies ComponentProps<typeof DashboardSidebar>
     const impersonatingId = Cookies.get('impersonating_id')?.value || Headers.get('x-impersonating-id') || ''
     const impersonatingName = Cookies.get('impersonating_name')?.value || Headers.get('x-impersonating-name') || ''
+    const thesisNavigation = await initialThesisNavigation(accessToken, id)
+    const sidebarProps = {
+        initialPreferences,
+        initialMode,
+        id,
+        thesisSheets: thesisNavigation.sheets,
+        hasHanasandOrganization: thesisNavigation.hasAccess,
+    } satisfies ComponentProps<typeof DashboardSidebar>
 
     return (
         <html lang='en' className={theme}>
@@ -54,6 +64,17 @@ export default async function layout({ children }: { children: ReactNode }) {
             </body>
         </html>
     )
+}
+
+async function initialThesisNavigation(token: string, id: string) {
+    if (!token || !id || id.startsWith('svc_')) return { hasAccess: false, sheets: [] }
+    try {
+        const result = await loadThesisForRender(token, id)
+        if (result.state !== 'loaded') return { hasAccess: false, sheets: [] }
+        return { hasAccess: true, sheets: thesisNavigationFromDocument(result.document) }
+    } catch {
+        return { hasAccess: false, sheets: [] }
+    }
 }
 
 async function AuthorizedSidebar(props: ComponentProps<typeof DashboardSidebar>) {

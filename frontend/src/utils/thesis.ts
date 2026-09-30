@@ -1,5 +1,6 @@
 import config from '@/config'
 import tokenIsValid from '@/utils/proxy/tokenIsValid'
+import { cache } from 'react'
 
 export type ThesisDocument = { title: string, body: string, revision: number }
 export type ThesisRenderResult =
@@ -30,7 +31,7 @@ export async function readThesis(token: string, id: string): Promise<ThesisDocum
     return document
 }
 
-export async function loadThesisForRender(token: string, id: string): Promise<ThesisRenderResult> {
+export const loadThesisForRender = cache(async (token: string, id: string): Promise<ThesisRenderResult> => {
     const response = await fetch(`${config.url.api}/thesis`, {
         headers: { Authorization: `Bearer ${token}`, id },
         cache: 'no-store',
@@ -42,7 +43,7 @@ export async function loadThesisForRender(token: string, id: string): Promise<Th
     const document = await response.json()
     if (!validThesis(document)) throw new Error('Invalid saved thesis')
     return { state: 'loaded', document, canEdit: response.headers.get('X-Thesis-Can-Edit') === 'true' }
-}
+})
 export async function writeThesis(document: ThesisDocument, token: string, id: string) {
     return fetch(`${config.url.api}/thesis`, {
         method: 'PUT',

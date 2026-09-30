@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import { getDashboardNavigation, navigationLinks, pinnedNavigation, type NavigationItem } from '../src/utils/layout/dashboardNavigation'
 import { organizationPages } from '../src/utils/organizations/pages'
 import { canViewHanasandInternalPages, HANASAND_ORGANIZATION_ID } from '../src/utils/organizations/internalPageAccess'
+import { thesisNavigationFromDocument } from '../src/utils/layout/thesisNavigationData'
+import { writeSheets } from '../src/app/thesis/workspace'
 
 test('organization destinations remain reachable exactly once after regrouping', () => {
     const links = navigationLinks(getDashboardNavigation({ id: 'member' }))
@@ -42,6 +44,22 @@ test('traffic has separate overview, recent, map, and blocklist destinations', (
     const traffic = logsAndRules?.items?.find(item => item.label === 'Traffic')
     assert.deepEqual(traffic?.items?.map(item => item.label), ['Overview', 'Recent traffic', 'Live map', 'Blocklist'])
     assert.deepEqual(traffic?.items?.map(item => item.href), ['/traffic', '/traffic/recent', '/traffic/map', '/traffic/blocklist'])
+})
+
+test('server-loaded thesis sheets are available under Content before opening Thesis', () => {
+    const names = ['Overview', 'Timetable', 'Plan', 'Research', 'Experiments', 'Draft', 'Appendix']
+    const document = {
+        title: '# Thesis',
+        body: writeSheets(names.map(name => ({ id: name, name, title: `# ${name}`, body: `${name} content` }))),
+    }
+    const thesisSheets = thesisNavigationFromDocument(document)
+    const sections = getDashboardNavigation({ id: 'owner', hasHanasandOrganization: true, thesisSheets })
+    const content = sections.find(section => section.label === 'Content')
+    const thesis = content?.items?.find(item => item.label === 'Thesis')
+
+    assert.deepEqual(thesisSheets.map(sheet => sheet.label), names)
+    assert.deepEqual(navigationLinks(sections).filter(link => link.href.startsWith('/thesis?sheet=')).map(link => link.href), names.map(name => `/thesis?sheet=${encodeURIComponent(name)}`))
+    assert.equal(thesis?.items?.some(item => item.label === 'More sheets'), true)
 })
 
 test('Hanasand owners and editors get internal pages from organization membership', () => {
