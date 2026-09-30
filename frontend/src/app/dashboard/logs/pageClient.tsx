@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { Copy, ChevronDown, Search, ListFilter, BarChart3, RefreshCw, X } from 'lucide-react'
 import { logSearchParams, logTables, type LogEvent as Event, type LogSearchResult as Result } from '@/utils/logs/search'
 import { retainEvents } from '@/utils/logs/retainEvents'
@@ -20,6 +20,33 @@ function projected(event: Event, fields: string[]) {
     return Object.fromEntries(fields.map(field => [field, field === 'TimeGenerated' ? event.event_timestamp : field === 'RuleId' ? event.normalized.detections?.map(rule => rule.rule_id) : fieldNames[field]?.split('.').reduce<unknown>((value, key) => value && typeof value === 'object' ? (value as Record<string, unknown>)[key] : undefined, event.normalized)]))
 }
 function isRealtimeSeverity(event: Event) { return event.normalized.severity === 'high' || event.normalized.severity === 'critical' }
+function logPeriodLabel(hours: string) {
+    const labels: Record<string, string> = { '1': '1h', '24': '24h', '168': '7d', '720': '30d', '2160': '90d' }
+    return labels[hours] || `${hours}h`
+}
+type MostActiveServiceSummary = { last_24h: Array<{ service: string, count: number }>, total: Array<{ service: string, count: number }> }
+const MostActiveServicesPanel = memo(function MostActiveServicesPanel({ summary, fallbackRecent, loaded }: { summary: MostActiveServiceSummary | null, fallbackRecent?: Array<{ service: string, count: number }>, loaded: boolean }) {
+    const [scope, setScope] = useState<'24h' | 'total'>('24h')
+    const [open, setOpen] = useState(true)
+    const services = scope === '24h' ? summary?.last_24h ?? fallbackRecent : summary?.total
+
+    return <section className={`${dashboardPanelClass} overflow-hidden`} aria-label='Most active services' data-most-active>
+        <header className='flex items-center justify-between gap-3 border-b border-ui-border bg-ui-raised px-4 py-2.5'>
+            <button type='button' className='flex min-h-8 flex-1 items-center text-left text-sm font-semibold' aria-expanded={open} aria-controls='most-active-services' onClick={() => setOpen(value => !value)}>Most active</button>
+            <div className='flex shrink-0 items-center gap-1.5'>
+                <div role='group' aria-label='Most active time range' className='inline-flex rounded-md border border-ui-border p-0.5'>
+                    {(['24h', 'total'] as const).map(value => <button key={value} type='button' aria-pressed={scope === value} onClick={() => setScope(value)} className={`rounded px-2 py-1 text-xs ${scope === value ? 'bg-ui-panel font-semibold text-ui-text' : 'text-ui-muted hover:text-ui-text'}`}>{value === '24h' ? '24h' : 'Total'}</button>)}
+                </div>
+                <button type='button' aria-label={`${open ? 'Collapse' : 'Expand'} most active services`} aria-expanded={open} aria-controls='most-active-services' onClick={() => setOpen(value => !value)} className='rounded p-1 text-ui-muted hover:text-ui-text'>
+                    <ChevronDown size={18} aria-hidden className={`${open ? 'rotate-0' : '-rotate-90'} transition-transform`} />
+                </button>
+            </div>
+        </header>
+        <div id='most-active-services' hidden={!open} className='p-4'>
+            {services?.length ? <dl className='grid gap-2'>{services.map(item => <div key={item.service} className='flex justify-between gap-3 text-sm'><dt>{item.service}</dt><dd>{item.count.toLocaleString('en-US')}</dd></div>)}</dl> : services ? <p className='text-sm text-ui-muted'>No services in this period.</p> : <p role='status' className='text-sm text-ui-muted'>{loaded ? 'Service counts are temporarily unavailable.' : 'Loading service counts…'}</p>}
+        </div>
+    </section>
+})
 export default function LogsPageClient({ initialServices = [], initialErrors, initialServiceFilter = 'all', initialData = null, initialError = '', initialMetrics = null }: { initialServices?: LogService[], initialErrors?: ErrorEventsResponse, initialServiceFilter?: string, initialData?: Result | null, initialError?: string, initialMetrics?: Metrics | null }) {
     const pathname = usePathname()
     const params = useSearchParams()
@@ -40,6 +67,8 @@ export default function LogsPageClient({ initialServices = [], initialErrors, in
     const [copied, setCopied] = useState('')
     const [errors, setErrors] = useState(initialErrors || emptyErrorEvents())
     const [errorsLoaded, setErrorsLoaded] = useState(Boolean(initialErrors))
+    const [mostActiveSummary, setMostActiveSummary] = useState<MostActiveServiceSummary | null>(null)
+    const [mostActiveLoaded, setMostActiveLoaded] = useState(false)
     const [refresh, setRefresh] = useState(0)
     const [paged, setPaged] = useState(false)
     const filterPanel = useRef<HTMLDivElement>(null)
@@ -132,6 +161,23 @@ export default function LogsPageClient({ initialServices = [], initialErrors, in
             .catch(() => { if (!controller.signal.aborted) setErrorsLoaded(true) })
         return () => controller.abort()
     }, [view, initialErrors])
+    useEffect(() => {
+        if (view !== 'dashboard') return
+        const controller = new AbortController()
+        void fetch('/api/backend/logs/services/summary', { signal: controller.signal, cache: 'no-store' })
+            .then(async response => {
+                if (!response.ok) throw new Error('Could not load most active services.')
+                return response.json() as Promise<MostActiveServiceSummary>
+            })
+            .then(body => {
+                if (!controller.signal.aborted) setMostActiveSummary(body)
+            })
+            .catch(() => undefined)
+            .finally(() => {
+                if (!controller.signal.aborted) setMostActiveLoaded(true)
+            })
+        return () => controller.abort()
+    }, [view])
     async function copy(event: Event | ErrorEvent) {
         try { await navigator.clipboard.writeText(JSON.stringify('normalized' in event ? event.normalized : event, null, 2)); setCopied(event.id) }
         catch { setCopied(''); setError('Copy failed. Select the event text and copy it manually.') }
@@ -140,6 +186,8 @@ export default function LogsPageClient({ initialServices = [], initialErrors, in
     const processingError = data?.processing?.last_error?.endsWith('Waiting for active log writes; will retry.') ? null : data?.processing?.last_error
     const serviceOptions = [...new Set([...initialServices.map(item => item.service), ...(data?.services.map(item => item.service) || []), ...(service === 'all' ? [] : [service])])].sort()
     const activeFilters = [service !== 'all', !advanced && !!search, !advanced && table !== 'Logs', advanced && !!appliedHql, hours !== (view === 'realtime' ? '1' : '24'), view !== 'realtime' && severity !== 'all'].filter(Boolean).length
+    const periodLabel = logPeriodLabel(hours)
+    const totalEvents = data?.counts.reduce((total, item) => total + item.count, 0)
     const realtimeLoadMore = view === 'realtime' && !advanced && !busy && !error && data?.next_cursor
         ? () => loadMore.current(data.next_cursor!) : undefined
     const resultCount = data?.rows.length || 0
@@ -197,8 +245,12 @@ export default function LogsPageClient({ initialServices = [], initialErrors, in
             {!!data?.processing?.skipped_events && <p role='status' className='text-sm text-ui-warning'>{data.processing.skipped_events.toLocaleString('en-US')} events remain excluded from detection.</p>}
             {view !== 'realtime' && data && !data.processing && !busy && <p role='status' className='text-sm text-ui-warning'>Waiting for the log processor to check in.</p>}
             {view === 'dashboard' ? <>
-                <section className='grid grid-cols-2 gap-2.5 min-[380px]:gap-3 md:grid-cols-3 xl:grid-cols-5' aria-label='Events by severity' data-logs-metrics>{['low','medium','high','critical'].map(value => <Link key={value} href={`/logs/search?${new URLSearchParams({ hours, ...(service !== 'all' ? { service } : {}), ...(advanced && appliedHql ? { hql: appliedHql } : { table, search }), severity: value })}`} className={`${dashboardPanelClass} min-w-0 p-3 sm:p-4`} data-logs-metric-card><p className='text-xs capitalize text-ui-muted sm:text-sm'>{value}</p><p className='mt-1.5 text-xl font-semibold tabular-nums sm:mt-2 sm:text-2xl'>{data ? (data.counts.find(item => item.severity === value)?.count || 0).toLocaleString('en-US') : '—'}</p></Link>)}<Link href='/logs/errors' className={`${dashboardPanelClass} min-w-0 p-3 sm:p-4`} data-logs-metric-card><p className='text-xs text-ui-muted sm:text-sm'>Errors</p><p className='mt-1.5 text-xl font-semibold tabular-nums sm:mt-2 sm:text-2xl'>{errorsLoaded ? errors.summary.total.toLocaleString('en-US') : '—'}</p></Link></section>
-                <details open className={`${dashboardPanelClass} group overflow-hidden`}><summary className='flex cursor-pointer list-none items-center justify-between border-b border-ui-border bg-ui-raised px-4 py-3 text-sm font-semibold [&::-webkit-details-marker]:hidden'>Most active<ChevronDown size={18} aria-hidden className='-rotate-90 text-ui-muted transition-transform group-open:rotate-0' /></summary><div className='p-4'><dl className='grid gap-2'>{data?.services.map(item => <div key={item.service} className='flex justify-between gap-3 text-sm'><dt>{item.service}</dt><dd>{item.count.toLocaleString('en-US')}</dd></div>)}</dl></div></details>
+                <div className='flex items-center justify-between gap-3 px-1' data-logs-total>
+                    <div className='flex items-center gap-2'><p className='text-sm font-medium text-ui-muted'>Total</p><span className='text-xs text-ui-muted'>{periodLabel}</span></div>
+                    <p className='text-lg font-semibold tabular-nums text-ui-text'>{totalEvents?.toLocaleString('en-US') ?? '—'}</p>
+                </div>
+                <section className='grid grid-cols-2 gap-2.5 min-[380px]:gap-3 md:grid-cols-3 xl:grid-cols-5' aria-label='Events by severity' data-logs-metrics>{['low','medium','high','critical'].map(value => <Link key={value} href={`/logs/search?${new URLSearchParams({ hours, ...(service !== 'all' ? { service } : {}), ...(advanced && appliedHql ? { hql: appliedHql } : { table, search }), severity: value })}`} className={`${dashboardPanelClass} min-w-0 p-3 sm:p-4`} data-logs-metric-card><div className='flex items-center justify-between gap-2'><p className='text-xs capitalize text-ui-muted sm:text-sm'>{value}</p><span className='text-[10px] font-medium text-ui-muted sm:text-xs'>{periodLabel}</span></div><p className='mt-1.5 text-xl font-semibold tabular-nums sm:mt-2 sm:text-2xl'>{data ? (data.counts.find(item => item.severity === value)?.count || 0).toLocaleString('en-US') : '—'}</p></Link>)}<Link href='/logs/errors' className={`${dashboardPanelClass} min-w-0 p-3 sm:p-4`} data-logs-metric-card><p className='text-xs text-ui-muted sm:text-sm'>Errors</p><p className='mt-1.5 text-xl font-semibold tabular-nums sm:mt-2 sm:text-2xl'>{errorsLoaded ? errors.summary.total.toLocaleString('en-US') : '—'}</p></Link></section>
+                <MostActiveServicesPanel summary={mostActiveSummary} fallbackRecent={data?.services} loaded={mostActiveLoaded} />
             </> : <section className={`${dashboardPanelClass} min-w-0 overflow-hidden ${view === 'realtime' ? 'flex min-h-0 flex-1 flex-col' : ''}`} aria-label='Log events'>
                 <div className='flex flex-wrap items-center justify-between gap-2 border-b border-ui-border p-3 text-xs text-ui-muted'>
                     <span>{showRealtimeCount ? <><span aria-hidden>{resultLabel}</span><span className='sr-only'>{resultCount.toLocaleString('en-US')} of {data?.total_events?.toLocaleString('en-US') ?? 'an unknown number of'} high and critical events</span></> : resultLabel}</span>

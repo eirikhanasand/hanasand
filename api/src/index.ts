@@ -16,6 +16,7 @@ import fp from '#utils/refresh/fp.ts'
 import ensureRepositoryUpToDate from '#utils/git/ensureRepositoryUpToDate.ts'
 import ensureSchema from '#utils/db/ensureSchema.ts'
 import { loadCachedLogMetrics, startLogMetricsRefresh } from './handlers/logs/metrics.ts'
+import { loadCachedMostActiveServices, startMostActiveServicesRefresh } from './handlers/logs/mostActive.ts'
 import recordLog from '#utils/logs/recordLog.ts'
 import recordTraffic from '#utils/traffic/recordTraffic.ts'
 import { recordHttpErrorResponse } from '#utils/logs/httpErrors.ts'
@@ -196,6 +197,11 @@ async function start() {
             await loadCachedLogMetrics().catch(error => fastify.log.warn({ error }, 'Failed to warm log throughput metrics cache'))
             const stopMetricsRefresh = startLogMetricsRefresh()
             fastify.addHook('onClose', async () => { stopMetricsRefresh() })
+        }
+        if (!browserWorkerOnly && process.env.AUTH_SERVICE_ONLY !== '1') {
+            await loadCachedMostActiveServices().catch(error => fastify.log.warn({ error }, 'Failed to warm most active services cache'))
+            const stopMostActiveRefresh = startMostActiveServicesRefresh()
+            fastify.addHook('onClose', async () => { stopMostActiveRefresh() })
         }
         if (!browserWorkerOnly && !httpWorkerOnly && process.env.AUTH_SERVICE_ONLY !== '1') {
             const stopProcessing = process.env.LOG_CATCHUP_WORKER_DISABLED === '1'
