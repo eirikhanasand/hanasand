@@ -158,6 +158,11 @@ ti/scraper/.tmp
 **/.env.*
 **/*secret*
 
+# These source files implement encrypted secret handling; they contain no credentials.
+!api/src/utils/crypto/secretBox.ts
+!api/scripts/rotate-encrypted-secrets.ts
+!api/tests/secret-box.test.ts
+
 # Exclude dependency contents even when source-file patterns re-include their parents.
 **/node_modules/**
 
