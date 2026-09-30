@@ -23,6 +23,7 @@ import ensureServiceAccountsSchema from './serviceAccountsSchema.ts'
 import ensureAccountIdentitySchema from './accountIdentitySchema.ts'
 import ensureSocialAuthSchema from './socialAuthSchema.ts'
 import ensureMonitoringIssuesSchema from './monitoringIssuesSchema.ts'
+import ensurePushMonitoringSchema from './pushMonitoringSchema.ts'
 import ensureThesisSchema from './thesisSchema.ts'
 import { reservedUsernames } from '#utils/auth/reservedUsernames.ts'
 
@@ -1494,6 +1495,7 @@ async function applySchema() {
     await run('CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_one_active_org ON api_keys(organization_id) WHERE organization_id IS NOT NULL AND enabled IS TRUE')
     await run('CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(key_prefix)')
     await run('CREATE INDEX IF NOT EXISTS idx_api_key_scopes_key_route ON api_key_scopes(api_key_id, method, route)')
+    await ensurePushMonitoringSchema()
     await run(`
         CREATE TABLE IF NOT EXISTS events (
             id TEXT PRIMARY KEY,

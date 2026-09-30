@@ -31,6 +31,8 @@ test('unknown uptime and history stay last, without treating zero as missing', (
 })
 
 test('sorting uses the same visible status, certificate and tag labels', () => {
+    assert.equal(healthCheckStatus(monitor('External', { monitoringType: 'push', targetUrl: 'home-1/moisture', lastStatus: null })), 'Awaiting reading')
+    assert.equal(healthCheckStatus(monitor('External', { monitoringType: 'push', targetUrl: 'home-1/moisture', lastStatus: 'failed' })), 'Unhealthy')
     assert.equal(healthCheckStatus(monitor('JSON', { monitoringType: 'json', lastStatus: 'failed' })), 'Unhealthy')
     assert.equal(healthCheckStatus(monitor('HTTP', { consecutiveFailures: 1 })), 'Unhealthy')
     assert.equal(healthCheckTag(monitor('Host')), '')

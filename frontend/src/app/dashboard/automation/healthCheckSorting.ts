@@ -4,6 +4,7 @@ export type HealthSortKey = 'name' | 'status' | 'cert' | 'history' | 'uptime' | 
 const alphabetical = new Intl.Collator('en', { sensitivity: 'base', numeric: true })
 
 export function healthCheckStatus(automation: AgentAutomation): string {
+    if (automation.monitoringType === 'push' && !automation.lastStatus) return automation.status === 'active' ? 'Awaiting reading' : 'Paused'
     if (automation.actionType === 'agent_prompt' && !automation.targetUrl) return 'Missing URL'
     if (automation.consecutiveFailures || automation.lastStatus === 'failed') return 'Unhealthy'
     if (automation.lastStatus === 'warning') return 'Warning'

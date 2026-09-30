@@ -25,7 +25,7 @@ export type AutomationRow = {
     name: string
     prompt: string
     target_url: string | null
-    monitoring_type: 'fetch' | 'post' | 'tcp' | 'ssh' | 'json'
+    monitoring_type: 'fetch' | 'post' | 'tcp' | 'ssh' | 'json' | 'push'
     follow_redirects: boolean
     user_agent: string | null
     expected_down: boolean
@@ -133,7 +133,7 @@ type NormalizedAutomationInput = {
     name: string
     prompt: string
     targetUrl: string | null
-    monitoringType: 'fetch' | 'post' | 'tcp' | 'ssh' | 'json'
+    monitoringType: 'fetch' | 'post' | 'tcp' | 'ssh' | 'json' | 'push'
     followRedirects: boolean
     userAgent: string | null
     expectedDown: boolean
@@ -231,13 +231,13 @@ export function normalizeAutomationInput(input: AutomationInput, existing?: Auto
     const prompt = clean(input.prompt) || existing?.prompt || ''
     const monitoringType = parseMonitoringType(input.monitoringType ?? input.monitoring_type ?? existing?.monitoring_type)
     const rawTarget = clean(input.targetUrl ?? input.target_url ?? existing?.target_url)
-    const targetUrl = monitoringType === 'tcp' || monitoringType === 'ssh' || monitoringType === 'json' && ['system:metrics', 'system:ti-delivery', 'system:ti-collection', 'system:ti-enrichment', 'system:recovery'].includes(rawTarget) ? rawTarget : normalizeTargetUrl(rawTarget)
+    const targetUrl = monitoringType === 'push' || monitoringType === 'tcp' || monitoringType === 'ssh' || monitoringType === 'json' && ['system:metrics', 'system:ti-delivery', 'system:ti-collection', 'system:ti-enrichment', 'system:recovery'].includes(rawTarget) ? rawTarget : normalizeTargetUrl(rawTarget)
     const jsonRule = monitoringType === 'json' ? normalizeJsonRule(input.jsonRule ?? input.json_rule ?? existing?.json_rule) : null
     const followRedirects = parseBoolean(input.followRedirects ?? input.follow_redirects ?? existing?.follow_redirects, true)
     const userAgent = clean(input.userAgent ?? input.user_agent ?? existing?.user_agent) || null
     const expectedDown = parseBoolean(input.expectedDown ?? input.expected_down ?? existing?.expected_down, false)
     const upsideDown = parseBoolean(input.upsideDown ?? input.upside_down ?? existing?.upside_down, false)
-    const timeoutSeconds = parseBoundedInteger(input.timeoutSeconds ?? input.timeout_seconds ?? existing?.timeout_seconds, 1, 120, 5)
+    const timeoutSeconds = parseBoundedInteger(input.timeoutSeconds ?? input.timeout_seconds ?? existing?.timeout_seconds, 1, monitoringType === 'push' ? 86400 : 120, monitoringType === 'push' ? 180 : 5)
     const retryCount = parseBoundedInteger(input.retryCount ?? input.retry_count ?? existing?.retry_count, 0, 5, 4)
     const notifyWarnings = parseBoolean(input.notifyWarnings ?? input.notify_warnings ?? existing?.notify_warnings, false)
     const scheduleKind = parseScheduleKind(input.scheduleKind ?? input.schedule_kind ?? existing?.schedule_kind)
@@ -260,8 +260,12 @@ export function normalizeAutomationInput(input: AutomationInput, existing?: Auto
     }
 
     if (actionType === 'agent_prompt') {
-        if (!targetUrl) throw new Error('Monitoring needs a URL to check.')
-        if (monitoringType === 'tcp' || monitoringType === 'ssh') {
+        if (!targetUrl) throw new Error(monitoringType === 'push' ? 'Enter a source ID.' : 'Monitoring needs a URL to check.')
+        if (monitoringType === 'push') {
+            if (!/^[\w./:-]{1,128}$/.test(targetUrl) || targetUrl.startsWith('system:')) throw new Error('Use a source ID of 1–128 letters, numbers, dots, slashes, colons, hyphens or underscores. The system: prefix is reserved.')
+            if (scheduleKind !== 'interval' || intervalMinutes !== 1) throw new Error('External checks must check for missing updates every minute.')
+            if (expectedDown || upsideDown) throw new Error('External checks cannot invert sensor conditions.')
+        } else if (monitoringType === 'tcp' || monitoringType === 'ssh') {
             if (!/^[^:/\s]+(?::\d+)?$/.test(targetUrl)) throw new Error(`${monitoringType.toUpperCase()} checks need a host and optional port.`)
         } else if (!(monitoringType === 'json' && ['system:metrics', 'system:ti-delivery', 'system:ti-collection', 'system:ti-enrichment', 'system:recovery'].includes(targetUrl!))) {
             let parsedUrl: URL
@@ -269,6 +273,7 @@ export function normalizeAutomationInput(input: AutomationInput, existing?: Auto
             if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error('Monitoring URL must use HTTP or HTTPS.')
         }
     }
+    if (monitoringType === 'push' && actionType !== 'agent_prompt') throw new Error('External events require a monitoring check.')
 
     if (status === 'active' && actionType === 'system_alert' && !modelName) {
         throw new Error('System alerts need a delivery destination before activation.')
@@ -382,6 +387,7 @@ export async function recoverStaleAutomationRuns() {
 }
 
 export async function executeAutomation(automation: AutomationRow) {
+    if (automation.monitoring_type === 'push') return (await import('./pushMonitoring.ts')).checkPushMonitor(automation.id)
     let accessGranted = false
     let actionCompleted = false
     let outcome: { kind: 'failure' | 'warning' | null, message: string }
@@ -776,8 +782,8 @@ function parseActionType(value: unknown): AutomationActionType {
     return ACTION_TYPES.has(actionType) ? actionType as AutomationActionType : 'agent_prompt'
 }
 
-function parseMonitoringType(value: unknown): 'fetch' | 'post' | 'tcp' | 'ssh' | 'json' {
-    return value === 'post' || value === 'tcp' || value === 'ssh' || value === 'json' ? value : 'fetch'
+function parseMonitoringType(value: unknown): AutomationRow['monitoring_type'] {
+    return value === 'post' || value === 'tcp' || value === 'ssh' || value === 'json' || value === 'push' ? value : 'fetch'
 }
 
 function parseDestinations(value: unknown, fallback: string | null) {

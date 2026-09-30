@@ -14,7 +14,7 @@ export type AgentAutomation = {
     name: string
     prompt: string
     targetUrl: string | null
-    monitoringType: 'fetch' | 'post' | 'tcp' | 'ssh' | 'json'
+    monitoringType: 'fetch' | 'post' | 'tcp' | 'ssh' | 'json' | 'push'
     followRedirects: boolean
     userAgent: string | null
     expectedDown: boolean
@@ -92,7 +92,7 @@ export type AutomationPayload = {
     name: string
     prompt: string
     targetUrl?: string | null
-    monitoringType?: 'fetch' | 'post' | 'tcp' | 'ssh' | 'json'
+    monitoringType?: 'fetch' | 'post' | 'tcp' | 'ssh' | 'json' | 'push'
     followRedirects?: boolean
     userAgent?: string | null
     expectedDown?: boolean
@@ -164,6 +164,10 @@ export function createAutomation(payload: AutomationPayload) {
         method: 'POST',
         body: JSON.stringify(payload),
     })
+}
+
+export function createSenderKey(id: string) {
+    return request<{ secret: string, endpoint: string }>(`/automations/${id}/sender-key`, { method: 'POST' })
 }
 
 export function updateAutomation(id: string, payload: AutomationPayload) {

@@ -12,6 +12,7 @@ import getHostOverview from './handlers/hostOverview.ts'
 import { getProfileSshKeys, postProfileSshKey, deleteProfileSshKey } from './handlers/profileSshKeys.ts'
 import authRoutes from './authRoutes.ts'
 import { getMonitoringCases, updateMonitoringCase } from './handlers/monitoringCases.ts'
+import { postPushMonitoringEvent, postPushMonitoringKey } from './handlers/pushMonitoring.ts'
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify'
 import indexHandler from './handlers/index.ts'
 import getUser from './handlers/user/get.ts'
@@ -572,6 +573,8 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/cases/monitoring/:id', getMonitoringCases)
     fastify.patch('/cases/monitoring/:id', updateMonitoringCase)
     fastify.get('/automations', getAutomations)
+    fastify.post('/automations/:id/events', postPushMonitoringEvent)
+    fastify.post('/automations/:id/sender-key', postPushMonitoringKey)
     fastify.post('/automations', postAutomation)
     fastify.get('/automations/:id', getAutomation)
     fastify.put('/automations/:id', putAutomation)
