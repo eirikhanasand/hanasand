@@ -138,9 +138,22 @@ export async function processLogBatch(logs: LogInput[], organizationId: string, 
         AND (e.processing_status IS DISTINCT FROM 'processed' OR e.normalized IS DISTINCT FROM e.normalized || item.result)`, [JSON.stringify(updates)])
 }
 
+function mayBeAuthentication(log: LogInput) {
+    const metadata = log.metadata && typeof log.metadata === 'object' && !Array.isArray(log.metadata) ? log.metadata : {}
+    const structured = metadata.structured && typeof metadata.structured === 'object' && !Array.isArray(metadata.structured)
+        ? metadata.structured as Record<string, unknown> : {}
+    return metadata.category === 'authentication'
+        || String(metadata.event_type || structured.event_type || '').trim() === 'authentication'
+        || /(?:Accepted|Failed) (?:password|publickey) for (?:invalid user )?\S+ from \S+/.test(log.message)
+        || /(?:^|[-_])(ssh|sshd|auth|sudo)(?:[-_]|$)/i.test(log.service)
+}
+
 function requiresCorrelation(log: LogInput, rules: Awaited<ReturnType<typeof loadConfiguredRules>>) {
-    const event = normalizeEvent(normalizeLogEvent(log, rules), { vendor: 'Hanasand', product: 'Logs' })
-    return event.eventType === 'authentication' && event.action === 'login'
+    if (!mayBeAuthentication(log)) return false
+    // The event already has Hanasand's canonical type and action here. Avoid
+    // building and redacting a second normalized copy just to choose its lane.
+    const event = normalizeLogEvent(log, rules)
+    return event.event_type.trim() === 'authentication' && event.action.trim() === 'login'
 }
 
 function scopedProcessor(platformId: string, onWork: () => void, afterBatch?: () => Promise<void>) {

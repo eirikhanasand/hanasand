@@ -367,12 +367,15 @@ test('durable stateless pages from mixed batches overlap without the correlation
 })
 
 test('durable authentication login pages keep the correlation lock', async () => {
-    fresh = []; priority = []; watermark = '1000'; cursor.history_end_id = '1'
-    backlog = [makeLog('1', { category: 'authentication', action: 'login' })]
+    fresh = []; priority = []; watermark = '1000'; cursor.history_end_id = '2'
+    backlog = [
+        makeLog('1', { category: 'authentication', action: 'login' }),
+        makeLog('2', { structured: { event_type: 'authentication', action: 'login' } }),
+    ]
 
     await processStoredLogs()
 
-    expect(checked).toContain('1')
+    expect(checked).toEqual(['1', '2'])
     expect(statements.filter(sql => sql.includes('event:log-batch'))).toHaveLength(1)
 })
 
