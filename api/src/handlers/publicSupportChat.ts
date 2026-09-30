@@ -73,7 +73,8 @@ export async function publicSupportChat(req: FastifyRequest<{ Body: ChatBody; Qu
             })
             return res.status(response.status).send(await response.json())
         }
-        const result = await sendSupportChat(hash, { requestId, message: body || 'I\'d like to speak with a human.', handoff: handoff === true, conversationId: conversationId as string | undefined })
+        const result = await sendSupportChat(hash, { requestId, message: body || 'I\'d like to speak with a human.', handoff: handoff === true, conversationId: conversationId as string | undefined }, undefined,
+            error => req.log.error({ err: error }, 'Support AI completion failed'))
         return res.send(result)
     } catch (error) {
         if (error instanceof SupportStateError) return res.status(error.status).send({ error: error.message })

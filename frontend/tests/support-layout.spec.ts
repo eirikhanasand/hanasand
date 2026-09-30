@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { mockSupportLive, supportSnapshot } from './support-fixture'
+import { mockSupportLive, supportSnapshot, supportTicketId } from './support-fixture'
 
 const ticket = { id: 'ticket-1', subject: 'Account question', status: 'open', user_name: 'Customer', updated_at: '2026-09-19T12:00:00Z' }
 const message = { id: 'message-1', sender_id: 'customer', sender_name: 'Customer', body: 'I need help with my account.', created_at: ticket.updated_at }
@@ -69,6 +69,49 @@ test('public support places close conversation beside new chat', async ({ page }
     const closeChatBox = (await closeChat.boundingBox())!
     expect(Math.abs(newChatBox.y - closeChatBox.y)).toBeLessThan(2)
     expect(newChatBox.x + newChatBox.width).toBeLessThanOrEqual(closeChatBox.x)
+})
+
+test('a failed AI reply offers working retry and human handoff buttons', async ({ page }) => {
+    const messages: { id: string; sender_kind: string; sender_name: string; body: string; request_id?: string }[] = []
+    const requests: Record<string, unknown>[] = []
+    let channel = 'ai'
+    const snapshot = () => ({ ...supportSnapshot(messages, channel), messages })
+    await page.route('**/api/support/chat*', async route => {
+        if (route.request().method() === 'POST') {
+            const body = route.request().postDataJSON()
+            if (body.action === 'connect') return route.fulfill({ json: { ticket: 'a'.repeat(64) } })
+            requests.push(body)
+            if (body.handoff) {
+                channel = 'human'
+                messages.push({ id: 'handoff', sender_kind: 'user', sender_name: 'You', body: body.message, request_id: body.requestId })
+                messages.push({ id: 'waiting', sender_kind: 'system', sender_name: 'Support', body: 'Waiting for support.' })
+                return route.fulfill({ json: snapshot() })
+            }
+            if (!messages.some(message => message.request_id === body.requestId)) messages.push({ id: 'question', sender_kind: 'user', sender_name: 'You', body: body.message, request_id: body.requestId })
+            return route.fulfill({ json: { ...snapshot(), error: 'Hanasand AI could not answer right now.' } })
+        }
+        await route.fulfill({ json: snapshot() })
+    })
+    await mockSupportLive(page)
+    await page.goto('/support')
+    const error = page.getByRole('region', { name: 'Support chat', exact: true }).getByRole('alert')
+    await page.getByLabel('Message', { exact: true }).fill('hei')
+    const send = page.getByRole('button', { name: 'Send message' })
+    await expect(send).toBeEnabled()
+    await send.click()
+    await expect(error).toContainText('Hanasand AI could not answer right now')
+    await expect(error).not.toContainText('Retry your message or talk to a human')
+    const retry = page.getByRole('button', { name: 'Retry', exact: true })
+    const handoff = page.getByRole('button', { name: 'Talk to a human', exact: true })
+    await expect(retry).toBeVisible()
+    await expect(handoff).toBeVisible()
+    await retry.click()
+    await expect(error).toContainText('Hanasand AI could not answer right now')
+    expect(requests).toHaveLength(2)
+    expect(requests[1].requestId).toBe(requests[0].requestId)
+    await handoff.click()
+    await expect(page.getByRole('log', { name: 'Messages' }).getByText('Waiting for support.')).toBeVisible()
+    expect(requests[2]).toMatchObject({ handoff: true, conversationId: supportTicketId })
 })
 
 test('an unanswered conversation asks whether the customer found what they needed', async ({ page }) => {

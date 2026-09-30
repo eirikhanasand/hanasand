@@ -191,6 +191,7 @@ export default function PublicSupportChat({ active = true, onUnreadChange, onRes
     const lastMessage = conversation.messages.at(-1)
     const unanswered = !human && !busy && lastMessage?.sender_kind === 'user' && lastMessage.request_id
         ? { requestId: lastMessage.request_id, message: lastMessage.body } : null
+    const retryable: Submission | null = retry || unanswered
     const visibleMessages = outgoing && !conversation.messages.some(message => message.request_id === outgoing.requestId)
         ? [...conversation.messages, { id: outgoing.requestId, body: outgoing.message, sender_kind: 'user' as const, sender_name: 'You' }]
         : conversation.messages
@@ -217,9 +218,14 @@ export default function PublicSupportChat({ active = true, onUnreadChange, onRes
                 {busy && !human ? <p role='status' className='mt-4 flex items-center gap-2 text-xs text-ui-muted'><LoaderCircle className='h-3.5 w-3.5 animate-spin' aria-hidden='true' />Hanasand AI is thinking…</p> : null}
             </div>
             <div className='min-w-0 border-t border-ui-border bg-ui-raised px-4 pb-3 pt-3'>
-                {error ? <div role='alert' className='mb-3 text-xs leading-5 text-ui-text'>{error}{retry ? <button type='button' disabled={sending || transferring} className='ml-2 font-semibold underline disabled:opacity-50' onClick={() => void submit(retry)}>Retry</button> : null}</div> : null}
+                {error || retryable ? <div role={error ? 'alert' : 'status'} className='mb-3 text-xs leading-5 text-ui-text'>
+                    {error || 'No answer yet.'}
+                    {retryable ? <div className='mt-2 flex flex-wrap gap-2'>
+                        <button type='button' disabled={sending || transferring} className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2 font-semibold text-ui-text transition-colors hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary disabled:opacity-50' onClick={() => void submit(retryable)}>Retry</button>
+                        <button type='button' disabled={sending || transferring} className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2 font-semibold text-ui-text transition-colors hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary disabled:opacity-50' onClick={() => void submit(retryable.handoff ? retryable : { requestId: crypto.randomUUID(), message: 'I\'d like to speak with a human.', handoff: true, conversationId: retryable.conversationId })}>{transferring ? <span className='inline-flex items-center gap-1.5'><LoaderCircle className='h-3.5 w-3.5 animate-spin' aria-hidden='true' />Connecting…</span> : 'Talk to a human'}</button>
+                    </div> : null}
+                </div> : null}
                 {!error && connection === 'reconnecting' ? <p role='status' className='mb-2 text-xs text-ui-muted'>{refreshError || 'Reconnecting…'}</p> : null}
-                {!error && unanswered ? <button type='button' onClick={() => void submit(unanswered)} className='mb-2 text-xs font-medium text-ui-primary hover:underline'>Retry AI answer</button> : null}
                 <form onSubmit={send} className='flex min-w-0 items-end gap-2 rounded-2xl border border-ui-border bg-ui-panel p-2 focus-within:border-ui-primary focus-within:ring-2 focus-within:ring-ui-primary/10'>
                     <textarea aria-label='Message' rows={Math.min(6, Math.max(1, input.split('\n').length))} maxLength={4000} value={input} onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.nativeEvent.isComposing) { event.preventDefault(); if (!loading && !busy) send(event) } }} placeholder={human ? 'Message the support team…' : 'Ask a question…'} className='min-h-9 min-w-0 flex-1 resize-none bg-transparent px-2 py-1 text-sm leading-5 text-ui-text outline-none placeholder:text-ui-muted' />
                     <button type='submit' disabled={loading || busy || !input.trim()} aria-label='Send message' className='grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-ui-primary text-ui-on-primary transition hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary disabled:opacity-40'>{sending ? <LoaderCircle className='h-4 w-4 animate-spin' /> : <ArrowUp className='h-4 w-4' />}</button>

@@ -121,8 +121,10 @@ test('handoff preserves history, enters staff queue, and returns agent replies t
 
 test('AI failure saves the message; retry completes it exactly once', async () => {
     const hash = session(), request = input('Help me sign in')
-    const failed = await sendSupportChat(hash, request, async () => { throw new Error('Model offline') })
-    expect(failed.error).toContain('could not answer')
+    const failure = new Error('Model offline'), logged: unknown[] = []
+    const failed = await sendSupportChat(hash, request, async () => { throw failure }, cause => logged.push(cause))
+    expect(failed.error).toBe('Hanasand AI could not answer right now.')
+    expect(logged).toEqual([failure])
     expect(failed.messages).toHaveLength(1)
     expect(failed.pending).toBe(false)
     const recovered = await sendSupportChat(hash, request, reply)

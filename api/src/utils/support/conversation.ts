@@ -42,7 +42,7 @@ async function transfer(query: typeof queryOnce, ticketId: string) {
         VALUES ($1, $2, 'system', $3, clock_timestamp())`, [randomUUID(), ticketId, handoffMessage])
 }
 
-export async function sendSupportChat(hash: string, input: Input, answer = answerSupport) {
+export async function sendSupportChat(hash: string, input: Input, answer = answerSupport, onAnswerError?: (error: unknown) => void) {
     const pending = await withTransaction(async query => {
         // Also serializes creation: retries must not create duplicate conversations.
         await query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`support:${hash}`])
@@ -91,7 +91,8 @@ export async function sendSupportChat(hash: string, input: Input, answer = answe
                     await query('UPDATE support_tickets SET ai_pending_id = NULL, ai_pending_at = NULL, updated_at = NOW() WHERE id = $1', [pending.ticketId!])
                 }
             })
-        } catch {
+        } catch (cause) {
+            onAnswerError?.(cause)
             await withTransaction(async query => {
                 const ticket = (await query('SELECT status, channel, ai_pending_id FROM support_tickets WHERE id=$1 FOR UPDATE', [pending.ticketId!])).rows[0]
                 // A late AI failure must never reopen a resolved chat or take over a newer reply.
@@ -99,7 +100,7 @@ export async function sendSupportChat(hash: string, input: Input, answer = answe
                 if ((supportFailoverActive() || independentSupport) && ticket.status === 'open' && ticket.channel === 'ai') await transfer(query, pending.ticketId!)
                 else await query('UPDATE support_tickets SET ai_pending_id = NULL, ai_pending_at = NULL WHERE id = $1 AND ai_pending_id = $2', [pending.ticketId!, pending.messageId!])
             })
-            error = 'Hanasand AI could not answer right now. Retry your message or talk to a human.'
+            error = 'Hanasand AI could not answer right now.'
         }
     }
     const conversation = await readSupportConversation(hash, input.conversationId)
