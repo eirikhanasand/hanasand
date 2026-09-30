@@ -23,9 +23,9 @@ test('website sign-ins retain real correlation fields without session credential
     expect(log).toMatchObject({ log_type: 'SigninLogs', event_type: 'authentication', action: 'login', outcome: 'failure', user: { id: 'user-a' }, source: { ip: '192.0.2.1' } })
     expect(JSON.stringify(log)).not.toContain('token_id')
 })
-test('HTTP errors are high severity and requests have structured HTTP fields', () => {
+test('HTTP errors default to medium severity and requests have structured HTTP fields', () => {
     const log = normalizeLogEvent(storedSourceLog('traffic_events', { ...row, domain: 'hanasand.com', method: 'GET', path: '/example', status: 503 }))
-    expect(log).toMatchObject({ log_type: 'HttpLogs', severity: 'high', http: { path: '/example', method: 'GET', status_code: 503 } })
+    expect(log).toMatchObject({ log_type: 'HttpLogs', severity: 'medium', http: { path: '/example', method: 'GET', status_code: 503 } })
 })
 test('audit events preserve organization scope and structured object context', () => {
     const log = storedSourceLog('system_events', { ...row, organization_id: 'org-a', actor_id: 'user-a', severity: 'critical', event_type: 'configuration.changed', object_id: 'setting', context: { key: 'value' } })

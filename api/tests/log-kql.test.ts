@@ -19,8 +19,8 @@ test('KQL projection, aggregation, quoted pipes and malformed syntax', () => {
     expect(() => compileLogQuery('Logs | where (Severity == "high"')).toThrow()
     expect(() => compileLogQuery('Logs | where Severity ==')).toThrow()
 })
-test('original level is preserved independently of security severity', () => {
-    for (const [level, severity] of [['info','low'], ['warn','medium'], ['error','high'], ['fatal','critical']]) {
+test('original level is preserved independently of default error severity', () => {
+    for (const [level, severity] of [['info','low'], ['warn','medium'], ['error','medium'], ['fatal','critical']]) {
         const event = normalizeLogEvent({ id: 1, service: 'api', level, message: 'message', created_at: '2026-09-19T00:00:00Z' })
         expect(event.level).toBe(level); expect(event.severity).toBe(severity)
     }

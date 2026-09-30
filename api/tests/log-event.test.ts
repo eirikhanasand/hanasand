@@ -24,7 +24,7 @@ test('local Bun Pwned validation probes remain visible as low severity traffic',
     expect(event.metadata).toMatchObject({ expected_internal_probe: true, original_level: 'error' })
 })
 
-test('external Pwned validation failures remain high severity', () => {
+test('external Pwned validation failures retain their explicit high severity', () => {
     const event = normalizeLogEvent({
         id: 'request',
         service: 'http-traffic',
@@ -61,7 +61,7 @@ test('log-ingest deadlocks remain errors but use low detection severity', () => 
     expect(event.outcome).toBe('failure')
 })
 
-test('deadlocks outside log ingest keep their level-derived severity', () => {
+test('deadlocks outside log ingest use the default error severity', () => {
     const event = normalizeLogEvent({
         id: 'other-deadlock',
         service: 'hanasand-api',
@@ -71,5 +71,5 @@ test('deadlocks outside log ingest keep their level-derived severity', () => {
         metadata: { log_type: 'HttpLogs', method: 'POST', path: '/api/other' },
     })
 
-    expect(event.severity).toBe('high')
+    expect(event.severity).toBe('medium')
 })

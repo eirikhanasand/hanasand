@@ -28,11 +28,16 @@ export function normalizeLogEvent(log: LogInput, rules?: Parameters<typeof class
     const expectedPwnedProbe = type === 'HttpLogs' && path === '/api/pwned' && method === 'POST'
         && Number(statusCode) === 400 && userAgent.startsWith('Bun/')
         && ['127.0.0.1', '::1'].includes(sourceIp)
+    const externalPwnedError = type === 'HttpLogs' && path === '/api/pwned' && method === 'POST'
+        && Number(statusCode) === 400 && !expectedPwnedProbe && log.level === 'error'
     const expectedLogIngestDeadlock = type === 'HttpLogs' && log.service === 'hanasand-api'
         && path === '/api/logs/ingest' && method === 'POST' && log.message === 'deadlock detected'
     const eventMetadata = expectedPwnedProbe
         ? { ...metadata, expected_internal_probe: true, original_level: log.level }
         : metadata
+    const levelSeverity = log.level === 'fatal' ? 'critical' : ['error', 'warn'].includes(log.level) ? 'medium' : 'low'
+    const severity = expectedPwnedProbe || expectedLogIngestDeadlock ? 'low'
+        : classification?.severity || (externalPwnedError ? 'high' : levelSeverity)
     return {
         ...(['routine-group-analyzer', 'postgres-session-analyzer'].includes(log.service) && log.source_event_id ? { source_event_id: log.source_event_id } : {}),
         schema_version: 'logs.v1', source_vendor: 'Hanasand', source_product: 'Logs', timestamp: new Date(log.created_at).toISOString(),
@@ -45,6 +50,6 @@ export function normalizeLogEvent(log: LogInput, rules?: Parameters<typeof class
         user: signin ? { ...user, id: `${log.host || 'unknown'}:${signin[1]}`, name: signin[1] } : user,
         source: { ...source, ip: mongo?.ip || signin?.[2] || source.ip || request.remoteAddress || metadata.source_ip || access.ip },
         device: metadata.device || structured.device, metadata: eventMetadata,
-        severity: expectedPwnedProbe || expectedLogIngestDeadlock ? 'low' : classification?.severity || (log.level === 'fatal' ? 'critical' : log.level === 'error' ? 'high' : log.level === 'warn' ? 'medium' : 'low'),
+        severity,
     }
 }
