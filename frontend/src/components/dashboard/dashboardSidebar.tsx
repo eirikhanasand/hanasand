@@ -13,6 +13,7 @@ import { useWorkspace } from '@/components/organizations/workspaceProvider'
 import { getThesisNavigation, subscribeThesisNavigation } from '@/utils/layout/thesisNavigation'
 import { canViewHanasandInternalPages } from '@/utils/organizations/internalPageAccess'
 import { fetchHasUnreadMail } from '@/utils/mail/client'
+import { hasUnreadSupportMessages, supportReadStateKey, SUPPORT_READ_STATE_EVENT, type SupportUnreadTicket } from '@/utils/supportUnread'
 
 const emptyThesisNavigation: ReturnType<typeof getThesisNavigation> = []
 
@@ -62,13 +63,13 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
     )
     const compact = desktop && mode === 'compact'
     const [hasVMs, setHasVMs] = useState(false)
-    const [supportQueue, setSupportQueue] = useState<{ userId: string; hasPending: boolean } | null>(null)
-    const hasPendingSupport = supportQueue?.userId === access.id && supportQueue.hasPending
+    const [supportQueue, setSupportQueue] = useState<{ userId: string; scope: string; tickets: SupportUnreadTicket[]; hasUnread: boolean } | null>(null)
+    const hasUnreadSupport = supportQueue?.userId === access.id && supportQueue.hasUnread
     const [mailQueue, setMailQueue] = useState<{ userId: string; hasUnread: boolean } | null>(null)
     const hasUnreadMail = mailQueue?.userId === access.id && mailQueue.hasUnread
     const pendingCommunicationItems = [
         hasUnreadMail ? 'unread mail' : null,
-        hasPendingSupport ? 'pending support chats' : null,
+        hasUnreadSupport ? 'unread support chats' : null,
     ].filter((item): item is string => item !== null)
     const communicationSummary = pendingCommunicationItems.join(' and ')
     const thesisSheets = useSyncExternalStore(subscribeThesisNavigation, () => {
@@ -94,31 +95,57 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
     useEffect(() => {
         const controller = new AbortController()
         let requestInFlight = false
+        let refreshRequested = false
         const refresh = async () => {
-            if (requestInFlight) return
+            if (requestInFlight) { refreshRequested = true; return }
             requestInFlight = true
             try {
                 const response = await fetch('/api/backend/support/tickets', { cache: 'no-store', signal: controller.signal })
                 if (!response.ok) return
-                const payload = await response.json() as { isSupport?: boolean; tickets?: Array<{ status?: string }> }
+                const payload = await response.json() as { tickets?: SupportUnreadTicket[] }
                 if (!controller.signal.aborted) {
+                    const actorId = getCookie('impersonating_id') || getCookie('id') || access.id
+                    const scope = `user:${actorId}`
+                    const tickets = payload.tickets || []
                     setSupportQueue({
                         userId: access.id,
-                        hasPending: payload.isSupport === true && payload.tickets?.some(ticket => ticket.status === 'open') === true,
+                        scope,
+                        tickets,
+                        hasUnread: hasUnreadSupportMessages(tickets, scope),
                     })
                 }
             } catch { /* Keep the last known support queue state if the request fails. */ }
-            finally { requestInFlight = false }
+            finally {
+                requestInFlight = false
+                if (refreshRequested && !controller.signal.aborted) { refreshRequested = false; void refresh() }
+            }
+        }
+        const refreshReadState = (scope: string) => {
+            setSupportQueue(current => current?.userId === access.id && current.scope === scope
+                ? { ...current, hasUnread: hasUnreadSupportMessages(current.tickets, scope) }
+                : current)
+        }
+        const onReadState = (event: Event) => {
+            const scope = (event as CustomEvent<{ scope?: string }>).detail?.scope
+            if (scope === `user:${getCookie('impersonating_id') || getCookie('id') || access.id}`) refreshReadState(scope)
+        }
+        const onStorage = (event: StorageEvent) => {
+            const scope = `user:${getCookie('impersonating_id') || getCookie('id') || access.id}`
+            if (event.key === supportReadStateKey(scope)) refreshReadState(scope)
         }
         void refresh()
         const interval = window.setInterval(() => { void refresh() }, 60_000)
         window.addEventListener('focus', refresh)
         document.addEventListener('visibilitychange', refresh)
+        window.addEventListener(SUPPORT_READ_STATE_EVENT, onReadState)
+        window.addEventListener('storage', onStorage)
         return () => {
             controller.abort()
             window.clearInterval(interval)
             window.removeEventListener('focus', refresh)
             document.removeEventListener('visibilitychange', refresh)
+            window.removeEventListener(SUPPORT_READ_STATE_EVENT, onReadState)
+            window.removeEventListener('storage', onStorage)
         }
     }, [access.id, pathname])
     useEffect(() => {
@@ -216,7 +243,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
 
     function renderLink(item: { label: string, href: string }, key = item.href) {
         const pinned = preferences.pinned.includes(item.href)
-        const pendingLabel = pendingLabelForHref(item.href, hasUnreadMail, hasPendingSupport)
+        const pendingLabel = pendingLabelForHref(item.href, hasUnreadMail, hasUnreadSupport)
         return (
             <div key={key} className='group flex min-w-0 items-center rounded-md hover:bg-ui-canvas'>
                 <Link href={item.href} aria-current={active?.href === item.href ? 'page' : undefined}
@@ -335,7 +362,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
                     </div>
                 </div>
             }
-            const pendingLabel = item.href ? pendingLabelForHref(item.href, hasUnreadMail, hasPendingSupport) : null
+            const pendingLabel = item.href ? pendingLabelForHref(item.href, hasUnreadMail, hasUnreadSupport) : null
             return item.href ? <Link key={item.href} href={item.href} onClick={() => setPreview(null)} aria-current={active?.href === item.href ? 'page' : undefined}
                 aria-label={pendingLabel ? `${item.label}, ${pendingLabel}` : undefined}
                 className={`flex items-center gap-2 rounded-md py-2 pr-3 text-sm leading-5 hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary ${active?.href === item.href ? 'bg-ui-primary/10 font-semibold text-ui-primary' : 'text-ui-text'}`}
@@ -425,9 +452,9 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
     )
 }
 
-function pendingLabelForHref(href: string, hasUnreadMail: boolean, hasPendingSupport: boolean) {
+function pendingLabelForHref(href: string, hasUnreadMail: boolean, hasUnreadSupport: boolean) {
     if (href === '/mail' && hasUnreadMail) return 'unread messages'
-    if (href === '/support' && hasPendingSupport) return 'pending conversations'
+    if (href === '/support' && hasUnreadSupport) return 'unread messages'
     return null
 }
 
