@@ -73,12 +73,9 @@ export default async function TiEnrichmentPage() {
                 </div>
             )}
             {actors.length ? <details className='group overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
-                <summary className='flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-ui-text transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 [&::-webkit-details-marker]:hidden'>
+                <summary className='flex cursor-pointer list-none items-center justify-between px-4 py-3 text-ui-text transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 [&::-webkit-details-marker]:hidden'>
+                    <span className='text-base font-semibold'>History</span>
                     <ChevronDown aria-hidden className='h-4 w-4 shrink-0 text-ui-muted transition group-open:rotate-180' />
-                    <span>
-                        <span className='block text-base font-semibold'>History</span>
-                        <span className='mt-1 block text-sm text-ui-muted'>Exact persisted changes and the evidence that triggered them.</span>
-                    </span>
                 </summary>
                 <div className='divide-y divide-ui-border border-t border-ui-border'>
                     {updates.slice(0, 20).map(update => <ProfileUpdateRow key={update.id} update={update} actor={actors.find(item => item.id === update.actorId)} />)}
