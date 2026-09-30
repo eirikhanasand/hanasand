@@ -1,5 +1,6 @@
 import pg from 'pg'
 import { decryptSecret, deriveSecretKey, encryptSecret } from '../src/utils/crypto/secretBox.ts'
+import { decryptRepoSecret, encryptRepoSecret, isRepoSecretEncryptedWithCurrentKey } from '../src/utils/ai/repoCredentials.ts'
 
 if (process.env.ROTATE_ENCRYPTED_SECRETS_CONFIRM !== '1') {
     throw new Error('Set ROTATE_ENCRYPTED_SECRETS_CONFIRM=1 to run the encrypted-secret migration.')
@@ -7,9 +8,12 @@ if (process.env.ROTATE_ENCRYPTED_SECRETS_CONFIRM !== '1') {
 
 const mailCurrent = process.env.MAIL_SERVICE_KEY?.trim()
 const dwmCurrent = process.env.DWM_WEBHOOK_SECRET_KEY?.trim()
-if (!mailCurrent || !dwmCurrent) throw new Error('Dedicated mail and DWM encryption keys are required.')
+if (!mailCurrent || !dwmCurrent || !process.env.AI_REPO_SECRET_KEY?.trim()) {
+    throw new Error('Dedicated mail, DWM, and AI repository encryption keys are required.')
+}
 
 const previousSources = [
+    process.env.AI_REPO_SECRET_KEY_PREVIOUS,
     process.env.MAIL_SERVICE_KEY_PREVIOUS,
     process.env.DWM_WEBHOOK_SECRET_KEY_PREVIOUS,
     process.env.VM_API_TOKEN_PREVIOUS,
@@ -56,6 +60,25 @@ async function rotateRows(input: {
     return { scanned: rows.length, changed }
 }
 
+async function rotateAiRepoCredentials() {
+    const { rows } = await client.query(
+        'SELECT id, github_token_encrypted AS secret FROM ai_imported_repositories WHERE github_token_encrypted IS NOT NULL FOR UPDATE',
+    )
+    let changed = 0
+    for (const row of rows as Array<{ id: string, secret: string }>) {
+        if (isRepoSecretEncryptedWithCurrentKey(row.secret)) continue
+
+        const rotated = encryptRepoSecret(decryptRepoSecret(row.secret))
+        const result = await client.query(
+            'UPDATE ai_imported_repositories SET github_token_encrypted = $2 WHERE id = $1 AND github_token_encrypted = $3',
+            [row.id, rotated, row.secret],
+        )
+        if (result.rowCount !== 1) throw new Error('Concurrent update blocked migration of AI repository credentials.')
+        changed++
+    }
+    return { scanned: rows.length, changed }
+}
+
 await client.connect()
 try {
     await client.query('BEGIN')
@@ -63,6 +86,7 @@ try {
         mailAccounts: await rotateRows({ table: 'mail_accounts', idColumn: 'user_id', secretColumn: 'mail_password_encrypted', currentKey: deriveSecretKey(mailCurrent) }),
         sharedMailAccounts: await rotateRows({ table: 'shared_mail_accounts', idColumn: 'id', secretColumn: 'mail_password_encrypted', currentKey: deriveSecretKey(mailCurrent) }),
         dwmDestinations: await rotateRows({ table: 'dwm_webhook_destinations', idColumn: 'id', secretColumn: 'endpoint_encrypted', currentKey: deriveSecretKey(dwmCurrent) }),
+        aiRepoCredentials: await rotateAiRepoCredentials(),
     }
     await client.query('COMMIT')
     console.info('Encrypted credential migration completed.', result)

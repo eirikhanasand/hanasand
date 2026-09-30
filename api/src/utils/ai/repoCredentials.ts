@@ -3,6 +3,12 @@ import run from '#db'
 
 const IV_LENGTH = 12
 const keySourceEnvNames = ['AI_REPO_SECRET_KEY', 'VM_API_TOKEN', 'MAIL_SERVICE_KEY', 'DB_PASSWORD'] as const
+const previousKeySourceEnvNames = [
+    'AI_REPO_SECRET_KEY_PREVIOUS',
+    'VM_API_TOKEN_PREVIOUS',
+    'MAIL_SERVICE_KEY_PREVIOUS',
+    'DB_PASSWORD_PREVIOUS',
+] as const
 
 type RepoCredentialRow = {
     github_token_encrypted: string | null
@@ -35,12 +41,30 @@ export function decryptRepoSecret(value: string) {
         return value
     }
 
-    const decipher = crypto.createDecipheriv('aes-256-gcm', repoCredentialEncryptionKey(), Buffer.from(ivB64, 'base64'))
-    decipher.setAuthTag(Buffer.from(tagB64, 'base64'))
-    return Buffer.concat([
-        decipher.update(Buffer.from(dataB64, 'base64')),
-        decipher.final(),
-    ]).toString('utf8')
+    const sources = repoCredentialKeySources()
+    for (const source of sources) {
+        try {
+            return decryptWithSource(value, source.value)
+        } catch {
+            // Keep old ciphertext readable while a key rotation is in progress.
+        }
+    }
+
+    throw new Error('Unable to decrypt repository credential with the configured keys.')
+}
+
+export function isRepoSecretEncryptedWithCurrentKey(value: string) {
+    if (!value.includes('.')) return false
+
+    const source = repoCredentialKeySource()
+    if (!source) return false
+
+    try {
+        decryptWithSource(value, source.value)
+        return true
+    } catch {
+        return false
+    }
 }
 
 function repoCredentialEncryptionKey() {
@@ -52,6 +76,18 @@ function repoCredentialEncryptionKey() {
     return crypto.createHash('sha256').update(source.value).digest()
 }
 
+function decryptWithSource(value: string, source: string) {
+    const [ivB64, tagB64, dataB64] = value.split('.')
+    if (!ivB64 || !tagB64 || !dataB64) return value
+
+    const decipher = crypto.createDecipheriv('aes-256-gcm', crypto.createHash('sha256').update(source).digest(), Buffer.from(ivB64, 'base64'))
+    decipher.setAuthTag(Buffer.from(tagB64, 'base64'))
+    return Buffer.concat([
+        decipher.update(Buffer.from(dataB64, 'base64')),
+        decipher.final(),
+    ]).toString('utf8')
+}
+
 function repoCredentialKeySource() {
     for (const name of keySourceEnvNames) {
         const value = process.env[name]?.trim()
@@ -61,6 +97,14 @@ function repoCredentialKeySource() {
     }
 
     return null
+}
+
+function repoCredentialKeySources() {
+    const values = [...keySourceEnvNames, ...previousKeySourceEnvNames]
+        .map(name => process.env[name]?.trim())
+        .filter((value): value is string => Boolean(value))
+
+    return [...new Set(values)].map(value => ({ value }))
 }
 
 export function buildTokenHint(token: string) {

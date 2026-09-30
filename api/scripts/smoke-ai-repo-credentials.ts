@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict'
-import { buildTokenHint, decryptRepoSecret, encryptRepoSecret } from '../src/utils/ai/repoCredentials.ts'
+import { buildTokenHint, decryptRepoSecret, encryptRepoSecret, isRepoSecretEncryptedWithCurrentKey } from '../src/utils/ai/repoCredentials.ts'
 
-const secretEnvNames = ['AI_REPO_SECRET_KEY', 'MAIL_SERVICE_KEY', 'VM_API_TOKEN', 'DB_PASSWORD'] as const
+const secretEnvNames = [
+    'AI_REPO_SECRET_KEY', 'AI_REPO_SECRET_KEY_PREVIOUS',
+    'MAIL_SERVICE_KEY', 'MAIL_SERVICE_KEY_PREVIOUS',
+    'VM_API_TOKEN', 'VM_API_TOKEN_PREVIOUS',
+    'DB_PASSWORD', 'DB_PASSWORD_PREVIOUS',
+] as const
 const previousEnv = new Map<string, string | undefined>()
 
 for (const name of secretEnvNames) {
@@ -31,6 +36,24 @@ try {
 
     const dbEncrypted = encryptRepoSecret(token)
     assert.equal(decryptRepoSecret(dbEncrypted), token, 'Existing server-side DB secret fallback should round-trip.')
+
+    delete process.env.DB_PASSWORD
+    process.env.VM_API_TOKEN = 'unit-test-old-vm-token'
+    const vmEncrypted = encryptRepoSecret(token)
+
+    process.env.AI_REPO_SECRET_KEY = 'unit-test-new-repo-key'
+    process.env.VM_API_TOKEN = 'unit-test-new-vm-token'
+    process.env.VM_API_TOKEN_PREVIOUS = 'unit-test-old-vm-token'
+    assert.equal(decryptRepoSecret(vmEncrypted), token, 'Previous VM token should decrypt repository credentials during rotation.')
+
+    const reencrypted = encryptRepoSecret(token)
+    assert.equal(decryptRepoSecret(reencrypted), token, 'New dedicated key should round-trip repository credentials.')
+    assert(isRepoSecretEncryptedWithCurrentKey(reencrypted), 'New ciphertext should use the dedicated active key.')
+    assert(!isRepoSecretEncryptedWithCurrentKey(vmEncrypted), 'Legacy ciphertext should be identified for migration.')
+
+    delete process.env.VM_API_TOKEN_PREVIOUS
+    delete process.env.VM_API_TOKEN
+    assert.equal(decryptRepoSecret(reencrypted), token, 'Dedicated ciphertext should remain readable after previous-key removal.')
 } finally {
     for (const [name, value] of previousEnv) {
         if (value === undefined) {
