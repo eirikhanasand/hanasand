@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState, useTransition } from 'react'
-import { ChevronDown, DatabaseBackup, RefreshCw, ShieldCheck } from 'lucide-react'
+import { ChevronDown, RefreshCw, ShieldCheck } from 'lucide-react'
 import type { BackupFile, BackupOperation, BackupService } from '@/utils/db/internal'
 import formatUtcDateTime from '@/utils/date/formatUtcDateTime'
 import { triggerBackupAction, verifyBackupAction } from '../actions'
@@ -57,34 +57,25 @@ export default function BackupPage({ backups, files, loadError = '' }: BackupPag
 
     return (
         <main className='grid w-full gap-4 px-2 py-4' data-backup-operator-console>
-            <section className='rounded-xl border border-ui-border bg-ui-panel p-4 sm:p-5' data-backup-primary-flow>
-                <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
-                    <div>
-                        <div className='flex items-center gap-2'>
-                            <DatabaseBackup className='h-5 w-5 text-ui-primary' />
-                            <h1 className='text-xl font-semibold text-ui-text'>Backups</h1>
-                        </div>
+            <section className='rounded-xl border border-ui-border bg-ui-panel p-4 sm:p-5' aria-labelledby='backup-runtime-heading' data-backup-primary-flow>
+                <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
+                    <h1 id='backup-runtime-heading' className='font-semibold text-ui-text'>Overview</h1>
+                    <div className='flex flex-wrap items-center gap-2'>
+                        <Status value={service?.status || 'Unavailable'} />
+                        <button
+                            type='button'
+                            onClick={runBackup}
+                            disabled={busy}
+                            className='inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-on-primary hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'
+                            data-backup-primary-action
+                        >
+                            <RefreshCw className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} />
+                            {service?.currentOperation ? stageLabel(service.currentOperation.stage) : isPending ? 'Running backup…' : 'Backup now'}
+                        </button>
                     </div>
-                    <button
-                        type='button'
-                        onClick={runBackup}
-                        disabled={busy}
-                        className='inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-on-primary disabled:cursor-not-allowed disabled:opacity-60'
-                        data-backup-primary-action
-                    >
-                        <RefreshCw className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} />
-                        {service?.currentOperation ? stageLabel(service.currentOperation.stage) : isPending ? 'Running backup…' : 'Backup now'}
-                    </button>
                 </div>
                 {visibleError && <p role='alert' className='mt-4 rounded-lg border border-ui-danger/30 bg-ui-raised/10 p-3 text-sm text-ui-text'>{visibleError}</p>}
                 {message && <p role='status' className='mt-4 rounded-lg border border-ui-success/30 bg-ui-success/10 p-3 text-sm text-ui-success'>{message}</p>}
-            </section>
-
-            <section className='rounded-xl border border-ui-border bg-ui-panel p-4 sm:p-5' aria-labelledby='backup-runtime-heading'>
-                <div className='flex items-center justify-between gap-3'>
-                    <h2 id='backup-runtime-heading' className='font-semibold text-ui-text'>Overview</h2>
-                    <Status value={service?.status || 'Unavailable'} />
-                </div>
                 <dl className='mt-4 grid gap-x-6 gap-y-4 sm:grid-cols-2 xl:grid-cols-4'>
                     <Evidence label='Last attempt' value={formatUtcDateTime(service?.lastAttempt, 'Never')} />
                     <Evidence label='Last success' value={formatUtcDateTime(service?.lastSuccess, 'Never')} />
@@ -140,19 +131,19 @@ function OperationHistory({ operations }: { operations: BackupOperation[] }) {
 
     return (
         <section className='overflow-hidden rounded-xl border border-ui-border bg-ui-panel' aria-labelledby='backup-history-heading'>
-            <div className='flex items-center justify-between gap-3 border-b border-ui-border p-4 sm:px-5'>
-                <h2 id='backup-history-heading' className='font-semibold text-ui-text'>History</h2>
+            <h2 id='backup-history-heading' className='m-0 border-b border-ui-border'>
                 <button
                     type='button'
                     onClick={() => setExpanded(value => !value)}
                     aria-expanded={expanded}
                     aria-controls='backup-history-content'
                     aria-label={expanded ? 'Collapse history' : 'Expand history'}
-                    className='inline-flex h-9 w-9 items-center justify-center rounded-md text-ui-muted hover:bg-ui-raised hover:text-ui-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ui-primary'
+                    className='flex min-h-[56px] w-full items-center justify-between gap-3 p-4 text-left text-ui-text hover:bg-ui-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ui-primary sm:px-5'
                 >
-                    <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                    <span className='font-semibold'>History</span>
+                    <ChevronDown aria-hidden='true' className={`h-4 w-4 text-ui-muted transition-transform ${expanded ? 'rotate-180' : ''}`} />
                 </button>
-            </div>
+            </h2>
             <div id='backup-history-content' hidden={!expanded} className='overflow-x-auto'>
                 <table className='min-w-[760px] w-full text-left text-sm'>
                     <thead className='bg-ui-raised text-xs uppercase text-ui-muted'><tr><th className='px-4 py-3'>Started</th><th className='px-4 py-3'>Operation</th><th className='px-4 py-3'>Status</th><th className='px-4 py-3'>Duration</th><th className='px-4 py-3'>Evidence</th></tr></thead>
