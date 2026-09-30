@@ -4,7 +4,7 @@ import { Worker } from 'node:worker_threads'
 import { matchesRule, type Condition } from './conditions.ts'
 import { loadLogRetentionRules, retentionStoreMatches, type RetentionRule } from './customRetention.ts'
 import { cachedRead, ReadAdmissionError } from '../readCache.ts'
-import { finiteRegexAlternatives, previewPredicate } from './previewPredicate.ts'
+import { finiteRegexAlternatives, previewPredicate, processExecutableCandidatePredicate } from './previewPredicate.ts'
 import { logFieldTextCandidates } from '../logs/searchText.ts'
 
 export type PreviewEvent = { id: string, timestamp: string, normalized: Record<string, unknown>, rank: number, bytes?: number }
@@ -64,6 +64,8 @@ async function scanRulePreviewUncached(organizationId: string, canReadLogs: bool
 
 function storageEstimatePredicate(conditions: Condition[], params: (string | string[] | number | boolean | null)[]) {
     const predicates = [previewPredicate(conditions, params)]
+    const executable = processExecutableCandidatePredicate(conditions, value => { params.push(value); return `$${params.length}` })
+    if (executable) predicates.push(executable)
     // The existing GIN index covers processed logs. One safe, selective literal
     // from this conjunction is enough to exclude non-candidates before paging.
     // The residual predicate and JS matcher still determine exact membership.

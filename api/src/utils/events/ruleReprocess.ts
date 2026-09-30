@@ -6,7 +6,7 @@ import { storedSourceLog } from './storedSources.ts'
 import { loadLogRetentionRules, retentionStoreMatches } from './customRetention.ts'
 import { collectEventFindings, loadConfiguredRules, normalizeEvent } from '../../handlers/events.ts'
 import { matchRulePage } from './rulePreview.ts'
-import { messageCandidatePredicate } from './previewPredicate.ts'
+import { hasIndexedProcessExecutableSelector, messageCandidatePredicate, processExecutableCandidatePredicate } from './previewPredicate.ts'
 import type { Condition } from './conditions.ts'
 import { builtinReprocessable, reprocessBuiltinPage } from './builtinReprocess.ts'
 
@@ -23,12 +23,14 @@ const eventCandidateColumns: Record<string, string> = {
 }
 
 function eventFieldCandidatePredicate(conditions: Condition[], bind: (value: string) => string) {
-    return conditions.flatMap(condition => {
+    const scalar = conditions.flatMap(condition => {
         const column = eventCandidateColumns[condition.path]
         if (!column || condition.operator !== 'equals') return []
         const value = bind(condition.value)
         return [condition.caseSensitive ? `${column} = ${value}` : `lower(${column}) = lower(${value})`]
-    }).join(' AND ')
+    })
+    const executable = processExecutableCandidatePredicate(conditions, bind)
+    return [...scalar, executable].filter((predicate): predicate is string => Boolean(predicate)).join(' AND ')
 }
 
 
@@ -64,6 +66,8 @@ export async function processRuleReprocessJob() {
             }
             if (rule.source === 'hanasand') return reprocessBuiltinPage(job, query)
             const cursor = { ...job.cursor }
+            const indexedProcessSelector = hasIndexedProcessExecutableSelector(rule.definition.conditions)
+            const skipRawSourceScan = indexedProcessSelector && cursor.phase > 0
             let items: Item[], scanned: number
             const windowedPhase = cursor.phase === 0 && Boolean(job.from_time)
             if (cursor.phase === 0) {
@@ -95,7 +99,7 @@ export async function processRuleReprocessJob() {
                 if (rows.length) Object.assign(cursor, { time: rows.at(-1).time, id: rows.at(-1).id, ...(windowed ? { windowEnd: upper } : {}) })
                 if (windowed && scanned < size) {
                     if (lowerMs <= fromMs) {
-                        cursor.phase++
+                        cursor.phase = indexedProcessSelector ? 3 : cursor.phase + 1
                         delete cursor.time
                         delete cursor.id
                         delete cursor.windowEnd
@@ -105,6 +109,13 @@ export async function processRuleReprocessJob() {
                         delete cursor.id
                     }
                 }
+            } else if (skipRawSourceScan) {
+                // The indexed event page is the previewed target set. Its matched
+                // log_key rows are deleted with the projection; don't scan raw
+                // source tables for unpreviewed, unprojected process records.
+                cursor.phase = 3
+                scanned = 0
+                items = []
             } else {
                 const source = cursor.phase === 1 ? 'service_logs' : 'traffic_events'
                 const params: (string | number | null)[] = [cursor.phase === 1 ? cursor.serviceEnd : cursor.trafficEnd,
@@ -131,8 +142,15 @@ export async function processRuleReprocessJob() {
                 })
                 if (rows.length) Object.assign(cursor, { time: rows.at(-1).cursor_time, id: String(rows.at(-1).id) })
             }
-            const result = await reprocessRuleItems(items, job, rule, query)
-            if (scanned < size && !windowedPhase) { cursor.phase++; delete cursor.time; delete cursor.id; delete cursor.windowEnd }
+            const result = skipRawSourceScan
+                ? { matched: 0, protected: 0, removedEvents: 0, removedSources: 0 }
+                : await reprocessRuleItems(items, job, rule, query)
+            if (scanned < size && !windowedPhase && !skipRawSourceScan) {
+                cursor.phase = indexedProcessSelector ? 3 : cursor.phase + 1
+                delete cursor.time
+                delete cursor.id
+                delete cursor.windowEnd
+            }
             const done = cursor.phase > 2
             await query(`UPDATE rule_reprocess_jobs SET status=$2,cursor=$3::jsonb,scanned=scanned+$4,
                 matched=matched+$5,protected=protected+$6,removed_events=removed_events+$7,removed_sources=removed_sources+$8,

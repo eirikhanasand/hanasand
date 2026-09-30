@@ -6,6 +6,7 @@ import { roleCanEditOrganization } from '#utils/organizationRoles.ts'
 import { reprocessableRule } from '#utils/events/ruleReprocess.ts'
 import { organizationAccess, ruleSlug } from './events.ts'
 import { scanRulePreview } from '#utils/events/rulePreview.ts'
+import { hasIndexedProcessExecutableSelector } from '#utils/events/previewPredicate.ts'
 
 type Request = FastifyRequest<{ Params: { id: string }, Querystring: { organizationId?: string },
     Body: { version?: string, from?: string | null, confirm?: boolean, action?: string, jobId?: string } }>
@@ -32,7 +33,8 @@ export async function getRuleReprocess(req: Request, res: FastifyReply) {
         try {
             let cursor: { time: string, id: string } | null = null, count = 0, bytes = 0
             do {
-                const page = await scanRulePreview(scope.organizationId, true, { from: null, until: new Date().toISOString(), cursor, action: 'drop', sample: true, conditions: rule.definition.conditions })
+                const page = await scanRulePreview(scope.organizationId, true, { from: null, until: new Date().toISOString(), cursor, action: 'drop', sample: true, conditions: rule.definition.conditions }, run,
+                    { storedLogsOnly: rule.source === 'owned' && hasIndexedProcessExecutableSelector(rule.definition.conditions) })
                 count += page.count; bytes += page.bytes
                 cursor = page.cursor
             } while (cursor)

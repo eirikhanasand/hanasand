@@ -153,6 +153,71 @@ export function messageCandidatePredicate(conditions: Condition[], column: strin
     return all.length ? all.join(' AND ') : 'TRUE'
 }
 
+function executableRegexLiterals(expression: string): string[] | null {
+    if (!expression.startsWith('^') || !expression.endsWith('$')) return null
+    let body = expression.slice(1, -1)
+    const grouped = (body.startsWith('(?:') && body.endsWith(')')) || (body.startsWith('(') && body.endsWith(')'))
+    if (grouped) body = body.startsWith('(?:') ? body.slice(3, -1) : body.slice(1, -1)
+
+    const alternatives: string[] = []
+    let current = '', escaped = false
+    for (const character of body) {
+        if (escaped) {
+            current += `\\${character}`
+            escaped = false
+        } else if (character === '\\') escaped = true
+        else if (character === '|') {
+            if (!grouped) return null
+            alternatives.push(current)
+            current = ''
+        } else current += character
+    }
+    if (escaped) return null
+    alternatives.push(current)
+
+    const literals = alternatives.map(alternative => {
+        let literal = ''
+        for (let index = 0; index < alternative.length; index++) {
+            const character = alternative[index]
+            if (character === '\\') {
+                const escapedCharacter = alternative[++index]
+                if (!escapedCharacter || !'.\\/|_-+?*()[]{}^$'.includes(escapedCharacter)) return null
+                literal += escapedCharacter
+            } else if (/[A-Za-z0-9/_-]/.test(character)) literal += character
+            else return null
+        }
+        return literal && /^[\x20-\x7e]+$/.test(literal) ? literal : null
+    })
+    return literals.every((literal): literal is string => Boolean(literal)) ? [...new Set(literals)] : null
+}
+
+function executableConditionLiterals(condition: Condition): string[] | null {
+    if (condition.path !== 'process.executable') return null
+    if (condition.operator === 'equals') return /^[\x20-\x7e]+$/.test(condition.value) && condition.value ? [condition.value] : null
+    return condition.operator === 'regex' ? executableRegexLiterals(condition.value) : null
+}
+
+// Candidate only: the indexed suffix narrows executable paths. The full
+// condition is still checked by the rule matcher, so suffix collisions are safe.
+export function processExecutableCandidatePredicate(conditions: Condition[], bind: (value: string) => string) {
+    const expression = 'left(reverse(lower(COALESCE(normalized#>>\'{process,executable}\', \'\'))), 512)'
+    const clauses = conditions.flatMap(condition => {
+        const values = executableConditionLiterals(condition)
+        if (!values) return []
+        const alternatives = values.map(value => {
+            const reversedPrefix = value.toLowerCase().split('').reverse().join('').slice(0, 512)
+            const pattern = reversedPrefix.replace(/[!%_]/g, character => `!${character}`) + '%'
+            return `${expression} LIKE ${bind(pattern)} ESCAPE '!'`
+        })
+        return [`(${alternatives.join(' OR ')})`]
+    })
+    return clauses.length ? clauses.join(' AND ') : null
+}
+
+export function hasIndexedProcessExecutableSelector(conditions: Condition[]) {
+    return conditions.some(condition => executableConditionLiterals(condition) !== null)
+}
+
 // These are candidate predicates, not a second rule engine. Keep the runtime
 // recheck: JavaScript number formatting and Unicode folding differ from SQL.
 export function previewPredicate(conditions: Condition[], params: (string | number | boolean | null | string[])[]) {
