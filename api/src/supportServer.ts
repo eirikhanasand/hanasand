@@ -12,7 +12,7 @@ import { validateApiKey, matchApiKeyScope } from './utils/auth/apiKeys.ts'
 import { validateSupportSession } from './utils/support/auth.ts'
 import registerSupportStream from './handlers/supportStream.ts'
 import { publicSupportChat } from './handlers/publicSupportChat.ts'
-import { getSupportMessages, getSupportTickets, postSupportMessage, postSupportTicket, postSupportStatus, postSupportFeedback } from './handlers/supportChat.ts'
+import { getMySupportTickets, getSupportMessages, getSupportTickets, postSupportMessage, postSupportTicket, postSupportStatus, postSupportFeedback } from './handlers/supportChat.ts'
 
 export async function createSupportServer() {
     if (!independentSupport || process.env.SUPPORT_INTERNAL_SERVICE !== '1' || (process.env.SUPPORT_SERVICE_KEY?.length || 0) < 32) throw new Error('Independent support storage and internal service authentication are required')
@@ -63,6 +63,7 @@ export async function createSupportServer() {
     app.get('/api/support/chat', publicSupportChat)
     app.post('/api/support/chat', publicSupportChat)
     app.get('/api/support/tickets', getSupportTickets)
+    app.get('/api/support/my-tickets', getMySupportTickets)
     app.post('/api/support/tickets', postSupportTicket)
     app.get('/api/support/tickets/:id/messages', getSupportMessages)
     app.post('/api/support/tickets/:id/messages', postSupportMessage)

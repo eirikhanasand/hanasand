@@ -12,5 +12,5 @@ export function hasSupportServiceKey(req: FastifyRequest) {
         && timingSafeEqual(Buffer.from(received), Buffer.from(expected)))
 }
 export function supportRequestPath(path: string) {
-    return /^\/api\/support\/(chat|tickets(?:\/[^/]+\/(?:messages|status|feedback))?)$/.test(path)
+    return /^\/api\/support\/(chat|my-tickets|tickets(?:\/[^/]+\/(?:messages|status|feedback))?)$/.test(path)
 }

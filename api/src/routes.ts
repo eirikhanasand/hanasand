@@ -214,7 +214,7 @@ import {
 import { getBrowserSandboxProfiles, putBrowserSandboxProfiles } from './handlers/browserSandboxProfiles.ts'
 import { getBrowserResult, getBrowserRunReport, getBrowserRuns, getBrowserRunStats, maxBrowserReportBytes, postBrowserRunReport } from './handlers/browserSandboxRuns.ts'
 import { publicSupportChat } from './handlers/publicSupportChat.ts'
-import { getSupportMessages, getSupportTickets, postSupportMessage, postSupportTicket, postSupportStatus, postSupportFeedback } from './handlers/supportChat.ts'
+import { getMySupportTickets, getSupportMessages, getSupportTickets, postSupportMessage, postSupportTicket, postSupportStatus, postSupportFeedback } from './handlers/supportChat.ts'
 import { forwardSupportRequest } from './utils/support/transport.ts'
 import { supportModel } from './handlers/supportModel.ts'
 import { getCommercialContactRequests, postCommercialContactRequest } from './handlers/commercialContactRequests.ts'
@@ -355,6 +355,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/support/chat', publicSupportChat)
     fastify.post('/support/model', supportModel)
     fastify.get('/support/tickets', getSupportTickets)
+    fastify.get('/support/my-tickets', getMySupportTickets)
     fastify.post('/support/tickets', postSupportTicket)
     fastify.get('/support/tickets/:id/messages', getSupportMessages)
     fastify.post('/support/tickets/:id/messages', postSupportMessage)
