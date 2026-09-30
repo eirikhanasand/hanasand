@@ -133,8 +133,8 @@ function ProfileUpdateRow({ update, actor }: { update: TiProfileUpdate, actor: T
     </div>
 }
 
-function PanelHeader({ title, subtitle }: { title: string, subtitle: string }) {
-    return <div className='border-b border-ui-border px-4 py-3'><h2 className='text-base font-semibold text-ui-text'>{title}</h2><p className='mt-1 text-sm text-ui-muted'>{subtitle}</p></div>
+function PanelHeader({ title, subtitle }: { title: string, subtitle?: string }) {
+    return <div className='border-b border-ui-border px-4 py-3'><h2 className='text-base font-semibold text-ui-text'>{title}</h2>{subtitle && <p className='mt-1 text-sm text-ui-muted'>{subtitle}</p>}</div>
 }
 
 function Metric({ label, value }: { label: string, value: string }) {

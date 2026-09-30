@@ -128,7 +128,7 @@ function PublicMobileMenu({ token }: { token: boolean }) {
     )
 }
 
-export default function Header({ token, id, path: serverPath }: { token: boolean, id: string, path: string }) {
+export default function Header({ token, id, username, path: serverPath }: { token: boolean, id: string, username: string, path: string }) {
     const mobile = useMobileNavigation()
     const pathname = usePathname() || serverPath
     const isShare = isSharePath(pathname)
@@ -171,6 +171,7 @@ export default function Header({ token, id, path: serverPath }: { token: boolean
                         </summary>
                         <div className='fixed inset-x-3 top-18 z-30 grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-3 text-sm text-ui-text shadow-xl sm:absolute sm:left-auto sm:right-0 sm:top-13 sm:w-60'>
                             {token ? <>
+                                <div className='rounded-lg p-2'>@{username || id}</div>
                                 <Link href={profileHref} className='rounded-lg p-2 hover:bg-ui-raised'>Profile</Link>
                                 {id && <Link href={`/profile/${encodeURIComponent(id)}/security`} className='rounded-lg p-2 hover:bg-ui-raised'>Security</Link>}
                                 {id && <Link href={`/profile/${encodeURIComponent(id)}/sessions`} className='rounded-lg p-2 hover:bg-ui-raised'>Sessions</Link>}

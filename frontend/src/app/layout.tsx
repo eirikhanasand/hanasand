@@ -12,6 +12,7 @@ import Header from '@/components/header/header'
 import DetachedBoxHost from '@/components/box/detachedBoxHost'
 import RouteFrame from '@/components/layout/routeFrame'
 import MobileNavigation from '@/components/layout/mobileNavigation'
+import fetchUser from '@/utils/users/fetchUser'
 export { default as metadata } from './metadata'
 export { viewport } from './metadata'
 
@@ -23,6 +24,10 @@ export default async function layout({ children }: { children: ReactNode }) {
     const theme = themeCookie === 'light' ? 'light' : 'dark'
     const path = Headers.get('x-current-path') || ''
     const id = Cookies.get('id')?.value || ''
+    const tokenValue = Cookies.get('access_token')?.value || ''
+    const username = token && id && tokenValue
+        ? (await fetchUser(id, { id, token: tokenValue }))?.username || id
+        : ''
     const initialMode = Cookies.get('dashboard_view_mode')?.value === 'compact' ? 'compact' : 'normal'
     const initialPreferences = readNavigationPreferences(Cookies.get(NAVIGATION_COOKIE)?.value, id)
     const sidebarProps = { initialPreferences, initialMode, id } satisfies ComponentProps<typeof DashboardSidebar>
@@ -35,7 +40,7 @@ export default async function layout({ children }: { children: ReactNode }) {
                 <div className='site-atmosphere' />
                 <WorkspaceProvider initial={readWorkspace(Cookies.get(WORKSPACE_COOKIE)?.value, impersonatingId || id)} enabled={token} serviceAccount={id.startsWith('svc_')}>
                     <MobileNavigation enabled={Boolean(id && token)}>
-                        <Header token={token} id={id} path={path} />
+                        <Header token={token} id={id} username={username} path={path} />
                         <DetachedBoxHost />
                         <RouteFrame serverPath={path} token={token}
                             sidebar={id && token ? <Suspense fallback={<DashboardSidebar {...sidebarProps} canManageOrganizations={false} />}>
