@@ -8,7 +8,7 @@ import { DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import RulePageActions from './rule-page-actions'
 import RuleLibrary from './rule-library'
 
-export type Rule = { id: string, hitCount?: number | null, hitRate?: number | null, sampledAt?: number, detectionLogic?: string, recordId?: string, rule_id?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'owned' | 'open_source', sourceReference?: string, definition?: { stage?: 'analyze' | 'match' | 'detect', action?: 'drop' | 'keep', storeScope?: 'all' | 'custom_drop', match?: 'all', parameters?: Record<string, number>, protection?: Record<string, unknown>, failureConditions?: Array<{ path: string, operator: string, value: string, caseSensitive?: boolean }>, conditions?: Array<{ path: string, operator: string, value: string, caseSensitive?: boolean }> } }
+export type Rule = { id: string, hitCount?: number | null, previousHitCount?: number, detectionLogic?: string, recordId?: string, rule_id?: string, version: string, name: string, family: string, severity: string, explanation: string, evidence: string[], enabled?: boolean, source?: 'hanasand' | 'owned' | 'open_source', sourceReference?: string, definition?: { stage?: 'analyze' | 'match' | 'detect', action?: 'drop' | 'keep', storeScope?: 'all' | 'custom_drop', match?: 'all', parameters?: Record<string, number>, protection?: Record<string, unknown>, failureConditions?: Array<{ path: string, operator: string, value: string, caseSensitive?: boolean }>, conditions?: Array<{ path: string, operator: string, value: string, caseSensitive?: boolean }> } }
 
 export type InitialRules = { organizationId: string, category: RuleCategory, rules: Rule[], canManageRetention: boolean, error?: string }
 
@@ -59,11 +59,11 @@ export default function DetectionRules({ category, initial }: { category: RuleCa
             if (pending || document.visibilityState !== 'visible') return
             pending = true
             try {
-                const payload = await requestJson<{ hitCounts?: Record<string, number | null>, hitRates?: Record<string, number>, sampledAt?: number | null }>(`/api/backend/rules/hits?organizationId=${encodeURIComponent(organizationId)}`, { cache: 'no-store' })
+                const payload = await requestJson<{ hitCounts?: Record<string, number | null>, previousHitCounts?: Record<string, number> }>(`/api/backend/rules/hits?organizationId=${encodeURIComponent(organizationId)}`, { cache: 'no-store' })
                 if (!active || latestOrganization.current !== organizationId || !payload.hitCounts) return
                 setLiveHitsUnavailable(false)
                 setRules(current => current.map(rule => Object.hasOwn(payload.hitCounts!, rule.id)
-                    ? { ...rule, hitCount: payload.hitCounts![rule.id], hitRate: payload.hitRates?.[rule.id] ?? null, sampledAt: payload.sampledAt ?? undefined }
+                    ? { ...rule, hitCount: payload.hitCounts![rule.id], previousHitCount: payload.previousHitCounts?.[rule.id] }
                     : rule))
             } catch {
                 if (active && latestOrganization.current === organizationId) setLiveHitsUnavailable(true)
