@@ -153,7 +153,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
     }
 
     function isExpanded(key: string) {
-        return preferences.expanded[key] ?? (activePath === key || activePath.startsWith(`${key}/`))
+        return activePath === key || activePath.startsWith(`${key}/`) || preferences.expanded[key] === true
     }
 
     function toggle(key: string) {
