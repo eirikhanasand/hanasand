@@ -183,8 +183,6 @@ async function listPersonalMailAccounts(actorId: string, canAccessAnyMailbox: bo
             FROM users u
             LEFT JOIN mail_accounts ma ON ma.user_id = u.id
             WHERE u.active = TRUE AND ma.disabled_at IS NULL
-                AND (u.id = $1 OR EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id
-                    AND ur.role_id IN ('administrator', 'admin', 'system_admin', 'support')))
             ORDER BY u.id ASC
         `, [actorId])
 

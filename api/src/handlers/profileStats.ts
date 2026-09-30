@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import { ARTICLES_DIR } from '#utils/git/git.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 
 const isNotFound = (error: unknown): boolean =>
@@ -15,7 +15,7 @@ export async function getProfileStats(req: FastifyRequest<{ Params: { id: string
     if (auth.impersonating || auth.id !== req.params.id) return res.status(403).send({ error: 'Forbidden.' })
 
     try {
-        const { valid: admin } = await hasRole(req, res, 'system_admin')
+        const { valid: admin } = await hasHanasandInternalRouteAccess(req)
         const [activity, totals, memberships, articleOwnership] = await Promise.all([
             run(`
                 SELECT TO_CHAR(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day, COUNT(*)::int AS logins

@@ -1,35 +1,34 @@
-import parseCookie from '@/utils/cookies/parseCookie'
+import tokenIsValid from '@/utils/proxy/tokenIsValid'
 import { FileWarning, Inbox, Radar, ShieldAlert, SquareChartGantt } from 'lucide-react'
 import { cookies } from 'next/headers'
 import Link from 'next/link'
 
 export default async function GreetingNavButtons({ id }: { id: string }) {
     const Cookies = await cookies()
-    const rolesCookie = Cookies.get('roles')?.value
-    const roles = parseCookie<Array<Role | string>>(rolesCookie, [])
-    const isAdmin = roles.some((role) => typeof role === 'string' ? role.includes('admin') : role.id?.includes('admin'))
+    const token = Cookies.get('access_token')?.value
+    const canViewInternalPages = Boolean(token && (await tokenIsValid(token, id)).canViewInternalPages)
 
     return (
         <div className='flex w-full gap-2 md:hidden'>
-            {isAdmin && <div className='group grid h-fit w-full cursor-pointer gap-2 rounded-lg border border-ui-border px-2 py-1'>
+            {canViewInternalPages && <div className='group grid h-fit w-full cursor-pointer gap-2 rounded-lg border border-ui-border px-2 py-1'>
                 <Link href='/management' className='flex justify-between w-full items-center gap-2'>
                     <SquareChartGantt className='h-5 w-5 text-ui-muted group-hover:text-ui-primary' />
                     <h1 className='font-semibold text-base self-center'>Management</h1>
                 </Link>
             </div>}
-            {isAdmin && <div className='group grid h-fit w-full cursor-pointer gap-2 rounded-lg border border-ui-border px-2 py-1'>
+            {canViewInternalPages && <div className='group grid h-fit w-full cursor-pointer gap-2 rounded-lg border border-ui-border px-2 py-1'>
                 <Link href='/dashboard' className='flex justify-between w-full items-center gap-2'>
                     <Radar className='h-5 w-5 text-ui-muted group-hover:text-ui-primary' />
                     <h1 className='font-semibold text-base self-center'>Overview</h1>
                 </Link>
             </div>}
-            {isAdmin && <div className='group grid h-fit w-full cursor-pointer gap-2 rounded-lg border border-ui-border px-2 py-1'>
+            {canViewInternalPages && <div className='group grid h-fit w-full cursor-pointer gap-2 rounded-lg border border-ui-border px-2 py-1'>
                 <Link href='/logs' className='flex justify-between w-full items-center gap-2'>
                     <FileWarning className='h-5 w-5 text-ui-muted group-hover:text-ui-primary' />
                     <h1 className='font-semibold text-base self-center'>Logs</h1>
                 </Link>
             </div>}
-            {isAdmin && <div className='group grid h-fit w-full cursor-pointer gap-2 rounded-lg border border-ui-border px-2 py-1'>
+            {canViewInternalPages && <div className='group grid h-fit w-full cursor-pointer gap-2 rounded-lg border border-ui-border px-2 py-1'>
                 <Link href='/vulnerabilities' className='flex justify-between w-full items-center gap-2'>
                     <ShieldAlert className='h-5 w-5 text-ui-muted group-hover:text-ui-primary' />
                     <h1 className='font-semibold text-base self-center'>Vulns</h1>

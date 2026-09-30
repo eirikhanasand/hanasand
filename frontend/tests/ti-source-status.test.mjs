@@ -5,9 +5,8 @@ const originalFetch = globalThis.fetch
 const originalBase = process.env.TI_SCRAPER_API_BASE
 process.env.TI_SCRAPER_API_BASE = 'http://scraper.test'
 let denied = false
-mock.module('@/utils/proxy/requireApiSession', () => ({ default: async(request, roles) => {
-    assert.deepEqual(roles, ['system_admin', 'admin', 'administrator'])
-    return denied ? { response: NextResponse.json({}, { status: 403 }) } : { identity: { id: 'operator', token: 'session', roles: ['admin'] } }
+mock.module('@/utils/proxy/requireApiSession', () => ({ default: async() => {
+    return denied ? { response: NextResponse.json({}, { status: 403 }) } : { identity: { id: 'operator', token: 'session' } }
 } }))
 const { POST } = await import('../src/app/api/ti/scraper/control/route')
 afterAll(() => { globalThis.fetch = originalFetch; if (originalBase === undefined) delete process.env.TI_SCRAPER_API_BASE; else process.env.TI_SCRAPER_API_BASE = originalBase })

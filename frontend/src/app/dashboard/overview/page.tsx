@@ -33,8 +33,8 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
     const params = searchParams ? await searchParams : {}
     const organizationId = await activeOrganizationId()
     const overview = loadOverview(sessionCookies.toString(), organizationId)
-    const session = id ? await tokenIsValid(token, id) : null
-    const isAdmin = session?.valid === true && session.roles?.some(role => role.id === 'administrator' || role.id === 'admin') === true
+    const session = id ? await tokenIsValid(token, id, sessionCookies.get('impersonation_token')?.value) : null
+    const isAdmin = session?.valid === true && session.canViewInternalPages === true
 
     const accessDenied = params.notAllowed === 'true'
     const membership = accessDenied ? await organizationMembership() : null

@@ -1,10 +1,25 @@
 import assert from 'node:assert/strict'
+import { createServer } from 'node:net'
 import { chromium, expect as playwrightExpect } from '@playwright/test'
 
 const expect = playwrightExpect.configure({ timeout: 30000 })
 
 // Real Next pages and proxies, with an isolated API matching the production response shape.
-const base = 'http://127.0.0.1:3029'
+async function availablePort() {
+    const server = createServer()
+    server.listen(0, '127.0.0.1')
+    await new Promise((resolve, reject) => {
+        server.once('listening', resolve)
+        server.once('error', reject)
+    })
+    const address = server.address()
+    await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+    if (!address || typeof address === 'string') throw new Error('Could not reserve a local test port')
+    return address.port
+}
+
+const frontendPort = await availablePort()
+const base = `http://127.0.0.1:${frontendPort}`
 const organizations = [
     { id: 'cashflow', name: 'Cashflow', slug: 'cashflow', role: 'reader', lifecycleStatus: 'active' },
     { id: 'hanasand', name: 'Hanasand', slug: 'hanasand', role: 'owner', lifecycleStatus: 'active' },
@@ -14,11 +29,14 @@ const organizations = [
 const calls = []
 let settingsError = false
 let destinationRemoved = false
-const api = Bun.serve({ port: 0, async fetch(request) {
+const api = Bun.serve({ port: await availablePort(), hostname: '127.0.0.1', async fetch(request) {
     const url = new URL(request.url)
     calls.push({ path: url.pathname, method: request.method })
-    if (url.pathname.includes('/auth/token/')) return Response.json({ roles: [{ id: 'system_admin' }] })
+    if (url.pathname.includes('/auth/token/')) return Response.json({ name: 'Fixture owner' })
+    if (url.pathname === '/api/auth/social/providers') return Response.json({ providers: [] })
+    if (url.pathname === '/api/auth/social/connections') return Response.json({ connections: [] })
     if (url.pathname.includes('/certificates/user/')) return Response.json([])
+    if (url.pathname.endsWith('/profile-stats')) return Response.json({ loginDays: [], counts: { organizations: 1, containers: 0, vms: 0, shares: 0, articles: 0 } })
     if (url.pathname.includes('/user/')) {
         const id = url.pathname.split('/').pop()
         return Response.json({ id, username: id, name: id === 'dashboard-render-proof-user' ? 'Fixture owner' : 'Other person' })
@@ -58,7 +76,7 @@ const api = Bun.serve({ port: 0, async fetch(request) {
     }
     return Response.json({})
 } })
-const dev = Bun.spawn(['node', './node_modules/.bin/next', 'dev', '--webpack', '-p', '3029'], {
+const dev = Bun.spawn(['node', './node_modules/.bin/next', 'dev', '--webpack', '-p', String(frontendPort)], {
     env: { ...process.env, FRONTEND_AUTH_API: `${api.url}api`, FRONTEND_INTERNAL_API: `${api.url}api`, TI_SCRAPER_API_BASE: String(api.url), NEXT_DIST_DIR: '.next/organization-pages' },
     stdout: 'ignore', stderr: 'inherit',
 })
@@ -72,7 +90,7 @@ try {
     browser = await chromium.launch()
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, extraHTTPHeaders: { 'x-hanasand-render-proof-auth': 'local-dashboard-render-proof' } })
     await context.addCookies(Object.entries({
-        id: 'dashboard-render-proof-user', access_token: 'local-dashboard-render-proof-token', roles: '["system_admin"]',
+        id: 'dashboard-render-proof-user', access_token: 'local-dashboard-render-proof-token',
         hanasand_workspace: JSON.stringify({ userId: 'dashboard-render-proof-user', organizationId: 'cashflow', name: 'Cashflow' }),
     }).map(([name, value]) => ({ name, value, url: base })))
     const page = await context.newPage()
@@ -179,6 +197,7 @@ try {
     await nav.getByRole('link', { name: 'Team', exact: true }).click()
     for (const button of await page.getByRole('button', { name: 'Remove member', exact: true }).all()) await expect(button).toBeDisabled()
     await page.getByRole('combobox', { name: 'Org', exact: true }).selectOption('hanasand')
+    await expect(page.getByRole('combobox', { name: 'Org', exact: true })).toHaveValue('hanasand')
     await nav.getByRole('link', { name: 'Settings', exact: true }).click()
     await expect(name).toHaveValue('Hanasand updated')
     await page.goto(`${base}/organizations?focus=members`)
@@ -199,18 +218,17 @@ try {
     settingsError = false
 
     await page.goto(`${base}/profile/dashboard-render-proof-user`)
-    const accountNav = page.getByRole('navigation', { name: 'Account pages' })
-    await expect(accountNav).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Certificates', exact: true })).toHaveCount(0)
-    await accountNav.getByRole('link', { name: 'Certificates', exact: true }).click()
-    await expect(page.getByRole('heading', { name: 'Certificates', exact: true })).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Sessions', exact: true })).toHaveCount(0)
     const sidebar = page.getByRole('complementary', { name: 'Dashboard sidebar' })
-    await expect(sidebar.getByRole('button', { name: 'Account', exact: true })).toBeVisible()
+    const accountGroup = sidebar.getByRole('button', { name: 'Account', exact: true })
+    await expect(accountGroup).toBeVisible()
+    const accountNav = sidebar.getByRole('navigation', { name: 'Main navigation' })
+    await expect(accountNav.getByRole('link', { name: 'SSH Keys', exact: true })).toBeVisible()
     await expect(sidebar.getByRole('button', { name: 'Organization', exact: true })).toBeVisible()
     await expect(sidebar.getByRole('button', { name: 'Account & organization', exact: true })).toHaveCount(0)
+    await accountNav.getByRole('link', { name: 'Security', exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'Account', exact: true })).toBeVisible()
     await page.goto(`${base}/profile/other-person/security`)
-    await expect(page.getByRole('navigation', { name: 'Account pages' })).toHaveCount(0)
+    await expect(sidebar).toBeVisible()
     await expect(page.getByRole('button', { name: 'Delete account', exact: true })).toHaveCount(0)
     await page.goto(`${base}/organizations`)
     await page.getByRole('button', { name: 'Create organization', exact: true }).click()

@@ -9,7 +9,7 @@ const users = [
 ] as UserWithRole[]
 const router = { push() {}, replace() {}, refresh() {}, back() {}, forward() {}, prefetch: async () => {}, hmrRefresh() {} }
 createRoot(document.getElementById('root')!).render(<AppRouterContext.Provider value={router}>
-    <div data-testid='user-list'><UsersList roles={[]} users={users} /></div>
+    <div data-testid='user-list'><UsersList users={users} /></div>
     <div data-testid='admin-profile'><PublicProfile username='member' profile={users[0]} /></div>
     <div data-testid='public-profile'><PublicProfile username='second' profile={users[1]} /></div>
 </AppRouterContext.Provider>)

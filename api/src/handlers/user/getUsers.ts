@@ -1,11 +1,11 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { loadSQL } from '#utils/loadSQL.ts'
 
 /**
- * Fetches all users and their highest role.
+ * Fetches users and their organization memberships.
  *
  * @param req Incoming Fastify Request
  * @param res Outgoing Fastify Response
@@ -21,7 +21,7 @@ export default async function getUsers(req: FastifyRequest, res: FastifyReply) {
 
     res.header('Cache-Control', 'private, no-store')
     try {
-        const canViewEmail = !impersonating && (await hasRole(req, res, 'user_admin')).valid
+        const canViewEmail = !impersonating && (await hasHanasandInternalRouteAccess(req)).valid
         const usersQuery = await loadSQL('getUsers.sql')
         const usersResult = await run(usersQuery, [canViewEmail])
         if (!usersResult.rows.length) {

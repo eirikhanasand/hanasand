@@ -2,7 +2,7 @@ import { hasVmAccess } from '#utils/vms/access.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import { agentTargetSelect } from '#utils/vms/agentTargetQuery.ts'
 import syncUserCertificatesToVm from '#utils/vms/syncUserCertificatesToVm.ts'
 import recordLog from '#utils/logs/recordLog.ts'
@@ -34,7 +34,7 @@ export default async function postAgentTargetSyncAccess(req: FastifyRequest, res
 
     const body = (req.body as SyncBody | undefined) ?? {}
     const scope = body.scope === 'all_access_users' ? 'all_access_users' : 'current_user'
-    const { valid: isAdmin } = await hasRole(req, res, 'system_admin')
+    const { valid: isAdmin } = await hasHanasandInternalRouteAccess(req)
 
     try {
         const result = await run(`

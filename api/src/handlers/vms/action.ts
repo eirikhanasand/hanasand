@@ -2,7 +2,7 @@ import { hasVmAccess } from '#utils/vms/access.ts'
 import { vmLifecycleLock } from '#utils/vms/lifecycleLock.ts'
 import config from '#constants'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import sanitize from '#utils/sanitize.ts'
 import run from '#db'
 import type { FastifyReply, FastifyRequest } from 'fastify'
@@ -16,7 +16,7 @@ export default async function vmAction(req: FastifyRequest, res: FastifyReply) {
     if (!valid || !userId) {
         return res.status(401).send({ error: 'Unauthorized.' })
     }
-    const { valid: validRole } = await hasRole(req, res, 'system_admin')
+    const { valid: validRole } = await hasHanasandInternalRouteAccess(req)
 
     const { id: rawId, action: rawAction } = req.params as { id: string, action: string }
     const id = sanitize(rawId)

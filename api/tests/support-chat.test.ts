@@ -62,13 +62,13 @@ async function duringFailover(work: (standby: () => Promise<void>) => Promise<vo
 
 beforeAll(async () => {
     // This file refuses to run outside its disposable database.
-    await query('DROP TABLE IF EXISTS support_live_tickets, support_messages, support_tickets, user_roles, roles, users, api_rate_limit_buckets CASCADE')
-    await query('CREATE TABLE users (id TEXT PRIMARY KEY, name TEXT)')
-    await query('CREATE TABLE roles (id TEXT PRIMARY KEY)')
-    await query('CREATE TABLE user_roles (user_id TEXT, role_id TEXT)')
-    await query('INSERT INTO users VALUES (\'agent\', \'Support Agent\'), (\'customer\', \'Customer\')')
-    await query('INSERT INTO roles VALUES (\'support\')')
-    await query('INSERT INTO user_roles VALUES (\'agent\', \'support\')')
+    await query('DROP TABLE IF EXISTS support_live_tickets, support_messages, support_tickets, organization_members, organizations, users, api_rate_limit_buckets CASCADE')
+    await query('CREATE TABLE users (id TEXT PRIMARY KEY, name TEXT, active BOOLEAN NOT NULL DEFAULT TRUE, deletion_scheduled_at TIMESTAMPTZ)')
+    await query('CREATE TABLE organizations (id TEXT PRIMARY KEY, status TEXT NOT NULL)')
+    await query('CREATE TABLE organization_members (organization_id TEXT NOT NULL, user_id TEXT NOT NULL, role TEXT NOT NULL, status TEXT NOT NULL)')
+    await query('INSERT INTO users (id, name) VALUES (\'agent\', \'Support Agent\'), (\'customer\', \'Customer\')')
+    await query('INSERT INTO organizations VALUES (\'3e735e7b-4d7f-444d-9806-231fa26cfcec\', \'active\')')
+    await query('INSERT INTO organization_members VALUES (\'3e735e7b-4d7f-444d-9806-231fa26cfcec\', \'agent\', \'editor\', \'active\')')
     await query('CREATE TABLE support_tickets (id UUID PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), subject TEXT NOT NULL, status TEXT NOT NULL DEFAULT \'open\', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())')
     await query('CREATE TABLE support_messages (id UUID PRIMARY KEY, ticket_id UUID REFERENCES support_tickets(id), sender_id TEXT NOT NULL REFERENCES users(id), body TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())')
     await query('CREATE TABLE api_rate_limit_buckets (bucket_key TEXT PRIMARY KEY, window_started_at TIMESTAMPTZ, request_count INTEGER, updated_at TIMESTAMPTZ)')
@@ -105,7 +105,7 @@ test('handoff preserves history, enters staff queue, and returns agent replies t
     const ticket = queue.tickets.find((t: any) => t.subject === 'A billing question for testing')
     expect(ticket.user_name).toBe('Visitor')
     const personal = (await app.inject({ url: '/support/my-tickets', headers: { 'test-user': 'agent' } })).json()
-    expect(personal.role).toBe('user')
+    expect(personal.isSupport).toBe(false)
     expect(personal.tickets.map((t: any) => t.id)).toEqual([ownId])
     const url = `/support/tickets/${ticket.id}/messages`
     expect((await app.inject({ url })).statusCode).toBe(401)

@@ -7,14 +7,13 @@ test('idle containers report zero CPU while missing samples remain unavailable',
     expect(parseStats({ cpu_stats: cpu }).cpu_percent).toBeNull()
     expect(parseStats({ cpu_stats: { ...cpu, cpu_usage: { total_usage: 1500 } }, precpu_stats: { ...cpu, system_cpu_usage: 10000 } }).cpu_percent).toBe(40)
 })
-let authenticated = true, admin = false
+let authenticated = true, internalMember = false
 mock.module('../src/utils/auth/session.ts', () => ({ validateSession: async () => authenticated ? { user: { id: 'member' } } : null }))
-mock.module('../src/utils/loadSQL.ts', () => ({ loadSQL: async () => 'role' }))
-mock.module('../src/utils/db.ts', () => ({ default: async () => ({ rows: [{ has_role: admin }] }) }))
+mock.module('../src/utils/auth/organizationPageAccess.ts', () => ({ hasHanasandInternalPageAccess: async () => internalMember }))
 const { canViewSystem } = await import('../src/handlers/metrics/systemStream.ts')
-test('live system telemetry requires an active administrator session', async () => {
+test('live system telemetry requires an active Hanasand owner or editor session', async () => {
     expect(await canViewSystem('member', 'test')).toBe(false)
-    admin = true
+    internalMember = true
     expect(await canViewSystem('member', 'test')).toBe(true)
     authenticated = false
     expect(await canViewSystem('member', 'test')).toBe(false)

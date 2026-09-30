@@ -3,7 +3,7 @@ import bcrypt from 'bcrypt'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run, { withTransaction } from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import { createApiKey, listApiKeys } from '#utils/auth/apiKeys.ts'
 import { serviceAccountEndpoints, validateServiceAccountScopes } from '#utils/auth/serviceAccountScopes.ts'
 import { recordSystemEvent } from '#utils/systemEvent.ts'
@@ -12,7 +12,7 @@ async function authorize(req: FastifyRequest, res: FastifyReply) {
     res.header('Cache-Control', 'no-store')
     const auth = await tokenWrapper(req, res)
     if (!auth.valid) { res.status(401).send({ error: 'Unauthorized.' }); return null }
-    if (!(await hasRole(req, res, 'system_admin')).valid) { res.status(403).send({ error: 'Service account management requires a system administrator.' }); return null }
+    if (!(await hasHanasandInternalRouteAccess(req)).valid) { res.status(403).send({ error: 'Active Hanasand organization owner or editor access is required.' }); return null }
     return auth.id
 }
 

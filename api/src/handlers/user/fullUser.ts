@@ -52,21 +52,12 @@ export default async function authorizedUserHandler(req: FastifyRequest, res: Fa
             if (!userResult.rows.length) {
                 return res.status(404).send({ error: 'User not found.' })
             }
-            const roleResult = await run(`
-                SELECT r.id, r.name, r.description, r.priority
-                FROM roles r
-                JOIN user_roles ur ON ur.role_id = r.id
-                WHERE ur.user_id = $1
-                ORDER BY r.priority ASC, r.id ASC
-            `, [id])
             return res.send({
                 ...userResult.rows[0],
-                roles: roleResult.rows,
             })
         }
         return res.send({
             ...session.user,
-            roles: session.roles,
             token: session.refreshed.token,
             expires_at: session.refreshed.expires_at,
         })

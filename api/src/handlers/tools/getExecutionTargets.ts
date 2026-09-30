@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import { buildAgentTarget } from '#utils/vms/buildAgentTarget.ts'
 import { agentTargetSelect } from '#utils/vms/agentTargetQuery.ts'
 
@@ -28,7 +28,7 @@ export default async function getExecutionTargets(req: FastifyRequest, res: Fast
         return res.status(401).send({ error: 'Unauthorized.' })
     }
 
-    const { valid: isAdmin } = await hasRole(req, res, 'system_admin')
+    const { valid: isAdmin } = await hasHanasandInternalRouteAccess(req)
 
     try {
         const result = isAdmin

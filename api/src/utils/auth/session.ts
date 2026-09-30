@@ -24,13 +24,6 @@ type SessionUser = {
     deletion_scheduled_at?: string | null
 }
 
-type SessionRole = {
-    id: string
-    name: string
-    description: string
-    priority: number
-}
-
 function sessionTTLHours(userAgent = '') {
     return userAgent.startsWith('Hanasand Desktop/')
         ? DESKTOP_SESSION_TTL_HOURS
@@ -87,12 +80,7 @@ export async function validateSession({ id, token, organizationSlug }: { id?: st
         SELECT t.token_id, t.id, t.token, t.ip, t.user_agent, t.created_at, t.timestamp,
             pg_is_in_recovery() AS database_read_only,
             json_build_object('id', u.id, 'name', u.name, 'avatar', u.avatar,
-                'active', u.active, 'deletion_scheduled_at', u.deletion_scheduled_at) AS session_user,
-            COALESCE((SELECT json_agg(role ORDER BY role.priority, role.id) FROM (
-                SELECT r.id, r.name, r.description, r.priority
-                FROM roles r JOIN user_roles ur ON ur.role_id = r.id
-                WHERE ur.user_id = t.id
-            ) role), '[]'::json) AS session_roles
+                'active', u.active, 'deletion_scheduled_at', u.deletion_scheduled_at) AS session_user
             ${organizationMemberSelect}
         FROM tokens t JOIN users u ON u.id = t.id
         WHERE ($1::text IS NULL OR t.id = $1)
@@ -101,10 +89,10 @@ export async function validateSession({ id, token, organizationSlug }: { id?: st
         LIMIT 1
     `, organizationSlug ? [id ?? null, token, organizationSlug] : [id ?? null, token])
 
-    const row = tokenResult.rows[0] as (SessionRow & { session_user: SessionUser, session_roles: SessionRole[], organization_member?: boolean }) | undefined
+    const row = tokenResult.rows[0] as (SessionRow & { session_user: SessionUser, organization_member?: boolean }) | undefined
     if (!row || !isSessionFresh(row)) return null
 
-    const { session_user: user, session_roles: roles, organization_member: organizationMember, ...session } = row
+    const { session_user: user, organization_member: organizationMember, ...session } = row
     const userId = session.id
     const ttlHours = sessionTTLHours(session.user_agent)
 
@@ -125,7 +113,6 @@ export async function validateSession({ id, token, organizationSlug }: { id?: st
 
     return {
         user,
-        roles,
         session,
         ...(organizationSlug ? { organizationMember: organizationMember === true } : {}),
         refreshed: {

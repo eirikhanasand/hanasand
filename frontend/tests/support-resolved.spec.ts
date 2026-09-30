@@ -47,7 +47,7 @@ for (const width of [390, 1440]) test(`resolved guest chat collects low ratings 
 test('staff resolves, sees queue tag and written feedback, then reopens', async ({ page, baseURL }) => {
     await page.context().addCookies([{ name: 'id', value: 'agent', url: baseURL! }, { name: 'access_token', value: 'test', url: baseURL! }])
     const ticket = { id: 'ticket', subject: 'Billing help', status: 'open', user_name: 'Visitor', reply_count: 1, resolution_version: 0, feedback_rating: null as number | null, feedback_comment: '' }
-    await page.route('**/api/backend/support/tickets', route => route.fulfill({ json: { realtime: true, role: 'support', tickets: [ticket] } }))
+    await page.route('**/api/backend/support/tickets', route => route.fulfill({ json: { realtime: true, isSupport: true, tickets: [ticket] } }))
     await page.route('**/api/backend/support/tickets/ticket/messages', route => route.fulfill({ json: { messages: [{ id: 'message', sender_kind: 'user', sender_name: 'Visitor', body: 'Help with billing.' }] } }))
     await page.route('**/api/backend/support/tickets/ticket/status', route => { ticket.status = route.request().postDataJSON().status; return route.fulfill({ json: { ok: true, ticket } }) })
     const live = await mockSupportLive(page)
@@ -77,7 +77,7 @@ test('Resolve updates immediately, confirms from the save response, and ignores 
     await page.route('**/api/backend/support/tickets', async route => {
         const snapshot = { ...ticket }
         if (saving) { staleRead = true; await readGate }
-        await route.fulfill({ json: { realtime: true, role: 'support', tickets: [snapshot] } })
+        await route.fulfill({ json: { realtime: true, isSupport: true, tickets: [snapshot] } })
     })
     await page.route('**/api/backend/support/tickets/ticket/messages', route => route.fulfill({ json: { messages: [] } }))
     await page.route('**/api/backend/support/tickets/ticket/status', async route => {
@@ -121,7 +121,7 @@ for (const committed of [false, true]) test(`a lost save response reconciles the
     await page.context().addCookies([{ name: 'id', value: 'agent', url: baseURL! }, { name: 'access_token', value: 'test', url: baseURL! }])
     const ticket = { id: 'ticket', subject: 'Save failure', status: 'open' }
     let fail = true
-    await page.route('**/api/backend/support/tickets', route => route.fulfill({ json: { realtime: true, role: 'support', tickets: [ticket] } }))
+    await page.route('**/api/backend/support/tickets', route => route.fulfill({ json: { realtime: true, isSupport: true, tickets: [ticket] } }))
     await page.route('**/api/backend/support/tickets/ticket/messages', route => route.fulfill({ json: { messages: [] } }))
     await page.route('**/api/backend/support/tickets/ticket/status', route => {
         if (fail) {

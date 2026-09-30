@@ -28,7 +28,7 @@ mock.module('../src/utils/auth/tokenWrapper.ts', () => ({ default: async (req: {
     if (user) req.headers.id = user
     return { valid: Boolean(user), id: user }
 } }))
-mock.module('../src/utils/auth/hasRole.ts', () => ({ default: async () => ({ valid: legacyAdmin }) }))
+mock.module('../src/utils/auth/organizationPageAccess.ts', () => ({ default: async () => ({ valid: legacyAdmin }) }))
 mock.module('../src/utils/auth/session.ts', () => ({ validateSession: async () => user ? { user: { id: user } } : null }))
 mock.module('../src/utils/git/git.ts', () => ({ ARTICLES_DIR: '/article-fixture', ensureRepo: async () => {} }))
 mock.module('../src/utils/git/ensureRepositoryUpToDate.ts', () => ({ default: async () => {} }))

@@ -32,7 +32,7 @@ try {
     assert.equal(upstreamBody.link, true)
     responseData = { url: 'https://attacker.test' }
     assert.ok((await start(new NextRequest(`${origin}/api/auth/social/google/start`), 'google')).headers.get('location')!.startsWith(`${origin}/login?`))
-    responseData = { id: 'owner', token: 'verified-session', roles: [], redirectPath: '//attacker.test' }
+    responseData = { id: 'owner', token: 'verified-session', redirectPath: '//attacker.test' }
     const apple = await callback(new NextRequest(`${origin}/api/auth/social/apple/callback`, {
         method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', cookie: '__Host-social-apple=browser-binding' },
         body: new URLSearchParams({ code: 'apple-code', state: 'apple-state' }),

@@ -16,7 +16,7 @@ mock.module('../src/utils/auth/session.ts', () => ({ validateSession: async (aut
     if (authority === 'offline') throw Object.assign(new Error('Primary unavailable'), { code: 'ECONNREFUSED' })
     if (authority === 'error') throw Object.assign(new Error('Permission denied'), { code: '42501' })
     if (authority === 'revoked' || auth.token !== token || auth.id && auth.id !== 'agent') return null
-    return { user: { id: 'agent', name: 'Support Agent', active: true }, roles: [{ id: 'support', name: 'Support' }],
+    return { user: { id: 'agent', name: 'Support Agent', active: true },
         session: { token, timestamp: new Date().toISOString() }, refreshed: { token, expires_at: new Date(Date.now() + 3600000).toISOString() } }
 } }))
 const { createSupportServer } = await import('../src/supportServer.ts')

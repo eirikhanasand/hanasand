@@ -297,7 +297,7 @@ export async function createDatabaseBackup(options: { actorId?: string, trigger?
     })
 }
 
-export async function verifyDatabaseBackupFile(file: string, actorId = 'system_admin') {
+export async function verifyDatabaseBackupFile(file: string, actorId = 'system') {
     if (usesBackupWorker()) return backupWorkerCall<BackupOperation>('verify', [file, actorId])
     return runOperation('verify', { actorId, trigger: 'manual' }, async(_operation, updateStage) => {
         const backup = await resolveBackupFile(file)
@@ -537,7 +537,7 @@ async function runOperation(
         id: randomUUID(),
         kind,
         trigger: input.trigger || 'manual',
-        actorId: input.actorId || 'system_admin',
+        actorId: input.actorId || 'system',
         status: 'running',
         stage: 'starting',
         startedAt: new Date().toISOString(),

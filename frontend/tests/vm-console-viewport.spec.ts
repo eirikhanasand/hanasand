@@ -4,7 +4,6 @@ test('console bounds scrollback, follows output and preserves its connection in 
     await page.context().addCookies([
         { name: 'id', value: 'dashboard-render-proof-user', url: 'http://127.0.0.1:3272' },
         { name: 'access_token', value: 'local-dashboard-render-proof-token', url: 'http://127.0.0.1:3272' },
-        { name: 'roles', value: JSON.stringify([{ id: 'administrator' }]), url: 'http://127.0.0.1:3272' },
     ])
     await page.setExtraHTTPHeaders({ 'x-hanasand-render-proof-auth': 'local-dashboard-render-proof' })
     let send: (data: string) => void = () => {}

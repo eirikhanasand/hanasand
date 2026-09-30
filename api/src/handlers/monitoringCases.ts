@@ -4,7 +4,7 @@ import run from '#db'
 import { monitoringCaseReadScope } from '#utils/monitoringCaseAccess.ts'
 import { automationWriteScope } from '#utils/automationAccess.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import { monitoringCaseHistory, monitoringCaseResolution } from '#utils/monitoringCaseWorkflow.ts'
 import { loadMonitoringCaseEvents, loadMonitoringRelatedChecks, monitoringCheckDetails } from '#utils/monitoringCaseEvents.ts'
 import type { AutomationRow } from '#utils/automations.ts'
@@ -16,7 +16,7 @@ export async function getMonitoringCases(req: FastifyRequest<{ Params: { id?: st
     const started = performance.now()
     const { valid, id } = await tokenWrapper(req, res)
     if (!valid || !id) return res.status(401).send({ error: 'Unauthorized.' })
-    const includeAll = (await hasRole(req, res, 'system_admin')).valid
+    const includeAll = (await hasHanasandInternalRouteAccess(req)).valid
     const caseId = req.params.id?.replace(/^MON-/, 'HA-')
     if (caseId && !/^HA-[1-9]\d*$/.test(caseId)) return res.status(404).send({ error: 'Case not found.' })
     const snapshot = req.query.eventsAt || new Date().toISOString()
@@ -68,7 +68,7 @@ export async function getMonitoringCases(req: FastifyRequest<{ Params: { id?: st
 export async function updateMonitoringCase(req: FastifyRequest<{ Params: { id: string }, Querystring: { organizationId?: string, tenantId?: string }, Body: { status?: string, severity?: string, notificationsEnabled?: boolean, comment?: string, resolutionMethod?: string, confirmResolutionId?: string } }>, res: FastifyReply) {
     const { valid, id, authenticatedId } = await tokenWrapper(req, res)
     if (!valid || !id) return res.status(401).send({ error: 'Unauthorized.' })
-    const includeAll = (await hasRole(req, res, 'system_admin')).valid
+    const includeAll = (await hasHanasandInternalRouteAccess(req)).valid
     const caseId = req.params.id.replace(/^MON-/, 'HA-')
     if (!/^HA-[1-9]\d*$/.test(caseId)) return res.status(404).send({ error: 'Case not found.' })
     const organizationId = req.query.organizationId || null

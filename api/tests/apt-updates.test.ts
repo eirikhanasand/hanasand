@@ -14,7 +14,7 @@ mock.module('#db', () => ({ default: async (sql: string, params: unknown[] = [])
 let authenticated = true
 let admin = true
 mock.module('#utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: authenticated }) }))
-mock.module('#utils/auth/hasRole.ts', () => ({ default: async () => ({ valid: admin }) }))
+mock.module('#utils/auth/organizationPageAccess.ts', () => ({ default: async () => ({ valid: admin }) }))
 const { readHostUpdateStatus, persistHostUpdateStatus, listHostUpdateHistory } = await import('../src/utils/aptUpdates.ts')
 const { getAptUpdates } = await import('../src/handlers/aptUpdates.ts')
 afterAll(() => rm(directory, { recursive: true, force: true }))

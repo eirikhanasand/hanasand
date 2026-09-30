@@ -85,16 +85,16 @@ describe('public TI API boundary', () => {
         expect(await resolveRateLimitActor(expiredSession, async () => null, async () => null)).toEqual({ scope: 'anonymous', identifier: 'ip:203.0.113.10', invalidSession: true })
     })
 
-    test('requires both the internal tier and an exact administrator role for internal limits', async () => {
+    test('requires the internal tier and Hanasand organization scope for internal limits', async () => {
         const request = { ip: '203.0.113.10', headers: { 'x-api-key': 'hsk_test' } } as unknown as FastifyRequest
-        const externalAdmin = await resolveRateLimitActor(request, async () => ({ apiKey: { id: 'key', tier: 'business' }, roles: [{ id: 'admin', name: 'Admin' }] }) as any)
-        expect(externalAdmin.scope).toBe('authenticated')
+        const externalKey = await resolveRateLimitActor(request, async () => ({ apiKey: { id: 'key', tier: 'business' } }) as any)
+        expect(externalKey.scope).toBe('authenticated')
 
-        const misleadingRole = await resolveRateLimitActor(request, async () => ({ apiKey: { id: 'key', tier: 'internal' }, roles: [{ id: 'admin_assistant', name: 'Admin assistant' }] }) as any)
-        expect(misleadingRole.scope).toBe('authenticated')
+        const externalInternal = await resolveRateLimitActor(request, async () => ({ apiKey: { id: 'key', tier: 'internal', organizationId: 'external-org' } }) as any)
+        expect(externalInternal.scope).toBe('authenticated')
 
-        const internalAdmin = await resolveRateLimitActor(request, async () => ({ apiKey: { id: 'key', tier: 'internal' }, roles: [{ id: 'admin', name: 'Admin' }] }) as any)
-        expect(internalAdmin.scope).toBe('internal')
+        const internalOrganizationKey = await resolveRateLimitActor(request, async () => ({ apiKey: { id: 'key', tier: 'internal', organizationId: '3e735e7b-4d7f-444d-9806-231fa26cfcec' } }) as any)
+        expect(internalOrganizationKey.scope).toBe('internal')
     })
 
     test('applies the documented durable batch budget equally to sessions and API keys', () => {

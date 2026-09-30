@@ -36,7 +36,7 @@ for (const guest of [true, false]) test(`${guest ? 'guest' : 'account'} feedback
                 return route.fulfill({ json: { ok: true } })
             }
             reads++
-            return route.fulfill({ json: guest ? { ...ticket, tickets: [ticket], messages: [], pending: false } : url.pathname.endsWith('/messages') ? { messages: [] } : { tickets: [ticket], role: 'user', realtime: true } })
+            return route.fulfill({ json: guest ? { ...ticket, tickets: [ticket], messages: [], pending: false } : url.pathname.endsWith('/messages') ? { messages: [] } : { tickets: [ticket], isSupport: false, realtime: true } })
         }
         return route.fulfill({ contentType: 'text/html', body: `<html class="dark"><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body><div id="root"></div><script type="module" src="/fixture.js"></script></body></html>` })
     })

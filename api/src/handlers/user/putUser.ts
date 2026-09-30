@@ -4,7 +4,7 @@ import run from '#db'
 import { validatePassword } from '#utils/auth/password.ts'
 import login from '#utils/auth/login.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import { syncMailPasswordForUser } from '#utils/mail/accounts.ts'
 
 type GetUserBodyProps = {
@@ -16,7 +16,7 @@ type GetUserBodyProps = {
 
 export default async function putUser(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
-    const { valid: validRole } = await hasRole(req, res, 'user_admin')
+    const { valid: validRole } = await hasHanasandInternalRouteAccess(req)
     if (!valid || !validRole) {
         return res.status(401).send({ error: 'Unauthorized.' })
     }

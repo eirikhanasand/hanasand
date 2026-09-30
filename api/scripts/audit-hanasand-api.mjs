@@ -9,6 +9,7 @@ const dbUser = process.env.DB_USER || 'hanasand'
 const dbPassword = process.env.DB_PASSWORD
 const vmToken = process.env.VM_API_TOKEN || ''
 const runId = `audit_${Date.now()}`
+const hanasandOrganizationId = '3e735e7b-4d7f-444d-9806-231fa26cfcec'
 const password = process.env.AUDIT_PASSWORD || `Aa11!!${crypto.randomUUID().replaceAll('-', '').slice(0, 20)}Bb22!!`
 const { Pool } = pg
 
@@ -118,13 +119,12 @@ async function request(label, path, {
     return { res, body: parsed, elapsed }
 }
 
-async function grantAuditRoles() {
+async function grantHanasandEditorAccess() {
     await pool.query(`
-        INSERT INTO user_roles (user_id, role_id, assigned_by)
-        SELECT $1, role_id, 'administrator'
-        FROM unnest($2::text[]) AS role_id
-        ON CONFLICT DO NOTHING
-    `, [runId, ['users', 'user_admin', 'system_admin', 'content_admin']])
+        INSERT INTO organization_members (organization_id, user_id, role, status, invited_by)
+        VALUES ($1, $2, 'editor', 'active', $2)
+        ON CONFLICT (organization_id, user_id) DO UPDATE SET role = 'editor', status = 'active'
+    `, [hanasandOrganizationId, runId])
 }
 
 async function cleanup() {
@@ -134,8 +134,7 @@ async function cleanup() {
     await pool.query('DELETE FROM vm_details WHERE name = $1', [`vm-${runId}`]).catch(() => {})
     await pool.query('DELETE FROM vm_shutdown WHERE name = $1', [`vm-${runId}`]).catch(() => {})
     await pool.query('DELETE FROM vms WHERE name = $1', [`vm-${runId}`]).catch(() => {})
-    await pool.query('DELETE FROM user_roles WHERE user_id = $1', [runId]).catch(() => {})
-    await pool.query('DELETE FROM roles WHERE id LIKE \'role_audit_%\'').catch(() => {})
+    await pool.query('DELETE FROM organization_members WHERE organization_id = $1 AND user_id = $2', [hanasandOrganizationId, runId]).catch(() => {})
     await pool.query('DELETE FROM service_logs WHERE metadata->>\'runId\' = $1', [runId]).catch(() => {})
     await pool.query('DELETE FROM tokens WHERE id = $1', [runId]).catch(() => {})
     await pool.query('DELETE FROM users WHERE id = $1', [runId]).catch(() => {})
@@ -151,12 +150,12 @@ async function main() {
         expect: body => expectObject(body) && Boolean(body.token),
     })
     token = registration.body.token
-    await grantAuditRoles()
+    await grantHanasandEditorAccess()
 
     const login = await request('POST /auth/login/:id', `/auth/login/${runId}`, {
         method: 'POST',
         body: { password },
-        expect: body => expectObject(body) && Boolean(body.token) && Array.isArray(body.roles),
+        expect: body => expectObject(body) && Boolean(body.token) && !Object.hasOwn(body, 'roles'),
     })
     token = login.body.token
 
@@ -165,43 +164,8 @@ async function main() {
     await request('GET /auth/sessions', '/auth/sessions', { headers: authHeaders(), expect: body => expectObject(body) && Array.isArray(body.sessions) })
     await request('GET /users', '/users', { headers: authHeaders(), expect: expectArray })
     await request('GET /user/:id', `/user/${runId}`, { expect: body => expectObject(body) && body.id === runId })
-    await request('GET /user/full/:id', `/user/full/${runId}`, { headers: authHeaders(), expect: body => expectObject(body) && Array.isArray(body.roles) })
-    await request('GET /roles', '/roles', { headers: authHeaders(), expect: expectArray })
-    await request('GET /role/:id', '/role/users', { headers: authHeaders(), expect: expectObject })
-    await request('GET /roles/user/:id', `/roles/user/${runId}`, { headers: authHeaders(), expect: expectArray })
-
-    const roleId = `role_${runId}`
-    await request('POST /role', '/role', {
-        method: 'POST',
-        headers: authHeaders(),
-        body: { id: roleId, name: `Audit Role ${runId}`, description: 'Audit role', created_by: runId },
-        expectStatus: 201,
-        expect: body => expectObject(body) && body.id === roleId,
-    })
-    await request('PUT /role/:id', `/role/${roleId}`, {
-        method: 'PUT',
-        headers: authHeaders(),
-        body: { name: `Audit Role Updated ${runId}`, description: 'Updated' },
-        expect: body => expectObject(body) && body.id === roleId,
-    })
-    await request('POST /role/assign/:id', `/role/assign/${runId}`, {
-        method: 'POST',
-        headers: authHeaders(),
-        body: { role_id: roleId, target: roleId },
-        expect: body => expectObject(body) && body.status === true,
-    })
-    await request('POST /role/unassign/:id', `/role/unassign/${runId}`, {
-        method: 'POST',
-        headers: authHeaders(),
-        body: { role_id: roleId },
-        expect: body => expectObject(body) && body.status === true,
-    })
-    await request('DELETE /role/:id', `/role/${roleId}`, {
-        method: 'DELETE',
-        headers: authHeaders(),
-        body: { target: roleId },
-        expect: body => expectObject(body) && Boolean(body.role),
-    })
+    await request('GET /user/full/:id', `/user/full/${runId}`, { headers: authHeaders(), expect: body => expectObject(body) && body.id === runId && !Object.hasOwn(body, 'roles') })
+    await request('GET legacy account-role endpoint', '/roles', { headers: authHeaders(), expectStatus: [404] })
 
     const cert = await request('POST /certificates', '/certificates', {
         method: 'POST',

@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { queryOnce } from '#db'
-import { validateSession } from '#utils/auth/session.ts'
+import { hasHanasandInternalPageAccess } from '#utils/auth/organizationPageAccess.ts'
 import hasInternalToken from '#utils/auth/internalToken.ts'
 import { thesisMember } from '#utils/thesisAccess.ts'
 
@@ -18,8 +18,8 @@ async function prepare() {
     await schema
 }
 async function owner(req: FastifyRequest) {
-    if (req.headers.id !== 'eirikhanasand' || !req.headers.authorization?.startsWith('Bearer ')) return false
-    return (await validateSession({ id: 'eirikhanasand', token: req.headers.authorization.slice(7) }))?.user.id === 'eirikhanasand'
+    const id = typeof req.headers.id === 'string' ? req.headers.id : ''
+    return Boolean(id && await hasHanasandInternalPageAccess(id))
 }
 export async function getCodeReviews(req: FastifyRequest, res: FastifyReply) {
     try {
@@ -46,13 +46,13 @@ export async function postCodeReview(req: FastifyRequest, res: FastifyReply) {
         const id = typeof req.headers.id === 'string' ? req.headers.id : ''
         const token = req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : ''
         if (!await thesisMember(id, token)) return res.status(403).send({ error: 'Hanasand organization membership is required.' })
-        if (!await owner(req)) return res.status(403).send({ error: 'Only the owner can approve source code.' })
+        if (!await owner(req)) return res.status(403).send({ error: 'Hanasand organization owners and editors can approve source code.' })
         const input = req.body as Record<string, unknown> | null
         if (!input || typeof input.id !== 'string' || !input.id || input.id.length > 2000 || typeof input.approved !== 'boolean' ||
             typeof input.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(input.sha256) || typeof input.reviewHash !== 'string' || !/^[a-f0-9]{64}$/.test(input.reviewHash) ||
             typeof input.eventId !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(input.eventId)) return res.status(400).send({ error: 'Invalid review.' })
         await prepare()
-        await queryOnce('INSERT INTO code_review_events (event_id, item_id, content_hash, review_hash, approved, reviewer) VALUES ($1, $2, $3, $4, $5, \'eirikhanasand\') ON CONFLICT (event_id) DO NOTHING', [input.eventId, input.id, input.sha256, input.reviewHash, input.approved])
+        await queryOnce('INSERT INTO code_review_events (event_id, item_id, content_hash, review_hash, approved, reviewer) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (event_id) DO NOTHING', [input.eventId, input.id, input.sha256, input.reviewHash, input.approved, id])
         const result = await queryOnce('SELECT * FROM code_review_events WHERE event_id = $1', [input.eventId])
         return res.header('Cache-Control', 'private, no-store').send(result.rows[0])
     } catch (error) {

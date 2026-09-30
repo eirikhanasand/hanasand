@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 test('ordinary accounts open empty personal automation pages and save a scheduled job', async ({ context, page, baseURL }) => {
     test.setTimeout(90000)
     await context.setExtraHTTPHeaders({ 'x-hanasand-render-proof-auth': 'local-dashboard-render-proof' })
-    for (const [name, value] of Object.entries({ id: 'dashboard-render-proof-user', access_token: 'local-dashboard-render-proof-token', roles: encodeURIComponent('[]') })) await context.addCookies([{ name, value, url: baseURL! }])
+    for (const [name, value] of Object.entries({ id: 'dashboard-render-proof-user', access_token: 'local-dashboard-render-proof-token' })) await context.addCookies([{ name, value, url: baseURL! }])
     let rows: Record<string, unknown>[] = []
     let systemRequests = 0
     await page.route('**/api/backend/system/cron**', async route => { systemRequests++; await route.fulfill({ status: 403, json: { error: 'Forbidden' } }) })

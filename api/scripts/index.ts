@@ -49,8 +49,7 @@ const coreTasks: TestTask[] = [
     scriptTask('generated-projects', 'Generated API, worker and bot behavior', 'check-generated-projects.ts'),
     scriptTask('generated-website', 'Generated website files and styles', 'check-generated-website.ts'),
     scriptTask('notes-unit', 'Notes unit contract', 'smoke-notes.ts'),
-    scriptTask('roles-unit', 'Role permission contract', 'smoke-role-permissions.ts'),
-    scriptTask('role-authorization', 'Role authorization contract', 'smoke-has-role.ts'),
+    scriptTask('organization-internal-pages', 'Organization internal-page access contract', 'smoke-organization-internal-pages.ts'),
     scriptTask('user-delete-unit', 'User delete contract', 'smoke-user-delete-contract.ts'),
     scriptTask('ai-stack-contracts', 'AI stack detection contract', 'smoke-ai-stack-contracts.ts'),
     scriptTask('ai-metrics-readiness', 'AI metrics readiness contract', 'smoke-ai-metrics-readiness.ts'),
@@ -118,7 +117,7 @@ const unitTasks: TestTask[] = (await readdir(path.join(scriptDir, '../tests')))
         id: file.replace(/\.test\.(ts|mjs)$/, ''),
         title: `API behavior: ${file}`,
         command: [bun, 'test', `tests/${file}`],
-        ...(['support-chat.test.ts', 'support-store.test.ts', 'role-management-postgres.test.ts', 'signup-verification-postgres.test.ts', 'schema-lock-timeout-postgres.test.ts', 'automation-history.test.mjs', 'monitoring-issues-postgres.test.ts', 'monitoring-correlation-postgres.test.ts', 'monitoring-message-history-postgres.test.ts', 'monitoring-case-workflow-postgres.test.ts', 'monitoring-vm-access-postgres.test.ts', 'account-deletion-postgres.test.ts', 'case-development-postgres.test.ts', 'monitor-backlog-postgres.test.ts', 'personal-automations-postgres.test.ts'].includes(file) ? { requires: 'database' as const } : {}),
+        ...(['support-chat.test.ts', 'support-store.test.ts', 'signup-verification-postgres.test.ts', 'schema-lock-timeout-postgres.test.ts', 'automation-history.test.mjs', 'monitoring-issues-postgres.test.ts', 'monitoring-correlation-postgres.test.ts', 'monitoring-message-history-postgres.test.ts', 'monitoring-case-workflow-postgres.test.ts', 'monitoring-vm-access-postgres.test.ts', 'account-deletion-postgres.test.ts', 'case-development-postgres.test.ts', 'monitor-backlog-postgres.test.ts', 'personal-automations-postgres.test.ts'].includes(file) ? { requires: 'database' as const } : {}),
     }))
 const playwrightTasks = await discoverPlaywrightTasks()
 const tasks = [...coreTasks, ...unitTasks, ...environmentTasks, ...playwrightTasks]

@@ -271,7 +271,6 @@ export async function postPasskeyAuthenticateVerify(req: FastifyRequest, res: Fa
         if (!user?.active || user.deletion_scheduled_at) {
             return res.status(403).send({ error: 'This account is not active.' })
         }
-        const roles = await rolesForUser(user.id)
         const session = await issueToken({
             id: user.id,
             ip: req.ip,
@@ -285,7 +284,6 @@ export async function postPasskeyAuthenticateVerify(req: FastifyRequest, res: Fa
             id: user.id,
             name: user.name,
             avatar: user.avatar ?? '',
-            roles,
             token: session.token,
             expires_at: session.expires_at,
             authProvider: 'passkey',
@@ -339,17 +337,6 @@ async function credentialForId(credentialId: string) {
         LIMIT 1
     `, [credentialId])
     return (result.rows[0] as CredentialRow | undefined) || null
-}
-
-async function rolesForUser(userId: string) {
-    const roleResponse = await run(`
-        SELECT r.id, r.name, r.description, r.priority
-        FROM roles r
-        JOIN user_roles ur ON ur.role_id = r.id
-        WHERE ur.user_id = $1
-        ORDER BY r.priority ASC, r.id ASC
-    `, [userId])
-    return roleResponse.rows
 }
 
 function credentialIdFromBody(credential: Record<string, any>) {

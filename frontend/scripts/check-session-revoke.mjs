@@ -24,7 +24,7 @@ try {
     let fail = false
     let revokedCurrent = false
     let invalidRefreshes = 0
-    await context.addCookies(['id', 'access_token', 'name', 'avatar', 'roles'].map(name => ({ name, value: 'fixture', url: 'http://session-revoke.test' })))
+    await context.addCookies(['id', 'access_token', 'name', 'avatar'].map(name => ({ name, value: 'fixture', url: 'http://session-revoke.test' })))
     await page.route('**/*', async route => {
         const request = route.request()
         const url = new URL(request.url())

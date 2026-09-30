@@ -9,9 +9,6 @@ import { socialAccount } from '../src/utils/auth/socialAccounts.ts'
 if (process.env.DB !== 'social_auth_test') throw new Error('Use only the disposable social_auth_test database')
 try {
     await query(`CREATE TABLE users (id TEXT PRIMARY KEY, name TEXT NOT NULL, password TEXT NOT NULL, avatar TEXT, active BOOLEAN NOT NULL DEFAULT TRUE, deletion_scheduled_at TIMESTAMPTZ);
-        CREATE TABLE roles (id TEXT PRIMARY KEY);
-        INSERT INTO roles VALUES ('users');
-        CREATE TABLE user_roles (user_id TEXT REFERENCES users(id), role_id TEXT REFERENCES roles(id), assigned_by TEXT, PRIMARY KEY(user_id,role_id));
         INSERT INTO users (id,name,password) VALUES ('existing-owner','Owner','test');`)
     await ensureSchema()
     await ensureIdentitySchema()
@@ -21,7 +18,6 @@ try {
     const id = concurrent[0]!.id
     assert.notEqual(id, 'existing-owner')
     assert.equal((await query('SELECT COUNT(*)::int AS count FROM users')).rows[0].count, 2)
-    assert.deepEqual((await query('SELECT role_id FROM user_roles WHERE user_id=$1', [id])).rows, [{ role_id: 'users' }])
     await query('UPDATE users SET active=FALSE WHERE id=$1', [id])
     assert.equal(await socialAccount('google', identity), null)
     await query('UPDATE users SET active=TRUE,deletion_scheduled_at=NOW() WHERE id=$1', [id])
@@ -31,9 +27,8 @@ try {
     await query('CREATE FUNCTION reject_test_identity() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.subject=\'rollback-test\' THEN RAISE EXCEPTION \'test write failure\'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_test_identity BEFORE INSERT ON user_social_identities FOR EACH ROW EXECUTE FUNCTION reject_test_identity()')
     const before = (await query('SELECT COUNT(*)::int AS count FROM users')).rows[0].count
     await assert.rejects(socialAccount('google', { subject: 'rollback-test', email: 'rollback@example.test' }))
-    assert.equal((await query('SELECT COUNT(*)::int AS count FROM users')).rows[0].count, before, 'Failed identity writes must roll back users and roles')
+    assert.equal((await query('SELECT COUNT(*)::int AS count FROM users')).rows[0].count, before, 'Failed identity writes must roll back user records')
     await query('INSERT INTO users (id,name,password,email,email_verified_at) VALUES (\'verified-owner\',\'Owner\',\'test\',\'owner@gmail.com\',NOW())')
-    await query('INSERT INTO user_roles VALUES (\'verified-owner\',\'users\',\'administrator\')')
     const owner = await socialAccount('google', { subject: 'owner-subject', email: 'OWNER@gmail.com', authoritativeEmail: true })
     assert.equal(owner!.id, 'verified-owner')
     await query('INSERT INTO users (id,name,password,email) VALUES (\'unverified\',\'Unverified\',\'test\',\'unverified@gmail.com\')')
@@ -47,7 +42,6 @@ try {
     assert.ok(readable.rows[0].email_verified_at)
 
     await query('INSERT INTO users (id,name,password,username) VALUES (\'editable\',\'Before\',\'test\',\'editable\'),(\'taken\',\'Other\',\'test\',\'taken.name\')')
-    await query('INSERT INTO user_roles VALUES (\'editable\',\'users\',\'administrator\')')
     let allowed = true
     mock.module('../src/utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: allowed, id: 'editable', authenticatedId: 'editable', impersonating: false }) }))
     mock.module('../src/utils/auth/login.ts', () => ({ default: async () => ({ token: 'test-token', expires_at: '2030-01-01' }) }))
@@ -63,7 +57,6 @@ try {
     assert.equal(updated.json().username, 'new.handle')
     assert.equal(updated.json().password, undefined)
     assert.equal((await query('SELECT name FROM users WHERE id=\'taken\'')).rows[0].name, 'Other')
-    assert.equal((await query('SELECT user_id FROM user_roles WHERE user_id=\'editable\'')).rows[0].user_id, 'editable')
     assert.equal((await edit({ username: 'TAKEN.NAME' })).statusCode, 409)
     assert.equal((await edit({ username: 'admin' })).statusCode, 400)
     allowed = false
@@ -74,5 +67,5 @@ try {
     const invalidEmail = await app.inject({ method: 'POST', url: '/user', payload: { id: 'signup-test', name: 'Signup test', email: 'invalid', password: 'Long-enough-test-password!' } })
     assert.equal(invalidEmail.statusCode, 400)
     await app.close()
-    console.log('PostgreSQL account checks: concurrent signup, verified email matching, unverified collision rejection, readable usernames, profile uniqueness and self authorization, stable IDs/roles, required signup email, rollback and inactive-account protection.')
+    console.log('PostgreSQL account checks: concurrent signup, verified email matching, unverified collision rejection, readable usernames, profile uniqueness and self authorization, stable IDs, required signup email, rollback and inactive-account protection.')
 } finally { await closeDatabase() }

@@ -27,12 +27,12 @@ assert.equal((await validate(new Response('', { status: 401 }))).state, 'invalid
 assert.equal((await validate(new Response('', { status: 403 }))).state, 'invalid')
 assert.equal(tokenValidationState(400), 'unavailable')
 assert.equal((await validate(new Error('temporary outage'), 'recovering-session')).state, 'unavailable')
-assert.equal((await validate(Response.json({ roles: [] }), 'recovering-session')).state, 'valid', 'An outage must not remain cached after authentication recovers')
+assert.equal((await validate(Response.json({}), 'recovering-session')).state, 'valid', 'An outage must not remain cached after authentication recovers')
 
 const sessionExpiresAt = new Date(Date.now() + 30 * 60_000).toISOString()
 const authCheckedAt = new Date(Date.now() - 2 * 60_000).toISOString()
 fetchResult = new Error('network unavailable')
-const degraded = await proxy(request(`access_token=grace; id=user; roles=%5B%5D; session_expires_at=${encodeURIComponent(sessionExpiresAt)}; auth_checked_at=${encodeURIComponent(authCheckedAt)}`))
+const degraded = await proxy(request(`access_token=grace; id=user; session_expires_at=${encodeURIComponent(sessionExpiresAt)}; auth_checked_at=${encodeURIComponent(authCheckedAt)}`))
 assert.equal(degraded.status, 503, 'Client-provided freshness cookies must never authorize an unavailable session')
 assert.equal(degraded.headers.get('x-middleware-next'), null)
 

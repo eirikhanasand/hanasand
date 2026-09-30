@@ -9,7 +9,6 @@ test('DMARC attachments render inline with safe failures and retries', async ({ 
     await context.addCookies([
         { name: 'id', value: 'dashboard-render-proof-user', url: baseURL! },
         { name: 'access_token', value: 'local-dashboard-render-proof-token', url: baseURL! },
-        { name: 'roles', value: '["administrator"]', url: baseURL! },
     ])
     const message = { id: 'report', subject: 'Report domain: hanasand.com', from: [{ email: 'noreply-dmarc-support@google.com' }], to: [{ email: 'postmaster@hanasand.com' }], cc: [], bcc: [], replyTo: [], receivedAt: '2026-09-19T10:00:00Z', mailboxIds: ['inbox'], preview: '', isRead: true,
         attachments: [{ blobId: 'zip', name: 'google-report.zip', size: 789, type: 'application/zip' }], textBody: '', htmlBody: '' }

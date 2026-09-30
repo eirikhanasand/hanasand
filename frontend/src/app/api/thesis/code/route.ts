@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     if ('response' in access) return access.response
     try {
         const origin = request.headers.get('origin')
-        if (!origin || !URL.canParse(origin) || new URL(origin).host !== request.headers.get('host') || !await canEditThesis(access.session.token, access.session.id)) return json({ error: 'Only the owner can review source code.' }, 403)
+        if (!origin || !URL.canParse(origin) || new URL(origin).host !== request.headers.get('host') || !await canEditThesis(access.session.token, access.session.id)) return json({ error: 'Hanasand organization owners and editors can review source code.' }, 403)
         const input = await request.json().catch(() => null)
         const data = await inventory()
         if (data.sync && (data.sync.phase !== 'ready' || data.sync.error)) return json({ error: 'Git is being synchronized. Wait for the current version before approving.' }, 409)

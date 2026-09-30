@@ -12,24 +12,24 @@ test('VM status comes from a live check, never the saved running state', async (
 })
 
 let valid = true
-let admin = false
+let internalMember = false
 let deleted = false
 mock.module('../src/utils/auth/session.ts', () => ({ validateSession: async ({ id }: { id: string }) => valid ? { user: { id } } : null }))
-mock.module('../src/utils/loadSQL.ts', () => ({ loadSQL: async () => 'role-query' }))
-mock.module('../src/utils/db.ts', () => ({ default: async (sql: string, params: string[] = []) => ({ rows: /SELECT vm_user_(has_access|can_manage)/.test(sql) ? [{ allowed: ['owner', 'creator', 'member'].includes(params[1]) }] : sql === 'role-query' ? [{ has_role: admin }] : [{ owner: 'owner', created_by: 'creator', access_users: ['member'], deleted_at: deleted ? new Date() : null }] }) }))
+mock.module('../src/utils/auth/organizationPageAccess.ts', () => ({ hasHanasandInternalPageAccess: async (id: string) => internalMember && id === 'org-editor' }))
+mock.module('../src/utils/db.ts', () => ({ default: async (sql: string, params: string[] = []) => ({ rows: /SELECT vm_user_(has_access|can_manage)/.test(sql) ? [{ allowed: ['owner', 'creator', 'member'].includes(params[1]) }] : [{ owner: 'owner', created_by: 'creator', access_users: ['member'], deleted_at: deleted ? new Date() : null }] }) }))
 mock.module('../src/utils/recovery.ts', () => ({ recoveryReadOnly: () => false }))
 mock.module('../src/utils/vms/lxd.ts', () => ({ lxdRequest: async () => { throw new Error('Unexpected host access') } }))
 const { consoleAccess } = await import('../src/handlers/vms/console.ts')
 const { consoleUsername, consoleLoginScript } = await import('../src/utils/vms/lxdConsole.ts')
 
-test('console requires an active session and VM ownership, sharing or verified admin role', async () => {
+test('console requires an active session and VM ownership, sharing or Hanasand organization access', async () => {
     for (const id of ['owner', 'creator', 'member']) expect(await consoleAccess('cashflow', id, 'test')).toBe(true)
     expect(await consoleAccess('cashflow', 'stranger', 'test')).toBe(false)
     valid = false
     expect(await consoleAccess('cashflow', 'member', 'test')).toBe(false)
     valid = true
-    admin = true
-    expect(await consoleAccess('cashflow', 'admin', 'test')).toBe(true)
+    internalMember = true
+    expect(await consoleAccess('cashflow', 'org-editor', 'test')).toBe(true)
 })
 
 test('console uses the existing VM account and rejects unsafe account names', () => {
@@ -57,10 +57,10 @@ test('login requires an existing non-system account and never creates a user', a
     } finally { await rm(directory, { recursive: true, force: true }) }
 })
 
-test('pending deletion denies console access even to administrators', async () => {
+test('pending deletion denies console access even to Hanasand organization editors', async () => {
     deleted = true
-    admin = true
-    expect(await consoleAccess('cashflow', 'admin', 'test')).toBe(false)
+    internalMember = true
+    expect(await consoleAccess('cashflow', 'org-editor', 'test')).toBe(false)
     expect(await consoleAccess('cashflow', 'owner', 'test')).toBe(false)
     deleted = false
 })

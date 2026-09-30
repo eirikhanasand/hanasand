@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { withLogSearchTransaction } from '#utils/logs/searchCapacity.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import { compileLogQuery } from '#utils/logs/kql.ts'
 import { readPendingProcessLogs } from '#utils/events/processQueue.ts'
 import { basicLogSearchPredicate } from '#utils/logs/searchText.ts'
@@ -12,7 +12,7 @@ import { rollupLogCountsSql } from '#utils/logs/counts.ts'
 export async function searchLogs(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
     if (!valid) return res.status(401).send({ error: 'Unauthorized.' })
-    if (!(await hasRole(req, res, 'system_admin')).valid) return res.status(403).send({ error: 'Missing system_admin role.' })
+    if (!(await hasHanasandInternalRouteAccess(req)).valid) return res.status(403).send({ error: 'Active Hanasand organization owner or editor access is required.' })
     const input = req.query as { hql?: string, kql?: string, search?: string, service?: string, severity?: string, hours?: string, stats?: string, paginate?: string, cursor?: string, realtime?: string }
     try {
         const compiled = compileLogQuery(input.hql || input.kql || 'Logs | take 200')

@@ -139,38 +139,23 @@ export async function recordSupportTimelineAuditBridgeEvent(req: FastifyRequest,
     await recordSystemEvent(req, supportTimelineAuditBridgeEvent(input))
 }
 
-export async function actorHasAdminSupportAccess(actorId: string) {
-    const result = await run(`
-        SELECT r.id, r.name
-        FROM roles r
-        JOIN user_roles ur ON ur.role_id = r.id
-        WHERE ur.user_id = $1
-    `, [actorId])
-
-    return result.rows.some((role: { id: string, name?: string }) => {
-        const id = role.id.toLowerCase()
-        const name = (role.name || '').toLowerCase()
-        return id === 'administrator'
-            || id === 'system_admin'
-            || id === 'user_admin'
-            || id.includes('admin')
-            || name.includes('admin')
-    })
-}
-
-export async function userHasAdministrativeRole(userId: string) {
+export async function actorHasHanasandInternalAccess(actorId: string) {
     const result = await run(`
         SELECT 1
-        FROM user_roles ur
-        JOIN roles r ON r.id = ur.role_id
-        WHERE ur.user_id = $1
-          AND (
-              lower(ur.role_id) IN ('administrator', 'system_admin', 'user_admin')
-              OR lower(coalesce(r.name, '')) LIKE '%admin%'
-          )
+        FROM organization_members member
+        JOIN organizations organization ON organization.id = member.organization_id
+        JOIN users ON users.id = member.user_id
+        WHERE member.user_id = $1 AND organization.id = $2
+          AND organization.status = 'active' AND member.status = 'active'
+          AND member.role IN ('owner', 'editor')
+          AND users.active IS TRUE AND users.deletion_scheduled_at IS NULL
         LIMIT 1
-    `, [userId])
+    `, [actorId, '3e735e7b-4d7f-444d-9806-231fa26cfcec'])
     return result.rows.length > 0
+}
+
+export async function userHasHanasandInternalAccess(userId: string) {
+    return actorHasHanasandInternalAccess(userId)
 }
 
 export async function recordSystemEvent(req: FastifyRequest, input: SystemEventInput, query: typeof run = run) {

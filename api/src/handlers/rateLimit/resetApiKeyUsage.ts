@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import { listApiKeys } from '#utils/auth/apiKeys.ts'
 import { recordSystemEvent, requireAuditReason } from '#utils/systemEvent.ts'
 import { resetApiKeyRateLimitBuckets } from '#plugins/rateLimit.ts'
@@ -11,8 +11,8 @@ export default async function resetApiKeyUsageHandler(req: FastifyRequest<{ Para
     const access = await tokenWrapper(req, res)
     if (!access.valid) return res.status(401).send({ error: access.error || 'Unauthorized.' })
 
-    const role = await hasRole(req, res, 'system_admin')
-    if (!role.valid) return res.status(403).send({ error: role.error || 'Missing system_admin role.' })
+    const role = await hasHanasandInternalRouteAccess(req)
+    if (!role.valid) return res.status(403).send({ error: role.error || 'Active Hanasand organization owner or editor access is required.' })
 
     let reason: string
     try {

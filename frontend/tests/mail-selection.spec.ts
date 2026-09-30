@@ -6,7 +6,6 @@ test('select mail without opening it, archive a group, and retain failures for r
     await context.addCookies([
         { name: 'id', value: 'dashboard-render-proof-user', url: baseURL! },
         { name: 'access_token', value: 'local-dashboard-render-proof-token', url: baseURL! },
-        { name: 'roles', value: '["administrator"]', url: baseURL! },
     ])
     const messages = ['One', 'Two', 'Three'].map(id => ({ id, subject: id, from: [{ email: 'sender@example.com' }], receivedAt: '2026-09-19T10:00:00Z', preview: 'Preview', isRead: false, mailboxIds: ['inbox'] }))
     const archived = new Set<string>()

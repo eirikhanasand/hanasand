@@ -6,7 +6,6 @@ test('mail scroll loads older messages, retries failures and contains long mailb
     await context.addCookies([
         { name: 'id', value: 'dashboard-render-proof-user', url: baseURL! },
         { name: 'access_token', value: 'local-dashboard-render-proof-token', url: baseURL! },
-        { name: 'roles', value: '["administrator"]', url: baseURL! },
     ])
     let failNext = true
     let archived = false

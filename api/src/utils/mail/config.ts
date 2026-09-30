@@ -42,12 +42,6 @@ export const mailConfig = {
     systemSenderLocalPart,
     systemAliasLocalParts,
     userAliases: mailUserAliases,
-    privilegedMailboxUsers: new Set(
-        (process.env.MAIL_PRIVILEGED_USERS || 'admin,administrator,eirik,eirikhanasand')
-            .split(',')
-            .map(value => value.trim())
-            .filter(Boolean)
-    ),
 }
 
 export function requireMailAdminConfig() {

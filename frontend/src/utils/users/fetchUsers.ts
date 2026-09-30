@@ -1,22 +1,15 @@
 import config from '@/config'
 import { redirect } from 'next/navigation'
 
-type FetchRoleProps = {
-    id: string
-    token: string
-    cache?: RequestCache
-}
-
-export default async function getRoles({ id, token, cache }: FetchRoleProps): Promise<Role[]> {
+export default async function fetchUsers({ id, token, cache }: { id?: string, token?: string, cache?: RequestCache }): Promise<User[]> {
     if (!id || !token) {
         return redirect('/logout?path=/login%3Fpath%3D/dashboard%26expired=true')
     }
 
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
-
     try {
-        const response = await fetch(`${config.url.api}/roles`, {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
+        const response = await fetch(`${config.url.api}/users`, {
             headers: {
                 'Content-Type': 'application/json',
                 'id': id,
@@ -28,7 +21,7 @@ export default async function getRoles({ id, token, cache }: FetchRoleProps): Pr
 
         clearTimeout(timeout)
         if (!response.ok) {
-            throw new Error('Failed to fetch roles.')
+            throw new Error('Failed to fetch users.')
         }
 
         const data = await response.json()

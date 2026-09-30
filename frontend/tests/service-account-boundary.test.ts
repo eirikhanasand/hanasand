@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mock } from 'bun:test'
 import { NextRequest } from 'next/server'
 mock.module('../../api/src/utils/recovery', () => ({ recoveryReadOnly: () => false }))
-mock.module('../src/utils/proxy/tokenIsValid', () => ({ default: async () => ({ valid: true, state: 'valid', servicePages: ['/db'], roles: [] }) }))
+mock.module('../src/utils/proxy/tokenIsValid', () => ({ default: async () => ({ valid: true, state: 'valid', servicePages: ['/db'] }) }))
 const { proxy } = await import('../src/proxy')
 const request = (method: string, path: string) => new NextRequest('https://hanasand.com' + path, { method, headers: { cookie: 'id=svc_fixture; access_token=hsk_fixture' } })
 assert.equal((await proxy(request('GET', '/db'))).status, 200)

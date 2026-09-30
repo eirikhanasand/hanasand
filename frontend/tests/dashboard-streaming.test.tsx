@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mock } from 'bun:test'
 import { createElement } from 'react'
 import { renderToReadableStream } from 'react-dom/server'
-let validation = { valid: true, state: 'valid', roles: [{ id: 'administrator' }] }
+let validation = { valid: true, state: 'valid', canViewInternalPages: false }
 let statusCalls = 0
 let organizationCalls = 0
 let organizationResponse = () => Response.json({ organizations: [] })
@@ -41,34 +41,34 @@ for (;;) { const chunk = await reader.read(); if (chunk.done) break; rest += new
 assert(rest.includes('Service health is temporarily unavailable'))
 console.log('Dashboard streams before status resolves and shows an honest unavailable state.')
 
-for (const roles of [[], [{ id: 'users' }], [{ id: 'system_admin' }], [{ id: 'owner' }]]) {
-    validation = { valid: true, state: 'valid', roles }
+for (const canViewInternalPages of [false]) {
+    validation = { valid: true, state: 'valid', canViewInternalPages }
     const callsBefore = statusCalls
     const html = await new Response(await renderToReadableStream(await Page({}))).text()
     assert(html.includes('Monitoring starts independently'))
     assert(!html.includes('Checking service health'))
     assert(!html.includes('Service health'))
-    assert.equal(statusCalls, callsBefore, 'Non-admins must not fetch service health')
+    assert.equal(statusCalls, callsBefore, 'Members without Hanasand internal access must not fetch service health')
 }
 for (const state of ['invalid', 'unavailable']) {
-    validation = { valid: false, state, roles: [{ id: 'administrator' }] }
+    validation = { valid: false, state, canViewInternalPages: true }
     const callsBefore = statusCalls
     const html = await new Response(await renderToReadableStream(await Page({}))).text()
     assert(!html.includes('Service health'))
     assert.equal(statusCalls, callsBefore, 'Unverified sessions must not fetch service health')
 }
-for (const role of ['administrator', 'admin']) {
-    validation = { valid: true, state: 'valid', roles: [{ id: role }] }
+for (const canViewInternalPages of [true]) {
+    validation = { valid: true, state: 'valid', canViewInternalPages }
     const adminStream = await renderToReadableStream(await Page({}))
     release({ generated_at: new Date().toISOString(), checks: [], history: [], incidents: [], overall: 'degraded' })
     const html = await new Response(adminStream).text()
     assert(html.includes('Service health'))
     assert(html.includes('need attention'))
 }
-console.log('Service health is visible only to verified admins; customer dashboards never fetch it.')
+console.log('Service health is visible only to verified Hanasand owners and editors; other dashboards never fetch it.')
 
 assert.equal(organizationCalls, 0, 'Normal dashboard visits must not fetch membership for a hidden notice')
-validation = { valid: true, state: 'valid', roles: [{ id: 'users' }] }
+validation = { valid: true, state: 'valid', canViewInternalPages: false }
 const deniedParams = { searchParams: Promise.resolve({ notAllowed: 'true', from: '/scanner' }) }
 const emptyNotice = await new Response(await renderToReadableStream(await Page(deniedParams))).text()
 assert(emptyNotice.includes('Create organization'))

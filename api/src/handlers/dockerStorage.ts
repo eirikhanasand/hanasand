@@ -1,14 +1,14 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 
 const root = process.env.DOCKER_STORAGE_STATE_DIR || '/var/lib/hanasand/docker-storage'
 async function authorize(req: FastifyRequest, res: FastifyReply) {
     const access = await tokenWrapper(req, res)
     if (!access.valid) { res.status(401).send({ error: 'Sign in to view storage.' }); return false }
-    if (!(await hasRole(req, res, 'system_admin')).valid) {
-        res.status(403).send({ error: 'System administrator access is required.' }); return false
+    if (!(await hasHanasandInternalRouteAccess(req)).valid) {
+        res.status(403).send({ error: 'Active Hanasand organization owner or editor access is required.' }); return false
     }
     return true
 }

@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import { revokeAllTokens } from '#utils/auth/session.ts'
 
 export default async function deactivateUser(req: FastifyRequest, res: FastifyReply) {
@@ -10,9 +10,9 @@ export default async function deactivateUser(req: FastifyRequest, res: FastifyRe
         return res.status(401).send({ error: 'Unauthorized.' })
     }
 
-    const canManageUsers = await hasRole(req, res, 'user_admin')
+    const canManageUsers = await hasHanasandInternalRouteAccess(req)
     if (!canManageUsers.valid) {
-        return res.status(403).send({ error: 'Missing user_admin role.' })
+        return res.status(403).send({ error: 'Active Hanasand organization owner or editor access is required.' })
     }
 
     const { id } = req.params as { id: string }

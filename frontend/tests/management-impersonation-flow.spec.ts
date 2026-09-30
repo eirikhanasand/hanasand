@@ -164,10 +164,8 @@ test('touch users can tap the menu without navigating away', async ({ browser })
         const trigger = page.getByRole('button', { name: 'Actions for target-user', exact: true })
         await expect(trigger).toHaveCSS('opacity', '1')
         await trigger.tap()
-        await expect(page.getByRole('button', { name: 'Edit roles for target-user', exact: true })).toBeVisible()
         await expect(page).toHaveURL(/\/management\/users$/)
         await page.getByRole('heading', { name: 'Users', exact: true }).tap()
-        await expect(page.getByRole('button', { name: 'Edit roles for target-user', exact: true })).toBeHidden()
     } finally { await context.close() }
 })
 
@@ -177,7 +175,6 @@ async function openManagementPage(browser: Browser, touch = false) {
         { name: 'id', value: 'admin-user', url: appBase, expires: cookieExpiry(), sameSite: 'Lax' },
         { name: 'name', value: encodeURIComponent('Admin User'), url: appBase, expires: cookieExpiry(), sameSite: 'Lax' },
         { name: 'access_token', value: 'admin-token', url: appBase, expires: cookieExpiry(), sameSite: 'Lax' },
-        { name: 'roles', value: encodeURIComponent(JSON.stringify([{ id: 'administrator' }, { id: 'user_admin' }])), url: appBase, expires: cookieExpiry(), sameSite: 'Lax' },
     ])
     const page = await context.newPage()
     await page.goto('/management/users', { waitUntil: 'domcontentloaded' })
@@ -246,20 +243,7 @@ async function handleMockApi(request: IncomingMessage, response: ServerResponse)
     const pathName = url.pathname
 
     if (request.method === 'GET' && pathName.startsWith('/api/auth/token/')) {
-        sendJson(response, { roles: [{ id: 'administrator' }, { id: 'user_admin' }], name: 'Admin User' })
-        return
-    }
-
-    if (request.method === 'GET' && pathName === '/api/roles') {
-        sendJson(response, [{
-            id: 'administrator',
-            name: 'Administrator',
-            description: 'Full admin',
-            priority: 0,
-            created_by: 'system',
-            created_at: '2026-07-03T00:00:00.000Z',
-            updated_at: '2026-07-03T00:00:00.000Z',
-        }])
+        sendJson(response, { name: 'Admin User' })
         return
     }
 
@@ -270,18 +254,12 @@ async function handleMockApi(request: IncomingMessage, response: ServerResponse)
                 name: 'Admin User',
                 avatar: '',
                 active: true,
-                highest_role_id: 'administrator',
-                highest_role_name: 'Administrator',
-                highest_role_priority: 0,
             },
             {
                 id: 'target-user',
                 name: 'Target User',
                 avatar: '',
                 active: true,
-                highest_role_id: 'member',
-                highest_role_name: 'Member',
-                highest_role_priority: 20,
             },
         ])
         return

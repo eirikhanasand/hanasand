@@ -11,7 +11,6 @@ type StorageSnapshot = {
     consent: ConsentChoice
     consentUpdatedAt: string
     sessionToken: boolean
-    roleToken: boolean
     impersonationToken: boolean
     localProductKeys: string[]
     sessionProductKeys: string[]
@@ -126,7 +125,6 @@ export default function CookieSettingsClient() {
                         </div>
                         <div className='mt-4 grid gap-2'>
                             <StatusRow label='Session token' present={snapshot.sessionToken} />
-                            <StatusRow label='Role token' present={snapshot.roleToken} />
                             <StatusRow label='Support session token' present={snapshot.impersonationToken} />
                         </div>
                         <Link
@@ -144,7 +142,7 @@ export default function CookieSettingsClient() {
                         <div>
                             <h2 className='text-lg font-semibold'>Browser-local product tokens</h2>
                             <p className='mt-2 max-w-3xl text-sm leading-7 text-ui-muted'>
-                                These are local drafts and product state for share workspaces, DWM setup, recent uploads, load testing, TI cache, and AI workspace continuity. Clearing them does not change your account, username, roles, or theme.
+                                These are local drafts and product state for share workspaces, DWM setup, recent uploads, load testing, TI cache, and AI workspace continuity. Clearing them does not change your account, username, or theme.
                             </p>
                         </div>
                         <button
@@ -238,7 +236,6 @@ function readSnapshot(): StorageSnapshot {
         consent: normalizeConsent(getCookie(consentCookie)),
         consentUpdatedAt: getCookie(consentUpdatedCookie) || '',
         sessionToken: cookies.includes('access_token'),
-        roleToken: cookies.includes('roles'),
         impersonationToken: cookies.includes('impersonation_token'),
         localProductKeys: productKeys(window.localStorage),
         sessionProductKeys: productKeys(window.sessionStorage),
@@ -250,7 +247,6 @@ function emptySnapshot(): StorageSnapshot {
         consent: 'unset',
         consentUpdatedAt: '',
         sessionToken: false,
-        roleToken: false,
         impersonationToken: false,
         localProductKeys: [],
         sessionProductKeys: [],

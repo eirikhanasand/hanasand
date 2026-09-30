@@ -2,15 +2,15 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import run, { withTransaction } from '#db'
 import { cachedLogQuery } from '#utils/logs/cache.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import { isRuntimeLogSourceAvailable, listRuntimeLogs } from '#utils/docker/engine.ts'
 import { isNativeLogSourceAvailable, listNativeLogs, listNativeLogServices } from '#utils/logs/native.ts'
 
 export async function getLogServices(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
     if (!valid) return res.status(401).send({ error: 'Unauthorized.' })
-    const role = await hasRole(req, res, 'system_admin')
-    if (!role.valid) return res.status(403).send({ error: 'Missing system_admin role.' })
+    const role = await hasHanasandInternalRouteAccess(req)
+    if (!role.valid) return res.status(403).send({ error: 'Active Hanasand organization owner or editor access is required.' })
 
     return res.send(await loadLogServices())
 }
@@ -52,8 +52,8 @@ async function queryLogServices() {
 export async function getLogs(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
     if (!valid) return res.status(401).send({ error: 'Unauthorized.' })
-    const role = await hasRole(req, res, 'system_admin')
-    if (!role.valid) return res.status(403).send({ error: 'Missing system_admin role.' })
+    const role = await hasHanasandInternalRouteAccess(req)
+    if (!role.valid) return res.status(403).send({ error: 'Active Hanasand organization owner or editor access is required.' })
 
     return res.send(await loadLogs(req.query as LogQuery))
 }
@@ -94,8 +94,8 @@ async function queryLogs(query: LogQuery) {
 export async function getRealtimeLogs(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
     if (!valid) return res.status(401).send({ error: 'Unauthorized.' })
-    const role = await hasRole(req, res, 'system_admin')
-    if (!role.valid) return res.status(403).send({ error: 'Missing system_admin role.' })
+    const role = await hasHanasandInternalRouteAccess(req)
+    if (!role.valid) return res.status(403).send({ error: 'Active Hanasand organization owner or editor access is required.' })
 
     const query = req.query as { service?: string, limit?: string, since?: string }
     const limit = Math.min(Math.max(Number(query.limit || 300), 1), 1000)

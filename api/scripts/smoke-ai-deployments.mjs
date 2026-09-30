@@ -77,7 +77,6 @@ async function cleanup() {
     await pool.query('DELETE FROM vm_metrics WHERE name = $1', [vmName]).catch(() => {})
     await pool.query('DELETE FROM vm_details WHERE name = $1', [vmName]).catch(() => {})
     await pool.query('DELETE FROM vms WHERE name = $1', [vmName]).catch(() => {})
-    await pool.query('DELETE FROM user_roles WHERE user_id = $1', [runId]).catch(() => {})
     await pool.query('DELETE FROM tokens WHERE id = $1', [runId]).catch(() => {})
     await pool.query('DELETE FROM users WHERE id = $1', [runId]).catch(() => {})
 }

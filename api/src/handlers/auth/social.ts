@@ -68,9 +68,8 @@ export async function postSocialCallback(req: FastifyRequest, res: FastifyReply)
         if (!user) return res.code(403).send({ error: 'This account is inactive or scheduled for deletion.' })
         const session = await issueToken({ id: user.id, ip: req.ip, userAgent: String(req.headers['user-agent'] || '') })
         if (!session) return res.code(503).send({ error: 'Unable to create a session. Please try again.' })
-        const roles = await run('SELECT r.id,r.name,r.description,r.priority FROM roles r JOIN user_roles ur ON ur.role_id=r.id WHERE ur.user_id=$1 ORDER BY r.priority,r.id', [user.id])
         await run('UPDATE user_social_identities SET last_used_at=NOW() WHERE provider=$1 AND subject=$2', [provider, identity.subject])
-        return res.send({ ...user, avatar: user.avatar || '', roles: roles.rows, token: session.token, expires_at: session.expires_at, redirectPath: transaction.redirect_path })
+        return res.send({ ...user, avatar: user.avatar || '', token: session.token, expires_at: session.expires_at, redirectPath: transaction.redirect_path })
     } catch (error) {
         if (error instanceof AccountIdentityError) return res.code(409).send({ error: error.message })
         // Never log authorization codes, provider tokens, secrets, or token response bodies.

@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { isExternalContactAddress } from '#utils/mail/contactSender.ts'
 import { sendSystemMail } from '#utils/mail/system.ts'
@@ -117,8 +117,8 @@ export async function getCommercialContactRequests(req: FastifyRequest<{ Queryst
     res.header('Cache-Control', 'no-store, max-age=0')
     const access = await tokenWrapper(req, res)
     if (!access.valid) return res.status(401).send({ error: access.error || 'Unauthorized.' })
-    const role = await hasRole(req, res, 'system_admin')
-    if (!role.valid) return res.status(403).send({ error: role.error || 'Missing system_admin role.' })
+    const role = await hasHanasandInternalRouteAccess(req)
+    if (!role.valid) return res.status(403).send({ error: role.error || 'Active Hanasand organization owner or editor access is required.' })
 
     const limit = Number(req.query?.limit || 50)
     if (!Number.isInteger(limit) || limit < 1 || limit > 100) return res.status(400).send({ error: 'limit must be an integer from 1 to 100.' })

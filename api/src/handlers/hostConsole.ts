@@ -2,15 +2,14 @@ import type { FastifyInstance } from 'fastify'
 import WebSocket from 'ws'
 import run, { withDatabaseAdvisoryLock } from '#db'
 import { validateSession } from '#utils/auth/session.ts'
-import { loadSQL } from '#utils/loadSQL.ts'
+import { hasHanasandInternalPageAccess } from '#utils/auth/organizationPageAccess.ts'
 import { recoveryReadOnly } from '#utils/recovery.ts'
 import { applyManagedHostSshKeys, hostConsoleNames, normalizeHostPublicKey, startHostConsole, type HostConsoleName } from '#utils/hostSsh.ts'
 
 async function canOpenHostConsole(id: string, token: string) {
     const session = await validateSession({ id, token })
     if (!session) return false
-    const role = await run(await loadSQL('hasRole.sql'), [session.user.id, 'system_admin'])
-    return role.rows[0]?.has_role === true
+    return hasHanasandInternalPageAccess(session.user.id)
 }
 
 export default function registerHostConsole(fastify: FastifyInstance) {
@@ -62,7 +61,7 @@ export default function registerHostConsole(fastify: FastifyInstance) {
             terminal?.close()
         }
         const fail = (message: string) => { send({ type: 'error', message }); close() }
-        const deadline = setTimeout(() => fail('Sign in with system administrator access to open this console.'), 10000)
+        const deadline = setTimeout(() => fail('Sign in as an active Hanasand organization owner or editor to open this console.'), 10000)
         const origin = request.headers.origin
         if (origin && origin !== 'https://hanasand.com' && !(process.env.NODE_ENV !== 'production' && /^http:\/\/(localhost|127.0.0.1)(:\d+)?$/.test(origin))) {
             clearTimeout(deadline)
@@ -76,11 +75,11 @@ export default function registerHostConsole(fastify: FastifyInstance) {
                 if (Buffer.byteLength(raw.toString()) > 32768) return fail('Console input is too large.')
                 const message = JSON.parse(raw.toString())
                 if (!authenticated) {
-                    if (starting || message.type !== 'auth' || typeof message.id !== 'string' || typeof message.token !== 'string' || message.id.length > 200 || message.token.length > 512) return fail('Sign in with system administrator access to open this console.')
+                    if (starting || message.type !== 'auth' || typeof message.id !== 'string' || typeof message.token !== 'string' || message.id.length > 200 || message.token.length > 512) return fail('Sign in as an active Hanasand organization owner or editor to open this console.')
                     starting = true
                     credentials = { id: message.id, token: message.token }
                     if (recoveryReadOnly()) return fail('Console access is paused during recovery.')
-                    if (!await canOpenHostConsole(credentials.id, credentials.token)) return fail('System administrator access is required.')
+                    if (!await canOpenHostConsole(credentials.id, credentials.token)) return fail('Active Hanasand organization owner or editor access is required.')
                     if (socket.readyState !== WebSocket.OPEN) return
                     clearTimeout(deadline)
                     authenticated = true

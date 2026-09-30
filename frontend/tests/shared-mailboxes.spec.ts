@@ -16,7 +16,7 @@ test.beforeAll(() => {
 test.afterAll(() => rmSync(output, { recursive: true, force: true }))
 
 test('shared folders keep mailbox selections separate and respect sending permissions', async ({ page, context, baseURL }) => {
-    await context.addCookies(['id', 'access_token', 'roles'].map(name => ({ name, value: name === 'id' ? 'mail-test' : name === 'roles' ? encodeURIComponent(JSON.stringify([{ id: 'support' }])) : 'fixture-token', url: baseURL! })))
+    await context.addCookies(['id', 'access_token'].map(name => ({ name, value: name === 'id' ? 'mail-test' : 'fixture-token', url: baseURL! })))
     const requests: URL[] = []
     let holdSupport = false
     let failMessage = false

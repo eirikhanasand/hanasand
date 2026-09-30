@@ -7,7 +7,6 @@ test.beforeEach(async ({ context, baseURL }) => {
     await context.addCookies([
         {name:'id',value:'dashboard-render-proof-user',url:baseURL!},
         {name:'access_token',value:'local-dashboard-render-proof-token',url:baseURL!},
-        {name:'roles',value:JSON.stringify([{id:'system_admin',name:'System administrator',priority:0}]),url:baseURL!},
         {name:'hanasand_workspace',value:JSON.stringify({userId:'dashboard-render-proof-user',organizationId:'org-one',name:'First organization'}),httpOnly:true,url:baseURL!},
     ])
     await context.route('**/api/service-accounts', route=>route.fulfill({json:{accounts:[],endpoints:[]}}))

@@ -15,6 +15,7 @@ if (!dbPassword) {
 }
 
 const runId = `vm_smoke_${Date.now()}`
+const hanasandOrganizationId = '3e735e7b-4d7f-444d-9806-231fa26cfcec'
 const password = `Aa11!!${crypto.randomUUID().replaceAll('-', '').slice(0, 20)}Bb22!!`
 const vmName = `vm-${runId}`
 const pool = new Pool({
@@ -70,7 +71,7 @@ async function cleanup() {
     await pool.query('DELETE FROM vm_metrics WHERE name = $1', [vmName]).catch(() => {})
     await pool.query('DELETE FROM vm_details WHERE name = $1', [vmName]).catch(() => {})
     await pool.query('DELETE FROM vms WHERE name = $1', [vmName]).catch(() => {})
-    await pool.query('DELETE FROM user_roles WHERE user_id = $1', [runId]).catch(() => {})
+    await pool.query('DELETE FROM organization_members WHERE organization_id = $1 AND user_id = $2', [hanasandOrganizationId, runId]).catch(() => {})
     await pool.query('DELETE FROM tokens WHERE id = $1', [runId]).catch(() => {})
     await pool.query('DELETE FROM users WHERE id = $1', [runId]).catch(() => {})
 }
@@ -85,11 +86,10 @@ async function main() {
     expect(signup.response.status === 201, 'Failed to create smoke user.', signup.body)
 
     await pool.query(`
-        INSERT INTO user_roles (user_id, role_id, assigned_by)
-        SELECT $1, role_id, 'administrator'
-        FROM unnest($2::text[]) AS role_id
-        ON CONFLICT DO NOTHING
-    `, [runId, ['users', 'user_admin', 'system_admin']])
+        INSERT INTO organization_members (organization_id, user_id, role, status, invited_by)
+        VALUES ($1, $2, 'editor', 'active', $2)
+        ON CONFLICT (organization_id, user_id) DO UPDATE SET role = 'editor', status = 'active'
+    `, [hanasandOrganizationId, runId])
 
     const login = await request(`/auth/login/${runId}`, {
         method: 'POST',

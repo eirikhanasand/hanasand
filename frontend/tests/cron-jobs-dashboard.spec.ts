@@ -10,9 +10,6 @@ test('cron jobs dashboard renders unified scheduled operations and controls', as
         { name: 'access_token', value: 'local-dashboard-render-proof-token', domain: 'localhost', path: '/' },
         { name: 'id', value: 'dashboard-render-proof-user', domain: '127.0.0.1', path: '/' },
         { name: 'access_token', value: 'local-dashboard-render-proof-token', domain: '127.0.0.1', path: '/' },
-        { name: 'roles', value: encodeURIComponent(JSON.stringify(['system_admin'])), url: origin },
-        { name: 'roles', value: encodeURIComponent(JSON.stringify(['system_admin'])), domain: 'localhost', path: '/' },
-        { name: 'roles', value: encodeURIComponent(JSON.stringify(['system_admin'])), domain: '127.0.0.1', path: '/' },
     ])
 
     const updates: unknown[] = []

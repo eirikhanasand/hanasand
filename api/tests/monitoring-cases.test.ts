@@ -7,7 +7,7 @@ let rows: Record<string, unknown>[] = []
 let values: unknown[] = []
 let sql = ''
 mock.module('../src/utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: authorized, id: authorized ? 'owner' : null }) }))
-mock.module('../src/utils/auth/hasRole.ts', () => ({ default: async () => ({ valid: admin }) }))
+mock.module('../src/utils/auth/organizationPageAccess.ts', () => ({ default: async () => ({ valid: admin }) }))
 mock.module('../src/utils/db.ts', () => ({ default: async (query: string, params: unknown[]) => { sql = query; values = params; return { rows } } }))
 mock.module('../src/utils/monitoringIssues.ts', () => ({ loadMonitoringIssues: async () => [{ caseNumber: 'HA-3', notifications: [{ messageId: 'receipt' }] }] }))
 mock.module('../src/utils/monitoringCaseEvents.ts', () => ({ loadMonitoringRelatedChecks: async () => [], monitoringCheckDetails: () => ({ endpoint: 'https://example.com' }), loadMonitoringCaseEvents: async () => ({ events: [{ id: 'run-1' }], eventTotal: 1, eventPage: 0 }) }))

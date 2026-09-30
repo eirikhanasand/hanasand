@@ -32,7 +32,7 @@ try {
         const context = await browser.newContext({ javaScriptEnabled: true, timezoneId: 'America/Los_Angeles', extraHTTPHeaders: { 'x-hanasand-render-proof-auth': 'local-dashboard-render-proof' } })
         // Allow inline server-stream delivery, but block all application/hydration code.
         if (!javaScriptEnabled) await context.route('**/_next/static/**/*.js', route => route.abort())
-        await context.addCookies(Object.entries({ id: 'dashboard-render-proof-user', access_token: 'local-dashboard-render-proof-token', roles: '["system_admin"]', impersonation_token: 'test-impersonation', dashboard_view_mode: compact ? 'compact' : 'normal', dashboard_navigation: encodeURIComponent(JSON.stringify({ id: 'dashboard-render-proof-user', expanded: { Automation: true, Settings: true, Pinned: true }, pinned: ['/automation/health'] })) }).map(([name, value]) => ({ name, value, url: base })))
+        await context.addCookies(Object.entries({ id: 'dashboard-render-proof-user', access_token: 'local-dashboard-render-proof-token', impersonation_token: 'test-impersonation', dashboard_view_mode: compact ? 'compact' : 'normal', dashboard_navigation: encodeURIComponent(JSON.stringify({ id: 'dashboard-render-proof-user', expanded: { Automation: true, Settings: true, Pinned: true }, pinned: ['/automation/health'] })) }).map(([name, value]) => ({ name, value, url: base })))
         return context
     }
     const noJS = await context(false)

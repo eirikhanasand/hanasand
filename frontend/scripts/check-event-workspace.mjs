@@ -7,7 +7,7 @@ assert(['localhost', '127.0.0.1'].includes(new URL(base).hostname))
 const browser = await chromium.launch({ headless: true })
 try {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, extraHTTPHeaders: { 'x-hanasand-render-proof-auth': 'local-dashboard-render-proof' } })
-    await context.addCookies(Object.entries({ id: 'dashboard-render-proof-user', access_token: 'local-dashboard-render-proof-token', roles: '[]', theme: 'dark' }).map(([name, value]) => ({ name, value, url: base })))
+    await context.addCookies(Object.entries({ id: 'dashboard-render-proof-user', access_token: 'local-dashboard-render-proof-token', theme: 'dark' }).map(([name, value]) => ({ name, value, url: base })))
     const requests = []
     const writes = []
     await context.route('**/api/**', route => {

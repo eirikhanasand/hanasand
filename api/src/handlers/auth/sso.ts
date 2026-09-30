@@ -2,7 +2,6 @@ import { randomUUID } from 'crypto'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import bcrypt from 'bcrypt'
 import run from '#db'
-import { loadSQL } from '#utils/loadSQL.ts'
 import { issueToken } from '#utils/auth/session.ts'
 import { getReservedUsernameReason, normalizeUsername } from '#utils/auth/reservedUsernames.ts'
 import {
@@ -86,7 +85,6 @@ export async function postSsoCallback(req: FastifyRequest, res: FastifyReply) {
             return res.status(403).send({ error: 'This account is not active.', code: 'sso_account_inactive' })
         }
 
-        const roles = await rolesForUser(user.id)
         const session = await issueToken({
             id: user.id,
             ip: req.ip,
@@ -100,7 +98,6 @@ export async function postSsoCallback(req: FastifyRequest, res: FastifyReply) {
             id: user.id,
             name: user.name,
             avatar: user.avatar ?? '',
-            roles,
             token: session.token,
             expires_at: session.expires_at,
             authProvider: config.provider,
@@ -146,8 +143,6 @@ async function findOrProvisionSsoUser(userinfo: OidcUserinfo, autoProvision: boo
         return null
     }
 
-    const userQuery = await loadSQL('assignUserRole.sql')
-    await run(userQuery, [id])
     return response.rows[0] as UserRow
 }
 
@@ -172,15 +167,4 @@ function normalizeSsoUserId(value: string, userinfo: OidcUserinfo) {
     const fallback = `sso-${String(userinfo.sub || randomUUID()).replace(/[^a-zA-Z0-9]/g, '').slice(0, 24).toLowerCase()}`
     const candidate = normalized || fallback
     return getReservedUsernameReason(candidate) ? `sso-${candidate}`.slice(0, 48) : candidate
-}
-
-async function rolesForUser(userId: string) {
-    const roleResponse = await run(`
-        SELECT r.id, r.name, r.description, r.priority
-        FROM roles r
-        JOIN user_roles ur ON ur.role_id = r.id
-        WHERE ur.user_id = $1
-        ORDER BY r.priority ASC, r.id ASC
-    `, [userId])
-    return roleResponse.rows
 }

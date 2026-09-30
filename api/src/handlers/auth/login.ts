@@ -93,14 +93,6 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
         await run('DELETE FROM attempts WHERE id = $1', [userId])
         const { password: ignoredPassword, ...userWithoutPassword } = user
         void ignoredPassword
-        const roleQuery = `
-            SELECT r.id, r.name, r.description, r.priority
-            FROM roles r
-            JOIN user_roles ur ON ur.role_id = r.id
-            WHERE ur.user_id = $1
-        `
-        const roleResponse = await run(roleQuery, [userId])
-        const roles = roleResponse.rows
         const session = await login({ id: userId, ip, userAgent })
         if (!session) {
             req.log.error({ userId, ip, userAgent }, 'Login session issuance failed')
@@ -108,7 +100,7 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
             return res.status(503).send({ ...userWithoutPassword, error: 'Please try again later.' })
         }
 
-        return res.send({ ...userWithoutPassword, roles, token: session.token, expires_at: session.expires_at })
+        return res.send({ ...userWithoutPassword, token: session.token, expires_at: session.expires_at })
     } catch (err: unknown) {
         const error = err as Error
         req.log.error({ err: error, identifier, ip, userAgent }, 'Login failed unexpectedly')

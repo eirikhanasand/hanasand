@@ -6,16 +6,14 @@ import AccountDate from './accountDate'
 import deleteUser from '@/utils/users/deleteUser'
 import { startImpersonating } from '@/utils/impersonation/client'
 import setUserActive from '@/utils/users/setUserActive'
-import { Ban, CheckCircle2, Crown, MoreHorizontal, Pencil, UserRound, X } from 'lucide-react'
+import { Ban, CheckCircle2, MoreHorizontal, UserRound } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useId, useRef, useState } from 'react'
 import ErrorNotice from '../error/errorNotice'
-import UserRoleHandler from '../roles/userRoleHandler'
 import './usersList.css'
 
-export default function DashboardUser({ user, roles }: { user: UserWithRole, roles: Role[] }) {
+export default function DashboardUser({ user }: { user: User }) {
     const { condition: deleted, setCondition: setDeleted } = useClearStateAfter()
-    const [displayRoles, setDisplayRoles] = useState(false)
     const router = useRouter()
     const actions = useRef<HTMLDivElement>(null)
     const actionsId = useId()
@@ -25,13 +23,6 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
     const [impersonationPromptOpen, setImpersonationPromptOpen] = useState(false)
     const [impersonationReason, setImpersonationReason] = useState('')
     const [impersonationReasonError, setImpersonationReasonError] = useState('')
-
-    async function handleRoles(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) {
-        e.stopPropagation()
-        e.preventDefault()
-        actions.current?.hidePopover()
-        setDisplayRoles(!displayRoles)
-    }
 
     async function handleActive(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) {
         e.stopPropagation()
@@ -95,7 +86,7 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
     return (
         <div className='dashboard-user-row group relative h-10 min-h-10 max-h-10'>
             <div onClick={() => router.push(`/profile/${encodeURIComponent(user.id)}`)} className='dashboard-user-row-main grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)_100px_100px_40px] items-center gap-3 rounded-lg py-2 hover:bg-ui-raised cursor-pointer'>
-                <h1 className={`dashboard-user-name min-w-0 truncate ${user.active === false ? 'text-ui-muted line-through' : ''}`} key={user.id}>{user.name}{user.highest_role_priority === 0 && <Crown aria-label='Administrator' className='ml-2 inline h-4 w-4 stroke-ui-warning' />}</h1>
+                <h1 className={`dashboard-user-name min-w-0 truncate ${user.active === false ? 'text-ui-muted line-through' : ''}`} key={user.id}>{user.name}</h1>
                 <span className={`dashboard-user-username min-w-0 truncate text-sm text-ui-muted ${user.active === false ? 'line-through' : ''}`}>{user.username || user.id}</span>
                 <span className='dashboard-user-email min-w-0 truncate text-sm text-ui-muted' title={user.email || undefined}><span className='dashboard-user-mobile-label'>Email</span>{user.email || '—'}</span>
                 <span className='dashboard-user-created text-xs text-ui-muted'><span className='dashboard-user-mobile-label'>Created</span><AccountDate value={user.created_at} /></span>
@@ -123,10 +114,6 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
                     <button type='button' autoFocus onClick={handleImpersonate} disabled={impersonationPending}
                         aria-label={`Impersonate ${user.id}`} className='flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-ui-raised'>
                         <UserRound className='h-4 w-4' />{impersonationPending ? 'Checking' : 'Impersonate'}
-                    </button>
-                    <button type='button' onClick={handleRoles} aria-label={`${displayRoles ? 'Cancel role editing' : 'Edit roles'} for ${user.id}`}
-                        className='flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-ui-raised'>
-                        {displayRoles ? <X className='h-4 w-4' /> : <Pencil className='h-4 w-4' />}{displayRoles ? 'Cancel role editing' : 'Edit roles'}
                     </button>
                     <button type='button' onClick={handleActive} aria-label={`${user.active === false ? 'Activate' : 'Deactivate'} ${user.id}`}
                         className='flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-ui-raised'>
@@ -183,7 +170,6 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
                     </div>
                 </form>
             ) : null}
-            <UserRoleHandler user={user} displayRoles={displayRoles} roles={roles} />
             {deleted ? <ErrorNotice compact variant='success' className='absolute right-2 top-12 z-[100] w-60' message={`Deleted user ${user.id}.`} /> : null}
             {error ? <ErrorNotice compact className='absolute right-2 top-12 z-[100] w-60' message={String(error)} /> : null}
         </div>

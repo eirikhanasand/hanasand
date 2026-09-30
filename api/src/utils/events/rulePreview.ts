@@ -46,7 +46,7 @@ async function scanRulePreviewUncached(organizationId: string, canReadLogs: bool
     const result = await query(`SELECT id, event_timestamp::text AS timestamp, normalized, pg_column_size(events)::bigint AS bytes${input.action === 'drop' ? ', original' : ''}
         FROM events WHERE ${scope.join(' AND ')} AND (${candidates})
         ORDER BY event_timestamp DESC, id DESC LIMIT ${limitParameter}`, params)
-    const eligible = result.rows.filter(row => input.action !== 'drop' || eligibleCustomDrop(row.normalized || {})
+    const eligible = result.rows.filter(row => input.action !== 'drop' || eligibleCustomDrop()
         && !retentionStoreMatches(row.normalized || {}, rules) && !retentionStoreMatches(row.original || {}, rules)) as PreviewEvent[]
     const matchedIndices = input.conditions.some(condition => condition.operator === 'regex')
         ? await matchRulePage(eligible.map(row => row.normalized), input.conditions)

@@ -3,17 +3,17 @@ import type { FastifyInstance } from 'fastify'
 import WebSocket from 'ws'
 import run from '#db'
 import { validateSession } from '#utils/auth/session.ts'
-import { loadSQL } from '#utils/loadSQL.ts'
+import { hasHanasandInternalPageAccess } from '#utils/auth/organizationPageAccess.ts'
 import { recoveryReadOnly } from '#utils/recovery.ts'
 import { startConsoleSession } from '#utils/vms/consoleSession.ts'
 
 export async function consoleAccess(name: string, id: string, token: string) {
     const session = await validateSession({ id, token })
     if (!session) return false
-    const role = await run(await loadSQL('hasRole.sql'), [session.user.id, 'system_admin'])
     const result = await run('SELECT owner, created_by, access_users, deleted_at FROM vms WHERE name = $1', [name])
     const vm = result.rows[0]
-    return Boolean(vm && !vm.deleted_at && (role.rows[0]?.has_role === true || await hasVmAccess(name, session.user.id, true)))
+    const organizationAdmin = await hasHanasandInternalPageAccess(session.user.id)
+    return Boolean(vm && !vm.deleted_at && (organizationAdmin || await hasVmAccess(name, session.user.id, true)))
 }
 
 export default function registerVmConsole(fastify: FastifyInstance) {

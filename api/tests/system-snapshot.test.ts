@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'bun:test'
 import Fastify from 'fastify'
 mock.module('../src/utils/auth/tokenWrapper.ts', () => ({ default: async (req: any) => ({ valid: Boolean(req.headers.id) }) }))
-mock.module('../src/utils/auth/hasRole.ts', () => ({ default: async (req: any) => ({ valid: req.headers.id === 'admin' }) }))
+mock.module('../src/utils/auth/organizationPageAccess.ts', () => ({ default: async (req: any) => ({ valid: req.headers.id === 'admin' }) }))
 const { default: handler } = await import('../src/handlers/metrics/systemSnapshot.ts')
 const app = Fastify()
 app.get('/system/snapshot', handler)

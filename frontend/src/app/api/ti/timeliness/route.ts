@@ -3,7 +3,6 @@ import requireApiSession from '@/utils/proxy/requireApiSession'
 
 export const dynamic = 'force-dynamic'
 
-const roles = ['owner', 'system_admin', 'admin', 'administrator', 'analyst']
 
 export async function GET(request: NextRequest) {
     return forward(request, '/v1/intel/timeliness/workbench')
@@ -15,7 +14,7 @@ export async function POST(request: NextRequest) {
 
 async function forward(request: NextRequest, path: string, body?: string | NextResponse) {
     if (body instanceof NextResponse) return body
-    const session = await requireApiSession(request, roles)
+    const session = await requireApiSession(request)
     if ('response' in session) return session.response
     const base = process.env.TI_SCRAPER_API_BASE?.trim()
     if (!base) return failure(503, 'timeliness_unavailable', 'The timeliness service is unavailable.')

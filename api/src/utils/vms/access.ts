@@ -1,12 +1,12 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 
 export async function vmViewer(req: FastifyRequest, res: FastifyReply) {
     const { valid, id } = await tokenWrapper(req, res)
     if (!valid || !id) { res.status(401).send({ error: 'Unauthorized.' }); return null }
-    const { valid: admin } = await hasRole(req, res, 'system_admin')
+    const { valid: admin } = await hasHanasandInternalRouteAccess(req)
     return { id, admin }
 }
 

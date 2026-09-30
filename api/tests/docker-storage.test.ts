@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 let signedIn = true
 let admin = true
 mock.module('#utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: signedIn }) }))
-mock.module('#utils/auth/hasRole.ts', () => ({ default: async () => ({ valid: admin }) }))
+mock.module('#utils/auth/organizationPageAccess.ts', () => ({ default: async () => ({ valid: admin }) }))
 const root = await mkdtemp(`${tmpdir()}/docker-storage-api-`)
 process.env.DOCKER_STORAGE_STATE_DIR = root
 const { getDockerStorage, clearDockerStorage } = await import('../src/handlers/dockerStorage.ts')

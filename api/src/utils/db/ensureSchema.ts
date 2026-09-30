@@ -9,7 +9,6 @@ import ensureLogCatchupSchema from './logCatchupSchema.ts'
 import ensureSupportAiSchema from '#utils/support/schema.ts'
 import ensureContentOrganizationSchema from './contentOrganizationSchema.ts'
 import ensureOrganizationRolesSchema from './organizationRolesSchema.ts'
-import ensureRoleSchema from './roleSchema.ts'
 import ensureLogDimensionsSchema from './logDimensionsSchema.ts'
 import ensureLogProcessQueueSchema from './logProcessQueueSchema.ts'
 import ensureSharedMailSchema from './sharedMailSchema.ts'
@@ -70,7 +69,9 @@ async function applySchema() {
         GRANT USAGE ON SCHEMA pgbouncer TO hanasand;
         GRANT EXECUTE ON FUNCTION pgbouncer.get_auth(text) TO hanasand`)
     await run('CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_vm_metrics_name_created ON vm_metrics(name, created_at DESC)')
-    await ensureRoleSchema()
+    await run('DROP TABLE IF EXISTS user_roles')
+    await run('DROP TABLE IF EXISTS roles')
+    await run('DROP TABLE IF EXISTS root')
     await ensureContainerBillingSchema()
     await ensureFailoverSchema()
     await ensureAccountIdentitySchema()
@@ -316,8 +317,6 @@ async function applySchema() {
         reservedUsernames.map(username => `${username} reserved account`),
     ])
     await run('UPDATE users SET reserved = TRUE WHERE lower(id) = ANY($1::text[])', [reservedUsernames])
-    await run('INSERT INTO roles (id, name, description, created_by) VALUES (\'support\', \'Support\', \'Answer customer support chats.\', $1) ON CONFLICT (id) DO NOTHING', [ownerUserIds[0] || 'eirikhanasand'])
-    await run('INSERT INTO user_roles (user_id, role_id, assigned_by) SELECT id, \'support\', $1 FROM users WHERE lower(id) = ANY($2::text[]) ON CONFLICT DO NOTHING', [ownerUserIds[0] || 'eirikhanasand', ownerUserIds])
     await run(`
         UPDATE users
         SET active = TRUE,

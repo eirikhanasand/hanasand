@@ -84,7 +84,7 @@ export default function CreateRuleDialog({ category, organizationId, canManage, 
             <label className='flex items-center gap-3 text-sm'>Preview range<select aria-label='Preview range' className={ruleInput + ' max-w-48'} value={range} onChange={event => setRange(event.target.value)}><option value='1'>Last hour</option><option value='24'>Last 24 hours</option><option value='168'>Last 7 days</option><option value='all'>All stored events</option></select></label>
             {!invalid && !editingJson && <RulePreview key={previewKey} organizationId={organizationId} conditions={conditions} action={action} range={range} onReady={previewReady} />}
             <footer className='flex flex-wrap items-center justify-between gap-3 border-t border-ui-border pt-4'>
-                <p className='text-xs text-ui-muted'>{!permitted ? stage === 'analyze' ? 'System administrator access is required for retention rules.' : 'Owner or admin access is required.' : ''}</p>
+                <p className='text-xs text-ui-muted'>{!permitted ? 'An active Hanasand organization editor or owner is required.' : ''}</p>
                 <button type='submit' disabled={busy || !permitted || editingJson || readyPreview !== previewKey || Boolean(invalid) || name.trim().length < 2 || explanation.trim().length < 10} className='rounded-md bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-on-primary disabled:opacity-50'>{busy ? 'Creating…' : 'Create rule'}</button>
             </footer>
             {conditions.some(condition => condition.operator === 'regex' && condition.value) && invalid && <p role='alert' className='text-sm text-ui-text'>{invalid}</p>}

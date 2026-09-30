@@ -15,7 +15,6 @@ type AuthPayload = {
     name: string
     token: string
     expires_at: string
-    roles?: Array<{ id: string }>
 }
 
 test.describe('live admin smoke', () => {
@@ -29,7 +28,6 @@ test.describe('live admin smoke', () => {
                 name: adminName,
                 token: adminToken,
                 expires_at: adminExpiresAt,
-                roles: [{ id: 'administrator' }, { id: 'system_admin' }, { id: 'user_admin' }, { id: 'users' }],
             } satisfies AuthPayload
             : await loginAsAdmin(request)
 
@@ -52,12 +50,6 @@ test.describe('live admin smoke', () => {
             await expect(page.getByRole('heading', { name: 'User management', exact: true })).toBeVisible()
             const managementHasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)
             expect(managementHasHorizontalOverflow).toBeFalsy()
-
-            await page.goto('/role/system_admin', { waitUntil: 'domcontentloaded' })
-            await expect(page).toHaveURL(/\/role\/system_admin/)
-            await expect(page.getByRole('heading', { name: 'System Administrator', exact: true })).toBeVisible()
-            const rolePageHasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)
-            expect(rolePageHasHorizontalOverflow).toBeFalsy()
 
             await page.goto(`/profile/${adminId}`, { waitUntil: 'networkidle' })
             await expect(page).toHaveURL(new RegExp(`/profile/${adminId}$`))
@@ -86,7 +78,6 @@ async function authenticateContext(context: BrowserContext, auth: AuthPayload, a
         { name: 'id', value: encodeURIComponent(auth.id), url: cookieUrl, expires, httpOnly: false, secure, sameSite: 'Lax' },
         { name: 'name', value: encodeURIComponent(auth.name), url: cookieUrl, expires, httpOnly: false, secure, sameSite: 'Lax' },
         { name: 'access_token', value: encodeURIComponent(auth.token), url: cookieUrl, expires, httpOnly: false, secure, sameSite: 'Lax' },
-        { name: 'roles', value: encodeURIComponent(JSON.stringify(auth.roles || [])), url: cookieUrl, expires, httpOnly: false, secure, sameSite: 'Lax' },
     ])
 }
 

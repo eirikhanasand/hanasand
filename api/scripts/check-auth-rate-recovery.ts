@@ -14,7 +14,7 @@ mock.module('#db', () => ({ default: async () => ({ rows: [] }), queryOnce: asyn
 mock.module('../src/utils/auth/session.ts', () => ({ validateSession: async () => {
     validations++
     if (fail) { fail = false; throw Object.assign(new Error('Connection reset during switch'), { code: 'ECONNRESET' }) }
-    return { user: { id: 'probe' }, roles: [], session: { database_read_only: true } }
+    return { user: { id: 'probe' }, session: { database_read_only: true } }
 } }))
 const { default: rateLimit } = await import('../src/plugins/rateLimit.ts')
 const app = Fastify()

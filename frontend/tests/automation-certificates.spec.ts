@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 
 test('certificate states are explicit and neutral details open by click and keyboard', async ({ context, page, baseURL }) => {
     await context.setExtraHTTPHeaders({ 'x-hanasand-render-proof-auth': 'local-dashboard-render-proof' })
-    for (const [name, value] of Object.entries({ id: 'dashboard-render-proof-user', access_token: 'local-dashboard-render-proof-token', roles: encodeURIComponent(JSON.stringify(['system_admin'])) })) {
+    for (const [name, value] of Object.entries({ id: 'dashboard-render-proof-user', access_token: 'local-dashboard-render-proof-token' })) {
         await context.addCookies([{ name, value, url: baseURL! }])
     }
     const base = { ownerId: 'owner', prompt: 'Check connectivity', status: 'active', actionType: 'agent_prompt', monitoringType: 'tcp', scheduleKind: 'interval', intervalMinutes: 1, lastStatus: 'completed', consecutiveFailures: 0, notifyOn: 'never', history: [], uptime: 100, certificateSubject: null, certificateIssuer: null, certificateExpiresAt: null }

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 
 test('health columns toggle both directions, preserve alphabetical ties and work on mobile', async ({ context, page, baseURL }) => {
     await context.setExtraHTTPHeaders({ 'x-hanasand-render-proof-auth': 'local-dashboard-render-proof' })
-    await context.addCookies(Object.entries({ id: 'dashboard-render-proof-user', access_token: 'local-dashboard-render-proof-token', roles: encodeURIComponent(JSON.stringify(['system_admin'])) }).map(([name, value]) => ({ name, value, url: baseURL! })))
+    await context.addCookies(Object.entries({ id: 'dashboard-render-proof-user', access_token: 'local-dashboard-render-proof-token' }).map(([name, value]) => ({ name, value, url: baseURL! })))
     const base = { ownerId: 'owner', prompt: 'Check availability', status: 'active', actionType: 'agent_prompt', monitoringType: 'fetch', targetUrl: 'https://example.test', scheduleKind: 'interval', intervalMinutes: 1, lastStatus: 'completed', consecutiveFailures: 0, notifyOn: 'never', history: [{ id: 'run', status: 'completed', warning: false, started_at: '2026-09-07T10:00:00Z' }], uptime: 100, certificateStatus: 'invalid' }
     const rows = [{ ...base, id: 'zulu', name: 'Zulu', lastStatus: 'failed', certificateStatus: 'valid', uptime: 90, history: [{ ...base.history[0], status: 'failed' }] }, { ...base, id: 'beta', name: 'Beta' }, { ...base, id: 'alpha', name: 'Alpha' }]
     await page.route('**/api/backend/automations**', route => {

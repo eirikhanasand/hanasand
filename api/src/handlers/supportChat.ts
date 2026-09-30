@@ -7,6 +7,7 @@ import primaryQuery from '#db'
 import { validateSupportSession } from '#utils/support/auth.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { matchApiKeyScope, validateApiKey } from '#utils/auth/apiKeys.ts'
+import { hasHanasandInternalPageAccess } from '#utils/auth/organizationPageAccess.ts'
 
 type SupportBody = { subject?: string; message?: string; requestId?: string }
 const actors = new WeakMap<FastifyRequest, { id: string; support: boolean }>()
@@ -19,7 +20,7 @@ async function auth(req: FastifyRequest, res: FastifyReply) {
         if (!res.sent && res.statusCode < 400) res.status(401).send({ error: 'Sign in to view your support conversations.' })
         return null
     }
-    if (independentSupport && session && session.user.id === result.id) actors.set(req, { id: result.id, support: session.roles.some(role => role.id === 'support') })
+    if (independentSupport && session && session.user.id === result.id) actors.set(req, { id: result.id, support: await hasHanasandInternalPageAccess(result.id) })
     else if (independentSupport) {
         // API keys and impersonation remain authoritative in the main authentication database.
         const user = (await primaryQuery('SELECT name FROM users WHERE id=$1', [result.id])).rows[0]
@@ -35,14 +36,7 @@ async function isSupport(userId: string, req: FastifyRequest) {
     const apiKey = (req as FastifyRequest & { apiKeyAuth?: NonNullable<Awaited<ReturnType<typeof validateApiKey>>> }).apiKeyAuth
     if (apiKey?.serviceAccount && apiKey.ownerId === userId
         && matchApiKeyScope(apiKey.apiKey.scopes, 'GET', '/api/support/tickets')) return true
-    const result = await primaryQuery(`
-        SELECT EXISTS (
-            SELECT 1 FROM user_roles ur
-            JOIN roles r ON r.id = ur.role_id
-            WHERE ur.user_id = $1 AND r.id = 'support'
-        ) AS allowed
-    `, [userId])
-    return result.rows[0]?.allowed === true
+    return hasHanasandInternalPageAccess(userId)
 }
 
 async function listSupportTickets(userId: string, supportQueue: boolean) {
@@ -66,7 +60,7 @@ export async function getSupportTickets(req: FastifyRequest, res: FastifyReply) 
     try {
         const support = await isSupport(userId, req)
         const result = await listSupportTickets(userId, support)
-        return res.send({ role: support ? 'support' : 'user', tickets: result.rows, realtime: true })
+        return res.send({ isSupport: support, tickets: result.rows, realtime: true })
     } catch (error) {
         req.log.error(error)
         return res.status(500).send({ error: 'Failed to load support tickets.' })
@@ -78,7 +72,7 @@ export async function getMySupportTickets(req: FastifyRequest, res: FastifyReply
     if (!userId) return
     try {
         const result = await listSupportTickets(userId, false)
-        return res.send({ role: 'user', tickets: result.rows, realtime: true })
+        return res.send({ isSupport: false, tickets: result.rows, realtime: true })
     } catch (error) {
         req.log.error(error)
         return res.status(500).send({ error: 'Failed to load your support tickets.' })

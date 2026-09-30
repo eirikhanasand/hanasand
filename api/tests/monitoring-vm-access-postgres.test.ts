@@ -3,7 +3,7 @@ import Fastify from 'fastify'
 if (process.env.DB_HOST !== 'monitor-test-db') throw Error('Requires the disposable monitor-test-db database')
 let viewer = 'sindre'
 mock.module('../src/utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: true, id: viewer }) }))
-mock.module('../src/utils/auth/hasRole.ts', () => ({ default: async () => ({ valid: viewer === 'admin' }) }))
+mock.module('../src/utils/auth/organizationPageAccess.ts', () => ({ default: async () => ({ valid: viewer === 'admin' }) }))
 mock.module('../src/utils/monitoringIssues.ts', () => ({ loadMonitoringIssues: async () => [] }))
 mock.module('../src/utils/monitoringCaseEvents.ts', () => ({ loadMonitoringRelatedChecks: async () => [], monitoringCheckDetails: () => ({}), loadMonitoringCaseEvents: async () => ({ events: [], eventTotal: 0 }) }))
 const { queryOnce: query, closeDatabase } = await import('../src/utils/db.ts')

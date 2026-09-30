@@ -9,7 +9,7 @@ let admin = false
 let user = 'alice'
 mock.module('../src/utils/db.ts', () => ({ default: query, queryOnce: query, withTransaction: async () => { throw Error('Unexpected transaction') } }))
 mock.module('../src/utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: true, id: user }) }))
-mock.module('../src/utils/auth/hasRole.ts', () => ({ default: async () => ({ valid: admin }) }))
+mock.module('../src/utils/auth/organizationPageAccess.ts', () => ({ default: async () => ({ valid: admin }) }))
 mock.module('../src/utils/monitoringIssues.ts', () => ({ loadMonitoringIssues: async () => [], recordMonitoringOutcome: async () => { recordedOutcomes++ } }))
 mock.module('../src/utils/systemCron.ts', () => ({ hasUnifiedScheduledJobsCache: () => true, listUnifiedScheduledJobs: async () => { throw Error('System registry must not be read') }, updateManagedCronJob: async () => { throw Error('System registry must not be changed') } }))
 const { executeAutomation } = await import('../src/utils/automations.ts')
@@ -32,7 +32,6 @@ test('personal automation persistence, owner and organization isolation, privile
     await query(`DROP SCHEMA public CASCADE; CREATE SCHEMA public;
         CREATE TABLE organizations(id text PRIMARY KEY,status text);
         CREATE TABLE organization_members(organization_id text,user_id text,status text,role text DEFAULT 'editor');
-        CREATE TABLE user_roles(user_id text,role_id text);
         CREATE TABLE agent_automations(id text PRIMARY KEY,owner_id text,name text,prompt text,target_url text,monitoring_type text,follow_redirects boolean,user_agent text,expected_down boolean,upside_down boolean,timeout_seconds int,retry_count int,schedule_kind text,interval_minutes int,run_at timestamptz,status text,action_type text,organization_id text,timezone text,model_name text,notify_on text,notify_warnings boolean,next_run_at timestamptz,notification_destinations text[],json_rule jsonb,consecutive_failures int DEFAULT 0,paused_reason text,last_status text,last_run_at timestamptz,last_error text,last_completed_at timestamptz,last_result text,run_count int DEFAULT 0,certificate_status text,certificate_subject text,certificate_issuer text,certificate_expires_at timestamptz,created_at timestamptz DEFAULT NOW(),updated_at timestamptz DEFAULT NOW());
         CREATE TABLE agent_automation_runs(id text,automation_id text,owner_id text,status text,warning boolean,started_at timestamptz,result text,error text,provider text,model text,completed_at timestamptz,duration_ms int,artifacts jsonb);
         CREATE TABLE monitoring_issues(id bigint,automation_id text,last_seen_at timestamptz);
@@ -72,10 +71,10 @@ test('personal automation persistence, owner and organization isolation, privile
     expect((await app.inject(`/automations/${orgJob}`)).statusCode).toBe(404)
     expect((await app.inject('/automations')).json().automations.map((row: { id: string }) => row.id)).toEqual([id])
     await expect(checkScheduledAutomationAccess(scheduled, 'alice')).rejects.toThrow('no longer have access')
-    await expect(checkScheduledAutomationAccess({ ...scheduled, organizationId: null, actionType: 'mail_health_check' }, 'alice')).rejects.toThrow('administrator access')
+    await expect(checkScheduledAutomationAccess({ ...scheduled, organizationId: null, actionType: 'mail_health_check' }, 'alice')).rejects.toThrow('Hanasand organization editor access')
     const revoked = (await query('SELECT * FROM agent_automations WHERE id=$1', [orgJob])).rows[0]
     await executeAutomation({ ...revoked, action_type: 'agent_prompt', target_url: 'https://example.com', notification_destinations: ['discord-webhook-file:/tmp/private'] })
-    expect((await query('SELECT status,error FROM agent_automation_runs WHERE automation_id=$1', [orgJob])).rows[0]).toMatchObject({ status: 'failed', error: 'System monitoring and server notification files require administrator access.' })
+    expect((await query('SELECT status,error FROM agent_automation_runs WHERE automation_id=$1', [orgJob])).rows[0]).toMatchObject({ status: 'failed', error: 'System monitoring and server notification files require Hanasand organization editor access.' })
     expect(recordedOutcomes).toBe(0)
     expect((await app.inject('/system/cron')).statusCode).toBe(403)
     expect((await app.inject({ method: 'PUT', url: '/system/cron/job', payload: {} })).statusCode).toBe(403)

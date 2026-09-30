@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { withTransaction } from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import { createApiKey } from '#utils/auth/apiKeys.ts'
 import { recordSystemEvent } from '#utils/systemEvent.ts'
 import { ingestPushEvent, parsePushEvent, PushEventError } from '#utils/pushMonitoring.ts'
@@ -11,7 +11,8 @@ export async function postPushMonitoringKey(req: FastifyRequest<{ Params: { id: 
     res.header('Cache-Control', 'no-store')
     const auth = await tokenWrapper(req, res)
     if (!auth.valid || !auth.id) return res.status(401).send({ error: 'Unauthorized.' })
-    const automation = await loadAutomation(req.params.id, auth.id, (await hasRole(req, res, 'system_admin')).valid, true)
+    const internalAccess = await hasHanasandInternalRouteAccess(req)
+    const automation = await loadAutomation(req.params.id, auth.id, internalAccess.valid, true)
     if (!automation || automation.monitoring_type !== 'push') return res.status(404).send({ error: 'External check not found.' })
     const created = await withTransaction(async query => {
         const current = (await query('SELECT status FROM agent_automations WHERE id=$1 FOR UPDATE', [automation.id])).rows[0]

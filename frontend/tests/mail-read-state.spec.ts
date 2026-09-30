@@ -6,7 +6,6 @@ test('opening persists read state and old archived mail never shows unread dots'
     await context.addCookies([
         { name: 'id', value: 'dashboard-render-proof-user', url: baseURL! },
         { name: 'access_token', value: 'local-dashboard-render-proof-token', url: baseURL! },
-        { name: 'roles', value: '["administrator"]', url: baseURL! },
     ])
     let read = false
     let reads = 0

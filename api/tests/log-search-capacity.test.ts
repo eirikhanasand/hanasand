@@ -6,7 +6,7 @@ let authorized = true
 const query = async (sql: string): Promise<any> => ({ rows: sql.includes('FROM log_process_queue LIMIT') ? [{ count: 0 }] : [] })
 mock.module('#db', () => ({ default: query, withTransaction: async (work: any) => { checkouts++; return work(query) } }))
 mock.module('../src/utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: authorized }) }))
-mock.module('../src/utils/auth/hasRole.ts', () => ({ default: async () => ({ valid: true }) }))
+mock.module('../src/utils/auth/organizationPageAccess.ts', () => ({ default: async () => ({ valid: true }) }))
 const { withLogSearchTransaction, logSearchCapacity } = await import('../src/utils/logs/searchCapacity.ts')
 const { searchLogs } = await import('../src/handlers/logs/search.ts')
 

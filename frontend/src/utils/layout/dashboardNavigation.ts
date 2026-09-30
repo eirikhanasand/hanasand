@@ -8,9 +8,6 @@ export type NavigationItem = {
 export type NavigationAccess = {
     id: string
     canManageOrganizations?: boolean
-    isAdmin: boolean
-    canManageSystem: boolean
-    canManageContent: boolean
     canViewInternalPages?: boolean
     hasContentOrganization?: boolean
     hasHanasandOrganization?: boolean
@@ -22,16 +19,16 @@ export type NavigationAccess = {
 export function getDashboardNavigation(access: NavigationAccess): NavigationItem[] {
     const {
         id,
-        canManageContent,
         hasContentOrganization = false,
         hasHanasandOrganization = false,
         thesisSheets = [],
         hasVMs = false,
     } = access
-    const isAdmin = access.isAdmin || access.canViewInternalPages === true
-    const canManageOrganizations = access.canManageOrganizations === true || access.canViewInternalPages === true
-    const canManageSystem = access.canManageSystem || access.canViewInternalPages === true
-    const canReviewIntel = access.canReviewIntel ?? isAdmin
+    const isAdmin = access.canViewInternalPages === true
+    const canManageContent = access.canViewInternalPages === true
+    const canManageOrganizations = access.canManageOrganizations === true
+    const canManageSystem = access.canViewInternalPages === true
+    const canReviewIntel = access.canViewInternalPages === true
     const link = (label: string, href: string, visible = true): NavigationItem => ({ label, href, visible })
     const group = (label: string, items: NavigationItem[], visible = true): NavigationItem => ({ label, items, visible })
     const sections = [
@@ -155,7 +152,6 @@ export function getDashboardNavigation(access: NavigationAccess): NavigationItem
         group('Administration', [
             link('Organizations', '/management/organizations', canManageOrganizations),
             link('Users', '/management/users', isAdmin),
-            link('Roles', '/management/roles', isAdmin),
             link('Audit Log', '/management/audit', isAdmin),
         ]),
         group('Resources', [link('API Docs', '/api'), link('OpenAPI JSON', '/api/openapi')]),

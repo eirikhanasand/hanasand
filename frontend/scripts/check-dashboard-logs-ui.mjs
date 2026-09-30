@@ -14,7 +14,7 @@ const errors = { generated_at: timestamp, errors: [{ id: 'proof-error', created_
 // Real Next routes, styles and backend proxy; only the API is an isolated fixture.
 const api = Bun.serve({ port: 0, fetch(request) {
     const url = new URL(request.url)
-    if (url.pathname.includes('/auth/token/')) return Response.json({ roles: [{ id: 'system_admin' }, { id: 'admin' }] })
+    if (url.pathname.includes('/auth/token/')) return Response.json({ name: 'Logs proof' })
     if (url.pathname.includes('/user/')) return Response.json({ id: 'dashboard-render-proof-user', username: 'proof', name: 'Logs proof' })
     if (url.pathname === '/api/organizations') return Response.json({ organizations: [] })
     if (url.pathname === '/api/logs/services') return Response.json({ services: [{ service: 'audit', entries: 2, last_seen: timestamp }, { service: 'api', entries: 1, last_seen: timestamp }] })
@@ -39,7 +39,7 @@ try {
     for (const colorScheme of ['light', 'dark']) {
         for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
             const context = await browser.newContext({ viewport, colorScheme, extraHTTPHeaders: { 'x-hanasand-render-proof-auth': 'local-dashboard-render-proof' }, permissions: ['clipboard-read', 'clipboard-write'] })
-            await context.addCookies(Object.entries({ id: 'dashboard-render-proof-user', access_token: 'local-dashboard-render-proof-token', roles: '["system_admin","admin"]', theme: colorScheme }).map(([name, value]) => ({ name, value, url: base })))
+            await context.addCookies(Object.entries({ id: 'dashboard-render-proof-user', access_token: 'local-dashboard-render-proof-token', theme: colorScheme }).map(([name, value]) => ({ name, value, url: base })))
             const page = await context.newPage()
             const pageErrors = []
             page.on('pageerror', error => pageErrors.push(error.message))

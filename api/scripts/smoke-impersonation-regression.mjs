@@ -7,6 +7,7 @@ const dbPort = Number(process.env.DB_PORT || 5432)
 const dbName = process.env.DB || 'hanasand'
 const dbUser = process.env.DB_USER || 'hanasand'
 const dbPassword = process.env.DB_PASSWORD
+const hanasandOrganizationId = '3e735e7b-4d7f-444d-9806-231fa26cfcec'
 const { Pool } = pg
 
 if (!dbPassword) {
@@ -79,17 +80,12 @@ async function login(id) {
     return loggedIn.body.token
 }
 
-async function grantAdmin() {
+async function grantInternalOrganizationAccess() {
     await pool.query(`
-        INSERT INTO roles (id, name, description, priority, created_by)
-        VALUES ('administrator', 'Administrator', 'Full administrative access', 0, $1)
-        ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name
-    `, [adminId])
-    await pool.query(`
-        INSERT INTO user_roles (user_id, role_id, assigned_by)
-        VALUES ($1, 'administrator', $1)
-        ON CONFLICT (user_id, role_id) DO NOTHING
-    `, [adminId])
+        INSERT INTO organization_members (organization_id, user_id, role, status, invited_by)
+        VALUES ($1, $2, 'editor', 'active', $2)
+        ON CONFLICT (organization_id, user_id) DO UPDATE SET role = 'editor', status = 'active'
+    `, [hanasandOrganizationId, adminId])
 }
 
 async function cleanup() {
@@ -97,7 +93,7 @@ async function cleanup() {
     await pool.query('DELETE FROM admin_audit_events WHERE actor_id = ANY($1::text[]) OR target_id = ANY($1::text[])', [ids]).catch(() => {})
     await pool.query('DELETE FROM impersonation_events WHERE actor_id = ANY($1::text[]) OR target_id = ANY($1::text[])', [ids]).catch(() => {})
     await pool.query('DELETE FROM impersonation_sessions WHERE actor_id = ANY($1::text[]) OR target_id = ANY($1::text[])', [ids]).catch(() => {})
-    await pool.query('DELETE FROM user_roles WHERE user_id = ANY($1::text[])', [ids]).catch(() => {})
+    await pool.query('DELETE FROM organization_members WHERE user_id = ANY($1::text[])', [ids]).catch(() => {})
     await pool.query('DELETE FROM tokens WHERE id = ANY($1::text[])', [ids]).catch(() => {})
     await pool.query('DELETE FROM users WHERE id = ANY($1::text[])', [ids]).catch(() => {})
 }
@@ -108,7 +104,7 @@ async function main() {
     await signup(targetId, 'Impersonation Target')
     await signup(inactiveTargetId, 'Inactive Impersonation Target')
     await signup(nonAdminId, 'Impersonation Non Admin')
-    await grantAdmin()
+    await grantInternalOrganizationAccess()
     await pool.query('UPDATE users SET active = FALSE WHERE id = $1', [inactiveTargetId])
 
     const adminToken = await login(adminId)

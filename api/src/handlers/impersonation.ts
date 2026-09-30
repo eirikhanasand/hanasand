@@ -2,7 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import crypto from 'crypto'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import { actorHasAdminSupportAccess, recordSystemEvent, requireAuditReason } from '#utils/systemEvent.ts'
+import { actorHasHanasandInternalAccess, recordSystemEvent, requireAuditReason } from '#utils/systemEvent.ts'
 
 type StartBody = {
     object_id?: string
@@ -224,7 +224,7 @@ export async function startImpersonation(req: FastifyRequest, res: FastifyReply)
     }
     const body = req.body as StartBody | undefined
     const targetId = cleanText(body?.object_id || body?.targetId || body?.target_user_id)
-    if (!await actorHasAdminSupportAccess(actor.id)) {
+    if (!await actorHasHanasandInternalAccess(actor.id)) {
         await recordSystemEvent(req, {
             actionType: 'impersonation.start',
             actorId: actor.id,
@@ -480,7 +480,7 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
     if (!actor.valid || !actor.id || actor.impersonating) {
         return res.status(401).send({ error: actor.error || 'Unauthorized.' })
     }
-    if (!await actorHasAdminSupportAccess(actor.id)) {
+    if (!await actorHasHanasandInternalAccess(actor.id)) {
         return res.status(403).send({ error: 'Only admins can view impersonation history.' })
     }
 

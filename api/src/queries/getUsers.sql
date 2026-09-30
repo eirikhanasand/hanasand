@@ -9,29 +9,9 @@ SELECT
     u.last_login_at,
     u.deactivated_at,
     u.deactivated_by,
-    r.id AS highest_role_id,
-    r.name AS highest_role_name,
-    r.priority AS highest_role_priority,
-    COALESCE(user_roles.role_ids, ARRAY[]::text[]) AS role_ids,
     org.organization_names AS organization,
     org.organization_ids
 FROM users u
-LEFT JOIN LATERAL (
-    SELECT 
-      roles.id, 
-      roles.name, 
-      roles.priority
-    FROM user_roles
-    JOIN roles ON user_roles.role_id = roles.id
-    WHERE user_roles.user_id = u.id
-    ORDER BY roles.priority ASC
-    LIMIT 1
-) r ON TRUE
-LEFT JOIN LATERAL (
-    SELECT array_agg(user_roles.role_id ORDER BY user_roles.role_id) AS role_ids
-    FROM user_roles
-    WHERE user_roles.user_id = u.id
-) user_roles ON TRUE
 LEFT JOIN LATERAL (
     SELECT
       string_agg(DISTINCT COALESCE(NULLIF(organizations.name, ''), organization_members.organization_id), ', ' ORDER BY COALESCE(NULLIF(organizations.name, ''), organization_members.organization_id)) AS organization_names,

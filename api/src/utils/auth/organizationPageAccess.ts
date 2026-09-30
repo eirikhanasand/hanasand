@@ -1,9 +1,37 @@
 import run from '#db'
-import { canViewHanasandInternalPages, HANASAND_ORGANIZATION_ID } from './organizationPagePolicy.ts'
+import { canAccessHanasandInternalPageRoute, canEditHanasandInternalPages, canViewHanasandInternalPages, canViewHanasandInternalRoute, HANASAND_ORGANIZATION_ID } from './organizationPagePolicy.ts'
+import { matchApiKeyScope } from './apiKeys.ts'
+import { serviceAccountEndpoints } from './serviceAccountScopes.ts'
+import type { FastifyRequest } from 'fastify'
 
-export { canViewHanasandInternalPages, canViewHanasandInternalRoute, HANASAND_ORGANIZATION_ID } from './organizationPagePolicy.ts'
+export { canAccessHanasandInternalPageRoute, canEditHanasandInternalPages, canViewHanasandInternalPages, canViewHanasandInternalRoute, HANASAND_ORGANIZATION_ID }
+
+export async function hasHanasandInternalRouteAccess(req: FastifyRequest): Promise<{ valid: boolean, error?: string }> {
+    const route = req.routeOptions?.url || req.url.split('?')[0]
+    const apiKeyAuth = (req as FastifyRequest & { apiKeyAuth?: { ownerId?: string, serviceAccount?: boolean, apiKey: { scopes: ApiKeyScopeRule[] } } }).apiKeyAuth
+    if (apiKeyAuth?.serviceAccount) {
+        return { valid: Boolean(matchApiKeyScope(apiKeyAuth.apiKey.scopes, req.method, route)
+            && serviceAccountEndpoints.some(endpoint => endpoint.method === req.method && endpoint.route === route)) }
+    }
+    if (!canViewHanasandInternalRoute(req.method, route)) return { valid: false }
+    const id = apiKeyAuth?.ownerId || req.headers.id
+    if (typeof id !== 'string') return { valid: false }
+    const membership = await getHanasandInternalMembership(id)
+    return { valid: Boolean(membership && canAccessHanasandInternalPageRoute(req.method, membership)) }
+}
+
+export default hasHanasandInternalRouteAccess
 
 export async function hasHanasandInternalPageAccess(userId: string) {
+    const membership = await getHanasandInternalMembership(userId)
+    return Boolean(membership && canEditHanasandInternalPages(membership))
+}
+
+export async function hasHanasandInternalPageReadAccess(userId: string) {
+    return Boolean(await getHanasandInternalMembership(userId))
+}
+
+async function getHanasandInternalMembership(userId: string) {
     const result = await run(`
         SELECT organization.id AS organization_id,
                organization.status AS organization_status,
@@ -19,10 +47,11 @@ export async function hasHanasandInternalPageAccess(userId: string) {
         LIMIT 1
     `, [userId, HANASAND_ORGANIZATION_ID])
 
-    return result.rows.some(row => canViewHanasandInternalPages({
+    const membership = result.rows.map(row => ({
         organizationId: row.organization_id,
         organizationStatus: row.organization_status,
         membershipStatus: row.membership_status,
         role: row.role,
-    }))
+    })).find(canViewHanasandInternalPages)
+    return membership || null
 }

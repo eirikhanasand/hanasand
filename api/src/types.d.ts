@@ -4,15 +4,6 @@ type User = {
     avatar: string
 }
 
-type Role = {
-    id: string
-    name: string
-    description?: string
-    created_by: string
-    created_at: string
-    updated_at: string
-}
-
 type Test = {
     id: number
     url: string

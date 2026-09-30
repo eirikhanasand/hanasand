@@ -14,7 +14,7 @@ type Message = { id: string; sender_id: string | null; sender_kind?: string; sen
 
 const fieldClass = 'min-w-0 rounded-lg border border-ui-border bg-ui-canvas px-3 py-2 text-sm text-ui-text outline-none placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
 
-type InitialChat = { tickets: Ticket[]; role: 'user' | 'support'; selectedId: string; messages: Message[]; realtime: boolean }
+type InitialChat = { tickets: Ticket[]; isSupport: boolean; selectedId: string; messages: Message[]; realtime: boolean }
 
 export default function SupportChat({ embedded = false, initialChat }: { embedded?: boolean; initialChat?: InitialChat }) {
     const [tickets, setTickets] = useState<Ticket[]>(initialChat?.tickets || [])
@@ -30,7 +30,7 @@ export default function SupportChat({ embedded = false, initialChat }: { embedde
     const [messages, setMessages] = useState<Message[]>(initialChat?.messages || [])
     const [input, setInput] = useState('')
     const [subject, setSubject] = useState('')
-    const [role, setRole] = useState<'user' | 'support'>(initialChat?.role || 'user')
+    const [isSupport, setIsSupport] = useState(initialChat?.isSupport === true)
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(!initialChat)
     const [syncedId, setSyncedId] = useState('')
@@ -47,11 +47,11 @@ export default function SupportChat({ embedded = false, initialChat }: { embedde
         const response = await fetch('/api/backend/support/tickets', { cache: 'no-store' })
         setSignedOut(response.status === 401)
         if (!response.ok) throw new Error(response.status === 401 ? 'Sign in to chat with support.' : 'Support is temporarily unavailable.')
-        const payload = await response.json() as { tickets?: Ticket[]; role?: 'user' | 'support'; realtime?: boolean }
+        const payload = await response.json() as { tickets?: Ticket[]; isSupport?: boolean; realtime?: boolean }
         if (version !== ticketRevision.current) return
         realtime.current = payload.realtime === true
         setTickets(payload.tickets || [])
-        setRole(payload.role || 'user')
+        setIsSupport(payload.isSupport === true)
         setSelectedId(current => creating.current ? current : current || payload.tickets?.[0]?.id || '')
         return payload.tickets || []
     }, [])
@@ -170,14 +170,14 @@ export default function SupportChat({ embedded = false, initialChat }: { embedde
             {embedded ? (
                 <aside className='flex min-h-0 min-w-0 flex-col border-b border-ui-border bg-ui-raised lg:border-b-0 lg:border-r'>
                     <div className={headingClass}>
-                        <h1 className={`text-sm font-semibold text-ui-text ${role === 'support' ? '-translate-y-2.5' : ''}`}>{role === 'support' ? 'Support' : 'Your support chats'}</h1>
-                        {role !== 'support' ? <p className='text-xs text-ui-muted'>Conversations with the support team.</p> : null}
+                        <h1 className={`text-sm font-semibold text-ui-text ${isSupport ? '-translate-y-2.5' : ''}`}>{isSupport ? 'Support' : 'Your support chats'}</h1>
+                        {!isSupport ? <p className='text-xs text-ui-muted'>Conversations with the support team.</p> : null}
                     </div>
-                    {role !== 'support' ? <button type='button' onClick={() => selectChat('')} className='mx-4 mb-2 rounded-lg border border-ui-border px-3 py-2 text-xs font-medium text-ui-primary hover:bg-ui-panel'>New chat</button> : null}
+                    {!isSupport ? <button type='button' onClick={() => selectChat('')} className='mx-4 mb-2 rounded-lg border border-ui-border px-3 py-2 text-xs font-medium text-ui-primary hover:bg-ui-panel'>New chat</button> : null}
                     <div className='max-h-36 overflow-y-auto p-2 lg:max-h-none lg:flex-1'>
                         {displayedTickets.map(ticket => (
                             <button key={ticket.id} type='button' aria-pressed={selectedId === ticket.id} onClick={() => selectChat(ticket.id)} className={`grid w-full min-w-0 gap-1 rounded-lg p-3 text-left focus-visible:outline-2 focus-visible:outline-ui-primary ${selectedId === ticket.id ? 'bg-ui-primary/10' : 'hover:bg-ui-panel'}`}>
-                                <span className='truncate text-sm font-semibold text-ui-text'>{role === 'support' && ticket.user_name !== 'Visitor' ? ticket.user_name || ticket.subject : ticket.subject}</span>
+                                <span className='truncate text-sm font-semibold text-ui-text'>{isSupport && ticket.user_name !== 'Visitor' ? ticket.user_name || ticket.subject : ticket.subject}</span>
                                 {ticket.status === 'closed' || ticket.feedback_rating ? <span className='flex flex-wrap items-center gap-2'>{ticket.status === 'closed' ? <span className='rounded-md border border-ui-success/30 bg-ui-success/10 px-2 py-0.5 text-[11px] font-medium text-ui-success'>Resolved</span> : null}{ticket.feedback_rating ? <SupportStars rating={ticket.feedback_rating} /> : null}</span> : null}
                                 {unread[ticket.id] ? <span role='status' aria-label={`${unread[ticket.id]} unread replies`} className='w-fit rounded-full bg-ui-primary px-2 py-0.5 text-[11px] text-ui-on-primary'>{unread[ticket.id]}</span> : null}
                                 <span className='truncate text-xs text-ui-muted'>{ticket.last_message || 'No messages yet'}</span>
@@ -188,26 +188,26 @@ export default function SupportChat({ embedded = false, initialChat }: { embedde
                 </aside>
             ) : (
                 <div className='border-b border-ui-border bg-ui-raised px-4 py-3'>
-                    {tickets.length ? <label className='grid gap-1.5 text-xs text-ui-muted'>Conversation<select aria-label='Conversation' value={selectedId} onChange={event => selectChat(event.target.value)} className={fieldClass}>{tickets.map(ticket => <option key={ticket.id} value={ticket.id}>{role === 'support' && ticket.user_name ? `${ticket.user_name} — ` : ''}{ticket.subject}</option>)}</select></label> : <p className='text-xs text-ui-muted'>Account, billing, or product questions? Talk to our support team.</p>}
+                    {tickets.length ? <label className='grid gap-1.5 text-xs text-ui-muted'>Conversation<select aria-label='Conversation' value={selectedId} onChange={event => selectChat(event.target.value)} className={fieldClass}>{tickets.map(ticket => <option key={ticket.id} value={ticket.id}>{isSupport && ticket.user_name ? `${ticket.user_name} — ` : ''}{ticket.subject}</option>)}</select></label> : <p className='text-xs text-ui-muted'>Account, billing, or product questions? Talk to our support team.</p>}
                 </div>
             )}
             <div className='grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto]'>
                 <header className='flex min-h-20 items-center justify-between gap-3 border-b border-ui-border px-4 py-3'>
                     <div className='grid min-w-0 gap-1'>
-                        <h2 className='truncate text-sm font-semibold text-ui-text'>{selected?.subject || (role === 'support' ? 'Customer conversation' : 'Start a support chat')}</h2>
-                        <p className='text-xs text-ui-muted'>{selected ? selected.status === 'closed' ? 'Chat resolved' : selected.agent_name ? `Speaking with ${selected.agent_name}` : 'Waiting for support.' : role === 'support' ? 'Choose a conversation from the queue.' : 'Tell us what you need help with.'}</p>
+                        <h2 className='truncate text-sm font-semibold text-ui-text'>{selected?.subject || (isSupport ? 'Customer conversation' : 'Start a support chat')}</h2>
+                        <p className='text-xs text-ui-muted'>{selected ? selected.status === 'closed' ? 'Chat resolved' : selected.agent_name ? `Speaking with ${selected.agent_name}` : 'Waiting for support.' : isSupport ? 'Choose a conversation from the queue.' : 'Tell us what you need help with.'}</p>
                     </div>
-                    {role === 'support' && selected ? <div className='flex shrink-0 items-center gap-2'>{statusChange?.id === selectedId ? <span role='status' className='text-xs text-ui-muted'>Saving…</span> : null}<button type='button' disabled={updatingStatus || sending} onClick={() => void updateStatus(selected.status === 'closed' ? 'open' : 'closed')} className='shrink-0 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-xs font-medium text-ui-text hover:bg-ui-raised disabled:opacity-50'>{selected.status === 'closed' ? 'Reopen chat' : 'Resolve'}</button></div> : null}
+                    {isSupport && selected ? <div className='flex shrink-0 items-center gap-2'>{statusChange?.id === selectedId ? <span role='status' className='text-xs text-ui-muted'>Saving…</span> : null}<button type='button' disabled={updatingStatus || sending} onClick={() => void updateStatus(selected.status === 'closed' ? 'open' : 'closed')} className='shrink-0 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-xs font-medium text-ui-text hover:bg-ui-raised disabled:opacity-50'>{selected.status === 'closed' ? 'Reopen chat' : 'Resolve'}</button></div> : null}
                 </header>
                 <div ref={log} role='log' aria-label='Messages' className='min-h-0 overflow-y-auto p-4'>
-                    {role === 'support' && selected?.feedback_rating ? <section aria-label='Customer feedback' className='mb-4 grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3'><h3 className='text-xs font-semibold text-ui-text'>Customer feedback</h3><SupportStars rating={selected.feedback_rating} />{selected.feedback_comment ? <p className='whitespace-pre-wrap text-sm text-ui-text [overflow-wrap:anywhere]'>{selected.feedback_comment}</p> : null}</section> : null}
-                    {messages.length ? <div className='grid gap-3'>{messages.map(message => message.sender_kind === 'system' ? <p key={message.id} className='px-3 py-1 text-center text-xs leading-5 text-ui-muted'>{message.body}</p> : <div key={message.id} className={`min-w-0 max-w-[90%] rounded-lg px-3 py-2 text-sm text-ui-text ${message.sender_id === userId ? 'justify-self-end bg-ui-primary/10' : 'justify-self-start bg-ui-raised'}`}><p className='text-xs font-semibold text-ui-muted'>{message.sender_name}</p><p className='mt-1 whitespace-pre-wrap [overflow-wrap:anywhere]'>{message.body}</p></div>)}</div> : <div className='grid h-full content-center justify-items-center gap-3 text-center text-sm text-ui-muted'><MessageCircle aria-hidden='true' className='h-8 w-8 text-ui-muted' /><p>{role === 'support' ? 'Select a customer chat to read and reply.' : 'Your conversation starts here.'}</p></div>}
+                    {isSupport && selected?.feedback_rating ? <section aria-label='Customer feedback' className='mb-4 grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3'><h3 className='text-xs font-semibold text-ui-text'>Customer feedback</h3><SupportStars rating={selected.feedback_rating} />{selected.feedback_comment ? <p className='whitespace-pre-wrap text-sm text-ui-text [overflow-wrap:anywhere]'>{selected.feedback_comment}</p> : null}</section> : null}
+                    {messages.length ? <div className='grid gap-3'>{messages.map(message => message.sender_kind === 'system' ? <p key={message.id} className='px-3 py-1 text-center text-xs leading-5 text-ui-muted'>{message.body}</p> : <div key={message.id} className={`min-w-0 max-w-[90%] rounded-lg px-3 py-2 text-sm text-ui-text ${message.sender_id === userId ? 'justify-self-end bg-ui-primary/10' : 'justify-self-start bg-ui-raised'}`}><p className='text-xs font-semibold text-ui-muted'>{message.sender_name}</p><p className='mt-1 whitespace-pre-wrap [overflow-wrap:anywhere]'>{message.body}</p></div>)}</div> : <div className='grid h-full content-center justify-items-center gap-3 text-center text-sm text-ui-muted'><MessageCircle aria-hidden='true' className='h-8 w-8 text-ui-muted' /><p>{isSupport ? 'Select a customer chat to read and reply.' : 'Your conversation starts here.'}</p></div>}
                 </div>
                 <div className='border-t border-ui-border p-4'>
                     {!error && connection === 'reconnecting' ? <p role='status' className='mb-2 text-xs text-ui-muted'>Reconnecting…</p> : null}
                     {error ? <p role='alert' className='mb-3 text-sm text-ui-text'>{error}</p> : null}
                     {statusError?.id === selectedId ? <p role='alert' className='mb-3 text-sm text-ui-text'>{statusError.message}</p> : null}
-                    {selected?.status === 'closed' ? role === 'support' ? <p className='text-xs text-ui-muted'>Chat resolved. Reopen it to continue the conversation.</p> : <SupportFeedback key={`${selectedId}:${selected.resolution_version}`} feedback={selected} submit={sendFeedback} /> : role !== 'support' || selectedId ? (
+                    {selected?.status === 'closed' ? isSupport ? <p className='text-xs text-ui-muted'>Chat resolved. Reopen it to continue the conversation.</p> : <SupportFeedback key={`${selectedId}:${selected.resolution_version}`} feedback={selected} submit={sendFeedback} /> : !isSupport || selectedId ? (
                         <form onSubmit={send} className='grid min-w-0 gap-3'>
                             {!selectedId ? <input aria-label='Subject' maxLength={160} value={subject} onChange={event => setSubject(event.target.value)} placeholder='Subject' className={`h-10 ${fieldClass}`} /> : null}
                             <div className='flex min-w-0 items-end gap-2'>

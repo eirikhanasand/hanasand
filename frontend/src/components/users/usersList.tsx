@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { isReservedPlaceholder } from '@/utils/users/isReservedPlaceholder'
 import DashboardUser from './dashboardUser'
 
-export default function UsersList({ users, roles }: { users: UserWithRole[], roles: Role[] }) {
+export default function UsersList({ users }: { users: User[] }) {
     const [showReserved, setShowReserved] = useState(false)
     const [searchOpen, setSearchOpen] = useState(false)
     const [search, setSearch] = useState('')
@@ -106,7 +106,7 @@ export default function UsersList({ users, roles }: { users: UserWithRole[], rol
                     <span>Last login</span>
                     <span aria-hidden='true' />
                 </div>
-                {visibleUsers.map((user) => <DashboardUser roles={roles} key={user.id} user={user} />)}
+                {visibleUsers.map((user) => <DashboardUser key={user.id} user={user} />)}
             </div></div>
         </>
     )

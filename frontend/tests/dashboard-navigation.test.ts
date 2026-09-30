@@ -5,7 +5,7 @@ import { organizationPages } from '../src/utils/organizations/pages'
 import { canViewHanasandInternalPages, HANASAND_ORGANIZATION_ID } from '../src/utils/organizations/internalPageAccess'
 
 test('organization destinations remain reachable exactly once after regrouping', () => {
-    const links = navigationLinks(getDashboardNavigation({ id: 'member', isAdmin: false, canManageSystem: false, canManageContent: false }))
+    const links = navigationLinks(getDashboardNavigation({ id: 'member' }))
     for (const page of organizationPages) {
         const matches = links.filter(link => link.href === page.href)
         assert.equal(matches.length, 1)
@@ -20,7 +20,7 @@ test('every dropdown has at most five entries, including long pinned lists', () 
             check(item.items)
         }
     }
-    const sections = getDashboardNavigation({ id: 'admin', isAdmin: true, canManageOrganizations: true, canManageSystem: true, canManageContent: true, hasVMs: true })
+    const sections = getDashboardNavigation({ id: 'admin', canManageOrganizations: true, canViewInternalPages: true, hasVMs: true })
     check(sections)
     const links = navigationLinks(sections)
     const pinned = pinnedNavigation(links)
@@ -29,13 +29,13 @@ test('every dropdown has at most five entries, including long pinned lists', () 
 })
 
 test('feeds remain reachable without the removed collection targets entry', () => {
-    const links = navigationLinks(getDashboardNavigation({ id: 'admin', isAdmin: true, canManageSystem: true, canManageContent: true }))
+    const links = navigationLinks(getDashboardNavigation({ id: 'admin', canViewInternalPages: true }))
     assert.equal(links.filter(link => link.href === '/ti/sources').length, 1)
     assert.equal(links.some(link => link.href?.startsWith('/ti/domains')), false)
 })
 
 test('traffic has separate overview, recent, map, and blocklist destinations', () => {
-    const sections = getDashboardNavigation({ id: 'admin', isAdmin: true, canManageSystem: true, canManageContent: true })
+    const sections = getDashboardNavigation({ id: 'admin', canViewInternalPages: true })
     const logsAndRules = sections.find(item => item.label === 'Logs & rules')
     assert.deepEqual(logsAndRules?.items?.map(item => item.label), ['Logs', 'Traffic', 'Rules'])
 
@@ -48,15 +48,16 @@ test('Hanasand owners and editors get internal pages from organization membershi
     for (const role of ['owner', 'editor']) {
         assert.equal(canViewHanasandInternalPages([{ id: HANASAND_ORGANIZATION_ID, role, lifecycleStatus: 'active' }]), true)
     }
-    assert.equal(canViewHanasandInternalPages([{ id: HANASAND_ORGANIZATION_ID, role: 'reader', lifecycleStatus: 'active' }]), false)
+    assert.equal(canViewHanasandInternalPages([{ id: HANASAND_ORGANIZATION_ID, role: 'reader', lifecycleStatus: 'active' }]), true)
     assert.equal(canViewHanasandInternalPages([{ id: HANASAND_ORGANIZATION_ID, role: 'editor', lifecycleStatus: 'archived' }]), false)
     assert.equal(canViewHanasandInternalPages([{ id: 'another-org', role: 'owner', lifecycleStatus: 'active' }]), false)
 
     const links = navigationLinks(getDashboardNavigation({
-        id: 'sindre', isAdmin: false, canManageSystem: false, canManageContent: false,
+        id: 'sindre',
+        canManageOrganizations: true,
         canViewInternalPages: true, canReviewIntel: true, hasVMs: true,
     }))
-    for (const path of ['/logs/realtime', '/traffic', '/ti/timeliness', '/db', '/management/users', '/management/roles', '/management/audit', '/management/organizations', '/vms', '/system/virtual-machines']) {
+    for (const path of ['/logs/realtime', '/traffic', '/ti/timeliness', '/db', '/management/users', '/management/audit', '/management/organizations', '/vms', '/system/virtual-machines']) {
         assert.equal(links.some(link => link.href === path), true, path)
     }
 })

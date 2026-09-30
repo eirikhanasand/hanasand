@@ -91,7 +91,6 @@ async function cleanup() {
     await pool.query('DELETE FROM ai_conversations WHERE id = $1', [conversationId]).catch(() => {})
 
     for (const id of [ownerId, editorId]) {
-        await pool.query('DELETE FROM user_roles WHERE user_id = $1', [id]).catch(() => {})
         await pool.query('DELETE FROM tokens WHERE id = $1', [id]).catch(() => {})
         await pool.query('DELETE FROM users WHERE id = $1', [id]).catch(() => {})
     }

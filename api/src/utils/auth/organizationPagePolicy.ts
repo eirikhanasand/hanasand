@@ -1,60 +1,54 @@
 export const HANASAND_ORGANIZATION_ID = '3e735e7b-4d7f-444d-9806-231fa26cfcec'
 
-const internalReadRoutes = new Set([
+// API namespaces used by internal dashboard pages. Keep this explicit so an
+// organization role cannot become a blanket grant on unrelated API routes.
+const internalPageRoutes = [
     '/admin/audit-events',
-    '/admin/audit-events/:id',
+    '/article',
+    '/articles',
     '/automations',
-    '/automations/:id',
     '/backup',
-    '/backup/files',
     '/blocklist/overview',
+    '/certificates',
+    '/commercial',
     '/db',
-    '/db/browse',
-    '/db/health',
-    '/db/rows',
     '/docker',
     '/events',
     '/host-overview',
     '/logs',
-    '/logs/errors',
-    '/logs/metrics',
-    '/logs/realtime',
-    '/logs/search',
-    '/logs/services',
-    '/logs/services/summary',
+    '/mail',
+    '/mail-relay',
     '/metrics',
-    '/rate-limit/keys',
-    '/rate-limit/settings',
+    '/notes',
+    '/project',
+    '/projects',
+    '/rate-limit',
+    '/rules',
     '/service-accounts',
-    '/system/cron',
-    '/system/events',
-    '/system/events/:id',
-    '/system/snapshot',
-    '/system/storage',
-    '/system/updates',
-    '/tools/execution-targets',
-    '/traffic/domains',
-    '/traffic/ips',
-    '/traffic/live',
-    '/traffic/metrics',
-    '/traffic/recent',
-    '/traffic/records',
-    '/traffic/summary',
-    '/traffic/tps',
-    '/traffic/uas',
-    '/vm/metrics',
-    '/vm/metrics/:id',
+    '/share',
+    '/system',
+    '/test',
+    '/tests',
+    '/thesis',
+    '/thought',
+    '/thoughts',
+    '/ti',
+    '/tools',
+    '/traffic',
+    '/user',
+    '/users',
+    '/vm',
     '/vms',
-    '/vms/:user',
-    '/vms/access/:user',
-    '/vms/names',
     '/vulnerabilities',
-    '/vulnerabilities/web-scan',
-])
+    '/ai',
+    '/cases/monitoring',
+]
 
 export function canViewHanasandInternalRoute(method: string, route: string) {
-    const path = route.split('?')[0].replace(/^\/api(?=\/)/, '')
-    return method.toUpperCase() === 'GET' && internalReadRoutes.has(path)
+    const path = route.split('?')[0].replace(/^\/api(?=\/)/, '').replace(/\/$/, '') || '/'
+    const normalizedMethod = method.toUpperCase()
+    if (!['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(normalizedMethod)) return false
+    return internalPageRoutes.some(prefix => path === prefix || path.startsWith(`${prefix}/`))
 }
 
 export function canViewHanasandInternalPages(membership: {
@@ -66,5 +60,25 @@ export function canViewHanasandInternalPages(membership: {
     return membership.organizationId === HANASAND_ORGANIZATION_ID
         && membership.organizationStatus === 'active'
         && membership.membershipStatus === 'active'
-        && ['owner', 'editor'].includes(membership.role.toLowerCase())
+        && ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'].includes(membership.role.toLowerCase())
+}
+
+export function canEditHanasandInternalPages(membership: {
+    organizationId: string
+    organizationStatus: string
+    membershipStatus: string
+    role: string
+}) {
+    return canViewHanasandInternalPages(membership)
+        && ['owner', 'admin', 'editor'].includes(membership.role.toLowerCase())
+}
+
+export function canAccessHanasandInternalPageRoute(method: string, membership: {
+    organizationId: string
+    organizationStatus: string
+    membershipStatus: string
+    role: string
+}) {
+    return canViewHanasandInternalPages(membership)
+        && (['GET', 'HEAD'].includes(method.toUpperCase()) || canEditHanasandInternalPages(membership))
 }

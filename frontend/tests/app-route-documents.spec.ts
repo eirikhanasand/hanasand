@@ -6,7 +6,7 @@ import { appRoutes } from '../src/utils/routes/appRoutes'
 const headers = {
     'x-forwarded-proto': 'https',
     'x-hanasand-render-proof-auth': 'local-dashboard-render-proof',
-    cookie: 'id=dashboard-render-proof-user; access_token=local-dashboard-render-proof-token; roles=["administrator"]',
+    cookie: 'id=dashboard-render-proof-user; access_token=local-dashboard-render-proof-token',
 }
 
 for (const [, path] of appRoutes) {
@@ -27,7 +27,7 @@ for (const [, path] of appRoutes) {
 for (const path of ['/ti/activity', '/ti/attacks']) {
     test(`${path} displays in the browser and preserves streaming navigation`, async ({ context, page, request, baseURL }) => {
         await context.setExtraHTTPHeaders({ 'x-forwarded-proto': 'https', 'x-hanasand-render-proof-auth': headers['x-hanasand-render-proof-auth'] })
-        for (const [name, value] of Object.entries({ id: 'dashboard-render-proof-user', access_token: 'local-dashboard-render-proof-token', roles: '["administrator"]' })) {
+        for (const [name, value] of Object.entries({ id: 'dashboard-render-proof-user', access_token: 'local-dashboard-render-proof-token' })) {
             await context.addCookies([{ name, value, url: baseURL! }])
         }
         const downloads: string[] = []

@@ -289,12 +289,6 @@ export const generatedSearchRoutes = [
         href: '/dashboard/management/organizations',
     },
     {
-        id: 'route:/dashboard/management/roles',
-        title: 'Dashboard · Management · Roles',
-        detail: 'Page · /dashboard/management/roles',
-        href: '/dashboard/management/roles',
-    },
-    {
         id: 'route:/dashboard/management/service-accounts',
         title: 'Dashboard · Management · Service Accounts',
         detail: 'Page · /dashboard/management/service-accounts',
@@ -671,12 +665,6 @@ export const generatedSearchRoutes = [
         title: 'Reset Password Again',
         detail: 'Page · /reset-password-again',
         href: '/reset-password-again',
-    },
-    {
-        id: 'route:/role',
-        title: 'Role',
-        detail: 'Page · /role',
-        href: '/role',
     },
     {
         id: 'route:/s',

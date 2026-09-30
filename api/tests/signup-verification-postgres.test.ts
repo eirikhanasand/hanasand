@@ -11,9 +11,6 @@ const { default: postUser } = await import('../src/handlers/user/post.ts')
 
 test('signup enforces single-use codes, expiration, attempts, binding and resend limits before creating an account', async () => {
     await query(`CREATE TABLE users(id text PRIMARY KEY,name text,password text,avatar text,username text UNIQUE,email text UNIQUE,email_verified_at timestamptz);
-        CREATE TABLE roles(id text PRIMARY KEY,name text,description text,priority int);
-        INSERT INTO roles VALUES ('users','Users','',100);
-        CREATE TABLE user_roles(user_id text,role_id text,assigned_by text);
         CREATE TABLE root(id int); INSERT INTO root VALUES(1),(2);`)
     const app = Fastify()
     app.post('/user', postUser)

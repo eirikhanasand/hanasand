@@ -3,7 +3,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import config from '#constants'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 
 type PreviewRow = {
     id: string
@@ -33,7 +33,7 @@ export async function getAiPreview(req: FastifyRequest, res: FastifyReply) {
 
     const { valid, id: userId } = await tokenWrapper(req, res)
     const { valid: isAdmin } = valid && userId
-        ? await hasRole(req, res, 'system_admin')
+        ? await hasHanasandInternalRouteAccess(req)
         : { valid: false }
 
     const result = await run(`

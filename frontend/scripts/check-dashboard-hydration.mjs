@@ -78,7 +78,7 @@ if (measureResponseTime) {
     })
 }
 let browser
-const cookie = 'id=dashboard-render-proof-user; access_token=local-dashboard-render-proof-token; roles=%5B%22system_admin%22%5D; dashboard_view_mode=normal'
+const cookie = 'id=dashboard-render-proof-user; access_token=local-dashboard-render-proof-token; dashboard_view_mode=normal'
 const headers = { cookie, 'x-hanasand-render-proof-auth': 'local-dashboard-render-proof' }
 const routes = [
     { path: '/scanner', heading: 'Runs' },
@@ -128,7 +128,7 @@ try {
     browser = await chromium.launch({ headless: true })
     const context = await browser.newContext({ timezoneId: 'America/Los_Angeles', extraHTTPHeaders: { 'x-hanasand-render-proof-auth': 'local-dashboard-render-proof' } })
     await context.addCookies(Object.entries({
-        id: 'dashboard-render-proof-user', access_token: 'local-dashboard-render-proof-token', roles: '["system_admin"]',
+        id: 'dashboard-render-proof-user', access_token: 'local-dashboard-render-proof-token',
         dashboard_view_mode: 'normal',
     }).map(([name, value]) => ({ name, value, url: base })))
     await context.route('**/api/backend/**', route => {

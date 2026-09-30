@@ -15,7 +15,6 @@ const query = async (sql: string, params: any[] = []) => {
     if (sql.startsWith('SELECT pg_advisory_xact_lock')) return rows()
     if (sql.startsWith('SELECT id,name,avatar,active,deletion_scheduled_at,email_verified_at') || sql.startsWith('SELECT 1 FROM users')) return rows()
     if (sql.startsWith('INSERT INTO users')) { provisioned++; return rows([{ id: params[0], name: params[1], avatar: '', active: true, deletion_scheduled_at: null }]) }
-    if (sql.startsWith('INSERT INTO user_roles')) { assert.ok(sql.includes('\'users\'')); assert.ok(!sql.includes('\'administrators\'')); return rows() }
     if (sql.startsWith('DELETE FROM social_auth_transactions WHERE expires_at')) return rows()
     if (sql.startsWith('INSERT INTO social_auth_transactions')) {
         transactions.set(params[0], { provider: params[1], binding_hash: params[2], nonce: params[3], verifier: params[4], redirect_path: params[5], link_user_id: params[6], expires: Date.now() + 600000 })
@@ -35,7 +34,6 @@ const query = async (sql: string, params: any[] = []) => {
         const user = identities.get(`${params[0]}:${params[1]}`)
         return rows(user ? [{ id: user, name: 'Existing account', avatar: '', active, deletion_scheduled_at: null }] : [])
     }
-    if (sql.startsWith('SELECT r.id')) return rows([{ id: params[0] === 'existing-owner' ? 'existing-role' : 'users', priority: 42 }])
     if (sql.startsWith('UPDATE user_social_identities')) return rows()
     throw new Error(`Unexpected query: ${sql}`)
 }
@@ -69,7 +67,7 @@ try {
     const unlinked = await callback(await start())
     assert.equal(unlinked.statusCode, 200, 'New users can sign up directly')
     assert.notEqual(unlinked.json().id, 'existing-owner', 'Matching email must not claim another account')
-    assert.equal(unlinked.json().roles[0].id, 'users')
+    assert.equal(Object.hasOwn(unlinked.json(), 'roles'), false)
     assert.equal(provisioned, 1)
     const repeat = await callback(await start())
     assert.equal(repeat.json().id, unlinked.json().id)
@@ -87,7 +85,7 @@ try {
     assert.equal(login.statusCode, 200)
     assert.equal(login.json().id, 'existing-owner')
     assert.equal(login.json().redirectPath, '/thesis')
-    assert.deepEqual(login.json().roles, [{ id: 'existing-role', priority: 42 }])
+    assert.equal(Object.hasOwn(login.json(), 'roles'), false)
     const cancelled = await start()
     assert.equal((await callback(cancelled, 'google', { cancelled: true })).statusCode, 400)
     assert.equal((await callback(cancelled)).statusCode, 400)
@@ -102,4 +100,4 @@ try {
     assert.equal(issued, 3)
     assert.equal(provisioned, 1, 'Inactive identities cannot create replacement accounts')
 } finally { await app.close() }
-console.log('Social auth: setup status, explicit authenticated linking, impersonation rejection, account isolation, state binding/provider/replay/expiry, cancellation, role inheritance and inactive-user rejection passed.')
+console.log('Social auth: setup status, explicit authenticated linking, impersonation rejection, account isolation, state binding/provider/replay/expiry, cancellation, and inactive-user rejection passed.')

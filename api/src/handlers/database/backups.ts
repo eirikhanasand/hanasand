@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import {
     BackupOperationError,
     collectDatabaseBackupServices,
@@ -116,9 +116,9 @@ async function requireBackupAccess(req: FastifyRequest, res: FastifyReply) {
         return null
     }
 
-    const role = await hasRole(req, res, 'system_admin')
+    const role = await hasHanasandInternalRouteAccess(req)
     if (!role.valid) {
-        res.status(403).send({ error: 'Missing system_admin role.' })
+        res.status(403).send({ error: 'Active Hanasand organization owner or editor access is required.' })
         return null
     }
 

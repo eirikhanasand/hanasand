@@ -33,8 +33,6 @@ await query(`CREATE TABLE users (id TEXT PRIMARY KEY, name TEXT, username TEXT, 
     CREATE TABLE organizations (id TEXT, name TEXT, status TEXT, created_at TIMESTAMPTZ);
     CREATE TABLE organization_members (organization_id TEXT, user_id TEXT, role TEXT, status TEXT);
     CREATE TABLE api_keys (organization_id TEXT, enabled BOOLEAN, expires_at TIMESTAMPTZ);
-    CREATE TABLE roles (id TEXT, name TEXT, description TEXT, priority INT);
-    CREATE TABLE user_roles (user_id TEXT, role_id TEXT);
     CREATE TABLE tokens (token_id SERIAL PRIMARY KEY, id TEXT, token TEXT, ip TEXT, user_agent TEXT,
         timestamp TIMESTAMPTZ DEFAULT NOW(), revoked_at TIMESTAMPTZ, revoked_by TEXT);
     CREATE TABLE login_events (user_id TEXT, token_id INT, ip TEXT, user_agent TEXT, status TEXT);

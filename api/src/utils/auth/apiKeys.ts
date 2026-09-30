@@ -90,13 +90,6 @@ type ApiKeyScopeRow = {
     per_day: number | null
 }
 
-type ApiKeyRoleRow = {
-    id: string
-    name: string
-    description: string
-    priority: number
-}
-
 export async function listApiKeys() {
     const keysResult = await run(`
         SELECT id, owner_id, organization_id, name, tier, description, enabled, key_prefix, expires_at, last_used_at, created_at, updated_at
@@ -364,16 +357,6 @@ export async function validateApiKey(secret: string, query: typeof run = run) {
     }
 
     const scopes = await getApiKeyScopes(apiKey.id, query)
-    const rolesResult = apiKey.owner_id
-        ? await query(`
-            SELECT r.id, r.name, r.description, r.priority
-            FROM roles r
-            JOIN user_roles ur ON ur.role_id = r.id
-            WHERE ur.user_id = $1
-            ORDER BY r.priority ASC, r.id ASC
-        `, [apiKey.owner_id])
-        : { rows: [] }
-
     await query(`
         UPDATE api_keys
         SET last_used_at = NOW(),
@@ -386,7 +369,6 @@ export async function validateApiKey(secret: string, query: typeof run = run) {
         ownerId: apiKey.owner_id,
         serviceAccount: apiKey.account_type === 'service',
         organizationId: apiKey.organization_id,
-        roles: rolesResult.rows as ApiKeyRoleRow[],
     }
 }
 

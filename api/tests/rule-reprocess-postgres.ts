@@ -16,7 +16,7 @@ mock.module('#db', () => ({ default: query, withTransaction: transaction, withDa
 let authorized = true
 const user = 'admin'
 mock.module('#utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: true, id: user }) }))
-mock.module('#utils/auth/hasRole.ts', () => ({ default: async () => ({ valid: authorized }) }))
+mock.module('#utils/auth/organizationPageAccess.ts', () => ({ default: async () => ({ valid: authorized }) }))
 const reply = () => ({ statusCode: 200, status(code: number) { this.statusCode = code; return this }, send(body: any) { return body } })
 const request = (body: any = {}, org = 'platform', id = 'custom.test') => ({ params: { id }, query: { organizationId: org }, body }) as any
 try {

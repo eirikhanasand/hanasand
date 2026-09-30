@@ -3,7 +3,7 @@ import { withLiveVmStatus } from '#utils/vms/status.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import { buildAgentTarget } from '#utils/vms/buildAgentTarget.ts'
 import { agentTargetSelect } from '#utils/vms/agentTargetQuery.ts'
 import recordLog from '#utils/logs/recordLog.ts'
@@ -36,7 +36,7 @@ export default async function getAgentTarget(req: FastifyRequest, res: FastifyRe
         return res.status(400).send({ error: 'Missing VM id.' })
     }
 
-    const { valid: isAdmin } = await hasRole(req, res, 'system_admin')
+    const { valid: isAdmin } = await hasHanasandInternalRouteAccess(req)
 
     try {
         const result = await run(`

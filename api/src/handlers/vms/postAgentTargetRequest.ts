@@ -2,7 +2,7 @@ import { hasVmAccess } from '#utils/vms/access.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import { agentTargetSelect } from '#utils/vms/agentTargetQuery.ts'
 import config from '#constants'
 import { auditAgentAction, evaluateAgentActionPolicy } from '#utils/ai/actionPolicy.ts'
@@ -62,7 +62,7 @@ export default async function postAgentTargetRequest(req: FastifyRequest, res: F
         return res.status(400).send({ error: 'Only http and https requests are supported.' })
     }
 
-    const { valid: isAdmin } = await hasRole(req, res, 'system_admin')
+    const { valid: isAdmin } = await hasHanasandInternalRouteAccess(req)
 
     try {
         const result = await run(`

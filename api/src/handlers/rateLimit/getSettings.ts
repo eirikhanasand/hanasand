@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import { getRateLimitSettings, listRateLimitRoutes } from '#utils/rateLimit/config.ts'
 import { listApiKeyTierPresets } from '#utils/auth/apiKeys.ts'
 
@@ -12,9 +12,9 @@ export default async function getRateLimitSettingsHandler(req: FastifyRequest, r
         return res.status(401).send({ error: access.error || 'Unauthorized.' })
     }
 
-    const role = await hasRole(req, res, 'system_admin')
+    const role = await hasHanasandInternalRouteAccess(req)
     if (!role.valid) {
-        return res.status(403).send({ error: role.error || 'Missing system_admin role.' })
+        return res.status(403).send({ error: role.error || 'Active Hanasand organization owner or editor access is required.' })
     }
 
     const settings = await getRateLimitSettings({ fresh: true })

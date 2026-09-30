@@ -9,5 +9,5 @@ export type InternalPageOrganization = {
 export function canViewHanasandInternalPages(organizations: InternalPageOrganization[]) {
     return organizations.some(organization => organization.id === HANASAND_ORGANIZATION_ID
         && organization.lifecycleStatus === 'active'
-        && ['owner', 'editor'].includes(organization.role?.toLowerCase() || ''))
+        && ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'].includes(organization.role?.toLowerCase() || ''))
 }

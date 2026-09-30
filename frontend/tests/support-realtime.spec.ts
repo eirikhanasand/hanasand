@@ -65,7 +65,7 @@ test('staff receives live queue updates and a recovered refresh clears the error
     const tickets = [{ id: 'chat-a', subject: 'First question', user_name: 'Visitor', reply_count: 1 }, { id: 'chat-b', subject: 'Other question', user_name: 'Visitor', reply_count: 0 }]
     let fail = false
     const messages = [{ id: 'q1', sender_id: null, sender_kind: 'user', sender_name: 'Visitor', body: 'Hello' }]
-    await page.route('**/api/backend/support/tickets', route => route.fulfill({ json: { realtime: true, role: 'support', tickets } }))
+    await page.route('**/api/backend/support/tickets', route => route.fulfill({ json: { realtime: true, isSupport: true, tickets } }))
     await page.route('**/api/backend/support/tickets/*/messages', route => route.fulfill(fail ? { status: 503, json: { error: 'Temporary failure' } } : { json: { messages } }))
     const live = await mockSupportLive(page)
     await page.goto('/support')

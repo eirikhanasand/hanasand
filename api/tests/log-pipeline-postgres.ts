@@ -541,7 +541,7 @@ try {
     await query('INSERT INTO login_events (user_id,ip,status,reason) VALUES (\'permission-user\',\'192.0.2.1\',\'failure\',\'bad_password\')')
     let authorized = true, administrator = true, reads = 0
     mock.module('../src/utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: authorized, id: 'permission-user' }) }))
-    mock.module('../src/utils/auth/hasRole.ts', () => ({ default: async () => ({ valid: administrator }) }))
+    mock.module('../src/utils/auth/organizationPageAccess.ts', () => ({ default: async () => ({ valid: administrator }) }))
     mock.module('../src/utils/logs/native.ts', () => ({ listNativeLogs: async () => [], listNativeLogServices: async () => [], isNativeLogSourceAvailable: () => false }))
     mock.module('../src/utils/docker/engine.ts', () => ({ listRuntimeLogs: async () => ({ logs: [], containers: [] }), isRuntimeLogSourceAvailable: () => false }))
     const { default: Fastify } = await import('fastify')

@@ -3,7 +3,7 @@ const entries = new Map<string, Entry>()
 const MAX_ENTRIES = 128
 const MAX_STALE_MS = 5 * 60_000
 
-// Call only after authorization. Log records are shared by system administrators,
+// Call only after authorization. Log records are shared by Hanasand operators,
 // but neither cached data nor an in-flight refresh grants access to a request.
 export async function cachedLogQuery<T>(key: string, ttl: number, load: () => Promise<T>): Promise<T> {
     let entry = entries.get(key)

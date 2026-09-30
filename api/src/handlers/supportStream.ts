@@ -7,6 +7,7 @@ import { supportSessionHash } from '#utils/support/conversation.ts'
 import { supportNotifications, type SupportChange } from '#utils/support/live.ts'
 import { recoveryRequestAllowed } from '#utils/recovery.ts'
 import { forwardSupportSocket } from '#utils/support/transport.ts'
+import { hasHanasandInternalPageAccess } from '#utils/auth/organizationPageAccess.ts'
 
 export function supportChangeAllowed(change: SupportChange, viewer: { visitor?: string; id?: string; support?: boolean }) {
     return Boolean(viewer.visitor && viewer.visitor === change.visitor || viewer.id && (change.user === viewer.id || viewer.support && change.channel === 'human'))
@@ -56,8 +57,8 @@ export default function registerSupportStream(fastify: FastifyInstance) {
                     const supportQueueScope = credential?.serviceAccount
                         ? matchApiKeyScope(credential.apiKey.scopes, 'GET', '/api/support/tickets')
                         : null
-                    const hasSupportRole = credential?.roles.some(role => role.id === 'support')
-                    if (!credential?.ownerId || !streamScope || (!hasSupportRole && !supportQueueScope)) throw new Error('Unauthorized')
+                    const hasSupportAccess = Boolean(credential?.ownerId && await hasHanasandInternalPageAccess(credential.ownerId))
+                    if (!credential?.ownerId || !streamScope || (!hasSupportAccess && !supportQueueScope)) throw new Error('Unauthorized')
                     viewer.id = credential.ownerId
                     viewer.support = true
                     let checking = false
@@ -70,9 +71,9 @@ export default function registerSupportStream(fastify: FastifyInstance) {
                             const currentQueueScope = current?.serviceAccount
                                 ? matchApiKeyScope(current.apiKey.scopes, 'GET', '/api/support/tickets')
                                 : null
-                            const currentSupportRole = current?.roles.some(role => role.id === 'support')
+                            const currentSupportAccess = Boolean(current?.ownerId && await hasHanasandInternalPageAccess(current.ownerId))
                             if (!current?.ownerId || current.ownerId !== viewer.id || !currentStreamScope
-                                || (!currentSupportRole && !currentQueueScope)) socket.close(1008)
+                                || (!currentSupportAccess && !currentQueueScope)) socket.close(1008)
                         } catch { socket.close(1011) } finally { checking = false }
                     }, 30000)
                 } else {
@@ -80,7 +81,7 @@ export default function registerSupportStream(fastify: FastifyInstance) {
                     const session = await validateSession(auth)
                     if (!session) throw new Error('Unauthorized')
                     viewer.id = session.user.id
-                    viewer.support = session.roles.some(role => role.id === 'support')
+                    viewer.support = await hasHanasandInternalPageAccess(session.user.id)
                     let checking = false
                     recheck = setInterval(async () => {
                         if (checking) return
@@ -88,7 +89,7 @@ export default function registerSupportStream(fastify: FastifyInstance) {
                         try {
                             const current = await validateSession(auth)
                             if (!current) socket.close(1008)
-                            else viewer.support = current.roles.some(role => role.id === 'support')
+                            else viewer.support = await hasHanasandInternalPageAccess(current.user.id)
                         } catch { socket.close(1011) } finally { checking = false }
                     }, 30000)
                 }

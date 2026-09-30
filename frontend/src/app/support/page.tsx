@@ -15,7 +15,7 @@ export const metadata: Metadata = buildRouteMetadata({
 
 type SupportTicket = { id: string; subject: string; status: string; updated_at: string; user_name?: string; last_message?: string; agent_name?: string; channel?: string; reply_count?: number; feedback_rating?: number | null; feedback_comment?: string | null; resolution_version?: number }
 type SupportMessage = { id: string; sender_id: string | null; sender_kind?: string; sender_name: string; body: string; created_at: string }
-type InitialSupportChat = { tickets: SupportTicket[]; role: 'user' | 'support'; selectedId: string; messages: SupportMessage[]; realtime: boolean }
+type InitialSupportChat = { tickets: SupportTicket[]; isSupport: boolean; selectedId: string; messages: SupportMessage[]; realtime: boolean }
 
 async function loadSupportChat(): Promise<InitialSupportChat | undefined> {
     const cookieStore = await cookies()
@@ -28,7 +28,7 @@ async function loadSupportChat(): Promise<InitialSupportChat | undefined> {
     try {
         const response = await fetch(`${config.url.api}/support/tickets`, { headers, cache: 'no-store', signal: AbortSignal.timeout(12_000) })
         if (!response.ok) return undefined
-        const payload = await response.json() as { tickets?: SupportTicket[]; role?: 'user' | 'support'; realtime?: boolean }
+        const payload = await response.json() as { tickets?: SupportTicket[]; isSupport?: boolean; realtime?: boolean }
         const tickets = payload.tickets || []
         const selectedId = tickets[0]?.id || ''
         let messages: SupportMessage[] = []
@@ -36,7 +36,7 @@ async function loadSupportChat(): Promise<InitialSupportChat | undefined> {
             const messageResponse = await fetch(`${config.url.api}/support/tickets/${encodeURIComponent(selectedId)}/messages`, { headers, cache: 'no-store', signal: AbortSignal.timeout(12_000) })
             if (messageResponse.ok) messages = (await messageResponse.json() as { messages?: SupportMessage[] }).messages || []
         }
-        return { tickets, role: payload.role || 'user', selectedId, messages, realtime: payload.realtime === true }
+        return { tickets, isSupport: payload.isSupport === true, selectedId, messages, realtime: payload.realtime === true }
     } catch {
         return undefined
     }

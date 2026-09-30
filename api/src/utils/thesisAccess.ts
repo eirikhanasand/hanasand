@@ -1,6 +1,7 @@
 import type { FastifyRequest } from 'fastify'
 import { performance } from 'node:perf_hooks'
 import { validateSession } from '#utils/auth/session.ts'
+import { hasHanasandInternalPageAccess } from '#utils/auth/organizationPageAccess.ts'
 
 export async function thesisAccess(id: string, token: string) {
     const authorizationStarted = performance.now()
@@ -8,6 +9,7 @@ export async function thesisAccess(id: string, token: string) {
     return {
         session,
         member: session?.organizationMember === true,
+        canEdit: session ? await hasHanasandInternalPageAccess(session.user.id) : false,
         authorizationMs: performance.now() - authorizationStarted,
     }
 }

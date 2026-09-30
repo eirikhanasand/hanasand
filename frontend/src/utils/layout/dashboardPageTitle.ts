@@ -3,7 +3,7 @@ import { canonicalAppPath } from '../routes/appRoutes'
 
 // Labels are route metadata, independent of which links a user can access.
 const pages = navigationLinks(getDashboardNavigation({
-    id: '', isAdmin: true, canManageSystem: true, canManageContent: true, hasVMs: true,
+    id: '', canManageOrganizations: true, canViewInternalPages: true, hasVMs: true,
 })).sort((a, b) => b.href.length - a.href.length)
 
 export function dashboardPageTitle(path: string): string {

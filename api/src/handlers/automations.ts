@@ -2,7 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import { automationAccessError, automationReadScope, automationWriteScope } from '#utils/automationAccess.ts'
 import { loadMonitoringIssues } from '#utils/monitoringIssues.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import {
     executeAutomation,
@@ -22,7 +22,7 @@ export async function getAutomations(req: FastifyRequest, res: FastifyReply) {
         return res.status(401).send({ error: 'Unauthorized.' })
     }
 
-    const canManageSystem = await canManageAllAutomations(req, res)
+    const canManageSystem = await canManageAllAutomations(req)
     const includeAll = canManageSystem && (req.query as { scope?: string }).scope !== 'personal'
     const result = await run(`
         SELECT a.*, stats.history, stats.uptime,
@@ -48,7 +48,7 @@ export async function getAutomation(req: FastifyRequest<{ Params: { id: string }
         return res.status(401).send({ error: 'Unauthorized.' })
     }
 
-    const includeAll = await canManageAllAutomations(req, res)
+    const includeAll = await canManageAllAutomations(req)
     const automation = await loadAutomation(req.params.id, ownerId, includeAll)
     if (!automation) {
         return res.status(404).send({ error: 'Automation not found.' })
@@ -76,7 +76,7 @@ export async function postAutomation(req: FastifyRequest<{ Body: AutomationInput
         return res.status(400).send({ error: error instanceof Error ? error.message : 'Invalid automation.' })
     }
 
-    const manageAll = await canManageAllAutomations(req, res)
+    const manageAll = await canManageAllAutomations(req)
     const accessError = await automationAccessError(input, ownerId, manageAll)
     if (accessError) return res.status(403).send({ error: accessError })
     if (input.status === 'active' && !manageAll) {
@@ -153,7 +153,7 @@ export async function putAutomation(req: FastifyRequest<{ Params: { id: string }
         return res.status(401).send({ error: 'Unauthorized.' })
     }
 
-    const manageAll = await canManageAllAutomations(req, res)
+    const manageAll = await canManageAllAutomations(req)
     const existing = await loadAutomation(req.params.id, ownerId, manageAll, true)
     if (!existing) {
         return res.status(404).send({ error: 'Automation not found.' })
@@ -249,7 +249,7 @@ export async function deleteAutomation(req: FastifyRequest<{ Params: { id: strin
         return res.status(401).send({ error: 'Unauthorized.' })
     }
 
-    const manageAll = await canManageAllAutomations(req, res)
+    const manageAll = await canManageAllAutomations(req)
     const result = await run(`
         UPDATE agent_automations
            SET status = 'archived',
@@ -278,7 +278,7 @@ export async function postAutomationRunNow(req: FastifyRequest<{ Params: { id: s
         return res.status(401).send({ error: 'Unauthorized.' })
     }
 
-    const automation = await loadAutomation(req.params.id, ownerId, await canManageAllAutomations(req, res), true)
+    const automation = await loadAutomation(req.params.id, ownerId, await canManageAllAutomations(req), true)
     if (!automation) {
         return res.status(404).send({ error: 'Automation not found.' })
     }
@@ -349,9 +349,9 @@ export async function loadRuns(automationId: string, ownerId: string, includeAll
     }
 }
 
-async function canManageAllAutomations(req: FastifyRequest, res: FastifyReply) {
-    const role = await hasRole(req, res, 'system_admin')
-    return role.valid
+async function canManageAllAutomations(req: FastifyRequest) {
+    const access = await hasHanasandInternalRouteAccess(req)
+    return access.valid
 }
 
 async function activeAutomationLimitError(ownerId: string, excludeId?: string) {

@@ -232,7 +232,7 @@ try {
     assert.match(routeSource, /fastify\.post\('\/backup', postDatabaseBackup\)/)
     assert.match(routeSource, /fastify\.post\('\/backup\/verify', postDatabaseBackupVerify\)/)
     assert.match(routeSource, /fastify\.post\('\/backup\/restore', postDatabaseBackupRestore\)/)
-    assert.match(handlerSource, /hasRole\(req, res, 'system_admin'\)/, 'every backup route must require system_admin authorization')
+    assert.match(handlerSource, /hasHanasandInternalRouteAccess\(req\)/, 'every backup route must require Hanasand organization access')
     assert.match(handlerSource, /targetDatabase: req\.body\.targetDatabase/)
     assert.match(handlerSource, /confirmation: req\.body\.confirmation/)
 

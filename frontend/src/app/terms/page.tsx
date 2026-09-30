@@ -30,7 +30,7 @@ export default function TermsPage() {
                     title: '3. Customer accounts and administration',
                     body: 'Customers are responsible for their users, administrators, credentials, API keys, webhook endpoints, watchlists, notification routes, and account configuration. You must keep credentials confidential, use reasonable access controls, and promptly notify Hanasand if you suspect unauthorized access or need an endpoint disabled.',
                     bullets: [
-                        'Administrators may invite users, assign roles, configure integrations, and remove access.',
+                        'Organization owners may invite members, configure integrations, and remove access.',
                         'You are responsible for activity under your account unless caused by Hanasand\'s breach of these Terms.',
                         'Hanasand may rely on instructions from an account administrator unless it has reason to believe the request is unauthorized or unlawful.',
                     ],

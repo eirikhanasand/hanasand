@@ -40,7 +40,7 @@ for (const [original, canonical] of appRoutes) {
     assert.equal(location.searchParams.get('path'), canonical + '?test=1')
     const authenticated = await proxy(new NextRequest('http://localhost:3127' + canonical + '?test=1', { headers: {
         'x-hanasand-render-proof-auth': 'local-dashboard-render-proof',
-        cookie: 'id=dashboard-render-proof-user; access_token=local-dashboard-render-proof-token; roles=["administrator"]',
+        cookie: 'id=dashboard-render-proof-user; access_token=local-dashboard-render-proof-token',
     } }))
     assert.equal(authenticated.status, 200, canonical)
     assert.equal(authenticated.headers.get('x-current-path'), canonical)
@@ -57,7 +57,7 @@ assert.equal(appPagePath('/articles/example'), '/articles/example')
 assert.equal(appPagePath('/ti/example'), '/ti/example')
 for (const path of ['/organizations', '/organizations/123', '/profile/123', '/ti', '/ti/example', '/api']) assert.ok(hasAppSidebar(path))
 for (const path of ['/', '/articles', '/login', '/pricing']) assert.ok(!hasAppSidebar(path))
-const navigation = navigationLinks(getDashboardNavigation({ id: 'test', isAdmin: true, canManageSystem: true, canManageContent: true }))
+const navigation = navigationLinks(getDashboardNavigation({ id: 'test', canViewInternalPages: true }))
 assert.equal(navigation.find(link => link.label === 'Actor Profiles')?.href, '/ti/profiles')
 for (const link of navigation) {
     assert.ok(!link.href.startsWith('/dashboard/'), link.href)
@@ -65,7 +65,7 @@ for (const link of navigation) {
 }
 const restricted = await proxy(new NextRequest('http://localhost:3127/db', { headers: {
     'x-hanasand-render-proof-auth': 'local-dashboard-render-proof',
-    cookie: 'id=dashboard-render-proof-user; access_token=local-dashboard-render-proof-token; roles=[]',
+    cookie: 'id=dashboard-render-proof-user; access_token=local-dashboard-render-proof-token',
 } }))
 assert.equal(new URL(restricted.headers.get('location')!).searchParams.get('notAllowed'), 'true')
-console.log(`Checked ${pages.length} page routes, ${appRoutes.length} login guards, navigation, collisions, and role protection.`)
+console.log(`Checked ${pages.length} page routes, ${appRoutes.length} login guards, navigation, collisions, and organization protection.`)

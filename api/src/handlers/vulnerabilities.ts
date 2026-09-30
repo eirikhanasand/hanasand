@@ -1,32 +1,32 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import { getVulnerabilityReport, startTrackedVulnerabilityScan } from '#utils/vulnerabilities/scanner.ts'
 import { getWebScanReport, setWebScanSchedule, startWebScan } from '#utils/vulnerabilities/webScanner.ts'
 import { recordSystemEvent } from '#utils/systemEvent.ts'
 import { checkBillingCapacity } from './billing.ts'
 
-async function requireSystemAdmin(req: FastifyRequest, res: FastifyReply) {
+async function requireHanasandInternalAccess(req: FastifyRequest, res: FastifyReply) {
     const { valid, id } = await tokenWrapper(req, res)
     if (!valid || !id) {
         res.status(401).send({ error: 'Unauthorized.' })
         return false
     }
-    const role = await hasRole(req, res, 'system_admin')
-    if (!role.valid) {
-        res.status(403).send({ error: 'System administrator access is required.' })
+    const internalAccess = await hasHanasandInternalRouteAccess(req)
+    if (!internalAccess.valid) {
+        res.status(403).send({ error: 'Active Hanasand organization owner or editor access is required.' })
         return false
     }
     return id
 }
 
 export async function getVulnerabilities(req: FastifyRequest, res: FastifyReply) {
-    if (!await requireSystemAdmin(req, res)) return
+    if (!await requireHanasandInternalAccess(req, res)) return
     return res.send(await getVulnerabilityReport())
 }
 
 export async function postVulnerabilityScan(req: FastifyRequest, res: FastifyReply) {
-    const actorId = await requireSystemAdmin(req, res)
+    const actorId = await requireHanasandInternalAccess(req, res)
     if (!actorId) return
     const quota = await checkBillingCapacity(actorId, 'monitoredTargets', 1)
     if (!quota.allowed) return res.status(quota.subscriptionRequired ? 402 : 409).send({ error: quota.subscriptionRequired ? 'subscription_required' : 'quota_exhausted', message: quota.subscriptionRequired ? 'A Security Scanner plan is required to run image scans.' : 'Your monitored-target quota has been reached.', quota })
@@ -48,12 +48,12 @@ export async function postVulnerabilityScan(req: FastifyRequest, res: FastifyRep
 }
 
 export async function getWebScanner(req: FastifyRequest, res: FastifyReply) {
-    if (!await requireSystemAdmin(req, res)) return
+    if (!await requireHanasandInternalAccess(req, res)) return
     return res.send(await getWebScanReport())
 }
 
 export async function postWebScanner(req: FastifyRequest, res: FastifyReply) {
-    const actorId = await requireSystemAdmin(req, res)
+    const actorId = await requireHanasandInternalAccess(req, res)
     if (!actorId) return
     const quota = await checkBillingCapacity(actorId, 'monitoredTargets', 1)
     if (!quota.allowed) return res.status(quota.subscriptionRequired ? 402 : 409).send({ error: quota.subscriptionRequired ? 'subscription_required' : 'quota_exhausted', message: quota.subscriptionRequired ? 'A Security Scanner plan is required to run web scans.' : 'Your monitored-target quota has been reached.', quota })
@@ -69,7 +69,7 @@ export async function postWebScanner(req: FastifyRequest, res: FastifyReply) {
 }
 
 export async function putWebScannerSchedule(req: FastifyRequest, res: FastifyReply) {
-    const actorId = await requireSystemAdmin(req, res)
+    const actorId = await requireHanasandInternalAccess(req, res)
     if (!actorId) return
     const body = req.body as { enabled?: unknown, intervalMinutes?: unknown } | undefined
     const intervalMinutes = body?.intervalMinutes === undefined ? undefined : Number(body.intervalMinutes)

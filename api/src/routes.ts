@@ -19,10 +19,6 @@ import getUser from './handlers/user/get.ts'
 import { getProfileStats } from './handlers/profileStats.ts'
 import postUser from './handlers/user/post.ts'
 import postPwned from './handlers/pwned/post.ts'
-import getRole from './handlers/roles/get.ts'
-import postRole from './handlers/roles/post.ts'
-import putRole from './handlers/roles/put.ts'
-import deleteRole from './handlers/roles/delete.ts'
 import getArticles, { getArticle } from './handlers/articles/get.ts'
 import postArticle from './handlers/articles/post.ts'
 import putArticle from './handlers/articles/put.ts'
@@ -32,8 +28,6 @@ import rerunTest from './handlers/test/rerun.ts'
 import { startLoadTestQueue } from './handlers/test/follow.ts'
 import { getMyRecentTests, getRecentTests } from './handlers/test/list.ts'
 import restartHandler from './handlers/restart/getRestart.ts'
-import getRoles from './handlers/roles/getRoles.ts'
-import getRolesForUser from './handlers/roles/getRolesForUser.ts'
 import putUser from './handlers/user/putUser.ts'
 import deleteUser from './handlers/user/deleteUser.ts'
 import deleteSelf from './handlers/user/deleteSelf.ts'
@@ -48,8 +42,6 @@ import putThought from './handlers/thoughts/put.ts'
 import deleteThought from './handlers/thoughts/delete.ts'
 import getRandomThought from './handlers/thoughts/getRandomThought.ts'
 import postThoughtByTitle from './handlers/thoughts/postThoughtByTitle.ts'
-import assignRole from './handlers/roles/assignRole.ts'
-import unassignRole from './handlers/roles/unassignRole.ts'
 import putSelf from './handlers/user/putSelf.ts'
 import getVisits from './handlers/test/getVisits.ts'
 import getCertificate from './handlers/certificates/get.ts'
@@ -317,16 +309,6 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/user/restore', restoreSelf)
     fastify.delete('/user/:id', deleteUser)
     fastify.delete('/user/self', deleteSelf)
-
-    // Roles handlers
-    fastify.get('/role/:id', getRole)
-    fastify.get('/roles', getRoles)
-    fastify.get('/roles/user/:id', getRolesForUser)
-    fastify.post('/role', postRole)
-    fastify.post('/role/assign/:id', assignRole)
-    fastify.post('/role/unassign/:id', unassignRole)
-    fastify.put('/role/:id', putRole)
-    fastify.delete('/role/:id', deleteRole)
 
     // Pwned handler
     fastify.post('/pwned', postPwned)

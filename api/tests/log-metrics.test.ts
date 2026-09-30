@@ -13,7 +13,7 @@ mock.module('#db', () => ({
 }))
 mock.module('#utils/logs/cache.ts', () => ({ cachedLogQuery: async (_key: string, _ttl: number, load: () => Promise<unknown>) => load() }))
 mock.module('#utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: false }) }))
-mock.module('#utils/auth/hasRole.ts', () => ({ default: async () => ({ valid: false }) }))
+mock.module('#utils/auth/organizationPageAccess.ts', () => ({ default: async () => ({ valid: false }) }))
 
 const { getPublicLogMetrics } = await import('../src/handlers/logs/metrics.ts')
 
@@ -24,11 +24,11 @@ test('log chart history is a cached-size set of completed five-minute averages f
 
     const historyQuery = queries.find(query => query.includes('WITH samples AS'))
     expect(historyQuery).toBeDefined()
-    expect(historyQuery).toContain("date_bin(INTERVAL '5 minutes'")
-    expect(historyQuery).toContain("WHERE sampled_at >= NOW() - INTERVAL '24 hours'")
+    expect(historyQuery).toContain('date_bin(INTERVAL \'5 minutes\'')
+    expect(historyQuery).toContain('WHERE sampled_at >= NOW() - INTERVAL \'24 hours\'')
     expect(historyQuery).toContain('AVG(pps)')
     expect(historyQuery).toContain('AVG(eps)')
     expect(historyQuery).toContain('AVG(npps)')
-    expect(historyQuery).toContain("bucket_start + INTERVAL '5 minutes' <= NOW()")
+    expect(historyQuery).toContain('bucket_start + INTERVAL \'5 minutes\' <= NOW()')
     expect((reply.body as any).history).toHaveLength(1)
 })

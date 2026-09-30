@@ -63,7 +63,6 @@ test('monitoring and unrelated cases share the list, links, search and paginatio
 
 test('a MON reference in Recent checks opens the shared case', async ({ context, page, baseURL }) => {
     await authenticate(context, baseURL)
-    await context.addCookies([{ name: 'roles', value: encodeURIComponent(JSON.stringify(['system_admin'])), url: baseURL! }])
     const automation = { id: 'inference', name: 'Inference health', ownerId: 'owner', status: 'active', actionType: 'agent_prompt', monitoringType: 'fetch', scheduleKind: 'interval', intervalMinutes: 1, targetUrl: 'https://example.test/health', history: [], caseNumbers: ['HA-3'], uptime: 0 }
     await page.route('**/api/backend/automations**', route => route.fulfill({ json: new URL(route.request().url()).pathname.endsWith('/automations') ? { automations: [automation] } : { automation, runs: [{ id: 'run-1', caseNumber: 'HA-3', status: 'failed', startedAt: '2026-09-07T09:20:00Z', error: 'HTTP 503' }], issues: [], total: 1, nextCursor: null } }))
     await page.route('**/api/cases/HA-3?**', route => route.fulfill({ json: { case: { id: 'HA-3', title: 'HA-3 · Inference health', summary: 'HTTP 503', status: 'open', occurrences: 1, automationId: 'inference', notifications: [] } } }))

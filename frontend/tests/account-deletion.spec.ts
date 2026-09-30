@@ -23,7 +23,7 @@ test('email link restores only after confirmation and shows the password form', 
     await page.route('**/api/user/restore', async route => {
         restores++
         expect(route.request().postDataJSON().restoreToken).toBe('email-secret')
-        await route.fulfill({ json: { id: 'recovery-user', name: 'Recovery User', token: 'session', resetToken: 'reset-secret', expires_at: '2030-01-01T00:00:00Z', roles: [] } })
+        await route.fulfill({ json: { id: 'recovery-user', name: 'Recovery User', token: 'session', resetToken: 'reset-secret', expires_at: '2030-01-01T00:00:00Z' } })
     })
     await page.route('**/api/auth/password-reset/complete', async route => {
         resets++
@@ -59,7 +59,7 @@ test('invalid links show an error without claiming the account was restored', as
 })
 
 test('recovery remains usable while older API replicas finish a rolling deployment', async ({ page }) => {
-    await page.route('**/api/user/restore', route => route.fulfill({ json: { id: 'recovery-user', name: 'Recovery User', token: 'session', expires_at: '2030-01-01T00:00:00Z', roles: [] } }))
+    await page.route('**/api/user/restore', route => route.fulfill({ json: { id: 'recovery-user', name: 'Recovery User', token: 'session', expires_at: '2030-01-01T00:00:00Z' } }))
     await page.goto('http://account-deletion.test/#restoreToken=email-secret')
     await page.getByRole('button', { name: 'Restore', exact: true }).click()
     await expect(page).toHaveURL('http://account-deletion.test/dashboard')

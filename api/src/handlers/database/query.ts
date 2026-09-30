@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import { queryOnce } from '#db'
 
 type QueryBody = {
@@ -66,9 +66,9 @@ export async function requireDatabaseAccess(req: FastifyRequest, res: FastifyRep
         return false
     }
 
-    const role = await hasRole(req, res, 'system_admin')
+    const role = await hasHanasandInternalRouteAccess(req)
     if (!role.valid) {
-        if (!res.sent && res.statusCode < 400) res.status(403).send({ error: 'Missing system_admin role.' })
+        if (!res.sent && res.statusCode < 400) res.status(403).send({ error: 'Active Hanasand organization owner or editor access is required.' })
         return false
     }
 

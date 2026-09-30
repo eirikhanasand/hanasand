@@ -1,17 +1,8 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { performance } from 'node:perf_hooks'
 import { queryOnce } from '#db'
-import { validateSession } from '#utils/auth/session.ts'
 import { compactThesisHistory, isThesisCached, readThesis, saveThesis, validThesis } from '#utils/thesis.ts'
-import { thesisAccess, thesisCredentials, thesisMember } from '#utils/thesisAccess.ts'
-
-async function owner(req: FastifyRequest) {
-    const authorization = req.headers.authorization || ''
-    const id = typeof req.headers.id === 'string' ? req.headers.id : ''
-    if (id !== 'eirikhanasand' || !authorization.startsWith('Bearer ')) return false
-    const session = await validateSession({ id, token: authorization.slice(7) })
-    return session?.user.id === 'eirikhanasand'
-}
+import { thesisAccess, thesisCredentials } from '#utils/thesisAccess.ts'
 
 export async function getThesis(req: FastifyRequest, res: FastifyReply) {
     const started = performance.now()
@@ -35,7 +26,7 @@ export async function getThesis(req: FastifyRequest, res: FastifyReply) {
         const serverTiming = `authorization;dur=${access.authorizationMs.toFixed(2)}, thesis;dur=${documentMs.toFixed(2)}, total;dur=${totalMs.toFixed(2)}`
         return res.header('Cache-Control', 'no-store')
             .header('Server-Timing', serverTiming)
-            .header('X-Thesis-Can-Edit', access.session.user.id === 'eirikhanasand' ? 'true' : 'false')
+            .header('X-Thesis-Can-Edit', access.canEdit ? 'true' : 'false')
             .send(document)
     } catch (error) {
         req.log.error(error)
@@ -57,8 +48,9 @@ function logThesisRender(req: FastifyRequest, timing: { authorizationMs: number,
 export async function putThesis(req: FastifyRequest, res: FastifyReply) {
     try {
         const { id, token } = thesisCredentials(req)
-        if (!await thesisMember(id, token)) return res.status(403).send({ error: 'Hanasand organization membership is required.' })
-        if (!await owner(req)) return res.status(403).send({ error: 'Only eirikhanasand can edit the thesis.' })
+        const access = await thesisAccess(id, token)
+        if (!access.member) return res.status(403).send({ error: 'Hanasand organization membership is required.' })
+        if (!access.canEdit) return res.status(403).send({ error: 'Hanasand organization owners and editors can edit the thesis.' })
         if (!validThesis(req.body)) return res.status(400).send({ error: 'Invalid thesis title, content or revision. Reload the editor if it was open before this update.' })
         const result = await saveThesis(req.body)
         return res.status(result.status).send(result.document)
@@ -71,8 +63,9 @@ export async function putThesis(req: FastifyRequest, res: FastifyReply) {
 export async function getThesisHistory(req: FastifyRequest, res: FastifyReply) {
     try {
         const { id, token } = thesisCredentials(req)
-        if (!await thesisMember(id, token)) return res.status(403).send({ error: 'Hanasand organization membership is required.' })
-        if (!await owner(req)) return res.status(403).send({ error: 'Only eirikhanasand can view thesis history.' })
+        const access = await thesisAccess(id, token)
+        if (!access.member) return res.status(403).send({ error: 'Hanasand organization membership is required.' })
+        if (!access.canEdit) return res.status(403).send({ error: 'Hanasand organization owners and editors can view thesis history.' })
         const { revision } = req.params as { revision?: string }
         if (revision !== undefined) {
             if (!/^\d+$/.test(revision) || !Number.isSafeInteger(Number(revision))) return res.status(400).send({ error: 'Invalid revision.' })

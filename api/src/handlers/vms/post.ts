@@ -3,7 +3,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import { loadSQL } from '#utils/loadSQL.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import hasInternalToken from '#utils/auth/internalToken.ts'
 import syncUserCertificatesToVm from '#utils/vms/syncUserCertificatesToVm.ts'
 import config from '#constants'
@@ -32,7 +32,7 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
             return res.status(401).send({ error: 'Unauthorized.' })
         }
 
-        const { valid: validRole } = await hasRole(req, res, 'system_admin')
+        const { valid: validRole } = await hasHanasandInternalRouteAccess(req)
         canAssignOwner = validRole
         actorId = id
         owner = validRole ? owner || id : id

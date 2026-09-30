@@ -12,7 +12,7 @@ mock.module('#db', () => ({
         catch (error) { operations.push('rollback'); throw error }
     },
 }))
-mock.module('#utils/auth/session.ts', () => ({ validateSession: async () => ({ user: { id: 'audit-user' }, roles: [], session: {} }) }))
+mock.module('#utils/auth/session.ts', () => ({ validateSession: async () => ({ user: { id: 'audit-user' }, session: {} }) }))
 mock.module('#utils/auth/apiKeys.ts', () => ({ validateApiKey: async () => null, matchApiKeyScope: () => null, organizationPublicApiScopes: () => [] }))
 mock.module('#utils/recovery.ts', () => ({ recoveryReadOnly: () => false }))
 mock.module('#utils/rateLimit/config.ts', () => ({

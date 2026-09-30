@@ -1,5 +1,5 @@
 import run from '#db'
-import { loadSQL } from '#utils/loadSQL.ts'
+import { hasHanasandInternalPageAccess } from '#utils/auth/organizationPageAccess.ts'
 import { isDiscordWebhookFileDestination, isDiscordWebhookUrl } from '#utils/alerts/discordWebhookFile.ts'
 
 type AccessInput = { actionType: string, targetUrl: string | null, organizationId: string | null, modelName: string | null, notificationDestinations?: string[] }
@@ -9,26 +9,26 @@ export function needsSystemAutomationAccess(input: AccessInput) {
         || [input.modelName, ...(input.notificationDestinations || [])].some(isDiscordWebhookFileDestination)
 }
 
-export async function automationAccessError(input: AccessInput, ownerId: string, systemAdmin: boolean) {
-    if (!systemAdmin && needsSystemAutomationAccess(input)) return 'System monitoring and server notification files require administrator access.'
-    if (!systemAdmin && [input.modelName, ...(input.notificationDestinations || [])].some(value => value && !isDiscordWebhookUrl(value))) return 'Use a valid Discord webhook URL for your notifications.'
+export async function automationAccessError(input: AccessInput, ownerId: string, hasInternalAccess: boolean) {
+    if (!hasInternalAccess && needsSystemAutomationAccess(input)) return 'System monitoring and server notification files require Hanasand organization editor access.'
+    if (!hasInternalAccess && [input.modelName, ...(input.notificationDestinations || [])].some(value => value && !isDiscordWebhookUrl(value))) return 'Use a valid Discord webhook URL for your notifications.'
     if (!input.organizationId) return input.actionType === 'organization_report' ? 'Organization reports need an organization.' : null
     const result = await run(`SELECT 1 FROM organizations o WHERE o.id = $1 AND o.status = 'active'
-        AND ($3::boolean OR EXISTS (SELECT 1 FROM organization_members m WHERE m.organization_id = o.id AND m.user_id = $2 AND m.status = 'active' AND m.role IN ('owner', 'admin', 'editor')))`, [input.organizationId, ownerId, systemAdmin])
+        AND ($3::boolean OR EXISTS (SELECT 1 FROM organization_members m WHERE m.organization_id = o.id AND m.user_id = $2 AND m.status = 'active' AND m.role IN ('owner', 'admin', 'editor')))`, [input.organizationId, ownerId, hasInternalAccess])
     return result.rows.length ? null : 'You no longer have access to this organization.'
 }
 
 export async function checkScheduledAutomationAccess(input: AccessInput, ownerId: string) {
     if (!input.organizationId && !needsSystemAutomationAccess(input)) return
-    const role = await run(await loadSQL('hasRole.sql'), [ownerId, 'system_admin'])
-    const error = await automationAccessError(input, ownerId, role.rows[0]?.has_role === true)
+    const hasInternalAccess = await hasHanasandInternalPageAccess(ownerId)
+    const error = await automationAccessError(input, ownerId, hasInternalAccess)
     if (error) throw new Error(error)
 }
 
 // Aliases and placeholders are fixed by callers, never supplied by a request.
-export function automationReadScope(alias: string, admin: string, owner: string, mutate = false) {
+export function automationReadScope(alias: string, internalAccess: string, owner: string, mutate = false) {
     const a = alias ? `${alias}.` : ''
-    return `(${admin}::boolean OR (${a}owner_id = ${owner}
+    return `(${internalAccess}::boolean OR (${a}owner_id = ${owner}
         AND ${a}action_type <> 'mail_health_check' AND ${a}target_url IS DISTINCT FROM 'system:recovery' AND ${a}target_url IS DISTINCT FROM 'system:metrics' AND ${a}target_url IS DISTINCT FROM 'system:ti-delivery' AND ${a}target_url IS DISTINCT FROM 'system:ti-collection' AND ${a}target_url IS DISTINCT FROM 'system:ti-enrichment'
         AND COALESCE(${a}target_url, '') NOT LIKE 'system:cron:%'
         AND COALESCE(${a}model_name, '') NOT LIKE 'discord-webhook-file:%'
@@ -37,6 +37,6 @@ export function automationReadScope(alias: string, admin: string, owner: string,
             WHERE o.id = ${a}organization_id AND o.status = 'active' AND m.user_id = ${owner} AND m.status = 'active' ${mutate ? 'AND m.role IN (\'owner\', \'admin\', \'editor\')' : ''}))))`
 }
 
-export function automationWriteScope(alias: string, admin: string, owner: string) {
-    return automationReadScope(alias, admin, owner, true)
+export function automationWriteScope(alias: string, internalAccess: string, owner: string) {
+    return automationReadScope(alias, internalAccess, owner, true)
 }

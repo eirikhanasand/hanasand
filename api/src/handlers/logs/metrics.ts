@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import { cachedLogQuery } from '#utils/logs/cache.ts'
 
 type SampleRow = { sampled_at: string, pps: number, eps: number, historical_eps: number, npps: number, remaining: number }
@@ -30,7 +30,7 @@ export async function getLogMetrics(req: FastifyRequest, res: FastifyReply) {
     if (!publicRequest) {
         const { valid } = await tokenWrapper(req, res)
         if (!valid) return res.status(401).send({ error: 'Unauthorized.' })
-        if (!(await hasRole(req, res, 'system_admin')).valid) return res.status(403).send({ error: 'Missing system_admin role.' })
+        if (!(await hasHanasandInternalRouteAccess(req)).valid) return res.status(403).send({ error: 'Active Hanasand organization owner or editor access is required.' })
     }
     try {
         return res.send(await loadCachedLogMetrics())

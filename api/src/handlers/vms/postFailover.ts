@@ -4,7 +4,7 @@ import { vmLifecycleLock } from '#utils/vms/lifecycleLock.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import sanitize from '#utils/sanitize.ts'
 
 export default async function postVmFailover(req: FastifyRequest, res: FastifyReply) {
@@ -19,7 +19,7 @@ export default async function postVmFailover(req: FastifyRequest, res: FastifyRe
         return res.status(400).send({ error: 'Missing VM id.' })
     }
 
-    const { valid: isAdmin } = await hasRole(req, res, 'system_admin')
+    const { valid: isAdmin } = await hasHanasandInternalRouteAccess(req)
 
     try {
         return await vmLifecycleLock(vmName, async () => {

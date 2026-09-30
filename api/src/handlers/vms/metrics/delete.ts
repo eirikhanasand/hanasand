@@ -1,11 +1,11 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 
 export default async function deleteVMMetrics(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
-    const { valid: validRole } = await hasRole(req, res, 'system_admin')
+    const { valid: validRole } = await hasHanasandInternalRouteAccess(req)
     if (!valid || !validRole) {
         return res.status(401).send({ error: 'Unauthorized.' })
     }

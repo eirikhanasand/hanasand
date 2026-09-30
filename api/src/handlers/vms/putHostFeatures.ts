@@ -4,7 +4,7 @@ import { vmLifecycleLock } from '#utils/vms/lifecycleLock.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import sanitize from '#utils/sanitize.ts'
 import { applyAlwaysRunning } from '#utils/vms/ensureAlwaysRunning.ts'
 import { recordSystemEvent } from '#utils/systemEvent.ts'
@@ -31,7 +31,7 @@ export default async function putVmHostFeatures(req: FastifyRequest, res: Fastif
     }
 
     const body = req.body as FeatureBody ?? {}
-    const { valid: isAdmin } = await hasRole(req, res, 'system_admin')
+    const { valid: isAdmin } = await hasHanasandInternalRouteAccess(req)
 
     try {
         return await vmLifecycleLock(vmName, async () => {

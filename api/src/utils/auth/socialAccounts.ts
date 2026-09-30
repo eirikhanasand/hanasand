@@ -46,7 +46,6 @@ export async function socialAccount(provider: SocialProvider, identity: { subjec
         const password = await bcrypt.hash(randomUUID() + randomUUID(), 10)
         const created = await query(`INSERT INTO users (id,name,password,avatar,username,email,email_verified_at) VALUES ($1,$2,$3,'',$4,$5,NOW())
             RETURNING id,name,username,avatar,active,deletion_scheduled_at`, [id, name, password, username, email])
-        await query('INSERT INTO user_roles (user_id,role_id,assigned_by) VALUES ($1,\'users\',\'administrator\')', [id])
         await query('INSERT INTO user_social_identities (provider,subject,user_id,email) VALUES ($1,$2,$3,$4)', [provider, identity.subject, id, email])
         return created.rows[0] as SocialAccount
     })

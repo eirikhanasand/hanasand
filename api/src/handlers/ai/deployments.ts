@@ -2,7 +2,7 @@ import { hasVmAccess } from '#utils/vms/access.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import config from '#constants'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import { agentTargetSelect } from '#utils/vms/agentTargetQuery.ts'
 import { getRepoCredential } from '#utils/ai/repoCredentials.ts'
 import { getConversationForUser, requireAiUser } from './shared.ts'
@@ -501,7 +501,7 @@ async function delayDeployRetry(attempt: number) {
 }
 
 async function getAccessibleVm(req: FastifyRequest, res: FastifyReply, vmName: string, userId: string) {
-    const { valid: isAdmin } = await hasRole(req, res, 'system_admin')
+    const { valid: isAdmin } = await hasHanasandInternalRouteAccess(req)
     const result = await run(`
         ${agentTargetSelect}
         WHERE v.name = $1

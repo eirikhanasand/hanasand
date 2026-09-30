@@ -11,7 +11,7 @@ const api = Bun.serve({
         const { pathname } = new URL(request.url)
         requests.push(pathname)
         if (pathname === '/requests') return Response.json(requests)
-        if (pathname.startsWith('/api/auth/token/')) return Response.json({ roles: pathname.endsWith('/admin-proof') ? [{ id: 'system_admin', name: 'System administrator' }] : [], name: 'Member' })
+        if (pathname.startsWith('/api/auth/token/')) return Response.json({ name: 'Member' })
         if (pathname === '/api/vms' || pathname === '/api/vm/metrics') return Response.json([])
         if (pathname.startsWith('/api/vms/')) return Response.json([{ name: 'my-machine', owner: 'dashboard-render-proof-user', status: 'running', access_users: [] }])
         if (pathname === '/status') {

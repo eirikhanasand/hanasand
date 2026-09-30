@@ -1,5 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import run, { withTransaction } from '#db'
+import { withTransaction } from '#db'
 import { createAccountRestoreToken, hashAccountRestoreToken } from '#utils/auth/accountDeletion.ts'
 import login from '#utils/auth/login.ts'
 
@@ -43,19 +43,10 @@ export default async function restoreSelf(req: FastifyRequest, res: FastifyReply
     }
 
     const session = await login({ id: userId, ip: req.ip, userAgent: String(req.headers['user-agent'] || '') })
-    const roleResponse = await run(`
-        SELECT r.id, r.name, r.description, r.priority
-        FROM roles r
-        JOIN user_roles ur ON ur.role_id = r.id
-        WHERE ur.user_id = $1
-        ORDER BY r.priority ASC, r.id ASC
-    `, [userId])
-
     return res.send({
         ...result.rows[0],
         message: 'Account restored.',
         resetToken: reset.token,
-        roles: roleResponse.rows,
         token: session?.token,
         expires_at: session?.expires_at,
     })

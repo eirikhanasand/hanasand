@@ -1,18 +1,18 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
-let administrator = true
+let internalMember = true
 let eventRows: Record<string, unknown>[] = []
 const queries: Array<{ sql: string, values: unknown[] }> = []
 async function run(sql: string, values: unknown[] = []) {
-    if (sql.includes('FROM roles r')) return { rows: administrator ? [{ id: 'system_admin' }] : [] }
+    if (sql.includes('FROM organization_members member')) return { rows: internalMember ? [{ id: 'member' }] : [] }
     queries.push({ sql, values })
     return { rows: sql.includes('AS total') ? [{ total: 125 }] : sql.includes('GROUP BY 1') ? [{ value: 'test', count: 12 }] : sql.includes('AS "Action"') ? [{ Action: 'restart', Description: 'matched' }] : eventRows }
 }
 mock.module('../src/utils/db.ts', () => ({ default: run, queryOnce: run, closeDatabase: async () => {} }))
 mock.module('../src/utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: true, id: 'test-admin' }) }))
 const { getSystemEvents } = await import('../src/handlers/adminSupport.ts')
-beforeEach(() => { administrator = true; eventRows = []; queries.length = 0 })
+beforeEach(() => { internalMember = true; eventRows = []; queries.length = 0 })
 async function request(query: Record<string, string>) {
     const result = { statusCode: 200, body: undefined as any, header() { return this }, status(code: number) { this.statusCode = code; return this }, send(body: unknown) { this.body = body; return this } }
     await getSystemEvents({ query } as FastifyRequest, result as unknown as FastifyReply)
@@ -32,8 +32,8 @@ test('invalid pages and unsupported filters are rejected', async () => {
     expect((await request({ page: '2', unsupported: 'value' })).statusCode).toBe(400)
     expect(queries).toHaveLength(0)
 })
-test('numbered audit pages remain administrator-only', async () => {
-    administrator = false
+test('numbered audit pages require Hanasand organization access', async () => {
+    internalMember = false
     expect((await request({ page: '2' })).statusCode).toBe(403)
     expect(queries).toHaveLength(0)
 })
@@ -71,7 +71,7 @@ test('HQL summarizes filtered matches and rejects unsupported syntax without que
     }
     expect((await request({ hql: 'AuditEvents', cursor: 'bad' })).statusCode).toBe(400)
     expect(queries).toHaveLength(0)
-    administrator = false
+    internalMember = false
     expect((await request({ hql: 'AuditEvents' })).statusCode).toBe(403)
 })
 
@@ -97,10 +97,10 @@ test('timeline pages return only display rows; cursor batches skip counts and su
     expect(next.body.pagination).toEqual({ total: null, nextCursor: null })
 })
 
-test('timeline format retains validation and administrator authorization', async () => {
+test('timeline format retains validation and organization authorization', async () => {
     expect((await request({ format: 'unknown' })).statusCode).toBe(400)
     expect((await request({ format: 'timeline', cursor: 'invalid' })).statusCode).toBe(400)
-    administrator = false
+    internalMember = false
     expect((await request({ format: 'timeline' })).statusCode).toBe(403)
     expect(queries).toHaveLength(0)
 })
@@ -118,7 +118,7 @@ test('helpdesk loads one bounded batch with acknowledgment and identity data, wi
     expect(queries[0].values).toEqual([201, 0])
     queries.length = 0
     expect((await request({ format: 'helpdesk', hql: 'AuditEvents' })).statusCode).toBe(400)
-    administrator = false
+    internalMember = false
     expect((await request({ format: 'helpdesk' })).statusCode).toBe(403)
     expect(queries).toHaveLength(0)
 })

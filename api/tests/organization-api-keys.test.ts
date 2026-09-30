@@ -153,7 +153,6 @@ async function fakeRun(sql: string, params: unknown[] = []) {
             ).slice(0, 1),
         }
     }
-    if (query.includes('FROM roles r') && query.includes('JOIN user_roles')) return { rows: [] }
     if (query.startsWith('UPDATE api_keys') && query.includes('last_used_at = NOW()')) return { rows: [], rowCount: 1 }
     throw new Error(`Unhandled SQL in organization API key test: ${query}`)
 }

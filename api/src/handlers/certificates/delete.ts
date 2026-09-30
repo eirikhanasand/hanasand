@@ -1,11 +1,11 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 
 export default async function deleteCertificate(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
-    const { valid: validRole } = await hasRole(req, res, 'user_admin')
+    const { valid: validRole } = await hasHanasandInternalRouteAccess(req)
     if (!valid || !validRole) {
         return res.status(401).send({ error: 'Unauthorized.' })
     }

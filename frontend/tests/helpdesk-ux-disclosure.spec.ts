@@ -79,15 +79,12 @@ test('helpdesk renders search first with filters and support actions collapsed',
         { name: 'name', value: 'Render Proof', url: origin },
         { name: 'id', value: 'dashboard-render-proof-user', url: origin },
         { name: 'access_token', value: 'local-dashboard-render-proof-token', url: origin },
-        { name: 'roles', value: encodeURIComponent(JSON.stringify(['system_admin'])), url: origin },
         { name: 'name', value: 'Render Proof', domain: 'localhost', path: '/' },
         { name: 'id', value: 'dashboard-render-proof-user', domain: 'localhost', path: '/' },
         { name: 'access_token', value: 'local-dashboard-render-proof-token', domain: 'localhost', path: '/' },
-        { name: 'roles', value: encodeURIComponent(JSON.stringify(['system_admin'])), domain: 'localhost', path: '/' },
         { name: 'name', value: 'Render Proof', domain: '127.0.0.1', path: '/' },
         { name: 'id', value: 'dashboard-render-proof-user', domain: '127.0.0.1', path: '/' },
         { name: 'access_token', value: 'local-dashboard-render-proof-token', domain: '127.0.0.1', path: '/' },
-        { name: 'roles', value: encodeURIComponent(JSON.stringify(['system_admin'])), domain: '127.0.0.1', path: '/' },
     ])
 
     await page.goto('/system/impersonation', { waitUntil: 'domcontentloaded' })
@@ -127,15 +124,12 @@ test('start session CTA opens the support panel on the scoped session flow', asy
         { name: 'name', value: 'Render Proof', url: origin },
         { name: 'id', value: 'dashboard-render-proof-user', url: origin },
         { name: 'access_token', value: 'local-dashboard-render-proof-token', url: origin },
-        { name: 'roles', value: encodeURIComponent(JSON.stringify(['system_admin'])), url: origin },
         { name: 'name', value: 'Render Proof', domain: 'localhost', path: '/' },
         { name: 'id', value: 'dashboard-render-proof-user', domain: 'localhost', path: '/' },
         { name: 'access_token', value: 'local-dashboard-render-proof-token', domain: 'localhost', path: '/' },
-        { name: 'roles', value: encodeURIComponent(JSON.stringify(['system_admin'])), domain: 'localhost', path: '/' },
         { name: 'name', value: 'Render Proof', domain: '127.0.0.1', path: '/' },
         { name: 'id', value: 'dashboard-render-proof-user', domain: '127.0.0.1', path: '/' },
         { name: 'access_token', value: 'local-dashboard-render-proof-token', domain: '127.0.0.1', path: '/' },
-        { name: 'roles', value: encodeURIComponent(JSON.stringify(['system_admin'])), domain: '127.0.0.1', path: '/' },
     ])
 
     await page.goto('/system/impersonation?support=impersonation#support-actions', { waitUntil: 'domcontentloaded' })

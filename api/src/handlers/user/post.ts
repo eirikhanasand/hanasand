@@ -5,10 +5,8 @@ import run, { withTransaction } from '#db'
 import { normalizeEmail, usernameError } from '#utils/auth/accountIdentity.ts'
 import { validatePassword } from '#utils/auth/password.ts'
 import login from '#utils/auth/login.ts'
-import { loadSQL } from '#utils/loadSQL.ts'
 import { ensureMailAccountForUser } from '#utils/mail/accounts.ts'
 import { normalizeUsername } from '#utils/auth/reservedUsernames.ts'
-import { recordSystemEvent } from '#utils/systemEvent.ts'
 
 type GetUserBodyProps = {
     id: string
@@ -51,7 +49,6 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
             const { status, ...response } = await requestSignupCode(email, ip, binding)
             return res.status(status).send(response)
         }
-        let assignedRoot = false
         const hashedPassword = await bcrypt.hash(password, 10)
         const response = await withTransaction(async query => {
             if (!await consumeSignupCode(query, String(challengeId), String(code || ''), binding)) return null
@@ -71,8 +68,6 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
             return res.status(400).send({ error: 'This username or email is already registered. Sign in to the existing account.' })
         }
 
-        const userQuery = await loadSQL('assignUserRole.sql')
-        await run(userQuery, [normalizedId])
         if (process.env.SKIP_MAIL_PROVISIONING !== '1') {
             await ensureMailAccountForUser(normalizedId, name, password).catch(error => {
                 if (isMailAdminConfigError(error)) {
@@ -84,42 +79,12 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
             })
         }
 
-        const rootResult = await run('SELECT * FROM root')
-        if (rootResult.rows.length <= 1) {
-            const rootQuery = await loadSQL('assignAdministratorRole.sql')
-            await run(rootQuery, [normalizedId])
-            assignedRoot = true
-            await recordSystemEvent(req, {
-                actionType: 'admin.account.created',
-                actorId: null,
-                source: 'auth',
-                targetType: 'user',
-                targetId: normalizedId,
-                severity: 'warning',
-                context: { creationPath: 'first_user_root_bootstrap' },
-            })
-        }
-
-        const roleQuery = `
-            SELECT r.id, r.name, r.description, r.priority
-            FROM roles r
-            JOIN user_roles ur ON ur.role_id = r.id
-            WHERE ur.user_id = $1
-            ORDER BY r.priority ASC, r.id ASC
-        `
-        const roleResponse = await run(roleQuery, [normalizedId])
-        const roles = roleResponse.rows
-
         const session = await login({ id: normalizedId, ip, userAgent })
         if (!session) {
-            const base = { ...user, message: 'User created', roles, error: 'Unable to login. Please try again later.' }
-            const data = assignedRoot ? { ...base, assignedRoot } : base
-            return res.status(206).send(data)
+            return res.status(206).send({ ...user, message: 'User created', error: 'Unable to login. Please try again later.' })
         }
 
-        const base = { ...user, message: 'User created', roles, token: session.token, expires_at: session.expires_at }
-        const data = assignedRoot ? { ...base, assignedRoot } : base
-        return res.status(201).send(data)
+        return res.status(201).send({ ...user, message: 'User created', token: session.token, expires_at: session.expires_at })
     } catch (err) {
         const error = err as unknown as Error & { code: string }
         if (error.code === '23505') {

@@ -10,6 +10,7 @@ const dbUser = process.env.DB_USER || 'hanasand'
 const dbPassword = process.env.DB_PASSWORD
 const runLive = process.env.RUN_ADMIN_SUPPORT_LIVE_SMOKE === '1'
 const keepData = process.env.KEEP_ADMIN_SUPPORT_SMOKE_DATA === '1'
+const hanasandOrganizationId = '3e735e7b-4d7f-444d-9806-231fa26cfcec'
 const { Pool } = pg
 
 if (!runLive || !dbPassword) {
@@ -109,15 +110,10 @@ async function seed() {
     await signup(adminOneId, 'Admin Support Smoke Requester')
     await signup(adminTwoId, 'Admin Support Smoke Approver')
     await pool.query(`
-        INSERT INTO roles (id, name, description, priority, created_by)
-        VALUES ('administrator', 'Administrator', 'Full administrative access', 0, $1)
-        ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name
-    `, [adminOneId])
-    await pool.query(`
-        INSERT INTO user_roles (user_id, role_id, assigned_by)
-        VALUES ($1, 'administrator', $1), ($2, 'administrator', $1)
-        ON CONFLICT (user_id, role_id) DO NOTHING
-    `, [adminOneId, adminTwoId])
+        INSERT INTO organization_members (organization_id, user_id, role, status, invited_by)
+        VALUES ($1, $2, 'editor', 'active', $2), ($1, $3, 'editor', 'active', $2)
+        ON CONFLICT (organization_id, user_id) DO UPDATE SET role = 'editor', status = 'active'
+    `, [hanasandOrganizationId, adminOneId, adminTwoId])
     await pool.query(`
         INSERT INTO organizations (id, name, slug, created_by)
         VALUES ($1, $2, $3, $4)
@@ -133,7 +129,6 @@ async function cleanup() {
     await pool.query('DELETE FROM organization_invites WHERE organization_id = $1', [orgId]).catch(() => {})
     await pool.query('DELETE FROM organization_members WHERE organization_id = $1 OR user_id = ANY($2::text[])', [orgId, [adminOneId, adminTwoId]]).catch(() => {})
     await pool.query('DELETE FROM organizations WHERE id = $1', [orgId]).catch(() => {})
-    await pool.query('DELETE FROM user_roles WHERE user_id = ANY($1::text[])', [[adminOneId, adminTwoId]]).catch(() => {})
     await pool.query('DELETE FROM tokens WHERE id = ANY($1::text[])', [[adminOneId, adminTwoId]]).catch(() => {})
     await pool.query('DELETE FROM users WHERE id = ANY($1::text[])', [[adminOneId, adminTwoId]]).catch(() => {})
 }

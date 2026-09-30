@@ -4,7 +4,7 @@ let replica = true
 let writes = 0
 const timestamp = new Date(Date.now() - 3600_000).toISOString()
 mock.module('#db', () => ({ default: async (sql: string) => {
-    if (sql.includes('FROM tokens')) return { rows: [{ token_id: 1, id: 'probe', token: 'test-token', user_agent: 'Browser', timestamp, database_read_only: replica, session_user: { id: 'probe', active: true }, session_roles: [] }] }
+    if (sql.includes('FROM tokens')) return { rows: [{ token_id: 1, id: 'probe', token: 'test-token', user_agent: 'Browser', timestamp, database_read_only: replica, session_user: { id: 'probe', active: true } }] }
     if (sql.includes('UPDATE tokens')) { writes++; return { rows: [] } }
     throw new Error('Unexpected query')
 } }))
@@ -12,7 +12,7 @@ const { validateSession } = await import('../src/utils/auth/session.ts')
 const recovered = await validateSession({ id: 'probe', token: 'test-token' })
 assert(recovered)
 assert.equal(recovered.user.id, 'probe')
-assert.deepEqual(recovered.roles, [])
+assert.equal(Object.hasOwn(recovered, 'roles'), false)
 assert.equal(writes, 0, 'Replica sessions must work before monitoring notices the switch')
 assert.equal(Date.parse(recovered.refreshed.expires_at), Date.parse(timestamp) + 24 * 3600_000)
 replica = false

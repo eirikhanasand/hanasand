@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { randomUUID } from 'node:crypto'
 import run, { withTransaction } from '#db'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import { roleCanEditOrganization } from '#utils/organizationRoles.ts'
 import { reprocessableRule } from '#utils/events/ruleReprocess.ts'
 import { organizationAccess, ruleSlug } from './events.ts'
@@ -13,8 +13,8 @@ type Request = FastifyRequest<{ Params: { id: string }, Querystring: { organizat
 async function access(req: Request, res: FastifyReply) {
     const scope = await organizationAccess(req, res)
     if (!scope) return
-    if (!roleCanEditOrganization(scope.role) || !(await hasRole(req, res, 'system_admin')).valid) {
-        res.status(403).send({ error: 'System administrator and organization editor access are required.' })
+    if (!roleCanEditOrganization(scope.role) || !(await hasHanasandInternalRouteAccess(req)).valid) {
+        res.status(403).send({ error: 'Active Hanasand organization owner or editor access is required.' })
         return
     }
     return scope

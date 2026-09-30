@@ -8,9 +8,9 @@ export type ThesisRenderResult =
     | { state: 'loaded', document: ThesisDocument, canEdit: boolean }
 
 export async function canEditThesis(token?: string, id?: string) {
-    if (!token || id !== 'eirikhanasand') return false
+    if (!token || !id) return false
     const auth = await tokenIsValid(token, id)
-    return auth.state === 'valid'
+    return auth.state === 'valid' && auth.canEditInternalPages === true
 }
 
 export function validThesis(value: unknown): value is ThesisDocument {

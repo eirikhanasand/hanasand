@@ -17,7 +17,6 @@ test.describe('rate-limit owner picker', () => {
             name: adminName,
             token: adminToken,
             expires_at: adminExpiresAt,
-            roles: [{ id: 'administrator' }, { id: 'system_admin' }],
         }, baseURL || 'http://127.0.0.1:3000')
 
         await mockClientRateLimitRequests(page, submittedPayloads)
@@ -67,7 +66,6 @@ test.describe('rate-limit owner picker', () => {
             name: adminName,
             token: adminToken,
             expires_at: adminExpiresAt,
-            roles: [{ id: 'administrator' }, { id: 'system_admin' }],
         }, baseURL || 'http://127.0.0.1:3000')
 
         await page.route('**/api/users', async (route) => {
@@ -165,7 +163,6 @@ async function authenticateContext(context: BrowserContext, auth: {
     name: string
     token: string
     expires_at: string
-    roles?: Array<{ id: string } | string>
 }, baseURL: string) {
     const expires = Math.floor(new Date(auth.expires_at).getTime() / 1000)
     const cookieUrl = new URL(baseURL).origin
@@ -175,6 +172,5 @@ async function authenticateContext(context: BrowserContext, auth: {
         { name: 'id', value: encodeURIComponent(auth.id), url: cookieUrl, expires, httpOnly: false, secure, sameSite: 'Lax' },
         { name: 'name', value: encodeURIComponent(auth.name), url: cookieUrl, expires, httpOnly: false, secure, sameSite: 'Lax' },
         { name: 'access_token', value: encodeURIComponent(auth.token), url: cookieUrl, expires, httpOnly: false, secure, sameSite: 'Lax' },
-        { name: 'roles', value: encodeURIComponent(JSON.stringify(auth.roles || [])), url: cookieUrl, expires, httpOnly: false, secure, sameSite: 'Lax' },
     ])
 }

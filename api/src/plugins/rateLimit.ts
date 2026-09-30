@@ -5,6 +5,7 @@ import fp from 'fastify-plugin'
 import type { FastifyInstance, FastifyReply, FastifyRequest, RouteOptions } from 'fastify'
 import { matchApiKeyScope, organizationPublicApiScopes, validateApiKey } from '#utils/auth/apiKeys.ts'
 import { validateSession } from '#utils/auth/session.ts'
+import { hasHanasandInternalPageAccess, HANASAND_ORGANIZATION_ID } from '#utils/auth/organizationPageAccess.ts'
 import {
     consumeSharedRateLimitBucket,
     consumeSharedRateLimitPair,
@@ -244,7 +245,7 @@ export async function resolveRateLimitActor(
         const apiKey = await validate(apiKeySecret)
         if (apiKey) {
             return {
-                scope: apiKey.apiKey.tier === 'internal' && apiKey.roles.some((role) => isInternalRole(role.id, role.name)) ? 'internal' : 'authenticated',
+                scope: apiKey.apiKey.tier === 'internal' && apiKey.organizationId === HANASAND_ORGANIZATION_ID ? 'internal' : 'authenticated',
                 identifier: `api_key:${apiKey.apiKey.id}`,
                 apiKey,
             }
@@ -265,7 +266,7 @@ export async function resolveRateLimitActor(
             ;(req as FastifyRequest & { rateLimitSession?: typeof session }).rateLimitSession = session
 
             return {
-                scope: session.roles.some((role) => isInternalRole(role.id, role.name)) ? 'internal' : 'authenticated',
+                scope: await hasHanasandInternalPageAccess(session.user.id) ? 'internal' : 'authenticated',
                 identifier: `user:${session.user.id}`,
             }
         }
@@ -277,13 +278,6 @@ export async function resolveRateLimitActor(
         scope: 'anonymous',
         identifier: `ip:${ip}`,
     }
-}
-
-function isInternalRole(roleId: string, roleName: string) {
-    const normalizedId = roleId.toLowerCase()
-    const normalizedName = roleName.toLowerCase()
-    return ['admin', 'administrator', 'system_admin'].includes(normalizedId)
-        || ['admin', 'administrator', 'system administrator'].includes(normalizedName)
 }
 
 function normalizeRequestPath(req: FastifyRequest) {

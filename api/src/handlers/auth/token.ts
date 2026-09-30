@@ -45,7 +45,6 @@ export default async function tokenHandler(req: FastifyRequest, res: FastifyRepl
         }
         return res.send({
             ...session.user,
-            roles: session.roles,
             token: session.refreshed.token,
             expires_at: session.refreshed.expires_at,
         })

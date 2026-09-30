@@ -167,7 +167,6 @@ const localAuthFixture = {
     id: 'dashboard-render-proof-user',
     name: 'Dashboard Render Proof',
     token: 'local-dashboard-render-proof-token',
-    roles: [{ id: 'admin' }, { id: 'system_admin' }],
 }
 
 function parseArgs(argv) {
@@ -586,7 +585,6 @@ async function run() {
                         { name: 'id', value: encodeURIComponent(localAuthFixture.id), url: cookieUrl(options.baseUrl), httpOnly: false, secure: false, sameSite: 'Lax' },
                         { name: 'name', value: encodeURIComponent(localAuthFixture.name), url: cookieUrl(options.baseUrl), httpOnly: false, secure: false, sameSite: 'Lax' },
                         { name: 'access_token', value: encodeURIComponent(localAuthFixture.token), url: cookieUrl(options.baseUrl), httpOnly: false, secure: false, sameSite: 'Lax' },
-                        { name: 'roles', value: encodeURIComponent(JSON.stringify(localAuthFixture.roles)), url: cookieUrl(options.baseUrl), httpOnly: false, secure: false, sameSite: 'Lax' },
                         { name: 'email', value: encodeURIComponent('dashboard-render-proof@hanasand.local'), url: cookieUrl(options.baseUrl), httpOnly: false, secure: false, sameSite: 'Lax' },
                         { name: 'theme', value: colorScheme, url: cookieUrl(options.baseUrl), httpOnly: false, secure: false, sameSite: 'Lax' },
                     ])

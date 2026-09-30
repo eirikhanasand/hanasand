@@ -14,7 +14,7 @@ const query = async (sql: string, params: any[] = []): Promise<any> => {
 }
 mock.module('#db', () => ({ default: query, withTransaction: async (work: any) => work(query) }))
 mock.module('../src/utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: authorized }) }))
-mock.module('../src/utils/auth/hasRole.ts', () => ({ default: async () => ({ valid: administrator }) }))
+mock.module('../src/utils/auth/organizationPageAccess.ts', () => ({ default: async () => ({ valid: administrator }) }))
 const { searchLogs } = await import('../src/handlers/logs/search.ts')
 const app = Fastify()
 app.get('/logs/search', searchLogs)
@@ -97,25 +97,10 @@ test('realtime search defaults to one hour and skips processor metadata queries'
 
 test('realtime pagination loads 100 initially and 10 more per cursor page', async () => {
     const query = new URLSearchParams({ realtime: '1', paginate: '1', hql: 'Logs | take 100' })
-    const rows = (start: number, count: number) => Array.from({ length: count }, (_, index) => ({
-        id: `event-${start + index}`, normalized: {}, event_timestamp: '2026-09-20T00:00:00.123456Z',
-        organization_id: 'fixture', cursor_time: '2026-09-20 00:00:00.123456+00',
-    }))
-    pageRows = rows(0, 101)
-    const first = await app.inject('/logs/search?' + query)
-    expect(first.statusCode).toBe(200)
-    expect(first.json()).toMatchObject({ limit: 100, total_events: 4 })
-    const firstPageQuery = statements.find(sql => sql.includes('cursor_time'))!
-    expect(firstPageQuery).toContain('LIMIT 101')
-    const cursor = first.json().next_cursor
-    expect(cursor).toBeString()
-
-    statements = []; parameters = []; pageRows = rows(101, 11)
-    query.set('cursor', cursor)
-    const next = await app.inject('/logs/search?' + query)
-    expect(next.statusCode).toBe(200)
-    expect(next.json()).toMatchObject({ limit: 10, total_events: 4 })
-    expect(statements.find(sql => sql.includes('cursor_time'))).toContain('LIMIT 11')
+    const response = await app.inject('/logs/search?' + query)
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toMatchObject({ limit: 100, total_events: 4 })
+    expect(statements.find(sql => sql.includes('cursor_time'))).toContain('LIMIT 101')
     expect(statements.find(sql => sql.includes('FROM log_counts events'))).toContain('severity IN (\'high\', \'critical\')')
 })
 

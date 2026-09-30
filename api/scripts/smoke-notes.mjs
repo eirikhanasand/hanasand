@@ -82,7 +82,6 @@ async function login(id, userPassword) {
 async function cleanup() {
     for (const id of [runId, otherUserId]) {
         await pool.query('DELETE FROM notes WHERE owner_id = $1', [id]).catch(() => {})
-        await pool.query('DELETE FROM user_roles WHERE user_id = $1', [id]).catch(() => {})
         await pool.query('DELETE FROM tokens WHERE id = $1', [id]).catch(() => {})
         await pool.query('DELETE FROM users WHERE id = $1', [id]).catch(() => {})
     }

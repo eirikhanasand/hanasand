@@ -7,7 +7,7 @@ test('pending support is shown in expanded and compact dashboard sidebars', asyn
         { name: 'access_token', value: 'local-test', url: baseURL! },
     ])
     await page.route('**/api/backend/support/tickets', route => route.fulfill({
-        json: { role: 'support', tickets: [{ id: 'ticket-1', status: 'open' }] },
+        json: { isSupport: true, tickets: [{ id: 'ticket-1', status: 'open' }] },
     }))
 
     await page.goto('/support')

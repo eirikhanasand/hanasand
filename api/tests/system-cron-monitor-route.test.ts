@@ -5,7 +5,7 @@ let authenticated = false
 let administrator = false
 let checks = 0
 mock.module('../src/utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: authenticated }) }))
-mock.module('../src/utils/auth/hasRole.ts', () => ({ default: async () => ({ valid: administrator }) }))
+mock.module('../src/utils/auth/organizationPageAccess.ts', () => ({ default: async () => ({ valid: administrator }) }))
 mock.module('../src/utils/systemCronMonitor.ts', () => ({ monitorSystemCronJobs: async () => { checks++; return { jobs: [{ id: 'blocked-job', status: 'blocked' }] } } }))
 const { postSystemCronMonitor } = await import('../src/handlers/systemCron.ts')
 

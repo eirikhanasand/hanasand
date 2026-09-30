@@ -74,17 +74,6 @@ await queryOnce(`
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE INDEX idx_api_rate_limit_buckets_updated_at ON api_rate_limit_buckets(updated_at);
-    CREATE TABLE roles (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        description TEXT NOT NULL DEFAULT '',
-        priority INT NOT NULL DEFAULT 1000
-    );
-    CREATE TABLE user_roles (
-        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        role_id TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
-        PRIMARY KEY (user_id, role_id)
-    );
     CREATE TABLE organizations (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,

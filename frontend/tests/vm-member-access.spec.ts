@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 test('members can create VMs from System and VMs without requesting host telemetry', async ({ context, page, baseURL }) => {
     test.skip(!process.env.VM_FIXTURE_API, 'Requires the VM fixture API')
     await context.setExtraHTTPHeaders({ 'x-hanasand-render-proof-auth': 'local-dashboard-render-proof' })
-    await context.addCookies(Object.entries({ id: 'dashboard-render-proof-user', access_token: 'local-dashboard-render-proof-token', roles: '[]' }).map(([name, value]) => ({ name, value, url: baseURL! })))
+    await context.addCookies(Object.entries({ id: 'dashboard-render-proof-user', access_token: 'local-dashboard-render-proof-token' }).map(([name, value]) => ({ name, value, url: baseURL! })))
     const rows = [{ name: 'my-machine', owner: 'dashboard-render-proof-user', status: 'running', access_users: [] }]
     await page.route('**/api/backend/vms/**', route => route.fulfill({ json: rows }))
     await page.route('**/api/vm', async route => {
@@ -23,8 +23,7 @@ test('members can create VMs from System and VMs without requesting host telemet
     await page.getByRole('button', { name: 'Create VM', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'new-machine', exact: true })).toBeVisible()
     await expect(page.getByRole('status').filter({ hasText: 'Created VM' })).toContainText('Created VM new-machine.')
-    // A client-side role cookie cannot unlock server-rendered host data.
-    await context.addCookies([{ name: 'roles', value: encodeURIComponent(JSON.stringify(['system_admin'])), url: baseURL! }])
+    // Page membership does not grant access to host telemetry or VM operations.
     await page.goto('/system')
     await expect(page.getByRole('button', { name: 'Create VM', exact: true })).toBeVisible()
     await expect(page.locator('[data-system-summary-metrics]')).toHaveCount(0)
@@ -41,7 +40,7 @@ test('VM pages still require a signed-in session', async ({ page }) => {
 test('empty accounts only see Infrastructure Overview until their first VM is created', async ({ context, page, baseURL }) => {
     test.skip(!process.env.VM_FIXTURE_API, 'Requires the VM fixture API')
     await context.setExtraHTTPHeaders({ 'x-hanasand-render-proof-auth': 'local-dashboard-render-proof' })
-    await context.addCookies(Object.entries({ id: 'dashboard-render-proof-user', access_token: 'local-dashboard-render-proof-token', roles: '[]' }).map(([name, value]) => ({ name, value, url: baseURL! })))
+    await context.addCookies(Object.entries({ id: 'dashboard-render-proof-user', access_token: 'local-dashboard-render-proof-token' }).map(([name, value]) => ({ name, value, url: baseURL! })))
     const rows: Array<{ name: string, owner: string, status: string, access_users: string[] }> = []
     await page.route('**/api/backend/vms/**', route => route.fulfill({ json: rows }))
     await page.route('**/api/vm', async route => {

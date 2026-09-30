@@ -91,7 +91,6 @@ export async function POST(req: NextRequest) {
         id: data.id,
         avatar: data.avatar ?? null,
         expires_at: data.expires_at ?? null,
-        roles: data.roles ?? [],
     })
     setAuthCookies(req, response, data)
     return response

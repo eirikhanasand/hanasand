@@ -6,10 +6,10 @@ type AuthPayload = {
     avatar?: string | null
     token?: string
     expires_at?: string | null
-    roles?: unknown[]
 }
 
-const authCookieNames = ['name', 'id', 'avatar', 'access_token', 'roles', 'session_expires_at', 'auth_checked_at'] as const
+const authCookieNames = ['name', 'id', 'avatar', 'access_token', 'session_expires_at', 'auth_checked_at'] as const
+const legacyAuthCookieNames = ['roles'] as const
 
 export function setAuthCookies(req: NextRequest, response: NextResponse, data: AuthPayload) {
     const expires = data.expires_at ? new Date(data.expires_at) : undefined
@@ -31,7 +31,10 @@ export function setAuthCookies(req: NextRequest, response: NextResponse, data: A
     if (data.token) {
         setAuthCookie(response, 'access_token', data.token, cookieOptions, sharedDomain)
     }
-    setAuthCookie(response, 'roles', JSON.stringify(data.roles ?? []), cookieOptions, sharedDomain)
+    for (const cookie of legacyAuthCookieNames) {
+        response.cookies.delete(cookie)
+        if (sharedDomain) response.cookies.set(cookie, '', { ...cookieOptions, expires: new Date(0), domain: sharedDomain })
+    }
     if (data.expires_at) {
         setAuthCookie(response, 'session_expires_at', data.expires_at, cookieOptions, sharedDomain)
     }
@@ -76,7 +79,7 @@ function setAuthCookie(
 
 function expireSharedDomainAuthCookies(req: NextRequest, response: NextResponse) {
     const secure = shouldUseSecureCookies(req) ? '; Secure' : ''
-    for (const cookie of authCookieNames) {
+    for (const cookie of [...authCookieNames, ...legacyAuthCookieNames]) {
         response.headers.append('Set-Cookie', `${cookie}=; Path=/; Domain=.hanasand.com; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax${secure}`)
     }
 }

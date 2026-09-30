@@ -32,7 +32,7 @@ export default function PrivacyPage() {
                 },
                 {
                     title: '4. Account, authentication, and console data',
-                    body: 'Hanasand processes account identifiers, role assignments, session state, access tokens, API keys, audit events, and console activity to authenticate users, enforce permissions, maintain security, support administrators, and operate protected product pages.',
+                    body: 'Hanasand processes account identifiers, organization memberships, session state, access tokens, API keys, audit events, and console activity to authenticate users, enforce permissions, maintain security, support organization owners, and operate protected product pages.',
                 },
                 {
                     title: '5. API, webhook, and integration data',
@@ -57,7 +57,7 @@ export default function PrivacyPage() {
                 },
                 {
                     title: '9. Customer control and administrator responsibility',
-                    body: 'Customer administrators control users, roles, watchlists, monitored terms, integrations, and delivery destinations. Customers are responsible for deciding what information to submit, who may access it, and which downstream systems receive alert or webhook content.',
+                    body: 'Organization owners control membership, watchlists, monitored terms, integrations, and delivery destinations. Customers are responsible for deciding what information to submit, who may access it, and which downstream systems receive alert or webhook content.',
                 },
                 {
                     title: '10. Sharing and subprocessors',

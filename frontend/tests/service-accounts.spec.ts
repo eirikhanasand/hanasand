@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 test('service account creation and mandatory deletion confirmation', async ({ browser, baseURL }) => {
     assert(baseURL)
     const context = await browser.newContext({viewport:{width:1280,height:1000}, extraHTTPHeaders:{'x-hanasand-render-proof-auth':'local-dashboard-render-proof'}})
-    await context.addCookies([{name:'id',value:'dashboard-render-proof-user',url:baseURL},{name:'access_token',value:'local-dashboard-render-proof-token',url:baseURL},{name:'roles',value:JSON.stringify([{id:'system_admin',name:'System administrator',priority:0}]),url:baseURL}])
+    await context.addCookies([{name:'id',value:'dashboard-render-proof-user',url:baseURL},{name:'access_token',value:'local-dashboard-render-proof-token',url:baseURL}])
     let accounts=[{id:'svc_fixture',name:'Existing monitor',active:true,created_at:'2026-09-01T12:00:00Z',keys:[{lastUsedAt:'2026-09-12T12:00:00Z',scopes:[{method:'GET',route:'/api/service-accounts/self'}]}]}]
     let deletes=0, creates=0
     const endpoints=[{method:'GET',route:'/api/service-accounts/self',label:'Check authentication'},{method:'GET',route:'/api/db',label:'Read database overview'}]
@@ -56,7 +56,7 @@ test('service account creation and mandatory deletion confirmation', async ({ br
 test('service account search, sorting, dialog keyboard controls and failed creation', async ({ browser, baseURL }) => {
     assert(baseURL)
     const context = await browser.newContext({viewport:{width:1280,height:900},extraHTTPHeaders:{'x-hanasand-render-proof-auth':'local-dashboard-render-proof'}})
-    await context.addCookies([{name:'id',value:'dashboard-render-proof-user',url:baseURL},{name:'access_token',value:'local-dashboard-render-proof-token',url:baseURL},{name:'roles',value:JSON.stringify([{id:'system_admin',name:'System administrator',priority:0}]),url:baseURL}])
+    await context.addCookies([{name:'id',value:'dashboard-render-proof-user',url:baseURL},{name:'access_token',value:'local-dashboard-render-proof-token',url:baseURL}])
     const endpoints = [{method:'GET',route:'/api/db',label:'Read database'},{method:'POST',route:'/api/db',label:'Write database'}]
     const accounts = [
         {id:'svc_zulu',name:'Zulu monitor',active:true,created_at:null,keys:[]},
@@ -127,7 +127,7 @@ test('service account search, sorting, dialog keyboard controls and failed creat
 test('names and descriptions persist, editing is beside delete, and long text opens in an accessible popup', async ({ browser, baseURL }) => {
     assert(baseURL)
     const context = await browser.newContext({viewport:{width:1280,height:900},extraHTTPHeaders:{'x-hanasand-render-proof-auth':'local-dashboard-render-proof'}})
-    await context.addCookies([{name:'id',value:'dashboard-render-proof-user',url:baseURL},{name:'access_token',value:'local-dashboard-render-proof-token',url:baseURL},{name:'roles',value:JSON.stringify([{id:'system_admin',name:'System administrator',priority:0}]),url:baseURL}])
+    await context.addCookies([{name:'id',value:'dashboard-render-proof-user',url:baseURL},{name:'access_token',value:'local-dashboard-render-proof-token',url:baseURL}])
     const endpoints = [{method:'GET',route:'/api/db',label:'Read database'}]
     const accounts = [{id:'svc_existing',name:'Existing monitor',description:'Checks authentication',active:true,created_at:null,keys:[]}]
     const longDescription = 'Checks production database health and correlates backup results.\nAlerts the infrastructure team when replication or scheduled verification fails. <script>plain text only</script>'

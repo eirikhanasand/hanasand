@@ -1,6 +1,6 @@
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
 export function requestedContentOrganization(req: FastifyRequest): string | null {
@@ -32,7 +32,7 @@ export async function articleOwnership(id: string) {
 export async function requireEditorialWrite(req: FastifyRequest, res: FastifyReply, organizationId: string | null) {
     if (organizationId) return requireContentOrganization(req, res, organizationId, true)
     const { valid } = await tokenWrapper(req, res)
-    if (valid && (await hasRole(req, res, 'content_admin')).valid) return true
+    if (valid && (await hasHanasandInternalRouteAccess(req)).valid) return true
     if (!res.sent) res.status(401).send({ error: 'Unauthorized.' })
     return false
 }

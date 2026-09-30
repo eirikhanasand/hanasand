@@ -305,7 +305,7 @@ export default function SystemDashboard({
             }
             socket.onclose = event => {
                 if (disposed) return
-                setSystemUnavailableReason(event.code === 1008 ? 'Sign in with administrator access to view live telemetry.' : 'System telemetry is reconnecting.')
+                setSystemUnavailableReason(event.code === 1008 ? 'Sign in as a Hanasand organization owner or editor to view live telemetry.' : 'System telemetry is reconnecting.')
                 if (event.code !== 1008) retry = setTimeout(connect, 2000)
             }
         }

@@ -1,8 +1,8 @@
 import { canManageOrganizations } from '@/utils/organizations/management'
+import tokenIsValid from '@/utils/proxy/tokenIsValid'
 import WorkspaceProvider from '@/components/organizations/workspaceProvider'
 import { readWorkspace, WORKSPACE_COOKIE } from '@/utils/organizations/workspace'
 import { NAVIGATION_COOKIE, readNavigationPreferences } from '@/utils/layout/navigationPreferences'
-import parseCookie from '@/utils/cookies/parseCookie'
 import DashboardSidebar from '@/components/dashboard/dashboardSidebar'
 import ImpersonationBanner from '@/components/impersonation/impersonationBanner'
 import { ReactNode, Suspense, type ComponentProps } from 'react'
@@ -23,19 +23,9 @@ export default async function layout({ children }: { children: ReactNode }) {
     const theme = themeCookie === 'light' ? 'light' : 'dark'
     const path = Headers.get('x-current-path') || ''
     const id = Cookies.get('id')?.value || ''
-    const roles = parseCookie<Array<Role | string>>(Cookies.get('roles')?.value, [])
-    const roleIds = roles.flatMap(role => {
-        if (typeof role === 'string') return [role]
-        const legacy = role as Role & { role_id?: string, role?: string }
-        return [legacy.id, legacy.role_id, legacy.role].filter(Boolean)
-    })
-    const isAdmin = roleIds.includes('administrator') || roleIds.includes('admin')
-    const canManageSystem = isAdmin || roleIds.includes('system_admin')
-    const canManageContent = isAdmin || roleIds.includes('content_admin')
-    const canReviewIntel = canManageSystem || roleIds.includes('analyst') || roleIds.includes('owner')
     const initialMode = Cookies.get('dashboard_view_mode')?.value === 'compact' ? 'compact' : 'normal'
     const initialPreferences = readNavigationPreferences(Cookies.get(NAVIGATION_COOKIE)?.value, id)
-    const sidebarProps = { initialPreferences, initialMode, id, isAdmin, canManageSystem, canManageContent, canReviewIntel } satisfies ComponentProps<typeof DashboardSidebar>
+    const sidebarProps = { initialPreferences, initialMode, id } satisfies ComponentProps<typeof DashboardSidebar>
     const impersonatingId = Cookies.get('impersonating_id')?.value || Headers.get('x-impersonating-id') || ''
     const impersonatingName = Cookies.get('impersonating_name')?.value || Headers.get('x-impersonating-name') || ''
 
@@ -62,5 +52,17 @@ export default async function layout({ children }: { children: ReactNode }) {
 }
 
 async function AuthorizedSidebar(props: ComponentProps<typeof DashboardSidebar>) {
-    return <DashboardSidebar {...props} canManageOrganizations={await canManageOrganizations()} />
+    const [manageOrganizations, internalPageAccess] = await Promise.all([
+        canManageOrganizations(),
+        canViewInternalPages(),
+    ])
+    return <DashboardSidebar {...props} canManageOrganizations={manageOrganizations} canViewInternalPages={internalPageAccess} />
+}
+
+async function canViewInternalPages() {
+    const store = await cookies()
+    const token = store.get('access_token')?.value
+    const id = store.get('id')?.value
+    if (!token || !id) return false
+    return (await tokenIsValid(token, id, store.get('impersonation_token')?.value)).canViewInternalPages === true
 }

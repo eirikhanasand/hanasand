@@ -3,7 +3,7 @@ import { withTransaction } from '#db'
 import { cachedLogQuery } from '#utils/logs/cache.ts'
 import { rollupLogCountsSql } from '#utils/logs/counts.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 
 type Severity = 'low' | 'medium' | 'high' | 'critical'
 type ServiceCount = { service: string, count: number }
@@ -33,7 +33,7 @@ export function startMostActiveServicesRefresh() {
 export async function getMostActiveServices(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
     if (!valid) return res.status(401).send({ error: 'Unauthorized.' })
-    if (!(await hasRole(req, res, 'system_admin')).valid) return res.status(403).send({ error: 'Missing system_admin role.' })
+    if (!(await hasHanasandInternalRouteAccess(req)).valid) return res.status(403).send({ error: 'Active Hanasand organization owner or editor access is required.' })
 
     try {
         return res.send(await loadCachedMostActiveServices())

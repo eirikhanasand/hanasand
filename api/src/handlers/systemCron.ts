@@ -1,36 +1,36 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import { monitorSystemCronJobs } from '#utils/systemCronMonitor.ts'
 import { hasUnifiedScheduledJobsCache, listUnifiedScheduledJobs, updateManagedCronJob, type ManagedCronUpdate } from '#utils/systemCron.ts'
 
-async function requireSystemAdmin(req: FastifyRequest, res: FastifyReply) {
+async function requireHanasandInternalAccess(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
     if (!valid) {
         res.status(401).send({ error: 'Unauthorized.' })
         return false
     }
-    const role = await hasRole(req, res, 'system_admin')
-    if (!role.valid) {
-        res.status(403).send({ error: 'System administrator access is required.' })
+    const internalAccess = await hasHanasandInternalRouteAccess(req)
+    if (!internalAccess.valid) {
+        res.status(403).send({ error: 'Active Hanasand organization owner or editor access is required.' })
         return false
     }
     return true
 }
 
 export async function getSystemCronJobs(req: FastifyRequest, res: FastifyReply) {
-    if (!await requireSystemAdmin(req, res)) return
+    if (!await requireHanasandInternalAccess(req, res)) return
     const jobs = await listUnifiedScheduledJobs({ fast: true })
     return res.send({ jobs, ready: hasUnifiedScheduledJobsCache() })
 }
 
 export async function postSystemCronMonitor(req: FastifyRequest, res: FastifyReply) {
-    if (!await requireSystemAdmin(req, res)) return
+    if (!await requireHanasandInternalAccess(req, res)) return
     return res.send(await monitorSystemCronJobs())
 }
 
 export async function putSystemCronJob(req: FastifyRequest<{ Params: { id: string }, Body: ManagedCronUpdate }>, res: FastifyReply) {
-    if (!await requireSystemAdmin(req, res)) return
+    if (!await requireHanasandInternalAccess(req, res)) return
     try {
         const job = await updateManagedCronJob(req.params.id, req.body || {})
         return res.send({ job, jobs: await listUnifiedScheduledJobs() })

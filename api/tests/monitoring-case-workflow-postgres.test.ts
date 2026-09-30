@@ -2,7 +2,7 @@ import { expect, mock, test } from 'bun:test'
 import Fastify from 'fastify'
 if (process.env.DB_HOST !== 'monitor-test-db') throw Error('Requires the disposable monitor-test-db database')
 mock.module('../src/utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: true, id: 'owner', authenticatedId: 'reviewer' }) }))
-mock.module('../src/utils/auth/hasRole.ts', () => ({ default: async () => ({ valid: true }) }))
+mock.module('../src/utils/auth/organizationPageAccess.ts', () => ({ default: async () => ({ valid: true }) }))
 const { queryOnce: query } = await import('../src/utils/db.ts')
 const { default: schema } = await import('../src/utils/db/monitoringIssuesSchema.ts')
 const { recordMonitoringOutcome } = await import('../src/utils/monitoringIssues.ts')

@@ -1,13 +1,13 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import { revokeAllTokens } from '#utils/auth/session.ts'
-import { recordSystemEvent, userHasAdministrativeRole } from '#utils/systemEvent.ts'
+import { recordSystemEvent, userHasHanasandInternalAccess } from '#utils/systemEvent.ts'
 
 export default async function deleteUser(req: FastifyRequest, res: FastifyReply) {
     const { valid, id: actorId } = await tokenWrapper(req, res)
-    const { valid: validRole } = await hasRole(req, res, 'user_admin')
+    const { valid: validRole } = await hasHanasandInternalRouteAccess(req)
     if (!valid || !validRole || !actorId) {
         return res.status(401).send({ error: 'Unauthorized.' })
     }
@@ -18,7 +18,7 @@ export default async function deleteUser(req: FastifyRequest, res: FastifyReply)
     }
 
     try {
-        const wasAdmin = await userHasAdministrativeRole(id)
+        const wasHanasandInternalMember = await userHasHanasandInternalAccess(id)
         const userResult = await run(`
             UPDATE users
             SET deletion_requested_at = NOW(),
@@ -40,10 +40,10 @@ export default async function deleteUser(req: FastifyRequest, res: FastifyReply)
             source: 'admin',
             targetType: 'user',
             targetId: id,
-            severity: wasAdmin ? 'critical' : 'warning',
-            context: { deletionMode: 'scheduled', administrativeAccount: wasAdmin, targetName: userResult.rows[0].name, targetId: id },
+            severity: wasHanasandInternalMember ? 'critical' : 'warning',
+            context: { deletionMode: 'scheduled', hanasandOrganizationMember: wasHanasandInternalMember, targetName: userResult.rows[0].name, targetId: id },
         })
-        if (wasAdmin) {
+        if (wasHanasandInternalMember) {
             await recordSystemEvent(req, {
                 actionType: 'admin.account.deleted',
                 actorId,

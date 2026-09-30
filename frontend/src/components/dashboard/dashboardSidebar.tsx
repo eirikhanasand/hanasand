@@ -89,11 +89,11 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
             try {
                 const response = await fetch('/api/backend/support/tickets', { cache: 'no-store', signal: controller.signal })
                 if (!response.ok) return
-                const payload = await response.json() as { role?: string; tickets?: Array<{ status?: string }> }
+                const payload = await response.json() as { isSupport?: boolean; tickets?: Array<{ status?: string }> }
                 if (!controller.signal.aborted) {
                     setSupportQueue({
                         userId: access.id,
-                        hasPending: payload.role === 'support' && payload.tickets?.some(ticket => ticket.status === 'open') === true,
+                        hasPending: payload.isSupport === true && payload.tickets?.some(ticket => ticket.status === 'open') === true,
                     })
                 }
             } catch { /* Keep the last known support queue state if the request fails. */ }
@@ -111,11 +111,11 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
         }
     }, [access.id, pathname])
     const hasHanasandOrganization = organizations.some(organization => organization.slug?.toLowerCase() === 'hanasand' && organization.lifecycleStatus === 'active')
-    const canViewInternalPages = access.isAdmin || access.canManageSystem || canViewHanasandInternalPages(organizations)
+    const canViewInternalPages = access.canViewInternalPages === true || canViewHanasandInternalPages(organizations)
     const sections = getDashboardNavigation({
         ...access,
         canViewInternalPages,
-        canManageOrganizations: access.canManageOrganizations || canViewInternalPages,
+        canManageOrganizations: access.canManageOrganizations,
         canReviewIntel: access.canReviewIntel || canViewInternalPages,
         hasVMs: hasVMs || canViewInternalPages,
         hasContentOrganization: Boolean(organizationId),

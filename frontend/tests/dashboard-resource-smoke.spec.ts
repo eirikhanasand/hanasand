@@ -265,7 +265,7 @@ test.describe('dashboard resource routes', () => {
         const context = await browser.newContext({ baseURL })
 
         try {
-            await authenticateContext(context, adminAuth(auth), baseURL || 'http://127.0.0.1:3000')
+            await authenticateContext(context, auth, baseURL || 'http://127.0.0.1:3000')
             const page = await context.newPage()
 
             await page.goto('/vm', { waitUntil: 'domcontentloaded' })
@@ -287,7 +287,7 @@ test.describe('dashboard resource routes', () => {
         const content = 'Created from the dashboard manage-flow smoke.'
 
         try {
-            await authenticateContext(context, adminAuth(auth), baseURL || 'http://127.0.0.1:3000')
+            await authenticateContext(context, auth, baseURL || 'http://127.0.0.1:3000')
             const page = await context.newPage()
 
             const notesLoaded = page.waitForResponse((response) =>
@@ -344,7 +344,7 @@ test.describe('dashboard resource routes', () => {
         const canceledTitle = `${title} canceled`
 
         try {
-            await authenticateContext(context, adminAuth(auth), baseURL || 'http://127.0.0.1:3000')
+            await authenticateContext(context, auth, baseURL || 'http://127.0.0.1:3000')
             const page = await context.newPage()
 
             const automationsLoaded = page.waitForResponse((response) =>
@@ -418,7 +418,7 @@ test.describe('dashboard resource routes', () => {
         const context = await browser.newContext({ baseURL })
 
         try {
-            await authenticateContext(context, adminAuth(auth), baseURL || 'http://127.0.0.1:3000')
+            await authenticateContext(context, auth, baseURL || 'http://127.0.0.1:3000')
             const page = await context.newPage()
 
             await page.goto('/projects', { waitUntil: 'networkidle' })
@@ -460,7 +460,7 @@ test.describe('dashboard resource routes', () => {
         const context = await browser.newContext({ baseURL })
 
         try {
-            await authenticateContext(context, adminAuth(auth), baseURL || 'http://127.0.0.1:3000')
+            await authenticateContext(context, auth, baseURL || 'http://127.0.0.1:3000')
             const page = await context.newPage()
 
             await page.goto('/shares', { waitUntil: 'networkidle' })
@@ -498,7 +498,6 @@ test.describe('dashboard resource routes', () => {
                     name: adminName,
                     token: adminToken,
                     expires_at: adminExpiresAt,
-                    roles: [{ id: 'administrator' }, { id: 'system_admin' }],
                 }
                 : await loginAsAdmin(request)
 
@@ -627,7 +626,6 @@ async function createUser(request: APIRequestContext, id: string, name: string) 
         name: string
         token: string
         expires_at: string
-        roles?: string[]
     }
 }
 
@@ -640,13 +638,6 @@ function authHeaders(auth: { id: string, token: string }) {
         Authorization: `Bearer ${decodeURIComponent(auth.token)}`,
         id: auth.id,
         'Content-Type': 'application/json',
-    }
-}
-
-function adminAuth<T extends { roles?: Array<{ id: string } | string> }>(auth: T) {
-    return {
-        ...auth,
-        roles: [{ id: 'administrator' }, { id: 'system_admin' }, { id: 'content_admin' }],
     }
 }
 
@@ -691,18 +682,15 @@ async function authenticateContext(context: BrowserContext, auth: {
     name: string
     token: string
     expires_at: string
-    roles?: Array<{ id: string } | string>
 }, baseURL: string) {
     const expires = Math.floor(new Date(auth.expires_at).getTime() / 1000)
     const cookieUrl = new URL(baseURL).origin
     const secure = cookieUrl.startsWith('https://')
-    const roles = auth.roles || []
 
     await context.addCookies([
         { name: 'id', value: encodeURIComponent(auth.id), url: cookieUrl, expires, httpOnly: false, secure, sameSite: 'Lax' },
         { name: 'name', value: encodeURIComponent(auth.name), url: cookieUrl, expires, httpOnly: false, secure, sameSite: 'Lax' },
         { name: 'access_token', value: encodeURIComponent(auth.token), url: cookieUrl, expires, httpOnly: false, secure, sameSite: 'Lax' },
-        { name: 'roles', value: encodeURIComponent(JSON.stringify(roles)), url: cookieUrl, expires, httpOnly: false, secure, sameSite: 'Lax' },
     ])
 }
 
@@ -718,6 +706,5 @@ async function loginAsAdmin(request: APIRequestContext) {
         name: string
         token: string
         expires_at: string
-        roles?: Array<{ id: string } | string>
     }
 }

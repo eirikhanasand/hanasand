@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { hostConsoleNames, inspectHost, normalizeHostPublicKey } from '#utils/hostSsh.ts'
 
@@ -10,8 +10,8 @@ export default async function getHostOverview(req: FastifyRequest, res: FastifyR
     if (!auth.valid || !auth.id || auth.impersonating) {
         return res.status(401).send({ error: 'Unauthorized.' })
     }
-    if (!(await hasRole(req, res, 'system_admin')).valid) {
-        return res.status(403).send({ error: 'System administrator access is required.' })
+    if (!(await hasHanasandInternalRouteAccess(req)).valid) {
+        return res.status(403).send({ error: 'Active Hanasand organization owner or editor access is required.' })
     }
     try {
         const [hosts, usersResult] = await Promise.all([

@@ -173,8 +173,6 @@ type User = {
     deactivated_by?: string | null
 }
 
-type UserWithRole = User & HighestRole & { role_ids?: string[] }
-
 type Thought = {
     id: string
     title: string
@@ -188,24 +186,6 @@ type Note = {
     title: string
     content: string
     source: string
-    created_at: string
-    updated_at: string
-}
-
-type MinimalRole = {
-    user_id: string
-    role_id: string
-    assigned_by: string
-    assigned_at: string
-}
-
-type Role = {
-    icon?: string | null
-    id: string
-    name: string
-    description: string
-    priority: number
-    created_by: string
     created_at: string
     updated_at: string
 }
@@ -546,12 +526,6 @@ type BlocklistEntry = {
     is_vpn?: boolean
     is_proxy?: boolean
     is_tor?: boolean
-}
-
-type HighestRole = {
-    highest_role_id: string
-    highest_role_name: string
-    highest_role_priority: number
 }
 
 type Project = {

@@ -2,6 +2,7 @@ import run from '#db'
 import { mailConfig } from './config.ts'
 import { encryptMailSecret, generateMailSecret, tryDecryptMailSecret } from './crypto.ts'
 import { createPrincipal, findPrincipalByName, patchPrincipal } from './stalwartAdmin.ts'
+import { hasHanasandInternalPageAccess } from '#utils/auth/organizationPageAccess.ts'
 
 export const sharedMailboxes = [
     { id: 'shared:support', name: 'Support', localPart: 'support' },
@@ -16,11 +17,8 @@ export class MailAccessDenied extends Error {
 }
 
 export async function mailPermissions(actorId: string) {
-    const result = await run(`SELECT r.id FROM roles r JOIN user_roles ur ON ur.role_id = r.id
-        JOIN users u ON u.id = ur.user_id WHERE ur.user_id = $1 AND u.active = TRUE`, [actorId])
-    const roles = result.rows.map((row: { id: string }) => row.id)
-    const admin = roles.some((role: string) => ['administrator', 'admin', 'system_admin'].includes(role))
-    return { admin, shared: admin || roles.includes('support'), any: admin || mailConfig.privilegedMailboxUsers.has(actorId) }
+    const internalMember = await hasHanasandInternalPageAccess(actorId)
+    return { admin: internalMember, shared: internalMember, any: internalMember }
 }
 
 // Secrets are encrypted in the database; shared mailboxes are not website users.

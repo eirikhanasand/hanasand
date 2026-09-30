@@ -12,7 +12,7 @@ mock.module('../src/utils/recovery.ts', () => ({ recoveryReadOnly: () => readOnl
 const { validateSession } = await import('../src/utils/auth/session.ts')
 beforeEach(() => {
     queries.length = 0; readOnly = false
-    row = { token_id: 1, id: 'member', token, user_agent: '', timestamp: new Date(Date.now() - 10000).toISOString(), session_user: { id: 'member', active: true }, session_roles: [{ id: 'system_admin' }] }
+    row = { token_id: 1, id: 'member', token, user_agent: '', timestamp: new Date(Date.now() - 10000).toISOString(), session_user: { id: 'member', active: true } }
 })
 test('parallel fresh requests still validate access without repeating timestamp writes', async () => {
     const result = await Promise.all(Array.from({ length: 10 }, () => validateSession({ id: 'member', token })))
@@ -20,8 +20,7 @@ test('parallel fresh requests still validate access without repeating timestamp 
     expect(queries).toHaveLength(10)
     expect(queries.every(({ sql }) => sql.includes('t.revoked_at IS NULL') && sql.includes('u.active IS TRUE'))).toBe(true)
     expect(result[0]!.refreshed.expires_at).toBe(new Date(Date.parse(row.timestamp) + 86400000).toISOString())
-    row.session_roles = []
-    expect((await validateSession({ id: 'member', token }))!.roles).toEqual([])
+    expect(Object.hasOwn((await validateSession({ id: 'member', token }))!, 'roles')).toBe(false)
     row = undefined
     expect(await validateSession({ id: 'member', token })).toBeNull()
 })

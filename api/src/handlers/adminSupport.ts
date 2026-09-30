@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto'
 import run from '#db'
 import { compileAuditQuery } from '#utils/auditQuery.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import { actorHasAdminSupportAccess, recordSystemEvent, redactAuditValue, requireAuditReason, supportTimelineAuditBridgeEvent } from '#utils/systemEvent.ts'
+import { actorHasHanasandInternalAccess, recordSystemEvent, redactAuditValue, requireAuditReason, supportTimelineAuditBridgeEvent } from '#utils/systemEvent.ts'
 import {
     buildOrganizationDwmAlertReference,
     normalizeInviteInput,
@@ -4795,7 +4795,7 @@ export async function requireAdminSupport(req: FastifyRequest, res: FastifyReply
         res.status(401).send(supportError('support_auth_required', actor.error || 'Unauthorized.'))
         return null
     }
-    if (!await actorHasAdminSupportAccess(actor.id)) {
+    if (!await actorHasHanasandInternalAccess(actor.id)) {
         res.status(403).send(supportError('support_role_required', 'Only admins can use support operations.'))
         return null
     }

@@ -25,7 +25,7 @@ type ControlActionBody = {
 }
 
 export async function GET(request: NextRequest) {
-    const session = await requireApiSession(request, ['system_admin', 'admin', 'administrator'])
+    const session = await requireApiSession(request)
     if ('response' in session) return session.response
     const identity = session.identity
     const base = scraperBase()
@@ -117,7 +117,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-    const session = await requireApiSession(request, ['system_admin', 'admin', 'administrator'])
+    const session = await requireApiSession(request)
     if ('response' in session) return session.response
     const identity = session.identity
     let body: ControlActionBody

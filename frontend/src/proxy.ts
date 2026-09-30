@@ -3,7 +3,7 @@ import { appPagePath, canonicalAppPath } from './utils/routes/appRoutes'
 import { NextRequest, NextResponse } from 'next/server'
 import pathIsAllowedWhileUnauthorized from './utils/proxy/pathIsAllowedWhileUnauthorized'
 import tokenIsValid from './utils/proxy/tokenIsValid'
-import pathToRoleArray from './utils/proxy/pathToRoleArray'
+import organizationProtectedPaths from './utils/proxy/organizationProtectedPaths'
 
 export async function proxy(req: NextRequest) {
     // The support API owns its independent store, authentication and active-site gate.
@@ -62,12 +62,9 @@ export async function proxy(req: NextRequest) {
 
         const token = tokenCookie.value
         const id = idCookie.value
-        let roles: Role[] = []
-        if (isLocalDashboardRenderProof(req, token, id)) {
-            const rolesCookie = req.cookies.get('roles')?.value
-            roles = normalizeRoles(rolesCookie ? JSON.parse(rolesCookie) : [])
-        } else {
-            const auth = await tokenIsValid(token, id)
+        let canViewOrganizationInternalPages = isLocalDashboardRenderProof(req, token, id)
+        if (!canViewOrganizationInternalPages) {
+            const auth = await tokenIsValid(token, id, impersonationToken || undefined)
 
             if (auth.state === 'unavailable') {
                 return authServiceUnavailable(req)
@@ -91,15 +88,7 @@ export async function proxy(req: NextRequest) {
                 }
             }
 
-            if (auth.roles) {
-                roles = normalizeRoles(auth.roles)
-                refreshedAuth = {
-                    ...(refreshedAuth ?? {}),
-                    roles,
-                    expires_at: auth.expires_at,
-                    checked_at: new Date().toISOString(),
-                }
-            }
+            canViewOrganizationInternalPages = auth.canViewInternalPages === true
 
             if (auth.name) {
                 refreshedAuth = {
@@ -123,14 +112,11 @@ export async function proxy(req: NextRequest) {
         }
 
         // This page enforces organization membership on the server and in its API.
-        const strictPath = path === '/dashboard/management/organizations' ? undefined : pathToRoleArray.find((item) => path.startsWith(item.path))
+        const strictPath = path === '/dashboard/management/organizations'
+            ? undefined
+            : organizationProtectedPaths.find(protectedPath => path.startsWith(protectedPath))
         if (strictPath) {
-            if (!roles.length) {
-                const rolesCookie = req.cookies.get('roles')?.value
-                roles = normalizeRoles(rolesCookie ? JSON.parse(rolesCookie) : [])
-            }
-
-            if (!roles.some((role) => roleMatchesStrictPath(role, strictPath.role))) {
+            if (!canViewOrganizationInternalPages) {
                 const url = new URL('/dashboard', req.url)
                 url.searchParams.set('notAllowed', 'true')
                 url.searchParams.set('from', pathWithSearch)
@@ -151,7 +137,6 @@ export async function proxy(req: NextRequest) {
 
 type TokenRefreshCookies = {
     token?: string
-    roles?: Array<Role & { role_id?: string }>
     name?: string
     avatar?: string
     expires_at?: string
@@ -176,9 +161,6 @@ function applyRefreshedAuthCookies(
 
     if (auth.token) {
         setAuthCookie(response, 'access_token', auth.token, cookieOptions, options.sharedDomain)
-    }
-    if (auth.roles) {
-        setAuthCookie(response, 'roles', JSON.stringify(auth.roles), cookieOptions, options.sharedDomain)
     }
     if (auth.name) {
         setAuthCookie(response, 'name', auth.name, cookieOptions, options.sharedDomain)
@@ -213,45 +195,6 @@ function setAuthCookie(
             domain: sharedDomain,
         })
     }
-}
-
-function normalizeRoles(value: unknown): Array<Role & { role_id?: string }> {
-    if (!Array.isArray(value)) {
-        return []
-    }
-
-    return value.flatMap((role) => {
-        if (typeof role === 'string') {
-            return [{
-                id: role,
-                name: role,
-                description: '',
-                priority: 0,
-                created_by: '',
-                created_at: '',
-                updated_at: '',
-            } as Role & { role_id?: string }]
-        }
-        if (!role || typeof role !== 'object') {
-            return []
-        }
-
-        return [role as Role & { role_id?: string }]
-    })
-}
-
-function roleMatchesStrictPath(role: Role & { role_id?: string }, requiredRole: string) {
-    const roleIds = roleIdsFor(role)
-    if (roleIds.includes('admin') || roleIds.includes('administrator')) {
-        return true
-    }
-
-    return roleIds.includes(requiredRole)
-}
-
-function roleIdsFor(role: Role & { role_id?: string }) {
-    const legacyRole = role as Role & { role_id?: string, role?: string }
-    return [legacyRole.id, legacyRole.role_id, legacyRole.role].filter(Boolean) as string[]
 }
 
 function authCookieOptions(req: NextRequest) {
@@ -294,7 +237,7 @@ function loginRedirect(
 
     const response = NextResponse.redirect(url)
     if (options.clearAuth) {
-        const authCookies = ['name', 'access_token', 'id', 'avatar', 'roles', 'session_expires_at', 'auth_checked_at']
+        const authCookies = ['name', 'access_token', 'id', 'avatar', 'session_expires_at', 'auth_checked_at', 'roles']
         for (const cookie of authCookies) {
             response.cookies.delete(cookie)
         }

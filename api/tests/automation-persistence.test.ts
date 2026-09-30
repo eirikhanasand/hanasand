@@ -24,7 +24,7 @@ mock.module('../src/utils/automationAccess.ts', () => ({
     automationWriteScope: () => 'TRUE',
 }))
 mock.module('../src/utils/auth/tokenWrapper.ts', () => ({ default: async (req: { headers: Record<string, string> }) => ({ valid: Boolean(req.headers.id), id: req.headers.id }) }))
-mock.module('../src/utils/auth/hasRole.ts', () => ({ default: async () => ({ valid: false }) }))
+mock.module('#utils/auth/organizationPageAccess.ts', () => ({ default: async () => ({ valid: false }) }))
 mock.module('../src/utils/monitoringIssues.ts', () => ({
     recordMonitoringOutcome: async (_automation: unknown, _run: string, kind: unknown, message: string) => { outcomes.push({ kind, message }) },
     notifyMonitoringOutcome: async () => {},

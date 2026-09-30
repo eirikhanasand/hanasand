@@ -5,7 +5,7 @@ import { chromium } from '@playwright/test'
 
 let healthy = false
 mock.module('@/utils/proxy/tokenIsValid', () => ({
-    default: async () => ({ valid: healthy, state: healthy ? 'valid' : 'unavailable', roles: [] }),
+    default: async () => ({ valid: healthy, state: healthy ? 'valid' : 'unavailable' }),
 }))
 const { proxy } = await import('../src/proxy.ts')
 const server = Bun.serve({ port: 0, async fetch(request) {

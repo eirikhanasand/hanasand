@@ -7,7 +7,7 @@ let found = true
 const query = async (sql: string, params: unknown[] = []) => { writes.push(sql); values.push(params); return { rows: found ? [{ id: 'svc_fixture', name: params[1] ?? 'Existing monitor', description: params[2] ?? 'Existing description' }] : [] } }
 mock.module('#db', () => ({ default: query, withTransaction: async (work: any) => work(query) }))
 mock.module('#utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid: authenticated, id: 'actor' }) }))
-mock.module('#utils/auth/hasRole.ts', () => ({ default: async () => ({ valid: administrator }) }))
+mock.module('#utils/auth/organizationPageAccess.ts', () => ({ default: async () => ({ valid: administrator }) }))
 mock.module('#utils/auth/apiKeys.ts', () => ({ createApiKey: async (input: any) => ({ apiKey: { ownerId: input.ownerId, scopes: input.scopes }, secret: 'once' }), listApiKeys: async () => [] }))
 mock.module('#utils/systemEvent.ts', () => ({ recordSystemEvent: async () => {} }))
 const { getServiceAccounts, postServiceAccount, patchServiceAccount, deleteServiceAccount } = await import('../src/handlers/serviceAccounts.ts')

@@ -30,14 +30,14 @@ export const trustArtifacts: TrustArtifact[] = [
         updated: 'July 3, 2026',
         summary: [
             ['Data model', 'Alerts use source details and metadata; customers do not need to upload raw leak material.'],
-            ['Access model', 'Accounts, roles, and protected dashboard pages control access.'],
+            ['Access model', 'Organization membership and protected dashboard pages control access.'],
             ['Identity', 'Password accounts are available today. SSO, SAML, OIDC, and SCIM require separate setup.'],
             ['Certification', 'No SOC 2 or ISO 27001 certificate is claimed.'],
         ],
         sections: [
             {
                 title: 'Customer data handled',
-                body: 'Hanasand stores the information needed to monitor companies and send alerts: account details, watchlist terms, user roles, webhook destinations, alert records, delivery status, and audit logs.',
+                body: 'Hanasand stores the information needed to monitor companies and send alerts: account details, organization memberships, watchlist terms, webhook destinations, alert records, delivery status, and audit logs.',
                 items: [
                     'Watch terms can include company names, domains, suppliers, brands, executives, aliases, and portfolio companies.',
                     'Alert records can include the matched term, company, source, time, confidence, status, delivery result, and notes.',
@@ -61,7 +61,7 @@ export const trustArtifacts: TrustArtifact[] = [
             columns: ['Control area', 'Current state', 'Evidence path'],
             rows: [
                 ['Authentication', 'Password accounts and protected dashboard routes', '/login, /register, protected dashboard routes'],
-                ['Organization administration', 'Members, roles, watchlists, and alert scope exist in product surfaces', '/organizations and dashboard organization APIs'],
+                ['Organization administration', 'Members, organization permissions, watchlists, and alert scope exist in product surfaces', '/organizations and dashboard organization APIs'],
                 ['Webhook delivery', 'Destinations, delivery state, and lifecycle APIs are represented', '/developers and dashboard automation routes'],
                 ['Monitoring boundary', 'Metadata-first collection and safe alert fields', '/findings and /ti'],
                 ['Certifications', 'No SOC 2 or ISO 27001 certification today', '/trust'],

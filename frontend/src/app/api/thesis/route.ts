@@ -27,7 +27,7 @@ export async function PUT(request: NextRequest) {
         if (!await isHanasandOrganizationMember(access.identity.token, access.identity.id)) return NextResponse.json({ error: 'Hanasand organization membership is required.' }, { status: 403 })
     } catch { return NextResponse.json({ error: 'Organization membership could not be checked.' }, { status: 503 }) }
     if (!await canEditThesis(access.identity.token, access.identity.id)) {
-        return NextResponse.json({ error: 'Only eirikhanasand can edit the thesis.' }, { status: 403 })
+        return NextResponse.json({ error: 'Hanasand organization owners and editors can edit the thesis.' }, { status: 403 })
     }
     const document = await request.json().catch(() => null)
     if (!validThesis(document)) return NextResponse.json({ error: 'Enter a non-empty title of at most 500 characters.' }, { status: 400 })

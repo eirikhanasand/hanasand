@@ -21,7 +21,7 @@ import { randomUUID } from 'node:crypto'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run, { withTransaction } from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import { hasHanasandInternalRouteAccess } from '#utils/auth/organizationPageAccess.ts'
 import { matchApiKeyScope, validateApiKey } from '#utils/auth/apiKeys.ts'
 import { recordSystemEvent } from '#utils/systemEvent.ts'
 import { parse as parseYaml } from 'yaml'
@@ -234,7 +234,7 @@ export async function getEvents(req: FastifyRequest, res: FastifyReply) {
     // the role check on that identity even when the proxy omitted the legacy
     // id header, and stop if the role helper had to send an auth response.
     if (!req.headers.id) req.headers.id = access.userId
-    const role = await hasRole(req, res, 'system_admin')
+    const role = await hasHanasandInternalRouteAccess(req)
     if (res.sent) return
     const canReadLogs = role.valid
     const result = await run(`
@@ -260,10 +260,10 @@ export async function postRulePreview(req: FastifyRequest, res: FastifyReply) {
         const normalized = normalizeConditions(body.conditions)
         if (normalized.error || !normalized.conditions.length || !validPreviewWindow(body)) return res.status(400).send({ error: normalized.error || 'Choose a valid preview range and rule.' })
         // Reuse the identity resolved by organizationAccess when the proxy omitted
-        // the legacy id header. hasRole may send an auth response, so stop before
+        // the legacy id header. Organization access checks may send an auth response, so stop before
         // the preview handler tries to send a second response.
         if (!req.headers.id) req.headers.id = access.userId
-        const role = await hasRole(req, res, 'system_admin')
+        const role = await hasHanasandInternalRouteAccess(req)
         if (res.sent) return res
         const canReadLogs = role.valid
         return res.send(await scanRulePreview(access.organizationId, canReadLogs, { ...body, conditions: normalized.conditions }))
@@ -297,7 +297,7 @@ export async function postEventAction(req: FastifyRequest<{ Params: { id: string
     `, [req.params.id, access.organizationId])
     const row = result.rows[0]
     if (!row) return res.status(404).send({ error: 'Event not found.' })
-    if (row.ingestion_id === 'logs' && !(await hasRole(req, res, 'system_admin')).valid) return res.status(403).send({ error: 'Missing system_admin role.' })
+    if (row.ingestion_id === 'logs' && !(await hasHanasandInternalRouteAccess(req)).valid) return res.status(403).send({ error: 'Active Hanasand organization owner or editor access is required.' })
     const event: NormalizedEvent = {
         timestamp: new Date(row.event_timestamp).toISOString(),
         eventType: String(row.event_type), action: String(row.action), outcome: String(row.outcome),
@@ -321,7 +321,7 @@ export async function getRules(req: FastifyRequest, res: FastifyReply) {
     const compact = query.view === 'list'
     const [configured, retentionRole] = await Promise.all([
         loadConfiguredRules(access.organizationId, run, compact),
-        canManageRules(access.role) ? hasRole(req, res, 'system_admin') : Promise.resolve({ valid: false }),
+        canManageRules(access.role) ? hasHanasandInternalRouteAccess(req) : Promise.resolve({ valid: false }),
     ])
     const hitRules = configured.filter(rule => !internalRetentionRuleIds.has(rule.id))
     const rules = hitRules.filter(rule => !query.category || ruleCategory(rule) === query.category)
@@ -404,7 +404,7 @@ export async function postRule(req: FastifyRequest, res: FastifyReply) {
     const stage = body?.stage ?? 'match'
     const action = body?.action ?? 'keep'
     if (!['match', 'analyze', 'detect'].includes(String(stage)) || !['drop', 'keep'].includes(String(action)) || (stage !== 'analyze' && action !== 'keep')) return res.status(400).send({ error: 'Drop requires an Analyze rule.' })
-    if (stage === 'analyze' && !(await hasRole(req, res, 'system_admin')).valid) return res.status(403).send({ error: 'System administrator access is required to change log retention.' })
+    if (stage === 'analyze' && !(await hasHanasandInternalRouteAccess(req)).valid) return res.status(403).send({ error: 'Active Hanasand organization owner or editor access is required to change log retention.' })
     const ruleId = `custom.${randomUUID().replaceAll('-', '').slice(0, 20)}.v1`
     const rule = await saveRule(req, access, { id: ruleId, version: '1', name, family: 'Custom', severity, explanation, evidence: [], definition: { match: 'all', conditions: conditionResult.conditions, stage: stage as RuleDefinition['stage'], action: action as RuleDefinition['action'] }, source: 'owned', enabled: true }, 'event.rule.created')
     return res.status(201).send({ rule })
@@ -478,7 +478,7 @@ export async function postRuleAction(req: FastifyRequest<{ Params: { id: string 
     if (!action) return res.status(400).send({ error: 'Action must be enable or disable.' })
     const rule = (await readDatabase(() => loadConfiguredRules(access.organizationId))).find(rule => ruleSlug(rule.id) === ruleSlug(req.params.id) || rule.recordId === req.params.id)
     if (!rule) return res.status(404).send({ error: 'Rule not found.' })
-    if (([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') && !(await hasRole(req, res, 'system_admin')).valid) return res.status(403).send({ error: 'System administrator access is required to change platform log retention.' })
+    if (([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') && !(await hasHanasandInternalRouteAccess(req)).valid) return res.status(403).send({ error: 'Active Hanasand organization owner or editor access is required to change platform log retention.' })
     if (action === 'enable' && unavailableAnalysisRule(rule.id)) return res.status(409).send({ error: unavailableAnalysisRule(rule.id) })
     try {
         const saved = await saveRule(req, access, { ...rule, enabled: action === 'enable' }, 'event.rule.updated', rule.version)
@@ -529,7 +529,7 @@ export async function getRule(req: FastifyRequest<{ Params: { id: string }, Quer
                 loadRuleHits(access.organizationId, [rule], run),
             ]))
             const hitCount = rule.definition?.stage === 'analyze' && rule.definition.action === 'keep' ? null : hits.get(rule.id) ?? 0
-            const canEdit = !isHistorical && canManageRules(access.role) && (!([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') || (await hasRole(req, res, 'system_admin')).valid)
+            const canEdit = !isHistorical && canManageRules(access.role) && (!([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') || (await hasHanasandInternalRouteAccess(req)).valid)
             return { organizationId: access.organizationId, canEdit, isHistorical, currentVersion: rule.version, rule: displayedRule, triggerCount: hitCount, audit: audit.rows.slice(0, 50), nextOffset: audit.rows.length > 50 ? offset + 50 : null }
         }
         const payload = process.env.NODE_ENV === 'test' || !(run as ReadAwareRun).withReadDatabase
@@ -548,7 +548,7 @@ export async function putRule(req: FastifyRequest<{ Params: { id: string } }>, r
     if (!canManageRules(access.role)) return res.status(403).send({ error: 'Editor access is required to manage rules.' })
     const rule = (await loadConfiguredRules(access.organizationId)).find(rule => ruleSlug(rule.id) === ruleSlug(req.params.id))
     if (!rule) return res.status(404).send({ error: 'Rule not found.' })
-    if (([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') && !(await hasRole(req, res, 'system_admin')).valid) return res.status(403).send({ error: 'System administrator access is required to change platform log retention.' })
+    if (([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') && !(await hasHanasandInternalRouteAccess(req)).valid) return res.status(403).send({ error: 'Active Hanasand organization owner or editor access is required to change platform log retention.' })
     const body = (req.body || {}) as Record<string, unknown>
     if (body.enabled === true && unavailableAnalysisRule(rule.id)) return res.status(409).send({ error: unavailableAnalysisRule(rule.id) })
     const name = typeof body.name === 'string' ? body.name.trim() : ''

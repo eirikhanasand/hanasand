@@ -1,13 +1,13 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import hasRole from '#utils/auth/hasRole.ts'
+import hasHanasandInternalRouteAccess from '#utils/auth/organizationPageAccess.ts'
 import { recordSystemEvent } from '#utils/systemEvent.ts'
 import { recordServiceCheckCase } from '#utils/status/serviceCheckCase.ts'
 
 export default async function stopVms(req: FastifyRequest, res: FastifyReply) {
     const { valid, id: userId } = await tokenWrapper(req, res)
-    const { valid: validRole } = await hasRole(req, res, 'system_admin')
+    const { valid: validRole } = await hasHanasandInternalRouteAccess(req)
     if (!valid || !validRole) {
         return res.status(401).send({ error: 'Unauthorized.' })
     }

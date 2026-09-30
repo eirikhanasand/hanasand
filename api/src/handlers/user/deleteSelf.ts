@@ -6,7 +6,7 @@ import { createAccountRestoreToken } from '#utils/auth/accountDeletion.ts'
 import { accountDeletionMail, deletionRequestLocation } from '#utils/auth/accountDeletionMail.ts'
 import { sendSystemMail } from '#utils/mail/system.ts'
 import { addressForUser } from '#utils/mail/helpers.ts'
-import { recordSystemEvent, userHasAdministrativeRole } from '#utils/systemEvent.ts'
+import { recordSystemEvent, userHasHanasandInternalAccess } from '#utils/systemEvent.ts'
 
 type PendingDeletionUser = User & { deletion_scheduled_at: string, deletion_requested_at: string }
 
@@ -93,17 +93,17 @@ export default async function deleteSelf(req: FastifyRequest, res: FastifyReply)
             return res.status(404).send({ error: `There is no user with id ${id}` })
         }
 
-        const wasAdmin = await userHasAdministrativeRole(id)
+        const wasHanasandInternalMember = await userHasHanasandInternalAccess(id)
         await recordSystemEvent(req, {
             actionType: 'user.account.deleted',
             actorId: id,
             source: 'auth',
             targetType: 'user',
             targetId: id,
-            severity: wasAdmin ? 'critical' : 'warning',
-            context: { deletionMode: 'scheduled', administrativeAccount: wasAdmin, targetName: outcome.user.name, targetId: id },
+            severity: wasHanasandInternalMember ? 'critical' : 'warning',
+            context: { deletionMode: 'scheduled', hanasandOrganizationMember: wasHanasandInternalMember, targetName: outcome.user.name, targetId: id },
         })
-        if (wasAdmin) {
+        if (wasHanasandInternalMember) {
             await recordSystemEvent(req, {
                 actionType: 'admin.account.deleted',
                 actorId: id,
