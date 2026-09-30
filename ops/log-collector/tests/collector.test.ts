@@ -133,10 +133,30 @@ for (const mode of ['truncate', 'rewrite', 'missing']) test('file discontinuity 
   fs.writeFileSync(log.path, logLine('new-' + 'x'.repeat(mode === 'rewrite' ? 200 : 0), 2)); await source.dockerFileBatch(config, 'id', log);
   expect(events.some(e => e.service === 'host-log-collector')).toBe(true); expect(events.at(-1)!.message).toStartWith('new-');
 });
-test('invalid complete record and oversized record preserve history checkpoint', async () => {
-  const log = logFixture(), events = capture(); fs.writeFileSync(log.path, Buffer.concat([logLine('valid'), Buffer.from('invalid\n')]));
-  await expect(source.dockerFileBatch(config, 'id', log)).rejects.toThrow('invalid JSON'); expect(events).toHaveLength(0); expect(store.load('docker-file-history-id.json', null)).toBeNull();
-  fs.writeFileSync(log.path, Buffer.alloc(MAX_RECORD_BYTES + 1, 65)); await expect(source.dockerFileBatch(config, 'id', log)).rejects.toThrow('8MB');
+test('invalid complete Docker record is reported once and does not block later history', async () => {
+  const log = logFixture(), events = capture(), malformed = Buffer.from('{"log":"token=private"\n');
+  fs.writeFileSync(log.path, Buffer.concat([logLine('valid'), malformed, logLine('after-invalid', 2)]));
+  await source.dockerFileBatch(config, 'id', log);
+  expect(events.map(item => item.service)).toEqual(['cdn', 'host-log-collector', 'cdn']);
+  expect(events[0].message).toBe('valid'); expect(events[2].message).toBe('after-invalid');
+  expect(events[1].metadata.source_status).toBe('invalid_json_record_skipped'); expect(events[1].message).not.toContain('private');
+  expect(events[1].metadata.source_fragment).toEqual({ reason: 'invalid_json_record', inode: String(fs.statSync(log.path).ino), offset: logLine('valid').length, byte_length: malformed.length, sha256: sha(malformed) });
+  expect(store.load<any>('docker-file-history-id.json', {}).offset).toBe(fs.statSync(log.path).size);
+  await source.dockerFileBatch(config, 'id', log); expect(events).toHaveLength(3);
+
+  const oversized = logFixture(); fs.writeFileSync(oversized.path, Buffer.alloc(MAX_RECORD_BYTES + 1, 65));
+  await expect(source.dockerFileBatch(config, 'oversized', oversized)).rejects.toThrow('8MB');
+  expect(store.load('docker-file-history-oversized.json', null)).toBeNull();
+});
+test('invalid Docker record is queued before its cursor advances', async () => {
+  const log = logFixture(), malformed = Buffer.from('invalid token=private\n'); fs.writeFileSync(log.path, malformed);
+  const queue = store.queueBatch.bind(store); store.queueBatch = () => { throw new Error('disk full'); };
+  await expect(source.dockerFileBatch(config, 'id', log)).rejects.toThrow('disk full');
+  expect(store.load('docker-file-history-id.json', null)).toBeNull();
+  store.queueBatch = queue;
+  await source.dockerFileBatch(config, 'id', log);
+  const first = queued('live')[0]; expect(first.level).toBe('error'); expect(first.sourceEventId).toBe(sha('fixture:docker-invalid-record:id:' + fs.statSync(log.path).ino + ':0:' + sha(malformed)));
+  await source.dockerFileBatch(config, 'id', log); expect(queued('live')).toHaveLength(1);
 });
 test('Docker cutoff is inclusive and batch count bounded', async () => {
   const log = logFixture(), events = capture(); log.since = '2026-09-19T00:00:02.100000Z'; fs.writeFileSync(log.path, Buffer.concat([logLine('before'), ...Array.from({ length: 150 }, (_, i) => logLine('row-' + i, 2))]));

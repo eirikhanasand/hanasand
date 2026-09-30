@@ -261,7 +261,15 @@ export class Sources {
           if (typeof record.log !== 'string' || !['stdout', 'stderr'].includes(record.stream) || typeof record.time !== 'string') throw new Error();
           const match = record.time.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2})$/); if (!match) throw new Error();
           time = seconds(record.time); timestamp = match[1] + '.' + (match[2] || '').padEnd(9, '0') + match[3]; message = trimEnding(record.log); stream = record.stream;
-        } catch { throw new CollectionError(source.name + ' (invalid JSON log record at byte ' + complete + ')'); }
+        } catch {
+          const digest = sha(line), offset = complete;
+          events.push(event(config, 'docker-invalid-record:' + id + ':' + stat.ino + ':' + offset + ':' + digest,
+            'host-log-collector', source.name + ': malformed Docker JSON record skipped at byte ' + offset + ' (sha256=' + digest + ')',
+            iso(stat.mtimeMs / 1000), { collector: 'docker', container_id: id, source_status: 'invalid_json_record_skipped',
+              source_fragment: { reason: 'invalid_json_record', inode: String(stat.ino), offset, byte_length: line.length, sha256: digest } }, 'error'));
+          scanned += line.length; complete = reader.position; anchor = Buffer.concat([anchor, line]).subarray(-128);
+          continue;
+        }
         if (time >= cutoff) { const item = dockerEvent(config, id, source.name, timestamp, message, stream); events.push(item); eventBytes += Buffer.byteLength(JSON.stringify(item)); }
         scanned += line.length; complete = reader.position; anchor = Buffer.concat([anchor, line]).subarray(-128);
       }
