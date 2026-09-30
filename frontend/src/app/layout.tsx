@@ -45,7 +45,7 @@ export default async function layout({ children }: { children: ReactNode }) {
                 <div className='site-atmosphere' />
                 <WorkspaceProvider initial={readWorkspace(Cookies.get(WORKSPACE_COOKIE)?.value, impersonatingId || id)} enabled={token} serviceAccount={id.startsWith('svc_')}>
                     <MobileNavigation enabled={Boolean(id && token)}>
-                        <Header token={token} path={path} initialMode={initialMode} />
+                        <Header token={token} id={id} path={path} />
                         <DetachedBoxHost />
                         <RouteFrame serverPath={path} token={token}
                             sidebar={id && token ? <Suspense fallback={<DashboardSidebar {...sidebarProps} canManageOrganizations={false} />}>

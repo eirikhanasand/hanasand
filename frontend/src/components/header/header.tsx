@@ -6,7 +6,6 @@ import { ActivityIcon, BellRing, BookOpen, ChevronDown, Code2, FileJson, Gauge, 
 import { isInternalAppPath, hasAppSidebar } from '@/utils/routes/appRoutes'
 import Menu from '@/components/menu/menu'
 import Link from 'next/link'
-import ViewModeToggle from './viewModeToggle'
 import isSharePath from '@/utils/routes/isSharePath'
 import isPublicProductPath from '@/utils/routes/isPublicProductPath'
 import BrandLogo from '@/components/brand/brandLogo'
@@ -129,7 +128,7 @@ function PublicMobileMenu({ token }: { token: boolean }) {
     )
 }
 
-export default function Header({ token, path: serverPath, initialMode = 'normal' }: { token: boolean, path: string, initialMode?: 'normal' | 'compact' }) {
+export default function Header({ token, id, path: serverPath }: { token: boolean, id: string, path: string }) {
     const mobile = useMobileNavigation()
     const pathname = usePathname() || serverPath
     const isShare = isSharePath(pathname)
@@ -141,6 +140,7 @@ export default function Header({ token, path: serverPath, initialMode = 'normal'
     const isOrganizations = pathname.startsWith('/organizations')
     const isAppSurface = isDashboard || (token && hasAppSidebar(pathname)) || isLoggedInConsoleProduct || (!isPublicProduct && (isShare || isAI || isDashboard || isProfile || isOrganizations))
     const pricingHref = token ? '/subscription' : '/pricing'
+    const profileHref = id ? `/profile/${encodeURIComponent(id)}` : '/profile'
 
     return (
         <header data-site-header className='site-chrome fixed left-0 top-0 z-1000 w-full border-b border-ui-border bg-ui-panel text-ui-text px-3 sm:px-5 md:px-10 lg:px-16'>
@@ -166,15 +166,14 @@ export default function Header({ token, path: serverPath, initialMode = 'normal'
                             event.currentTarget.querySelector('summary')?.focus()
                         }
                     }}>
-                        <summary aria-label='Account and workspace' className='grid h-10 w-10 cursor-pointer list-none place-items-center rounded-lg border border-ui-border text-ui-muted hover:bg-ui-raised hover:text-ui-text [&::-webkit-details-marker]:hidden'>
+                        <summary aria-label='Account options' className='grid h-10 w-10 cursor-pointer list-none place-items-center rounded-lg border border-ui-border text-ui-muted hover:bg-ui-raised hover:text-ui-text [&::-webkit-details-marker]:hidden'>
                             <UserRound className='h-5 w-5' />
                         </summary>
                         <div className='fixed inset-x-3 top-18 z-30 grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-3 text-sm text-ui-text shadow-xl sm:absolute sm:left-auto sm:right-0 sm:top-13 sm:w-60'>
-                            {isDashboard && <ViewModeToggle initialMode={initialMode} />}
-                            <Link href='/dashboard' className='rounded-lg p-2 hover:bg-ui-raised'>Dashboard</Link>
-                            <Link href='/profile' className='rounded-lg p-2 hover:bg-ui-raised'>Profile</Link>
-                            <Link href='/s' className='rounded-lg p-2 hover:bg-ui-raised'>Workspace</Link>
-                            <Link href='/ai' className='rounded-lg p-2 hover:bg-ui-raised'>Workspace assistant</Link>
+                            <Link href={profileHref} className='rounded-lg p-2 hover:bg-ui-raised'>Profile</Link>
+                            {id && <Link href={`/profile/${encodeURIComponent(id)}/security`} className='rounded-lg p-2 hover:bg-ui-raised'>Security</Link>}
+                            {id && <Link href={`/profile/${encodeURIComponent(id)}/sessions`} className='rounded-lg p-2 hover:bg-ui-raised'>Sessions</Link>}
+                            <div role='separator' className='border-t border-ui-border' />
                             <Link href='/logout' className='rounded-lg p-2 hover:bg-ui-raised'>Sign out</Link>
                         </div>
                     </details>}
