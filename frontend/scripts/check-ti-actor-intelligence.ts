@@ -128,6 +128,7 @@ const pageClientSource = [
         .filter(file => file.endsWith('.tsx'))
         .map(file => readFileSync(new URL(`../src/app/ti/components/${file}`, import.meta.url), 'utf8')),
 ].join('\n')
+const evidenceResultsSource = readFileSync(new URL('../src/app/ti/components/evidence-results.tsx', import.meta.url), 'utf8')
 const globalStylesSource = readFileSync(new URL('../src/app/globals.css', import.meta.url), 'utf8')
 const actorIntelligenceSource = readFileSync(new URL('../src/utils/ti/actorIntelligence.ts', import.meta.url), 'utf8')
 const actionabilitySource = readFileSync(new URL('../src/utils/ti/actionability.ts', import.meta.url), 'utf8')
@@ -779,8 +780,8 @@ assert(pageClientSource.includes('data-ti-map=\'true\''), 'Public TI first viewp
 assert(pageClientSource.includes('data-ti-activity=\'true\''), 'Public TI page should expose recent activity.')
 assert(pageClientSource.includes('showActorActivity'), 'Public TI activity should be gated by retained actor evidence.')
 assert(!pageClientSource.includes('data-ti-sources=\'true\''), 'Public TI should not render a duplicate generic source section.')
-assert(pageClientSource.indexOf('data-ti-actor-info=\'true\'') < pageClientSource.indexOf('data-ti-map=\'true\''), 'Public TI should lead with actor information before the map.')
-assert(pageClientSource.indexOf('data-ti-map=\'true\'') < pageClientSource.indexOf('data-ti-activity=\'true\''), 'Public TI should place the map before recent activity.')
+assert(evidenceResultsSource.indexOf('<ActorProfileHeader') < evidenceResultsSource.indexOf("data-ti-map='true'"), 'Public TI should lead with actor information before the map.')
+assert(evidenceResultsSource.indexOf("data-ti-map='true'") < evidenceResultsSource.indexOf("data-ti-activity='true'"), 'Public TI should place the map before recent activity.')
 assert(!pageClientSource.includes('Current profile'), 'Public TI actor header should not render a self-explanatory current-profile tag.')
 assert(!pageClientSource.includes('Source context'), 'Public TI should use Sources copy instead of source-context wording.')
 assert(!pageClientSource.includes('Missing links'), 'Public TI should not hard-fail automatic source-link discovery in the UI.')
