@@ -3,6 +3,7 @@ import WebSocket from 'ws'
 import run from '#db'
 import { loadSQL } from '#utils/loadSQL.ts'
 import { validateSession } from '#utils/auth/session.ts'
+import { hasHanasandInternalPageAccess } from '#utils/auth/organizationPageAccess.ts'
 import { listRuntimeContainersWithStats } from '#utils/docker/engine.ts'
 import getStats from '#utils/refresh/queries/stats.ts'
 
@@ -10,7 +11,7 @@ export async function canViewSystem(id: string, token: string) {
     const session = await validateSession({ id, token })
     if (!session) return false
     const role = await run(await loadSQL('hasRole.sql'), [session.user.id, 'system_admin'])
-    return role.rows[0]?.has_role === true
+    return role.rows[0]?.has_role === true || await hasHanasandInternalPageAccess(session.user.id)
 }
 
 export default function registerSystemStream(fastify: FastifyInstance) {

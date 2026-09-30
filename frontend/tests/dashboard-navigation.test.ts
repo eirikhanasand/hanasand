@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { getDashboardNavigation, navigationLinks, pinnedNavigation, type NavigationItem } from '../src/utils/layout/dashboardNavigation'
 import { organizationPages } from '../src/utils/organizations/pages'
+import { canViewHanasandInternalPages, HANASAND_ORGANIZATION_ID } from '../src/utils/organizations/internalPageAccess'
 
 test('organization destinations remain reachable exactly once after regrouping', () => {
     const links = navigationLinks(getDashboardNavigation({ id: 'member', isAdmin: false, canManageSystem: false, canManageContent: false }))
@@ -41,4 +42,21 @@ test('traffic has separate overview, recent, map, and blocklist destinations', (
     const traffic = logsAndRules?.items?.find(item => item.label === 'Traffic')
     assert.deepEqual(traffic?.items?.map(item => item.label), ['Overview', 'Recent traffic', 'Live map', 'Blocklist'])
     assert.deepEqual(traffic?.items?.map(item => item.href), ['/traffic', '/traffic/recent', '/traffic/map', '/traffic/blocklist'])
+})
+
+test('Hanasand owners and editors get internal pages from organization membership', () => {
+    for (const role of ['owner', 'editor']) {
+        assert.equal(canViewHanasandInternalPages([{ id: HANASAND_ORGANIZATION_ID, role, lifecycleStatus: 'active' }]), true)
+    }
+    assert.equal(canViewHanasandInternalPages([{ id: HANASAND_ORGANIZATION_ID, role: 'reader', lifecycleStatus: 'active' }]), false)
+    assert.equal(canViewHanasandInternalPages([{ id: HANASAND_ORGANIZATION_ID, role: 'editor', lifecycleStatus: 'archived' }]), false)
+    assert.equal(canViewHanasandInternalPages([{ id: 'another-org', role: 'owner', lifecycleStatus: 'active' }]), false)
+
+    const links = navigationLinks(getDashboardNavigation({
+        id: 'sindre', isAdmin: false, canManageSystem: false, canManageContent: false,
+        canViewInternalPages: true, canReviewIntel: true, hasVMs: true,
+    }))
+    for (const path of ['/logs/realtime', '/traffic', '/ti/timeliness', '/db', '/management/users', '/management/roles', '/management/audit', '/management/organizations', '/vms', '/system/virtual-machines']) {
+        assert.equal(links.some(link => link.href === path), true, path)
+    }
 })

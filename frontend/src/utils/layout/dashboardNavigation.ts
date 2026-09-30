@@ -11,6 +11,7 @@ export type NavigationAccess = {
     isAdmin: boolean
     canManageSystem: boolean
     canManageContent: boolean
+    canViewInternalPages?: boolean
     hasContentOrganization?: boolean
     hasHanasandOrganization?: boolean
     thesisSheets?: Array<{ label: string, href: string }>
@@ -18,7 +19,19 @@ export type NavigationAccess = {
     canReviewIntel?: boolean
 }
 
-export function getDashboardNavigation({ id, isAdmin, canManageOrganizations = false, canManageSystem, canManageContent, hasContentOrganization = false, hasHanasandOrganization = false, thesisSheets = [], canReviewIntel = isAdmin, hasVMs = false }: NavigationAccess): NavigationItem[] {
+export function getDashboardNavigation(access: NavigationAccess): NavigationItem[] {
+    const {
+        id,
+        canManageContent,
+        hasContentOrganization = false,
+        hasHanasandOrganization = false,
+        thesisSheets = [],
+        hasVMs = false,
+    } = access
+    const isAdmin = access.isAdmin || access.canViewInternalPages === true
+    const canManageOrganizations = access.canManageOrganizations === true || access.canViewInternalPages === true
+    const canManageSystem = access.canManageSystem || access.canViewInternalPages === true
+    const canReviewIntel = access.canReviewIntel ?? isAdmin
     const link = (label: string, href: string, visible = true): NavigationItem => ({ label, href, visible })
     const group = (label: string, items: NavigationItem[], visible = true): NavigationItem => ({ label, items, visible })
     const sections = [

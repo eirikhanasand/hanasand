@@ -3,6 +3,7 @@ import { loadSQL } from '#utils/loadSQL.ts'
 import run from '#db'
 import { serviceAccountEndpoints } from './serviceAccountScopes.ts'
 import { matchApiKeyScope } from './apiKeys.ts'
+import { canViewHanasandInternalRoute, hasHanasandInternalPageAccess } from './organizationPageAccess.ts'
 import type { validateSession } from './session.ts'
 
 type Valid = {
@@ -49,17 +50,24 @@ export default async function hasRole(req: FastifyRequest, res: FastifyReply, ro
         // The boundary has already read current roles for this request. Never
         // reuse the actor's roles for a different impersonated user or API key.
         const session = (req as FastifyRequest & { rateLimitSession?: Awaited<ReturnType<typeof validateSession>> }).rateLimitSession
+        let hasRole = false
         if (!apiKeyOwnerId && session?.user.id === id) {
-            return session.roles.some(entry => entry.id === role) ? { valid: true } : { valid: false, error: 'Unauthorized.' }
-        }
-        const roleQuery = await loadSQL('hasRole.sql')
-        const { rows } = await run(roleQuery, [id!, role])
-
-        if (rows[0]?.has_role !== true) {
-            return { valid: false, error: 'Unauthorized.' }
+            hasRole = session.roles.some(entry => entry.id === role)
+        } else {
+            const roleQuery = await loadSQL('hasRole.sql')
+            const { rows } = await run(roleQuery, [id!, role])
+            hasRole = rows[0]?.has_role === true
         }
 
-        return { valid: true }
+        if (hasRole) return { valid: true }
+
+        const route = req.routeOptions?.url || req.url.split('?')[0]
+        if (role === 'system_admin' && !apiKeyOwnerId && canViewHanasandInternalRoute(req.method, route)
+            && await hasHanasandInternalPageAccess(String(id))) {
+            return { valid: true }
+        }
+
+        return { valid: false, error: 'Unauthorized.' }
     } catch (error) {
         res.log.error(error)
         return { valid: false, error: 'Internal server error' }

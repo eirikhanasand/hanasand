@@ -14,7 +14,7 @@ export async function getManagementOrganizations(req: FastifyRequest<{ Querystri
         JOIN organizations o ON o.id = m.organization_id AND o.status = 'active'
         JOIN users u ON u.id = m.user_id AND u.active = TRUE AND u.deletion_scheduled_at IS NULL
         WHERE m.user_id = $1 AND m.organization_id = $2
-          AND m.status = 'active' AND m.role IN ('owner', 'admin')
+          AND m.status = 'active' AND m.role IN ('owner', 'admin', 'editor')
         LIMIT 1
     `, [id, hanasandOrganizationId])
     if (req.query.access === '1') return res.send({ allowed: access.rows.length > 0 })

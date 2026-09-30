@@ -11,6 +11,7 @@ import { getDashboardViewMode, setDashboardViewMode } from '@/utils/layout/viewM
 import { getDashboardNavigation, navigationLinks, pinnedNavigation, type NavigationAccess, type NavigationItem } from '@/utils/layout/dashboardNavigation'
 import { useWorkspace } from '@/components/organizations/workspaceProvider'
 import { getThesisNavigation, subscribeThesisNavigation } from '@/utils/layout/thesisNavigation'
+import { canViewHanasandInternalPages } from '@/utils/organizations/internalPageAccess'
 
 const emptyThesisNavigation: ReturnType<typeof getThesisNavigation> = []
 
@@ -110,7 +111,17 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
         }
     }, [access.id, pathname])
     const hasHanasandOrganization = organizations.some(organization => organization.slug?.toLowerCase() === 'hanasand' && organization.lifecycleStatus === 'active')
-    const sections = getDashboardNavigation({ ...access, hasVMs, hasContentOrganization: Boolean(organizationId), hasHanasandOrganization, thesisSheets })
+    const canViewInternalPages = access.isAdmin || access.canManageSystem || canViewHanasandInternalPages(organizations)
+    const sections = getDashboardNavigation({
+        ...access,
+        canViewInternalPages,
+        canManageOrganizations: access.canManageOrganizations || canViewInternalPages,
+        canReviewIntel: access.canReviewIntel || canViewInternalPages,
+        hasVMs: hasVMs || canViewInternalPages,
+        hasContentOrganization: Boolean(organizationId),
+        hasHanasandOrganization,
+        thesisSheets,
+    })
     const links = navigationLinks(sections)
     const route = pathname
     const matchesHref = (href: string) => {
