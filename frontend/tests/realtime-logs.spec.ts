@@ -121,51 +121,50 @@ test('retains logs and reading position across overlapping polls and failures', 
     await expect(page.getByRole('button', { name: 'Pause', exact: true })).toHaveCount(0)
 })
 
-test('realtime loads 100 initially and 10 more only after scrolling through the new page', async ({ page }) => {
+test('realtime loads 50 events at a time when the feed reaches the end', async ({ page }) => {
     const requests: URL[] = []
     await page.route('**/api/backend/logs/search?*', route => {
         const url = new URL(route.request().url())
         requests.push(url)
         const cursor = url.searchParams.get('cursor')
         const rows = cursor === 'second-page'
-            ? Array.from({ length: 10 }, (_, index) => event(`event-${100 + index}`))
+            ? Array.from({ length: 50 }, (_, index) => event(`event-${50 + index}`))
             : cursor === 'third-page'
-                ? Array.from({ length: 10 }, (_, index) => event(`event-${110 + index}`))
-                : Array.from({ length: 100 }, (_, index) => event(`event-${index}`))
+                ? Array.from({ length: 25 }, (_, index) => event(`event-${100 + index}`))
+                : Array.from({ length: 50 }, (_, index) => event(`event-${index}`))
         const nextCursor = cursor ? cursor === 'second-page' ? 'third-page' : null : 'second-page'
-        const response = { ...result(rows), limit: cursor ? 10 : 100, next_cursor: nextCursor, ...(cursor ? {} : { total_events: 205 }) }
+        const response = { ...result(rows), limit: 50, next_cursor: nextCursor, ...(cursor ? {} : { total_events: 125 }) }
         return route.fulfill({ json: response })
     })
     await openLogs(page)
-    await expect(page.locator('article')).toHaveCount(100)
-    expect(requests[0].searchParams.get('hql')).toBe('Logs | take 100')
+    await expect(page.locator('article')).toHaveCount(50)
+    expect(requests).toHaveLength(1)
+    expect(requests[0].searchParams.get('hql')).toBe('Logs | take 50')
     expect(requests[0].searchParams.get('hours')).toBe('24')
     expect(requests[0].searchParams.get('paginate')).toBe('1')
-    await expect(page.getByText('100/205')).toBeVisible()
+    await expect(page.getByText('50/125')).toBeVisible()
 
     const viewport = page.locator('[data-logs-scroll]')
-    const initialHeight = await viewport.evaluate(element => element.scrollHeight)
     await viewport.evaluate(element => {
-        element.scrollTop = element.scrollHeight - element.clientHeight - 1100
+        element.scrollTop = element.scrollHeight
         element.dispatchEvent(new Event('scroll'))
     })
     await expect.poll(() => requests.length).toBe(2)
     expect(requests[1].searchParams.get('cursor')).toBe('second-page')
-    await expect(page.locator('article')).toHaveCount(110)
-    await expect(page.getByText('110/205')).toBeVisible()
-    const appendedHeight = await viewport.evaluate((element, height) => element.scrollHeight - height, initialHeight)
-    expect(appendedHeight).toBeGreaterThan(0)
-    await page.waitForTimeout(100)
-    expect(requests).toHaveLength(2)
+    await expect(page.locator('article')).toHaveCount(100)
+    await expect(page.getByText('100/125')).toBeVisible()
 
-    await viewport.evaluate((element, distance) => {
-        element.scrollTop += Math.max(200, distance)
+    await viewport.evaluate(element => {
+        element.scrollTop = element.scrollHeight
         element.dispatchEvent(new Event('scroll'))
-    }, appendedHeight)
+    })
     await expect.poll(() => requests.length).toBe(3)
     expect(requests[2].searchParams.get('cursor')).toBe('third-page')
-    await expect(page.locator('article')).toHaveCount(120)
-    await expect(page.getByText('120/205')).toBeVisible()
+    await expect(page.locator('article')).toHaveCount(125)
+    await expect(page.getByText('125/125')).toBeVisible()
+    await viewport.evaluate(element => { element.scrollTop = element.scrollHeight; element.dispatchEvent(new Event('scroll')) })
+    await page.waitForTimeout(100)
+    expect(requests).toHaveLength(3)
 })
 
 test('event text remains selectable and copies full evidence without navigating', async ({ page }) => {

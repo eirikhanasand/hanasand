@@ -21,7 +21,7 @@ export async function searchLogs(req: FastifyRequest, res: FastifyReply) {
         const params = [...compiled.params]
         const bind = (value: string | number) => { params.push(value); return `$${params.length}` }
         const realtime = input.realtime === '1'
-        const pageLimit = paginate && realtime && input.cursor ? Math.min(compiled.limit, 10) : compiled.limit
+        const pageLimit = paginate && realtime && input.cursor ? Math.min(compiled.limit, 50) : compiled.limit
         const hours = Number(input.hours || (realtime ? 1 : 24))
         if (!Number.isFinite(hours) || hours < 1 || hours > 24 * 90) throw new Error('Time range must be between one hour and 90 days.')
         const timeWhere = `event_timestamp >= NOW() - ${bind(hours)} * INTERVAL '1 hour'`

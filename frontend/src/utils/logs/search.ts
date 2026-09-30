@@ -9,7 +9,7 @@ export const logTables = ['Logs', 'ProcessLogs', 'SigninLogs', 'ApplicationLogs'
 export function logSearchParams({ view, hours, advanced, appliedHql, table, search, service, severity }: {
     view: string, hours: string, advanced: boolean, appliedHql: string, table: string, search: string, service: string, severity: string
 }) {
-    const params = new URLSearchParams({ hours, hql: advanced && appliedHql ? appliedHql : `${table} | take ${view === 'realtime' ? 100 : 200}` })
+    const params = new URLSearchParams({ hours, hql: advanced && appliedHql ? appliedHql : `${table} | take ${view === 'realtime' ? 50 : 200}` })
     if (search && !advanced) params.set('search', search)
     if (service !== 'all') params.set('service', service)
     if (view === 'realtime') {

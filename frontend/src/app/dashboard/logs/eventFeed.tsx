@@ -11,7 +11,6 @@ export default class EventFeed extends Component<EventFeedProps> {
     private observer?: IntersectionObserver
     private sentinelNear = false
     private loadMorePending = false
-    private loadMoreBlockedUntil = 0
     componentDidMount() { this.observeLoadMore() }
     getSnapshotBeforeUpdate(previous: Readonly<EventFeedProps>): EventFeedSnapshot | null {
         const node = this.viewport.current
@@ -24,10 +23,8 @@ export default class EventFeed extends Component<EventFeedProps> {
     componentDidUpdate(previous: Readonly<EventFeedProps>, _state: unknown, snapshot: EventFeedSnapshot | null) {
         const node = this.viewport.current
         if (node && snapshot?.appended) {
-            this.loadMoreBlockedUntil = Math.max(this.loadMoreBlockedUntil, snapshot.top + Math.max(200, node.scrollHeight - snapshot.height))
             this.loadMorePending = false
-        } else if (node && previous.onLoadMore === undefined && this.props.onLoadMore) {
-            this.loadMoreBlockedUntil = Math.max(this.loadMoreBlockedUntil, node.scrollTop + 200)
+        } else if (previous.onLoadMore === undefined && this.props.onLoadMore) {
             this.loadMorePending = false
         }
         if (node && snapshot && !snapshot.appended) node.scrollTop = snapshot.top + node.scrollHeight - snapshot.height
@@ -38,7 +35,7 @@ export default class EventFeed extends Component<EventFeedProps> {
     private tryLoadMore() {
         const node = this.viewport.current
         const loadMore = this.props.onLoadMore
-        if (!node || !loadMore || !this.sentinelNear || this.loadMorePending || node.scrollTop < this.loadMoreBlockedUntil) return
+        if (!node || !loadMore || !this.sentinelNear || this.loadMorePending) return
         this.loadMorePending = true
         loadMore()
     }
@@ -49,7 +46,7 @@ export default class EventFeed extends Component<EventFeedProps> {
         this.observer = new IntersectionObserver(entries => {
             this.sentinelNear = entries.some(entry => entry.isIntersecting)
             this.tryLoadMore()
-        }, { root: this.viewport.current, rootMargin: '1200px 0px' })
+        }, { root: this.viewport.current, rootMargin: '150px' })
         this.observer.observe(this.sentinel.current)
     }
     render() {
