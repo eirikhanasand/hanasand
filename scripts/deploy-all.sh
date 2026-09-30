@@ -291,10 +291,24 @@ wait_for_healthy() {
 warm_dashboard_pages() {
     port=$1
     for page_path in /scanner /vms /db/backups /automation/health; do
-        curl --silent --show-error --max-time 15 --output /dev/null \
-            -H 'Cookie: id=dashboard-render-proof-user; access_token=local-dashboard-render-proof-token; roles=["system_admin"]; dashboard_view_mode=normal' \
+        page_cookie='id=dashboard-render-proof-user; access_token=local-dashboard-render-proof-token; roles=%5B%22system_admin%22%5D; dashboard_view_mode=normal'
+        curl --fail --silent --show-error --max-time 15 --output /dev/null \
+            -H "Cookie: $page_cookie" \
             -H 'x-hanasand-render-proof-auth: local-dashboard-render-proof' \
             "http://127.0.0.1:$port$page_path"
+
+        response=$(curl --fail --silent --show-error --max-time 15 --output /dev/null \
+            --write-out '%{http_code} %{time_starttransfer}' \
+            -H "Cookie: $page_cookie" \
+            -H 'x-hanasand-render-proof-auth: local-dashboard-render-proof' \
+            "http://127.0.0.1:$port$page_path")
+        status=${response%% *}
+        elapsed=${response#* }
+        if [ "$status" != "200" ] || ! awk -v elapsed="$elapsed" 'BEGIN { exit (elapsed < 0.020) ? 0 : 1 }'; then
+            echo "$page_path did not reach 200 with a first byte under 20ms (status $status, ${elapsed}s)." >&2
+            return 1
+        fi
+        printf '%s first byte %.1f ms\n' "$page_path" "$(awk -v elapsed="$elapsed" 'BEGIN { print elapsed * 1000 }')"
     done
 }
 
