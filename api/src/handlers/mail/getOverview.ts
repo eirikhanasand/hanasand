@@ -18,7 +18,7 @@ export default async function getMailOverview(req: FastifyRequest, res: FastifyR
     }
 
     try {
-        const query = req.query as { mailboxUser?: string, mailboxId?: string, messageId?: string, after?: string }
+        const query = req.query as { mailboxUser?: string, mailboxId?: string, messageId?: string, after?: string, unreadOnly?: string }
         const access = await getMailAccess(id, query.mailboxUser)
         if (query.after) {
             if (typeof query.after !== 'string' || query.after.length > 1024 || typeof query.mailboxId !== 'string') {
@@ -27,6 +27,11 @@ export default async function getMailOverview(req: FastifyRequest, res: FastifyR
             return res.send(await listMessagePage(access.username, access.password, query.mailboxId, query.after))
         }
         const accessibleAccounts = await listAccessibleMailAccounts(id)
+        if (query.unreadOnly === 'true') {
+            return res
+                .header('Cache-Control', 'no-store, private, max-age=0, must-revalidate')
+                .send({ accessibleAccounts: await loadAccountCounts(id, accessibleAccounts, access.targetUser) })
+        }
         const accountCounts = loadAccountCounts(id, accessibleAccounts, access.targetUser)
         const recentRecipients = await listRecentRecipients(id, access.targetUser)
         const health = await withDeadline(getMailHealth(), 3500, null).catch(error => {

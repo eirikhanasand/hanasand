@@ -56,6 +56,24 @@ export async function fetchMailOverview(params: { mailboxUser?: string, mailboxI
     return normalizeMailOverview(payload as Partial<MailOverview>)
 }
 
+export async function fetchHasUnreadMail() {
+    const headers = authHeaders()
+    if (!headers) {
+        throw new Error('Unauthorized.')
+    }
+
+    const response = await fetchWithTimeout('/api/backend/mail/overview?unreadOnly=true', {
+        headers,
+        cache: 'no-store',
+    }, 7_000)
+    const payload = await response.json().catch(() => ({})) as { error?: string, accessibleAccounts?: Array<{ unreadCount?: number | null }> } | null
+    if (!response.ok) {
+        throw new Error(payload?.error || 'Mail is unavailable right now.')
+    }
+
+    return Array.isArray(payload?.accessibleAccounts) && payload.accessibleAccounts.some(account => (account.unreadCount ?? 0) > 0)
+}
+
 export async function sendMail(body: {
     mailboxUser?: string
     to: string

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-test('pending support is shown in expanded and compact dashboard sidebars', async ({ page, baseURL }) => {
+test('mail and support badges appear on their own rows in expanded and compact navigation', async ({ page, baseURL }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.context().addCookies([
         { name: 'id', value: 'support-agent', url: baseURL! },
@@ -9,15 +9,29 @@ test('pending support is shown in expanded and compact dashboard sidebars', asyn
     await page.route('**/api/backend/support/tickets', route => route.fulfill({
         json: { isSupport: true, tickets: [{ id: 'ticket-1', status: 'open' }] },
     }))
+    await page.route('**/api/backend/mail/overview**', route => route.fulfill({
+        json: { accessibleAccounts: [{ id: 'support-agent', unreadCount: 1 }] },
+    }))
 
     await page.goto('/support')
-    const expandedCommunication = page.getByRole('button', { name: 'Communication, 1 pending support chat' })
+    const expandedCommunication = page.getByRole('button', { name: 'Communication', exact: true })
+    const mailLink = page.getByRole('link', { name: 'Mail, unread messages', exact: true })
+    const supportLink = page.getByRole('link', { name: 'Support Chats, pending conversations', exact: true })
     await expect(expandedCommunication).toBeVisible()
-    await expect(expandedCommunication.locator('span').filter({ hasText: /^1$/ })).toHaveClass(/rounded-full.*bg-neutral-700/)
+    await expect(expandedCommunication.locator('span[aria-hidden="true"]')).toHaveCount(0)
+    await expect(mailLink.locator('span[aria-hidden="true"]')).toHaveText('1')
+    await expect(mailLink.locator('span[aria-hidden="true"]')).toHaveClass(/rounded-full.*bg-neutral-700/)
+    await expect(supportLink.locator('span[aria-hidden="true"]')).toHaveText('1')
+    await expect(supportLink.locator('span[aria-hidden="true"]')).toHaveClass(/rounded-full.*bg-neutral-700/)
 
     await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click()
-    const compactCommunication = page.getByRole('button', { name: 'Open Communication, 1 pending support chat' })
+    const compactCommunication = page.getByRole('button', { name: 'Open Communication, unread mail and pending support chats' })
     await expect(compactCommunication).toBeVisible()
-    await expect(compactCommunication.locator('span')).toHaveText('1')
-    await expect(compactCommunication.locator('span')).toHaveClass(/rounded-full.*bg-neutral-700/)
+    await expect(compactCommunication.locator('span[aria-hidden="true"]')).toHaveText('1')
+    await expect(compactCommunication.locator('span[aria-hidden="true"]')).toHaveClass(/rounded-full.*bg-neutral-700/)
+    await compactCommunication.hover()
+    const compactPreview = page.getByRole('region', { name: 'Communication navigation' })
+    await expect(compactCommunication.locator('span[aria-hidden="true"]')).toHaveCount(0)
+    await expect(compactPreview.getByRole('link', { name: 'Mail, unread messages', exact: true })).toBeVisible()
+    await expect(compactPreview.getByRole('link', { name: 'Support Chats, pending conversations', exact: true })).toBeVisible()
 })

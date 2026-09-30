@@ -12,6 +12,7 @@ import { getDashboardNavigation, navigationLinks, pinnedNavigation, type Navigat
 import { useWorkspace } from '@/components/organizations/workspaceProvider'
 import { getThesisNavigation, subscribeThesisNavigation } from '@/utils/layout/thesisNavigation'
 import { canViewHanasandInternalPages } from '@/utils/organizations/internalPageAccess'
+import { fetchHasUnreadMail } from '@/utils/mail/client'
 
 const emptyThesisNavigation: ReturnType<typeof getThesisNavigation> = []
 
@@ -63,6 +64,13 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
     const [hasVMs, setHasVMs] = useState(false)
     const [supportQueue, setSupportQueue] = useState<{ userId: string; hasPending: boolean } | null>(null)
     const hasPendingSupport = supportQueue?.userId === access.id && supportQueue.hasPending
+    const [mailQueue, setMailQueue] = useState<{ userId: string; hasUnread: boolean } | null>(null)
+    const hasUnreadMail = mailQueue?.userId === access.id && mailQueue.hasUnread
+    const pendingCommunicationItems = [
+        hasUnreadMail ? 'unread mail' : null,
+        hasPendingSupport ? 'pending support chats' : null,
+    ].filter((item): item is string => item !== null)
+    const communicationSummary = pendingCommunicationItems.join(' and ')
     const thesisSheets = useSyncExternalStore(subscribeThesisNavigation, getThesisNavigation, () => emptyThesisNavigation)
     useEffect(() => {
         const controller = new AbortController()
@@ -110,6 +118,35 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
             document.removeEventListener('visibilitychange', refresh)
         }
     }, [access.id, pathname])
+    useEffect(() => {
+        let disposed = false
+        let requestInFlight = false
+        const refresh = async () => {
+            if (requestInFlight) return
+            requestInFlight = true
+            try {
+                const hasUnread = await fetchHasUnreadMail()
+                if (!disposed) {
+                    setMailQueue({
+                        userId: access.id,
+                        hasUnread,
+                    })
+                }
+            } catch { /* Mail access can be unavailable for some dashboard users. */ }
+            finally { requestInFlight = false }
+        }
+        void refresh()
+        const interval = window.setInterval(() => { void refresh() }, 60_000)
+        const refreshWhenVisible = () => { if (!document.hidden) void refresh() }
+        window.addEventListener('focus', refresh)
+        document.addEventListener('visibilitychange', refreshWhenVisible)
+        return () => {
+            disposed = true
+            window.clearInterval(interval)
+            window.removeEventListener('focus', refresh)
+            document.removeEventListener('visibilitychange', refreshWhenVisible)
+        }
+    }, [access.id])
     const hasHanasandOrganization = organizations.some(organization => organization.slug?.toLowerCase() === 'hanasand' && organization.lifecycleStatus === 'active')
     const canViewInternalPages = access.canViewInternalPages === true || canViewHanasandInternalPages(organizations)
     const sections = getDashboardNavigation({
@@ -176,17 +213,20 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
 
     function renderLink(item: { label: string, href: string }, key = item.href) {
         const pinned = preferences.pinned.includes(item.href)
+        const pendingLabel = pendingLabelForHref(item.href, hasUnreadMail, hasPendingSupport)
         return (
             <div key={key} className='group flex min-w-0 items-center rounded-md hover:bg-ui-canvas'>
                 <Link href={item.href} aria-current={active?.href === item.href ? 'page' : undefined}
+                    aria-label={pendingLabel ? `${item.label}, ${pendingLabel}` : undefined}
                     data-thesis-sheet-link={item.href.startsWith('/thesis?sheet=') ? '' : undefined}
                     onClick={event => {
                         if (!item.href.startsWith('/thesis?sheet=') || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
                         event.preventDefault()
                         window.history.pushState(null, '', item.href)
                     }}
-                    className={`min-w-0 flex-1 rounded-md px-2 py-2 text-sm leading-5 focus-visible:outline-2 focus-visible:outline-ui-primary ${active?.href === item.href ? 'bg-ui-primary/10 font-semibold text-ui-primary' : 'text-ui-muted hover:text-ui-text'}`}>
-                    {item.label}
+                    className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-sm leading-5 focus-visible:outline-2 focus-visible:outline-ui-primary ${active?.href === item.href ? 'bg-ui-primary/10 font-semibold text-ui-primary' : 'text-ui-muted hover:text-ui-text'}`}>
+                    <span className='min-w-0 flex-1'>{item.label}</span>
+                    {pendingLabel ? <PendingBadge /> : null}
                 </Link>
                 <button type='button' onClick={() => pin(item.href)} aria-label={`${pinned ? 'Unpin' : 'Pin'} ${item.label}`} aria-pressed={pinned}
                     className={`grid h-8 w-7 shrink-0 place-items-center rounded text-ui-muted hover:text-ui-primary focus-visible:outline-2 focus-visible:outline-ui-primary ${pinned ? 'text-ui-primary' : 'lg:opacity-0 lg:group-hover:opacity-100 lg:focus-visible:opacity-100'}`}>
@@ -206,11 +246,9 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
         return (
             <div key={key} className={ancestors.length ? 'min-w-0' : 'min-w-0 border-t border-ui-border/50 pt-1 first:border-0'}>
                 <button type='button' aria-expanded={expanded} aria-controls={controls} onClick={() => toggle(key)}
-                    aria-label={item.label === 'Communication' && hasPendingSupport ? 'Communication, 1 pending support chat' : undefined}
                     className={`flex min-h-10 w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm leading-5 hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary ${containsActive ? 'text-ui-primary' : 'text-ui-text'} ${ancestors.length ? 'font-medium' : 'font-semibold'}`}>
                     {!ancestors.length && <Icon className='h-4 w-4 shrink-0' />}
                     <span className='min-w-0 flex-1'>{item.label}</span>
-                    {item.label === 'Communication' && hasPendingSupport ? <SupportPendingBadge /> : null}
                     <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${expanded ? '' : '-rotate-90'}`} />
                 </button>
                 <div id={controls} hidden={!expanded} className='ml-2 border-l border-ui-border pl-2'>
@@ -290,10 +328,13 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
                     </div>
                 </div>
             }
+            const pendingLabel = item.href ? pendingLabelForHref(item.href, hasUnreadMail, hasPendingSupport) : null
             return item.href ? <Link key={item.href} href={item.href} onClick={() => setPreview(null)} aria-current={active?.href === item.href ? 'page' : undefined}
-                className={`block rounded-md py-2 pr-3 text-sm leading-5 hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary ${active?.href === item.href ? 'bg-ui-primary/10 font-semibold text-ui-primary' : 'text-ui-text'}`}
+                aria-label={pendingLabel ? `${item.label}, ${pendingLabel}` : undefined}
+                className={`flex items-center gap-2 rounded-md py-2 pr-3 text-sm leading-5 hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary ${active?.href === item.href ? 'bg-ui-primary/10 font-semibold text-ui-primary' : 'text-ui-text'}`}
                 style={{ paddingLeft: 12 + ancestors.length * 12 }}>
-                {item.label}
+                <span className='min-w-0 flex-1'>{item.label}</span>
+                {pendingLabel ? <PendingBadge /> : null}
             </Link> : null
         })
     }
@@ -341,13 +382,13 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
                     if (section.href) return <Link key={section.href} href={section.href} aria-label={section.label} title={section.label} aria-current={active?.href === section.href ? 'page' : undefined}
                         className={`grid h-10 w-full place-items-center rounded-md focus-visible:outline-2 focus-visible:outline-ui-primary ${active?.href === section.href ? 'bg-ui-primary/10 text-ui-primary' : 'text-ui-muted hover:bg-ui-canvas'}`}><Icon className='h-4 w-4' /></Link>
                     return <button key={section.label} type='button'
-                        aria-label={section.label === 'Communication' && hasPendingSupport ? 'Open Communication, 1 pending support chat' : `Open ${section.label}`}
-                        title={section.label === 'Communication' && hasPendingSupport ? 'Communication · 1 pending support chat' : section.label}
+                        aria-label={section.label === 'Communication' && communicationSummary ? `Open Communication, ${communicationSummary}` : `Open ${section.label}`}
+                        title={section.label === 'Communication' && communicationSummary ? `Communication · ${communicationSummary}` : section.label}
                         onMouseEnter={event => showPreview(section, event.currentTarget)} onFocus={event => showPreview(section, event.currentTarget)}
                         onClick={() => { save({ ...preferences, expanded: { ...preferences.expanded, [section.label]: true } }); setDashboardViewMode('normal'); setPreview(null) }}
                         className={`relative grid h-10 w-full place-items-center rounded-md hover:bg-ui-canvas focus-visible:outline-2 focus-visible:outline-ui-primary ${activePath.startsWith(section.label) ? 'bg-ui-primary/10 text-ui-primary' : 'text-ui-muted'}`}>
                         <Icon className='h-4 w-4' />
-                        {section.label === 'Communication' && hasPendingSupport ? <SupportPendingBadge className='absolute right-0 top-0' /> : null}
+                        {section.label === 'Communication' && communicationSummary && preview?.section.label !== section.label ? <PendingBadge className='absolute right-0 top-0' /> : null}
                     </button>
                 }) : search ? <div aria-label='Navigation search results'>
                     <p role='status' className='px-2 py-1 text-xs text-ui-muted'>{matches.length} matching pages</p>
@@ -377,6 +418,12 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
     )
 }
 
-function SupportPendingBadge({ className = '' }: { className?: string }) {
+function pendingLabelForHref(href: string, hasUnreadMail: boolean, hasPendingSupport: boolean) {
+    if (href === '/mail' && hasUnreadMail) return 'unread messages'
+    if (href === '/support' && hasPendingSupport) return 'pending conversations'
+    return null
+}
+
+function PendingBadge({ className = '' }: { className?: string }) {
     return <span aria-hidden='true' className={`grid h-4 w-4 shrink-0 place-items-center rounded-full bg-neutral-700 text-[10px] font-semibold leading-none text-white ${className}`}>1</span>
 }
