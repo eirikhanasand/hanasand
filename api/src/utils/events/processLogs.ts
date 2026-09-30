@@ -184,11 +184,11 @@ function scopedProcessor(platformId: string, onWork: () => void, afterBatch?: ()
                     return
                 }
 
-                // Process events are evaluated independently. Let two durable pages overlap;
-                // event IDs and finding keys make replay races safe, while other events keep
-                // the correlation lock even when they share a source batch.
-                for (let offset = 0; offset < pages.length; offset += 2) {
-                    const group = pages.slice(offset, offset + 2)
+                // Process events are evaluated independently. Let three durable pages overlap;
+                // event IDs and finding keys make replay races safe. Authentication logins
+                // remain serialized under their correlation lock.
+                for (let offset = 0; offset < pages.length; offset += 3) {
+                    const group = pages.slice(offset, offset + 3)
                     if (group.length === 1) {
                         await processPage(group[0])
                         await afterBatch?.()
