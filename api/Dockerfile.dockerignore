@@ -17,3 +17,6 @@ api/.tmp
 **/*.key
 **/*secret*
 **/.DS_Store
+
+# This encryption helper is source code, not a secret value.
+!api/src/utils/crypto/secretBox.ts
