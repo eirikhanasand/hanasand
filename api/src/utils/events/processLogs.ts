@@ -18,6 +18,7 @@ let running = false
 const AUTH_CORRELATION_PAGE_SIZE = 1
 const AUTH_CORRELATION_RECHECK_LIMIT = 25
 const DEDICATED_LOG_BATCH_LIMIT = 25
+const DEDICATED_LOG_WORK_LIMIT = DEDICATED_LOG_BATCH_LIMIT * 3
 // Stateless results commit atomically with their findings; authentication keeps
 // durable pending history for correlation. Stable identities make retries safe.
 export async function processLog(log: LogInput, organizationId: string, rules: Awaited<ReturnType<typeof loadConfiguredRules>>) {
@@ -288,10 +289,11 @@ export async function processStoredLogs() {
         // Fresh command admission and the event-time priority pass remain unchanged.
         const settings = readLogCatchupSettings()
         // The dedicated worker commits cursor/progress state once a pass ends.
-        // Keep each pass deliberately small even if a deployment tuning changes.
+        // Keep individual transactions at 25 records while feeding three
+        // concurrent pages, matching processScopes' bounded worker group.
         const dedicatedWorker = process.env.LOG_PROCESSOR_ONLY === '1'
-        const configuredLimit = dedicatedWorker ? Math.min(settings.limit, DEDICATED_LOG_BATCH_LIMIT) : settings.limit
-        const configuredHistoryLimit = dedicatedWorker ? Math.min(settings.historyLimit, DEDICATED_LOG_BATCH_LIMIT) : settings.historyLimit
+        const configuredLimit = dedicatedWorker ? Math.min(settings.limit, DEDICATED_LOG_WORK_LIMIT) : settings.limit
+        const configuredHistoryLimit = dedicatedWorker ? Math.min(settings.historyLimit, DEDICATED_LOG_WORK_LIMIT) : settings.historyLimit
         const queueLimit = dedicatedWorker ? configuredLimit : 1000
         // The transaction owns the lock connection until both cursors are durable.
         // Another replica skips this tick instead of duplicating the same work.

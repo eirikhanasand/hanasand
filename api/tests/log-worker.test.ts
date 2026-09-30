@@ -136,7 +136,7 @@ test('delayed command work keeps its longer budget while catch-up uses the confi
     expect(queueRuns).toBe(2); expect(recoveryRuns).toBe(2)
 })
 
-test('dedicated worker keeps every page and queue batch within its durable limit', async () => {
+test('dedicated worker keeps transaction pages small while feeding three pages per lane', async () => {
     process.env.LOG_PROCESSOR_ONLY = '1'
     process.env.LOG_CATCHUP_BATCH_LIMIT = '1000'
     process.env.LOG_CATCHUP_HISTORY_LIMIT = '1000'
@@ -145,10 +145,10 @@ test('dedicated worker keeps every page and queue batch within its durable limit
     await processStoredLogs()
 
     expect(reads.length).toBeGreaterThan(0)
-    expect(reads.every(read => read.params[2] === 25)).toBe(true)
-    expect(historyLimits).toEqual([25]); expect(recentLimits).toEqual([25])
-    expect(recoveryLimits).toEqual([25]); expect(queueLimits).toEqual([25])
-    expect(queuePageLimits).toEqual([1]); expect(unassignedLimits).toEqual([25]); expect(pendingLimits).toEqual([25])
+    expect(reads.every(read => read.params[2] === 75)).toBe(true)
+    expect(historyLimits).toEqual([75]); expect(recentLimits).toEqual([75])
+    expect(recoveryLimits).toEqual([75]); expect(queueLimits).toEqual([75])
+    expect(queuePageLimits).toEqual([1]); expect(unassignedLimits).toEqual([75]); expect(pendingLimits).toEqual([75])
 })
 test('failed findings roll back the event and preserve cursors for successful retry', async () => {
     fail = true
