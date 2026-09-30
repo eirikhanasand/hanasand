@@ -51,8 +51,9 @@ export default function Page() {
                             <ArrowRight className='h-4 w-4' />
                         </Link>
                         <div className='grid max-w-4xl gap-6'>
-                            <h1 className='max-w-4xl text-[clamp(2.8rem,5.4vw,5.4rem)] font-medium leading-[0.94] tracking-[-0.065em]'>
-                                Know what’s exposed <span className='home-heading-muted'>before it’s too late.</span>
+                            <h1 className='max-w-4xl text-[clamp(1.625rem,5.4vw,5.4rem)] font-medium leading-[0.94] tracking-[-0.065em]'>
+                                <span className='block whitespace-nowrap'>Know what’s exposed</span>
+                                <span className='home-heading-muted block whitespace-nowrap'>before it’s too late.</span>
                             </h1>
                             <p className='max-w-xl text-base leading-7 text-ui-muted md:text-lg md:leading-8'>
                                 Company monitoring done right. Track company and vendor mentions with source links and context your team can act on.
