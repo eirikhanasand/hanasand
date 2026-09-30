@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, ExternalLink, Radio, Users } from 'lucide-react'
+import { ArrowRight, ChevronDown, ExternalLink, Radio, Users } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import { getTiEnrichmentOverview, type TiActivityEvent, type TiEnrichedActor, type TiProfileUpdate } from '@/utils/tiAdmin/enrichment'
 import { formatTiDate } from '@/utils/tiAdmin/ops'
@@ -72,13 +72,19 @@ export default async function TiEnrichmentPage() {
                     </DashboardPanel>
                 </div>
             )}
-            {actors.length ? <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
-                <PanelHeader title='Profile update history' subtitle='Exact persisted changes and the evidence that triggered them.' />
-                <div className='divide-y divide-ui-border'>
+            {actors.length ? <details className='group overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
+                <summary className='flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-ui-text transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 [&::-webkit-details-marker]:hidden'>
+                    <ChevronDown aria-hidden className='h-4 w-4 shrink-0 text-ui-muted transition group-open:rotate-180' />
+                    <span>
+                        <span className='block text-base font-semibold'>History</span>
+                        <span className='mt-1 block text-sm text-ui-muted'>Exact persisted changes and the evidence that triggered them.</span>
+                    </span>
+                </summary>
+                <div className='divide-y divide-ui-border border-t border-ui-border'>
                     {updates.slice(0, 20).map(update => <ProfileUpdateRow key={update.id} update={update} actor={actors.find(item => item.id === update.actorId)} />)}
                     {!updates.length ? <p className='p-5 text-sm text-ui-muted'>No field-level profile changes have been recorded yet. The next profile-changing observation will be listed here.</p> : null}
                 </div>
-            </DashboardPanel> : null}
+            </details> : null}
         </DashboardPage>
     )
 }
