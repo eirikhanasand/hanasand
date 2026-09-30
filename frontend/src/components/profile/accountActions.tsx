@@ -182,7 +182,8 @@ export default function AccountActions({ isSelf }: { isSelf: boolean }) {
             </div>
             <SocialSignIn link />
             {message && <p className='mt-3 text-sm text-ui-text'>{message}</p>}
-            <div className='mt-4 grid gap-2'>
+            <h3 className='mb-2 mt-4 text-sm font-semibold text-ui-text'>Passkeys</h3>
+            <div className='grid gap-2'>
                 {passkeys.map(passkey => (
                     <div key={passkey.credentialId} className='flex min-w-0 flex-col gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 sm:flex-row sm:items-center sm:justify-between'>
                         <div className='min-w-0 flex-1'>
