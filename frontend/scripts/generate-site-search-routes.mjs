@@ -43,7 +43,8 @@ function quote(value) {
     return apostrophe + escaped + apostrophe
 }
 
-const routes = [...new Set(await pageRoutes(appDir))].sort((a, b) => a.localeCompare(b))
+const nonSearchableRoutes = new Set(['/browser/report'])
+const routes = [...new Set(await pageRoutes(appDir))].filter(route => !nonSearchableRoutes.has(route)).sort((a, b) => a.localeCompare(b))
 const items = routes.map(href => `{
         id: ${quote(`route:${href}`)},
         title: ${quote(labelFor(href))},

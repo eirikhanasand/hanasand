@@ -13,7 +13,6 @@ export const publicRoutes = [
     '/privacy',
     '/findings',
     '/browser',
-    '/browser/report',
     '/browser-sandbox',
     '/onion-session',
     '/status',

@@ -22,6 +22,10 @@ export async function proxy(req: NextRequest) {
         url.pathname = canonicalPath
         return NextResponse.redirect(url, 308)
     }
+    if (visiblePath === '/browser/report'
+        && (!req.nextUrl.searchParams.get('run') || !req.nextUrl.searchParams.get('token'))) {
+        return NextResponse.redirect(new URL('/browser', req.url))
+    }
     const path = appPagePath(visiblePath)
     const pathWithSearch = `${visiblePath}${req.nextUrl.search}`
     const requestHeaders = new Headers(req.headers)

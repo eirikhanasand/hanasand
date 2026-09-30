@@ -73,12 +73,6 @@ export const generatedSearchRoutes = [
         href: '/browser-sandbox',
     },
     {
-        id: 'route:/browser/report',
-        title: 'Browser · Report',
-        detail: 'Page · /browser/report',
-        href: '/browser/report',
-    },
-    {
         id: 'route:/contact',
         title: 'Contact',
         detail: 'Page · /contact',
@@ -649,6 +643,12 @@ export const generatedSearchRoutes = [
         href: '/reset-password',
     },
     {
+        id: 'route:/reset-password-again',
+        title: 'Reset Password Again',
+        detail: 'Page · /reset-password-again',
+        href: '/reset-password-again',
+    },
+    {
         id: 'route:/role',
         title: 'Role',
         detail: 'Page · /role',
@@ -659,6 +659,12 @@ export const generatedSearchRoutes = [
         title: 'S',
         detail: 'Page · /s',
         href: '/s',
+    },
+    {
+        id: 'route:/secure-account',
+        title: 'Secure Account',
+        detail: 'Page · /secure-account',
+        href: '/secure-account',
     },
     {
         id: 'route:/signup',
