@@ -224,11 +224,11 @@ export async function getLegacyTrafficRecords(req: FastifyRequest, res: FastifyR
 }
 
 function loadTrafficRecordTotal(domain: string | null) {
-    return safeQuery(`
+    return cachedLogQuery(`traffic:record-total:${JSON.stringify(domain)}`, 30000, () => safeQuery(`
         SELECT COUNT(*)::bigint AS total
         FROM traffic_events
         WHERE ($1::text IS NULL OR domain = $1)
-    `, [domain])
+    `, [domain]))
 }
 
 export async function getLegacyTrafficLive(req: FastifyRequest, res: FastifyReply) {
