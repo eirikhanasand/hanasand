@@ -93,7 +93,7 @@ export async function updateMonitoringCase(req: FastifyRequest<{ Params: { id: s
     const actor = authenticatedId || id
     const at = new Date().toISOString()
     const eventId = crypto.randomUUID()
-    const comment = body.comment === undefined ? [] : [{ id: eventId, author: actor, body: body.comment.trim(), createdAt: at }]
+    const comment = body.comment === undefined ? [] : [{ id: eventId, author: actor, actorType: machine ? 'automation' : 'human', body: body.comment.trim(), createdAt: at }]
     const metadata = JSON.stringify({ id: eventId, actor, actorType: machine ? 'automation' : 'human', at, note: body.comment?.trim() })
     const resolution = ['closed', 'resolved'].includes(body.status || '') ? JSON.stringify({ id: eventId, actor, type: body.resolutionMethod === 'ai' ? 'ai' : machine ? 'automation' : 'human', at, note: body.comment!.trim() }) : null
     const result = await run(`UPDATE monitoring_issues i SET

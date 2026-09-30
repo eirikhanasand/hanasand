@@ -59,7 +59,7 @@ export async function recordMonitoringOutcome(automation: AutomationRow, runId: 
                 WHERE c.issue_id=i.id AND c.automation_id=$1 AND ($2::text IS NULL OR i.kind='failure')`, [automation.id, kind])
             await query(`UPDATE monitoring_issues SET resolved_at = NOW(),
                 history = history || jsonb_build_array(jsonb_build_object('id', $3::text, 'at', NOW(), 'actor', 'Health monitoring', 'actorType', 'automation', 'action', 'recovered', 'note', $4::text, 'runId', $3::text)),
-                comments = comments || jsonb_build_array(jsonb_build_object('id', $3::text, 'createdAt', NOW(), 'author', 'Health monitoring', 'body', $4::text)),
+                comments = comments || jsonb_build_array(jsonb_build_object('id', $3::text, 'createdAt', NOW(), 'author', 'Health monitoring', 'actorType', 'automation', 'body', $4::text)),
                 resolution = CASE WHEN status_override IS NULL THEN jsonb_build_object('id', $3::text, 'at', NOW(), 'actor', 'Health monitoring', 'type', 'automation', 'note', $4::text) ELSE resolution END
                 WHERE merged_into IS NULL AND resolved_at IS NULL AND ($2::text IS NULL OR kind = 'failure')
                   AND EXISTS (SELECT 1 FROM monitoring_issue_checks c WHERE c.issue_id=monitoring_issues.id AND c.automation_id=$1)

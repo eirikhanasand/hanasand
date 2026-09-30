@@ -102,6 +102,41 @@ test('case filters hide resolved cases by default and reveal AI resolutions need
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })
 
+test('case comments start collapsed and can be filtered by author, text and automation', async ({ context, page, baseURL }) => {
+    await authenticate(context, baseURL)
+    const item: MonitoringCase = {
+        id: 'HA-47206', title: 'Comment filters', summary: 'A case with comments to filter.', status: 'open', severity: 'high', occurrences: 1, automationId: 'health',
+        notificationsEnabled: true, notifications: [], history: [], comments: [
+            { id: 'human', author: 'Alice', body: 'Investigated database latency.', createdAt: '2026-09-12T09:00:00Z', actorType: 'human' },
+            { id: 'auto', author: 'Health monitoring', body: 'Check recovered automatically.', createdAt: '2026-09-12T09:05:00Z' },
+            { id: 'release', author: 'Release bot', body: 'Deployment completed.', createdAt: '2026-09-12T09:10:00Z', actorType: 'automation' },
+        ],
+    }
+    await page.route('**/api/cases/HA-47206?**', route => route.fulfill({ json: { case: item } }))
+    await page.route('**/api/backend/cases/**', route => route.fulfill({ json: { items: [], hasMore: false } }))
+    await page.goto('/cases/HA-47206')
+    const comments = page.getByRole('region', { name: 'Comments' })
+    await expect(page.getByRole('button', { name: 'Comments', exact: true })).toHaveAttribute('aria-expanded', 'false')
+    await expect(comments).toBeHidden()
+    await expect(page.getByText('3 comments', { exact: true })).toBeVisible()
+    await page.getByRole('button', { name: 'Comments', exact: true }).click()
+    await expect(comments).toBeVisible()
+    await page.getByRole('button', { name: 'Filter comments' }).click()
+    await page.getByRole('searchbox', { name: 'Search comments' }).fill('latency')
+    await expect(comments.getByText('Investigated database latency.')).toBeVisible()
+    await expect(comments.getByText('Check recovered automatically.')).toHaveCount(0)
+    await page.getByRole('button', { name: 'Clear filters' }).click()
+    await page.getByRole('searchbox', { name: 'Search comments' }).fill('Alice')
+    await expect(comments.getByText('Investigated database latency.')).toBeVisible()
+    await expect(comments.getByText('Deployment completed.')).toHaveCount(0)
+    await page.getByRole('button', { name: 'Clear filters' }).click()
+    await page.getByLabel('Hide automated comments').check()
+    await expect(comments.getByText('Investigated database latency.')).toBeVisible()
+    await expect(comments.getByText('Check recovered automatically.')).toHaveCount(0)
+    await expect(comments.getByText('Deployment completed.')).toHaveCount(0)
+    await expect(page.getByText('3 comments', { exact: true })).toBeVisible()
+})
+
 test('resolution requires a comment, records AI provenance and confirms the exact resolution', async ({ context, page, baseURL }) => {
     await authenticate(context, baseURL)
     const item: MonitoringCase = { id: 'HA-1', title: 'Resolution test', summary: 'Service check failed', status: 'in_progress', severity: 'high', occurrences: 1, automationId: 'health', notificationsEnabled: true, notifications: [], comments: [], history: [{ id: 'progress', at: '2026-09-12T09:00:00Z', actor: 'alice', action: 'status_changed', fromStatus: 'open', toStatus: 'in_progress' }] }
