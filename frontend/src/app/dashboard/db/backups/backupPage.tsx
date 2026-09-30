@@ -138,7 +138,7 @@ function OperationHistory({ operations }: { operations: BackupOperation[] }) {
                     aria-expanded={expanded}
                     aria-controls='backup-history-content'
                     aria-label={expanded ? 'Collapse history' : 'Expand history'}
-                    className='flex min-h-[56px] w-full items-center justify-between gap-3 p-4 text-left text-ui-text hover:bg-ui-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ui-primary sm:px-5'
+                    className='flex min-h-14 w-full items-center justify-between gap-3 p-4 text-left text-ui-text hover:bg-ui-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ui-primary sm:px-5'
                 >
                     <span className='font-semibold'>History</span>
                     <ChevronDown aria-hidden='true' className={`h-4 w-4 text-ui-muted transition-transform ${expanded ? 'rotate-180' : ''}`} />
