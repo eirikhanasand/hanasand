@@ -52,7 +52,7 @@ mock.module('#db', () => ({ default: query, withTransaction: async (work: any) =
     try { return await work(query) } catch (error) { rows = beforeRows; audits = beforeAudit; throw error }
 } }))
 mock.module('#utils/auth/tokenWrapper.ts', () => ({ default: async () => ({ valid, id: 'editor' }) }))
-mock.module('#utils/auth/organizationPageAccess.ts', () => ({ default: async () => ({ valid: systemAdmin }) }))
+mock.module('#utils/auth/organizationPageAccess.ts', () => ({ default: async () => ({ valid: systemAdmin }), hasHanasandInternalRouteAccess: async () => ({ valid: systemAdmin }) }))
 mock.module('#utils/auth/apiKeys.ts', () => ({ validateApiKey: async () => ({ organizationId: 'org-a', apiKey: { scopes: [] } }), matchApiKeyScope: () => true }))
 const { defaultRuleDefinition, normalizeBuiltinDefinition, postRulePreview, getRules, getRule, getRuleHitCounts, getRuleHitCount, putRule, postRuleAction, postRule, postRulePack, ingestEvent } = await import('../src/handlers/events.ts')
 const builtin = 'network.signature_alert.v1'

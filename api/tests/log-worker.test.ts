@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, expect, mock, spyOn, test } from 'bun:test'
 let locked = true, fail = false, watermark: string | null = '200', additionalRuns = 0, queueRuns = 0, recoveryRuns = 0
 let delayed = false, historyLimits: number[], recentLimits: number[], queueModes: boolean[], recoveryLimits: number[], reads: Array<{ sql: string, params: any[] }>
-let queueLimits: number[] = [], acknowledged: string[][] = []
+let queueLimits: number[] = [], queuePageLimits: number[] = [], unassignedLimits: number[] = [], pendingLimits: number[] = [], freshLimits: number[] = [], acknowledged: string[][] = []
 let historyScans: any[][] = []
 let historyGate: Promise<void> | undefined, historyEntered: (() => void) | undefined
 let cursor: any, statements: string[], checked: string[], stored: Record<string, any>, pending: any[]
@@ -26,11 +26,14 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
         if (sql.includes('last_error = NULL')) cursor.last_error = null
         return { rows: [] }
     }
-    if (sql.includes('SELECT s.* FROM service_logs s')) return { rows: priority
-        .filter(row => (p[0] === undefined || BigInt(row.id) <= BigInt(p[0])) && Date.parse(row.created_at) >= Date.now() - 10_000
-            && !Object.values(stored).some(event => event.key === `service:${row.id}` && ['processed', 'skipped'].includes(event.processing_status)))
-        .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at) || Number(a.id) - Number(b.id))
-        .slice(0, 200) }
+    if (sql.includes('SELECT s.* FROM service_logs s')) {
+        freshLimits.push(p[0] || 200)
+        return { rows: priority
+            .filter(row => Date.parse(row.created_at) >= Date.now() - 10_000
+                && !Object.values(stored).some(event => event.key === `service:${row.id}` && ['processed', 'skipped'].includes(event.processing_status)))
+            .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at) || Number(a.id) - Number(b.id))
+            .slice(0, p[0] || 200) }
+    }
     if (sql.startsWith('SELECT id FROM service_logs')) { historyEntered?.(); await historyGate; historyScans.push(p); return { rows: (p[1] === watermark ? fresh : backlog).filter(row => BigInt(row.id) > BigInt(p[0]) && BigInt(row.id) <= BigInt(p[1])).slice(0, 10000).map(row => ({ id: row.id })) } }
     if (sql.includes('SELECT * FROM service_logs')) {
         if (failHistory && p[1] !== watermark) throw new Error('History read failed')
@@ -49,7 +52,7 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
     }
     if (sql.includes('SELECT id FROM events')) return { rows: Object.values(stored).filter(row => p[0].includes(row.id) && row.processing_status !== 'processed') }
     if (sql.includes('SELECT rule_id, severity')) return { rows: [] }
-    if (sql.includes('SELECT e.* FROM events')) return { rows: pending }
+    if (sql.includes('SELECT e.* FROM events')) { pendingLimits.push(p[0]); return { rows: pending } }
     if (sql.includes('UPDATE events e SET')) {
         for (const item of JSON.parse(p[0])) { stored[item.id].processing_status = 'processed'; stored[item.id].normalized = { ...stored[item.id].normalized, ...item.result } }
         return { rows: [] }
@@ -58,7 +61,7 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
     throw new Error(sql)
 }
 mock.module('../src/utils/events/catchupProgress.ts', () => ({ refreshLogCatchupProgress: async () => {} }))
-mock.module('../src/utils/events/recoverUnassignedLogs.ts', () => ({ recoverUnassignedLogs: async () => {} }))
+mock.module('../src/utils/events/recoverUnassignedLogs.ts', () => ({ recoverUnassignedLogs: async (_process: unknown, limit = 100) => { unassignedLimits.push(limit) } }))
 const transactionQuery = async (sql: string, p: any[] = []) => { transactionStatements.push(sql); return query(sql, p) }
 mock.module('#db', () => ({ default: query, withTransaction: async (work: any) => {
     const before = { ...cursor }
@@ -76,7 +79,7 @@ mock.module('#db', () => ({ default: query, withTransaction: async (work: any) =
     }
 } }))
 mock.module('../src/utils/logs/dimensions.ts', () => ({ backfillLogDimensions: async () => ({ processed: 0, ready: true }) }))
-mock.module('../src/utils/events/processQueue.ts', () => ({ acknowledgeProcessedLogs: async (ids: string[]) => { acknowledged.push(ids) }, processQueuedLogs: async (_process: unknown, delayed: boolean, limit = 1000) => { queueRuns++; queueModes.push(delayed); queueLimits.push(limit) }, recoverProcessLogs: async (_process: unknown, limit: number) => { recoveryRuns++; recoveryLimits.push(limit) } }))
+mock.module('../src/utils/events/processQueue.ts', () => ({ acknowledgeProcessedLogs: async (ids: string[]) => { acknowledged.push(ids) }, processQueuedLogs: async (_process: unknown, delayed: boolean, limit = 1000, maxPages = 4) => { queueRuns++; queueModes.push(delayed); queueLimits.push(limit); queuePageLimits.push(maxPages) }, recoverProcessLogs: async (_process: unknown, limit: number) => { recoveryRuns++; recoveryLimits.push(limit) } }))
 mock.module('../src/utils/events/storedSources.ts', () => ({ processAdditionalLogSources: async (_process: unknown, historyLimit: number, recentLimit: number, cursorQuery: unknown) => { additionalRuns++; historyLimits.push(historyLimit); recentLimits.push(recentLimit); additionalCursorQuery = cursorQuery } }))
 mock.module('../src/utils/events/logWatermark.ts', () => ({ stableLogWatermark: async () => watermark }))
 mock.module('../src/handlers/events.ts', () => ({
@@ -94,7 +97,7 @@ afterEach(() => { if (originalHistoryLimit === undefined) delete process.env.LOG
 afterEach(() => { if (originalProcessorOnly === undefined) delete process.env.LOG_PROCESSOR_ONLY; else process.env.LOG_PROCESSOR_ONLY = originalProcessorOnly })
 beforeEach(() => { delete process.env.LOG_CATCHUP_HISTORY_LIMIT })
 beforeEach(() => { delete process.env.LOG_PROCESSOR_ONLY })
-beforeEach(() => { queueLimits = []; acknowledged = []; transactions = []; transactionQueries = []; transactionStatements = []; failHistory = false; additionalCursorQuery = undefined })
+beforeEach(() => { queueLimits = []; queuePageLimits = []; unassignedLimits = []; pendingLimits = []; freshLimits = []; acknowledged = []; transactions = []; transactionQueries = []; transactionStatements = []; failHistory = false; additionalCursorQuery = undefined })
 afterEach(() => { if (originalLimit === undefined) delete process.env.LOG_CATCHUP_BATCH_LIMIT; else process.env.LOG_CATCHUP_BATCH_LIMIT = originalLimit })
 beforeEach(() => { delete process.env.LOG_CATCHUP_BATCH_LIMIT; historyScans = []; inactiveScopes = new Set(['inactive']); watermark = '200'; additionalRuns = 0; queueRuns = 0; recoveryRuns = 0; locked = true; fail = false; delayed = false; historyLimits = []; recentLimits = []; queueModes = []; recoveryLimits = []; reads = []; cursor = { last_id: '0', recent_id: '100' }; statements = []; checked = []; stored = {}; pending = []; priority = []; fresh = [makeLog('101')]; backlog = [makeLog('1')] })
 test('a replica that does not hold the shared lock performs no work', async () => {
@@ -145,6 +148,7 @@ test('dedicated worker keeps every page and queue batch within its durable limit
     expect(reads.every(read => read.params[2] === 25)).toBe(true)
     expect(historyLimits).toEqual([25]); expect(recentLimits).toEqual([25])
     expect(recoveryLimits).toEqual([25]); expect(queueLimits).toEqual([25])
+    expect(queuePageLimits).toEqual([1]); expect(unassignedLimits).toEqual([25]); expect(pendingLimits).toEqual([25])
 })
 test('failed findings roll back the event and preserve cursors for successful retry', async () => {
     fail = true
@@ -208,7 +212,8 @@ test('recent event times are checked before replayed FIFO events without jumping
     expect(sql).not.toContain('s.id <= $1')
     expect(sql).toContain('e.log_key = \'service:\' || s.id::text')
     expect(sql).toContain('e.processing_status IN (\'processed\', \'skipped\')')
-    expect(sql).toContain('ORDER BY s.created_at ASC, s.id ASC LIMIT 200')
+    expect(sql).toContain('ORDER BY s.created_at ASC, s.id ASC LIMIT $1')
+    expect(freshLimits.at(-1)).toBe(200)
     // When FIFO catches up it advances normally, without reevaluating the same log.
     fresh = [priority[0]]; backlog = []
     await processStoredLogs()
@@ -501,6 +506,15 @@ test('a live burst is committed together while historical pages still yield', as
     expect(checked).toHaveLength(200)
     expect(statements.filter(sql => sql.includes('INSERT INTO events'))).toHaveLength(1)
     expect(statements.some(sql => sql.includes('event:log-batch'))).toBe(false)
+})
+
+test('dedicated worker bounds fresh priority intake and processing pages', async () => {
+    process.env.LOG_PROCESSOR_ONLY = '1'
+    priority = Array.from({ length: 100 }, (_, i) => ({ ...makeLog(String(2001 + i)), created_at: new Date().toISOString() }))
+    expect(await processLiveLogs()).toBe(true)
+    expect(freshLimits).toEqual([25])
+    expect(checked).toHaveLength(25)
+    expect(acknowledged.flat()).toHaveLength(25)
 })
 
 test('live authentication logins retain the correlation lock', async () => {

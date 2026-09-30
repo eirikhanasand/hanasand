@@ -1,9 +1,12 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
 let stored: Record<string, any> = {}, findings: any[] = [], fail = false, findingWrites = 0, eventUpdates = 0, pendingLookups = 0
+let authRechecks: Array<{ sql: string, params: any[] }> = []
 const query = async (sql: string, p: any[] = []): Promise<any> => {
+    if (sql.includes('WITH changed AS (SELECT * FROM jsonb_to_recordset')) { authRechecks.push({ sql, params: p }); return { rows: [] } }
     if (sql.includes('SELECT log_key FROM events')) return { rows: Object.values(stored)
         .filter(row => p[0].includes(row.log_key) && row.processing_status === 'processed').map(row => ({ log_key: row.log_key })) }
     if (sql.includes('SELECT id, event_timestamp, outcome, source_country, normalized')) return { rows: [] }
+    if (sql.includes('SELECT id, user_id, event_timestamp, normalized')) return { rows: [] }
     if (sql.includes('INSERT INTO events')) { for (const item of JSON.parse(p[0])) stored[item.id] ||= { id: item.id, log_key: item.key, processing_status: item.processing_status, normalized: item.normalized }; return { rows: JSON.parse(p[0]).map((item: any) => ({ id: item.id })) } }
     if (sql.includes('SELECT id FROM events')) { pendingLookups++; return { rows: Object.values(stored).filter(row => row.processing_status !== 'processed') } }
     if (sql.includes('INSERT INTO findings')) {
@@ -22,7 +25,7 @@ const { BUILTIN_RULES, defaultRuleDefinition } = await import('../src/handlers/e
 const { securityRules } = await import('../src/utils/events/securityRules.ts')
 const rules = () => BUILTIN_RULES.map(rule => ({...rule,enabled:true,source:'hanasand' as const,definition:defaultRuleDefinition(rule.id)}))
 const log = (executable='/usr/bin/whoami',command='whoami') => ({id:'real-log',service:'audit',host:'inspur',level:'info',message:command,created_at:'2026-09-19T10:00:00Z',metadata:{process:{executable,command_line:command}}})
-beforeEach(()=>{stored={};findings=[];fail=false;findingWrites=0;eventUpdates=0;pendingLookups=0})
+beforeEach(()=>{stored={};findings=[];fail=false;findingWrites=0;eventUpdates=0;pendingLookups=0;authRechecks=[]})
 test('an info-level whoami executes Event and persists high severity plus evidence',async()=>{
     await processLog(log(),'org-a',rules())
     const row: any=Object.values(stored)[0]
@@ -87,6 +90,21 @@ test('login events keep their pending correlation lookup', async () => {
     await processLogBatch([login], 'org-a', [])
     expect(pendingLookups).toBe(1)
     expect(Object.values(stored)[0].processing_status).toBe('processed')
+})
+
+test('late authentication rechecks use bounded user and source-IP index lanes', async () => {
+    const login = { id: 'late-login', service: 'sshd', host: 'inspur', level: 'info', message: 'Failed password for alice from 192.0.2.1', created_at: '2026-09-19T10:00:00Z' }
+    await processLogBatch([login], 'org-a', rules())
+    expect(authRechecks).toHaveLength(1)
+    const { sql, params } = authRechecks[0]
+    expect(params[3]).toBe(25)
+    expect(sql).toContain('e.user_id = c.user_id')
+    expect(sql).toContain('md5(e.source_ip) = md5(c.source_ip)')
+    expect(sql).toContain('c.outcome = \'failure\'')
+    expect(sql).toContain('e.outcome = \'success\'')
+    expect(sql).toContain('LIMIT $4')
+    expect(sql).not.toContain(' OR e.source_ip')
+    expect(sql).not.toContain('OFFSET')
 })
 
 for (const [program, command] of [['uname', 'uname -o'], ['uname', 'uname -r'], ['ps', 'ps -eo pid,comm,args'], ['ps', 'ps aux']]) {

@@ -27,6 +27,14 @@ test('continuous newer arrivals cannot displace an admitted older command; work 
     expect(queue[0].id).toBe('4001')
     expect(calls.filter(sql => sql.includes('FROM log_process_queue q JOIN'))).toHaveLength(4)
 })
+test('dedicated worker handles one bounded queue page per tick', async () => {
+    queue = Array.from({ length: 200 }, (_, id) => ({ id: String(id + 1) }))
+    await processQueuedLogs(process, true, 25, 1)
+    expect(complete.size).toBe(25)
+    expect(queue).toHaveLength(175)
+    expect(queue[0].id).toBe('26')
+    expect(calls.filter(sql => sql.includes('FROM log_process_queue q JOIN'))).toHaveLength(1)
+})
 test('failure keeps queue entries; replay removes only events durably processed or safely skipped', async () => {
     queue = [{ id: '1' }, { id: '2' }]
     await expect(processQueuedLogs( async rows => { complete.add(String(rows[0].id)); throw new Error('write failed') })).rejects.toThrow('write failed')

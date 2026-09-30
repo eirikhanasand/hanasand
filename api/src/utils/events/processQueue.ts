@@ -4,8 +4,9 @@ import type { LogInput } from './logEvent.ts'
 
 type Process = (logs: LogInput[]) => Promise<void>
 
-export async function processQueuedLogs(process: Process, delayed = false, limit = 1000) {
+export async function processQueuedLogs(process: Process, delayed = false, limit = 1000, maxPages = 4) {
     if (!Number.isInteger(limit) || limit < 1 || limit > 1000) throw new Error('Invalid command recovery batch limit')
+    if (!Number.isInteger(maxPages) || maxPages < 1 || maxPages > 4) throw new Error('Invalid command recovery page limit')
     // Rows are removed individually, so a lower ID committed later cannot be
     // skipped. An unrelated long source writer must not delay admitted work.
     const watermark = (await run('SELECT COALESCE(MAX(log_id), 0)::text AS id FROM log_process_queue')).rows[0].id
@@ -14,7 +15,7 @@ export async function processQueuedLogs(process: Process, delayed = false, limit
     // Reserve capacity for live process arrivals without letting this stream
     // monopolize a tick. Delayed commands get more time, still capped at four
     // pages; the soft time budget can overrun by one durable page. No work expires.
-    for (let page = 0; page < 4; page++) {
+    for (let page = 0; page < maxPages; page++) {
         const batch = await run(`SELECT s.* FROM log_process_queue q JOIN service_logs s ON s.id = q.log_id
             WHERE q.log_id <= $1 ORDER BY q.log_id LIMIT $2`, [watermark, limit])
         if (!batch.rows.length) break

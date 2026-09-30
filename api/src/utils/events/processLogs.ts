@@ -16,6 +16,7 @@ import { withLogBatch } from './logBatch.ts'
 let running = false
 // Keep a slow login's correlation work from holding the global lock for a batch.
 const AUTH_CORRELATION_PAGE_SIZE = 1
+const AUTH_CORRELATION_RECHECK_LIMIT = 25
 const DEDICATED_LOG_BATCH_LIMIT = 25
 // Stateless results commit atomically with their findings; authentication keeps
 // durable pending history for correlation. Stable identities make retries safe.
@@ -93,21 +94,34 @@ export async function processLogBatch(logs: LogInput[], organizationId: string, 
         // Late delivery/backfill can provide the missing precursor to a login
         // already checked by the fresh stream. Revisit only matching identities
         // inside a configured correlation window, in bounded pages.
-        const changed = auth.map(({ event }) => ({ timestamp: event.timestamp, user_id: event.userId, source_ip: event.sourceIp }))
-        for (let offset = 0; ; offset += 500) {
-            const later = await run(`WITH changed AS (SELECT * FROM jsonb_to_recordset($1::jsonb) AS item(timestamp timestamptz, user_id text, source_ip text))
-                SELECT e.id, e.normalized FROM events e
-                WHERE e.organization_id = $2 AND e.ingestion_id = 'logs' AND e.processing_status = 'processed'
-                  AND e.event_type = 'authentication' AND e.action = 'login'
-                  AND e.event_timestamp > (SELECT MIN(timestamp) FROM changed)
-                  AND e.event_timestamp <= (SELECT MAX(timestamp) FROM changed) + $3 * INTERVAL '1 minute'
-                  AND EXISTS (SELECT 1 FROM changed c WHERE e.event_timestamp > c.timestamp
-                    AND e.event_timestamp <= c.timestamp + $3 * INTERVAL '1 minute'
-                    AND (e.user_id = c.user_id OR e.source_ip = c.source_ip))
-                ORDER BY e.event_timestamp, e.id LIMIT 500 OFFSET $4`, [JSON.stringify(changed), organizationId, windowMinutes, offset])
-            for (const row of later.rows) work.push({ id: row.id, key: '', logId: '', complete: false, findings: [], event: normalizeEvent(row.normalized, { vendor: 'Hanasand', product: 'Logs' }) })
-            if (later.rows.length < 500) break
-        }
+        const changed = auth.map(({ event }) => ({ timestamp: event.timestamp, user_id: event.userId, source_ip: event.sourceIp, outcome: event.outcome }))
+        // Keep each correlation on its matching index. A shared source IP can
+        // match an organization's full login history, so each rule lane gets
+        // one bounded page and can never pin the worker while scanning it all.
+        const later = await run(`WITH changed AS (SELECT * FROM jsonb_to_recordset($1::jsonb) AS item(timestamp timestamptz, user_id text, source_ip text, outcome text)),
+            later_users AS (
+                SELECT e.id, e.normalized, e.event_timestamp FROM changed c JOIN events e
+                  ON e.organization_id = $2 AND e.user_id = c.user_id
+                WHERE c.user_id IS NOT NULL AND e.ingestion_id = 'logs' AND e.processing_status = 'processed'
+                  AND e.event_type = 'authentication' AND e.action = 'login' AND e.outcome = 'success'
+                  AND e.event_timestamp > c.timestamp AND e.event_timestamp <= c.timestamp + $3 * INTERVAL '1 minute'
+                ORDER BY e.event_timestamp, e.id LIMIT $4
+            ),
+            later_source_ip AS (
+                SELECT e.id, e.normalized, e.event_timestamp FROM changed c JOIN events e
+                  ON e.organization_id = $2 AND md5(e.source_ip) = md5(c.source_ip)
+                WHERE c.outcome = 'failure' AND c.source_ip IS NOT NULL
+                  AND e.source_ip = c.source_ip AND e.ingestion_id = 'logs' AND e.processing_status = 'processed'
+                  AND e.event_type = 'authentication' AND e.action = 'login' AND e.outcome = 'failure'
+                  AND e.event_timestamp > c.timestamp AND e.event_timestamp <= c.timestamp + $3 * INTERVAL '1 minute'
+                ORDER BY e.event_timestamp, e.id LIMIT $4
+            )
+            SELECT id, normalized FROM (
+                SELECT id, normalized, event_timestamp FROM later_users
+                UNION ALL
+                SELECT id, normalized, event_timestamp FROM later_source_ip
+            ) related ORDER BY event_timestamp, id`, [JSON.stringify(changed), organizationId, windowMinutes, AUTH_CORRELATION_RECHECK_LIMIT])
+        for (const row of later.rows) work.push({ id: row.id, key: '', logId: '', complete: false, findings: [], event: normalizeEvent(row.normalized, { vendor: 'Hanasand', product: 'Logs' }) })
     }
     // Events are persisted together before correlation, then checked in event-time order.
     work.sort((a, b) => Date.parse(a.event.timestamp) - Date.parse(b.event.timestamp))
@@ -175,7 +189,9 @@ function scopedProcessor(platformId: string, onWork: () => void, afterBatch?: ()
             if (!configured.has(target)) configured.set(target, await loadConfiguredRules(target))
             // Keep fresh work small for latency; larger durable pages reduce write overhead.
             // Recovery still yields to fresh arrivals after every durable page.
-            const pageSize = priority ? 200 : 400
+            const pageSize = process.env.LOG_PROCESSOR_ONLY === '1'
+                ? DEDICATED_LOG_BATCH_LIMIT
+                : priority ? 200 : 400
             const processPage = (page: LogInput[]) => processLogBatch(page, target, configured.get(target)!)
             const processPages = async (logs: LogInput[], independent: boolean) => {
                 // Correlation pages hold the shared advisory lock while login
@@ -257,11 +273,12 @@ export async function processLiveLogs() {
 }
 
 async function freshLogs(): Promise<LogInput[]> {
+    const limit = process.env.LOG_PROCESSOR_ONLY === '1' ? DEDICATED_LOG_BATCH_LIMIT : 200
     return (await run(`SELECT s.* FROM service_logs s
         WHERE s.created_at >= statement_timestamp() - INTERVAL '10 seconds'
           AND NOT EXISTS (SELECT 1 FROM events e WHERE e.log_key = 'service:' || s.id::text
             AND e.processing_status IN ('processed', 'skipped'))
-        ORDER BY s.created_at ASC, s.id ASC LIMIT 200`)).rows
+        ORDER BY s.created_at ASC, s.id ASC LIMIT $1`, [limit])).rows
 }
 
 export async function processStoredLogs() {
@@ -299,7 +316,10 @@ export async function processStoredLogs() {
             const { configured, processScopes } = scopedProcessor(platform.rows[0].id, () => { advanced = true }, () => processFresh())
             let lastFresh = -Infinity
             const processFresh = async () => {
-                if (performance.now() - lastFresh < 250) return
+                // The dedicated worker already ran the live lane immediately
+                // before this catch-up pass. Repeating it here stretches the
+                // cursor transaction while live arrivals continue.
+                if (dedicatedWorker || performance.now() - lastFresh < 250) return
                 lastFresh = performance.now()
                 // No cursor advances here: visible committed rows are safe to
                 // process even while another writer prevents a stable watermark.
@@ -315,11 +335,11 @@ export async function processStoredLogs() {
             const { rows: [queue] } = await run(`SELECT COALESCE((SELECT queued_at < clock_timestamp() - INTERVAL '60 seconds'
                 FROM log_process_queue ORDER BY queued_at, log_id LIMIT 1), FALSE) AS delayed`)
             // Command checks must not inherit the historical replication throttle.
-            await processQueuedLogs(processScopes, queue.delayed, queueLimit)
+            await processQueuedLogs(processScopes, queue.delayed, queueLimit, dedicatedWorker ? 1 : 4)
             await processFresh()
             await recoverProcessLogs(processScopes, configuredLimit)
             await processFresh()
-            await recoverUnassignedLogs(processScopes)
+            await recoverUnassignedLogs(processScopes, dedicatedWorker ? configuredLimit : 100)
             await processFresh()
             // The priority queue above already gets a longer budget when it is
             // delayed. Keep the configured service-log page size so catch-up
@@ -347,9 +367,10 @@ export async function processStoredLogs() {
             await processFresh()
             // Direct Event ingestion is also pending until findings are durable.
             // Recover requests that stopped after persistence or during evaluation.
+            const pendingLimit = dedicatedWorker ? configuredLimit : 100
             const pending = await run(`SELECT e.* FROM events e JOIN organizations o ON o.id = e.organization_id
                 WHERE e.ingestion_id <> 'logs' AND e.processing_status = 'pending' AND o.status = 'active'
-                ORDER BY e.event_timestamp, e.id LIMIT 100`)
+                ORDER BY e.event_timestamp, e.id LIMIT $1`, [pendingLimit])
             for (const row of pending.rows) {
                 advanced = true
                 if (!configured.has(row.organization_id)) configured.set(row.organization_id, await loadConfiguredRules(row.organization_id))
