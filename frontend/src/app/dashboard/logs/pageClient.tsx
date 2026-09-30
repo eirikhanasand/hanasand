@@ -147,7 +147,7 @@ export default function LogsPageClient({ initialServices = [], initialErrors, in
                     else setData(previous => {
                         if (cursor && previous) {
                             const seen = new Set(previous.rows.map(row => row.id))
-                            return { ...body, rows: [...previous.rows, ...body.rows.filter((row: Event) => !seen.has(row.id))] }
+                            return { ...body, total_events: body.total_events ?? previous.total_events, rows: [...previous.rows, ...body.rows.filter((row: Event) => !seen.has(row.id))] }
                         }
                         // Keep the pages being read in place while progress keeps refreshing.
                         if (browsingPages && previous) return { ...previous, processing: body.processing, generated_at: body.generated_at, total_events: body.total_events }

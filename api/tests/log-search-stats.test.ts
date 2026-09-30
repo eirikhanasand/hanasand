@@ -97,11 +97,21 @@ test('realtime search defaults to one hour and skips processor metadata queries'
 
 test('realtime pagination loads 100 initially and 10 more per cursor page', async () => {
     const query = new URLSearchParams({ realtime: '1', paginate: '1', hql: 'Logs | take 100' })
+    pageRows = Array.from({ length: 101 }, (_, index) => ({ id: `event-${index}`, normalized: { severity: 'high' }, event_timestamp: '2026-09-19T14:00:00Z', organization_id: 'org-1', cursor_time: '2026-09-19T14:00:00Z' }))
     const response = await app.inject('/logs/search?' + query)
     expect(response.statusCode).toBe(200)
     expect(response.json()).toMatchObject({ limit: 100, total_events: 4 })
     expect(statements.find(sql => sql.includes('cursor_time'))).toContain('LIMIT 101')
     expect(statements.find(sql => sql.includes('FROM log_counts events'))).toContain('severity IN (\'high\', \'critical\')')
+
+    const cursor = response.json().next_cursor
+    expect(cursor).toBeTruthy()
+    pageRows = Array.from({ length: 11 }, (_, index) => ({ id: `next-${index}`, normalized: { severity: 'high' }, event_timestamp: '2026-09-19T13:00:00Z', organization_id: 'org-1', cursor_time: '2026-09-19T13:00:00Z' }))
+    const next = await app.inject('/logs/search?' + new URLSearchParams({ ...Object.fromEntries(query), cursor }))
+    expect(next.statusCode).toBe(200)
+    expect(next.json()).toMatchObject({ limit: 10 })
+    expect(next.json()).not.toHaveProperty('total_events')
+    expect(statements.filter(sql => sql.includes('FROM log_counts events'))).toHaveLength(1)
 })
 
 test('processing status exposes bounded pending command counts and their oldest receipt', async () => {

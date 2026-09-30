@@ -133,7 +133,8 @@ test('realtime loads 100 initially and 10 more only after scrolling through the 
                 ? Array.from({ length: 10 }, (_, index) => event(`event-${110 + index}`))
                 : Array.from({ length: 100 }, (_, index) => event(`event-${index}`))
         const nextCursor = cursor ? cursor === 'second-page' ? 'third-page' : null : 'second-page'
-        return route.fulfill({ json: { ...result(rows), limit: cursor ? 10 : 100, total_events: 205, next_cursor: nextCursor } })
+        const response = { ...result(rows), limit: cursor ? 10 : 100, next_cursor: nextCursor, ...(cursor ? {} : { total_events: 205 }) }
+        return route.fulfill({ json: response })
     })
     await openLogs(page)
     await expect(page.locator('article')).toHaveCount(100)
@@ -143,23 +144,24 @@ test('realtime loads 100 initially and 10 more only after scrolling through the 
     await expect(page.getByText('100/205')).toBeVisible()
 
     const viewport = page.locator('[data-logs-scroll]')
+    const initialHeight = await viewport.evaluate(element => element.scrollHeight)
     await viewport.evaluate(element => {
-        element.scrollTop = element.scrollHeight
+        element.scrollTop = element.scrollHeight - element.clientHeight - 1100
         element.dispatchEvent(new Event('scroll'))
     })
     await expect.poll(() => requests.length).toBe(2)
     expect(requests[1].searchParams.get('cursor')).toBe('second-page')
     await expect(page.locator('article')).toHaveCount(110)
     await expect(page.getByText('110/205')).toBeVisible()
-    const gapAfterAppend = await viewport.evaluate(element => element.scrollHeight - element.scrollTop - element.clientHeight)
-    expect(gapAfterAppend).toBeGreaterThan(150)
+    const appendedHeight = await viewport.evaluate((element, height) => element.scrollHeight - height, initialHeight)
+    expect(appendedHeight).toBeGreaterThan(0)
     await page.waitForTimeout(100)
     expect(requests).toHaveLength(2)
 
-    await viewport.evaluate(element => {
-        element.scrollTop = element.scrollHeight
+    await viewport.evaluate((element, distance) => {
+        element.scrollTop += Math.max(200, distance)
         element.dispatchEvent(new Event('scroll'))
-    })
+    }, appendedHeight)
     await expect.poll(() => requests.length).toBe(3)
     expect(requests[2].searchParams.get('cursor')).toBe('third-page')
     await expect(page.locator('article')).toHaveCount(120)
