@@ -343,6 +343,29 @@ test('durable process pages overlap without taking the correlation lock', async 
     } finally { hook.mockRestore() }
 })
 
+test('durable process pages from mixed batches overlap while other events keep the correlation lock', async () => {
+    fresh = []; priority = []; watermark = '1000'; cursor.history_end_id = '750'
+    backlog = [
+        ...Array.from({ length: 500 }, (_, n) => makeLog(String(n + 1), { process: { executable: '/usr/bin/sed', command_line: 'sed' } })),
+        ...Array.from({ length: 250 }, (_, n) => makeLog(String(n + 501))),
+    ]
+    let active = 0, maximum = 0
+    const findings = await import('../src/handlers/events.ts')
+    const original = findings.persistEventFindings
+    const hook = spyOn(findings, 'persistEventFindings').mockImplementation(async rows => {
+        active++; maximum = Math.max(maximum, active)
+        await new Promise(resolve => setTimeout(resolve, 10))
+        try { await original(rows) } finally { active-- }
+    })
+    try {
+        await processStoredLogs()
+        expect(maximum).toBe(2)
+        expect(checked).toHaveLength(750)
+        expect(cursor.last_id).toBe('750')
+        expect(statements.filter(sql => sql.includes('event:log-batch'))).toHaveLength(1)
+    } finally { hook.mockRestore() }
+})
+
 
 test('fresh arrivals are serviced between durable historical pages', async () => {
     let clock = 0

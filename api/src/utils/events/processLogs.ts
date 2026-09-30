@@ -162,35 +162,47 @@ function scopedProcessor(platformId: string, onWork: () => void, afterBatch?: ()
             // Keep fresh work small for latency; larger durable pages reduce write overhead.
             // Recovery still yields to fresh arrivals after every durable page.
             const pageSize = priority ? 200 : 400
-            const pages = Array.from({ length: Math.ceil(batch.length / pageSize) }, (_, index) => batch.slice(index * pageSize, (index + 1) * pageSize))
             const processPage = (page: LogInput[]) => processLogBatch(page, target, configured.get(target)!)
-            if (!priority && pages.length && pages.every(page => page.every(hasProcessContext))) {
+            const processPages = async (logs: LogInput[], independent: boolean) => {
+                const pages = Array.from({ length: Math.ceil(logs.length / pageSize) }, (_, index) => logs.slice(index * pageSize, (index + 1) * pageSize))
+                if (!independent) {
+                    for (const page of pages) {
+                        await withLogBatch(() => processPage(page))
+                        if (!priority) await afterBatch?.()
+                    }
+                    return
+                }
+
                 // Process events are evaluated independently. Let two durable pages overlap;
-                // event IDs and finding keys make replay races safe, while auth stays serialized.
+                // event IDs and finding keys make replay races safe, while other events keep
+                // the correlation lock even when they share a source batch.
                 for (let offset = 0; offset < pages.length; offset += 2) {
                     const group = pages.slice(offset, offset + 2)
-                    if (group.length === 1) await processPage(group[0])
-                    else {
-                        const work = group.map(processPage)
-                        let firstError: unknown
-                        try { await Promise.race(work) } catch (error) { firstError = error }
-                        let freshError: unknown
-                        if (!firstError) {
-                            try { await afterBatch?.() } catch (error) { freshError = error }
-                        }
-                        const results = await Promise.allSettled(work)
-                        const workError = results.find((result): result is PromiseRejectedResult => result.status === 'rejected')
-                        if (workError) throw workError.reason
-                        if (freshError) throw freshError
+                    if (group.length === 1) {
+                        await processPage(group[0])
+                        await afterBatch?.()
                         continue
                     }
-                    await afterBatch?.()
+                    const work = group.map(processPage)
+                    let firstError: unknown
+                    try { await Promise.race(work) } catch (error) { firstError = error }
+                    let freshError: unknown
+                    if (!firstError) {
+                        try { await afterBatch?.() } catch (error) { freshError = error }
+                    }
+                    const results = await Promise.allSettled(work)
+                    const workError = results.find((result): result is PromiseRejectedResult => result.status === 'rejected')
+                    if (workError) throw workError.reason
+                    if (freshError) throw freshError
                 }
-            } else {
-                for (const page of pages) {
-                    await withLogBatch(() => processPage(page))
-                    if (!priority) await afterBatch?.()
-                }
+            }
+
+            if (priority) await processPages(batch, false)
+            else {
+                const processLogs = batch.filter(hasProcessContext)
+                const otherLogs = batch.filter(log => !hasProcessContext(log))
+                await processPages(processLogs, true)
+                await processPages(otherLogs, false)
             }
         }
     }
