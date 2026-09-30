@@ -118,10 +118,10 @@ export function getDashboardNavigation(access: NavigationAccess): NavigationItem
                 link('Projects', '/projects', isAdmin),
                 link('Shares', '/shares'),
             ]),
+            nestedGroup('Thesis', thesisSheets.length
+                ? thesisSheets.map(sheet => link(sheet.label, sheet.href))
+                : [link('Overview', '/thesis')], hasHanasandOrganization),
         ]),
-        thesisSheets.length
-            ? nestedGroup('Thesis', thesisSheets.map(sheet => link(sheet.label, sheet.href)), hasHanasandOrganization)
-            : link('Thesis', '/thesis', hasHanasandOrganization),
         group('Communication', [
             link('Mail', '/mail'),
             link('Support Chats', '/support'),
