@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { readFile } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 
 const root = process.cwd()
@@ -58,7 +58,9 @@ test.describe('public threat actor profile', () => {
     })
 
     test('keeps the actor page focused on four sections', async () => {
-        const pageSource = await readFile(path.join(root, 'src/app/ti/pageClient.tsx'), 'utf8')
+        const componentDirectory = path.join(root, 'src/app/ti/components')
+        const componentFiles = await readdir(componentDirectory)
+        const pageSource = (await Promise.all(componentFiles.filter(file => file.endsWith('.tsx')).map(file => readFile(path.join(componentDirectory, file), 'utf8')))).join('\n')
         const modelSource = await readFile(path.join(root, 'src/app/ti/pageModel.ts'), 'utf8')
         const source = `${pageSource}\n${modelSource}`
         const workspaceIndex = pageSource.indexOf('data-ti-workspace=\'true\'')

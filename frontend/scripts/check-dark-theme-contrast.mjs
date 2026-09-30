@@ -8,7 +8,9 @@ const roots = [
     path.join(frontendRoot, 'src/app/dashboard/ti'),
 ]
 
-const publicTi = readFileSync(path.join(frontendRoot, 'src/app/ti/pageClient.tsx'), 'utf8')
+const publicTi = collectFiles(path.join(frontendRoot, 'src/app/ti'))
+    .map(file => readFileSync(file, 'utf8'))
+    .join('\n')
 const workbench = readFileSync(path.join(frontendRoot, 'src/app/dashboard/ti/workbench/workbenchClient.tsx'), 'utf8')
 const globals = readFileSync(path.join(frontendRoot, 'src/app/globals.css'), 'utf8')
 const cookieSettings = readFileSync(path.join(frontendRoot, 'src/app/cookie-settings/pageClient.tsx'), 'utf8')
@@ -999,9 +1001,13 @@ function extractThemeBlock(source, selector) {
     if (start === -1) throw new Error(`Missing ${selector} theme block`)
     const end = source.indexOf('\n}', start)
     const block = source.slice(start, end)
+    const defaultsStart = source.indexOf('@theme {')
+    const defaultsEnd = source.indexOf('\n}', defaultsStart)
+    const defaults = defaultsStart === -1 || defaultsEnd === -1 ? '' : source.slice(defaultsStart, defaultsEnd)
     const values = {}
     for (const name of paletteNames) {
         const match = block.match(new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})`))
+            || (selector === '.dark' ? defaults.match(new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})`)) : null)
         if (!match) throw new Error(`Missing --${name} in ${selector}`)
         values[name] = match[1]
     }

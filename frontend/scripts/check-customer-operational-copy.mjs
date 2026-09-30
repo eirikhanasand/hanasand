@@ -140,7 +140,9 @@ for (const file of runtimeFiles) {
                 violations.push(`${relativeFile}:${index + 1} ${label}: ${line.trim()}`)
             }
         }
-        if (relativeFile === 'frontend/src/app/ti/pageClient.tsx') {
+        if (relativeFile === 'frontend/src/app/ti/pageClient.tsx'
+            || relativeFile === 'frontend/src/app/ti/pageClientShared.ts'
+            || relativeFile.startsWith('frontend/src/app/ti/components/')) {
             for (const { pattern, label } of bannedPublicTiAttributes) {
                 if (pattern.test(line)) {
                     violations.push(`${relativeFile}:${index + 1} ${label}: ${line.trim()}`)

@@ -9,7 +9,9 @@ const testPage = readSource('src/app/test/page.tsx')
 const testClient = readSource('src/app/test/pageClient.tsx')
 const loadTestingPage = readSource('src/app/dashboard/load-testing/page.tsx')
 const loadTestingClient = readSource('src/app/dashboard/load-testing/pageClient.tsx')
-const tiClient = readSource('src/app/ti/pageClient.tsx')
+const tiClient = readSource('src/app/ti/components/ti-page-client.tsx')
+const tiControls = readSource('src/app/ti/components/search-workspace-controls.tsx')
+const emptyState = readSource('src/app/ti/components/empty-state.tsx')
 
 assertIncludes(testClient, 'Check a service before users do', 'public service check page must lead with the primary workflow')
 assertIncludes(testClient, 'Run an owned HTTP endpoint through a measured scenario with latency, failure-rate, logs, and a shareable result link.', 'public service check page must explain the concrete evidence produced')
@@ -45,12 +47,11 @@ assertExcludes(loadTestingClient, 'Next: run more jobs', 'dashboard command cent
 assertExcludes(loadTestingClient, 'needs proof', 'dashboard command center must not ship blocker-style placeholder copy')
 assertExcludes(loadTestingClient, 'needs work', 'dashboard command center must not ship blocker-style placeholder copy')
 
-const emptyState = extractFunction(tiClient, 'function EmptyState()')
-const searchFormStart = tiClient.indexOf('<form onSubmit={submit}')
+const searchFormStart = tiControls.indexOf('<form onSubmit={onSubmit}')
 const resultsGate = tiClient.indexOf('{busy ? <SearchLoading')
-assert.ok(searchFormStart >= 0, 'TI page search form was not found')
-assert.ok(resultsGate > searchFormStart, 'TI page result visibility gate was not found after the search form')
-const landingForm = tiClient.slice(searchFormStart, resultsGate)
+assert.ok(searchFormStart >= 0, 'TI search controls were not found')
+assert.ok(resultsGate >= 0, 'TI page result visibility gate was not found')
+const landingForm = tiControls.slice(searchFormStart)
 
 assertIncludes(landingForm, 'Search threat intelligence', 'TI landing must use a concise search-focused heading')
 assertIncludes(landingForm, 'Find current intelligence about any threat actor, company, domain, CVE, or malware family.', 'TI landing must use one short blue helper line')
@@ -83,26 +84,4 @@ function assertOrder(source, first, second, message) {
     assert.ok(firstIndex >= 0, `${message}: missing first token ${JSON.stringify(first)}`)
     assert.ok(secondIndex >= 0, `${message}: missing second token ${JSON.stringify(second)}`)
     assert.ok(firstIndex < secondIndex, `${message}: expected ${JSON.stringify(first)} before ${JSON.stringify(second)}`)
-}
-
-function extractFunction(source, signature) {
-    const start = source.indexOf(signature)
-    assert.ok(start >= 0, `Could not find ${signature}`)
-    let depth = 0
-    let seenBody = false
-
-    for (let index = start; index < source.length; index += 1) {
-        const char = source[index]
-        if (char === '{') {
-            depth += 1
-            seenBody = true
-        } else if (char === '}') {
-            depth -= 1
-            if (seenBody && depth === 0) {
-                return source.slice(start, index + 1)
-            }
-        }
-    }
-
-    throw new Error(`Could not extract ${signature}`)
 }

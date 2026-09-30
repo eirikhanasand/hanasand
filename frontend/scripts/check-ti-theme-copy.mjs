@@ -1,21 +1,32 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const tiPage = readFileSync(path.join(root, 'src/app/ti/pageClient.tsx'), 'utf8')
+const tiComponents = path.join(root, 'src/app/ti/components')
+const tiPage = [
+    readFileSync(path.join(root, 'src/app/ti/pageClientShared.ts'), 'utf8'),
+    readFileSync(path.join(root, 'src/app/ti/pageModel.ts'), 'utf8'),
+    ...readdirSync(tiComponents).filter(file => file.endsWith('.tsx')).map(file => readFileSync(path.join(tiComponents, file), 'utf8')),
+].join('\n')
+const suggestionState = readFileSync(path.join(tiComponents, 'empty-state.tsx'), 'utf8')
 
 const requiredSemanticChipTokens = [
     'dark:border-ui-primary/35 dark:bg-ui-primary/10 dark:text-ui-primary',
     'dark:border-ui-success/35 dark:bg-ui-success/10 dark:text-ui-success',
     'dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning',
-    'dark:border-ui-danger/35 dark:bg-ui-danger/10 dark:text-ui-danger',
+    'dark:border-ui-danger/35 dark:bg-ui-raised/10 dark:text-ui-text',
 ]
 
 for (const token of requiredSemanticChipTokens) {
     assert.ok(tiPage.includes(token), `Public TI semantic dark-mode chip token is missing: ${token}`)
 }
+
+const suggestionLink = suggestionState.match(/<Link key=\{item\.href\} href=\{item\.href\} className='([^']+)'/)
+assert.ok(suggestionLink, 'Public TI starter suggestions must render as links')
+assert.match(suggestionLink[1], /\bbg-ui-panel\b.*\btext-ui-text\b.*\bdark:bg-ui-panel\b.*\bdark:text-ui-text\b/)
+assert.doesNotMatch(suggestionLink[1], /text-ui-on-primary/)
 
 assert.equal(tiPage.includes('divide-[#eef1f5]'), false, 'Public TI should use shared divider tokens instead of bespoke light dividers')
 assert.equal(tiPage.includes('dark:divide-[#273244]'), false, 'Public TI should use shared divider tokens instead of bespoke dark dividers')

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { buildActorIntelligence } from '../src/utils/ti/actorIntelligence'
 import { actorGeoProfile, victimObservationsFor } from '../src/utils/ti/actorProfile'
 import { buildTiActionability } from '../src/utils/ti/actionability'
@@ -122,9 +122,12 @@ const fullPublicProfile = buildActorIntelligence(fixture, fullPublicVictims)
 const fullPublicActionability = buildTiActionability(fixture, fullPublicProfile, fullPublicVictims)
 const geo = actorGeoProfile(fixture)
 const pageClientSource = [
-    '../src/app/ti/pageClient.tsx',
-    '../src/app/ti/pageModel.ts',
-].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n')
+    readFileSync(new URL('../src/app/ti/pageClientShared.ts', import.meta.url), 'utf8'),
+    readFileSync(new URL('../src/app/ti/pageModel.ts', import.meta.url), 'utf8'),
+    ...readdirSync(new URL('../src/app/ti/components/', import.meta.url))
+        .filter(file => file.endsWith('.tsx'))
+        .map(file => readFileSync(new URL(`../src/app/ti/components/${file}`, import.meta.url), 'utf8')),
+].join('\n')
 const globalStylesSource = readFileSync(new URL('../src/app/globals.css', import.meta.url), 'utf8')
 const actorIntelligenceSource = readFileSync(new URL('../src/utils/ti/actorIntelligence.ts', import.meta.url), 'utf8')
 const actionabilitySource = readFileSync(new URL('../src/utils/ti/actionability.ts', import.meta.url), 'utf8')
