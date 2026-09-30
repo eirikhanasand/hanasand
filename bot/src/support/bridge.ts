@@ -281,12 +281,15 @@ export class SupportBridge {
         const overwrites = channel.permissionOverwrites.cache
         const everyone = overwrites.get(guild.roles.everyone.id)
         const support = overwrites.get(this.supportRole!.id)
+        const supportPermissions = PermissionFlagsBits.ViewChannel
+            | PermissionFlagsBits.SendMessages
+            | PermissionFlagsBits.ReadMessageHistory
+            | PermissionFlagsBits.EmbedLinks
         const correctOverwrites = overwrites.size === 2
-            && Boolean(everyone?.deny.has(PermissionFlagsBits.ViewChannel))
-            && Boolean(support?.allow.has(PermissionFlagsBits.ViewChannel)
-                && support.allow.has(PermissionFlagsBits.SendMessages)
-                && support.allow.has(PermissionFlagsBits.ReadMessageHistory)
-                && support.allow.has(PermissionFlagsBits.EmbedLinks))
+            && everyone?.allow.bitfield === 0n
+            && everyone.deny.bitfield === PermissionFlagsBits.ViewChannel
+            && support?.allow.bitfield === supportPermissions
+            && support.deny.bitfield === 0n
         if (!correctOverwrites) {
             await channel.permissionOverwrites.set(desired, 'Restrict Hanasand support chats to the Hanasand Support role')
         }
