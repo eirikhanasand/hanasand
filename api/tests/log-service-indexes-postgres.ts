@@ -20,6 +20,7 @@ try {
         FROM generate_series(1,100000) n`)
     await client.query(`INSERT INTO events VALUES
         ('z', 'active','logs','processed',NOW(), '{"service":"rare","severity":"high"}'),
+        ('zz', 'active','logs','processed',NOW(), '{"service":"other","severity":"critical"}'),
         ('y', 'active','logs','processed',NOW(), '{"service":"rare","severity":"low"}'),
         ('x', 'hidden','logs','processed',NOW(), '{"service":"rare","severity":"critical"}'),
         ('pending', 'active','logs','pending',NOW(), '{"service":"rare"}'),
@@ -35,11 +36,17 @@ try {
         AND normalized->>'service'=$1
         AND EXISTS(SELECT 1 FROM organizations o WHERE o.id=events.organization_id AND o.status='active')`
     const rows = `SELECT id FROM events WHERE ${base} ORDER BY event_timestamp DESC,id DESC LIMIT 200`
+    const realtimeRows = `SELECT id FROM events WHERE ingestion_id='logs' AND processing_status='processed'
+        AND event_timestamp >= NOW()-INTERVAL '24 hours'
+        AND organization_id=ANY(ARRAY(SELECT o.id FROM organizations o WHERE o.status='active'))
+        AND normalized->>'severity' IN ('high','critical') AND event_timestamp <= NOW()
+        ORDER BY event_timestamp DESC,id DESC LIMIT 51`
     const groups = `SELECT severity,count(*)::int AS count FROM log_dimensions d
         WHERE service=$1 AND event_timestamp>=NOW()-INTERVAL '24 hours'
         AND EXISTS(SELECT 1 FROM organizations o WHERE o.id=d.organization_id AND o.status='active')
         GROUP BY severity ORDER BY severity`
     assert.deepEqual((await client.query(rows,['rare'])).rows.map(row=>row.id),['z','y'])
+    assert.deepEqual((await client.query(realtimeRows)).rows.map(row=>row.id),['zz','z'])
     assert.deepEqual((await client.query(groups,['rare'])).rows,[{severity:'high',count:1},{severity:'low',count:1}])
     for (const service of ['rare','missing']) {
         for (const [sql,index] of [[rows,'idx_logs_service_time'],[groups,'idx_log_dimensions_service_time']]) {
@@ -48,6 +55,9 @@ try {
             console.log(JSON.stringify({service,index,execution_ms:plan[0]['Execution Time']}))
         }
     }
+    const realtimePlan = (await client.query('EXPLAIN (ANALYZE, FORMAT JSON) '+realtimeRows)).rows[0]['QUERY PLAN']
+    assert.ok(JSON.stringify(realtimePlan).includes('idx_logs_realtime_page_time'), 'Realtime pages should use the partial ordered index')
+    console.log(JSON.stringify({index:'idx_logs_realtime_page_time',execution_ms:realtimePlan[0]['Execution Time']}))
     console.log('PASS: rare/absent services, exact counts, deterministic ordering, time/status/organization isolation')
 } finally {
     await client.query('ROLLBACK')

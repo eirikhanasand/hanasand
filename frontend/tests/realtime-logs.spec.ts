@@ -121,38 +121,42 @@ test('retains logs and reading position across overlapping polls and failures', 
     await expect(page.getByRole('button', { name: 'Pause', exact: true })).toHaveCount(0)
 })
 
-test('realtime loads 50 events at a time when the feed reaches the end', async ({ page }) => {
+test('realtime loads 100 events initially and prefetches 50 more near the end', async ({ page }) => {
     const requests: URL[] = []
     await page.route('**/api/backend/logs/search?*', route => {
         const url = new URL(route.request().url())
         requests.push(url)
         const cursor = url.searchParams.get('cursor')
         const rows = cursor === 'second-page'
-            ? Array.from({ length: 50 }, (_, index) => event(`event-${50 + index}`))
+            ? Array.from({ length: 50 }, (_, index) => event(`event-${100 + index}`))
             : cursor === 'third-page'
-                ? Array.from({ length: 25 }, (_, index) => event(`event-${100 + index}`))
-                : Array.from({ length: 50 }, (_, index) => event(`event-${index}`))
-        const nextCursor = cursor ? cursor === 'second-page' ? 'third-page' : null : 'second-page'
-        const response = { ...result(rows), limit: 50, next_cursor: nextCursor, ...(cursor ? {} : { total_events: 125 }) }
+                ? Array.from({ length: 50 }, (_, index) => event(`event-${150 + index}`))
+                : cursor === 'fourth-page'
+                    ? Array.from({ length: 25 }, (_, index) => event(`event-${200 + index}`))
+                    : Array.from({ length: 100 }, (_, index) => event(`event-${index}`))
+        const nextCursor = cursor === null ? 'second-page'
+            : cursor === 'second-page' ? 'third-page'
+                : cursor === 'third-page' ? 'fourth-page' : null
+        const response = { ...result(rows), limit: cursor ? 50 : 100, next_cursor: nextCursor, ...(cursor ? {} : { total_events: 225 }) }
         return route.fulfill({ json: response })
     })
     await openLogs(page)
-    await expect(page.locator('article')).toHaveCount(50)
+    await expect(page.locator('article')).toHaveCount(100)
     expect(requests).toHaveLength(1)
-    expect(requests[0].searchParams.get('hql')).toBe('Logs | take 50')
+    expect(requests[0].searchParams.get('hql')).toBe('Logs | take 100')
     expect(requests[0].searchParams.get('hours')).toBe('24')
     expect(requests[0].searchParams.get('paginate')).toBe('1')
-    await expect(page.getByText('50/125')).toBeVisible()
+    await expect(page.getByText('100/225')).toBeVisible()
 
     const viewport = page.locator('[data-logs-scroll]')
     await viewport.evaluate(element => {
-        element.scrollTop = element.scrollHeight
+        element.scrollTop = element.scrollHeight - element.clientHeight - 800
         element.dispatchEvent(new Event('scroll'))
     })
     await expect.poll(() => requests.length).toBe(2)
     expect(requests[1].searchParams.get('cursor')).toBe('second-page')
-    await expect(page.locator('article')).toHaveCount(100)
-    await expect(page.getByText('100/125')).toBeVisible()
+    await expect(page.locator('article')).toHaveCount(150)
+    await expect(page.getByText('150/225')).toBeVisible()
 
     await viewport.evaluate(element => {
         element.scrollTop = element.scrollHeight
@@ -160,11 +164,17 @@ test('realtime loads 50 events at a time when the feed reaches the end', async (
     })
     await expect.poll(() => requests.length).toBe(3)
     expect(requests[2].searchParams.get('cursor')).toBe('third-page')
-    await expect(page.locator('article')).toHaveCount(125)
-    await expect(page.getByText('125/125')).toBeVisible()
+    await expect(page.locator('article')).toHaveCount(200)
+    await expect(page.getByText('200/225')).toBeVisible()
+
+    await viewport.evaluate(element => { element.scrollTop = element.scrollHeight; element.dispatchEvent(new Event('scroll')) })
+    await expect.poll(() => requests.length).toBe(4)
+    expect(requests[3].searchParams.get('cursor')).toBe('fourth-page')
+    await expect(page.locator('article')).toHaveCount(225)
+    await expect(page.getByText('225/225')).toBeVisible()
     await viewport.evaluate(element => { element.scrollTop = element.scrollHeight; element.dispatchEvent(new Event('scroll')) })
     await page.waitForTimeout(100)
-    expect(requests).toHaveLength(3)
+    expect(requests).toHaveLength(4)
 })
 
 test('event text remains selectable and copies full evidence without navigating', async ({ page }) => {

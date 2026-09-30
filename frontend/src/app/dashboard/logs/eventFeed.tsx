@@ -46,7 +46,7 @@ export default class EventFeed extends Component<EventFeedProps> {
         this.observer = new IntersectionObserver(entries => {
             this.sentinelNear = entries.some(entry => entry.isIntersecting)
             this.tryLoadMore()
-        }, { root: this.viewport.current, rootMargin: '150px' })
+        }, { root: this.viewport.current, rootMargin: '900px' })
         this.observer.observe(this.sentinel.current)
     }
     render() {
