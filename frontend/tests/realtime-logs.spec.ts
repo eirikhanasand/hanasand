@@ -121,16 +121,19 @@ test('retains logs and reading position across overlapping polls and failures', 
     await expect(page.getByRole('button', { name: 'Pause', exact: true })).toHaveCount(0)
 })
 
-test('realtime loads 100 events first and fetches the next page at the feed end', async ({ page }) => {
+test('realtime loads 100 initially and 10 more only after scrolling through the new page', async ({ page }) => {
     const requests: URL[] = []
     await page.route('**/api/backend/logs/search?*', route => {
         const url = new URL(route.request().url())
         requests.push(url)
-        const secondPage = url.searchParams.has('cursor')
-        const rows = secondPage
-            ? Array.from({ length: 5 }, (_, index) => event(`event-${100 + index}`))
-            : Array.from({ length: 100 }, (_, index) => event(`event-${index}`))
-        return route.fulfill({ json: { ...result(rows), limit: 100, total_events: 205, next_cursor: secondPage ? null : 'second-page' } })
+        const cursor = url.searchParams.get('cursor')
+        const rows = cursor === 'second-page'
+            ? Array.from({ length: 10 }, (_, index) => event(`event-${100 + index}`))
+            : cursor === 'third-page'
+                ? Array.from({ length: 10 }, (_, index) => event(`event-${110 + index}`))
+                : Array.from({ length: 100 }, (_, index) => event(`event-${index}`))
+        const nextCursor = cursor ? cursor === 'second-page' ? 'third-page' : null : 'second-page'
+        return route.fulfill({ json: { ...result(rows), limit: cursor ? 10 : 100, total_events: 205, next_cursor: nextCursor } })
     })
     await openLogs(page)
     await expect(page.locator('article')).toHaveCount(100)
@@ -139,14 +142,28 @@ test('realtime loads 100 events first and fetches the next page at the feed end'
     expect(requests[0].searchParams.get('paginate')).toBe('1')
     await expect(page.getByText('100/205')).toBeVisible()
 
-    await page.locator('[data-logs-scroll]').evaluate(element => {
+    const viewport = page.locator('[data-logs-scroll]')
+    await viewport.evaluate(element => {
         element.scrollTop = element.scrollHeight
         element.dispatchEvent(new Event('scroll'))
     })
     await expect.poll(() => requests.length).toBe(2)
     expect(requests[1].searchParams.get('cursor')).toBe('second-page')
-    await expect(page.locator('article')).toHaveCount(105)
-    await expect(page.getByText('105/205')).toBeVisible()
+    await expect(page.locator('article')).toHaveCount(110)
+    await expect(page.getByText('110/205')).toBeVisible()
+    const gapAfterAppend = await viewport.evaluate(element => element.scrollHeight - element.scrollTop - element.clientHeight)
+    expect(gapAfterAppend).toBeGreaterThan(150)
+    await page.waitForTimeout(100)
+    expect(requests).toHaveLength(2)
+
+    await viewport.evaluate(element => {
+        element.scrollTop = element.scrollHeight
+        element.dispatchEvent(new Event('scroll'))
+    })
+    await expect.poll(() => requests.length).toBe(3)
+    expect(requests[2].searchParams.get('cursor')).toBe('third-page')
+    await expect(page.locator('article')).toHaveCount(120)
+    await expect(page.getByText('120/205')).toBeVisible()
 })
 
 test('event text remains selectable and copies full evidence without navigating', async ({ page }) => {

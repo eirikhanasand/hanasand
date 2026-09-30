@@ -21,6 +21,7 @@ export async function searchLogs(req: FastifyRequest, res: FastifyReply) {
         const params = [...compiled.params]
         const bind = (value: string | number) => { params.push(value); return `$${params.length}` }
         const realtime = input.realtime === '1'
+        const pageLimit = paginate && realtime && input.cursor ? Math.min(compiled.limit, 10) : compiled.limit
         const hours = Number(input.hours || (realtime ? 1 : 24))
         if (!Number.isFinite(hours) || hours < 1 || hours > 24 * 90) throw new Error('Time range must be between one hour and 90 days.')
         const timeWhere = `event_timestamp >= NOW() - ${bind(hours)} * INTERVAL '1 hour'`
@@ -28,7 +29,7 @@ export async function searchLogs(req: FastifyRequest, res: FastifyReply) {
         // timestamp index order and sort every matching event before LIMIT.
         const where = ['ingestion_id = \'logs\'', 'processing_status = \'processed\'', timeWhere, ...compiled.where,
             'organization_id = ANY(ARRAY(SELECT o.id FROM organizations o WHERE o.status = \'active\'))']
-        if (realtime) where.push("normalized->>'severity' IN ('high', 'critical')")
+        if (realtime) where.push('normalized->>\'severity\' IN (\'high\', \'critical\')')
         if (input.search) where.push(basicLogSearchPredicate(bind(input.search)))
         if (input.service) where.push(`normalized->>'service' = ${bind(input.service)}`)
         if (input.severity === 'high,critical') where.push('normalized->>\'severity\' IN (\'high\', \'critical\')')
@@ -38,12 +39,12 @@ export async function searchLogs(req: FastifyRequest, res: FastifyReply) {
         }
         const result = await withLogSearchTransaction(async query => {
             await query('SET LOCAL statement_timeout = \'8s\'')
-            const result = paginate ? await searchLogPage(query, { where, params, order: compiled.order, limit: compiled.limit, cursor: input.cursor, recentFirst: Boolean(input.search) }) : compiled.summarize
+            const result = paginate ? await searchLogPage(query, { where, params, order: compiled.order, limit: pageLimit, cursor: input.cursor, recentFirst: Boolean(input.search) }) : compiled.summarize
                 ? await query(`SELECT ${compiled.fields[compiled.summarize]} AS value, COUNT(*)::int AS count FROM events WHERE ${where.join(' AND ')} GROUP BY 1 ORDER BY count DESC LIMIT ${compiled.limit}`, params)
                 : await query(`SELECT id, normalized, event_timestamp, organization_id FROM events WHERE ${where.join(' AND ')} ORDER BY ${compiled.order} LIMIT ${compiled.limit}`, params)
             if (realtime) {
                 const compact = dimensionLogWhere(where)
-                let totalEvents = 0
+                let totalEvents: number
                 if (compact) {
                     const state = (await query('SELECT ready, last_error, (SELECT ready FROM log_counts_state WHERE id = TRUE) AS counts_ready FROM log_dimensions_state WHERE id = TRUE')).rows[0]
                     const rollup = state?.ready && state?.counts_ready ? rollupLogCountsSql(compact, timeWhere) : null
@@ -78,7 +79,7 @@ export async function searchLogs(req: FastifyRequest, res: FastifyReply) {
             const stalled = status.rows.find(row => row.last_error)
             return { rows: result.rows, next_cursor: 'next_cursor' in result ? result.next_cursor : undefined, processing: primary ? { ...primary, catchup, pending_commands: pendingCommands, last_error: stalled ? `${stalled.name}: ${stalled.last_error}` : countersLastError ? `Log counters: ${countersLastError}` : null, sources: status.rows } : null, ...counts }
         })
-        return res.send({ ...result, projection: compiled.projection, summarize: compiled.summarize, limit: compiled.limit, hours, generated_at: new Date().toISOString() })
+        return res.send({ ...result, projection: compiled.projection, summarize: compiled.summarize, limit: pageLimit, hours, generated_at: new Date().toISOString() })
     } catch (error) {
         if ((error as { code?: string }).code === 'LOG_SEARCH_BUSY') {
             return res.header('Retry-After', '1').status(503).send({ error: (error as Error).message })

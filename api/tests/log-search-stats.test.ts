@@ -1,9 +1,10 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
 import Fastify from 'fastify'
 let ready = true, authorized = true, administrator = true, pendingCount = 0, rollupsReady = true
-let statements: string[], parameters: any[][]
+let statements: string[], parameters: any[][], pageRows: any[]
 const query = async (sql: string, params: any[] = []): Promise<any> => {
     statements.push(sql); parameters.push(params)
+    if (sql.includes('AS cursor_time')) return { rows: pageRows }
     if (sql.includes('FROM log_process_queue LIMIT 10001')) return { rows: [{ count: pendingCount, oldest_queued_at: pendingCount ? '2026-09-19T14:49:32.311Z' : null }] }
     if (sql.startsWith('SELECT payload, last_error')) return { rows: [{ payload: { remaining: 3000, processed: 1000, total: 4000, rate: 50, estimated_seconds: 60 }, last_error: null }] }
     if (sql.startsWith('SELECT name, updated_at')) return { rows: [{ name: 'service_logs', last_error: null }] }
@@ -17,7 +18,7 @@ mock.module('../src/utils/auth/hasRole.ts', () => ({ default: async () => ({ val
 const { searchLogs } = await import('../src/handlers/logs/search.ts')
 const app = Fastify()
 app.get('/logs/search', searchLogs)
-beforeEach(() => { ready = authorized = administrator = true; pendingCount = 0; rollupsReady = true; statements = []; parameters = [] })
+beforeEach(() => { ready = authorized = administrator = true; pendingCount = 0; rollupsReady = true; statements = []; parameters = []; pageRows = [] })
 test('dashboard uses one exact compact grouping scan after complete backfill', async () => {
     const response = await app.inject('/logs/search?stats=1&service=api&severity=high,critical')
     expect(response.statusCode).toBe(200)
@@ -88,19 +89,34 @@ test('realtime search defaults to one hour and skips processor metadata queries'
     expect(response.statusCode).toBe(200)
     expect(response.json()).toMatchObject({ hours: 1, processing: null, counts: [], services: [], total_events: 4 })
     const eventQuery = statements.find(sql => sql.startsWith('SELECT id, normalized'))
-    expect(eventQuery).toContain("normalized->>'severity' IN ('high', 'critical')")
+    expect(eventQuery).toContain('normalized->>\'severity\' IN (\'high\', \'critical\')')
     expect(statements.some(sql => sql.startsWith('SELECT name, updated_at'))).toBe(false)
     expect(statements.some(sql => sql.startsWith('SELECT payload, last_error'))).toBe(false)
     expect(statements.some(sql => sql.includes('FROM log_process_queue'))).toBe(false)
 })
 
-test('realtime pagination keeps 100-event pages and reports the total high-severity count', async () => {
+test('realtime pagination loads 100 initially and 10 more per cursor page', async () => {
     const query = new URLSearchParams({ realtime: '1', paginate: '1', hql: 'Logs | take 100' })
-    const response = await app.inject('/logs/search?' + query)
-    expect(response.statusCode).toBe(200)
-    expect(response.json()).toMatchObject({ limit: 100, total_events: 4 })
-    expect(statements.find(sql => sql.includes('cursor_time'))).toContain('LIMIT 101')
-    expect(statements.find(sql => sql.includes('FROM log_counts events'))).toContain("severity IN ('high', 'critical')")
+    const rows = (start: number, count: number) => Array.from({ length: count }, (_, index) => ({
+        id: `event-${start + index}`, normalized: {}, event_timestamp: '2026-09-20T00:00:00.123456Z',
+        organization_id: 'fixture', cursor_time: '2026-09-20 00:00:00.123456+00',
+    }))
+    pageRows = rows(0, 101)
+    const first = await app.inject('/logs/search?' + query)
+    expect(first.statusCode).toBe(200)
+    expect(first.json()).toMatchObject({ limit: 100, total_events: 4 })
+    const firstPageQuery = statements.find(sql => sql.includes('cursor_time'))!
+    expect(firstPageQuery).toContain('LIMIT 101')
+    const cursor = first.json().next_cursor
+    expect(cursor).toBeString()
+
+    statements = []; parameters = []; pageRows = rows(101, 11)
+    query.set('cursor', cursor)
+    const next = await app.inject('/logs/search?' + query)
+    expect(next.statusCode).toBe(200)
+    expect(next.json()).toMatchObject({ limit: 10, total_events: 4 })
+    expect(statements.find(sql => sql.includes('cursor_time'))).toContain('LIMIT 11')
+    expect(statements.find(sql => sql.includes('FROM log_counts events'))).toContain('severity IN (\'high\', \'critical\')')
 })
 
 test('processing status exposes bounded pending command counts and their oldest receipt', async () => {

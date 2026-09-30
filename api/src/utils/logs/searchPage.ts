@@ -5,7 +5,7 @@ type Input = { where: string[], params: NonNullable<Parameters<typeof queryOnce>
 type Cursor = { time: string, id: string, until: string, scope: string }
 
 export async function searchLogPage(query: typeof queryOnce, input: Input) {
-    const scope = createHash('sha256').update(JSON.stringify([input.where, input.params, input.order, input.limit])).digest('hex')
+    const scope = createHash('sha256').update(JSON.stringify([input.where, input.params, input.order])).digest('hex')
     let cursor: Cursor | undefined
     if (input.cursor) {
         try {
