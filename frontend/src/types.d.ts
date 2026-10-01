@@ -171,6 +171,7 @@ type User = {
     active?: boolean
     deactivated_at?: string | null
     deactivated_by?: string | null
+    organization_memberships?: { id: string, name: string, slug: string | null, status: string }[]
 }
 
 type Thought = {

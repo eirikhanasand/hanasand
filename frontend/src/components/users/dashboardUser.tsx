@@ -6,18 +6,22 @@ import AccountDate from './accountDate'
 import deleteUser from '@/utils/users/deleteUser'
 import { startImpersonating } from '@/utils/impersonation/client'
 import setUserActive from '@/utils/users/setUserActive'
+import Link from 'next/link'
 import { Ban, CheckCircle2, MoreHorizontal, UserRound } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useId, useRef, useState } from 'react'
 import ErrorNotice from '../error/errorNotice'
 import './usersList.css'
 
-export default function DashboardUser({ user }: { user: User }) {
+export default function DashboardUser({ user, accessibleOrganizationIds }: { user: User, accessibleOrganizationIds: string[] }) {
     const { condition: deleted, setCondition: setDeleted } = useClearStateAfter()
     const router = useRouter()
     const actions = useRef<HTMLDivElement>(null)
     const actionsId = useId()
+    const organizationsId = useId()
     const [actionsOpen, setActionsOpen] = useState(false)
+    const [organizationsOpen, setOrganizationsOpen] = useState(false)
+    const organizationsPopover = useRef<HTMLDivElement>(null)
     const { condition: error, setCondition: setError } = useClearStateAfter()
     const [impersonationPending, setImpersonationPending] = useState(false)
     const [impersonationPromptOpen, setImpersonationPromptOpen] = useState(false)
@@ -82,13 +86,44 @@ export default function DashboardUser({ user }: { user: User }) {
     }
 
     const reasonLength = impersonationReason.trim().replace(/\s+/g, ' ').length
+    const organizations = user.organization_memberships || []
 
     return (
         <div className='dashboard-user-row group relative h-10 min-h-10 max-h-10'>
-            <div onClick={() => router.push(`/profile/${encodeURIComponent(user.id)}`)} className='dashboard-user-row-main grid cursor-pointer grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)_100px_100px_40px] items-center gap-3 rounded-lg py-2 hover:bg-ui-raised'>
+            <div onClick={() => router.push(`/profile/${encodeURIComponent(user.id)}`)} className='dashboard-user-row-main grid cursor-pointer grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)_72px_100px_100px_40px] items-center gap-3 rounded-lg py-2 hover:bg-ui-raised'>
                 <h1 className={`dashboard-user-name min-w-0 truncate ${user.active === false ? 'text-ui-muted line-through' : ''}`} key={user.id}>{user.name}</h1>
                 <span className={`dashboard-user-username min-w-0 truncate text-sm text-ui-muted ${user.active === false ? 'line-through' : ''}`}>{user.username || user.id}</span>
                 <span className='dashboard-user-email min-w-0 truncate text-sm text-ui-muted' title={user.email || undefined}><span className='dashboard-user-mobile-label'>Email</span>{user.email || '—'}</span>
+                <div className='dashboard-user-organizations text-xs text-ui-muted' onClick={event => event.stopPropagation()}>
+                    <span className='dashboard-user-mobile-label'>Orgs</span>
+                    {organizations.length ? <button
+                        type='button'
+                        aria-label={`Show ${organizations.length} organizations for ${user.name || user.id}`}
+                        aria-expanded={organizationsOpen}
+                        popoverTarget={organizationsId}
+                        onClick={event => {
+                            event.stopPropagation()
+                            const rect = event.currentTarget.getBoundingClientRect()
+                            if (organizationsPopover.current) {
+                                organizationsPopover.current.style.top = `${Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - 280))}px`
+                                organizationsPopover.current.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 296))}px`
+                            }
+                        }}
+                        className='rounded px-1.5 py-1 font-semibold text-ui-primary hover:bg-ui-raised focus-visible:outline-2 focus-visible:outline-ui-primary'
+                    >{organizations.length}</button> : <span>0</span>}
+                    <div ref={organizationsPopover} id={organizationsId} popover='auto' aria-label={`Organizations for ${user.name || user.id}`}
+                        onToggle={event => setOrganizationsOpen(event.newState === 'open')}
+                        onClick={event => event.stopPropagation()}
+                        className='fixed m-0 max-h-[min(70vh,24rem)] w-72 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-lg border border-ui-border bg-ui-panel p-2 text-sm text-ui-text shadow-xl'>
+                        <ul className='grid gap-1'>
+                            {organizations.map(organization => <li key={organization.id}>
+                                {organization.status === 'active' && accessibleOrganizationIds.includes(organization.id)
+                                    ? <Link href={`/organizations?organizationId=${encodeURIComponent(organization.id)}`} className='block rounded-md px-2 py-1.5 hover:bg-ui-raised focus-visible:outline-2 focus-visible:outline-ui-primary'>{organization.name}</Link>
+                                    : <span className='block rounded-md px-2 py-1.5 text-ui-muted'>{organization.name}</span>}
+                            </li>)}
+                        </ul>
+                    </div>
+                </div>
                 <span className='dashboard-user-created text-xs text-ui-muted'><span className='dashboard-user-mobile-label'>Created</span><AccountDate value={user.created_at} /></span>
                 <span className='dashboard-user-last-login text-xs text-ui-muted'><span className='dashboard-user-mobile-label'>Last login</span><AccountDate value={user.last_login_at} empty='Never recorded' /></span>
                 <button

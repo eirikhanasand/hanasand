@@ -15,6 +15,7 @@
             'name actions'
             'username actions'
             'email email'
+            'organizations organizations'
             'created last-login';
         align-items: start;
         gap: .35rem .75rem;
@@ -25,6 +26,7 @@
     .dashboard-user-row .dashboard-user-name { grid-area: name; overflow: visible; white-space: normal; }
     .dashboard-user-row .dashboard-user-username { grid-area: username; overflow-wrap: anywhere; }
     .dashboard-user-row .dashboard-user-email { grid-area: email; overflow-wrap: anywhere; }
+    .dashboard-user-row .dashboard-user-organizations { grid-area: organizations; }
     .dashboard-user-row .dashboard-user-created { grid-area: created; }
     .dashboard-user-row .dashboard-user-last-login { grid-area: last-login; }
     .dashboard-user-row .dashboard-user-actions { grid-area: actions; opacity: 1 !important; }

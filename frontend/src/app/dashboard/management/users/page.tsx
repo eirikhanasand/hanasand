@@ -19,6 +19,10 @@ export default async function Page() {
     const users = await fetchUsers({ id, token, cache: 'no-store' })
     void name
     const reservedCount = users.filter(isReservedPlaceholder).length
+    const currentUser = users.find(user => user.id === id)
+    const accessibleOrganizationIds = currentUser?.active === false ? [] : (currentUser?.organization_memberships || [])
+        .filter(organization => organization.status === 'active')
+        .map(organization => organization.id)
 
     return (
         <DashboardPage>
@@ -31,7 +35,7 @@ export default async function Page() {
                 <AdminMetric icon={<UsersRound className='h-4 w-4' />} label='Users' value={String(users.length)} detail='Registered accounts' />
                 <AdminMetric icon={<UserRound className='h-4 w-4' />} label='Reserved' value={String(reservedCount)} detail='Reserved accounts' />
             </section>
-            <Users initialUsers={users} />
+            <Users initialUsers={users} accessibleOrganizationIds={accessibleOrganizationIds} />
         </DashboardPage>
     )
 }

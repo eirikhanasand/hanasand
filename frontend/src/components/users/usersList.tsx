@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { isReservedPlaceholder } from '@/utils/users/isReservedPlaceholder'
 import DashboardUser from './dashboardUser'
 
-export default function UsersList({ users }: { users: User[] }) {
+export default function UsersList({ users, accessibleOrganizationIds }: { users: User[], accessibleOrganizationIds: string[] }) {
     const [showReserved, setShowReserved] = useState(false)
     const [searchOpen, setSearchOpen] = useState(false)
     const [search, setSearch] = useState('')
@@ -98,15 +98,16 @@ export default function UsersList({ users }: { users: User[] }) {
                 </div>
             </div>
             <div className='users-list-scroll overflow-x-auto'><div className='users-list-table min-w-[1000px]'>
-                <div className='users-list-heading grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)_100px_100px_40px] gap-3 text-[0.68rem] font-bold uppercase tracking-[0.12em] text-ui-muted'>
+                <div className='users-list-heading grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)_72px_100px_100px_40px] gap-3 text-[0.68rem] font-bold uppercase tracking-[0.12em] text-ui-muted'>
                     <span>Name</span>
                     <span>Username</span>
                     <span>Email</span>
+                    <span>Orgs</span>
                     <span>Created</span>
                     <span>Last login</span>
                     <span aria-hidden='true' />
                 </div>
-                {visibleUsers.map((user) => <DashboardUser key={user.id} user={user} />)}
+                {visibleUsers.map((user) => <DashboardUser key={user.id} user={user} accessibleOrganizationIds={accessibleOrganizationIds} />)}
             </div></div>
         </>
     )
