@@ -280,7 +280,7 @@ export const securityRules: SecurityRule[] = [
         'id': 'process.recon.host.v1',
         'name': 'host reconnaissance',
         'family': 'Reconnaissance',
-        'severity': 'high',
+        'severity': 'low',
         'explanation': 'The host command was executed. Review the user and surrounding activity; legitimate administration can also trigger this rule.',
         'pattern': '(?:^|[/\\\\])host(?:\\.exe)?$',
         'field': 'executable',
