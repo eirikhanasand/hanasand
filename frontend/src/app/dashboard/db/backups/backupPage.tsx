@@ -6,7 +6,7 @@ import { useEffect, useState, useTransition } from 'react'
 import { ChevronDown, RefreshCw, ShieldCheck } from 'lucide-react'
 import type { BackupFile, BackupOperation, BackupService } from '@/utils/db/internal'
 import formatUtcDateTime from '@/utils/date/formatUtcDateTime'
-import { triggerBackupAction } from '../actions'
+import { triggerBackupAction, verifyBackupAction } from '../actions'
 
 type BackupPageProps = {
     backups: BackupService[]
@@ -20,6 +20,7 @@ export default function BackupPage({ backups, files, loadError = '' }: BackupPag
     const [isPending, startTransition] = useTransition()
     const [message, setMessage] = useState('')
     const [error, setError] = useState('')
+    const [verifying, setVerifying] = useState('')
 
     useEffect(() => {
         if (!service?.currentOperation) return
@@ -41,6 +42,19 @@ export default function BackupPage({ backups, files, loadError = '' }: BackupPag
     function restore(file: string) {
         const params = new URLSearchParams({ mode: 'live', file })
         router.push(`/db/restore?${params.toString()}`)
+    }
+
+    function verify(file: string) {
+        setMessage('')
+        setError('')
+        setVerifying(file)
+        startTransition(async() => {
+            const response = await verifyBackupAction(file)
+            if (typeof response === 'string') setError(response)
+            else setMessage(response.message)
+            setVerifying('')
+            router.refresh()
+        })
     }
 
     const busy = isPending || Boolean(service?.currentOperation)
@@ -100,9 +114,14 @@ export default function BackupPage({ backups, files, loadError = '' }: BackupPag
                                     <td className='px-4 py-3'>{file.size || '—'}</td>
                                     <td className='px-4 py-3'>{file.verified ? <span className='inline-flex items-center gap-1 text-ui-success'><ShieldCheck className='h-4 w-4' /> {shortHash(file.checksumSha256)}</span> : <span className='text-ui-warning'>Unverified</span>}</td>
                                     <td className='px-4 py-3 text-right'>
-                                        <button type='button' disabled={busy} onClick={() => restore(file.file)} className='min-h-9 rounded-md border border-ui-border px-3 font-semibold hover:bg-ui-raised disabled:opacity-50'>
-                                            Restore
-                                        </button>
+                                        <div className='flex justify-end gap-2'>
+                                            <button type='button' disabled={busy} onClick={() => verify(file.file)} className='min-h-9 rounded-md border border-ui-border px-3 font-semibold hover:bg-ui-raised disabled:opacity-50'>
+                                                {verifying === file.file ? 'Verifying…' : 'Verify checksum'}
+                                            </button>
+                                            <button type='button' disabled={busy} onClick={() => restore(file.file)} className='min-h-9 rounded-md border border-ui-border px-3 font-semibold hover:bg-ui-raised disabled:opacity-50'>
+                                                Restore
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
