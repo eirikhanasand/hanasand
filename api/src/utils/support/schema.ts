@@ -26,6 +26,8 @@ export default async function ensureSupportAiSchema(run = defaultQuery) {
     await run('ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS resolution_version INTEGER NOT NULL DEFAULT 0')
     await run('ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS feedback_rating INTEGER CHECK (feedback_rating BETWEEN 1 AND 5)')
     await run('ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS feedback_comment TEXT')
+    await run('ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS requester_discord_id TEXT')
+    await run('CREATE INDEX IF NOT EXISTS idx_support_discord_requester ON support_tickets(requester_discord_id, updated_at DESC) WHERE requester_discord_id IS NOT NULL')
     // Historical resolution timestamps are optional; avoid rewriting the full ticket table at startup.
     await run('ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ')
     await run('ALTER TABLE support_messages ADD COLUMN IF NOT EXISTS event TEXT CHECK (event IN (\'resolved\',\'reopened\',\'feedback\'))')

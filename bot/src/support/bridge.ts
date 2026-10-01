@@ -138,7 +138,7 @@ export class SupportBridge {
             await interaction.editReply({ content: `Ticket restored in <#${channel.id}>.`, embeds: [], components: [], allowedMentions: { parse: [] } })
         } catch (error) {
             const content = this.describeApiError(error)
-            await interaction.editReply({ content, embeds: [], components: this.linkNeeded(error) ? [this.linkButtonRow()] : [], allowedMentions: { parse: [] } })
+            await interaction.editReply({ content, embeds: [], components: [], allowedMentions: { parse: [] } })
         }
     }
 
@@ -147,14 +147,13 @@ export class SupportBridge {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral })
         try {
             if (interaction.customId === 'support-ticket:link') {
-                await this.api.discordAction({ action: 'link', discordUserId: interaction.user.id, discordName: interaction.user.globalName || interaction.user.username, code: interaction.fields.getTextInputValue('code').trim().toUpperCase() })
+                await this.api.discordAction({ action: 'link', discordUserId: interaction.user.id, code: interaction.fields.getTextInputValue('code').trim().toUpperCase() })
                 await interaction.editReply('Your Hanasand account is connected. You can create and restore support tickets here.')
                 return
             }
             const created = await this.api.discordAction({
                 action: 'create',
                 discordUserId: interaction.user.id,
-                discordName: interaction.user.globalName || interaction.user.username,
                 subject: interaction.fields.getTextInputValue('subject').trim() || 'Support question',
                 message: interaction.fields.getTextInputValue('message').trim(),
             })
@@ -164,7 +163,7 @@ export class SupportBridge {
             const channel = await this.openTicket(interaction.user.id, created.id)
             await interaction.editReply({ content: `Your support chat is open in <#${channel.id}>.`, allowedMentions: { parse: [] } })
         } catch (error) {
-            await interaction.editReply({ content: this.describeApiError(error), components: this.linkNeeded(error) ? [this.linkButtonRow()] : [], allowedMentions: { parse: [] } })
+            await interaction.editReply({ content: this.describeApiError(error), allowedMentions: { parse: [] } })
         }
     }
 
@@ -192,7 +191,7 @@ export class SupportBridge {
             if (update) await interaction.update({ embeds: [embed], components, allowedMentions: { parse: [] } })
             else await interaction.reply({ embeds: [embed], components, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } })
         } catch (error) {
-            const response = { content: this.describeApiError(error), embeds: [], components: this.linkNeeded(error) ? [this.linkButtonRow()] : [], allowedMentions: { parse: [] } }
+            const response = { content: this.describeApiError(error), embeds: [], components: [], allowedMentions: { parse: [] } }
             if (update) await interaction.update(response)
             else await interaction.reply({ ...response, flags: MessageFlags.Ephemeral })
         }
@@ -205,20 +204,8 @@ export class SupportBridge {
         )
     }
 
-    private linkButtonRow() {
-        return new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId('support-ticket:link').setLabel('Link account').setStyle(ButtonStyle.Primary))
-    }
-
-    private linkNeeded(error: unknown) {
-        return error instanceof SupportApiError && (error.status === 403 && /connect your Hanasand account/i.test(error.message)
-            || error.status === 404 && /link your Hanasand account/i.test(error.message))
-    }
-
     private describeApiError(error: unknown) {
-        if (error instanceof SupportApiError) {
-            if (this.linkNeeded(error)) return 'Connect your Hanasand account first. Sign in at https://hanasand.com/support, choose **Connect Discord**, then enter that code with **Link account** here.'
-            return error.message
-        }
+        if (error instanceof SupportApiError) return error.message
         return error instanceof Error ? error.message.slice(0, 240) : 'The support action could not be completed.'
     }
 
@@ -275,7 +262,7 @@ export class SupportBridge {
                 await interaction.editReply('Only members of the Hanasand Support role can resolve or reopen tickets.')
                 return
             }
-            const result = await this.api.discordAction({ action: 'status', discordUserId: interaction.user.id, discordName: interaction.user.globalName || interaction.user.username, ticketId, status })
+            const result = await this.api.discordAction({ action: 'status', discordUserId: interaction.user.id, ticketId, status })
             await this.syncTicket(ticketId)
             const saved = this.state.get(ticketId)
             if (status === 'closed' && saved?.removeAt) {
@@ -680,7 +667,7 @@ export class SupportBridge {
             if (!state || state.handledDiscordMessageIds.includes(message.id)) return
             const isSupportStaff = await this.isSupportMember(message.author.id, message.member)
             if (!isSupportStaff && state.requesterDiscordId !== message.author.id) {
-                await message.reply({ content: 'Only the linked ticket owner and Hanasand Support can reply here.', allowedMentions: { parse: [] } })
+                await message.reply({ content: 'Only the ticket owner and Hanasand Support can reply here.', allowedMentions: { parse: [] } })
                 state.handledDiscordMessageIds.push(message.id)
                 await this.state.save()
                 return
@@ -703,7 +690,7 @@ export class SupportBridge {
             let lastError: unknown
             for (let attempt = 0; attempt < 3; attempt++) {
                 try {
-                    const result = await this.api.discordAction({ action: 'message', discordUserId: message.author.id, discordName: message.member?.displayName || message.author.globalName || message.author.username, ticketId, message: body, requestId })
+                    const result = await this.api.discordAction({ action: 'message', discordUserId: message.author.id, ticketId, message: body, requestId })
                     const responseMessageId = typeof result === 'object' && result !== null && 'messageId' in result
                         && typeof result.messageId === 'string' ? result.messageId : undefined
                     if (responseMessageId && !state.mirroredMessageIds.includes(responseMessageId)) state.mirroredMessageIds.push(responseMessageId)
@@ -718,9 +705,7 @@ export class SupportBridge {
                 }
             }
             const detail = lastError instanceof Error ? lastError.message.slice(0, 240) : 'Unknown website error.'
-            const accountHint = lastError instanceof SupportApiError && lastError.status === 403
-                ? ' Connect your Hanasand account using /tickets first.' : ''
-            await message.reply({ content: `The message was not sent to the website: ${detail}${accountHint}`, allowedMentions: { parse: [] } })
+            await message.reply({ content: `The message was not sent to the website: ${detail}`, allowedMentions: { parse: [] } })
             if (lastError instanceof SupportApiError && lastError.status < 500 && lastError.status !== 429) {
                 state.handledDiscordMessageIds.push(message.id)
                 await this.state.save()

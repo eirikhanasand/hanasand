@@ -11,7 +11,7 @@ const command: BotCommand = {
             .addFields(
                 { name: 'Create ticket', value: 'Start a private support chat in Discord.' },
                 { name: 'Ticket history', value: 'Open or restore previous support chats.' },
-                { name: 'Link account', value: 'Connect your Hanasand account to keep your ticket history together.' },
+                { name: 'Link account (optional)', value: 'Connect Hanasand to see these tickets in your website history too.' },
             )
             .setFooter({ text: 'Resolved channels are removed after 24 hours; tickets remain in your history.' })
             .setTimestamp()

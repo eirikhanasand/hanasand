@@ -4,6 +4,7 @@ import { hasHanasandInternalPageAccess } from '#utils/auth/organizationPageAcces
 import { queryOnce, withTransaction } from '#utils/support/db.ts'
 import { setSupportStatus, SupportStateError } from '#utils/support/lifecycle.ts'
 import { supportIdPattern } from '#utils/support/conversation.ts'
+import { DiscordIdentityError, getDiscordSupportIdentity } from '#utils/support/discordIdentity.ts'
 
 const discordIdPattern = /^\d{17,20}$/
 const requestIdPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i
@@ -11,7 +12,6 @@ const requestIdPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-
 type DiscordActionBody = {
     action?: unknown
     discordUserId?: unknown
-    discordName?: unknown
     code?: unknown
     ticketId?: unknown
     subject?: unknown
@@ -41,15 +41,25 @@ export async function getDiscordSupportTickets(req: FastifyRequest<{ Querystring
         return res.code(400).send({ error: 'Invalid Discord account or history page.' })
     }
     try {
+        const discordMember = await getDiscordSupportIdentity(discordUserId)
+        if (!discordMember) return res.code(403).send({ error: 'Join the Hanasand server to view Discord support history.' })
         const userId = await linkedUser(discordUserId)
-        if (!userId) return res.code(404).send({ error: 'Link your Hanasand account before viewing support history.' })
-        const supportStaff = await hasHanasandInternalPageAccess(userId)
-        const result = await queryOnce(`SELECT id, subject, status, channel, created_at, updated_at, resolved_at
-            FROM support_tickets WHERE channel='human' AND ($1::boolean OR user_id=$2)
-            ORDER BY updated_at DESC, id DESC LIMIT 26 OFFSET $3`, [supportStaff, userId, page * 25])
+        const supportStaff = discordMember.isSupportMember
+            || Boolean(userId && await hasHanasandInternalPageAccess(userId))
+        const result = await queryOnce(`SELECT t.id, t.subject, t.status, t.channel, t.created_at, t.updated_at, t.resolved_at,
+                COALESCE(t.requester_discord_id, (SELECT discord_user_id FROM support_discord_links WHERE user_id=t.user_id)) AS requester_discord_id,
+                COALESCE(u.name, first_message.sender_display_name, 'Visitor') AS user_name,
+                (SELECT body FROM support_messages WHERE ticket_id=t.id ORDER BY created_at ASC, id ASC LIMIT 1) AS first_message
+            FROM support_tickets t
+            LEFT JOIN users u ON u.id=t.user_id
+            LEFT JOIN LATERAL (SELECT sender_display_name FROM support_messages
+                WHERE ticket_id=t.id AND sender_kind='user' ORDER BY created_at, id LIMIT 1) first_message ON TRUE
+            WHERE t.channel='human' AND ($1::boolean OR t.user_id=$2 OR t.requester_discord_id=$3)
+            ORDER BY t.updated_at DESC, t.id DESC LIMIT 26 OFFSET $4`, [supportStaff, userId || null, discordUserId, page * 25])
         const tickets = result.rows.slice(0, 25)
         return res.send({ tickets, page, hasMore: result.rows.length > 25 })
     } catch (error) {
+        if (error instanceof DiscordIdentityError) return res.code(503).send({ error: error.message })
         req.log.error(error)
         return res.code(500).send({ error: 'Could not load Discord support history.' })
     }
@@ -60,12 +70,15 @@ export async function postDiscordSupportAction(req: FastifyRequest<{ Body: Disco
     const body = req.body || {}
     const discordUserId = typeof body.discordUserId === 'string' ? body.discordUserId : ''
     if (!discordIdPattern.test(discordUserId)) return res.code(400).send({ error: 'Invalid Discord account.' })
-    const discordName = typeof body.discordName === 'string' ? body.discordName.replace(/[\r\n]/g, ' ').trim().slice(0, 80) || 'Discord user' : 'Discord user'
 
     try {
+        const discordMember = await getDiscordSupportIdentity(discordUserId)
+        if (!discordMember) return res.code(403).send({ error: 'Join the Hanasand server to use Discord support.' })
+        const discordName = discordMember.displayName
         if (body.action === 'link') return await linkDiscordAccount(req, res, discordUserId, discordName, body.code)
         const userId = await linkedUser(discordUserId)
-        if (!userId) return res.code(403).send({ error: 'Connect your Hanasand account before using support in Discord.' })
+        const supportStaff = discordMember.isSupportMember
+            || Boolean(userId && await hasHanasandInternalPageAccess(userId))
 
         if (body.action === 'create') {
             const subject = typeof body.subject === 'string' ? body.subject.trim().slice(0, 160) : 'Support question'
@@ -73,10 +86,10 @@ export async function postDiscordSupportAction(req: FastifyRequest<{ Body: Disco
             if (!message) return res.code(400).send({ error: 'A first message is required.' })
             const id = randomUUID()
             await withTransaction(async query => {
-                await query(`INSERT INTO support_tickets(id,user_id,subject,status,channel)
-                    VALUES($1,$2,$3,'open','human')`, [id, userId, subject || 'Support question'])
+                await query(`INSERT INTO support_tickets(id,user_id,requester_discord_id,subject,status,channel)
+                    VALUES($1,$2,$3,$4,'open','human')`, [id, userId || null, discordUserId, subject || 'Support question'])
                 await query(`INSERT INTO support_messages(id,ticket_id,sender_id,sender_kind,sender_display_name,body)
-                    VALUES($1,$2,$3,'user',$4,$5)`, [randomUUID(), id, userId, discordName, message])
+                    VALUES($1,$2,$3,'user',$4,$5)`, [randomUUID(), id, userId || null, discordName, message])
             })
             return res.code(201).send({ id })
         }
@@ -84,25 +97,27 @@ export async function postDiscordSupportAction(req: FastifyRequest<{ Body: Disco
         if (body.action !== 'message' && body.action !== 'status' && body.action !== 'restore') return res.code(400).send({ error: 'Unknown Discord support action.' })
         const ticketId = typeof body.ticketId === 'string' ? body.ticketId : ''
         if (!supportIdPattern.test(ticketId)) return res.code(400).send({ error: 'Invalid support ticket.' })
-        const ticket = (await queryOnce('SELECT user_id, status, channel FROM support_tickets WHERE id=$1', [ticketId])).rows[0]
+        const ticket = (await queryOnce('SELECT user_id, requester_discord_id, status, channel FROM support_tickets WHERE id=$1', [ticketId])).rows[0]
         if (!ticket || ticket.channel !== 'human') return res.code(404).send({ error: 'Support ticket not found.' })
-        const ownsTicket = ticket.user_id === userId
-        const supportStaff = await hasHanasandInternalPageAccess(userId)
+        const ownsTicket = Boolean(userId && ticket.user_id === userId) || ticket.requester_discord_id === discordUserId
         if (!ownsTicket && !supportStaff) return res.code(403).send({ error: 'You do not have access to this support ticket.' })
 
         if (body.action === 'restore') {
             const details = (await queryOnce(`SELECT t.id, t.subject, t.status, t.channel, t.created_at, t.updated_at, t.resolved_at,
-                    (SELECT discord_user_id FROM support_discord_links WHERE user_id=t.user_id) AS requester_discord_id,
-                    COALESCE(u.name,'Visitor') AS user_name,
+                    COALESCE(t.requester_discord_id, (SELECT discord_user_id FROM support_discord_links WHERE user_id=t.user_id)) AS requester_discord_id,
+                    COALESCE(u.name, first_message.sender_display_name, 'Visitor') AS user_name,
                     (SELECT body FROM support_messages WHERE ticket_id=t.id ORDER BY created_at ASC,id ASC LIMIT 1) AS first_message
-                FROM support_tickets t LEFT JOIN users u ON u.id=t.user_id WHERE t.id=$1`, [ticketId])).rows[0]
+                FROM support_tickets t LEFT JOIN users u ON u.id=t.user_id
+                LEFT JOIN LATERAL (SELECT sender_display_name FROM support_messages
+                    WHERE ticket_id=t.id AND sender_kind='user' ORDER BY created_at, id LIMIT 1) first_message ON TRUE
+                WHERE t.id=$1`, [ticketId])).rows[0]
             return res.send({ ticket: details, isOwner: ownsTicket })
         }
 
         if (body.action === 'status') {
-            if (!supportStaff) return res.code(403).send({ error: 'Only linked support agents can resolve or reopen a ticket.' })
+            if (!supportStaff) return res.code(403).send({ error: 'Only members of Hanasand Support can resolve or reopen a ticket.' })
             if (body.status !== 'open' && body.status !== 'closed') return res.code(400).send({ error: 'Invalid ticket status.' })
-            const result = await setSupportStatus(ticketId, body.status, userId)
+            const result = await setSupportStatus(ticketId, body.status, userId || null, discordName)
             return res.send({ ok: true, ...result })
         }
 
@@ -124,7 +139,7 @@ export async function postDiscordSupportAction(req: FastifyRequest<{ Body: Disco
             const senderKind = supportStaff ? 'support' : 'user'
             const inserted = await query(`INSERT INTO support_messages(id,ticket_id,sender_id,sender_kind,sender_display_name,body,request_id)
                 VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(ticket_id,request_id) WHERE request_id IS NOT NULL DO NOTHING RETURNING id`,
-            [randomUUID(), ticketId, userId, senderKind, discordName, message, requestId || null])
+            [randomUUID(), ticketId, userId || null, senderKind, discordName, message, requestId || null])
             const id = inserted.rows[0]?.id as string | undefined
             if (!id && requestId) {
                 const previous = (await query('SELECT id, sender_id, body FROM support_messages WHERE ticket_id=$1 AND request_id=$2', [ticketId, requestId])).rows[0]
@@ -136,6 +151,7 @@ export async function postDiscordSupportAction(req: FastifyRequest<{ Body: Disco
         })
         return res.send({ ok: true, messageId: savedMessageId })
     } catch (error) {
+        if (error instanceof DiscordIdentityError) return res.code(503).send({ error: error.message })
         if (error instanceof SupportStateError) return res.code(error.status).send({ error: error.message })
         req.log.error(error)
         return res.code(500).send({ error: 'Could not complete the Discord support action.' })
@@ -153,6 +169,7 @@ async function linkDiscordAccount(req: FastifyRequest, res: FastifyReply, discor
         if (conflict && (conflict.discord_user_id !== discordUserId || conflict.user_id !== code.user_id)) return 'conflict'
         await query(`INSERT INTO support_discord_links(discord_user_id,user_id,display_name) VALUES($1,$2,$3)
             ON CONFLICT(discord_user_id) DO UPDATE SET display_name=EXCLUDED.display_name`, [discordUserId, code.user_id, discordName])
+        await query('UPDATE support_tickets SET user_id=$2 WHERE requester_discord_id=$1 AND user_id IS NULL', [discordUserId, code.user_id])
         await query('DELETE FROM support_discord_link_codes WHERE code_hash=$1 OR user_id=$2', [codeHash, code.user_id])
         return 'linked'
     })

@@ -5,7 +5,7 @@ export class SupportStateError extends Error {
     constructor(message: string, public status = 409) { super(message) }
 }
 
-export async function setSupportStatus(id: string, status: 'open' | 'closed', agentId: string) {
+export async function setSupportStatus(id: string, status: 'open' | 'closed', agentId: string | null, actorName?: string) {
     return withTransaction(async query => {
         const ticket = (await query('SELECT id, status, resolution_version, feedback_rating, feedback_comment, updated_at, resolved_at FROM support_tickets WHERE id=$1 FOR UPDATE', [id])).rows[0]
         if (!ticket) throw new SupportStateError('Support chat not found.', 404)
@@ -15,9 +15,13 @@ export async function setSupportStatus(id: string, status: 'open' | 'closed', ag
             feedback_rating=CASE WHEN $2='closed' THEN NULL ELSE feedback_rating END,
             feedback_comment=CASE WHEN $2='closed' THEN NULL ELSE feedback_comment END
             WHERE id=$1 RETURNING id, status, resolution_version, feedback_rating, feedback_comment, updated_at, resolved_at`, [id, status])).rows[0]
+        const linkedAgentName = agentId ? (await query('SELECT name FROM users WHERE id=$1', [agentId])).rows[0]?.name : null
+        const name = actorName?.trim() || linkedAgentName || 'Support'
+        const body = status === 'closed'
+            ? `Closed by ${name}. How was your experience? Please rate your support from 1 to 5 stars.`
+            : `Reopened by ${name}. You can send messages again.`
         const message = (await query(`INSERT INTO support_messages(id,ticket_id,sender_id,sender_kind,event,body)
-            VALUES($1,$2,$3,'system',$4,$5) RETURNING id, sender_id, sender_kind, body, created_at`, [randomUUID(), id, agentId, status === 'closed' ? 'resolved' : 'reopened',
-            status === 'closed' ? 'Chat resolved. How was your experience? Please rate your support from 1 to 5 stars.' : 'Support reopened this chat. You can send messages again.'])).rows[0]
+            VALUES($1,$2,$3,'system',$4,$5) RETURNING id, sender_id, sender_kind, body, created_at`, [randomUUID(), id, agentId, status === 'closed' ? 'resolved' : 'reopened', body])).rows[0]
         return { ticket: changed, message: { ...message, sender_name: 'Support' } }
     })
 }

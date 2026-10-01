@@ -44,17 +44,22 @@ type TicketFilters = { search: string; from: string; to: string; stars: string; 
 async function listSupportTickets(userId: string, supportQueue: boolean, filters: TicketFilters) {
     return run(`
             SELECT t.id, t.user_id, t.subject, t.status, t.created_at, t.updated_at, t.resolved_at, t.channel, t.resolution_version, t.feedback_rating, t.feedback_comment,
-                   (SELECT discord_user_id FROM support_discord_links WHERE user_id=t.user_id) AS requester_discord_id,
-                   (SELECT COALESCE(m2.sender_display_name,u2.name) FROM support_messages m2 JOIN users u2 ON u2.id=m2.sender_id WHERE m2.ticket_id=t.id AND m2.sender_kind='support' ORDER BY m2.created_at DESC, m2.id DESC LIMIT 1) AS agent_name,
+                   COALESCE(t.requester_discord_id, (SELECT discord_user_id FROM support_discord_links WHERE user_id=t.user_id)) AS requester_discord_id,
+                   (SELECT COALESCE(m2.sender_display_name,u2.name) FROM support_messages m2 LEFT JOIN users u2 ON u2.id=m2.sender_id WHERE m2.ticket_id=t.id AND m2.sender_kind='support' ORDER BY m2.created_at DESC, m2.id DESC LIMIT 1) AS agent_name,
                    (SELECT COUNT(*)::int FROM support_messages m3 WHERE m3.ticket_id=t.id AND (m3.sender_kind<>'system' OR m3.event=CASE WHEN $1::boolean THEN 'feedback' ELSE 'resolved' END OR (NOT $1::boolean AND m3.event='reopened')) AND m3.sender_id IS DISTINCT FROM $2) AS reply_count,
-                   COALESCE(u.name, 'Visitor') AS user_name,
+                   COALESCE(u.name, requester.sender_display_name, 'Visitor') AS user_name,
                    (SELECT body FROM support_messages WHERE ticket_id = t.id ORDER BY created_at DESC, id DESC LIMIT 1) AS last_message,
                    (SELECT body FROM support_messages WHERE ticket_id = t.id ORDER BY created_at ASC, id ASC LIMIT 1) AS first_message
             FROM support_tickets t
             LEFT JOIN users u ON u.id = t.user_id
+            LEFT JOIN LATERAL (
+                SELECT sender_display_name FROM support_messages
+                WHERE ticket_id=t.id AND sender_kind='user'
+                ORDER BY created_at, id LIMIT 1
+            ) requester ON TRUE
             WHERE (($1::boolean AND t.channel = 'human') OR (NOT $1::boolean AND t.user_id = $2))
               AND ($3 = '' OR position(lower($3) in lower(t.subject)) > 0
-                   OR position(lower($3) in lower(COALESCE(u.name, 'Visitor'))) > 0
+                   OR position(lower($3) in lower(COALESCE(u.name, requester.sender_display_name, 'Visitor'))) > 0
                    OR position(lower($3) in lower(COALESCE(t.feedback_comment, ''))) > 0
                    OR EXISTS (SELECT 1 FROM support_messages m4 WHERE m4.ticket_id = t.id AND position(lower($3) in lower(m4.body)) > 0))
               AND ($4::date IS NULL OR t.created_at >= $4::date)
