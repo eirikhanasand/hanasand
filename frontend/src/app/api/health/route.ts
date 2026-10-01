@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET() {
     try {
-        const response = await fetch(new URL('/health', config.url.api), {
+        const response = await fetch(`${config.url.api.replace(/\/$/, '')}/health`, {
             cache: 'no-store',
             signal: AbortSignal.timeout(2000),
         })
