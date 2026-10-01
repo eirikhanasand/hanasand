@@ -304,6 +304,22 @@ warm_dashboard_pages() {
     done
 }
 
+wait_for_database_backups() {
+    while :; do
+        active_backups=$(docker exec hanasand_database psql -U hanasand -d hanasand -Atc \
+            "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND application_name = 'pg_dump'")
+        case "$active_backups" in
+            ''|*[!0-9]*)
+                echo "Could not read active database backup count: $active_backups" >&2
+                return 1
+                ;;
+        esac
+        test "$active_backups" -gt 0 || return 0
+        echo "Waiting for $active_backups active database backup(s) before release schema checks."
+        sleep 30
+    done
+}
+
 # Keep authentication replicas untouched until the rest of the release passes
 # its health checks.
 services=$(compose_live config --services \
@@ -311,6 +327,7 @@ services=$(compose_live config --services \
 if test "$pgbouncer_config_changed" = 0; then
     services=$(printf '%s\n' "$services" | sed '/^pgbouncer$/d')
 fi
+wait_for_database_backups
 # Compose service names are controlled by docker-compose.yml and contain no
 # shell metacharacters, so split the list into its individual arguments.
 # shellcheck disable=SC2086
