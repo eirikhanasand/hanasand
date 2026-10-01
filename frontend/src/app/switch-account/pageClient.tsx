@@ -75,7 +75,6 @@ export default function SwitchAccountPage() {
             <div className='w-full max-w-xl'>
                 <header className='mb-6'>
                     <h1 className='text-2xl font-semibold tracking-tight'>Choose an account</h1>
-                    <p className='mt-1 text-sm text-ui-muted'>Switch between separate Hanasand accounts.</p>
                 </header>
 
                 <div className={cardClass}>
