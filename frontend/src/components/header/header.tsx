@@ -2,7 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import ThemeSwitch from '@/components/theme/themeSwitch'
-import { ActivityIcon, BellRing, BookOpen, ChevronDown, Code2, FileJson, Gauge, LockKeyhole, MenuIcon, Network, Radar, ShieldAlert, ShieldCheck, UserRound, X } from 'lucide-react'
+import { ActivityIcon, ArrowLeftRight, BellRing, BookOpen, ChevronDown, Code2, FileJson, Gauge, LockKeyhole, MenuIcon, Network, Radar, ShieldAlert, ShieldCheck, UserRound, X } from 'lucide-react'
 import { isInternalAppPath, hasAppSidebar } from '@/utils/routes/appRoutes'
 import Menu from '@/components/menu/menu'
 import Link from 'next/link'
@@ -135,10 +135,11 @@ export default function Header({ token, id, username, path: serverPath }: { toke
     const isAI = pathname.endsWith('/ai') || pathname.includes('/ai/')
     const isDashboard = isInternalAppPath(pathname)
     const isProfile = pathname.startsWith('/profile')
+    const isAccountSwitcher = pathname === '/switch-account'
     const isPublicProduct = isPublicProductPath(pathname)
     const isLoggedInConsoleProduct = token && (pathname === '/ti' || pathname.startsWith('/ti/'))
     const isOrganizations = pathname.startsWith('/organizations')
-    const isAppSurface = isDashboard || (token && hasAppSidebar(pathname)) || isLoggedInConsoleProduct || (!isPublicProduct && (isShare || isAI || isDashboard || isProfile || isOrganizations))
+    const isAppSurface = isDashboard || isAccountSwitcher || (token && hasAppSidebar(pathname)) || isLoggedInConsoleProduct || (!isPublicProduct && (isShare || isAI || isDashboard || isProfile || isOrganizations))
     const pricingHref = token ? '/subscription' : '/pricing'
     const profileHref = id ? `/profile/${encodeURIComponent(id)}` : '/profile'
 
@@ -176,7 +177,12 @@ export default function Header({ token, id, username, path: serverPath }: { toke
                         <div aria-hidden='true' className='fixed inset-x-3 top-14 z-20 h-4 bg-transparent sm:absolute sm:inset-x-auto sm:right-0 sm:top-10 sm:h-3 sm:w-60' />
                         <div className='fixed inset-x-3 top-18 z-30 grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-3 text-sm text-ui-text shadow-xl sm:absolute sm:left-auto sm:right-0 sm:top-13 sm:w-60'>
                             {token ? <>
-                                <div className='rounded-lg p-2 font-mono text-xs text-ui-muted/70'>@{username || id}</div>
+                                <div className='flex items-center gap-2 rounded-lg px-2 py-1'>
+                                    <div className='min-w-0 flex-1 truncate font-mono text-xs text-ui-muted/70'>@{username || id}</div>
+                                    <Link href='/switch-account' aria-label='Switch account' title='Switch account' className='grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>
+                                        <ArrowLeftRight className='h-4 w-4' />
+                                    </Link>
+                                </div>
                                 <div role='separator' className='border-t border-ui-border' />
                                 <Link href={profileHref} className='rounded-lg p-2 hover:bg-ui-raised'>Profile</Link>
                                 {id && <Link href={`/profile/${encodeURIComponent(id)}/security`} className='rounded-lg p-2 hover:bg-ui-raised'>Security</Link>}

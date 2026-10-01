@@ -15,6 +15,7 @@ export default function RouteFrame({ children, serverPath, token, sidebar, banne
     const isBrowserLanding = pathname === '/browser'
     const isShare = isSharePath(pathname)
     const isDashboard = isInternalAppPath(pathname)
+    const isAccountSwitcher = pathname === '/switch-account'
     const showSidebar = Boolean(sidebar) && hasAppSidebar(pathname)
     const isProfile = pathname.startsWith('/profile')
     const isOrganizations = pathname.startsWith('/organizations')
@@ -22,7 +23,7 @@ export default function RouteFrame({ children, serverPath, token, sidebar, banne
     const isPublicProduct = isPublicProductPath(pathname)
     const isThesisPage = pathname === '/thesis' || pathname.startsWith('/thesis/') || pathname === '/content/thesis' || pathname.startsWith('/content/thesis/')
     const isLoggedInTi = token && (pathname === '/ti' || pathname.startsWith('/ti/'))
-    const isAppSurface = showSidebar || isDashboard || isLoggedInTi || (!isPublicProduct && (isShare || pathname.startsWith('/ai') || isDashboard || isProfile || isOrganizations))
+    const isAppSurface = showSidebar || isDashboard || isAccountSwitcher || isLoggedInTi || (!isPublicProduct && (isShare || pathname.startsWith('/ai') || isDashboard || isProfile || isOrganizations))
     const showFooter = !isBrowserLanding && !isThesisPage && (!isAppSurface || isAiWorkbench)
     const thesisScroll = isThesisPage && !showSidebar
     const frameRows = thesisScroll ? 'grid-rows-[auto_minmax(0,1fr)]' : showFooter ? 'grid-rows-[auto_minmax(max-content,auto)_auto]' : 'grid-rows-[auto_minmax(0,1fr)]'

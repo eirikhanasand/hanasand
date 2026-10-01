@@ -721,6 +721,12 @@ export const generatedSearchRoutes = [
         href: '/support',
     },
     {
+        id: 'route:/switch-account',
+        title: 'Switch Account',
+        detail: 'Page · /switch-account',
+        href: '/switch-account',
+    },
+    {
         id: 'route:/terms',
         title: 'Terms',
         detail: 'Page · /terms',

@@ -21,6 +21,7 @@ type LoginPageProps = {
     socialError?: string
     initialMode?: 'login' | 'signup'
     serverError?: string
+    initialUsername?: string
 }
 
 const authInputClass = 'h-10 rounded-lg border border-ui-border bg-ui-panel px-3.5 text-sm font-medium text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-4 focus:ring-ui-primary/20'
@@ -28,7 +29,7 @@ const authPrimaryButtonClass = 'group inline-flex h-9 items-center justify-cente
 const authGhostButtonClass = 'inline-flex h-9 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text disabled:cursor-not-allowed disabled:text-ui-muted/60'
 
 
-export default function LoginPage({ path, serverInternal, serverExpired, socialError, initialMode = 'login', serverError }: LoginPageProps) {
+export default function LoginPage({ path, serverInternal, serverExpired, socialError, initialMode = 'login', serverError, initialUsername }: LoginPageProps) {
     const router = useRouter()
     const pathname = usePathname()
     const [mode, setMode] = useState<'login' | 'signup' | 'verify-signup' | 'request-reset' | 'verify-reset'>(initialMode)
@@ -260,6 +261,7 @@ export default function LoginPage({ path, serverInternal, serverExpired, socialE
                                         type='text'
                                         name='username'
                                         placeholder='Username'
+                                        defaultValue={initialUsername}
                                         className={authInputClass}
                                         autoComplete='username'
                                         required
