@@ -141,7 +141,6 @@ for (const token of [
     'Workflow updated',
     'Action blocked',
     'Manage your watchlist, collect updates and send events.',
-    'Org watchlists',
     'Commands',
     'RouteStateCard label=\'Terms\'',
     'Save and check events',
