@@ -2,12 +2,12 @@
 
 import { ArrowUp, LoaderCircle, UserRound } from 'lucide-react'
 import { GuestSupportFeedback, type Feedback } from './supportFeedback'
-import useSupportLive from './useSupportLive'
+import useSupportLive, { SUPPORT_CHAT_OPENED_EVENT } from './useSupportLive'
 import useSupportUnread from './useSupportUnread'
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 type Message = { id: string; body: string; sender_kind: 'user' | 'assistant' | 'support' | 'system'; sender_name: string; request_id?: string }
-type Ticket = { id: string; subject: string; reply_count: number }
+type Ticket = { id: string; subject: string; reply_count: number; status?: string }
 export type PublicSupportConversation = Feedback & { id?: string; tickets?: Ticket[]; agent_name?: string; channel: 'ai' | 'human'; status: string; pending: boolean; messages: Message[]; error?: string; accepted?: boolean }
 type Submission = { requestId: string; message: string; handoff?: boolean; conversationId?: string }
 const emptyTickets: Ticket[] = []
@@ -85,6 +85,7 @@ export default function PublicSupportChat({ active = true, onUnreadChange, onRes
             if (payload.status !== 'closed' && viewingClosedChat) setViewingClosedChat(false)
             if (!selection.current && payload.id) { selection.current = payload.id; setSelectedId(payload.id) }
         }
+        return realtime.current && Array.isArray(payload.tickets) && payload.tickets.some((ticket: Ticket) => ticket.status === 'open')
     }, [onResolvedChange, viewingClosedChat])
 
     useEffect(() => {
@@ -96,8 +97,8 @@ export default function PublicSupportChat({ active = true, onUnreadChange, onRes
     }, [])
     useEffect(() => { if (selectedId) try { localStorage.setItem('hanasand-support-selected', selectedId) } catch { /* Selection is still available in this tab. */ } }, [selectedId])
     const connection = useSupportLive(async () => {
-        try { await refresh(); return realtime.current } catch (error) { if (mounted.current) { setRefreshError(error instanceof Error ? error.message : 'Reconnecting…'); setLoading(false) } }
-    }, true)
+        try { return await refresh() } catch (error) { if (mounted.current) { setRefreshError(error instanceof Error ? error.message : 'Reconnecting…'); setLoading(false) } }
+    }, true, active)
     const legacy = !Array.isArray(conversation.tickets)
     const tickets = useMemo(() => conversation.tickets || (conversation.messages.length ? [{ id: 'legacy', subject: 'Support', reply_count: conversation.messages.filter(message => ['assistant', 'support'].includes(message.sender_kind)).length }] : emptyTickets), [conversation])
     const unread = useSupportUnread(tickets, legacy ? 'legacy' : selectedId, active, 'visitor')
@@ -137,7 +138,8 @@ export default function PublicSupportChat({ active = true, onUnreadChange, onRes
             if (!mounted.current) return
             // Fetch current state after the write so a concurrent handoff cannot be overwritten by an older reply.
             revision.current += 1
-            await refresh()
+            const shouldConnect = await refresh()
+            if (shouldConnect) window.dispatchEvent(new Event(SUPPORT_CHAT_OPENED_EVENT))
             if (payload.accepted !== false && !handoff && (!submission.conversationId || selection.current === submission.conversationId)) setInput(current => current.trim() === submission.message ? '' : current)
             if (payload.accepted !== false && drafts.current[id]?.trim() === submission.message) delete drafts.current[id]
             if (payload.error && !handoff) failures.current[id] = { message: payload.error, submission }

@@ -2,8 +2,9 @@
 
 import Link from 'next/link'
 import SupportFeedback, { SupportStars, type Feedback } from './supportFeedback'
-import useSupportLive from './useSupportLive'
+import useSupportLive, { SUPPORT_CHAT_OPENED_EVENT } from './useSupportLive'
 import useSupportUnread from './useSupportUnread'
+import { SUPPORT_TICKETS_UPDATED_EVENT } from '@/utils/supportUnread'
 import { PublicSupportPanel } from './publicSupportChat'
 import { BellDot, ListFilter, Loader2, MessageCircle, Search, Send } from 'lucide-react'
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react'
@@ -38,6 +39,7 @@ export default function SupportChat({ embedded = false, initialChat }: { embedde
     const [input, setInput] = useState('')
     const [subject, setSubject] = useState('')
     const [isSupport, setIsSupport] = useState(initialChat?.isSupport === true)
+    const isSupportRef = useRef(initialChat?.isSupport === true)
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(!initialChat)
     const [syncedId, setSyncedId] = useState('')
@@ -80,8 +82,18 @@ export default function SupportChat({ embedded = false, initialChat }: { embedde
         const payload = await response.json() as { tickets?: Ticket[]; isSupport?: boolean; realtime?: boolean }
         if (version !== ticketRevision.current) return
         realtime.current = payload.realtime === true
-        setTickets(payload.tickets || [])
-        setIsSupport(payload.isSupport === true)
+        const updatedTickets = payload.tickets || []
+        const supportQueue = payload.isSupport === true
+        isSupportRef.current = supportQueue
+        setTickets(updatedTickets)
+        window.dispatchEvent(new CustomEvent(SUPPORT_TICKETS_UPDATED_EVENT, {
+            detail: {
+                scope: `user:${getCookie('impersonating_id') || getCookie('id') || ''}`,
+                tickets: updatedTickets,
+            },
+        }))
+        if (!supportQueue && updatedTickets.some(ticket => ticket.status === 'open')) window.dispatchEvent(new Event(SUPPORT_CHAT_OPENED_EVENT))
+        setIsSupport(supportQueue)
         setSelectedId(current => creating.current ? current : current || payload.tickets?.[0]?.id || '')
         return payload.tickets || []
     }, [])
@@ -121,7 +133,11 @@ export default function SupportChat({ embedded = false, initialChat }: { embedde
     const connection = useSupportLive(async () => {
         const id = selectedRef.current
         setSyncedId('')
-        try { await Promise.all([loadTickets(), loadMessages(id)]); setError(''); setSyncedId(id); return realtime.current }
+        try {
+            const [updatedTickets] = await Promise.all([loadTickets(), loadMessages(id)])
+            setError(''); setSyncedId(id)
+            return realtime.current && (isSupportRef.current || Boolean(updatedTickets?.some(ticket => ticket.status === 'open')))
+        }
         catch (error) { setError(error instanceof Error ? error.message : 'Reconnecting…') }
         finally { setLoading(false) }
     }, false, !signedOut)

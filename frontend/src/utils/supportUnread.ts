@@ -1,6 +1,7 @@
 export const SUPPORT_READ_STATE_EVENT = 'hanasand-support-read-state'
+export const SUPPORT_TICKETS_UPDATED_EVENT = 'hanasand-support-tickets-updated'
 
-export type SupportUnreadTicket = { id: string; reply_count?: number }
+export type SupportUnreadTicket = { id: string; reply_count?: number; status?: string }
 
 export function supportReadStateKey(scope: string) {
     return `hanasand-support-read:${scope}`

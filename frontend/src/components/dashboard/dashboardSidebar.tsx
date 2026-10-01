@@ -13,9 +13,11 @@ import { useWorkspace } from '@/components/organizations/workspaceProvider'
 import { getThesisNavigation, subscribeThesisNavigation } from '@/utils/layout/thesisNavigation'
 import { canManageHanasandOrganizations, canViewHanasandInternalPages } from '@/utils/organizations/internalPageAccess'
 import { fetchHasUnreadMail } from '@/utils/mail/client'
-import { hasUnreadSupportMessages, supportReadStateKey, SUPPORT_READ_STATE_EVENT, type SupportUnreadTicket } from '@/utils/supportUnread'
+import config from '@/config'
+import { hasUnreadSupportMessages, supportReadStateKey, SUPPORT_READ_STATE_EVENT, SUPPORT_TICKETS_UPDATED_EVENT, type SupportUnreadTicket } from '@/utils/supportUnread'
 
 const emptyThesisNavigation: ReturnType<typeof getThesisNavigation> = []
+const SUPPORT_TICKETS_REFRESH_EVENT = 'hanasand-support-tickets-refresh'
 
 const sectionIcons: Record<string, typeof ShieldCheck> = {
     'Security & intelligence': ShieldCheck,
@@ -64,6 +66,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
     const compact = desktop && mode === 'compact'
     const [hasVMs, setHasVMs] = useState(false)
     const [supportQueue, setSupportQueue] = useState<{ userId: string; scope: string; tickets: SupportUnreadTicket[]; hasUnread: boolean } | null>(null)
+    const hasOpenSupportChats = supportQueue?.userId === access.id && supportQueue.tickets.some(ticket => ticket.status === 'open')
     const hasUnreadSupport = supportQueue?.userId === access.id && supportQueue.hasUnread
     const [mailQueue, setMailQueue] = useState<{ userId: string; hasUnread: boolean } | null>(null)
     const hasUnreadMail = mailQueue?.userId === access.id && mailQueue.hasUnread
@@ -98,8 +101,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
         }
         void refresh()
         window.addEventListener('vms-updated', refresh)
-        window.addEventListener('focus', refresh)
-        return () => { controller.abort(); window.removeEventListener('vms-updated', refresh); window.removeEventListener('focus', refresh) }
+        return () => { controller.abort(); window.removeEventListener('vms-updated', refresh) }
     }, [access.id])
     useEffect(() => {
         const controller = new AbortController()
@@ -142,21 +144,72 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
             const scope = `user:${getCookie('impersonating_id') || getCookie('id') || access.id}`
             if (event.key === supportReadStateKey(scope)) refreshReadState(scope)
         }
-        void refresh()
-        const interval = window.setInterval(() => { void refresh() }, 60_000)
-        window.addEventListener('focus', refresh)
-        document.addEventListener('visibilitychange', refresh)
+        const onTicketsUpdated = (event: Event) => {
+            const detail = (event as CustomEvent<{ scope?: string; tickets?: SupportUnreadTicket[] }>).detail
+            const scope = `user:${getCookie('impersonating_id') || getCookie('id') || access.id}`
+            if (detail?.scope !== scope) return
+            const tickets = detail.tickets || []
+            setSupportQueue({ userId: access.id, scope, tickets, hasUnread: hasUnreadSupportMessages(tickets, scope) })
+        }
+        if (pathname !== '/support') void refresh()
         window.addEventListener(SUPPORT_READ_STATE_EVENT, onReadState)
         window.addEventListener('storage', onStorage)
+        window.addEventListener(SUPPORT_TICKETS_UPDATED_EVENT, onTicketsUpdated)
+        window.addEventListener(SUPPORT_TICKETS_REFRESH_EVENT, refresh)
         return () => {
             controller.abort()
-            window.clearInterval(interval)
-            window.removeEventListener('focus', refresh)
-            document.removeEventListener('visibilitychange', refresh)
             window.removeEventListener(SUPPORT_READ_STATE_EVENT, onReadState)
             window.removeEventListener('storage', onStorage)
+            window.removeEventListener(SUPPORT_TICKETS_UPDATED_EVENT, onTicketsUpdated)
+            window.removeEventListener(SUPPORT_TICKETS_REFRESH_EVENT, refresh)
         }
-    }, [access.id])
+    }, [access.id, pathname])
+    useEffect(() => {
+        if (!hasOpenSupportChats || pathname === '/support') return
+        const id = getCookie('impersonating_id') || getCookie('id') || access.id
+        const token = getCookie('access_token') || ''
+        if (!id || !token) return
+        let disposed = false
+        let socket: WebSocket | undefined
+        let retry: ReturnType<typeof setTimeout> | undefined
+        let refreshTimer: ReturnType<typeof setTimeout> | undefined
+        let attempts = 0
+        const publishChange = () => {
+            if (refreshTimer) return
+            refreshTimer = setTimeout(() => {
+                refreshTimer = undefined
+                window.dispatchEvent(new Event(SUPPORT_TICKETS_REFRESH_EVENT))
+            }, 100)
+        }
+        const connect = () => {
+            if (disposed) return
+            const next = new WebSocket(`${config.url.api_wss}/support`)
+            socket = next
+            next.onopen = () => next.send(JSON.stringify({ type: 'auth', id, token }))
+            next.onmessage = event => {
+                try {
+                    const message = JSON.parse(event.data)
+                    if (message.type === 'ready') {
+                        attempts = 0
+                        publishChange()
+                    } else if (message.type === 'changed') publishChange()
+                } catch { /* Ignore malformed events. */ }
+            }
+            next.onerror = () => next.close()
+            next.onclose = () => {
+                if (socket !== next) return
+                socket = undefined
+                if (!disposed) retry = setTimeout(connect, Math.min(30_000, 1000 * 2 ** Math.min(attempts++, 5)))
+            }
+        }
+        connect()
+        return () => {
+            disposed = true
+            clearTimeout(retry)
+            clearTimeout(refreshTimer)
+            socket?.close()
+        }
+    }, [access.id, hasOpenSupportChats, pathname])
     useEffect(() => {
         let disposed = false
         let requestInFlight = false
@@ -175,13 +228,11 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
             finally { requestInFlight = false }
         }
         void refresh()
-        const interval = window.setInterval(() => { void refresh() }, 60_000)
         const refreshWhenVisible = () => { if (!document.hidden) void refresh() }
         window.addEventListener('focus', refresh)
         document.addEventListener('visibilitychange', refreshWhenVisible)
         return () => {
             disposed = true
-            window.clearInterval(interval)
             window.removeEventListener('focus', refresh)
             document.removeEventListener('visibilitychange', refreshWhenVisible)
         }
