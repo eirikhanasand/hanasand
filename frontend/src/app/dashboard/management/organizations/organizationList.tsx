@@ -1,13 +1,16 @@
 'use client'
 
-import { Search, X } from 'lucide-react'
+import Link from 'next/link'
+import { ArrowLeftRight, Search, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import SortIndicator from '@/components/dashboard/sort-indicator'
+import { useWorkspace } from '@/components/organizations/workspaceProvider'
 
 type Organization = { id: string, name: string, slug: string, status: string, member_count: number, created_at: string, last_active_at: string | null }
 type SortKey = 'created' | 'lastActive' | 'members' | 'name' | 'slug' | 'status'
 
 export default function OrganizationList({ organizations }: { organizations: Organization[] }) {
+    const { organizations: accessibleOrganizations, canSwitchOrganization } = useWorkspace()
     const [search, setSearch] = useState('')
     const [searchOpen, setSearchOpen] = useState(false)
     const [sort, setSort] = useState<{ key: SortKey, direction: 'asc' | 'desc' }>({ key: 'name', direction: 'asc' })
@@ -39,6 +42,7 @@ export default function OrganizationList({ organizations }: { organizations: Org
     }, [searchOpen])
 
     const query = search.trim().toLowerCase()
+    const accessibleOrganizationIds = new Set(accessibleOrganizations.filter(org => org.lifecycleStatus === 'active').map(org => org.id))
     const rows = organizations.filter(org => `${org.name} ${org.slug} ${org.status}`.toLowerCase().includes(query))
     const sortedRows = [...rows].sort((a, b) => {
         const sign = sort.direction === 'asc' ? 1 : -1
@@ -80,7 +84,7 @@ export default function OrganizationList({ organizations }: { organizations: Org
             <table className='w-full text-left text-sm'>
                 <thead className='border-b border-ui-border text-ui-muted'><tr>{[
                     sortHeading('Organization', 'name'), sortHeading('Slug', 'slug'), sortHeading('Status', 'status'), sortHeading('Members', 'members'),
-                    sortHeading('Created', 'created'), sortHeading('Last active (UTC)', 'lastActive'),
+                    sortHeading('Created', 'created'), sortHeading('Last active (UTC)', 'lastActive'), <th key='switch' scope='col' className='w-12 px-3 py-3'><span className='sr-only'>Open organization</span></th>,
                 ]}</tr></thead>
                 <tbody>{sortedRows.map(org => <tr key={org.id} className='border-b border-ui-border text-ui-text'>
                     <td className='px-3 py-3 font-medium'>{org.name}</td>
@@ -89,6 +93,9 @@ export default function OrganizationList({ organizations }: { organizations: Org
                     <td className='px-3 py-3'>{org.member_count}</td>
                     <td className='whitespace-nowrap px-3 py-3'>{new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC' }).format(new Date(org.created_at))}</td>
                     <td className='whitespace-nowrap px-3 py-3'>{org.last_active_at ? <time dateTime={org.last_active_at}>{new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(org.last_active_at))}</time> : 'No recorded activity'}</td>
+                    <td className='px-3 py-2 text-right'>{canSwitchOrganization && org.status === 'active' && accessibleOrganizationIds.has(org.id) ? <Link href={`/organizations?org=${encodeURIComponent(org.id)}`} aria-label={`Switch to ${org.name}`} title={`Switch to ${org.name}`} className='ml-auto grid h-8 w-8 place-items-center rounded-lg text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>
+                        <ArrowLeftRight className='h-4 w-4' />
+                    </Link> : null}</td>
                 </tr>)}</tbody>
             </table>
             {!sortedRows.length && <p className='py-8 text-center text-ui-muted'>{organizations.length ? 'No organizations match your search.' : 'No organizations found.'}</p>}
