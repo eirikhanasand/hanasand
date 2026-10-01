@@ -21,6 +21,15 @@ function MessageBody({ text }: { text: string }) {
     })}</p>
 }
 
+function ConversationMessages({ messages }: { messages: Message[] }) {
+    return <>{messages.map(message => message.sender_kind === 'system'
+        ? <p key={message.id} className='px-2 py-1 text-center text-xs leading-5 text-ui-muted'>{message.body}</p>
+        : <div key={message.id} className={`min-w-0 max-w-[92%] ${message.sender_kind === 'user' ? 'justify-self-end' : 'justify-self-start'}`}>
+            <p className={`mb-1.5 text-[11px] font-medium text-ui-muted ${message.sender_kind === 'user' ? 'text-right' : ''}`}>{message.sender_name}</p>
+            <div className={`rounded-2xl px-3.5 py-2.5 text-sm leading-6 ${message.sender_kind === 'user' ? 'rounded-tr-md bg-ui-primary text-ui-on-primary' : 'rounded-tl-md bg-ui-raised text-ui-text'}`}><MessageBody text={message.body} /></div>
+        </div>)}</>
+}
+
 export default function PublicSupportChat({ active = true, onUnreadChange, onResolvedChange, initialConversation, initialSelectedId = '' }: { active?: boolean; onUnreadChange?: (count: number) => void; onResolvedChange?: (resolved: boolean) => void; initialConversation?: PublicSupportConversation; initialSelectedId?: string }) {
     const [selectedId, setSelectedId] = useState(initialConversation?.id || initialSelectedId)
     const selection = useRef(initialConversation?.id || initialSelectedId)
@@ -28,6 +37,7 @@ export default function PublicSupportChat({ active = true, onUnreadChange, onRes
     const realtime = useRef(false)
     const drafts = useRef<Record<string, string>>({})
     const [conversation, setConversation] = useState<PublicSupportConversation>(initialConversation || empty)
+    const [viewingClosedChat, setViewingClosedChat] = useState(false)
     const [input, setInput] = useState('')
     const [loading, setLoading] = useState(!initialConversation)
     const [pendingMessages, setPendingMessages] = useState<Record<string, Submission>>({})
@@ -40,6 +50,7 @@ export default function PublicSupportChat({ active = true, onUnreadChange, onRes
     const [closing, setClosing] = useState(false)
     const [retry, setRetry] = useState<Submission | null>(null)
     const log = useRef<HTMLDivElement>(null)
+    const closedLog = useRef<HTMLDivElement>(null)
     const mounted = useRef(true)
     const serverConversation = useRef(Boolean(initialConversation))
     const revision = useRef(0)
@@ -70,10 +81,11 @@ export default function PublicSupportChat({ active = true, onUnreadChange, onRes
                     if (index >= 0) { read[readId] = index + 1; localStorage.setItem(key, JSON.stringify(read)) }
                 }
             } catch { /* Read markers are optional when browser storage is unavailable. */ }
-            setConversation(payload); onResolvedChange?.(payload.status === 'closed'); setRefreshError(''); setLoading(false)
+            setConversation(payload); onResolvedChange?.(payload.status === 'closed' && !viewingClosedChat); setRefreshError(''); setLoading(false)
+            if (payload.status !== 'closed' && viewingClosedChat) setViewingClosedChat(false)
             if (!selection.current && payload.id) { selection.current = payload.id; setSelectedId(payload.id) }
         }
-    }, [onResolvedChange])
+    }, [onResolvedChange, viewingClosedChat])
 
     useEffect(() => {
         mounted.current = true
@@ -100,7 +112,11 @@ export default function PublicSupportChat({ active = true, onUnreadChange, onRes
         setLoading(true)
         try { await refresh() } catch { setRefreshError('Could not load this chat. Reconnecting…') } finally { setLoading(false) }
     }
-    useEffect(() => { if (active && log.current) log.current.scrollTop = log.current.scrollHeight }, [active, conversation.messages.length, sending])
+    useEffect(() => {
+        if (!active) return
+        const currentLog = viewingClosedChat ? closedLog.current : log.current
+        if (currentLog) currentLog.scrollTop = currentLog.scrollHeight
+    }, [active, conversation.messages.length, sending, viewingClosedChat])
 
     async function submit(submission: Submission) {
         const id = submission.conversationId || selection.current || (legacy ? '' : crypto.randomUUID())
@@ -149,8 +165,28 @@ export default function PublicSupportChat({ active = true, onUnreadChange, onRes
         if (!message || conversation.status === 'closed') return
         void submit(retry?.message === message ? retry : { requestId: crypto.randomUUID(), message })
     }
-    if (conversation.status === 'closed') return <section aria-label='Support feedback' className='grid justify-items-center gap-5 py-2'><GuestSupportFeedback key={`${selectedId}:${conversation.resolution_version}`} feedback={conversation} submit={sendFeedback} submitCloseFeedback={sendCloseFeedback} onNewChat={startNewChat} /></section>
+    const visibleMessages = outgoing && !conversation.messages.some(message => message.request_id === outgoing.requestId)
+        ? [...conversation.messages, { id: outgoing.requestId, body: outgoing.message, sender_kind: 'user' as const, sender_name: 'You' }]
+        : conversation.messages
+    if (conversation.status === 'closed') return <section aria-label={viewingClosedChat ? 'Support chat' : 'Support feedback'} className='min-h-0 min-w-0'>
+        <div className={viewingClosedChat ? 'grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)]' : 'hidden'}>
+            <header className='flex min-w-0 flex-wrap items-center justify-between gap-3 border-b border-ui-border bg-ui-raised px-5 py-3'>
+                <div className='min-w-0'><h1 className='text-sm font-semibold text-ui-text'>Support</h1><p className='text-xs text-ui-muted'>Chat resolved</p></div>
+                <div className='flex min-w-0 flex-wrap justify-end gap-2'>
+                    <button type='button' onClick={() => { setViewingClosedChat(false); onResolvedChange?.(true) }} className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-ui-text transition-colors hover:bg-ui-canvas'>Back to feedback</button>
+                    <button type='button' onClick={startNewChat} className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-ui-text transition-colors hover:bg-ui-canvas'>New chat</button>
+                </div>
+            </header>
+            <div ref={closedLog} role='log' aria-label='Messages' className='min-h-0 overflow-y-auto overscroll-contain px-5 py-5'>
+                {visibleMessages.length ? <div className='grid gap-4'><ConversationMessages messages={visibleMessages} /></div> : <p className='text-center text-sm text-ui-muted'>No messages in this chat.</p>}
+            </div>
+        </div>
+        <div className={viewingClosedChat ? 'hidden' : 'grid justify-items-center gap-5 py-2'}>
+            <GuestSupportFeedback key={`${selectedId}:${conversation.resolution_version}`} feedback={conversation} submit={sendFeedback} submitCloseFeedback={sendCloseFeedback} onNewChat={startNewChat} onViewChat={() => { setViewingClosedChat(true); onResolvedChange?.(false) }} />
+        </div>
+    </section>
     function startNewChat() {
+        setViewingClosedChat(false)
         onResolvedChange?.(false)
         void selectChat(crypto.randomUUID())
     }
@@ -192,9 +228,6 @@ export default function PublicSupportChat({ active = true, onUnreadChange, onRes
     const unanswered = !human && !busy && lastMessage?.sender_kind === 'user' && lastMessage.request_id
         ? { requestId: lastMessage.request_id, message: lastMessage.body } : null
     const retryable: Submission | null = retry || unanswered
-    const visibleMessages = outgoing && !conversation.messages.some(message => message.request_id === outgoing.requestId)
-        ? [...conversation.messages, { id: outgoing.requestId, body: outgoing.message, sender_kind: 'user' as const, sender_name: 'You' }]
-        : conversation.messages
     return (
         <section aria-label='Support chat' className='grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto]'>
             {!legacy ? <div className='flex min-w-0 items-center justify-between gap-3 border-b border-ui-border bg-ui-raised px-5 py-3'>
@@ -209,12 +242,7 @@ export default function PublicSupportChat({ active = true, onUnreadChange, onRes
                     <h2 className='text-xl font-semibold tracking-tight text-ui-text'>What can we help with?</h2>
                     <p className='mt-2 max-w-sm text-sm leading-6 text-ui-muted'>Describe your question and we’ll point you in the right direction.</p>
                     <div className='mt-6 flex flex-wrap justify-center gap-2'>{['Account help', 'Billing question', 'Using Hanasand'].map(topic => <button key={topic} type='button' disabled={loading || sending} onClick={() => setInput(topic)} className='rounded-full border border-ui-border px-3 py-2 text-xs text-ui-text transition hover:border-ui-primary hover:bg-ui-primary/5 disabled:opacity-50'>{topic}</button>)}</div>
-                </div> : <div className='grid gap-4'>{visibleMessages.map(message => message.sender_kind === 'system'
-                    ? <p key={message.id} className='px-2 py-1 text-center text-xs leading-5 text-ui-muted'>{message.body}</p>
-                    : <div key={message.id} className={`min-w-0 max-w-[92%] ${message.sender_kind === 'user' ? 'justify-self-end' : 'justify-self-start'}`}>
-                        <p className={`mb-1.5 text-[11px] font-medium text-ui-muted ${message.sender_kind === 'user' ? 'text-right' : ''}`}>{message.sender_name}</p>
-                        <div className={`rounded-2xl px-3.5 py-2.5 text-sm leading-6 ${message.sender_kind === 'user' ? 'rounded-tr-md bg-ui-primary text-ui-on-primary' : 'rounded-tl-md bg-ui-raised text-ui-text'}`}><MessageBody text={message.body} /></div>
-                    </div>)}</div>}
+                </div> : <div className='grid gap-4'><ConversationMessages messages={visibleMessages} /></div>}
                 {busy && !human ? <p role='status' className='mt-4 flex items-center gap-2 text-xs text-ui-muted'><LoaderCircle className='h-3.5 w-3.5 animate-spin' aria-hidden='true' />Hanasand AI is thinking…</p> : null}
             </div>
             <div className='min-w-0 border-t border-ui-border bg-ui-raised px-4 pb-3 pt-3'>

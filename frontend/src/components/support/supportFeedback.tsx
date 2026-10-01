@@ -33,7 +33,7 @@ export default function SupportFeedback({ feedback, submit }: { feedback: Feedba
     </form>
 }
 
-export function GuestSupportFeedback({ feedback, submit, submitCloseFeedback, onNewChat }: { feedback: Feedback; submit: (rating: number, comment: string) => Promise<void>; submitCloseFeedback: (foundWhatLookingFor: boolean, reason?: string) => Promise<void>; onNewChat: () => void }) {
+export function GuestSupportFeedback({ feedback, submit, submitCloseFeedback, onNewChat, onViewChat }: { feedback: Feedback; submit: (rating: number, comment: string) => Promise<void>; submitCloseFeedback: (foundWhatLookingFor: boolean, reason?: string) => Promise<void>; onNewChat: () => void; onViewChat: () => void }) {
     const [rating, setRating] = useState(0)
     const [comment, setComment] = useState('')
     const [saving, setSaving] = useState(false)
@@ -45,6 +45,10 @@ export function GuestSupportFeedback({ feedback, submit, submitCloseFeedback, on
     const [closeSaving, setCloseSaving] = useState(false)
     const [closeError, setCloseError] = useState('')
     const displayedRating = feedback.feedback_rating || (sent ? rating : 0)
+    const actions = <div className='mt-4 flex flex-wrap justify-center gap-2'>
+        <button type='button' onClick={onNewChat} className='rounded-lg border border-ui-border bg-ui-raised px-4 py-2 text-sm font-medium text-ui-text transition hover:bg-ui-panel'>New chat</button>
+        <button type='button' onClick={onViewChat} className='rounded-lg border border-ui-border bg-ui-raised px-4 py-2 text-sm font-medium text-ui-text transition hover:bg-ui-panel'>View chat</button>
+    </div>
     async function save(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
         if (!rating || saving) return
@@ -89,23 +93,23 @@ export function GuestSupportFeedback({ feedback, submit, submitCloseFeedback, on
             <label className='grid w-full gap-1.5 text-left text-xs text-ui-muted'>Your reason (optional)<textarea aria-label='Reason' rows={4} maxLength={2000} disabled={closeSaving} value={closeReason} onChange={event => setCloseReason(event.target.value)} className='min-w-0 resize-y rounded-xl border border-ui-border bg-ui-canvas px-3 py-2 text-sm text-ui-text outline-none focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/10' /></label>
             {closeError ? <p role='alert' className='text-xs text-ui-text'>{closeError}</p> : null}
             <div className='flex w-full items-center justify-between gap-3'><button type='button' disabled={closeSaving} onClick={() => setCloseStep('done')} className='rounded-lg px-3 py-2 text-sm text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Skip</button><button type='submit' disabled={closeSaving} className='rounded-lg border border-ui-border bg-ui-raised px-4 py-2 text-sm font-medium text-ui-text transition hover:bg-ui-panel disabled:opacity-50'>{closeSaving ? 'Saving…' : 'Submit'}</button></div>
-        </form> : <div className='grid justify-items-center gap-3 text-center'><p className='text-base font-semibold text-ui-text'>{feedback.close_feedback_found === true ? 'Thanks for letting us know you found what you needed.' : 'Thank you for letting us know.'}</p><button type='button' onClick={onNewChat} className='rounded-lg border border-ui-border bg-ui-raised px-4 py-2 text-sm font-medium text-ui-text transition hover:bg-ui-panel'>Start a new chat</button></div>}
+        </form> : <div className='grid justify-items-center gap-3 text-center'><p className='text-base font-semibold text-ui-text'>{feedback.close_feedback_found === true ? 'Thanks for letting us know you found what you needed.' : 'Thank you for letting us know.'}</p></div>}
+        {actions}
     </div>
     return <div className='animate-[support-panel-enter_280ms_cubic-bezier(0.22,1,0.36,1)_both]'>
         {displayedRating ? <div className='grid justify-items-center gap-3 text-center'>
             <p className='text-base font-semibold text-ui-text'>Thank you for your feedback.</p>
             <SupportStars rating={displayedRating} />
             {feedback.feedback_comment || sent && comment.trim() ? <p className='max-w-sm whitespace-pre-wrap text-sm text-ui-muted [overflow-wrap:anywhere]'>{feedback.feedback_comment || comment.trim()}</p> : null}
-            <button type='button' onClick={onNewChat} className='mt-1 rounded-lg border border-ui-border bg-ui-raised px-4 py-2 text-sm font-medium text-ui-text transition hover:bg-ui-panel'>Start a new chat</button>
         </div> : <form className='grid justify-items-center gap-3 text-center' onSubmit={save}>
             <div><h2 className='text-lg font-semibold tracking-tight text-ui-text'>How satisfied were you with our support?</h2><p className='mt-1 text-sm text-ui-muted'>Your feedback helps us improve.</p></div>
             <div role='group' aria-label='Rate your support experience' className='flex gap-1'>{[1, 2, 3, 4, 5].map(star => <button key={star} type='button' aria-label={`${star} ${star === 1 ? 'star' : 'stars'}`} aria-pressed={rating === star} disabled={saving} onClick={() => setRating(star)} className='rounded-lg p-2 text-ui-warning transition duration-150 hover:scale-110 hover:bg-ui-raised active:scale-95 focus-visible:outline-2 focus-visible:outline-ui-primary disabled:opacity-50'><Star aria-hidden='true' className={`h-7 w-7 transition-transform duration-150 ${star <= rating ? 'fill-current' : ''}`} /></button>)}</div>
             {rating > 0 && rating <= 4 ? <label className='grid w-full gap-1.5 text-left text-xs text-ui-muted animate-[support-panel-enter_180ms_ease-out_both]'>What could we have done better? (optional)<textarea aria-label='Feedback' rows={4} maxLength={2000} disabled={saving} value={comment} onChange={event => setComment(event.target.value)} className='min-w-0 resize-y rounded-xl border border-ui-border bg-ui-canvas px-3 py-2 text-sm text-ui-text outline-none transition focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/10' /></label> : null}
             {error ? <p role='alert' className='text-xs text-ui-text'>{error}</p> : null}
-            <div className='flex w-full items-center justify-between gap-3'>
-                <button type='button' onClick={onNewChat} className='rounded-lg px-3 py-2 text-sm text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Start a new chat</button>
+            <div className='flex w-full justify-center'>
                 <button type='submit' disabled={!rating || saving} className='rounded-lg bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-on-primary transition hover:opacity-90 disabled:opacity-50'>{saving ? 'Saving...' : 'Send feedback'}</button>
             </div>
         </form>}
+        {actions}
     </div>
 }
