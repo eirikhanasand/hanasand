@@ -263,9 +263,9 @@ export HANASAND_TI_API_SOURCE="$ti_release_dir/api"
 
 compose_release() {
     if test -f "$build_dir/.env"; then
-        docker compose --env-file "$build_dir/.env" -f "$build_dir/docker-compose.yml" "$@"
+        docker compose --parallel 2 --env-file "$build_dir/.env" -f "$build_dir/docker-compose.yml" "$@"
     else
-        docker compose -f "$build_dir/docker-compose.yml" "$@"
+        docker compose --parallel 2 -f "$build_dir/docker-compose.yml" "$@"
     fi
 }
 
@@ -338,19 +338,18 @@ if test "$pgbouncer_config_changed" = 0; then
     echo "Keeping healthy PgBouncer from $pgbouncer_release in place for this code-only release."
 fi
 
-# Build from the immutable release archive, not the live checkout. This keeps
-# runtime state (including the separate code-review mirror) out of every image
-# context while preserving parallel BuildKit execution for the release.
+# Build from the immutable release archive, not the live checkout. Limit
+# concurrent services so image exports do not starve live auth and API requests.
 compose_release build
 compose_live() {
     if test -f "$build_dir/.env"; then
-        docker compose --env-file "$build_dir/.env" -f "$root/docker-compose.yml" "$@"
+        docker compose --parallel 2 --env-file "$build_dir/.env" -f "$root/docker-compose.yml" "$@"
     else
-        docker compose -f "$root/docker-compose.yml" "$@"
+        docker compose --parallel 2 -f "$root/docker-compose.yml" "$@"
     fi
 }
 compose_candidates() {
-    docker compose --profile deployment-candidates --env-file "$build_dir/.env" \
+    docker compose --parallel 2 --profile deployment-candidates --env-file "$build_dir/.env" \
         -f "$root/docker-compose.yml" "$@"
 }
 
@@ -537,16 +536,21 @@ esac
 warm_dashboard_pages 3100
 candidate_safe_to_remove=0
 switch_upstreams 3100 8082 canonical
-wait_for_proxy_workers_to_drain "$last_proxy_workers"
-candidate_safe_to_remove=1
-for candidate in $(docker ps -aq --filter label=com.docker.compose.project=hanasand \
-    --filter label=com.docker.compose.service=api-candidate) \
-    $(docker ps -aq --filter label=com.docker.compose.project=hanasand \
-    --filter label=com.docker.compose.service=frontend-candidate) \
-    $(docker ps -aq --filter label=com.docker.compose.project=hanasand \
-    --filter label=com.docker.compose.service=pgbouncer-candidate); do
-    docker rm -f "$candidate" >/dev/null
-done
+if wait_for_proxy_workers_to_drain "$last_proxy_workers"; then
+    candidate_safe_to_remove=1
+    for candidate in $(docker ps -aq --filter label=com.docker.compose.project=hanasand \
+        --filter label=com.docker.compose.service=api-candidate) \
+        $(docker ps -aq --filter label=com.docker.compose.project=hanasand \
+        --filter label=com.docker.compose.service=frontend-candidate) \
+        $(docker ps -aq --filter label=com.docker.compose.project=hanasand \
+        --filter label=com.docker.compose.service=pgbouncer-candidate); do
+        docker rm -f "$candidate" >/dev/null
+    done
+else
+    # New requests use canonical now. Keep the healthy candidate stack for
+    # long-lived connections still handled by the old graceful workers.
+    echo "OpenResty still has connections to the release candidates; keeping them online."
+fi
 echo "Frontend and API health verified."
 compose_live up -d --no-build --no-deps --force-recreate auth-secondary
 wait_for_healthy hanasand_auth_secondary "Secondary auth worker" 180
