@@ -105,14 +105,13 @@ test "$processor_image_release" = "$processor_release" || {
 }
 processor_running_hash=$(docker inspect -f '{{index .Config.Labels "com.docker.compose.config-hash"}}' \
     hanasand_log_processor 2>/dev/null || true)
-verify_compose_file=${HANASAND_VERIFY_COMPOSE_FILE:-$(git rev-parse --show-toplevel)/docker-compose.yml}
-verify_env_file=${HANASAND_VERIFY_ENV_FILE:-$(git rev-parse --show-toplevel)/.env}
-if test -f "$verify_env_file"; then
+root=$(git rev-parse --show-toplevel)
+if test -f "$root/.env"; then
     processor_desired_hash=$(HANASAND_RELEASE_COMMIT="$processor_release" docker compose --project-name hanasand \
-        --env-file "$verify_env_file" -f "$verify_compose_file" config --hash log-processor 2>/dev/null | sed 's/.* //')
+        --env-file "$root/.env" -f "$root/docker-compose.yml" config --hash log-processor 2>/dev/null | sed 's/.* //')
 else
     processor_desired_hash=$(HANASAND_RELEASE_COMMIT="$processor_release" docker compose --project-name hanasand \
-        -f "$verify_compose_file" config --hash log-processor 2>/dev/null | sed 's/.* //')
+        -f "$root/docker-compose.yml" config --hash log-processor 2>/dev/null | sed 's/.* //')
 fi
 test -n "$processor_running_hash" && test "$processor_running_hash" = "$processor_desired_hash" || {
     echo "The durable log processor service configuration is stale." >&2

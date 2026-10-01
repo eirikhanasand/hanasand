@@ -331,7 +331,8 @@ log_processor_can_be_reused() {
     log_processor_running_hash=$(docker inspect -f '{{index .Config.Labels "com.docker.compose.config-hash"}}' \
         hanasand_log_processor 2>/dev/null || true)
     log_processor_desired_hash=$(HANASAND_RELEASE_COMMIT="$log_processor_release" \
-        compose_live config --hash log-processor 2>/dev/null | sed 's/.* //')
+        docker compose --project-name hanasand --env-file "$root/.env" \
+            -f "$root/docker-compose.yml" config --hash log-processor 2>/dev/null | sed 's/.* //')
     test -n "$log_processor_running_hash" \
         && test "$log_processor_running_hash" = "$log_processor_desired_hash"
 }
@@ -619,7 +620,5 @@ for container in hanasand-tunnel hanasand-tunnel-database hanasand-tunnel-intell
 done
 expected_pgbouncer_release=
 if test "$pgbouncer_config_changed" = 1; then expected_pgbouncer_release=$release; fi
-export HANASAND_VERIFY_COMPOSE_FILE="$build_dir/docker-compose.yml"
-export HANASAND_VERIFY_ENV_FILE="$build_dir/.env"
 sh "$root/scripts/verify-stack-release.sh" "$release" "$expected_pgbouncer_release" "$preserved_services"
 echo "Hanasand stack deployed from main at $release."
