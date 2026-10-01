@@ -3,21 +3,27 @@ import { processLogPredicate } from '../db/logProcessQueueSchema.ts'
 import type { LogInput } from './logEvent.ts'
 
 type Process = (logs: LogInput[]) => Promise<void>
+export const freshProcessLogArrivalWindowMs = 10_000
 
-export async function processQueuedLogs(process: Process, delayed = false, limit = 1000, maxPages = 4) {
+export async function processQueuedLogs(process: Process, delayed = false, limit = 1000, maxPages = 4, excludeRecentArrivalsMs = 0) {
     if (!Number.isInteger(limit) || limit < 1 || limit > 1000) throw new Error('Invalid command recovery batch limit')
     if (!Number.isInteger(maxPages) || maxPages < 1 || maxPages > 4) throw new Error('Invalid command recovery page limit')
+    if (!Number.isInteger(excludeRecentArrivalsMs) || excludeRecentArrivalsMs < 0 || excludeRecentArrivalsMs > 60_000) throw new Error('Invalid recent arrival window')
     // Rows are removed individually, so a lower ID committed later cannot be
     // skipped. An unrelated long source writer must not delay admitted work.
     const watermark = (await run('SELECT COALESCE(MAX(log_id), 0)::text AS id FROM log_process_queue')).rows[0].id
     if (String(watermark) === '0') return
     const started = performance.now(), budgetMs = delayed ? 30_000 : 5000
-    // Reserve capacity for live process arrivals without letting this stream
-    // monopolize a tick. Delayed commands get more time, still capped at four
-    // pages; the soft time budget can overrun by one durable page. No work expires.
+    // Keep recent arrivals on the reserved live lane while catching up on older
+    // work. Delayed queues get more time, still capped at four pages; the soft
+    // budget can overrun by one durable page. No work expires.
     for (let page = 0; page < maxPages; page++) {
+        const recentArrivalFilter = excludeRecentArrivalsMs
+            ? `AND q.queued_at < statement_timestamp() - ($3 * INTERVAL '1 millisecond')`
+            : ''
+        const params = excludeRecentArrivalsMs ? [watermark, limit, excludeRecentArrivalsMs] : [watermark, limit]
         const batch = await run(`SELECT s.* FROM log_process_queue q JOIN service_logs s ON s.id = q.log_id
-            WHERE q.log_id <= $1 ORDER BY q.log_id LIMIT $2`, [watermark, limit])
+            WHERE q.log_id <= $1 ${recentArrivalFilter} ORDER BY q.log_id LIMIT $2`, params)
         if (!batch.rows.length) break
         await process(batch.rows)
         await acknowledgeProcessedLogs(batch.rows.map(row => String(row.id)))

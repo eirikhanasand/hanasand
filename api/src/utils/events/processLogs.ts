@@ -7,11 +7,12 @@ import { collectEventFindings, persistEventFindings, createFindings, loadConfigu
 import { normalizeLogEvent, severityOrder, type LogInput } from './logEvent.ts'
 import { processAdditionalLogSources } from './storedSources.ts'
 import { stableLogWatermark } from './logWatermark.ts'
-import { acknowledgeProcessedLogs, processQueuedLogs, recoverProcessLogs } from './processQueue.ts'
+import { acknowledgeProcessedLogs, freshProcessLogArrivalWindowMs, processQueuedLogs, recoverProcessLogs } from './processQueue.ts'
 import { backfillLogDimensions } from '../logs/dimensions.ts'
 import { pruneAccessLogs } from './pruneAccessLogs.ts'
 import { accessRuleId } from './analyzeAccess.ts'
 import { withLogBatch } from './logBatch.ts'
+import { processLogPredicate } from '../db/logProcessQueueSchema.ts'
 
 let running = false
 // Keep a slow login's correlation work from holding the global lock for a batch.
@@ -19,7 +20,7 @@ const AUTH_CORRELATION_PAGE_SIZE = 1
 const AUTH_CORRELATION_RECHECK_LIMIT = 25
 const DEDICATED_LOG_BATCH_LIMIT = 50
 const DEDICATED_LOG_PAGE_CONCURRENCY = 36
-const DEDICATED_LOG_FRESH_LIMIT = 75
+const DEDICATED_LOG_FRESH_LIMIT = 150
 const DEFAULT_LOG_PAGE_CONCURRENCY = 3
 const DEDICATED_LOG_WORK_LIMIT = DEDICATED_LOG_BATCH_LIMIT * DEDICATED_LOG_PAGE_CONCURRENCY
 // Stateless results commit atomically with their findings; authentication keeps
@@ -279,7 +280,27 @@ export async function processLiveLogs() {
 }
 
 async function freshLogs(): Promise<LogInput[]> {
-    const limit = process.env.LOG_PROCESSOR_ONLY === '1' ? DEDICATED_LOG_FRESH_LIMIT : 200
+    const dedicatedWorker = process.env.LOG_PROCESSOR_ONLY === '1'
+    const limit = dedicatedWorker ? DEDICATED_LOG_FRESH_LIMIT : 200
+    if (dedicatedWorker) {
+        // Collector replays keep their source event time, which can be hours old.
+        // Use the queue's database receipt time so new arrivals bypass old FIFO work.
+        const recent = await run(`WITH arrivals AS (
+            SELECT q.log_id AS id, q.queued_at AS arrived_at
+            FROM log_process_queue q
+            WHERE q.queued_at >= statement_timestamp() - ($2 * INTERVAL '1 millisecond')
+            UNION ALL
+            SELECT s.id, s.created_at
+            FROM service_logs s
+            WHERE s.created_at >= statement_timestamp() - ($2 * INTERVAL '1 millisecond')
+              AND NOT ${processLogPredicate('s.metadata')}
+        )
+        SELECT s.* FROM arrivals a JOIN service_logs s ON s.id = a.id
+        WHERE NOT EXISTS (SELECT 1 FROM events e WHERE e.log_key = 'service:' || s.id::text
+            AND e.processing_status IN ('processed', 'skipped'))
+        ORDER BY a.arrived_at ASC, a.id ASC LIMIT $1`, [limit, freshProcessLogArrivalWindowMs])
+        return recent.rows
+    }
     return (await run(`SELECT s.* FROM service_logs s
         WHERE s.created_at >= statement_timestamp() - INTERVAL '10 seconds'
           AND NOT EXISTS (SELECT 1 FROM events e WHERE e.log_key = 'service:' || s.id::text
@@ -321,6 +342,8 @@ export async function processStoredLogs() {
             await query('UPDATE log_processing_cursors SET history_end_id = recent_id WHERE name = \'service_logs\' AND history_end_id IS NULL')
             const cursor = (await query('SELECT last_id, recent_id, history_end_id FROM log_processing_cursors WHERE name = \'service_logs\'')).rows[0]
             const { configured, processScopes } = scopedProcessor(platform.rows[0].id, () => { advanced = true }, () => processFresh())
+            const processQueued = (delayed: boolean) => processQueuedLogs(processScopes, delayed, queueLimit, 4,
+                dedicatedWorker ? freshProcessLogArrivalWindowMs : 0)
             let lastFresh = -Infinity
             const processFresh = async () => {
                 // The dedicated worker already ran the live lane immediately
@@ -342,7 +365,7 @@ export async function processStoredLogs() {
             const { rows: [queue] } = await run(`SELECT COALESCE((SELECT queued_at < clock_timestamp() - INTERVAL '60 seconds'
                 FROM log_process_queue ORDER BY queued_at, log_id LIMIT 1), FALSE) AS delayed`)
             // Command checks must not inherit the historical replication throttle.
-            await processQueuedLogs(processScopes, queue.delayed, queueLimit, 4)
+            await processQueued(queue.delayed)
             await processFresh()
             await recoverProcessLogs(processScopes, configuredLimit)
             await processFresh()
@@ -353,12 +376,22 @@ export async function processStoredLogs() {
             // does not fall behind new arrivals indefinitely.
             const catchupLimit = Math.min(1000, configuredLimit)
             const historyLimit = Math.min(queue.delayed ? 100 : 10000, configuredHistoryLimit)
-            const beforeHistory = historyLimit > catchupLimit ? () => processQueuedLogs(processScopes, false) : undefined
+            const beforeHistory = historyLimit > catchupLimit ? () => processQueued(false) : undefined
             const processPage = async (after: string, until: string, pageLimit = catchupLimit) => {
                 const candidates = await run('SELECT id FROM service_logs WHERE id > $1 AND id <= $2 ORDER BY id LIMIT 10000', [after, until])
-                const batch = candidates.rows.length ? await run(`SELECT * FROM service_logs s WHERE id > $1 AND id <= $2 AND id = ANY($4::bigint[])
+                // The live lane owns recently queued process logs. The queue keeps
+                // them durable if its reserved lane has not acknowledged them yet.
+                const recentQueueFilter = dedicatedWorker
+                    ? `AND NOT EXISTS (SELECT 1 FROM log_process_queue q WHERE q.log_id = s.id
+                        AND q.queued_at >= statement_timestamp() - ($5 * INTERVAL '1 millisecond'))`
+                    : ''
+                const batchParams = dedicatedWorker
+                    ? [after, until, pageLimit, candidates.rows.map(row => row.id), freshProcessLogArrivalWindowMs]
+                    : [after, until, pageLimit, candidates.rows.map(row => row.id)]
+                const batch = candidates.rows.length ? await run(`SELECT * FROM service_logs s WHERE s.id > $1 AND s.id <= $2 AND s.id = ANY($4::bigint[])
+                    ${recentQueueFilter}
                     AND NOT EXISTS (SELECT 1 FROM events e WHERE e.log_key = 'service:' || s.id::text AND e.processing_status = 'processed')
-                    ORDER BY id LIMIT $3`, [after, until, pageLimit, candidates.rows.map(row => row.id)]) : { rows: [] }
+                    ORDER BY s.id LIMIT $3`, batchParams) : { rows: [] }
                 await processScopes(batch.rows)
                 const lastId = batch.rows.length === pageLimit ? batch.rows.at(-1)!.id : candidates.rows.at(-1)?.id || until
                 const checked = candidates.rows.filter(row => BigInt(row.id) <= BigInt(lastId)).length

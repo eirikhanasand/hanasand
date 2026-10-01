@@ -2,12 +2,13 @@ import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, expect, mock, spyOn, test } from 'bun:test'
 let locked = true, fail = false, watermark: string | null = '200', additionalRuns = 0, queueRuns = 0, recoveryRuns = 0
 let delayed = false, historyLimits: number[], recentLimits: number[], queueModes: boolean[], recoveryLimits: number[], reads: Array<{ sql: string, params: any[] }>
-let queueLimits: number[] = [], queuePageLimits: number[] = [], unassignedLimits: number[] = [], pendingLimits: number[] = [], freshLimits: number[] = [], acknowledged: string[][] = []
+let queueLimits: number[] = [], queuePageLimits: number[] = [], queueArrivalWindows: number[] = [], unassignedLimits: number[] = [], pendingLimits: number[] = [], freshLimits: number[] = [], acknowledged: string[][] = []
 let historyScans: any[][] = []
 let historyGate: Promise<void> | undefined, historyEntered: (() => void) | undefined
 let cursor: any, statements: string[], checked: string[], stored: Record<string, any>, pending: any[]
 let transactions: string[][] = [], transactionQueries: any[] = []
 let transactionStatements: string[], failHistory = false, additionalCursorQuery: unknown
+let freshQueries: string[] = []
 const makeLog = (id: string, metadata: any = {}) => ({ id, service: 'audit', host: 'inspur', level: 'info', message: id, created_at: '2026-09-19T00:00:00Z', metadata })
 let priority: any[], fresh: any[], backlog: any[], inactiveScopes: Set<string>
 const query = async (sql: string, p: any[] = []): Promise<any> => {
@@ -26,10 +27,18 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
         if (sql.includes('last_error = NULL')) cursor.last_error = null
         return { rows: [] }
     }
-    if (sql.includes('SELECT s.* FROM service_logs s')) {
+    if (sql.includes('SELECT s.* FROM service_logs s') || sql.includes('FROM arrivals a')) {
         freshLimits.push(p[0] || 200)
+        freshQueries.push(sql)
+        const isProcessLog = (row: any) => row.metadata?.log_type === 'ProcessLogs'
+            || Boolean(row.metadata?.process && Object.keys(row.metadata.process).length)
+            || Boolean(row.metadata?.structured?.process && Object.keys(row.metadata.structured.process).length)
         return { rows: priority
-            .filter(row => Date.parse(row.created_at) >= Date.now() - 10_000
+            .filter(row => (process.env.LOG_PROCESSOR_ONLY === '1'
+                ? isProcessLog(row)
+                    ? Date.parse(row.queued_at) >= Date.now() - 10_000
+                    : Date.parse(row.created_at) >= Date.now() - 10_000
+                : Date.parse(row.created_at) >= Date.now() - 10_000)
                 && !Object.values(stored).some(event => event.key === `service:${row.id}` && ['processed', 'skipped'].includes(event.processing_status)))
             .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at) || Number(a.id) - Number(b.id))
             .slice(0, p[0] || 200) }
@@ -39,7 +48,9 @@ const query = async (sql: string, p: any[] = []): Promise<any> => {
         if (failHistory && p[1] !== watermark) throw new Error('History read failed')
         reads.push({ sql, params: p })
         const processed = new Set(Object.values(stored).filter(event => event.processing_status === 'processed').map(event => event.key))
-        return { rows: (p[1] === watermark ? fresh : backlog).filter(row => BigInt(row.id) > BigInt(p[0]) && BigInt(row.id) <= BigInt(p[1]) && (!p[3] || !processed.has(`service:${row.id}`))).slice(0, p[2] || 1000) }
+        return { rows: (p[1] === watermark ? fresh : backlog).filter(row => BigInt(row.id) > BigInt(p[0]) && BigInt(row.id) <= BigInt(p[1])
+            && (!p[3] || !processed.has(`service:${row.id}`))
+            && (!sql.includes('q.queued_at >= statement_timestamp()') || !row.queued_at || Date.parse(row.queued_at) < Date.now() - 10_000)).slice(0, p[2] || 1000) }
     }
     if (sql.startsWith('SELECT log_key FROM events')) return { rows: Object.values(stored)
         .filter(row => p[0].includes(row.key) && row.processing_status === 'processed').map(row => ({ log_key: row.key })) }
@@ -79,7 +90,7 @@ mock.module('#db', () => ({ default: query, withTransaction: async (work: any) =
     }
 } }))
 mock.module('../src/utils/logs/dimensions.ts', () => ({ backfillLogDimensions: async () => ({ processed: 0, ready: true }) }))
-mock.module('../src/utils/events/processQueue.ts', () => ({ acknowledgeProcessedLogs: async (ids: string[]) => { acknowledged.push(ids) }, processQueuedLogs: async (_process: unknown, delayed: boolean, limit = 1000, maxPages = 4) => { queueRuns++; queueModes.push(delayed); queueLimits.push(limit); queuePageLimits.push(maxPages) }, recoverProcessLogs: async (_process: unknown, limit: number) => { recoveryRuns++; recoveryLimits.push(limit) } }))
+mock.module('../src/utils/events/processQueue.ts', () => ({ freshProcessLogArrivalWindowMs: 10_000, acknowledgeProcessedLogs: async (ids: string[]) => { acknowledged.push(ids) }, processQueuedLogs: async (_process: unknown, delayed: boolean, limit = 1000, maxPages = 4, excludeRecentArrivalsMs = 0) => { queueRuns++; queueModes.push(delayed); queueLimits.push(limit); queuePageLimits.push(maxPages); queueArrivalWindows.push(excludeRecentArrivalsMs) }, recoverProcessLogs: async (_process: unknown, limit: number) => { recoveryRuns++; recoveryLimits.push(limit) } }))
 mock.module('../src/utils/events/storedSources.ts', () => ({ processAdditionalLogSources: async (_process: unknown, historyLimit: number, recentLimit: number, cursorQuery: unknown) => { additionalRuns++; historyLimits.push(historyLimit); recentLimits.push(recentLimit); additionalCursorQuery = cursorQuery } }))
 mock.module('../src/utils/events/logWatermark.ts', () => ({ stableLogWatermark: async () => watermark }))
 mock.module('../src/handlers/events.ts', () => ({
@@ -97,9 +108,9 @@ afterEach(() => { if (originalHistoryLimit === undefined) delete process.env.LOG
 afterEach(() => { if (originalProcessorOnly === undefined) delete process.env.LOG_PROCESSOR_ONLY; else process.env.LOG_PROCESSOR_ONLY = originalProcessorOnly })
 beforeEach(() => { delete process.env.LOG_CATCHUP_HISTORY_LIMIT })
 beforeEach(() => { delete process.env.LOG_PROCESSOR_ONLY })
-beforeEach(() => { queueLimits = []; queuePageLimits = []; unassignedLimits = []; pendingLimits = []; freshLimits = []; acknowledged = []; transactions = []; transactionQueries = []; transactionStatements = []; failHistory = false; additionalCursorQuery = undefined })
+beforeEach(() => { queueLimits = []; queuePageLimits = []; queueArrivalWindows = []; unassignedLimits = []; pendingLimits = []; freshLimits = []; acknowledged = []; transactions = []; transactionQueries = []; transactionStatements = []; failHistory = false; additionalCursorQuery = undefined })
 afterEach(() => { if (originalLimit === undefined) delete process.env.LOG_CATCHUP_BATCH_LIMIT; else process.env.LOG_CATCHUP_BATCH_LIMIT = originalLimit })
-beforeEach(() => { delete process.env.LOG_CATCHUP_BATCH_LIMIT; historyScans = []; inactiveScopes = new Set(['inactive']); watermark = '200'; additionalRuns = 0; queueRuns = 0; recoveryRuns = 0; locked = true; fail = false; delayed = false; historyLimits = []; recentLimits = []; queueModes = []; recoveryLimits = []; reads = []; cursor = { last_id: '0', recent_id: '100' }; statements = []; checked = []; stored = {}; pending = []; priority = []; fresh = [makeLog('101')]; backlog = [makeLog('1')] })
+beforeEach(() => { freshQueries = []; delete process.env.LOG_CATCHUP_BATCH_LIMIT; historyScans = []; inactiveScopes = new Set(['inactive']); watermark = '200'; additionalRuns = 0; queueRuns = 0; recoveryRuns = 0; locked = true; fail = false; delayed = false; historyLimits = []; recentLimits = []; queueModes = []; recoveryLimits = []; reads = []; cursor = { last_id: '0', recent_id: '100' }; statements = []; checked = []; stored = {}; pending = []; priority = []; fresh = [makeLog('101')]; backlog = [makeLog('1')] })
 test('a replica that does not hold the shared lock performs no work', async () => {
     locked = false; await processStoredLogs()
     expect(statements).toHaveLength(1)
@@ -148,7 +159,21 @@ test('dedicated worker keeps transaction pages bounded and lets queue recovery u
     expect(reads.every(read => read.params[2] === 900)).toBe(true)
     expect(historyLimits).toEqual([900]); expect(recentLimits).toEqual([900])
     expect(recoveryLimits).toEqual([900]); expect(queueLimits).toEqual([900])
-    expect(queuePageLimits).toEqual([4]); expect(unassignedLimits).toEqual([900]); expect(pendingLimits).toEqual([900])
+    expect(queuePageLimits).toEqual([4]); expect(queueArrivalWindows).toEqual([10_000]); expect(unassignedLimits).toEqual([900]); expect(pendingLimits).toEqual([900])
+})
+
+test('dedicated cursor leaves recent queued process logs to the live lane', async () => {
+    process.env.LOG_PROCESSOR_ONLY = '1'
+    fresh = [{ ...makeLog('101', { process: { executable: 'auditd' } }), queued_at: new Date().toISOString() }]
+    backlog = []
+    watermark = '200'
+    cursor = { last_id: '0', recent_id: '100', history_end_id: '100' }
+
+    await processStoredLogs()
+
+    expect(checked).toEqual([])
+    expect(reads.some(read => read.sql.includes('q.queued_at >= statement_timestamp()'))).toBe(true)
+    expect(cursor.recent_id).toBe('101')
 })
 
 test('dedicated catch-up batches fifty records across bounded concurrent pages', async () => {
@@ -531,13 +556,15 @@ test('a live burst is committed together while historical pages still yield', as
     expect(statements.some(sql => sql.includes('event:log-batch'))).toBe(false)
 })
 
-test('dedicated worker bounds fresh priority intake and processing pages', async () => {
+test('dedicated worker admits recent queue arrivals even when their event time is old', async () => {
     process.env.LOG_PROCESSOR_ONLY = '1'
-    priority = Array.from({ length: 100 }, (_, i) => ({ ...makeLog(String(2001 + i)), created_at: new Date().toISOString() }))
+    priority = Array.from({ length: 200 }, (_, i) => ({ ...makeLog(String(2001 + i), { process: { executable: 'auditd' } }), queued_at: new Date().toISOString() }))
     expect(await processLiveLogs()).toBe(true)
-    expect(freshLimits).toEqual([75])
-    expect(checked).toHaveLength(75)
-    expect(acknowledged.flat()).toHaveLength(75)
+    expect(freshLimits).toEqual([150])
+    expect(checked).toHaveLength(150)
+    expect(acknowledged.flat()).toHaveLength(150)
+    expect(freshQueries[0]).toContain('q.queued_at >= statement_timestamp()')
+    expect(freshQueries[0]).toContain('UNION ALL')
 })
 
 test('live authentication logins retain the correlation lock', async () => {

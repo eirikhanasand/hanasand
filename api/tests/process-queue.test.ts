@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, expect, mock, spyOn, test } from 'bun:test'
-let queue: { id: string }[], recovered: { id: string }[], calls: string[], recoveryId: string, complete: Set<string>
+let queue: { id: string, queued_at?: string }[], recovered: { id: string }[], calls: string[], recoveryId: string, complete: Set<string>
 const query = async (sql: string, args: any[] = []) => {
     calls.push(sql)
     if (sql.startsWith('SELECT COALESCE(MAX(log_id)')) return { rows: [{ id: queue.reduce((max, row) => BigInt(row.id) > BigInt(max) ? row.id : max, '0') }] }
-    if (sql.includes('FROM log_process_queue q JOIN')) return { rows: queue.filter(row => BigInt(row.id) <= BigInt(args[0])).slice(0, args[1]) }
+    if (sql.includes('FROM log_process_queue q JOIN')) return { rows: queue
+        .filter(row => BigInt(row.id) <= BigInt(args[0]))
+        .filter(row => !sql.includes('q.queued_at < statement_timestamp()') || Date.parse(row.queued_at || '1970-01-01') < Date.now() - args[2])
+        .slice(0, args[1]) }
     if (sql.startsWith('DELETE FROM log_process_queue')) { queue = queue.filter(row => !args[0].includes(row.id) || !complete.has(row.id)); return { rows: [] } }
     if (sql.startsWith('SELECT recent_id')) return { rows: [{ recent_id: recoveryId }] }
     if (sql.startsWith('SELECT id FROM service_logs')) return { rows: recovered.filter(row => BigInt(row.id) <= BigInt(args[0])).sort((a, b) => Number(b.id) - Number(a.id)).slice(0, 10000) }
@@ -34,6 +37,18 @@ test('dedicated worker handles one bounded queue page per tick', async () => {
     expect(queue).toHaveLength(175)
     expect(queue[0].id).toBe('26')
     expect(calls.filter(sql => sql.includes('FROM log_process_queue q JOIN'))).toHaveLength(1)
+})
+test('durable FIFO yields recent arrivals to the live lane', async () => {
+    const now = Date.now()
+    queue = [
+        { id: '1', queued_at: new Date(now - 60_000).toISOString() },
+        { id: '2', queued_at: new Date(now - 5_000).toISOString() },
+        { id: '3', queued_at: new Date(now - 20_000).toISOString() },
+    ]
+    await processQueuedLogs(process, false, 10, 4, 10_000)
+    expect([...complete]).toEqual(['1', '3'])
+    expect(queue.map(row => row.id)).toEqual(['2'])
+    expect(calls.filter(sql => sql.includes('FROM log_process_queue q JOIN'))[0]).toContain('q.queued_at < statement_timestamp()')
 })
 test('failure keeps queue entries; replay removes only events durably processed or safely skipped', async () => {
     queue = [{ id: '1' }, { id: '2' }]
