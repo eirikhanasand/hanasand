@@ -17,7 +17,7 @@ export const supportIdPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab
 export async function readSupportConversation(hash: string, conversationId?: string) {
     const tickets = (await queryOnce(`SELECT t.id, t.subject, t.channel, t.status, t.updated_at, t.resolution_version, t.feedback_rating, t.feedback_comment,
         t.ai_pending_id IS NOT NULL AND t.ai_pending_at > NOW() - INTERVAL '90 seconds' AS pending,
-        (SELECT u.name FROM support_messages m JOIN users u ON u.id=m.sender_id
+        (SELECT COALESCE(m.sender_display_name,u.name) FROM support_messages m JOIN users u ON u.id=m.sender_id
             WHERE m.ticket_id=t.id AND m.sender_kind='support' ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS agent_name,
         (SELECT COUNT(*)::int FROM support_messages m WHERE m.ticket_id=t.id AND (m.sender_kind IN ('support','assistant') OR m.event IN ('resolved','reopened'))) AS reply_count
         FROM support_tickets t WHERE COALESCE(t.visitor_session_hash, t.visitor_token_hash)=$1 ORDER BY t.updated_at DESC, t.id`, [hash])).rows
@@ -25,8 +25,8 @@ export async function readSupportConversation(hash: string, conversationId?: str
     if (!ticket) return { id: null, channel: 'ai', status: 'open', pending: false, messages: [], tickets }
     const messages = await queryOnce(`SELECT m.id, m.body, m.sender_kind, m.event, m.request_id, m.created_at,
         CASE WHEN m.sender_kind = 'assistant' THEN 'Hanasand AI'
-             WHEN m.sender_kind = 'support' THEN COALESCE(u.name, 'Support team')
-             WHEN m.sender_kind = 'system' THEN 'Support' ELSE 'You' END AS sender_name
+             WHEN m.sender_kind = 'support' THEN COALESCE(m.sender_display_name,u.name, 'Support team')
+             WHEN m.sender_kind = 'system' THEN 'Support' ELSE COALESCE(m.sender_display_name,'You') END AS sender_name
         FROM support_messages m LEFT JOIN users u ON u.id = m.sender_id
         WHERE m.ticket_id = $1 ORDER BY m.created_at, m.id`, [ticket.id])
     const closeAnswer = messages.rows.find(message => message.event === 'feedback' && message.body === 'Customer found what they were looking for.')
@@ -36,7 +36,7 @@ export async function readSupportConversation(hash: string, conversationId?: str
 }
 
 async function transfer(query: typeof queryOnce, ticketId: string) {
-    const changed = await query(`UPDATE support_tickets SET channel = 'human', status = 'open', ai_pending_id = NULL, ai_pending_at = NULL, updated_at = NOW()
+    const changed = await query(`UPDATE support_tickets SET channel = 'human', status = 'open', resolved_at = NULL, ai_pending_id = NULL, ai_pending_at = NULL, updated_at = NOW()
         WHERE id = $1 AND channel <> 'human' RETURNING id`, [ticketId])
     if (changed.rowCount) await query(`INSERT INTO support_messages (id, ticket_id, sender_kind, body, created_at)
         VALUES ($1, $2, 'system', $3, clock_timestamp())`, [randomUUID(), ticketId, handoffMessage])

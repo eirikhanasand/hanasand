@@ -12,7 +12,8 @@ import { validateApiKey, matchApiKeyScope } from './utils/auth/apiKeys.ts'
 import { validateSupportSession } from './utils/support/auth.ts'
 import registerSupportStream from './handlers/supportStream.ts'
 import { publicSupportChat } from './handlers/publicSupportChat.ts'
-import { getMySupportTickets, getSupportMessages, getSupportTickets, postSupportMessage, postSupportTicket, postSupportStatus, postSupportFeedback } from './handlers/supportChat.ts'
+import { getMySupportTickets, getSupportMessages, getSupportTickets, postSupportMessage, postSupportTicket, postSupportStatus, postSupportFeedback, postSupportDiscordLinkCode } from './handlers/supportChat.ts'
+import { getDiscordSupportTickets, postDiscordSupportAction } from './handlers/supportDiscord.ts'
 
 export async function createSupportServer() {
     if (!independentSupport || process.env.SUPPORT_INTERNAL_SERVICE !== '1' || (process.env.SUPPORT_SERVICE_KEY?.length || 0) < 32) throw new Error('Independent support storage and internal service authentication are required')
@@ -69,6 +70,9 @@ export async function createSupportServer() {
     app.post('/api/support/tickets/:id/messages', postSupportMessage)
     app.post('/api/support/tickets/:id/status', postSupportStatus)
     app.post('/api/support/tickets/:id/feedback', postSupportFeedback)
+    app.post('/api/support/discord/link-code', postSupportDiscordLinkCode)
+    app.get('/api/support/discord/tickets', getDiscordSupportTickets)
+    app.post('/api/support/discord/action', postDiscordSupportAction)
     registerSupportStream(app)
     app.addHook('onClose', async () => { await closeSupportDatabase(); await closeDatabase() })
     return app

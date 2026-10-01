@@ -26,14 +26,32 @@ export default async function ensureSupportAiSchema(run = defaultQuery) {
     await run('ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS resolution_version INTEGER NOT NULL DEFAULT 0')
     await run('ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS feedback_rating INTEGER CHECK (feedback_rating BETWEEN 1 AND 5)')
     await run('ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS feedback_comment TEXT')
+    await run('ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ')
     await run('ALTER TABLE support_messages ADD COLUMN IF NOT EXISTS event TEXT CHECK (event IN (\'resolved\',\'reopened\',\'feedback\'))')
+    await run(`UPDATE support_tickets t SET resolved_at = COALESCE(
+        (SELECT m.created_at FROM support_messages m WHERE m.ticket_id=t.id AND m.event='resolved' ORDER BY m.created_at DESC LIMIT 1),
+        t.updated_at) WHERE t.status='closed' AND t.resolved_at IS NULL`)
     await run('CREATE INDEX IF NOT EXISTS idx_support_visitor_chats ON support_tickets(COALESCE(visitor_session_hash, visitor_token_hash), updated_at DESC)')
     await run('ALTER TABLE support_messages ALTER COLUMN sender_id DROP NOT NULL')
     await run('ALTER TABLE support_messages ADD COLUMN IF NOT EXISTS sender_kind TEXT NOT NULL DEFAULT \'user\' CHECK (sender_kind IN (\'user\', \'assistant\', \'support\', \'system\'))')
     await run('ALTER TABLE support_messages ADD COLUMN IF NOT EXISTS request_id UUID')
+    await run('ALTER TABLE support_messages ADD COLUMN IF NOT EXISTS sender_display_name TEXT')
     await run('ALTER TABLE support_messages ADD COLUMN IF NOT EXISTS reply_to UUID REFERENCES support_messages(id) ON DELETE SET NULL')
     await run('CREATE UNIQUE INDEX IF NOT EXISTS idx_support_message_request ON support_messages(ticket_id, request_id) WHERE request_id IS NOT NULL')
     await run('CREATE UNIQUE INDEX IF NOT EXISTS idx_support_message_reply ON support_messages(reply_to) WHERE reply_to IS NOT NULL')
+    await run(`CREATE TABLE IF NOT EXISTS support_discord_links (
+        discord_user_id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+        display_name TEXT NOT NULL DEFAULT 'Discord user',
+        linked_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`)
+    await run("ALTER TABLE support_discord_links ADD COLUMN IF NOT EXISTS display_name TEXT NOT NULL DEFAULT 'Discord user'")
+    await run(`CREATE TABLE IF NOT EXISTS support_discord_link_codes (
+        code_hash TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        expires_at TIMESTAMPTZ NOT NULL
+    )`)
+    await run('CREATE INDEX IF NOT EXISTS idx_support_discord_link_codes_expiry ON support_discord_link_codes(expires_at)')
     await run(`CREATE TABLE IF NOT EXISTS support_live_tickets (
         token_hash TEXT PRIMARY KEY, visitor_token_hash TEXT NOT NULL, expires_at TIMESTAMPTZ NOT NULL
     )`)

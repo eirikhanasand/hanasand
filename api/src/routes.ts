@@ -209,7 +209,8 @@ import {
 import { getBrowserSandboxProfiles, putBrowserSandboxProfiles } from './handlers/browserSandboxProfiles.ts'
 import { getBrowserResult, getBrowserRunReport, getBrowserRuns, getBrowserRunStats, maxBrowserReportBytes, postBrowserRunReport } from './handlers/browserSandboxRuns.ts'
 import { publicSupportChat } from './handlers/publicSupportChat.ts'
-import { getMySupportTickets, getSupportMessages, getSupportTickets, postSupportMessage, postSupportTicket, postSupportStatus, postSupportFeedback } from './handlers/supportChat.ts'
+import { getMySupportTickets, getSupportMessages, getSupportTickets, postSupportMessage, postSupportTicket, postSupportStatus, postSupportFeedback, postSupportDiscordLinkCode } from './handlers/supportChat.ts'
+import { getDiscordSupportTickets, postDiscordSupportAction } from './handlers/supportDiscord.ts'
 import { forwardSupportRequest } from './utils/support/transport.ts'
 import { supportModel } from './handlers/supportModel.ts'
 import { getCommercialContactRequests, postCommercialContactRequest } from './handlers/commercialContactRequests.ts'
@@ -349,6 +350,9 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/support/tickets/:id/messages', postSupportMessage)
     fastify.post('/support/tickets/:id/status', postSupportStatus)
     fastify.post('/support/tickets/:id/feedback', postSupportFeedback)
+    fastify.post('/support/discord/link-code', postSupportDiscordLinkCode)
+    fastify.get('/support/discord/tickets', getDiscordSupportTickets)
+    fastify.post('/support/discord/action', postDiscordSupportAction)
 
     // Article handlers
     fastify.get('/articles', getArticles)

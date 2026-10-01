@@ -5,7 +5,10 @@ export type SupportTicket = {
     channel: string
     user_name: string
     created_at: string
+    updated_at: string
+    resolved_at: string | null
     first_message: string
+    requester_discord_id: string | null
 }
 
 export type SupportMessage = {
@@ -37,7 +40,10 @@ function ticket(value: unknown): SupportTicket | null {
         channel: value.channel,
         user_name: typeof value.user_name === 'string' ? value.user_name : 'Visitor',
         created_at: typeof value.created_at === 'string' ? value.created_at : '',
+        updated_at: typeof value.updated_at === 'string' ? value.updated_at : '',
+        resolved_at: typeof value.resolved_at === 'string' ? value.resolved_at : null,
         first_message: typeof value.first_message === 'string' ? value.first_message : '',
+        requester_discord_id: typeof value.requester_discord_id === 'string' ? value.requester_discord_id : null,
     }
 }
 
@@ -73,6 +79,27 @@ export class SupportApi {
         const payload = await this.request('/api/support/tickets')
         if (!record(payload) || !Array.isArray(payload.tickets)) throw new SupportApiError(502, 'Website support returned an invalid ticket list.')
         return payload.tickets.map(ticket).filter((value): value is SupportTicket => value !== null)
+    }
+
+    async getDiscordTickets(discordUserId: string, page: number) {
+        const params = new URLSearchParams({ discordUserId, page: String(page) })
+        const payload = await this.request(`/api/support/discord/tickets?${params}`)
+        if (!record(payload) || !Array.isArray(payload.tickets) || typeof payload.hasMore !== 'boolean') {
+            throw new SupportApiError(502, 'Website support returned invalid Discord ticket history.')
+        }
+        return { tickets: payload.tickets.map(ticket).filter((value): value is SupportTicket => value !== null), hasMore: payload.hasMore }
+    }
+
+    async restoreDiscordTicket(discordUserId: string, ticketId: string) {
+        const payload = await this.discordAction({ action: 'restore', discordUserId, ticketId })
+        if (!record(payload) || !record(payload.ticket) || typeof payload.isOwner !== 'boolean') throw new SupportApiError(502, 'Website support returned an invalid ticket.')
+        const value = ticket(payload.ticket)
+        if (!value) throw new SupportApiError(502, 'Website support returned an invalid ticket.')
+        return { ticket: value, isOwner: payload.isOwner }
+    }
+
+    async discordAction(input: Record<string, unknown>) {
+        return this.request('/api/support/discord/action', { method: 'POST', body: JSON.stringify(input) })
     }
 
     async getMessages(ticketId: string) {

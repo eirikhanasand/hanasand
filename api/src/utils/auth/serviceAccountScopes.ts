@@ -10,6 +10,8 @@ export const serviceAccountEndpoints = [
     { method: 'GET', route: '/api/support/tickets', label: 'Read website support queue' },
     { method: 'GET', route: '/api/support/tickets/:id/messages', label: 'Read website support messages' },
     { method: 'POST', route: '/api/support/tickets/:id/messages', label: 'Reply to website support chats' },
+    { method: 'GET', route: '/api/support/discord/tickets', label: 'Read linked Discord support history' },
+    { method: 'POST', route: '/api/support/discord/action', label: 'Manage linked Discord support chats' },
     { method: 'GET', route: '/api/ws/support', label: 'Receive live support updates' },
 ]
 

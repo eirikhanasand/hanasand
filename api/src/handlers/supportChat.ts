@@ -1,6 +1,6 @@
 import { setSupportStatus, saveSupportFeedback, SupportStateError } from '#utils/support/lifecycle.ts'
 import { supportIdPattern } from '#utils/support/conversation.ts'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run, { withTransaction, independentSupport } from '#utils/support/db.ts'
 import primaryQuery from '#db'
@@ -43,8 +43,9 @@ type TicketFilters = { search: string; from: string; to: string; stars: string; 
 
 async function listSupportTickets(userId: string, supportQueue: boolean, filters: TicketFilters) {
     return run(`
-            SELECT t.id, t.user_id, t.subject, t.status, t.created_at, t.updated_at, t.channel, t.resolution_version, t.feedback_rating, t.feedback_comment,
-                   (SELECT u2.name FROM support_messages m2 JOIN users u2 ON u2.id=m2.sender_id WHERE m2.ticket_id=t.id AND m2.sender_kind='support' ORDER BY m2.created_at DESC, m2.id DESC LIMIT 1) AS agent_name,
+            SELECT t.id, t.user_id, t.subject, t.status, t.created_at, t.updated_at, t.resolved_at, t.channel, t.resolution_version, t.feedback_rating, t.feedback_comment,
+                   (SELECT discord_user_id FROM support_discord_links WHERE user_id=t.user_id) AS requester_discord_id,
+                   (SELECT COALESCE(m2.sender_display_name,u2.name) FROM support_messages m2 JOIN users u2 ON u2.id=m2.sender_id WHERE m2.ticket_id=t.id AND m2.sender_kind='support' ORDER BY m2.created_at DESC, m2.id DESC LIMIT 1) AS agent_name,
                    (SELECT COUNT(*)::int FROM support_messages m3 WHERE m3.ticket_id=t.id AND (m3.sender_kind<>'system' OR m3.event=CASE WHEN $1::boolean THEN 'feedback' ELSE 'resolved' END OR (NOT $1::boolean AND m3.event='reopened')) AND m3.sender_id IS DISTINCT FROM $2) AS reply_count,
                    COALESCE(u.name, 'Visitor') AS user_name,
                    (SELECT body FROM support_messages WHERE ticket_id = t.id ORDER BY created_at DESC, id DESC LIMIT 1) AS last_message,
@@ -131,6 +132,30 @@ export async function postSupportTicket(req: FastifyRequest<{ Body: SupportBody 
     }
 }
 
+export async function postSupportDiscordLinkCode(req: FastifyRequest, res: FastifyReply) {
+    if ((req as FastifyRequest & { apiKeyAuth?: unknown }).apiKeyAuth) return res.code(403).send({ error: 'Sign in on Hanasand to connect a Discord account.' })
+    const origin = req.headers.origin
+    if (origin !== 'https://hanasand.com' && origin !== 'https://www.hanasand.com'
+        && !(process.env.NODE_ENV !== 'production' && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin || ''))) {
+        return res.code(403).send({ error: 'Create Discord link codes from the Hanasand website.' })
+    }
+    const userId = await auth(req, res)
+    if (!userId) return
+    try {
+        const code = randomBytes(8).toString('hex').toUpperCase()
+        const codeHash = createHash('sha256').update(code).digest('hex')
+        const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString()
+        await withTransaction(async query => {
+            await query('DELETE FROM support_discord_link_codes WHERE expires_at<=NOW() OR user_id=$1', [userId])
+            await query('INSERT INTO support_discord_link_codes(code_hash,user_id,expires_at) VALUES($1,$2,$3)', [codeHash, userId, expiresAt])
+        })
+        return res.send({ code, expiresAt })
+    } catch (error) {
+        req.log.error(error)
+        return res.code(500).send({ error: 'Could not create a Discord link code.' })
+    }
+}
+
 export async function getSupportMessages(req: FastifyRequest<{ Params: { id: string } }>, res: FastifyReply) {
     const userId = await auth(req, res)
     if (!userId) return
@@ -140,7 +165,7 @@ export async function getSupportMessages(req: FastifyRequest<{ Params: { id: str
         if (!access.rows[0]?.allowed) return res.status(404).send({ error: 'Support ticket not found.' })
         const result = await run(`
             SELECT m.id, m.sender_id, m.sender_kind, m.body, m.created_at,
-                   CASE WHEN m.sender_kind = 'assistant' THEN 'Hanasand AI' WHEN m.sender_kind = 'system' THEN 'Support' ELSE COALESCE(u.name, 'Visitor') END AS sender_name
+                   CASE WHEN m.sender_kind = 'assistant' THEN 'Hanasand AI' WHEN m.sender_kind = 'system' THEN 'Support' ELSE COALESCE(m.sender_display_name,u.name, 'Visitor') END AS sender_name
             FROM support_messages m LEFT JOIN users u ON u.id = m.sender_id
             WHERE m.ticket_id = $1 ORDER BY m.created_at ASC, m.id
         `, [req.params.id])
@@ -185,7 +210,7 @@ export async function postSupportMessage(req: FastifyRequest<{ Params: { id: str
                 if (!previous || previous.sender_id !== userId || previous.body !== body) throw new SupportStateError('Request ID was already used for a different message.')
                 savedId = previous.id as string
             }
-            await query(`UPDATE support_tickets SET status = $2, updated_at = NOW(),
+            await query(`UPDATE support_tickets SET status = $2, updated_at = NOW(), resolved_at = NULL,
                 channel = CASE WHEN $3 THEN 'human' ELSE channel END,
                 ai_pending_id = CASE WHEN $3 THEN NULL ELSE ai_pending_id END,
                 ai_pending_at = CASE WHEN $3 THEN NULL ELSE ai_pending_at END WHERE id = $1`, [req.params.id, 'open', support])

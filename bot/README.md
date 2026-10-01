@@ -1,17 +1,19 @@
 # Hanasand Discord bot
 
-This TypeScript bot provides `/info`, `/ping`, `/help`, and `/tickets`, and mirrors human Hanasand support chats into private Discord channels. It uses the website's support change stream over WebSocket and its scoped support API for messages. It does not poll the site.
+This TypeScript bot provides `/info`, `/ping`, `/help`, and `/tickets`. Its native Discord buttons create private support channels, show linked ticket history, and restore resolved channels. Messages sync with Hanasand over the support WebSocket stream.
 
 ## Setup
 
 1. Create a Discord application and bot in the [Discord Developer Portal](https://discord.com/developers/applications). Enable the **Message Content Intent** so staff replies in support channels can be read. Copy the bot token into the server environment; never commit it or paste it into chat.
-2. Create a Hanasand service account in `/management/service-accounts` with these four scopes:
+2. Create or update a Hanasand service account in `/management/service-accounts` with these six scopes:
    - `GET /api/support/tickets`
    - `GET /api/support/tickets/:id/messages`
    - `POST /api/support/tickets/:id/messages`
+   - `GET /api/support/discord/tickets`
+   - `POST /api/support/discord/action`
    - `GET /api/ws/support`
 
-   The service account may read human support chats and send replies only through those endpoints. Add the token it returns to `HANASAND_DISCORD_SUPPORT_API_KEY`.
+   The service account may read and reply to human support chats and manage Discord-originated tickets through those endpoints. Add the token it returns to `HANASAND_DISCORD_SUPPORT_API_KEY`.
 3. Set `DISCORD_BOT_TOKEN`, `DISCORD_CLIENT_ID`, `DISCORD_GUILD_ID`, `HANASAND_DISCORD_SUPPORT_API_KEY`, and `DISCORD_SUPPORT_ROLE_ID` in the Hanasand server's environment. `DISCORD_SUPPORT_ROLE_ID` must identify a least-privileged Support role, and the Hanasand bot plus staff who need access must have that role. New channels are placed in the existing `Support` category or the category identified by `DISCORD_SUPPORT_CATEGORY_ID`. Discord server owners and members with Administrator permission can still bypass channel restrictions.
 4. Register the guild commands and create the server invite link:
 
@@ -35,4 +37,4 @@ For local development, copy `.env.example` to `.env` and use `npm run dev`. The 
 
 ## Delivery behavior
 
-A committed human support message or handoff wakes the bot through PostgreSQL `LISTEN/NOTIFY` -> the website's WebSocket stream -> Discord. A Discord staff message is posted to the website support API immediately and uses an idempotency key, so reconnects do not duplicate replies. Network or service failures can still take time to recover; no cross-network system can guarantee literal zero latency or availability. The bridge does not use a polling interval.
+A committed human support message or handoff wakes the bot through PostgreSQL `LISTEN/NOTIFY` -> the website's WebSocket stream -> Discord. Discord messages are attributed to the linked Hanasand profile and use idempotency keys, so reconnects do not duplicate replies. Resolved channels show their removal timestamp and are removed from Discord 24 hours after resolution; tickets remain on Hanasand and can be restored from `/tickets` history. Users and support staff connect their website accounts from the support page using a short-lived link code. The bridge does not use a polling interval.

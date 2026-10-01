@@ -48,6 +48,10 @@ export default function SupportChat({ embedded = false, initialChat }: { embedde
     const statusPending = useRef(false)
     const [statusError, setStatusError] = useState<{ id: string; message: string } | null>(null)
     const [userId, setUserId] = useState('')
+    const [discordLinkCode, setDiscordLinkCode] = useState('')
+    const [discordLinkExpiry, setDiscordLinkExpiry] = useState('')
+    const [discordLinkBusy, setDiscordLinkBusy] = useState(false)
+    const [discordLinkError, setDiscordLinkError] = useState('')
     const [filtersOpen, setFiltersOpen] = useState(false)
     const [filterText, setFilterText] = useState('')
     const [starFilter, setStarFilter] = useState('all')
@@ -191,6 +195,24 @@ export default function SupportChat({ embedded = false, initialChat }: { embedde
             ? { ...ticket, feedback_rating: rating, feedback_comment: comment } : ticket))
     }
 
+    async function createDiscordLinkCode() {
+        if (discordLinkBusy) return
+        setDiscordLinkBusy(true)
+        setDiscordLinkError('')
+        setDiscordLinkCode('')
+        try {
+            const response = await fetch('/api/backend/support/discord/link-code', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+            const payload = await response.json() as { code?: string; expiresAt?: string; error?: string }
+            if (!response.ok || !payload.code) throw new Error(payload.error || 'Could not create a Discord link code.')
+            setDiscordLinkCode(payload.code)
+            setDiscordLinkExpiry(payload.expiresAt || '')
+        } catch (error) {
+            setDiscordLinkError(error instanceof Error ? error.message : 'Could not create a Discord link code.')
+        } finally {
+            setDiscordLinkBusy(false)
+        }
+    }
+
     if (signedOut) return <PublicSupportPanel />
     if (embedded && loading) return <section aria-label='Support chat' aria-busy='true' className='grid min-h-0 min-w-0 place-items-center'><Loader2 className='site-loading-icon' aria-hidden='true' /></section>
 
@@ -255,6 +277,11 @@ export default function SupportChat({ embedded = false, initialChat }: { embedde
                             </div> : null}
                         </div>
                         {!isSupport ? <p className='text-xs text-ui-muted'>Conversations with the support team.</p> : null}
+                    </div>
+                    <div className='grid gap-2 border-b border-ui-border px-4 py-3'>
+                        <button type='button' disabled={discordLinkBusy} onClick={() => void createDiscordLinkCode()} className='w-fit rounded-lg border border-ui-border px-3 py-2 text-xs font-medium text-ui-text hover:bg-ui-panel disabled:opacity-50'>{discordLinkBusy ? 'Creating code…' : 'Connect Discord'}</button>
+                        {discordLinkCode ? <p role='status' className='text-xs leading-5 text-ui-muted'>In Discord, run <span className='font-medium text-ui-text'>/tickets</span>, choose <span className='font-medium text-ui-text'>Link account</span>, then enter <code className='select-all rounded bg-ui-panel px-1.5 py-0.5 font-mono text-ui-text'>{discordLinkCode}</code>. Code expires {new Date(discordLinkExpiry).toLocaleTimeString()}.</p> : null}
+                        {discordLinkError ? <p role='alert' className='text-xs text-ui-text'>{discordLinkError}</p> : null}
                     </div>
                     {!isSupport ? <button type='button' onClick={() => selectChat('')} className='mx-4 mb-2 rounded-lg border border-ui-border px-3 py-2 text-xs font-medium text-ui-primary hover:bg-ui-panel'>New chat</button> : null}
                     <div className='max-h-36 overflow-y-auto p-2 lg:max-h-none lg:flex-1'>

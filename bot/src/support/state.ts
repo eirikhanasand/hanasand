@@ -5,6 +5,11 @@ export type TicketState = {
     channelId: string
     channelNumber?: number
     status: 'open' | 'closed'
+    resolvedAt?: string
+    removeAt?: string
+    archived?: boolean
+    requesterDiscordId?: string
+    headerMessageId?: string
     mirroredMessageIds: string[]
     handledDiscordMessageIds: string[]
 }
@@ -16,6 +21,11 @@ function isTicketState(value: unknown): value is TicketState {
         && typeof (value as TicketState).channelId === 'string'
         && ((value as TicketState).channelNumber === undefined || Number.isSafeInteger((value as TicketState).channelNumber) && (value as TicketState).channelNumber! > 0)
         && ((value as TicketState).status === 'open' || (value as TicketState).status === 'closed')
+        && ((value as TicketState).resolvedAt === undefined || typeof (value as TicketState).resolvedAt === 'string')
+        && ((value as TicketState).removeAt === undefined || typeof (value as TicketState).removeAt === 'string')
+        && ((value as TicketState).archived === undefined || typeof (value as TicketState).archived === 'boolean')
+        && ((value as TicketState).requesterDiscordId === undefined || typeof (value as TicketState).requesterDiscordId === 'string')
+        && ((value as TicketState).headerMessageId === undefined || typeof (value as TicketState).headerMessageId === 'string')
         && Array.isArray((value as TicketState).mirroredMessageIds)
         && Array.isArray((value as TicketState).handledDiscordMessageIds)
 }

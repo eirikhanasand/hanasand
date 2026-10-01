@@ -7,14 +7,14 @@ export class SupportStateError extends Error {
 
 export async function setSupportStatus(id: string, status: 'open' | 'closed', agentId: string) {
     return withTransaction(async query => {
-        const ticket = (await query('SELECT id, status, resolution_version, feedback_rating, feedback_comment, updated_at FROM support_tickets WHERE id=$1 FOR UPDATE', [id])).rows[0]
+        const ticket = (await query('SELECT id, status, resolution_version, feedback_rating, feedback_comment, updated_at, resolved_at FROM support_tickets WHERE id=$1 FOR UPDATE', [id])).rows[0]
         if (!ticket) throw new SupportStateError('Support chat not found.', 404)
         if (ticket.status === status) return { ticket }
-        const changed = (await query(`UPDATE support_tickets SET status=$2, updated_at=NOW(), ai_pending_id=NULL, ai_pending_at=NULL,
+        const changed = (await query(`UPDATE support_tickets SET status=$2, updated_at=NOW(), resolved_at=CASE WHEN $2='closed' THEN NOW() ELSE NULL END, ai_pending_id=NULL, ai_pending_at=NULL,
             resolution_version=resolution_version+CASE WHEN $2='closed' THEN 1 ELSE 0 END,
             feedback_rating=CASE WHEN $2='closed' THEN NULL ELSE feedback_rating END,
             feedback_comment=CASE WHEN $2='closed' THEN NULL ELSE feedback_comment END
-            WHERE id=$1 RETURNING id, status, resolution_version, feedback_rating, feedback_comment, updated_at`, [id, status])).rows[0]
+            WHERE id=$1 RETURNING id, status, resolution_version, feedback_rating, feedback_comment, updated_at, resolved_at`, [id, status])).rows[0]
         const message = (await query(`INSERT INTO support_messages(id,ticket_id,sender_id,sender_kind,event,body)
             VALUES($1,$2,$3,'system',$4,$5) RETURNING id, sender_id, sender_kind, body, created_at`, [randomUUID(), id, agentId, status === 'closed' ? 'resolved' : 'reopened',
             status === 'closed' ? 'Chat resolved. How was your experience? Please rate your support from 1 to 5 stars.' : 'Support reopened this chat. You can send messages again.'])).rows[0]
@@ -28,9 +28,9 @@ export async function closeVisitorSupportConversation(id: string, visitor: strin
             WHERE id=$1 AND COALESCE(visitor_session_hash,visitor_token_hash)=$2 FOR UPDATE`, [id, visitor])).rows[0]
         if (!ticket) throw new SupportStateError('Support chat not found.', 404)
         if (ticket.status === 'closed') return { ticket }
-        const changed = (await query(`UPDATE support_tickets SET status='closed', updated_at=NOW(), ai_pending_id=NULL, ai_pending_at=NULL,
+        const changed = (await query(`UPDATE support_tickets SET status='closed', updated_at=NOW(), resolved_at=NOW(), ai_pending_id=NULL, ai_pending_at=NULL,
             resolution_version=resolution_version+1, feedback_rating=NULL, feedback_comment=NULL
-            WHERE id=$1 RETURNING id, status, resolution_version, feedback_rating, feedback_comment, updated_at`, [id])).rows[0]
+            WHERE id=$1 RETURNING id, status, resolution_version, feedback_rating, feedback_comment, updated_at, resolved_at`, [id])).rows[0]
         const message = (await query(`INSERT INTO support_messages(id,ticket_id,sender_kind,event,body)
             VALUES($1,$2,'system','resolved',$3) RETURNING id, sender_id, sender_kind, body, created_at`,
         [randomUUID(), id, 'This conversation was closed.'])).rows[0]

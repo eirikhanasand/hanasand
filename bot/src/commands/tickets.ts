@@ -1,29 +1,25 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, SlashCommandBuilder } from 'discord.js'
 import type { BotCommand } from './types.js'
 
-const supportPage = 'https://hanasand.com/support'
-
 const command: BotCommand = {
     data: new SlashCommandBuilder().setName('tickets').setDescription('Post the Hanasand support ticket panel.'),
     async execute(interaction) {
         const embed = new EmbedBuilder()
             .setColor(0x5865f2)
             .setTitle('Hanasand Support')
-            .setDescription('Open a support chat for Hanasand account, product, or billing questions. Chats that need our team appear in private channels under **support** and sync live with the website.')
+            .setDescription('Create and manage Hanasand support chats here in Discord. Messages sync live with your Hanasand support history.')
             .addFields(
-                { name: 'Create', value: 'Start a new support chat on Hanasand.' },
-                { name: 'View', value: 'See your existing support chats.' },
-                { name: 'Close', value: 'Resolve a chat when your question is answered.' },
-                { name: 'Reopen', value: 'Continue a resolved conversation.' },
+                { name: 'Create ticket', value: 'Start a private support chat in Discord.' },
+                { name: 'Ticket history', value: 'Open or restore previous support chats.' },
+                { name: 'Link account', value: 'Connect your Hanasand account to keep your ticket history together.' },
             )
-            .setFooter({ text: 'Hanasand Support · hanasand.com' })
+            .setFooter({ text: 'Resolved channels are removed after 24 hours; tickets remain in your history.' })
             .setTimestamp()
 
         const actions = new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder().setLabel('Create Ticket').setStyle(ButtonStyle.Link).setURL(supportPage),
-            new ButtonBuilder().setLabel('View Tickets').setStyle(ButtonStyle.Link).setURL(supportPage),
-            new ButtonBuilder().setLabel('Close Ticket').setStyle(ButtonStyle.Link).setURL(supportPage),
-            new ButtonBuilder().setLabel('Reopen Ticket').setStyle(ButtonStyle.Link).setURL(supportPage),
+            new ButtonBuilder().setCustomId('support-ticket:create').setLabel('Create ticket').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('support-ticket:history').setLabel('Ticket history').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('support-ticket:link').setLabel('Link account').setStyle(ButtonStyle.Secondary),
         )
 
         await interaction.reply({ embeds: [embed], components: [actions], allowedMentions: { parse: [] } })

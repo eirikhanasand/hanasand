@@ -22,6 +22,21 @@ client.once(Events.ClientReady, readyClient => {
 })
 
 client.on(Events.InteractionCreate, async interaction => {
+    if (interaction.isButton() || interaction.isStringSelectMenu() || interaction.isModalSubmit()) {
+        if (interaction.guildId !== config.guildId) {
+            if (interaction.isRepliable()) await interaction.reply({ content: 'This support panel is configured for the Hanasand server.', flags: MessageFlags.Ephemeral })
+            return
+        }
+        try {
+            await bridge.handleComponent(interaction)
+        } catch (error) {
+            console.error('Support button could not be completed:', error instanceof Error ? error.message : 'unknown error')
+            const response = { content: 'The support action could not be completed. Please try again.', flags: MessageFlags.Ephemeral as const }
+            if (interaction.replied || interaction.deferred) await interaction.followUp(response).catch(() => {})
+            else await interaction.reply(response).catch(() => {})
+        }
+        return
+    }
     if (!interaction.isChatInputCommand()) return
     if (interaction.guildId !== config.guildId) {
         await interaction.reply({ content: 'This command is configured for the Hanasand server.', flags: MessageFlags.Ephemeral })
