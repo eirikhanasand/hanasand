@@ -102,7 +102,7 @@ if test -n "$running_api_release" \
     && git diff --quiet "$running_api_release" "$release" -- . \
         ':(exclude)scripts/deploy-all.sh' ':(exclude)scripts/verify-stack-release.sh'; then
     if HANASAND_VERIFY_LIVE_RELEASE_ONLY=1 \
-        sh "$root/scripts/verify-stack-release.sh" "$running_api_release" "" ""; then
+        sh "$root/scripts/verify-stack-release.sh" "$running_api_release" "" "onion-tor ai-parser-bridge ti-scraper"; then
         running_api_health=$(curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8082/health)
         running_frontend_health=$(curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3100/api/health)
         case "$running_api_health" in *'"ok":true'*"\"release\":\"$running_api_release\""*) ;; *)
