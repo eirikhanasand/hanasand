@@ -11,13 +11,15 @@ import {
     restoreSavedProfile,
     type SavedProfile,
 } from '@/utils/auth/savedProfiles'
-import { ArrowRight, ArrowUpRight, Plus, UserRound } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ArrowUpRight, Plus, UserRound } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 const cardClass = 'rounded-xl border border-ui-border bg-ui-panel shadow-sm'
 const secondaryButtonClass = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-4 text-sm font-semibold text-ui-text transition hover:bg-ui-raised'
 
 export default function SwitchAccountPage() {
+    const router = useRouter()
     const [currentProfile, setCurrentProfile] = useState<SavedProfile | null>(null)
     const [profiles, setProfiles] = useState<SavedProfile[]>([])
     const [ready, setReady] = useState(false)
@@ -35,6 +37,15 @@ export default function SwitchAccountPage() {
         rememberCurrentProfile()
         clearActiveProfileCookies()
         window.location.assign('/login?path=%2Fswitch-account')
+    }
+
+    function goBack() {
+        if (window.history.length > 1) {
+            router.back()
+            return
+        }
+
+        router.replace('/dashboard')
     }
 
     function switchTo(profile: SavedProfile) {
@@ -73,7 +84,11 @@ export default function SwitchAccountPage() {
     return (
         <section className='mx-auto flex h-full w-full max-w-2xl flex-col items-center justify-center overflow-y-auto px-4 py-10 text-ui-text sm:px-8'>
             <div className='w-full max-w-xl'>
-                <header className='mb-6'>
+                <header className='mb-6 flex items-center gap-4'>
+                    <button type='button' onClick={goBack} className={secondaryButtonClass}>
+                        <ArrowLeft className='h-4 w-4' />
+                        Back
+                    </button>
                     <h1 className='text-2xl font-semibold tracking-tight'>Choose an account</h1>
                 </header>
 
