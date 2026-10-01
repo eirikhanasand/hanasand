@@ -17,9 +17,11 @@ export default async function page() {
     const id = Cookies.get('id')?.value
     const token = Cookies.get('access_token')?.value
 
-    const shares = id && token ? await getUserShares({ id, token }) : []
+    const [shares, workspace] = await Promise.all([
+        id && token ? getUserShares({ id, token }) : Promise.resolve([]),
+        getAiWorkspace({ id, token }),
+    ])
     const initialShares = Array.isArray(shares) ? shares : []
-    const workspace = await getAiWorkspace({ id, token })
 
     return (
         <AIPageClient

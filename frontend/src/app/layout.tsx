@@ -1,5 +1,3 @@
-import { canManageOrganizations } from '@/utils/organizations/management'
-import tokenIsValid from '@/utils/proxy/tokenIsValid'
 import WorkspaceProvider from '@/components/organizations/workspaceProvider'
 import { readWorkspace, WORKSPACE_COOKIE } from '@/utils/organizations/workspace'
 import { NAVIGATION_COOKIE, readNavigationPreferences } from '@/utils/layout/navigationPreferences'
@@ -28,12 +26,7 @@ export default async function layout({ children }: { children: ReactNode }) {
     const path = Headers.get('x-current-path') || ''
     const id = Cookies.get('id')?.value || ''
     const tokenValue = Cookies.get('access_token')?.value || ''
-    const deferChromeData = path === '/management/organizations' || path === '/dashboard/management/organizations'
-    const [userProfile, thesisNavigation] = await Promise.all([
-        !deferChromeData && token && id && tokenValue ? fetchUser(id, { id, token: tokenValue }) : Promise.resolve(null),
-        deferChromeData ? Promise.resolve({ hasAccess: false, sheets: [] }) : initialThesisNavigation(accessToken, id),
-    ])
-    const username = token && id && tokenValue ? userProfile?.username || id : ''
+    const username = token && id && tokenValue ? id : ''
     const initialMode = Cookies.get('dashboard_view_mode')?.value === 'compact' ? 'compact' : 'normal'
     const initialPreferences = readNavigationPreferences(Cookies.get(NAVIGATION_COOKIE)?.value, id)
     const impersonatingId = Cookies.get('impersonating_id')?.value || Headers.get('x-impersonating-id') || ''
@@ -42,8 +35,8 @@ export default async function layout({ children }: { children: ReactNode }) {
         initialPreferences,
         initialMode,
         id,
-        thesisSheets: thesisNavigation.sheets,
-        hasHanasandOrganization: thesisNavigation.hasAccess,
+        thesisSheets: [],
+        hasHanasandOrganization: false,
     } satisfies ComponentProps<typeof DashboardSidebar>
 
     return (
@@ -52,7 +45,7 @@ export default async function layout({ children }: { children: ReactNode }) {
                 <div className='site-atmosphere' />
                 <WorkspaceProvider initial={readWorkspace(Cookies.get(WORKSPACE_COOKIE)?.value, impersonatingId || id)} enabled={token} serviceAccount={id.startsWith('svc_')}>
                     <MobileNavigation enabled={Boolean(id && token)}>
-                        {deferChromeData && token && id && tokenValue
+                        {token && id && tokenValue
                             ? <Suspense fallback={<Header token={token} id={id} username={id} path={path} />}>
                                 <AuthorizedHeader id={id} tokenValue={tokenValue} path={path} />
                             </Suspense>
@@ -60,7 +53,7 @@ export default async function layout({ children }: { children: ReactNode }) {
                         <DetachedBoxHost />
                         <RouteFrame serverPath={path} token={token}
                             sidebar={id && token ? <Suspense fallback={<DashboardSidebar {...sidebarProps} canManageOrganizations={false} canViewInternalPages={false} />}>
-                                <AuthorizedSidebar {...sidebarProps} deferThesisNavigation={deferChromeData} />
+                                <AuthorizedSidebar {...sidebarProps} />
                             </Suspense> : null}
                             banner={impersonatingId ? <ImpersonationBanner id={impersonatingId} name={impersonatingName} /> : null}>
                             {children}
@@ -88,28 +81,8 @@ async function AuthorizedHeader({ id, tokenValue, path }: { id: string, tokenVal
     return <Header token id={id} username={userProfile?.username || id} path={path} />
 }
 
-type AuthorizedSidebarProps = ComponentProps<typeof DashboardSidebar> & { deferThesisNavigation: boolean }
-
-async function AuthorizedSidebar({ deferThesisNavigation, ...props }: AuthorizedSidebarProps) {
-    const thesisNavigation = deferThesisNavigation
-        ? (async () => {
-            const store = await cookies()
-            return initialThesisNavigation(store.get('access_token')?.value || '', store.get('id')?.value || '')
-        })()
-        : Promise.resolve({ hasAccess: props.hasHanasandOrganization, sheets: props.thesisSheets })
-    const [manageOrganizations, internalPageAccess, initialThesis] = await Promise.all([
-        canManageOrganizations(),
-        canViewInternalPages(),
-        thesisNavigation,
-    ])
-    return <DashboardSidebar {...props} thesisSheets={initialThesis.sheets} hasHanasandOrganization={initialThesis.hasAccess}
-        canManageOrganizations={manageOrganizations} canViewInternalPages={internalPageAccess} />
-}
-
-async function canViewInternalPages() {
+async function AuthorizedSidebar(props: ComponentProps<typeof DashboardSidebar>) {
     const store = await cookies()
-    const token = store.get('access_token')?.value
-    const id = store.get('id')?.value
-    if (!token || !id) return false
-    return (await tokenIsValid(token, id, store.get('impersonation_token')?.value)).canViewInternalPages === true
+    const thesisNavigation = await initialThesisNavigation(store.get('access_token')?.value || '', store.get('id')?.value || '')
+    return <DashboardSidebar {...props} thesisSheets={thesisNavigation.sheets} hasHanasandOrganization={thesisNavigation.hasAccess} />
 }

@@ -12,9 +12,11 @@ import { actorProfileHref } from '@/utils/ti/actorProfileRoute'
 export const dynamic = 'force-dynamic'
 
 export default async function TiAdminPage() {
-    const overview = await getTiAdminOverview()
+    const [overview, enrichment] = await Promise.all([
+        getTiAdminOverview(),
+        getTiEnrichmentOverview(),
+    ])
     const { sources, domains, captures, runs } = overview
-    const enrichment = await getTiEnrichmentOverview()
     const now = Date.now()
 
     const candidateSources = sources.filter(source => source.status === 'candidate' || source.status === 'review')

@@ -21,9 +21,6 @@ export default async function Page(props: {
     const openFolders = parseCookieJson<string[]>(openFoldersCookie?.value, [])
     const openFiles = parseCookieJson<OpenFile[]>(openFilesCookie?.value, [])
     const project = await getProject({ alias, token, userId })
-    const activeShare = searchParams.file
-        ? await getShare({ id: searchParams.file, token, userId })
-        : null
 
     if (!project) {
         const share = await getShare({ id: alias, token, userId })
@@ -35,6 +32,10 @@ export default async function Page(props: {
     if (!project) {
         redirect(`/s/${alias}`)
     }
+
+    const activeShare = searchParams.file
+        ? await getShare({ id: searchParams.file, token, userId })
+        : null
 
     return (
         <div className='w-full h-[92.5vh]'>

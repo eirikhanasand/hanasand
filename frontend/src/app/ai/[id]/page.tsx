@@ -8,14 +8,16 @@ export default async function AIConversationPage({
 }: {
     params: Promise<{ id: string }>
 }) {
-    const Cookies = await cookies()
+    const [Cookies, routeParams] = await Promise.all([cookies(), params])
     const id = Cookies.get('id')?.value
     const token = Cookies.get('access_token')?.value
 
-    const shares = id && token ? await getUserShares({ id, token }) : []
+    const [shares, workspace] = await Promise.all([
+        id && token ? getUserShares({ id, token }) : Promise.resolve([]),
+        getAiWorkspace({ id, token }),
+    ])
     const initialShares = Array.isArray(shares) ? shares : []
-    const workspace = await getAiWorkspace({ id, token })
-    const conversationId = (await params).id
+    const conversationId = routeParams.id
 
     return (
         <AIPageClient

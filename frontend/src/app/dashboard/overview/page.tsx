@@ -33,9 +33,6 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
     const params = searchParams ? await searchParams : {}
     const organizationId = await activeOrganizationId()
     const overview = loadOverview(sessionCookies.toString(), organizationId)
-    const session = id ? await tokenIsValid(token, id, sessionCookies.get('impersonation_token')?.value) : null
-    const isAdmin = session?.valid === true && session.canViewInternalPages === true
-
     const accessDenied = params.notAllowed === 'true'
     const membership = accessDenied ? await organizationMembership() : null
     const notice = membership === 'none'
@@ -73,11 +70,9 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
 
             <DwmOverviewPanel organizationId={organizationId} state={overviewState} />
 
-            {isAdmin ? (
-                <Suspense fallback={<div role='status'><DashboardPanel className='p-4'>Checking service health…</DashboardPanel></div>}>
-                    <ServiceHealth />
-                </Suspense>
-            ) : null}
+            <Suspense fallback={null}>
+                <AuthorizedServiceHealth token={token} id={id || ''} impersonationToken={sessionCookies.get('impersonation_token')?.value} />
+            </Suspense>
         </DashboardPage>
     )
 }
@@ -88,6 +83,15 @@ async function organizationMembership(): Promise<'member' | 'none' | 'unavailabl
     const payload = await response.json() as { organizations?: unknown }
     if (!Array.isArray(payload.organizations)) return 'unavailable'
     return payload.organizations.length ? 'member' : 'none'
+}
+
+async function AuthorizedServiceHealth({ token, id, impersonationToken }: { token: string, id: string, impersonationToken?: string }) {
+    if (!id) return null
+    const session = await tokenIsValid(token, id, impersonationToken)
+    if (!session.valid || session.canViewInternalPages !== true) return null
+    return <Suspense fallback={<div role='status'><DashboardPanel className='p-4'>Checking service health…</DashboardPanel></div>}>
+        <ServiceHealth />
+    </Suspense>
 }
 
 async function ServiceHealth() {

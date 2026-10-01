@@ -60,8 +60,15 @@ for (const state of ['invalid', 'unavailable']) {
 for (const canViewInternalPages of [true]) {
     validation = { valid: true, state: 'valid', canViewInternalPages }
     const adminStream = await renderToReadableStream(await Page({}))
+    const adminReader = adminStream.getReader()
+    let html = ''
+    while (!html.includes('Checking service health')) {
+        const chunk = await adminReader.read()
+        assert(!chunk.done, 'Expected the authorized service health fallback')
+        html += new TextDecoder().decode(chunk.value)
+    }
     release({ generated_at: new Date().toISOString(), checks: [], history: [], incidents: [], overall: 'degraded' })
-    const html = await new Response(adminStream).text()
+    for (;;) { const chunk = await adminReader.read(); if (chunk.done) break; html += new TextDecoder().decode(chunk.value) }
     assert(html.includes('Service health'))
     assert(html.includes('need attention'))
 }

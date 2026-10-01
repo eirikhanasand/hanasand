@@ -11,7 +11,7 @@ import { getDashboardViewMode, setDashboardViewMode } from '@/utils/layout/viewM
 import { getDashboardNavigation, navigationLinks, pinnedNavigation, type NavigationAccess, type NavigationItem } from '@/utils/layout/dashboardNavigation'
 import { useWorkspace } from '@/components/organizations/workspaceProvider'
 import { getThesisNavigation, subscribeThesisNavigation } from '@/utils/layout/thesisNavigation'
-import { canViewHanasandInternalPages } from '@/utils/organizations/internalPageAccess'
+import { canManageHanasandOrganizations, canViewHanasandInternalPages } from '@/utils/organizations/internalPageAccess'
 import { fetchHasUnreadMail } from '@/utils/mail/client'
 import { hasUnreadSupportMessages, supportReadStateKey, SUPPORT_READ_STATE_EVENT, type SupportUnreadTicket } from '@/utils/supportUnread'
 
@@ -78,7 +78,11 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
     }, () => initialThesisSheets)
     useEffect(() => {
         const controller = new AbortController()
+        let requestInFlight = false
+        let refreshRequested = false
         const refresh = async () => {
+            if (requestInFlight) { refreshRequested = true; return }
+            requestInFlight = true
             try {
                 const id = getCookie('impersonating_id') || access.id
                 if (id.startsWith('svc_')) { setHasVMs(false); return }
@@ -87,11 +91,16 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
                 const vms = await response.json()
                 if (Array.isArray(vms) && !controller.signal.aborted) setHasVMs(vms.length > 0)
             } catch { /* Keep the last known navigation if the VM request fails. */ }
+            finally {
+                requestInFlight = false
+                if (refreshRequested && !controller.signal.aborted) { refreshRequested = false; void refresh() }
+            }
         }
         void refresh()
         window.addEventListener('vms-updated', refresh)
-        return () => { controller.abort(); window.removeEventListener('vms-updated', refresh) }
-    }, [access.id, pathname])
+        window.addEventListener('focus', refresh)
+        return () => { controller.abort(); window.removeEventListener('vms-updated', refresh); window.removeEventListener('focus', refresh) }
+    }, [access.id])
     useEffect(() => {
         const controller = new AbortController()
         let requestInFlight = false
@@ -147,7 +156,7 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
             window.removeEventListener(SUPPORT_READ_STATE_EVENT, onReadState)
             window.removeEventListener('storage', onStorage)
         }
-    }, [access.id, pathname])
+    }, [access.id])
     useEffect(() => {
         let disposed = false
         let requestInFlight = false
@@ -179,10 +188,11 @@ export default function DashboardSidebar({ initialPreferences = { expanded: {}, 
     }, [access.id])
     const hasHanasandOrganization = access.hasHanasandOrganization === true || organizations.some(organization => organization.slug?.toLowerCase() === 'hanasand' && organization.lifecycleStatus === 'active')
     const canViewInternalPages = access.canViewInternalPages === true || canViewHanasandInternalPages(organizations)
+    const canManageOrganizations = access.canManageOrganizations === true || canManageHanasandOrganizations(organizations)
     const sections = getDashboardNavigation({
         ...access,
         canViewInternalPages,
-        canManageOrganizations: access.canManageOrganizations,
+        canManageOrganizations,
         canReviewIntel: access.canReviewIntel || canViewInternalPages,
         hasVMs: hasVMs || canViewInternalPages,
         hasContentOrganization: Boolean(organizationId),

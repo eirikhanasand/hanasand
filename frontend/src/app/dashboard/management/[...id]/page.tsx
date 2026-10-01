@@ -15,9 +15,11 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
         return redirect(`/logout?path=/login%3Fpath%3D/management/${id}%26expired=true`)
     }
 
-    const vmResponse = await getVM(id, token, userId)
+    const [vmResponse, metrics] = await Promise.all([
+        getVM(id, token, userId),
+        getVMMetrics(id, token, userId),
+    ])
     const vm = Array.isArray(vmResponse) && vmResponse.length ? vmResponse[0] : null
-    const metrics = await getVMMetrics(id, token, userId)
 
     if (!vm) {
         return null

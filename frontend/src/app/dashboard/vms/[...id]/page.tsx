@@ -19,10 +19,12 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
         return redirect(`/logout?path=/login%3Fpath%3D/vms/${id}%26expired=true`)
     }
 
-    const vmResponse = await getVM(id, token, userId)
-    const details = await getVMDetails(id, token, userId)
-    const metrics = await getVMMetrics(id, token, userId)
-    const connection = await getVMConnection(id, token, userId)
+    const [vmResponse, details, metrics, connection] = await Promise.all([
+        getVM(id, token, userId),
+        getVMDetails(id, token, userId),
+        getVMMetrics(id, token, userId),
+        getVMConnection(id, token, userId),
+    ])
     const vm = Array.isArray(vmResponse) && vmResponse.length ? vmResponse[0] : null
     if (!vm) {
         return (

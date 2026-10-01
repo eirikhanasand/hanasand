@@ -11,3 +11,9 @@ export function canViewHanasandInternalPages(organizations: InternalPageOrganiza
         && organization.lifecycleStatus === 'active'
         && ['owner', 'admin', 'editor', 'reader', 'member', 'viewer'].includes(organization.role?.toLowerCase() || ''))
 }
+
+export function canManageHanasandOrganizations(organizations: InternalPageOrganization[]) {
+    return organizations.some(organization => organization.id === HANASAND_ORGANIZATION_ID
+        && organization.lifecycleStatus === 'active'
+        && ['owner', 'admin', 'editor'].includes(organization.role?.toLowerCase() || ''))
+}
