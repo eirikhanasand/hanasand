@@ -269,6 +269,28 @@ compose_release() {
     fi
 }
 
+# HANASAND_RELEASE_COMMIT changes on every application release. Do not roll
+# the shared pool just for that label: long-lived clients resolve its container
+# address once and would keep using the old address after a replacement.
+pgbouncer_config_changed=1
+pgbouncer_release=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' hanasand_pgbouncer 2>/dev/null \
+    | sed -n 's/^HANASAND_RELEASE_COMMIT=//p' | head -1)
+case "$pgbouncer_release" in
+    *[!a-f0-9]*|'') ;;
+    *)
+        if test "${#pgbouncer_release}" -eq 40 \
+            && git diff --quiet "$pgbouncer_release" "$release" -- ops/pgbouncer; then
+            running_config_hash=$(docker inspect -f '{{index .Config.Labels "com.docker.compose.config-hash"}}' \
+                hanasand_pgbouncer 2>/dev/null || true)
+            desired_config_hash=$(HANASAND_RELEASE_COMMIT="$pgbouncer_release" \
+                compose_release config --hash pgbouncer 2>/dev/null | awk '{print $NF}')
+            if test -n "$running_config_hash" && test "$running_config_hash" = "$desired_config_hash"; then
+                pgbouncer_config_changed=0
+            fi
+        fi
+        ;;
+esac
+
 wait_for_healthy() {
     container=$1
     service=$2
@@ -297,11 +319,24 @@ wait_for_healthy() {
 # partially completed prior deployment cannot strand backlog processing.
 canonical_pgbouncer_state=$(docker inspect -f '{{.State.Status}}' hanasand_pgbouncer 2>/dev/null || true)
 canonical_pgbouncer_health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' hanasand_pgbouncer 2>/dev/null || true)
+canonical_pgbouncer_recreated=0
 if test "$canonical_pgbouncer_state" != running || test "$canonical_pgbouncer_health" != healthy; then
     compose_release up -d --no-build --no-deps --force-recreate pgbouncer
+    canonical_pgbouncer_recreated=1
 fi
 wait_for_healthy hanasand_pgbouncer "Canonical PgBouncer" 180
 wait_for_healthy hanasand_log_processor "Durable log processor" 180
+if test "$canonical_pgbouncer_recreated" = 1; then
+    # The recovery changed the pool's address; refresh clients before the
+    # long image build so authentication does not wait for the rollout tail.
+    compose_release up -d --no-build --no-deps --force-recreate auth-secondary
+    wait_for_healthy hanasand_auth_secondary "Secondary auth worker" 180
+    compose_release up -d --no-build --no-deps --force-recreate auth-primary
+    wait_for_healthy hanasand_auth_primary "Primary auth worker" 180
+fi
+if test "$pgbouncer_config_changed" = 0; then
+    echo "Keeping healthy PgBouncer from $pgbouncer_release in place for this code-only release."
+fi
 
 # Build from the immutable release archive, not the live checkout. This keeps
 # runtime state (including the separate code-review mirror) out of every image
@@ -345,7 +380,11 @@ warm_dashboard_pages() {
 
 # Keep authentication replicas untouched until the rest of the release passes
 # its health checks.
-services=$(compose_live config --services | sed '/^api$/d; /^frontend$/d; /^auth-primary$/d; /^auth-secondary$/d; /^log-processor$/d')
+services=$(compose_live config --services \
+    | sed '/^api$/d; /^frontend$/d; /^auth-primary$/d; /^auth-secondary$/d; /^log-processor$/d')
+if test "$pgbouncer_config_changed" = 0; then
+    services=$(printf '%s\n' "$services" | sed '/^pgbouncer$/d')
+fi
 # Compose service names are controlled by docker-compose.yml and contain no
 # shell metacharacters, so split the list into its individual arguments.
 # shellcheck disable=SC2086
@@ -522,5 +561,7 @@ done
 for container in hanasand-tunnel hanasand-tunnel-database hanasand-tunnel-intelligence hanasand-tunnel-web hanasand-tunnel-monitor hanasand-tunnel-replication hanasand-tunnel-support hanasand-tunnel-ai hanasand-proxy-1 hanasand-proxy-2 log-catchup-pg-check; do
     if docker inspect "$container" >/dev/null 2>&1; then docker rm -f "$container"; fi
 done
-sh "$root/scripts/verify-stack-release.sh" "$release"
+expected_pgbouncer_release=
+if test "$pgbouncer_config_changed" = 1; then expected_pgbouncer_release=$release; fi
+sh "$root/scripts/verify-stack-release.sh" "$release" "$expected_pgbouncer_release"
 echo "Hanasand stack deployed from main at $release."

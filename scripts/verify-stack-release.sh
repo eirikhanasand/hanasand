@@ -2,12 +2,13 @@
 set -eu
 
 release=${1:-$(git rev-parse HEAD)}
+expected_pgbouncer_release=${2:-}
 test "$(git rev-parse HEAD)" = "$release" || {
     echo "Release must equal the checked-out main commit: $release" >&2
     exit 1
 }
 
-containers='hanasand hanasand_api hanasand_log_processor hanasand_auth_primary hanasand_auth_secondary hanasand_database_backup hanasand_onion_tor hanasand_ai_parser_bridge hanasand_ai_model_client hanasand_ti_scraper hanasand_pgbouncer hanasand_browsers'
+containers='hanasand hanasand_api hanasand_log_processor hanasand_auth_primary hanasand_auth_secondary hanasand_database_backup hanasand_onion_tor hanasand_ai_parser_bridge hanasand_ai_model_client hanasand_ti_scraper hanasand_browsers'
 for container in $containers; do
     test "$(docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null || true)" = true || {
         echo "Required Hanasand container is not running: $container" >&2
@@ -26,6 +27,24 @@ for container in $containers; do
         exit 1
     }
 done
+
+test "$(docker inspect -f '{{.State.Running}}' hanasand_pgbouncer 2>/dev/null || true)" = true \
+    && test "$(docker inspect -f '{{.State.Health.Status}}' hanasand_pgbouncer 2>/dev/null || true)" = healthy || {
+    echo "Canonical PgBouncer is not running and healthy." >&2
+    exit 1
+}
+if test -n "$expected_pgbouncer_release"; then
+    pgbouncer_env_release=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' hanasand_pgbouncer \
+        | sed -n 's/^HANASAND_RELEASE_COMMIT=//p' | head -1)
+    pgbouncer_image=$(docker inspect -f '{{.Image}}' hanasand_pgbouncer)
+    pgbouncer_image_release=$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' \
+        "$pgbouncer_image" 2>/dev/null || true)
+    test "$pgbouncer_env_release" = "$expected_pgbouncer_release" \
+        && test "$pgbouncer_image_release" = "$expected_pgbouncer_release" || {
+        echo "PgBouncer does not match its requested release $expected_pgbouncer_release." >&2
+        exit 1
+    }
+fi
 
 test "$(docker inspect -f '{{.State.Health.Status}}' hanasand_log_processor)" = healthy || {
     echo "hanasand_log_processor is not healthy after deployment." >&2
