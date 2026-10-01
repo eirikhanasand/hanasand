@@ -373,6 +373,59 @@ services=$(compose_live config --services \
 if test "$pgbouncer_config_changed" = 0; then
     services=$(printf '%s\n' "$services" | sed '/^pgbouncer$/d')
 fi
+
+service_compose_block() {
+    git show "$1:docker-compose.yml" | awk -v wanted="$2" '
+        $0 == "  " wanted ":" { capture = 1 }
+        capture && /^  [[:alnum:]_-]+:/ && $0 != "  " wanted ":" { exit }
+        capture { print }
+    '
+}
+
+preserved_services=
+preserve_unchanged_service() {
+    service_name=$1
+    container_name=$2
+    shift 2
+
+    printf '%s\n' "$services" | grep -qx "$service_name" || return 1
+    test "$(docker inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null || true)" = true || return 1
+    test "$(docker inspect -f '{{.State.Health.Status}}' "$container_name" 2>/dev/null || true)" = healthy || return 1
+
+    service_release=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container_name" 2>/dev/null \
+        | sed -n 's/^HANASAND_RELEASE_COMMIT=//p' | head -1)
+    case "$service_release" in *[!a-f0-9]*|'') return 1 ;; esac
+    test "${#service_release}" -eq 40 || return 1
+    git merge-base --is-ancestor "$service_release" "$release" || return 1
+    git diff --quiet "$service_release" "$release" -- "$@" || return 1
+
+    previous_service_config=$(service_compose_block "$service_release" "$service_name" 2>/dev/null)
+    current_service_config=$(service_compose_block "$release" "$service_name" 2>/dev/null)
+    test -n "$previous_service_config" && test "$previous_service_config" = "$current_service_config" || return 1
+
+    running_config_hash=$(docker inspect -f '{{index .Config.Labels "com.docker.compose.config-hash"}}' \
+        "$container_name" 2>/dev/null) || return 1
+    if test "$service_name" = ti-scraper; then
+        desired_config_hash=$(HANASAND_RELEASE_COMMIT="$service_release" \
+            HANASAND_TI_SCRAPER_SOURCE="$root/ops/runtime/ti-releases/$service_release" \
+            HANASAND_TI_API_SOURCE="$root/ops/runtime/ti-releases/$service_release/api" \
+            compose_release config --hash "$service_name" 2>/dev/null | awk '{print $NF}')
+    else
+        desired_config_hash=$(HANASAND_RELEASE_COMMIT="$service_release" \
+            compose_release config --hash "$service_name" 2>/dev/null | awk '{print $NF}')
+    fi
+    test -n "$running_config_hash" && test "$running_config_hash" = "$desired_config_hash" || return 1
+
+    services=$(printf '%s\n' "$services" | sed "/^$service_name\$/d")
+    preserved_services="${preserved_services}${preserved_services:+ }$service_name"
+    echo "Keeping healthy $container_name from $service_release; its code and Compose settings are unchanged."
+}
+
+preserve_unchanged_service onion-tor hanasand_onion_tor ops/onion-tor || true
+preserve_unchanged_service ai-parser-bridge hanasand_ai_parser_bridge ti/ai-parser-bridge || true
+preserve_unchanged_service ti-scraper hanasand_ti_scraper \
+    ti/scraper api/src/utils/alerts/discordWebhookFile.ts api/src/utils/dwm/customerOutputSafety.ts || true
+
 wait_for_database_backups
 # Compose service names are controlled by docker-compose.yml and contain no
 # shell metacharacters, so split the list into its individual arguments.
@@ -568,5 +621,5 @@ expected_pgbouncer_release=
 if test "$pgbouncer_config_changed" = 1; then expected_pgbouncer_release=$release; fi
 export HANASAND_VERIFY_COMPOSE_FILE="$build_dir/docker-compose.yml"
 export HANASAND_VERIFY_ENV_FILE="$build_dir/.env"
-sh "$root/scripts/verify-stack-release.sh" "$release" "$expected_pgbouncer_release"
+sh "$root/scripts/verify-stack-release.sh" "$release" "$expected_pgbouncer_release" "$preserved_services"
 echo "Hanasand stack deployed from main at $release."

@@ -3,6 +3,7 @@ set -eu
 
 release=${1:-$(git rev-parse HEAD)}
 expected_pgbouncer_release=${2:-}
+preserved_services=${3:-}
 current_branch=$(git branch --show-current)
 current_release=$(git rev-parse HEAD)
 test "$current_branch" = main && git merge-base --is-ancestor "$release" "$current_release" || {
@@ -10,22 +11,65 @@ test "$current_branch" = main && git merge-base --is-ancestor "$release" "$curre
     exit 1
 }
 
+is_preserved_service() {
+    case " $preserved_services " in
+        *" $1 "*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+for service in $preserved_services; do
+    case "$service" in
+        onion-tor|ai-parser-bridge|ti-scraper) ;;
+        *)
+            echo "Unknown preserved Hanasand service: $service" >&2
+            exit 1
+            ;;
+    esac
+done
+
 containers='hanasand hanasand_api hanasand_auth_primary hanasand_auth_secondary hanasand_database_backup hanasand_onion_tor hanasand_ai_parser_bridge hanasand_ai_model_client hanasand_ti_scraper hanasand_browsers'
 for container in $containers; do
     test "$(docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null || true)" = true || {
         echo "Required Hanasand container is not running: $container" >&2
         exit 1
     }
+    test "$(docker inspect -f '{{.State.Health.Status}}' "$container" 2>/dev/null || true)" = healthy || {
+        echo "Required Hanasand container is not healthy: $container" >&2
+        exit 1
+    }
     env_release=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container" \
         | sed -n 's/^HANASAND_RELEASE_COMMIT=//p' | head -1)
     image=$(docker inspect -f '{{.Image}}' "$container")
     image_release=$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image" 2>/dev/null || true)
-    test "$env_release" = "$release" || {
-        echo "$container has release $env_release, expected $release" >&2
+
+    expected_container_release=$release
+    case "$container" in
+        hanasand_onion_tor) preserved_service=onion-tor ;;
+        hanasand_ai_parser_bridge) preserved_service=ai-parser-bridge ;;
+        hanasand_ti_scraper) preserved_service=ti-scraper ;;
+        *) preserved_service= ;;
+    esac
+    if test -n "$preserved_service" && is_preserved_service "$preserved_service"; then
+        expected_container_release=$env_release
+    fi
+    if test "$expected_container_release" != "$release"; then
+        case "$expected_container_release" in *[!a-f0-9]*|'')
+            echo "$container has an invalid preserved release $expected_container_release." >&2
+            exit 1
+            ;;
+        esac
+        test "${#expected_container_release}" -eq 40 && git merge-base --is-ancestor "$expected_container_release" "$release" || {
+            echo "$container's preserved release is not an ancestor of $release." >&2
+            exit 1
+        }
+    fi
+    test "$env_release" = "$expected_container_release" || {
+        echo "$container has release $env_release, expected $expected_container_release" >&2
         exit 1
     }
-    test "$image_release" = "$release" || {
-        echo "$container image has revision $image_release, expected $release" >&2
+    test "$image_release" = "$expected_container_release" || {
+        echo "$container image has revision $image_release, expected $expected_container_release" >&2
         exit 1
     }
 done
@@ -151,17 +195,19 @@ test "$browser_pool_current" = 1 || {
     exit 1
 }
 
+ti_release=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' hanasand_ti_scraper \
+    | sed -n 's/^HANASAND_RELEASE_COMMIT=//p' | head -1)
 ti_source=$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/app/ti/scraper"}}{{.Source}}{{end}}{{end}}' hanasand_ti_scraper)
-test "$ti_source" = "/home/hanasand/hanasand/ops/runtime/ti-releases/$release" || {
-    echo "hanasand_ti_scraper is not mounted from the immutable release directory." >&2
+test "$ti_source" = "/home/hanasand/hanasand/ops/runtime/ti-releases/$ti_release" || {
+    echo "hanasand_ti_scraper is not mounted from its immutable release directory." >&2
     exit 1
 }
-test "$(cat "$ti_source/.hanasand-release")" = "$release" || {
-    echo "hanasand_ti_scraper source marker does not match the release." >&2
+test "$(cat "$ti_source/.hanasand-release")" = "$ti_release" || {
+    echo "hanasand_ti_scraper source marker does not match the container release." >&2
     exit 1
 }
 ti_api_source=$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/app/api"}}{{.Source}}{{end}}{{end}}' hanasand_ti_scraper)
-test "$ti_api_source" = "/home/hanasand/hanasand/ops/runtime/ti-releases/$release/api" || {
+test "$ti_api_source" = "/home/hanasand/hanasand/ops/runtime/ti-releases/$ti_release/api" || {
     echo "hanasand_ti_scraper API utility mount is not from the immutable release directory." >&2
     exit 1
 }
@@ -188,4 +234,4 @@ test "$recovery_route_status" = 404 || {
     exit 1
 }
 
-echo "All application and browser containers match $release; the durable log processor is verified on $processor_release."
+echo "All application and browser containers are healthy for release $release; durable log processor verified on $processor_release; preserved unchanged services: ${preserved_services:-none}."
