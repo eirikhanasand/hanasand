@@ -9,6 +9,8 @@ if (!existsSync(scriptUrl)) {
 }
 const script = readFileSync(scriptUrl, 'utf8')
 const verifyScript = readFileSync(verifyScriptUrl, 'utf8')
+const deployScript = readFileSync(new URL('../../scripts/deploy-all.sh', import.meta.url), 'utf8')
+const stackVerifier = readFileSync(new URL('../../scripts/verify-stack-release.sh', import.meta.url), 'utf8')
 
 for (const value of [
     '0.0.0.0/8',
@@ -59,5 +61,8 @@ for (const source of [script, verifyScript]) {
 const service = readFileSync(new URL('../../ops/browser-worker/hanasand-browser-egress.service', import.meta.url), 'utf8')
 assert(service.includes('PartOf=docker.service') && service.includes('WantedBy=multi-user.target docker.service'), 'restore isolation after boot and Docker restart')
 assert(service.includes('ExecStartPost=/bin/sh /home/hanasand/hanasand/ops/browser-worker/verify-egress-firewall.sh'), 'service must fail when firewall verification fails')
+assert.match(deployScript, /compose_live up -d --no-build --no-deps api frontend[\s\S]*?wait_for_healthy hanasand_api[\s\S]*?sudo -n systemctl restart hanasand-browser-egress\.service/, 'refresh firewall rules after replacing the API container')
+assert.match(stackVerifier, /API cannot reach ready browser worker slot/, 'release verification should report API-to-worker connectivity failures')
+assert.match(stackVerifier, /internal\/browser-warm[\s\S]*?\/health/, 'release verification should probe both warm-worker control and stream paths')
 
 console.log('Browser egress firewall contract passed.')

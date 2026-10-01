@@ -225,6 +225,31 @@ test "$browser_pool_current" = 1 || {
     exit 1
 }
 
+# Container health does not prove the API can claim or connect to a warm worker.
+# Probe the authenticated worker status from the API's own network namespace.
+for slot in 0 1 2 3 4; do
+    container="hanasand_browser_warm_$slot"
+    worker_ip=$(docker inspect -f "{{.NetworkSettings.Networks.hanasand_browsernet.IPAddress}}" "$container")
+    worker_token=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container" \
+        | sed -n 's/^BROWSER_SANDBOX_POOL_TOKEN=//p' | head -1)
+    if test -z "$worker_ip" || test -z "$worker_token" \
+        || ! printf '%s' "$worker_token" | docker exec -i \
+            -e "HANASAND_BROWSER_WORKER_PROBE_IP=$worker_ip" hanasand_api bun -e '
+                const token = await new Response(Bun.stdin.stream()).text()
+                const ip = process.env.HANASAND_BROWSER_WORKER_PROBE_IP
+                const response = await fetch(`http://${ip}:8090/internal/browser-warm`, {
+                    headers: { "x-browser-pool-token": token },
+                    signal: AbortSignal.timeout(1500),
+                })
+                const status = await response.json()
+                const health = await fetch(`http://${ip}:8080/health`, { signal: AbortSignal.timeout(1000) })
+                if (!response.ok || status.state !== "ready" || !health.ok) process.exit(1)
+            ' >/dev/null 2>&1; then
+        echo "API cannot reach ready browser worker slot $slot." >&2
+        exit 1
+    fi
+done
+
 ti_release=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' hanasand_ti_scraper \
     | sed -n 's/^HANASAND_RELEASE_COMMIT=//p' | head -1)
 ti_source=$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/app/ti/scraper"}}{{.Source}}{{end}}{{end}}' hanasand_ti_scraper)

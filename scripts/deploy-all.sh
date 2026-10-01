@@ -616,6 +616,9 @@ compose_live up -d --no-build --no-deps --remove-orphans $services
 
 compose_live up -d --no-build --no-deps api frontend
 wait_for_healthy hanasand_api "API" 600
+# The browser egress rules allow the current API container IP. Compose replaces
+# that IP on each release, so refresh the host rules before sending traffic to it.
+sudo -n systemctl restart hanasand-browser-egress.service
 wait_for_healthy hanasand "Frontend" 180
 if log_processor_can_be_reused; then
     echo "Keeping durable log processor on $log_processor_release; its code and configuration are unchanged."
