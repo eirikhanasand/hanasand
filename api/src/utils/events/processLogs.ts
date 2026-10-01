@@ -18,7 +18,7 @@ let running = false
 const AUTH_CORRELATION_PAGE_SIZE = 1
 const AUTH_CORRELATION_RECHECK_LIMIT = 25
 const DEDICATED_LOG_BATCH_LIMIT = 25
-const DEDICATED_LOG_PAGE_CONCURRENCY = 28
+const DEDICATED_LOG_PAGE_CONCURRENCY = 36
 const DEFAULT_LOG_PAGE_CONCURRENCY = 3
 const DEDICATED_LOG_WORK_LIMIT = DEDICATED_LOG_BATCH_LIMIT * DEDICATED_LOG_PAGE_CONCURRENCY
 // Stateless results commit atomically with their findings; authentication keeps
@@ -213,7 +213,7 @@ function scopedProcessor(platformId: string, onWork: () => void, afterBatch?: ()
                 }
 
                 // Process events are evaluated independently. The dedicated worker
-                // can use its reserved pool for twenty bounded pages; API workers
+                // can use its reserved pool for thirty-six bounded pages; API workers
                 // retain their smaller group. Authentication logins remain serialized.
                 for (let offset = 0; offset < pages.length; offset += pageConcurrency) {
                     const group = pages.slice(offset, offset + pageConcurrency)
