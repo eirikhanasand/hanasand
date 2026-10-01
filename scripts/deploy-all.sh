@@ -187,9 +187,9 @@ export HANASAND_TI_API_SOURCE="$ti_release_dir/api"
 
 compose_release() {
     if test -f "$build_dir/.env"; then
-        docker compose --parallel 1 --env-file "$build_dir/.env" -f "$build_dir/docker-compose.yml" "$@"
+        docker compose --project-name hanasand --parallel 1 --env-file "$build_dir/.env" -f "$build_dir/docker-compose.yml" "$@"
     else
-        docker compose --parallel 1 -f "$build_dir/docker-compose.yml" "$@"
+        docker compose --project-name hanasand --parallel 1 -f "$build_dir/docker-compose.yml" "$@"
     fi
 }
 
@@ -296,13 +296,13 @@ wait_for_database_backups
 compose_release build
 compose_live() {
     if test -f "$build_dir/.env"; then
-        docker compose --parallel 2 --env-file "$build_dir/.env" -f "$build_dir/docker-compose.yml" "$@"
+        docker compose --project-name hanasand --parallel 2 --env-file "$build_dir/.env" -f "$build_dir/docker-compose.yml" "$@"
     else
-        docker compose --parallel 2 -f "$build_dir/docker-compose.yml" "$@"
+        docker compose --project-name hanasand --parallel 2 -f "$build_dir/docker-compose.yml" "$@"
     fi
 }
 compose_candidates() {
-    docker compose --parallel 2 --profile deployment-candidates --env-file "$build_dir/.env" \
+    docker compose --project-name hanasand --parallel 2 --profile deployment-candidates --env-file "$build_dir/.env" \
         -f "$build_dir/docker-compose.yml" "$@"
 }
 
