@@ -23,7 +23,8 @@ const { Pool } = pg
 const schemaWork = new AsyncLocalStorage<boolean>()
 
 // A queued schema lock also blocks later reads, including authentication.
-// Keep this policy scoped to migrations; ordinary queries retain their settings.
+// Fail fast so a busy migration cannot queue site requests behind it.
+const schemaLockTimeout = '100ms'
 export function withSchemaLockTimeout<T>(work: () => Promise<T>): Promise<T> {
     return schemaWork.run(true, work)
 }
@@ -182,7 +183,7 @@ export async function queryOnce(query: string, params?: SQLParamType, name?: str
     const onlineIndex = /^\s*CREATE\s+(?:UNIQUE\s+)?INDEX\s+CONCURRENTLY\b/i.test(query)
     try {
         if (schemaWork.getStore()) {
-            await client.query('SET lock_timeout = \'1s\'; SET statement_timeout = \'5s\'')
+            await client.query(`SET lock_timeout = '${schemaLockTimeout}'; SET statement_timeout = '5s'`)
             // Cancelling an online index build leaves an invalid index behind.
             // It allows normal reads/writes, so retain only its lock-wait limit.
             if (onlineIndex) {
@@ -258,7 +259,7 @@ export async function withTransaction<T>(work: (query: typeof queryOnce) => Prom
     }) as typeof queryOnce
     const execute = async () => {
         await client.query('BEGIN')
-        if (schema) await client.query('SET LOCAL lock_timeout = \'1s\'; SET LOCAL statement_timeout = \'5s\'; SET LOCAL idle_in_transaction_session_timeout = \'5s\'')
+        if (schema) await client.query(`SET LOCAL lock_timeout = '${schemaLockTimeout}'; SET LOCAL statement_timeout = '5s'; SET LOCAL idle_in_transaction_session_timeout = '5s'`)
         const result = await work(query)
         if (expired) throw timeoutError
         await client.query('COMMIT')

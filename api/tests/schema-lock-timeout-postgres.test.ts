@@ -24,7 +24,7 @@ test('startup schema locks fail promptly behind a backup without stranding login
         expect(queued).toBe(true)
         const started = Date.now()
         await queryOnce('SELECT id FROM users')
-        expect(Date.now() - started).toBeLessThan(2000)
+        expect(Date.now() - started).toBeLessThan(500)
         expect((await migration)?.code).toBe('55P03')
         expect((await queryOnce('SHOW lock_timeout')).rows[0].lock_timeout).toBe('0')
         const failure = await withSchemaLockTimeout(() => withTransaction(query =>
@@ -37,7 +37,7 @@ test('startup schema locks fail promptly behind a backup without stranding login
     await withSchemaLockTimeout(() => queryOnce('ALTER TABLE users ADD COLUMN username TEXT'))
     expect((await queryOnce('SHOW lock_timeout')).rows[0].lock_timeout).toBe('0')
     await withSchemaLockTimeout(() => withTransaction(async query => {
-        expect((await query('SHOW lock_timeout')).rows[0].lock_timeout).toBe('1s')
+        expect((await query('SHOW lock_timeout')).rows[0].lock_timeout).toBe('100ms')
         // Concurrent ordinary work must not inherit the migration setting.
     }))
     expect((await queryOnce('SHOW lock_timeout')).rows[0].lock_timeout).toBe('0')
