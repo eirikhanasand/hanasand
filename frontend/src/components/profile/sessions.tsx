@@ -11,9 +11,9 @@ function formatDate(value: string) {
     return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
 }
 
-export default function SessionsPanel({ isSelf }: { isSelf: boolean }) {
-    const [sessions, setSessions] = useState<AuthSession[]>([])
-    const [loading, setLoading] = useState(true)
+export default function SessionsPanel({ isSelf, initialSessions }: { isSelf: boolean, initialSessions?: AuthSession[] }) {
+    const [sessions, setSessions] = useState<AuthSession[]>(initialSessions || [])
+    const [loading, setLoading] = useState(initialSessions === undefined)
     const [error, setError] = useState('')
     const [busy, setBusy] = useState(false)
 
@@ -49,8 +49,8 @@ export default function SessionsPanel({ isSelf }: { isSelf: boolean }) {
     }
 
     useEffect(() => {
-        if (isSelf) void refresh()
-    }, [isSelf])
+        if (isSelf && initialSessions === undefined) void refresh()
+    }, [isSelf, initialSessions])
 
     if (!isSelf) return null
 

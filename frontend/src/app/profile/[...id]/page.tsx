@@ -11,6 +11,8 @@ import { getProfileSshKeys } from '@/utils/sshKeys'
 import fetchUser from '@/utils/users/fetchUser'
 import OrganizationProfile from '@/components/profile/organizationProfile'
 import { cookies } from 'next/headers'
+import config from '@/config'
+import type { AuthSession } from '@/utils/auth/sessions'
 
 export default async function Page(props: { params: Promise<{ id: string[] }> }) {
     const params = await props.params
@@ -25,16 +27,21 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     if (!userId || !token) notFound()
     if (section === 'certificates') redirect(`/profile/${encodeURIComponent(profileId)}/ssh-keys`)
 
-    const profile = await fetchUser(profileId, { id: userId, token })
-    if (!profile) notFound()
+    const isSelfSessionsPage = section === 'sessions' && profileId === userId
+    const [profile, initialSessions] = await Promise.all([
+        isSelfSessionsPage ? Promise.resolve(null) : fetchUser(profileId, { id: userId, token }),
+        isSelfSessionsPage ? loadSessionsForRender(userId, token) : Promise.resolve(undefined),
+    ])
+    if (!profile && !isSelfSessionsPage) notFound()
 
-    const username = profile.username || profile.id
-    const isSelf = Boolean(profile && profile.id === userId)
+    const username = profile?.username || profile?.id || profileId
+    const isSelf = isSelfSessionsPage || profile?.id === userId
     if (profile && profileId !== username) redirect(`/profile/${encodeURIComponent(username)}${section === 'profile' ? '' : `/${section}`}`)
 
-    if (!isSelf) return <DashboardPage><OrganizationProfile key={username} profile={profile} username={username} /></DashboardPage>
+    if (!isSelf && profile) return <DashboardPage><OrganizationProfile key={username} profile={profile} username={username} /></DashboardPage>
+    if (!isSelf) notFound()
 
-    const displayName = profile?.name || (isSelf ? name : null) || profileId
+    const displayName = profile?.name || name || profileId
     const stats = section === 'profile' ? await getProfileStats(userId, token) : null
     const sshKeys = isSelf && section === 'ssh-keys' ? await getProfileSshKeys(userId, token) : null
 
@@ -50,10 +57,25 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
                 </DashboardPanel>
             ) : <p className='px-1 text-xs text-ui-muted'>@{username}</p>}
             {section === 'profile' && <ProfileOverview stats={stats} />}
-            {section === 'sessions' && <SessionsPanel isSelf />}
+            {section === 'sessions' && <SessionsPanel isSelf initialSessions={initialSessions ?? undefined} />}
             {section === 'ssh-keys' && <SshKeys initialKeys={sshKeys} />}
             {section === 'support' && <SupportTickets />}
             {section === 'security' && <AccountActions isSelf />}
         </DashboardPage>
     )
+}
+
+async function loadSessionsForRender(id: string, token: string): Promise<AuthSession[] | null> {
+    try {
+        const response = await fetch(`${config.url.api}/auth/sessions`, {
+            headers: { id, Authorization: `Bearer ${decodeURIComponent(token)}` },
+            cache: 'no-store',
+            signal: AbortSignal.timeout(config.abortTimeout),
+        })
+        if (!response.ok) return null
+        const body = await response.json() as { sessions?: unknown }
+        return Array.isArray(body.sessions) ? body.sessions as AuthSession[] : null
+    } catch {
+        return null
+    }
 }

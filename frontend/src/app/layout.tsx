@@ -28,14 +28,17 @@ export default async function layout({ children }: { children: ReactNode }) {
     const path = Headers.get('x-current-path') || ''
     const id = Cookies.get('id')?.value || ''
     const tokenValue = Cookies.get('access_token')?.value || ''
+    const [userProfile, thesisNavigation] = await Promise.all([
+        token && id && tokenValue ? fetchUser(id, { id, token: tokenValue }) : Promise.resolve(null),
+        initialThesisNavigation(accessToken, id),
+    ])
     const username = token && id && tokenValue
-        ? (await fetchUser(id, { id, token: tokenValue }))?.username || id
+        ? userProfile?.username || id
         : ''
     const initialMode = Cookies.get('dashboard_view_mode')?.value === 'compact' ? 'compact' : 'normal'
     const initialPreferences = readNavigationPreferences(Cookies.get(NAVIGATION_COOKIE)?.value, id)
     const impersonatingId = Cookies.get('impersonating_id')?.value || Headers.get('x-impersonating-id') || ''
     const impersonatingName = Cookies.get('impersonating_name')?.value || Headers.get('x-impersonating-name') || ''
-    const thesisNavigation = await initialThesisNavigation(accessToken, id)
     const sidebarProps = {
         initialPreferences,
         initialMode,
