@@ -5,14 +5,19 @@ LAUNCHER_MODE="${1:-generic}"
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 CURRENT_DIR="$SCRIPT_DIR"
 
-LLAMA_DIR="${HANASAND_LLAMA_CPP_DIR:-$CURRENT_DIR/llama.cpp}"
-LLAMA_BUILD_DIR="$LLAMA_DIR/build"
+LLAMA_DIR="${HANASAND_LLAMA_CPP_DIR:-$CURRENT_DIR/.llama.cpp-src}"
+LLAMA_SOURCE_IS_TEMPORARY=0
+if [ -z "${HANASAND_LLAMA_CPP_DIR:-}" ]; then
+  LLAMA_SOURCE_IS_TEMPORARY=1
+fi
+LLAMA_BUILD_ROOT="$CURRENT_DIR/.llama.cpp-build"
 MODELS_ROOT="$CURRENT_DIR/models"
 API_DIR="$CURRENT_DIR/api"
 MODULES_DIR="$CURRENT_DIR/modules"
 MODEL_API_ENTRY="$API_DIR/src/index.ts"
 MODEL_PORT="${MODEL_PORT:-18081}"
-BUILD_MARKER="$LLAMA_BUILD_DIR/.hanasand-build"
+BUILD_PROFILE="server-only-no-ui-v1"
+BUILD_MARKER=""
 MODEL_PROFILE="${HANASAND_MODEL_PROFILE:-default}"
 MODEL_SELECTION_ONLY="${HANASAND_MODEL_SELECTION_ONLY:-0}"
 MODEL_SELECTION_ARTIFACT="$CURRENT_DIR/runtime/self-improvement/model-selection-latest.json"
@@ -100,15 +105,10 @@ install_apt_prereqs() {
   [ "$LAUNCHER_MODE" = "apt" ] || return 0
 
   local missing=()
-  need_cmd git || missing+=(git)
-  need_cmd wget || missing+=(wget)
   need_cmd python3 || missing+=(python3)
   python3 -m venv --help >/dev/null 2>&1 || missing+=(python3-venv)
   python3 -m pip --version >/dev/null 2>&1 || missing+=(python3-pip)
   need_cmd node || missing+=(nodejs)
-  need_cmd gcc || missing+=(build-essential)
-  need_cmd make || missing+=(build-essential)
-  need_cmd file || missing+=(file)
   need_cmd lsof || missing+=(lsof)
 
   if [ "${#missing[@]}" -gt 0 ]; then
@@ -121,36 +121,16 @@ install_prereqs() {
   install_apt_prereqs
 
   local missing=0
-  for cmd in git node npm python3; do
+  for cmd in node npm python3; do
     if ! need_cmd "$cmd"; then
       echo "Missing required command: $cmd"
       missing=1
     fi
   done
 
-  if ! need_cmd cmake; then
-    if [ "$LAUNCHER_MODE" = "apt" ]; then
-      true
-    elif [ "$OS_NAME" = "Darwin" ] && need_cmd brew; then
-      brew install cmake
-    else
-      echo "Missing required command: cmake"
-      missing=1
-    fi
-  fi
-
   if [ "$missing" -ne 0 ]; then
     echo "Please install the missing prerequisites and rerun."
     exit 1
-  fi
-
-  if [ "$LAUNCHER_MODE" = "apt" ]; then
-    if [ ! -d "$CURRENT_DIR/venv" ]; then
-      python3 -m venv "$CURRENT_DIR/venv"
-    fi
-    # shellcheck disable=SC1091
-    source "$CURRENT_DIR/venv/bin/activate"
-    pip install --upgrade pip huggingface_hub cmake
   fi
 
   if need_cmd hf; then
@@ -173,9 +153,59 @@ install_prereqs() {
   fi
 }
 
+install_apt_build_prereqs() {
+  [ "$LAUNCHER_MODE" = "apt" ] || return 0
+
+  local missing=()
+  need_cmd git || missing+=(git)
+  need_cmd cmake || missing+=(cmake)
+  need_cmd gcc || missing+=(build-essential)
+  need_cmd g++ || missing+=(build-essential)
+  need_cmd make || missing+=(build-essential)
+
+  if [ "${#missing[@]}" -gt 0 ]; then
+    sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get update
+    sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get install -y "${missing[@]}"
+  fi
+}
+
+ensure_model_build_prereqs() {
+  install_apt_build_prereqs
+
+  if ! need_cmd cmake && [ "$OS_NAME" = "Darwin" ] && need_cmd brew; then
+    brew install cmake
+  fi
+
+  local missing=0
+  for cmd in git cmake make cc c++; do
+    if ! need_cmd "$cmd"; then
+      echo "Missing build command: $cmd"
+      missing=1
+    fi
+  done
+
+  if [ "$missing" -ne 0 ]; then
+    echo "Install the C++ build tools before rebuilding llama-server."
+    exit 1
+  fi
+}
+
 select_backend() {
   BACKEND="cpu"
-  CMAKE_BACKEND_FLAGS=(-DCMAKE_CXX_STANDARD=17 -DLLAMA_CURL=OFF)
+  CMAKE_BACKEND_FLAGS=(
+    -DCMAKE_CXX_STANDARD=17
+    -DLLAMA_CURL=OFF
+    -DLLAMA_BUILD_COMMON=ON
+    -DLLAMA_BUILD_TESTS=OFF
+    -DLLAMA_BUILD_TOOLS=ON
+    -DLLAMA_BUILD_EXAMPLES=OFF
+    -DLLAMA_BUILD_SERVER=ON
+    -DLLAMA_BUILD_APP=OFF
+    -DLLAMA_BUILD_UI=OFF
+    -DLLAMA_USE_PREBUILT_UI=OFF
+    -DGGML_BUILD_TESTS=OFF
+    -DGGML_BUILD_EXAMPLES=OFF
+  )
   SERVER_EXTRA_ARGS=()
 
   if [ "$OS_NAME" = "Darwin" ]; then
@@ -332,37 +362,56 @@ binary_matches_host_arch() {
 }
 
 build_marker_matches() {
-  [ -f "$BUILD_MARKER" ] || return 1
-  grep -qx "backend=$BACKEND" "$BUILD_MARKER"
+  [ -f "$BUILD_MARKER" ] \
+    && grep -qx "backend=$BACKEND" "$BUILD_MARKER" \
+    && grep -qx "profile=$BUILD_PROFILE" "$BUILD_MARKER"
 }
 
 build_llama_cpp() {
-  if [ ! -d "$LLAMA_DIR" ] || [ ! -f "$LLAMA_DIR/CMakeLists.txt" ]; then
-    rm -rf "$LLAMA_DIR"
-    git clone https://github.com/ggml-org/llama.cpp.git "$LLAMA_DIR"
-  fi
-
-  if [ ! -d "$LLAMA_DIR/tools/server" ]; then
-    echo "llama.cpp checkout at $LLAMA_DIR is missing tools/server; refreshing source checkout."
-    rm -rf "$LLAMA_DIR"
-    git clone https://github.com/ggml-org/llama.cpp.git "$LLAMA_DIR"
-  fi
-
+  LLAMA_BUILD_DIR="$LLAMA_BUILD_ROOT/$BACKEND"
+  BUILD_MARKER="$LLAMA_BUILD_DIR/.hanasand-build"
   LLAMA_SERVER_BIN="$LLAMA_BUILD_DIR/bin/llama-server"
 
-  if ! binary_matches_host_arch "$LLAMA_SERVER_BIN" || ! build_marker_matches; then
-    echo "Building llama.cpp with backend: $BACKEND"
-    rm -rf "$LLAMA_BUILD_DIR"
-    cmake -S "$LLAMA_DIR" -B "$LLAMA_BUILD_DIR" "${CMAKE_BACKEND_FLAGS[@]}"
-    cmake --build "$LLAMA_BUILD_DIR" --config Release -j"$CPU_CORES"
-    echo "backend=$BACKEND" > "$BUILD_MARKER"
-  else
-    echo "llama.cpp already built for backend: $BACKEND"
+  if binary_matches_host_arch "$LLAMA_SERVER_BIN" && build_marker_matches; then
+    echo "llama-server already built for backend: $BACKEND"
+    return
   fi
+
+  if [ ! -f "$LLAMA_DIR/CMakeLists.txt" ] || [ ! -d "$LLAMA_DIR/tools/server" ]; then
+    if [ "$LLAMA_SOURCE_IS_TEMPORARY" -ne 1 ]; then
+      echo "Configured llama.cpp source at $LLAMA_DIR must include tools/server."
+      exit 1
+    fi
+
+    echo "Fetching llama.cpp source for a server-only build."
+    rm -rf "$LLAMA_DIR"
+    git clone --depth 1 https://github.com/ggml-org/llama.cpp.git "$LLAMA_DIR"
+  fi
+
+  ensure_model_build_prereqs
+  echo "Building llama-server only with backend: $BACKEND"
+  rm -rf "$LLAMA_BUILD_DIR"
+  cmake -S "$LLAMA_DIR" -B "$LLAMA_BUILD_DIR" "${CMAKE_BACKEND_FLAGS[@]}"
+  cmake --build "$LLAMA_BUILD_DIR" --config Release --target llama-server -j"$CPU_CORES"
 
   if [ ! -x "$LLAMA_SERVER_BIN" ]; then
     echo "Failed to find llama-server after build."
     exit 1
+  fi
+
+  printf 'backend=%s\nprofile=%s\n' "$BACKEND" "$BUILD_PROFILE" > "$BUILD_MARKER"
+
+  for build_entry in "$LLAMA_BUILD_DIR"/* "$LLAMA_BUILD_DIR"/.[!.]* "$LLAMA_BUILD_DIR"/..?*; do
+    [ -e "$build_entry" ] || continue
+    entry_name="${build_entry##*/}"
+    case "$entry_name" in
+      bin | .hanasand-build) continue ;;
+    esac
+    rm -rf "$build_entry"
+  done
+
+  if [ "$LLAMA_SOURCE_IS_TEMPORARY" -eq 1 ]; then
+    rm -rf "$LLAMA_DIR"
   fi
 }
 
@@ -509,6 +558,7 @@ echo "Node PID:         $NODE_PID"
 cd "$CURRENT_DIR" || exit 1
 SERVER_ARGS=(
   -m "$MODEL_PATH"
+  --no-webui
   --host 127.0.0.1
   --port "$MODEL_PORT"
   --ctx-size "$CTX_SIZE"

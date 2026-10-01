@@ -21,17 +21,15 @@ fi
 
 mkdir -p "$RUNTIME_ROOT" "$TARGET_DIR" "$HOME/Library/Logs"
 
-if [ ! -d "$RUNTIME_DIR" ]; then
-  echo "Creating launchd-safe runtime mirror at $RUNTIME_DIR"
-  cp -cR "$GPT_DIR" "$RUNTIME_DIR"
-else
-  echo "Refreshing launchd-safe runtime mirror at $RUNTIME_DIR"
-  rsync -a --delete \
-    --exclude '.git' \
-    --exclude 'models' \
-    --exclude 'runtime' \
-    "$GPT_DIR/" "$RUNTIME_DIR/"
-fi
+echo "Syncing launchd-safe runtime mirror at $RUNTIME_DIR"
+mkdir -p "$RUNTIME_DIR"
+rsync -a --delete \
+  --exclude '.git' \
+  --exclude 'models' \
+  --exclude 'runtime' \
+  --exclude '.llama.cpp-src' \
+  --exclude '.llama.cpp-build' \
+  "$GPT_DIR/" "$RUNTIME_DIR/"
 
 if [ -f "$SOURCE_ENV" ]; then
   cp "$SOURCE_ENV" "$RUNTIME_ENV"

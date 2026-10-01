@@ -42,6 +42,7 @@ next-env.d.ts
 # gpts
 /gpt/models/*
 /gpt/.llama.cpp-src/
+/gpt/.llama.cpp-build/
 /gpt/venv/
 /gpt/.venv-vllm/
 /gpt/api/runtime/orchestration/
