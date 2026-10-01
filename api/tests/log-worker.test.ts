@@ -136,7 +136,7 @@ test('delayed command work keeps its longer budget while catch-up uses the confi
     expect(queueRuns).toBe(2); expect(recoveryRuns).toBe(2)
 })
 
-test('dedicated worker keeps transaction pages small while feeding three pages per lane', async () => {
+test('dedicated worker keeps transaction pages small while feeding twelve pages per lane', async () => {
     process.env.LOG_PROCESSOR_ONLY = '1'
     process.env.LOG_CATCHUP_BATCH_LIMIT = '1000'
     process.env.LOG_CATCHUP_HISTORY_LIMIT = '1000'
@@ -145,10 +145,33 @@ test('dedicated worker keeps transaction pages small while feeding three pages p
     await processStoredLogs()
 
     expect(reads.length).toBeGreaterThan(0)
-    expect(reads.every(read => read.params[2] === 75)).toBe(true)
-    expect(historyLimits).toEqual([75]); expect(recentLimits).toEqual([75])
-    expect(recoveryLimits).toEqual([75]); expect(queueLimits).toEqual([75])
-    expect(queuePageLimits).toEqual([1]); expect(unassignedLimits).toEqual([75]); expect(pendingLimits).toEqual([75])
+    expect(reads.every(read => read.params[2] === 300)).toBe(true)
+    expect(historyLimits).toEqual([300]); expect(recentLimits).toEqual([300])
+    expect(recoveryLimits).toEqual([300]); expect(queueLimits).toEqual([300])
+    expect(queuePageLimits).toEqual([1]); expect(unassignedLimits).toEqual([300]); expect(pendingLimits).toEqual([300])
+})
+
+test('dedicated catch-up uses its twelve reserved event connections', async () => {
+    process.env.LOG_PROCESSOR_ONLY = '1'
+    process.env.LOG_CATCHUP_BATCH_LIMIT = '300'
+    process.env.LOG_CATCHUP_HISTORY_LIMIT = '300'
+    fresh = []; priority = []; watermark = '2000'; cursor = { last_id: '0', recent_id: '1000', history_end_id: '1000' }
+    backlog = Array.from({ length: 1000 }, (_, n) => makeLog(String(n + 1), { process: { executable: '/usr/bin/sed', command_line: 'sed' } }))
+    let active = 0, maximum = 0, largestPage = 0
+    const findings = await import('../src/handlers/events.ts')
+    const original = findings.persistEventFindings
+    const hook = spyOn(findings, 'persistEventFindings').mockImplementation(async rows => {
+        active++; maximum = Math.max(maximum, active); largestPage = Math.max(largestPage, rows.length)
+        await new Promise(resolve => setTimeout(resolve, 10))
+        try { await original(rows) } finally { active-- }
+    })
+    try {
+        await processStoredLogs()
+        expect(maximum).toBe(12)
+        expect(largestPage).toBeLessThanOrEqual(25)
+        expect(checked).toHaveLength(300)
+        expect(cursor.last_id).toBe('300')
+    } finally { hook.mockRestore() }
 })
 test('failed findings roll back the event and preserve cursors for successful retry', async () => {
     fail = true

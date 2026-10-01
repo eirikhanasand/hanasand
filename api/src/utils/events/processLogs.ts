@@ -18,7 +18,9 @@ let running = false
 const AUTH_CORRELATION_PAGE_SIZE = 1
 const AUTH_CORRELATION_RECHECK_LIMIT = 25
 const DEDICATED_LOG_BATCH_LIMIT = 25
-const DEDICATED_LOG_WORK_LIMIT = DEDICATED_LOG_BATCH_LIMIT * 3
+const DEDICATED_LOG_PAGE_CONCURRENCY = 12
+const DEFAULT_LOG_PAGE_CONCURRENCY = 3
+const DEDICATED_LOG_WORK_LIMIT = DEDICATED_LOG_BATCH_LIMIT * DEDICATED_LOG_PAGE_CONCURRENCY
 // Stateless results commit atomically with their findings; authentication keeps
 // durable pending history for correlation. Stable identities make retries safe.
 export async function processLog(log: LogInput, organizationId: string, rules: Awaited<ReturnType<typeof loadConfiguredRules>>) {
@@ -192,6 +194,9 @@ function scopedProcessor(platformId: string, onWork: () => void, afterBatch?: ()
             const pageSize = process.env.LOG_PROCESSOR_ONLY === '1'
                 ? DEDICATED_LOG_BATCH_LIMIT
                 : priority ? 200 : 400
+            const pageConcurrency = process.env.LOG_PROCESSOR_ONLY === '1'
+                ? DEDICATED_LOG_PAGE_CONCURRENCY
+                : DEFAULT_LOG_PAGE_CONCURRENCY
             const processPage = (page: LogInput[]) => processLogBatch(page, target, configured.get(target)!)
             const processPages = async (logs: LogInput[], independent: boolean) => {
                 // Correlation pages hold the shared advisory lock while login
@@ -207,11 +212,11 @@ function scopedProcessor(platformId: string, onWork: () => void, afterBatch?: ()
                     return
                 }
 
-                // Process events are evaluated independently. Let three durable pages overlap;
-                // event IDs and finding keys make replay races safe. Authentication logins
-                // remain serialized under their correlation lock.
-                for (let offset = 0; offset < pages.length; offset += 3) {
-                    const group = pages.slice(offset, offset + 3)
+                // Process events are evaluated independently. The dedicated worker
+                // can use its reserved pool for twelve bounded pages; API workers
+                // retain their smaller group. Authentication logins remain serialized.
+                for (let offset = 0; offset < pages.length; offset += pageConcurrency) {
+                    const group = pages.slice(offset, offset + pageConcurrency)
                     if (group.length === 1) {
                         await processPage(group[0])
                         await afterBatch?.()
@@ -289,8 +294,8 @@ export async function processStoredLogs() {
         // Fresh command admission and the event-time priority pass remain unchanged.
         const settings = readLogCatchupSettings()
         // The dedicated worker commits cursor/progress state once a pass ends.
-        // Keep individual transactions at 25 records while feeding three
-        // concurrent pages, matching processScopes' bounded worker group.
+        // Keep individual transactions at 25 records while feeding the
+        // dedicated worker's bounded concurrent page group.
         const dedicatedWorker = process.env.LOG_PROCESSOR_ONLY === '1'
         const configuredLimit = dedicatedWorker ? Math.min(settings.limit, DEDICATED_LOG_WORK_LIMIT) : settings.limit
         const configuredHistoryLimit = dedicatedWorker ? Math.min(settings.historyLimit, DEDICATED_LOG_WORK_LIMIT) : settings.historyLimit

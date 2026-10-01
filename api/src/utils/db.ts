@@ -37,14 +37,18 @@ const maxWaitingConnections = Math.max(8, Math.min(64, maxConnections * 2))
 // Schema setup and session-scoped advisory locks bypass transaction pooling.
 // Reserve those clients inside the configured total instead of adding a second budget.
 const directConnections = DB_POOL_HOST ? Math.min(8, maxConnections) : 0
+// The dedicated log worker does not serve API reads; reserve its pool budget
+// for independent event writes instead of creating an unused read pool.
+const readConnections = process.env.LOG_PROCESSOR_ONLY === '1'
+    ? 0
+    : process.env.API_HTTP_ONLY !== '1' && process.env.AUTH_SERVICE_ONLY !== '1'
+        && maxConnections >= 16 ? Math.min(4, Math.max(2, Math.floor(maxConnections / 5))) : 0
 // Reserve worker capacity without increasing its total connection budget.
 // Event holds cursor and batch locks while committing evidence on another client.
-const eventConnections = process.env.API_HTTP_ONLY !== '1' && process.env.AUTH_SERVICE_ONLY !== '1'
-    && maxConnections >= 12 ? 8 : 0
-// Keep short-lived rule/detail reads away from ingestion and event writes.
-// Reserve only when the pool has enough capacity to avoid starving ordinary API work.
-const readConnections = process.env.API_HTTP_ONLY !== '1' && process.env.AUTH_SERVICE_ONLY !== '1'
-    && maxConnections >= 16 ? Math.min(4, Math.max(2, Math.floor(maxConnections / 5))) : 0
+const eventConnections = process.env.LOG_PROCESSOR_ONLY === '1'
+    ? Math.min(13, Math.max(0, maxConnections - directConnections - readConnections))
+    : process.env.API_HTTP_ONLY !== '1' && process.env.AUTH_SERVICE_ONLY !== '1'
+        && maxConnections >= 12 ? 8 : 0
 const primaryConnections = Math.max(0, maxConnections - eventConnections - readConnections - directConnections)
 const warmupBudget = Math.max(0, Math.min(maxConnections, Math.floor(Number(process.env.DB_POOL_WARMUP_CONN) || 0)))
 const primaryWarmup = Math.min(primaryConnections, warmupBudget)
