@@ -472,6 +472,11 @@ echo "OpenResty now serves the healthy frontend and API candidates for $release.
 # Recreate dependent services only after traffic is on the isolated candidates.
 # The candidate API continues using its candidate pool while canonical PgBouncer
 # and the rest of the stack are updated. Authentication replicas stay online.
+# Compose can leave the shared health-gated guard in `created` during this
+# no-deps update, so start and verify it before recreating dependent services.
+compose_live up -d --no-build --no-deps deploy-path-guard
+wait_for_healthy hanasand-deploy-path-guard-1 "Deploy path guard" 30
+services=$(printf '%s\n' "$services" | sed '/^deploy-path-guard$/d')
 # shellcheck disable=SC2086
 compose_live up -d --no-build --no-deps --remove-orphans $services
 
