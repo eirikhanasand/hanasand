@@ -10,7 +10,7 @@ test "$current_branch" = main && git merge-base --is-ancestor "$release" "$curre
     exit 1
 }
 
-containers='hanasand hanasand_api hanasand_log_processor hanasand_auth_primary hanasand_auth_secondary hanasand_database_backup hanasand_onion_tor hanasand_ai_parser_bridge hanasand_ai_model_client hanasand_ti_scraper hanasand_browsers'
+containers='hanasand hanasand_api hanasand_auth_primary hanasand_auth_secondary hanasand_database_backup hanasand_onion_tor hanasand_ai_parser_bridge hanasand_ai_model_client hanasand_ti_scraper hanasand_browsers'
 for container in $containers; do
     test "$(docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null || true)" = true || {
         echo "Required Hanasand container is not running: $container" >&2
@@ -29,6 +29,51 @@ for container in $containers; do
         exit 1
     }
 done
+
+# The log processor is a durable worker. It may stay on an older application
+# release when its source, dependencies, schema, image, and service config have
+# not changed; unrelated frontend or operations releases must not interrupt it.
+processor_release=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' hanasand_log_processor \
+    | sed -n 's/^HANASAND_RELEASE_COMMIT=//p' | head -1)
+case "$processor_release" in
+    *[!a-f0-9]*|'')
+        echo "The durable log processor has no valid release marker." >&2
+        exit 1
+        ;;
+esac
+test "${#processor_release}" -eq 40 \
+    && git merge-base --is-ancestor "$processor_release" "$release" || {
+    echo "The durable log processor release is not an ancestor of $release." >&2
+    exit 1
+}
+if ! git diff --quiet "$processor_release" "$release" -- \
+    api/src api/Dockerfile api/package.json api/bun.lock api/bunfig.toml \
+    api/scripts/download-session-geo.ts api/scripts/check-session-network.ts db; then
+    echo "The durable log processor source or schema differs from $release." >&2
+    exit 1
+fi
+processor_image=$(docker inspect -f '{{.Image}}' hanasand_log_processor)
+processor_image_release=$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' \
+    "$processor_image" 2>/dev/null || true)
+test "$processor_image_release" = "$processor_release" || {
+    echo "The durable log processor image does not match its release marker." >&2
+    exit 1
+}
+processor_running_hash=$(docker inspect -f '{{index .Config.Labels "com.docker.compose.config-hash"}}' \
+    hanasand_log_processor 2>/dev/null || true)
+verify_compose_file=${HANASAND_VERIFY_COMPOSE_FILE:-$(git rev-parse --show-toplevel)/docker-compose.yml}
+verify_env_file=${HANASAND_VERIFY_ENV_FILE:-$(git rev-parse --show-toplevel)/.env}
+if test -f "$verify_env_file"; then
+    processor_desired_hash=$(HANASAND_RELEASE_COMMIT="$processor_release" docker compose --project-name hanasand \
+        --env-file "$verify_env_file" -f "$verify_compose_file" config --hash log-processor 2>/dev/null | sed 's/.* //')
+else
+    processor_desired_hash=$(HANASAND_RELEASE_COMMIT="$processor_release" docker compose --project-name hanasand \
+        -f "$verify_compose_file" config --hash log-processor 2>/dev/null | sed 's/.* //')
+fi
+test -n "$processor_running_hash" && test "$processor_running_hash" = "$processor_desired_hash" || {
+    echo "The durable log processor service configuration is stale." >&2
+    exit 1
+}
 
 test "$(docker inspect -f '{{.State.Running}}' hanasand_pgbouncer 2>/dev/null || true)" = true \
     && test "$(docker inspect -f '{{.State.Health.Status}}' hanasand_pgbouncer 2>/dev/null || true)" = healthy || {
@@ -53,8 +98,8 @@ test "$(docker inspect -f '{{.State.Health.Status}}' hanasand_log_processor)" = 
     exit 1
 }
 processor_health=$(docker exec hanasand_log_processor wget -qO- http://127.0.0.1:8099/health)
-case "$processor_health" in *'"ok":true'*"\"release\":\"$release\""*) ;; *)
-    echo "Durable log processor health did not report release $release." >&2
+case "$processor_health" in *'"ok":true'*"\"release\":\"$processor_release\""*) ;; *)
+    echo "Durable log processor health did not report its verified release $processor_release." >&2
     exit 1
     ;;
 esac
@@ -143,4 +188,4 @@ test "$recovery_route_status" = 404 || {
     exit 1
 }
 
-echo "All Hanasand code and browser containers are on $release."
+echo "All application and browser containers match $release; the durable log processor is verified on $processor_release."
