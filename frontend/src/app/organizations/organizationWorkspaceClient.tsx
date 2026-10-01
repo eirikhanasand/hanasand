@@ -1,6 +1,6 @@
 'use client'
 import Link from 'next/link'
-import { organizationPages, organizationPageForFocus, type OrganizationPage } from '@/utils/organizations/pages'
+import { organizationNavigationPages, organizationPages, organizationPageForFocus, type OrganizationPage } from '@/utils/organizations/pages'
 import { useWorkspace } from '@/components/organizations/workspaceProvider'
 import { cleanWorkspaceUrl, workspaceShareUrl } from '@/utils/organizations/workspace'
 
@@ -1532,7 +1532,7 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
 
 function WorkspaceSectionNav({ activePage }: { activePage: OrganizationPage }) {
     return <nav aria-label='Organization pages' className='flex flex-wrap gap-1 border-b border-ui-border pb-3' data-org-section-nav='true'>
-        {organizationPages.map(page => <Link key={page.id} href={page.href} aria-current={page.id === activePage ? 'page' : undefined}
+        {organizationNavigationPages.map(page => <Link key={page.id} href={page.href} aria-current={page.id === activePage ? 'page' : undefined}
             className={`rounded-md px-3 py-2 text-sm font-medium transition hover:bg-ui-raised ${page.id === activePage ? 'bg-ui-primary/10 text-ui-primary' : 'text-ui-muted'}`}>{page.label}</Link>)}
     </nav>
 }

@@ -138,10 +138,8 @@ export function getDashboardNavigation(access: NavigationAccess): NavigationItem
                 link('API Keys', '/organizations/api-keys'),
                 link('Service Accounts', '/management/service-accounts', isAdmin),
             ]),
-            group('Integrations & delivery', [
+            group('Integrations', [
                 link('Integrations', '/findings/delivery'),
-                link('Destinations', '/organizations/destinations'),
-                link('Delivery History', '/organizations/delivery'),
             ]),
             group('Monitoring & activity', [
                 link('Watchlists', '/organizations/watchlists'),

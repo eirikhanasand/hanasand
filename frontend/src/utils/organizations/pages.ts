@@ -10,6 +10,7 @@ export const organizationPages = [
     { id: 'alerts', label: 'Alerts & cases', href: '/organizations/alerts' },
     { id: 'activity', label: 'Activity', href: '/organizations/activity' },
 ] as const
+export const organizationNavigationPages = organizationPages.filter(page => page.id !== 'destinations' && page.id !== 'delivery')
 export type OrganizationPage = typeof organizationPages[number]['id']
 export function organizationPageForFocus(focus: string): OrganizationPage {
     if (/^(members?|invites?|team)$/.test(focus)) return 'team'
