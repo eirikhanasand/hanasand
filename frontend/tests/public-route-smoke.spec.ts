@@ -58,11 +58,17 @@ test.describe('public website routes', () => {
         })
     }
 
-    test('organization profiles are not public', async ({ request }) => {
+    test('organization profiles show the not-found page to anonymous visitors', async ({ page }) => {
+        const downloads: string[] = []
+        page.on('download', (download) => downloads.push(download.suggestedFilename()))
+
         for (const path of ['/profile/eirikhanasand', '/profile/sindre', '/profile/example-user']) {
-            const response = await request.get(path)
+            const response = await page.goto(path)
             expect(response.status(), `${path} should require organization membership`).toBe(404)
+            await expect(page.getByRole('heading', { name: 'This page does not exist' })).toBeVisible()
         }
+
+        expect(downloads).toEqual([])
     })
 
     test('public navigation keeps readable light contrast and exposes service checks', async ({ page }, testInfo) => {

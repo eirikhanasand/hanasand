@@ -30,7 +30,9 @@ export async function proxy(req: NextRequest) {
     const pathWithSearch = `${visiblePath}${req.nextUrl.search}`
     if ((path === '/profile' || path.startsWith('/profile/'))
         && (!tokenCookie?.value || !idCookie?.value)) {
-        return new NextResponse(null, { status: 404, headers: { 'Cache-Control': 'private, no-store' } })
+        return NextResponse.rewrite(new URL('/_not-found', req.url), {
+            headers: { 'Cache-Control': 'private, no-store' },
+        })
     }
     const requestHeaders = new Headers(req.headers)
     const theme = req.cookies.get('theme')?.value || 'dark'
