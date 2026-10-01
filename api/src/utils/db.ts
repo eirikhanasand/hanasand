@@ -47,7 +47,7 @@ const readConnections = process.env.LOG_PROCESSOR_ONLY === '1'
 // Reserve worker capacity without increasing its total connection budget.
 // Event holds cursor and batch locks while committing evidence on another client.
 const eventConnections = process.env.LOG_PROCESSOR_ONLY === '1'
-    ? Math.min(13, Math.max(0, maxConnections - directConnections - readConnections))
+    ? Math.min(21, Math.max(0, maxConnections - directConnections - readConnections))
     : process.env.API_HTTP_ONLY !== '1' && process.env.AUTH_SERVICE_ONLY !== '1'
         && maxConnections >= 12 ? 8 : 0
 const primaryConnections = Math.max(0, maxConnections - eventConnections - readConnections - directConnections)

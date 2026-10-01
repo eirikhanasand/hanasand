@@ -14,13 +14,13 @@ mock.module('../src/utils/events/storedSources.ts', () => ({ storedSourceLog: (_
 
 const { recoverUnassignedLogs } = await import('../src/utils/events/recoverUnassignedLogs.ts')
 
-test('supports the dedicated worker recovery cap of 300 records', async () => {
+test('supports the dedicated worker recovery cap of 500 records', async () => {
     let processed = 0
-    await recoverUnassignedLogs(async logs => { processed = logs.length }, 300)
-    expect(selectedLimit).toBe(300)
+    await recoverUnassignedLogs(async logs => { processed = logs.length }, 500)
+    expect(selectedLimit).toBe(500)
     expect(processed).toBe(1)
 })
 
 test('rejects unassigned recovery batches above its bounded cap', async () => {
-    await expect(recoverUnassignedLogs(async () => {}, 301)).rejects.toThrow('Invalid unassigned log recovery limit')
+    await expect(recoverUnassignedLogs(async () => {}, 501)).rejects.toThrow('Invalid unassigned log recovery limit')
 })

@@ -5,7 +5,7 @@ import { storedSourceLog } from './storedSources.ts'
 // Revisit old exclusion markers using the original retained log, not the
 // sanitized marker. Finding keys and processing status make retries idempotent.
 export async function recoverUnassignedLogs(process: (logs: LogInput[]) => Promise<void>, limit = 100) {
-    if (!Number.isInteger(limit) || limit < 1 || limit > 300) throw new Error('Invalid unassigned log recovery limit')
+    if (!Number.isInteger(limit) || limit < 1 || limit > 500) throw new Error('Invalid unassigned log recovery limit')
     const markers = (await run(`SELECT log_key FROM events
         WHERE ingestion_id='logs' AND processing_status='skipped'
           AND normalized->>'processing_reason'='Organization is missing or inactive'
