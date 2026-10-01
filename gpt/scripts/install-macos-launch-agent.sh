@@ -25,8 +25,8 @@ echo "Syncing launchd-safe runtime mirror at $RUNTIME_DIR"
 mkdir -p "$RUNTIME_DIR"
 rsync -a --delete \
   --exclude '.git' \
-  --exclude 'models' \
-  --exclude 'runtime' \
+  --exclude '/models/' \
+  --exclude '/runtime/' \
   --exclude '.llama.cpp-src' \
   --exclude '.llama.cpp-build' \
   "$GPT_DIR/" "$RUNTIME_DIR/"
