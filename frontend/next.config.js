@@ -3,6 +3,9 @@ const appRoutes = require('./src/utils/routes/appRoutes.json')
 const nextConfig = {
     distDir: process.env.NEXT_DIST_DIR || '.next',
     allowedDevOrigins: ['127.0.0.1'],
+    experimental: {
+        cpus: 2,
+    },
     output: 'standalone',
     async headers() {
         return [
