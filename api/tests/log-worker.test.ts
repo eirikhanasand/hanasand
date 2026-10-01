@@ -136,7 +136,7 @@ test('delayed command work keeps its longer budget while catch-up uses the confi
     expect(queueRuns).toBe(2); expect(recoveryRuns).toBe(2)
 })
 
-test('dedicated worker keeps transaction pages small while feeding twenty-eight pages per lane', async () => {
+test('dedicated worker keeps transaction pages small while feeding thirty-six pages per lane', async () => {
     process.env.LOG_PROCESSOR_ONLY = '1'
     process.env.LOG_CATCHUP_BATCH_LIMIT = '1000'
     process.env.LOG_CATCHUP_HISTORY_LIMIT = '1000'
@@ -145,16 +145,16 @@ test('dedicated worker keeps transaction pages small while feeding twenty-eight 
     await processStoredLogs()
 
     expect(reads.length).toBeGreaterThan(0)
-    expect(reads.every(read => read.params[2] === 700)).toBe(true)
-    expect(historyLimits).toEqual([700]); expect(recentLimits).toEqual([700])
-    expect(recoveryLimits).toEqual([700]); expect(queueLimits).toEqual([700])
-    expect(queuePageLimits).toEqual([1]); expect(unassignedLimits).toEqual([700]); expect(pendingLimits).toEqual([700])
+    expect(reads.every(read => read.params[2] === 900)).toBe(true)
+    expect(historyLimits).toEqual([900]); expect(recentLimits).toEqual([900])
+    expect(recoveryLimits).toEqual([900]); expect(queueLimits).toEqual([900])
+    expect(queuePageLimits).toEqual([1]); expect(unassignedLimits).toEqual([900]); expect(pendingLimits).toEqual([900])
 })
 
-test('dedicated catch-up uses its twenty-eight reserved event connections', async () => {
+test('dedicated catch-up uses its thirty-six reserved event connections', async () => {
     process.env.LOG_PROCESSOR_ONLY = '1'
-    process.env.LOG_CATCHUP_BATCH_LIMIT = '700'
-    process.env.LOG_CATCHUP_HISTORY_LIMIT = '700'
+    process.env.LOG_CATCHUP_BATCH_LIMIT = '900'
+    process.env.LOG_CATCHUP_HISTORY_LIMIT = '900'
     fresh = []; priority = []; watermark = '2000'; cursor = { last_id: '0', recent_id: '1000', history_end_id: '1000' }
     backlog = Array.from({ length: 1000 }, (_, n) => makeLog(String(n + 1), { process: { executable: '/usr/bin/sed', command_line: 'sed' } }))
     let active = 0, maximum = 0, largestPage = 0
@@ -167,10 +167,10 @@ test('dedicated catch-up uses its twenty-eight reserved event connections', asyn
     })
     try {
         await processStoredLogs()
-        expect(maximum).toBe(28)
+        expect(maximum).toBe(36)
         expect(largestPage).toBeLessThanOrEqual(25)
-        expect(checked).toHaveLength(700)
-        expect(cursor.last_id).toBe('700')
+        expect(checked).toHaveLength(900)
+        expect(cursor.last_id).toBe('900')
     } finally { hook.mockRestore() }
 })
 test('failed findings roll back the event and preserve cursors for successful retry', async () => {
