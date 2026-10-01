@@ -16,11 +16,12 @@ fi
 
 lock_file=/tmp/hanasand-full-deploy.lock
 owner_file=/tmp/hanasand-full-deploy.pid
-exec 9>"$lock_file"
-
-if ! flock -n 9; then
-    echo "Another Hanasand deployment is active; waiting for it to finish." >&2
-    flock 9
+if test "${HANASAND_DEPLOY_LOCK_HELD:-}" != 1; then
+    exec 9>"$lock_file"
+    if ! flock -n 9; then
+        echo "Another Hanasand deployment is active; waiting for it to finish." >&2
+        flock 9
+    fi
 fi
 printf '%s\n' "$$" > "$owner_file"
 
@@ -69,6 +70,12 @@ git fetch origin main
 git merge --ff-only FETCH_HEAD
 sh "$root/scripts/require-main.sh"
 release=$(git rev-parse HEAD)
+# The shell parsed this file before fetching. Re-exec once from the fast-forwarded
+# checkout so deployment behavior matches the release being built.
+if test "${HANASAND_DEPLOY_REFRESHED_RELEASE:-}" != "$release"; then
+    exec env HANASAND_DEPLOY_LOCK_HELD=1 HANASAND_DEPLOY_REFRESHED_RELEASE="$release" \
+        "$root/scripts/deploy-all.sh" "$@"
+fi
 sh "$root/scripts/require-compose-healthchecks.sh"
 reuse_schema_marker_for_code_only_release
 
