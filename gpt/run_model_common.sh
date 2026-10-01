@@ -568,7 +568,7 @@ SERVER_ARGS=(
   -ub "$LLAMA_UBATCH_SIZE"
   -ngl "$N_GPU_LAYERS"
   --reasoning-budget -1
-  --mlock
+  --load-mode mmap+mlock
 )
 
 if [ "${HANASAND_MODEL_IDLE_MODE:-1}" = "1" ]; then
