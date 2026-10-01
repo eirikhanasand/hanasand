@@ -61,8 +61,20 @@ sub vcl_backend_response {
         set beresp.grace = 30s;
         set beresp.http.Cache-Control = "public, max-age=5, stale-while-revalidate=30";
         return (deliver);
+    } else if (bereq.url ~ "^/(?:dashboard/)?automation/health(?:[/?#]|$)"
+        && bereq.is_bgfetch && beresp.status >= 500) {
+        # Keep the last session-specific page if its background refresh fails.
+        return (abandon);
+    } else if (bereq.url ~ "^/(?:dashboard/)?automation/health(?:[/?#]|$)"
+        && beresp.status == 200) {
+        # Keep the session-keyed page available while a slow refresh completes.
+        # Varnish serves this grace object immediately and fetches a replacement
+        # in the background after the 15-second fresh lifetime.
+        set beresp.ttl = 15s;
+        set beresp.grace = 52w;
+        return (deliver);
     } else if ((bereq.url ~ "^/dashboard(?:[/?#]|$)"
-        || bereq.url ~ "^/(?:scanner|vms|db/backups|automation/health)(?:[/?#]|$)")
+        || bereq.url ~ "^/(?:scanner|vms|db/backups)(?:[/?#]|$)")
         && beresp.status == 200) {
         # Next marks cookie-aware dynamic pages private. They are still safe
         # here because vcl_hash includes the complete authenticated cookie.
