@@ -832,7 +832,9 @@ services:
       retries: 3
       start_period: 30s
     volumes:
-      - ./mail/stalwart:/opt/stalwart
+      # The deployment Compose file is extracted into a temporary release directory.
+      # Keep mailbox state and configuration on the stable project path instead.
+      - ${HANASAND_STALWART_STATE_DIR:-./mail/stalwart}:/opt/stalwart
     ports:
       - "127.0.0.1:${MAIL_HTTP_LOCAL_PORT:-8081}:8080"
       - "127.0.0.1:${MAIL_SMTP_LOCAL_PORT:-2525}:25"

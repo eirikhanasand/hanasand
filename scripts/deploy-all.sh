@@ -6,6 +6,11 @@ test "$root" = "/home/hanasand/hanasand" || {
     echo "Run this from /home/hanasand/hanasand" >&2
     exit 1
 }
+test -d "$root/mail/stalwart" || {
+    echo "Persistent Stalwart state is missing: $root/mail/stalwart" >&2
+    exit 1
+}
+export HANASAND_STALWART_STATE_DIR="$root/mail/stalwart"
 
 # Run each deployment in its own process group and serialize requests. Builds
 # happen beside the live stack, so a newer main commit must wait for the
