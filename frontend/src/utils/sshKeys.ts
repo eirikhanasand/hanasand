@@ -7,6 +7,7 @@ export type ProfileSshKey = {
     fingerprint: string
     keyType: string
     addedAt: string
+    lastUsedAt: string | null
 }
 
 export type HostOverview = {

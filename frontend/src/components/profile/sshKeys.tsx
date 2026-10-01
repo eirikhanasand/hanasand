@@ -61,9 +61,9 @@ export default function SshKeys({ initialKeys }: { initialKeys: ProfileSshKey[] 
                 <p role='alert' className='mt-4 rounded-lg border border-ui-danger/30 bg-ui-danger/5 p-4 text-sm text-ui-danger'>Unable to load SSH keys. Refresh the page to try again.</p>
             ) : keys.length ? (
                 <div className='mt-4 overflow-x-auto rounded-lg border border-ui-border'>
-                    <table className='w-full min-w-[600px] text-left text-sm'>
+                    <table className='w-full min-w-[720px] text-left text-sm'>
                         <thead className='bg-ui-raised text-xs uppercase tracking-wide text-ui-muted'>
-                            <tr><th scope='col' className='px-4 py-3'>Key</th><th scope='col' className='px-4 py-3'>Fingerprint</th><th scope='col' className='px-4 py-3'>Added</th><th scope='col' className='w-12 px-3 py-3'><span className='sr-only'>Actions</span></th></tr>
+                            <tr><th scope='col' className='px-4 py-3'>Key</th><th scope='col' className='px-4 py-3'>Fingerprint</th><th scope='col' className='px-4 py-3'>Added</th><th scope='col' className='px-4 py-3'>Last used</th><th scope='col' className='w-12 px-3 py-3'><span className='sr-only'>Actions</span></th></tr>
                         </thead>
                         <tbody className='divide-y divide-ui-border'>
                             {keys.map(key => <tr key={key.id}>
@@ -73,6 +73,7 @@ export default function SshKeys({ initialKeys }: { initialKeys: ProfileSshKey[] 
                                 </th>
                                 <td className='px-4 py-3 font-mono text-xs text-ui-muted'>{key.fingerprint}</td>
                                 <td className='whitespace-nowrap px-4 py-3 text-ui-muted'>{formatDate(key.addedAt)}</td>
+                                <td className='whitespace-nowrap px-4 py-3 text-ui-muted'>{formatDateTime(key.lastUsedAt)}</td>
                                 <td className='px-3 py-3 text-right'>
                                     <button type='button' disabled={busy} onClick={() => void removeKey(key)} aria-label={`Remove ${key.name}`} title='Remove key' className='rounded-lg p-2 text-ui-muted transition hover:bg-ui-danger/10 hover:text-ui-danger disabled:opacity-50'>
                                         <Trash2 className='h-4 w-4' />
@@ -115,4 +116,10 @@ export default function SshKeys({ initialKeys }: { initialKeys: ProfileSshKey[] 
 function formatDate(value: string) {
     const date = new Date(value)
     return Number.isNaN(date.getTime()) ? 'Unknown' : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date)
+}
+
+function formatDateTime(value: string | null) {
+    if (!value) return 'Not recorded'
+    const date = new Date(value)
+    return Number.isNaN(date.getTime()) ? 'Unknown' : `${date.toISOString().slice(0, 16).replace('T', ' ')} UTC`
 }
