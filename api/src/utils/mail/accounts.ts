@@ -184,7 +184,7 @@ async function listPersonalMailAccounts(actorId: string, canAccessAnyMailbox: bo
             LEFT JOIN mail_accounts ma ON ma.user_id = u.id
             WHERE u.active = TRUE AND ma.disabled_at IS NULL
             ORDER BY u.id ASC
-        `, [actorId])
+        `)
 
         return Promise.all(rows.rows.map(async (row) => {
             const user = row as UserRow & { mail_address?: string | null }
