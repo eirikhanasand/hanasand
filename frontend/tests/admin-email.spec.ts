@@ -11,12 +11,12 @@ test.beforeAll(() => {
     bundle = readFileSync(path.join(output, 'fixture.js'), 'utf8')
 })
 test.afterAll(() => rmSync(output, { recursive: true, force: true }))
-test('admins can see profile emails and filter users by email without losing name search', async ({ page }) => {
+test('organization profiles preserve email visibility and user search', async ({ page }) => {
     await page.route('http://email.test/fixture.js', route => route.fulfill({ contentType: 'application/javascript', body: bundle }))
     await page.route('http://email.test/', route => route.fulfill({ contentType: 'text/html', body: '<div id="root"></div><script type="module" src="/fixture.js"></script>' }))
     await page.goto('http://email.test/')
     await expect(page.getByTestId('admin-profile')).toContainText('Email: support@example.com')
-    await expect(page.getByTestId('public-profile')).not.toContainText('Email:')
+    await expect(page.getByTestId('organization-profile')).not.toContainText('Email:')
     await page.getByRole('button', { name: 'Search users (Cmd J)' }).click()
     const search = page.getByRole('textbox', { name: 'Filter users' })
     await expect(search).toHaveAttribute('placeholder', 'Name, username or email')

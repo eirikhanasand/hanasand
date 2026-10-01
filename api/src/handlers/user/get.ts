@@ -21,10 +21,49 @@ export default async function userHandler(req: FastifyRequest, res: FastifyReply
 
     res.header('Cache-Control', 'private, no-store')
     try {
-        const viewer = req.headers.authorization ? await tokenWrapper(req, res) : null
+        const viewer = await tokenWrapper(req, res)
         if (res.sent) return
-        const canViewEmail = Boolean(viewer?.valid && viewer.id && !viewer.impersonating && (await hasHanasandInternalRouteAccess(req)).valid)
-        const userResult = await run('SELECT CASE WHEN $2::boolean THEN email ELSE NULL END AS email, id, COALESCE(username,id) AS username, name, avatar, active, deactivated_at, deactivated_by, deletion_requested_at, deletion_scheduled_at FROM users WHERE id = $1 OR lower(COALESCE(username,id)) = lower($1)', [id, canViewEmail])
+        if (!viewer.valid || !viewer.id) {
+            return res.status(401).send({ error: 'Unauthorized.' })
+        }
+
+        const canViewEmail = !viewer.impersonating && (await hasHanasandInternalRouteAccess(req)).valid
+        const userResult = await run(`
+            SELECT
+                CASE WHEN $2::boolean THEN profile_user.email ELSE NULL END AS email,
+                profile_user.id,
+                COALESCE(profile_user.username, profile_user.id) AS username,
+                profile_user.name,
+                profile_user.avatar,
+                profile_user.active,
+                profile_user.deactivated_at,
+                profile_user.deactivated_by,
+                profile_user.deletion_requested_at,
+                profile_user.deletion_scheduled_at
+            FROM users profile_user
+            WHERE (profile_user.id = $1 OR lower(COALESCE(profile_user.username, profile_user.id)) = lower($1))
+              AND (
+                  profile_user.id = $3
+                  OR EXISTS (
+                      SELECT 1
+                      FROM organization_members viewer_membership
+                      JOIN organizations shared_organization
+                        ON shared_organization.id = viewer_membership.organization_id
+                       AND shared_organization.status = 'active'
+                      JOIN organization_members profile_membership
+                        ON profile_membership.organization_id = viewer_membership.organization_id
+                       AND profile_membership.user_id = profile_user.id
+                       AND profile_membership.status = 'active'
+                      JOIN users viewer_user
+                        ON viewer_user.id = viewer_membership.user_id
+                       AND viewer_user.active IS TRUE
+                       AND viewer_user.deletion_scheduled_at IS NULL
+                      WHERE viewer_membership.user_id = $3
+                        AND viewer_membership.status = 'active'
+                  )
+              )
+            LIMIT 1
+        `, [id, canViewEmail, viewer.id])
         if (!userResult.rows.length) {
             return res.status(404).send({ error: `There is no user with id ${id}` })
         }

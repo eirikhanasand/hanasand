@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-test('public profiles remain available except Sindre and owner account tools remain private', async ({ browser, baseURL }) => {
+test('organization profiles require membership and owner account tools remain private', async ({ browser, baseURL }) => {
     test.skip(process.env.PROFILE_NAVIGATION_TEST !== '1', 'Requires the isolated profile fixture.')
     test.setTimeout(60000)
     expect(baseURL).toBe('http://127.0.0.1:3230')
@@ -11,6 +11,7 @@ test('public profiles remain available except Sindre and owner account tools rem
     await page.getByRole('heading', { name: 'Selected Person', exact: true }).click()
     await expect(page).toHaveURL(/\/profile\/selected-person$/)
     await expect(page.getByRole('heading', { name: 'Selected Person', exact: true })).toBeVisible()
+    await expect(page.getByText('Member', { exact: true })).toHaveCount(0)
     await expect(page.getByText('@selected-person', { exact: true })).toBeVisible()
     await expect(page.locator('[aria-label="Dashboard sidebar"]')).toHaveCount(1)
     await expect(page.getByRole('heading', { name: 'Certificates', exact: true })).toHaveCount(0)
@@ -23,8 +24,6 @@ test('public profiles remain available except Sindre and owner account tools rem
         await expect(page.locator('[aria-label="Dashboard sidebar"]')).toHaveCount(1)
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
     }
-    const blockedProfile = await page.goto('/profile/sindre')
-    expect(blockedProfile?.status()).toBe(404)
     await page.goto('/profile/role-fixture-admin')
     await expect(page.getByRole('heading', { name: 'Fixture Admin', exact: true })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Certificates', exact: true })).toHaveCount(0)
@@ -34,10 +33,9 @@ test('public profiles remain available except Sindre and owner account tools rem
     await context.close()
     const visitor = await browser.newContext()
     const publicPage = await visitor.newPage()
-    const publicResponse = await publicPage.goto('/profile/selected-person')
-    await expect(publicPage.getByRole('heading', { name: 'Selected Person', exact: true })).toBeVisible()
-    expect(publicResponse?.status()).toBe(200)
-    const blockedPublicResponse = await publicPage.goto('/profile/sindre')
-    expect(blockedPublicResponse?.status()).toBe(404)
+    for (const profile of ['selected-person', 'sindre', 'eirikhanasand']) {
+        const publicResponse = await publicPage.goto(`/profile/${profile}`)
+        expect(publicResponse?.status()).toBe(404)
+    }
     await visitor.close()
 })

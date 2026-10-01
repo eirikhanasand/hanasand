@@ -19,7 +19,6 @@ const publicRoutes = [
     '/upload',
     '/g',
     '/test',
-    '/profile/eirikhanasand',
     '/s',
 ]
 
@@ -59,9 +58,11 @@ test.describe('public website routes', () => {
         })
     }
 
-    test('Sindre profile page is not public', async ({ request }) => {
-        const response = await request.get('/profile/sindre')
-        expect(response.status()).toBe(404)
+    test('organization profiles are not public', async ({ request }) => {
+        for (const path of ['/profile/eirikhanasand', '/profile/sindre', '/profile/example-user']) {
+            const response = await request.get(path)
+            expect(response.status(), `${path} should require organization membership`).toBe(404)
+        }
     })
 
     test('public navigation keeps readable light contrast and exposes service checks', async ({ page }, testInfo) => {

@@ -4,7 +4,7 @@ import Image from 'next/image'
 import { Check, Copy, Link as LinkIcon } from 'lucide-react'
 import { useState } from 'react'
 
-export default function PublicProfile({ profile, username }: { profile: User | null, username: string }) {
+export default function OrganizationProfile({ profile, username }: { profile: User, username: string }) {
     const [copied, setCopied] = useState(false)
     const [copyFailed, setCopyFailed] = useState(false)
     const [avatarFailed, setAvatarFailed] = useState(false)
@@ -33,21 +33,16 @@ export default function PublicProfile({ profile, username }: { profile: User | n
                 <div className='absolute -right-44 -top-4 size-96 rounded-full border border-ui-primary/15 sm:-right-22' />
             </div>
             <div className='relative px-6 pb-7 sm:px-10 sm:pb-9'>
-                <div className='relative -mt-14 mb-5 flex items-end justify-between gap-4 sm:-mt-16'>
+                <div className='relative -mt-14 mb-5 flex items-end gap-4 sm:-mt-16'>
                     <div className='relative flex size-28 shrink-0 items-center justify-center overflow-hidden rounded-full border-[5px] border-ui-panel bg-ui-raised text-4xl font-semibold tracking-tight text-ui-primary shadow-sm sm:size-36 sm:text-5xl'>
                         {avatar && !avatarFailed
                             ? <Image src={avatar} alt={`${displayName}'s avatar`} fill unoptimized className='object-cover' onError={() => setAvatarFailed(true)} />
                             : <span aria-hidden='true'>{initials}</span>}
                     </div>
-                    {profile && <span className='mb-1 flex items-center gap-2 rounded-full border border-ui-border bg-ui-panel px-3 py-1 text-xs font-medium text-ui-muted'>
-                        <span className={`size-1.5 rounded-full ${inactive ? 'bg-ui-warning' : 'bg-ui-success'}`} />
-                        {inactive ? 'Inactive' : 'Member'}
-                    </span>}
                 </div>
                 <h1 className='wrap-break-word text-3xl font-semibold tracking-tight text-ui-text sm:text-4xl'>{displayName}</h1>
                 <p className='mt-1 break-all text-lg text-ui-muted'>@{username}</p>
                 {profile?.email && <p className='mt-3 break-all text-sm text-ui-muted'><span className='font-medium'>Email: </span>{profile.email}</p>}
-                {!profile && <p role='status' className='mt-5 text-sm text-ui-muted'>Profile details are unavailable. Please try again.</p>}
                 {inactive && <p className='mt-5 text-sm text-ui-muted'>This account is no longer active.</p>}
                 <div className='mt-8 flex flex-col gap-4 border-t border-ui-border pt-5 sm:flex-row sm:items-center sm:justify-between'>
                     <a href={path} className='flex min-w-0 items-start gap-2 text-sm text-ui-muted transition-colors hover:text-ui-primary'>
