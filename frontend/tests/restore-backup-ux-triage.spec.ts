@@ -18,3 +18,14 @@ test('restore page requires an explicit isolated target and confirmation', async
     expect(page).toContain('removing_isolated_database')
     expect(page).toContain('Restore-drill audit history')
 })
+
+test('live restore requires the selected archive and exact database confirmation', async() => {
+    const page = await readFile(path.join(root, 'src/app/dashboard/db/restore/liveRestoreClient.tsx'), 'utf8')
+
+    expect(page).toContain('data-live-restore-console')
+    expect(page).toContain('This replaces all data')
+    expect(page).toContain('confirmation === requiredConfirmation')
+    expect(page).toContain('restoreLiveBackupAction(selected.file, confirmation)')
+    expect(page).toContain('switching_live_database')
+    expect(page).toContain('checking_integrity')
+})

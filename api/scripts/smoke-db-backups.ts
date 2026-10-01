@@ -127,6 +127,27 @@ try {
     assert.match(commands, /dropdb .*restore_drill_release_check/)
     assert.doesNotMatch(commands, /createdb .* hanasand(?:\n|$)/, 'restore drill must never create or target the live database name')
 
+    await assert.rejects(
+        () => backups.restoreDatabaseBackupToLive({ file: drillFile, confirmation: 'wrong' }),
+        /Confirmation must exactly match RESTORE hanasand/,
+    )
+    const liveRestore = await backups.restoreDatabaseBackupToLive({
+        file: drillFile,
+        confirmation: 'RESTORE hanasand',
+        actorId: 'admin-1',
+    })
+    assert.equal(liveRestore.status, 'succeeded')
+    assert.equal(liveRestore.kind, 'restore_live')
+    assert.equal(liveRestore.targetDatabase, 'hanasand')
+    assert.equal(liveRestore.restoredIntegrity?.tables, liveRestore.sourceIntegrity?.tables)
+    const liveCommands = await readFile(commandLog, 'utf8')
+    assert.match(liveCommands, /createdb .*hanasand_restore_[a-f0-9]{16}/)
+    assert.match(liveCommands, /pg_restore .*--dbname hanasand_restore_[a-f0-9]{16}/)
+    assert.match(liveCommands, /ALTER DATABASE "hanasand" WITH ALLOW_CONNECTIONS false/)
+    assert.match(liveCommands, /ALTER DATABASE "hanasand" RENAME TO "hanasand_previous_[a-f0-9]{16}"/)
+    assert.match(liveCommands, /ALTER DATABASE "hanasand_restore_[a-f0-9]{16}" RENAME TO "hanasand"/)
+    assert.match(liveCommands, /dropdb .*hanasand_previous_[a-f0-9]{16}/)
+
     const failedCleanupTarget = 'restore_drill_cleanup_failure'
     process.env.DB_BACKUP_TEST_FAIL = 'pg_restore'
     process.env.DB_BACKUP_TEST_DROP_FAIL = 'true'
@@ -232,6 +253,7 @@ try {
     assert.match(routeSource, /fastify\.post\('\/backup', postDatabaseBackup\)/)
     assert.match(routeSource, /fastify\.post\('\/backup\/verify', postDatabaseBackupVerify\)/)
     assert.match(routeSource, /fastify\.post\('\/backup\/restore', postDatabaseBackupRestore\)/)
+    assert.match(routeSource, /fastify\.post\('\/backup\/restore-live', postDatabaseBackupRestoreLive\)/)
     assert.match(handlerSource, /hasHanasandInternalRouteAccess\(req\)/, 'every backup route must require Hanasand organization access')
     assert.match(handlerSource, /targetDatabase: req\.body\.targetDatabase/)
     assert.match(handlerSource, /confirmation: req\.body\.confirmation/)
@@ -239,7 +261,14 @@ try {
     assert.match(backups.sanitizeBackupError(new Error('password authentication failed for user "hanasand"')), /cannot authenticate to PostgreSQL/i)
     assert.doesNotMatch(backups.sanitizeBackupError(new Error('password authentication failed for user "hanasand"')), /"hanasand"|password authentication failed for user/i)
 
-    console.log('Database backup, retention, verification, schedule, restart, and isolated restore checks passed.')
+    console.log('Database backup, retention, verification, schedule, restart, isolated restore, and live restore checks passed.')
+} catch (error) {
+    const commands = await readFile(commandLog, 'utf8').catch(() => '')
+    if (commands) console.error(commands)
+    const state = await readFile(statePath, 'utf8').then(value => JSON.parse(value)).catch(() => null)
+    const lastOperation = state?.operations?.at(-1)
+    if (lastOperation) console.error('Last backup operation:', lastOperation.kind, lastOperation.stage, lastOperation.error)
+    throw error
 } finally {
     await rm(root, { recursive: true, force: true })
 }
@@ -257,6 +286,7 @@ done
 printf 'verified custom archive bytes' > "$output"
 `,
         pg_restore: `#!/bin/sh
+printf 'pg_restore %s\n' "$*" >> "$DB_BACKUP_TEST_COMMAND_LOG"
 if [ "$DB_BACKUP_TEST_FAIL" = "pg_restore" ] && [ "$1" != "--list" ]; then echo "pg_restore failed" >&2; exit 1; fi
 if [ "$1" = "--list" ]; then
   printf '; archive\n1; 0 0 SCHEMA - public owner\n2; 1259 1 TABLE public users owner\n3; 1259 2 TABLE public audit_events owner\n'
@@ -264,7 +294,18 @@ fi
 `,
         psql: `#!/bin/sh
 if [ "$DB_BACKUP_TEST_FAIL" = "psql" ]; then echo "psql failed" >&2; exit 1; fi
-printf '{"schemas":1,"tables":2,"estimatedRows":5}\n'
+sql=""
+previous=""
+for argument in "$@"; do
+  if [ "$previous" = "--command" ]; then sql="$argument"; fi
+  previous="$argument"
+done
+printf 'psql %s\n' "$sql" >> "$DB_BACKUP_TEST_COMMAND_LOG"
+case "$sql" in
+  *pg_stat_user_tables*) printf '{"schemas":1,"tables":2,"estimatedRows":5}\n' ;;
+  *datlocprovider*) printf '{"encoding":"UTF8","collation":"C.UTF-8","ctype":"C.UTF-8","provider":"c","icuLocale":null,"builtinLocale":null}\n' ;;
+  *json_agg*datname*) printf '["hanasand"]\n' ;;
+esac
 `,
         createdb: `#!/bin/sh
 printf 'createdb %s\n' "$*" >> "$DB_BACKUP_TEST_COMMAND_LOG"

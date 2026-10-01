@@ -13,7 +13,7 @@ if (!socket) throw new Error('DB_BACKUP_WORKER_SOCKET is required')
 // Only one owner may initialize the audit ledger or remove stale operation locks.
 // The separate container outlives API deployments and client disconnects.
 const owner = new pg.Client({ host: config.DB_HOST, port: Number(config.DB_PORT) || 5432,
-    user: config.DB_USER || 'hanasand', password: config.DB_PASSWORD, database: config.DB || 'hanasand', keepAlive: true })
+    user: config.DB_USER || 'hanasand', password: config.DB_PASSWORD, database: 'postgres', keepAlive: true })
 // Losing this session loses ownership: stop before another worker can take over.
 owner.on('error', () => { console.error('Backup worker lost its ownership connection'); process.exit(1) })
 await owner.connect()
@@ -49,6 +49,7 @@ if (!acquired.rows[0].acquired) throw new Error('Another backup worker is alread
                 case 'create': value = await backups.createDatabaseBackup(args[0]); break
                 case 'verify': value = await backups.verifyDatabaseBackupFile(args[0], args[1]); break
                 case 'restore': value = await backups.restoreDatabaseBackupFile(args[0]); break
+                case 'restore-live': value = await backups.restoreDatabaseBackupToLive(args[0] as Parameters<typeof backups.restoreDatabaseBackupToLive>[0]); break
                 case 'pause':
                     if (typeof args[0] !== 'boolean') throw Object.assign(new Error('Invalid pause value'), { statusCode: 400 })
                     value = await backups.setDatabaseBackupSchedulePaused(args[0]); break

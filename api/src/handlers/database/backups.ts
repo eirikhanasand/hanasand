@@ -6,6 +6,7 @@ import {
     collectDatabaseBackupServices,
     createDatabaseBackup,
     listDatabaseBackupFiles,
+    restoreDatabaseBackupToLive,
     restoreDatabaseBackupFile,
     sanitizeBackupError,
     verifyDatabaseBackupFile,
@@ -24,6 +25,11 @@ type RestoreBody = {
 
 type VerifyBody = {
     file?: string
+}
+
+type LiveRestoreBody = {
+    file?: string
+    confirmation?: string
 }
 
 export async function getDatabaseBackups(req: FastifyRequest, res: FastifyReply) {
@@ -99,6 +105,31 @@ export async function postDatabaseBackupRestore(req: FastifyRequest<{ Body: Rest
         })
         return res.send({
             message: `Restore drill passed for ${operation.file}; isolated target ${operation.targetDatabase} was removed.`,
+            operation,
+        })
+    } catch (error) {
+        req.log.error(error)
+        const statusCode = error instanceof BackupOperationError ? error.statusCode : (error as { statusCode?: number })?.statusCode || 503
+        return res.status(statusCode).send({ message: sanitizeBackupError(error) })
+    }
+}
+
+export async function postDatabaseBackupRestoreLive(req: FastifyRequest<{ Body: LiveRestoreBody }>, res: FastifyReply) {
+    const actorId = await requireBackupAccess(req, res)
+    if (!actorId) return
+
+    if (!req.body?.file || !req.body.confirmation) {
+        return res.status(400).send({ message: 'Live restore requires a backup file and exact confirmation.' })
+    }
+
+    try {
+        const operation = await restoreDatabaseBackupToLive({
+            file: req.body.file,
+            confirmation: req.body.confirmation,
+            actorId,
+        })
+        return res.send({
+            message: `Database ${operation.targetDatabase} restored from ${operation.file}.`,
             operation,
         })
     } catch (error) {

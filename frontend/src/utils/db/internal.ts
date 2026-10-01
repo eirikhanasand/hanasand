@@ -64,6 +64,7 @@ export type DatabaseQueryActivity = {
 export type BackupService = {
     id: string
     name: string
+    database?: string
     status: string
     error?: string | null
     dbSize?: string
@@ -109,7 +110,7 @@ export type BackupIntegrity = {
 
 export type BackupOperation = {
     id: string
-    kind: 'backup' | 'verify' | 'restore_drill'
+    kind: 'backup' | 'verify' | 'restore_drill' | 'restore_live'
     trigger: 'manual' | 'schedule'
     actorId: string
     status: 'running' | 'succeeded' | 'failed' | 'interrupted'
@@ -207,5 +208,13 @@ export async function restoreDatabaseBackup(file: string, targetDatabase: string
     return await requestService<{ message: string, operation: BackupOperation }>('internal', 'backup/restore', {
         method: 'POST',
         body: JSON.stringify({ file, targetDatabase, confirmation }),
+    })
+}
+
+export async function restoreDatabaseBackupToLive(file: string, confirmation: string) {
+    return await requestService<{ message: string, operation: BackupOperation }>('internal', 'backup/restore-live', {
+        method: 'POST',
+        body: JSON.stringify({ file, confirmation }),
+        signal: AbortSignal.timeout(30 * 60 * 1000),
     })
 }

@@ -6,7 +6,7 @@ import { useEffect, useState, useTransition } from 'react'
 import { ChevronDown, RefreshCw, ShieldCheck } from 'lucide-react'
 import type { BackupFile, BackupOperation, BackupService } from '@/utils/db/internal'
 import formatUtcDateTime from '@/utils/date/formatUtcDateTime'
-import { triggerBackupAction, verifyBackupAction } from '../actions'
+import { triggerBackupAction } from '../actions'
 
 type BackupPageProps = {
     backups: BackupService[]
@@ -20,7 +20,6 @@ export default function BackupPage({ backups, files, loadError = '' }: BackupPag
     const [isPending, startTransition] = useTransition()
     const [message, setMessage] = useState('')
     const [error, setError] = useState('')
-    const [verifying, setVerifying] = useState('')
 
     useEffect(() => {
         if (!service?.currentOperation) return
@@ -39,17 +38,9 @@ export default function BackupPage({ backups, files, loadError = '' }: BackupPag
         })
     }
 
-    function verify(file: string) {
-        setMessage('')
-        setError('')
-        setVerifying(file)
-        startTransition(async() => {
-            const response = await verifyBackupAction(file)
-            if (typeof response === 'string') setError(response)
-            else setMessage(response.message)
-            setVerifying('')
-            router.refresh()
-        })
+    function restore(file: string) {
+        const params = new URLSearchParams({ mode: 'live', file })
+        router.push(`/db/restore?${params.toString()}`)
     }
 
     const busy = isPending || Boolean(service?.currentOperation)
@@ -94,7 +85,7 @@ export default function BackupPage({ backups, files, loadError = '' }: BackupPag
                         <h2 id='backup-files-heading' className='font-semibold text-ui-text'>Available backups</h2>
                         <p className='mt-1 text-sm text-ui-muted'>{files.length} {files.length === 1 ? 'backup' : 'backups'} in {service?.storageTarget || 'configured storage'}.</p>
                     </div>
-                    <Link href='/db/restore' className='text-sm font-semibold text-ui-primary hover:underline'>Restore</Link>
+                    <Link href='/db/restore' className='text-sm font-semibold text-ui-primary hover:underline'>Restore drill</Link>
                 </div>
                 <div className='overflow-x-auto'>
                     <table className='min-w-[760px] w-full text-left text-sm'>
@@ -109,8 +100,8 @@ export default function BackupPage({ backups, files, loadError = '' }: BackupPag
                                     <td className='px-4 py-3'>{file.size || '—'}</td>
                                     <td className='px-4 py-3'>{file.verified ? <span className='inline-flex items-center gap-1 text-ui-success'><ShieldCheck className='h-4 w-4' /> {shortHash(file.checksumSha256)}</span> : <span className='text-ui-warning'>Unverified</span>}</td>
                                     <td className='px-4 py-3 text-right'>
-                                        <button type='button' disabled={busy} onClick={() => verify(file.file)} className='min-h-9 rounded-md border border-ui-border px-3 font-semibold hover:bg-ui-raised disabled:opacity-50'>
-                                            {verifying === file.file ? 'Verifying…' : 'Verify checksum'}
+                                        <button type='button' disabled={busy} onClick={() => restore(file.file)} className='min-h-9 rounded-md border border-ui-border px-3 font-semibold hover:bg-ui-raised disabled:opacity-50'>
+                                            Restore
                                         </button>
                                     </td>
                                 </tr>
@@ -194,6 +185,7 @@ function retentionLabel(service?: BackupService) {
 
 function operationLabel(operation: BackupOperation) {
     if (operation.kind === 'restore_drill') return `Restore drill → ${operation.targetDatabase || 'isolated target'}`
+    if (operation.kind === 'restore_live') return `Live restore · ${operation.trigger}`
     return `${operation.kind === 'backup' ? 'Backup' : 'Checksum verification'} · ${operation.trigger}`
 }
 

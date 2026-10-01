@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 type BackupLocation = 'local'
-type BackupOperationKind = 'backup' | 'verify' | 'restore_drill'
+type BackupOperationKind = 'backup' | 'verify' | 'restore_drill' | 'restore_live'
 type BackupOperationStatus = 'running' | 'succeeded' | 'failed' | 'interrupted'
 
 type IntegritySummary = {
@@ -101,6 +101,7 @@ type DatabaseProbe = {
 export type BackupServiceStatus = {
     id: string
     name: string
+    database: string
     status: string
     error?: string | null
     dbSize?: string
@@ -178,6 +179,7 @@ export async function collectDatabaseBackupServices(): Promise<BackupServiceStat
     return [{
         id: `${slug(database)}_database`,
         name: `${database}_database`,
+        database,
         status: currentOperation ? 'Running' : error ? 'Unavailable' : latest?.metadata ? 'Healthy' : latest ? 'Needs verification' : 'Available',
         error,
         dbSize: probe.ok && probe.sizeBytes !== null ? formatBytes(probe.sizeBytes) : undefined,
@@ -439,6 +441,102 @@ export async function restoreDatabaseBackupFile(input: {
             sourceIntegrity,
             restoredIntegrity,
             targetRemoved: true,
+        }
+    })
+}
+
+export async function restoreDatabaseBackupToLive(input: {
+    file: string
+    confirmation: string
+    actorId?: string
+}) {
+    if (usesBackupWorker()) return backupWorkerCall<BackupOperation>('restore-live', [input])
+    const targetDatabase = databaseName()
+    if (input.confirmation !== `RESTORE ${targetDatabase}`) {
+        throw new BackupOperationError(`Confirmation must exactly match RESTORE ${targetDatabase}.`, 400)
+    }
+
+    return runOperation('restore_live', { actorId: input.actorId, trigger: 'manual', targetDatabase }, async(_operation, updateStage) => {
+        const backup = await resolveBackupFile(input.file)
+        const existing = await readMetadata(backup)
+        const suffix = randomUUID().replaceAll('-', '').slice(0, 16)
+        const stagedDatabase = `hanasand_restore_${suffix}`
+        const previousDatabase = `hanasand_previous_${suffix}`
+        try {
+            await updateStage('verifying_archive')
+            const archive = await inspectArchive(backup)
+            const checksumSha256 = await checksumFile(backup)
+            if (existing?.checksumSha256 && existing.checksumSha256 !== checksumSha256) {
+                throw new BackupOperationError('Backup checksum does not match its persisted verification metadata.', 409)
+            }
+            const sourceIntegrity = existing?.sourceIntegrity || archive.integrity
+            const info = await stat(backup)
+            const creationArgs = await temporaryDatabaseCreationArgs(targetDatabase)
+
+            await updateStage('creating_restore_database')
+            await runBackupCommand('createdb', [
+                ...connectionArgs(),
+                '--maintenance-db', 'postgres',
+                ...creationArgs,
+                stagedDatabase,
+            ])
+            await updateStage('restoring')
+            await runBackupCommand('pg_restore', [
+                '--exit-on-error',
+                '--no-owner',
+                '--no-privileges',
+                ...connectionArgs(),
+                '--dbname', stagedDatabase,
+                backup,
+            ])
+
+            await updateStage('checking_integrity')
+            const restoredIntegrity = await queryIntegrity(stagedDatabase)
+            if (restoredIntegrity.tables !== sourceIntegrity.tables) {
+                throw new BackupOperationError(`Restore integrity failed: expected ${sourceIntegrity.tables} user tables and restored ${restoredIntegrity.tables}.`, 500)
+            }
+
+            await updateStage('switching_live_database')
+            await setDatabaseConnections(targetDatabase, false)
+            await terminateDatabaseConnections(targetDatabase)
+            await renameDatabase(targetDatabase, previousDatabase)
+            await renameDatabase(stagedDatabase, targetDatabase)
+            await setDatabaseConnections(targetDatabase, true)
+
+            const liveIntegrity = await queryIntegrity(targetDatabase)
+            if (liveIntegrity.tables !== sourceIntegrity.tables) {
+                throw new BackupOperationError(`Live restore integrity failed: expected ${sourceIntegrity.tables} user tables and found ${liveIntegrity.tables}.`, 500)
+            }
+
+            await updateStage('removing_previous_database')
+            try {
+                await runBackupCommand('dropdb', [
+                    ...connectionArgs(),
+                    '--maintenance-db', 'postgres',
+                    '--if-exists',
+                    '--force',
+                    previousDatabase,
+                ])
+            } catch (error) {
+                if ((await databaseNames([previousDatabase])).has(previousDatabase)) throw error
+            }
+
+            return {
+                stage: 'complete',
+                file: path.basename(backup),
+                targetDatabase,
+                checksumSha256,
+                sizeBytes: info.size,
+                archiveEntries: archive.entries,
+                sourceIntegrity,
+                restoredIntegrity: liveIntegrity,
+            }
+        } catch (error) {
+            const recovered = await recoverLiveRestore({ targetDatabase, stagedDatabase, previousDatabase })
+            if (!recovered) {
+                throw new BackupOperationError('The live restore failed and automatic recovery could not be completed. Check the database backup worker and PostgreSQL logs.', 503)
+            }
+            throw error
         }
     })
 }
@@ -804,6 +902,139 @@ async function inspectArchive(file: string) {
         entries,
         integrity: { schemas: schemas.size, tables: tableLines.length, estimatedRows: 0 },
     }
+}
+
+async function temporaryDatabaseCreationArgs(sourceDatabase: string) {
+    const sql = `SELECT json_build_object(
+        'encoding', pg_encoding_to_char(encoding),
+        'collation', datcollate,
+        'ctype', datctype,
+        'provider', datlocprovider,
+        'icuLocale', to_json(db)->>'daticulocale',
+        'builtinLocale', to_json(db)->>'datlocale'
+    )::text FROM pg_database AS db WHERE datname = ${sqlLiteral(sourceDatabase)}`
+    const output = await runBackupCommand('psql', [
+        ...connectionArgs(),
+        '--dbname', 'postgres',
+        '--no-align',
+        '--tuples-only',
+        '--set', 'ON_ERROR_STOP=1',
+        '--command', sql,
+    ])
+    const line = output.split('\n').map(value => value.trim()).find(Boolean)
+    if (!line) throw new BackupOperationError('Could not read the live database locale settings for the restore.', 500)
+
+    let settings: { encoding?: string, collation?: string, ctype?: string, provider?: string, icuLocale?: string | null, builtinLocale?: string | null }
+    try {
+        settings = JSON.parse(line)
+    } catch {
+        throw new BackupOperationError('Could not read the live database locale settings for the restore.', 500)
+    }
+    if (!settings.encoding || !settings.provider) {
+        throw new BackupOperationError('The live database returned incomplete locale settings for the restore.', 500)
+    }
+
+    const args = ['--template', 'template0', '--encoding', settings.encoding, '--locale-provider', settings.provider === 'i' ? 'icu' : settings.provider === 'b' ? 'builtin' : 'libc']
+    if (settings.provider === 'i') {
+        if (!settings.icuLocale) throw new BackupOperationError('The live database ICU locale is missing.', 500)
+        args.push('--icu-locale', settings.icuLocale)
+    } else if (settings.provider === 'b') {
+        if (!settings.builtinLocale) throw new BackupOperationError('The live database built-in locale is missing.', 500)
+        args.push('--builtin-locale', settings.builtinLocale)
+    } else {
+        if (!settings.collation || !settings.ctype) throw new BackupOperationError('The live database collation settings are missing.', 500)
+        args.push('--lc-collate', settings.collation, '--lc-ctype', settings.ctype)
+    }
+    return args
+}
+
+async function setDatabaseConnections(database: string, allowed: boolean) {
+    await runMaintenanceSql(`ALTER DATABASE ${sqlIdentifier(database)} WITH ALLOW_CONNECTIONS ${allowed ? 'true' : 'false'}`)
+}
+
+async function terminateDatabaseConnections(database: string) {
+    await runMaintenanceSql(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = ${sqlLiteral(database)} AND pid <> pg_backend_pid()`)
+}
+
+async function renameDatabase(from: string, to: string) {
+    await runMaintenanceSql(`ALTER DATABASE ${sqlIdentifier(from)} RENAME TO ${sqlIdentifier(to)}`)
+}
+
+async function databaseNames(names: string[]) {
+    const sql = `SELECT COALESCE(json_agg(datname)::text, '[]') FROM pg_database WHERE datname IN (${names.map(sqlLiteral).join(', ')})`
+    const output = await runBackupCommand('psql', [
+        ...connectionArgs(),
+        '--dbname', 'postgres',
+        '--no-align',
+        '--tuples-only',
+        '--set', 'ON_ERROR_STOP=1',
+        '--command', sql,
+    ])
+    const line = output.split('\n').map(value => value.trim()).find(Boolean)
+    if (!line) throw new BackupOperationError('Could not inspect database names during restore recovery.', 500)
+    try {
+        const names = JSON.parse(line)
+        if (!Array.isArray(names) || names.some(name => typeof name !== 'string')) throw new Error('invalid database list')
+        return new Set<string>(names)
+    } catch {
+        throw new BackupOperationError('Could not inspect database names during restore recovery.', 500)
+    }
+}
+
+async function recoverLiveRestore(input: { targetDatabase: string, stagedDatabase: string, previousDatabase: string }) {
+    try {
+        let names = await databaseNames([input.targetDatabase, input.stagedDatabase, input.previousDatabase])
+        if (names.has(input.previousDatabase)) {
+            if (names.has(input.targetDatabase)) {
+                if (names.has(input.stagedDatabase)) return false
+                await setDatabaseConnections(input.targetDatabase, false)
+                await terminateDatabaseConnections(input.targetDatabase)
+                await renameDatabase(input.targetDatabase, input.stagedDatabase)
+                names.add(input.stagedDatabase)
+            }
+            await renameDatabase(input.previousDatabase, input.targetDatabase)
+            names.delete(input.previousDatabase)
+            names.add(input.targetDatabase)
+            await setDatabaseConnections(input.targetDatabase, true)
+        } else if (names.has(input.targetDatabase)) {
+            await setDatabaseConnections(input.targetDatabase, true)
+        } else {
+            return false
+        }
+
+        names = await databaseNames([input.targetDatabase, input.stagedDatabase, input.previousDatabase])
+        if (!names.has(input.targetDatabase) || names.has(input.previousDatabase)) return false
+        if (names.has(input.stagedDatabase)) {
+            await runBackupCommand('dropdb', [
+                ...connectionArgs(),
+                '--maintenance-db', 'postgres',
+                '--if-exists',
+                '--force',
+                input.stagedDatabase,
+            ])
+        }
+        return true
+    } catch {
+        return false
+    }
+}
+
+async function runMaintenanceSql(sql: string) {
+    await runBackupCommand('psql', [
+        ...connectionArgs(),
+        '--dbname', 'postgres',
+        '--set', 'ON_ERROR_STOP=1',
+        '--command', sql,
+    ])
+}
+
+function sqlIdentifier(value: string) {
+    return `"${value.replaceAll('"', '""')}"`
+}
+
+function sqlLiteral(value: string) {
+    const quote = String.fromCharCode(39)
+    return `${quote}${value.replaceAll(quote, quote + quote)}${quote}`
 }
 
 async function queryIntegrity(database: string): Promise<IntegritySummary> {

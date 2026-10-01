@@ -1,6 +1,6 @@
 'use server'
 
-import { getDatabaseHealth, getDatabaseRows, restoreDatabaseBackup, runDatabaseSql, triggerDatabaseBackup, verifyDatabaseBackup } from '@/utils/db/internal'
+import { getDatabaseHealth, getDatabaseRows, restoreDatabaseBackup, restoreDatabaseBackupToLive, runDatabaseSql, triggerDatabaseBackup, verifyDatabaseBackup } from '@/utils/db/internal'
 
 export async function triggerBackupAction() {
     return await triggerDatabaseBackup()
@@ -12,6 +12,10 @@ export async function verifyBackupAction(file: string) {
 
 export async function restoreBackupAction(file: string, targetDatabase: string, confirmation: string) {
     return await restoreDatabaseBackup(file, targetDatabase, confirmation)
+}
+
+export async function restoreLiveBackupAction(file: string, confirmation: string) {
+    return await restoreDatabaseBackupToLive(file, confirmation)
 }
 
 export async function databaseHealthAction() {
