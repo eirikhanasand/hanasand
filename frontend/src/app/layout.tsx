@@ -42,8 +42,8 @@ export default async function layout({ children }: { children: ReactNode }) {
         initialPreferences,
         initialMode,
         id,
-        thesisSheets: [],
-        hasHanasandOrganization: false,
+        thesisSheets: thesisNavigation.sheets,
+        hasHanasandOrganization: thesisNavigation.hasAccess,
     } satisfies ComponentProps<typeof DashboardSidebar>
 
     return (
