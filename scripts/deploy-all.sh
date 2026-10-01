@@ -11,6 +11,7 @@ test -d "$root/mail/stalwart" || {
     exit 1
 }
 export HANASAND_STALWART_STATE_DIR="$root/mail/stalwart"
+export HANASAND_DEPLOY_GUARD_ROOT="$root"
 
 # Run each deployment in its own process group and serialize requests. Builds
 # happen beside the live stack, so a newer main commit must wait for the

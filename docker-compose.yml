@@ -10,9 +10,10 @@ services:
       fi;
       sleep infinity'
     environment:
-      HANASAND_DEPLOY_GUARD_CWD: ${PWD:-}
+      HANASAND_DEPLOY_GUARD_CWD: ${HANASAND_DEPLOY_GUARD_ROOT:-${PWD:-}}
     volumes:
-      - .:/workspace:ro
+      # The guard outlives the temporary release build directory.
+      - ${HANASAND_DEPLOY_GUARD_ROOT:-.}:/workspace:ro
       - /etc/hostname:/host/etc-hostname:ro
     healthcheck:
       test:
