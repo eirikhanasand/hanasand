@@ -6,6 +6,7 @@ import type { DatabaseOverview } from '@/utils/db/internal'
 import DatabaseWorkbench from './databaseWorkbench'
 import DatabaseRefresh from './databaseRefresh'
 import DatabaseInventory from './databaseInventory'
+import DatabaseStoragePanel from './databaseStoragePanel'
 import QueryCard from './queryCard'
 
 
@@ -29,13 +30,9 @@ export function DatabaseDashboard({ overview, serviceAccount = false }: { overvi
             </section>
         </DatabaseWorkbench>
 
-        <DashboardPanel className='min-w-0 overflow-hidden' id='storage-inventory'>
-            <div className='flex flex-wrap items-center justify-between gap-2 border-b border-ui-border px-5 py-4'>
-                <h2 className='text-base font-semibold'>Storage and databases</h2>
-                <div className='flex flex-wrap items-center gap-3'><span className='text-xs text-ui-muted'>{storage?.stale ? 'Last known sizes · status stale' : storage ? storage.host : 'Hanasand cluster only · host inventory unavailable'}</span><DatabaseActions /></div>
-            </div>
+        <DatabaseStoragePanel stale={Boolean(storage?.stale)} actions={<DatabaseActions />}>
             {storage ? <DatabaseInventory instances={storage.instances} stale={!fresh} /> : <p className='p-5 text-sm text-ui-muted'>Database inventory unavailable.</p>}
-        </DashboardPanel>
+        </DatabaseStoragePanel>
 
 
         <Disclosure title='Queries' id='active-queries' detail={`${overview.queries.length} shown · ${overview.queries.filter(q => q.isLongRunning).length} long-running · Long-running after ${formatTime(overview.longRunningThresholdSeconds)} · Checked ${formatDateTime(overview.generatedAt)}`}>

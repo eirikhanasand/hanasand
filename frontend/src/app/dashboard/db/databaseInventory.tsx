@@ -1,8 +1,9 @@
 'use client'
 
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { Fragment, useContext, useEffect, useRef, useState } from 'react'
 import type { DatabaseOverview } from '@/utils/db/internal'
 import SortIndicator from '@/components/dashboard/sort-indicator'
+import { DatabaseFullscreenContext } from './databaseStoragePanel'
 
 type Instance = NonNullable<DatabaseOverview['storage']>['instances'][number]
 type Database = Instance['databases'][number]
@@ -30,6 +31,7 @@ async function fetchPage(params: URLSearchParams, signal?: AbortSignal): Promise
 }
 
 export default function DatabaseInventory({ instances, stale }: { instances: Instance[], stale: boolean }) {
+    const fullscreen = useContext(DatabaseFullscreenContext)
     const [expanded, setExpanded] = useState<string | null>(null)
     const [sort, setSort] = useState<Sort<DatabaseSort>>({ key: 'health', descending: false })
     const viewport = useRef<HTMLDivElement>(null)
@@ -39,9 +41,9 @@ export default function DatabaseInventory({ instances, stale }: { instances: Ins
     const value = ({ instance, database }: typeof rows[number]) => ({ name: database.name, instance: instance.id, health: health(instance), count: database.tableCount, connections: database.connections, size: database.sizeBytes })[sort.key]
     rows.sort((a, b) => compare(value(a), value(b), sort.descending) || compare(a.database.sizeBytes, b.database.sizeBytes, true) || a.database.name.localeCompare(b.database.name) || a.instance.id.localeCompare(b.instance.id))
     useEffect(() => {
-        if (rows.length <= 5 || !viewport.current) return
+        if (rows.length <= 6 || !viewport.current) return
         const headers = viewport.current.querySelector('thead')
-        const entries = Array.from(viewport.current.querySelectorAll<HTMLElement>('[data-database-row]')).slice(0, 5)
+        const entries = Array.from(viewport.current.querySelectorAll<HTMLElement>('[data-database-row]')).slice(0, 6)
         const measure = () => setHeight(entries.reduce((total, row) => total + row.getBoundingClientRect().height, headers?.getBoundingClientRect().height || 0) + 1)
         const observer = new ResizeObserver(measure)
         if (headers) observer.observe(headers)
@@ -50,7 +52,8 @@ export default function DatabaseInventory({ instances, stale }: { instances: Ins
         return () => observer.disconnect()
     }, [instances, rows.length, sort])
     const columns: [DatabaseSort, string][] = [['name', 'Database'], ['instance', 'Instance'], ['health', 'Health'], ['count', 'Tables / keys'], ['connections', 'Connections'], ['size', 'Size']]
-    return <div ref={viewport} className='overflow-auto' style={{ maxHeight: rows.length > 5 ? height : undefined }} tabIndex={0} aria-label='Databases'><table className='w-full text-left text-sm'>
+    const maxHeight = fullscreen ? 'calc(100dvh - 6rem)' : rows.length > 6 ? height === undefined ? undefined : height * (expanded ? 2 : 1) : undefined
+    return <div ref={viewport} className='overflow-auto' style={{ maxHeight }} tabIndex={0} aria-label='Databases'><table className='w-full text-left text-sm'>
         <thead className='sticky top-0 z-10 bg-ui-raised text-xs text-ui-muted'><tr>{columns.map(([key, label]) => <th key={key} aria-sort={sort.key === key ? sort.descending ? 'descending' : 'ascending' : 'none'} className='px-5 py-2 font-medium'><SortButton label={label} active={sort.key === key} descending={sort.descending} onClick={() => setSort({ key, descending: sort.key === key ? !sort.descending : false })} /></th>)}</tr></thead>
         <tbody>
             {rows.map(({ instance, database }) => {
@@ -81,7 +84,7 @@ function DatabaseContents({ instance, database }: { instance: Instance, database
     const searchInput = useRef<HTMLInputElement>(null)
     const list = useRef<HTMLDivElement>(null)
     const [listHeight, setListHeight] = useState<number>()
-    const manyTables = items.length > 5
+    const manyTables = items.length > 6
     useEffect(() => {
         if (!manyTables) return
         const focusSearch = (event: KeyboardEvent) => {
@@ -96,9 +99,9 @@ function DatabaseContents({ instance, database }: { instance: Instance, database
     }, [manyTables])
     useEffect(() => {
         if (!manyTables || !list.current) return
-        const buttons = Array.from(list.current.querySelectorAll<HTMLElement>('[data-table-selector]')).slice(0, 5)
-        if (buttons.length < 5) return
-        const measure = () => setListHeight(buttons.reduce((height, button) => height + button.getBoundingClientRect().height + 2, 48))
+        const buttons = Array.from(list.current.querySelectorAll<HTMLElement>('[data-table-selector]')).slice(0, 6)
+        if (buttons.length < 6) return
+        const measure = () => setListHeight(buttons.reduce((height, button, index) => height + button.getBoundingClientRect().height + (index ? 12 : 0), 0))
         const observer = new ResizeObserver(measure)
         buttons.forEach(button => observer.observe(button))
         measure()

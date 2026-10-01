@@ -47,9 +47,14 @@ async function connect(input: BrowseInput, engine: string) {
             const portFlag = args.indexOf('-p')
             const port = Number(env.PGPORT || (portFlag >= 0 ? args[portFlag + 1] : '') || (engine === 'PostgreSQL' ? 5432 : engine === 'MongoDB' ? 27017 : 6379))
             const published = inspect.NetworkSettings?.Ports?.[`${port}/tcp`]?.[0]
-            const host = published || inspect.HostConfig?.NetworkMode === 'host' ? '127.0.0.1' : Object.values(inspect.NetworkSettings?.Networks || {}).find(network => network.IPAddress)?.IPAddress
+            const network = Object.values(inspect.NetworkSettings?.Networks || {}).find(network => network.IPAddress)
+            const hostNetwork = inspect.HostConfig?.NetworkMode === 'host'
+            // API and database containers share Docker networks. Use the
+            // database's internal address and port instead of its published
+            // host port, which would resolve to the API container's loopback.
+            const host = hostNetwork ? '127.0.0.1' : network?.IPAddress || (published ? '127.0.0.1' : undefined)
             if (!host) throw new Error('Database address unavailable')
-            const actualPort = published ? Number(published.HostPort) : port
+            const actualPort = hostNetwork || network?.IPAddress ? port : published ? Number(published.HostPort) : port
             if (engine === 'PostgreSQL') {
                 const standby = input.instance === 'hanasand-db-standby'
                 const pg = new Pool({ host, port: actualPort, database: input.database, user: env.POSTGRES_USER || (standby ? process.env.DB_USER : undefined) || 'hanasand', password: env.POSTGRES_PASSWORD || (standby ? process.env.DB_PASSWORD : undefined),

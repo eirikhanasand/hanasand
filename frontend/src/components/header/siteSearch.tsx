@@ -23,24 +23,27 @@ export default function SiteSearch({ token }: { token: boolean }) {
     const [savedSearches, setSavedSearches] = useState<SearchItem[]>([])
     const [watchTerms, setWatchTerms] = useState<SearchItem[]>([])
     const [loading, setLoading] = useState(false)
+    const [casesLoading, setCasesLoading] = useState(false)
     const [selectedIndex, setSelectedIndex] = useState(0)
     const inputRef = useRef<HTMLInputElement>(null)
+    const casesLoadedAt = useRef(0)
     const router = useRouter()
     const cleanQuery = query.trim().toLowerCase()
     const routeResults = useMemo(() => filterItems([...generatedSearchRoutes], cleanQuery).sort((a, b) => routeRelevance(b, cleanQuery) - routeRelevance(a, cleanQuery)), [cleanQuery])
     const directThreatResult = useMemo(() => directThreatItem(cleanQuery, actors), [actors, cleanQuery])
+    const caseResults = useMemo(() => filterItems(cases, cleanQuery).slice(0, 6), [cases, cleanQuery])
     const savedResults = useMemo(() => filterItems(savedSearches, cleanQuery).slice(0, 4), [savedSearches, cleanQuery])
     const watchResults = useMemo(() => filterItems(watchTerms, cleanQuery).slice(0, 4), [watchTerms, cleanQuery])
     const fallbackSearch = useMemo(() => cleanQuery && !directThreatResult ? manualSearchItem(cleanQuery) : null, [cleanQuery, directThreatResult])
     const groups = useMemo(() => [
         { title: 'ROUTES', items: routeResults, icon: 'route' as const },
         { title: 'THREAT INTELLIGENCE', items: directThreatResult ? [directThreatResult] : [], icon: 'actor' as const },
-        { title: 'CASES', items: token ? cases.slice(0, 6) : [], icon: 'case' as const },
+        { title: 'CASES', items: token ? caseResults : [], icon: 'case' as const },
         { title: 'SAVED SEARCHES', items: savedResults, icon: 'route' as const },
         { title: 'WATCHLISTS', items: watchResults, icon: 'actor' as const },
         { title: 'RECENT EVIDENCE', items: actors.filter(item => item.href !== directThreatResult?.href).slice(0, 6), icon: 'route' as const },
         { title: 'SEARCH', items: fallbackSearch ? [fallbackSearch] : [], icon: 'route' as const },
-    ], [actors, cases, directThreatResult, fallbackSearch, routeResults, savedResults, token, watchResults])
+    ], [actors, caseResults, directThreatResult, fallbackSearch, routeResults, savedResults, token, watchResults])
     const flatResults = useMemo(() => groups.flatMap(group => group.items), [groups])
 
     useEffect(() => setSelectedIndex(0), [cleanQuery])
@@ -77,31 +80,54 @@ export default function SiteSearch({ token }: { token: boolean }) {
     }, [open, token])
 
     useEffect(() => {
+        if (!open || !token) {
+            casesLoadedAt.current = 0
+            setCases([])
+            setCasesLoading(false)
+            return
+        }
+        if (casesLoadedAt.current) return
+        const controller = new AbortController()
+        setCasesLoading(true)
+        loadCases(controller.signal).then(items => {
+            if (controller.signal.aborted) return
+            setCases(items)
+            casesLoadedAt.current = Date.now()
+        }).catch(() => {
+            if (!controller.signal.aborted) setCases([])
+        }).finally(() => {
+            if (!controller.signal.aborted) setCasesLoading(false)
+        })
+        return () => controller.abort()
+    }, [open, token])
+
+    useEffect(() => {
         if (!open) return
         requestAnimationFrame(() => inputRef.current?.focus())
     }, [open])
 
     useEffect(() => {
-        if (!open) return
+        if (!open || cleanQuery.length < 2) {
+            setActors([])
+            setLoading(false)
+            return
+        }
         const controller = new AbortController()
         const timer = window.setTimeout(async () => {
             setLoading(true)
             try {
-                const [caseItems, actorItems] = await Promise.all([
-                    token ? loadCases(cleanQuery, controller.signal) : Promise.resolve([]),
-                    cleanQuery ? loadActors(cleanQuery, controller.signal) : Promise.resolve([]),
-                ])
-                setCases(caseItems)
-                setActors(actorItems)
+                setActors(await loadActors(cleanQuery, controller.signal))
+            } catch {
+                if (!controller.signal.aborted) setActors([])
             } finally {
                 if (!controller.signal.aborted) setLoading(false)
             }
-        }, 180)
+        }, 220)
         return () => {
             window.clearTimeout(timer)
             controller.abort()
         }
-    }, [cleanQuery, open, token])
+    }, [cleanQuery, open])
 
     return (
         <>
@@ -145,7 +171,7 @@ export default function SiteSearch({ token }: { token: boolean }) {
                                 placeholder='Search routes, cases, and threat actors'
                                 className='h-full min-w-0 flex-1 bg-transparent text-lg text-ui-text outline-none placeholder:text-ui-muted'
                             />
-                            {loading ? <Loader2 className='h-4 w-4 animate-spin text-ui-muted' /> : null}
+                            {loading || casesLoading ? <Loader2 className='h-4 w-4 animate-spin text-ui-muted' /> : null}
                             <button type='button' onClick={() => setOpen(false)} className='grid h-9 w-9 place-items-center rounded-lg border border-ui-border text-ui-muted transition hover:bg-ui-raised hover:text-ui-text' aria-label='Close search'>
                                 <X className='h-4 w-4' />
                             </button>
@@ -219,15 +245,13 @@ function actorDisplayName(value: string) {
     return /^apt\d+$/i.test(value) ? value.toUpperCase() : value
 }
 
-async function loadCases(query: string, signal: AbortSignal): Promise<SearchItem[]> {
+async function loadCases(signal: AbortSignal): Promise<SearchItem[]> {
     const response = await fetch('/api/cases', { cache: 'no-store', signal })
-    if (!response.ok) return []
+    if (!response.ok) throw new Error('Cases are temporarily unavailable.')
     const payload = await response.json()
     return arrayFrom(payload, ['cases', 'items', 'rows'])
         .map(caseItem)
         .filter(isSearchItem)
-        .filter(item => !query || `${item.title} ${item.detail} ${item.href}`.toLowerCase().includes(query))
-        .slice(0, 8)
 }
 
 async function loadActors(query: string, signal: AbortSignal): Promise<SearchItem[]> {
