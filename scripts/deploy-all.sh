@@ -119,7 +119,10 @@ cleanup() {
 }
 trap cleanup EXIT HUP INT TERM
 git archive --format=tar --output="$build_dir/source.tar" "$release"
-tar -xf "$build_dir/source.tar" -C "$build_dir"
+(
+    umask 022
+    tar -xf "$build_dir/source.tar" -C "$build_dir"
+)
 rm -f "$build_dir/source.tar"
 mkdir -p "$build_dir/.git"
 printf 'ref: refs/heads/main\n' > "$build_dir/.git/HEAD"

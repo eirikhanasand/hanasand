@@ -11,8 +11,8 @@ RUN apk add --no-cache pgbouncer=1.25.1-r0 postgresql17-client nodejs \
     && mkdir -p /run/pgbouncer \
     && chown pgbouncer:pgbouncer /run/pgbouncer
 
-COPY ops/pgbouncer/pgbouncer.ini /etc/pgbouncer/pgbouncer.ini
-COPY ops/pgbouncer/entrypoint.mjs /usr/local/bin/pgbouncer-entrypoint.mjs
+COPY --chmod=0644 ops/pgbouncer/pgbouncer.ini /etc/pgbouncer/pgbouncer.ini
+COPY --chmod=0644 ops/pgbouncer/entrypoint.mjs /usr/local/bin/pgbouncer-entrypoint.mjs
 
 USER pgbouncer
 ENTRYPOINT ["node", "/usr/local/bin/pgbouncer-entrypoint.mjs"]
