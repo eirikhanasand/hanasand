@@ -1,14 +1,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { getDashboardNavigation, navigationLinks, pinnedNavigation, type NavigationItem } from '../src/utils/layout/dashboardNavigation'
-import { organizationPages } from '../src/utils/organizations/pages'
+import { organizationNavigationPages } from '../src/utils/organizations/pages'
 import { canViewHanasandInternalPages, HANASAND_ORGANIZATION_ID } from '../src/utils/organizations/internalPageAccess'
 import { thesisNavigationFromDocument } from '../src/utils/layout/thesisNavigationData'
 import { writeSheets } from '../src/app/thesis/workspace'
 
-test('organization destinations remain reachable exactly once after regrouping', () => {
+test('organization navigation pages remain reachable exactly once after regrouping', () => {
     const links = navigationLinks(getDashboardNavigation({ id: 'member' }))
-    for (const page of organizationPages) {
+    for (const page of organizationNavigationPages) {
         const matches = links.filter(link => link.href === page.href)
         assert.equal(matches.length, 1)
         assert.equal(matches[0].ancestors[0], 'Organization')
