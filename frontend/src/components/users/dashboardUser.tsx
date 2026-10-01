@@ -23,6 +23,7 @@ export default function DashboardUser({ user }: { user: User }) {
     const [impersonationPromptOpen, setImpersonationPromptOpen] = useState(false)
     const [impersonationReason, setImpersonationReason] = useState('')
     const [impersonationReasonError, setImpersonationReasonError] = useState('')
+    const profileRouteAvailable = user.id.toLowerCase() !== 'sindre' && user.username?.toLowerCase() !== 'sindre'
 
     async function handleActive(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) {
         e.stopPropagation()
@@ -85,7 +86,7 @@ export default function DashboardUser({ user }: { user: User }) {
 
     return (
         <div className='dashboard-user-row group relative h-10 min-h-10 max-h-10'>
-            <div onClick={() => router.push(`/profile/${encodeURIComponent(user.id)}`)} className='dashboard-user-row-main grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)_100px_100px_40px] items-center gap-3 rounded-lg py-2 hover:bg-ui-raised cursor-pointer'>
+            <div onClick={profileRouteAvailable ? () => router.push(`/profile/${encodeURIComponent(user.id)}`) : undefined} className={`dashboard-user-row-main grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)_100px_100px_40px] items-center gap-3 rounded-lg py-2 hover:bg-ui-raised ${profileRouteAvailable ? 'cursor-pointer' : ''}`}>
                 <h1 className={`dashboard-user-name min-w-0 truncate ${user.active === false ? 'text-ui-muted line-through' : ''}`} key={user.id}>{user.name}</h1>
                 <span className={`dashboard-user-username min-w-0 truncate text-sm text-ui-muted ${user.active === false ? 'line-through' : ''}`}>{user.username || user.id}</span>
                 <span className='dashboard-user-email min-w-0 truncate text-sm text-ui-muted' title={user.email || undefined}><span className='dashboard-user-mobile-label'>Email</span>{user.email || '—'}</span>

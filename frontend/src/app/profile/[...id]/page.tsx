@@ -26,6 +26,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     const profile = await fetchUser(profileId, userId && token ? { id: userId, token } : undefined)
     const username = profile?.username || profile?.id || profileId
     const isSelf = Boolean(profile && profile.id === userId)
+    if (!isSelf && (profileId.toLowerCase() === 'sindre' || username.toLowerCase() === 'sindre')) notFound()
     if (profile && profileId !== username) redirect(`/profile/${encodeURIComponent(username)}${section === 'profile' ? '' : `/${section}`}`)
 
     if (!userId || !token) {
