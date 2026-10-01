@@ -223,10 +223,10 @@ export const generatedSearchRoutes = [
         href: '/dashboard/findings/sources',
     },
     {
-        id: 'route:/dashboard/findings/watchlists',
-        title: 'Dashboard · Findings · Watchlists',
-        detail: 'Page · /dashboard/findings/watchlists',
-        href: '/dashboard/findings/watchlists',
+        id: 'route:/watchlists',
+        title: 'Watchlists',
+        detail: 'Page · /watchlists',
+        href: '/watchlists',
     },
     {
         id: 'route:/dashboard/helpdesk',

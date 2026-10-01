@@ -44,7 +44,7 @@ export function getDashboardNavigation(access: NavigationAccess): NavigationItem
                 link('Actor Profiles', '/ti/profiles', isAdmin),
             ]),
             group('Monitoring', [
-                link('Watchlists', '/findings/watchlists'),
+                link('Watchlists', '/watchlists'),
                 link('Findings', '/findings'),
                 link('Delivery', '/findings/actions'),
             ]),
@@ -142,7 +142,6 @@ export function getDashboardNavigation(access: NavigationAccess): NavigationItem
                 link('Integrations', '/findings/delivery'),
             ]),
             group('Monitoring & activity', [
-                link('Watchlists', '/organizations/watchlists'),
                 link('Alerts & Cases', '/organizations/alerts'),
                 link('Activity', '/organizations/activity'),
             ]),

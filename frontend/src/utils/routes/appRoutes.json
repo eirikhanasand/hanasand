@@ -1,5 +1,9 @@
 [
   [
+    "/dashboard/findings/watchlists",
+    "/watchlists"
+  ],
+  [
     "/dashboard/cases",
     "/cases"
   ],

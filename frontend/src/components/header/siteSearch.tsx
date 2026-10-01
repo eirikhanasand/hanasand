@@ -338,7 +338,7 @@ function watchlistTerms(value: unknown): SearchItem[] {
     return terms.flatMap(term => {
         const item = term && typeof term === 'object' ? term as Record<string, unknown> : null
         const value = typeof term === 'string' ? term : stringValue(item?.value || item?.term)
-        return value ? [{ id: `watch:${value}`, title: value, detail: 'Monitored entity', href: '/findings/watchlists' }] : []
+        return value ? [{ id: `watch:${value}`, title: value, detail: 'Monitored entity', href: '/watchlists' }] : []
     })
 }
 

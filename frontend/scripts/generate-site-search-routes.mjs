@@ -46,9 +46,10 @@ function quote(value) {
 
 const nonSearchableRoutes = new Set(['/browser/report', '/dashboard/system/ssh-keys'])
 const profilePagePath = appRoutes.find(([, canonical]) => canonical === '/ti/profiles')?.[0]
+const watchlistsPagePath = appRoutes.find(([legacy]) => legacy === '/dashboard/findings/watchlists')?.[0]
 const routes = [...new Set((await pageRoutes(appDir))
     .filter(route => !nonSearchableRoutes.has(route))
-    .map(route => route === profilePagePath ? '/ti/profiles' : route))].sort((a, b) => a.localeCompare(b))
+    .map(route => route === profilePagePath ? '/ti/profiles' : route === watchlistsPagePath ? '/watchlists' : route))].sort((a, b) => a.localeCompare(b))
 const items = routes.map(href => `{
         id: ${quote(`route:${href}`)},
         title: ${quote(labelFor(href))},

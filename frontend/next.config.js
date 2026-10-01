@@ -47,6 +47,7 @@ const nextConfig = {
     },
     async redirects() {
         return [
+            { source: '/findings/watchlists', destination: '/watchlists', permanent: true },
             { source: '/ti/enrichment', destination: '/ti/profiles', permanent: true },
             { source: '/ti/domains/:path*', destination: '/ti/sources', permanent: true },
             { source: '/dashboard/ti/domains/:path*', destination: '/ti/sources', permanent: true },

@@ -12,8 +12,8 @@ export default function DwmOverviewPanel({ organizationId, state }: { organizati
     const hasWatchlist = snapshot.watchlist.length > 0
     if (!hasWatchlist) {
         const watchlistHref = organizationId
-            ? `/findings/watchlists?organizationId=${encodeURIComponent(organizationId)}`
-            : '/findings/watchlists'
+            ? `/watchlists?organizationId=${encodeURIComponent(organizationId)}`
+            : '/watchlists'
         return <section className='grid min-h-[26rem] place-items-center rounded-lg border border-ui-border bg-ui-panel p-6 text-center shadow-sm' aria-label={scopeLabel}>
             <div className='grid max-w-md justify-items-center gap-4'>
                 <span className='grid h-14 w-14 place-items-center rounded-2xl border border-ui-primary/30 bg-ui-primary/10 text-ui-primary ui-glow-primary-soft'>

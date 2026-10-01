@@ -719,13 +719,6 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                         <h3 className='text-sm font-semibold text-ui-text'>Commands</h3>
                         <p className='mt-0.5 text-xs leading-5 text-ui-subtle'>Manage your watchlist, collect updates and send events.</p>
                     </div>
-                    <div className='flex flex-wrap gap-2'>
-                        {organizationId ? (
-                            <Link href={`/organizations?organizationId=${encodeURIComponent(organizationId)}&focus=watchlists`} className='inline-flex min-h-8 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
-                                Org watchlists
-                            </Link>
-                        ) : null}
-                    </div>
                 </div>
                 <div className='mt-3 grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-3'>
                     {routeQueue.map(action => <RouteQueueCard key={action.id} action={action} />)}

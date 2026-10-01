@@ -1047,7 +1047,7 @@ export function geographyContextPayloadFor(point: ReturnType<typeof actorGeoProf
             reportDate: row.reportDate,
             confidence: row.confidence,
         })) ?? [],
-        route: handoff?.watchlistTerm ? '/findings/watchlists' : '/ti/profiles',
+        route: handoff?.watchlistTerm ? '/watchlists' : '/ti/profiles',
         blockedBy: handoff ? [] : [{
             ownerLane: 'source',
             reason: 'Country row needs source evidence before it can be routed.',
