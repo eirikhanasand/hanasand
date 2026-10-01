@@ -1468,10 +1468,12 @@ export default function OrganizationWorkspaceClient({ initialOrganizations, page
                 {(selectedOrganization || organizations.length > 0 || (!loading && organizations.length === 0)) && <main className='min-w-0'>
                     {selectedOrganization ? (
                         <div className='grid min-w-0 content-start gap-5'>
-                            <WorkspaceSummary organization={selectedOrganization} activeWatchlists={activeWatchlists.length} pausedWatchlists={pausedWatchlists.length} memberCount={activeMembers.length} inviteCount={pendingInvites.length} webhookCount={configuredDestinationCount} />
                             <WorkspaceSectionNav activePage={activePage} />
                             {busy === 'load-org' ? <SkeletonRows count={3} /> : <>
-                                {activePage === 'overview' && <WorkspaceHealthStrip organization={selectedOrganization} bundle={bundle} />}
+                                {activePage === 'overview' && <>
+                                    <WorkspaceSummary organization={selectedOrganization} activeWatchlists={activeWatchlists.length} pausedWatchlists={pausedWatchlists.length} memberCount={activeMembers.length} inviteCount={pendingInvites.length} webhookCount={configuredDestinationCount} />
+                                    <WorkspaceHealthStrip organization={selectedOrganization} bundle={bundle} />
+                                </>}
                                 {activePage === 'settings' && <SettingsPanel settingsDraft={settingsDraft} setSettingsDraft={setSettingsDraft} settingsDirty={settingsDirty} canManage={canManage} busy={busy} rowMessage={rowMessages.settings} onSave={() => void saveSettings()} onReset={() => setSettingsDraft(bundle.settings || {})} />}
                                 {activePage === 'team' && canManage && <InvitePanel emails={inviteEmails} setEmails={setInviteEmails} role={inviteRole} setRole={setInviteRole} invites={bundle.invites} members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} onInvite={() => void sendInvite()} onInviteAction={(invite, action) => void inviteAction(invite, action)} onCopyInvite={invite => void copyInvite(invite)} />}
                                 {activePage === 'team' && <MemberPanel members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} onRoleChange={(member, role) => void changeMemberRole(member, role)} onRemove={member => void removeMember(member)} />}
