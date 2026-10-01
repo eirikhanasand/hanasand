@@ -18,6 +18,25 @@ is_preserved_service() {
     esac
 }
 
+verify_image_revision() {
+    container=$1
+    image=$2
+    image_release=$3
+    expected_release=$4
+    if ! docker image inspect "$image" >/dev/null 2>&1; then
+        if test "${HANASAND_VERIFY_LIVE_RELEASE_ONLY:-0}" = 1; then
+            echo "$container has no retained image metadata; checking its live release marker and health instead." >&2
+            return 0
+        fi
+        echo "$container image is not available to verify (expected revision $expected_release)." >&2
+        return 1
+    fi
+    test "$image_release" = "$expected_release" || {
+        echo "$container image has revision $image_release, expected $expected_release" >&2
+        return 1
+    }
+}
+
 for service in $preserved_services; do
     case "$service" in
         onion-tor|ai-parser-bridge|ti-scraper) ;;
@@ -68,10 +87,7 @@ for container in $containers; do
         echo "$container has release $env_release, expected $expected_container_release" >&2
         exit 1
     }
-    test "$image_release" = "$expected_container_release" || {
-        echo "$container image has revision $image_release, expected $expected_container_release" >&2
-        exit 1
-    }
+    verify_image_revision "$container" "$image" "$image_release" "$expected_container_release"
 done
 
 # The log processor is a durable worker. It may stay on an older application
@@ -99,10 +115,7 @@ fi
 processor_image=$(docker inspect -f '{{.Image}}' hanasand_log_processor)
 processor_image_release=$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' \
     "$processor_image" 2>/dev/null || true)
-test "$processor_image_release" = "$processor_release" || {
-    echo "The durable log processor image does not match its release marker." >&2
-    exit 1
-}
+verify_image_revision "The durable log processor" "$processor_image" "$processor_image_release" "$processor_release"
 processor_running_hash=$(docker inspect -f '{{index .Config.Labels "com.docker.compose.config-hash"}}' \
     hanasand_log_processor 2>/dev/null || true)
 root=$(git rev-parse --show-toplevel)
@@ -129,11 +142,11 @@ if test -n "$expected_pgbouncer_release"; then
     pgbouncer_image=$(docker inspect -f '{{.Image}}' hanasand_pgbouncer)
     pgbouncer_image_release=$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' \
         "$pgbouncer_image" 2>/dev/null || true)
-    test "$pgbouncer_env_release" = "$expected_pgbouncer_release" \
-        && test "$pgbouncer_image_release" = "$expected_pgbouncer_release" || {
+    test "$pgbouncer_env_release" = "$expected_pgbouncer_release" || {
         echo "PgBouncer does not match its requested release $expected_pgbouncer_release." >&2
         exit 1
     }
+    verify_image_revision "PgBouncer" "$pgbouncer_image" "$pgbouncer_image_release" "$expected_pgbouncer_release"
 fi
 
 test "$(docker inspect -f '{{.State.Health.Status}}' hanasand_log_processor)" = healthy || {
@@ -181,7 +194,10 @@ while test "$elapsed" -lt 240; do
         worker_release=$(docker inspect -f '{{index .Config.Labels "com.hanasand.release"}}' "$container")
         image=$(docker inspect -f '{{.Image}}' "$container")
         image_release=$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image" 2>/dev/null || true)
-        if test "$running" != true || test "$health" != healthy || test "$worker_release" != "$release" || test "$image_release" != "$release"; then
+        if test "$running" != true || test "$health" != healthy || test "$worker_release" != "$release"; then
+            browser_pool_current=0
+        fi
+        if ! verify_image_revision "$container" "$image" "$image_release" "$release"; then
             browser_pool_current=0
         fi
     done
