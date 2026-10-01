@@ -180,9 +180,9 @@ export HANASAND_TI_API_SOURCE="$ti_release_dir/api"
 
 compose_release() {
     if test -f "$build_dir/.env"; then
-        docker compose --parallel 2 --env-file "$build_dir/.env" -f "$build_dir/docker-compose.yml" "$@"
+        docker compose --parallel 1 --env-file "$build_dir/.env" -f "$build_dir/docker-compose.yml" "$@"
     else
-        docker compose --parallel 2 -f "$build_dir/docker-compose.yml" "$@"
+        docker compose --parallel 1 -f "$build_dir/docker-compose.yml" "$@"
     fi
 }
 
@@ -267,8 +267,25 @@ if test "$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' hanasan
     fi
 fi
 
-# Build from the immutable release archive, not the live checkout. Limit
-# concurrent services so image exports do not starve live auth and API requests.
+wait_for_database_backups() {
+    while :; do
+        active_backups=$(docker exec hanasand_database psql -U hanasand -d hanasand -Atc \
+            "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND application_name = 'pg_dump'")
+        case "$active_backups" in
+            ''|*[!0-9]*)
+                echo "Could not read active database backup count: $active_backups" >&2
+                return 1
+                ;;
+        esac
+        test "$active_backups" -gt 0 || return 0
+        echo "Waiting for $active_backups active database backup(s) before deployment work."
+        sleep 30
+    done
+}
+
+# Builds run beside the live stack. Wait until the large database export has
+# finished, and build one image at a time to keep CPU and disk available to users.
+wait_for_database_backups
 compose_release build
 compose_live() {
     if test -f "$build_dir/.env"; then
@@ -303,22 +320,6 @@ warm_dashboard_pages() {
             return 1
         fi
         printf '%s first byte %.1f ms\n' "$page_path" "$(awk -v elapsed="$elapsed" 'BEGIN { print elapsed * 1000 }')"
-    done
-}
-
-wait_for_database_backups() {
-    while :; do
-        active_backups=$(docker exec hanasand_database psql -U hanasand -d hanasand -Atc \
-            "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND application_name = 'pg_dump'")
-        case "$active_backups" in
-            ''|*[!0-9]*)
-                echo "Could not read active database backup count: $active_backups" >&2
-                return 1
-                ;;
-        esac
-        test "$active_backups" -gt 0 || return 0
-        echo "Waiting for $active_backups active database backup(s) before release schema checks."
-        sleep 30
     done
 }
 
