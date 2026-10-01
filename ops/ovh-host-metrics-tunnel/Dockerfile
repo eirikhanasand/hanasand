@@ -1,0 +1,10 @@
+FROM alpine:3.22
+
+ARG HANASAND_RELEASE_COMMIT=unknown
+LABEL org.opencontainers.image.revision=$HANASAND_RELEASE_COMMIT
+
+RUN apk add --no-cache openssh-client procps
+COPY entrypoint.sh /usr/local/bin/hanasand-ovh-host-metrics-tunnel
+RUN chmod 0755 /usr/local/bin/hanasand-ovh-host-metrics-tunnel
+
+ENTRYPOINT ["/usr/local/bin/hanasand-ovh-host-metrics-tunnel"]

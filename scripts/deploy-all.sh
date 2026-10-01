@@ -350,6 +350,14 @@ compose_live() {
         docker compose --project-name hanasand --parallel 2 -f "$build_dir/docker-compose.yml" "$@"
     fi
 }
+# Replace the retired shared tunnel before binding the dedicated telemetry
+# tunnel to its loopback port.
+if docker inspect hanasand-tunnel >/dev/null 2>&1; then
+    docker rm -f hanasand-tunnel
+fi
+compose_release up -d --no-build --no-deps ovh-host-metrics-tunnel
+wait_for_healthy hanasand_ovh_host_metrics_tunnel "OVH host metrics tunnel" 180
+
 log_processor_can_be_reused() {
     log_processor_release=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' hanasand_log_processor 2>/dev/null \
         | sed -n 's/^HANASAND_RELEASE_COMMIT=//p' | head -1)

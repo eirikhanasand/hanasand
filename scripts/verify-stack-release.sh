@@ -47,7 +47,7 @@ for service in $preserved_services; do
     esac
 done
 
-containers='hanasand hanasand_api hanasand_auth_primary hanasand_auth_secondary hanasand_database_backup hanasand_onion_tor hanasand_ai_parser_bridge hanasand_ai_model_client hanasand_ti_scraper hanasand_browsers'
+containers='hanasand hanasand_api hanasand_auth_primary hanasand_auth_secondary hanasand_database_backup hanasand_onion_tor hanasand_ai_parser_bridge hanasand_ai_model_client hanasand_ti_scraper hanasand_browsers hanasand_ovh_host_metrics_tunnel'
 for container in $containers; do
     test "$(docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null || true)" = true || {
         echo "Required Hanasand container is not running: $container" >&2
@@ -89,6 +89,21 @@ for container in $containers; do
     }
     verify_image_revision "$container" "$image" "$image_release" "$expected_container_release"
 done
+
+systemctl is-active --quiet hanasand-ovh-host-metrics.timer || {
+    echo "The OVH host metrics refresh timer is not active." >&2
+    exit 1
+}
+if ! curl --fail --silent --show-error --max-time 10 http://127.0.0.1:19911/status \
+    | grep -Eq '"site"[[:space:]]*:[[:space:]]*"ovhcloud"'; then
+    echo "The OVH host metrics tunnel does not return OVH status." >&2
+    exit 1
+fi
+metrics_age=$(($(date +%s) - $(stat -c %Y /var/lib/hanasand/metrics/ovhcloud.json)))
+if test "$metrics_age" -lt 0 || test "$metrics_age" -gt 90; then
+    echo "OVH host telemetry is not fresh (age: ${metrics_age}s)." >&2
+    exit 1
+fi
 
 # The log processor is a durable worker. It may stay on an older application
 # release when its source, dependencies, schema, image, and service config have
