@@ -47,8 +47,8 @@ sed "s#__HOME__#$HOME#g" "$SOURCE_PLIST" > "$TARGET_PLIST"
 chmod 644 "$TARGET_PLIST"
 
 launchctl bootout "$GUI_DOMAIN/$LABEL" >/dev/null 2>&1 || true
-launchctl bootstrap "$GUI_DOMAIN" "$TARGET_PLIST"
 launchctl enable "$GUI_DOMAIN/$LABEL"
+launchctl bootstrap "$GUI_DOMAIN" "$TARGET_PLIST"
 launchctl kickstart -k "$GUI_DOMAIN/$LABEL"
 
 echo "Installed and started $LABEL"
