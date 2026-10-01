@@ -17,8 +17,9 @@ let running = false
 // Keep a slow login's correlation work from holding the global lock for a batch.
 const AUTH_CORRELATION_PAGE_SIZE = 1
 const AUTH_CORRELATION_RECHECK_LIMIT = 25
-const DEDICATED_LOG_BATCH_LIMIT = 25
+const DEDICATED_LOG_BATCH_LIMIT = 50
 const DEDICATED_LOG_PAGE_CONCURRENCY = 36
+const DEDICATED_LOG_FRESH_LIMIT = 75
 const DEFAULT_LOG_PAGE_CONCURRENCY = 3
 const DEDICATED_LOG_WORK_LIMIT = DEDICATED_LOG_BATCH_LIMIT * DEDICATED_LOG_PAGE_CONCURRENCY
 // Stateless results commit atomically with their findings; authentication keeps
@@ -278,7 +279,7 @@ export async function processLiveLogs() {
 }
 
 async function freshLogs(): Promise<LogInput[]> {
-    const limit = process.env.LOG_PROCESSOR_ONLY === '1' ? DEDICATED_LOG_BATCH_LIMIT : 200
+    const limit = process.env.LOG_PROCESSOR_ONLY === '1' ? DEDICATED_LOG_FRESH_LIMIT : 200
     return (await run(`SELECT s.* FROM service_logs s
         WHERE s.created_at >= statement_timestamp() - INTERVAL '10 seconds'
           AND NOT EXISTS (SELECT 1 FROM events e WHERE e.log_key = 'service:' || s.id::text
@@ -341,7 +342,7 @@ export async function processStoredLogs() {
             const { rows: [queue] } = await run(`SELECT COALESCE((SELECT queued_at < clock_timestamp() - INTERVAL '60 seconds'
                 FROM log_process_queue ORDER BY queued_at, log_id LIMIT 1), FALSE) AS delayed`)
             // Command checks must not inherit the historical replication throttle.
-            await processQueuedLogs(processScopes, queue.delayed, queueLimit, dedicatedWorker ? 1 : 4)
+            await processQueuedLogs(processScopes, queue.delayed, queueLimit, 4)
             await processFresh()
             await recoverProcessLogs(processScopes, configuredLimit)
             await processFresh()

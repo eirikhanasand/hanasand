@@ -19,4 +19,12 @@ describe('log processor health', () => {
         expect(isLogProcessorHealthy({ ...base, shuttingDown: true }, 100_001)).toBe(false)
         expect(isLogProcessorHealthy({ ...base, consecutiveFailures: 10 }, 100_001)).toBe(false)
     })
+
+    test('requires both the live and stored paths to remain healthy', () => {
+        const base = { shuttingDown: false, lastSuccessfulTickAt: 100_000, processingStartedAt: 100_000,
+            consecutiveFailures: 0, lastLiveTickAt: 100_000, liveProcessingStartedAt: null, liveConsecutiveFailures: 0 }
+        expect(isLogProcessorHealthy(base, 100_001)).toBe(true)
+        expect(isLogProcessorHealthy({ ...base, liveConsecutiveFailures: 10 }, 100_001)).toBe(false)
+        expect(isLogProcessorHealthy({ ...base, lastLiveTickAt: null, liveProcessingStartedAt: null }, 220_001)).toBe(false)
+    })
 })

@@ -1,5 +1,5 @@
 import { createServer } from 'node:http'
-import { closeDatabase, withEventDatabase } from '#db'
+import { closeDatabase, withEventDatabase, withPriorityEventDatabase } from '#db'
 import { processLiveLogs, processStoredLogs } from '#utils/events/processLogs.ts'
 import { startLogProcessor } from '#utils/events/processor.ts'
 import { readLogCatchupSettings } from '#utils/events/catchupLimit.ts'
@@ -12,8 +12,12 @@ const restartAfterFailures = 10
 let lastSuccessfulTickAt: number | null = null
 let processingStartedAt: number | null = null
 let consecutiveFailures = 0
+let lastLiveTickAt: number | null = null
+let liveProcessingStartedAt: number | null = null
+let liveConsecutiveFailures = 0
 let shuttingDown = false
-let stopProcessing: () => Promise<void> = async () => {}
+let stopLiveProcessing: () => Promise<void> = async () => {}
+let stopStoredProcessing: () => Promise<void> = async () => {}
 
 const healthServer = createServer((request, response) => {
     if (request.url?.split('?')[0] !== '/health') {
@@ -27,6 +31,9 @@ const healthServer = createServer((request, response) => {
         lastSuccessfulTickAt,
         processingStartedAt,
         consecutiveFailures,
+        lastLiveTickAt,
+        liveProcessingStartedAt,
+        liveConsecutiveFailures,
     }, now)
     response.statusCode = ok ? 200 : 503
     response.setHeader('Content-Type', 'application/json')
@@ -37,20 +44,40 @@ const healthServer = createServer((request, response) => {
         lastSuccessfulTickAt: lastSuccessfulTickAt === null ? null : new Date(lastSuccessfulTickAt).toISOString(),
         processingStartedAt: processingStartedAt === null ? null : new Date(processingStartedAt).toISOString(),
         consecutiveFailures,
+        lastLiveTickAt: lastLiveTickAt === null ? null : new Date(lastLiveTickAt).toISOString(),
+        liveProcessingStartedAt: liveProcessingStartedAt === null ? null : new Date(liveProcessingStartedAt).toISOString(),
+        liveConsecutiveFailures,
     }))
 })
 healthServer.listen(healthPort, '0.0.0.0')
 
-stopProcessing = startLogProcessor(async () => {
+stopLiveProcessing = startLogProcessor(async () => {
+    liveProcessingStartedAt = Date.now()
+    try {
+        const didLiveWork = await withPriorityEventDatabase(processLiveLogs)
+        lastLiveTickAt = Date.now()
+        liveConsecutiveFailures = 0
+        return didLiveWork
+    } catch (error) {
+        liveConsecutiveFailures++
+        console.error('Priority log processor pass failed.', error)
+        if (liveConsecutiveFailures >= restartAfterFailures) {
+            console.error(`Priority log processor reached ${restartAfterFailures} consecutive failures; restarting.`)
+            setTimeout(() => process.exit(1), 0)
+        }
+        throw error
+    } finally {
+        liveProcessingStartedAt = null
+    }
+}, () => {}, () => Math.min(250, settings.intervalMs), () => performance.now(), 250)
+
+stopStoredProcessing = startLogProcessor(async () => {
     processingStartedAt = Date.now()
     try {
-        // Keep all service-log work on this dedicated process. Run the fresh
-        // lane first, then let catch-up service durable history and its FIFO.
-        const didLiveWork = await withEventDatabase(processLiveLogs)
         const didStoredWork = await withEventDatabase(processStoredLogs)
         lastSuccessfulTickAt = Date.now()
         consecutiveFailures = 0
-        return didLiveWork || didStoredWork
+        return didStoredWork
     } catch (error) {
         consecutiveFailures++
         console.error('Durable log processor pass failed.', error)
@@ -62,12 +89,12 @@ stopProcessing = startLogProcessor(async () => {
     } finally {
         processingStartedAt = null
     }
-}, () => {}, () => settings.intervalMs)
+}, () => {}, () => readLogCatchupSettings().intervalMs)
 
 async function shutdown() {
     if (shuttingDown) return
     shuttingDown = true
-    await stopProcessing()
+    await Promise.all([stopLiveProcessing(), stopStoredProcessing()])
     await new Promise<void>(resolve => healthServer.close(() => resolve()))
     await closeDatabase()
 }

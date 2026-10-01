@@ -136,10 +136,10 @@ test('delayed command work keeps its longer budget while catch-up uses the confi
     expect(queueRuns).toBe(2); expect(recoveryRuns).toBe(2)
 })
 
-test('dedicated worker keeps transaction pages small while feeding thirty-six pages per lane', async () => {
+test('dedicated worker keeps transaction pages bounded and lets queue recovery use four pages', async () => {
     process.env.LOG_PROCESSOR_ONLY = '1'
-    process.env.LOG_CATCHUP_BATCH_LIMIT = '1000'
-    process.env.LOG_CATCHUP_HISTORY_LIMIT = '1000'
+    process.env.LOG_CATCHUP_BATCH_LIMIT = '900'
+    process.env.LOG_CATCHUP_HISTORY_LIMIT = '900'
     fresh = []; priority = []; backlog = [makeLog('1')]
 
     await processStoredLogs()
@@ -148,10 +148,10 @@ test('dedicated worker keeps transaction pages small while feeding thirty-six pa
     expect(reads.every(read => read.params[2] === 900)).toBe(true)
     expect(historyLimits).toEqual([900]); expect(recentLimits).toEqual([900])
     expect(recoveryLimits).toEqual([900]); expect(queueLimits).toEqual([900])
-    expect(queuePageLimits).toEqual([1]); expect(unassignedLimits).toEqual([900]); expect(pendingLimits).toEqual([900])
+    expect(queuePageLimits).toEqual([4]); expect(unassignedLimits).toEqual([900]); expect(pendingLimits).toEqual([900])
 })
 
-test('dedicated catch-up uses its thirty-six reserved event connections', async () => {
+test('dedicated catch-up batches fifty records across bounded concurrent pages', async () => {
     process.env.LOG_PROCESSOR_ONLY = '1'
     process.env.LOG_CATCHUP_BATCH_LIMIT = '900'
     process.env.LOG_CATCHUP_HISTORY_LIMIT = '900'
@@ -167,8 +167,8 @@ test('dedicated catch-up uses its thirty-six reserved event connections', async 
     })
     try {
         await processStoredLogs()
-        expect(maximum).toBe(36)
-        expect(largestPage).toBeLessThanOrEqual(25)
+        expect(maximum).toBe(18)
+        expect(largestPage).toBeLessThanOrEqual(50)
         expect(checked).toHaveLength(900)
         expect(cursor.last_id).toBe('900')
     } finally { hook.mockRestore() }
@@ -535,9 +535,9 @@ test('dedicated worker bounds fresh priority intake and processing pages', async
     process.env.LOG_PROCESSOR_ONLY = '1'
     priority = Array.from({ length: 100 }, (_, i) => ({ ...makeLog(String(2001 + i)), created_at: new Date().toISOString() }))
     expect(await processLiveLogs()).toBe(true)
-    expect(freshLimits).toEqual([25])
-    expect(checked).toHaveLength(25)
-    expect(acknowledged.flat()).toHaveLength(25)
+    expect(freshLimits).toEqual([75])
+    expect(checked).toHaveLength(75)
+    expect(acknowledged.flat()).toHaveLength(75)
 })
 
 test('live authentication logins retain the correlation lock', async () => {
