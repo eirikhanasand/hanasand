@@ -10,7 +10,9 @@ const serviceKeySource = process.env.MAIL_SERVICE_KEY || process.env.VM_API_TOKE
 const serviceKeySources = [
     serviceKeySource,
     process.env.MAIL_SERVICE_KEY_PREVIOUS,
+    process.env.VM_API_TOKEN,
     process.env.VM_API_TOKEN_PREVIOUS,
+    process.env.DB_PASSWORD,
     process.env.DB_PASSWORD_PREVIOUS,
 ].filter((value, index, values): value is string => typeof value === 'string' && values.indexOf(value) === index)
 const systemSenderLocalPart = process.env.MAIL_SYSTEM_SENDER_LOCAL_PART || 'noreply'

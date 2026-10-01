@@ -16,7 +16,9 @@ const previousSources = [
     process.env.AI_REPO_SECRET_KEY_PREVIOUS,
     process.env.MAIL_SERVICE_KEY_PREVIOUS,
     process.env.DWM_WEBHOOK_SECRET_KEY_PREVIOUS,
+    process.env.VM_API_TOKEN,
     process.env.VM_API_TOKEN_PREVIOUS,
+    process.env.DB_PASSWORD,
     process.env.DB_PASSWORD_PREVIOUS,
 ].filter((value): value is string => Boolean(value?.trim()))
 const previousKeys = [...new Set(previousSources)].map(deriveSecretKey)

@@ -390,8 +390,11 @@ const SECRET_KEY_SOURCE = process.env.DWM_WEBHOOK_SECRET_KEY
 const SECRET_KEY_SOURCES = [
     SECRET_KEY_SOURCE,
     process.env.DWM_WEBHOOK_SECRET_KEY_PREVIOUS,
+    process.env.MAIL_SERVICE_KEY,
     process.env.MAIL_SERVICE_KEY_PREVIOUS,
+    process.env.VM_API_TOKEN,
     process.env.VM_API_TOKEN_PREVIOUS,
+    process.env.DB_PASSWORD,
     process.env.DB_PASSWORD_PREVIOUS,
 ].filter((value, index, values): value is string => typeof value === 'string' && values.indexOf(value) === index)
 const SECRET_KEYS = SECRET_KEY_SOURCES.map(deriveSecretKey)
