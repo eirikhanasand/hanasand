@@ -75,8 +75,8 @@ function LoginActivity({ loginDays }: { loginDays: ProfileStats['loginDays'] }) 
                                 const count = activity.get(key) || 0
                                 const level = count === 0 ? 0 : count === 1 ? 1 : count <= 3 ? 2 : count <= 6 ? 3 : 4
                                 const label = count
-                                    ? `${count} sign-in${count === 1 ? '' : 's'} on ${dayLabel.format(date)}`
-                                    : `No sign-ins on ${dayLabel.format(date)}`
+                                    ? `${count} login${count === 1 ? '' : 's'} on ${dayLabel.format(date)}`
+                                    : `No logins on ${dayLabel.format(date)}`
                                 const cellClass = 'h-2.5 w-2.5 rounded-xs ' + levels[level]
                                 return (
                                     <button
