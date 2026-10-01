@@ -102,7 +102,7 @@ async function workerEndpoint() {
 
 async function tokenFromAgents() {
     const agents = await readFile(path.join(homedir(), '.codex/AGENTS.md'), 'utf8').catch(() => '')
-    return agents.match(/token=([a-f0-9]{40,})/)?.[1] || ''
+    return agents.match(/token=([A-Za-z0-9_-]{40,})/)?.[1] || ''
 }
 
 async function log(message) {
