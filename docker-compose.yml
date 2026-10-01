@@ -824,8 +824,6 @@ services:
     build:
       context: .
       dockerfile: ./ops/stalwart/Dockerfile
-    environment:
-      STALWART_RECOVERY_ADMIN: ${STALWART_RECOVERY_ADMIN:-${MAIL_ADMIN_USERNAME:-admin}:${MAIL_ADMIN_PASSWORD:-}}
     command: ["--config", "/opt/stalwart/etc/config.json"]
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/healthz/live"]
