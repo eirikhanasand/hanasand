@@ -111,9 +111,9 @@ export function MonitoringCaseDetail({ caseId, organizationId }: { caseId: strin
     return <article className='min-w-0 overflow-hidden rounded-xl border border-ui-border bg-ui-panel text-ui-text'>
         <div aria-hidden='true' className='h-1.5' style={{ backgroundColor: severityColor[item?.severity ?? ''] ?? 'transparent' }} />
         <header className='grid gap-3 border-b border-ui-border px-5 py-4 sm:px-6'>
-            <div className='flex flex-wrap items-center gap-3'>
-                <div className='flex min-w-0 flex-1 items-center gap-4'>
-                    <h1 className='min-w-0 wrap-break-word text-xl font-semibold leading-10'>{item?.title || caseId}</h1>
+            <div className='grid gap-3 2xl:grid-cols-[minmax(0,1fr)_auto] 2xl:items-center'>
+                <div className='flex min-w-0 items-center gap-4'>
+                    <h1 className='min-w-0 max-w-[20ch] flex-1 wrap-break-word text-xl font-semibold leading-tight'>{item?.title || caseId}</h1>
                     <Link className='inline-flex h-10 shrink-0 items-center whitespace-nowrap text-sm text-ui-primary' href={`/cases${organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''}`}>← Cases</Link>
                 </div>
                 {item && <div className='flex max-w-full flex-wrap items-center gap-2'>
