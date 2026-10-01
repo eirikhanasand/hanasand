@@ -7,21 +7,22 @@ test "$root" = "/home/hanasand/hanasand" || {
     exit 1
 }
 
-# Run each deployment in its own process group so a newer request can stop
-# the complete older deployment, including a docker compose child process.
+# Run each deployment in its own process group and serialize requests. Builds
+# happen beside the live stack, so a newer main commit must wait for the
+# current release to finish rather than canceling and restarting its build.
 if test "${HANASAND_DEPLOY_GUARDED:-}" != 1; then
     exec env HANASAND_DEPLOY_GUARDED=1 setsid "$0" "$@"
 fi
 
 lock_file=/tmp/hanasand-full-deploy.lock
 owner_file=/tmp/hanasand-full-deploy.pid
-exec 8>/tmp/hanasand-full-deploy-start.lock
 exec 9>"$lock_file"
 
-running_deployments() {
-    ps -eo pid=,args= | awk -v self="$$" \
-        '$1 != self && $NF ~ /(^|\/)deploy-all[.]sh$/ { print $1 }'
-}
+if ! flock -n 9; then
+    echo "Another Hanasand deployment is active; waiting for it to finish." >&2
+    flock 9
+fi
+printf '%s\n' "$$" > "$owner_file"
 
 release_has_schema_changes() {
     previous_release=$1
@@ -63,95 +64,9 @@ reuse_schema_marker_for_code_only_release() {
     echo "Reused the applied database schema marker for code-only release $release."
 }
 
-stop_deployment_group() {
-    signal=$1
-    group=$2
-    /bin/kill -"$signal" -- "-$group" 2>/dev/null || true
-}
-
-process_group() {
-    ps -o pgid= -p "$1" 2>/dev/null | tr -d ' '
-}
-
-deployment_group_exists() {
-    ps -eo pid=,pgid=,args= | awk -v group="$1" \
-        '$2 == group && $0 ~ /(deploy-all[.]sh|docker compose|docker-compose|docker-buildx)/ { found=1 } END { exit !found }'
-}
-
-stop_existing_deployments() {
-    previous_groups=
-    previous_owner=$(cat "$owner_file" 2>/dev/null || true)
-    case "$previous_owner" in
-        ''|*[!0-9]*|1|"$$") ;;
-        *)
-            owner_group=$(process_group "$previous_owner")
-            case "$owner_group" in
-                ''|*[!0-9]*) owner_group=$previous_owner ;;
-            esac
-            if deployment_group_exists "$owner_group"; then
-                previous_groups="$previous_groups $owner_group"
-                stop_deployment_group TERM "$owner_group"
-            fi
-            ;;
-    esac
-
-    for pid in $(running_deployments); do
-        if test "$(readlink "/proc/$pid/cwd" 2>/dev/null || true)" = "$root"; then
-            group=$(process_group "$pid")
-            case " $previous_groups " in
-                *" $group "*) ;;
-                *)
-                    previous_groups="$previous_groups $group"
-                    stop_deployment_group TERM "$group"
-                    ;;
-            esac
-        fi
-    done
-
-    # Older deploy shells may have exited while Compose descendants still hold
-    # the release lock. Their immutable archive path identifies those builds.
-    for group in $(ps -eo pgid=,args= | awk \
-        '$0 ~ /hanasand-release-build[.]([^ /]+)\// && $0 ~ /(docker compose|docker-compose|docker-buildx)/ { print $1 }' | sort -u); do
-        case " $previous_groups " in
-            *" $group "*) ;;
-            *)
-                previous_groups="$previous_groups $group"
-                stop_deployment_group TERM "$group"
-                ;;
-        esac
-    done
-
-    attempt=0
-    while test "$attempt" -lt 15; do
-        if flock -n 9; then
-            return
-        fi
-        sleep 1
-        attempt=$((attempt + 1))
-    done
-
-    for group in $previous_groups; do
-        stop_deployment_group KILL "$group"
-    done
-    flock 9
-}
-
-if ! flock -n 8; then
-    stop_existing_deployments
-    flock 8
-fi
-
-if flock -n 9; then
-    :
-else
-    stop_existing_deployments
-fi
-
-owner_group=$(process_group "$$")
-test -n "$owner_group" || owner_group=$$
-printf '%s\n' "$owner_group" > "$owner_file"
-flock -u 8
-
+sh "$root/scripts/require-main.sh"
+git fetch origin main
+git merge --ff-only FETCH_HEAD
 sh "$root/scripts/require-main.sh"
 release=$(git rev-parse HEAD)
 sh "$root/scripts/require-compose-healthchecks.sh"
@@ -338,19 +253,31 @@ if test "$pgbouncer_config_changed" = 0; then
     echo "Keeping healthy PgBouncer from $pgbouncer_release in place for this code-only release."
 fi
 
+if test "$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' hanasand 2>/dev/null \
+    | sed -n 's/^HANASAND_RELEASE_COMMIT=//p' | head -1)" = "$release" \
+    && test "$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' hanasand_api 2>/dev/null \
+    | sed -n 's/^HANASAND_RELEASE_COMMIT=//p' | head -1)" = "$release"; then
+    expected_pgbouncer_release=
+    if test "$pgbouncer_config_changed" = 1; then expected_pgbouncer_release=$release; fi
+    if sh "$root/scripts/verify-stack-release.sh" "$release" "$expected_pgbouncer_release"; then
+        echo "Release $release is already deployed and verified; skipping this queued duplicate."
+        exit 0
+    fi
+fi
+
 # Build from the immutable release archive, not the live checkout. Limit
 # concurrent services so image exports do not starve live auth and API requests.
 compose_release build
 compose_live() {
     if test -f "$build_dir/.env"; then
-        docker compose --parallel 2 --env-file "$build_dir/.env" -f "$root/docker-compose.yml" "$@"
+        docker compose --parallel 2 --env-file "$build_dir/.env" -f "$build_dir/docker-compose.yml" "$@"
     else
-        docker compose --parallel 2 -f "$root/docker-compose.yml" "$@"
+        docker compose --parallel 2 -f "$build_dir/docker-compose.yml" "$@"
     fi
 }
 compose_candidates() {
     docker compose --parallel 2 --profile deployment-candidates --env-file "$build_dir/.env" \
-        -f "$root/docker-compose.yml" "$@"
+        -f "$build_dir/docker-compose.yml" "$@"
 }
 
 warm_dashboard_pages() {

@@ -3,8 +3,10 @@ set -eu
 
 release=${1:-$(git rev-parse HEAD)}
 expected_pgbouncer_release=${2:-}
-test "$(git rev-parse HEAD)" = "$release" || {
-    echo "Release must equal the checked-out main commit: $release" >&2
+current_branch=$(git branch --show-current)
+current_release=$(git rev-parse HEAD)
+test "$current_branch" = main && git merge-base --is-ancestor "$release" "$current_release" || {
+    echo "Release must be checked out on main or be an ancestor of its current commit: $release" >&2
     exit 1
 }
 
