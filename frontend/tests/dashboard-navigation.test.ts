@@ -6,12 +6,14 @@ import { canViewHanasandInternalPages, HANASAND_ORGANIZATION_ID } from '../src/u
 import { thesisNavigationFromDocument } from '../src/utils/layout/thesisNavigationData'
 import { writeSheets } from '../src/app/thesis/workspace'
 
-test('organization navigation pages remain reachable exactly once after regrouping', () => {
+test('organization pages and standalone watchlists remain reachable after regrouping', () => {
     const links = navigationLinks(getDashboardNavigation({ id: 'member' }))
     for (const page of organizationNavigationPages) {
-        const matches = links.filter(link => link.href === page.href)
-        assert.equal(matches.length, 1)
-        assert.equal(matches[0].ancestors[0], 'Organization')
+        const standalone = page.id === 'watchlists'
+        const href = standalone ? '/watchlists' : page.href
+        const matches = links.filter(link => link.href === href)
+        assert.equal(matches.length, 1, `${page.id} appears once in the dashboard navigation`)
+        assert.equal(matches[0].ancestors[0], standalone ? 'Security & intelligence' : 'Organization')
     }
 })
 
