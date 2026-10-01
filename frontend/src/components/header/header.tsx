@@ -173,9 +173,10 @@ export default function Header({ token, id, username, path: serverPath }: { toke
                         <summary aria-label='Account options' className='grid h-10 w-10 cursor-pointer list-none place-items-center rounded-lg border border-ui-border text-ui-muted hover:bg-ui-raised hover:text-ui-text [&::-webkit-details-marker]:hidden'>
                             <UserRound className='h-5 w-5' />
                         </summary>
-                        <div className='fixed inset-x-3 top-18 z-30 grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-3 text-sm text-ui-text shadow-xl sm:absolute sm:left-auto sm:right-0 sm:top-13 sm:w-60'>
+                        <div className='fixed inset-x-3 top-14 z-30 grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-3 text-sm text-ui-text shadow-xl sm:absolute sm:left-auto sm:right-0 sm:top-10 sm:w-60'>
                             {token ? <>
-                                <div className='rounded-lg p-2'>@{username || id}</div>
+                                <div className='rounded-lg p-2 font-mono text-xs text-ui-muted/70'>@{username || id}</div>
+                                <div role='separator' className='border-t border-ui-border' />
                                 <Link href={profileHref} className='rounded-lg p-2 hover:bg-ui-raised'>Profile</Link>
                                 {id && <Link href={`/profile/${encodeURIComponent(id)}/security`} className='rounded-lg p-2 hover:bg-ui-raised'>Security</Link>}
                                 {id && <Link href={`/profile/${encodeURIComponent(id)}/sessions`} className='rounded-lg p-2 hover:bg-ui-raised'>Sessions</Link>}
