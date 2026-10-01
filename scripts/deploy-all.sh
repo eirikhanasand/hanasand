@@ -130,6 +130,8 @@ if test -f "$build_dir/.env"; then
         printf 'BROWSER_SANDBOX_WORKER_IMAGE=%s\n' "$BROWSER_SANDBOX_WORKER_IMAGE" >> "$build_dir/.env"
     fi
     if docker image inspect hanasand_browser_base:latest >/dev/null 2>&1; then
+        export HANASAND_BROWSER_RUNTIME_BASE=hanasand_browser_base:latest
+        export HANASAND_BROWSER_RUNTIME_PATCHED=1
         if grep -q '^HANASAND_BROWSER_RUNTIME_BASE=' "$build_dir/.env"; then
             sed -i 's#^HANASAND_BROWSER_RUNTIME_BASE=.*#HANASAND_BROWSER_RUNTIME_BASE=hanasand_browser_base:latest#' "$build_dir/.env"
         else
