@@ -1,5 +1,5 @@
 'use client'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { requestJson, type Rule } from './detection-rules'
 import RulePreview from './rule-preview'
 
@@ -10,10 +10,11 @@ const active = (job?: Job) => job && ['queued', 'running'].includes(job.status)
 const number = (value: string) => Number(value).toLocaleString()
 const removed = (value: string, noun: string) => `${number(value)} ${noun}${Number(value) === 1 ? '' : 's'} removed`
 
-export default function ReprocessRule({ rule, organizationId, disabled }: { rule: Rule, organizationId: string, disabled: boolean }) {
+export default function ReprocessRule({ rule, organizationId, disabled, defaultRange = '24', onComplete }: { rule: Rule, organizationId: string, disabled: boolean, defaultRange?: string, onComplete?: () => void }) {
     const [jobs, setJobs] = useState<Job[]>([]), [existing, setExisting] = useState<Existing | null>(null), [loaded, setLoaded] = useState(false), [error, setError] = useState(''), [busy, setBusy] = useState(false)
-    const [open, setOpen] = useState(false), [range, setRange] = useState('24'), [confirmed, setConfirmed] = useState(false)
+    const [open, setOpen] = useState(false), [range, setRange] = useState(defaultRange), [confirmed, setConfirmed] = useState(false)
     const [previewReady, setPreviewReady] = useState(false), [refresh, setRefresh] = useState(0)
+    const completedJob = useRef('')
     const ready = useCallback((value: boolean) => setPreviewReady(value), [])
     const endpoint = `/api/backend/rules/${encodeURIComponent(rule.id.replace(/\.v\d+$/, ''))}/reprocess?organizationId=${encodeURIComponent(organizationId)}`
     const job = jobs[0]
@@ -28,12 +29,17 @@ export default function ReprocessRule({ rule, organizationId, disabled }: { rule
                 setJobs(result.jobs)
                 setExisting(result.existing)
                 setLoaded(true)
+                const completed = result.jobs.find(item => item.status === 'completed')
+                if (completed && completedJob.current !== completed.id) {
+                    completedJob.current = completed.id
+                    onComplete?.()
+                }
                 if (result.jobs.some(active)) timer = setTimeout(load, 10_000)
             } catch (cause) { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Could not load progress.') }
         }
         void load()
         return () => { controller.abort(); clearTimeout(timer) }
-    }, [endpoint, refresh])
+    }, [endpoint, onComplete, refresh])
     useEffect(() => { setOpen(false); setConfirmed(false); setPreviewReady(false) }, [rule.version])
     async function start() {
         if (!confirmed || !previewReady || disabled || busy) return

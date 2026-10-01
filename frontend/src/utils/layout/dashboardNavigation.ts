@@ -76,6 +76,7 @@ export function getDashboardNavigation(access: NavigationAccess): NavigationItem
                 link('Match Rules', '/rules/match'),
                 link('Analysis Rules', '/rules/analysis'),
                 link('Detection Rules', '/rules/detection'),
+                link('Tuning', '/rules/tuning', canManageSystem),
             ]),
         ]),
         group('Infrastructure', [

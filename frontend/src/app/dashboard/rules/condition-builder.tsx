@@ -1,7 +1,7 @@
 'use client'
 import { useId, useState } from 'react'
 
-export type Condition = { path: string, operator: string, value: string }
+export type Condition = { path: string, operator: string, value: string, caseSensitive?: boolean }
 export const ruleInput = 'w-full min-w-0 rounded-md border border-ui-border bg-ui-canvas px-3 py-2 font-mono text-sm text-ui-text outline-none focus:border-ui-primary disabled:opacity-60'
 export const fieldValues: Record<string, string[]> = {
     event_type: ['application', 'authentication', 'database', 'network', 'process', 'vulnerability'],

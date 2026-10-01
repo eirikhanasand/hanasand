@@ -87,6 +87,7 @@ import getExecutionTargets from './handlers/tools/getExecutionTargets.ts'
 import aiTool from './handlers/tools/ai.ts'
 import { cancelVerificationJob, getVerificationJob, getVerificationJobs, postVerificationJob } from './handlers/tools/verificationJobs.ts'
 import { getLogs, getLogServices, getRealtimeLogs } from './handlers/logs/get.ts'
+import { getLogTuning } from './handlers/logs/tuning.ts'
 import { getMostActiveServices } from './handlers/logs/mostActive.ts'
 import { getErrorEvents } from './handlers/logs/errors.ts'
 import ingestLog from './handlers/logs/ingest.ts'
@@ -609,6 +610,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
 
     // Logs
     fastify.get('/logs', getLogs)
+    fastify.get('/logs/tuning', getLogTuning)
     fastify.get('/logs/errors', getErrorEvents)
     fastify.get('/logs/services', getLogServices)
     fastify.get('/logs/services/summary', getMostActiveServices)

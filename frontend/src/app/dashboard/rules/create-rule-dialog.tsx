@@ -5,12 +5,14 @@ import { ruleCategories, type RuleCategory } from './rule-categories'
 import RulePreview from './rule-preview'
 import ConditionBuilder, { conditionError, fieldValues, ruleInput, type Condition } from './condition-builder'
 
-export default function CreateRuleDialog({ category, organizationId, canManage, canManageRetention, rules, onClose, onCreated }: { category: RuleCategory, organizationId: string, canManage: boolean, canManageRetention: boolean, rules: Rule[], onClose: () => void, onCreated: (rule: Rule) => void }) {
+type RulePreset = { name: string, explanation: string, stage: string, action: string, conditions: Condition[] }
+
+export default function CreateRuleDialog({ category, organizationId, canManage, canManageRetention, rules, onClose, onCreated, initialPreset }: { category: RuleCategory, organizationId: string, canManage: boolean, canManageRetention: boolean, rules: Rule[], onClose: () => void, onCreated: (rule: Rule) => void, initialPreset?: RulePreset }) {
     const dialog = useRef<HTMLDialogElement>(null)
     const active = useRef(true)
-    const [name, setName] = useState(''), [explanation, setExplanation] = useState(''), [severity, setSeverity] = useState('medium')
-    const [stage, setStage] = useState(category === 'analysis' ? 'analyze' : category === 'detection' ? 'detect' : 'match')
-    const [action, setAction] = useState('keep'), [conditions, setConditions] = useState<Condition[]>([{ path: 'event_type', operator: 'equals', value: '' }])
+    const [name, setName] = useState(initialPreset?.name || ''), [explanation, setExplanation] = useState(initialPreset?.explanation || ''), [severity, setSeverity] = useState('medium')
+    const [stage, setStage] = useState(initialPreset?.stage || (category === 'analysis' ? 'analyze' : category === 'detection' ? 'detect' : 'match'))
+    const [action, setAction] = useState(initialPreset?.action || 'keep'), [conditions, setConditions] = useState<Condition[]>(initialPreset?.conditions || [{ path: 'event_type', operator: 'equals', value: '' }])
     const [busy, setBusy] = useState(false), [error, setError] = useState(''), [options, setOptions] = useState(fieldValues)
     const [editingJson, setEditingJson] = useState(false)
     const [range, setRange] = useState('24')
