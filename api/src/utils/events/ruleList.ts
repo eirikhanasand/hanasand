@@ -12,6 +12,7 @@ import { readinessAuditRuleId } from './analyzeReadinessAudit.ts'
 import { collectorRuleId } from './analyzeCollector.ts'
 import { telemetryRuleId, sshWindowRuleId } from './analyzeRoutineGroups.ts'
 import { cdnRefreshRuleId } from './analyzeCdnRefresh.ts'
+import { ingestAccessRuleId } from './analyzeIngestAccess.ts'
 
 type Rule = { id: string, recordId?: string, name: string, explanation: string, family: string, severity: string, source?: string, enabled?: boolean, definition?: { stage?: string, action?: string } }
 export const internalRetentionRuleIds = new Set(['security.event_evidence.v1'])
@@ -30,7 +31,7 @@ export function listRule(rule: Rule) {
         family: rule.family, severity: rule.severity, source: rule.source, enabled: rule.enabled,
         definition: { stage: rule.definition?.stage, action: rule.definition?.action } }
 }
-const receiptRules = new Set([ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, sshTransportRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, modelHealthRuleId])
+const receiptRules = new Set([ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, sshTransportRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, modelHealthRuleId, ingestAccessRuleId])
 const aggregateTables = new Map([
     [accessRuleId, ['log_access_counts', 'sum(amount)']], [mongoRuleId, ['log_mongo_ping_counts', 'sum(amount)']],
     [postgresRuleId, ['log_postgres_session_state', 'sum(dropped_records)']], [proxyRuleId, ['log_proxy_counts', 'sum(amount)']],
