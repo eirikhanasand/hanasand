@@ -6,7 +6,7 @@ import ensureIngestionAnalyzeSchema from './ingestionAnalyzeSchema.ts'
 import { ensureModelProbeSchema } from './modelProbeSchema.ts'
 import { ensureReadinessAuditSchema } from './readinessAuditSchema.ts'
 import { cdnRefreshRule, cdnRefreshDefinition } from '../events/analyzeCdnRefresh.ts'
-import { modelDiscoveryRule, modelDiscoveryRuleId, modelDiscoveryDefinition } from '../events/analyzeModelDiscovery.ts'
+import { modelDiscoveryRule, modelDiscoveryRuleId, modelDiscoveryDefinition, modelHealthRule, modelHealthRuleId, modelHealthDefinition } from '../events/analyzeModelDiscovery.ts'
 import { readinessAuditRule, readinessAuditRuleId, readinessAuditDefinition } from '../events/analyzeReadinessAudit.ts'
 import { telemetryRule, sshWindowRule, telemetryDefinition, sshWindowDefinition } from '../events/analyzeRoutineGroups.ts'
 import { collectorRule, collectorDefinition } from '../events/analyzeCollector.ts'
@@ -50,7 +50,7 @@ export default async function ensureLogAnalyzeSchema() {
     await ensureEventProtectionRule(run)
     // Seed once for the platform organization only. Restarts must never undo a
     // user's later Keep/Disable choice. The first version is included in history.
-    for (const [rule, definition] of [[ingestionRule, ingestionDefinition], [cdnRefreshRule, cdnRefreshDefinition], [cdnDeliveryRule, cdnDeliveryDefinition], [modelDiscoveryRule, modelDiscoveryDefinition], [readinessAuditRule, readinessAuditDefinition], [telemetryRule, telemetryDefinition], [sshWindowRule, sshWindowDefinition], [sshTransportRule, sshTransportDefinition], [collectorRule, collectorDefinition], [proxyRule, proxyDefinition], [postgresRule, postgresDefinition], [accessRule, accessDefinition], [mongoRule, mongoDefinition], [mongoReconRule, mongoReconDefinition]] as const) {
+    for (const [rule, definition] of [[ingestionRule, ingestionDefinition], [cdnRefreshRule, cdnRefreshDefinition], [cdnDeliveryRule, cdnDeliveryDefinition], [modelDiscoveryRule, modelDiscoveryDefinition], [modelHealthRule, modelHealthDefinition], [readinessAuditRule, readinessAuditDefinition], [telemetryRule, telemetryDefinition], [sshWindowRule, sshWindowDefinition], [sshTransportRule, sshTransportDefinition], [collectorRule, collectorDefinition], [proxyRule, proxyDefinition], [postgresRule, postgresDefinition], [accessRule, accessDefinition], [mongoRule, mongoDefinition], [mongoReconRule, mongoReconDefinition]] as const) {
         await run(`WITH installed AS (
         INSERT INTO rules(id,organization_id,rule_id,version,name,family,severity,explanation,definition,source,enabled)
         SELECT gen_random_uuid()::text,o.id,$2,'1',$3,$6,$7,$4,$5::jsonb,$8,$9
@@ -59,7 +59,7 @@ export default async function ensureLogAnalyzeSchema() {
         INSERT INTO system_events(event_type,source,object_type,object_id,organization_id,context)
         SELECT 'event.rule.created','event','event_rule',rule_id,organization_id,
             jsonb_build_object('ruleId',rule_id,'after',jsonb_build_object('version',version,'name',name,'explanation',explanation,'severity',severity,'enabled',enabled,'definition',definition))
-        FROM installed`, [process.env.PLATFORM_LOG_ORGANIZATION_ID || null, rule.id, rule.name, rule.explanation, JSON.stringify(definition), rule.family, rule.severity, 'source' in rule ? rule.source : 'hanasand', ![modelDiscoveryRuleId, readinessAuditRuleId, sshTransportRuleId, cdnDeliveryRuleId].includes(rule.id)])
+        FROM installed`, [process.env.PLATFORM_LOG_ORGANIZATION_ID || null, rule.id, rule.name, rule.explanation, JSON.stringify(definition), rule.family, rule.severity, 'source' in rule ? rule.source : 'hanasand', ![modelDiscoveryRuleId, modelHealthRuleId, readinessAuditRuleId, sshTransportRuleId, cdnDeliveryRuleId].includes(rule.id)])
         await migrateAnalysisPolicy(rule.id, definition, run)
     }
 }

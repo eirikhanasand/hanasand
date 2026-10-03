@@ -7,7 +7,7 @@ import { accessRuleId } from './analyzeAccess.ts'
 import { mongoRuleId } from './analyzeMongo.ts'
 import { postgresRuleId } from './analyzePostgres.ts'
 import { proxyRuleId } from './analyzeProxy.ts'
-import { modelDiscoveryRuleId } from './analyzeModelDiscovery.ts'
+import { modelDiscoveryRuleId, modelHealthRuleId } from './analyzeModelDiscovery.ts'
 import { readinessAuditRuleId } from './analyzeReadinessAudit.ts'
 import { collectorRuleId } from './analyzeCollector.ts'
 import { telemetryRuleId, sshWindowRuleId } from './analyzeRoutineGroups.ts'
@@ -15,7 +15,7 @@ import { cdnRefreshRuleId } from './analyzeCdnRefresh.ts'
 
 type Rule = { id: string, recordId?: string, name: string, explanation: string, family: string, severity: string, source?: string, enabled?: boolean, definition?: { stage?: string, action?: string } }
 export const internalRetentionRuleIds = new Set(['security.event_evidence.v1'])
-const analysis = new Set(['mongodb.cashflow_connections', 'http.routine_access'])
+const analysis = new Set(['mongodb.cashflow_connections', 'http.routine_access', 'model.local_health_checks'])
 const match = new Set(['network.signature_alert', 'vulnerability.cve_asset_context'])
 export function ruleCategory(rule: Pick<Rule, 'id' | 'source' | 'definition'>) {
     if (rule.definition?.stage === 'analyze' && rule.definition.action === 'keep') return 'detection'
@@ -30,11 +30,11 @@ export function listRule(rule: Rule) {
         family: rule.family, severity: rule.severity, source: rule.source, enabled: rule.enabled,
         definition: { stage: rule.definition?.stage, action: rule.definition?.action } }
 }
-const receiptRules = new Set([ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, sshTransportRuleId, cdnRefreshRuleId, cdnDeliveryRuleId])
+const receiptRules = new Set([ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, sshTransportRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, modelHealthRuleId])
 const aggregateTables = new Map([
     [accessRuleId, ['log_access_counts', 'sum(amount)']], [mongoRuleId, ['log_mongo_ping_counts', 'sum(amount)']],
     [postgresRuleId, ['log_postgres_session_state', 'sum(dropped_records)']], [proxyRuleId, ['log_proxy_counts', 'sum(amount)']],
-    [modelDiscoveryRuleId, ['log_model_probe_receipts', 'count(*)']], [readinessAuditRuleId, ['log_readiness_audit_receipts', 'count(*)']],
+    [modelDiscoveryRuleId, ['log_model_probe_receipts', 'count(*)']], [modelHealthRuleId, ['log_analyze_receipts', 'count(*)']], [readinessAuditRuleId, ['log_readiness_audit_receipts', 'count(*)']],
 ])
 type HitSample = { at: number, counts: Map<string, number>, ruleIds: Set<string> }
 const hitSamples = new Map<string, HitSample[]>()

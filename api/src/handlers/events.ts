@@ -5,7 +5,7 @@ import { eventProtectionRule, eventProtectionRuleId, eventProtectionDefinition, 
 import { ingestionRule, ingestionRuleId, ingestionDefinition } from '#utils/events/analyzeIngestion.ts'
 import { internalRetentionRuleIds, listRule, ruleCategory, loadRuleHits, getPreviousRuleHitCounts } from '#utils/events/ruleList.ts'
 import { cdnRefreshRule, cdnRefreshRuleId, cdnRefreshDefinition } from '#utils/events/analyzeCdnRefresh.ts'
-import { modelDiscoveryRule, modelDiscoveryRuleId, modelDiscoveryDefinition, modelDiscoveryConfigured, modelDiscoveryUnavailableReason } from '#utils/events/analyzeModelDiscovery.ts'
+import { modelDiscoveryRule, modelDiscoveryRuleId, modelDiscoveryDefinition, modelDiscoveryConfigured, modelDiscoveryUnavailableReason, modelHealthRule, modelHealthRuleId, modelHealthDefinition } from '#utils/events/analyzeModelDiscovery.ts'
 import { readinessAuditRule, readinessAuditRuleId, readinessAuditDefinition, readinessAuditConfigured, readinessAuditUnavailable } from '#utils/events/analyzeReadinessAudit.ts'
 import { retainedOriginals } from '#utils/events/retainedOriginals.ts'
 import { normalizeLogEvent } from '#utils/events/logEvent.ts'
@@ -54,6 +54,7 @@ export const BUILTIN_RULES: Rule[] = [
     cdnRefreshRule,
     cdnDeliveryRule,
     modelDiscoveryRule,
+    modelHealthRule,
     readinessAuditRule,
     telemetryRule,
     sshWindowRule,
@@ -81,6 +82,7 @@ export function defaultRuleDefinition(id: string): RuleDefinition {
     if (id === cdnDeliveryRuleId) return structuredClone(cdnDeliveryDefinition)
     if (id === cdnRefreshRuleId) return structuredClone(cdnRefreshDefinition)
     if (id === modelDiscoveryRuleId) return structuredClone(modelDiscoveryDefinition)
+    if (id === modelHealthRuleId) return structuredClone(modelHealthDefinition)
     if (id === readinessAuditRuleId) return structuredClone(readinessAuditDefinition)
     if (id === telemetryRuleId) return structuredClone(telemetryDefinition)
     if (id === sshTransportRuleId) return structuredClone(sshTransportDefinition)
@@ -123,8 +125,8 @@ export function normalizeBuiltinDefinition(id: string, value: unknown): { defini
     }
     if (id === applicationErrorRuleId && input.action !== 'keep') return { error: 'Application errors must use Store.' }
     if (defaults.stage) {
-        const configuredPolicy = [applicationErrorRuleId, modelDiscoveryRuleId, readinessAuditRuleId, proxyRuleId, ingestionRuleId, telemetryRuleId, sshWindowRuleId, sshTransportRuleId, collectorRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, postgresRuleId, accessRuleId, mongoRuleId].includes(id)
-        if (input.stage !== 'analyze' || !['drop', 'keep'].includes(String(input.action)) || !Array.isArray(input.conditions) || (!configuredPolicy && input.conditions.length)) return { error: 'Choose Keep or Count and drop. The required safety checks cannot be removed.' }
+        const configuredPolicy = [applicationErrorRuleId, modelDiscoveryRuleId, modelHealthRuleId, readinessAuditRuleId, proxyRuleId, ingestionRuleId, telemetryRuleId, sshWindowRuleId, sshTransportRuleId, collectorRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, postgresRuleId, accessRuleId, mongoRuleId].includes(id)
+    if (input.stage !== 'analyze' || !['drop', 'keep'].includes(String(input.action)) || !Array.isArray(input.conditions) || (!configuredPolicy && input.conditions.length)) return { error: 'Choose Keep or Count and drop. The required safety checks cannot be removed.' }
         definition.action = input.action as 'drop' | 'keep'
     }
     for (const key of ['conditions', ...(defaults.failureConditions ? ['failureConditions'] : [])] as Array<'conditions' | 'failureConditions'>) {
@@ -478,7 +480,7 @@ export async function postRuleAction(req: FastifyRequest<{ Params: { id: string 
     if (!action) return res.status(400).send({ error: 'Action must be enable or disable.' })
     const rule = (await readDatabase(() => loadConfiguredRules(access.organizationId))).find(rule => ruleSlug(rule.id) === ruleSlug(req.params.id) || rule.recordId === req.params.id)
     if (!rule) return res.status(404).send({ error: 'Rule not found.' })
-    if (([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') && !(await hasHanasandInternalRouteAccess(req)).valid) return res.status(403).send({ error: 'Active Hanasand organization owner or editor access is required to change platform log retention.' })
+    if (([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, modelDiscoveryRuleId, modelHealthRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') && !(await hasHanasandInternalRouteAccess(req)).valid) return res.status(403).send({ error: 'Active Hanasand organization owner or editor access is required to change platform log retention.' })
     if (action === 'enable' && unavailableAnalysisRule(rule.id)) return res.status(409).send({ error: unavailableAnalysisRule(rule.id) })
     try {
         const saved = await saveRule(req, access, { ...rule, enabled: action === 'enable' }, 'event.rule.updated', rule.version)
@@ -529,7 +531,7 @@ export async function getRule(req: FastifyRequest<{ Params: { id: string }, Quer
                 loadRuleHits(access.organizationId, [rule], run),
             ]))
             const hitCount = rule.definition?.stage === 'analyze' && rule.definition.action === 'keep' ? null : hits.get(rule.id) ?? 0
-            const canEdit = !isHistorical && canManageRules(access.role) && (!([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') || (await hasHanasandInternalRouteAccess(req)).valid)
+            const canEdit = !isHistorical && canManageRules(access.role) && (!([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, modelDiscoveryRuleId, modelHealthRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') || (await hasHanasandInternalRouteAccess(req)).valid)
             return { organizationId: access.organizationId, canEdit, isHistorical, currentVersion: rule.version, rule: displayedRule, triggerCount: hitCount, audit: audit.rows.slice(0, 50), nextOffset: audit.rows.length > 50 ? offset + 50 : null }
         }
         const payload = process.env.NODE_ENV === 'test' || !(run as ReadAwareRun).withReadDatabase
@@ -548,7 +550,7 @@ export async function putRule(req: FastifyRequest<{ Params: { id: string } }>, r
     if (!canManageRules(access.role)) return res.status(403).send({ error: 'Editor access is required to manage rules.' })
     const rule = (await loadConfiguredRules(access.organizationId)).find(rule => ruleSlug(rule.id) === ruleSlug(req.params.id))
     if (!rule) return res.status(404).send({ error: 'Rule not found.' })
-    if (([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') && !(await hasHanasandInternalRouteAccess(req)).valid) return res.status(403).send({ error: 'Active Hanasand organization owner or editor access is required to change platform log retention.' })
+    if (([accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, modelDiscoveryRuleId, modelHealthRuleId, readinessAuditRuleId].includes(rule.id) || rule.definition?.stage === 'analyze') && !(await hasHanasandInternalRouteAccess(req)).valid) return res.status(403).send({ error: 'Active Hanasand organization owner or editor access is required to change platform log retention.' })
     const body = (req.body || {}) as Record<string, unknown>
     if (body.enabled === true && unavailableAnalysisRule(rule.id)) return res.status(409).send({ error: unavailableAnalysisRule(rule.id) })
     const name = typeof body.name === 'string' ? body.name.trim() : ''
@@ -653,7 +655,7 @@ async function loadConfiguredRulesUncached(organizationId: string, query: typeof
         ORDER BY created_at ASC
     `, [organizationId])
     const overrides = new Map((result.rows as Array<Record<string, unknown>>).map(row => [String(row.rule_id), row]))
-    const builtIns = BUILTIN_RULES.filter(rule => ![accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, modelDiscoveryRuleId, readinessAuditRuleId].includes(rule.id) || overrides.has(rule.id)).map(rule => {
+    const builtIns = BUILTIN_RULES.filter(rule => ![accessRuleId, mongoRuleId, postgresRuleId, proxyRuleId, ingestionRuleId, collectorRuleId, telemetryRuleId, sshWindowRuleId, cdnRefreshRuleId, cdnDeliveryRuleId, modelDiscoveryRuleId, modelHealthRuleId, readinessAuditRuleId].includes(rule.id) || overrides.has(rule.id)).map(rule => {
         const override = overrides.get(rule.id)
         return { ...rule, definition: builtinDefinition(rule, override?.definition), detectionLogic: rule.explanation, ...(override ? { recordId: String(override.id), version: String(override.version), name: String(override.name), explanation: String(override.explanation), severity: String(override.severity) } : {}), enabled: override ? Boolean(override.enabled) : rule.enabled !== false, source: 'hanasand' as const }
     })

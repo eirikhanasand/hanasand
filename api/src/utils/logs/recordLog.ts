@@ -1,7 +1,7 @@
 import { classifyApplicationError } from '../events/applicationError.ts'
 import { analyzeCdnDelivery } from '../events/analyzeCdnDeliveryLog.ts'
 import { analyzeIngestion } from '../events/analyzeIngestion.ts'
-import { analyzeModelDiscovery } from '../events/analyzeModelDiscoveryLog.ts'
+import { analyzeModelDiscovery, analyzeModelHealthCheck } from '../events/analyzeModelDiscoveryLog.ts'
 import { analyzeReadinessAuditBatch } from '../events/analyzeReadinessAuditLog.ts'
 import { analyzeCdnRefresh } from '../events/analyzeCdnRefreshLog.ts'
 import { analyzeRoutineGroupBatch } from '../events/analyzeRoutineGroupBatch.ts'
@@ -85,6 +85,7 @@ async function prepareLog({
     // Explicit Store exceptions must win before any built-in analyzer can drop.
     if (retentionAction !== 'keep') {
         if (await analyzeModelDiscovery({ service, host, level, message, metadata, sourceEventId, timestamp }, query === run ? undefined : query)) return
+        if (await analyzeModelHealthCheck({ service, host, level, message, metadata, sourceEventId, timestamp }, query === run ? undefined : query)) return
         if (await analyzeCdnDelivery({ service, host, level, message, metadata, sourceEventId, timestamp }, query === run ? undefined : query)) return
         if (await analyzeCdnRefresh({ service, host, level, message, metadata, sourceEventId, timestamp }, query === run ? undefined : query)) return
         if (await analyzeCollectorExecution({ service, host, level, message, metadata, sourceEventId, timestamp }, query === run ? undefined : query)) return

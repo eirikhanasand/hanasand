@@ -9,8 +9,8 @@ import { analyzeCollectorExecution } from './analyzeCollectorLog.ts'
 import { collectorRuleId } from './analyzeCollector.ts'
 import { analyzeCdnRefresh } from './analyzeCdnRefreshLog.ts'
 import { cdnRefreshRuleId } from './analyzeCdnRefresh.ts'
-import { analyzeModelDiscovery } from './analyzeModelDiscoveryLog.ts'
-import { modelDiscoveryRuleId } from './analyzeModelDiscovery.ts'
+import { analyzeModelDiscovery, analyzeModelHealthCheck } from './analyzeModelDiscoveryLog.ts'
+import { modelDiscoveryRuleId, modelHealthRuleId } from './analyzeModelDiscovery.ts'
 import { analyzeAccess, analyzeMongoPing } from './analyzeLog.ts'
 import { accessRuleId, verifiedAccessFromLog } from './analyzeAccess.ts'
 import { mongoRuleId } from './analyzeMongo.ts'
@@ -32,6 +32,7 @@ const analyzers = {
     [cdnRefreshRuleId]: analyzeCdnRefresh,
     [cdnDeliveryRuleId]: analyzeCdnDelivery,
     [modelDiscoveryRuleId]: analyzeModelDiscovery,
+    [modelHealthRuleId]: analyzeModelHealthCheck,
     [mongoRuleId]: analyzeMongoPing,
     [accessRuleId]: async (log: Parameters<typeof analyzeProxy>[0], query: typeof run) => {
         const access = verifiedAccessFromLog(log)

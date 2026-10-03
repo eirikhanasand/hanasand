@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { accessDefinition, eligibleAccess, inspectAccess, accessFromLog, verifiedAccessFromLog, type AccessEvent } from '../src/utils/events/analyzeAccess.ts'
+import { modelHealthDefinition, modelHealthRuleId } from '../src/utils/events/analyzeModelDiscovery.ts'
+import { ruleCategory } from '../src/utils/events/ruleList.ts'
 
 const event: AccessEvent = { key: 'http-api:test', ip: '192.0.2.1', path: '/public/file', method: 'GET', status: 200,
     timestamp: new Date().toISOString(), inspection: inspectAccess({ url: '/public/file', headers: { host: 'hanasand.com' } }) }
@@ -74,6 +76,15 @@ describe('Analyze access safety', () => {
         expect(accessFromLog({ ...log, metadata: { ...log.metadata, organizationId: 'customer' } })).toBeNull()
         expect(accessFromLog({ ...log, level: 'warn' })).toBeNull()
     })
+})
+
+test('local model health analyzer only selects the internal vLLM probe and exposes an analysis rule', () => {
+    expect(ruleCategory({ id: modelHealthRuleId, definition: modelHealthDefinition })).toBe('analysis')
+    const matches = modelHealthDefinition.conditions
+    expect(matches.map(condition => condition.path)).toEqual(['host', 'service', 'level', 'message'])
+    expect(matches.at(-1)?.value).toContain('127\\.0\\.0\\.1')
+    expect(matches.at(-1)?.value).toContain('GET /v1/models HTTP/1\\.1')
+    expect(matches.at(-1)?.value).toContain('200 OK$')
 })
 
 test('stored HTTP criteria can select a different successful status or service', () => {

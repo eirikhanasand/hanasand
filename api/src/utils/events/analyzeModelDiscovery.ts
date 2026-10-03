@@ -2,6 +2,7 @@ import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
 import { STATUS_CODES } from 'node:http'
 
 export const modelDiscoveryRuleId = 'model.verified_discovery_probes.v1'
+export const modelHealthRuleId = 'model.local_health_checks.v1'
 export const modelDiscoveryAvailable = false
 export const modelDiscoveryConfigured = () => /^[a-f0-9]{64}$/.test(process.env.MODEL_PROBE_PROOF_KEY || '')
 export const modelDiscoveryUnavailableReason = 'Model probe verification is not configured. Unverified model requests are stored.'
@@ -24,6 +25,22 @@ export const modelDiscoveryDefinition = {
     { path: 'metadata.model_probe.serverPort', operator: 'regex' as const, caseSensitive: true, value: '^1808[1-8]$' },
     { path: 'metadata.model_probe.path', operator: 'regex' as const, caseSensitive: true, value: '^/v1/models\\?hanasand_probe=[a-f0-9-]{36}$' }],
     parameters: { maxDurationMs: 1000, minIntervalMs: 5000, maxIntervalMs: 40000 },
+}
+// Routine localhost health checks carry no caller identity. Count only this
+// exact vLLM line shape; never use it to compact requests from public IPs.
+export const modelHealthRule = {
+    id: modelHealthRuleId, version: '1', name: 'Local model health checks', family: 'HTTP', severity: 'low', enabled: false,
+    explanation: 'Count and drop successful localhost GET /v1/models checks from the Inspur model server. Public requests are retained with their access metadata.',
+    evidence: ['localhost IP', 'request count', 'day'],
+}
+export const modelHealthDefinition = {
+    match: 'all' as const, stage: 'analyze' as const, action: 'drop' as 'drop' | 'keep',
+    conditions: [
+        { path: 'host', operator: 'equals' as const, value: 'inspur', caseSensitive: true },
+        { path: 'service', operator: 'equals' as const, value: 'run_model_inspur_vllm_gpu.sh', caseSensitive: true },
+        { path: 'level', operator: 'equals' as const, value: 'info', caseSensitive: true },
+        { path: 'message', operator: 'regex' as const, value: '^\\(APIServer pid=[1-9]\\d*\\) INFO: +127\\.0\\.0\\.1:[1-9]\\d* - "GET /v1/models HTTP/1\\.1" 200 OK$', caseSensitive: true },
+    ], parameters: {},
 }
 type Row = Record<string, unknown>
 export const exactModelFields = (value: unknown, keys: string[]): value is Row => Boolean(value && typeof value === 'object' && !Array.isArray(value)
