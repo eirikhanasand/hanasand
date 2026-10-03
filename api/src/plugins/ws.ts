@@ -960,7 +960,7 @@ const browserWarmPool = new BrowserWarmPool({
         if (!inspect?.Id) return null
         const ip = inspect.NetworkSettings?.Networks?.[process.env.BROWSER_SANDBOX_WORKER_NETWORK || 'hanasand_browsernet']?.IPAddress
         const token = inspect.Config?.Env?.find(value => value.startsWith('BROWSER_SANDBOX_POOL_TOKEN='))?.split('=')[1] || ''
-        return { containerId: inspect.Id, wsUrl: `ws://${ip}:8090/api/ws`, streamIp: ip || '', token, createdAt: Date.parse(inspect.Created || ''), running: inspect.State?.Running, release: inspect.Config?.Labels?.['com.hanasand.release'] }
+        return { containerId: inspect.Id, wsUrl: `ws://${ip}:8090/api/ws`, streamIp: ip || '', token, createdAt: Date.parse(inspect.Created || ''), running: inspect.State?.Running }
     },
     async create(slot) {
         try { await startEphemeralBrowserWorker(`warm-${slot}`, '1280x720', slot) }
@@ -987,7 +987,7 @@ const browserWarmPool = new BrowserWarmPool({
     async retire(worker) { return (await warmWorkerRequest(worker, { retire: true })).ok },
     async remove(worker) { await removeRuntimeContainer(worker.containerId).catch(error => { if (!String(error).includes('No such container')) throw error }) },
     error(error) { console.error('Browser ready pool:', error instanceof Error ? error.message : String(error)) },
-}, process.env.HANASAND_RELEASE_COMMIT || 'unknown')
+})
 
 function warmWorkerRequest(worker: WarmWorker, body?: { sessionId?: string; retire?: boolean }) {
     return fetch(`http://${worker.streamIp}:8090/internal/browser-warm`, {
@@ -1010,7 +1010,7 @@ async function startEphemeralBrowserWorker(sessionId: string, resolution = '1280
     const networkName = process.env.BROWSER_SANDBOX_WORKER_NETWORK || 'hanasand_browsernet'
     const turn = browserTurnCredentials(sessionId, warmSlot === undefined ? 60 * 60 : 120 * 60)
     const containerId = await createRuntimeContainer(containerName, {
-        Image: process.env.BROWSER_SANDBOX_WORKER_IMAGE || 'hanasand_browsers',
+        Image: process.env.BROWSER_SANDBOX_WORKER_IMAGE || 'hanasand_browsers:latest',
         User: '1000',
         Env: [
             'NODE_ENV=production',
@@ -1071,7 +1071,6 @@ async function startEphemeralBrowserWorker(sessionId: string, resolution = '1280
         Labels: {
             'com.hanasand.role': 'browser-session-worker',
             'com.hanasand.session': sessionId,
-            ...(warmSlot === undefined ? {} : { 'com.hanasand.release': process.env.HANASAND_RELEASE_COMMIT || 'unknown' }),
         },
     }, warmSlot !== undefined)
 

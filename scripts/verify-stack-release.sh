@@ -67,6 +67,19 @@ for container in $containers; do
         hanasand_onion_tor) preserved_service=onion-tor ;;
         hanasand_ai_parser_bridge) preserved_service=ai-parser-bridge ;;
         hanasand_ti_scraper) preserved_service=ti-scraper ;;
+        hanasand_browsers)
+            expected_container_release=$image_release
+            case "$image_release" in
+                *[!a-f0-9]*|'')
+                    echo "The browser image has no valid browser repository revision." >&2
+                    exit 1
+                    ;;
+            esac
+            test "${#image_release}" -eq 40 || {
+                echo "The browser image has no valid browser repository revision." >&2
+                exit 1
+            }
+            ;;
         *) preserved_service= ;;
     esac
     if test -n "$preserved_service" && is_preserved_service "$preserved_service"; then
@@ -83,10 +96,12 @@ for container in $containers; do
             exit 1
         }
     fi
-    test "$env_release" = "$expected_container_release" || {
-        echo "$container has release $env_release, expected $expected_container_release" >&2
-        exit 1
-    }
+    if test "$container" != hanasand_browsers; then
+        test "$env_release" = "$expected_container_release" || {
+            echo "$container has release $env_release, expected $expected_container_release" >&2
+            exit 1
+        }
+    fi
     verify_image_revision "$container" "$image" "$image_release" "$expected_container_release"
 done
 
@@ -164,9 +179,8 @@ for container in $(docker ps -aq --filter label=com.docker.compose.project=hanas
     fi
 done
 
-# Browser warm workers are created directly by the API, so Compose does not
-# recreate them with the rest of the stack. Wait until all named pool slots
-# report both the application release and browser image revision being checked.
+# Browser warm workers are created directly by the API, so site releases keep
+# their containers and image versions. Confirm every slot remains healthy.
 elapsed=0
 while test "$elapsed" -lt 240; do
     browser_pool_current=1
@@ -178,13 +192,10 @@ while test "$elapsed" -lt 240; do
         fi
         running=$(docker inspect -f '{{.State.Running}}' "$container")
         health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$container")
-        worker_release=$(docker inspect -f '{{index .Config.Labels "com.hanasand.release"}}' "$container")
         image=$(docker inspect -f '{{.Image}}' "$container")
         image_release=$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image" 2>/dev/null || true)
-        if test "$running" != true || test "$health" != healthy || test "$worker_release" != "$release"; then
-            browser_pool_current=0
-        fi
-        if ! verify_image_revision "$container" "$image" "$image_release" "$release"; then
+        case "$image_release" in *[!a-f0-9]*|'') browser_pool_current=0 ;; esac
+        if test "$running" != true || test "$health" != healthy || test "${#image_release}" -ne 40; then
             browser_pool_current=0
         fi
     done
@@ -193,7 +204,7 @@ while test "$elapsed" -lt 240; do
     elapsed=$((elapsed + 5))
 done
 test "$browser_pool_current" = 1 || {
-    echo "Browser warm pool did not reach five healthy workers on release $release within 240 seconds." >&2
+    echo "Browser warm pool did not reach five healthy workers within 240 seconds." >&2
     exit 1
 }
 

@@ -126,7 +126,7 @@ fi
 reuse_schema_marker_for_code_only_release
 
 export HANASAND_RELEASE_COMMIT="$release"
-export BROWSER_SANDBOX_WORKER_IMAGE="hanasand_browsers:$release"
+export BROWSER_SANDBOX_WORKER_IMAGE="hanasand_browsers:latest"
 candidate_suffix=$(printf '%s' "$release" | cut -c1-12)
 candidate_offset=$(printf '%s' "$release" | cksum | awk '{ print $1 % 5000 }')
 candidate_attempt=0
@@ -184,20 +184,6 @@ if test -f "$build_dir/.env"; then
         sed -i "s#^BROWSER_SANDBOX_WORKER_IMAGE=.*#BROWSER_SANDBOX_WORKER_IMAGE=$BROWSER_SANDBOX_WORKER_IMAGE#" "$build_dir/.env"
     else
         printf 'BROWSER_SANDBOX_WORKER_IMAGE=%s\n' "$BROWSER_SANDBOX_WORKER_IMAGE" >> "$build_dir/.env"
-    fi
-    if docker image inspect hanasand_browser_base:latest >/dev/null 2>&1; then
-        export HANASAND_BROWSER_RUNTIME_BASE=hanasand_browser_base:latest
-        export HANASAND_BROWSER_RUNTIME_PATCHED=1
-        if grep -q '^HANASAND_BROWSER_RUNTIME_BASE=' "$build_dir/.env"; then
-            sed -i 's#^HANASAND_BROWSER_RUNTIME_BASE=.*#HANASAND_BROWSER_RUNTIME_BASE=hanasand_browser_base:latest#' "$build_dir/.env"
-        else
-            printf 'HANASAND_BROWSER_RUNTIME_BASE=hanasand_browser_base:latest\n' >> "$build_dir/.env"
-        fi
-        if grep -q '^HANASAND_BROWSER_RUNTIME_PATCHED=' "$build_dir/.env"; then
-            sed -i 's#^HANASAND_BROWSER_RUNTIME_PATCHED=.*#HANASAND_BROWSER_RUNTIME_PATCHED=1#' "$build_dir/.env"
-        else
-            printf 'HANASAND_BROWSER_RUNTIME_PATCHED=1\n' >> "$build_dir/.env"
-        fi
     fi
     printf 'HANASAND_TI_SCRAPER_SOURCE=%s\n' "$root/ops/runtime/ti-releases/$release" >> "$build_dir/.env"
     printf 'HANASAND_TI_API_SOURCE=%s\n' "$root/ops/runtime/ti-releases/$release/api" >> "$build_dir/.env"
