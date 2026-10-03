@@ -9,9 +9,10 @@ export const cdnDeliveryRule = {
     evidence: ['collector host', 'CDN container', 'delivery request ID', 'delivery outcome'],
 }
 const equals = (path: string, value: string) => ({ path, operator: 'equals' as const, value, caseSensitive: true })
+const matches = (path: string, value: string) => ({ path, operator: 'regex' as const, value, caseSensitive: true })
 export const cdnDeliveryDefinition = {
     match: 'all' as const, stage: 'analyze' as const, action: 'drop' as 'drop' | 'keep', parameters: {},
-    conditions: [equals('service', 'cdn'), equals('host', 'inspur'), equals('level', 'info'),
+    conditions: [equals('service', 'cdn'), matches('host', '^(?:inspur|hanasand)$'), equals('level', 'info'),
         equals('metadata.collector', 'docker'), equals('metadata.stream', 'stdout'),
         equals('metadata.structured.level', '30'), equals('metadata.structured.msg', 'http_access'),
         equals('metadata.structured.access.method', 'POST'), equals('metadata.structured.access.path', '/api/traffic'),

@@ -7,6 +7,7 @@ import { customRetentionAction, loadLogRetentionRules } from '#utils/events/cust
 import { normalizeLogEvent } from '#utils/events/logEvent.ts'
 import { analyzeAccess } from '#utils/events/analyzeLog.ts'
 import { redactLogText, redactLogValue } from '#utils/logs/redact.ts'
+import { analyzeIngestAccess } from '#utils/events/analyzeIngestAccess.ts'
 
 const ignoredPathPrefixes = [
     '/api/traffic',
@@ -18,6 +19,15 @@ export default async function recordTraffic(req: FastifyRequest, res: FastifyRep
     const path = normalizePath(req.url)
     const access = { key: `http-api:${req.id}`, ip: verifiedClientIp(req), timestamp: new Date().toISOString(),
         path, method: req.method, status: res.statusCode, inspection: inspectAccess(req) }
+    const userAgent = readHeader(req.headers['user-agent'])
+    if (persist && path === '/api/logs/ingest') {
+        try {
+            const decision = await analyzeIngestAccess(access, req.hostname, userAgent)
+            if (decision.drop) return
+        } catch (error) {
+            req.log.warn({ error }, 'Log-ingest access analysis failed; retaining request')
+        }
+    }
     let proxyRecorded = false
     try {
         if (persist) proxyRecorded = await recordProxyRequest(req, res)
@@ -51,7 +61,6 @@ export default async function recordTraffic(req: FastifyRequest, res: FastifyRep
     }
 
     const domain = normalizeDomain(readHeader(req.headers['x-forwarded-host']) || readHeader(req.headers.host))
-    const userAgent = readHeader(req.headers['user-agent'])
     const referer = readHeader(req.headers.referer || req.headers.referrer)
     const ip = verifiedClientIp(req)
     const countryIso = normalizeCountryIso(

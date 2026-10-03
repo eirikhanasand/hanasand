@@ -24,7 +24,11 @@ const eligible = (log: ReturnType<typeof fixture>, definition = cdnDeliveryDefin
 
 test('only the successful delivery copy matches; original request evidence is retained', () => {
     expect(eligible(fixture())).toBe(true)
+    const currentHostLabel = fixture(); currentHostLabel.host = 'hanasand'; encode(currentHostLabel)
+    expect(eligible(currentHostLabel)).toBe(true)
     for (const service of ['openresty', 'http-traffic', 'hanasand-api-1', 'customer-app']) expect(eligible({ ...fixture(), service })).toBe(false)
+    const unexpectedHost = fixture(); unexpectedHost.host = 'untrusted'; encode(unexpectedHost)
+    expect(eligible(unexpectedHost)).toBe(false)
     for (const change of [{ method: 'GET' }, { path: '/s/example' }, { path: '/api/traffic?x=1' }, { ip: '203.0.113.7' },
         { status: 200 }, { status: 401 }, { status: 500 }, { path: '/login' }, { path: '/api/traffic/../admin' }]) {
         const log = fixture(); Object.assign(log.metadata.structured.access, change); encode(log)
