@@ -63,6 +63,7 @@ for container in $containers; do
     image=$(docker inspect -f '{{.Image}}' "$container")
     image_release=$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image" 2>/dev/null || true)
 
+    preserved_service=
     expected_container_release=$release
     case "$container" in
         hanasand_onion_tor) preserved_service=onion-tor ;;
