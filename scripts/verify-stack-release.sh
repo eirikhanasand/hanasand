@@ -119,7 +119,7 @@ verify_image_revision "Standalone processor" "$processor_image" "$processor_imag
 test "$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' processor)" = processor || {
     echo "Processor must belong to its own Compose project." >&2; exit 1
 }
-processor_health=$(curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8099/health)
+processor_health=$(docker exec processor wget -qO- http://127.0.0.1:8099/health)
 case "$processor_health" in *'"ok":true'*"\"release\":\"$processor_release\""*) ;; *)
     echo "Standalone processor is not healthy on its reported release." >&2; exit 1 ;;
 esac
