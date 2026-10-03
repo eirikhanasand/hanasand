@@ -4,7 +4,7 @@ import type { CdnRefreshLog } from './analyzeCdnRefresh.ts'
 
 export const cdnDeliveryRuleId = 'cdn.telemetry_deliveries.v1'
 export const cdnDeliveryRule = {
-    id: cdnDeliveryRuleId, version: '1', name: 'Successful traffic report deliveries', family: 'HTTP', severity: 'low', enabled: false,
+    id: cdnDeliveryRuleId, version: '1', name: 'Successful traffic report deliveries', family: 'HTTP', severity: 'low', enabled: true,
     explanation: 'Count and drop exact successful CDN traffic-report delivery envelopes. Keep original proxy/application requests and traffic records, which identify the real client. Keep failures, unexpected content, detections and Store matches. Delivery success does not classify the reported traffic as safe.',
     evidence: ['collector host', 'CDN container', 'delivery request ID', 'delivery outcome'],
 }
