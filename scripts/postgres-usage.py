@@ -24,9 +24,20 @@ def sample_processes():
 
             fields = stat[stat.rfind(")") + 2 :].split()
             cpu_ticks = int(fields[11]) + int(fields[12])
-            with open(f"/proc/{pid}/statm", encoding="ascii") as statm_file:
-                resident_pages = int(statm_file.read().split()[1])
-            processes[pid] = (cpu_ticks, resident_pages * PAGE_SIZE)
+            try:
+                with open(f"/proc/{pid}/smaps_rollup", encoding="ascii") as smaps_file:
+                    proportional_kb = next(
+                        int(line.split()[1])
+                        for line in smaps_file
+                        if line.startswith("Pss:")
+                    )
+                memory_bytes = proportional_kb * 1024
+            except (OSError, StopIteration):
+                # Fall back when the kernel does not expose smaps to this user.
+                with open(f"/proc/{pid}/statm", encoding="ascii") as statm_file:
+                    resident_pages = int(statm_file.read().split()[1])
+                memory_bytes = resident_pages * PAGE_SIZE
+            processes[pid] = (cpu_ticks, memory_bytes)
         except (OSError, ValueError, IndexError):
             # Processes can exit between listing /proc and reading their stats.
             continue
