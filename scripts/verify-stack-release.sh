@@ -64,12 +64,14 @@ for container in $containers; do
     image_release=$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image" 2>/dev/null || true)
 
     preserved_service=
+    independent_release=0
     expected_container_release=$release
     case "$container" in
         hanasand_onion_tor) preserved_service=onion-tor ;;
         hanasand_ai_parser_bridge) preserved_service=ai-parser-bridge ;;
         hanasand_ti_scraper) preserved_service=ti-scraper ;;
         hanasand_browsers)
+            independent_release=1
             expected_container_release=$image_release
             case "$image_release" in
                 *[!a-f0-9]*|'')
@@ -93,10 +95,16 @@ for container in $containers; do
             exit 1
             ;;
         esac
-        test "${#expected_container_release}" -eq 40 && git merge-base --is-ancestor "$expected_container_release" "$release" || {
-            echo "$container's preserved release is not an ancestor of $release." >&2
+        test "${#expected_container_release}" -eq 40 || {
+            echo "$container has an invalid preserved release $expected_container_release." >&2
             exit 1
         }
+        if test "$independent_release" != 1; then
+            git merge-base --is-ancestor "$expected_container_release" "$release" || {
+                echo "$container's preserved release is not an ancestor of $release." >&2
+                exit 1
+            }
+        fi
     fi
     if test "$container" != hanasand_browsers; then
         test "$env_release" = "$expected_container_release" || {
