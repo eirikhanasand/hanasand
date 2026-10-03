@@ -220,6 +220,13 @@ export async function queryOnce(query: string, params?: SQLParamType, name?: str
         })])
     } catch (error) {
         failure = error as Error
+        if (schemaWork.getStore() && ['55P03', '57014'].includes((error as PgError)?.code || '')) {
+            console.warn('Schema statement deferred by PostgreSQL timeout.', {
+                code: (error as PgError).code,
+                message: (error as Error).message,
+                query: query.replace(/\s+/g, ' ').slice(0, 240)
+            })
+        }
         throw error
     } finally {
         clearTimeout(timer)
