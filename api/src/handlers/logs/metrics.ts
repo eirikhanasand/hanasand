@@ -50,19 +50,16 @@ async function queryLogMetrics(): Promise<LogMetrics> {
             remaining BIGINT NOT NULL
         )`).then(() => undefined).catch(error => { metricsSchema = undefined; throw error })
     await metricsSchema
-    const current = (await run(`
-            SELECT c.checked_count, c.updated_at, COALESCE((p.payload->>'remaining')::bigint, 0) AS remaining
-            FROM log_processing_cursors c
-            LEFT JOIN log_catchup_progress p ON p.id = TRUE
-            WHERE c.name = 'service_logs'
-        `)).rows[0]
+    const current = (await run(`SELECT
+            (SELECT COUNT(*)::bigint FROM events WHERE ingestion_id='logs' AND processing_status='processed'
+                AND event_timestamp >= NOW() - INTERVAL '10 seconds') AS checked_count,
+            (SELECT COUNT(*)::bigint FROM events WHERE ingestion_id='logs' AND processing_status='pending') AS remaining,
+            (SELECT COUNT(*)::bigint FROM events WHERE ingestion_id='logs' AND processing_status IN ('processed','pending')
+                AND event_timestamp >= NOW() - INTERVAL '10 seconds') AS received`)).rows[0]
     const now = new Date()
-    const previous = (await run('SELECT checked_count, sampled_at FROM log_throughput_samples ORDER BY sampled_at DESC LIMIT 1')).rows[0]
-    const elapsed = previous ? Math.max(1, (now.getTime() - new Date(previous.sampled_at).getTime()) / 1000) : 0
     const checked = Number(current?.checked_count || 0)
-    const pps = previous && checked >= Number(previous.checked_count) ? (checked - Number(previous.checked_count)) / elapsed : 0
-    const epsResult = await run('SELECT COUNT(*)::int AS count FROM service_logs WHERE created_at >= NOW() - make_interval(secs => 10)')
-    const eps = Number(epsResult.rows[0]?.count || 0) / 10
+    const pps = Number(current?.checked_count || 0) / 10
+    const eps = Number(current?.received || 0) / 10
     const historical_eps = Math.max(0, pps - eps)
     const npps = pps > 0 ? (eps + historical_eps) / pps : 0
     await run('INSERT INTO log_throughput_samples (sampled_at,checked_count,pps,eps,historical_eps,npps,remaining) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (sampled_at) DO NOTHING', [now, checked, pps, eps, historical_eps, npps, Number(current?.remaining || 0)])

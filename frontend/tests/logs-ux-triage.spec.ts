@@ -10,7 +10,7 @@ test('search refreshes progress every ten seconds without advancing the timestam
         requests++
         return fail ? route.fulfill({ status: 503, json: { error: 'Search unavailable.' } }) : route.fulfill({ json: {
             ...result(), generated_at: generatedAt,
-            processing: { updated_at: generatedAt, last_error: 'service_logs: Waiting for active log writes; will retry.',
+            processing: { updated_at: generatedAt, last_error: 'events: Waiting for pending log events; will retry.',
                 catchup: { remaining: 3000, processed: 1000, total: 4000, rate: 50, estimated_seconds: 60, updated_at: generatedAt } },
         } })
     })

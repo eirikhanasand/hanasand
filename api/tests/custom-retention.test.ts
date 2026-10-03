@@ -1,5 +1,5 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
-let reads = 0, writes: unknown[][] = [], receipts: unknown[][] = [], failed = false
+let reads = 0, writes: unknown[][] = [], insertSqls: string[] = [], receipts: unknown[][] = [], failed = false
 let rules: any[] = []
 const query = async (sql: string, params: any[] = []): Promise<any> => {
     if (sql.includes('FROM rules r')) {
@@ -7,7 +7,7 @@ const query = async (sql: string, params: any[] = []): Promise<any> => {
         if (failed) throw new Error('Rule lookup unavailable')
         return { rows: rules.filter(rule => rule.organizationId === (params[0] || 'platform')) }
     }
-    if (sql.includes('INSERT INTO service_logs')) { writes.push(params); return { rows: [] } }
+    if (sql.includes('INSERT INTO events')) { writes.push(params); insertSqls.push(sql); return { rows: [{ id: 'event-test' }], rowCount: 1 } }
     if (sql.includes('INSERT INTO log_analyze_receipts')) { receipts.push(params); return { rows: [] } }
     throw new Error('Unexpected query')
 }
@@ -19,7 +19,7 @@ const { normalizeLogEvent } = await import('../src/utils/events/logEvent.ts')
 const { authenticationAuditStoreRule, eventProtectionDefinition } = await import('../src/utils/events/eventProtection.ts')
 const drop = { source: 'owned', enabled: true, organizationId: 'org-a', definition: { stage: 'analyze', action: 'drop', conditions: [{ path: 'event_type', operator: 'equals', value: 'application' }] } }
 const entry = { service: 'example', level: 'info' as const, message: 'heartbeat', metadata: { organizationId: 'org-a' } }
-beforeEach(() => { reads = 0; writes = []; receipts = []; failed = false; rules = [structuredClone(drop)] })
+beforeEach(() => { reads = 0; writes = []; insertSqls = []; receipts = []; failed = false; rules = [structuredClone(drop)] })
 test('new Analyze Drop rules match the same source fields in live logs and record hits', async () => {
     rules = [{ ...drop, id: 'custom.process.v1', version: '1', organization_id: 'org-a', definition: { ...drop.definition, conditions: [
         { path: 'source_vendor', operator: 'equals', value: 'Hanasand' },
@@ -38,7 +38,7 @@ test('new Analyze Drop rules match the same source fields in live logs and recor
     expect(JSON.parse(receipts[0][0] as string)[0]).toMatchObject({ organization_id: 'org-a', rule_id: 'custom.process.v1' })
     expect(receipts[0][0]).toBe(receipts[1][0])
 })
-test('new matching service logs never reach storage; unmatched tenants and disabled rules retain logs', async () => {
+test('new matching events never reach storage; unmatched tenants and disabled rules retain events', async () => {
     await recordLog(entry)
     expect(writes).toHaveLength(0)
     await recordLog({ ...entry, metadata: { organizationId: 'org-b' } })
@@ -46,6 +46,19 @@ test('new matching service logs never reach storage; unmatched tenants and disab
     rules[0].enabled = false
     await recordLog(entry)
     expect(writes).toHaveLength(2)
+})
+test('retained service logs are written once as complete pending Events', async () => {
+    rules = []
+    const raw = { service: 'audit', host: 'inspur', level: 'info' as const, message: 'whoami', sourceEventId: 'audit:42',
+        metadata: { organizationId: 'org-a', process: { executable: '/usr/bin/whoami' } } }
+    await recordLog(raw)
+    const sql = insertSqls[0]
+    const [row] = JSON.parse(writes[0][0] as string)
+    expect(sql).toContain('INSERT INTO events')
+    expect(sql).not.toContain('service_logs')
+    expect(sql).toContain("'{}'::jsonb,'pending'")
+    expect(row.normalized).toMatchObject({ service: 'audit', message: 'whoami', metadata: raw.metadata })
+    expect(row.id).toMatch(/^[a-f0-9]{64}$/)
 })
 test('the first matching Drop rule short-circuits later Drop rules', async () => {
     const first = { ...drop, id: 'custom.first.v1', version: '1', organization_id: 'org-a' }

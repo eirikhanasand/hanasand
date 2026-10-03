@@ -49,14 +49,15 @@ export async function reprocessBuiltinPage(job: ReprocessJob, query: typeof run)
         AND (id=$1 OR ($1::text IS NULL AND lower(name)='hanasand')) ORDER BY created_at LIMIT 1`, [process.env.PLATFORM_LOG_ORGANIZATION_ID || null])).rows[0]?.id
     if (platform !== job.organization_id) throw new Error('This analyzer does not own the selected log scope.')
     const limit = 1000
-    const rows = (await query(`SELECT * FROM service_logs WHERE ($1::bigint IS NULL OR id<$1::bigint) AND id<=$2::bigint
-        AND created_at<=$3::timestamptz AND ($4::timestamptz IS NULL OR created_at>=$4::timestamptz)
-        ORDER BY id DESC LIMIT $5 FOR UPDATE`, [job.cursor.id || null, job.cursor.serviceEnd, job.until_time, job.from_time, limit])).rows as LogInput[]
-    const keys = rows.map(row => `service:${row.id}`)
-    const projections = (await query(`SELECT id,log_key,organization_id,normalized,original FROM events
-        WHERE log_key=ANY($1::text[]) FOR UPDATE`, [keys])).rows
+    const rows = (await query(`SELECT id,organization_id,normalized,original,event_timestamp::text AS cursor_time FROM events
+        WHERE ingestion_id='logs' AND organization_id=$1 AND event_timestamp<=$2::timestamptz
+          AND ($3::timestamptz IS NULL OR event_timestamp>=$3::timestamptz)
+          AND ($4::timestamptz IS NULL OR (event_timestamp,id)<($4::timestamptz,$5::text))
+        ORDER BY event_timestamp DESC,id DESC LIMIT $6 FOR UPDATE`, [job.organization_id, job.until_time, job.from_time,
+        job.cursor.time || null, job.cursor.id || null, limit])).rows
+    const projections = rows
     const findings = new Set((await query('SELECT event_ids FROM findings WHERE event_ids && $1::text[]', [projections.map(row => row.id)])).rows.flatMap(row => row.event_ids))
-    const canonical = await canonicalReplayKeys(keys, query)
+    const canonical = await canonicalReplayKeys(rows.map(row => row.id), query)
     const retention = await loadLogRetentionRules(job.organization_id, query)
     const { loadConfiguredRules, collectEventFindings, normalizeEvent } = await import('../../handlers/events.ts')
     const rules = await loadConfiguredRules(job.organization_id, query)
@@ -64,25 +65,25 @@ export async function reprocessBuiltinPage(job: ReprocessJob, query: typeof run)
         || collectEventFindings(job.organization_id, id, normalizeEvent(event, { vendor: 'Hanasand', product: 'Logs' }), rules).findings.length > 0
     const removed: string[] = []
     const protectedSources = new Set<string>()
-    const logs = rows.map(row => ({ service: row.service, host: row.host, level: row.level, message: row.message,
-        metadata: row.metadata, sourceEventId: row.source_event_id, timestamp: new Date(row.created_at).toISOString() }))
+    const logs = rows.map(row => ({ id: row.id, eventId: row.id, service: row.normalized.service || 'hanasand-api', host: row.normalized.host || '',
+        level: row.normalized.level || 'info', message: row.normalized.message || '', metadata: row.normalized.metadata || {},
+        source_event_id: row.normalized.source_event_id || row.id, sourceEventId: row.normalized.source_event_id || row.id,
+        created_at: row.normalized.timestamp || row.cursor_time }))
     let protectedCount = 0
-    for (const row of rows) {
-        const id = String(row.id), key = `service:${id}`
-        const scope = row.metadata?.organizationId || row.metadata?.tenantId || platform
-        const related = projections.filter(projection => projection.log_key === key)
+    for (const [index, row] of rows.entries()) {
+        const id = String(row.id), log = logs[index]
+        const scope = row.organization_id
+        const related = [row]
         // Findings and canonical pointers are evidence integrity, not a second
         // drop rule. Never delete another tenant's or a retained finding's source.
-        if (scope !== job.organization_id || canonical.has(key) || !row.source_event_id
-            || protectedEvent(normalizeLogEvent(row), id)
+        if (scope !== job.organization_id || canonical.has(id)
+            || protectedEvent(normalizeLogEvent(log), id)
             || related.some(projection => projection.organization_id !== job.organization_id || findings.has(projection.id)
                 || protectedEvent({ ...projection.normalized, retained_original: projection.original }, projection.id))) {
             protectedCount++
-            if (row.source_event_id) protectedSources.add(row.source_event_id)
+            protectedSources.add(String(log.sourceEventId))
             continue
         }
-        const log = { service: row.service, host: row.host, level: row.level, message: row.message,
-            metadata: row.metadata, sourceEventId: row.source_event_id, timestamp: new Date(row.created_at).toISOString() }
         if (analyzer && await analyzer(log, query)) removed.push(id)
     }
     if (grouped.includes(job.rule_id)) {
@@ -97,17 +98,15 @@ export async function reprocessBuiltinPage(job: ReprocessJob, query: typeof run)
                 : await analyzeRoutineGroupBatch(candidates, query, { historicalReplay: { ruleId: job.rule_id } })
         const kept = new Set(retained.map(log => log.sourceEventId))
         const dropped = new Set(candidates.filter(log => !kept.has(log.sourceEventId)).map(log => log.sourceEventId))
-        for (const row of rows) if (row.source_event_id && dropped.has(row.source_event_id)) removed.push(String(row.id))
+        for (const log of logs) if (dropped.has(log.sourceEventId)) removed.push(String(log.id))
     }
-    const removedKeys = removed.map(id => `service:${id}`)
-    const events = await query('DELETE FROM events WHERE organization_id=$1 AND log_key=ANY($2::text[]) RETURNING id', [job.organization_id, removedKeys])
-    const sources = await query('DELETE FROM service_logs WHERE id=ANY($1::bigint[]) RETURNING id', [removed])
+    const events = await query('DELETE FROM events WHERE organization_id=$1 AND id=ANY($2::text[]) RETURNING id', [job.organization_id, removed])
     const done = rows.length < limit
     await query(`UPDATE rule_reprocess_jobs SET status=$2,cursor=$3::jsonb,scanned=scanned+$4,
         matched=matched+$5,protected=protected+$6,removed_events=removed_events+$7,removed_sources=removed_sources+$8,
         error=NULL,updated_at=NOW() WHERE id=$1`, [job.id, done ? 'completed' : 'running',
-        JSON.stringify({ ...job.cursor, id: String(rows.at(-1)?.id || job.cursor.id || '0') }), rows.length, removed.length,
-        protectedCount, events.rowCount || 0, sources.rowCount || 0])
+        JSON.stringify({ ...job.cursor, time: rows.at(-1)?.cursor_time || job.cursor.time, id: String(rows.at(-1)?.id || job.cursor.id || '') }), rows.length, removed.length,
+        protectedCount, events.rowCount || 0, 0])
     if (done) await query(`INSERT INTO system_events(event_type,source,object_type,object_id,organization_id,context)
         SELECT 'event.rule.reprocessed','event','event_rule',rule_id,organization_id,
             jsonb_build_object('jobId',id,'version',rule_version,'scanned',scanned,'matched',matched,'protected',protected,'removedEvents',removed_events,'removedSources',removed_sources)

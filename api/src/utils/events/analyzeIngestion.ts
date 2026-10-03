@@ -73,12 +73,13 @@ export async function analyzeIngestion(log: ProxyLog, query?: typeof run): Promi
     if (!state || state.source_event_id === log.sourceEventId) return false
     let canonical = state.original
     if (!canonical) {
-        const raw = (await query('SELECT * FROM service_logs WHERE source_event_id=$1 FOR SHARE', [state.source_event_id])).rows[0]
+        const eventId = hash(`service:${state.source_event_id}`)
+        const raw = (await query('SELECT normalized FROM events WHERE id=$1 FOR SHARE', [eventId])).rows[0]?.normalized
         if (!raw) return false // Out of order, same batch, or already expired: keep.
         canonical = { service: raw.service, host: raw.host, level: raw.level, message: raw.message, metadata: raw.metadata,
-            sourceEventId: raw.source_event_id, timestamp: new Date(raw.created_at).toISOString() }
+            sourceEventId: state.source_event_id, timestamp: raw.timestamp }
         if (ingestionCopy(canonical)?.key !== copy.key) return false
-        await query('UPDATE log_ingestion_canonical SET original=$2::jsonb,canonical_log_key=$3 WHERE key=$1', [copy.key, JSON.stringify(canonical), `service:${raw.id}`])
+        await query('UPDATE log_ingestion_canonical SET original=$2::jsonb,canonical_event_id=$3 WHERE key=$1', [copy.key, JSON.stringify(canonical), eventId])
     }
     // Compare the content too; never treat a hash or request ID alone as evidence.
     if (canonical.message !== log.message || !isDeepStrictEqual(canonical.metadata.structured, log.metadata!.structured)) return false

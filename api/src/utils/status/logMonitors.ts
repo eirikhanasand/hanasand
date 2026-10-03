@@ -45,14 +45,16 @@ export default async function runProductionLogMonitors() {
 
 async function runCollectorMonitor() {
     const result = await run(`
-        SELECT created_at, message, metadata FROM (
-          (SELECT created_at, message, metadata FROM service_logs
-           WHERE service = 'host-log-collector' AND level = 'info' AND host IN ('inspur', 'hanasand')
-           ORDER BY created_at DESC LIMIT 1)
+        SELECT event_timestamp AS created_at, normalized->>'message' AS message, normalized->'metadata' AS metadata FROM (
+          (SELECT event_timestamp, normalized FROM events
+           WHERE ingestion_id='logs' AND normalized->>'service' = 'host-log-collector'
+             AND normalized->>'level' = 'info' AND normalized->>'host' IN ('inspur', 'hanasand')
+           ORDER BY event_timestamp DESC LIMIT 1)
           UNION ALL
-          (SELECT created_at, message, metadata FROM service_logs
-           WHERE service = 'host-log-collector' AND level = 'error' AND host IN ('inspur', 'hanasand')
-           ORDER BY created_at DESC LIMIT 1)
+          (SELECT event_timestamp, normalized FROM events
+           WHERE ingestion_id='logs' AND normalized->>'service' = 'host-log-collector'
+             AND normalized->>'level' = 'error' AND normalized->>'host' IN ('inspur', 'hanasand')
+           ORDER BY event_timestamp DESC LIMIT 1)
         ) recent
         ORDER BY created_at DESC
         LIMIT 1
@@ -64,10 +66,10 @@ async function runCollectorMonitor() {
 async function runMonitor(monitor: MonitorDefinition) {
     const result = await run(`
         SELECT COUNT(*)::int AS count,
-               MAX(created_at) AS last_seen
-        FROM service_logs
-        WHERE created_at >= NOW() - ($1::int * INTERVAL '1 minute')
-          AND metadata->>'category' = $2
+               MAX(event_timestamp) AS last_seen
+        FROM events
+        WHERE ingestion_id='logs' AND event_timestamp >= NOW() - ($1::int * INTERVAL '1 minute')
+          AND normalized->'metadata'->>'category' = $2
     `, [lookbackMinutes, monitor.category])
     const row = result.rows[0] as { count: number, last_seen: string | null }
     const count = Number(row?.count || 0)

@@ -24,7 +24,7 @@ test('ingestion drops with a receipt only when the platform rule is active', asy
             return { rows: [], rowCount: 1 }
         }
         await recordLog(log, query)
-        expect(statements.some(sql => sql.includes('INSERT INTO service_logs'))).toBe(!active)
+        expect(statements.some(sql => sql.includes('INSERT INTO events'))).toBe(!active)
         expect(statements.some(sql => sql.includes('INSERT INTO log_analyze_receipts'))).toBe(active)
         expect(statements.some(sql => sql.includes('INSERT INTO log_mongo_ping_counts'))).toBe(active)
     }
@@ -61,5 +61,5 @@ test('replayed ping receipts do not inflate retained metadata counts', async () 
     }
     await recordLog(log, query)
     expect(statements.some(sql => sql.includes('INSERT INTO log_mongo_ping_counts'))).toBe(false)
-    expect(statements.some(sql => sql.includes('INSERT INTO service_logs'))).toBe(false)
+    expect(statements.some(sql => sql.includes('INSERT INTO events'))).toBe(false)
 })

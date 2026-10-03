@@ -1,18 +1,14 @@
 import { readLogCatchupSettings } from './catchupLimit.ts'
 import { refreshLogCatchupProgress } from './catchupProgress.ts'
-import { recoverUnassignedLogs } from './recoverUnassignedLogs.ts'
 import { createHash } from 'node:crypto'
 import run, { withTransaction } from '#db'
 import { collectEventFindings, persistEventFindings, createFindings, loadConfiguredRules, normalizeEvent } from '../../handlers/events.ts'
 import { normalizeLogEvent, severityOrder, type LogInput } from './logEvent.ts'
 import { processAdditionalLogSources } from './storedSources.ts'
-import { stableLogWatermark } from './logWatermark.ts'
-import { acknowledgeProcessedLogs, freshProcessLogArrivalWindowMs, processQueuedLogs, recoverProcessLogs } from './processQueue.ts'
 import { backfillLogDimensions } from '../logs/dimensions.ts'
 import { pruneAccessLogs } from './pruneAccessLogs.ts'
 import { accessRuleId } from './analyzeAccess.ts'
 import { withLogBatch } from './logBatch.ts'
-import { processLogPredicate } from '../db/logProcessQueueSchema.ts'
 
 let running = false
 // Keep a slow login's correlation work from holding the global lock for a batch.
@@ -22,7 +18,6 @@ const DEDICATED_LOG_BATCH_LIMIT = 50
 const DEDICATED_LOG_PAGE_CONCURRENCY = 36
 const DEDICATED_LOG_FRESH_LIMIT = 150
 const DEFAULT_LOG_PAGE_CONCURRENCY = 3
-const DEDICATED_LOG_WORK_LIMIT = DEDICATED_LOG_BATCH_LIMIT * DEDICATED_LOG_PAGE_CONCURRENCY
 // Stateless results commit atomically with their findings; authentication keeps
 // durable pending history for correlation. Stable identities make retries safe.
 export async function processLog(log: LogInput, organizationId: string, rules: Awaited<ReturnType<typeof loadConfiguredRules>>) {
@@ -38,12 +33,14 @@ export async function processLogBatch(logs: LogInput[], organizationId: string, 
     }
     // Priority delivery and retry can overlap the historical cursor. Read the
     // acknowledgement before normalization instead of locking completed rows again.
-    const completed = await run('SELECT log_key FROM events WHERE log_key = ANY($1::text[]) AND processing_status = \'processed\'', [logs.map(log => `service:${log.id}`)])
-    const completedKeys = new Set(completed.rows.map(row => row.log_key))
-    const prepared = logs.filter(log => !completedKeys.has(`service:${log.id}`)).map(log => {
+    const eventIds = logs.map(log => log.eventId || createHash('sha256').update(`service:${log.id}`).digest('hex'))
+    const completed = await run('SELECT id FROM events WHERE id = ANY($1::text[]) AND processing_status = \'processed\'', [eventIds])
+    const completedKeys = new Set(completed.rows.map(row => row.id))
+    const prepared = logs.filter(log => !completedKeys.has(log.eventId || createHash('sha256').update(`service:${log.id}`).digest('hex'))).map(log => {
         const key = `service:${log.id}`
         const event = normalizeEvent(normalizeLogEvent(log, rules), { vendor: 'Hanasand', product: 'Logs' })
-        const id = createHash('sha256').update(key).digest('hex')
+        if (log.source_event_id) event.normalized.source_event_id = log.source_event_id
+        const id = log.eventId || createHash('sha256').update(key).digest('hex')
         // Stateless rules can finish before persistence. Login correlation still needs
         // the durable event-time history and retains the retryable pending path.
         const correlates = event.eventType === 'authentication' && event.action === 'login'
@@ -52,7 +49,7 @@ export async function processLogBatch(logs: LogInput[], organizationId: string, 
         const complete = !correlates
         if (complete) Object.assign(event.normalized, { detections: [], evaluated_at: new Date().toISOString(),
             rules_checked: rules.filter(rule => rule.enabled !== false).length })
-        return { id, key, event, complete, findings, logId: String(log.id) }
+        return { id, event, complete, findings }
     })
     if (!prepared.length) return
     await withTransaction(async query => {
@@ -72,18 +69,18 @@ export async function processLogBatch(logs: LogInput[], organizationId: string, 
             }
         }
         const written = await query(`INSERT INTO events (id, ingestion_id, organization_id, source_vendor, source_product, event_timestamp,
-        event_type, action, outcome, user_id, user_email, source_ip, source_country, source_city, device_id, parser_version, normalized, original, processing_status, log_key)
+        event_type, action, outcome, user_id, user_email, source_ip, source_country, source_city, device_id, parser_version, normalized, original, processing_status)
         SELECT item.id, 'logs', $2, 'Hanasand', 'Logs', item.timestamp::timestamptz, item.event_type,
-            item.action, item.outcome, item.user_id, item.user_email, item.source_ip, item.source_country, item.source_city, item.device_id, item.parser_version, item.normalized, jsonb_build_object('service_log_id', item.log_id), item.processing_status, item.key
-        FROM jsonb_to_recordset($1::jsonb) AS item(id text, key text, timestamp text, event_type text, action text, outcome text, user_id text, user_email text, source_ip text, source_country text, source_city text, device_id text, parser_version text, normalized jsonb, log_id text, processing_status text)
+            item.action, item.outcome, item.user_id, item.user_email, item.source_ip, item.source_country, item.source_city, item.device_id, item.parser_version, item.normalized, '{}'::jsonb, item.processing_status
+        FROM jsonb_to_recordset($1::jsonb) AS item(id text, timestamp text, event_type text, action text, outcome text, user_id text, user_email text, source_ip text, source_country text, source_city text, device_id text, parser_version text, normalized jsonb, processing_status text)
         WHERE EXISTS (SELECT 1 FROM organizations WHERE id = $2 AND status = 'active')
-        ON CONFLICT (log_key) DO UPDATE SET organization_id=EXCLUDED.organization_id,
+        ON CONFLICT (id) DO UPDATE SET organization_id=EXCLUDED.organization_id,
             event_timestamp=EXCLUDED.event_timestamp, event_type=EXCLUDED.event_type, action=EXCLUDED.action, outcome=EXCLUDED.outcome,
             user_id=EXCLUDED.user_id, user_email=EXCLUDED.user_email, source_ip=EXCLUDED.source_ip, source_country=EXCLUDED.source_country,
             source_city=EXCLUDED.source_city, device_id=EXCLUDED.device_id, parser_version=EXCLUDED.parser_version,
             normalized=EXCLUDED.normalized, original=EXCLUDED.original, processing_status=EXCLUDED.processing_status
         WHERE events.ingestion_id='logs' AND (events.processing_status='pending'
-          OR (events.processing_status='skipped' AND events.normalized->>'processing_reason'='Organization is missing or inactive')) RETURNING id `, [JSON.stringify(prepared.map(({ id, key, event, logId, complete }) => ({ id, key, processing_status: complete ? 'processed' : 'pending', timestamp: event.timestamp, event_type: event.eventType, action: event.action, outcome: event.outcome, user_id: event.userId, user_email: event.userEmail, source_ip: event.sourceIp, source_country: event.sourceCountry, source_city: event.sourceCity, device_id: event.deviceId, parser_version: event.parserVersion, normalized: event.normalized, log_id: logId }))), organizationId])
+          OR (events.processing_status='skipped' AND events.normalized->>'processing_reason'='Organization is missing or inactive')) RETURNING id `, [JSON.stringify(prepared.map(({ id, event, complete }) => ({ id, processing_status: complete ? 'processed' : 'pending', timestamp: event.timestamp, event_type: event.eventType, action: event.action, outcome: event.outcome, user_id: event.userId, user_email: event.userEmail, source_ip: event.sourceIp, source_country: event.sourceCountry, source_city: event.sourceCity, device_id: event.deviceId, parser_version: event.parserVersion, normalized: event.normalized }))), organizationId])
         const writtenIds = new Set(written.rows.map(row => row.id))
         await persistEventFindings(stateless.filter(item => writtenIds.has(item.id)).flatMap(item => item.findings), query)
     })
@@ -124,7 +121,7 @@ export async function processLogBatch(logs: LogInput[], organizationId: string, 
                     UNION ALL
                     SELECT id, normalized, event_timestamp FROM later_source_ip
                 ) related ORDER BY event_timestamp, id`, [organizationId, event.userId, event.sourceIp, event.outcome, event.timestamp, windowMinutes, AUTH_CORRELATION_RECHECK_LIMIT])
-            for (const row of later.rows) work.push({ id: row.id, key: '', logId: '', complete: false, findings: [], event: normalizeEvent(row.normalized, { vendor: 'Hanasand', product: 'Logs' }) })
+            for (const row of later.rows) work.push({ id: row.id, complete: false, findings: [], event: normalizeEvent(row.normalized, { vendor: 'Hanasand', product: 'Logs' }) })
         }
     }
     // Events are persisted together before correlation, then checked in event-time order.
@@ -268,172 +265,63 @@ export async function processLiveLogs() {
         return await withTransaction(async query => {
             const lock = await query('SELECT pg_try_advisory_xact_lock(hashtextextended(\'event:live-service-logs\', 0)) AS locked')
             if (!lock.rows[0].locked) return false
-            const logs = await freshLogs()
+            const logs = await pendingLogEvents(DEDICATED_LOG_FRESH_LIMIT, 10_000)
             if (!logs.length) return false
             const platform = await run('SELECT id FROM organizations WHERE status = \'active\' AND (id = $1 OR ($1::text IS NULL AND lower(name) = \'hanasand\')) ORDER BY created_at LIMIT 1', [process.env.PLATFORM_LOG_ORGANIZATION_ID || null])
             if (!platform.rows[0]) throw new Error('Configure an active platform log organization.')
             await scopedProcessor(platform.rows[0].id, () => {}).processScopes(logs, true)
-            await acknowledgeProcessedLogs(logs.map(log => String(log.id)))
             return true
         })
     } finally { liveRunning = false }
 }
 
-async function freshLogs(): Promise<LogInput[]> {
-    const dedicatedWorker = process.env.LOG_PROCESSOR_ONLY === '1'
-    const limit = dedicatedWorker ? DEDICATED_LOG_FRESH_LIMIT : 200
-    if (dedicatedWorker) {
-        // Collector replays keep their source event time, which can be hours old.
-        // Use the queue's database receipt time so new arrivals bypass old FIFO work.
-        const recent = await run(`WITH arrivals AS (
-            SELECT q.log_id AS id, q.queued_at AS arrived_at
-            FROM log_process_queue q
-            WHERE q.queued_at >= statement_timestamp() - ($2 * INTERVAL '1 millisecond')
-            UNION ALL
-            SELECT s.id, s.created_at
-            FROM service_logs s
-            WHERE s.created_at >= statement_timestamp() - ($2 * INTERVAL '1 millisecond')
-              AND NOT ${processLogPredicate('s.metadata')}
-        )
-        SELECT s.* FROM arrivals a JOIN service_logs s ON s.id = a.id
-        WHERE NOT EXISTS (SELECT 1 FROM events e WHERE e.log_key = 'service:' || s.id::text
-            AND e.processing_status IN ('processed', 'skipped'))
-        ORDER BY a.arrived_at ASC, a.id ASC LIMIT $1`, [limit, freshProcessLogArrivalWindowMs])
-        return recent.rows
-    }
-    return (await run(`SELECT s.* FROM service_logs s
-        WHERE s.created_at >= statement_timestamp() - INTERVAL '10 seconds'
-          AND NOT EXISTS (SELECT 1 FROM events e WHERE e.log_key = 'service:' || s.id::text
-            AND e.processing_status IN ('processed', 'skipped'))
-        ORDER BY s.created_at ASC, s.id ASC LIMIT $1`, [limit])).rows
+async function pendingLogEvents(limit: number, recentMs = 0): Promise<LogInput[]> {
+    const recent = recentMs ? `AND e.received_at >= statement_timestamp() - ($2 * INTERVAL '1 millisecond')` : ''
+    const params = recentMs ? [limit, recentMs] : [limit]
+    const rows = await run(`SELECT e.id, e.event_timestamp, e.normalized FROM events e
+        WHERE e.ingestion_id='logs' AND e.processing_status='pending' ${recent}
+        ORDER BY e.received_at, e.id LIMIT $1`, params)
+    return rows.rows.map(row => ({
+        id: row.id, eventId: row.id, service: String(row.normalized?.service || 'hanasand-api'),
+        host: String(row.normalized?.host || ''), level: String(row.normalized?.level || 'info'),
+        message: String(row.normalized?.message || ''), created_at: row.normalized?.timestamp || row.event_timestamp,
+        metadata: row.normalized?.metadata && typeof row.normalized.metadata === 'object' ? row.normalized.metadata : {},
+        ...(typeof row.normalized?.source_event_id === 'string' ? { source_event_id: row.normalized.source_event_id } : {}),
+    }))
 }
 
 export async function processStoredLogs() {
     if (running) return
     running = true
     try {
-        // Operators can temporarily bound catch-up during replication recovery.
-        // Fresh command admission and the event-time priority pass remain unchanged.
         const settings = readLogCatchupSettings()
-        // The dedicated worker commits cursor/progress state once a pass ends.
-        // Keep individual transactions at 25 records while feeding the
-        // dedicated worker's bounded concurrent page group.
         const dedicatedWorker = process.env.LOG_PROCESSOR_ONLY === '1'
-        const configuredLimit = dedicatedWorker ? Math.min(settings.limit, DEDICATED_LOG_WORK_LIMIT) : settings.limit
-        const configuredHistoryLimit = dedicatedWorker ? Math.min(settings.historyLimit, DEDICATED_LOG_WORK_LIMIT) : settings.historyLimit
-        const queueLimit = dedicatedWorker ? configuredLimit : 1000
-        // The transaction owns the lock connection until both cursors are durable.
-        // Another replica skips this tick instead of duplicating the same work.
-        let didWork = false, advanced = false
+        const limit = dedicatedWorker ? Math.min(settings.limit, DEDICATED_LOG_BATCH_LIMIT * DEDICATED_LOG_PAGE_CONCURRENCY) : Math.min(settings.limit, 1000)
+        let didWork = false
         await withTransaction(async query => {
-            const lock = await query('SELECT pg_try_advisory_xact_lock(hashtextextended(\'event:service-logs\', 0)) AS locked')
+            const lock = await query('SELECT pg_try_advisory_xact_lock(hashtextextended(\'event:pending-logs\', 0)) AS locked')
             if (!lock.rows[0].locked) return
             didWork = true
             const platform = await run('SELECT id FROM organizations WHERE status = \'active\' AND (id = $1 OR ($1::text IS NULL AND lower(name) = \'hanasand\')) ORDER BY created_at LIMIT 1', [process.env.PLATFORM_LOG_ORGANIZATION_ID || null])
             if (!platform.rows[0]) throw new Error('Configure an active platform log organization.')
-            // Commit cursor bookkeeping together. Event batches still commit on
-            // their own connections first; rollback can replay, but never skip them.
-            await query('INSERT INTO log_processing_cursors (name) VALUES (\'service_logs\') ON CONFLICT DO NOTHING')
-            const watermark = await stableLogWatermark('service_logs')
-            if (watermark === null) await query('UPDATE log_processing_cursors SET last_error = $1, updated_at = clock_timestamp() WHERE name = \'service_logs\'', ['Waiting for active log writes; will retry.'])
-            else await query('UPDATE log_processing_cursors SET recent_id = GREATEST($1::bigint - 200, 0) WHERE name = \'service_logs\' AND recent_id IS NULL', [watermark])
-            // Freeze the historical range. Forward delivery must not keep adding
-            // already checked rows to the tail of the backfill.
-            await query('UPDATE log_processing_cursors SET history_end_id = recent_id WHERE name = \'service_logs\' AND history_end_id IS NULL')
-            const cursor = (await query('SELECT last_id, recent_id, history_end_id FROM log_processing_cursors WHERE name = \'service_logs\'')).rows[0]
-            const { configured, processScopes } = scopedProcessor(platform.rows[0].id, () => { advanced = true }, () => processFresh())
-            const processQueued = (delayed: boolean) => processQueuedLogs(processScopes, delayed, queueLimit, 4,
-                dedicatedWorker ? freshProcessLogArrivalWindowMs : 0)
-            let lastFresh = -Infinity
-            const processFresh = async () => {
-                // The dedicated worker already ran the live lane immediately
-                // before this catch-up pass. Repeating it here stretches the
-                // cursor transaction while live arrivals continue.
-                if (dedicatedWorker || performance.now() - lastFresh < 250) return
-                lastFresh = performance.now()
-                // No cursor advances here: visible committed rows are safe to
-                // process even while another writer prevents a stable watermark.
-                // Overdue events remain in the durable FIFO/recovery passes;
-                // reserve this lane for events that can still meet the deadline.
-                // Oldest first prevents newer bursts from repeatedly displacing
-                // the unprocessed remainder of the preceding batch.
-                const logs = await freshLogs()
-                await processScopes(logs, true)
-                await acknowledgeProcessedLogs(logs.map(log => String(log.id)))
-            }
-            await processFresh()
-            const { rows: [queue] } = await run(`SELECT COALESCE((SELECT queued_at < clock_timestamp() - INTERVAL '60 seconds'
-                FROM log_process_queue ORDER BY queued_at, log_id LIMIT 1), FALSE) AS delayed`)
-            // Command checks must not inherit the historical replication throttle.
-            await processQueued(queue.delayed)
-            await processFresh()
-            await recoverProcessLogs(processScopes, configuredLimit)
-            await processFresh()
-            await recoverUnassignedLogs(processScopes, dedicatedWorker ? configuredLimit : 100)
-            await processFresh()
-            // The priority queue above already gets a longer budget when it is
-            // delayed. Keep the configured service-log page size so catch-up
-            // does not fall behind new arrivals indefinitely.
-            const catchupLimit = Math.min(1000, configuredLimit)
-            const historyLimit = Math.min(queue.delayed ? 100 : 10000, configuredHistoryLimit)
-            const beforeHistory = historyLimit > catchupLimit ? () => processQueued(false) : undefined
-            const processPage = async (after: string, until: string, pageLimit = catchupLimit) => {
-                const candidates = await run('SELECT id FROM service_logs WHERE id > $1 AND id <= $2 ORDER BY id LIMIT 10000', [after, until])
-                // The live lane owns recently queued process logs. The queue keeps
-                // them durable if its reserved lane has not acknowledged them yet.
-                const recentQueueFilter = dedicatedWorker
-                    ? `AND NOT EXISTS (SELECT 1 FROM log_process_queue q WHERE q.log_id = s.id
-                        AND q.queued_at >= statement_timestamp() - ($5 * INTERVAL '1 millisecond'))`
-                    : ''
-                const batchParams = dedicatedWorker
-                    ? [after, until, pageLimit, candidates.rows.map(row => row.id), freshProcessLogArrivalWindowMs]
-                    : [after, until, pageLimit, candidates.rows.map(row => row.id)]
-                const batch = candidates.rows.length ? await run(`SELECT * FROM service_logs s WHERE s.id > $1 AND s.id <= $2 AND s.id = ANY($4::bigint[])
-                    ${recentQueueFilter}
-                    AND NOT EXISTS (SELECT 1 FROM events e WHERE e.log_key = 'service:' || s.id::text AND e.processing_status = 'processed')
-                    ORDER BY s.id LIMIT $3`, batchParams) : { rows: [] }
-                await processScopes(batch.rows)
-                const lastId = batch.rows.length === pageLimit ? batch.rows.at(-1)!.id : candidates.rows.at(-1)?.id || until
-                const checked = candidates.rows.filter(row => BigInt(row.id) <= BigInt(lastId)).length
-                if (checked) advanced = true
-                return { lastId, checked }
-            }
-            if (watermark !== null) {
-                const recent = await processPage(cursor.recent_id, watermark)
-                await query('UPDATE log_processing_cursors SET recent_id = $1, checked_count = checked_count + $2, updated_at = clock_timestamp(), last_error = NULL WHERE name = \'service_logs\'', [recent.lastId, recent.checked])
-            }
-            await processFresh()
-            await processAdditionalLogSources(processScopes, historyLimit, catchupLimit, query, beforeHistory)
-            await processFresh()
-            // Direct Event ingestion is also pending until findings are durable.
-            // Recover requests that stopped after persistence or during evaluation.
-            const pendingLimit = dedicatedWorker ? configuredLimit : 100
+            const { configured, processScopes } = scopedProcessor(platform.rows[0].id, () => { })
+            const pendingLogs = await pendingLogEvents(limit)
+            await processScopes(pendingLogs, true)
+            await processAdditionalLogSources(processScopes, Math.min(settings.historyLimit, 10_000), Math.min(settings.limit, 1000), query)
             const pending = await run(`SELECT e.* FROM events e JOIN organizations o ON o.id = e.organization_id
                 WHERE e.ingestion_id <> 'logs' AND e.processing_status = 'pending' AND o.status = 'active'
-                ORDER BY e.event_timestamp, e.id LIMIT $1`, [pendingLimit])
+                ORDER BY e.event_timestamp, e.id LIMIT $1`, [dedicatedWorker ? limit : 100])
             for (const row of pending.rows) {
-                advanced = true
+                didWork = true
                 if (!configured.has(row.organization_id)) configured.set(row.organization_id, await loadConfiguredRules(row.organization_id))
                 await createFindings(row.organization_id, row.id, normalizeEvent(row.normalized, { vendor: row.source_vendor, product: row.source_product }), configured.get(row.organization_id)!)
                 await run('UPDATE events SET processing_status = \'processed\' WHERE id = $1 AND organization_id = $2', [row.id, row.organization_id])
             }
-            if (cursor.history_end_id !== null) {
-                // Already acknowledged rows need no wide JSON reads or evaluation.
-                // Inspect narrow IDs in larger pages, while retaining the operator
-                // limit for actual detection work and never skipping a pending row.
-                await beforeHistory?.()
-                const backlog = await processPage(cursor.last_id, cursor.history_end_id, historyLimit)
-                await query('UPDATE log_processing_cursors SET last_id = GREATEST(last_id, $1), checked_count = checked_count + $2, updated_at = clock_timestamp() WHERE name = \'service_logs\'', [backlog.lastId, backlog.checked])
-            }
         })
-        // Counter initialization has its own lock and visible error state. Keep
-        // its historical reads outside the lock used by live event processing.
-        // Progress scans run independently so fresh detection never waits on a historical count.
-        if (didWork) void refreshLogCatchupProgress()
+        void refreshLogCatchupProgress()
         void backfillLogDimensions().catch(() => {})
-        return advanced
+        return didWork
     } catch (error) {
-        await run('UPDATE log_processing_cursors SET last_error = $1 WHERE name = \'service_logs\'', [error instanceof Error ? error.message : 'Log processing failed']).catch(() => {})
         throw error
     } finally { running = false }
 }

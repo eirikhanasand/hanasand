@@ -1,14 +1,13 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
-let stored: Record<string, any> = {}, findings: any[] = [], fail = false, findingWrites = 0, eventUpdates = 0, pendingLookups = 0
+let stored: Record<string, any> = {}, findings: any[] = [], fail = false, findingWrites = 0, eventUpdates = 0, pendingLookups = 0, completedLookups = 0
 let authRechecks: Array<{ sql: string, params: any[] }> = []
 const query = async (sql: string, p: any[] = []): Promise<any> => {
     if (sql.includes('WITH later_users AS')) { authRechecks.push({ sql, params: p }); return { rows: [] } }
-    if (sql.includes('SELECT log_key FROM events')) return { rows: Object.values(stored)
-        .filter(row => p[0].includes(row.log_key) && row.processing_status === 'processed').map(row => ({ log_key: row.log_key })) }
     if (sql.includes('SELECT id, event_timestamp, outcome, source_country, normalized')) return { rows: [] }
     if (sql.includes('SELECT id, user_id, event_timestamp, normalized')) return { rows: [] }
-    if (sql.includes('INSERT INTO events')) { for (const item of JSON.parse(p[0])) stored[item.id] ||= { id: item.id, log_key: item.key, processing_status: item.processing_status, normalized: item.normalized }; return { rows: JSON.parse(p[0]).map((item: any) => ({ id: item.id })) } }
-    if (sql.includes('SELECT id FROM events')) { pendingLookups++; return { rows: Object.values(stored).filter(row => row.processing_status !== 'processed') } }
+    if (sql.includes('INSERT INTO events')) { for (const item of JSON.parse(p[0])) stored[item.id] = { id: item.id, processing_status: item.processing_status, normalized: item.normalized }; return { rows: JSON.parse(p[0]).map((item: any) => ({ id: item.id })) } }
+    if (sql.includes('SELECT id FROM events') && sql.includes("processing_status = 'processed'")) { completedLookups++; return { rows: Object.values(stored).filter(row => p[0].includes(row.id) && row.processing_status === 'processed').map(row => ({ id: row.id })) } }
+    if (sql.includes('SELECT id FROM events')) { pendingLookups++; return { rows: Object.values(stored).filter(row => row.processing_status !== 'processed').map(row => ({ id: row.id })) } }
     if (sql.includes('INSERT INTO findings')) {
         findingWrites++
         if (fail) throw new Error('Storage temporarily failed')
@@ -25,7 +24,7 @@ const { BUILTIN_RULES, defaultRuleDefinition } = await import('../src/handlers/e
 const { securityRules } = await import('../src/utils/events/securityRules.ts')
 const rules = () => BUILTIN_RULES.map(rule => ({...rule,enabled:true,source:'hanasand' as const,definition:defaultRuleDefinition(rule.id)}))
 const log = (executable='/usr/bin/whoami',command='whoami') => ({id:'real-log',service:'audit',host:'inspur',level:'info',message:command,created_at:'2026-09-19T10:00:00Z',metadata:{process:{executable,command_line:command}}})
-beforeEach(()=>{stored={};findings=[];fail=false;findingWrites=0;eventUpdates=0;pendingLookups=0;authRechecks=[]})
+beforeEach(()=>{stored={};findings=[];fail=false;findingWrites=0;eventUpdates=0;pendingLookups=0;completedLookups=0;authRechecks=[]})
 test('an info-level whoami executes Event and persists high severity plus evidence',async()=>{
     await processLog(log(),'org-a',rules())
     const row: any=Object.values(stored)[0]
@@ -77,18 +76,18 @@ test('stateless detections use bounded bulk writes without dropping or duplicati
     await processLogBatch(logs, 'org-a', rules())
     expect(findings).toHaveLength(1001)
     expect(findingWrites).toBe(2)
-    expect(pendingLookups).toBe(0)
+    expect(pendingLookups).toBe(0); expect(completedLookups).toBe(1)
     expect(Object.values(stored).every(row => row.processing_status === 'processed')).toBe(true)
     await processLogBatch(logs, 'org-a', rules())
     expect(findings).toHaveLength(1001)
     expect(findingWrites).toBe(2)
-    expect(pendingLookups).toBe(0)
+    expect(pendingLookups).toBe(0); expect(completedLookups).toBe(2)
 })
 
 test('login events keep their pending correlation lookup', async () => {
     const login = { id: 'login', service: 'sshd', host: 'inspur', level: 'info', message: 'Accepted password for alice from 192.0.2.1', created_at: '2026-09-19T10:00:00Z' }
     await processLogBatch([login], 'org-a', [])
-    expect(pendingLookups).toBe(1)
+    expect(pendingLookups).toBe(1); expect(completedLookups).toBe(1)
     expect(Object.values(stored)[0].processing_status).toBe('processed')
 })
 

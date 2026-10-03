@@ -14,6 +14,7 @@ import { normalizeLogEvent } from '../events/logEvent.ts'
 import { redactLogText, redactLogValue } from './redact.ts'
 import { verifiedAccessFromLog } from '../events/analyzeAccess.ts'
 import { analyzeAccess, analyzeMongoPing } from '../events/analyzeLog.ts'
+import { createHash, randomUUID } from 'node:crypto'
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'fatal'
 
@@ -105,76 +106,84 @@ async function prepareLog({
         metadata = { category: 'organization_request_error', surface: 'organizations' }
     }
 
-    return [service, host, level, message, JSON.stringify(metadata), scopeId, sourceEventId || null, timestamp || null]
+    const identity = sourceEventId || randomUUID()
+    return [service, host, level, message, JSON.stringify(metadata), scopeId, identity, timestamp || null,
+        createHash('sha256').update(`service:${identity}`).digest('hex')]
+}
+
+function eventRow(values: Awaited<ReturnType<typeof prepareLog>>) {
+    if (!values) return null
+    const [service, host, level, message, metadataJson, scopeId, sourceEventId, timestamp, id] = values
+    const metadata = JSON.parse(metadataJson || '{}')
+    const event = { ...normalizeLogEvent({ id: sourceEventId || '', service: service || 'hanasand-api', host: host || '', level: level || 'info', message: message || '', metadata, created_at: timestamp || new Date() }),
+        source_event_id: sourceEventId }
+    return { id, scopeId, event, timestamp: event.timestamp }
 }
 
 export default async function recordLog(entry: Parameters<typeof prepareLog>[0], query: typeof run = run) {
     const values = await prepareLog(preserveUnrecognizedFields(entry), query)
     if (!values) return
-    const inserted = await query(`
-        WITH organization_privacy AS MATERIALIZED (
-            SELECT status, audit_safe_metadata
-              FROM organizations
-             WHERE id = $6
-             FOR KEY SHARE
-        )
-        INSERT INTO service_logs (service, host, level, message, metadata, source_event_id, created_at)
-        SELECT
-            CASE WHEN private.deleted THEN 'hanasand-api' ELSE $1 END,
-            CASE WHEN private.deleted THEN '' ELSE $2 END,
-            CASE WHEN private.deleted THEN 'info' ELSE $3 END,
-            CASE WHEN private.deleted THEN 'organization_event' ELSE $4 END,
-            CASE WHEN private.deleted THEN jsonb_strip_nulls(jsonb_build_object(
-                'category', 'organization_privacy',
-                'action', 'post_delete_event',
-                'organizationId', $6::text,
-                'tenantId', $6::text,
-                'outcome', 'recorded',
-                'privacyDeletionRunId', private.privacy_deletion_run_id
-            )) ELSE $5::jsonb END,
-            $7, COALESCE($8::timestamptz, NOW())
-        FROM (
-            SELECT
-                COALESCE((SELECT status = 'deleted' OR (audit_safe_metadata ? 'privacyDeletedAt') FROM organization_privacy), FALSE) deleted,
-                (SELECT audit_safe_metadata->>'privacyDeletionRunId' FROM organization_privacy) privacy_deletion_run_id
-        ) private
-        ON CONFLICT (source_event_id) DO NOTHING RETURNING id
-    `, values)
-    return inserted.rows[0]?.id as string | undefined
+    const row = eventRow(values)!
+    const inserted = await insertEvents([row], query)
+    return inserted[0]
+}
+
+async function insertEvents(rows: NonNullable<ReturnType<typeof eventRow>>[], query: typeof run) {
+    if (!rows.length) return []
+    const payload = rows.map(({ id, scopeId, event, timestamp }) => ({ id, scope_id: scopeId, timestamp,
+        event_type: event.event_type, action: event.action, outcome: event.outcome,
+        user_id: event.user?.id == null ? null : String(event.user.id), user_email: event.user?.email == null ? null : String(event.user.email),
+        source_ip: event.source?.ip == null ? null : String(event.source.ip),
+        source_country: (event.source as Record<string, unknown>)?.country == null ? null : String((event.source as Record<string, unknown>).country),
+        source_city: (event.source as Record<string, unknown>)?.city == null ? null : String((event.source as Record<string, unknown>).city),
+        device_id: event.device && typeof event.device === 'object' && 'id' in event.device ? String(event.device.id) : null,
+        normalized: event }))
+    const result = await query(`WITH input AS MATERIALIZED (
+        SELECT * FROM jsonb_to_recordset($1::jsonb) AS item(id text, scope_id text, timestamp timestamptz,
+            event_type text, action text, outcome text, user_id text, user_email text, source_ip text,
+            source_country text, source_city text, device_id text, normalized jsonb)
+    ), organization_privacy AS MATERIALIZED (
+        SELECT id, status, audit_safe_metadata FROM organizations
+        WHERE id IN (SELECT scope_id FROM input WHERE scope_id IS NOT NULL) ORDER BY id FOR KEY SHARE
+    ), target AS MATERIALIZED (
+        SELECT i.*, COALESCE((SELECT id FROM organizations o WHERE o.id=i.scope_id AND o.status='active'),
+            (SELECT id FROM organizations WHERE status='active' AND (id=$2 OR ($2::text IS NULL AND lower(name)='hanasand')) ORDER BY created_at LIMIT 1)) organization_id,
+            COALESCE(o.status='deleted' OR o.audit_safe_metadata ? 'privacyDeletedAt', FALSE) deleted,
+            o.audit_safe_metadata->>'privacyDeletionRunId' privacy_deletion_run_id
+        FROM input i LEFT JOIN organization_privacy o ON o.id=i.scope_id
+    )
+    INSERT INTO events(id,ingestion_id,organization_id,source_vendor,source_product,event_timestamp,event_type,action,outcome,
+        user_id,user_email,source_ip,source_country,source_city,device_id,parser_version,normalized,original,processing_status)
+    SELECT id,'logs',organization_id,'Hanasand','Logs',timestamp,
+        CASE WHEN deleted THEN 'application' ELSE event_type END,
+        CASE WHEN deleted THEN 'post_delete_event' ELSE action END,
+        CASE WHEN deleted THEN 'recorded' ELSE outcome END,
+        CASE WHEN deleted THEN NULL ELSE user_id END, CASE WHEN deleted THEN NULL ELSE user_email END,
+        CASE WHEN deleted THEN NULL ELSE source_ip END, CASE WHEN deleted THEN NULL ELSE source_country END,
+        CASE WHEN deleted THEN NULL ELSE source_city END, CASE WHEN deleted THEN NULL ELSE device_id END,'logs.v1',
+        CASE WHEN deleted THEN jsonb_build_object('schema_version','logs.v1','source_vendor','Hanasand','source_product','Logs',
+            'timestamp',timestamp,'event_type','application','action','post_delete_event','outcome','recorded','level','info',
+            'service','hanasand-api','host','','message','organization_event','metadata',jsonb_strip_nulls(jsonb_build_object(
+                'category','organization_privacy','action','post_delete_event','organizationId',scope_id,'tenantId',scope_id,
+                'outcome','recorded','privacyDeletionRunId',privacy_deletion_run_id))) ELSE normalized END,
+        '{}'::jsonb,'pending'
+    FROM target WHERE organization_id IS NOT NULL ON CONFLICT(id) DO NOTHING RETURNING id`,
+        [JSON.stringify(payload), process.env.PLATFORM_LOG_ORGANIZATION_ID || null])
+    return result.rows.map(row => row.id as string)
 }
 
 
 // Keep analyzer decisions and the insert in the caller's transaction, while
 // ordinary collector rows share one insert instead of 100 sequential round trips.
 export async function recordLogBatch(entries: Parameters<typeof prepareLog>[0][], query: typeof run) {
-    const rows = []
+    const rows: NonNullable<ReturnType<typeof eventRow>>[] = []
     const retention = new Map<string, Awaited<ReturnType<typeof loadLogRetentionRules>>>()
     const originals = entries.map(entry => ({ ...preserveUnrecognizedFields(entry), service: entry.service ?? process.env.SERVICE_NAME ?? 'hanasand-api' }))
     for (const entry of await analyzeRoutineGroupBatch(await analyzePostgresBatch(await analyzeReadinessAuditBatch(originals, query), query), query)) {
         const values = await prepareLog(entry, query, retention)
-        if (values) rows.push(values)
+        const row = eventRow(values)
+        if (row) rows.push(row)
     }
     if (!rows.length) return
-    await query(`WITH input AS MATERIALIZED (
-        SELECT v->>0 service, v->>1 host, v->>2 level, v->>3 message, (v->>4)::jsonb metadata,
-            v->>5 scope_id, v->>6 source_event_id, (v->>7)::timestamptz created_at
-        FROM jsonb_array_elements($1::jsonb) v
-    ), organization_privacy AS MATERIALIZED (
-        SELECT id, status, audit_safe_metadata FROM organizations
-        WHERE id IN (SELECT scope_id FROM input WHERE scope_id IS NOT NULL)
-        ORDER BY id FOR KEY SHARE
-    )
-    INSERT INTO service_logs(service, host, level, message, metadata, source_event_id, created_at)
-    SELECT CASE WHEN private.deleted THEN 'hanasand-api' ELSE i.service END,
-        CASE WHEN private.deleted THEN '' ELSE i.host END,
-        CASE WHEN private.deleted THEN 'info' ELSE i.level END,
-        CASE WHEN private.deleted THEN 'organization_event' ELSE i.message END,
-        CASE WHEN private.deleted THEN jsonb_strip_nulls(jsonb_build_object(
-            'category','organization_privacy','action','post_delete_event',
-            'organizationId',i.scope_id,'tenantId',i.scope_id,'outcome','recorded',
-            'privacyDeletionRunId',o.audit_safe_metadata->>'privacyDeletionRunId')) ELSE i.metadata END,
-        i.source_event_id, COALESCE(i.created_at, NOW())
-    FROM input i LEFT JOIN organization_privacy o ON o.id=i.scope_id
-    CROSS JOIN LATERAL (SELECT COALESCE(o.status='deleted' OR o.audit_safe_metadata ? 'privacyDeletedAt', FALSE) AS deleted) private
-    ON CONFLICT (source_event_id) DO NOTHING`, [JSON.stringify(rows)])
+    await insertEvents(rows, query)
 }

@@ -25,7 +25,7 @@ function database(customDrop = false) {
             definition: { stage: 'analyze', action: 'drop', conditions: [{ path: 'service', operator: 'equals', value: 'audit' }] } }] : [] }
         if (sql.includes('FROM rules')) return { rows: [{ organization_id: 'platform', version: '1', enabled: true, definition: collectorDefinition }] }
         if (sql.includes('INSERT INTO log_analyze_receipts')) { receipts++; return { rows: [], rowCount: 1 } }
-        if (sql.includes('INSERT INTO service_logs')) { stored = sql.includes('WITH input AS') ? JSON.parse(params[0]) : [params]; return { rows: [], rowCount: stored.length } }
+        if (sql.includes('INSERT INTO events')) { stored = JSON.parse(params[0]).map((row: any) => row.normalized); return { rows: stored.map((_: unknown, i: number) => ({ id: String(i) })), rowCount: stored.length } }
         throw new Error(`Unexpected query: ${sql}`)
     }
     return { query, get stored() { return stored }, get receipts() { return receipts } }
@@ -56,7 +56,7 @@ test('single and batch ingestion preserve extras despite custom drop rules and m
         else await recordLog(log, db.query)
         expect(db.receipts).toBe(0)
         expect(db.stored).toHaveLength(1)
-        const metadata = JSON.parse(db.stored[0][4] as string)
+        const metadata = db.stored[0].metadata
         expect(metadata.unrecognized_ingest_fields.fields.extra).toBe('outer-evidence')
         expect(metadata.unrecognized_ingest_fields.previous).toBe('prior-evidence')
         expect(metadata.process).toEqual(original.metadata.process)

@@ -7,7 +7,7 @@ const query: any = async (sql: string) => {
         if (failLookup) throw new Error('Rule lookup unavailable')
         return { rows: rules }
     }
-    if (sql.includes('INSERT INTO service_logs') || sql.includes('INSERT INTO traffic_events')) { writes.push(sql); return { rows: [] } }
+    if (sql.includes('INSERT INTO events') || sql.includes('INSERT INTO traffic_events')) { writes.push(sql); return { rows: [{ id: 'event-test' }], rowCount: 1 } }
     throw new Error(`Unexpected query: ${sql}`)
 }
 mock.module('#db', () => ({ default: query, withTransaction: async (work: any) => work(query) }))

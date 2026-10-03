@@ -34,17 +34,18 @@ export async function pruneAccessLogs(logs: LogInput[], organizationId: string, 
     const retention = await loadLogRetentionRules(organizationId, query)
     const entries = candidates.filter(({ log, access }) => eligibleAccess(access!, rule.definition!) && Date.parse(access!.timestamp) < new Date(rule.created_at || 0).getTime()
         && customRetentionAction(normalizeLogEvent(log), retention) !== 'keep')
-        .map(({ log, access }) => ({ id: String(log.id), key: `service:${log.id}`, receipt: createHash('sha256').update(access!.key).digest('hex'),
+        .map(({ log, access }) => ({ id: String(log.id), receipt: createHash('sha256').update(access!.key).digest('hex'),
+            eventId: log.eventId || createHash('sha256').update(`service:${log.id}`).digest('hex'),
             ip: ipaddr.process(access!.ip).toString(), timestamp: access!.timestamp }))
     if (!entries.length) return new Set()
     // Lock existing evidence before checking findings. Never remove evidence that
     // already produced a detection, regardless of its current finding status.
-    const evidence = await query('SELECT id,log_key,normalized FROM events WHERE log_key=ANY($1::text[]) FOR UPDATE', [entries.map(e => e.key)])
+    const evidence = await query('SELECT id,normalized FROM events WHERE id=ANY($1::text[]) FOR UPDATE', [entries.map(e => e.eventId)])
     const findings = await query('SELECT event_ids FROM findings WHERE event_ids && $1::text[]', [evidence.rows.map(row => row.id)])
     const protectedIds = new Set(findings.rows.flatMap(row => row.event_ids))
-    const protectedKeys = new Set(evidence.rows.filter(row => protectedIds.has(row.id) || ['medium', 'high', 'critical'].includes(row.normalized?.severity)
-        || row.normalized?.detections?.length).map(row => row.log_key))
-    const safe = entries.filter(e => !protectedKeys.has(e.key))
+    const protectedEventIds = new Set(evidence.rows.filter(row => protectedIds.has(row.id) || ['medium', 'high', 'critical'].includes(row.normalized?.severity)
+        || row.normalized?.detections?.length).map(row => row.id))
+    const safe = entries.filter(e => !protectedEventIds.has(e.eventId))
     if (!safe.length) return new Set()
     await query(`WITH records AS (SELECT * FROM jsonb_to_recordset($1::jsonb) AS r(receipt text,ip text,timestamp timestamptz)),
         added AS (INSERT INTO log_analyze_receipts(key,organization_id,rule_id,rule_version)
@@ -53,10 +54,8 @@ export async function pruneAccessLogs(logs: LogInput[], organizationId: string, 
         SELECT $2,r.ip::inet,(r.timestamp AT TIME ZONE 'UTC')::date,count(*) FROM records r JOIN added a ON a.key=r.receipt GROUP BY r.ip,(r.timestamp AT TIME ZONE 'UTC')::date
         ORDER BY r.ip,(r.timestamp AT TIME ZONE 'UTC')::date
         ON CONFLICT(organization_id,ip,day) DO UPDATE SET amount=log_access_counts.amount+EXCLUDED.amount`, [JSON.stringify(safe), organizationId, accessRuleId, rule.version || '1'])
-    await query('DELETE FROM events WHERE log_key=ANY($1::text[])', [safe.map(e => e.key)])
+    await query('DELETE FROM events WHERE id=ANY($1::text[])', [safe.map(e => e.eventId)])
     const trafficIds = safe.filter(e => /^traffic_events:\d+$/.test(e.id)).map(e => e.id.split(':')[1])
-    const serviceIds = safe.filter(e => /^\d+$/.test(e.id)).map(e => e.id)
     if (trafficIds.length) await query('DELETE FROM traffic_events WHERE id=ANY($1::bigint[])', [trafficIds])
-    if (serviceIds.length) await query('DELETE FROM service_logs WHERE id=ANY($1::bigint[])', [serviceIds])
     return new Set(safe.map(e => e.id))
 }

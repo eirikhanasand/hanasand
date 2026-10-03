@@ -1,4 +1,5 @@
 import type run from '#db'
+import { createHash } from 'node:crypto'
 import { matchesAnalysisPolicy } from './analysisPolicy.ts'
 import { customRetentionAction } from './customRetention.ts'
 import { normalizeLogEvent } from './logEvent.ts'
@@ -57,12 +58,22 @@ export async function analyzePostgresBatch<T extends PostgresLog>(entries: T[], 
             for (const row of replay.rows) dropped.add(row.key)
             continue
         }
-        const existing = await query('SELECT source_event_id FROM service_logs WHERE source_event_id=ANY($1::text[])', [session.logs.map(log => log.sourceEventId!)])
+        const sourceIds = session.logs.map(log => log.sourceEventId!)
+        const eventIds = sourceIds.map(id => createHash('sha256').update(`service:${id}`).digest('hex'))
+        const existing = await query('SELECT id FROM events WHERE id=ANY($1::text[])', [eventIds])
         if (existing.rows.length && !options.historicalReplay) continue
-        const summary = await query(`INSERT INTO service_logs(service,host,level,message,metadata,source_event_id,created_at)
-            VALUES('postgres-session-analyzer',$4,'info','Completed local PostgreSQL readiness session',$1::jsonb,$2,$3::timestamptz)
-            ON CONFLICT(source_event_id) DO NOTHING RETURNING id`,
-        [JSON.stringify(postgresSessionEvidence(session)), `postgres-session:${session.key}`, new Date(session.ended).toISOString(), session.host])
+        const sourceEventId = `postgres-session:${session.key}`
+        const id = createHash('sha256').update(`service:${sourceEventId}`).digest('hex')
+        const timestamp = new Date(session.ended).toISOString()
+        const normalized = normalizeLogEvent({ id: sourceEventId, service: 'postgres-session-analyzer', host: session.host,
+            level: 'info', message: 'Completed local PostgreSQL readiness session', metadata: postgresSessionEvidence(session),
+            created_at: timestamp })
+        normalized.source_event_id = sourceEventId
+        const summary = await query(`INSERT INTO events(id,ingestion_id,organization_id,source_vendor,source_product,event_timestamp,event_type,
+            action,outcome,normalized,original,processing_status)
+            VALUES($1,'logs',$2,'Hanasand','Logs',$3::timestamptz,$4,$5,$6,$7::jsonb,'{}'::jsonb,'pending')
+            ON CONFLICT(id) DO NOTHING RETURNING id`,
+        [id, rule.organization_id, timestamp, normalized.event_type, normalized.action, normalized.outcome, JSON.stringify(normalized)])
         if (!summary.rowCount) continue
         const added = await query(`INSERT INTO log_analyze_receipts(key,organization_id,rule_id,rule_version)
             SELECT unnest($1::text[]),$2,$3,$4 ON CONFLICT DO NOTHING RETURNING key`, [keys, rule.organization_id, postgresRuleId, rule.version])

@@ -34,8 +34,6 @@ export async function recordProxyRequest(req: FastifyRequest, res: FastifyReply)
         await analyzeAccess(access, query)
         // First completed request wins. A suspicious first request cannot be replaced
         // by a later benign request to make a connection eligible for filtering.
-        await query(`INSERT INTO log_proxy_requests(connection_id,service_log_id,connection,access)
-            VALUES($1,$2,$3::jsonb,$4::jsonb) ON CONFLICT DO NOTHING`, [connection.id, id, JSON.stringify(connection), JSON.stringify(redactLogValue(access))])
         return true
     })
 }

@@ -38,28 +38,28 @@ async function queryErrorEvents(query: ErrorQuery) {
     const [httpRows, authRows, trafficRows, summary] = await Promise.all([
         run(`
             SELECT
-                ('log-' || id::text) AS id,
+                ('log-' || id) AS id,
                 'api' AS source,
-                service,
-                metadata->>'surface' AS surface,
-                metadata->>'method' AS method,
-                metadata->>'path' AS path,
-                NULLIF(metadata->>'status_code', '')::int AS status_code,
-                metadata->>'error_code' AS error_code,
-                COALESCE(metadata->>'error_message', message) AS message,
-                metadata->>'request_id' AS request_id,
-                metadata->>'user_id' AS user_id,
-                level,
-                created_at
-            FROM service_logs
-            WHERE metadata->>'category' IN ('http_response_error', 'application_error')
-              AND ($1::text IS NULL OR metadata->>'surface' = $1)
-              AND ($2::int IS NULL OR NULLIF(metadata->>'status_code', '')::int = $2)
-              AND ($3::text IS NULL OR metadata->>'error_code' = $3)
-              AND ($4::text IS NULL OR message ILIKE '%' || $4 || '%' OR metadata::text ILIKE '%' || $4 || '%')
-              AND ($5::boolean OR NOT COALESCE(${expectedHttpProbePredicate()}, FALSE))
-              AND ($5::boolean OR NOT COALESCE(${scannerHttpProbePredicate()}, FALSE))
-            ORDER BY created_at DESC
+                normalized->>'service' AS service,
+                normalized->'metadata'->>'surface' AS surface,
+                normalized->'metadata'->>'method' AS method,
+                normalized->'metadata'->>'path' AS path,
+                NULLIF(normalized->'metadata'->>'status_code', '')::int AS status_code,
+                normalized->'metadata'->>'error_code' AS error_code,
+                COALESCE(normalized->'metadata'->>'error_message', normalized->>'message') AS message,
+                normalized->'metadata'->>'request_id' AS request_id,
+                normalized->'metadata'->>'user_id' AS user_id,
+                normalized->>'level' AS level,
+                event_timestamp AS created_at
+            FROM events
+            WHERE ingestion_id='logs' AND normalized->'metadata'->>'category' IN ('http_response_error', 'application_error')
+              AND ($1::text IS NULL OR normalized->'metadata'->>'surface' = $1)
+              AND ($2::int IS NULL OR NULLIF(normalized->'metadata'->>'status_code', '')::int = $2)
+              AND ($3::text IS NULL OR normalized->'metadata'->>'error_code' = $3)
+              AND ($4::text IS NULL OR normalized->>'message' ILIKE '%' || $4 || '%' OR normalized->'metadata'::text ILIKE '%' || $4 || '%')
+              AND ($5::boolean OR NOT COALESCE(${expectedHttpProbePredicate("normalized->'metadata'")}, FALSE))
+              AND ($5::boolean OR NOT COALESCE(${scannerHttpProbePredicate("normalized->'metadata'")}, FALSE))
+            ORDER BY event_timestamp DESC
             LIMIT $6
         `, [surface, normalizedStatus, code, q, includeExpected, limit]),
         run(`
@@ -134,10 +134,10 @@ async function queryErrorEvents(query: ErrorQuery) {
             await query('SET LOCAL statement_timeout = \'30s\'')
             return query(`
             WITH raw_events AS NOT MATERIALIZED (
-                SELECT metadata->>'surface' AS surface, NULLIF(metadata->>'status_code', '')::int AS status_code, metadata->>'error_code' AS error_code, metadata->>'path' AS path, created_at
-                FROM service_logs
-                WHERE metadata->>'category' IN ('http_response_error', 'application_error')
-                  AND ($1::boolean OR NOT COALESCE(${expectedHttpProbePredicate()}, FALSE))
+                SELECT normalized->'metadata'->>'surface' AS surface, NULLIF(normalized->'metadata'->>'status_code', '')::int AS status_code, normalized->'metadata'->>'error_code' AS error_code, normalized->'metadata'->>'path' AS path, event_timestamp AS created_at
+                FROM events
+                WHERE ingestion_id='logs' AND normalized->'metadata'->>'category' IN ('http_response_error', 'application_error')
+                  AND ($1::boolean OR NOT COALESCE(${expectedHttpProbePredicate("normalized->'metadata'")}, FALSE))
                 UNION ALL
                 SELECT 'auth', CASE
                     WHEN reason = 'bad_password' THEN 401
@@ -237,14 +237,14 @@ async function queryErrorEvents(query: ErrorQuery) {
     }
 }
 
-function expectedHttpProbePredicate() {
+function expectedHttpProbePredicate(metadata = 'metadata') {
     return `(
-        metadata->>'user_agent' = 'hanasand_internal'
-        AND NULLIF(metadata->>'status_code', '')::int IN (401, 404)
+        ${metadata}->>'user_agent' = 'hanasand_internal'
+        AND NULLIF(${metadata}->>'status_code', '')::int IN (401, 404)
         AND (
-            metadata->>'path' = '/api/docker'
-            OR metadata->>'path' = '/api/stats'
-            OR metadata->>'path' ~ '^/api/vm/[^/]+/start$'
+            ${metadata}->>'path' = '/api/docker'
+            OR ${metadata}->>'path' = '/api/stats'
+            OR ${metadata}->>'path' ~ '^/api/vm/[^/]+/start$'
         )
     )`
 }
@@ -261,14 +261,14 @@ function expectedTrafficProbePredicate() {
     )`
 }
 
-function scannerHttpProbePredicate() {
+function scannerHttpProbePredicate(metadata = 'metadata') {
     return `(
-        NULLIF(metadata->>'status_code', '')::int = 404
+        NULLIF(${metadata}->>'status_code', '')::int = 404
         AND (
-            metadata->>'error_code' = 'project_not_found'
-            OR metadata->>'error_code' = 'share_not_found'
-            OR metadata->>'path' ~ '^/api/project/[^/]+$'
-            OR metadata->>'path' ~ '^/api/share(/tree)?/[^/]+$'
+            ${metadata}->>'error_code' = 'project_not_found'
+            OR ${metadata}->>'error_code' = 'share_not_found'
+            OR ${metadata}->>'path' ~ '^/api/project/[^/]+$'
+            OR ${metadata}->>'path' ~ '^/api/share(/tree)?/[^/]+$'
         )
     )`
 }

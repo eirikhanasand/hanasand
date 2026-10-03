@@ -482,20 +482,20 @@ async function completePrivacyDeletion(retentionRun: RetentionRun, protection: {
                AND (event.owner_id IS NOT NULL OR event.actor_id IS NOT NULL
                     OR event.metadata <> jsonb_build_object('privacyDeletionRunId', $2::text))
             RETURNING id
-        ), redacted_service_logs AS (
-            UPDATE service_logs event
-               SET service = 'hanasand-api', host = '', level = 'info',
-                   message = COALESCE(NULLIF(event.metadata->>'action', ''), 'organization_event'),
-                   metadata = jsonb_strip_nulls(jsonb_build_object(
-                       'category', event.metadata->>'category',
-                       'action', event.metadata->>'action',
-                       'organizationId', $1::text,
-                       'tenantId', $1::text,
-                       'outcome', event.metadata->>'outcome',
-                       'privacyDeletionRunId', $2::text
-                   ))
-             WHERE event.metadata->>'organizationId' = $1
-                OR event.metadata->>'tenantId' = $1
+        ), redacted_log_events AS (
+            UPDATE events event
+               SET event_type='application', action=COALESCE(NULLIF(event.normalized #>> '{metadata,action}', ''), 'post_delete_event'),
+                   outcome='recorded', user_id=NULL, user_email=NULL, source_ip=NULL, source_country=NULL, source_city=NULL, device_id=NULL,
+                   normalized=jsonb_build_object('schema_version','logs.v1','source_vendor','Hanasand','source_product','Logs',
+                       'timestamp',event.event_timestamp,'event_type','application','action',COALESCE(NULLIF(event.normalized #>> '{metadata,action}', ''),'post_delete_event'),
+                       'outcome','recorded','level','info','service','hanasand-api','host','',
+                       'message',COALESCE(NULLIF(event.normalized #>> '{metadata,action}', ''),'organization_event'),
+                       'metadata',jsonb_strip_nulls(jsonb_build_object(
+                           'category',event.normalized #>> '{metadata,category}','action',event.normalized #>> '{metadata,action}',
+                           'organizationId',$1::text,'tenantId',$1::text,'outcome','recorded','privacyDeletionRunId',$2::text))),
+                   original=event.original-'service_log_id'
+             WHERE event.ingestion_id='logs' AND (event.normalized #>> '{metadata,organizationId}' = $1
+                OR event.normalized #>> '{metadata,tenantId}' = $1)
             RETURNING id::text id
         ), affected AS (
             SELECT 'organization_member' record_type, user_id record_id, 'delete' action, 'deleted' status FROM deleted_members
@@ -505,7 +505,7 @@ async function completePrivacyDeletion(retentionRun: RetentionRun, protection: {
             UNION ALL SELECT 'dwm_webhook_delivery', id, 'redact', 'redacted' FROM redacted_deliveries
             UNION ALL SELECT 'system_event_event', id, 'redact', 'redacted' FROM redacted_system_event
             UNION ALL SELECT 'dwm_webhook_audit_event', id, 'redact', 'redacted' FROM redacted_webhook_audit
-            UNION ALL SELECT 'service_log', id, 'redact', 'redacted' FROM redacted_service_logs
+            UNION ALL SELECT 'event', id, 'redact', 'redacted' FROM redacted_log_events
         ), recorded AS (
             INSERT INTO organization_retention_run_items (
                 run_id, organization_id, source_service, record_type, record_id,
@@ -556,7 +556,7 @@ export async function organizationPrivacyState(organizationId: string, page = { 
               (SELECT COUNT(*)::int FROM admin_access_recovery_approvals WHERE organization_id = $1) access_recovery_holds,
               (SELECT COUNT(*)::int FROM system_events WHERE organization_id = $1) immutable_system_events,
               (SELECT COUNT(*)::int FROM dwm_webhook_audit_events WHERE org_id = $1) immutable_webhook_audit_events,
-              (SELECT COUNT(*)::int FROM service_logs WHERE metadata->>'organizationId' = $1 OR metadata->>'tenantId' = $1) immutable_service_logs
+              (SELECT COUNT(*)::int FROM events WHERE ingestion_id='logs' AND (normalized #>> '{metadata,organizationId}' = $1 OR normalized #>> '{metadata,tenantId}' = $1)) immutable_log_events
         `, [organizationId]),
     ])
     return {
@@ -592,7 +592,7 @@ export async function exportOrganizationPrivacyData(organizationId: string) {
                    , COALESCE((SELECT jsonb_agg(approval ORDER BY approval.created_at) FROM admin_access_recovery_approvals approval WHERE approval.organization_id = organization.id), '[]'::jsonb) access_recovery_evidence
                    , COALESCE((SELECT jsonb_agg(event ORDER BY event.created_at) FROM system_events event WHERE event.organization_id = organization.id), '[]'::jsonb) system_events
                    , COALESCE((SELECT jsonb_agg(event ORDER BY event.created_at) FROM dwm_webhook_audit_events event WHERE event.org_id = organization.id), '[]'::jsonb) webhook_audit_events
-                   , COALESCE((SELECT jsonb_agg(event ORDER BY event.created_at) FROM service_logs event WHERE event.metadata->>'organizationId' = organization.id OR event.metadata->>'tenantId' = organization.id), '[]'::jsonb) service_logs
+                   , COALESCE((SELECT jsonb_agg(event ORDER BY event.event_timestamp) FROM events event WHERE event.ingestion_id='logs' AND (event.normalized #>> '{metadata,organizationId}' = organization.id OR event.normalized #>> '{metadata,tenantId}' = organization.id)), '[]'::jsonb) events
               FROM organizations organization WHERE organization.id = $1
         `, [organizationId]),
         callTiPrivacy(organizationId),

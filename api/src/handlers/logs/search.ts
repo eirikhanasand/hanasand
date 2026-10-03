@@ -77,9 +77,12 @@ export async function searchLogs(req: FastifyRequest, res: FastifyReply) {
                     : await query(`SELECT normalized->>'severity' AS severity, normalized->>'service' AS service, COUNT(*)::int AS count FROM events WHERE ${where.join(' AND ')} GROUP BY 1, 2`, params)
                 counts = foldLogCounts(grouped.rows)
             }
-            const primary = status.rows.find(row => row.name === 'service_logs')
             const stalled = status.rows.find(row => row.last_error)
-            return { rows: result.rows, next_cursor: 'next_cursor' in result ? result.next_cursor : undefined, processing: primary ? { ...primary, catchup, pending_commands: pendingCommands, last_error: stalled ? `${stalled.name}: ${stalled.last_error}` : countersLastError ? `Log counters: ${countersLastError}` : null, sources: status.rows } : null, ...counts }
+            return { rows: result.rows, next_cursor: 'next_cursor' in result ? result.next_cursor : undefined,
+                processing: { updated_at: new Date().toISOString(), skipped_events: Number(status.rows[0]?.skipped_events || 0),
+                    catchup, pending_commands: pendingCommands,
+                    last_error: stalled ? `${stalled.name}: ${stalled.last_error}` : countersLastError ? `Log counters: ${countersLastError}` : null,
+                    sources: status.rows }, ...counts }
         })
         return res.send({ ...result, projection: compiled.projection, summarize: compiled.summarize, limit: pageLimit, hours, generated_at: new Date().toISOString() })
     } catch (error) {

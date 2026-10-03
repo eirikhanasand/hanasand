@@ -135,7 +135,7 @@ async function cleanup() {
     await pool.query('DELETE FROM vm_shutdown WHERE name = $1', [`vm-${runId}`]).catch(() => {})
     await pool.query('DELETE FROM vms WHERE name = $1', [`vm-${runId}`]).catch(() => {})
     await pool.query('DELETE FROM organization_members WHERE organization_id = $1 AND user_id = $2', [hanasandOrganizationId, runId]).catch(() => {})
-    await pool.query('DELETE FROM service_logs WHERE metadata->>\'runId\' = $1', [runId]).catch(() => {})
+    await pool.query("DELETE FROM events WHERE ingestion_id='logs' AND normalized->'metadata'->>'runId' = $1", [runId]).catch(() => {})
     await pool.query('DELETE FROM tokens WHERE id = $1', [runId]).catch(() => {})
     await pool.query('DELETE FROM users WHERE id = $1', [runId]).catch(() => {})
 }

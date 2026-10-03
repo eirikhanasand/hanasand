@@ -67,13 +67,11 @@ export async function postRuleReprocess(req: Request, res: FastifyReply) {
         const existing = (await query(`SELECT ${columns} FROM rule_reprocess_jobs WHERE organization_id=$1 AND rule_id=$2
             AND status IN ('queued','running')`, [scope.organizationId, rule.rule_id])).rows[0]
         if (existing) return res.send({ job: existing })
-        const bounds = (await query(`SELECT COALESCE((SELECT max(id) FROM service_logs),0)::text AS service_end,
-            COALESCE((SELECT max(id) FROM traffic_events),0)::text AS traffic_end`)).rows[0]
         const id = randomUUID()
         const result = await query(`INSERT INTO rule_reprocess_jobs(id,organization_id,rule_id,rule_version,requested_by,from_time,until_time,cursor)
             VALUES($1,$2,$3,$4,$5,$6,NOW(),$7::jsonb) RETURNING ${columns}`,
         [id, scope.organizationId, rule.rule_id, rule.version, scope.userId, body.from || null,
-            JSON.stringify({ phase: 0, serviceEnd: bounds.service_end, trafficEnd: bounds.traffic_end })])
+            JSON.stringify({ phase: 0 })])
         await query(`INSERT INTO system_events(event_type,source,object_type,object_id,actor_id,organization_id,context)
             VALUES('event.rule.reprocess_requested','event','event_rule',$1,$2,$3,$4::jsonb)`,
         [rule.rule_id, scope.userId, scope.organizationId, JSON.stringify({ jobId: id, version: rule.version, from: body.from, action: 'drop' })])

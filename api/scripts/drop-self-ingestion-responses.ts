@@ -3,9 +3,6 @@ import { isDeepStrictEqual } from 'node:util'
 import { randomUUID } from 'node:crypto'
 import run, { withTransaction } from '#db'
 import { eventProtectionRuleId, eventProtectionRule, eventProtectionDefinition, normalizeEventProtection } from '#utils/events/eventProtection.ts'
-import { normalizeLogEvent } from '#utils/events/logEvent.ts'
-import { storedSourceLog } from '#utils/events/storedSources.ts'
-import { matchesRule } from '#utils/events/conditions.ts'
 import { PreviewRegexTimeout } from '#utils/events/rulePreview.ts'
 import { reprocessRuleItems } from '#utils/events/ruleReprocess.ts'
 
@@ -45,22 +42,16 @@ await withTransaction(async query => {
 })
 const rule = (await run('SELECT * FROM rules WHERE organization_id=$1 AND rule_id=$2',[organizationId,ruleId])).rows[0]
 if (!rule?.enabled || rule.definition.action!=='drop' || !isDeepStrictEqual(rule.definition.conditions,definition.conditions)) throw new Error('Saved drop rule differs from the requested rule.')
-// Select likely matches once, then re-evaluate every source, finding and Store
-// policy under the same locks used by the normal reprocessing worker.
+// Select likely matches from the canonical event store. The source envelope is
+// already part of normalized; no service-log or proxy-proof table is needed.
 const services = ['hanasand-api', 'hanasand-api-1', 'hanasand-api-2', 'hanasand-api-3', 'hanasand-api-4', 'http-traffic']
-const events = (await run(`SELECT id,log_key AS key,event_timestamp AS time FROM events WHERE organization_id=$1 AND ingestion_id='logs' AND processing_status='processed' AND normalized->>'service'=ANY($2::text[])
+const events = (await run(`SELECT id,event_timestamp AS time FROM events WHERE organization_id=$1 AND ingestion_id='logs' AND processing_status='processed' AND normalized->>'service'=ANY($2::text[])
     AND normalized->'http'->>'path'='/api/logs/ingest' AND normalized->'source'->>'ip'='128.39.142.218'
     AND normalized->'http'->>'status_code'='201' AND normalized->>'severity'='low'`,[organizationId,services])).rows
-const sources = (await run(`SELECT id,created_at AS time FROM service_logs WHERE service=ANY($1::text[]) AND level IN ('info','debug') AND (
-    metadata->>'path'='/api/logs/ingest' OR metadata->>'url'='/api/logs/ingest'
-    OR metadata->'request'->>'url'='/api/logs/ingest' OR metadata->'request'->>'path'='/api/logs/ingest'
-    OR metadata->'structured'->'req'->>'url'='/api/logs/ingest' OR metadata->'structured'->'req'->>'path'='/api/logs/ingest'
-    OR metadata->'structured'->'access'->>'path'='/api/logs/ingest')`, [services])).rows
-const traffic = (await run('SELECT id,created_at AS time FROM traffic_events WHERE path=\'/api/logs/ingest\' AND ip=\'128.39.142.218\' AND status=201')).rows
-const candidates = [...events.map(row=>({id:row.id,key:row.key,time:new Date(row.time).getTime()})),...sources.map(row=>({id:'',key:`service:${row.id}`,time:new Date(row.time).getTime()})),...traffic.map(row=>({id:'',key:`service:traffic_events:${row.id}`,time:new Date(row.time).getTime()}))]
+const candidates = events.map(row=>({id:row.id,time:new Date(row.time).getTime()}))
 // Chronological batches touch fewer reporting buckets and nearby source pages.
-const unique = [...new Map(candidates.map(row=>[row.key || row.id,row])).values()].sort((a,b)=>a.time-b.time)
-events.length=0; sources.length=0; traffic.length=0; candidates.length=0
+const unique = [...new Map(candidates.map(row=>[row.id,row])).values()].sort((a,b)=>a.time-b.time)
+events.length=0; candidates.length=0
 const totals = {matched:0,protected:0,removedEvents:0,removedSources:0}
 console.log(JSON.stringify({candidates:unique.length}))
 for (let offset=0;offset<unique.length;offset+=1000) {
@@ -75,31 +66,12 @@ for (let offset=0;offset<unique.length;offset+=1000) {
         // A crash can only leave a replay batch unapplied; the final synchronous
         // audit flushes all earlier deletes before this command reports success.
         await query('SET LOCAL synchronous_commit=off')
-        for (const lock of ['event:service-logs','event:live-service-logs']) await query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[lock])
+        for (const lock of ['event:pending-logs','event:live-service-logs']) await query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[lock])
         const currentRule=(await query('SELECT * FROM rules WHERE organization_id=$1 AND rule_id=$2 FOR SHARE',[organizationId,ruleId])).rows[0]
         if (!currentRule?.enabled || currentRule.version!==rule.version) throw new Error('Rule changed during replay.')
-        const items: Parameters<typeof reprocessRuleItems>[0]=[]
-        const present=(await query('SELECT id,log_key AS key,normalized AS event,original FROM events WHERE organization_id=$1 AND log_key=ANY($2::text[]) FOR UPDATE',[organizationId,batch.map(row=>row.key)])).rows
-        items.push(...present)
-        const keys=new Set(present.map(row=>row.key))
-        const remaining=batch.filter(row=>!keys.has(row.key))
-        const serviceIds=remaining.filter(row=>/^service:\d+$/.test(row.key)).map(row=>row.key.split(':')[1])
-        const trafficIds=remaining.filter(row=>/^service:traffic_events:\d+$/.test(row.key)).map(row=>row.key.split(':')[2])
-        if (serviceIds.length) for (const row of (await query('SELECT * FROM service_logs WHERE id=ANY($1::bigint[]) FOR UPDATE',[serviceIds])).rows) {
-            if ((row.metadata?.organizationId || row.metadata?.tenantId || organizationId)!==organizationId) continue
-            items.push({id:'',key:`service:${row.id}`,event:normalizeLogEvent(row)})
-        }
-        if (trafficIds.length) for (const row of (await query('SELECT * FROM traffic_events WHERE id=ANY($1::bigint[]) FOR UPDATE',[trafficIds])).rows) items.push({id:'',key:`service:traffic_events:${row.id}`,event:normalizeLogEvent(storedSourceLog('traffic_events',row))})
-        // POST/201 responses cannot prove the GET/200 proxy-compaction rule.
-        // Release only unused proof rows for exact matches, then restore any whose
-        // source survives the normal evidence checks, all in the same transaction.
-        const eligibleIds=items.filter(item=>matchesRule(item.event,currentRule.definition.conditions) && /^service:\d+$/.test(item.key || ''))
-            .map(item=>item.key!.slice(8))
-        const unused=(await query(`DELETE FROM log_proxy_requests p WHERE p.service_log_id=ANY($1::bigint[])
-            AND p.access->>'method'='POST' AND p.access->>'status'='201' AND p.access->>'path'='/api/logs/ingest'
-            AND p.access->>'ip'='128.39.142.218'
-            AND NOT EXISTS(SELECT 1 FROM log_proxy_receipts r WHERE r.connection_id=p.connection_id)
-            RETURNING p.*`,[eligibleIds])).rows
+        const rows=(await query(`SELECT id,normalized AS event,original FROM events
+            WHERE organization_id=$1 AND id=ANY($2::text[]) FOR UPDATE`,[organizationId,batch.map(row=>row.id)])).rows
+        const items: Parameters<typeof reprocessRuleItems>[0]=rows.map(row=>({ id:row.id,event:row.event,original:row.original }))
         const result=await reprocessRuleItems(items,{organization_id:organizationId},currentRule,async (sql,values)=>{
             // Bulk-remove the reporting rows before the FK cascade so their
             // statement-level count trigger runs once, rather than once per event.
@@ -107,10 +79,6 @@ for (let offset=0;offset<unique.length;offset+=1000) {
                 USING events e WHERE d.event_id=e.id AND e.organization_id=$1 AND e.id=ANY($2::text[])`,values)
             return query(sql,values)
         })
-        if(unused.length) await query(`INSERT INTO log_proxy_requests(connection_id,service_log_id,connection,access)
-            SELECT p.connection_id,p.service_log_id,p.connection,p.access
-            FROM jsonb_to_recordset($1::jsonb) AS p(connection_id uuid,service_log_id bigint,connection jsonb,access jsonb)
-            JOIN service_logs s ON s.id=p.service_log_id`,[JSON.stringify(unused)])
         return result
     })
     let result: Awaited<ReturnType<typeof replay>> | undefined

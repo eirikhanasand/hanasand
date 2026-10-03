@@ -63,9 +63,11 @@ export async function analyzeProxy(log: ProxyLog, query?: typeof run): Promise<b
     // An exact replay may arrive after raw retention removed the proof row.
     const replay = (await query('SELECT original FROM log_proxy_receipts WHERE key=$1 AND organization_id=$2', [key, rule.organization_id])).rows[0]
     if (replay) return isDeepStrictEqual(replay.original, JSON.parse(JSON.stringify(log)))
-    const proof = (await query(`SELECT p.connection,p.access,p.service_log_id,s.metadata,s.level,s.message,s.created_at
-        FROM log_proxy_requests p JOIN service_logs s ON s.id=p.service_log_id
-        WHERE p.connection_id=$1 FOR SHARE OF p,s`, [connection.id])).rows[0]
+    const proof = (await query(`SELECT id, normalized->'metadata'->'proxy' AS connection,
+            normalized->'metadata'->'access' AS access, normalized->'metadata' AS metadata,
+            normalized->>'level' AS level, normalized->>'message' AS message, event_timestamp AS created_at
+        FROM events WHERE ingestion_id='logs' AND normalized #>> '{metadata,proxy,id}'=$1
+        ORDER BY received_at DESC,id LIMIT 1 FOR SHARE`, [connection.id])).rows[0]
     const logTimestamp = log.timestamp
     const accessTimestamp = proof?.access?.timestamp
     if (!proof || !isDeepStrictEqual(proof.connection, connection) || !safeProxyRequest(proof.access)
@@ -74,9 +76,9 @@ export async function analyzeProxy(log: ProxyLog, query?: typeof run): Promise<b
         || typeof logTimestamp !== 'string' || typeof accessTimestamp !== 'string'
         || Date.parse(accessTimestamp) < Date.parse(logTimestamp) - 1000
         || Date.parse(accessTimestamp) > Date.parse(logTimestamp) + 60000) return false
-    const receipt = await query(`INSERT INTO log_proxy_receipts(key,organization_id,connection_id,canonical_log_key,original)
+    const receipt = await query(`INSERT INTO log_proxy_receipts(key,organization_id,connection_id,canonical_event_id,original)
         VALUES($1,$2,$3,$4,$5::jsonb) ON CONFLICT DO NOTHING RETURNING key`,
-    [key, rule.organization_id, connection.id, `service:${proof.service_log_id}`, JSON.stringify(log)])
+    [key, rule.organization_id, connection.id, proof.id, JSON.stringify(log)])
     if (receipt.rowCount) await query(`INSERT INTO log_proxy_counts(organization_id,day,amount) VALUES($1,($2::timestamptz AT TIME ZONE 'UTC')::date,1)
         ON CONFLICT(organization_id,day) DO UPDATE SET amount=log_proxy_counts.amount+1`, [rule.organization_id, log.timestamp])
     if (!receipt.rowCount) {

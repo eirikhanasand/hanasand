@@ -1,6 +1,6 @@
 import { withTransaction } from '#db'
 
-export type LogSource = 'service_logs' | 'login_events' | 'traffic_events' | 'system_events'
+export type LogSource = 'login_events' | 'traffic_events' | 'system_events'
 
 const watermarkLockKey = (source: LogSource) => `logs:watermark:${source}`
 

@@ -3881,7 +3881,7 @@ function organizationInviteListContract(organization: OrganizationRow, invites: 
             nonmemberEnumeration: false,
         },
         audit: {
-            source: 'service_logs',
+            source: 'events',
             eventActions: [
                 'organization_invites_created',
                 'organization_invite_accepted',

@@ -12,7 +12,7 @@ const access = { key: 'http-api:request', timestamp: '2026-09-24T00:00:00.010Z',
     inspection: { version: 1, bodyEmpty: true, headersSafe: true, pathSafe: true } }
 function proof(): any {
     const connection = proxyConnection(header)
-    return structuredClone({ connection, access, service_log_id: '42', level: 'info', message: 'proxy_request_completed', metadata: { proxy: connection, access } })
+    return structuredClone({ id: 'event-42', connection, access, level: 'info', message: 'proxy_request_completed', metadata: { proxy: connection, access } })
 }
 test('old, malformed, warning, cross-tenant and unexpected proxy notices remain', async () => {
     expect(proxyNotice(log)).toEqual(proxyConnection(header))
@@ -43,10 +43,10 @@ test('only committed matching safe evidence permits a receipt and count', async 
             statements.push(sql)
             if (sql.includes('FROM rules')) return { rows: mode === 'disabled' ? [] : [{ organization_id: 'platform', definition: proxyDefinition }] }
             if (sql.startsWith('SELECT original')) return { rows: [] }
-            if (sql.includes('FROM log_proxy_requests')) return { rows: mode === 'missing' ? [] : [evidence] }
+            if (sql.includes('FROM events')) return { rows: mode === 'missing' ? [] : [evidence] }
             if (sql.includes('INSERT INTO log_proxy_receipts')) {
                 expect(JSON.parse(args[4])).toEqual(log)
-                expect(args[3]).toBe('service:42')
+                expect(args[3]).toBe('event-42')
                 return { rowCount: 1, rows: [] }
             }
             return { rows: [], rowCount: 1 }

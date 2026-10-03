@@ -10,7 +10,6 @@ import ensureSupportAiSchema from '#utils/support/schema.ts'
 import ensureContentOrganizationSchema from './contentOrganizationSchema.ts'
 import ensureOrganizationRolesSchema from './organizationRolesSchema.ts'
 import ensureLogDimensionsSchema from './logDimensionsSchema.ts'
-import ensureLogProcessQueueSchema from './logProcessQueueSchema.ts'
 import ensureSharedMailSchema from './sharedMailSchema.ts'
 import ensureVmOrganizationSchema from './vmOrganizationSchema.ts'
 import { ensureFailoverSchema } from '../vms/failover.ts'
@@ -519,24 +518,6 @@ async function applySchema() {
     await run('CREATE INDEX IF NOT EXISTS idx_service_monitor_results_service_check ON service_monitor_results(service, check_name, checked_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_service_monitor_results_non_up ON service_monitor_results(service, check_name, checked_at) WHERE status <> \'up\'')
     await run(`
-        CREATE TABLE IF NOT EXISTS service_logs (
-            id BIGSERIAL PRIMARY KEY,
-            service TEXT NOT NULL,
-            host TEXT NOT NULL DEFAULT 'local',
-            level TEXT NOT NULL DEFAULT 'info',
-            message TEXT NOT NULL,
-            metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-    `)
-    await ensureIndex(run, 'idx_service_logs_created_at', 'CREATE INDEX IF NOT EXISTS idx_service_logs_created_at ON service_logs(created_at DESC)')
-    await ensureColumn(run, 'service_logs', 'source_event_id', 'ALTER TABLE service_logs ADD COLUMN IF NOT EXISTS source_event_id TEXT')
-    await ensureIndex(run, 'idx_service_logs_source_event_id', 'CREATE UNIQUE INDEX IF NOT EXISTS idx_service_logs_source_event_id ON service_logs(source_event_id)')
-    await ensureIndex(run, 'idx_service_logs_service_level', 'CREATE INDEX IF NOT EXISTS idx_service_logs_service_level ON service_logs(service, level, created_at DESC)')
-    // The organization privacy summary counts matching logs; without these indexes every load scans the full log table.
-    await ensureIndex(run, 'idx_service_logs_organization_id', 'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_service_logs_organization_id ON service_logs((metadata->>\'organizationId\'))')
-    await ensureIndex(run, 'idx_service_logs_tenant_id', 'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_service_logs_tenant_id ON service_logs((metadata->>\'tenantId\'))')
-    await run(`
         CREATE TABLE IF NOT EXISTS host_update_snapshots (
             host TEXT PRIMARY KEY,
             run_id TEXT NOT NULL,
@@ -560,8 +541,6 @@ async function applySchema() {
         )
     `)
     await run('CREATE INDEX IF NOT EXISTS idx_host_update_events_host_occurred ON host_update_events(host, occurred_at DESC)')
-    await ensureIndex(run, 'idx_service_logs_http_errors', 'CREATE INDEX IF NOT EXISTS idx_service_logs_http_errors ON service_logs((metadata->>\'category\'), created_at DESC)')
-    await ensureIndex(run, 'idx_service_logs_http_error_code', 'CREATE INDEX IF NOT EXISTS idx_service_logs_http_error_code ON service_logs((metadata->>\'error_code\'), created_at DESC) WHERE metadata->>\'category\' = \'http_response_error\'')
     await run(`
         CREATE TABLE IF NOT EXISTS scheduled_job_controls (
             id TEXT PRIMARY KEY,
@@ -1522,10 +1501,15 @@ async function applySchema() {
     `)
     await ensureColumn(run, 'events', 'parser_version', 'ALTER TABLE events ADD COLUMN IF NOT EXISTS parser_version TEXT NOT NULL DEFAULT \'event.v1\'')
     await run('CREATE INDEX IF NOT EXISTS idx_events_org_time ON events(organization_id, event_timestamp DESC)')
-    await ensureColumn(run, 'events', 'log_key', 'ALTER TABLE events ADD COLUMN IF NOT EXISTS log_key TEXT')
     await run(`CREATE INDEX IF NOT EXISTS idx_events_native_pending ON events(event_timestamp, id)
         WHERE ingestion_id <> 'logs' AND processing_status = 'pending'`)
-    await run('CREATE UNIQUE INDEX IF NOT EXISTS idx_events_log_key ON events(log_key)')
+    await run(`CREATE INDEX IF NOT EXISTS idx_events_logs_pending ON events(event_timestamp DESC, id DESC)
+        WHERE ingestion_id = 'logs' AND processing_status = 'pending'`)
+    await run('DROP TABLE IF EXISTS log_process_queue')
+    await run('DROP TABLE IF EXISTS log_proxy_requests')
+    await run('DROP TABLE IF EXISTS service_logs')
+    await run('DROP FUNCTION IF EXISTS enqueue_process_logs()')
+    await run("DELETE FROM log_processing_cursors WHERE name IN ('service_logs', 'process_logs_recovery')")
     await run('CREATE TABLE IF NOT EXISTS log_processing_cursors (name TEXT PRIMARY KEY, last_id BIGINT NOT NULL DEFAULT 0, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), last_error TEXT)')
     await ensureColumn(run, 'log_processing_cursors', 'recent_id', 'ALTER TABLE log_processing_cursors ADD COLUMN IF NOT EXISTS recent_id BIGINT')
     await ensureLogCatchupSchema()
@@ -1535,7 +1519,6 @@ async function applySchema() {
     await run(`CREATE INDEX IF NOT EXISTS idx_auth_failure_source_time ON events(organization_id, md5(source_ip), event_timestamp DESC)
         WHERE event_type = 'authentication' AND action = 'login' AND outcome = 'failure'`)
     await ensureLogDimensionsSchema()
-    await ensureLogProcessQueueSchema()
     await run(`
         CREATE TABLE IF NOT EXISTS rules (
             id TEXT PRIMARY KEY,
@@ -1577,6 +1560,8 @@ async function applySchema() {
     await ensureRuleSourceConstraint(run)
     await run('CREATE INDEX IF NOT EXISTS idx_rules_org_enabled ON rules(organization_id, enabled, updated_at DESC)')
     await ensureLogAnalyzeSchema()
+    await run('DROP INDEX IF EXISTS idx_events_log_key')
+    await run('ALTER TABLE events DROP COLUMN IF EXISTS log_key')
     await ensureRuleReprocessSchema()
     await run(`
         CREATE TABLE IF NOT EXISTS findings (

@@ -1991,7 +1991,7 @@ assert.equal(readiness.readinessProof.customerWorkflowProof.proofCommand, 'cd ap
 assert.equal(readiness.readinessProof.auditTimelineProof.schemaVersion, 'organization.audit_timeline_readiness.v1')
 assert.equal(readiness.readinessProof.auditTimelineProof.organizationId, organization.id)
 assert.equal(readiness.readinessProof.auditTimelineProof.tenantId, organization.id)
-assert.equal(readiness.readinessProof.auditTimelineProof.source, 'service_logs')
+assert.equal(readiness.readinessProof.auditTimelineProof.source, 'events')
 assert.equal(readiness.readinessProof.auditTimelineProof.supportRoute, '/api/admin/support/organizations/:id')
 assert.equal(readiness.readinessProof.auditTimelineProof.logQuery, 'GET /api/logs?service=api&message=organization')
 assert.ok(readiness.readinessProof.auditTimelineProof.requiredEventActions.includes('organization_invites_created'))
@@ -2882,7 +2882,7 @@ assert.ok(alertTermsExport.sharedWatchlistDownstreamProof.integration.payloadSha
 assert.ok(alertTermsExport.sharedWatchlistDownstreamProof.integration.routeHandlers.includes('api/src/handlers/organizations.ts'))
 assert.ok(alertTermsExport.sharedWatchlistDownstreamProof.integration.storageModules.includes('ti/scraper/src/storage/dwmAlertRepository.ts'))
 assert.equal(alertTermsExport.sharedWatchlistDownstreamProof.audit.schemaVersion, 'organization.shared_watchlist_audit_contract.v1')
-assert.equal(alertTermsExport.sharedWatchlistDownstreamProof.audit.source, 'service_logs')
+assert.equal(alertTermsExport.sharedWatchlistDownstreamProof.audit.source, 'events')
 for (const action of [
     'organization_invites_created',
     'organization_invite_accepted',
@@ -3162,7 +3162,7 @@ assert.ok(alertTermsExport.sharedWatchlistAlertQueueVisibility.consumerContract.
 assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.consumerContract.requiredRouteBinding, 'organizationId_query_and_workflow_context')
 assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.consumerContract.requiredStorageBinding, 'workflowContext.organizationId')
 assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.consumerContract.proofCommand, 'cd api && bun scripts/smoke-organizations-api.ts')
-assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.auditContract.source, 'service_logs')
+assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.auditContract.source, 'events')
 assert.ok(alertTermsExport.sharedWatchlistAlertQueueVisibility.auditContract.requiredEventActions.includes('organization_watchlist_alert_terms_exported'))
 assert.ok(alertTermsExport.sharedWatchlistAlertQueueVisibility.auditContract.requiredEventActions.includes('organization_watchlist_upserted'))
 assert.ok(alertTermsExport.sharedWatchlistAlertQueueVisibility.auditContract.requiredEventActions.includes('organization_watchlist_updated'))
@@ -5261,9 +5261,12 @@ async function fakeRun(query: string, params: any[] = []) {
         return rows([...organizations.values()].filter(org => org.slug === slug || org.slug.startsWith(prefix)).map(org => ({ slug: org.slug })))
     }
 
-    if (compact.includes('INSERT INTO service_logs')) {
-        serviceLogs.push({ service: params[0], host: params[1], level: params[2], message: params[3], metadata: JSON.parse(params[4]) })
-        return rows([])
+    if (compact.includes('INSERT INTO events')) {
+        serviceLogs.push(...JSON.parse(params[0]).map((row: any) => ({
+            service: row.normalized.service, host: row.normalized.host, level: row.normalized.level,
+            message: row.normalized.message, metadata: row.normalized.metadata,
+        })))
+        return rows(JSON.parse(params[0]).map((row: any) => ({ id: row.id })))
     }
 
     if (compact.includes('WITH new_organization AS')) {

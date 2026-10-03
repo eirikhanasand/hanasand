@@ -1,6 +1,6 @@
 import { classifyApplicationError } from './applicationError.ts'
 import { mongoCommandFromLog } from './analyzeMongo.ts'
-export type LogInput = { id: string | number, service: string, host?: string, level: string, message: string, created_at: string | Date, metadata?: Record<string, unknown>, source_event_id?: string }
+export type LogInput = { id: string | number, eventId?: string, service: string, host?: string, level: string, message: string, created_at: string | Date, metadata?: Record<string, unknown>, source_event_id?: string }
 export type LogNormalizationOptions = { classify?: boolean, includeSeverity?: boolean }
 export const severityOrder = ['low', 'medium', 'high', 'critical'] as const
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}

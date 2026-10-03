@@ -118,15 +118,6 @@ await queryOnce(`
         status TEXT NOT NULL DEFAULT 'active',
         archived_at TIMESTAMPTZ
     );
-    CREATE TABLE service_logs (
-        id BIGSERIAL PRIMARY KEY,
-        service TEXT NOT NULL,
-        host TEXT NOT NULL DEFAULT 'local',
-        level TEXT NOT NULL DEFAULT 'info',
-        message TEXT NOT NULL,
-        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
     CREATE TABLE api_keys (
         id TEXT PRIMARY KEY,
         owner_id TEXT REFERENCES users(id) ON DELETE SET NULL,

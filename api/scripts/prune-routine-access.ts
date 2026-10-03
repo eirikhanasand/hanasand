@@ -13,7 +13,7 @@ try {
         console.log(JSON.stringify({ apply: false, rule: 'http.routine_access.v1', organization: rule.organization_id, olderThan: rule.created_at,
             message: 'Use --apply for resumable batches. Existing findings, security activity and known request bodies are preserved.' }))
     } else {
-        for (const source of ['traffic_events', 'service_logs'] as const) {
+        for (const source of ['traffic_events'] as const) {
             const cursorName = `analyze_prune:${source}`
             await run(`INSERT INTO log_processing_cursors(name,last_id,history_end_id) SELECT $1,0,COALESCE(MAX(id),0) FROM ${source} ON CONFLICT DO NOTHING`, [cursorName])
             let finished = false, total = 0
@@ -23,7 +23,7 @@ try {
                 await withTransaction(async query => {
                     await query('SET LOCAL lock_timeout = \'2s\'')
                     await query('SET LOCAL statement_timeout = \'20s\'')
-                    const lock = await query('SELECT pg_try_advisory_xact_lock(hashtextextended(\'event:service-logs\',0)) AS locked')
+                    const lock = await query('SELECT pg_try_advisory_xact_lock(hashtextextended(\'event:pending-logs\',0)) AS locked')
                     if (!lock.rows[0].locked) return
                     const active = await platformAccessRule(query)
                     if (!active?.enabled || active.definition?.action !== 'drop') throw new Error('Analyze rule was disabled or changed to Keep; cleanup stopped.')

@@ -47,7 +47,8 @@ export async function analyzeRoutineGroupBatch<T extends RoutineLog>(entries: T[
         if (!options?.historicalReplay) {
             const sourceEventIds = group.logs.map(log => log.sourceEventId)
             if (sourceEventIds.some(id => typeof id !== 'string')) continue
-            const stored = await query('SELECT source_event_id FROM service_logs WHERE source_event_id=ANY($1::text[])', [sourceEventIds as string[]])
+            const eventIds = (sourceEventIds as string[]).map(id => createHash('sha256').update(`service:${id}`).digest('hex'))
+            const stored = await query('SELECT id FROM events WHERE id=ANY($1::text[])', [eventIds])
             if (stored.rows.length) continue
         }
         await query('INSERT INTO log_routine_group_state(organization_id,rule_id,scope) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [rule.organization_id, group.ruleId, group.scope])
@@ -70,10 +71,17 @@ export async function analyzeRoutineGroupBatch<T extends RoutineLog>(entries: T[
         }
         const host = group.logs[0]?.host
         if (typeof host !== 'string') continue
-        const summary = await query(`INSERT INTO service_logs(service,host,level,message,metadata,source_event_id,created_at)
-            VALUES('routine-group-analyzer',$1,'info',$2,$3::jsonb,$4,$5::timestamptz)
-            ON CONFLICT(source_event_id) DO NOTHING RETURNING id`,
-        [host, group.ruleId === telemetryRuleId ? 'Completed host telemetry cycle' : group.ruleId === sshTransportRuleId ? 'SSH transport debug summary' : 'Completed SSH session window adjustments', JSON.stringify(routineEvidence(group)), `routine-group:${group.key}`, new Date(group.ended).toISOString()])
+        const sourceEventId = `routine-group:${group.key}`
+        const id = createHash('sha256').update(`service:${sourceEventId}`).digest('hex')
+        const message = group.ruleId === telemetryRuleId ? 'Completed host telemetry cycle' : group.ruleId === sshTransportRuleId ? 'SSH transport debug summary' : 'Completed SSH session window adjustments'
+        const timestamp = new Date(group.ended).toISOString()
+        const normalized = { ...normalizeLogEvent({ id: sourceEventId, service: 'routine-group-analyzer', host, level: 'info',
+            message, metadata: routineEvidence(group), created_at: timestamp }), source_event_id: sourceEventId }
+        const summary = await query(`INSERT INTO events(id,ingestion_id,organization_id,source_vendor,source_product,event_timestamp,event_type,
+            action,outcome,normalized,original,processing_status)
+            VALUES($1,'logs',$2,'Hanasand','Logs',$3::timestamptz,$4,$5,$6,$7::jsonb,'{}'::jsonb,'pending')
+            ON CONFLICT(id) DO NOTHING RETURNING id`,
+        [id, rule.organization_id, timestamp, normalized.event_type, normalized.action, normalized.outcome, JSON.stringify(normalized)])
         if (!summary.rowCount) continue
         await query(`INSERT INTO log_analyze_receipts(key,organization_id,rule_id,rule_version)
             SELECT unnest($1::text[]),$2,$3,$4 ON CONFLICT DO NOTHING`, [receipts, rule.organization_id, group.ruleId, rule.version])
@@ -81,3 +89,4 @@ export async function analyzeRoutineGroupBatch<T extends RoutineLog>(entries: T[
     }
     return entries.filter(log => !dropped.has(log))
 }
+import { createHash } from 'node:crypto'

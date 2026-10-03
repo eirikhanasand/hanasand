@@ -1,21 +1,19 @@
 import { canonicalReplayKeys } from './replayEvidence.ts'
 import { createHash } from 'node:crypto'
 import run, { withTransaction } from '#db'
-import { normalizeLogEvent, type LogInput } from './logEvent.ts'
-import { storedSourceLog } from './storedSources.ts'
 import { loadLogRetentionRules, retentionStoreMatches } from './customRetention.ts'
 import { collectEventFindings, loadConfiguredRules, normalizeEvent } from '../../handlers/events.ts'
 import { matchRulePage } from './rulePreview.ts'
-import { hasIndexedProcessExecutableSelector, messageCandidatePredicate, processExecutableCandidatePredicate } from './previewPredicate.ts'
+import { messageCandidatePredicate, processExecutableCandidatePredicate } from './previewPredicate.ts'
 import type { Condition } from './conditions.ts'
 import { builtinReprocessable, reprocessBuiltinPage } from './builtinReprocess.ts'
 
-type Cursor = { phase: number, time?: string, id?: string, windowEnd?: string, serviceEnd: string, trafficEnd: string }
+type Cursor = { phase: number, time?: string, id?: string, windowEnd?: string }
 export type ReprocessJob = { id: string, organization_id: string, rule_id: string, rule_version: string, status: string,
     from_time: string | null, until_time: string, cursor: Cursor, scanned: string, matched: string, protected: string,
     removed_events: string, removed_sources: string, error: string | null }
 type Rule = { rule_id: string, version: string, source: string, enabled: boolean, definition: { stage: string, action: string, conditions: Condition[] } }
-type Item = { id: string, key: string | null, event: Record<string, unknown>, original?: Record<string, unknown> }
+type Item = { id: string, event: Record<string, unknown>, original?: Record<string, unknown> }
 const size = 1000
 const eventCandidateColumns: Record<string, string> = {
     source_vendor: 'source_vendor', source_product: 'source_product', event_type: 'event_type',
@@ -66,8 +64,6 @@ export async function processRuleReprocessJob() {
             }
             if (rule.source === 'hanasand') return reprocessBuiltinPage(job, query)
             const cursor = { ...job.cursor }
-            const indexedProcessSelector = hasIndexedProcessExecutableSelector(rule.definition.conditions)
-            const skipRawSourceScan = indexedProcessSelector && cursor.phase > 0
             let items: Item[], scanned: number
             const windowedPhase = cursor.phase === 0 && Boolean(job.from_time)
             if (cursor.phase === 0) {
@@ -86,7 +82,7 @@ export async function processRuleReprocessJob() {
                 const cursorTimeParam = params.push(windowed && cursor.windowEnd ? cursor.time || null : cursor.time || null)
                 const cursorIdParam = params.push(cursor.id || '')
                 const limitParam = params.push(size)
-                const rows = (await query(`SELECT id,log_key,source_vendor,source_product,normalized,original,event_timestamp::text AS time FROM events
+                const rows = (await query(`SELECT id,source_vendor,source_product,normalized,original,event_timestamp::text AS time FROM events
                     WHERE organization_id=$1 AND event_timestamp<=$2::timestamptz AND received_at<=$2::timestamptz
                     ${ownedLogScope}
                     AND ($3::timestamptz IS NULL OR event_timestamp>$3::timestamptz)
@@ -94,12 +90,12 @@ export async function processRuleReprocessJob() {
                     ORDER BY event_timestamp DESC,id DESC LIMIT $${limitParam} FOR UPDATE`,
                 params)).rows
                 scanned = rows.length
-                items = rows.map(row => ({ id: row.id, key: row.log_key,
+                items = rows.map(row => ({ id: row.id,
                     event: { ...row.normalized, source_vendor: row.source_vendor, source_product: row.source_product }, original: row.original }))
                 if (rows.length) Object.assign(cursor, { time: rows.at(-1).time, id: rows.at(-1).id, ...(windowed ? { windowEnd: upper } : {}) })
                 if (windowed && scanned < size) {
                     if (lowerMs <= fromMs) {
-                        cursor.phase = indexedProcessSelector ? 3 : cursor.phase + 1
+                        cursor.phase = 1
                         delete cursor.time
                         delete cursor.id
                         delete cursor.windowEnd
@@ -109,49 +105,19 @@ export async function processRuleReprocessJob() {
                         delete cursor.id
                     }
                 }
-            } else if (skipRawSourceScan) {
-                // The indexed event page is the previewed target set. Its matched
-                // log_key rows are deleted with the projection; don't scan raw
-                // source tables for unpreviewed, unprojected process records.
-                cursor.phase = 3
+            } else {
                 scanned = 0
                 items = []
-            } else {
-                const source = cursor.phase === 1 ? 'service_logs' : 'traffic_events'
-                const params: (string | number | null)[] = [cursor.phase === 1 ? cursor.serviceEnd : cursor.trafficEnd,
-                    job.until_time, job.from_time, cursor.time || null, cursor.id || '0', size]
-                const candidate = cursor.phase === 1
-                    ? messageCandidatePredicate(rule.definition.conditions, 'message', value => { params.push(value); return `$${params.length}` }) : 'TRUE'
-                // Use the existing time index: a short selected window must not walk the entire raw archive.
-                const rows = (await query(`SELECT *,created_at::text AS cursor_time FROM ${source}
-                    WHERE id<=$1::bigint AND created_at<=$2::timestamptz
-                    AND ($3::timestamptz IS NULL OR created_at>=$3::timestamptz)
-                    AND ($4::timestamptz IS NULL OR (created_at,id)<($4::timestamptz,$5::bigint)) AND ${candidate}
-                    ORDER BY created_at DESC,id DESC LIMIT $6 FOR UPDATE`,
-                params)).rows
-                scanned = rows.length
-                const platform = (await query(`SELECT id FROM organizations WHERE status='active' AND
-                    (id=$1 OR ($1::text IS NULL AND lower(name)='hanasand')) ORDER BY created_at LIMIT 1`, [process.env.PLATFORM_LOG_ORGANIZATION_ID || null])).rows[0]?.id
-                items = rows.flatMap(row => {
-                    const log = source === 'traffic_events' ? storedSourceLog(source, row) : row as LogInput
-                    const scope = log.metadata?.organizationId || log.metadata?.tenantId || platform
-                    const time = new Date(log.created_at).getTime()
-                    if (scope !== job.organization_id || time > new Date(job.until_time).getTime()
-                        || (job.from_time && time < new Date(job.from_time).getTime())) return []
-                    return [{ id: '', key: `service:${log.id}`, event: normalizeLogEvent(log) }]
-                })
-                if (rows.length) Object.assign(cursor, { time: rows.at(-1).cursor_time, id: String(rows.at(-1).id) })
+                cursor.phase = 1
             }
-            const result = skipRawSourceScan
-                ? { matched: 0, protected: 0, removedEvents: 0, removedSources: 0 }
-                : await reprocessRuleItems(items, job, rule, query)
-            if (scanned < size && !windowedPhase && !skipRawSourceScan) {
-                cursor.phase = indexedProcessSelector ? 3 : cursor.phase + 1
+            const result = await reprocessRuleItems(items, job, rule, query)
+            if (scanned < size && !windowedPhase && cursor.phase === 0) {
+                cursor.phase = 1
                 delete cursor.time
                 delete cursor.id
                 delete cursor.windowEnd
             }
-            const done = cursor.phase > 2
+            const done = cursor.phase > 0
             await query(`UPDATE rule_reprocess_jobs SET status=$2,cursor=$3::jsonb,scanned=scanned+$4,
                 matched=matched+$5,protected=protected+$6,removed_events=removed_events+$7,removed_sources=removed_sources+$8,
                 error=NULL,updated_at=NOW() WHERE id=$1`, [job.id, done ? 'completed' : 'running', JSON.stringify(cursor), scanned, result.matched, result.protected, result.removedEvents, result.removedSources])
@@ -184,46 +150,24 @@ export async function reprocessRuleItems(items: Item[], job: Pick<ReprocessJob, 
     const keeps = storageRules.filter(r => r.definition?.action === 'keep' && !r.definition.protection && r.definition.conditions?.length)
     const kept = new Set<number>()
     for (const keep of keeps) for (const index of await matchRulePage(matches.map(item => item.event), keep.definition!.conditions!)) kept.add(index)
-    // Unsupported source tables cannot be reconciled atomically by this worker.
-    // Keep their projections, along with unknown envelopes and existing finding evidence.
-    let safe = matches.filter((item, index) => !kept.has(index) && !retentionStoreMatches({ ...item.event, retained_original: item.original }, storageRules) && !protectedEvent({ ...item.event, retained_original: item.original })
-        && !/^service:(?:login_events|system_events):/.test(item.key || ''))
-    const keys = safe.flatMap(item => item.key ? [item.key] : [])
-    const evidence = (await query(`SELECT id,log_key,organization_id,source_vendor,source_product,normalized,original FROM events
-        WHERE id=ANY($1::text[]) OR log_key=ANY($2::text[]) FOR UPDATE`, [safe.map(item => item.id), keys])).rows
+    let safe = matches.filter((item, index) => !kept.has(index)
+        && !retentionStoreMatches({ ...item.event, retained_original: item.original }, storageRules)
+        && !protectedEvent({ ...item.event, retained_original: item.original }))
+    const evidence = (await query(`SELECT id,organization_id,source_vendor,source_product,normalized,original FROM events
+        WHERE id=ANY($1::text[]) FOR UPDATE`, [safe.map(item => item.id)])).rows
         .map(row => ({ ...row, normalized: { ...row.normalized, source_vendor: row.source_vendor, source_product: row.source_product } }))
     const findingIds = new Set((await query('SELECT event_ids FROM findings WHERE event_ids && $1::text[]', [evidence.map(row => row.id)])).rows.flatMap(row => row.event_ids))
     for (const keep of keeps) for (const index of await matchRulePage(evidence.map(row => row.normalized), keep.definition!.conditions!)) findingIds.add(evidence[index].id)
-    safe = safe.filter(item => !evidence.some(row => (row.id === item.id || (item.key && row.log_key === item.key))
+    safe = safe.filter(item => !evidence.some(row => row.id === item.id
         && (row.organization_id !== job.organization_id || findingIds.has(row.id) || retentionStoreMatches({ ...row.normalized, original: row.original }, storageRules) || protectedEvent({ ...row.normalized, original: row.original }))))
-    // Check the still-retained original as well as the indexed projection.
-    // Old normalization versions may have omitted fields now recognized as unsafe.
-    const rawIds = safe.flatMap(item => /^service:\d+$/.test(item.key || '') ? [item.key!.split(':')[1]] : [])
-    const trafficIdsToCheck = safe.flatMap(item => /^service:traffic_events:\d+$/.test(item.key || '') ? [item.key!.split(':')[2]] : [])
-    const originals: Array<{ key: string, event: Record<string, unknown> }> = []
-    if (rawIds.length) for (const row of (await query('SELECT * FROM service_logs WHERE id=ANY($1::bigint[]) FOR UPDATE', [rawIds])).rows)
-        originals.push({ key: `service:${row.id}`, event: normalizeLogEvent(row) })
-    if (trafficIdsToCheck.length) for (const row of (await query('SELECT * FROM traffic_events WHERE id=ANY($1::bigint[]) FOR UPDATE', [trafficIdsToCheck])).rows)
-        originals.push({ key: `service:traffic_events:${row.id}`, event: normalizeLogEvent(storedSourceLog('traffic_events', row)) })
-    const retainedKeys = new Set(originals.filter(item => retentionStoreMatches(item.event, storageRules) || protectedEvent(item.event)).map(item => item.key))
-    for (const keep of keeps) for (const index of await matchRulePage(originals.map(item => item.event), keep.definition!.conditions!)) retainedKeys.add(originals[index].key)
-    const canonical = await canonicalReplayKeys(safe.flatMap(item => item.key ? [item.key] : []), query)
-    safe = safe.filter(item => !item.key || !retainedKeys.has(item.key) && !canonical.has(item.key))
-    const ids = evidence.filter(row => safe.some(item => item.id === row.id || (item.key && item.key === row.log_key))).map(row => row.id)
-    const serviceIds = new Set<string>(), trafficIds = new Set<string>()
-    for (const item of safe) {
-        if (/^service:\d+$/.test(item.key || '')) serviceIds.add(item.key!.split(':')[1])
-        if (/^service:traffic_events:\d+$/.test(item.key || '')) trafficIds.add(item.key!.split(':')[2])
-    }
-    // Deleting both copies in one transaction prevents catch-up from resurrecting a dropped event.
+    const canonical = await canonicalReplayKeys(safe.map(item => item.id), query)
+    safe = safe.filter(item => !canonical.has(item.id))
+    const ids = evidence.filter(row => safe.some(item => item.id === row.id)).map(row => row.id)
     const removed = await query('DELETE FROM events WHERE organization_id=$1 AND id=ANY($2::text[]) RETURNING id', [job.organization_id, ids])
-    let sources = 0
-    if (serviceIds.size) sources += (await query('DELETE FROM service_logs WHERE id=ANY($1::bigint[]) RETURNING id', [[...serviceIds]])).rowCount || 0
-    if (trafficIds.size) sources += (await query('DELETE FROM traffic_events WHERE id=ANY($1::bigint[]) RETURNING id', [[...trafficIds]])).rowCount || 0
     if (safe.length) await query(`INSERT INTO log_analyze_receipts(key,organization_id,rule_id,rule_version)
         SELECT entry.key,$1,$2,$3 FROM jsonb_to_recordset($4::jsonb) AS entry(key text) ON CONFLICT DO NOTHING`,
     [job.organization_id, rule.rule_id, rule.version, JSON.stringify(safe.map(item => ({
-        key: createHash('sha256').update(`custom:${rule.rule_id}:${item.key || item.id}`).digest('hex'),
+        key: createHash('sha256').update(`custom:${rule.rule_id}:${item.id}`).digest('hex'),
     })))])
-    return { matched: matches.length, protected: matches.length - safe.length, removedEvents: removed.rowCount || 0, removedSources: sources }
+    return { matched: matches.length, protected: matches.length - safe.length, removedEvents: removed.rowCount || 0, removedSources: 0 }
 }

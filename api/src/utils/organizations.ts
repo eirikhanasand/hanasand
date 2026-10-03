@@ -558,7 +558,7 @@ export type OrganizationSharedWatchlistDownstreamProof = {
     }
     audit: {
         schemaVersion: 'organization.shared_watchlist_audit_contract.v1'
-        source: 'service_logs'
+        source: 'events'
         eventActions: OrganizationSharedWatchlistAuditEventAction[]
         requiredMetadataFields: string[]
         requestIdFields: string[]
@@ -568,7 +568,7 @@ export type OrganizationSharedWatchlistDownstreamProof = {
         proofLogQuery: 'GET /api/logs?service=api&message=organization_watchlist'
         eventBridge: {
             schemaVersion: 'organization.shared_watchlist_audit_event_bridge.v1'
-            source: 'service_logs'
+            source: 'events'
             expectedAdapter: 'organizationSharedWatchlistAuditEventBridge'
             requiredActions: OrganizationSharedWatchlistAuditEventAction[]
             eventDescriptors: Array<{
@@ -816,7 +816,7 @@ export type OrganizationSharedWatchlistDownstreamProof = {
         }>
         timelineContract: {
             route: 'GET /api/admin/support/audit'
-            source: 'service_logs'
+            source: 'events'
             requiredEventBridge: 'organization.shared_watchlist_audit_event_bridge.v1'
             eventActions: OrganizationSharedWatchlistAuditEventAction[]
             redactedFields: Array<'metadata.value' | 'metadata.email' | 'activeTerms[].term' | 'alertBridge.alertGeneratorKeys'>
@@ -1120,7 +1120,7 @@ export type OrganizationSharedWatchlistAlertQueueVisibility = {
         proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
     }
     auditContract: {
-        source: 'service_logs'
+        source: 'events'
         requiredEventActions: string[]
         requiredMetadataFields: string[]
         requestIdFields: string[]
@@ -2597,7 +2597,7 @@ export type OrganizationReadinessProof = {
         schemaVersion: 'organization.audit_timeline_readiness.v1'
         organizationId: string
         tenantId: string
-        source: 'service_logs'
+        source: 'events'
         supportRoute: '/api/admin/support/organizations/:id'
         logQuery: 'GET /api/logs?service=api&message=organization'
         requiredEventActions: Array<
@@ -2997,7 +2997,7 @@ export function organizationMemberAccessContract(
                 serviceLogAction: 'organization_ownership_transferred',
             },
             audit: {
-                source: 'service_logs',
+                source: 'events',
                 requiredMetadataFields: ['requestId', 'reason', 'actorId', 'targetUserId', 'organizationId'],
             },
             noLeakFields: [
@@ -3553,7 +3553,7 @@ export function organizationSharedWatchlistDownstreamProof(
         },
         audit: {
             schemaVersion: 'organization.shared_watchlist_audit_contract.v1',
-            source: 'service_logs',
+            source: 'events',
             eventActions: auditEventActions,
             requiredMetadataFields: [
                 'requestId',
@@ -4022,7 +4022,7 @@ function organizationSharedWatchlistAuditEventBridge(
 
     return {
         schemaVersion: 'organization.shared_watchlist_audit_event_bridge.v1',
-        source: 'service_logs',
+        source: 'events',
         expectedAdapter: 'organizationSharedWatchlistAuditEventBridge',
         requiredActions,
         eventDescriptors,
@@ -4348,7 +4348,7 @@ function organizationSharedWatchlistAnalystPortalWorkflow(input: {
         ],
         timelineContract: {
             route: 'GET /api/admin/support/audit',
-            source: 'service_logs',
+        source: 'events',
             requiredEventBridge: 'organization.shared_watchlist_audit_event_bridge.v1',
             eventActions,
             redactedFields: redactedTimelineFields,
@@ -6159,7 +6159,7 @@ export function organizationReadinessProof(input: {
             schemaVersion: 'organization.audit_timeline_readiness.v1',
             organizationId: input.downstreamAuthorization.organizationId,
             tenantId: input.downstreamAuthorization.tenantId,
-            source: 'service_logs',
+            source: 'events',
             supportRoute: '/api/admin/support/organizations/:id',
             logQuery: 'GET /api/logs?service=api&message=organization',
             requiredEventActions: [

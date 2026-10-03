@@ -24,9 +24,9 @@ async function queryLogServices() {
     const result = await withTransaction(async query => {
         await query('SET LOCAL statement_timeout = \'30s\'')
         return query(`
-        SELECT service, MAX(created_at) AS last_seen, COUNT(*)::int AS entries
-        FROM service_logs
-        GROUP BY service
+        SELECT normalized->>'service' AS service, MAX(event_timestamp) AS last_seen, COUNT(*)::int AS entries
+        FROM events WHERE ingestion_id='logs'
+        GROUP BY normalized->>'service'
         ORDER BY service ASC
         `)
     })
@@ -68,12 +68,14 @@ async function queryLogs(query: LogQuery) {
     const limit = Math.min(Math.max(Number(query.limit || 100), 1), 500)
     const [result, nativeLogs] = await Promise.all([
         run(`
-        SELECT id, service, host, level, message, metadata, created_at
-        FROM service_logs
-        WHERE ($1::text IS NULL OR service = $1)
-          AND ($2::text IS NULL OR level = $2)
-          AND ($3::text IS NULL OR message ILIKE '%' || $3 || '%')
-        ORDER BY created_at DESC
+        SELECT id, normalized->>'service' AS service, normalized->>'host' AS host,
+            normalized->>'level' AS level, normalized->>'message' AS message,
+            normalized->'metadata' AS metadata, event_timestamp AS created_at
+        FROM events
+        WHERE ingestion_id='logs' AND ($1::text IS NULL OR normalized->>'service' = $1)
+          AND ($2::text IS NULL OR normalized->>'level' = $2)
+          AND ($3::text IS NULL OR normalized->>'message' ILIKE '%' || $3 || '%')
+        ORDER BY event_timestamp DESC
         LIMIT $4
     `, [query.service || null, query.level || null, query.search || null, limit]),
         listNativeLogs({

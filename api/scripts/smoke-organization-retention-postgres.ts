@@ -122,7 +122,7 @@ assert.equal((exported.data.public.organization as { id: string }).id, 'retentio
 assert.equal((exported.data.threatIntelligence as { organizationId: string }).organizationId, 'retention_org_a')
 assert.deepEqual(Object.keys(exported.data.public).sort(), [
     'access_recovery_evidence', 'admin_audit_events', 'invites', 'members', 'organization',
-    'privacy_requests', 'retention_items', 'retention_runs', 'service_logs', 'watchlists',
+    'events', 'privacy_requests', 'retention_items', 'retention_runs', 'watchlists',
     'webhook_audit_events', 'webhook_deliveries', 'webhook_destinations',
 ])
 
@@ -276,8 +276,7 @@ await queryOnce(`
     INSERT INTO dwm_webhook_audit_events (id, owner_id, actor_id, org_id, action, metadata)
     VALUES ('audit_delete_c', $1, $1, 'retention_org_c', 'retention.raw-webhook', '{"rawCustomer":"sensitive webhook context"}'::jsonb)
 `, [users[2]])
-const unscopedLogStart = (await queryOnce('SELECT COALESCE(MAX(id), 0) id FROM service_logs')).rows[0].id
-await recordLog({
+const unscopedLogIds = [await recordLog({
     service: 'secret-http-service', host: 'secret-http-host', level: 'error', message: 'secret HTTP response body',
     metadata: {
         category: 'http_response_error', surface: 'organizations', method: 'DELETE',
@@ -286,15 +285,16 @@ await recordLog({
         ip: '203.0.113.44', user_agent: 'unscoped-http-agent-marker', referer: 'https://secret.example/customer',
         error_message: 'unscoped-http-error-marker', body: 'unscoped-http-body-marker',
     },
-})
-await recordLog({
+}), await recordLog({
     service: 'secret-onerror-service', host: 'secret-onerror-host', level: 'error', message: 'unscoped-onerror-message-marker',
     metadata: {
         method: 'POST', url: '/api/admin/support/organizations/retention_org_c?secret=unscoped-onerror-url-marker',
         error: 'unscoped-onerror-error-marker', stack: 'unscoped-onerror-stack-marker',
     },
-})
-const unscopedLogs = (await queryOnce('SELECT service, host, level, message, metadata FROM service_logs WHERE id > $1 AND message = \'organization_request_error\' ORDER BY id', [unscopedLogStart])).rows
+})]
+const unscopedLogs = (await queryOnce(`SELECT normalized->>'service' service, normalized->>'host' host, normalized->>'level' level,
+    normalized->>'message' message, normalized->'metadata' metadata FROM events WHERE id=ANY($1::text[])
+    AND normalized->>'message'='organization_request_error' ORDER BY received_at`, [unscopedLogIds])).rows
 assert.deepEqual(unscopedLogs, [
     { service: 'hanasand-api', host: '', level: 'error', message: 'organization_request_error', metadata: { category: 'organization_request_error', surface: 'organizations' } },
     { service: 'hanasand-api', host: '', level: 'error', message: 'organization_request_error', metadata: { category: 'organization_request_error', surface: 'organizations' } },
@@ -311,7 +311,9 @@ const beforeDeleteIngest = await app.inject({
     },
 })
 assert.equal(beforeDeleteIngest.statusCode, 201, beforeDeleteIngest.body)
-const beforeDeleteServiceLog = (await queryOnce('SELECT id, service, host, level, message, metadata FROM service_logs WHERE service = \'internal-ingest-service-marker\' ORDER BY id DESC LIMIT 1')).rows[0]
+const beforeDeleteServiceLog = (await queryOnce(`SELECT id, normalized->>'service' service, normalized->>'host' host, normalized->>'level' level,
+    normalized->>'message' message, normalized->'metadata' metadata FROM events
+    WHERE normalized->>'service'='internal-ingest-service-marker' ORDER BY received_at DESC LIMIT 1`)).rows[0]
 assert.equal(JSON.stringify(beforeDeleteServiceLog).includes('internal-ingest-message-marker'), true)
 assert.equal(JSON.stringify(beforeDeleteServiceLog).includes('raw-service-request@example.test'), true)
 const serviceLogId = beforeDeleteServiceLog.id
@@ -339,7 +341,8 @@ assert.deepEqual(redactedAdminAudit, {
 })
 const redactedWebhookAudit = (await queryOnce('SELECT action, owner_id, actor_id, metadata FROM dwm_webhook_audit_events WHERE id = \'audit_delete_c\'')).rows[0]
 assert.deepEqual(redactedWebhookAudit, { action: 'retention.raw-webhook', owner_id: null, actor_id: null, metadata: { privacyDeletionRunId: deletion.id } })
-const redactedServiceLog = (await queryOnce('SELECT service, host, level, message, metadata FROM service_logs WHERE id = $1', [serviceLogId])).rows[0]
+const redactedServiceLog = (await queryOnce(`SELECT normalized->>'service' service, normalized->>'host' host, normalized->>'level' level,
+    normalized->>'message' message, normalized->'metadata' metadata FROM events WHERE id = $1`, [serviceLogId])).rows[0]
 assert.deepEqual(redactedServiceLog, {
     service: 'hanasand-api', host: '', level: 'info', message: 'delete',
     metadata: { category: 'organization_privacy', action: 'delete', organizationId: 'retention_org_c', tenantId: 'retention_org_c', outcome: 'failed', privacyDeletionRunId: deletion.id },
@@ -350,7 +353,6 @@ await ensureSchema()
 const restartedApp = Fastify({ logger: false })
 restartedApp.post('/api/logs/ingest', ingestLog)
 await restartedApp.ready()
-const postDeleteLogStart = (await queryOnce('SELECT COALESCE(MAX(id), 0) id FROM service_logs')).rows[0].id
 const postDeleteIngest = await restartedApp.inject({
     method: 'POST', url: '/api/logs/ingest', headers: { authorization: `Bearer ${process.env.VM_API_TOKEN}` },
     payload: {
@@ -363,7 +365,10 @@ const postDeleteIngest = await restartedApp.inject({
     },
 })
 assert.equal(postDeleteIngest.statusCode, 201, postDeleteIngest.body)
-const postDeleteServiceLog = (await queryOnce('SELECT id, service, host, level, message, metadata FROM service_logs WHERE id > $1 ORDER BY id LIMIT 1', [postDeleteLogStart])).rows[0]
+const postDeleteServiceLog = (await queryOnce(`SELECT id, normalized->>'service' service, normalized->>'host' host,
+    normalized->>'level' level, normalized->>'message' message, normalized->'metadata' metadata FROM events
+    WHERE normalized #>> '{metadata,privacyDeletionRunId}'=$1 AND normalized #>> '{metadata,action}'='post_delete_event'
+    ORDER BY received_at DESC LIMIT 1`, [deletion.id])).rows[0]
 assert.deepEqual(postDeleteServiceLog, {
     id: postDeleteServiceLog.id,
     service: 'hanasand-api', host: '', level: 'info', message: 'organization_event',
@@ -388,16 +393,18 @@ assert.equal(JSON.stringify(postDeleteExport).includes('203.0.113.42'), false)
 assert.equal(JSON.stringify(postDeleteExport).includes('raw-customer-host'), false)
 assert.equal(JSON.stringify(postDeleteExport).includes('raw-service-request@example.test'), false)
 assert.equal(JSON.stringify(postDeleteExport).includes('203.0.113.43'), false)
-const retainedServiceLogs = JSON.stringify((await queryOnce('SELECT service, host, message, metadata FROM service_logs WHERE id > $1 ORDER BY id', [unscopedLogStart])).rows)
+const retainedServiceLogs = JSON.stringify((await queryOnce(`SELECT normalized->>'service' service, normalized->>'host' host,
+    normalized->>'message' message, normalized->'metadata' metadata FROM events
+    WHERE id=ANY($1::text[]) OR id=$2`, [[...unscopedLogIds, postDeleteServiceLog.id], postDeleteServiceLog.id])).rows)
 for (const marker of ['internal-ingest', 'unscoped-http', 'unscoped-onerror', 'post-delete-', 'secret-http', 'secret-onerror', 'secret HTTP', 'raw service customer context', 'raw-service-request', '203.0.113.43']) {
     assert.equal(JSON.stringify(postDeleteExport).includes(marker), false)
     assert.equal(retainedServiceLogs.includes(marker), false)
 }
-assert.equal((postDeleteExport.data.public.service_logs as Array<{ id: string }>).some(log => String(log.id) === String(serviceLogId)), true)
-assert.equal((postDeleteExport.data.public.service_logs as Array<{ id: string }>).some(log => String(log.id) === String(postDeleteServiceLog.id)), true)
+assert.equal((postDeleteExport.data.public.events as Array<{ id: string }>).some(log => String(log.id) === String(serviceLogId)), true)
+assert.equal((postDeleteExport.data.public.events as Array<{ id: string }>).some(log => String(log.id) === String(postDeleteServiceLog.id)), true)
 const postDeleteState = await organizationPrivacyState('retention_org_c')
-assert.equal(postDeleteState.protection.immutable_service_logs, 2)
-assert.equal((await queryOnce('SELECT COUNT(*)::int count FROM organization_retention_run_items WHERE run_id = $1 AND record_type = \'service_log\' AND status = \'redacted\'', [deletion.id])).rows[0].count, 1)
+assert.equal(postDeleteState.protection.immutable_log_events, 2)
+assert.equal((await queryOnce('SELECT COUNT(*)::int count FROM organization_retention_run_items WHERE run_id = $1 AND record_type = \'event\' AND status = \'redacted\'', [deletion.id])).rows[0].count, 1)
 
 const counts = (await queryOnce('SELECT selected_count, protected_count, deleted_count, redacted_count, failed_count, retried_count FROM organization_retention_runs WHERE id = $1', [runA.id])).rows[0]
 assert.equal(counts.selected_count, counts.protected_count + counts.deleted_count + counts.redacted_count + counts.failed_count + counts.retried_count)
