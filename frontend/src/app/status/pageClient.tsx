@@ -4,7 +4,7 @@ import { statusHeadline } from '@/utils/status/incidentCopy'
 
 import Link from 'next/link'
 import IncidentReport from './incidentReport'
-import { retainVerifiedStatus, compactStatusSnapshot, isCurrentPublicCheck } from '@/utils/status/publicStatus'
+import { retainVerifiedStatus, compactStatusSnapshot, isCurrentPublicCheck, toPublicServiceStatus } from '@/utils/status/publicStatus'
 import { useEffect, useRef, useState } from 'react'
 import type { ServiceIncident, ServiceStatus } from '@/utils/status/getStatus'
 import { AlertCircle, CheckCircle } from 'lucide-react'
@@ -15,6 +15,7 @@ type DashboardProps = {
     incidentId?: string
 }
 
+const STATUS_API = process.env.NEXT_PUBLIC_STATUS_API_URL || 'https://status.hanasand.com/api/status'
 const REFRESH_MS = 3000
 const UPTIME_DAYS = 90
 const UPTIME_WINDOW = `${UPTIME_DAYS} days`
@@ -37,9 +38,9 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
                 if (pending || document.hidden) return
                 pending = true
                 try {
-                    const response = await fetch(`/api/status?incident=${encodeURIComponent(incidentId || '')}`, { cache: 'no-store', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(5000)]) })
+                    const response = await fetch(`${STATUS_API}?incident=${encodeURIComponent(incidentId || '')}`, { cache: 'no-store', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(5000)]) })
                     if (!response.ok) return
-                    const next = await response.json() as ServiceStatus
+                    const next = toPublicServiceStatus(await response.json() as ServiceStatus)
                     if (!Array.isArray(next.incidents) || !next.incidents.length) return
                     setCurrentStatus(next)
                     if (next.incidents[0].status === 'resolved') window.clearInterval(refresh)
@@ -63,9 +64,9 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
             if (pending) return
             pending = true
             try {
-                const response = await fetch(mode === 'incidents' ? '/api/status?history=true' : '/api/status', { cache: 'no-store', signal: AbortSignal.timeout(5000) })
+                const response = await fetch(mode === 'incidents' ? `${STATUS_API}?history=true` : STATUS_API, { cache: 'no-store', signal: AbortSignal.timeout(5000) })
                 if (response.ok) {
-                    const next = await response.json() as ServiceStatus
+                    const next = toPublicServiceStatus(await response.json() as ServiceStatus)
                     if (!next || !Array.isArray(next.checks) || !Array.isArray(next.history) || !Array.isArray(next.incidents)) throw new Error('Invalid status feed')
                     const retained = retainVerifiedStatus(next, verified.current)
                     if (retained.checks.some(check => check.checked_at && check.status !== 'unknown')) {

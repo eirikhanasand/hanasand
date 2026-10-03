@@ -1,5 +1,3 @@
-import config from '@/config'
-
 export type ServiceCheck = {
     service: string
     check_name: string
@@ -62,7 +60,9 @@ export function unavailableServiceStatus(): ServiceStatus {
 
 export default async function getStatus({ summary = false, incidentId, dashboard = false }: { summary?: boolean, incidentId?: string, dashboard?: boolean } = {}): Promise<ServiceStatus> {
     try {
-        const response = await fetch(`${config.url.api}/status${incidentId ? '?incident=' + encodeURIComponent(incidentId) : summary ? '?summary=true' : dashboard ? '?dashboard=true' : ''}`, { cache: 'no-store', signal: AbortSignal.timeout(5000) })
+        const params = incidentId ? `?incident=${encodeURIComponent(incidentId)}` : summary ? '?summary=true' : dashboard ? '?dashboard=true' : ''
+        const statusApi = process.env.NEXT_PUBLIC_STATUS_API_URL || 'https://status.hanasand.com/api/status'
+        const response = await fetch(`${statusApi}${params}`, { cache: 'no-store', signal: AbortSignal.timeout(5000) })
         if (!response.ok) return unavailableServiceStatus()
 
         const payload = await response.json()

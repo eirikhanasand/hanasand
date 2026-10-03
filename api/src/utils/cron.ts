@@ -6,13 +6,11 @@ import collectVmMetrics, { VM_METRICS_JOB_ID } from './vms/collectMetrics.ts'
 import { schedule } from 'node-cron'
 import invalidateOldTokens from './auth/invalidateOldTokens.ts'
 import invalidateOldAttempts from './auth/invalidateOldAttempts.ts'
-import runSyntheticMonitor from './status/monitor.ts'
 import { provisionExistingMailAccounts } from './mail/accounts.ts'
 import { mailConfig } from './mail/config.ts'
 import purgeDeletedAccounts from './auth/purgeDeletedAccounts.ts'
 import ensureAlwaysRunningVms from './vms/ensureAlwaysRunning.ts'
 import { runDueAutomations } from './automations.ts'
-import runProductionLogMonitors from './status/logMonitors.ts'
 import { runTrackedBackgroundJob } from './backgroundJobRuntime.ts'
 import { runDueVulnerabilityScan, VULNERABILITY_SCAN_JOB_ID } from './vulnerabilities/scanner.ts'
 import { DATABASE_BACKUP_JOB_ID, runDueDatabaseBackup } from './db/backups.ts'
@@ -30,10 +28,8 @@ const apiCronRunners: Record<string, () => Promise<unknown> | unknown> = {
     'api-auth-token-cleanup': invalidateOldTokens,
     'api-login-attempt-cleanup': invalidateOldAttempts,
     'api-deleted-account-purge': purgeDeletedAccounts,
-    'api-synthetic-monitor': runSyntheticMonitor,
     'api-cron-health-monitor': async() => (await import('./systemCronMonitor.ts')).monitorSystemCronJobs(),
     [VM_METRICS_JOB_ID]: collectVmMetrics,
-    'api-production-log-monitor': runProductionLogMonitors,
     [HOST_UPDATE_MONITOR_JOB_ID]: async() => {
         const results = await Promise.allSettled(updateHosts.map(async host => {
             const { status, runId } = await readHostUpdateStatus(host)
@@ -115,10 +111,8 @@ export default function cron() {
                 runDueApiCronJob('api-auth-token-cleanup'),
                 runDueApiCronJob('api-login-attempt-cleanup'),
                 runDueApiCronJob('api-deleted-account-purge'),
-                runDueApiCronJob('api-synthetic-monitor'),
                 runDueApiCronJob('api-cron-health-monitor'),
                 runDueApiCronJob(VM_METRICS_JOB_ID),
-                runDueApiCronJob('api-production-log-monitor'),
                 runDueApiCronJob(HOST_UPDATE_MONITOR_JOB_ID),
                 runDueApiCronJob('api-vm-ensure-running'),
                 runDueApiCronJob(CASE_DELIVERY_JOB_ID),
