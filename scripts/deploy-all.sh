@@ -298,7 +298,7 @@ if test "$canonical_pgbouncer_state" != running || test "$canonical_pgbouncer_he
     canonical_pgbouncer_recreated=1
 fi
 wait_for_healthy hanasand_pgbouncer "Canonical PgBouncer" 180
-wait_for_healthy hanasand_log_processor "Durable log processor" 180
+wait_for_healthy processor "Standalone log processor" 180
 if test "$canonical_pgbouncer_recreated" = 1; then
     # The recovery changed the pool's address; refresh clients before the
     # long image build so authentication does not wait for the rollout tail.
@@ -358,33 +358,6 @@ fi
 compose_release up -d --no-build --no-deps ovh-host-metrics-tunnel
 wait_for_healthy hanasand_ovh_host_metrics_tunnel "OVH host metrics tunnel" 180
 
-log_processor_can_be_reused() {
-    log_processor_release=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' hanasand_log_processor 2>/dev/null \
-        | sed -n 's/^HANASAND_RELEASE_COMMIT=//p' | head -1)
-    case "$log_processor_release" in
-        *[!a-f0-9]*|'') return 1 ;;
-    esac
-    test "${#log_processor_release}" -eq 40 || return 1
-    git merge-base --is-ancestor "$log_processor_release" "$release" || return 1
-    if ! git diff --quiet "$log_processor_release" "$release" -- \
-        api/src api/Dockerfile api/package.json api/bun.lock api/bunfig.toml \
-        api/scripts/download-session-geo.ts api/scripts/check-session-network.ts db; then
-        return 1
-    fi
-
-    log_processor_image=$(docker inspect -f '{{.Image}}' hanasand_log_processor)
-    log_processor_image_release=$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' \
-        "$log_processor_image" 2>/dev/null || true)
-    test "$log_processor_image_release" = "$log_processor_release" || return 1
-
-    log_processor_running_hash=$(docker inspect -f '{{index .Config.Labels "com.docker.compose.config-hash"}}' \
-        hanasand_log_processor 2>/dev/null || true)
-    log_processor_desired_hash=$(HANASAND_RELEASE_COMMIT="$log_processor_release" \
-        docker compose --project-name hanasand --env-file "$root/.env" \
-            -f "$root/docker-compose.yml" config --hash log-processor 2>/dev/null | sed 's/.* //')
-    test -n "$log_processor_running_hash" \
-        && test "$log_processor_running_hash" = "$log_processor_desired_hash"
-}
 compose_candidates() {
     docker compose --project-name hanasand --parallel 2 --profile deployment-candidates --env-file "$build_dir/.env" \
         -f "$build_dir/docker-compose.yml" "$@"
@@ -419,7 +392,7 @@ warm_dashboard_pages() {
 # The API candidate owns schema setup. Do not restart the shared database during
 # an application release; its recovery period interrupts authenticated traffic.
 services=$(compose_live config --services \
-    | sed '/^api$/d; /^frontend$/d; /^auth-primary$/d; /^auth-secondary$/d; /^log-processor$/d; /^postgres$/d')
+    | sed '/^api$/d; /^frontend$/d; /^auth-primary$/d; /^auth-secondary$/d; /^postgres$/d')
 if test "$pgbouncer_config_changed" = 0; then
     services=$(printf '%s\n' "$services" | sed '/^pgbouncer$/d')
 fi
@@ -620,12 +593,8 @@ wait_for_healthy hanasand_api "API" 600
 # that IP on each release, so refresh the host rules before sending traffic to it.
 sudo -n systemctl restart hanasand-browser-egress.service
 wait_for_healthy hanasand "Frontend" 180
-if log_processor_can_be_reused; then
-    echo "Keeping durable log processor on $log_processor_release; its code and configuration are unchanged."
-else
-    compose_live up -d --no-build --no-deps log-processor
-    wait_for_healthy hanasand_log_processor "Durable log processor" 180
-fi
+# Processor owns its release and rules; Hanasand deployments only verify health.
+wait_for_healthy processor "Standalone log processor" 180
 canonical_frontend_health=$(curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3100/api/health)
 case "$canonical_frontend_health" in *'"ok":true'*"\"release\":\"$release\""*"\"api\""*) ;; *)
     echo "Canonical frontend did not report release $release and its matching API." >&2

@@ -105,46 +105,24 @@ if test "$metrics_age" -lt 0 || test "$metrics_age" -gt 90; then
     exit 1
 fi
 
-# The log processor is a durable worker. It may stay on an older application
-# release when its source, dependencies, schema, image, and service config have
-# not changed; unrelated frontend or operations releases must not interrupt it.
-processor_release=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' hanasand_log_processor \
-    | sed -n 's/^HANASAND_RELEASE_COMMIT=//p' | head -1)
+# Processor is deployed from its own repository and Compose project.
+processor_release=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' processor \
+    | sed -n 's/^PROCESSOR_RELEASE_COMMIT=//p' | head -1)
 case "$processor_release" in
-    *[!a-f0-9]*|'')
-        echo "The durable log processor has no valid release marker." >&2
-        exit 1
-        ;;
+    *[!a-f0-9]*|'') echo "Processor has no valid release marker." >&2; exit 1 ;;
 esac
-test "${#processor_release}" -eq 40 \
-    && git merge-base --is-ancestor "$processor_release" "$release" || {
-    echo "The durable log processor release is not an ancestor of $release." >&2
-    exit 1
-}
-if ! git diff --quiet "$processor_release" "$release" -- \
-    api/src api/Dockerfile api/package.json api/bun.lock api/bunfig.toml \
-    api/scripts/download-session-geo.ts api/scripts/check-session-network.ts db; then
-    echo "The durable log processor source or schema differs from $release." >&2
-    exit 1
-fi
-processor_image=$(docker inspect -f '{{.Image}}' hanasand_log_processor)
+test "${#processor_release}" -eq 40 || { echo "Processor release is invalid." >&2; exit 1; }
+processor_image=$(docker inspect -f '{{.Image}}' processor)
 processor_image_release=$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' \
     "$processor_image" 2>/dev/null || true)
-verify_image_revision "The durable log processor" "$processor_image" "$processor_image_release" "$processor_release"
-processor_running_hash=$(docker inspect -f '{{index .Config.Labels "com.docker.compose.config-hash"}}' \
-    hanasand_log_processor 2>/dev/null || true)
-root=$(git rev-parse --show-toplevel)
-if test -f "$root/.env"; then
-    processor_desired_hash=$(HANASAND_RELEASE_COMMIT="$processor_release" docker compose --project-name hanasand \
-        --env-file "$root/.env" -f "$root/docker-compose.yml" config --hash log-processor 2>/dev/null | sed 's/.* //')
-else
-    processor_desired_hash=$(HANASAND_RELEASE_COMMIT="$processor_release" docker compose --project-name hanasand \
-        -f "$root/docker-compose.yml" config --hash log-processor 2>/dev/null | sed 's/.* //')
-fi
-test -n "$processor_running_hash" && test "$processor_running_hash" = "$processor_desired_hash" || {
-    echo "The durable log processor service configuration is stale." >&2
-    exit 1
+verify_image_revision "Standalone processor" "$processor_image" "$processor_image_release" "$processor_release"
+test "$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' processor)" = processor || {
+    echo "Processor must belong to its own Compose project." >&2; exit 1
 }
+processor_health=$(curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8099/health)
+case "$processor_health" in *'"ok":true'*"\"release\":\"$processor_release\""*) ;; *)
+    echo "Standalone processor is not healthy on its reported release." >&2; exit 1 ;;
+esac
 
 test "$(docker inspect -f '{{.State.Running}}' hanasand_pgbouncer 2>/dev/null || true)" = true \
     && test "$(docker inspect -f '{{.State.Health.Status}}' hanasand_pgbouncer 2>/dev/null || true)" = healthy || {
@@ -164,16 +142,10 @@ if test -n "$expected_pgbouncer_release"; then
     verify_image_revision "PgBouncer" "$pgbouncer_image" "$pgbouncer_image_release" "$expected_pgbouncer_release"
 fi
 
-test "$(docker inspect -f '{{.State.Health.Status}}' hanasand_log_processor)" = healthy || {
-    echo "hanasand_log_processor is not healthy after deployment." >&2
+test "$(docker inspect -f '{{.State.Health.Status}}' processor)" = healthy || {
+    echo "Standalone processor is not healthy after deployment." >&2
     exit 1
 }
-processor_health=$(docker exec hanasand_log_processor wget -qO- http://127.0.0.1:8099/health)
-case "$processor_health" in *'"ok":true'*"\"release\":\"$processor_release\""*) ;; *)
-    echo "Durable log processor health did not report its verified release $processor_release." >&2
-    exit 1
-    ;;
-esac
 
 for container in hanasand_auth_primary hanasand_auth_secondary; do
     test "$(docker inspect -f '{{.State.Health.Status}}' "$container")" = healthy || {
