@@ -23,8 +23,9 @@ verify_image_revision() {
     image=$2
     image_release=$3
     expected_release=$4
+    allow_missing_image=${5:-0}
     if ! docker image inspect "$image" >/dev/null 2>&1; then
-        if test "${HANASAND_VERIFY_LIVE_RELEASE_ONLY:-0}" = 1; then
+        if test "${HANASAND_VERIFY_LIVE_RELEASE_ONLY:-0}" = 1 || test "$allow_missing_image" = 1; then
             echo "$container has no retained image metadata; checking its live release marker and health instead." >&2
             return 0
         fi
@@ -102,7 +103,11 @@ for container in $containers; do
             exit 1
         }
     fi
-    verify_image_revision "$container" "$image" "$image_release" "$expected_container_release"
+    allow_missing_image=0
+    if test -n "$preserved_service" && is_preserved_service "$preserved_service"; then
+        allow_missing_image=1
+    fi
+    verify_image_revision "$container" "$image" "$image_release" "$expected_container_release" "$allow_missing_image"
 done
 
 systemctl is-active --quiet hanasand-ovh-host-metrics.timer || {
