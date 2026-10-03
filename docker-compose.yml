@@ -653,7 +653,7 @@ services:
       SCRAPER_MAX_REQUEST_TASKS: 500
       SCRAPER_DARKNET_METADATA_ONLY: "true"
       SCRAPER_HIGH_RISK_REQUIRES_APPROVAL: "true"
-      PGHOST: postgres
+      PGHOST: hanasand_database
       PGPORT: 5432
       PGUSER: ${DB_USER:-hanasand}
       PGPASSWORD: ${DB_PASSWORD}
